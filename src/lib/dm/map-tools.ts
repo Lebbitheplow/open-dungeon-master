@@ -36,6 +36,7 @@ import {
 } from "@/lib/battlemap/types";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { getSheetById } from "@/lib/db/sheets";
+import { listRecentMessages } from "@/lib/db/messages";
 import { publishEphemeral } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
@@ -44,7 +45,7 @@ import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { canEnemyAct } from "@/lib/dm/can-act";
 import { awayFromFear, enemyMoveTraits, fearSourceAt, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
-import { payForTeleport, spendEnemyDisengage, teleportRangeFeet, walkCompanion } from "@/lib/dm/token-rules";
+import { distancesFrom, payForTeleport, spendEnemyDisengage, stillAt, teleportRangeFeet, walkCharacter } from "@/lib/dm/token-rules";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { z } from "zod";
@@ -361,7 +362,7 @@ export const moveTokenTool: ToolDef = {
   function: {
     name: "move_token",
     description:
-      "Move a combatant on the battle map: an enemy taking its movement, an AI companion walking on its own turn (no forced; it spends the companion's speed, stands it from prone for half of it, and draws opportunity attacks), or a character being pushed, pulled, or carried (forced:true; players walk their own tokens). The server enforces walls, occupancy, speed, and that a frightened creature never walks closer to what it fears; moves clamp to the farthest legal tile toward the target. A walking enemy passes through its allies' spaces and a character's two sizes apart at double cost (never stopping in one), and a Large or bigger one squeezes through a gap one size too small at double cost and is squeezing there (attacks against it have advantage).",
+      "Move a combatant on the battle map. A walk (no forced): an enemy taking its movement, or a character on their own turn, either an AI companion or a player character walking the move their player just declared; it spends their speed, stands them from prone for what standing costs, and draws opportunity attacks. A forced move (forced:true): a character pushed, pulled, or carried. The server enforces walls, occupancy, speed, and that a frightened creature never walks closer to what it fears; moves clamp to the farthest legal tile toward the target. A walking enemy passes through its allies' spaces and a character's two sizes apart at double cost (never stopping in one), and a Large or bigger one squeezes through a gap one size too small at double cost and is squeezing there (attacks against it have advantage).",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -369,7 +370,7 @@ export const moveTokenTool: ToolDef = {
         tokenName: {
           type: "string",
           description:
-            "Enemy name or enemyId, or character name/characterId for forced movement, exactly as shown on the battle map in GAME STATE.",
+            "Enemy name or enemyId, or character name or characterId, exactly as shown on the battle map in GAME STATE.",
         },
         x: { type: "integer", description: "Destination column." },
         y: { type: "integer", description: "Destination row." },
@@ -437,11 +438,24 @@ function walkedPart(path: Array<{ x: number; y: number }>, landing: { x: number;
   return at >= 0 ? path.slice(0, at + 1) : path;
 }
 
+// Whether the character's player asked for something in the input this DM
+// turn answers: a message of theirs since the DM last spoke, table talk
+// aside. A token never walks on a turn its player did not speak in (issue 17:
+// a token that moved with no input).
+function declaredThisTurn(campaignId: string, characterId: string): boolean {
+  const messages = listRecentMessages(campaignId, 50);
+  const since = messages.slice(messages.findLastIndex((message) => message.authorType === "dm") + 1);
+  return since.some(
+    (message) => message.authorType === "player" && message.characterId === characterId && !message.content.startsWith("(ooc)"),
+  );
+}
+
 export function handleMoveToken(
   campaign: Campaign,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  turn: Pick<DmTurn, "actor">,
 ): Record<string, unknown> {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -463,17 +477,19 @@ export function handleMoveToken(
   }
   if (resolved.kind === "pc" && !args.forced) {
     // An AI companion walks on its own turn as a player walks from the
-    // board: its speed, standing from prone, fear, opportunity attacks.
+    // board: its speed, standing from prone, fear, opportunity attacks. So
+    // does a character whose player just typed the move on their own turn.
     const walker = resolveSheetRef(args.tokenName, sheets, sheetsById);
     const fresh = walker ? (getSheetById(walker.id) ?? walker) : null;
     const current = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
-    if (fresh?.isCompanion && current?.kind === "pc" && current.characterId === fresh.id) {
-      return walkCompanion(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y });
+    const declared = fresh && turn.actor === "ai" && declaredThisTurn(campaign.id, fresh.id);
+    if (fresh && (fresh.isCompanion || declared) && current?.kind === "pc" && current.characterId === fresh.id) {
+      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y });
     }
     return {
       error: fresh?.isCompanion
         ? `${resolved.token.name} walks on their own turn only; pass forced:true when something pushes, drags, or carries them.`
-        : `${resolved.token.name} is a player character; players move their own tokens. Pass forced:true only when something pushes, drags, or carries them.`,
+        : `${resolved.token.name} is a player character; players move their own tokens, and move_token walks one only on their own turn, for the move their player just declared. Pass forced:true only when something pushes, drags, or carries them.`,
     };
   }
   // On their own turn the player moves from the board; a "forced" move here
@@ -564,7 +580,7 @@ export function handleMoveToken(
     const walk = walkPathWithBudget(map.terrain, map.width, steps, budget, traits, resolved.token);
     if (!walk.at) {
       return {
-        error: `${resolved.token.name} has no movement left this turn (speed ${resolved.speedTiles * 5} ft)${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.`,
+        error: `${resolved.token.name} has no movement left this turn (speed ${resolved.speedTiles * 5} ft)${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.${stillAt(tokens, resolved.token)}`,
       };
     }
     landing = walk.at;
@@ -621,20 +637,11 @@ export function handleMoveToken(
       : [];
   // The spell areas walked (or pushed) into: their saves and damage (zone-triggers.ts).
   const zoneEffects = zonesAfterMove(campaign, encounter.id, resolved.token, origin, walkedPart(path, landing));
-  // Fresh ranges from the landing tile, so the model narrates the new
-  // distances instead of remembering the pre-move map.
-  const opposing = tokens.filter(
-    (other) => other.id !== resolved.token.id && other.kind !== resolved.kind,
-  );
-  const distances = opposing.map((other) => {
-    const tilesApart = Math.max(Math.abs(landing.x - other.x), Math.abs(landing.y - other.y));
-    return `${other.name}: ${tilesApart <= 1 ? "ADJACENT (5 ft)" : `${tilesApart * 5} ft`}`;
-  });
   return {
     ok: true,
     name: resolved.token.name,
     at: `(${landing.x},${landing.y})`,
-    ...(distances.length ? { distancesNow: distances.join("; ") } : {}),
+    ...distancesFrom(tokens, resolved.token, landing),
     ...(zoneEffects.length ? { zoneEffects } : {}),
     ...(opportunity.length
       ? {

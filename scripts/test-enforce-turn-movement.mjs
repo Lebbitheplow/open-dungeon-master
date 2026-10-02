@@ -1,7 +1,8 @@
 // How far a combatant may still move on the turn it is taking, asked of
 // every reader: the board's reachable tiles and the player's move route
-// (pcMoveBudget, src/lib/battlemap/view.ts), and an enemy's move_token and
-// the walk-up inside enemy_attack (src/lib/dm/enemy-approach.ts).
+// (pcMoveBudget, src/lib/battlemap/view.ts), an enemy's move_token and the
+// walk-up inside enemy_attack (src/lib/dm/enemy-approach.ts), and the GAME
+// STATE line the DM reads before it answers a typed move.
 //
 // SRD 5.1, Movement and Position: "On your turn, you can move a distance up
 // to your speed." Movement belongs to a turn, so a creature with two turns
@@ -13,6 +14,7 @@ import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
+import { aiEngine, fakeModel, reply } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-enforce-turn-movement");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
@@ -20,7 +22,12 @@ const kit = await combatKit(world);
 const { pcMoveBudget } = await import("../src/lib/battlemap/view.ts");
 const { editInitiative } = await import("../src/lib/dm/initiative.ts");
 const { oweEnemiesAnAction } = await import("../src/lib/dm/can-act.ts");
+const { allocateSeq } = await import("../src/lib/db/campaigns.ts");
+const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
+const { removeTokenByRef } = await import("../src/lib/db/battle-maps.ts");
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
+const { moveTokenTool } = await import("../src/lib/dm/map-tools.ts");
+const ai = await aiEngine(world);
 
 const thief = world.addHero({
   class: "rogue", subclass: "Thief", level: 17, abilities: { dex: 10 }, proficiencies: TRAINED, maxHp: 200, speed: 30,
@@ -45,6 +52,7 @@ async function walk(sheet, x, y) {
 
 // What the board lights for a character right now, in squares.
 const lit = (sheet) => pcMoveBudget(world.campaignId, world.encounter(), kit.map(), world.sheet(sheet.id), kit.token(sheet.id)).tiles;
+const prone = (sheet) => world.sheet(sheet.id).conditions.includes("prone");
 const current = () => {
   const entry = world.encounter().order[world.encounter().turnIndex];
   return entry.kind === "pc" ? entry.characterId : null;
@@ -225,9 +233,143 @@ await test("The board's intent for an enemy reads the speed it really has: a slo
   assert.equal(intentOf().verb, "Shortbow");
 });
 
+// ---- a move typed by the player ----
+
+// A line in the transcript, as the actions route or the server writes it.
+const say = (authorType, content, sheet) =>
+  insertCampaignMessage({
+    campaignId: world.campaignId,
+    seq: allocateSeq(world.campaignId),
+    authorType,
+    content,
+    ...(sheet ? { userId: sheet.userId, characterId: sheet.id } : {}),
+  });
+
+async function typedMoveStage() {
+  await kit.endFight();
+  await kit.fight(1, { heroFaces: { [fighter.id]: 20, [thief.id]: 15 } });
+  kit.place(fighter.id, 2, 2);
+  kit.place(thief.id, 2, 6);
+  say("dm", "The goblin bursts from the reeds. Kara, it's your turn.");
+  ai.fresh();
+}
+
+await test("The AI walks the acting character the move their player just typed, from their own movement, as a board move would.", async () => {
+  await typedMoveStage();
+  say("player", "Kara hurries 20 feet east.", fighter);
+  const out = await ai.invoke("move_token", { tokenName: fighter.id, x: 6, y: 2 });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual([kit.token(fighter.id).x, kit.token(fighter.id).y], [6, 2]);
+  assert.equal(lit(fighter), 2, "the walk did not spend the character's movement");
+  const far = await ai.invoke("move_token", { tokenName: fighter.id, x: 12, y: 2 });
+  assert.equal(kit.token(fighter.id).x <= 8, true, `the walk went past the movement left: ${JSON.stringify(far)}`);
+});
+
+await test("The walk's result gives the new distances and the movement left, so the reply narrates the board's numbers.", async () => {
+  await typedMoveStage();
+  const [goblin] = world.enemies();
+  kit.place(goblin.id, 10, 2);
+  say("player", "Kara hurries 20 feet east.", fighter);
+  const out = await ai.invoke("move_token", { tokenName: fighter.id, x: 6, y: 2 });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.movementLeft, "10 ft");
+  // Grouped as the Combatants legend names them; the thief stands at (2,6),
+  // four squares from (6,2).
+  assert.equal(out.result.distancesNow, `Enemies: Goblin 20 ft. PCs: ${world.sheet(thief.id).name} 20 ft.`);
+  // An enemy's move reads the same way, from where it landed.
+  const moved = await ai.invoke("move_token", { tokenName: goblin.id, x: 9, y: 2 });
+  assert.equal(moved.ok, true, moved.error);
+  assert.equal(moved.result.distancesNow, `PCs: ${world.sheet(thief.id).name} 35 ft; Kara 15 ft.`);
+});
+
+await test("A walk refused for want of movement says where the mover still stands and the board's distances from there.", async () => {
+  await typedMoveStage();
+  const [goblin] = world.enemies();
+  kit.place(goblin.id, 10, 2, 6);
+  kit.place(fighter.id, 2, 2, 6);
+  say("player", "Kara charges another 15 feet east.", fighter);
+  const out = await ai.invoke("move_token", { tokenName: fighter.id, x: 5, y: 2 });
+  assert.equal(out.ok, false, "a walk with no movement left was accepted");
+  assert.equal(out.error.endsWith(` Still at (2,2): Enemies: Goblin 40 ft. PCs: ${world.sheet(thief.id).name} 20 ft.`), true, out.error);
+  const stuck = await ai.invoke("move_token", { tokenName: goblin.id, x: 8, y: 2 });
+  assert.equal(stuck.ok, false, "an enemy walk with no movement left was accepted");
+  assert.equal(stuck.error.endsWith(` Still at (10,2): PCs: ${world.sheet(thief.id).name} 40 ft; Kara 40 ft.`), true, stuck.error);
+});
+
+await test("A typed 'I get up' walked to the character's own square stands them up for half their speed; standing there already is refused.", async () => {
+  await typedMoveStage();
+  world.patch(fighter.id, { conditions: ["prone"] });
+  say("player", "Kara gets up.", fighter);
+  const stood = await ai.invoke("move_token", { tokenName: fighter.id, x: 2, y: 2 });
+  assert.equal(stood.ok, true, stood.error);
+  assert.equal(prone(fighter), false);
+  assert.equal(lit(fighter), 3, "standing up cost no movement");
+  const again = await ai.invoke("move_token", { tokenName: fighter.id, x: 2, y: 2 });
+  assert.equal(again.ok, false, "a walk to where they already stand was accepted");
+});
+
+await test("A typed move walks nobody when the player said nothing this DM turn, only talked out of character, or it is somebody else's character.", async () => {
+  await typedMoveStage();
+  say("system", "Brom ends their turn. It is now Kara's turn.");
+  const unasked = await ai.invoke("move_token", { tokenName: fighter.id, x: 6, y: 2 });
+  assert.equal(unasked.ok, false, "a turn the player did not speak in walked their token");
+  // The refusal and the tool's description say when a typed move walks.
+  assert.match(unasked.error, /on their own turn, for the move their player just declared/);
+  assert.match(moveTokenTool.function.description, /walking the move their player just declared/);
+  say("player", "(ooc) brb, getting a drink", fighter);
+  assert.equal((await ai.invoke("move_token", { tokenName: fighter.id, x: 6, y: 2 })).ok, false, "table talk walked the token");
+  say("player", "Kara hurries 20 feet east.", fighter);
+  assert.equal((await ai.invoke("move_token", { tokenName: thief.id, x: 6, y: 6 })).ok, false, "the acting player's message walked another character");
+  assert.equal((await ai.invoke("move_token", { tokenName: fighter.id, x: 6, y: 2, forced: true })).ok, false, "a forced move on their own turn was allowed");
+  // The human DM's console keeps today's rule: players walk their own tokens.
+  assert.equal((await world.invoke("move_token", { tokenName: fighter.id, x: 6, y: 2 })).ok, false, "the console walked a player's token");
+  assert.deepEqual([kit.token(fighter.id).x, kit.token(fighter.id).y], [2, 2]);
+  assert.deepEqual([kit.token(thief.id).x, kit.token(thief.id).y], [2, 6]);
+});
+
+await test("A typed move does not walk a character off their turn.", async () => {
+  await typedMoveStage();
+  say("player", "Vex darts 20 feet east.", thief);
+  assert.equal((await ai.invoke("move_token", { tokenName: thief.id, x: 6, y: 6 })).ok, false);
+  assert.deepEqual([kit.token(thief.id).x, kit.token(thief.id).y], [2, 6]);
+});
+
+// ---- what the DM is told ----
+
+await test("GAME STATE gives the acting character's movement left this turn, the number the board lights.", async () => {
+  await kit.endFight();
+  await kit.fight(1, { heroFaces: { [fighter.id]: 20, [thief.id]: 15 } });
+  kit.place(fighter.id, 2, 2);
+  assert.equal(await walk(fighter, 4, 2), 200);
+  const model = await fakeModel();
+  model.pointAt(world);
+  model.script([reply({ text: "Kara holds her ground." })]);
+  await model.turn(world, "Kara hurries 20 feet further west.", fighter.id, fighter.userId);
+  const sent = model.requests[0].messages.map((message) => message.content).join("\n");
+  model.close();
+  assert.match(sent, /Movement left this turn: Kara 20 ft \(speed 30 ft\)/);
+  // The Distances block gives each character their allies too.
+  assert.match(sent, /- Kara: Enemies: [^\n]*\. PCs: [^\n]*\./);
+  assert.equal(lit(fighter), 4);
+});
+
+await test("GAME STATE says nothing of movement for a character with no token on the board.", async () => {
+  await kit.endFight();
+  await kit.fight(1, { heroFaces: { [fighter.id]: 20, [thief.id]: 15 } });
+  removeTokenByRef(kit.map().id, fighter.id);
+  const model = await fakeModel();
+  model.pointAt(world);
+  model.script([reply({ text: "Kara looks around." })]);
+  await model.turn(world, "Kara looks around.", fighter.id, fighter.userId);
+  const sent = model.requests[0].messages.map((message) => message.content).join("\n");
+  model.close();
+  assert.doesNotMatch(sent, /Movement left this turn/);
+});
+
 // ---- every action an ambusher spends closes the turn it was owed ----
 
-// A table of its own: a wizard to counterspell, and a fighter to grapple.
+// A table of its own: a wizard to counterspell, a fighter to grapple, and a
+// Drunken Master whose Tipsy Sway makes standing up cost 5 feet.
 const second = await openWorld({ gameSettings: { ttsEnabled: false } });
 const kit2 = await combatKit(second);
 const kara2 = second.addHero({ name: "Kara", class: "fighter", level: 5, abilities: { str: 16 }, proficiencies: TRAINED, maxHp: 200, speed: 30 });
@@ -235,6 +377,7 @@ const wren = second.addHero({
   name: "Wren", class: "wizard", level: 5, abilities: { int: 16 }, proficiencies: TRAINED, maxHp: 200, speed: 30,
   spellcasting: { ability: "int", slots: { 3: { max: 2, used: 0 } }, prepared: ["Counterspell"], known: [], cantrips: [] },
 });
+const drunkard = second.addHero({ name: "Mei", class: "monk", subclass: "Way of the Drunken Master", level: 6, abilities: { dex: 16, wis: 14 }, proficiencies: TRAINED, maxHp: 200 });
 
 // The goblin ahead of both characters has walked its speed on the turn it
 // is owed; `act` spends that turn's action, and its own turn must walk again.
@@ -271,6 +414,18 @@ await test("An ambusher's owed turn closed by a spell, a grapple escape, a spell
   });
   await owedTurnClosedBy("a countered spell", (goblin) =>
     second.invoke("use_reaction", { characterId: wren.id, feature: "Counterspell", targetEnemyId: goblin.id, spell: "Fireball" }));
+});
+
+await test("A typed move stands a character up for what their features make standing cost: Tipsy Sway's 5 feet, as on the board.", async () => {
+  await kit2.endFight();
+  await kit2.fight(1, { heroFaces: { [drunkard.id]: 20 } });
+  kit2.place(drunkard.id, 4, 4);
+  second.patch(drunkard.id, { conditions: ["prone"] });
+  insertCampaignMessage({ campaignId: second.campaignId, seq: allocateSeq(second.campaignId), authorType: "player", content: "Mei gets up.", userId: drunkard.userId, characterId: drunkard.id });
+  const ai2 = await aiEngine(second);
+  const stood = await ai2.invoke("move_token", { tokenName: drunkard.id, x: 4, y: 4 });
+  assert.equal(stood.ok, true, stood.error);
+  assert.equal(kit2.token(drunkard.id).movedThisRound, 1, "standing did not cost Tipsy Sway's 5 feet");
 });
 
 await kit2.endFight();

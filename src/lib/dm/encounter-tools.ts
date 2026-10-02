@@ -971,7 +971,7 @@ export function applyEncounterCall(
       return { result: early ? { error: early } : handleEnemyAttack(campaign, turn, rawArguments, sheets, sheetsById) };
     }
     case "move_token":
-      return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById) };
+      return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById, turn) };
     case "teleport_token":
       return { result: handleTeleportToken(campaign, rawArguments, sheets, sheetsById, turn) };
     case "set_movement":

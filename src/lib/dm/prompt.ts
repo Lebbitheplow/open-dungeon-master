@@ -103,6 +103,9 @@ export type DmEncounterState = {
   // What the combatant whose turn it is still has to spend, or null before
   // they have spent anything (src/lib/dm/action-budget.ts).
   turnBudget: string | null;
+  // The acting character's movement left this turn, as the board counts it,
+  // or null when they have no token on a board.
+  movementLeft: string | null;
   enemies: Array<{
     enemyId: string;
     name: string;
@@ -683,6 +686,9 @@ export function buildGameStateBlock(state: DmGameState): string {
         lines.push(
           `Action economy this turn: the current combatant ${encounter.turnBudget}. The server enforces it; a tool that needs a spent action is refused.`,
         );
+      }
+      if (encounter.movementLeft) {
+        lines.push(`Movement left this turn: ${encounter.movementLeft}, counted by the board.`);
       }
     } else {
       lines.push(
