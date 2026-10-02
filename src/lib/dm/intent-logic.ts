@@ -65,7 +65,7 @@ export function intentTools(intent: MessageIntent): string[] {
     case "feature":
       return ["use_resource"];
     case "basic":
-      return intent.action === "end-turn" ? ["end_turn"] : ["take_action"];
+      return intent.action === "end-turn" ? ["end_turn"] : intent.action === "stand-up" ? ["clear_condition"] : ["take_action"];
     case "reaction":
       return ["use_reaction"];
   }

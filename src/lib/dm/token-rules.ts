@@ -11,6 +11,8 @@ import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 import { findPath, speedToTiles, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
 import { tileIndex, type BattleToken } from "@/lib/battlemap/types";
+import { describeDistances } from "@/lib/battlemap/serialize";
+import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { canAct, canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
 import { removeConditions } from "@/lib/dm/condition-logic";
@@ -23,9 +25,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The rules behind two board moves the model can make: a teleport, which
 // the AI makes only through the spell or ability that does it (cast and
-// paid for) or a hazard, and a companion's walk on its own turn, which
-// costs its speed and draws opportunity attacks exactly as a player's walk
-// from the board does. Split from map-tools.ts, which calls both.
+// paid for) or a hazard, and a character's walk on their own turn (an AI
+// companion's, or the move a player just declared), which costs their speed
+// and draws opportunity attacks exactly as a player's walk from the board
+// does. Split from map-tools.ts, which calls both.
 
 type XY = { x: number; y: number };
 
@@ -140,11 +143,28 @@ export function spendEnemyDisengage(campaignId: string, enemy: EncounterEnemy): 
   return { how: "its action (Disengage)" };
 }
 
-// A companion walking on its own turn: its speed this round (conditions,
-// exhaustion, Dash), standing from prone for half of it, never closer to
-// what it fears, and the opportunity attacks of every enemy it walks away
-// from. Returns the move_token result.
-export function walkCompanion(
+// Fresh ranges from where a mover landed to everyone else on the board, so
+// the model narrates the new distances instead of remembering the pre-move
+// map.
+export function distancesFrom(tokens: BattleToken[], mover: BattleToken, at: XY): { distancesNow?: string } {
+  const distances = describeDistances(at, tokens.filter((other) => other.id !== mover.id));
+  return distances ? { distancesNow: distances } : {};
+}
+
+// Where a refused walk leaves the mover and its ranges from there, appended
+// to the refusal, so the reply reads the board's distances whether the walk
+// happened or not.
+export function stillAt(tokens: BattleToken[], mover: BattleToken): string {
+  const distances = describeDistances(mover, tokens.filter((other) => other.id !== mover.id));
+  return ` Still at (${mover.x},${mover.y})${distances ? `: ${distances}` : "."}`;
+}
+
+// A character walking on their own turn, an AI companion or a player's typed
+// move (map-tools.ts): their speed this turn (conditions, exhaustion, Dash),
+// standing from prone for half of it, never closer to what they fear, and
+// the opportunity attacks of every enemy they walk away from. Returns the
+// move_token result.
+export function walkCharacter(
   campaign: Campaign,
   encounter: Encounter,
   map: BattleMap,
@@ -161,7 +181,19 @@ export function walkCompanion(
   }
   const { speed, fullTiles } = pcMoveBudget(campaign.id, encounter, map, sheet, token);
   if (speed <= 0 || fullTiles <= 0) {
-    return { error: `${sheet.name} has no movement left this round.` };
+    return { error: `${sheet.name} has no movement left this turn.${stillAt(listTokens(map.id), token)}` };
+  }
+  // Prone: standing costs half the speed; without that much left it cannot
+  // stand, and this walk does not crawl.
+  const prone = sheet.conditions.find((entry) => entry.toLowerCase() === "prone");
+  const standCost = prone ? standUpTiles(sheet, speedToTiles(speed)) : 0;
+  if (prone && standCost > fullTiles) {
+    return { error: `${sheet.name} is prone and has too little movement left to stand.${stillAt(listTokens(map.id), token)}` };
+  }
+  // A walk to the square they stand on is a prone character getting up.
+  const here = destination.x === token.x && destination.y === token.y;
+  if (here && !prone) {
+    return { error: `${sheet.name} already stands at (${token.x},${token.y}).` };
   }
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const occupied = occupiedTiles(map, listTokens(map.id), token, footprintLookup(enemiesById));
@@ -169,26 +201,18 @@ export function walkCompanion(
     return { error: `(${destination.x},${destination.y}) is occupied by another combatant.` };
   }
   const traits = withZoneSteps(false, map, "pc", sheet.id);
-  const path = findPath(map.terrain, map.width, map.height, occupied, token, destination, 1, token.movement === "fly", traits);
+  const path = here ? [] : findPath(map.terrain, map.width, map.height, occupied, token, destination, 1, token.movement === "fly", traits);
   if (!path) {
     return { error: `No path to (${destination.x},${destination.y}); walls block the way.` };
   }
-  // Prone: standing costs half the speed; without that much left it cannot
-  // stand, and this walk does not crawl.
-  const prone = sheet.conditions.find((entry) => entry.toLowerCase() === "prone");
-  const standCost = prone ? Math.floor(speedToTiles(speed) / 2) : 0;
-  if (prone && standCost > fullTiles) {
-    return { error: `${sheet.name} is prone and has too little movement left to stand.` };
-  }
   const fear = fearSourceAt(map.id, sheet.conditions, sheet.conditionMeta as Record<string, { source?: string }>);
   const steps = awayFromFear(token, path, fear);
-  const walk = walkPathWithBudget(map.terrain, map.width, steps, fullTiles - standCost, traits, token);
+  const walk = here
+    ? { at: { x: token.x, y: token.y }, spent: 0, reachedEnd: true }
+    : walkPathWithBudget(map.terrain, map.width, steps, fullTiles - standCost, traits, token);
   if (!walk.at) {
-    return {
-      error: fear
-        ? `${sheet.name} is frightened and cannot move closer to what it fears.`
-        : `${sheet.name} has no movement left for that.`,
-    };
+    const why = fear ? `${sheet.name} is frightened and cannot move closer to what it fears.` : `${sheet.name} has no movement left for that.`;
+    return { error: `${why}${stillAt(listTokens(map.id), token)}` };
   }
   const origin = { x: token.x, y: token.y };
   moveToken(token.id, walk.at.x, walk.at.y, token.movedThisRound + walk.spent + standCost);
@@ -214,7 +238,9 @@ export function walkCompanion(
     name: token.name,
     at: `(${landed.x},${landed.y})`,
     movementSpent: `${(walk.spent + standCost) * 5} ft`,
-    ...(prone ? { stood: "stood up for half its speed" } : {}),
+    movementLeft: `${(fullTiles - walk.spent - standCost) * 5} ft`,
+    ...distancesFrom(listTokens(map.id), token, landed),
+    ...(prone ? { stood: `stood up for ${standCost * 5} ft of movement` } : {}),
     ...(opportunity.notes.length
       ? {
           opportunityAttacks: opportunity.notes,

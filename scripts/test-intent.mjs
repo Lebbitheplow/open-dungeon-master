@@ -73,24 +73,34 @@ test("the likely intent picks the nearest living, unhidden player character", ()
   const actor = { id: "t-wight", x: 5, y: 5 };
   const far = { id: "t-far", x: 9, y: 5 };
   const near = { id: "t-near", x: 6, y: 6 };
-  const intent = likelyIntent({ stats: wightStats }, actor, [far, near]);
+  const intent = likelyIntent({ stats: wightStats, conditions: [] }, actor, [far, near]);
   assert.equal(intent.targetTokenId, "t-near");
   assert.equal(intent.verb, "Longsword");
   assert.equal(intent.verbKind, "melee");
   assert.equal(intent.expected, 7);
   assert.equal(intent.source, "likely");
   // The nearest one is down, then hidden: the far one is the mark.
-  assert.equal(likelyIntent({ stats: wightStats }, actor, [far, { ...near, down: true }]).targetTokenId, "t-far");
-  assert.equal(likelyIntent({ stats: wightStats }, actor, [far, { ...near, hidden: true }]).targetTokenId, "t-far");
+  assert.equal(likelyIntent({ stats: wightStats, conditions: [] }, actor, [far, { ...near, down: true }]).targetTokenId, "t-far");
+  assert.equal(likelyIntent({ stats: wightStats, conditions: [] }, actor, [far, { ...near, hidden: true }]).targetTokenId, "t-far");
   // Nobody standing, or nothing to attack with: nothing to say.
-  assert.equal(likelyIntent({ stats: wightStats }, actor, [{ ...near, down: true }]), null);
-  assert.equal(likelyIntent({ stats: { speed: "30 ft.", attacks: [] } }, actor, [near]), null);
+  assert.equal(likelyIntent({ stats: wightStats, conditions: [] }, actor, [{ ...near, down: true }]), null);
+  assert.equal(likelyIntent({ stats: { speed: "30 ft.", attacks: [] }, conditions: [] }, actor, [near]), null);
 });
 
 test("a mark no move could close brings out the bow", () => {
-  const intent = likelyIntent({ stats: wightStats }, { id: "t-wight", x: 0, y: 0 }, [{ id: "t-pc", x: 20, y: 0 }]);
+  const intent = likelyIntent({ stats: wightStats, conditions: [] }, { id: "t-wight", x: 0, y: 0 }, [{ id: "t-pc", x: 20, y: 0 }]);
   assert.equal(intent.verb, "Longbow");
   assert.equal(intent.verbKind, "ranged");
+});
+
+test("the move a mark needs is the one the creature has: slowed or grappled, the bow comes out sooner", () => {
+  // Seven squares off: a 30-foot walk closes it, half of one does not, and
+  // a grappled creature walks nowhere.
+  const mark = [{ id: "t-pc", x: 7, y: 0 }];
+  const actor = { id: "t-wight", x: 0, y: 0 };
+  assert.equal(likelyIntent({ stats: wightStats, conditions: [] }, actor, mark).verb, "Longsword");
+  assert.equal(likelyIntent({ stats: wightStats, conditions: ["slowed"] }, actor, mark).verb, "Longbow");
+  assert.equal(likelyIntent({ stats: wightStats, conditions: ["grappled"] }, { ...actor, x: 5 }, mark).verb, "Longbow");
 });
 
 test("the pure projection drops an unseen actor and unnames an unseen mark", () => {
@@ -98,8 +108,8 @@ test("the pure projection drops an unseen actor and unnames an unseen mark", () 
     round: 2,
     declared: { round: 2, byActor: { e1: { verb: "Longsword", verbKind: "melee", targetRef: "pc-2", expected: 9 } } },
     enemies: [
-      { id: "e1", stats: wightStats, token: { id: "t-e1", x: 1, y: 1 } },
-      { id: "e2", stats: wightStats, token: { id: "t-e2", x: 8, y: 1 } },
+      { id: "e1", stats: wightStats, conditions: [], token: { id: "t-e1", x: 1, y: 1 } },
+      { id: "e2", stats: wightStats, conditions: [], token: { id: "t-e2", x: 8, y: 1 } },
     ],
     pcTokens: [
       { id: "t-pc1", refId: "pc-1", x: 2, y: 1 },

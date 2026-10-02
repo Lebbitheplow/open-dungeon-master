@@ -31,7 +31,7 @@ import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { wornArmorTurnsCrits } from "@/lib/srd/armor";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { approachTarget, standUpIfProne } from "@/lib/dm/enemy-approach";
+import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { blowByType, resolveOnHit } from "@/lib/dm/enemy-hit";
 import { charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
@@ -214,7 +214,12 @@ export function handleEnemyAttack(
   // The action is spent by taking it, hit or miss. Read fresh: the walk up
   // to the target may have spent a character's reaction on this same row.
   const live = getActiveEncounter(campaign.id) ?? encounter;
-  markEnemyActed(live, enemy.id);
+  // An attack a legendary action bought is not a turn of the creature's.
+  if (single) {
+    markEnemyActed(live, enemy.id);
+  } else {
+    spendEnemyAction(live, enemy.id);
+  }
   saveEncounter(live);
   const hitLog = openLastHit(campaign.id, target.id);
 

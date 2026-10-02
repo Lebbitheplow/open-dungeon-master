@@ -96,7 +96,7 @@ function canMoveNow(campaignId: string, characterId: string): boolean {
   return current?.kind === "pc" && current.characterId === characterId;
 }
 
-// Movement left this round for a player character, in tiles, and the speed
+// Movement left this turn for a player character, in tiles, and the speed
 // it comes from. The one computation the board's highlights and the move
 // route both use: conditions, exhaustion, armor and the Dash action all
 // count, so no lit tile is refused and no Dash tile goes unlit (issue 17).
@@ -419,7 +419,7 @@ export function buildPlayerMapView(
         enemies: tokens.flatMap((token) => {
           const enemy = token.kind === "enemy" ? enemiesById.get(token.refId) : undefined;
           return enemy && enemy.status === "alive"
-            ? [{ id: enemy.id, stats: enemy.stats, token }]
+            ? [{ id: enemy.id, stats: enemy.stats, conditions: enemy.conditions, token }]
             : [];
         }),
         pcTokens: tokens

@@ -1,4 +1,4 @@
-import { tileIndex, type AmbientLight, type BattleToken, type MapLight } from "@/lib/battlemap/types";
+import { chebyshev, tileIndex, type AmbientLight, type BattleToken, type MapLight, type TokenKind } from "@/lib/battlemap/types";
 import { describeScene, type DoorStates, type MapLabel } from "@/lib/battlemap/scene";
 import { withAnchors, type SpellZone } from "@/lib/battlemap/zones";
 import { describeZones } from "@/lib/battlemap/zones-describe";
@@ -40,6 +40,27 @@ export function tokenGlyphs(tokens: BattleToken[]): Map<string, string> {
   return glyphs;
 }
 
+// The ranges from one square to other tokens, grouped by the names the
+// Combatants legend gives them, so a list reads the same whoever moved:
+// "Enemies: Goblin 30 ft; Goblin 2 ADJACENT (melee range, 5 ft). PCs: Brom 20 ft."
+const DISTANCE_GROUPS: Array<[string, TokenKind[]]> = [
+  ["Enemies", ["enemy"]],
+  ["PCs", ["pc"]],
+  ["Others", ["npc", "prop"]],
+];
+
+export function describeDistances(from: { x: number; y: number }, others: BattleToken[]): string {
+  return DISTANCE_GROUPS.flatMap(([label, kinds]) => {
+    const entries = others
+      .filter((other) => kinds.includes(other.kind))
+      .map((other) => {
+        const tilesApart = chebyshev(from.x, from.y, other.x, other.y);
+        return `${other.name} ${tilesApart <= 1 ? "ADJACENT (melee range, 5 ft)" : `${tilesApart * 5} ft`}`;
+      });
+    return entries.length ? [`${label}: ${entries.join("; ")}.`] : [];
+  }).join(" ");
+}
+
 // `statuses` maps a token's refId to a short status note appended to its
 // combatant line (DOWN, DYING, conditions), so the model sees drift-free
 // state next to each position.
@@ -79,19 +100,15 @@ export function serializeMapForPrompt(
   });
   lines.push(`Combatants: ${tokenLines.join("; ")}`);
 
-  // Precomputed PC-to-enemy ranges: tile counting on the ASCII grid is
-  // exactly the arithmetic small models get wrong, so these lines are the
-  // authoritative distances the prompt points at.
+  // Precomputed ranges from each PC to every enemy and every other PC: tile
+  // counting on the ASCII grid is exactly the arithmetic small models get
+  // wrong, so these lines are the authoritative distances the prompt points at.
   const pcTokens = tokens.filter((token) => token.kind === "pc");
   const enemyTokens = tokens.filter((token) => token.kind === "enemy");
-  if (pcTokens.length && enemyTokens.length) {
-    const rows = pcTokens.map((pc) => {
-      const parts = enemyTokens.map((enemy) => {
-        const tilesApart = Math.max(Math.abs(pc.x - enemy.x), Math.abs(pc.y - enemy.y));
-        return `${enemy.name} ${tilesApart <= 1 ? "ADJACENT (melee range, 5 ft)" : `${tilesApart * 5} ft`}`;
-      });
-      return `- ${pc.name}: ${parts.join("; ")}`;
-    });
+  if (pcTokens.length && (enemyTokens.length || pcTokens.length > 1)) {
+    const rows = pcTokens.map(
+      (pc) => `- ${pc.name}: ${describeDistances(pc, [...enemyTokens, ...pcTokens.filter((other) => other.id !== pc.id)])}`,
+    );
     lines.push(`Distances (authoritative; do not re-count tiles):\n${rows.join("\n")}`);
   }
 

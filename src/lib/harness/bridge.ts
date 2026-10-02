@@ -46,8 +46,10 @@ const IDLE_MS_TURN = 10 * 60_000;
 const IDLE_MS_OTHER = 90_000;
 const MAX_LIFETIME_MS = 20 * 60_000;
 
-export const NARRATE_NOW =
+const NO_MORE_TOOLS =
   "No more tools are available this turn. Stop calling tools and write the narration for the players now.";
+// The answer to a call made when only narration is left (refuseToNarrate).
+export const NARRATE_NOW = `${NO_MORE_TOOLS} This call did not happen: write the complete narration from what the tool results show; it replaces anything you wrote before the call.`;
 const TURN_OVER = "This turn has ended. Stop calling tools.";
 
 type PendingCall = {
@@ -90,6 +92,9 @@ export class BridgeSession {
   private queue: PendingCall[] = [];
   private inflight = new Map<string, PendingCall>();
   private text = "";
+  // What the program wrote before its last call refused for narration only:
+  // the message if it writes nothing after the refusal (refuseToNarrate).
+  private draft = "";
   private waiter: Waiter | null = null;
   private stored: UpstreamResult | null = null;
   private gatherTimer: ReturnType<typeof setTimeout> | null = null;
@@ -153,8 +158,9 @@ export class BridgeSession {
     if (event.type === "turn_end") {
       this.finished = true;
       this.lastUsage = event.usage;
-      const content = (this.text.trim() ? this.text : event.text).trim();
+      const content = (this.text.trim() ? this.text : this.draft || event.text).trim();
       this.text = "";
+      this.draft = "";
       // Calls still queued when the program says it is done can only be
       // strays; they are answered and dropped.
       for (const call of this.queue.splice(0)) {
@@ -186,7 +192,7 @@ export class BridgeSession {
       return Promise.resolve({ text: TURN_OVER, isError: true });
     }
     if (this.narrateOnly) {
-      return Promise.resolve({ text: NARRATE_NOW, isError: true });
+      return Promise.resolve({ text: this.refuseToNarrate(), isError: true });
     }
     if (!this.allowed.has(name)) {
       return Promise.resolve({
@@ -205,6 +211,18 @@ export class BridgeSession {
       });
       this.scheduleGather();
     });
+  }
+
+  // A call refused because only narration is left did not happen, so what
+  // the program wrote before it may tell it as done ("Kara steps back") or be
+  // a draft it rewrites after the refusal. The text written after the last
+  // refusal is the message; the latest draft stands only if nothing follows.
+  private refuseToNarrate(): string {
+    if (this.text.trim()) {
+      this.draft = this.text;
+    }
+    this.text = "";
+    return NARRATE_NOW;
   }
 
   private scheduleGather() {
@@ -302,7 +320,7 @@ export class BridgeSession {
       this.inflight.clear();
       if (this.narrateOnly) {
         for (const call of this.queue.splice(0)) {
-          call.answer(NARRATE_NOW, true);
+          call.answer(this.refuseToNarrate(), true);
         }
       }
 
@@ -316,7 +334,7 @@ export class BridgeSession {
       const followUp = renderFollowUp(fresh as never[]);
       if (this.finished) {
         if (followUp) {
-          this.send(this.narrateOnly ? `${followUp}\n\n${NARRATE_NOW}` : followUp);
+          this.send(this.narrateOnly ? `${followUp}\n\n${NO_MORE_TOOLS}` : followUp);
         } else {
           // Asked again with nothing new: the last answer stands.
           this.deliver({ message: { content: "" } });
