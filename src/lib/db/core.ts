@@ -1794,6 +1794,12 @@ function ensureSchema(db: SqliteDatabase) {
     // the roller and the DM ('self'). A human DM's answer to the screen they
     // would otherwise be hiding dice behind (src/lib/dm/viewer.ts).
     ["visibility", `TEXT NOT NULL DEFAULT 'public'`],
+    // Who made an attack or damage roll, by name as they were when it was
+    // rolled (src/lib/db/rolls.ts RollAttacker). character_id is the PC the
+    // roll concerns, which for an enemy's attack is its target, so it cannot
+    // say who rolled. NULL: nobody did (a fall), a roll tool, or a roll
+    // stored before the column.
+    ["attacker_json", `TEXT`],
   ]);
 
   addColumns("campaign_notes", [

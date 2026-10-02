@@ -17,6 +17,12 @@ export type RollKind =
 export const ROLL_VISIBILITIES = ["public", "dm", "blind", "self"] as const;
 export type RollVisibility = (typeof ROLL_VISIBILITIES)[number];
 
+// Who made an attack or damage roll, named as they were when it was rolled.
+// A character's bound creature has no id of its own (it lives on its owner's
+// sheet), so a pet's id is its owner's sheet id. characterId cannot say this:
+// it is the PC the roll concerns, the target of an enemy's attack.
+export type RollAttacker = { kind: "sheet" | "enemy" | "pet"; id: string; name: string };
+
 export type StoredRoll = {
   id: string;
   campaignId: string;
@@ -36,6 +42,9 @@ export type StoredRoll = {
   // set together with `applied` (the damage_enemy double-apply guard).
   targetEnemyId: string | null;
   applied: boolean;
+  // Attack and damage rolls: who rolled. Null when nobody did (a fall), for
+  // the roll tools' rolls, and for rolls stored before it was recorded.
+  attacker: RollAttacker | null;
   createdAt: string;
 };
 
@@ -56,6 +65,7 @@ type RollRow = {
   message_id: string | null;
   target_enemy_id: string | null;
   applied: number;
+  attacker_json: string | null;
   created_at: string;
 };
 
@@ -81,6 +91,7 @@ function mapRoll(row: RollRow): StoredRoll {
     messageId: row.message_id,
     targetEnemyId: row.target_enemy_id ?? null,
     applied: Boolean(row.applied),
+    attacker: parseJson<RollAttacker | null>(row.attacker_json ?? "null", null),
     createdAt: row.created_at,
   };
 }
@@ -93,18 +104,23 @@ export function markRollApplied(rollId: string, targetEnemyId: string) {
     .run(targetEnemyId, rollId);
 }
 
-export function insertRoll(input: {
+// An attack or damage roll must say who made it, or that nobody did.
+export type RollInsert = {
   campaignId: string;
   characterId?: string | null;
   requestedBy: "dm" | "player";
-  kind: RollKind;
   detail?: string;
   advantage?: Advantage;
   dc?: number | null;
   result: RollResult;
   visibility?: RollVisibility;
   messageId?: string | null;
-}): StoredRoll {
+} & (
+  | { kind: "attack" | "damage"; attacker: RollAttacker | null }
+  | { kind: Exclude<RollKind, "attack" | "damage">; attacker?: RollAttacker | null }
+);
+
+export function insertRoll(input: RollInsert): StoredRoll {
   const id = crypto.randomUUID();
   const success =
     input.dc === undefined || input.dc === null ? null : input.result.total >= input.dc ? 1 : 0;
@@ -115,9 +131,9 @@ export function insertRoll(input: {
         INSERT INTO rolls (
           id, campaign_id, character_id, requested_by, roll_kind, detail,
           expression, advantage, dc, total, success, breakdown_json,
-          visibility, message_id, created_at
+          visibility, message_id, attacker_json, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -135,6 +151,7 @@ export function insertRoll(input: {
       JSON.stringify(input.result),
       input.visibility ?? "public",
       input.messageId ?? null,
+      input.attacker ? JSON.stringify(input.attacker) : null,
       nowIso(),
     );
 

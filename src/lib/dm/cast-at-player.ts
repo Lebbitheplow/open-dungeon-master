@@ -4,7 +4,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, recordEncounterTarget, setEnemyConcentration } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { isValidExpression, rollExpression } from "@/lib/dice";
+import { isValidExpression } from "@/lib/dice";
 import { spellMechanicsFor } from "@/lib/content";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
@@ -13,6 +13,9 @@ import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
+import { rollCard } from "@/lib/dm/action-common";
+import type { RollAttacker } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -249,7 +252,9 @@ export function handleCastAtPlayer(
   };
 
   if (damage) {
-    const outcome = rollExpression(damage);
+    // The card shows the dice as rolled; the save halves or stops what lands.
+    const caster: RollAttacker | null = use ? { kind: "enemy", id: use.enemy.id, name: use.enemy.displayName } : null;
+    const outcome = rollCard(campaign, turn, sheet.id, "damage", rollAgainst(use?.name || args.spell || args.source || "Effect", sheet.name), damage, caster);
     // The one save-for-half rule every path shares, Evasion included
     // (src/lib/srd/trait-rules.ts).
     const taken = saveDamageTaken({ total: outcome.total, saved, halfOnSave, ability, sheet });

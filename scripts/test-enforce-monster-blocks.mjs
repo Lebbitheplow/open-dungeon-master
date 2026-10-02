@@ -86,8 +86,9 @@ await test("An enemy's Multiattack makes the attacks its routine lists, each wit
   const [dragon] = await stage(ROWS.adultRedDragon);
   const out = await strike(dragon, tank, [15, 1, 1, 1, 1, 15, 1, 1, 15, 1, 1]);
   assert.equal(out.ok, true, out.error);
-  const attacks = out.made.filter((roll) => roll.kind === "attack").map((roll) => roll.detail);
-  assert.deepEqual(attacks, [`${dragon.displayName}: Bite`, `${dragon.displayName}: Claw`, `${dragon.displayName}: Claw`]);
+  const attacks = out.made.filter((roll) => roll.kind === "attack");
+  assert.deepEqual(attacks.map((roll) => roll.detail), [`Bite vs ${tank.name}`, `Claw vs ${tank.name}`, `Claw vs ${tank.name}`]);
+  assert.ok(attacks.every((roll) => roll.attacker?.id === dragon.id));
   assert.equal(out.unused, 0);
 });
 

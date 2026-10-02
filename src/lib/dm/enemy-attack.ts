@@ -15,6 +15,7 @@ import {
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { insertRoll } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { getSheetById } from "@/lib/db/sheets";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -284,9 +285,10 @@ export function handleEnemyAttack(
       characterId: target.id,
       requestedBy: "dm",
       kind: "attack",
-      detail: `${enemy.displayName}: ${attack.name}`,
+      detail: rollAgainst(attack.name, target.name),
       advantage,
       result: hitOutcome,
+      attacker: { kind: "enemy", id: enemy.id, name: enemy.displayName },
     });
     publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
       roll: hitRoll,
@@ -344,8 +346,9 @@ export function handleEnemyAttack(
       characterId: target.id,
       requestedBy: "dm",
       kind: "damage",
-      detail: `${enemy.displayName}: ${attack.name} damage`,
+      detail: rollAgainst(attack.name, target.name),
       result: damageOutcome,
+      attacker: { kind: "enemy", id: enemy.id, name: enemy.displayName },
     });
     publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
       roll: damageRoll,

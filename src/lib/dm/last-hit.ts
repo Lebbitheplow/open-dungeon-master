@@ -26,6 +26,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import type { RollResult, Advantage } from "@/lib/dice";
+import type { RollAttacker } from "@/lib/db/rolls";
 import { spellMechanicsFor } from "@/lib/content";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -88,6 +89,14 @@ export type LastHit = {
   startedAt: string;
   at: string;
 };
+
+// Who rolls the recorded attack again (Protection and its kin): the enemy
+// that made it; a hazard is nobody.
+export function rerollAttacker(record: LastHit): RollAttacker | null {
+  return record.attacker.kind === "enemy" && record.attacker.id
+    ? { kind: "enemy", id: record.attacker.id, name: record.attacker.name }
+    : null;
+}
 
 const ensured = new WeakSet<object>();
 

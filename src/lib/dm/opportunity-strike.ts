@@ -18,6 +18,7 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { getEnemy, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, markRollApplied } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -161,9 +162,10 @@ export function pcOpportunitySwing(input: {
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "attack",
-    detail: `${sheet.name}: opportunity attack on ${enemy.displayName} (${profile.weapon})`,
+    detail: rollAgainst(`${profile.weapon} (opportunity attack)`, enemy.displayName),
     advantage,
     result: hitOutcome,
+    attacker: { kind: "sheet", id: sheet.id, name: sheet.name },
   });
   publishRoll(campaign.id, hitRoll);
   const judged = adjudicateHit(hitOutcome.total, hitOutcome.crit, targetAc, {
@@ -208,8 +210,9 @@ export function pcOpportunitySwing(input: {
       characterId: sheet.id,
       requestedBy: "dm",
       kind: "damage",
-      detail: `${sheet.name}: opportunity attack damage`,
+      detail: rollAgainst(`${profile.weapon} (opportunity attack)`, enemy.displayName),
       result: damageOutcome,
+      attacker: { kind: "sheet", id: sheet.id, name: sheet.name },
     });
     publishRoll(campaign.id, damageRoll);
     const sheets = listSheets(campaign.id);

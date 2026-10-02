@@ -151,6 +151,7 @@ export function finishEncounter(
       sheets,
       rolls: listRollsSince(campaign.id, encounter.createdAt).map((roll) => ({
         characterId: roll.characterId,
+        attacker: roll.attacker,
         kind: roll.kind,
         total: roll.total,
         applied: roll.applied,
