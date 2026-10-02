@@ -224,6 +224,68 @@ await test("Dice of harm no character dealt to an object are a card with no atta
   expectCard(world, before, { attacker: null, detail: "fire on the oak door", characterId: null, total: 6 });
 });
 
+// ---- the rest of the server's dice ----
+
+const newRolls = (world, before) => listRecentRolls(world.campaignId, 200).filter((roll) => !before.has(roll.id));
+
+await test("An enemy's initiative is a roll the DM alone sees, as its saves are.", async () => {
+  const { world, enemies: [goblin] } = await table([FIGHTER]);
+  const roll = listRecentRolls(world.campaignId, 200).find((entry) => entry.kind === "initiative" && entry.detail === `${goblin.displayName}: initiative`);
+  assert.ok(roll, "the enemy's initiative left no record");
+  assert.equal(roll.visibility, "dm");
+  assert.equal(roll.characterId, null);
+});
+
+await test("Prismatic Spray: the d8 that picks each creature's ray is a card the table sees.", async () => {
+  const { world, sheets: [wizard, fighter], enemies: [goblin] } = await table([caster("wizard", "int", ["Prismatic Spray"], [], 13), { ...FIGHTER, name: "Bren" }]);
+  const before = snapshot(world);
+  world.dice(1, 1, ...new Array(10).fill(2), 1, 1, ...new Array(10).fill(2));
+  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 17, level: 7 });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  const rays = newRolls(world, before).filter((roll) => roll.detail.startsWith("Prismatic Spray: the ray"));
+  assert.deepEqual(rays.map((roll) => [roll.detail, roll.total, roll.visibility]), [
+    [`Prismatic Spray: the ray that strikes ${goblin.displayName}`, 1, "public"],
+    ["Prismatic Spray: the ray that strikes Bren", 1, "public"],
+  ]);
+});
+
+await test("Treasure's gold, a potion's duration and False Life's temporary hit points are cards.", async () => {
+  const { world, sheets: [wizard] } = await table([{ ...caster("wizard", "int", ["False Life"]), equipment: [{ name: "Potion of Growth", qty: 1 }] }]);
+  let before = snapshot(world);
+  const gold = await world.invoke("roll_treasure", { cr: 1, characterIds: [wizard.id] });
+  assert.equal(gold.ok, true, gold.error);
+  assert.ok(newRolls(world, before).some((roll) => roll.detail.startsWith("Treasure: gold") && roll.visibility === "public"), "no gold card");
+  before = snapshot(world);
+  world.dice(3);
+  const drunk = await world.invoke("use_item", { characterId: wizard.id, item: "Potion of Growth" });
+  world.clearDice();
+  assert.equal(drunk.ok, true, drunk.error);
+  const hours = newRolls(world, before).find((roll) => roll.detail === "Potion of Growth: hours it lasts");
+  assert.ok(hours, "no duration card");
+  assert.equal(hours.total, 3);
+  before = snapshot(world);
+  const cast = await world.invoke("cast_buff", { characterId: wizard.id, spell: "False Life", level: 1 });
+  assert.equal(cast.ok, true, cast.error);
+  const temp = newRolls(world, before).find((roll) => roll.detail === "False Life: temporary hit points");
+  assert.ok(temp, "no temporary hit point card");
+  assert.equal(temp.characterId, wizard.id);
+});
+
+await test("Mirror Image: the d20 that decides whether a duplicate is struck is a card about the caster.", async () => {
+  const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Mirror Image"])]);
+  const cast = await world.invoke("cast_buff", { characterId: wizard.id, spell: "Mirror Image", level: 2 });
+  assert.equal(cast.ok, true, cast.error);
+  const before = snapshot(world);
+  world.dice(19, 15, 3);
+  await enemySwing(world, goblin.id, wizard.id);
+  world.clearDice();
+  const decoy = newRolls(world, before).find((roll) => roll.detail.startsWith("Mirror Image"));
+  assert.ok(decoy, "no Mirror Image card");
+  assert.equal(decoy.characterId, wizard.id);
+  assert.equal(decoy.visibility, "public");
+});
+
 await test("A flat amount rolls no dice and stores no card; dice always do.", async () => {
   const { world, sheets: [fighter] } = await table([FIGHTER]);
   const before = snapshot(world);

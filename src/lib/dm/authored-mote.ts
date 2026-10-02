@@ -20,7 +20,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression, type RollResult } from "@/lib/dice";
+import type { RollResult } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
@@ -50,9 +50,9 @@ export function moteOf(sheet: Pick<CharacterSheet, "conditionMeta">, spent: stri
 
 // The value the die showed in a roll: its term's subtotal, or a fresh roll
 // when the expression did not keep it apart.
-function dieValue(outcome: RollResult | null, mote: HeldMote): number {
+function dieValue(campaign: Campaign, sheetId: string, outcome: RollResult | null, mote: HeldMote): number {
   const term = outcome?.terms.find((entry) => entry.kind === "dice" && entry.sides === mote.sides);
-  return term && term.kind === "dice" ? term.subtotal : rollExpression(`1${mote.die}`).total;
+  return term && term.kind === "dice" ? term.subtotal : rollCard(campaign, null, sheetId, "custom", "Mote of Potential", `1${mote.die}`, null).total;
 }
 
 // After a saving throw that spent a mote die: its temporary hit points.
@@ -69,7 +69,7 @@ export function moteAfterRoll(
   const bard = getSheetById(mote.bardId);
   const sheet = getSheetById(stale.id) ?? stale;
   const cha = bard ? computeSheetDerived(bard).abilityMods.cha : 0;
-  const amount = Math.max(1, dieValue(outcome, mote) + cha);
+  const amount = Math.max(1, dieValue(campaign, sheet.id, outcome, mote) + cha);
   if (amount > sheet.tempHp) {
     const updated = patchSheet(sheet.id, { tempHp: amount });
     if (updated) {

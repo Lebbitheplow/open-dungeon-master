@@ -8,7 +8,7 @@ import {
   type OrderEntry,
 } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, insertToken, listTokens } from "@/lib/db/battle-maps";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { d20Expression } from "@/lib/dice";
 import { resolveMonster } from "@/lib/bestiary";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
@@ -19,6 +19,7 @@ import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import type { SettingRef } from "@/lib/worlds/preset";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { dmRoll } from "@/lib/dm/roll-card";
 
 // Enemy spawning shared by start_encounter and the mid-combat add_enemies
 // tool, so reinforcements and summons are real server-tracked combatants
@@ -196,7 +197,8 @@ export function handleAddEnemies(
       slug: entry.slug,
       displayName: names[index],
       // Enemy initiative rolls silently at spawn, like start_encounter.
-      initiative: rollExpression(d20Expression(entry.stats.dexMod)).total,
+      // A record for the DM alone, as an enemy's save is.
+      initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
     }),
   );

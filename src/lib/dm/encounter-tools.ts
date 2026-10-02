@@ -110,6 +110,7 @@ import { VIGILANT_PREFIX } from "@/lib/srd/authored-effects-more";
 import { handleReaperCast } from "@/lib/dm/authored-reaper";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { afflictionsAtCombatStart } from "@/lib/dm/afflictions";
+import { dmRoll } from "@/lib/dm/roll-card";
 
 // Server-authoritative combat: enemies spawn from real stat blocks, their
 // HP changes only through these tools, and the initiative pointer is moved
@@ -265,7 +266,8 @@ function handleStartEncounter(
       slug: entry.slug,
       displayName: names[index],
       // Enemy initiative rolls silently at spawn; players roll on request.
-      initiative: rollExpression(d20Expression(entry.stats.dexMod)).total,
+      // A record for the DM alone, as an enemy's save is.
+      initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
     }),
   );

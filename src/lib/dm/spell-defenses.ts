@@ -13,9 +13,9 @@
 // left ride the condition's name: "mirror image" is three, then
 // "mirror image (2)", "mirror image (1)".
 
+import { rollCard } from "@/lib/dm/roll-card";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { EncounterEnemy } from "@/lib/db/encounters";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -50,7 +50,7 @@ export function mirrorImageDecoy(campaignId: string, targetId: string, attackTot
   }
   const left = Number(/\((\d)\)/.exec(held)?.[1] ?? 3);
   const needed = left >= 3 ? 6 : left === 2 ? 8 : 11;
-  const roll = rollExpression("1d20").total;
+  const roll = rollCard({ id: campaignId }, null, target.id, "custom", `Mirror Image (${needed} or higher turns the attack)`, "1d20", null).total;
   if (roll < needed) {
     return null;
   }

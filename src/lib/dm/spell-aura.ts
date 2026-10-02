@@ -18,12 +18,12 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, listEnemies, patchEnemyConditions, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
@@ -35,7 +35,6 @@ import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { spellEffectsOnEnemyDamage, spellKey } from "@/lib/dm/spell-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
-import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
 
 const FEET_PER_TILE = 5;
@@ -214,7 +213,8 @@ function confusionRoll(enemy: EncounterEnemy, lines: string[]) {
   if (!enemy.conditions.includes("confused") || !entry) {
     return;
   }
-  const roll = rollExpression("1d10").total;
+  // The creature's own roll: the DM sees the die, the table what it does.
+  const roll = dmRoll(enemy.campaignId, null, "custom", `${enemy.displayName}: Confusion`, "1d10").total;
   const lost = roll === 1 ? "wandering" : roll <= 6 ? "halted" : null;
   if (lost && !enemy.conditions.includes(lost)) {
     // Until the end of this turn (src/lib/dm/turn-end.ts reads the mark).

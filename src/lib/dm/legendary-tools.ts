@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dmRoll } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, orderEntryId, saveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
@@ -7,7 +8,6 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { canEnemyAct, enemyActedThisRound, oweEnemiesAnAction } from "@/lib/dm/can-act";
-import { rollExpression } from "@/lib/dice";
 import {
   abilityFromLine,
   abilityKey,
@@ -136,7 +136,7 @@ export function refillLegendaryForTurn(encounter: Encounter, enemy: EncounterEne
     ...(enemy.stats.specials ?? []),
     ...(enemy.stats.traits ?? []).map(abilityFromLine).filter((entry): entry is MonsterAbility => entry !== null),
   ];
-  const rolled = rollRecharges(enemy.displayName, abilities, ledger, () => rollExpression("1d6").total);
+  const rolled = rollRecharges(enemy.displayName, abilities, ledger, () => dmRoll(encounter.campaignId, null, "custom", `${enemy.displayName}: recharge`, "1d6").total);
   encounter.legendary.abilities = { ...(encounter.legendary.abilities ?? {}), [enemy.id]: rolled.ledger ?? {} };
   return [...lines, ...rolled.lines];
 }

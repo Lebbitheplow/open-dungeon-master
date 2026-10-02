@@ -41,7 +41,8 @@ type PotionPlan =
   | { kind: "vitality" }
   | { kind: "heroism" }
   | { kind: "giant"; score: number }
-  | { kind: "condition"; condition: string; minutes: number }
+  // `hoursDice`: the duration is rolled when the potion is drunk, as a card.
+  | { kind: "condition"; condition: string; minutes: number; hoursDice?: string }
   | { kind: "poison" }
   | { kind: "narrated" };
 
@@ -69,10 +70,10 @@ export function potionPlan(name: string): PotionPlan | null {
     return { kind: "condition", condition: "hasted", minutes: 1 };
   }
   if (/growth/.test(lowered)) {
-    return { kind: "condition", condition: "enlarged", minutes: 60 * rollExpression("1d4").total };
+    return { kind: "condition", condition: "enlarged", minutes: 0, hoursDice: "1d4" };
   }
   if (/diminution/.test(lowered)) {
-    return { kind: "condition", condition: "reduced", minutes: 60 * rollExpression("1d4").total };
+    return { kind: "condition", condition: "reduced", minutes: 0, hoursDice: "1d4" };
   }
   const resisted = DAMAGE_TYPES.find((type) => lowered.includes(type));
   if (/resistance/.test(lowered) && resisted) {
@@ -210,10 +211,11 @@ export function applyConsumable(
       return { effect: `${sheet.name}'s Strength is ${plan.score} for an hour (if it was lower).` };
     }
     case "condition": {
-      const applied = condition(campaign, turnId, sheet, plan.condition, plan.minutes, reason);
+      const minutes = plan.hoursDice ? 60 * rollCard(campaign, null, sheet.id, "custom", `${itemName}: hours it lasts`, plan.hoursDice, null).total : plan.minutes;
+      const applied = condition(campaign, turnId, sheet, plan.condition, minutes, reason);
       return "error" in applied
         ? { effect: `No effect: ${String(applied.error)}` }
-        : { effect: `${sheet.name} is ${plan.condition} for ${plan.minutes >= 60 ? `${plan.minutes / 60} hour${plan.minutes === 60 ? "" : "s"}` : `${plan.minutes} minute${plan.minutes === 1 ? "" : "s"}`}.` };
+        : { effect: `${sheet.name} is ${plan.condition} for ${minutes >= 60 ? `${minutes / 60} hour${minutes === 60 ? "" : "s"}` : `${minutes} minute${minutes === 1 ? "" : "s"}`}.` };
     }
     case "poison": {
       const damage = rollCard(campaign, null, sheet.id, "damage", `${itemName}: it was poison`, "3d6", null);

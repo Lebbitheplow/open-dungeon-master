@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { rollCard } from "@/lib/dm/roll-card";
 import { allocateSeq, campaignSeats, countPartySlots, type Campaign } from "@/lib/db/campaigns";
 import { createSheet, listSheets, markSheetAsCompanion } from "@/lib/db/sheets";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
@@ -21,7 +22,7 @@ import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { d20Expression, defaultRng, rollExpression } from "@/lib/dice";
+import { d20Expression, defaultRng } from "@/lib/dice";
 import {
   DRACONIC_ANCESTRY_IDS,
   findDraconicAncestry,
@@ -423,7 +424,7 @@ export function finalizeNewCompanion(
   // exactly like add_enemies does for the other side.
   const encounter = getActiveEncounter(campaign.id);
   if (encounter) {
-    const initiative = rollExpression(d20Expression(abilityMod(sheet.abilities.dex))).total;
+    const initiative = rollCard(campaign, null, sheet.id, "initiative", "initiative", d20Expression(abilityMod(sheet.abilities.dex)), null).total;
     if (encounter.orderReady) {
       const entry: OrderEntry = {
         kind: "pc",

@@ -5,11 +5,12 @@
 // take_action escape comes here when the escaper holds no grapple
 // (src/lib/dm/grapple.ts).
 
+import { dmRoll } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, patchEnemyConditions, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { rollExpression, d20Expression } from "@/lib/dice";
+import { d20Expression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
@@ -64,7 +65,7 @@ export function enemySpellEscape(campaign: Campaign, turn: DmTurn, enemy: Encoun
   const saved = hold.save
     ? rollEnemySave(campaign.id, enemy, hold.save, hold.dc, { magical: true, record: { turn, detail: `${enemy.displayName}: ${hold.save.toUpperCase()} save against ${hold.spell}` } })
     : null;
-  const total = saved ? (saved.total ?? 0) : rollExpression(d20Expression(mod)).total;
+  const total = saved ? (saved.total ?? 0) : dmRoll(campaign.id, turn, "ability_check", `${enemy.displayName}: breaking free of ${hold.spell}`, d20Expression(mod)).total;
   const escaped = saved ? saved.success : total >= hold.dc;
   if (escaped) {
     const cleared = removeConditions(enemy.conditions, enemy.conditionMeta, [hold.name]);

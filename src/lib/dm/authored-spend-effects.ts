@@ -7,7 +7,6 @@ import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { resolveFormula, type AuthoredSpend, type HeldAuthored } from "@/lib/srd/authored-effects";
@@ -170,7 +169,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     case "buff": {
       const condition = conditionName(ctx, does);
       const lines: string[] = [];
-      const tempHp = does.tempHp ? Math.max(0, Number(rollExpression(formula(ctx, does.tempHp)).total)) : 0;
+      const tempHp = does.tempHp ? Math.max(0, Number(rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: temporary hit points`, formula(ctx, does.tempHp), null).total)) : 0;
       if (does.target === "enemy") {
         const enemy = targetEnemy(ctx);
         if ("error" in enemy) {
@@ -258,7 +257,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     case "reroll_save":
       return rerollLastSave(ctx);
     case "temp_hp": {
-      const amount = Math.max(1, Number(rollExpression(formula(ctx, does.formula)).total));
+      const amount = Math.max(1, Number(rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: temporary hit points`, formula(ctx, does.formula), null).total));
       if (!does.allies) {
         return {
           patch: amount > sheet.tempHp ? { tempHp: amount } : {},
@@ -333,7 +332,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     case "flames": {
       const wanted = lower(ctx.args.variant);
       if (/heal/.test(wanted)) {
-        const rolled = rollExpression(formula(ctx, does.formula)).total;
+        const rolled = rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: healing`, formula(ctx, does.formula), null).total;
         const ally = ctx.args.targetCharacterId ? getSheetById(ctx.args.targetCharacterId) : sheet;
         if (!ally || ally.deathSaves?.dead) {
           return { error: `${ctx.spend.name} heals a living creature at the table: pass targetCharacterId. Nothing was spent.` };
@@ -366,7 +365,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const insight = rollCharacterCheck(campaign, sheet, { skill: "insight" }, `${sheet.name}: Insight against ${enemy.displayName}'s Deception`);
       const skills = enemy.stats.skills as Record<string, number> | undefined;
       const deceptionMod = Number(skills?.deception ?? Math.floor(((enemy.stats.abilities?.cha ?? 10) - 10) / 2));
-      const deception = rollExpression(`1d20${deceptionMod >= 0 ? "+" : ""}${deceptionMod}`).total;
+      // A contest the table sees, as every enemy's contest roll is (action-common.ts).
+      const deception = rollCard(ctx.campaign, ctx.turn, null, "skill_check", `${enemy.displayName}: Deception against ${sheet.name}'s Insight`, `1d20${deceptionMod >= 0 ? "+" : ""}${deceptionMod}`, null).total;
       if (insight.total <= deception) {
         return { result: { insight: insight.total, deception, read: `${enemy.displayName} gives nothing away; no Sneak Attack edge.` } };
       }

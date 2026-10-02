@@ -7,7 +7,6 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, type Encounter } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { activeAuthored, resolveFormula } from "@/lib/srd/authored-effects";
@@ -85,7 +84,7 @@ export function authoredTurnStart(campaign: Campaign, encounter: Encounter, comb
         if (effect.when !== "start") {
           continue;
         }
-        const amount = rollExpression(resolveFormula(effect.formula, held.level, modsOf(sheet))).total;
+        const amount = rollCard(campaign, null, sheet.id, "custom", `${held.feature}: hit points regained`, resolveFormula(effect.formula, held.level, modsOf(sheet)), null).total;
         const given = heal(campaign, getSheetById(id) ?? sheet, amount);
         if (given > 0) {
           lines.push(`${held.feature}: ${sheet.name} regains ${given} hit points.`);
@@ -138,7 +137,7 @@ export function authoredTurnEnd(campaign: Campaign, combatantIds: string[]): str
       if (effect.belowHalf && now.currentHp >= Math.ceil(effectiveMaxHp(now) / 2)) {
         continue;
       }
-      const amount = rollExpression(resolveFormula(effect.formula, held.level, modsOf(now))).total;
+      const amount = rollCard(campaign, null, now.id, "custom", `${held.feature}: hit points regained`, resolveFormula(effect.formula, held.level, modsOf(now)), null).total;
       const given = heal(campaign, now, amount);
       if (given > 0) {
         lines.push(`${held.feature}: ${now.name} regains ${given} hit points.`);

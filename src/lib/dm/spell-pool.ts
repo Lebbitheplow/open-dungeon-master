@@ -7,10 +7,10 @@
 //
 // Imports nothing that imports the cast tools.
 
+import { rollCard } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { rollExpression } from "@/lib/dice";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
 import { addDice } from "@/lib/srd/spell-scaling";
 import type { TurnBudget } from "@/lib/dm/action-budget";
@@ -76,7 +76,7 @@ export function sleepPool(
   const budget = encounter?.turnBudget && encounter.turnBudget.ownerId === caster.id ? encounter.turnBudget : null;
   const carried = input.continuing ? poolLeftOf(budget, spell) : null;
   const dice = addDice(pool.dice, pool.perSlotLevel, Math.max(0, input.slotLevel - input.spellLevel));
-  const rolled = carried ?? rollExpression(dice).total;
+  const rolled = carried ?? rollCard(campaign, null, caster.id, "custom", `${spell}: hit points it can affect`, dice, null).total;
   const out: Record<string, unknown> = {
     noSave: true,
     pool: carried === null ? `${dice}: ${rolled} hit points` : `${rolled} hit points left of the casting's roll`,

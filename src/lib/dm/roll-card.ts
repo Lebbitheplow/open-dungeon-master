@@ -6,7 +6,7 @@
 
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
+import { insertRoll, type RollAttacker, type RollKind } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 
@@ -16,10 +16,10 @@ import { publishWithSeq } from "@/lib/events";
 // A flat amount (Aura of Conquest's half a level) rolls no dice and gets no
 // card.
 export function rollCard(
-  campaign: Campaign,
+  campaign: Pick<Campaign, "id">,
   turn: DmTurn | null,
   characterId: string | null,
-  kind: "attack" | "damage" | "custom" | "skill_check",
+  kind: RollKind,
   detail: string,
   expression: string,
   attacker: RollAttacker | null,
@@ -47,3 +47,27 @@ export const sheetAttacker = (sheet: { id: string; name: string }): RollAttacker
 
 // Who an enemy is, as a roll's attacker.
 export const enemyAttacker = (enemy: { id: string; displayName: string }): RollAttacker => ({ kind: "enemy", id: enemy.id, name: enemy.displayName });
+
+// A roll the players are not shown (an enemy's initiative, its stealth, a
+// recharge, an NPC's private choice): stored for the DM alone and kept on the
+// turn, exactly as an enemy's saving throw is (src/lib/dm/forced-save.ts).
+export function dmRoll(
+  campaignId: string,
+  turn: DmTurn | null,
+  kind: Exclude<RollKind, "attack" | "damage">,
+  detail: string,
+  expression: string,
+) {
+  const outcome = rollExpression(expression);
+  const roll = insertRoll({
+    campaignId,
+    characterId: null,
+    requestedBy: "dm",
+    kind,
+    detail: detail.slice(0, 200),
+    result: outcome,
+    visibility: "dm",
+  });
+  turn?.rollIds.push(roll.id);
+  return outcome;
+}

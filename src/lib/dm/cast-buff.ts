@@ -8,12 +8,12 @@
 // Split out of cast-tools.ts, which re-exports it. Imports mutations (for
 // the slot spend) and must never be imported by it.
 
+import { rollCard } from "@/lib/dm/roll-card";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { spellFactsFor, spellMechanicsFor } from "@/lib/content";
 import { findBeastForm, formatCr } from "@/lib/srd/beast-forms";
@@ -311,7 +311,7 @@ export function handleCastBuff(
   for (const target of targetSheets) {
     const fresh = getSheetById(target.id) ?? target;
     // Heroes' Feast rolls each diner's 2d10; it rides in the name as Aid's does.
-    const feast = resolvedMech.mech.maxHpDice ? rollExpression(resolvedMech.mech.maxHpDice).total : 0;
+    const feast = resolvedMech.mech.maxHpDice ? rollCard(campaign, turn, target.id, "custom", `${args.spell}: ${target.name}'s hit point maximum`, resolvedMech.mech.maxHpDice, null).total : 0;
     const gain = maxHpGain || feast;
     const outcome = handleSetCondition(
       campaign,
@@ -360,9 +360,9 @@ export function handleCastBuff(
     const tempHp = buff.tempHp
       ? buff.tempHp.base +
         (buff.tempHp.perSlotLevel ?? 0) * above +
-        (buff.tempHp.dice ? rollExpression(buff.tempHp.dice).total : 0)
+        (buff.tempHp.dice ? rollCard(campaign, turn, target.id, "custom", `${args.spell}: temporary hit points`, buff.tempHp.dice, null).total : 0)
       : tempDice
-        ? rollExpression(tempDice).total
+        ? rollCard(campaign, turn, target.id, "custom", `${condition}: temporary hit points`, tempDice, null).total
         : 0;
     if (tempHp > 0) {
       const now = getSheetById(target.id);

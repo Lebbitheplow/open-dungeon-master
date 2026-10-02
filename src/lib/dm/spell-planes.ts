@@ -14,12 +14,12 @@
 // The characters' own acts are guarded by can-act.ts (spellTurnHold); these
 // are the refusals the enemy side and the targeting paths meet.
 
+import { rollCard } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { getActiveEncounter, listEnemies, patchEnemyHp, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import {
   conditionBlocksAttacks,
@@ -78,7 +78,7 @@ export function blinkTurnEnd(campaign: Campaign, combatantIds: string[]): string
     if (!sheet || !holds(sheet.conditions, BLINK) || holds(sheet.conditions, BLINKED) || sheet.currentHp <= 0) {
       continue;
     }
-    const roll = rollExpression("1d20").total;
+    const roll = rollCard(campaign, null, sheet.id, "custom", "Blink (11 or higher: to the Ethereal Plane)", "1d20", null).total;
     if (roll < 11) {
       lines.push(`${sheet.name}'s Blink: ${roll}, they stay on the Material Plane.`);
       continue;
