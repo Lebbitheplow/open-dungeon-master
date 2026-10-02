@@ -32,6 +32,7 @@ import { checklistSpell } from "@/lib/srd/spell-lists";
 import { recordItemCast } from "@/lib/srd/item-cast-credit";
 import { afflictCondition, afflictionConditionsFor } from "@/lib/dm/afflictions";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard } from "@/lib/dm/roll-card";
 
 const GIANTS: Record<string, number> = { hill: 21, frost: 23, stone: 23, fire: 25, cloud: 27, storm: 29 };
 const DAMAGE_TYPES = ["acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"];
@@ -215,7 +216,7 @@ export function applyConsumable(
         : { effect: `${sheet.name} is ${plan.condition} for ${plan.minutes >= 60 ? `${plan.minutes / 60} hour${plan.minutes === 60 ? "" : "s"}` : `${plan.minutes} minute${plan.minutes === 1 ? "" : "s"}`}.` };
     }
     case "poison": {
-      const damage = rollExpression("3d6");
+      const damage = rollCard(campaign, null, sheet.id, "damage", `${itemName}: it was poison`, "3d6", null);
       const hurt = applyPcDamage(campaign, turnId, sheet, { amount: damage.total, type: "poison", reason });
       const save = rollSave(campaign, getSheetById(sheet.id) ?? sheet, 13, `${sheet.name}: CON save vs ${itemName}`);
       if (!save.success) {

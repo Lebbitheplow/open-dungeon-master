@@ -18,10 +18,12 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
-import { getBattleMapForEncounter, listTokens, moveToken, type BattleMap } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, listHiddenRefIds, listTokens, moveToken, type BattleMap } from "@/lib/db/battle-maps";
+import type { RollAttacker } from "@/lib/db/rolls";
+import { rollCard } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { spellSaveDcFor } from "@/lib/srd";
 import { addDice } from "@/lib/srd/spell-scaling";
@@ -130,6 +132,12 @@ function strike(
   const why = moment === "enter" ? `entering ${zone.spell}` : moment === "each5" ? `moving through ${zone.spell}` : `${zone.spell}`;
   const dice = diceOf(trigger, row, zone, times);
   const lines: string[] = [];
+  // The zone's damage card names its caster, unless the players cannot see
+  // an enemy caster's token (src/lib/dm/aoe-damage.ts names it the same way).
+  const by: RollAttacker =
+    zone.casterKind === "pc"
+      ? { kind: "sheet", id: zone.casterId, name: zone.casterName }
+      : { kind: "enemy", id: zone.casterId, name: listHiddenRefIds(map.id).includes(zone.casterId) ? "Someone unseen" : zone.casterName };
   if (victim.kind === "enemy") {
     const enemy = getEnemy(victim.id);
     if (!enemy || enemy.status !== "alive") {
@@ -148,7 +156,7 @@ function strike(
     }
     let dealt = 0;
     if (dice && (failed || (trigger.half && !trigger.damageOnFail))) {
-      const rolled = rollExpression(dice).total;
+      const rolled = rollCard(campaign, null, zone.casterKind === "pc" ? zone.casterId : null, "damage", rollAgainst(zone.spell, enemy.displayName), dice, by).total;
       dealt = failed ? rolled : Math.floor(rolled / 2);
       if (dealt > 0) {
         const before = enemy.currentHp;
@@ -179,7 +187,7 @@ function strike(
       lines.push(`${sheet.name} ${failed ? "fails" : "makes"} the ${trigger.save.toUpperCase()} save against ${zone.spell} (DC ${dc}).`);
     }
     if (dice && (failed || (trigger.half && !trigger.damageOnFail))) {
-      const rolled = rollExpression(dice).total;
+      const rolled = rollCard(campaign, turn, sheet.id, "damage", rollAgainst(zone.spell, sheet.name), dice, by).total;
       const amount = failed ? rolled : Math.floor(rolled / 2);
       if (amount > 0) {
         const hurt = applyPcDamage(campaign, turn.id, getSheetById(sheet.id) ?? sheet, {

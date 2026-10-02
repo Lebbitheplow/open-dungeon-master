@@ -33,7 +33,7 @@ import {
   type EncounterEnemy,
 } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression, type Advantage } from "@/lib/dice";
+import type { Advantage } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { activeAuthored, resolveFormula } from "@/lib/srd/authored-effects";
@@ -42,6 +42,8 @@ import { hurtEnemy } from "@/lib/dm/spell-aura";
 import { withinFeet } from "@/lib/dm/authored-saves";
 import { naturalWeaponOnHit } from "@/lib/dm/authored-attacks";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
@@ -156,7 +158,7 @@ export function authoredAfterHit(
     const amount =
       effect.formula === "half_dealt"
         ? Math.floor(input.dealt / 2)
-        : Number(rollExpression(resolveFormula(effect.formula, held.level, modsOf(target))).total);
+        : Number(rollCard(campaign, null, target.id, "damage", rollAgainst(held.feature, live.displayName), resolveFormula(effect.formula, held.level, modsOf(target)), sheetAttacker(target)).total);
     if (amount > 0) {
       lines.push(hurtEnemy(campaign, input.encounter, live, amount, effect.type, held.feature));
     }
@@ -257,7 +259,8 @@ export function authoredOnHit(
       const meta = { ...(enemy.conditionMeta as ConditionMetaMap) };
       delete meta[cursed];
       patchEnemyConditions(enemy.id, cleared, meta);
-      const amount = rollExpression(curse.dice ?? "2d8").total;
+      const cleric = getSheetById(curse.source);
+      const amount = rollCard(campaign, null, cleric?.id ?? null, "damage", rollAgainst("Order's Wrath", enemy.displayName), curse.dice ?? "2d8", cleric ? sheetAttacker(cleric) : null).total;
       const fresh = getEnemy(enemy.id);
       if (fresh) {
         lines.push(hurtEnemy(campaign, encounter, fresh, amount, curse.type ?? "psychic", "Order's Wrath"));

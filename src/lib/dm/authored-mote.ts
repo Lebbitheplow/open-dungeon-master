@@ -27,6 +27,8 @@ import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 export type HeldMote = { bardId: string; die: string; sides: number };
 
@@ -94,7 +96,8 @@ export function moteBurst(campaign: Campaign, turn: DmTurn, mote: HeldMote | nul
   if (save.success) {
     return `Mote of Potential: the mote bursts on ${enemy.displayName}, which shrugs it off (CON ${save.total} vs DC ${dc}).`;
   }
-  const amount = Math.max(1, rollExpression(`1${mote.die}`).total);
+  // The mote is the bard's: the burst is theirs.
+  const amount = Math.max(1, rollCard(campaign, turn, bard?.id ?? null, "damage", rollAgainst("Mote of Potential", enemy.displayName), `1${mote.die}`, bard ? sheetAttacker(bard) : null).total);
   const sheets = listSheets(campaign.id);
   applyEnemyDamage(campaign, turn, encounter, enemy, amount, sheets, new Map(sheets.map((entry) => [entry.id, entry])), "thunder", { magical: true });
   publishEncounter(campaign.id);

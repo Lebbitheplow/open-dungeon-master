@@ -15,7 +15,6 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, getTokenByRef, listTokens, moveToken } from "@/lib/db/battle-maps";
 import { getEnemy, listEnemies } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
@@ -30,6 +29,8 @@ import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { noHit, type Ctx } from "@/lib/dm/reaction-tools";
 import { withinFeet } from "@/lib/dm/authored-saves";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { enemyAttacker, rollCard } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 // The mark a character's opportunity attack that hit leaves until their next
 // turn: what Relentless Avenger's move answers.
@@ -163,7 +164,8 @@ function redirectMiss(ctx: Ctx, name: string, rangeFt: number): Record<string, u
   if (!attack?.damage) {
     return { error: `The server has no damage on record for ${record.attacker.name}'s ${record.attack}. Nothing was spent.` };
   }
-  const rolled = Math.max(0, rollExpression(attack.damage).total);
+  // The attacker's own blow, turned (Stand Against the Tide reads the same).
+  const rolled = Math.max(0, rollCard(campaign, ctx.turn, null, "damage", rollAgainst(`${attack.name} (${name})`, target.displayName), attack.damage, attacker ? enemyAttacker(attacker) : null).total);
   const type = attack.type ?? record.type;
   const applied = applyEnemyDamage(campaign, ctx.turn, encounter, target, rolled, ctx.sheets, ctx.sheetsById, type);
   publishEncounter(campaign.id);

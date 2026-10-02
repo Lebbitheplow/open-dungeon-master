@@ -23,6 +23,12 @@ import { withinFeet } from "@/lib/dm/authored-saves";
 import { rerollLastSave, swarmPush } from "@/lib/dm/authored-spend-more";
 import { summonSteelDefender } from "@/lib/dm/summon-defender";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
+
+// A spend's damage on one enemy, as the holder's dice card.
+const damageDice = (ctx: SpendContext, enemy: EncounterEnemy, dice: string) =>
+  rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "damage", rollAgainst(ctx.spend.name, enemy.displayName), dice, sheetAttacker(ctx.sheet)).total;
 
 export type SpendContext = {
   campaign: Campaign;
@@ -236,7 +242,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const dice = does.perUnit ? addUnits(does.perUnit, does.perUnit, ctx.units - 1) : does.dice ? formula(ctx, does.dice) : null;
       if (dice) {
         const type = (does.typeFromVariant ?? []).find((entry) => lower(ctx.args.variant).includes(entry)) ?? does.type ?? "";
-        const rolled = rollExpression(dice).total;
+        const rolled = damageDice(ctx, enemy, dice);
         const amount = save.success ? (does.half ? Math.floor(rolled / 2) : 0) : rolled;
         Object.assign(result, { rolled: `${dice}: ${rolled}` }, damageEnemy(ctx, getEnemy(enemy.id) ?? enemy, amount, type));
       }
@@ -299,7 +305,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         return enemy;
       }
       const dice = formula(ctx, does.dice);
-      const rolled = rollExpression(dice).total;
+      const rolled = damageDice(ctx, enemy, dice);
       return { result: { rolled: `${dice}: ${rolled}`, ...damageEnemy(ctx, enemy, rolled, does.type) } };
     }
     case "flourish": {
@@ -308,7 +314,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         return enemy;
       }
       const die = `1${bardicDie(ctx.held.level)}`;
-      const rolled = rollExpression(die).total;
+      const rolled = damageDice(ctx, enemy, die);
       const result: Record<string, unknown> = { rolled: `${die}: ${rolled}`, ...damageEnemy(ctx, enemy, rolled, "") };
       if (/defen/.test(lower(ctx.args.variant))) {
         const condition = `defensive flourish (+${rolled})`;
@@ -326,8 +332,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       return stormAura(ctx);
     case "flames": {
       const wanted = lower(ctx.args.variant);
-      const rolled = rollExpression(formula(ctx, does.formula)).total;
       if (/heal/.test(wanted)) {
+        const rolled = rollExpression(formula(ctx, does.formula)).total;
         const ally = ctx.args.targetCharacterId ? getSheetById(ctx.args.targetCharacterId) : sheet;
         if (!ally || ally.deathSaves?.dead) {
           return { error: `${ctx.spend.name} heals a living creature at the table: pass targetCharacterId. Nothing was spent.` };
@@ -348,6 +354,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       if ("error" in enemy) {
         return enemy;
       }
+      // Rolled once the burn is sure to land: a refusal above spends nothing.
+      const rolled = damageDice(ctx, enemy, formula(ctx, does.formula));
       return { result: { rolled, ...damageEnemy(ctx, enemy, rolled, does.type) } };
     }
     case "insight_contest": {
@@ -396,7 +404,7 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
       continue;
     }
     if (spec.dice) {
-      const rolled = rollExpression(formula(ctx, spec.dice)).total;
+      const rolled = damageDice(ctx, enemy, formula(ctx, spec.dice));
       damageEnemy(ctx, getEnemy(enemy.id) ?? enemy, rolled, spec.type ?? "");
       lines.push(`${enemy.displayName} takes ${rolled} ${spec.type ?? ""} damage.`.replace("  ", " "));
     }

@@ -5,7 +5,7 @@
 
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
-import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
+import { insertRoll } from "@/lib/db/rolls";
 import { patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
@@ -87,29 +87,5 @@ export function rollEnemyContest(
   return outcome.total;
 }
 
-// A die the engine rolled inside a tool, stored and published as a dice
-// card like any other, and recorded on the turn. `attacker` is who made an
-// attack or damage roll (null: nobody, or not a combat roll).
-export function rollCard(
-  campaign: Campaign,
-  turn: DmTurn,
-  characterId: string | null,
-  kind: "attack" | "damage" | "custom" | "skill_check",
-  detail: string,
-  expression: string,
-  attacker: RollAttacker | null,
-) {
-  const outcome = rollExpression(expression);
-  const roll = insertRoll({
-    campaignId: campaign.id,
-    characterId,
-    requestedBy: "dm",
-    kind,
-    detail: detail.slice(0, 120),
-    result: outcome,
-    attacker,
-  });
-  publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
-  turn.rollIds.push(roll.id);
-  return outcome;
-}
+// A die the engine rolled inside a tool, as a dice card (src/lib/dm/roll-card.ts).
+export { rollCard } from "@/lib/dm/roll-card";

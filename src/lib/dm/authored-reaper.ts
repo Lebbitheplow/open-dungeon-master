@@ -10,7 +10,6 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
 import { authoredTwinSpell } from "@/lib/srd/authored-effects-more";
 import { conditionExtraActions } from "@/lib/srd/condition-effects";
@@ -23,6 +22,7 @@ import { resolveSheetRef } from "@/lib/dm/rolls";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard } from "@/lib/dm/roll-card";
 
 // cast_at_enemy with a second target (Improved Reaper), or null when the call
 // names none and the plain handler resolves it.
@@ -92,7 +92,7 @@ export function handleReaperCast(
   }
   const again = handleCastAtEnemy(campaign, turn, JSON.stringify({ ...rest, targetEnemyId: second.id }), sheets, sheetsById);
   // The price the authored text names, in the cleric's own hit points.
-  const price = Math.max(1, rollExpression(twin.cost).total);
+  const price = Math.max(1, rollCard(campaign, turn, sheet.id, "damage", `${twin.feature} (${spell})`, twin.cost, null).total);
   const paid = applyPcDamage(campaign, turn.id, getSheetById(sheet.id) ?? sheet, { amount: price, reason: `${twin.feature} (${spell})` });
   return { ...cast, secondTarget: again, [twin.feature]: `${twin.cost} of ${sheet.name}'s own hit points: ${price}`, paid };
 }

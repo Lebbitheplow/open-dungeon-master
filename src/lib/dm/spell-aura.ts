@@ -36,6 +36,8 @@ import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { spellEffectsOnEnemyDamage, spellKey } from "@/lib/dm/spell-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 const FEET_PER_TILE = 5;
 
@@ -110,7 +112,8 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
         magical: true,
         record: { detail: `${live.displayName}: ${ring.save.toUpperCase()} save against ${aura.name}` },
       });
-      const rolled = rollExpression(dice).total;
+      // Each creature's damage is its own roll, and its own card.
+      const rolled = rollCard(campaign, null, caster.id, "damage", rollAgainst(aura.name, live.displayName), dice, sheetAttacker(caster)).total;
       const amount = save.success ? (ring.halfOnSave ? Math.floor(rolled / 2) : 0) : rolled;
       lines.push(
         `${live.displayName} starts its turn in ${caster.name}'s ${aura.name}: ${ring.save.toUpperCase()} save ${save.success ? "made" : "failed"} (DC ${dc}).`,
@@ -151,7 +154,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     if (hurt.noSave) {
       const slot = entry.slotLevel ?? hurt.baseLevel;
       const dice = hurt.perSlotLevel ? addDice(hurt.dice, hurt.perSlotLevel, Math.max(0, slot - hurt.baseLevel)) : hurt.dice;
-      lines.push(hurtEnemy(campaign, encounter, live, rollExpression(dice).total, hurt.type, resolved.name));
+      lines.push(hurtEnemy(campaign, encounter, live, rollCard(campaign, null, caster.id, "damage", rollAgainst(resolved.name, live.displayName), dice, sheetAttacker(caster)).total, hurt.type, resolved.name));
       continue;
     }
     const dc = spellSaveDcFor(caster, resolved.name) ?? 13;
@@ -171,7 +174,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     }
     const slot = entry.slotLevel ?? hurt.baseLevel;
     const dice = hurt.perSlotLevel ? addDice(hurt.dice, hurt.perSlotLevel, Math.max(0, slot - hurt.baseLevel)) : hurt.dice;
-    lines.push(hurtEnemy(campaign, encounter, live, rollExpression(dice).total, hurt.type, resolved.name));
+    lines.push(hurtEnemy(campaign, encounter, live, rollCard(campaign, null, caster.id, "damage", rollAgainst(resolved.name, live.displayName), dice, sheetAttacker(caster)).total, hurt.type, resolved.name));
   }
 }
 
