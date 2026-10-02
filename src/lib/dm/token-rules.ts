@@ -161,7 +161,7 @@ export function walkCompanion(
   }
   const { speed, fullTiles } = pcMoveBudget(campaign.id, encounter, map, sheet, token);
   if (speed <= 0 || fullTiles <= 0) {
-    return { error: `${sheet.name} has no movement left this round.` };
+    return { error: `${sheet.name} has no movement left this turn.` };
   }
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const occupied = occupiedTiles(map, listTokens(map.id), token, footprintLookup(enemiesById));

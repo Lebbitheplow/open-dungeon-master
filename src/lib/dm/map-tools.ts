@@ -40,10 +40,10 @@ import { publishEphemeral } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
 import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
-import { effectiveSpeed, isIncapacitated } from "@/lib/dm/condition-logic";
+import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { canEnemyAct } from "@/lib/dm/can-act";
-import { exhaustedTiles } from "@/lib/dm/monster-abilities";
 import { awayFromFear, enemyMoveTraits, fearSourceAt, standUpIfProne } from "@/lib/dm/enemy-approach";
+import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { payForTeleport, spendEnemyDisengage, teleportRangeFeet, walkCompanion } from "@/lib/dm/token-rules";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -428,10 +428,7 @@ function resolveMoveTarget(
   const token = getTokenByRef(map.id, enemy.id);
   // Grappled/restrained/stunned... = speed 0; the budget clamp refuses the
   // move with the standard "no movement left" error.
-  // Exhaustion halves it from level 2 and stops it at 5.
-  const speedTiles =
-    effectiveSpeed(enemy.conditions, 1) === 0 ? 0 : exhaustedTiles(enemy.conditions, speedToTiles(enemy.stats.speed));
-  return token ? { token, kind: "enemy", speedTiles, enemy } : null;
+  return token ? { token, kind: "enemy", speedTiles: enemySpeedTiles(enemy), enemy } : null;
 }
 
 // The squares of a path up to and including the one landed on.
@@ -567,7 +564,7 @@ export function handleMoveToken(
     const walk = walkPathWithBudget(map.terrain, map.width, steps, budget, traits, resolved.token);
     if (!walk.at) {
       return {
-        error: `${resolved.token.name} has no movement left this round (speed ${resolved.speedTiles * 5} ft)${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.`,
+        error: `${resolved.token.name} has no movement left this turn (speed ${resolved.speedTiles * 5} ft)${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.`,
       };
     }
     landing = walk.at;

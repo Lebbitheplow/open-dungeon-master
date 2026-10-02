@@ -13,7 +13,8 @@ import { rollExpression, d20Expression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
-import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
+import { canEnemyAct } from "@/lib/dm/can-act";
+import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -58,7 +59,7 @@ export function enemySpellEscape(campaign: Campaign, turn: DmTurn, enemy: Encoun
   if (!allowed.ok) {
     return { error: allowed.error };
   }
-  markEnemyActed(encounter, enemy.id);
+  spendEnemyAction(encounter, enemy.id);
   saveEncounter(encounter);
   const mod = Math.max(...hold.abilities.map((ability) => Math.floor(((enemy.stats.abilities?.[ability] ?? 10) - 10) / 2)));
   const saved = hold.save

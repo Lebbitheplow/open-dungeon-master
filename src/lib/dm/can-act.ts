@@ -227,6 +227,22 @@ export function markEnemyActed(encounter: LedgerHolder, enemyId: string) {
   writeLedger(encounter, ids.includes(enemyId) ? ids : [...ids, enemyId], owed);
 }
 
+// Whether the action an enemy is about to spend closes a turn it was owed
+// and its own turn of the round follows at once: an ambusher ahead of the
+// first character plays the round the party lost and then its own in the
+// same DM turn, and the second walks on fresh movement. Not when its own
+// action is already taken (a legendary attack is owed on top of it) or its
+// place in the order is still ahead of the pointer (its own turn comes when
+// the pointer passes it).
+export function endsOwedTurn(
+  encounter: LedgerHolder & Pick<ActingEncounter, "order" | "turnIndex">,
+  enemyId: string,
+): boolean {
+  const { ids, owed } = ledgerOf(encounter);
+  const slot = encounter.order.findIndex((entry) => entry.kind === "enemy" && entry.enemyId === enemyId);
+  return owed.includes(enemyId) && !ids.includes(enemyId) && slot >= 0 && slot < encounter.turnIndex;
+}
+
 // One action more for each enemy named, on top of the round's own: the
 // round a wholly surprised party lost to them, or a legendary action that
 // is an attack. The caller saves the encounter.

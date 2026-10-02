@@ -519,6 +519,18 @@ export function resetRoundBudgets(mapId: string, round: number) {
   })();
 }
 
+// The combatants whose turns are starting walk again: movement belongs to a
+// turn (SRD 5.1, Movement and Position), so a second turn in the same round
+// (a Thief's Reflexes, an ambusher's own turn after the one it was owed)
+// brings its own.
+export function resetTurnBudgets(mapId: string, refIds: string[]) {
+  getDatabase()
+    .prepare(
+      `UPDATE battle_tokens SET moved_this_round = 0, updated_at = ? WHERE map_id = ? AND ref_id IN (${refIds.map(() => "?").join(", ")})`,
+    )
+    .run(nowIso(), mapId, ...refIds);
+}
+
 // ---- per-character explored-tile memory (hex bitfield) ----
 
 export function decodeExplored(hex: string, tileCount: number): Set<number> {
