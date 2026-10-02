@@ -17,6 +17,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { TokenFace } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
+import { ROLL_KIND_LABELS, rollChronicleLead, rollToastLead } from "@/lib/roll-labels";
 
 // The cinematic table ("ODM World Concepts", round 3b): the scene's own
 // painting fills the screen, the chrome shrinks to its edges, and the fight
@@ -271,15 +272,6 @@ export function PartyRail({
 // held for a few seconds where every eye already is. Ember for a natural 1,
 // gold for a 20, plain otherwise. Blind and DM-only rolls never show.
 const TOAST_MS = 5200;
-const ROLL_LABELS: Record<string, string> = {
-  skill_check: "Skill check",
-  saving_throw: "Saving throw",
-  ability_check: "Ability check",
-  attack: "Attack",
-  damage: "Damage",
-  initiative: "Initiative",
-  custom: "Roll",
-};
 
 export function RollToast({
   latestRoll,
@@ -309,16 +301,14 @@ export function RollToast({
     return null;
   }
   const { roll } = shown;
-  const who = roll.characterId ? sheets.find((sheet) => sheet.id === roll.characterId)?.name : null;
-  const what = roll.detail?.trim() || ROLL_LABELS[roll.kind] || "Roll";
+  const sheetName = roll.characterId ? sheets.find((sheet) => sheet.id === roll.characterId)?.name : undefined;
   const crit = roll.breakdown?.crit;
   return (
     <div key={shown.seq} className="cine-roll" data-crit={crit ?? undefined} role="status" aria-live="polite">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/assets/icons/glyph/tab-dice.webp" alt="" className="cine-roll-die" />
       <span className="cine-roll-text">
-        {who ? `${who} · ` : roll.requestedBy === "dm" ? "The DM · " : ""}
-        {what} ·{" "}
+        {rollToastLead(roll, sheetName)} ·{" "}
         <span className="cine-roll-math">
           {roll.expression} = {roll.total}
         </span>
@@ -547,13 +537,10 @@ export function TabletopChronicle({
 }
 
 function ChronicleRoll({ roll, sheets }: { roll: StoredRoll; sheets: ReadonlyArray<CharacterSheet> }) {
-  const who = roll.characterId ? sheets.find((sheet) => sheet.id === roll.characterId)?.name : null;
+  const sheetName = roll.characterId ? sheets.find((sheet) => sheet.id === roll.characterId)?.name : undefined;
   const crit = roll.breakdown?.crit;
-  const label = ROLL_LABELS[roll.kind] || "Roll";
-  // The detail the engine writes already names the roller ("Sera: Fire Bolt
-  // vs Husk 1"), so the name is only added when there is no detail.
-  const detail = roll.detail?.trim();
-  const what = detail || (who ? `${who} · ${label}` : label);
+  const label = ROLL_KIND_LABELS[roll.kind] || "Roll";
+  const what = rollChronicleLead(roll, sheetName);
   const verdict =
     crit === "nat20" ? "Natural 20" : crit === "nat1" ? "Natural 1" : roll.success === null ? label : roll.success ? (roll.kind === "attack" ? "Hit" : "Success") : roll.kind === "attack" ? "Miss" : "Failed";
   return (

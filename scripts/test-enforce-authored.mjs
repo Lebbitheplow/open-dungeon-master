@@ -43,9 +43,11 @@ const facesOf = (result) => result?.dice?.find((term) => term.sides === 20)?.dic
 const diceOf = (roll, sides) =>
   (roll?.breakdown?.terms ?? []).filter((term) => term.sides === sides).reduce((sum, term) => sum + term.dice.length, 0);
 // Several rolls can share a timestamp, so a roll is found by what it is: its
-// kind, the character it is about and, for an enemy's swing, the attack.
+// kind, the character it is about and, for an enemy's swing, its attacker.
 const rollOn = (kind, characterId, detail = "") =>
   kit.lastRolls(40).find((roll) => roll.kind === kind && roll.characterId === characterId && roll.detail.includes(detail)) ?? null;
+const rollBy = (kind, characterId, enemy) =>
+  kit.lastRolls(40).find((roll) => roll.kind === kind && roll.characterId === characterId && roll.attacker?.id === enemy.id) ?? null;
 const heroesSoFar = () => world.sheets();
 
 // A fight with `first` at the pointer, a sturdy dummy beside them.
@@ -116,7 +118,7 @@ await test("Fungal Body: the druid cannot be frightened, and a critical hit agai
   world.patch(spore.id, { ac: 12, acOverride: true });
   kit.place(spore.id, 5, 5);
   const hit = await enemyHits(enemy, spore, [20, 3, 3]);
-  const damage = rollOn("damage", spore.id, ": Club");
+  const damage = rollBy("damage", spore.id, enemy);
   assert.ok(damage, "the hit rolled damage");
   assert.equal(diceOf(damage, 6), 1, "a critical doubles the dice; Fungal Body keeps them single");
   assert.notEqual(hit.swings?.[0]?.crit, true);
@@ -194,7 +196,7 @@ await test("Among the Dead: an undead creature attacks the warlock at disadvanta
   kit.setEnemy(enemy.id, { stats: { type: "undead" } });
   world.patch(undying.id, { ac: 12, acOverride: true });
   await enemyHits(enemy, undying, [15, 12, 3]);
-  const roll = rollOn("attack", undying.id, ": Club");
+  const roll = rollBy("attack", undying.id, enemy);
   assert.equal(roll.advantage, "disadvantage");
   assert.equal(d20Faces(roll).length, 2);
 });
@@ -235,10 +237,10 @@ await test("Ancestral Protectors: the first creature a raging barbarian hits att
   assert.equal(hit.result.hit, true, hit.error);
   world.patch(ally.id, { ac: 12, acOverride: true });
   await enemyHits(enemy, ally, [15, 12, 3]);
-  assert.equal(rollOn("attack", ally.id, ": Club").advantage, "disadvantage");
+  assert.equal(rollBy("attack", ally.id, enemy).advantage, "disadvantage");
   world.patch(guardian.id, { ac: 12, acOverride: true });
   await enemyHits(enemy, guardian, [15, 3]);
-  assert.equal(rollOn("attack", guardian.id, ": Club").advantage, "none");
+  assert.equal(rollBy("attack", guardian.id, enemy).advantage, "none");
 });
 
 await test("Rakish Audacity: Sneak Attack with no ally and no advantage when the rogue duels one creature alone.", async () => {

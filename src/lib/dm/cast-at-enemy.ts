@@ -370,6 +370,7 @@ export function handleCastAtEnemy(
         sheet,
         enemy,
         spell: args.spell,
+        spellName,
         authors,
         mech,
         facts,

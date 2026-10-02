@@ -16,6 +16,9 @@ export type EncounterSummary = {
 
 export type SummaryRoll = {
   characterId: string | null;
+  // Who rolled it (src/lib/db/rolls.ts); absent or null, the roll is the
+  // characterId sheet's, as every roll was before it was recorded.
+  attacker?: { kind: string; id: string } | null;
   kind: string;
   total: number;
   applied?: boolean;
@@ -39,7 +42,9 @@ export function computeEncounterSummary(input: {
     input.sheets.map((sheet) => [sheet.id, { characterId: sheet.id, name: sheet.name, dealt: 0, taken: 0, healed: 0, nat20s: 0, nat1s: 0 }]),
   );
   for (const roll of input.rolls) {
-    const line = roll.characterId ? lines.get(roll.characterId) : undefined;
+    // An enemy's critical hit on a character is not the character's natural 20.
+    const rollerId = roll.attacker ? (roll.attacker.kind === "sheet" ? roll.attacker.id : null) : roll.characterId;
+    const line = rollerId ? lines.get(rollerId) : undefined;
     if (!line) {
       continue;
     }

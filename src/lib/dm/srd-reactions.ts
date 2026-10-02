@@ -23,6 +23,8 @@ import { withinFeet } from "@/lib/dm/authored-saves";
 import { removeConditions } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { freshLastHit, writeLastHit } from "@/lib/dm/last-hit";
+import type { RollAttacker } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { READIED } from "@/lib/dm/object-actions";
 import { handlePcAttack } from "@/lib/dm/pc-attack";
 import { noHit, SPENT, spendReaction, type Ctx } from "@/lib/dm/reaction-tools";
@@ -98,14 +100,15 @@ function standAgainstTheTide(ctx: Ctx): Record<string, unknown> {
   }
   const ac = enemyAcWithEffects(campaign.id, target);
   const bonus = Number(attack.toHit ?? 0);
-  const roll = rollCard(campaign, ctx.turn, null, "attack", `${attacker.displayName}: ${attack.name} again, at ${target.displayName} (Stand Against the Tide)`, `1d20${bonus >= 0 ? "+" : ""}${bonus}`);
+  const turned: RollAttacker = { kind: "enemy", id: attacker.id, name: attacker.displayName };
+  const roll = rollCard(campaign, ctx.turn, null, "attack", rollAgainst(`${attack.name} again (Stand Against the Tide)`, target.displayName), `1d20${bonus >= 0 ? "+" : ""}${bonus}`, turned);
   const hit = roll.crit !== "nat1" && (roll.crit === "nat20" || roll.total >= ac);
   writeLastHit(campaign.id, { ...record, answered: [...record.answered, "stand against the tide"] });
   spendReaction(ctx);
   if (!hit || !attack.damage) {
     return { ok: true, reaction: "Stand Against the Tide", spent: SPENT(sheet.name), applied: `${attacker.displayName}'s ${attack.name} swings at ${target.displayName} instead: ${roll.total} against AC ${ac} misses.` };
   }
-  const damage = rollCard(campaign, ctx.turn, null, "damage", `${attacker.displayName}: ${attack.name} damage on ${target.displayName}`, attack.damage);
+  const damage = rollCard(campaign, ctx.turn, null, "damage", rollAgainst(`${attack.name} (Stand Against the Tide)`, target.displayName), attack.damage, turned);
   const applied = applyEnemyDamage(campaign, ctx.turn, encounter, target, Math.max(0, damage.total), ctx.sheets, ctx.sheetsById, attack.type);
   publishEncounter(campaign.id);
   return {

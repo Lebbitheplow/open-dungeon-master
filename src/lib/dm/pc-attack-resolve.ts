@@ -42,6 +42,7 @@ import {
 } from "@/lib/dm/attack-onhit";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
+import { rollAgainst } from "@/lib/roll-labels";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The roll the attack makes and the damage it carries, built once the
@@ -79,7 +80,7 @@ export function strikeToHit(plan: AttackPlan) {
     .replace(/^2d20kh1/, elvenAccuracy ? "3d20kh1" : "2d20kh1")
     .replace(/^(\d+d20(?:k[hl]\d+)?)/, lucky ? "$1r1" : "$1");
   const toHitExpression = `${toHitD20}${toHitRiderSuffix}`;
-  const detail = `${sheet.name}: ${profile.weapon} vs ${enemy.displayName}`;
+  const detail = rollAgainst(profile.weapon, enemy.displayName);
   return { toHitExpression, detail };
 }
 
@@ -101,6 +102,7 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     detail: strike.detail,
     advantage: plan.advantage,
     result: hitOutcome,
+    attacker: { kind: "sheet", id: sheet.id, name: sheet.name },
   });
   publishRoll(campaign.id, hitRoll);
   turn.rollIds.push(hitRoll.id);
@@ -235,8 +237,9 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "damage",
-    detail: `${sheet.name}: ${profile.weapon} damage`,
+    detail: strike.detail,
     result: damageOutcome,
+    attacker: { kind: "sheet", id: sheet.id, name: sheet.name },
   });
   publishRoll(campaign.id, damageRoll);
   turn.rollIds.push(damageRoll.id);
@@ -360,15 +363,16 @@ export function hitExtras(plan: AttackPlan, dead: boolean, over: boolean): Recor
 // Half of a missed spell's damage (Acid Arrow), rolled and applied like a
 // hit's, rounded down.
 function missDamage(plan: AttackPlan): Record<string, unknown> | null {
-  const { campaign, turn, sheet, profile } = plan;
+  const { campaign, turn, sheet, enemy, profile } = plan;
   const outcome = rollExpression(profile.damageExpression);
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "damage",
-    detail: `${sheet.name}: ${profile.weapon} damage (half on a miss)`,
+    detail: rollAgainst(`${profile.weapon} (half on a miss)`, enemy.displayName),
     result: outcome,
+    attacker: { kind: "sheet", id: sheet.id, name: sheet.name },
   });
   publishRoll(campaign.id, roll);
   turn.rollIds.push(roll.id);

@@ -5,7 +5,9 @@
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
-import { insertRoll } from "@/lib/db/rolls";
+import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
+import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";
+import { rollOn } from "@/lib/roll-labels";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { isValidExpression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -118,6 +120,16 @@ export function handleAoeDamage(
   for (const ref of (args.targets ?? "").split(",").map((part) => part.trim()).filter(Boolean)) {
     addRef(ref);
   }
+  // The dead are beyond an area's harm: no save, no damage, no condition,
+  // and no place on its card (apply_damage refuses them anyway).
+  const skippedDead = pcTargets.filter((sheet) => sheet.deathSaves?.dead).map((sheet) => sheet.name);
+  if (skippedDead.length) {
+    pcTargets.splice(0, pcTargets.length, ...pcTargets.filter((sheet) => !sheet.deathSaves?.dead));
+    // A spell that lays its area (a Web over the fallen) is still cast.
+    if (!enemyTargets.length && !pcTargets.length && !(args.spell && zoneRowFor(args.spell))) {
+      return { error: `${skippedDead.join(", ")} ${skippedDead.length === 1 ? "is" : "are"} dead; the area catches nobody it can harm. Nothing was spent.` };
+    }
+  }
   // A creature Blink, Etherealness, Maze or a Resilient Sphere took away is
   // beyond the area's reach, and a caster off the Material Plane reaches
   // nobody (src/lib/dm/spell-planes.ts).
@@ -203,7 +215,7 @@ export function handleAoeDamage(
     // Prismatic Spray rolls a ray for each creature (prismatic.ts).
     if (isPrismaticSpray(planned.spell)) {
       const results = castPrismaticSpray({ campaign, turn, caster: planned.caster, dc: planned.dc, enemies: enemyTargets, characters: pcTargets.filter((sheet) => !planned.sculpted.includes(sheet.id)), sheets, sheetsById });
-      return { ok: true, spell: planned.spell, caster: planned.caster.name, dc: planned.dc, saveAbility: "dex", results, ...(planned.corrections.length ? { corrected: planned.corrections } : {}) };
+      return { ok: true, spell: planned.spell, caster: planned.caster.name, dc: planned.dc, saveAbility: "dex", results, ...(planned.corrections.length ? { corrected: planned.corrections } : {}), ...(skippedDead.length ? { skippedDead } : {}) };
     }
     args.damage = planned.damage ?? undefined;
     args.saveAbility = planned.saveAbility;
@@ -261,6 +273,26 @@ export function handleAoeDamage(
   // apart (Meteor Swarm: src/lib/dm/aoe-parts.ts).
   let total = 0;
   const rolled: DamagePart[] = [];
+  // The roll's card names who made the area and every creature it can harm:
+  // not an ally Sculpt Spells shapes it around, and not an enemy whose token
+  // the players cannot see (the rule activePublicEncounter applies).
+  const map = getBattleMapForEncounter(encounter.id);
+  const unseen = map ? listHiddenRefIds(map.id) : [];
+  const caught = [
+    ...enemyTargets.filter((enemy) => !unseen.includes(enemy.id)).map((enemy) => enemy.displayName),
+    ...pcTargets.filter((sheet) => !plan?.sculpted.includes(sheet.id)).map((sheet) => sheet.name),
+  ];
+  // A character's area that names no spell (a dragonborn's breath) is still
+  // theirs. A caster whose token is hidden is not named, as a hidden
+  // creature it catches is not (the tracker's word for it).
+  const areaBy: RollAttacker | null = plan
+    ? { kind: "sheet", id: plan.caster.id, name: plan.caster.name }
+    : enemyUse
+      ? { kind: "enemy", id: enemyUse.enemy.id, name: unseen.includes(enemyUse.enemy.id) ? "Someone unseen" : enemyUse.enemy.displayName }
+      : awayCaster
+        ? { kind: "sheet", id: awayCaster.id, name: awayCaster.name }
+        : null;
+  const areaName = plan ? plan.spell : enemyUse?.name || null;
   if (typeof args.damage === "number") {
     total = args.damage;
   } else if (args.damage) {
@@ -277,8 +309,11 @@ export function handleAoeDamage(
         characterId: null,
         requestedBy: "dm",
         kind: "damage",
-        detail: `area effect${type ? ` (${type})` : ""}`,
+        // The type tells a two-type spell's rolls apart, and is all an
+        // unnamed effect has.
+        detail: rollOn(`${areaName ?? "area effect"}${type && (split || !areaName) ? ` (${type})` : ""}`, caught),
         result: outcome,
+        attacker: areaBy,
       });
       turn.rollIds.push(roll.id);
       publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
@@ -487,6 +522,7 @@ export function handleAoeDamage(
     results,
     ...(corrections.length ? { corrected: corrections } : {}),
     ...(unmatched.length ? { unmatchedTargets: unmatched } : {}),
+    ...(skippedDead.length ? { skippedDead } : {}),
     ...(enemyConcentration ? { enemyConcentration } : {}),
     ...(area ? { area } : {}),
     ...(beyondReach.length ? { outOfReach: `${beyondReach.join(", ")} ${beyondReach.length === 1 ? "is" : "are"} off the Material Plane; the spell does not touch them.` } : {}),

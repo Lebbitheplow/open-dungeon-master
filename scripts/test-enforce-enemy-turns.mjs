@@ -45,7 +45,7 @@ async function stage(count = 1, faces = { [scout.id]: 19, [watcher.id]: 3 }, ene
 }
 
 const attacksBy = (enemy) =>
-  rolls.listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack" && roll.detail.startsWith(`${enemy.displayName}:`)).length;
+  rolls.listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack" && roll.attacker?.id === enemy.id).length;
 
 async function walk(hero, x, y) {
   const route = await world.route("campaigns/[campaignId]/battle-map/move");

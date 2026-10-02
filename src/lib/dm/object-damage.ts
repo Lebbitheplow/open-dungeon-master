@@ -14,7 +14,8 @@ import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getClock, setClock } from "@/lib/db/clock";
-import { insertRoll } from "@/lib/db/rolls";
+import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { getSheetById } from "@/lib/db/sheets";
 import { isValidExpression, rollExpression, type RollResult } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -44,8 +45,8 @@ const objectSchema = z.object({
 
 const keyOf = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 60);
 
-function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: string | null, kind: "attack" | "damage", detail: string, result: RollResult) {
-  const roll = insertRoll({ campaignId: campaign.id, characterId, requestedBy: "dm", kind, detail, result });
+function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: string | null, kind: "attack" | "damage", detail: string, result: RollResult, attacker: RollAttacker) {
+  const roll = insertRoll({ campaignId: campaign.id, characterId, requestedBy: "dm", kind, detail, result, attacker });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
   turn?.rollIds.push(roll.id);
 }
@@ -103,7 +104,8 @@ export function damageObject(
       return { error: built.error };
     }
     const attack = rollExpression(`1d20${built.profile.toHit >= 0 ? "+" : ""}${built.profile.toHit}`);
-    publishRoll(campaign, turn, sheet.id, "attack", `${sheet.name}: ${built.profile.weapon} vs ${args.name ?? "an object"}`, attack);
+    const striker: RollAttacker = { kind: "sheet", id: sheet.id, name: sheet.name };
+    publishRoll(campaign, turn, sheet.id, "attack", rollAgainst(built.profile.weapon, args.name ?? "an object"), attack, striker);
     const natural = attack.natural ?? 0;
     const hit = natural !== 1 && (natural === 20 || attack.total >= ac);
     if (!hit) {
@@ -119,7 +121,7 @@ export function damageObject(
     }
     const expression = natural === 20 ? critDamageExpression(built.profile.damageExpression) : built.profile.damageExpression;
     const damage = rollExpression(expression);
-    publishRoll(campaign, turn, sheet.id, "damage", `${sheet.name}: ${built.profile.weapon} damage to ${args.name ?? "an object"}`, damage);
+    publishRoll(campaign, turn, sheet.id, "damage", rollAgainst(built.profile.weapon, args.name ?? "an object"), damage, striker);
     dealt = Math.max(0, damage.total);
     type = type || built.profile.damageType;
   } else if (args.damage) {

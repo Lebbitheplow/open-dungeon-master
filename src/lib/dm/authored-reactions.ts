@@ -27,7 +27,8 @@ import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { pcResistances, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
-import { freshLastHit, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { rollAgainst } from "@/lib/roll-labels";
 import { READIED } from "@/lib/dm/object-actions";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { handlePcAttack } from "@/lib/dm/pc-attack";
@@ -220,7 +221,7 @@ function resolve(ctx: Ctx, found: Found): Record<string, unknown> | { error: str
         reduction = 5 * (ctx.args.level ?? 1);
       } else {
         const expression = does.amount === "psionic_int" ? `${psionicDie(held.level)}+${modsOf(holder).int}` : resolveFormula(does.amount, held.level, modsOf(holder));
-        reduction = Math.max(0, rollCard(ctx.campaign, ctx.turn, holder.id, "custom", `${holder.name}: ${reaction.name}`, expression).total);
+        reduction = Math.max(0, rollCard(ctx.campaign, ctx.turn, holder.id, "custom", `${holder.name}: ${reaction.name}`, expression, null).total);
         rolled = `${expression}: ${reduction}`;
       }
       const corrected = hit.record.swings.map((entry, at) => (at === hit.index ? { ...entry, raw: Math.max(0, entry.raw - reduction) } : entry));
@@ -236,7 +237,7 @@ function resolve(ctx: Ctx, found: Found): Record<string, unknown> | { error: str
           return { error: `${ctx.sheet.name} holds no Bardic Inspiration die to add to their AC. Nothing was spent.` };
         }
         const die = /\((d\d+)\)/i.exec(spentDie)![1];
-        bonus = rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "custom", `${ctx.sheet.name}: ${reaction.name}`, `1${die}`).total;
+        bonus = rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "custom", `${ctx.sheet.name}: ${reaction.name}`, `1${die}`, null).total;
       } else {
         bonus = does.amount;
       }
@@ -267,7 +268,7 @@ function resolve(ctx: Ctx, found: Found): Record<string, unknown> | { error: str
           ? swing.natural
           : swing.advantage === "advantage"
             ? (swing.faces[0] ?? swing.natural)
-            : Math.min(swing.natural, rollCard(ctx.campaign, ctx.turn, null, "attack", `${hit.record.attacker.name}: the attack again, at disadvantage (${reaction.name})`, "1d20").total);
+            : Math.min(swing.natural, rollCard(ctx.campaign, ctx.turn, null, "attack", rollAgainst(`${hit.record.attack} again, at disadvantage (${reaction.name})`, ctx.sheet.name), "1d20", rerollAttacker(hit.record)).total);
       const total = swing.total - swing.natural + kept;
       const missed = kept !== 20 && (kept === 1 || total < swing.vsAc);
       if (!missed) {
@@ -329,7 +330,7 @@ function resolve(ctx: Ctx, found: Found): Record<string, unknown> | { error: str
         return { error: `${enemy.displayName} is beyond ${does.rangeFt} feet of ${ctx.sheet.name}. Nothing was spent.` };
       }
       const expression = resolveFormula(does.amount, held.level, modsOf(holder));
-      let amount = rollCard(ctx.campaign, ctx.turn, holder.id, "damage", `${holder.name}: ${reaction.name}`, expression).total;
+      let amount = rollCard(ctx.campaign, ctx.turn, holder.id, "damage", rollAgainst(reaction.name, enemy.displayName), expression, { kind: "sheet", id: holder.id, name: holder.name }).total;
       const out: Record<string, unknown> = { rolled: `${expression}: ${amount}` };
       if (does.save) {
         const dc = saveDc(holder, does.save.dcAbility);
@@ -411,7 +412,7 @@ function resolve(ctx: Ctx, found: Found): Record<string, unknown> | { error: str
       const target = allyOf(ctx) ?? ctx.sheet;
       const hit = lastHitOn(ctx, target, label);
       if ("error" in hit) return hit;
-      const die = rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "custom", `${ctx.sheet.name}: ${reaction.name}`, does.die).total;
+      const die = rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "custom", `${ctx.sheet.name}: ${reaction.name}`, does.die, null).total;
       const swing = hit.record.swings[hit.index];
       if (swing.natural === 20 || swing.total - die >= swing.vsAc) {
         return { rolled: die, applied: `The attack falls to ${swing.total - die} and still hits AC ${swing.vsAc}.` };

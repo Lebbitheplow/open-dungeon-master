@@ -22,6 +22,7 @@ import {
   type BeatSourceLine,
 } from "@/lib/dm/beat-logic";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
+import { rollerName } from "@/lib/roll-labels";
 
 // Story capture for a human DM: writing down what was said out loud, and
 // drafting it from the mechanical record when the DM would rather edit than
@@ -110,7 +111,7 @@ export function beatSourceLines(campaignId: string, since: string): BeatSourceLi
     if (roll.createdAt <= since) {
       continue;
     }
-    const who = (roll.characterId && names.get(roll.characterId)) || "Someone";
+    const who = rollerName(roll, roll.characterId ? names.get(roll.characterId) : undefined) || "Someone";
     const against = roll.dc === null ? "" : ` against DC ${roll.dc}`;
     const outcome = roll.success === null ? "" : roll.success ? ", and made it" : ", and missed it";
     lines.push({

@@ -59,7 +59,7 @@ export function rollCharacterCheck(
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
-    kind: args.kind,
+    kind: check.skill ? "skill_check" : "ability_check",
     detail: `${detail}: ${resolved.detail}`.slice(0, 120),
     result: outcome,
   });
