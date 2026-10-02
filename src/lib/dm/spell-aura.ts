@@ -23,11 +23,10 @@ import { getEnemy, listEnemies, patchEnemyConditions, patchEnemyHp, setEnemyConc
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
-import { saveModFor } from "@/lib/bestiary/statblock";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -65,7 +64,9 @@ export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: Encou
   patchEnemyHp(enemy.id, hp, hp <= 0 ? "dead" : "alive");
   if (enemy.concentration) {
     const dc = Math.max(10, Math.floor(adjusted.amount / 2));
-    const kept = hp > 0 && rollExpression(d20Expression(saveModFor(enemy.stats, "con"))).total >= dc;
+    // The same save the damage path rolls (enemy-damage.ts): its conditions
+    // count, and the DM sees the roll.
+    const kept = hp > 0 && rollEnemySave(campaign.id, enemy, "con", dc, { record: { detail: `${enemy.displayName}: concentration on ${enemy.concentration} (CON save)` } }).success;
     if (!kept) {
       setEnemyConcentration(enemy.id, null);
       clearSpellConditionsByName(campaign, enemy.concentration, undefined, enemy.id);

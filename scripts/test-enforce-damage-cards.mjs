@@ -49,6 +49,24 @@ await test("Spirit Guardians: the damage on an enemy starting its turn in the au
   expectCard(world, before, { attacker: asSheet(world, priest.id), detail: `Spirit Guardians vs ${goblin.displayName}`, characterId: priest.id, total: 12 });
 });
 
+await test("An enemy hurt at its turn's start saves to keep concentration as on any damage: rolled as an enemy save, recorded for the DM.", async () => {
+  const { world, sheets: [priest], enemies: [goblin] } = await table([caster("cleric", "wis", ["Spirit Guardians"])]);
+  await layMap(world, field(), { [priest.id]: { x: 1, y: 2 }, [goblin.id]: { x: 2, y: 2 } });
+  const cast = await world.invoke("cast_buff", { characterId: priest.id, spell: "Spirit Guardians", level: 3 });
+  assert.equal(cast.ok, true, cast.error);
+  const { setEnemyConcentration } = await import("../src/lib/db/encounters.ts");
+  setEnemyConcentration(goblin.id, "Hold Person");
+  const before = snapshot(world);
+  world.dice(1, 4, 4, 4, 20);
+  nextTurn(world);
+  world.clearDice();
+  const save = listRecentRolls(world.campaignId, 200).find((roll) => !before.has(roll.id) && roll.kind === "saving_throw" && roll.detail.includes("concentration"));
+  assert.ok(save, "the concentration save left no record");
+  assert.equal(save.detail, `${goblin.displayName}: concentration on Hold Person (CON save)`);
+  assert.equal(save.visibility, "dm");
+  assert.equal(enemyOf(world, goblin.id).concentration, "Hold Person", "a 20 kept the concentration");
+});
+
 await test("Phantasmal Killer: the damage at the end of the target's turn is the caster's card.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Phantasmal Killer"])]);
   world.dice(1);
