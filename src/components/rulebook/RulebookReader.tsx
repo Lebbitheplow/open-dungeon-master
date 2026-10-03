@@ -466,6 +466,11 @@ function Frontispiece({ onBegin }: { onBegin: () => void }) {
         adventuring, combat, spellcasting, every spell, magic item and monster, and the conditions they inflict.
       </p>
       <p className="rb-frontis-text">
+        Three books are bound here: the players&apos;, the Dungeon Master&apos;s and the monsters&apos;, each
+        holding all that the reference document opens of the Player&apos;s Handbook, the Dungeon Master&apos;s
+        Guide and the Monster Manual.
+      </p>
+      <p className="rb-frontis-text">
         Search from the contents page, or open a chapter. The arrow keys turn the pages, and a bookmark keeps a
         page one tap away.
       </p>

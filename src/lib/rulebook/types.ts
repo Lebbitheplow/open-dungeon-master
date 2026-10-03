@@ -28,6 +28,16 @@ export type RulebookChapter = {
   pages: string[];
 };
 
+// One of the three books the reference document opens (the players', the
+// Dungeon Master's, the monsters'): a run of chapters in binding order.
+export type RulebookPart = {
+  id: string;
+  numeral: string;
+  title: string;
+  blurb: string;
+  chapters: string[];
+};
+
 export type RulebookSource = {
   title: string;
   publisher: string;
@@ -38,6 +48,7 @@ export type RulebookSource = {
 
 export type RulebookData = {
   source: RulebookSource;
+  parts: RulebookPart[];
   chapters: RulebookChapter[];
   pages: RulebookPage[];
 };
@@ -53,6 +64,7 @@ export type QuickLink = { label: string; page: string; at?: string };
 
 export type RulebookContents = {
   source: RulebookSource;
+  parts: RulebookPart[];
   chapters: ContentsChapter[];
   quick: QuickLink[];
   pageCount: number;
