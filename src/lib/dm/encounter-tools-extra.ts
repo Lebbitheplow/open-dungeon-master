@@ -11,7 +11,10 @@ import { canonicalCondition } from "@/lib/dm/mutations";
 import { isIncapacitated, pruneMeta } from "@/lib/dm/condition-logic";
 import { onEnemyIncapacitated } from "@/lib/dm/enemy-conditions";
 import { setEnemyExhaustion } from "@/lib/dm/enemy-exhaustion";
-import { enemyCallOutOfTurn } from "@/lib/dm/enemy-turn-order";
+import { enemyCallOutOfTurn, enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
+import { standUpIfProne } from "@/lib/dm/enemy-approach";
+import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
+import { PRONE } from "@/lib/dm/vitals-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { planConditionFx } from "@/lib/battlemap/fx-plan";
@@ -293,6 +296,27 @@ function handleEnemyCondition(
       error: `${enemy.displayName} is not ${wanted}.`,
       currentConditions: enemy.conditions,
     };
+  }
+  // The AI clearing prone is the enemy standing up, which costs half its
+  // speed on its own turn, as its own walk charges it (enemy-approach.ts) and
+  // a character's clear_condition does (stand-up.ts). The console stays free.
+  if (wanted === PRONE && ctx.turn.actor === "ai" && encounter.orderReady) {
+    const early = enemyTurnRefusal(encounter, enemy, ctx.turn);
+    if (early) {
+      return { error: early };
+    }
+    const stood = standUpIfProne(encounter.id, enemy);
+    if (!stood.stood) {
+      const speed = enemySpeedTiles(enemy) * 5;
+      return {
+        error: speed
+          ? `${enemy.displayName} has too little movement left this turn to stand: it costs half its speed (${Math.floor(speed / 10) * 5} ft).`
+          : `${enemy.displayName} cannot stand up at speed 0.`,
+      };
+    }
+    publishEncounter(campaign.id);
+    publishBattleMapUpdate(campaign.id);
+    return { ok: true, name: enemy.displayName, cleared: removed.join(", "), stood: "stood up for half its speed" };
   }
   const remaining = enemy.conditions.filter((entry) => !matches(entry));
   patchEnemyConditions(enemy.id, remaining, pruneMeta(remaining, enemy.conditionMeta));

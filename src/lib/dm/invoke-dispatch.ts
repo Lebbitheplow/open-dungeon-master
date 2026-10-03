@@ -189,7 +189,7 @@ export async function dispatchAdjudication(
     case "play_sting":
       return handlePlaySting(campaign, rawArguments);
     case "mount_up":
-      return handleMountUp(campaign, rawArguments, sheets, sheetsById);
+      return handleMountUp(campaign, rawArguments, sheets, sheetsById, turn);
     case "dismount":
       return handleDismount(campaign, rawArguments, sheets, sheetsById, turn);
     case "damage_object":

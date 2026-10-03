@@ -454,7 +454,7 @@ export function getToken(tokenId: string): BattleToken | null {
 }
 
 // The DM picking a token up and putting it down. Deliberately not moveToken:
-// free placement never touches moved_this_round, because the round's budget
+// free placement never touches moved_this_round, because the turn's budget
 // belongs to the combatant's own movement and a DM repositioning the board
 // is not the combatant walking. It also skips terrain and reach entirely;
 // the caller checks what it wants to check (src/lib/dm/board.ts).
@@ -517,6 +517,18 @@ export function resetRoundBudgets(mapId: string, round: number) {
     db.prepare(`UPDATE battle_tokens SET moved_this_round = 0, updated_at = ? WHERE map_id = ?`).run(now, mapId);
     db.prepare(`UPDATE battle_maps SET round_marker = ?, updated_at = ? WHERE id = ?`).run(round, now, mapId);
   })();
+}
+
+// The combatants whose turns are starting walk again: movement belongs to a
+// turn (SRD 5.1, Movement and Position), so a second turn in the same round
+// (a Thief's Reflexes, an ambusher's own turn after the one it was owed)
+// brings its own.
+export function resetTurnBudgets(mapId: string, refIds: string[]) {
+  getDatabase()
+    .prepare(
+      `UPDATE battle_tokens SET moved_this_round = 0, updated_at = ? WHERE map_id = ? AND ref_id IN (${refIds.map(() => "?").join(", ")})`,
+    )
+    .run(nowIso(), mapId, ...refIds);
 }
 
 // ---- per-character explored-tile memory (hex bitfield) ----

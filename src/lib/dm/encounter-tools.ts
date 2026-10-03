@@ -102,7 +102,7 @@ import { endTurns } from "@/lib/dm/turn-end";
 import { turnStartEffects } from "@/lib/dm/turn-start-effects";
 import { damageEnemyTool, endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
 import { rollDeathSave } from "@/lib/dm/death";
-import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
 import { initLegendaryPools } from "@/lib/dm/legendary-tools";
 import { publishTitleCard } from "@/lib/dm/scene-state";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -971,7 +971,7 @@ export function applyEncounterCall(
       return { result: early ? { error: early } : handleEnemyAttack(campaign, turn, rawArguments, sheets, sheetsById) };
     }
     case "move_token":
-      return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById) };
+      return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById, turn) };
     case "teleport_token":
       return { result: handleTeleportToken(campaign, rawArguments, sheets, sheetsById, turn) };
     case "set_movement":
@@ -1078,6 +1078,14 @@ function advancePointer(
     const map = getBattleMapForEncounter(encounter.id);
     if (map) {
       resetRoundBudgets(map.id, encounter.round);
+      publishBattleMapUpdate(campaign.id);
+    }
+  } else {
+    // Mid-round, only the turns now starting walk again: a Thief's Reflexes
+    // turn after the thief's first one, not a turn that has been taken.
+    const map = getBattleMapForEncounter(encounter.id);
+    if (map) {
+      resetTurnBudgets(map.id, starting);
       publishBattleMapUpdate(campaign.id);
     }
   }

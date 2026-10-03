@@ -4,7 +4,8 @@ import { getActiveEncounter, saveEncounter, type Encounter, type EncounterEnemy 
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
 import { spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
-import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
+import { canEnemyAct } from "@/lib/dm/can-act";
+import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { castingHold } from "@/lib/dm/spell-planes";
 import { antimagicProblem } from "@/lib/dm/zone-rules";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
@@ -252,7 +253,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | { 
         const rest = (ledger?.bought ?? []).filter((entry, index, list) => entry !== legendary || list.indexOf(entry) !== index);
         ledger = { ...(ledger ?? {}), bought: rest };
       } else {
-        markEnemyActed(live, enemy.id);
+        spendEnemyAction(live, enemy.id);
         if (!turn.actedEnemyIds.includes(enemy.id)) {
           turn.actedEnemyIds.push(enemy.id);
         }

@@ -206,7 +206,36 @@ await test("the agent works under the same call budget: the last call is narrati
   assert.deepEqual(results.slice(0, 3).map((entry) => entry.detail.isError), [false, false, false]);
   assert.equal(results[3].detail.isError, true, "a fourth round of tools must be refused");
   assert.equal(results[3].detail.text, NARRATE_NOW);
+  // The refused call is said not to have happened, so it is not narrated as done.
+  assert.match(NARRATE_NOW, /did not happen/);
   assert.ok(getLatestDmMessage(campaign.id).content.includes("The door holds, then holds no more."));
+});
+
+// A call refused for narration only did not happen: what the program wrote
+// before it may tell it as done, or be a draft it rewrites after the refusal.
+await test("what the program writes after a refused call is the narration; what came before it is dropped", async () => {
+  script([[roll, roll, roll, { text: "Now she steps back 20 feet." }, roll, { text: "The door holds, then holds no more." }]]);
+  say("I try again, then step back.");
+  await startDmTurn(campaign.id);
+  const content = getLatestDmMessage(campaign.id).content;
+  assert.ok(content.includes("The door holds, then holds no more."), content);
+  assert.ok(!content.includes("steps back"), "the text before the refused call reached the players");
+});
+
+await test("a program that writes nothing after the refused call keeps its latest draft", async () => {
+  script([[roll, roll, roll, { text: "The door holds, then holds no more." }, roll]]);
+  say("I try again.");
+  await startDmTurn(campaign.id);
+  assert.ok(getLatestDmMessage(campaign.id).content.includes("The door holds, then holds no more."));
+});
+
+await test("several takes around refused calls leave the last one alone", async () => {
+  script([[roll, roll, roll, { text: "First take." }, roll, { text: "Second take." }, roll, { text: "Third take." }]]);
+  say("I try once more.");
+  await startDmTurn(campaign.id);
+  const content = getLatestDmMessage(campaign.id).content;
+  assert.ok(content.includes("Third take."), content);
+  assert.ok(!content.includes("First take.") && !content.includes("Second take."), content);
 });
 
 await test("a signed-out program halts the turn with a message the table can act on", async () => {

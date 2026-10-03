@@ -160,8 +160,9 @@ import {
   COMPANION_TOOL_NAMES,
   companionTools,
 } from "@/lib/dm/companion-tools";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
-import { getBattleMapForEncounter, listTokens } from "@/lib/db/battle-maps";
+import { getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
+import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/battle-maps";
+import { pcMoveBudget } from "@/lib/battlemap/view";
 import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
 import { suggestEnemies } from "@/lib/bestiary";
 import { extraBlockLines } from "@/lib/bestiary/block-sections";
@@ -254,6 +255,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       ? []
       : sheets.filter((sheet) => !staged.has(sheet.id)).map((sheet) => sheet.name),
     turnBudget: encounter.turnBudget ? describeBudget(encounter.turnBudget) : null,
+    movementLeft: encounter.orderReady ? movementLeft(campaignId, encounter, sheets) : null,
     enemies: enemies.map((enemy) => ({
       enemyId: enemy.id,
       name: enemy.displayName,
@@ -282,6 +284,21 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
     })),
     map: buildMapText(encounter.id, sheets),
   };
+}
+
+// The acting character's movement left this turn, from the budget the
+// board lights and the move route enforces, so a typed move is answered
+// with the board's number rather than a guess.
+function movementLeft(campaignId: string, encounter: Encounter, sheets: CharacterSheet[]): string | null {
+  const entry = encounter.order[encounter.turnIndex];
+  const sheet = entry.kind === "pc" ? sheets.find((candidate) => candidate.id === entry.characterId) : undefined;
+  const map = sheet ? getBattleMapForEncounter(encounter.id) : null;
+  const token = sheet && map ? getTokenByRef(map.id, sheet.id) : null;
+  if (!sheet || !map || !token) {
+    return null;
+  }
+  const { speed, tiles } = pcMoveBudget(campaignId, encounter, map, sheet, token);
+  return `${sheet.name} ${tiles * 5} ft (speed ${speed} ft)`;
 }
 
 // The DM is omniscient on the battle map: full grid, all positions, plus

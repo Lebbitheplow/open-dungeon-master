@@ -12,6 +12,7 @@ const {
   canEnemyAct,
   enemyActedThisRound,
   isSurprised,
+  endsOwedTurn,
   markEnemyActed,
   oweEnemiesAnAction,
 } = await import("../src/lib/dm/can-act.ts");
@@ -274,6 +275,23 @@ test("the next round gives the action back", () => {
   assert.deepEqual(canEnemyAct({ enemy: goblin(), encounter, kind: "action" }), { ok: true });
   markEnemyActed(encounter, "en-2");
   assert.deepEqual(encounter.legendary.acted, { round: 2, ids: ["en-2"] });
+});
+
+test("the owed action closes a turn and opens the enemy's own only when its own turn is under way and not yet taken", () => {
+  // The pointer on Brom: the goblin's place is behind it, its own turn is on.
+  const behind = fight({ round: 2, turnIndex: 2 });
+  assert.equal(endsOwedTurn(behind, "en-1"), false, "nothing owed");
+  oweEnemiesAnAction(behind, ["en-1"]);
+  assert.equal(endsOwedTurn(behind, "en-1"), true);
+  // Its place still ahead of the pointer: its own turn comes later.
+  const ahead = fight({ round: 2, turnIndex: 0 });
+  oweEnemiesAnAction(ahead, ["en-1"]);
+  assert.equal(endsOwedTurn(ahead, "en-1"), false);
+  // Its own action already taken: an action owed on top (a legendary attack) opens no turn.
+  const acted = fight({ round: 2, turnIndex: 2 });
+  markEnemyActed(acted, "en-1");
+  oweEnemiesAnAction(acted, ["en-1"]);
+  assert.equal(endsOwedTurn(acted, "en-1"), false);
 });
 
 test("an enemy owed the round a surprised party lost acts twice, then no more", () => {

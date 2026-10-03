@@ -1,7 +1,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { listEnemies, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
-import { getBattleMapForEncounter, getTokenByRef, listTokens, moveToken } from "@/lib/db/battle-maps";
-import { findPath, speedToTiles, walkPathWithBudget } from "@/lib/battlemap/movement";
+import { listEnemies, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { getBattleMapForEncounter, getTokenByRef, listTokens, moveToken, resetTurnBudgets } from "@/lib/db/battle-maps";
+import { findPath, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { hasLineOfSight } from "@/lib/battlemap/los";
 import { bestFiringPosition } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
@@ -10,11 +10,12 @@ import { footprintForSize } from "@/lib/battlemap/footprint";
 import { passableTiles } from "@/lib/battlemap/passage";
 import { getSheetById } from "@/lib/db/sheets";
 import { sizeForRace } from "@/lib/srd";
-import { effectiveSpeed, isIncapacitated, removeConditions } from "@/lib/dm/condition-logic";
+import { isIncapacitated, removeConditions } from "@/lib/dm/condition-logic";
 import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
 import { publishEphemeral } from "@/lib/events";
 import { swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
-import { exhaustedTiles } from "@/lib/dm/monster-abilities";
+import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
+import { endsOwedTurn, markEnemyActed } from "@/lib/dm/can-act";
 import { missileProblem, zoneStepsFor } from "@/lib/dm/zone-rules";
 import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 
@@ -69,9 +70,16 @@ export function awayFromFear(from: XY, steps: XY[], source: XY | null): XY[] {
   return allowed;
 }
 
-function speedTiles(enemy: EncounterEnemy): number {
-  const full = speedToTiles(enemy.stats.speed);
-  return effectiveSpeed(enemy.conditions, full) === 0 ? 0 : exhaustedTiles(enemy.conditions, full);
+// An enemy spends its action. When that closes the turn it was owed and its
+// own turn follows (can-act.ts endsOwedTurn), the own turn walks on fresh
+// movement. The caller saves the encounter.
+export function spendEnemyAction(encounter: Encounter, enemyId: string) {
+  const ownTurnFollows = endsOwedTurn(encounter, enemyId);
+  markEnemyActed(encounter, enemyId);
+  const map = ownTurnFollows ? getBattleMapForEncounter(encounter.id) : null;
+  if (map) {
+    resetTurnBudgets(map.id, [enemyId]);
+  }
 }
 
 // A prone enemy stands at the start of what it does on its turn, paying
@@ -82,7 +90,7 @@ export function standUpIfProne(encounterId: string, enemy: EncounterEnemy): { en
   if (!prone) {
     return { enemy, stood: false };
   }
-  const full = speedTiles(enemy);
+  const full = enemySpeedTiles(enemy);
   if (full <= 0) {
     return { enemy, stood: false };
   }
@@ -134,7 +142,7 @@ export function approachTarget(
     return { distance: startDistance };
   }
 
-  const budget = Math.max(0, speedTiles(enemy) - attacker.movedThisRound);
+  const budget = Math.max(0, enemySpeedTiles(enemy) - attacker.movedThisRound);
   const fear = fearSourceAt(map.id, enemy.conditions, enemy.conditionMeta as Record<string, { source?: string }>);
   const occupied = occupiedTiles(map, listTokens(map.id), attacker);
   let landing: XY = origin;
@@ -192,10 +200,10 @@ export function approachTarget(
   const why = fear
     ? `${attacker.name} is frightened and will not move closer to what it fears`
     : profile.melee
-      ? `${attacker.name} is ${distance * 5} ft from ${target.name} and cannot reach them this round`
+      ? `${attacker.name} is ${distance * 5} ft from ${target.name} and cannot reach them this turn`
       : sightFrom(landing)
-        ? `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${profile.longRangeTiles * 5} ft range, and cannot close the gap this round`
-        : `${attacker.name} has no line of sight to ${target.name} and cannot reach a firing position this round`;
+        ? `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${profile.longRangeTiles * 5} ft range, and cannot close the gap this turn`
+        : `${attacker.name} has no line of sight to ${target.name} and cannot reach a firing position this turn`;
   return {
     ...base,
     blocked: {

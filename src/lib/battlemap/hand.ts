@@ -9,7 +9,7 @@
 import { ragingMeleeBonus, weaponAttackProfile, weaponOf } from "@/lib/dm/attack-logic";
 import { magicWeaponOfRow, type WeaponGear } from "@/lib/dm/gear-attack";
 import { bonusRouteFor, kiLeft, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
-import { effectiveSpeed } from "@/lib/dm/condition-logic";
+import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
 import { attackOptionsFor, bonusStrikeCards, fastHandsCards, kiCards } from "@/lib/battlemap/hand-class";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -283,6 +283,7 @@ const BASICS: Array<{ id: BasicActionId; name: string; rules: string; target: Ha
   { id: "hide", name: "Hide", rules: "A Stealth check to slip out of sight.", target: "none" },
   { id: "search", name: "Search", rules: "Perception or Investigation to find what is hidden.", target: "none" },
   { id: "escape", name: "Escape", rules: "Athletics or Acrobatics against the grappler's Athletics.", target: "none" },
+  { id: "stand-up", name: "Stand up", rules: "Getting up costs half your speed.", target: "none" },
   { id: "ready", name: "Ready", rules: "Name a trigger; when it happens your reaction makes the attack.", target: "none", asks: "trigger" },
   { id: "grapple", name: "Grapple", rules: "Athletics against their Athletics or Acrobatics. Takes the place of one attack.", target: "enemy" },
   { id: "shove", name: "Shove", rules: "Knock them prone or push them 5 ft. Takes the place of one attack.", target: "enemy" },
@@ -298,6 +299,7 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
   const derived = computeSheetDerived(sheet);
   const allowed = 1 + riders.extraAttacks;
   const grappled = sheet.conditions.some((entry) => entry.trim().toLowerCase() === "grappled");
+  const prone = sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
   // A spell's hold (Web, Maze, Irresistible Dance): take_action escape breaks
   // it when no grapple does (src/lib/dm/spell-escape.ts).
   const hold = grappled ? null : spellHoldOf(sheet);
@@ -305,7 +307,7 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
   const athletics = derived.skills.athletics ?? derived.abilityMods.str;
   const make = (basic: (typeof BASICS)[number], route: BonusRoute | null): HandCard => {
     const contest = basic.id === "grapple" || basic.id === "shove";
-    const cost: HandCost = basic.id === "end-turn" ? "free" : route ? "bonus" : "action";
+    const cost: HandCost = basic.id === "end-turn" || basic.id === "stand-up" ? "free" : route ? "bonus" : "action";
     const escape = basic.id === "escape";
     const ki = route?.ki ? kiLeft(sheet) : null;
     return {
@@ -343,11 +345,23 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
   for (const basic of BASICS) {
     // Escape is only there to take while something holds you.
     if (basic.id === "escape" && !grappled && !hold) continue;
+    // Standing up is only there to take while lying prone.
+    if (basic.id === "stand-up" && !prone) continue;
     const plain = make(basic, null);
     const card: HandCard =
       basic.id === "escape" && hold
         ? { ...plain, name: `Escape: ${hold.spell}`, rules: hold.rules, dice: hold.dice, roll: hold.roll, condition: "" }
         : plain;
+    if (basic.id === "stand-up") {
+      // Movement, not an action (SRD 5.1, Being Prone): no standing at speed
+      // 0, whether a condition or exhaustion stops them.
+      const still: Gate =
+        exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, sheet.speed)) === 0
+          ? { reason: "Your speed is 0, so you cannot stand up.", spent: false }
+          : null;
+      cards.push(gated(card, standingGate(sheet, turn, "move"), still));
+      continue;
+    }
     if (basic.id === "end-turn") {
       // Ending the turn is always open to whoever holds it, down or not.
       cards.push(turn.myTurn ? card : gated(card, standingGate(sheet, turn, "free")));
@@ -437,7 +451,11 @@ export function splitHand(cards: HandCard[], cap = HAND_FAN_CAP): { fan: HandCar
   const rest = cards.filter((card) => card !== end);
   // A bare fist gives its seat up too when there is steel to swing.
   const armed = rest.some((card) => card.intent.card === "attack" && card.id !== "attack:unarmed strike");
-  const rank = (card: HandCard) => (card.disabled ? 2 : armed && card.id === "attack:unarmed strike" ? 1 : 0);
+  // Escape and Stand up are dealt only while something holds the character
+  // or they lie prone, which is when they matter most: they keep a seat.
+  const situational = (card: HandCard) => card.id === "basic:escape" || card.id === "basic:stand-up";
+  const rank = (card: HandCard) =>
+    card.disabled ? 2 : situational(card) ? -1 : armed && card.id === "attack:unarmed strike" ? 1 : 0;
   const ranked = [...rest].sort((a, b) => rank(a) - rank(b));
   const keep = new Set(ranked.slice(0, end ? cap - 1 : cap));
   const fan = rest.filter((card) => keep.has(card));

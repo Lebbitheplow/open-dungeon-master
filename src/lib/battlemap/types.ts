@@ -64,7 +64,9 @@ export type BattleToken = {
   name: string;
   x: number;
   y: number;
-  // Movement budget already spent this round, in tile-cost units.
+  // Movement budget already spent on the combatant's turn under way, in
+  // tile-cost units. It refills as each of its turns starts and at every
+  // round wrap (src/lib/db/battle-maps.ts).
   movedThisRound: number;
   // Carried light (torch/lantern): bright radius in tiles, 0 = none. The
   // dim radius is always double the bright radius.

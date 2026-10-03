@@ -53,7 +53,7 @@ export function rollExtrasFor(campaign: Campaign, sheet: CharacterSheet, kind: s
   };
 }
 
-// No more than half their speed walked this round, on the board; off it the
+// No more than half their speed walked this turn, on the board; off it the
 // character is taken at their word and moves slowly.
 function movedLittle(campaignId: string, sheet: CharacterSheet): boolean {
   const encounter = getActiveEncounter(campaignId);

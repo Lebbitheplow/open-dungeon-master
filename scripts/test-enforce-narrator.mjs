@@ -386,7 +386,7 @@ await test("A companion walks with move_token and no forced on its own turn; the
   const rules = companionRules(world.campaign(), "full");
   assert.doesNotMatch(rules, /move_token \(forced:true\) if they need to reposition/);
   assert.match(rules, /move_token with no forced if they need to reposition/);
-  assert.match(systemText(), /an AI companion walking on its own turn: move_token with no forced/);
+  assert.match(systemText(), /On a character's own turn, move_token with no forced walks them: an AI companion/);
 });
 
 await test("The level-up rule never lets a lead's request turn into a level the server refuses from the model.", () => {

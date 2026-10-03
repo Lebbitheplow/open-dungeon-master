@@ -43,7 +43,7 @@ import { combatFeatureSpend } from "@/lib/dm/combat-features";
 import { srdFeatureSpend } from "@/lib/dm/srd-feature-spends";
 import { handleStabilize } from "@/lib/dm/stabilize";
 import { canonicalCondition, handleSetCondition } from "@/lib/dm/set-condition";
-import { exhaustionPatch, namesExhaustion, SUFFOCATING } from "@/lib/dm/vitals-logic";
+import { exhaustionPatch, namesExhaustion, PRONE, SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { prepareResourceCharge } from "@/lib/dm/resource-turn";
 import { prepareUseItem } from "@/lib/dm/object-actions";
 import { chargedItemUse } from "@/lib/dm/item-use";
@@ -53,6 +53,7 @@ import { ZONE_ARGS, zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { castHealingSpell } from "@/lib/dm/heal-spell";
 import { advanceClock, recordShapeEnd } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
+import { payToStand } from "@/lib/dm/stand-up";
 import { copyCost, learnProblem } from "@/lib/dm/learn-rules";
 import { getAuditPreImage, listAuditForTurn, listAuditSince } from "@/lib/db/sheet-audit";
 import { autoLevelCompanion } from "@/lib/dm/companion-tools";
@@ -1220,6 +1221,14 @@ export function applyDmMutation(
             currentConditions: sheet.conditions,
           },
         };
+      }
+      // The AI clearing prone is the character standing up; a person at the
+      // console keeps a free hand to correct the board.
+      if (removed.some((entry) => canonicalCondition(entry) === PRONE) && getDmTurn(turnId)?.actor !== "human_dm") {
+        const refusal = payToStand(campaign.id, sheet);
+        if (refusal) {
+          return { result: { error: refusal } };
+        }
       }
       const withoutCondition = sheet.conditions.filter((entry) => !matches(entry));
       const prunedMeta = pruneMeta(withoutCondition, sheet.conditionMeta);

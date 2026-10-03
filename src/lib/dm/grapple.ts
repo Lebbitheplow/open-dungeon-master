@@ -34,7 +34,8 @@ import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollEnemyContest } from "@/lib/dm/action-common";
-import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
+import { canEnemyAct } from "@/lib/dm/can-act";
+import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
@@ -183,7 +184,7 @@ export function enemyEscape(
       error: `${enemy.displayName}'s grapple names no grappler the server can find; end it with set_enemy_condition instead of a contest.`,
     };
   }
-  markEnemyActed(encounter, enemy.id);
+  spendEnemyAction(encounter, enemy.id);
   saveEncounter(encounter);
   const theirs = rollEnemyContest(campaign, turn, enemy, "either", `${enemy.displayName}: escape the grapple`);
   const hold = rollCharacterCheck(campaign, holder, { skill: "athletics" }, `${holder.name}: Athletics to hold the grapple`);

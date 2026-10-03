@@ -10,7 +10,8 @@ import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getActiveEncounter, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { spellFactsFor } from "@/lib/content";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
-import { enemyActedThisRound, markEnemyActed } from "@/lib/dm/can-act";
+import { enemyActedThisRound } from "@/lib/dm/can-act";
+import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { findMonsterSpell } from "@/lib/dm/monster-abilities";
@@ -258,7 +259,7 @@ function finishCounterspell(
   if (countered) {
     const live = getActiveEncounter(ctx.campaign.id);
     if (live) {
-      markEnemyActed(live, counter.enemy.id);
+      spendEnemyAction(live, counter.enemy.id);
       saveEncounter(live);
     }
   }

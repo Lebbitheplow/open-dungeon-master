@@ -84,7 +84,7 @@ export function rulerFor(view: RulerView, fromId: string, hover: XY, spends: boo
       const spend = cost * factor;
       return { path, label: `${spend * TILE_FEET} ft${factor > 1 ? " dragging" : ""}`, overBudget: spend > view.budgetLeft };
     }
-    // Not lit: out of this round's reach, by the server's count. The line
+    // Not lit: out of this turn's reach, by the server's count. The line
     // still shows the way; the terrain's price is a floor, so a square the
     // terrain alone would allow says it is out of reach instead of a number
     // the server would not honour.

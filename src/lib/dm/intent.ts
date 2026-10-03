@@ -8,7 +8,7 @@
 import type { EnemyAttack, EnemyStats } from "@/lib/bestiary/statblock";
 import type { EncounterIntents } from "@/lib/db/encounter-intents";
 import type { IntentVerbKind, TokenIntent } from "@/lib/battlemap/intent";
-import { speedToTiles } from "@/lib/battlemap/movement";
+import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { chebyshev } from "@/lib/battlemap/types";
 import { averageDetail } from "@/lib/srd/odds";
 
@@ -69,7 +69,7 @@ export function expectedDamage(expression: string | null | undefined): number | 
   return Number.isFinite(detail.average) && detail.average > 0 ? Math.round(detail.average) : null;
 }
 
-export type IntentActor = { stats: Pick<EnemyStats, "attacks" | "speed"> };
+export type IntentActor = { stats: Pick<EnemyStats, "attacks" | "speed">; conditions: string[] };
 export type IntentPosition = { id: string; x: number; y: number };
 // A player character's token as the guess sees it. `down` is a PC at 0 HP:
 // on the board, but not something a monster spends its turn on.
@@ -115,7 +115,7 @@ export function likelyIntent(
     return null;
   }
   let attack = attacks[0];
-  const canClose = nearest.tiles <= speedToTiles(enemy.stats.speed) + 1;
+  const canClose = nearest.tiles <= enemySpeedTiles(enemy) + 1;
   if (!canClose && attackVerbKind(attack) === "melee") {
     attack = attacks.find((entry) => attackVerbKind(entry) !== "melee") ?? attack;
   }
@@ -135,7 +135,7 @@ export type IntentProjectionInput = {
   declared: EncounterIntents;
   // Living enemies with a token on the board, hidden ones included: the
   // viewer's own token list decides which of them are spoken for.
-  enemies: Array<{ id: string; stats: IntentActor["stats"]; token: IntentPosition }>;
+  enemies: Array<IntentActor & { id: string; token: IntentPosition }>;
   // Every player character token on the board.
   pcTokens: Array<IntentMark & { refId: string }>;
   // The token ids this viewer's projection contains.
