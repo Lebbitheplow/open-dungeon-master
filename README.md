@@ -8,15 +8,19 @@
 [![Node 22+](https://img.shields.io/badge/node-22%2B-d4ab3a?labelColor=151229&style=flat-square)](package.json)
 [![Ruleset: D&D 5e SRD 5.1](https://img.shields.io/badge/ruleset-D%26D%205e%20SRD%205.1-d4ab3a?labelColor=151229&style=flat-square)](docs/rules-coverage.md)
 [![Runs: fully on-device](https://img.shields.io/badge/runs-fully%20on--device-d4ab3a?labelColor=151229&style=flat-square)](#requirements)
+[![AI: local, API or CLI agent](https://img.shields.io/badge/AI-local%20%C2%B7%20API%20%C2%B7%20CLI%20agent-d4ab3a?labelColor=151229&style=flat-square)](#requirements)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-e0703a?labelColor=151229&style=flat-square)](#)
 
 </div>
 
 **Open Dungeon Master** runs multiplayer (and solo) Dungeons &amp; Dragons 5e
-campaigns with an AI Dungeon Master, fully on your own machine. A local model is
-the creative mind and narrator; a stack of server-side engines enforces the 5e
-rules for both the players and the DM. **The narrator never owns the numbers** —
-dice, hit points, spell slots, conditions, and the death track are computed and
+campaigns with an AI Dungeon Master, on your own machine. The narrator is whichever
+AI you already have: **a local model** (llama.cpp, Ollama, LM Studio, vLLM), **an
+API key** (OpenAI, OpenRouter, or any OpenAI-compatible endpoint), or **a CLI agent
+you already pay for** (Claude Code, Codex, opencode, Grok Build), which narrates on
+its own subscription with no API key handed over. The model is the creative mind
+and narrator; a stack of server-side engines enforces the 5e rules for both the
+players and the DM. **The narrator never owns the numbers**: dice, hit points, spell slots, conditions, and the death track are computed and
 clamped by the backend, and the model changes game state only through tools the
 server validates.
 
@@ -61,8 +65,8 @@ a secret story arc it regenerates as the campaign moves.
 </td>
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/text-model.png" width="56"><br>
-<b>Local AI Dungeon Master</b><br>
-<sub>Any OpenAI-compatible server with tool calling — llama.cpp, Ollama, LM Studio, vLLM. The model narrates and makes creative calls; it never states a roll or edits its own numbers.</sub>
+<b>Your AI Dungeon Master, your choice</b><br>
+<sub>A local model (llama.cpp, Ollama, LM Studio, vLLM), an API key (OpenAI, OpenRouter, any OpenAI-compatible endpoint with tool calling), or a CLI agent subscription you already have: Claude Code, Codex, opencode or Grok Build. Whichever narrates, it makes the creative calls and never states a roll or edits its own numbers.</sub>
 </td>
 </tr>
 <tr>
@@ -226,7 +230,9 @@ and clamped by code.
 
 ### AI and LLM integration
 
-- **Model client (dual provider)** - streaming against an OpenAI-compatible `/chat/completions` server (llama.cpp, LM Studio, vLLM, OpenRouter) or a local Ollama.
+- **Model client (dual provider)** - streaming against an OpenAI-compatible `/chat/completions` server (llama.cpp, LM Studio, vLLM, OpenAI, OpenRouter) or a local Ollama.
+- **Agent programs as the DM** - Claude Code, Codex, opencode or Grok Build, signed in on the server's computer, narrate on their own subscription. The program is started with none of its own tools; its only tools are the turn's DM tools over the server's MCP endpoint, so the same engines roll and clamp ([docs/agent-harness.md](docs/agent-harness.md)).
+- **Connected agents** - your own Claude Code, Codex or other MCP client connects to the server as you, scoped by a revocable token, to read campaigns, play your character or run a table from the DM seat.
 - **DM turn engine** - a persisted park/resume state machine and tool-calling loop (up to four rounds) that salvages malformed tool calls and streams filtered narration.
 - **DM prompt and tool families** - a rules-as-tools system prompt covering rolls, checks, encounters, casts, resources, rests, conditions, items, hazards, NPCs, notes, maps, and world.
 - **Engine boundary contract** - one explicit block naming the eight classes of fact the engine owns, so the model writes the prose and never the math.
@@ -279,7 +285,12 @@ and clamped by code.
     `http://127.0.0.1:8001` serving a model named `qwen3.6-35b`. This is the default
     and preferred configuration (see below). Or:
   - any other OpenAI-compatible server with tool calling: Ollama, LM Studio, vLLM,
-    TabbyAPI, KoboldCpp, or a remote API like OpenRouter.
+    TabbyAPI, KoboldCpp, or a remote API key like OpenAI or OpenRouter. Or:
+  - a CLI agent already installed and signed in on the server's computer: Claude
+    Code, Codex, opencode or Grok Build, running on the plan you already pay for.
+    Pick it in **Admin > Agent program**. Works for a server started with npm or
+    systemd, not inside the Docker image
+    ([docs/agent-harness.md](docs/agent-harness.md)).
 - **Optional services** (each feature simply stays off, or falls back to a
   placeholder, without it):
   - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for character
