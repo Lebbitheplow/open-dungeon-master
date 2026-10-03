@@ -1,9 +1,12 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { campaignSeats } from "@/lib/db/campaigns";
+import { hasHumanDm } from "@/lib/dm/viewer";
 import {
   countPendingPlayerWhispers,
   countUnreadWhispers,
   insertPlayerWhisper,
+  listInboxWhispers,
   listWhispersForUser,
 } from "@/lib/db/dm-whispers";
 import { getSheetForUser } from "@/lib/db/sheets";
@@ -27,6 +30,11 @@ export async function GET(
   return Response.json({
     whispers: listWhispersForUser(campaignId, context.user.id),
     unread: countUnreadWhispers(campaignId, context.user.id),
+    // A person in the DM seat reads the players' private messages here; the
+    // AI reads them from GAME STATE instead.
+    ...(capsFor(context).adjudicates && hasHumanDm(campaignSeats(context.campaign))
+      ? { inbox: listInboxWhispers(campaignId) }
+      : {}),
   });
 }
 

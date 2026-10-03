@@ -1,12 +1,13 @@
 import {
   allocateSeq,
+  campaignSeats,
   getCampaignById,
   latestSeq,
   setQuestLog,
   setStoryArc,
 } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
-import { narratorIsAi } from "@/lib/dm/viewer";
+import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
@@ -815,7 +816,10 @@ export async function refreshStoryArc(
     // there), and this is the cascade that would otherwise quietly plan,
     // enrich and rewrite an arc the DM never asked for. Their notes are not
     // the model's to edit.
-    if (!narratorIsAi(campaign.gameSettings.dmMode)) {
+    // That holds for an assisted table too: a person sits in the seat, and an
+    // arc is theirs to ask for (the Story panel's generate), never one the
+    // first chapter close plans behind their back.
+    if (!narratorIsAi(campaign.gameSettings.dmMode) || hasHumanDm(campaignSeats(campaign))) {
       return;
     }
     if (!campaign.storyArc) {

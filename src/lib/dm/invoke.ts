@@ -22,6 +22,8 @@ import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { askForInitiative, describeInitiativeAsk } from "@/lib/dm/initiative-ask";
+import { listPendingPlayerWhispers, markPlayerWhispersAnswered } from "@/lib/db/dm-whispers";
+import { publishEphemeral } from "@/lib/events";
 import { ENCOUNTER_CAP_PER_TURN, ENCOUNTER_TOOL_NAMES } from "@/lib/dm/encounter-tools";
 import { MUTATION_CAP_PER_TURN, MUTATION_TOOL_NAMES } from "@/lib/dm/mutations";
 // "goblin x4" is the same shorthand a prepared encounter is saved in, so the
@@ -274,6 +276,20 @@ export async function invokeEngine(
     const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
     if (ask) {
       result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
+    }
+  }
+
+  // A person answering a player's private message: the whisper is answered,
+  // which is what lets the player send another (the AI's turn marks its own
+  // in finalize).
+  if (actor.kind === "human" && entry.name === "send_whisper" && Array.isArray(result.whisperedCharacterIds)) {
+    const to = new Set(result.whisperedCharacterIds as string[]);
+    const answered = listPendingPlayerWhispers(campaign.id).filter(
+      (whisper) => whisper.characterId && to.has(whisper.characterId),
+    );
+    if (answered.length) {
+      markPlayerWhispersAnswered(answered.map((whisper) => whisper.id), turn.id);
+      publishEphemeral(campaign.id, "whisper_activity", {});
     }
   }
 

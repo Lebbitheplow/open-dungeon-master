@@ -14,6 +14,7 @@ import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { CameraEvent, SceneState } from "@/lib/scene/state";
 import type { MapLabel } from "@/lib/battlemap/scene";
 import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
+import { DmInboxPanel } from "@/app/campaigns/[campaignId]/DmInboxPanel";
 import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
 import { BondsPanel } from "@/app/campaigns/[campaignId]/BondsPanel";
@@ -52,7 +53,7 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { Note } from "@/lib/db/notes";
 import type { WorldFact } from "@/lib/db/facts";
-import type { DmWhisper } from "@/lib/db/dm-whispers";
+import type { DmWhisper, InboxWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { MapPing } from "@/lib/dm/board-logic";
@@ -110,6 +111,7 @@ export type SidePanelRouterProps = {
   refreshSideChat: () => Promise<void>;
   whispers: DmWhisper[];
   whisperUnread: number;
+  dmInbox: InboxWhisper[];
   refreshWhispers: () => Promise<void>;
   chatTarget: string | null;
   onChatTargetHandled: () => void;
@@ -199,6 +201,7 @@ export function SidePanelRouter({
   refreshSideChat,
   whispers,
   whisperUnread,
+  dmInbox,
   refreshWhispers,
   chatTarget,
   onChatTargetHandled,
@@ -538,13 +541,20 @@ export function SidePanelRouter({
   if (tab === "chat") {
     return (
       <div className="space-y-3">
-        <DmWhisperPanel
-          campaignId={campaignId}
-          whispers={whispers}
-          unread={whisperUnread}
-          sheets={sheets}
-          refreshWhispers={refreshWhispers}
-        />
+        {adjudicates && humanDmTable ? (
+          // The DM seat's side of the private line: what the players sent,
+          // answered from here (the player's own card would whisper to
+          // themselves).
+          <DmInboxPanel campaignId={campaignId} inbox={dmInbox} refreshWhispers={refreshWhispers} />
+        ) : (
+          <DmWhisperPanel
+            campaignId={campaignId}
+            whispers={whispers}
+            unread={whisperUnread}
+            sheets={sheets}
+            refreshWhispers={refreshWhispers}
+          />
+        )}
         <SideChatPanel
           campaignId={campaignId}
           members={members}

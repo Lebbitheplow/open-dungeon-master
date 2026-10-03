@@ -3,6 +3,9 @@
 // Every arm calls exactly what turn.ts calls for the same tool. That is the
 // point: there is one rules engine, and swapping the AI DM for a person
 // swaps the caller, not the game.
+import { maybeProposeItemChange } from "@/lib/dm/proposal-intercept";
+import { maybeCloseChapter } from "@/lib/dm/chapter-close";
+import { enqueueDmJob } from "@/lib/dm/queue";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { handleCastBuff } from "@/lib/dm/cast-tools";
 import { handleCheckNotice, handleGroupCheck } from "@/lib/dm/check-tools";
@@ -84,7 +87,13 @@ export async function dispatchAdjudication(
   const rawArguments = strictBooleanArgs(sentArguments);
 
   if (MUTATIONS.has(name)) {
-    return applyDmMutation(campaign, turn.id, name, rawArguments, sheets, sheetsById).result;
+    // inventoryApprovals holds for whoever runs the table: an item or gold
+    // change to a player character is an offer they answer, from the console
+    // as from the AI's turn (turn.ts).
+    return (
+      maybeProposeItemChange(campaign, turn.id, name, rawArguments, sheetsById) ??
+      applyDmMutation(campaign, turn.id, name, rawArguments, sheets, sheetsById).result
+    );
   }
   if (ENCOUNTERS.has(name)) {
     return applyEncounterCall(campaign, turn, name, rawArguments, sheets, sheetsById, {
@@ -214,8 +223,22 @@ export async function dispatchAdjudication(
       return handleGenerateImage(campaign, rawArguments);
     case "record_event":
       return handleRecordEvent(campaign, rawArguments, sheets, sheetsById);
-    case "complete_beat":
-      return handleCompleteBeat(campaign.id, rawArguments, false).result;
+    case "complete_beat": {
+      const outcome = handleCompleteBeat(campaign.id, rawArguments, false);
+      // A person's "Beat achieved" counts toward the chapter the way the AI's
+      // does at the end of its turn (turn.ts): the console used to drop the
+      // flags, so a human table's chapters only closed at the message cap.
+      if (turn.actor !== "ai" && (outcome.completed || outcome.gated)) {
+        enqueueDmJob(campaign.id, () =>
+          maybeCloseChapter(campaign.id, {
+            beatCompleted: outcome.completed,
+            beatGated: outcome.completed && outcome.gated,
+            beatClaimed: !outcome.completed && outcome.gated,
+          }),
+        );
+      }
+      return outcome.result;
+    }
     case "write_campaign_note":
       return handleWriteCampaignNote(campaign, rawArguments);
     case "send_whisper":

@@ -61,7 +61,9 @@ export function composerGate({
   const placeholder = narrationBlocked
     ? "The Dungeon Master is setting the scene... (OOC still open)"
     : holdBlocked
-      ? "The party lead has the floor held for discussion... (OOC still open)"
+      ? floor.mode === "hold" && floor.next.mode === "initiative"
+        ? "The enemies are taking their turns... (OOC still open)"
+        : "The party lead has the floor held for discussion... (OOC still open)"
       : initiativeBlocked
         ? `${floor.mode === "initiative" ? floor.currentName : "Another hero"}'s turn in combat... (OOC still open)`
         : floorBlocked

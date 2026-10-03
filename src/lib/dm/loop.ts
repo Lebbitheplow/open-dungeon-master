@@ -5,6 +5,7 @@ import { campaignSeats, getCampaignById } from "@/lib/db/campaigns";
 import { consumeDmCoverTurn } from "@/lib/db/dm-cover";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { enqueueDmJob } from "@/lib/dm/queue";
+import { listRecentMessages } from "@/lib/db/messages";
 import { getDmStatus, setDmStatus } from "@/lib/dm/status";
 import { startDmTurn } from "@/lib/dm/turn";
 import { hasHumanDm } from "@/lib/dm/viewer";
@@ -77,3 +78,16 @@ export function requestDmTurn(campaignId: string): boolean {
 // Modules inside the turn (initiative landing on an AI companion) wake the
 // DM through the registry instead of importing this module (cycle).
 registerDmWaker(requestDmTurn);
+
+// The AI just took over answering (a cover stretch began, or the table was
+// handed to it) and players may already be waiting on the person who had
+// the seat. Only a player message at the end of the transcript wakes it, so
+// a cover's handed-over answers are never spent on a table with nothing to
+// answer. requestDmTurn's own guards still apply.
+export function wakeForWaitingPlayers(campaignId: string, aiAnswersNow: boolean): boolean {
+  if (!aiAnswersNow) {
+    return false;
+  }
+  const last = listRecentMessages(campaignId, 1).at(-1);
+  return last?.authorType === "player" ? requestDmTurn(campaignId) : false;
+}

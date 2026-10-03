@@ -21,7 +21,8 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
-import type { DmWhisper } from "@/lib/db/dm-whispers";
+import type { DmWhisper, InboxWhisper } from "@/lib/db/dm-whispers";
+import { queuedIntents } from "@/lib/dm/intent-queue";
 import type { CampaignAsk } from "@/lib/db/asks";
 import type { WorldFact } from "@/lib/db/facts";
 import type { SideThread } from "@/lib/db/side-chat";
@@ -148,6 +149,8 @@ export type CampaignState = {
   whispers: DmWhisper[];
   whisperUnread: number;
   whispersLoaded: boolean;
+  // A person in the DM seat: the players' private messages to them.
+  dmInbox: InboxWhisper[];
   // Ask: the caller's own questions plus every table-visible one.
   asks: CampaignAsk[];
   asksLoaded: boolean;
@@ -286,6 +289,7 @@ const initialState: CampaignState = {
   whispers: [],
   whisperUnread: 0,
   whispersLoaded: false,
+  dmInbox: [],
   asks: [],
   asksLoaded: false,
   facts: [],
@@ -330,7 +334,7 @@ type Action =
   | { type: "snapshot"; payload: Partial<CampaignState> & { lastSeq: number } }
   | { type: "notes"; notes: Note[] }
   | { type: "sideThreads"; sideThreads: SideThread[] }
-  | { type: "whispers"; whispers: DmWhisper[]; unread: number }
+  | { type: "whispers"; whispers: DmWhisper[]; unread: number; inbox: InboxWhisper[] }
   | { type: "asks"; asks: CampaignAsk[] }
   | { type: "facts"; facts: WorldFact[] }
   | { type: "battleMap"; view: PlayerMapView | null }
@@ -386,6 +390,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         whispers: action.whispers,
         whisperUnread: action.unread,
         whispersLoaded: true,
+        dmInbox: action.inbox,
       };
     case "facts":
       return { ...state, facts: action.facts };
@@ -1039,6 +1044,11 @@ export function useCampaignStream(campaignId: string) {
           encounter: data.encounter ?? null,
           itemProposals: data.itemProposals ?? [],
           beats: data.beats ?? [],
+          // The DM's "waiting on you" queue, rebuilt from the transcript: the
+          // live events that fed it are never replayed after a reload.
+          dmIntents: data.caps?.adjudicates
+            ? queuedIntents(data.messages ?? [], (data.beats ?? []).map((beat: { messageId: string }) => beat.messageId))
+            : [],
           dmStatus: data.dmStatus ?? "idle",
           utilityCalls: sortCalls(data.utilityCalls ?? []),
           narrationAudio: data.narrationAudio ?? {},
@@ -1148,7 +1158,7 @@ export function useCampaignStream(campaignId: string) {
         return;
       }
       const data = await response.json();
-      dispatch({ type: "whispers", whispers: data.whispers ?? [], unread: data.unread ?? 0 });
+      dispatch({ type: "whispers", whispers: data.whispers ?? [], unread: data.unread ?? 0, inbox: data.inbox ?? [] });
     } catch {
       // transient; the next whisper_activity event retries
     }

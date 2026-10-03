@@ -255,7 +255,10 @@ export function SessionView({
   // Chime on new private messages (side chats + DM whispers). The loaded
   // flags keep the page-load backlog silent.
   const chatUnreadTotal =
-    state.sideThreads.reduce((sum, thread) => sum + thread.unread, 0) + state.whisperUnread;
+    state.sideThreads.reduce((sum, thread) => sum + thread.unread, 0) +
+    state.whisperUnread +
+    // A person in the DM seat: players' private messages still unanswered.
+    state.dmInbox.filter((whisper) => !whisper.answered).length;
   useChatChime(chatUnreadTotal, state.sideChatLoaded && state.whispersLoaded);
   const pendingNoteCount = state.notes.filter((note) => note.status === "pending").length;
   // Two different authorities, deliberately separate. `isLead` owns the
@@ -841,6 +844,7 @@ export function SessionView({
           refreshSideChat={refreshSideChat}
           whispers={state.whispers}
           whisperUnread={state.whisperUnread}
+          dmInbox={state.dmInbox}
           refreshWhispers={refreshWhispers}
           chatTarget={chatTarget}
           onChatTargetHandled={clearChatTarget}

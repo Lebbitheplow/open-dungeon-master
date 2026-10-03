@@ -36,7 +36,10 @@ const { insertItemProposal } = await import("../src/lib/db/item-proposals.ts");
 const { listOpenPendingRolls } = await import("../src/lib/db/dm-turns.ts");
 const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
 
-const world = await openWorld({ gameSettings: { dicePolicy: "real_allowed", inventoryApprovals: true } });
+// Item offers stay off: the console honours them as the AI's turn does, and
+// the mutations below are about what publishes when a change lands. The
+// offer race further down inserts its own offer.
+const world = await openWorld({ gameSettings: { dicePolicy: "real_allowed" } });
 const who = await seats(world);
 const campaignId = world.campaignId;
 const params = { campaignId };

@@ -132,6 +132,43 @@ export function listPendingPlayerWhispers(campaignId: string): PendingPlayerWhis
   }));
 }
 
+// The DM's inbox at a person's table: every private message players sent
+// the DM, newest last, answered or not. The AI reads the pending ones from
+// GAME STATE; a person has nowhere else to read them.
+export type InboxWhisper = PendingPlayerWhisper & { answered: boolean };
+
+export function listInboxWhispers(campaignId: string, limit = 60): InboxWhisper[] {
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT w.id, w.user_id, w.character_id, w.content, w.created_at, w.answered_turn_id,
+          COALESCE(s.name, 'Unknown') AS name
+        FROM dm_whispers w
+        LEFT JOIN character_sheets s ON s.id = w.character_id
+        WHERE w.campaign_id = ? AND w.direction = 'to_dm'
+        ORDER BY w.created_at DESC, w.id DESC LIMIT ?
+      `,
+    )
+    .all(campaignId, limit) as Array<{
+    id: string;
+    user_id: string;
+    character_id: string | null;
+    content: string;
+    created_at: string;
+    answered_turn_id: string | null;
+    name: string;
+  }>;
+  return rows.reverse().map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    characterId: row.character_id,
+    characterName: row.name,
+    content: row.content,
+    createdAt: row.created_at,
+    answered: row.answered_turn_id !== null,
+  }));
+}
+
 export function countPendingPlayerWhispers(campaignId: string, userId: string): number {
   const row = getDatabase()
     .prepare(

@@ -9,6 +9,7 @@ import {
   MAX_COVER_TURNS,
 } from "@/lib/dm/delegation";
 import { publishPersisted } from "@/lib/events";
+import { wakeForWaitingPlayers } from "@/lib/dm/loop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,5 +80,8 @@ export async function POST(
   // Persisted, and sent to the whole table rather than the DM alone: a player
   // is owed the knowledge that the person answering them stepped out.
   publishPersisted(campaignId, "dm_cover_changed", { cover });
+  // Actions already waiting are what the DM handed over the answers for:
+  // without this the AI sat silent until a player happened to post again.
+  wakeForWaitingPlayers(campaignId, turns > 0);
   return Response.json({ cover });
 }

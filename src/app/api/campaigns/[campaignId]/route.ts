@@ -30,7 +30,7 @@ import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
-import { hasHumanDm, isPrimaryDm, lobbyBlocker } from "@/lib/dm/viewer";
+import { hasHumanDm, isPrimaryDm, lobbyBlocker, narratorIsAi } from "@/lib/dm/viewer";
 import { sheetForViewer } from "@/lib/dm/sheet-view";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
@@ -273,7 +273,10 @@ export async function PATCH(
         : "The party is assembled and the adventure begins. Introduce the opening scene, set the premise, and give the party their first decision.",
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
-    if (!humanDm && campaign.gameSettings.aiStorySetup) {
+    // An assisted table asked for this in the wizard ("the AI fills this in
+    // if left blank"), so the premise pass runs for it as well; only a fully
+    // human table never gets one. The arc below stays the AI table's alone.
+    if (narratorIsAi(campaign.gameSettings.dmMode) && campaign.gameSettings.aiStorySetup) {
       enqueueDmJob(campaignId, () => runStorySetup(campaignId));
     }
     // Every AI-run campaign gets a structured story arc built from the

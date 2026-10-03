@@ -167,8 +167,9 @@ export async function POST(
     campaign.dmCover,
   );
   const humanDm = hasHumanDm(campaignSeats(campaign)) && !covering;
+  // A person's table gets the recap too: it is a utility call that wakes no
+  // DM turn, and recap.ts writes the DM's own secret track for exactly them.
   if (
-    !humanDm &&
     lastMessage &&
     Date.now() - new Date(lastMessage.createdAt).getTime() > RECAP_IDLE_MS &&
     claimRecap(campaignId, lastMessage.seq)
@@ -198,7 +199,11 @@ export async function POST(
   // intent: it sits in the DM's queue until they adjudicate it, and all the
   // table sees is that it landed. The message row and the floor bookkeeping
   // above are identical either way, which is what keeps one transcript.
-  if ((kind !== "ooc" && !spotlightStillWaiting) || isFirstAction) {
+  //
+  // A person's queue takes every action as it lands, a spotlight answer
+  // included: the coalescing that waits for the last answer is the AI turn's,
+  // and holding answers back from a person lost all but the last of them.
+  if (humanDm ? kind !== "ooc" || isFirstAction : (kind !== "ooc" && !spotlightStillWaiting) || isFirstAction) {
     if (humanDm) {
       publishPersisted(campaignId, "dm_intent_queued", {
         messageId: message.id,

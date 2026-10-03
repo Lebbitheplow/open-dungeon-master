@@ -23,7 +23,7 @@ import { publishPersisted } from "@/lib/events";
 
 // Whether a person is playing the monsters right now: a human DM in the seat
 // and no AI cover stretch answering for them.
-export function personRunsFight(campaign: Campaign): boolean {
+export function personRunsTable(campaign: Campaign): boolean {
   if (!hasHumanDm(campaignSeats(campaign))) {
     return false;
   }
@@ -34,7 +34,7 @@ export function personRunsFight(campaign: Campaign): boolean {
 // enemies due before the player now up and holds the floor for them.
 // Returns the ids recorded.
 export function holdForEnemies(campaign: Campaign | null, encounter: Encounter, enemyIds: string[]): string[] {
-  if (!campaign || !personRunsFight(campaign)) {
+  if (!campaign || !personRunsTable(campaign)) {
     return [];
   }
   const enemies = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
