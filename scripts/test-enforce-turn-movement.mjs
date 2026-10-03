@@ -277,8 +277,9 @@ await test("The walk's result gives the new distances and the movement left, so 
   // Grouped as the Combatants legend names them; the thief stands at (2,6),
   // four squares from (6,2).
   assert.equal(out.result.distancesNow, `Enemies: Goblin 20 ft. PCs: ${world.sheet(thief.id).name} 20 ft.`);
-  // An enemy's move reads the same way, from where it landed.
-  const moved = await ai.invoke("move_token", { tokenName: goblin.id, x: 9, y: 2 });
+  // An enemy's move reads the same way, from where it landed (moved from the
+  // console: the AI walks an enemy only on its own turn).
+  const moved = await world.invoke("move_token", { tokenName: goblin.id, x: 9, y: 2 });
   assert.equal(moved.ok, true, moved.error);
   assert.equal(moved.result.distancesNow, `PCs: ${world.sheet(thief.id).name} 35 ft; Kara 15 ft.`);
 });
@@ -292,7 +293,7 @@ await test("A walk refused for want of movement says where the mover still stand
   const out = await ai.invoke("move_token", { tokenName: fighter.id, x: 5, y: 2 });
   assert.equal(out.ok, false, "a walk with no movement left was accepted");
   assert.equal(out.error.endsWith(` Still at (2,2): Enemies: Goblin 40 ft. PCs: ${world.sheet(thief.id).name} 20 ft.`), true, out.error);
-  const stuck = await ai.invoke("move_token", { tokenName: goblin.id, x: 8, y: 2 });
+  const stuck = await world.invoke("move_token", { tokenName: goblin.id, x: 8, y: 2 });
   assert.equal(stuck.ok, false, "an enemy walk with no movement left was accepted");
   assert.equal(stuck.error.endsWith(` Still at (10,2): PCs: ${world.sheet(thief.id).name} 40 ft; Kara 40 ft.`), true, stuck.error);
 });

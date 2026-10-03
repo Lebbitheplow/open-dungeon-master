@@ -42,7 +42,7 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "mount_up",
-      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from this round's movement in a fight. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}. For anything else, send customName with a speed and a size.`,
+      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from their own turn's movement in a fight. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}. For anything else, send customName with a speed and a size.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -62,7 +62,7 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "dismount",
-      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from this round's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} Dexterity save and lays them prone on a failure; do not roll it or set the condition yourself.`,
+      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from their own turn's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} Dexterity save and lays them prone on a failure; do not roll it or set the condition yourself.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -120,6 +120,7 @@ export function handleMountUp(
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  turn?: Pick<DmTurn, "actor">,
 ): Record<string, unknown> {
   let args: z.infer<typeof mountSchema>;
   try {
@@ -146,7 +147,7 @@ export function handleMountUp(
   if ("error" in checked) {
     return checked;
   }
-  const spent = spendMountingMovement(campaign, sheet);
+  const spent = spendMountingMovement(campaign, sheet, turn);
   if ("error" in spent) {
     return spent;
   }
@@ -158,26 +159,37 @@ export function handleMountUp(
     mounted: checked.state.name,
     speed: checked.state.speed,
     movementSpent: mountCost(sheet.speed),
-    note: `${sheet.name} now moves at ${checked.state.speed} ft. Mounting cost half their movement (${mountCost(sheet.speed)} ft)${spent.charged ? ", taken from this round's movement on the board" : ""}.`,
+    note: `${sheet.name} now moves at ${checked.state.speed} ft. Mounting cost half their movement (${mountCost(sheet.speed)} ft)${spent.charged ? ", taken from this turn's movement on the board" : ""}.`,
   };
 }
 
-// Mounting or dismounting costs half the rider's speed (SRD 5.1, Mounted
-// Combat). In a fight on a board it comes out of this round's movement, and
-// without that much left it cannot be done this round.
-function spendMountingMovement(campaign: Campaign, sheet: CharacterSheet): { charged: boolean } | { error: string } {
+// Mounting or dismounting costs half the rider's speed, once during their
+// move (SRD 5.1, Mounted Combat). In a fight on a board it comes out of the
+// movement of the rider's own turn, and without that much left it cannot be
+// done this turn. Off their turn there is no movement of theirs to spend (it
+// would refill as their turn starts); a person at the console keeps a free
+// hand.
+function spendMountingMovement(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  turn?: Pick<DmTurn, "actor">,
+): { charged: boolean } | { error: string } {
   const encounter = getActiveEncounter(campaign.id);
   const map = encounter?.orderReady ? getBattleMapForEncounter(encounter.id) : null;
   const token = map ? getTokenByRef(map.id, sheet.id) : null;
-  if (!token) {
+  if (!encounter || !token) {
     return { charged: false };
+  }
+  const current = encounter.order[encounter.turnIndex];
+  if (turn?.actor !== "human_dm" && (current?.kind !== "pc" || current.characterId !== sheet.id)) {
+    return { error: `${sheet.name} mounts or dismounts during their own move only; it is ${current?.name ?? "another combatant"}'s turn.` };
   }
   const half = Math.floor(speedToTiles(sheet.speed) / 2);
   const mounted = getMounts(campaign.id)[sheet.id];
   const full = speedToTiles(mounted ? mounted.speed : sheet.speed);
   if (full - token.movedThisRound < half) {
     return {
-      error: `${sheet.name} has too little movement left this round to ${mounted ? "dismount" : "mount"}: it costs half their speed (${half * 5} ft).`,
+      error: `${sheet.name} has too little movement left this turn to ${mounted ? "dismount" : "mount"}: it costs half their speed (${half * 5} ft).`,
     };
   }
   moveToken(token.id, token.x, token.y, token.movedThisRound + half);
@@ -209,7 +221,7 @@ export function handleDismount(
   }
   const cause = args.cause ?? "voluntary";
   if (cause === "voluntary") {
-    const spent = spendMountingMovement(campaign, sheet);
+    const spent = spendMountingMovement(campaign, sheet, turn);
     if ("error" in spent) {
       return spent;
     }

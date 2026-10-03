@@ -16,6 +16,7 @@ import {
   moveToken,
   placeToken,
   placeTokens,
+  resetTurnBudgets,
   setTokenMovement,
   type BattleMap,
 } from "@/lib/db/battle-maps";
@@ -45,6 +46,7 @@ import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { canEnemyAct } from "@/lib/dm/can-act";
 import { awayFromFear, enemyMoveTraits, fearSourceAt, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
+import { enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
 import { distancesFrom, payForTeleport, spendEnemyDisengage, stillAt, teleportRangeFeet, walkCharacter } from "@/lib/dm/token-rules";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -455,7 +457,7 @@ export function handleMoveToken(
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
-  turn: Pick<DmTurn, "actor">,
+  turn: Pick<DmTurn, "id" | "actor">,
 ): Record<string, unknown> {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -484,7 +486,7 @@ export function handleMoveToken(
     const current = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
     const declared = fresh && turn.actor === "ai" && declaredThisTurn(campaign.id, fresh.id);
     if (fresh && (fresh.isCompanion || declared) && current?.kind === "pc" && current.characterId === fresh.id) {
-      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y });
+      return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag });
     }
     return {
       error: fresh?.isCompanion
@@ -509,6 +511,14 @@ export function handleMoveToken(
     const allowed = canEnemyAct({ enemy: resolved.enemy, encounter, kind: "reaction" });
     if (!allowed.ok && allowed.reason === "surprised") {
       return { error: allowed.error };
+    }
+    // Movement belongs to its turn, and every turn now brings its own
+    // (advancePointer): a walk taken before its turn would be given back when
+    // its turn starts. A legendary creature may still move on a legendary
+    // action.
+    const early = encounter.legendary.pools[resolved.enemy.id] ? null : enemyTurnRefusal(encounter, resolved.enemy, turn);
+    if (early) {
+      return { error: early };
     }
   }
   if (args.x < 0 || args.y < 0 || args.x >= map.width || args.y >= map.height) {
@@ -552,7 +562,7 @@ export function handleMoveToken(
   }
 
   // Forced movement ignores speed (the force decides the distance); normal
-  // enemy movement clamps to the round's remaining budget along the path.
+  // enemy movement clamps to the turn's remaining budget along the path.
   let landing = { x: args.x, y: args.y };
   let spent = 0;
   let clamped = false;
@@ -595,12 +605,14 @@ export function handleMoveToken(
   // Disengage first, paid for (token-rules.ts): then leaving reach draws
   // nothing.
   let disengaged: string | null = null;
+  let closesOwedTurn = false;
   if (args.disengage && resolved.kind === "enemy" && resolved.enemy && !args.forced) {
     const paid = spendEnemyDisengage(campaign.id, resolved.enemy);
     if ("error" in paid) {
       return { error: paid.error };
     }
     disengaged = paid.how;
+    closesOwedTurn = Boolean(paid.closesOwedTurn);
   }
   moveToken(
     resolved.token.id,
@@ -612,6 +624,11 @@ export function handleMoveToken(
   );
   for (const entry of carried) {
     moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
+  }
+  // The Disengage and this walk were the turn it was owed; its own turn
+  // follows on fresh movement (token-rules.ts spendEnemyDisengage).
+  if (closesOwedTurn) {
+    resetTurnBudgets(map.id, [resolved.token.refId]);
   }
   publishBattleMapUpdate(campaign.id);
   // Moving two creatures apart ends a grapple between them (src/lib/dm/grapple.ts).

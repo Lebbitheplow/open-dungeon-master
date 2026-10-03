@@ -78,7 +78,7 @@ export function planLongJump(input: {
     };
   }
   if (tiles > input.budgetTiles) {
-    return { ok: false, error: `Each foot of a jump costs a foot of movement: ${feet} feet is more than ${name} has left this round.` };
+    return { ok: false, error: `Each foot of a jump costs a foot of movement: ${feet} feet is more than ${name} has left this turn.` };
   }
   const path = jumpLine(from, to);
   for (const square of path.slice(0, -1)) {

@@ -472,4 +472,15 @@ test("a spent card gives its seat in the fan to one that can be played", () => {
   assert.ok(fan.every((card) => card.disabled === null));
 });
 
+test("Escape and Stand up, dealt only when held or prone, keep a seat in a full fan", () => {
+  const held = caster({ equipment: [item("Quarterstaff"), item("Dagger")], conditions: ["prone", "grappled"], conditionMeta: { grappled: { source: "e1" } } });
+  const cards = deriveHand(held, FRESH_TURN, { spells: FACTS });
+  assert.ok(cards.length > HAND_FAN_CAP);
+  const { fan } = splitHand(cards);
+  assert.ok(fan.some((card) => card.id === "basic:escape"), "Escape waited behind the spine");
+  // Grappled is speed 0, so Stand up is dealt refused and gives its seat up.
+  const prone = deriveHand(caster({ equipment: [item("Quarterstaff"), item("Dagger")], conditions: ["prone"] }), FRESH_TURN, { spells: FACTS });
+  assert.ok(splitHand(prone).fan.some((card) => card.id === "basic:stand-up"), "Stand up waited behind the spine");
+});
+
 console.log(`test-hand: ${passed} passed`);

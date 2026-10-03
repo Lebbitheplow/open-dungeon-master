@@ -4,21 +4,24 @@ import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { getActiveEncounter, listEnemies, saveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { listTokens, moveToken, type BattleMap } from "@/lib/db/battle-maps";
-import { publishPersisted } from "@/lib/events";
+import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { spellFactsFor } from "@/lib/content";
 import { withZoneSteps } from "@/lib/dm/zone-rules";
 import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 import { findPath, speedToTiles, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
 import { tileIndex, type BattleToken } from "@/lib/battlemap/types";
+import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { describeDistances } from "@/lib/battlemap/serialize";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { budgetApplies } from "@/lib/dm/action-budget";
-import { canAct, canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
+import { canAct, canEnemyAct, endsOwedTurn, markEnemyActed } from "@/lib/dm/can-act";
 import { removeConditions } from "@/lib/dm/condition-logic";
 import { awayFromFear, fearSourceAt } from "@/lib/dm/enemy-approach";
 import { abilityNames, hasTrait } from "@/lib/dm/monster-abilities";
 import { applyDmMutation } from "@/lib/dm/mutations";
+import { characterDrag, dragLandings } from "@/lib/dm/drag-move";
+import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
 import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -119,8 +122,13 @@ export function payForTeleport(
 
 // An enemy's Disengage before it walks: a bonus action with Nimble Escape
 // (once a round), its action otherwise (SRD 5.1). Returns how it was paid,
-// or the refusal.
-export function spendEnemyDisengage(campaignId: string, enemy: EncounterEnemy): { how: string } | { error: string } {
+// and whether that action closes the turn it was owed so its own turn walks
+// on fresh movement once this walk is spent (can-act.ts endsOwedTurn), or
+// the refusal.
+export function spendEnemyDisengage(
+  campaignId: string,
+  enemy: EncounterEnemy,
+): { how: string; closesOwedTurn?: boolean } | { error: string } {
   const live = getActiveEncounter(campaignId);
   if (!live) {
     return { how: "no fight" };
@@ -138,9 +146,10 @@ export function spendEnemyDisengage(campaignId: string, enemy: EncounterEnemy): 
   if (!allowed.ok) {
     return { error: allowed.error };
   }
+  const closesOwedTurn = endsOwedTurn(live, enemy.id);
   markEnemyActed(live, enemy.id);
   saveEncounter(live);
-  return { how: "its action (Disengage)" };
+  return { how: "its action (Disengage)", closesOwedTurn };
 }
 
 // Fresh ranges from where a mover landed to everyone else on the board, so
@@ -160,9 +169,11 @@ export function stillAt(tokens: BattleToken[], mover: BattleToken): string {
 }
 
 // A character walking on their own turn, an AI companion or a player's typed
-// move (map-tools.ts): their speed this turn (conditions, exhaustion, Dash),
-// standing from prone for half of it, never closer to what they fear, and
-// the opportunity attacks of every enemy they walk away from. Returns the
+// move (map-tools.ts), as the board's move route walks them: their speed this
+// turn (conditions, exhaustion, Dash), standing from prone for half of it,
+// through allies' spaces, never closer to what they fear, dragging the
+// creature they grapple when asked, letting go of it otherwise, and the
+// opportunity attacks of every enemy they walk away from. Returns the
 // move_token result.
 export function walkCharacter(
   campaign: Campaign,
@@ -171,6 +182,7 @@ export function walkCharacter(
   sheet: CharacterSheet,
   token: BattleToken,
   destination: XY,
+  options: { drag?: boolean } = {},
 ): Record<string, unknown> {
   const allowed = canAct({ sheet, encounter, kind: "move" });
   if (!allowed.ok) {
@@ -196,11 +208,34 @@ export function walkCharacter(
     return { error: `${sheet.name} already stands at (${token.x},${token.y}).` };
   }
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
-  const occupied = occupiedTiles(map, listTokens(map.id), token, footprintLookup(enemiesById));
+  const tokens = listTokens(map.id);
+  const footprintOf = footprintLookup(enemiesById);
+  const occupied = occupiedTiles(map, tokens, token, footprintOf);
   if (occupied.has(tileIndex(map.width, destination.x, destination.y))) {
     return { error: `(${destination.x},${destination.y}) is occupied by another combatant.` };
   }
-  const traits = withZoneSteps(false, map, "pc", sheet.id);
+  // Dragging the creature they grapple doubles every square unless it is two
+  // sizes smaller (drag-move.ts), as on the board.
+  const drag = options.drag ? characterDrag(sheet, [...enemiesById.values()], tokens) : null;
+  if (drag && "error" in drag) {
+    return { error: drag.error };
+  }
+  const factor = drag?.factor ?? 1;
+  // The board's own walking traits: allies' spaces, a swimming or climbing
+  // speed, Halfling Nimbleness, and the spell areas underfoot.
+  const traits = withZoneSteps(
+    pcMoveTraits({
+      width: map.width,
+      tokens,
+      mover: token,
+      sheet,
+      footprintOf,
+      enemySize: (refId) => enemiesById.get(refId)?.stats.size,
+    }),
+    map,
+    "pc",
+    sheet.id,
+  );
   const path = here ? [] : findPath(map.terrain, map.width, map.height, occupied, token, destination, 1, token.movement === "fly", traits);
   if (!path) {
     return { error: `No path to (${destination.x},${destination.y}); walls block the way.` };
@@ -209,13 +244,28 @@ export function walkCharacter(
   const steps = awayFromFear(token, path, fear);
   const walk = here
     ? { at: { x: token.x, y: token.y }, spent: 0, reachedEnd: true }
-    : walkPathWithBudget(map.terrain, map.width, steps, fullTiles - standCost, traits, token);
+    : walkPathWithBudget(map.terrain, map.width, steps, Math.floor((fullTiles - standCost) / factor), traits, token);
   if (!walk.at) {
     const why = fear ? `${sheet.name} is frightened and cannot move closer to what it fears.` : `${sheet.name} has no movement left for that.`;
     return { error: `${why}${stillAt(listTokens(map.id), token)}` };
   }
   const origin = { x: token.x, y: token.y };
-  moveToken(token.id, walk.at.x, walk.at.y, token.movedThisRound + walk.spent + standCost);
+  const walkedSquares = steps.slice(0, steps.findIndex((step) => step.x === walk.at?.x && step.y === walk.at?.y) + 1);
+  const carried = drag
+    ? dragLandings({ map, tokens, mover: token, landing: walk.at, walked: [origin, ...walkedSquares], held: drag.held, footprintOf })
+    : [];
+  if (!carried) {
+    return { error: `There is no room beside (${walk.at.x},${walk.at.y}) to set down the creature ${sheet.name} drags. Choose another square.` };
+  }
+  const spent = walk.spent * factor + standCost;
+  moveToken(token.id, walk.at.x, walk.at.y, token.movedThisRound + spent);
+  for (const entry of carried) {
+    moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
+  }
+  // Walking away from a grapple ends it (grapple.ts), and the board shows the
+  // walk at once rather than at the end of the DM turn.
+  releaseGrapplesOutOfReach(campaign);
+  publishEphemeral(campaign.id, "battle_map_updated", {});
   if (prone) {
     const stood = removeConditions(sheet.conditions, sheet.conditionMeta, [prone]);
     const updated = patchSheet(sheet.id, { conditions: stood.conditions, conditionMeta: stood.meta });
@@ -223,13 +273,14 @@ export function walkCharacter(
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
     }
   }
-  const walked = steps.slice(0, steps.findIndex((step) => step.x === walk.at?.x && step.y === walk.at?.y) + 1);
+  const walked = walkedSquares;
   const disengaged = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
     ? Boolean(encounter.turnBudget?.disengaged)
     : false;
   const opportunity = resolveOpportunityAttacks(campaign, sheet.id, origin, walk.at, disengaged, walked);
   if (opportunity.downedAt) {
-    moveToken(token.id, opportunity.downedAt.x, opportunity.downedAt.y, token.movedThisRound + walk.spent + standCost);
+    moveToken(token.id, opportunity.downedAt.x, opportunity.downedAt.y, token.movedThisRound + spent);
+    publishEphemeral(campaign.id, "battle_map_updated", {});
   }
   const landed = opportunity.downedAt ?? walk.at;
   const zoneEffects = opportunity.downedAt ? [] : zonesAfterMove(campaign, encounter.id, { kind: "pc", refId: sheet.id }, origin, walked);
@@ -237,10 +288,11 @@ export function walkCharacter(
     ok: true,
     name: token.name,
     at: `(${landed.x},${landed.y})`,
-    movementSpent: `${(walk.spent + standCost) * 5} ft`,
-    movementLeft: `${(fullTiles - walk.spent - standCost) * 5} ft`,
+    movementSpent: `${spent * 5} ft`,
+    movementLeft: `${(fullTiles - spent) * 5} ft`,
     ...distancesFrom(listTokens(map.id), token, landed),
     ...(prone ? { stood: `stood up for ${standCost * 5} ft of movement` } : {}),
+    ...(carried.length ? { dragged: carried.map((entry) => `${entry.token.name} to (${entry.at.x},${entry.at.y})`).join("; ") } : {}),
     ...(opportunity.notes.length
       ? {
           opportunityAttacks: opportunity.notes,

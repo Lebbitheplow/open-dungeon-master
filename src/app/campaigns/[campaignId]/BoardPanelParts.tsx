@@ -197,7 +197,7 @@ export function boardHintText(input: {
         : canMove
           ? scene
             ? "Tap anywhere you can walk. Nothing is being counted out here."
-            : `Tap a highlighted tile to move (${input.budgetLeft * TILE_FEET} ft left this round). Tap your figure for actions.`
+            : `Tap a highlighted tile to move (${input.budgetLeft * TILE_FEET} ft left this turn). Tap your figure for actions.`
           : input.hasToken
             ? "You can move on your turn. The shroud shows what your character cannot see."
             : "You have no token on this field.";

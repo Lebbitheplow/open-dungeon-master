@@ -200,10 +200,10 @@ export function approachTarget(
   const why = fear
     ? `${attacker.name} is frightened and will not move closer to what it fears`
     : profile.melee
-      ? `${attacker.name} is ${distance * 5} ft from ${target.name} and cannot reach them this round`
+      ? `${attacker.name} is ${distance * 5} ft from ${target.name} and cannot reach them this turn`
       : sightFrom(landing)
-        ? `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${profile.longRangeTiles * 5} ft range, and cannot close the gap this round`
-        : `${attacker.name} has no line of sight to ${target.name} and cannot reach a firing position this round`;
+        ? `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${profile.longRangeTiles * 5} ft range, and cannot close the gap this turn`
+        : `${attacker.name} has no line of sight to ${target.name} and cannot reach a firing position this turn`;
   return {
     ...base,
     blocked: {

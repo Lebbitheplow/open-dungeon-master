@@ -9,7 +9,7 @@
 import { ragingMeleeBonus, weaponAttackProfile, weaponOf } from "@/lib/dm/attack-logic";
 import { magicWeaponOfRow, type WeaponGear } from "@/lib/dm/gear-attack";
 import { bonusRouteFor, kiLeft, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
-import { effectiveSpeed } from "@/lib/dm/condition-logic";
+import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
 import { attackOptionsFor, bonusStrikeCards, fastHandsCards, kiCards } from "@/lib/battlemap/hand-class";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -353,9 +353,12 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
         ? { ...plain, name: `Escape: ${hold.spell}`, rules: hold.rules, dice: hold.dice, roll: hold.roll, condition: "" }
         : plain;
     if (basic.id === "stand-up") {
-      // Movement, not an action (SRD 5.1, Being Prone): no standing at speed 0.
+      // Movement, not an action (SRD 5.1, Being Prone): no standing at speed
+      // 0, whether a condition or exhaustion stops them.
       const still: Gate =
-        effectiveSpeed(sheet.conditions, sheet.speed) === 0 ? { reason: "Your speed is 0, so you cannot stand up.", spent: false } : null;
+        exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, sheet.speed)) === 0
+          ? { reason: "Your speed is 0, so you cannot stand up.", spent: false }
+          : null;
       cards.push(gated(card, standingGate(sheet, turn, "move"), still));
       continue;
     }
@@ -448,7 +451,11 @@ export function splitHand(cards: HandCard[], cap = HAND_FAN_CAP): { fan: HandCar
   const rest = cards.filter((card) => card !== end);
   // A bare fist gives its seat up too when there is steel to swing.
   const armed = rest.some((card) => card.intent.card === "attack" && card.id !== "attack:unarmed strike");
-  const rank = (card: HandCard) => (card.disabled ? 2 : armed && card.id === "attack:unarmed strike" ? 1 : 0);
+  // Escape and Stand up are dealt only while something holds the character
+  // or they lie prone, which is when they matter most: they keep a seat.
+  const situational = (card: HandCard) => card.id === "basic:escape" || card.id === "basic:stand-up";
+  const rank = (card: HandCard) =>
+    card.disabled ? 2 : situational(card) ? -1 : armed && card.id === "attack:unarmed strike" ? 1 : 0;
   const ranked = [...rest].sort((a, b) => rank(a) - rank(b));
   const keep = new Set(ranked.slice(0, end ? cap - 1 : cap));
   const fan = rest.filter((card) => keep.has(card));

@@ -454,7 +454,7 @@ export function getToken(tokenId: string): BattleToken | null {
 }
 
 // The DM picking a token up and putting it down. Deliberately not moveToken:
-// free placement never touches moved_this_round, because the round's budget
+// free placement never touches moved_this_round, because the turn's budget
 // belongs to the combatant's own movement and a DM repositioning the board
 // is not the combatant walking. It also skips terrain and reach entirely;
 // the caller checks what it wants to check (src/lib/dm/board.ts).

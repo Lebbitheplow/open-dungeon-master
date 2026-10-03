@@ -68,7 +68,7 @@ const moveSchema = z.object({
 });
 
 // A player moves their own token. Server-authoritative: walls, occupancy,
-// and the round's remaining speed budget are enforced here, and moving is
+// and the turn's remaining speed budget are enforced here, and moving is
 // only allowed on an open floor or the player's own initiative turn.
 // Movement never wakes the DM; it reads fresh positions at its next turn.
 export async function POST(
@@ -211,8 +211,8 @@ export async function POST(
     return Response.json(
       {
         error: prone
-          ? "You are prone: standing costs half your speed and crawling costs double. You cannot reach that tile this round."
-          : "You cannot reach that tile this round.",
+          ? "You are prone: standing costs half your speed and crawling costs double. You cannot reach that tile this turn."
+          : "You cannot reach that tile this turn.",
       },
       { status: 400 },
     );
@@ -261,7 +261,7 @@ export async function POST(
     }
     spend = cost * dragCostFactor(sizeForRace(sheet.race), held.map((enemy) => ({ refId: enemy.id, name: enemy.displayName, size: enemy.stats.size })));
     if (spend > budget) {
-      return Response.json({ error: `Dragging a grappled creature halves ${sheet.name}'s speed: that move costs ${spend * 5} feet and ${budget * 5} are left this round.` }, { status: 400 });
+      return Response.json({ error: `Dragging a grappled creature halves ${sheet.name}'s speed: that move costs ${spend * 5} feet and ${budget * 5} are left this turn.` }, { status: 400 });
     }
     const heldIds = new Set(heldTokens.map((entry) => entry.token.id));
     const landed = tokens.filter((entry) => !heldIds.has(entry.id)).map((entry) => (entry.id === token.id ? { ...entry, x, y } : entry));
