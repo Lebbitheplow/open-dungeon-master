@@ -42,10 +42,12 @@ export function holdForEnemies(campaign: Campaign | null, encounter: Encounter, 
     const enemy = enemies.get(id);
     return Boolean(enemy && canEnemyAct({ enemy, encounter, kind: "action" }).ok);
   });
-  if (due.length) {
-    encounter.legendary.due = due;
-  } else {
-    delete encounter.legendary.due;
+  // Added to, never replaced: the enemies an earlier pass left due are owed
+  // their turns still (a pass that goes on from someone who left as their
+  // turn began holds both legs).
+  const owed = [...new Set([...enemiesDue(encounter), ...due])];
+  if (owed.length) {
+    encounter.legendary.due = owed;
   }
   saveEncounter(encounter);
   if (!due.length) {

@@ -1036,16 +1036,97 @@ export function applyEncounterCall(
 
 // ---- server-driven turn advancement ----
 
+// The fight's floor, under a hold too: every pass sets it to the turn that
+// began, and nothing else moves it while the pointer stays.
+function fightFloor(campaignId: string): InitiativeFloor | null {
+  const floor = getFloor(campaignId);
+  return floor.mode === "initiative"
+    ? floor
+    : floor.mode === "hold" && floor.next.mode === "initiative"
+      ? floor.next
+      : null;
+}
+
+// Who holds the turn, and the order around them, before an engine call.
+export type TurnHolder = {
+  encounterId: string;
+  order: OrderEntry[];
+  turnIndex: number;
+  floor: InitiativeFloor | null;
+};
+
+export function turnHolder(campaignId: string): TurnHolder | null {
+  const encounter = getActiveEncounter(campaignId);
+  if (!encounter || !encounter.orderReady) {
+    return null;
+  }
+  return {
+    encounterId: encounter.id,
+    order: [...encounter.order],
+    turnIndex: encounter.turnIndex,
+    floor: fightFloor(campaignId),
+  };
+}
+
+// Where the turn resumes after its holder left the order: the slot before
+// the first entry after them that is still there, so that entry's turn is
+// the next to begin. A replacement in their place (a summon turned hostile)
+// is passed over, and acts at its count next round. Past the end of the
+// order the step wraps, as it would have from the holder. Null while the
+// holder is still in the order.
+function resumeAfter(before: Pick<TurnHolder, "order" | "turnIndex">, order: OrderEntry[]): number | null {
+  const holder = before.order[before.turnIndex];
+  const ids = order.map(orderEntryId);
+  if (ids.includes(orderEntryId(holder))) {
+    return null;
+  }
+  for (let step = 1; step < before.order.length; step += 1) {
+    const at = (before.turnIndex + step) % before.order.length;
+    const index = ids.indexOf(orderEntryId(before.order[at]));
+    if (index >= 0) {
+      return at < before.turnIndex ? order.length - 1 : index - 1;
+    }
+  }
+  return order.length - 1;
+}
+
+// Called where an engine call finishes (the model's tool calls, the
+// console, the DM's controls, the backstop, the routes that resolve a roll
+// or dismiss a companion): a holder who left the order during it (a summon
+// dropped, a companion dismissed, a PC the DM took out) passes the turn on
+// as an End Turn would. Not deep in the handler, which may still save the
+// encounter it read before and half undo the move. A call that passed the
+// turn itself (an end_turn, the DM's step) already ended the holder's: if
+// they go with that pass (a summon whose spell ran out at the wrap), the
+// floor has moved and nothing is left to settle.
+export function settleTurn(campaign: Campaign, before: TurnHolder | null) {
+  if (!before || JSON.stringify(fightFloor(campaign.id)) !== JSON.stringify(before.floor)) {
+    return;
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  if (!encounter || encounter.id !== before.encounterId || !encounter.orderReady) {
+    return;
+  }
+  const from = resumeAfter(before, encounter.order);
+  if (from !== null) {
+    encounter.turnIndex = from;
+    advancePointer(campaign, encounter, { leaving: before.order[before.turnIndex] });
+  }
+}
+
 // options.announce: false posts no table line; a function gives the line in
 // place of "It is now X's turn", posted like it before the death saves the
 // pass rolls (a character can die on the one that begins their turn).
+// options.leaving: the combatant whose turn ends when they are no longer at
+// turnIndex, because they left the order (settleTurn); turnIndex is then
+// the slot before the next turn's, -1 when that is the first.
 function advancePointer(
   campaign: Campaign,
   encounter: Encounter,
-  options?: { announce?: boolean | ((next: OrderEntry) => string) },
+  options?: { announce?: boolean | ((next: OrderEntry) => string); leaving?: OrderEntry },
 ): { enemiesPassed: string[]; wrapped: boolean } | null {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
-  const leaving = encounter.order[encounter.turnIndex];
+  const leaving = options?.leaving ?? encounter.order[encounter.turnIndex];
   const acts = (entry: OrderEntry) => entryActs(entry, enemiesById, encounter.surprisedIds);
   let next = nextTurn(encounter.order, encounter.turnIndex, acts);
   // Round 1 is ending: Thief's Reflexes' second turns go with it
@@ -1138,11 +1219,26 @@ function advancePointer(
   }
   encounter.waitingSeq = latestSeq(campaign.id);
   saveEncounter(encounter);
-  const reached = encounter.order[encounter.turnIndex];
+  const landed = { order: [...encounter.order], turnIndex: next.turnIndex };
   // A creature a spell made that went during the move leaves the order now,
   // after the save that would have put it back (src/lib/dm/summon-store.ts).
   if (sweepSummons(campaign).length || encounter.order.some((entry) => entry.kind === "pc" && !getSheetById(entry.characterId))) {
     Object.assign(encounter, getActiveEncounter(campaign.id) ?? encounter);
+  }
+  // The one the turn reached went as it began (its spell ran out at the
+  // wrap, a turn-start effect dropped it): the turn passes on from them.
+  const resume = resumeAfter(landed, encounter.order);
+  if (resume !== null) {
+    encounter.turnIndex = resume;
+    holdForEnemies(campaign, encounter, next.enemiesPassed);
+    for (const characterId of next.pcsPassed) {
+      rollDeathSave(campaign, characterId);
+    }
+    const after = advancePointer(campaign, encounter, { ...options, leaving: landed.order[landed.turnIndex] });
+    return {
+      enemiesPassed: [...next.enemiesPassed, ...(after?.enemiesPassed ?? [])],
+      wrapped: next.wrapped || Boolean(after?.wrapped),
+    };
   }
   setInitiativeFloor(campaign, encounter);
   holdForEnemies(campaign, encounter, next.enemiesPassed);
@@ -1162,7 +1258,7 @@ function advancePointer(
   // Nobody could act, so the turn came to a PC who cannot either: it is
   // still their turn beginning, and a downed one rolls for it.
   if (!next.acts) {
-    rollDeathSave(campaign, orderEntryId(reached));
+    rollDeathSave(campaign, orderEntryId(landed.order[landed.turnIndex]));
   }
   return { enemiesPassed: next.enemiesPassed, wrapped: next.wrapped };
 }
@@ -1274,14 +1370,7 @@ export function autoActSkippedEnemies(
 // passes that the model never attacked with auto-act via the server
 // fallback.
 export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
-  const floor = getFloor(campaign.id);
-  // A hold wrapping the fight's floor is still the fight's floor.
-  const combat =
-    floor.mode === "initiative"
-      ? floor
-      : floor.mode === "hold" && floor.next.mode === "initiative"
-        ? floor.next
-        : null;
+  const combat = fightFloor(campaign.id);
   if (!combat) {
     return;
   }
@@ -1298,7 +1387,10 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
     saveEncounter(encounter);
     const sheets = listSheets(campaign.id);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+    // An enemy it plays may take out the summon whose turn it is.
+    const holder = turnHolder(campaign.id);
     autoActSkippedEnemies(campaign, turn, encounter, handoff.enemyIds, sheets, sheetsById);
+    settleTurn(campaign, holder);
     // The pass the model's end_turn made, said now that the narration is in.
     const live = getActiveEncounter(campaign.id);
     if (live) {
@@ -1340,6 +1432,7 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
   if (advanced && turn) {
     const sheets = listSheets(campaign.id);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+    const holder = turnHolder(campaign.id);
     autoActSkippedEnemies(
       campaign,
       turn,
@@ -1348,6 +1441,7 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
       sheets,
       sheetsById,
     );
+    settleTurn(campaign, holder);
   }
   if (advanced) {
     wakeForNextTurn(campaign);

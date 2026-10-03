@@ -11,17 +11,23 @@
 //     again or nothing more can change.
 //   - The order locks when the last initiative lands, even with nobody able
 //     to act.
+//   - A combatant who leaves the order holding the turn (a companion
+//     dismissed, a summon dropped or turned hostile, a PC the DM took out)
+//     takes no turn with them: it passes on as End Turn would, and whoever
+//     acted before them does not get theirs back.
 //   - The model's own pass is said once, after its narration, and every
 //     wake the server asks for leaves a note for the woken turn to answer.
 //   - Pointer, floor, the engine's turn gate, the Hand and the board always
 //     name the same combatant.
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, DUMMY } from "./lib/enforce-combat.mjs";
 
 const { getDatabase } = await import("../src/lib/db/core.ts");
-const { allocateSeq, getFloor, setFloor } = await import("../src/lib/db/campaigns.ts");
+const { allocateSeq, getFloor, setFloor, setDmMode } = await import("../src/lib/db/campaigns.ts");
 const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/db/messages.ts");
 const { createCompanionUser } = await import("../src/lib/db/users.ts");
 const { createSheet, markSheetAsCompanion } = await import("../src/lib/db/sheets.ts");
@@ -33,9 +39,12 @@ const tools = await import("../src/lib/dm/encounter-tools.ts");
 const { actingCombatantId } = await import("../src/lib/dm/can-act.ts");
 const { editInitiative } = await import("../src/lib/dm/initiative.ts");
 const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
+const { spawnSummons, endSpellSummons } = await import("../src/lib/dm/summon-store.ts");
 const { registerDmWaker } = await import("../src/lib/dm/wake.ts");
 const { turnFromEncounter } = await import("../src/lib/battlemap/hand-table.ts");
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
+const { findSummonForm } = await import("../src/lib/srd/summon-forms.ts");
+const { summonSchema } = await import("../src/lib/schemas/summon.ts");
 
 const { test, finish } = suite("test-enforce-turn-advance");
 
@@ -131,6 +140,21 @@ function agree(world, kit, label) {
       assert.equal(tools.endOwnTurn(world.campaignId, other), false, `${label}: End Turn refused to another player`);
     }
   }
+}
+
+// A summoned wolf of Kara's, placed in the order as `initiative` says.
+function summonWolf(world, caster, { initiative = "caster", rounds = 10, hostileOnBreak = false, spell = "Conjure Animals" } = {}) {
+  const form = findSummonForm("wolf");
+  const record = summonSchema.parse({
+    spell,
+    casterId: caster.id,
+    casterName: caster.name,
+    form: form.name,
+    concentration: true,
+    ...(hostileOnBreak ? { hostileOnBreak: true } : {}),
+  });
+  const [wolf] = spawnSummons(world.campaign(), world.sheet(caster.id), { form, count: 1, record, rounds, slotLevel: 3, initiative });
+  return wolf;
 }
 
 // An AI companion, with the bot user behind it, rolled into the order.
@@ -420,5 +444,177 @@ for (const ambushed of [true, false]) {
     agree(world, kit, "moved on");
   });
 }
+
+// ---- a combatant who leaves takes no turn with them ----
+
+await test("A companion dismissed on its own turn hands it on: Brom gets the turn, Kara does not get hers back", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblinFace: 12 });
+  const [goblin] = world.enemies();
+  const pip = companion(world, "Pip", 18, kara);
+  assert.deepEqual(orderNames(world), ["Kara", "Pip", goblin.displayName, "Brom"]);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(currentName(world), "Pip");
+  const dismissed = await world.invoke("dismiss_companion", { characterId: pip.id });
+  assert.equal(dismissed.ok, true, dismissed.error);
+  assert.equal(currentName(world), "Brom");
+  agree(world, kit, "after the dismissal");
+});
+
+await test("A companion dismissed on its own turn with an enemy before it: the turn does not fall on the enemy", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara"], { goblinFace: 20 });
+  const [goblin] = world.enemies();
+  const pip = companion(world, "Pip", 12, kara);
+  assert.deepEqual(orderNames(world), [goblin.displayName, "Kara", "Pip"]);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(currentName(world), "Pip");
+  const dismissed = await world.invoke("dismiss_companion", { characterId: pip.id });
+  assert.equal(dismissed.ok, true, dismissed.error);
+  assert.equal(currentName(world), "Kara", "round 2 comes round to Kara");
+  assert.equal(world.encounter().round, 2);
+  agree(world, kit, "after the dismissal");
+});
+
+await test("A summon dropped to 0 hit points on its own turn hands it on", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblinFace: 12 });
+  const [goblin] = world.enemies();
+  const wolf = summonWolf(world, kara);
+  assert.deepEqual(orderNames(world), ["Kara", wolf.name, goblin.displayName, "Brom"]);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(currentName(world), wolf.name);
+  const hit = await world.invoke("apply_damage", { characterId: wolf.id, amount: 200 });
+  assert.equal(hit.ok, true, hit.error);
+  assert.equal(world.sheet(wolf.id), null, "the wolf is gone");
+  assert.equal(currentName(world), "Brom");
+  agree(world, kit, "after the wolf");
+});
+
+await test("A summon turned hostile on its own turn hands it on, and its new self acts at its count next round", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblinFace: 12 });
+  const [goblin] = world.enemies();
+  const wolf = summonWolf(world, kara, { hostileOnBreak: true, spell: "Conjure Fey" });
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(currentName(world), wolf.name);
+  const before = tools.turnHolder(world.campaignId);
+  endSpellSummons(world.campaign(), "Conjure Fey", kara.id);
+  tools.settleTurn(world.campaign(), before);
+  const hostile = world.enemies().find((enemy) => enemy.id !== goblin.id);
+  assert.ok(hostile, "the wolf is an enemy now");
+  assert.equal(orderNames(world)[1], hostile.displayName, "in the wolf's place");
+  assert.equal(currentName(world), "Brom");
+  agree(world, kit, "after the wolf turned");
+});
+
+await test("The enemy the backstop plays dropping the summon whose turn it is hands the turn on", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara"], { goblinFace: 12 });
+  const [goblin] = world.enemies();
+  const wolf = summonWolf(world, kara);
+  assert.equal(editInitiative(world.campaign(), { op: "set-initiative", id: wolf.id, initiative: 5 }).ok, true);
+  assert.deepEqual(orderNames(world), ["Kara", goblin.displayName, wolf.name]);
+  kit.place(kara.id, 1, 1);
+  kit.place(goblin.id, 6, 6);
+  kit.place(wolf.id, 6, 7);
+  world.patch(wolf.id, { currentHp: 1 });
+  const turn = createDmTurn(world.campaignId, [], "ai");
+  assert.equal((await aiEndTurn(world, kara.id, turn)).ok, true);
+  assert.equal(currentName(world), wolf.name);
+  world.dice(20, 6, 6, 6);
+  dmTurnEnds(world, getDmTurn(turn.id));
+  world.clearDice();
+  assert.equal(world.sheet(wolf.id), null, "the goblin the model left killed the wolf");
+  assert.equal(currentName(world), "Kara");
+  agree(world, kit, "after the backstop");
+});
+
+await test("The DM taking out the hero whose turn it is passes it on, and the floor follows", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblinFace: 20 });
+  const [goblin] = world.enemies();
+  assert.deepEqual(orderNames(world), [goblin.displayName, "Kara", "Brom"]);
+  assert.equal(currentName(world), "Kara");
+  // Brom slides into Kara's slot: the slot number alone would not say the
+  // turn changed hands.
+  const removed = editInitiative(world.campaign(), { op: "remove", id: kara.id });
+  assert.equal(removed.ok, true, removed.error);
+  assert.equal(currentName(world), "Brom");
+  agree(world, kit, "after the removal");
+});
+
+await test("A summon whose spell runs out at the wrap, just as the turn reaches it, hands it on", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara"]);
+  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1 });
+  const [goblin] = world.enemies();
+  // The wolf at the top, the goblin under it: once the wolf goes, the slot
+  // it leaves falls to the goblin.
+  const encounter = world.encounter();
+  const by = (id) => encounter.order.find((entry) => (entry.characterId ?? entry.enemyId) === id);
+  kit.saveEncounter({ ...encounter, order: [by(wolf.id), by(goblin.id), by(kara.id)], turnIndex: 2 });
+  tools.setInitiativeFloor(world.campaign(), world.encounter());
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.equal(world.sheet(wolf.id), null, "the wolf faded at the wrap");
+  assert.equal(currentName(world), "Kara", "the turn passed over the goblin back to Kara");
+  assert.equal(world.encounter().round, 2);
+  agree(world, kit, "after the wolf faded");
+});
+
+await test("At a person's table, a pass that goes on past a summon gone as its turn began holds the enemies of both legs", async () => {
+  const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"], { goblins: 2 });
+  assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId, "a person takes the DM seat");
+  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1 });
+  const [first, second] = world.enemies();
+  const encounter = world.encounter();
+  const by = (id) => encounter.order.find((entry) => (entry.characterId ?? entry.enemyId) === id);
+  kit.saveEncounter({ ...encounter, order: [by(first.id), by(wolf.id), by(second.id), by(kara.id), by(brom.id)], turnIndex: 4 });
+  tools.setInitiativeFloor(world.campaign(), world.encounter());
+  assert.equal(kit.endTurn(userOf(world, brom.id)), true);
+  assert.equal(world.sheet(wolf.id), null, "the wolf faded at the wrap");
+  assert.equal(currentName(world), "Kara");
+  assert.deepEqual(world.encounter().legendary.due, [first.id, second.id], "the goblin before the wolf and the one after it");
+  assert.equal(getFloor(world.campaignId).mode, "hold");
+  agree(world, kit, "held for both");
+});
+
+await test("A summon ending its own turn as its spell runs out at the wrap is passed once, not twice", async () => {
+  const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1 });
+  const encounter = world.encounter();
+  const by = (id) => encounter.order.find((entry) => (entry.characterId ?? entry.enemyId) === id);
+  const [goblin] = world.enemies();
+  kit.saveEncounter({ ...encounter, order: [by(kara.id), by(brom.id), by(goblin.id), by(wolf.id)], turnIndex: 3 });
+  tools.setInitiativeFloor(world.campaign(), world.encounter());
+  const ended = await aiEndTurn(world, wolf.id);
+  assert.equal(ended.ok, true, ended.error);
+  assert.equal(world.sheet(wolf.id), null, "the wolf faded at the wrap its own turn ended in");
+  assert.equal(currentName(world), "Kara", "round 2 opens on Kara");
+  assert.equal(world.encounter().round, 2);
+  agree(world, kit, "after the wolf's last turn");
+});
+
+// ---- every engine entry point settles the turn ----
+
+await test("Every route that runs the engine directly settles the turn after it", () => {
+  const api = path.join(import.meta.dirname, "..", "src", "app", "api");
+  const engine = /\b(dispatchAdjudication|applyEncounterCall|applyDmMutation|applyCompanionCall|handleDismissCompanion|resolvePendingPcAttack|applyPendingDamageRoll|recordInitiativeRoll)\(/;
+  const unsettled = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.name === "route.ts") {
+        const source = fs.readFileSync(full, "utf8");
+        if (engine.test(source) && !source.includes("settleTurn(")) {
+          unsettled.push(path.relative(api, full));
+        }
+      }
+    }
+  })(api);
+  assert.deepEqual(unsettled, []);
+  const lib = path.join(import.meta.dirname, "..", "src", "lib", "dm");
+  // turn.ts each model call, invoke.ts the console and the DM's controls,
+  // initiative.ts each edit, encounter-tools.ts the backstop.
+  for (const [file, places] of [["turn.ts", 1], ["invoke.ts", 2], ["initiative.ts", 2], ["encounter-tools.ts", 2]]) {
+    const calls = fs.readFileSync(path.join(lib, file), "utf8").match(/(?<!function )\bsettleTurn\(/g) ?? [];
+    assert.equal(calls.length, places, `${file} settles the turn after each engine call it makes`);
+  }
+});
 
 finish();

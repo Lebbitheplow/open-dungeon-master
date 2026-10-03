@@ -24,7 +24,7 @@ import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { askForInitiative, describeInitiativeAsk } from "@/lib/dm/initiative-ask";
 import { listPendingPlayerWhispers, markPlayerWhispersAnswered } from "@/lib/db/dm-whispers";
 import { publishEphemeral } from "@/lib/events";
-import { ENCOUNTER_CAP_PER_TURN, ENCOUNTER_TOOL_NAMES } from "@/lib/dm/encounter-tools";
+import { ENCOUNTER_CAP_PER_TURN, ENCOUNTER_TOOL_NAMES, settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { MUTATION_CAP_PER_TURN, MUTATION_TOOL_NAMES } from "@/lib/dm/mutations";
 // "goblin x4" is the same shorthand a prepared encounter is saved in, so the
 // live form and the saved roster share one parser.
@@ -254,6 +254,7 @@ export async function invokeEngine(
   const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
 
   let result: Record<string, unknown>;
+  const holder = turnHolder(campaign.id);
   try {
     result = await dispatchAdjudication(entry.name, JSON.stringify(args), {
       campaign,
@@ -268,6 +269,8 @@ export async function invokeEngine(
       error: error instanceof Error ? error.message : "The engine could not resolve that.",
     };
   }
+  // A combatant who left the fight during the call takes no turn with them.
+  settleTurn(campaign, holder);
 
   // A fight a person starts asks the table for initiative itself: the model
   // is told to go round with request_roll, and a person was told the same
@@ -343,7 +346,10 @@ export function resumeHumanTurn(turnId: string): boolean {
 // to belong to, closed the way invokeEngine closes one.
 export function onPersonsTurn<T>(campaign: Campaign, run: (turn: DmTurn) => T): T {
   const turn = humanTurnFor(campaign.id);
+  const holder = turnHolder(campaign.id);
   const out = run(turn);
+  // A combatant who left the fight during the call takes no turn with them.
+  settleTurn(campaign, holder);
   const parked = listOpenPendingRolls(campaign.id).some((pending) => pending.turnId === turn.id);
   turn.status = parked ? "awaiting_rolls" : "done";
   saveDmTurn(turn);

@@ -11,7 +11,7 @@ import {
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
-import { setInitiativeFloor, stepTurnForward } from "@/lib/dm/encounter-tools";
+import { setInitiativeFloor, settleTurn, stepTurnForward, turnHolder } from "@/lib/dm/encounter-tools";
 import { d20Expression } from "@/lib/dice";
 import { dmRoll } from "@/lib/dm/roll-card";
 import {
@@ -56,6 +56,7 @@ export function editInitiative(campaign: Campaign, edit: InitiativeEdit): Initia
   if (!encounter.orderReady) {
     return { error: "The initiative order is still being collected." };
   }
+  const holder = turnHolder(campaign.id);
   // On a turn is a turn ending, not a correction: it goes through the turn
   // engine End Turn uses, so conditions tick, reactions and movement come
   // back, a downed character rolls their death save, the round turns over,
@@ -72,6 +73,7 @@ export function editInitiative(campaign: Campaign, edit: InitiativeEdit): Initia
     const next = now?.order[now.turnIndex]?.name;
     const note = `The DM moved the turn on${leaving ? ` from ${leaving}` : ""}.${next ? ` It is now ${next}'s turn.` : ""}`;
     announce(campaign, note);
+    settleTurn(campaign, holder);
     return { ok: true, note };
   }
   const outcome = applyInitiativeEdit(
@@ -97,6 +99,10 @@ export function editInitiative(campaign: Campaign, edit: InitiativeEdit): Initia
   }
   publishEncounter(campaign.id);
   announce(campaign, outcome.note);
+  // Taking out the one acting passes their turn on as an End Turn would,
+  // rather than the next in line sliding into their slot with no turn of
+  // their own beginning.
+  settleTurn(campaign, holder);
   return { ok: true, note: outcome.note };
 }
 
