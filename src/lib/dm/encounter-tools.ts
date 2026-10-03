@@ -25,7 +25,7 @@ import {
 } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { getRoll, insertRoll } from "@/lib/db/rolls";
-import { insertCampaignMessage } from "@/lib/db/messages";
+import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -402,6 +402,26 @@ function entryActs(
   return entryAlive(entry, enemiesById) && !surprisedIds.includes(entryId(entry));
 }
 
+type OrderStep = NonNullable<ReturnType<typeof advanceOrder>>;
+
+// Where the turn goes from fromIndex: the next PC who can act. With nobody
+// able to, it still goes round, to the next PC at all, so the enemies keep
+// their turns, conditions keep ticking off at the wrap and the downed keep
+// rolling death saves; advanceAfterTurn ends that turn for its owner. Null
+// only when no PC is left in the order.
+function nextTurn(
+  order: OrderEntry[],
+  fromIndex: number,
+  acts: (entry: OrderEntry) => boolean,
+): (OrderStep & { acts: boolean }) | null {
+  const next = advanceOrder(order, fromIndex, acts);
+  if (next) {
+    return { ...next, acts: true };
+  }
+  const anyone = advanceOrder(order, fromIndex, (entry) => entry.kind === "pc" || acts(entry));
+  return anyone && { ...anyone, acts: false };
+}
+
 // Armor Class with every active effect folded in lives in
 // src/lib/dm/ac-effects.ts; re-exported for the callers that learned it here.
 export { acWithEffects, enemyAcWithEffects };
@@ -547,11 +567,20 @@ export function recordInitiativeRoll(
     })),
   );
   const enemiesById = new Map(enemies.map((enemy) => [enemy.id, enemy]));
-  const first = advanceOrder(encounter.order, -1, (entry) =>
+  const first = nextTurn(encounter.order, -1, (entry) =>
     entryActs(entry, enemiesById, encounter.surprisedIds),
   );
   if (!first) {
-    return openAfterAmbush(campaignId, encounter, enemies, enemiesById);
+    throw new Error("An initiative order with no player character in it.");
+  }
+  if (!first.acts) {
+    // Surprise alone keeps the party from acting: the ambush. Otherwise
+    // nobody could act even unsurprised, and the order locks on round 1 like
+    // any other, the turn going round until somebody can.
+    const unsurprised = advanceOrder(encounter.order, -1, (entry) => entryAlive(entry, enemiesById));
+    if (unsurprised) {
+      return openAfterAmbush(campaignId, encounter, enemies, enemiesById, unsurprised);
+    }
   }
   encounter.orderReady = true;
   encounter.turnIndex = first.turnIndex;
@@ -566,6 +595,9 @@ export function recordInitiativeRoll(
   if (campaign) {
     for (const passedCharacterId of first.pcsPassed) {
       rollDeathSave(campaign, passedCharacterId);
+    }
+    if (!first.acts) {
+      rollDeathSave(campaign, orderEntryId(encounter.order[first.turnIndex]));
     }
   }
 
@@ -590,13 +622,8 @@ function openAfterAmbush(
   encounter: Encounter,
   enemies: EncounterEnemy[],
   enemiesById: Map<string, EncounterEnemy>,
-): string | null {
-  const first = advanceOrder(encounter.order, -1, (entry) => entryAlive(entry, enemiesById));
-  if (!first) {
-    // Nobody in the party can stand at all: nothing to open.
-    saveEncounter(encounter);
-    return null;
-  }
+  first: OrderStep,
+): string {
   encounter.orderReady = true;
   encounter.round = 2;
   encounter.surprisedIds = [];
@@ -887,8 +914,10 @@ function handleEndTurn(
   // from where the pointer stands). The ones the model leaves are acted by
   // the backstop when its turn finishes (advanceAfterTurn), which reads the
   // handoff recorded here so it neither moves the pointer twice nor acts an
-  // enemy the model already played.
-  const advanced = advancePointer(campaign, encounter);
+  // enemy the model already played. An AI's pass is announced after the
+  // narration it belongs to, when its DM turn finishes (advanceAfterTurn);
+  // the model reads it in this result.
+  const advanced = advancePointer(campaign, encounter, { announce: turn.actor !== "ai" });
   if (!advanced) {
     return { error: "Nobody is left standing to take the next turn." };
   }
@@ -898,8 +927,13 @@ function handleEndTurn(
     .filter((enemy): enemy is EncounterEnemy => Boolean(enemy && enemy.status === "alive"));
   if (turn.actor === "ai") {
     const live = getActiveEncounter(campaign.id) ?? encounter;
-    const earlier = live.legendary.handoff?.turnId === turn.id ? live.legendary.handoff.enemyIds : [];
-    live.legendary.handoff = { turnId: turn.id, enemyIds: [...earlier, ...passed.map((enemy) => enemy.id)] };
+    const earlier = live.legendary.handoff?.turnId === turn.id ? live.legendary.handoff : null;
+    const wrapped = advanced.wrapped || earlier?.wrapped === true;
+    live.legendary.handoff = {
+      turnId: turn.id,
+      enemyIds: [...(earlier?.enemyIds ?? []), ...passed.map((enemy) => enemy.id)],
+      ...(wrapped ? { wrapped } : {}),
+    };
     saveEncounter(live);
   }
   const names = passed.map((enemy) => enemy.displayName);
@@ -1002,16 +1036,18 @@ export function applyEncounterCall(
 
 // ---- server-driven turn advancement ----
 
+// options.announce: false posts no table line; a function gives the line in
+// place of "It is now X's turn", posted like it before the death saves the
+// pass rolls (a character can die on the one that begins their turn).
 function advancePointer(
   campaign: Campaign,
   encounter: Encounter,
-  options?: { announce?: boolean },
-): { enemiesPassed: string[] } | null {
+  options?: { announce?: boolean | ((next: OrderEntry) => string) },
+): { enemiesPassed: string[]; wrapped: boolean } | null {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const leaving = encounter.order[encounter.turnIndex];
-  let next = advanceOrder(encounter.order, encounter.turnIndex, (entry) =>
-    entryActs(entry, enemiesById, encounter.surprisedIds),
-  );
+  const acts = (entry: OrderEntry) => entryActs(entry, enemiesById, encounter.surprisedIds);
+  let next = nextTurn(encounter.order, encounter.turnIndex, acts);
   // Round 1 is ending: Thief's Reflexes' second turns go with it
   // (src/lib/dm/encounter-logic.ts), and the step is taken again on the
   // order the next round keeps.
@@ -1019,9 +1055,7 @@ function advancePointer(
   if (reflexless) {
     encounter.order = reflexless.order;
     encounter.turnIndex = reflexless.turnIndex;
-    next = advanceOrder(encounter.order, encounter.turnIndex, (entry) =>
-      entryActs(entry, enemiesById, encounter.surprisedIds),
-    );
+    next = nextTurn(encounter.order, encounter.turnIndex, acts);
   }
   if (!next) {
     return null;
@@ -1104,6 +1138,7 @@ function advancePointer(
   }
   encounter.waitingSeq = latestSeq(campaign.id);
   saveEncounter(encounter);
+  const reached = encounter.order[encounter.turnIndex];
   // A creature a spell made that went during the move leaves the order now,
   // after the save that would have put it back (src/lib/dm/summon-store.ts).
   if (sweepSummons(campaign).length || encounter.order.some((entry) => entry.kind === "pc" && !getSheetById(entry.characterId))) {
@@ -1114,29 +1149,22 @@ function advancePointer(
   publishEncounter(campaign.id);
   // The pointer move is announced as a table note so the transcript can
   // never silently disagree with the banner about whose turn it is.
-  if (options?.announce !== false) {
-    const nextEntry = encounter.order[encounter.turnIndex];
-    if (nextEntry) {
-      const seq = allocateSeq(campaign.id);
-      const lairNote =
-        next.wrapped && encounter.legendary.lair
-          ? " Initiative 20: the lair stirs (lair_action)."
-          : "";
-      const message = insertCampaignMessage({
-        campaignId: campaign.id,
-        seq,
-        authorType: "system",
-        content: `It is now ${nextEntry.name}'s turn (round ${encounter.round}).${lairNote}`,
-      });
-      publishWithSeq(campaign.id, seq, "message_added", { message });
-    }
+  if (typeof options?.announce === "function") {
+    tableNote(campaign, options.announce(encounter.order[encounter.turnIndex]));
+  } else if (options?.announce !== false) {
+    announceTurn(campaign, encounter, next.wrapped && encounter.legendary.lair ? LAIR_NOTE : "");
   }
   // Downed PCs the pointer skipped make their death saves now, once per
   // pass, announced to the table as system messages and dice cards.
   for (const characterId of next.pcsPassed) {
     rollDeathSave(campaign, characterId);
   }
-  return { enemiesPassed: next.enemiesPassed };
+  // Nobody could act, so the turn came to a PC who cannot either: it is
+  // still their turn beginning, and a downed one rolls for it.
+  if (!next.acts) {
+    rollDeathSave(campaign, orderEntryId(reached));
+  }
+  return { enemiesPassed: next.enemiesPassed, wrapped: next.wrapped };
 }
 
 // The auto-act fallback: enemies the model skipped this turn take their
@@ -1271,11 +1299,19 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
     const sheets = listSheets(campaign.id);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
     autoActSkippedEnemies(campaign, turn, encounter, handoff.enemyIds, sheets, sheetsById);
-    const next = encounter.order[encounter.turnIndex];
-    if (next?.kind === "pc" && isCompanionUserId(next.userId)) {
-      wakeDm(campaign.id);
+    // The pass the model's end_turn made, said now that the narration is in.
+    const live = getActiveEncounter(campaign.id);
+    if (live) {
+      announceTurn(campaign, live, handoff.wrapped && live.legendary.lair ? LAIR_NOTE : "");
     }
-    return;
+    // The turn they led to is one its owner cannot take: it is ended below,
+    // now. A wake alone could find nothing posted since this turn's
+    // narration, and a DM turn with nothing new to answer does not run.
+    if (!turnStuck(campaign)) {
+      wakeForNextTurn(campaign);
+      return;
+    }
+    Object.assign(encounter, getActiveEncounter(campaign.id) ?? encounter);
   }
   const current = encounter.order[encounter.turnIndex];
   if (!current || current.kind !== "pc") {
@@ -1286,7 +1322,11 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
   // landed rolls leave the floor with the character, because they may still
   // have movement or a bonus action to spend.
   const resolved = turn !== undefined && turn.resolvedCharacterIds.includes(current.characterId);
-  if (!resolved) {
+  // A turn its owner cannot take (down, incapacitated, surprised) is ended
+  // here unresolved, as the walk would have passed them: with nobody able
+  // to act the pointer still rests on a PC (nextTurn), and this is what
+  // moves the fight on round by round.
+  if (!resolved && !turnStuck(campaign)) {
     // AI companion turn the model never adjudicated: the server takes the
     // basic action (like skipped enemies), so combat cannot wedge on a
     // combatant no human controls.
@@ -1309,15 +1349,88 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
       sheetsById,
     );
   }
-  // The pointer now rests on an AI companion: wake the DM so the model can
-  // play their turn with real tactics; if that turn ends without resolving
-  // them, the auto-act above is the safety net.
   if (advanced) {
-    const next = encounter.order[encounter.turnIndex];
-    if (next?.kind === "pc" && isCompanionUserId(next.userId)) {
-      wakeDm(campaign.id);
-    }
+    wakeForNextTurn(campaign);
   }
+}
+
+// Whether the turn rests on a player character who cannot take it (down,
+// incapacitated, surprised), read fresh.
+function turnStuck(campaign: Campaign): boolean {
+  const encounter = getActiveEncounter(campaign.id);
+  const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  if (!encounter || current?.kind !== "pc") {
+    return false;
+  }
+  const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
+  return !entryActs(current, enemiesById, encounter.surprisedIds);
+}
+
+// After the backstop, read fresh (it may have dropped the PC the pointer
+// now rests on). An AI companion's turn wakes the DM to play it, the
+// auto-act above being the safety net. A turn its owner cannot take wakes
+// it too, but only while a round can still change something (an enemy
+// standing, a PC standing or dying): past that each wake is a model call
+// with nothing to show.
+function wakeForNextTurn(campaign: Campaign) {
+  const encounter = getActiveEncounter(campaign.id);
+  const next = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  if (!encounter || next?.kind !== "pc") {
+    return;
+  }
+  if (turnStuck(campaign)) {
+    if (enemyStanding(encounter) && partyCanRise(encounter)) {
+      wake(campaign, encounter);
+    }
+    return;
+  }
+  if (isCompanionUserId(next.userId)) {
+    wake(campaign, encounter);
+  }
+}
+
+// A DM turn the server asks for runs only when something was posted after
+// the last narration (startDmTurn), so when nothing was, whose turn it is
+// is said again first: it is also what the woken turn answers.
+function wake(campaign: Campaign, encounter: Encounter) {
+  const [last] = listRecentMessages(campaign.id, 1);
+  if (last?.authorType === "dm") {
+    announceTurn(campaign, encounter);
+  }
+  wakeDm(campaign.id);
+}
+
+const LAIR_NOTE = " Initiative 20: the lair stirs (lair_action).";
+
+function announceTurn(campaign: Campaign, encounter: Encounter, extra = "") {
+  const current = encounter.order[encounter.turnIndex];
+  if (current) {
+    tableNote(campaign, `It is now ${current.name}'s turn (round ${encounter.round}).${extra}`);
+  }
+}
+
+function tableNote(campaign: Campaign, content: string) {
+  const seq = allocateSeq(campaign.id);
+  const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", content });
+  publishWithSeq(campaign.id, seq, "message_added", { message });
+}
+
+function enemyStanding(encounter: Encounter): boolean {
+  const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
+  return encounter.order.some((entry) => entry.kind === "enemy" && entryAlive(entry, enemiesById));
+}
+
+// Somebody a round can still change: a PC in the order not dead and not
+// stable at 0 hit points (standing, or dying with death saves to roll). Only
+// a death track that says so counts as down for good.
+function partyCanRise(encounter: Encounter): boolean {
+  return encounter.order.some((entry) => {
+    if (entry.kind !== "pc") {
+      return false;
+    }
+    const sheet = getSheetById(entry.characterId);
+    return Boolean(sheet && !sheet.deathSaves?.dead && !(sheet.currentHp <= 0 && sheet.deathSaves?.stable));
+  });
 }
 
 // The companion analog of autoActSkippedEnemies: nearest living enemy,
@@ -1408,19 +1521,11 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
     return false;
   }
   const name = current.name;
-  if (!advancePointer(campaign, encounter, { announce: false })) {
-    return false;
-  }
-  const next = encounter.order[encounter.turnIndex];
-  const seq = allocateSeq(campaignId);
-  const message = insertCampaignMessage({
-    campaignId,
-    seq,
-    authorType: "system",
-    content: `${name} ends their turn.${next ? ` It is now ${next.name}'s turn.` : ""}`,
-  });
-  publishWithSeq(campaignId, seq, "message_added", { message });
-  return true;
+  return Boolean(
+    advancePointer(campaign, encounter, {
+      announce: (next) => `${name} ends their turn. It is now ${next.name}'s turn.`,
+    }),
+  );
 }
 
 // A person running the fight hands the turn on after the enemies the pointer
@@ -1489,19 +1594,9 @@ export function skipCurrentTurn(campaignId: string): boolean {
     return false;
   }
   const skipped = encounter.order[encounter.turnIndex];
-  if (!advancePointer(campaign, encounter, { announce: false })) {
-    return false;
-  }
-  const next = encounter.order[encounter.turnIndex];
-  const seq = allocateSeq(campaignId);
-  const message = insertCampaignMessage({
-    campaignId,
-    seq,
-    authorType: "system",
-    content: `The party lead skipped ${skipped?.name ?? "the current"}'s turn.${
-      next ? ` It is now ${next.name}'s turn.` : ""
-    }`,
-  });
-  publishWithSeq(campaignId, seq, "message_added", { message });
-  return true;
+  return Boolean(
+    advancePointer(campaign, encounter, {
+      announce: (next) => `The party lead skipped ${skipped?.name ?? "the current"}'s turn. It is now ${next.name}'s turn.`,
+    }),
+  );
 }
