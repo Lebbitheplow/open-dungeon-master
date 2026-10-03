@@ -15,6 +15,7 @@
 //     dismissed, a summon dropped or turned hostile, a PC the DM took out)
 //     takes no turn with them: it passes on as End Turn would, and whoever
 //     acted before them does not get theirs back.
+//   - An edit around the one acting keeps their turn and what it spent.
 //   - The model's own pass is said once, after its narration, and every
 //     wake the server asks for leaves a note for the woken turn to answer.
 //   - Pointer, floor, the engine's turn gate, the Hand and the board always
@@ -37,7 +38,8 @@ const { activePublicEncounter } = await import("../src/lib/db/encounter-view.ts"
 const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
 const tools = await import("../src/lib/dm/encounter-tools.ts");
 const { actingCombatantId } = await import("../src/lib/dm/can-act.ts");
-const { editInitiative } = await import("../src/lib/dm/initiative.ts");
+const { freshBudget } = await import("../src/lib/dm/action-budget.ts");
+const { editInitiative, newNpcEntryId } = await import("../src/lib/dm/initiative.ts");
 const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
 const { spawnSummons, endSpellSummons } = await import("../src/lib/dm/summon-store.ts");
 const { registerDmWaker } = await import("../src/lib/dm/wake.ts");
@@ -586,6 +588,104 @@ await test("A summon ending its own turn as its spell runs out at the wrap is pa
   assert.equal(currentName(world), "Kara", "round 2 opens on Kara");
   assert.equal(world.encounter().round, 2);
   agree(world, kit, "after the wolf's last turn");
+});
+
+// ---- an edit around the one acting keeps their turn ----
+
+await test("Inserting, moving and re-scoring around the hero acting keeps what her turn spent", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblins: 2, goblinFace: 12 });
+  const [goblin] = world.enemies();
+  const encounter = world.encounter();
+  const spent = {
+    ...freshBudget({ ownerId: kara.id, round: encounter.round }),
+    actionUsed: true,
+    bonusUsed: true,
+    attacksMade: 1,
+    dashed: true,
+  };
+  kit.saveEncounter({ ...encounter, turnBudget: spent, reactionsUsed: [kara.id] });
+  for (const edit of [
+    { op: "insert", id: newNpcEntryId(), name: "Captain", initiative: 30 },
+    { op: "move", id: goblin.id, direction: "up" },
+    { op: "set-initiative", id: goblin.id, initiative: 25 },
+  ]) {
+    const done = editInitiative(world.campaign(), edit);
+    assert.equal(done.ok, true, `${edit.op}: ${done.error ?? ""}`);
+    assert.equal(currentName(world), "Kara", `${edit.op}: still Kara's turn`);
+    assert.deepEqual(world.encounter().turnBudget, spent, `${edit.op}: her spent action, bonus action, attack and Dash stay spent`);
+    assert.deepEqual(world.encounter().reactionsUsed, [kara.id], `${edit.op}: and so does her reaction`);
+    agree(world, kit, edit.op);
+  }
+});
+
+await test("The DM delaying the hero acting hands the floor to the one who slides into her place", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblinFace: 20 });
+  assert.deepEqual(orderNames(world).slice(1), ["Kara", "Brom"]);
+  const delayed = editInitiative(world.campaign(), { op: "delay", id: kara.id });
+  assert.equal(delayed.ok, true, delayed.error);
+  assert.equal(currentName(world), "Brom");
+  agree(world, kit, "after the delay");
+});
+
+// ---- one answer everywhere ----
+
+await test("One answer everywhere: a mixed order walked through every path that moves the turn", async () => {
+  const { world, kit, heroes: [kara, brom, cora] } = await table(["Kara", "Brom", "Cora"], { goblinFace: 12 });
+  const [goblin] = world.enemies();
+  const pip = companion(world, "Pip", 15, kara);
+  const wolf = summonWolf(world, kara);
+  editInitiative(world.campaign(), { op: "insert", id: newNpcEntryId(), name: "Captain", initiative: 8 });
+  stun(world, brom.id, "0 hp");
+  stun(world, cora.id, "incapacitated");
+  kit.saveEncounter({ ...world.encounter(), surprisedIds: [goblin.id] });
+  agree(world, kit, "staged");
+
+  // Ends turns with the current player's own button until `sheetId` holds
+  // the turn, checking every step on the way.
+  function walkTo(sheetId, label) {
+    for (let step = 0; step < 12 && current(world)?.characterId !== sheetId; step += 1) {
+      assert.equal(tools.endOwnTurn(world.campaignId, current(world).userId), true, `${label}: End Turn`);
+      agree(world, kit, `${label}: walking`);
+    }
+    assert.equal(current(world)?.characterId, sheetId, `${label}: the turn reached them`);
+  }
+  const steps = [
+    ["the lead's skip", () => assert.equal(tools.skipCurrentTurn(world.campaignId), true)],
+    ["the model's end_turn", async () => assert.equal((await aiEndTurn(world, current(world).characterId)).ok, true)],
+    ["move", () => editInitiative(world.campaign(), { op: "move", id: goblin.id, direction: "up" })],
+    ["insert", () => editInitiative(world.campaign(), { op: "insert", id: newNpcEntryId(), name: "Sergeant", initiative: 30 })],
+    ["delay", () => editInitiative(world.campaign(), { op: "delay", id: current(world).characterId })],
+    ["goto", () => editInitiative(world.campaign(), { op: "goto", id: current(world).characterId === kara.id ? pip.id : kara.id })],
+    ["step forward", () => editInitiative(world.campaign(), { op: "step", direction: "forward" })],
+    ["step back", () => editInitiative(world.campaign(), { op: "step", direction: "back" })],
+    ["set-initiative", () => editInitiative(world.campaign(), { op: "set-initiative", id: goblin.id, initiative: 2 })],
+    ["a companion dismissed on its turn", async () => {
+      walkTo(pip.id, "to Pip");
+      assert.equal((await world.invoke("dismiss_companion", { characterId: pip.id })).ok, true);
+    }],
+    ["a summon dropped on its turn", async () => {
+      walkTo(wolf.id, "to the wolf");
+      assert.equal((await world.invoke("apply_damage", { characterId: wolf.id, amount: 200 })).ok, true);
+    }],
+    ["a summon turned hostile on its turn", () => {
+      const fey = summonWolf(world, kara, { hostileOnBreak: true, spell: "Conjure Fey" });
+      walkTo(fey.id, "to the fey wolf");
+      const before = tools.turnHolder(world.campaignId);
+      endSpellSummons(world.campaign(), "Conjure Fey", kara.id);
+      tools.settleTurn(world.campaign(), before);
+    }],
+    ["remove the hero acting", () => editInitiative(world.campaign(), { op: "remove", id: current(world).characterId })],
+  ];
+  const rounds = new Set();
+  for (const [label, step] of steps) {
+    await step();
+    agree(world, kit, label);
+    rounds.add(world.encounter().round);
+    assert.equal(tools.endOwnTurn(world.campaignId, current(world).userId), true, `${label}: the current player's End Turn`);
+    agree(world, kit, `${label}, then End Turn`);
+    rounds.add(world.encounter().round);
+  }
+  assert.ok(rounds.size > 1, "the walk wrapped the round");
 });
 
 // ---- every engine entry point settles the turn ----

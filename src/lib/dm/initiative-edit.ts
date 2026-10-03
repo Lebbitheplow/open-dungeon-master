@@ -213,10 +213,11 @@ export function applyInitiativeEdit(
     }
     // The combatant who delayed was the one acting, so there is no entry to
     // hold the pointer on: it goes to whoever was standing behind them,
-    // which is the slot they just vacated.
+    // which is the slot they just vacated. From the top slot the walk starts
+    // at -1, so the one who moved up into it is not stepped over.
     const order = rebuild([...state.order]);
     const next = settle(
-      { order, turnIndex: Math.max(0, index - 1), round: state.round },
+      { order, turnIndex: index - 1, round: state.round },
       1,
       { evenIfValid: true },
     );

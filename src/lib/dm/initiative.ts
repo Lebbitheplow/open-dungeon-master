@@ -6,6 +6,7 @@ import {
   orderEntryId,
   setEnemyInitiative,
   saveEncounter,
+  turnKey,
   type Encounter,
 } from "@/lib/db/encounters";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -83,8 +84,12 @@ export function editInitiative(campaign: Campaign, edit: InitiativeEdit): Initia
   if ("error" in outcome) {
     return outcome;
   }
-  const moved =
-    outcome.state.turnIndex !== encounter.turnIndex || outcome.state.round !== encounter.round;
+  // The turn is a combatant's, not a slot's: an edit around the one acting
+  // (an insert above them, a re-sort) shifts their slot and keeps their
+  // turn. Taking them out is a turn ending, settled below.
+  const acting = orderEntryId(encounter.order[encounter.turnIndex]);
+  const stays = outcome.state.order.some((entry) => orderEntryId(entry) === acting);
+  const moved = stays && turnKey(outcome.state) !== turnKey(encounter);
   encounter.order = outcome.state.order;
   encounter.turnIndex = outcome.state.turnIndex;
   encounter.round = outcome.state.round;
