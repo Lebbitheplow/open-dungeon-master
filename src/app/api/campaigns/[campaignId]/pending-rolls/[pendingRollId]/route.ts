@@ -147,6 +147,8 @@ export async function POST(
       pending.attack && pending.characterId
         ? { kind: "sheet", id: pending.characterId, name: pending.attack.attacker }
         : null,
+    // A roll the DM asked for behind the screen lands behind it.
+    visibility: pending.visibility,
   });
 
   const resolved = resolvePendingRoll(

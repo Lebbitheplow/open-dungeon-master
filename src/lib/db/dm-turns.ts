@@ -1,7 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { ChatMessage } from "@/lib/model-client";
 import type { Advantage } from "@/lib/dice";
-import type { RollKind } from "@/lib/db/rolls";
+import type { RollKind, RollVisibility } from "@/lib/db/rolls";
 import type { ContextTrace } from "@/lib/dm/context-budget";
 import { parkReasonFor, type ParkReason } from "@/lib/dice/held-rolls";
 
@@ -259,6 +259,9 @@ export type PendingRoll = {
   // roll the server throws when the player releases it. Null on a roll
   // parked before the reason was recorded.
   parkedFor: ParkReason | null;
+  // Who may read the roll once it lands; the DM's screen, kept while the
+  // roll waits.
+  visibility: RollVisibility;
   status: PendingRollStatus;
   rollId: string | null;
   createdAt: string;
@@ -281,6 +284,7 @@ type PendingRow = {
   target_enemy_id: string | null;
   attack_json: string | null;
   combat_note: string | null;
+  visibility?: RollVisibility | null;
   status: PendingRollStatus;
   roll_id: string | null;
   created_at: string;
@@ -305,6 +309,7 @@ function mapPending(row: PendingRow): PendingRoll {
     combatNote: row.combat_note ?? null,
     parkedFor:
       row.parked_for === "real_dice" || row.parked_for === "held" ? row.parked_for : null,
+    visibility: row.visibility ?? "public",
     status: row.status,
     rollId: row.roll_id,
     createdAt: row.created_at,
@@ -366,6 +371,7 @@ export function createPendingRoll(input: {
   // Left out by every caller today: the reason is read from the table's dice
   // policy and the player's preferences as the roll is parked.
   parkedFor?: ParkReason;
+  visibility?: RollVisibility;
 }): PendingRoll {
   const id = crypto.randomUUID();
   ensureParkColumn();
@@ -380,9 +386,9 @@ export function createPendingRoll(input: {
         INSERT INTO pending_rolls (
           id, campaign_id, turn_id, tool_call_id, user_id, character_id, kind,
           detail, expression, advantage, dc, reason, target_enemy_id, attack_json, parked_for,
-          status, created_at
+          visibility, status, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
       `,
     )
     .run(
@@ -401,6 +407,7 @@ export function createPendingRoll(input: {
       input.targetEnemyId ?? null,
       input.attack ? JSON.stringify(input.attack) : null,
       parkedFor,
+      input.visibility ?? "public",
       nowIso(),
     );
   const pending = getPendingRoll(id);
