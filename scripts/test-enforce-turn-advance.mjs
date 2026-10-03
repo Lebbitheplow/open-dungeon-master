@@ -16,6 +16,8 @@
 //     takes no turn with them: it passes on as End Turn would, and whoever
 //     acted before them does not get theirs back.
 //   - An edit around the one acting keeps their turn and what it spent.
+//   - A turn is named by whose it is, so an entry spliced in above the one
+//     acting does not re-arm what happens once a turn.
 //   - The model's own pass is said once, after its narration, and every
 //     wake the server asks for leaves a note for the woken turn to answer.
 //   - Pointer, floor, the engine's turn gate, the Hand and the board always
@@ -33,7 +35,7 @@ const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/d
 const { createCompanionUser } = await import("../src/lib/db/users.ts");
 const { createSheet, markSheetAsCompanion } = await import("../src/lib/db/sheets.ts");
 const { createDmTurn, getDmTurn } = await import("../src/lib/db/dm-turns.ts");
-const { createEncounter, insertEnemy } = await import("../src/lib/db/encounters.ts");
+const { createEncounter, insertEnemy, turnKey } = await import("../src/lib/db/encounters.ts");
 const { activePublicEncounter } = await import("../src/lib/db/encounter-view.ts");
 const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
 const tools = await import("../src/lib/dm/encounter-tools.ts");
@@ -42,6 +44,7 @@ const { freshBudget } = await import("../src/lib/dm/action-budget.ts");
 const { editInitiative, newNpcEntryId } = await import("../src/lib/dm/initiative.ts");
 const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
 const { spawnSummons, endSpellSummons } = await import("../src/lib/dm/summon-store.ts");
+const { freshLastHit } = await import("../src/lib/dm/last-hit.ts");
 const { registerDmWaker } = await import("../src/lib/dm/wake.ts");
 const { turnFromEncounter } = await import("../src/lib/battlemap/hand-table.ts");
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
@@ -625,6 +628,44 @@ await test("The DM delaying the hero acting hands the floor to the one who slide
   assert.equal(delayed.ok, true, delayed.error);
   assert.equal(currentName(world), "Brom");
   agree(world, kit, "after the delay");
+});
+
+// ---- a turn is named by whose it is ----
+
+await test("An insert above the hero acting keeps her turn's key and a fresh hit on her answerable; her next turn does not", async () => {
+  const { world, kit, heroes: [kara] } = await table(["Kara"]);
+  const [goblin] = world.enemies();
+  kit.place(kara.id, 5, 5);
+  kit.place(goblin.id, 5, 6);
+  world.dice(20, 6);
+  const swung = await world.invoke("enemy_attack", { enemyId: goblin.id, targetCharacterId: kara.id });
+  world.clearDice();
+  assert.equal(swung.ok, true, swung.error);
+  assert.ok(freshLastHit(world.campaignId, kara.id), "the hit is answerable this turn");
+  const key = turnKey(world.encounter());
+  const inserted = editInitiative(world.campaign(), { op: "insert", id: newNpcEntryId(), name: "Captain", initiative: 30 });
+  assert.equal(inserted.ok, true, inserted.error);
+  assert.equal(turnKey(world.encounter()), key, "the same turn");
+  assert.ok(freshLastHit(world.campaignId, kara.id), "still answerable after the insert");
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  assert.notEqual(turnKey(world.encounter()), key, "her next turn is another");
+  assert.equal(freshLastHit(world.campaignId, kara.id), null);
+});
+
+await test("No once-a-turn stamp is built from the slot number", () => {
+  const root = path.join(import.meta.dirname, "..", "src");
+  const offenders = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/\.tsx?$/.test(entry.name) && /round\}:\$\{[a-zA-Z.]*turnIndex\}/.test(fs.readFileSync(full, "utf8"))) {
+        offenders.push(path.relative(root, full));
+      }
+    }
+  })(root);
+  assert.deepEqual(offenders, [], "use turnKey (src/lib/db/encounters.ts)");
 });
 
 // ---- one answer everywhere ----

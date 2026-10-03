@@ -22,7 +22,7 @@ import { getBattleMapForEncounter, listHiddenRefIds, listTokens, moveToken, type
 import type { RollAttacker } from "@/lib/db/rolls";
 import { rollCard } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
-import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { spellSaveDcFor } from "@/lib/srd";
@@ -53,8 +53,6 @@ function withZoneTurn<T>(campaignId: string, run: (turn: DmTurn) => T): T {
     saveDmTurn(turn);
   }
 }
-
-const turnKey = (encounter: Pick<Encounter, "round" | "turnIndex">) => `${encounter.round}:${encounter.turnIndex}`;
 
 type Victim = { kind: "pc" | "enemy"; id: string };
 
