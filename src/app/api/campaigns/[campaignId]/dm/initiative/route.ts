@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { editInitiative, newNpcEntryId, resetInitiative } from "@/lib/dm/initiative";
-import { askInitiativeAgain } from "@/lib/dm/invoke";
+import { askInitiativeAgain, onPersonsTurn } from "@/lib/dm/invoke";
+import { handOnEnemyTurns, playCompanionTurn } from "@/lib/dm/encounter-tools";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
 
 export const runtime = "nodejs";
@@ -33,6 +34,11 @@ const bodySchema = z.discriminatedUnion("op", [
     initiative: z.number().int().min(MIN_INITIATIVE).max(MAX_INITIATIVE),
   }),
   z.object({ op: z.literal("reset") }),
+  // A person's table: the enemies the pointer walked past are done (play
+  // has the server play the ones still owed their action), or the AI
+  // companion up now has its turn played (src/lib/dm/enemies-due.ts).
+  z.object({ op: z.literal("enemies"), play: z.boolean() }),
+  z.object({ op: z.literal("companion") }),
 ]);
 
 export async function POST(
@@ -49,6 +55,13 @@ export async function POST(
     return Response.json({ error: "That is not an edit the order takes." }, { status: 400 });
   }
   const body = parsed.data;
+  if (body.op === "enemies" || body.op === "companion") {
+    const campaign = context.campaign;
+    const error = onPersonsTurn(campaign, (turn) =>
+      body.op === "enemies" ? handOnEnemyTurns(campaign, turn, body.play) : playCompanionTurn(campaign, turn),
+    );
+    return error ? Response.json({ error }, { status: 409 }) : Response.json({ ok: true });
+  }
   const outcome =
     body.op === "reset"
       ? resetInitiative(context.campaign)

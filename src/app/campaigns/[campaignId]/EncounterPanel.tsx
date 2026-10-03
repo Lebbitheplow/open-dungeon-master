@@ -95,6 +95,33 @@ export function EncounterPanel({
     }
   }
 
+  // The DM's seat ends a fight the way the engine does (end_encounter): XP,
+  // the after-the-fight card, the music, the ammunition back. The abort
+  // above is a party lead's way out of a wedged fight; a person running the
+  // table reached for this button and got no XP and the combat music still
+  // playing. The abort stays offered when the engine will not end it.
+  async function endFight() {
+    if (!await appConfirm("End the fight now? XP is awarded and the board clears; it cannot be reopened.", { title: "End the fight", actionLabel: "End it" })) {
+      return;
+    }
+    setEnding(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/dm/invoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "end_encounter", args: {} }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        if (await appConfirm(`${body.error ?? "The engine would not end the fight."} Force-end it without XP instead?`, { actionLabel: "Force-end" })) {
+          await fetch(`/api/campaigns/${campaignId}/encounter`, { method: "DELETE" });
+        }
+      }
+    } finally {
+      setEnding(false);
+    }
+  }
+
   return (
     <section
       className={cn(
@@ -115,10 +142,10 @@ export function EncounterPanel({
         {steersStory ? (
           <button
             type="button"
-            onClick={forceEnd}
+            onClick={canEditOrder ? endFight : forceEnd}
             disabled={ending}
-            className="text-xs text-stone-500 hover:text-red-300 disabled:opacity-50"
-            title="Force-end the encounter (lead only)"
+            className="text-xs text-stone-500 hover:text-red-300 disabled:opacity-50 motion-press"
+            title={canEditOrder ? "End the fight: XP and the after-the-fight card" : "Force-end the encounter (lead only)"}
           >
             End encounter
           </button>

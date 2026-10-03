@@ -483,6 +483,13 @@ export function patchEnemyConditions(
   return getEnemy(enemyId);
 }
 
+// A fresh initiative count, for a DM's reset of the order.
+export function setEnemyInitiative(enemyId: string, initiative: number) {
+  getDatabase()
+    .prepare(`UPDATE encounter_enemies SET initiative = ?, updated_at = ? WHERE id = ?`)
+    .run(initiative, nowIso(), enemyId);
+}
+
 export function setEnemyConcentration(
   enemyId: string,
   spell: string | null,

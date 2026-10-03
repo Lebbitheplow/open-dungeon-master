@@ -1,6 +1,6 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { listOpenPendingRolls, type DmTurn } from "@/lib/db/dm-turns";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { listSheets } from "@/lib/db/sheets";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { fieldedSheets } from "@/lib/dm/roster";
@@ -80,10 +80,20 @@ export function askForInitiative(
 export function describeInitiativeAsk(campaignId: string, ask: InitiativeAsk): Record<string, unknown> {
   const encounter = getActiveEncounter(campaignId);
   const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  // Enemies ahead of the first character are the DM's to play first, with
+  // the floor held for them (src/lib/dm/enemies-due.ts).
+  const names = new Map(encounter ? listEnemies(encounter.id).map((enemy) => [enemy.id, enemy.displayName]) : []);
+  const first = (encounter?.legendary.due ?? []).flatMap((id) => (names.has(id) ? [names.get(id) as string] : []));
   return {
     ...(ask.rolled.length ? { initiative: ask.rolled.join(", ") } : {}),
     next: encounter?.orderReady
-      ? `Every initiative is in; combat has begun.${current ? ` It is ${current.name}'s turn.` : ""}`
+      ? `Every initiative is in; combat has begun.${
+          first.length
+            ? ` ${first.join(" and ")} ${first.length === 1 ? "acts" : "act"} before ${current?.name ?? "the first player"}: play ${first.length === 1 ? "it" : "them"}, then hand on the turn.`
+            : current
+              ? ` It is ${current.name}'s turn.`
+              : ""
+        }`
       : ask.waiting.length
         ? `${ask.waiting.join(", ")} ${ask.waiting.length === 1 ? "has" : "have"} an initiative roll to make. The order locks once every initiative is in.`
         : "The order locks once every initiative is in.",

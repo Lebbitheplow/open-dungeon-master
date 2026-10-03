@@ -321,15 +321,25 @@ export function resumeHumanTurn(turnId: string): boolean {
   return true;
 }
 
-// The DM reset the order: ask everyone again, on a person's turn so a parked
-// roll has a turn to answer. Returns the console's words for it.
-export function askInitiativeAgain(campaign: Campaign): Record<string, unknown> | null {
+// Something the DM's own controls do outside the console's form (hand the
+// turn on after the enemies, play a companion, ask for initiative again),
+// run on a person's turn so a roll it parks or an enemy it plays has a turn
+// to belong to, closed the way invokeEngine closes one.
+export function onPersonsTurn<T>(campaign: Campaign, run: (turn: DmTurn) => T): T {
   const turn = humanTurnFor(campaign.id);
-  const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
+  const out = run(turn);
   const parked = listOpenPendingRolls(campaign.id).some((pending) => pending.turnId === turn.id);
   turn.status = parked ? "awaiting_rolls" : "done";
   saveDmTurn(turn);
-  return ask ? describeInitiativeAsk(campaign.id, ask) : null;
+  return out;
+}
+
+// The DM reset the order: ask everyone again. Returns the console's words.
+export function askInitiativeAgain(campaign: Campaign): Record<string, unknown> | null {
+  return onPersonsTurn(campaign, (turn) => {
+    const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
+    return ask ? describeInitiativeAsk(campaign.id, ask) : null;
+  });
 }
 
 // Convenience for routes that already have only the id.

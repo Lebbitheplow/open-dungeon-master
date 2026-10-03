@@ -1,5 +1,6 @@
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
-import { isSurprised } from "@/lib/dm/can-act";
+import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
+import { isCompanionUserId } from "@/lib/db/users";
 import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
 import { conditionNote, conditionNoteLine, namesLookup } from "@/lib/battlemap/condition-notes";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
@@ -33,6 +34,14 @@ export type PublicEncounter = {
   round: number;
   turnIndex: number;
   orderReady: boolean;
+  // DM view only. While the order is collected: who has rolled so far.
+  staged?: Array<{ name: string; initiative: number }>;
+  // DM view only, at a person's table: the enemies the pointer walked past
+  // that are due before the player up next, the floor held for them
+  // (src/lib/dm/enemies-due.ts); `acted` once one has taken its action.
+  enemiesDue?: Array<{ id: string; name: string; acted: boolean }>;
+  // DM view only: an AI companion is up, and nobody at the table holds it.
+  companionTurn?: { id: string; name: string };
   order: Array<{
     kind: "pc" | "enemy" | "npc";
     id: string;
@@ -302,8 +311,31 @@ export function publicEncounter(
       : {}),
     ...turnView(encounter),
     ...actingView(encounter, hidden, showNumbers),
+    ...(showNumbers ? dmTurnView(encounter, enemies) : {}),
     ...(options.lastHits?.length
       ? { lastHits: options.lastHits.map((record) => lastHitView(record, hidden, showNumbers)) }
+      : {}),
+  };
+}
+
+// What the person running the fight is waiting on: the rolls so far while
+// the order is collected, the enemies due, an AI companion up.
+function dmTurnView(encounter: Encounter, enemies: EncounterEnemy[]) {
+  if (!encounter.orderReady) {
+    const staged = encounter.order.flatMap((entry) =>
+      entry.kind === "pc" ? [{ name: entry.name, initiative: entry.initiative }] : [],
+    );
+    return staged.length ? { staged } : {};
+  }
+  const names = new Map(enemies.map((enemy) => [enemy.id, enemy.displayName]));
+  const due = (encounter.legendary.due ?? []).flatMap((id) =>
+    names.has(id) ? [{ id, name: names.get(id) as string, acted: enemyActedThisRound(encounter, id) }] : [],
+  );
+  const current = encounter.order[encounter.turnIndex];
+  return {
+    ...(due.length ? { enemiesDue: due } : {}),
+    ...(current?.kind === "pc" && isCompanionUserId(current.userId)
+      ? { companionTurn: { id: current.characterId, name: current.name } }
       : {}),
   };
 }

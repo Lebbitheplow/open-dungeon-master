@@ -76,11 +76,23 @@ export function DmInitiativePanel({
 
   if (!encounter.orderReady) {
     return (
-      <p className="mt-2 text-[11px] text-stone-500">
-        The order locks once every initiative is in. The monsters have already rolled.
-      </p>
+      <div className="mt-2 space-y-1 text-[11px] text-stone-500">
+        <p>
+          Every player has been asked for initiative; the order locks once the last roll is in. The monsters have
+          already rolled.
+        </p>
+        {encounter.staged?.length ? (
+          <p className="reveal text-stone-400">
+            In so far: {encounter.staged.map((entry) => `${entry.name} ${entry.initiative}`).join(", ")}
+          </p>
+        ) : null}
+        {error ? <p className="text-red-300">{error}</p> : null}
+      </div>
     );
   }
+
+  const current = encounter.order[encounter.turnIndex];
+  const due = encounter.enemiesDue ?? [];
 
   return (
     <section className="mt-2 space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
@@ -129,6 +141,56 @@ export function DmInitiativePanel({
           <ListRestart className="size-3.5" />
         </button>
       </div>
+      {due.length ? (
+        // The enemies the pointer walked past, held for the DM to play before
+        // the next player's turn (src/lib/dm/enemies-due.ts).
+        <div className="reveal space-y-1.5 rounded-md border border-red-900/60 bg-red-950/30 px-2 py-1.5">
+          <p className="text-xs text-red-100">
+            Enemy turns before {current?.name ?? "the next player"}:{" "}
+            {due.map((enemy, index) => (
+              <span key={enemy.id} className={cn("transition-colors duration-[260ms]", enemy.acted && "text-stone-500 line-through")}>
+                {index ? ", " : ""}
+                {enemy.name}
+              </span>
+            ))}
+          </p>
+          <p className="text-[11px] text-stone-400">
+            Play them from the console, then hand on the turn. The players wait until you do.
+          </p>
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void send({ op: "enemies", play: true })}
+              className="min-h-9 rounded-md border border-red-800 bg-red-950/50 px-3 py-1 text-xs text-red-100 disabled:opacity-40 motion-press"
+            >
+              Play the rest for me
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void send({ op: "enemies", play: false })}
+              className="min-h-9 rounded-md border border-amber-700 bg-amber-950/50 px-3 py-1 text-xs text-amber-100 disabled:opacity-40 motion-press"
+            >
+              Done, hand on the turn
+            </button>
+          </div>
+        </div>
+      ) : encounter.companionTurn ? (
+        <div className="reveal flex flex-wrap items-center gap-1.5 rounded-md border border-sky-900/60 bg-sky-950/30 px-2 py-1.5">
+          <p className="mr-auto text-xs text-sky-100">
+            {encounter.companionTurn.name} is an AI companion: run their turn from the console, or
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void send({ op: "companion" })}
+            className="min-h-9 rounded-md border border-sky-800 bg-sky-950/50 px-3 py-1 text-xs text-sky-100 disabled:opacity-40 motion-press"
+          >
+            Play their turn
+          </button>
+        </div>
+      ) : null}
       <ol className="space-y-1">
         {encounter.order.map((entry, index) => (
           <li

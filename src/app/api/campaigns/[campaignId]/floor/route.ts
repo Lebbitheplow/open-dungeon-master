@@ -2,7 +2,9 @@ import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
-import { fightOwnsFloor, floorAfterRelease, skipCurrentTurn } from "@/lib/dm/encounter-tools";
+import { fightOwnsFloor, floorAfterRelease, handOnEnemyTurns, skipCurrentTurn } from "@/lib/dm/encounter-tools";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { onPersonsTurn } from "@/lib/dm/invoke";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishPersisted } from "@/lib/events";
 
@@ -86,6 +88,13 @@ export async function POST(
       requestDmTurn(campaignId);
     }
     return Response.json({ ok: true });
+  }
+  // A hold a person's table put up for the enemies' turns: releasing it is
+  // handing the turn on, so those turns end with it (src/lib/dm/enemies-due.ts).
+  if (floor.mode === "hold" && floor.next.mode === "initiative" && getActiveEncounter(campaignId)?.legendary.due?.length) {
+    const campaign = context.campaign;
+    const error = onPersonsTurn(campaign, (turn) => handOnEnemyTurns(campaign, turn, false));
+    return error ? Response.json({ error }, { status: 409 }) : Response.json({ ok: true });
   }
   // A hold opens into its stored spotlight; anything else opens into the
   // fight's floor while a fight runs (read fresh from the pointer, which may

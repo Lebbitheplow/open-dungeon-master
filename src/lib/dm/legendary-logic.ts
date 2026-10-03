@@ -46,6 +46,9 @@ export type LegendaryState = {
   // The enemies that have taken a bonus action in `round` (Nimble Escape's
   // Disengage or Hide).
   bonus?: { round: number; ids: string[] };
+  // At a person's table: the enemies the pointer walked past that the DM has
+  // not yet played or waved through (src/lib/dm/enemies-due.ts).
+  due?: string[];
 };
 
 function stringList(raw: unknown): string[] {
@@ -87,6 +90,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
       ? { handoff: { turnId: handoff.turnId, enemyIds: stringList(handoff.enemyIds) } }
       : {}),
     ...(bonus ? { bonus: { round: Number(bonus.round) || 0, ids: stringList(bonus.ids) } } : {}),
+    ...(stringList(record.due).length ? { due: stringList(record.due) } : {}),
   };
 }
 

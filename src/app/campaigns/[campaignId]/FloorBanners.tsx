@@ -177,7 +177,25 @@ export function FloorBanners({
             </span>
         </SessionBanner>
       ) : null}
-      {floor.mode === "hold" ? (
+      {floor.mode === "hold" && floor.next.mode === "initiative" ? (
+        // A fight held for the enemies' turns at a person's table
+        // (src/lib/dm/enemies-due.ts). Reactions still go through.
+        <SessionBanner
+          glyph="tab-battle"
+          title="Enemy turns"
+          actions={
+            steersStory ? (
+              <button type="button" onClick={onRelease} className={bannerButtonClass(true)}>
+                Hand on the turn
+              </button>
+            ) : null
+          }
+        >
+          <span>
+            The enemies act before {floor.next.currentName || "the next turn"}; the DM hands on the turn.
+          </span>
+        </SessionBanner>
+      ) : floor.mode === "hold" ? (
         <SessionBanner
           glyph="rest-inspiration"
           title="Responses held"

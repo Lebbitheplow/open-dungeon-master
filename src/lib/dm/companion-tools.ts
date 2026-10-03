@@ -425,19 +425,26 @@ export function finalizeNewCompanion(
   const encounter = getActiveEncounter(campaign.id);
   if (encounter) {
     const initiative = rollCard(campaign, null, sheet.id, "initiative", "initiative", d20Expression(abilityMod(sheet.abilities.dex)), null).total;
+    const entry: OrderEntry = {
+      kind: "pc",
+      characterId: sheet.id,
+      userId: botUser.id,
+      name: sheet.name,
+      initiative,
+    };
     if (encounter.orderReady) {
-      const entry: OrderEntry = {
-        kind: "pc",
-        characterId: sheet.id,
-        userId: botUser.id,
-        name: sheet.name,
-        initiative,
-      };
       const spliced = spliceIntoOrder(encounter.order, encounter.turnIndex, [entry]);
       encounter.order = spliced.order;
       encounter.turnIndex = spliced.turnIndex;
       saveEncounter(encounter);
       publishEncounterState(campaign.id);
+    } else {
+      // The order is still being collected and counts every fielded
+      // character, companions included: the roll is staged with the rest, or
+      // the order waits on a card nobody was ever dealt. The last player's
+      // roll builds and sorts it (recordInitiativeRoll).
+      encounter.order.push(entry);
+      saveEncounter(encounter);
     }
     const map = getBattleMapForEncounter(encounter.id);
     if (map) {

@@ -6,6 +6,7 @@ import {
   canAct,
   claimRecap,
   getFloor,
+  combatOwnsFloor,
   setFloor,
   type Floor,
 } from "@/lib/db/campaigns";
@@ -69,12 +70,17 @@ export async function POST(
   const floor = getFloor(campaignId);
   // A reaction is taken on somebody else's turn (SRD 5.1): a reaction card
   // passes the initiative floor, and the engine's canAct judges it below.
-  const reactionOffTurn = intent?.card === "reaction" && floor.mode === "initiative";
+  // The same holds while a person plays the enemies' turns under a hold
+  // (src/lib/dm/enemies-due.ts): that is when a Shield or an opportunity
+  // attack is wanted most.
+  const reactionOffTurn = intent?.card === "reaction" && combatOwnsFloor(floor);
   if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
       return Response.json(
         {
-          error: "The party lead has not opened responses yet. Use OOC for table talk.",
+          error: combatOwnsFloor(floor)
+            ? "The enemies are taking their turns; the DM hands the turn on. Use OOC for table talk."
+            : `The ${campaign.dmUserId ? "DM" : "party lead"} has not opened responses yet. Use OOC for table talk.`,
           floor,
         },
         { status: 409 },

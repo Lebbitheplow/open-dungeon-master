@@ -12,6 +12,7 @@ import { insertRoll } from "@/lib/db/rolls";
 import { defaultRng, expressionDice, rollExpression, rollExpressionWithDice } from "@/lib/dice";
 import { mayTypeFaces } from "@/lib/dice/held-rolls";
 import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
+import { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import { applyPendingDamageRoll } from "@/lib/dm/enemy-damage";
 import { resolvePendingPcAttack } from "@/lib/dm/pc-attack";
 import { resumeDmTurn } from "@/lib/dm/turn";
@@ -173,6 +174,11 @@ export async function POST(
     const note = recordInitiativeRoll(campaignId, pending.characterId, roll.total);
     if (note) {
       setPendingCombatNote(pendingRollId, note);
+    }
+    // Superior Inspiration, Perfect Self: a use back on rolling initiative,
+    // for dice entered at the table as for dice the server threw.
+    if (pending.characterId) {
+      applyInitiativeRefills(context.campaign, pending.characterId);
     }
   } else if (pending.kind === "attack" && pending.attack) {
     // A parked pc_attack to-hit roll: the server adjudicates it against the
