@@ -211,7 +211,8 @@ function handleStartEncounter(
   rawArguments: string,
   sheets: CharacterSheet[],
   // The AI's fight opens with its initiative rolled (the server rolls every
-  // character it rolls for); a person at the console asks for the rolls.
+  // character it rolls for); a person's fight is asked for its rolls by the
+  // console's façade (src/lib/dm/initiative-ask.ts), on the person's turn.
   actor: DmTurn["actor"] = "human_dm",
 ): Record<string, unknown> {
   const args = parseStartArgs(rawArguments);
@@ -515,7 +516,11 @@ export function recordInitiativeRoll(
   });
 
   const campaignForRoster = getCampaignById(campaignId);
-  const sheets = campaignForRoster ? fieldedSheets(campaignForRoster) : listSheets(campaignId);
+  // The dead roll nothing (request_roll refuses them), so the order is not
+  // held open waiting on them.
+  const sheets = (campaignForRoster ? fieldedSheets(campaignForRoster) : listSheets(campaignId)).filter(
+    (entry) => !entry.deathSaves?.dead,
+  );
   const staged = encounter.order.filter(
     (entry): entry is Extract<OrderEntry, { kind: "pc" }> => entry.kind === "pc",
   );
@@ -636,7 +641,7 @@ export function ensureInitiativeProgress(campaign: Campaign): string | null {
       .filter((entry): entry is Extract<OrderEntry, { kind: "pc" }> => entry.kind === "pc")
       .map((entry) => entry.characterId),
   );
-  const missing = fieldedSheets(campaign).filter((sheet) => !staged.has(sheet.id));
+  const missing = fieldedSheets(campaign).filter((sheet) => !staged.has(sheet.id) && !sheet.deathSaves?.dead);
   if (!missing.length) {
     return null;
   }

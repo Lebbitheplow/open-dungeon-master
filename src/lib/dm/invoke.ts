@@ -21,6 +21,7 @@ import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
+import { askForInitiative, describeInitiativeAsk } from "@/lib/dm/initiative-ask";
 import { ENCOUNTER_CAP_PER_TURN, ENCOUNTER_TOOL_NAMES } from "@/lib/dm/encounter-tools";
 import { MUTATION_CAP_PER_TURN, MUTATION_TOOL_NAMES } from "@/lib/dm/mutations";
 // "goblin x4" is the same shorthand a prepared encounter is saved in, so the
@@ -266,6 +267,16 @@ export async function invokeEngine(
     };
   }
 
+  // A fight a person starts asks the table for initiative itself: the model
+  // is told to go round with request_roll, and a person was told the same
+  // thing in other words while nobody asked anybody (issue 63).
+  if (actor.kind === "human" && entry.name === "start_encounter" && typeof result.error !== "string") {
+    const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
+    if (ask) {
+      result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
+    }
+  }
+
   // The handlers mutate the turn as they run (which enemies have acted, which
   // characters were resolved), and that bookkeeping is what stops an enemy
   // swinging twice. The AI's own turn loop saves its turn itself; a turn
@@ -308,6 +319,17 @@ export function resumeHumanTurn(turnId: string): boolean {
   turn.status = "done";
   saveDmTurn(turn);
   return true;
+}
+
+// The DM reset the order: ask everyone again, on a person's turn so a parked
+// roll has a turn to answer. Returns the console's words for it.
+export function askInitiativeAgain(campaign: Campaign): Record<string, unknown> | null {
+  const turn = humanTurnFor(campaign.id);
+  const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
+  const parked = listOpenPendingRolls(campaign.id).some((pending) => pending.turnId === turn.id);
+  turn.status = parked ? "awaiting_rolls" : "done";
+  saveDmTurn(turn);
+  return ask ? describeInitiativeAsk(campaign.id, ask) : null;
 }
 
 // Convenience for routes that already have only the id.

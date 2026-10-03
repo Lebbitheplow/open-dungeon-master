@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { editInitiative, newNpcEntryId, resetInitiative } from "@/lib/dm/initiative";
+import { askInitiativeAgain } from "@/lib/dm/invoke";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
 
 export const runtime = "nodejs";
@@ -57,7 +58,11 @@ export async function POST(
           // module, so the edit stays deterministic and testable.
           body.op === "insert" ? { ...body, id: newNpcEntryId() } : body,
         );
-  return "error" in outcome
-    ? Response.json({ error: outcome.error }, { status: 409 })
-    : Response.json({ ok: true, note: outcome.note });
+  if ("error" in outcome) {
+    return Response.json({ error: outcome.error }, { status: 409 });
+  }
+  // "Have everyone roll again" means asking them: a person has no turn loop
+  // to go round the table (src/lib/dm/initiative-ask.ts, issue 63).
+  const asked = body.op === "reset" ? askInitiativeAgain(context.campaign) : null;
+  return Response.json({ ok: true, note: outcome.note, ...(asked ?? {}) });
 }

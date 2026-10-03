@@ -50,13 +50,16 @@ globalThis.__odmEmbedderPromise = Promise.resolve((texts) =>
 // a builtin are live bindings, so replacing the function and syncing makes
 // every die in the engine come from this queue. A call that is not shaped
 // like a die (a minimum other than 1) is passed through untouched. An empty
-// queue rolls for real.
+// queue rolls for real, and so does a null in it: a die the test does not
+// care about, ahead of ones it does.
 const realRandomInt = crypto.randomInt;
 const queue = [];
 const rolled = [];
 
 crypto.randomInt = function forcedRandomInt(min, max, callback) {
-  if (min === 1 && typeof max === "number" && typeof callback !== "function" && queue.length) {
+  if (min === 1 && typeof max === "number" && typeof callback !== "function" && queue.length && queue[0] === null) {
+    queue.shift();
+  } else if (min === 1 && typeof max === "number" && typeof callback !== "function" && queue.length) {
     const sides = max - 1;
     const face = Math.max(1, Math.min(sides, queue.shift()));
     rolled.push({ sides, face, forced: true });
@@ -149,6 +152,7 @@ export async function openWorld(options = {}) {
   const sheets = await import("../../src/lib/db/sheets.ts");
   const encounters = await import("../../src/lib/db/encounters.ts");
   const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { fieldedSheets } = await import("../../src/lib/dm/roster.ts");
   const { mintSession } = await import("../../src/lib/auth.ts");
 
   let userCount = 0;
@@ -209,13 +213,24 @@ export async function openWorld(options = {}) {
   async function beginFight(enemies, { heroFaces = {}, enemyFace = 1, ...args } = {}) {
     clearDice();
     const count = enemies.reduce((sum, enemy) => sum + (enemy.count ?? 1), 0);
+    // The console asks the table for initiative as the fight opens
+    // (src/lib/dm/initiative-ask.ts): the enemies' dice, then any ambush
+    // Stealth (rolled for real), then each fielded hero's, in roster order.
+    const heroes = fieldedSheets(campaign()).filter((sheet) => !sheet.deathSaves?.dead);
+    const stealth = args.ambush === "enemies" ? count : args.ambush === "party" ? heroes.length : 0;
     dice(new Array(count).fill(enemyFace));
+    dice(new Array(stealth).fill(null));
+    dice(heroes.map((sheet) => heroFaces[sheet.id] ?? 15));
     const started = await invoke("start_encounter", { enemies, ...args });
     clearDice();
     if (!started.ok) {
       throw new Error(`start_encounter refused: ${started.error}`);
     }
-    for (const sheet of sheets.listSheets(campaignId)) {
+    // Anyone the opening did not roll for (a held roll) is asked by hand.
+    const placed = new Set(
+      (encounters.getActiveEncounter(campaignId)?.order ?? []).map((entry) => entry.characterId),
+    );
+    for (const sheet of heroes.filter((entry) => !placed.has(entry.id))) {
       dice(heroFaces[sheet.id] ?? 15);
       const rolled = await invoke("request_roll", {
         characterId: sheet.id,
