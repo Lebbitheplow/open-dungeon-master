@@ -5,7 +5,7 @@ import { describeInstant } from "@/lib/dm/calendar";
 import { listFactions } from "@/lib/db/factions";
 import { advanceFactionGoals } from "@/lib/dm/faction-logic";
 import { shiftFactionPower } from "@/lib/dm/faction-tools";
-import { getCampaignById, latestSeq, setCampaignSummaryState, allocateSeq } from "@/lib/db/campaigns";
+import { campaignSeats, getCampaignById, latestSeq, setCampaignSummaryState, allocateSeq } from "@/lib/db/campaigns";
 import {
   closeChapterRow,
   ensureOpenChapter,
@@ -43,7 +43,7 @@ import {
 } from "@/lib/dm/arc";
 import { activeBeat, beatGated } from "@/lib/dm/waypoint-logic";
 import { judgeWaypoints } from "@/lib/dm/waypoint-tick";
-import { narratorIsAi } from "@/lib/dm/viewer";
+import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
@@ -427,8 +427,14 @@ export async function maybeCloseChapter(
 
   // Milestone XP: surviving a chapter advances everyone a little, so
   // roleplay-heavy campaigns level without the model remembering award_xp.
-  // Idempotent because a chapter closes exactly once.
-  awardChapterMilestoneXp(campaignId, result.closed.index);
+  // Idempotent because a chapter closes exactly once. A person in the seat
+  // awards XP themselves (the console's award_xp): this backstop for a model
+  // that forgets is not theirs, and a human table's chapter can close at the
+  // message cap with nobody having earned anything.
+  const closingCampaign = getCampaignById(campaignId);
+  if (closingCampaign && !hasHumanDm(campaignSeats(closingCampaign))) {
+    awardChapterMilestoneXp(campaignId, result.closed.index);
+  }
 
   // Chapter boundaries are the arc's heartbeat: mark beats the chapter
   // accomplished, settle or open sub-arcs. Never throws (arc.ts swallows).

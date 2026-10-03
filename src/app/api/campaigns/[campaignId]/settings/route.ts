@@ -3,6 +3,7 @@ import { setDmMode, updateGameSettings } from "@/lib/db/campaigns";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { layOver } from "@/lib/schemas/parse-keeping-valid";
 import { publishPersisted } from "@/lib/events";
+import { wakeForWaitingPlayers } from "@/lib/dm/loop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,8 @@ export async function PATCH(
       return Response.json({ error: "Campaign not found." }, { status: 404 });
     }
     publishPersisted(campaignId, "dm_seat_changed", { seat: "dm", userId: changed.dmUserId });
+    // Handed to the AI with players waiting on the person who ran it: answer.
+    wakeForWaitingPlayers(campaignId, dmMode === "ai");
   }
   const gameSettings = updateGameSettings(
     campaignId,

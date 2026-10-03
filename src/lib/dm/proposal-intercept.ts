@@ -54,6 +54,10 @@ export function maybeProposeItemChange(
   } catch {
     return null;
   }
+  // "null" or a bare value parses but is no arguments: the handler refuses it.
+  if (!args || typeof args !== "object") {
+    return null;
+  }
   const sheet = args.characterId ? sheetsById.get(String(args.characterId)) : undefined;
   if (
     !shouldProposeItemChange(

@@ -1,0 +1,214 @@
+[
+  {
+    "source": "assets/intro.mp4",
+    "start": 0,
+    "duration": 4
+  },
+  {
+    "source": "captures/combat.webm",
+    "start": 120,
+    "duration": 4,
+    "crop": [
+      1440,
+      810,
+      240,
+      230
+    ],
+    "title": "Your move. Your moment.",
+    "sub": "Play an action. Pick a target. Let the dice decide."
+  },
+  {
+    "source": "captures/resolution.webm",
+    "start": -4.5,
+    "duration": 4,
+    "crop": [
+      1600,
+      900,
+      0,
+      80
+    ],
+    "title": "Make every turn count.",
+    "sub": "Tactical combat \u00b7 Spells \u00b7 Initiative"
+  },
+  {
+    "source": "captures/combat.webm",
+    "start": 548,
+    "duration": 4,
+    "crop": [
+      1550,
+      872,
+      340,
+      100
+    ],
+    "title": "Step into the unknown.",
+    "sub": "Painted battle maps. A world beyond the shroud."
+  },
+  {
+    "card": "Become the hero.",
+    "eyebrow": "A NEW ADVENTURE. A NEW YOU.",
+    "duration": 2
+  },
+  {
+    "source": "captures/hero.webm",
+    "start": 39,
+    "duration": 5,
+    "crop": [
+      1120,
+      630,
+      400,
+      240
+    ],
+    "title": "Find your other self.",
+    "sub": "Choose your ancestry. Discover your calling."
+  },
+  {
+    "source": "captures/hero.webm",
+    "start": 232.2,
+    "duration": 4,
+    "crop": [
+      1120,
+      630,
+      400,
+      240
+    ],
+    "title": "A little magic goes a long way.",
+    "sub": "Build a character that plays your way."
+  },
+  {
+    "source": "captures/party.webm",
+    "start": -3.4,
+    "duration": 3,
+    "crop": [
+      1120,
+      630,
+      400,
+      0
+    ],
+    "title": "Bring your heroes with you.",
+    "sub": "Your character library. Ready for the next campaign."
+  },
+  {
+    "card": "Make the world.",
+    "eyebrow": "THEN FILL IT WITH POSSIBILITY.",
+    "duration": 2
+  },
+  {
+    "source": "captures/maps.webm",
+    "start": 164,
+    "duration": 4,
+    "crop": [
+      1440,
+      810,
+      240,
+      90
+    ],
+    "title": "Describe it. Roll it.",
+    "sub": "Turn an idea into a place to adventure."
+  },
+  {
+    "source": "captures/paint.webm",
+    "start": 113,
+    "duration": 5,
+    "crop": [
+      1600,
+      900,
+      160,
+      80
+    ],
+    "title": "Leave your mark.",
+    "sub": "Paint the terrain. Shape the battlefield."
+  },
+  {
+    "source": "captures/region.webm",
+    "start": -6.5,
+    "duration": 4,
+    "crop": [
+      1600,
+      900,
+      160,
+      70
+    ],
+    "title": "Think bigger than a dungeon.",
+    "sub": "Regions to explore. Places to discover."
+  },
+  {
+    "source": "captures/workshop.webm",
+    "start": 38.5,
+    "duration": 4,
+    "crop": [
+      1600,
+      900,
+      160,
+      70
+    ],
+    "title": "Your workshop. Your imagination.",
+    "sub": "Maps \u00b7 Encounters \u00b7 Cast \u00b7 Lore \u00b7 Homebrew"
+  },
+  {
+    "source": "captures/bestiary.webm",
+    "start": -4,
+    "duration": 3,
+    "crop": [
+      1440,
+      810,
+      240,
+      70
+    ],
+    "title": "Build the next big bad.",
+    "sub": "Custom monsters. Legendary encounters."
+  },
+  {
+    "source": "captures/creator.webm",
+    "start": 256,
+    "duration": 3,
+    "crop": [
+      1440,
+      810,
+      240,
+      100
+    ],
+    "title": "Set the stage for your story.",
+    "sub": "Create a campaign. Choose your world."
+  },
+  {
+    "source": "captures/paint.webm",
+    "start": -12,
+    "duration": 1,
+    "crop": [
+      1280,
+      720,
+      340,
+      170
+    ],
+    "title": "CREATE."
+  },
+  {
+    "source": "captures/hero.webm",
+    "start": 234,
+    "duration": 1,
+    "crop": [
+      1120,
+      630,
+      400,
+      240
+    ],
+    "title": "EXPLORE."
+  },
+  {
+    "source": "captures/combat.webm",
+    "start": 542,
+    "duration": 1,
+    "crop": [
+      1600,
+      900,
+      160,
+      100
+    ],
+    "title": "PLAY."
+  },
+  {
+    "source": "assets/outro.mp4",
+    "start": 0,
+    "duration": 6
+  }
+]

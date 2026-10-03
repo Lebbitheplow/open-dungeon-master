@@ -6,6 +6,7 @@ import {
   canAct,
   claimRecap,
   getFloor,
+  combatOwnsFloor,
   setFloor,
   type Floor,
 } from "@/lib/db/campaigns";
@@ -69,12 +70,17 @@ export async function POST(
   const floor = getFloor(campaignId);
   // A reaction is taken on somebody else's turn (SRD 5.1): a reaction card
   // passes the initiative floor, and the engine's canAct judges it below.
-  const reactionOffTurn = intent?.card === "reaction" && floor.mode === "initiative";
+  // The same holds while a person plays the enemies' turns under a hold
+  // (src/lib/dm/enemies-due.ts): that is when a Shield or an opportunity
+  // attack is wanted most.
+  const reactionOffTurn = intent?.card === "reaction" && combatOwnsFloor(floor);
   if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
       return Response.json(
         {
-          error: "The party lead has not opened responses yet. Use OOC for table talk.",
+          error: combatOwnsFloor(floor)
+            ? "The enemies are taking their turns; the DM hands the turn on. Use OOC for table talk."
+            : `The ${campaign.dmUserId ? "DM" : "party lead"} has not opened responses yet. Use OOC for table talk.`,
           floor,
         },
         { status: 409 },
@@ -161,8 +167,9 @@ export async function POST(
     campaign.dmCover,
   );
   const humanDm = hasHumanDm(campaignSeats(campaign)) && !covering;
+  // A person's table gets the recap too: it is a utility call that wakes no
+  // DM turn, and recap.ts writes the DM's own secret track for exactly them.
   if (
-    !humanDm &&
     lastMessage &&
     Date.now() - new Date(lastMessage.createdAt).getTime() > RECAP_IDLE_MS &&
     claimRecap(campaignId, lastMessage.seq)
@@ -192,7 +199,11 @@ export async function POST(
   // intent: it sits in the DM's queue until they adjudicate it, and all the
   // table sees is that it landed. The message row and the floor bookkeeping
   // above are identical either way, which is what keeps one transcript.
-  if ((kind !== "ooc" && !spotlightStillWaiting) || isFirstAction) {
+  //
+  // A person's queue takes every action as it lands, a spotlight answer
+  // included: the coalescing that waits for the last answer is the AI turn's,
+  // and holding answers back from a person lost all but the last of them.
+  if (humanDm ? kind !== "ooc" || isFirstAction : (kind !== "ooc" && !spotlightStillWaiting) || isFirstAction) {
     if (humanDm) {
       publishPersisted(campaignId, "dm_intent_queued", {
         messageId: message.id,

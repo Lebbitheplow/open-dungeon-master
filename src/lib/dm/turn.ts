@@ -50,6 +50,7 @@ import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import { announcesEncounterStart, collectExchanges, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
 import { markToolError } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
+import { personRunsTable } from "@/lib/dm/enemies-due";
 import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
@@ -498,6 +499,17 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
   }
   const pendings = listPendingForTurn(turnId);
   if (pendings.some((pending) => pending.status === "pending")) {
+    return;
+  }
+  // A person holds the seat now: the table switched from the AI while this
+  // turn waited on a roll, or it was a pass delegated on the person's behalf.
+  // The rolls already published and applied what they apply; there is no
+  // model to hand them to, so the turn closes as a person's does rather than
+  // narrating at a table the AI no longer runs.
+  if (personRunsTable(campaign)) {
+    turn.status = "done";
+    saveDmTurn(turn);
+    setDmStatus(campaignId, "idle");
     return;
   }
 

@@ -21,6 +21,7 @@ const world = await openWorld();
 const kit = await combatKit(world);
 const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
 const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
+const { setMemberHoldRolls } = await import("../src/lib/db/campaigns.ts");
 const { ENCOUNTER_CAP_PER_TURN } = await import("../src/lib/dm/encounter-tools.ts");
 const { MUTATION_CAP_PER_TURN } = await import("../src/lib/dm/mutations.ts");
 
@@ -240,7 +241,11 @@ await test("A character takes an action only on their own turn (or readies one t
 
 await test("Nobody acts in a fight before initiative is rolled.", async () => {
   await kit.endFight();
+  // A player who holds their rolls keeps the order open: the console asks
+  // for initiative at once, and theirs waits on their card.
+  setMemberHoldRolls(world.campaignId, first.userId, true);
   const started = await world.invoke("start_encounter", { enemies: [{ monster: "goblin", count: 1 }] });
+  setMemberHoldRolls(world.campaignId, first.userId, false);
   assert.equal(started.ok, true, started.error);
   const [enemy] = world.enemies();
   kit.openField();

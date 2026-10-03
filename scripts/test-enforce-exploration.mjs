@@ -39,7 +39,17 @@ await test("A 12-hour march is four forced-march hours: four Constitution saves 
   setInstant(world.campaignId, (Math.floor(clockNow(world.campaignId).instant / 1440) + 1) * 1440 + 6 * 60);
   await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
   world.dice(1, 1, 1, 1);
-  const out = await world.invoke("travel", { hours: 12, pace: "normal", characterIds: [walker.id] });
+  // A leg of four hours or more rolls a new sky too (src/lib/dm/sky.ts), and
+  // a frigid or hot one adds an exposure save for every hour on the road.
+  // Its rolls come from Math.random: 0.5 keeps the clear sky with no drift.
+  const random = Math.random;
+  Math.random = () => 0.5;
+  let out;
+  try {
+    out = await world.invoke("travel", { hours: 12, pace: "normal", characterIds: [walker.id] });
+  } finally {
+    Math.random = random;
+  }
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.deepEqual(savesOf(walker.id), [11, 12, 13, 14]);

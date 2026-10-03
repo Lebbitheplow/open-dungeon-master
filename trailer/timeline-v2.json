@@ -1,0 +1,263 @@
+[
+  {
+    "source": "fire-action",
+    "start": 5.05,
+    "duration": 1.0,
+    "crop": [
+      1280,
+      720,
+      250,
+      70
+    ],
+    "label": "YOUR MOVE"
+  },
+  {
+    "source": "dice-tumble",
+    "start": 7.0,
+    "duration": 2.2,
+    "label": "ROLL WITH IT"
+  },
+  {
+    "source": "fire-action",
+    "start": 2.55,
+    "duration": 1.6,
+    "crop": [
+      1280,
+      720,
+      160,
+      120
+    ]
+  },
+  {
+    "source": "combat-burst",
+    "start": 3.15,
+    "duration": 1.35,
+    "crop": [
+      960,
+      540,
+      380,
+      180
+    ]
+  },
+  {
+    "source": "tactical-move",
+    "start": 3.0,
+    "duration": 2.3,
+    "crop": [
+      1280,
+      720,
+      250,
+      70
+    ]
+  },
+  {
+    "source": "hero-build",
+    "start": 1.95,
+    "duration": 1.4,
+    "speed": 1,
+    "crop": [
+      1120,
+      630,
+      240,
+      130
+    ],
+    "label": "BUILD YOUR HERO"
+  },
+  {
+    "source": "hero-build",
+    "start": 6.55,
+    "duration": 1.4,
+    "crop": [
+      1120,
+      630,
+      240,
+      130
+    ]
+  },
+  {
+    "source": "hero-dice",
+    "start": 7.45,
+    "duration": 2.0,
+    "crop": [
+      1120,
+      630,
+      240,
+      140
+    ]
+  },
+  {
+    "source": "hero-dice",
+    "start": 9.1,
+    "duration": 0.5,
+    "crop": [
+      1120,
+      630,
+      240,
+      140
+    ]
+  },
+  {
+    "source": "river-stroke",
+    "start": 3.75,
+    "duration": 3.0,
+    "speed": 1.7,
+    "crop": [
+      1536,
+      864,
+      32,
+      18
+    ],
+    "label": "SHAPE YOUR WORLD"
+  },
+  {
+    "source": "forest-forge",
+    "start": 4.05,
+    "duration": 1.8,
+    "crop": [
+      1120,
+      630,
+      240,
+      70
+    ]
+  },
+  {
+    "source": "map-gallery",
+    "start": 1.95,
+    "duration": 0.7,
+    "crop": [
+      1536,
+      864,
+      32,
+      18
+    ]
+  },
+  {
+    "source": "map-gallery",
+    "start": 4.0,
+    "duration": 0.7,
+    "crop": [
+      1536,
+      864,
+      32,
+      18
+    ]
+  },
+  {
+    "source": "map-gallery",
+    "start": 5.95,
+    "duration": 0.7,
+    "crop": [
+      1536,
+      864,
+      32,
+      18
+    ]
+  },
+  {
+    "source": "region-explore",
+    "start": 2.65,
+    "duration": 2.0,
+    "crop": [
+      1200,
+      675,
+      200,
+      75
+    ]
+  },
+  {
+    "source": "workshop-flow",
+    "start": 0.8,
+    "duration": 1.2,
+    "crop": [
+      1200,
+      675,
+      200,
+      70
+    ],
+    "label": "MAKE IT YOURS"
+  },
+  {
+    "source": "monster-tune",
+    "start": 1.32,
+    "duration": 1.6,
+    "crop": [
+      1200,
+      675,
+      200,
+      95
+    ]
+  },
+  {
+    "source": "campaign-creator",
+    "start": 3.65,
+    "duration": 2.0,
+    "crop": [
+      1120,
+      630,
+      240,
+      125
+    ]
+  },
+  {
+    "source": "combat-burst",
+    "start": 5.5,
+    "duration": 1.1,
+    "crop": [
+      800,
+      450,
+      540,
+      190
+    ],
+    "label": "TAKE YOUR CHANCES"
+  },
+  {
+    "source": "final-strike",
+    "start": 2.85,
+    "duration": 0.9,
+    "crop": [
+      800,
+      450,
+      540,
+      190
+    ]
+  },
+  {
+    "source": "river-stroke",
+    "start": 10.45,
+    "duration": 0.55,
+    "crop": [
+      1536,
+      864,
+      32,
+      18
+    ]
+  },
+  {
+    "source": "hero-dice",
+    "start": 8.45,
+    "duration": 0.6,
+    "crop": [
+      1120,
+      630,
+      240,
+      140
+    ]
+  },
+  {
+    "source": "fire-action",
+    "start": 5.05,
+    "duration": 0.65,
+    "crop": [
+      960,
+      540,
+      350,
+      135
+    ]
+  },
+  {
+    "source": "dice-tumble",
+    "start": 12.9,
+    "duration": 3.0,
+    "closing": true
+  }
+]

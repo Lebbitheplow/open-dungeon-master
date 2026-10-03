@@ -145,21 +145,28 @@ export function useFxPlayer(
     return () => cancelAnimationFrame(frame);
   }, [incoming, startNext]);
 
-  // Retire whatever has held long enough, then let the next one start.
+  // Retire whatever has held long enough, then let the next one start. What
+  // retired is read from a mirror of the list, not inside the state updater:
+  // React may run an updater while rendering, and reporting from there set
+  // the page's state mid-render ("Cannot update a component while rendering
+  // a different component") every time an attack's effect finished.
+  const activeRef = useRef<Active[]>([]);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
   useEffect(() => {
     if (!active.length && !pendingRef.current.length) {
       return;
     }
     const timer = window.setInterval(() => {
       const now = performance.now();
-      setActive((current) => {
-        const done = current.filter((entry) => now - entry.startedAt >= entry.hold);
-        if (!done.length) {
-          return current;
-        }
-        onPlayedRef.current(done.map((entry) => entry.fx.id));
-        return current.filter((entry) => !done.includes(entry));
-      });
+      const done = activeRef.current.filter((entry) => now - entry.startedAt >= entry.hold);
+      if (done.length) {
+        const ids = new Set(done.map((entry) => entry.fx.id));
+        activeRef.current = activeRef.current.filter((entry) => !ids.has(entry.fx.id));
+        setActive((current) => current.filter((entry) => !ids.has(entry.fx.id)));
+        onPlayedRef.current([...ids]);
+      }
       if (pendingRef.current.length) {
         startNext();
       }

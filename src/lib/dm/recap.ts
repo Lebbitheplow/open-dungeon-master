@@ -100,7 +100,7 @@ export async function runResumeRecap(campaignId: string) {
     const dmTrack = renderRecapMaterial(recapMaterial(material, true));
     if (dmTrack) {
       insertWhisper(campaignId, null, [{ userId: seats.humanDmUserId, characterId: "", characterName: "the DM" }], `Previously, for your eyes: what the party does not know and where the world stands.\n\n${dmTrack.slice(0, 2_000)}`);
-      publishEphemeral(campaignId, "whispers_updated", { at: Date.now() });
+      publishEphemeral(campaignId, "whisper_activity", {});
     }
   }
 }

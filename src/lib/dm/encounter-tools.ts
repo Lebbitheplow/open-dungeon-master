@@ -110,6 +110,8 @@ import { VIGILANT_PREFIX } from "@/lib/srd/authored-effects-more";
 import { handleReaperCast } from "@/lib/dm/authored-reaper";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { afflictionsAtCombatStart } from "@/lib/dm/afflictions";
+import { holdForEnemies } from "@/lib/dm/enemies-due";
+import { approachForCompanion } from "@/lib/dm/companion-approach";
 import { dmRoll } from "@/lib/dm/roll-card";
 
 // Server-authoritative combat: enemies spawn from real stat blocks, their
@@ -211,7 +213,8 @@ function handleStartEncounter(
   rawArguments: string,
   sheets: CharacterSheet[],
   // The AI's fight opens with its initiative rolled (the server rolls every
-  // character it rolls for); a person at the console asks for the rolls.
+  // character it rolls for); a person's fight is asked for its rolls by the
+  // console's façade (src/lib/dm/initiative-ask.ts), on the person's turn.
   actor: DmTurn["actor"] = "human_dm",
 ): Record<string, unknown> {
   const args = parseStartArgs(rawArguments);
@@ -515,7 +518,11 @@ export function recordInitiativeRoll(
   });
 
   const campaignForRoster = getCampaignById(campaignId);
-  const sheets = campaignForRoster ? fieldedSheets(campaignForRoster) : listSheets(campaignId);
+  // The dead roll nothing (request_roll refuses them), so the order is not
+  // held open waiting on them.
+  const sheets = (campaignForRoster ? fieldedSheets(campaignForRoster) : listSheets(campaignId)).filter(
+    (entry) => !entry.deathSaves?.dead,
+  );
   const staged = encounter.order.filter(
     (entry): entry is Extract<OrderEntry, { kind: "pc" }> => entry.kind === "pc",
   );
@@ -552,6 +559,9 @@ export function recordInitiativeRoll(
   saveEncounter(encounter);
   const campaign = getCampaignById(campaignId);
   setInitiativeFloor(campaign, encounter);
+  // Enemies ahead of the first character: a person plays them before the
+  // floor opens (src/lib/dm/enemies-due.ts).
+  holdForEnemies(campaign, encounter, first.enemiesPassed);
   publishEncounter(campaignId);
   if (campaign) {
     for (const passedCharacterId of first.pcsPassed) {
@@ -601,6 +611,7 @@ function openAfterAmbush(
   saveEncounter(encounter);
   const campaign = getCampaignById(campaignId);
   setInitiativeFloor(campaign, encounter);
+  holdForEnemies(campaign, encounter, [...ambushers.map((enemy) => enemy.id), ...first.enemiesPassed]);
   publishEncounter(campaignId);
   if (campaign) {
     for (const passedCharacterId of first.pcsPassed) {
@@ -636,7 +647,7 @@ export function ensureInitiativeProgress(campaign: Campaign): string | null {
       .filter((entry): entry is Extract<OrderEntry, { kind: "pc" }> => entry.kind === "pc")
       .map((entry) => entry.characterId),
   );
-  const missing = fieldedSheets(campaign).filter((sheet) => !staged.has(sheet.id));
+  const missing = fieldedSheets(campaign).filter((sheet) => !staged.has(sheet.id) && !sheet.deathSaves?.dead);
   if (!missing.length) {
     return null;
   }
@@ -1099,6 +1110,7 @@ function advancePointer(
     Object.assign(encounter, getActiveEncounter(campaign.id) ?? encounter);
   }
   setInitiativeFloor(campaign, encounter);
+  holdForEnemies(campaign, encounter, next.enemiesPassed);
   publishEncounter(campaign.id);
   // The pointer move is announced as a table note so the transcript can
   // never silently disagree with the banner about whose turn it is.
@@ -1132,16 +1144,20 @@ function advancePointer(
 // through handleEnemyAttack, so multiattack, auto-approach, conditions, and
 // real dice cards all apply; the outcome posts as a system table note the
 // model narrates around next turn.
-function autoActSkippedEnemies(
+export function autoActSkippedEnemies(
   campaign: Campaign,
   turn: DmTurn,
   encounter: Encounter,
   enemyIds: string[],
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // A person who played the enemies themselves hands the turn on with
+  // play=false: only the end of those turns is applied.
+  options: { play?: boolean } = {},
 ) {
+  const play = options.play !== false;
   const notes: string[] = [];
-  for (const enemyId of enemyIds) {
+  for (const enemyId of play ? enemyIds : []) {
     if (turn.actedEnemyIds.includes(enemyId)) {
       continue;
     }
@@ -1215,7 +1231,7 @@ function autoActSkippedEnemies(
       campaignId: campaign.id,
       seq,
       authorType: "system",
-      content: `Skipped enemy turns resolve automatically: ${notes.join(" ")}`,
+      content: play ? `Skipped enemy turns resolve automatically: ${notes.join(" ")}` : notes.join(" "),
     });
     publishWithSeq(campaign.id, seq, "message_added", { message });
     saveDmTurn(turn);
@@ -1347,21 +1363,26 @@ function companionAutoAct(
       }
     }
   }
+  // Out of reach: it walks to the target first, as the enemies the server
+  // plays do (src/lib/dm/companion-approach.ts).
+  const walked = approachForCompanion(campaign, live, sheet, target);
+  const mover = walked ? getSheetById(sheet.id) ?? sheet : sheet;
   const result = handlePcAttack(
     campaign,
     turn,
-    JSON.stringify({ characterId: sheet.id, targetEnemyId: target.id }),
-    [sheet],
-    new Map([[sheet.id, sheet]]),
+    JSON.stringify({ characterId: mover.id, targetEnemyId: target.id }),
+    [mover],
+    new Map([[mover.id, mover]]),
     new Set<string>(),
     null,
   );
   const note =
-    "error" in result
+    (walked ? `${walked} ` : "") +
+    ("error" in result
       ? `${sheet.name} does not attack: ${String(result.error)}`
       : result.hit
         ? `${sheet.name} attacks ${target.displayName} with ${String(result.weapon ?? "their weapon")} and hits for ${String(result.damage)} damage${result.dead ? `, slaying ${target.displayName}!` : "."}`
-        : `${sheet.name} attacks ${target.displayName} but misses.`;
+        : `${sheet.name} attacks ${target.displayName} but misses.`);
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
@@ -1400,6 +1421,62 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
   return true;
+}
+
+// A person running the fight hands the turn on after the enemies the pointer
+// walked past (src/lib/dm/enemies-due.ts): with play, the server plays the
+// ones still owed their action, as the AI's backstop would; either way their
+// turns end and the floor opens for the player up next.
+export function handOnEnemyTurns(campaign: Campaign, turn: DmTurn, play: boolean): string | null {
+  const encounter = getActiveEncounter(campaign.id);
+  if (!encounter || !encounter.orderReady) {
+    return "No fight is running.";
+  }
+  const due = encounter.legendary.due ?? [];
+  delete encounter.legendary.due;
+  saveEncounter(encounter);
+  if (due.length) {
+    const sheets = fieldedSheets(campaign);
+    const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+    autoActSkippedEnemies(campaign, turn, encounter, due, sheets, sheetsById, { play });
+  }
+  const floor = getFloor(campaign.id);
+  if (floor.mode === "hold" && floor.next.mode === "initiative") {
+    const next = floorAfterRelease(campaign.id);
+    setFloor(campaign.id, next);
+    publishPersisted(campaign.id, "floor_changed", { floor: next });
+  }
+  publishEncounter(campaign.id);
+  return null;
+}
+
+// The pointer rests on an AI companion at a person's table: the server
+// plays its basic turn (as the AI's backstop does) and moves on.
+export function playCompanionTurn(campaign: Campaign, turn: DmTurn): string | null {
+  const encounter = getActiveEncounter(campaign.id);
+  if (!encounter || !encounter.orderReady) {
+    return "No fight is running.";
+  }
+  const current = encounter.order[encounter.turnIndex];
+  if (!current || current.kind !== "pc" || !isCompanionUserId(current.userId)) {
+    return "It is not a companion's turn.";
+  }
+  companionAutoAct(campaign, turn, encounter, current.characterId);
+  const live = getActiveEncounter(campaign.id);
+  if (live && !advancePointer(campaign, live)) {
+    return "Nobody is left standing to take the next turn.";
+  }
+  return null;
+}
+
+// The DM's "on a turn": the same move End Turn makes, with everything a new
+// turn brings (conditions, reactions, movement, death saves, a new round).
+export function stepTurnForward(campaign: Campaign): string | null {
+  const encounter = getActiveEncounter(campaign.id);
+  if (!encounter || !encounter.orderReady) {
+    return "No fight is running.";
+  }
+  return advancePointer(campaign, encounter) ? null : "Nobody is left standing to take the next turn.";
 }
 
 // Lead escape hatch: advance past an absent player's turn. Inserts a table

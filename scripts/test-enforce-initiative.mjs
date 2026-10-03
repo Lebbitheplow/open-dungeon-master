@@ -146,19 +146,16 @@ await test("ties go to player characters first, then by name (ODM's rule)", asyn
     [bard.id]: 10 - abilityMod(14) - Math.floor(proficiencyBonus(5) / 2),
     [clumsy.id]: 10 - abilityMod(7),
   };
+  // The console rolls the heroes as the fight opens, so the order is built
+  // there: the goblins' face is found first (count minus face is their
+  // modifier), then the fight is started again with every total on 10.
   world.clearDice();
-  const started = await world.invoke("start_encounter", { enemies: [{ monster: "goblin", count: 2 }] });
-  assert.equal(started.ok, true, started.error);
-  const { getDatabase } = await import("../src/lib/db/core.ts");
-  getDatabase()
-    .prepare(`UPDATE encounter_enemies SET initiative = 10 WHERE encounter_id = ?`)
-    .run(world.encounter().id);
-  for (const sheet of world.sheets()) {
-    world.dice(faces[sheet.id]);
-    const rolled = await world.invoke("request_roll", { characterId: sheet.id, kind: "initiative" });
-    world.clearDice();
-    assert.equal(rolled.ok, true, rolled.error);
-  }
+  world.dice(10, 10);
+  const probe = await world.invoke("start_encounter", { enemies: [{ monster: "goblin", count: 2 }] });
+  assert.equal(probe.ok, true, probe.error);
+  const modifier = world.enemies()[0].initiative - 10;
+  await kit.endFight();
+  await world.beginFight([{ monster: "goblin", count: 2 }], { heroFaces: faces, enemyFace: 10 - modifier });
   const order = world.encounter().order;
   assert.ok(order.every((entry) => entry.initiative === 10));
   assert.deepEqual(
