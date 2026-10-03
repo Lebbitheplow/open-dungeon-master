@@ -153,6 +153,8 @@ export async function openWorld(options = {}) {
   const encounters = await import("../../src/lib/db/encounters.ts");
   const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
   const { fieldedSheets } = await import("../../src/lib/dm/roster.ts");
+  const { resolveRollExpression } = await import("../../src/lib/dm/rolls.ts");
+  const { rollExtrasFor } = await import("../../src/lib/dm/forced-save.ts");
   const { mintSession } = await import("../../src/lib/auth.ts");
 
   let userCount = 0;
@@ -210,7 +212,19 @@ export async function openWorld(options = {}) {
   // turn. Enemies roll `enemyFace` on their d20; each hero rolls the face
   // given for its id in `heroFaces`, or 15. With the defaults the heroes act
   // first, in the order they were added when their modifiers match.
-  async function beginFight(enemies, { heroFaces = {}, enemyFace = 1, ...args } = {}) {
+  // How many d20s a hero's initiative throws, resolved the way the opening
+  // resolves it (src/lib/dm/encounter-open.ts).
+  function initiativeD20s(sheet) {
+    const resolved = resolveRollExpression(
+      { kind: "initiative", characterId: sheet.id },
+      sheet,
+      rollExtrasFor(campaign(), sheet, "initiative"),
+    );
+    const match = resolved.expression ? /(\d*)d20/.exec(resolved.expression) : null;
+    return match ? Number(match[1] || 1) : 1;
+  }
+
+  async function beginFight(enemies,{ heroFaces = {}, enemyFace = 1, ...args } = {}) {
     clearDice();
     const count = enemies.reduce((sum, enemy) => sum + (enemy.count ?? 1), 0);
     // The console asks the table for initiative as the fight opens
@@ -220,7 +234,9 @@ export async function openWorld(options = {}) {
     const stealth = args.ambush === "enemies" ? count : args.ambush === "party" ? heroes.length : 0;
     dice(new Array(count).fill(enemyFace));
     dice(new Array(stealth).fill(null));
-    dice(heroes.map((sheet) => heroFaces[sheet.id] ?? 15));
+    // A hero rolling with advantage (Feral Instinct) throws two d20s, so the
+    // face goes in once per die, or the next hero rolls for real.
+    dice(heroes.flatMap((sheet) => new Array(initiativeD20s(sheet)).fill(heroFaces[sheet.id] ?? 15)));
     const started = await invoke("start_encounter", { enemies, ...args });
     clearDice();
     if (!started.ok) {
