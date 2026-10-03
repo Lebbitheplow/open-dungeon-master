@@ -17,7 +17,6 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
 import { addDice } from "@/lib/srd/spell-scaling";
@@ -25,6 +24,8 @@ import { removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/l
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { lastCastSlot, spellKey } from "@/lib/dm/spell-effects";
 import { hurtEnemy } from "@/lib/dm/spell-aura";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 type TurnEndHook = (campaign: Campaign, enemy: EncounterEnemy, meta: ConditionMeta) => string | null;
 
@@ -36,7 +37,9 @@ function acidArrowBurn(campaign: Campaign, enemy: EncounterEnemy, meta: Conditio
   }
   const slot = meta.slotLevel ?? (meta.source ? lastCastSlot(meta.source, "Acid Arrow") : null) ?? 2;
   const dice = addDice("2d4", "1d4", Math.max(0, slot - 2));
-  return hurtEnemy(campaign, encounter, enemy, rollExpression(dice).total, "acid", "Acid Arrow's acid");
+  const caster = meta.source ? getSheetById(meta.source) : null;
+  const burn = rollCard(campaign, null, caster?.id ?? null, "damage", rollAgainst("Acid Arrow (second burn)", enemy.displayName), dice, caster ? sheetAttacker(caster) : null).total;
+  return hurtEnemy(campaign, encounter, enemy, burn, "acid", "Acid Arrow's acid");
 }
 
 // The mark goes back on for the next turn's end.
@@ -106,7 +109,11 @@ function saveAtTurnEnd(campaign: Campaign, enemy: EncounterEnemy, meta: Conditio
   rearm(enemy.id, tag, meta);
   const slot = meta.slotLevel ?? edge.baseLevel;
   const dice = edge.dice && edge.perSlotLevel ? addDice(edge.dice, edge.perSlotLevel, Math.max(0, slot - edge.baseLevel)) : edge.dice;
-  return dice ? hurtEnemy(campaign, encounter, enemy, rollExpression(dice).total, edge.type ?? "psychic", resolved.name) : null;
+  if (!dice) {
+    return null;
+  }
+  const hurt = rollCard(campaign, null, caster?.id ?? null, "damage", rollAgainst(resolved.name, enemy.displayName), dice, caster ? sheetAttacker(caster) : null).total;
+  return hurtEnemy(campaign, encounter, enemy, hurt, edge.type ?? "psychic", resolved.name);
 }
 
 const HOOKS: Record<string, TurnEndHook> = {

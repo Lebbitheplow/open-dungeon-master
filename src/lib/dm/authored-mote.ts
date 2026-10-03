@@ -20,13 +20,15 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression, type RollResult } from "@/lib/dice";
+import type { RollResult } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 export type HeldMote = { bardId: string; die: string; sides: number };
 
@@ -48,9 +50,9 @@ export function moteOf(sheet: Pick<CharacterSheet, "conditionMeta">, spent: stri
 
 // The value the die showed in a roll: its term's subtotal, or a fresh roll
 // when the expression did not keep it apart.
-function dieValue(outcome: RollResult | null, mote: HeldMote): number {
+function dieValue(campaign: Campaign, sheetId: string, outcome: RollResult | null, mote: HeldMote): number {
   const term = outcome?.terms.find((entry) => entry.kind === "dice" && entry.sides === mote.sides);
-  return term && term.kind === "dice" ? term.subtotal : rollExpression(`1${mote.die}`).total;
+  return term && term.kind === "dice" ? term.subtotal : rollCard(campaign, null, sheetId, "custom", "Mote of Potential", `1${mote.die}`, null).total;
 }
 
 // After a saving throw that spent a mote die: its temporary hit points.
@@ -67,7 +69,7 @@ export function moteAfterRoll(
   const bard = getSheetById(mote.bardId);
   const sheet = getSheetById(stale.id) ?? stale;
   const cha = bard ? computeSheetDerived(bard).abilityMods.cha : 0;
-  const amount = Math.max(1, dieValue(outcome, mote) + cha);
+  const amount = Math.max(1, dieValue(campaign, sheet.id, outcome, mote) + cha);
   if (amount > sheet.tempHp) {
     const updated = patchSheet(sheet.id, { tempHp: amount });
     if (updated) {
@@ -94,7 +96,8 @@ export function moteBurst(campaign: Campaign, turn: DmTurn, mote: HeldMote | nul
   if (save.success) {
     return `Mote of Potential: the mote bursts on ${enemy.displayName}, which shrugs it off (CON ${save.total} vs DC ${dc}).`;
   }
-  const amount = Math.max(1, rollExpression(`1${mote.die}`).total);
+  // The mote is the bard's: the burst is theirs.
+  const amount = Math.max(1, rollCard(campaign, turn, bard?.id ?? null, "damage", rollAgainst("Mote of Potential", enemy.displayName), `1${mote.die}`, bard ? sheetAttacker(bard) : null).total);
   const sheets = listSheets(campaign.id);
   applyEnemyDamage(campaign, turn, encounter, enemy, amount, sheets, new Map(sheets.map((entry) => [entry.id, entry])), "thunder", { magical: true });
   publishEncounter(campaign.id);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dmRoll } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
@@ -528,7 +529,8 @@ export function handleRomanceAdvance(
     relationship.approval,
     args.to,
     warmth,
-    rollExpression("1d20").total,
+    // The NPC's own mind: the DM sees the die, the table the answer.
+    dmRoll(campaign.id, null, "custom", `${subject.name}: whether they agree`, "1d20").total,
   );
   if (!consent.accepted) {
     const approval = applyApproval(relationship.approval, REFUSAL_COST);

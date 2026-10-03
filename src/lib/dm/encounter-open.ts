@@ -10,6 +10,7 @@ import { applyInitiativeRefills } from "@/lib/dm/feature-spends";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { resolveRollExpression, type RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { dmRoll } from "@/lib/dm/roll-card";
 
 // What happens as a fight opens (SRD 5.1, Combat Step by Step): who is
 // surprised, decided by the hiders' Stealth against each opponent's passive
@@ -46,7 +47,7 @@ export function decideAmbush(
   const stealth: number[] = [];
   if (hiders === "enemies") {
     for (const enemy of enemies) {
-      const outcome = rollExpression(d20Expression(enemyStealth(enemy)));
+      const outcome = dmRoll(campaign.id, null, "skill_check", `${enemy.displayName}: stealth, lying in wait`, d20Expression(enemyStealth(enemy)));
       stealth.push(outcome.total);
     }
     const lowest = Math.min(...stealth);

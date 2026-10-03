@@ -7,6 +7,7 @@
 // checks, conditions, exhaustion, armor, and the items that ride checks.
 // The roll is stored and published like any other.
 
+import { rollCard } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertRoll } from "@/lib/db/rolls";
 import { getSheetById } from "@/lib/db/sheets";
@@ -47,7 +48,7 @@ export function rollCharacterCheck(
   );
   if ("error" in resolved) {
     // An unknown skill: fall back to the plain ability, never to nothing.
-    const outcome = rollExpression(d20Expression(0, check.advantage ?? "none"));
+    const outcome = rollCard(campaign, null, sheet.id, check.skill ? "skill_check" : "ability_check", `${detail}: ${check.skill ?? check.ability ?? "check"}`, d20Expression(0, check.advantage ?? "none"), null);
     return { total: outcome.total, expression: "1d20", notes: [resolved.error], rollId: null };
   }
   if ("autoFail" in resolved) {

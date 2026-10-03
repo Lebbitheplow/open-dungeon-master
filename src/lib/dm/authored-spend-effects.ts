@@ -7,7 +7,6 @@ import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { resolveFormula, type AuthoredSpend, type HeldAuthored } from "@/lib/srd/authored-effects";
@@ -23,6 +22,12 @@ import { withinFeet } from "@/lib/dm/authored-saves";
 import { rerollLastSave, swarmPush } from "@/lib/dm/authored-spend-more";
 import { summonSteelDefender } from "@/lib/dm/summon-defender";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
+
+// A spend's damage on one enemy, as the holder's dice card.
+const damageDice = (ctx: SpendContext, enemy: EncounterEnemy, dice: string) =>
+  rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "damage", rollAgainst(ctx.spend.name, enemy.displayName), dice, sheetAttacker(ctx.sheet)).total;
 
 export type SpendContext = {
   campaign: Campaign;
@@ -164,7 +169,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     case "buff": {
       const condition = conditionName(ctx, does);
       const lines: string[] = [];
-      const tempHp = does.tempHp ? Math.max(0, Number(rollExpression(formula(ctx, does.tempHp)).total)) : 0;
+      const tempHp = does.tempHp ? Math.max(0, Number(rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: temporary hit points`, formula(ctx, does.tempHp), null).total)) : 0;
       if (does.target === "enemy") {
         const enemy = targetEnemy(ctx);
         if ("error" in enemy) {
@@ -236,7 +241,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const dice = does.perUnit ? addUnits(does.perUnit, does.perUnit, ctx.units - 1) : does.dice ? formula(ctx, does.dice) : null;
       if (dice) {
         const type = (does.typeFromVariant ?? []).find((entry) => lower(ctx.args.variant).includes(entry)) ?? does.type ?? "";
-        const rolled = rollExpression(dice).total;
+        const rolled = damageDice(ctx, enemy, dice);
         const amount = save.success ? (does.half ? Math.floor(rolled / 2) : 0) : rolled;
         Object.assign(result, { rolled: `${dice}: ${rolled}` }, damageEnemy(ctx, getEnemy(enemy.id) ?? enemy, amount, type));
       }
@@ -252,7 +257,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     case "reroll_save":
       return rerollLastSave(ctx);
     case "temp_hp": {
-      const amount = Math.max(1, Number(rollExpression(formula(ctx, does.formula)).total));
+      const amount = Math.max(1, Number(rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: temporary hit points`, formula(ctx, does.formula), null).total));
       if (!does.allies) {
         return {
           patch: amount > sheet.tempHp ? { tempHp: amount } : {},
@@ -299,7 +304,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         return enemy;
       }
       const dice = formula(ctx, does.dice);
-      const rolled = rollExpression(dice).total;
+      const rolled = damageDice(ctx, enemy, dice);
       return { result: { rolled: `${dice}: ${rolled}`, ...damageEnemy(ctx, enemy, rolled, does.type) } };
     }
     case "flourish": {
@@ -308,7 +313,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         return enemy;
       }
       const die = `1${bardicDie(ctx.held.level)}`;
-      const rolled = rollExpression(die).total;
+      const rolled = damageDice(ctx, enemy, die);
       const result: Record<string, unknown> = { rolled: `${die}: ${rolled}`, ...damageEnemy(ctx, enemy, rolled, "") };
       if (/defen/.test(lower(ctx.args.variant))) {
         const condition = `defensive flourish (+${rolled})`;
@@ -326,8 +331,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       return stormAura(ctx);
     case "flames": {
       const wanted = lower(ctx.args.variant);
-      const rolled = rollExpression(formula(ctx, does.formula)).total;
       if (/heal/.test(wanted)) {
+        const rolled = rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: healing`, formula(ctx, does.formula), null).total;
         const ally = ctx.args.targetCharacterId ? getSheetById(ctx.args.targetCharacterId) : sheet;
         if (!ally || ally.deathSaves?.dead) {
           return { error: `${ctx.spend.name} heals a living creature at the table: pass targetCharacterId. Nothing was spent.` };
@@ -348,6 +353,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       if ("error" in enemy) {
         return enemy;
       }
+      // Rolled once the burn is sure to land: a refusal above spends nothing.
+      const rolled = damageDice(ctx, enemy, formula(ctx, does.formula));
       return { result: { rolled, ...damageEnemy(ctx, enemy, rolled, does.type) } };
     }
     case "insight_contest": {
@@ -358,7 +365,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const insight = rollCharacterCheck(campaign, sheet, { skill: "insight" }, `${sheet.name}: Insight against ${enemy.displayName}'s Deception`);
       const skills = enemy.stats.skills as Record<string, number> | undefined;
       const deceptionMod = Number(skills?.deception ?? Math.floor(((enemy.stats.abilities?.cha ?? 10) - 10) / 2));
-      const deception = rollExpression(`1d20${deceptionMod >= 0 ? "+" : ""}${deceptionMod}`).total;
+      // A contest the table sees, as every enemy's contest roll is (action-common.ts).
+      const deception = rollCard(ctx.campaign, ctx.turn, null, "skill_check", `${enemy.displayName}: Deception against ${sheet.name}'s Insight`, `1d20${deceptionMod >= 0 ? "+" : ""}${deceptionMod}`, null).total;
       if (insight.total <= deception) {
         return { result: { insight: insight.total, deception, read: `${enemy.displayName} gives nothing away; no Sneak Attack edge.` } };
       }
@@ -396,7 +404,7 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
       continue;
     }
     if (spec.dice) {
-      const rolled = rollExpression(formula(ctx, spec.dice)).total;
+      const rolled = damageDice(ctx, enemy, formula(ctx, spec.dice));
       damageEnemy(ctx, getEnemy(enemy.id) ?? enemy, rolled, spec.type ?? "");
       lines.push(`${enemy.displayName} takes ${rolled} ${spec.type ?? ""} damage.`.replace("  ", " "));
     }

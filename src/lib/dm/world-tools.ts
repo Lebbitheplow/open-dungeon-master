@@ -1,10 +1,10 @@
 import { z } from "zod";
+import { rollCard } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { chargeLifestyle } from "@/lib/dm/lifestyle";
 import { dawnsBetween } from "@/lib/dm/item-charges";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -346,7 +346,7 @@ export function handleRollTreasure(
   }
   const tier = treasureTierForCr(args.cr);
   const { dice, mult } = hoardGoldDice(tier);
-  let gold = rollExpression(dice).total * mult;
+  let gold = rollCard(campaign, turn, null, "custom", `Treasure: gold (${dice} × ${mult})`, dice, null).total * mult;
   if (args.individual) {
     gold = Math.floor(gold / 10);
   }

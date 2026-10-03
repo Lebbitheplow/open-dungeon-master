@@ -15,7 +15,7 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getClock, setClock } from "@/lib/db/clock";
 import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
-import { rollAgainst } from "@/lib/roll-labels";
+import { rollAgainst, rollOn } from "@/lib/roll-labels";
 import { getSheetById } from "@/lib/db/sheets";
 import { isValidExpression, rollExpression, type RollResult } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -45,7 +45,7 @@ const objectSchema = z.object({
 
 const keyOf = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 60);
 
-function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: string | null, kind: "attack" | "damage", detail: string, result: RollResult, attacker: RollAttacker) {
+function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: string | null, kind: "attack" | "damage", detail: string, result: RollResult, attacker: RollAttacker | null) {
   const roll = insertRoll({ campaignId: campaign.id, characterId, requestedBy: "dm", kind, detail, result, attacker });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
   turn?.rollIds.push(roll.id);
@@ -128,7 +128,12 @@ export function damageObject(
     if (/^-?\d+$/.test(args.damage.trim())) {
       dealt = Number(args.damage.trim());
     } else if (isValidExpression(args.damage)) {
-      dealt = rollExpression(args.damage).total;
+      const rolled = rollExpression(args.damage);
+      // Harm no character dealt (a hazard, a falling block): nobody's roll.
+      if (campaign) {
+        publishRoll(campaign, turn, null, "damage", rollOn(type || "damage", [args.name ?? "an object"]), rolled, null);
+      }
+      dealt = rolled.total;
     } else {
       return { error: `Invalid damage "${args.damage}".` };
     }

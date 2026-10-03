@@ -16,13 +16,12 @@
 
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
-import { d20Expression, rollExpression } from "@/lib/dice";
-import { saveModFor } from "@/lib/bestiary/statblock";
 import { removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
 import { conditionEffectsFor, type SaveAbilityId } from "@/lib/srd/condition-effects";
 import { MECH_OVERRIDES } from "@/lib/srd/spell-mechanics";
 import { getDmTurn } from "@/lib/db/dm-turns";
+import { rollEnemySave } from "@/lib/dm/forced-save";
 
 // The SRD's own conditions. One of these with no spell recorded on it may
 // have come from anywhere (a ghoul's claw, a net), so a spell ending does not
@@ -155,17 +154,21 @@ export function spellEffectsOnEnemyDamage(enemyId: string): string[] {
     }
     saved.add(tag);
     const { ability, dc, advantage } = entry.saveOnDamage;
-    const outcome = rollExpression(
-      d20Expression(saveModFor(enemy.stats, ability), advantage ? "advantage" : "none"),
-    );
-    if (outcome.total >= dc) {
+    // Rolled as every enemy save is (src/lib/dm/forced-save.ts): its
+    // conditions count, and the DM sees the roll.
+    const outcome = rollEnemySave(enemy.campaignId, enemy, ability, dc, {
+      magical: true,
+      advantage,
+      record: { detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${entry.spell ?? name} (hurt)` },
+    });
+    if (outcome.success) {
       endingSpells.add(tag);
       lines.push(
-        `${enemy.displayName} is hurt and shakes off ${entry.spell ?? name} (${ability.toUpperCase()} save ${outcome.total} vs DC ${dc}${advantage ? ", with advantage" : ""}).`,
+        `${enemy.displayName} is hurt and shakes off ${entry.spell ?? name} (${ability.toUpperCase()} save ${outcome.total ?? "failed"} vs DC ${dc}${advantage ? ", with advantage" : ""}).`,
       );
     } else {
       lines.push(
-        `${enemy.displayName} is hurt but stays ${name} (${ability.toUpperCase()} save ${outcome.total} vs DC ${dc}).`,
+        `${enemy.displayName} is hurt but stays ${name} (${ability.toUpperCase()} save ${outcome.total ?? "failed"} vs DC ${dc}).`,
       );
     }
   }

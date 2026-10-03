@@ -10,6 +10,7 @@
 // must not import mutations.ts, enemy-damage.ts, map-tools.ts or
 // companion-tools.ts (each of them reaches those two).
 
+import { dmRoll, rollCard } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import {
@@ -40,7 +41,7 @@ import { findSpawnTiles } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
 import { numberDuplicates } from "@/lib/dm/encounter-logic";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { d20Expression } from "@/lib/dice";
 import { createSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import type { SummonForm } from "@/lib/srd/summon-forms";
@@ -166,7 +167,7 @@ function placeInFight(
     const initiative =
       mode !== "group" && casterAt >= 0
         ? casterInitiative
-        : rollExpression(d20Expression(mod(form.abilities.dex))).total;
+        : rollCard(campaign, null, created[0].id, "initiative", `${form.name}: initiative`, d20Expression(mod(form.abilities.dex)), null).total;
     const entries: OrderEntry[] = created.map((sheet) => ({
       kind: "pc",
       characterId: sheet.id,
@@ -270,7 +271,8 @@ function turnHostile(campaign: Campaign, sheet: CharacterSheet): string | null {
   }
   const stats = enemyStatsFromSummon(sheet);
   const entryAt = encounter.order.findIndex((entry) => entry.kind === "pc" && entry.characterId === sheet.id);
-  const initiative = entryAt >= 0 ? encounter.order[entryAt].initiative : rollExpression(d20Expression(stats.dexMod)).total;
+  // Now a foe: its roll is the DM's, as an enemy's initiative is.
+  const initiative = entryAt >= 0 ? encounter.order[entryAt].initiative : dmRoll(campaign.id, null, "initiative", `${sheet.summon.form}: initiative`, d20Expression(stats.dexMod)).total;
   const taken = new Set(listEnemies(encounter.id).map((enemy) => enemy.displayName));
   const displayName = taken.has(sheet.summon.form) ? `${sheet.summon.form} (unbound)` : sheet.summon.form;
   const enemy = insertEnemy({

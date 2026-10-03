@@ -14,7 +14,6 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { spellSaveDcFor } from "@/lib/srd";
 import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { conditionRollRiders, type ConditionRollRiders } from "@/lib/srd/condition-effects";
@@ -22,6 +21,8 @@ import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logi
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 // The riders of the attacker's next swing, with what this one spent taken
 // off the creature (the spent condition leaves its row).
@@ -102,7 +103,8 @@ export function spellRetort(
     const type = /\(fire\)/i.test(shield) ? "cold" : "fire";
     const live = getEnemy(attacker.id);
     if (live?.status === "alive") {
-      const rolled = rollExpression("2d8").total;
+      // The shield's bearer deals it.
+      const rolled = rollCard(campaign, turn, target.id, "damage", rollAgainst("Fire Shield", live.displayName), "2d8", sheetAttacker(target)).total;
       const applied = applyEnemyDamage(campaign, turn, encounter, live, rolled, sheets, sheetsById, type, { magical: true });
       lines.push(`${target.name}'s Fire Shield sears ${live.displayName} for ${applied.damageApplied ?? rolled} ${type} damage.`);
     }
@@ -162,7 +164,8 @@ export function curseBurn(
   if (!encounter || !enemy || !rider) {
     return null;
   }
-  const rolled = rollExpression(rider.dice).total;
+  const caster = getSheetById(casterId);
+  const rolled = rollCard(campaign, turn, caster?.id ?? null, "damage", rollAgainst("Bestow Curse", enemy.displayName), rider.dice, caster ? sheetAttacker(caster) : null).total;
   applyEnemyDamage(campaign, turn, encounter, enemy, rolled, sheets, sheetsById, rider.type, { magical: true });
   return `Bestow Curse: ${rolled} necrotic more to ${enemy.displayName}.`;
 }

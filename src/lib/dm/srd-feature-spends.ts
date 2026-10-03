@@ -24,7 +24,6 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
@@ -36,6 +35,8 @@ import { hurtEnemy } from "@/lib/dm/spell-aura";
 import { getDmTurn } from "@/lib/db/dm-turns";
 import { feetBetween, priceTheAction, publishSheet } from "@/lib/dm/combat-features";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
+import { rollAgainst } from "@/lib/roll-labels";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
@@ -142,7 +143,7 @@ function quiveringPalm(campaign: Campaign, turnId: string, sheet: CharacterSheet
   const save = rollEnemySave(campaign.id, enemy, "con", dc, { record: { detail: `${enemy.displayName}: CON save against Quivering Palm` } });
   price.commit();
   const live = listEnemies(encounter.id).find((entry) => entry.id === enemy.id) ?? enemy;
-  const amount = save.success ? rollExpression("10d10").total : live.currentHp;
+  const amount = save.success ? rollCard(campaign, null, sheet.id, "damage", rollAgainst("Quivering Palm", live.displayName), "10d10", sheetAttacker(sheet)).total : live.currentHp;
   const sheets = listSheets(campaign.id);
   const turn = getDmTurn(turnId);
   // The damage path wants the DM turn; off one, the aura path lands it.

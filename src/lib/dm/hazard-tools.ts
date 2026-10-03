@@ -4,7 +4,6 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { planHazardFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
-import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { openFall } from "@/lib/dm/last-hit";
@@ -24,6 +23,8 @@ import {
 } from "@/lib/srd/hazards";
 import { pcResistances } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard } from "@/lib/dm/roll-card";
+import { rollOn } from "@/lib/roll-labels";
 
 // Traps and environmental hazards used to be pure narration routed through the
 // generic damage_enemy call, so a "dart trap" or a "40-foot fall" dealt
@@ -199,7 +200,8 @@ export function handleApplyHazard(
       if (sheet.conditions.some((entry) => entry.trim().toLowerCase() === "feather fall")) {
         return { name: sheet.name, damage: 0, note: `${sheet.name} drifts down under Feather Fall and lands unhurt.` };
       }
-      const rolled = rollExpression(dice);
+      // A fall: nobody made it, as an enemy's fall (src/lib/dm/enemy-fall.ts).
+      const rolled = rollCard(campaign, turn, sheet.id, "damage", rollOn(`${args.feet ?? 0} ft fall (${dice} bludgeoning)`, [sheet.name]), dice, null);
       // Kept so Slow Fall and Feather Fall can answer it (src/lib/dm/last-hit.ts).
       const fall = openFall(campaign.id, sheet.id);
       // The server rolled these dice, so they land as rolled (20d6 can pass

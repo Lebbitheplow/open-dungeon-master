@@ -55,15 +55,15 @@ const RAYS: Array<{ color: string; type?: string }> = [
 export const isPrismaticSpray = (spell: string | undefined) => (spell ?? "").trim().toLowerCase() === PRISMATIC_SPRAY;
 
 // The rays one creature is struck by: one d8, or on an 8 two more, each 8
-// rolled again.
-export function rollRays(): number[] {
-  const first = rollExpression("1d8").total;
+// rolled again. `d8` rolls one die (a card, in a cast).
+export function rollRays(d8: () => number = () => rollExpression("1d8").total): number[] {
+  const first = d8();
   if (first !== 8) {
     return [first];
   }
   const rays: number[] = [];
   for (let guard = 0; rays.length < 2 && guard < 40; guard += 1) {
-    const next = rollExpression("1d8").total;
+    const next = d8();
     if (next !== 8) {
       rays.push(next);
     }
@@ -81,6 +81,10 @@ export type PrismaticCast = {
   sheets: CharacterSheet[];
   sheetsById: Map<string, CharacterSheet>;
 };
+
+// The d8 that picks a creature's ray, as a card the table sees.
+const rayDie = (input: PrismaticCast, characterId: string, target: string) => () =>
+  rollCard(input.campaign, input.turn, characterId, "custom", `Prismatic Spray: the ray that strikes ${target}`, "1d8", null).total;
 
 // A damaging ray's 10d6, a dice card as a weapon's damage is. characterId
 // is the PC the roll concerns: the caster on an enemy, the PC a ray hits.
@@ -102,7 +106,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
       continue;
     }
     const save = rollEnemySave(campaign.id, enemy, "dex", dc, { magical: true, record: { turn, detail: `${enemy.displayName}: DEX save against Prismatic Spray` } });
-    const rays = rollRays();
+    const rays = rollRays(rayDie(input, caster.id, enemy.displayName));
     const row: Record<string, unknown> = { target: enemy.displayName, save: save.total, success: save.success, rays: rays.map((ray) => RAYS[ray - 1].color) };
     const notes: string[] = [];
     for (const ray of rays) {
@@ -141,7 +145,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
       continue;
     }
     const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", "spell");
-    const rays = rollRays();
+    const rays = rollRays(rayDie(input, sheet.id, sheet.name));
     const notes: string[] = [];
     for (const ray of rays) {
       const { color, type } = RAYS[ray - 1];

@@ -18,16 +18,15 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, listEnemies, patchEnemyConditions, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
-import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
-import { saveModFor } from "@/lib/bestiary/statblock";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -36,6 +35,7 @@ import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { spellEffectsOnEnemyDamage, spellKey } from "@/lib/dm/spell-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
+import { rollAgainst } from "@/lib/roll-labels";
 
 const FEET_PER_TILE = 5;
 
@@ -63,7 +63,9 @@ export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: Encou
   patchEnemyHp(enemy.id, hp, hp <= 0 ? "dead" : "alive");
   if (enemy.concentration) {
     const dc = Math.max(10, Math.floor(adjusted.amount / 2));
-    const kept = hp > 0 && rollExpression(d20Expression(saveModFor(enemy.stats, "con"))).total >= dc;
+    // The same save the damage path rolls (enemy-damage.ts): its conditions
+    // count, and the DM sees the roll.
+    const kept = hp > 0 && rollEnemySave(campaign.id, enemy, "con", dc, { record: { detail: `${enemy.displayName}: concentration on ${enemy.concentration} (CON save)` } }).success;
     if (!kept) {
       setEnemyConcentration(enemy.id, null);
       clearSpellConditionsByName(campaign, enemy.concentration, undefined, enemy.id);
@@ -110,7 +112,8 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
         magical: true,
         record: { detail: `${live.displayName}: ${ring.save.toUpperCase()} save against ${aura.name}` },
       });
-      const rolled = rollExpression(dice).total;
+      // Each creature's damage is its own roll, and its own card.
+      const rolled = rollCard(campaign, null, caster.id, "damage", rollAgainst(aura.name, live.displayName), dice, sheetAttacker(caster)).total;
       const amount = save.success ? (ring.halfOnSave ? Math.floor(rolled / 2) : 0) : rolled;
       lines.push(
         `${live.displayName} starts its turn in ${caster.name}'s ${aura.name}: ${ring.save.toUpperCase()} save ${save.success ? "made" : "failed"} (DC ${dc}).`,
@@ -151,7 +154,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     if (hurt.noSave) {
       const slot = entry.slotLevel ?? hurt.baseLevel;
       const dice = hurt.perSlotLevel ? addDice(hurt.dice, hurt.perSlotLevel, Math.max(0, slot - hurt.baseLevel)) : hurt.dice;
-      lines.push(hurtEnemy(campaign, encounter, live, rollExpression(dice).total, hurt.type, resolved.name));
+      lines.push(hurtEnemy(campaign, encounter, live, rollCard(campaign, null, caster.id, "damage", rollAgainst(resolved.name, live.displayName), dice, sheetAttacker(caster)).total, hurt.type, resolved.name));
       continue;
     }
     const dc = spellSaveDcFor(caster, resolved.name) ?? 13;
@@ -171,7 +174,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     }
     const slot = entry.slotLevel ?? hurt.baseLevel;
     const dice = hurt.perSlotLevel ? addDice(hurt.dice, hurt.perSlotLevel, Math.max(0, slot - hurt.baseLevel)) : hurt.dice;
-    lines.push(hurtEnemy(campaign, encounter, live, rollExpression(dice).total, hurt.type, resolved.name));
+    lines.push(hurtEnemy(campaign, encounter, live, rollCard(campaign, null, caster.id, "damage", rollAgainst(resolved.name, live.displayName), dice, sheetAttacker(caster)).total, hurt.type, resolved.name));
   }
 }
 
@@ -210,7 +213,8 @@ function confusionRoll(enemy: EncounterEnemy, lines: string[]) {
   if (!enemy.conditions.includes("confused") || !entry) {
     return;
   }
-  const roll = rollExpression("1d10").total;
+  // The creature's own roll: the DM sees the die, the table what it does.
+  const roll = dmRoll(enemy.campaignId, null, "custom", `${enemy.displayName}: Confusion`, "1d10").total;
   const lost = roll === 1 ? "wandering" : roll <= 6 ? "halted" : null;
   if (lost && !enemy.conditions.includes(lost)) {
     // Until the end of this turn (src/lib/dm/turn-end.ts reads the mark).

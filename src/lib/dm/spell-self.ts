@@ -13,11 +13,11 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
 import { getSheetById } from "@/lib/db/sheets";
-import { rollExpression } from "@/lib/dice";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { rollCard } from "@/lib/dm/roll-card";
 
 export const INSANE = "insane (contact other plane)";
 
@@ -32,7 +32,7 @@ export function casterCost(campaign: Campaign, sheet: CharacterSheet, spell: str
     if (save.success) {
       return { casterCost: `${sheet.name}'s mind holds against the other plane (INT save ${save.total} against DC 15).` };
     }
-    const amount = rollExpression("6d6").total;
+    const amount = rollCard(campaign, turn, sheet.id, "damage", "Contact Other Plane", "6d6", null).total;
     applyPcDamage(campaign, turn.id, getSheetById(sheet.id) ?? sheet, { amount, type: "psychic", reason: "Contact Other Plane: the mind recoils" });
     const standing = getSheetById(sheet.id);
     if (standing && !standing.deathSaves?.dead) {
