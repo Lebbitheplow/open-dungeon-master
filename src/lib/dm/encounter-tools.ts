@@ -111,6 +111,7 @@ import { handleReaperCast } from "@/lib/dm/authored-reaper";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { afflictionsAtCombatStart } from "@/lib/dm/afflictions";
 import { holdForEnemies } from "@/lib/dm/enemies-due";
+import { approachForCompanion } from "@/lib/dm/companion-approach";
 import { dmRoll } from "@/lib/dm/roll-card";
 
 // Server-authoritative combat: enemies spawn from real stat blocks, their
@@ -1362,21 +1363,26 @@ function companionAutoAct(
       }
     }
   }
+  // Out of reach: it walks to the target first, as the enemies the server
+  // plays do (src/lib/dm/companion-approach.ts).
+  const walked = approachForCompanion(campaign, live, sheet, target);
+  const mover = walked ? getSheetById(sheet.id) ?? sheet : sheet;
   const result = handlePcAttack(
     campaign,
     turn,
-    JSON.stringify({ characterId: sheet.id, targetEnemyId: target.id }),
-    [sheet],
-    new Map([[sheet.id, sheet]]),
+    JSON.stringify({ characterId: mover.id, targetEnemyId: target.id }),
+    [mover],
+    new Map([[mover.id, mover]]),
     new Set<string>(),
     null,
   );
   const note =
-    "error" in result
+    (walked ? `${walked} ` : "") +
+    ("error" in result
       ? `${sheet.name} does not attack: ${String(result.error)}`
       : result.hit
         ? `${sheet.name} attacks ${target.displayName} with ${String(result.weapon ?? "their weapon")} and hits for ${String(result.damage)} damage${result.dead ? `, slaying ${target.displayName}!` : "."}`
-        : `${sheet.name} attacks ${target.displayName} but misses.`;
+        : `${sheet.name} attacks ${target.displayName} but misses.`);
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
