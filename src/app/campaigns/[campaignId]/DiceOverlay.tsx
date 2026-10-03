@@ -204,6 +204,11 @@ export function DiceOverlay({
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
+    // A blind roll reaches the table with its faces stripped
+    // (src/lib/dm/viewer.ts): there is nothing to throw.
+    if (!latestRoll.roll.breakdown) {
+      return;
+    }
     const notations = rollToDiceBoxNotation(latestRoll.roll.breakdown);
     if (!notations) {
       return;

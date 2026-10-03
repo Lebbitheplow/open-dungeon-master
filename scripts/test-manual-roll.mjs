@@ -6,6 +6,7 @@ import {
   rollExpressionWithDice,
 } from "../src/lib/dice.ts";
 import { trayExpressionProblem } from "../src/lib/dice/tray-rules.ts";
+import { EMPTY_TRAY_POOL, TRAY_DICE_PER_KIND, trayAddDie, trayPoolExpression } from "../src/lib/dice/tray-pool.ts";
 
 let passed = 0;
 function test(name, fn) {
@@ -64,6 +65,23 @@ test("the dice tray rolls dice, with a bonus a sheet could hold", () => {
   assert.ok(trayExpressionProblem("1d20-31"));
   assert.ok(trayExpressionProblem("1d1+19"));
   assert.ok(trayExpressionProblem("drop table"));
+});
+
+test("the tray's tapped dice read as one expression it will roll", () => {
+  assert.equal(trayPoolExpression(EMPTY_TRAY_POOL), "");
+  assert.equal(trayPoolExpression({ dice: {}, bonus: 4 }), "", "a bonus alone is not a roll");
+  let pool = trayAddDie(EMPTY_TRAY_POOL, 6);
+  pool = trayAddDie(pool, 20);
+  pool = trayAddDie(pool, 6);
+  assert.equal(trayPoolExpression(pool), "1d20+2d6");
+  assert.equal(trayPoolExpression({ ...pool, bonus: 3 }), "1d20+2d6+3");
+  assert.equal(trayPoolExpression({ ...pool, bonus: -2 }), "1d20+2d6-2");
+  assert.equal(trayPoolExpression({ dice: { 100: 1 }, bonus: 99 }), "1d100+30", "the bonus stays inside the tray's limit");
+  for (let tap = 0; tap < 30; tap += 1) pool = trayAddDie(pool, 4);
+  assert.equal(pool.dice[4], TRAY_DICE_PER_KIND);
+  for (const bonus of [-30, -1, 0, 7, 30]) {
+    assert.equal(trayExpressionProblem(trayPoolExpression({ ...pool, bonus })), null, `bonus ${bonus}`);
+  }
 });
 
 console.log(`${passed} manual-roll tests passed`);

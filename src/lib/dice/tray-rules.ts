@@ -10,10 +10,9 @@
 // Pure: no database and no alias imports beyond the dice parser.
 import { rollExpression } from "../dice.ts";
 
-// The largest flat bonus the tray adds. A 20th level character with
-// expertise and a 20 in the ability reaches +17; the room above that is for
-// a magic item or a spell's bonus.
-export const TRAY_MODIFIER_LIMIT = 30;
+import { TRAY_MODIFIER_LIMIT } from "./tray-pool.ts";
+
+export { TRAY_MODIFIER_LIMIT };
 
 // Null when the expression may be rolled, otherwise the sentence to refuse
 // it with.
@@ -37,3 +36,4 @@ export function trayExpressionProblem(expression: string): string | null {
   }
   return null;
 }
+

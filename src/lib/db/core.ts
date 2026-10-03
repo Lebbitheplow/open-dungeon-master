@@ -1779,6 +1779,9 @@ function ensureSchema(db: SqliteDatabase) {
     // AC, damage expressions) the server needs when the d20 is submitted
     // (src/lib/dm/pc-attack.ts).
     ["attack_json", `TEXT`],
+    // Who may read the roll once it lands (rolls.visibility): a person's
+    // screen survives the roll being parked for real dice or a held roll.
+    ["visibility", `TEXT NOT NULL DEFAULT 'public'`],
   ]);
 
   addColumns("rolls", [

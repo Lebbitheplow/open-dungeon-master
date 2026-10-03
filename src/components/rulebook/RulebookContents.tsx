@@ -4,12 +4,12 @@ import { Bookmark, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { cn } from "@/lib/cn";
 import { stem } from "@/lib/rulebook/search";
-import type { ContentsChapter, ContentsEntry, RulebookContents as Contents, SearchHit } from "@/lib/rulebook/types";
+import type { ContentsChapter, ContentsEntry, RulebookContents as Contents, RulebookPart, SearchHit } from "@/lib/rulebook/types";
 import { Digits } from "./RulebookPage";
 
 // The left-hand page: the book's name, a search line, the rules a table
-// reaches for mid-session, the reader's bookmarks, and the contents,
-// chapter by chapter, each opening onto its pages with dotted leaders and
+// reaches for mid-session, the reader's bookmarks, and the contents, book by
+// book (players, Dungeon Master, monsters) and chapter by chapter, each opening onto its pages with dotted leaders and
 // folios. While something is typed in the search line, what it found takes
 // the contents' place.
 
@@ -156,6 +156,25 @@ export function RulebookContents({
     if (!mounted.has(id)) setMounted(new Set(mounted).add(id));
   }
 
+  // The contents in its three books, then whatever no book claims (the
+  // appendices). Every heading and chapter takes the next step of the ink-in.
+  const sections = useMemo(() => {
+    const out: Array<{ part: RulebookPart | null; delay: number; chapters: Array<{ chapter: ContentsChapter; delay: number }> }> = [];
+    const partOf = new Map<string, RulebookPart>();
+    for (const part of contents?.parts ?? []) for (const id of part.chapters) partOf.set(id, part);
+    let step = 0;
+    for (const chapter of contents?.chapters ?? []) {
+      const part = partOf.get(chapter.id) ?? null;
+      let last = out[out.length - 1];
+      if (!last || last.part !== part) {
+        last = { part, delay: part ? step++ : step, chapters: [] };
+        out.push(last);
+      }
+      last.chapters.push({ chapter, delay: step++ });
+    }
+    return out;
+  }, [contents]);
+
   const searchingNow = Boolean(query.trim());
   const shown = searchingNow && result?.query === query.trim() ? result : null;
   const marks = useMemo(() => bookmarks.map((id) => entries.get(id)).filter((entry): entry is ContentsEntry => Boolean(entry)), [bookmarks, entries]);
@@ -267,29 +286,40 @@ export function RulebookContents({
 
               <nav aria-label="Contents">
                 <p className="rb-section-label">Contents</p>
-                <ol className="rb-chapters">
-                  {contents.chapters.map((chapter, index) => {
-                    const isOpen = open.has(chapter.id);
-                    return (
-                      <li key={chapter.id} className="rb-chapter" data-open={isOpen || undefined} style={{ animationDelay: `${120 + index * 30}ms` }}>
-                        <button type="button" className="rb-chapter-row" aria-expanded={isOpen} onClick={() => toggle(chapter.id)}>
-                          <span className="rb-numeral">{chapter.numeral}</span>
-                          <span className="rb-chapter-title">
-                            <Digits text={chapter.title} />
-                          </span>
-                          <span className="rb-leader" aria-hidden="true" />
-                          <span className="rb-entry-folio">{chapter.entries[0]?.folio}</span>
-                          <ChevronRight className="rb-chevron" aria-hidden="true" />
-                        </button>
-                        <div className="rb-chapter-body">
-                          <div className="rb-chapter-inner">
-                            {mounted.has(chapter.id) ? <ChapterBody chapter={chapter} current={current} onOpen={(id) => onOpen(id)} /> : null}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
+                {sections.map((section) => (
+                  <section key={section.part?.id ?? "appendices"} className="rb-part" aria-label={section.part?.title}>
+                    {section.part ? (
+                      <header className="rb-part-head" style={{ animationDelay: `${120 + section.delay * 30}ms` }}>
+                        <p className="rb-part-numeral">Book {section.part.numeral}</p>
+                        <h3 className="rb-part-title">{section.part.title}</h3>
+                        <p className="rb-part-blurb">{section.part.blurb}</p>
+                      </header>
+                    ) : null}
+                    <ol className="rb-chapters">
+                      {section.chapters.map(({ chapter, delay }) => {
+                        const isOpen = open.has(chapter.id);
+                        return (
+                          <li key={chapter.id} className="rb-chapter" data-open={isOpen || undefined} style={{ animationDelay: `${120 + delay * 30}ms` }}>
+                            <button type="button" className="rb-chapter-row" aria-expanded={isOpen} onClick={() => toggle(chapter.id)}>
+                              <span className="rb-numeral">{chapter.numeral}</span>
+                              <span className="rb-chapter-title">
+                                <Digits text={chapter.title} />
+                              </span>
+                              <span className="rb-leader" aria-hidden="true" />
+                              <span className="rb-entry-folio">{chapter.entries[0]?.folio}</span>
+                              <ChevronRight className="rb-chevron" aria-hidden="true" />
+                            </button>
+                            <div className="rb-chapter-body">
+                              <div className="rb-chapter-inner">
+                                {mounted.has(chapter.id) ? <ChapterBody chapter={chapter} current={current} onOpen={(id) => onOpen(id)} /> : null}
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </section>
+                ))}
               </nav>
 
               <p className="rb-legal">

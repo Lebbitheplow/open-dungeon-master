@@ -520,5 +520,75 @@ await test("the dice tray throws dice: a bare number or an impossible bonus is n
   assert.equal(digital.stored(), before + 1);
 });
 
+await test("a secret roll from the tray is the roller's and the DM's, and a DM's secret roll is the DM's alone", async () => {
+  const digital = await table("digital_only");
+  const { world, who, params } = digital;
+  const seenBy = async (user, id) => {
+    world.signIn(user);
+    const listed = await call(route.rolls, "GET", undefined, params);
+    return listed.json.rolls.find((roll) => roll.id === id) ?? null;
+  };
+
+  world.signIn(who.player);
+  world.dice(14);
+  const mine = await call(route.rolls, "POST", { expression: "1d20+2", secret: true }, params);
+  assert.equal(mine.status, 201, JSON.stringify(mine.json));
+  assert.equal(mine.json.roll.visibility, "self");
+  assert.equal(mine.json.roll.total, 16, "the roller is answered with the number");
+  assert.equal(mine.json.roll.requestedBy, "player");
+  for (const user of [who.player, who.dm, who.assistant]) {
+    assert.equal((await seenBy(user, mine.json.roll.id))?.total, 16, `${user.username} reads the player's secret roll`);
+  }
+  for (const user of [who.other, who.lead, who.bare]) {
+    assert.equal(await seenBy(user, mine.json.roll.id), null, `${user.username} was shown the player's secret roll`);
+  }
+
+  world.signIn(who.dm);
+  world.dice(5);
+  const screened = await call(route.rolls, "POST", { expression: "1d6", secret: true }, params);
+  assert.equal(screened.status, 201, JSON.stringify(screened.json));
+  assert.equal(screened.json.roll.visibility, "dm");
+  assert.equal(screened.json.roll.requestedBy, "dm");
+  assert.equal(screened.json.roll.characterId, null);
+  for (const user of [who.dm, who.assistant]) {
+    assert.equal((await seenBy(user, screened.json.roll.id))?.total, 5, `${user.username} reads the DM's secret roll`);
+  }
+  for (const user of [who.player, who.other, who.lead, who.bare]) {
+    assert.equal(await seenBy(user, screened.json.roll.id), null, `${user.username} was shown the DM's secret roll`);
+  }
+
+  // A check off the sheet goes behind the screen the same way; without the
+  // flag every roll is the table's, as it always was.
+  world.signIn(who.player);
+  world.dice(9);
+  const check = await call(route.rolls, "POST", { kind: "skill_check", skill: "insight", secret: true }, params);
+  assert.equal(check.json.roll.visibility, "self");
+  world.dice(9);
+  const open = await call(route.rolls, "POST", { expression: "1d20" }, params);
+  assert.equal(open.json.roll.visibility, "public");
+  assert.equal((await seenBy(who.other, open.json.roll.id))?.total, 9);
+  assert.equal((await call(route.rolls, "POST", { expression: "1d20", secret: "yes" }, params)).status, 400);
+});
+
+await test("a roll the DM asks for behind the screen stays behind it when the player answers with real dice", async () => {
+  for (const visibility of ["dm", "self", "blind"]) {
+    const real = await table("real_allowed");
+    const { world, who, params } = real;
+    assert.equal((await real.prefer({ useRealDice: true })).status, 200);
+    const parked = await real.ask({ visibility });
+    assert.equal(parked.result.parked, true, parked.error);
+    const [pending] = real.open();
+    assert.equal(pending.visibility, visibility);
+    const answered = await real.answer(pending.id, { dice: [12] });
+    assert.equal(answered.status, 200, JSON.stringify(answered.json));
+    const landed = listRecentRolls(world.campaignId, 1)[0];
+    assert.equal(landed.visibility, visibility, `${visibility}: the answer was stored as ${landed.visibility}`);
+    world.signIn(who.other);
+    const listed = await call(route.rolls, "GET", undefined, params);
+    const seen = listed.json.rolls.find((roll) => roll.id === landed.id) ?? null;
+    assert.ok(seen === null || seen.total === null, `${visibility}: another player read ${seen?.total}`);
+  }
+});
+
 first.close();
 finish();

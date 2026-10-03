@@ -151,6 +151,8 @@ export function handleRequestRoll(
       dc: args.dc ?? null,
       reason: args.reason?.slice(0, 200) ?? "",
       targetEnemyId: args.kind === "damage" ? args.targetEnemyId ?? null : null,
+      // The screen holds while the player's dice are on their way.
+      visibility: model ? "public" : args.visibility ?? "public",
     });
     publishPersisted(campaignId, "roll_pending", { pendingRoll: publicPendingRoll(pending) });
     return {

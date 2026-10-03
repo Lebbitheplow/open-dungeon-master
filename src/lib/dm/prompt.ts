@@ -549,7 +549,10 @@ export function buildGameStateBlock(state: DmGameState): string {
     const who = rollerName(roll, sheet?.name) ?? "someone";
     const outcome =
       roll.dc === null ? "" : roll.success ? ` vs DC ${roll.dc}: success` : ` vs DC ${roll.dc}: failure`;
-    return `- ${who}: ${roll.kind.replaceAll("_", " ")}${roll.detail ? ` (${roll.detail.replaceAll("_", " ")})` : ""} rolled ${roll.total}${outcome}${roll.breakdown.crit === "nat20" ? " (natural 20)" : roll.breakdown.crit === "nat1" ? " (natural 1)" : ""}`;
+    // A roll behind the screen is the DM's to know and the table's not to:
+    // the number steers the narration and is never spoken.
+    const secret = roll.visibility === "public" ? "" : " [secret roll: let it shape what happens, never say the number]";
+    return `- ${who}: ${roll.kind.replaceAll("_", " ")}${roll.detail ? ` (${roll.detail.replaceAll("_", " ")})` : ""} rolled ${roll.total}${outcome}${roll.breakdown.crit === "nat20" ? " (natural 20)" : roll.breakdown.crit === "nat1" ? " (natural 1)" : ""}${secret}`;
   });
 
   const sections = [

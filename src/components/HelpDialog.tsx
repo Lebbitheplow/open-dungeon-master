@@ -281,7 +281,12 @@ export function HelpDialog({
       <Section icon={Dices} title="Dice">
         <p>
           Every check, save, and attack is rolled by the server, never invented by the AI. The dice
-          button in the header toggles the 3D dice animation. If you opt into real dice in the game
+          button in the header opens <span className="text-stone-300">Roll dice</span>: tap dice
+          into the tray (or type an expression such as 2d6+3), add a bonus, and roll. Turn on{" "}
+          <span className="text-stone-300">Roll in secret</span> to roll behind the screen: a DM&apos;s
+          secret roll is seen by the DM seats alone, and a player&apos;s by that player and the DM;
+          the rest of the table is not told a die was rolled. The same menu toggles the 3D dice
+          animation. If you opt into real dice in the game
           settings, the DM waits for you to enter your physical roll, with a digital fallback
           button if you would rather let the server roll.
         </p>
@@ -436,7 +441,11 @@ export function HelpDialog({
             rulebook
           </Link>{" "}
           is the whole fifth edition reference document, searchable, for the moment a rule needs
-          checking word for word; at the table it opens from the book button in the header.
+          checking word for word. Its contents are bound as three books: the players&apos; rules,
+          the Dungeon Master&apos;s, and the monsters, each holding everything the reference document
+          opens from the Player&apos;s Handbook, the Dungeon Master&apos;s Guide and the Monster Manual
+          (the rest of those books is not openly licensed). At the table it opens from the book
+          button in the header.
         </p>
       </Section>
 

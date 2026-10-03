@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { EyeOff } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { InputKind } from "@/lib/campaign-types";
@@ -270,7 +271,9 @@ export function PartyRail({
 
 // "Sera · Fire Bolt · 1d20+5 = 6 · NATURAL 1": the roll that just landed,
 // held for a few seconds where every eye already is. Ember for a natural 1,
-// gold for a 20, plain otherwise. Blind and DM-only rolls never show.
+// gold for a 20, plain otherwise. A secret roll shows only on the seats the
+// server sent its number to (the roller, the DM), stamped Secret; a blind
+// roll, whose number nobody here holds, never shows.
 const TOAST_MS = 5200;
 
 export function RollToast({
@@ -288,7 +291,7 @@ export function RollToast({
   const [seenSeq, setSeenSeq] = useState<number | null>(() => latestRoll?.seq ?? null);
   if (latestRoll && latestRoll.seq !== seenSeq) {
     setSeenSeq(latestRoll.seq);
-    if (latestRoll.roll.visibility === "public") {
+    if (latestRoll.roll.visibility === "public" || typeof latestRoll.roll.total === "number") {
       setShown(latestRoll);
     }
   }
@@ -303,8 +306,9 @@ export function RollToast({
   const { roll } = shown;
   const sheetName = roll.characterId ? sheets.find((sheet) => sheet.id === roll.characterId)?.name : undefined;
   const crit = roll.breakdown?.crit;
+  const secret = roll.visibility !== "public";
   return (
-    <div key={shown.seq} className="cine-roll" data-crit={crit ?? undefined} role="status" aria-live="polite">
+    <div key={shown.seq} className="cine-roll" data-crit={crit ?? undefined} data-secret={secret || undefined} role="status" aria-live="polite">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/assets/icons/glyph/tab-dice.webp" alt="" className="cine-roll-die" />
       <span className="cine-roll-text">
@@ -314,6 +318,12 @@ export function RollToast({
         </span>
       </span>
       {crit ? <span className="cine-roll-crit">{crit === "nat20" ? "Natural 20" : "Natural 1"}</span> : null}
+      {secret ? (
+        <span className="cine-roll-secret">
+          <EyeOff className="size-3.5" aria-hidden="true" />
+          Secret
+        </span>
+      ) : null}
       {roll.dc !== null && roll.success !== null && !crit ? (
         <span className="cine-roll-crit" data-quiet="true">{roll.success ? "Success" : "Miss"}</span>
       ) : null}

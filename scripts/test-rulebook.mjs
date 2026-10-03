@@ -77,6 +77,26 @@ try {
     assert.ok(count("monsters") + count("creatures") + count("npcs") >= 318);
   });
 
+  await test("the contents bind the chapters as the players', the Dungeon Master's and the monsters' books", () => {
+    const { parts, chapters } = rulebookContents();
+    assert.deepEqual(
+      parts.map((part) => [part.numeral, part.title, part.chapters]),
+      [
+        ["I", "Players", chapters.slice(0, 11).map((chapter) => chapter.id)],
+        ["II", "The Dungeon Master", ["running-the-game", "magic-items"]],
+        ["III", "Monsters", ["monsters", "creatures", "npcs"]],
+      ],
+    );
+    const claimed = parts.flatMap((part) => part.chapters);
+    assert.equal(new Set(claimed).size, claimed.length, "no chapter is in two books");
+    assert.deepEqual(
+      chapters.map((chapter) => chapter.id).filter((id) => !claimed.includes(id)),
+      ["appendix"],
+      "only the appendices stand outside the three books",
+    );
+    for (const part of parts) assert.match(part.blurb, /Player's Handbook|Dungeon Master's Guide|Monster Manual/);
+  });
+
   await test("folios count every page once, from 1", () => {
     const folios = rulebookContents().chapters.flatMap((chapter) => chapter.entries.map((entry) => entry.folio));
     assert.deepEqual(folios, folios.map((_, index) => index + 1));

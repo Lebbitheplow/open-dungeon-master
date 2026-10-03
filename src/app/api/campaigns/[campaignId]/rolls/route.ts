@@ -12,17 +12,20 @@ import { ABILITIES } from "@/lib/schemas/sheet";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Manual player rolls: a raw expression, or a named check/save resolved from
-// the player's own sheet.
+// Manual rolls: a raw expression, or a named check/save resolved from the
+// caller's own sheet. `secret` rolls behind the screen: a DM seat's secret
+// roll is the DM's alone ("dm"), a player's is theirs and the DM's ("self").
 const rollRequestSchema = z.union([
   z.object({
     expression: z.string().trim().min(2).max(60),
+    secret: z.boolean().default(false),
   }),
   z.object({
     kind: z.enum(["skill_check", "saving_throw", "ability_check"]),
     skill: z.string().max(40).optional(),
     ability: z.enum(ABILITIES).optional(),
     advantage: z.enum(["none", "advantage", "disadvantage"]).default("none"),
+    secret: z.boolean().default(false),
   }),
 ]);
 
@@ -121,14 +124,16 @@ export async function POST(
     );
   }
 
+  const dmSeat = capsFor(context).adjudicates;
   const roll = insertRoll({
     campaignId,
     characterId: sheet?.id ?? null,
-    requestedBy: "player",
+    requestedBy: dmSeat ? "dm" : "player",
     kind,
     detail,
     advantage,
     result,
+    visibility: input.secret ? (dmSeat ? "dm" : "self") : "public",
   });
 
   publishPersisted(campaignId, "roll_result", { roll, source: "digital" });
