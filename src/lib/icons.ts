@@ -24,14 +24,15 @@ export function iconSlug(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-// Things the engine offers that the catalogue never painted, each lent the
-// painting closest in meaning so the screen does not ask for a file that is
+// Counters the engine names apart from the class table's own wording, each
+// lent the table's painting so the screen does not ask for a file that is
 // not there (scripts/test-hand-look.mjs walks every Hand card against disk).
 const ICON_ALIASES: Record<string, { kind: IconKind; slug: string }> = {
-  "action/search": { kind: "glyph", slug: "skill-perception" },
-  "action/escape": { kind: "feature", slug: "escape-artist" },
-  "action/stand-up": { kind: "condition", slug: "prone" },
-  "feature/flurry-of-blows": { kind: "feature", slug: "martial-arts" },
+  "feature/action-surge": { kind: "feature", slug: "action-surge-1-use" },
+  "feature/bardic-inspiration": { kind: "feature", slug: "bardic-inspiration-d6" },
+  "feature/indomitable": { kind: "feature", slug: "indomitable-1-use" },
+  "feature/lay-on-hands-hp-pool": { kind: "feature", slug: "lay-on-hands" },
+  "feature/maneuver": { kind: "family", slug: "option-maneuver" },
 };
 
 export function iconPath(kind: IconKind, key: string): string {

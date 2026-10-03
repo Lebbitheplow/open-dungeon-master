@@ -65,6 +65,9 @@ const BASIC_ACTIONS = [
   ["shove", "Shove", "a palm strike pushing a figure back"],
   ["use-object", "Use an object", "a hand pulling a lever"],
   ["end-turn", "End turn", "a simple hourglass with sand run through"],
+  ["search", "Search", "a hand holding a lantern up to a dark corner, its light falling on a hidden latch"],
+  ["escape", "Escape", "a hand wrenching free of a loosening coil of rope"],
+  ["stand-up", "Stand up", "a warrior in shining silver armour rising from one knee to stand tall, a bright golden glow rising behind"],
 ];
 
 const CONDITION_SUBJECT = {
@@ -280,6 +283,75 @@ export async function buildIconList() {
       }
       list.push(entry("family", `class-${klass.id}`, klass.name, `the emblem of the ${klass.name.toLowerCase()}, a ${GENRE_WORD[genre]} character class, ${tone}`, { genre }));
     }
+  }
+
+  // Combat cards: the Hand deals a card by the name of every class counter
+  // (src/lib/srd/class-resources.ts) and every subclass spend and reaction
+  // the authored layer resolves (src/lib/srd/authored-effects.ts), and asks
+  // a few reactions by name (src/lib/battlemap/hand-react.ts). Most are
+  // subclass features the table above never names, so without these a card
+  // fell back to its class's emblem, or for a reaction showed nothing. The
+  // subclass's own line on the feature says what to paint.
+  register("./lib/register-alias.mjs", import.meta.url);
+  const { RESOURCE_DEFS } = await import("../src/lib/srd/class-resources.ts");
+  const { AUTHORED_TABLE } = await import("../src/lib/srd/authored-effects.ts");
+  const { iconPath } = await import("../src/lib/icons.ts");
+  const told = new Map();
+  for (const [classId, subclasses] of Object.entries(readJson("src/lib/srd/subclasses.json").classes)) {
+    for (const subclass of subclasses) {
+      for (const level of Object.values(subclass.levels || {})) {
+        for (const feature of level) {
+          if (!told.has(feature.n.toLowerCase())) told.set(feature.n.toLowerCase(), { classId, does: feature.d || "" });
+        }
+      }
+    }
+  }
+  const genreOf = new Map();
+  for (const genre of Object.keys(GENRE_TONE)) {
+    for (const klass of readJson(`src/lib/classes/${genre}.json`).classes) genreOf.set(klass.id, genre);
+  }
+  const cardNames = new Map();
+  const deal = (name, classId) => {
+    if (!cardNames.has(name)) cardNames.set(name, classId);
+  };
+  for (const def of RESOURCE_DEFS) {
+    if (def.passive || def.id === "ki" || def.id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
+    // An innate spell counter is named for its spell, painted as a spell.
+    if (spells.some((s) => s.n.toLowerCase() === def.displayName.toLowerCase())) continue;
+    deal(def.displayName, def.classIds?.[0] ?? def.grantedBy?.[0] ?? null);
+  }
+  for (const [key, entry] of Object.entries(AUTHORED_TABLE)) {
+    const classId = key.split("::")[0];
+    for (const spend of entry.spends ?? []) {
+      if (spend.fight !== "out" && spend.does.kind !== "choose") deal(spend.name, classId);
+    }
+    for (const reaction of entry.reactions ?? []) deal(reaction.name, classId);
+  }
+  for (const [name, classId] of [["Flurry of Blows", "monk"], ["Uncanny Dodge", "rogue"], ["Deflect Missiles", "monk"], ["Slow Fall", "monk"], ["Cutting Words", "bard"], ["Protection", "fighter"]]) {
+    deal(name, classId);
+  }
+  for (const [name, dealtBy] of cardNames) {
+    const slug = slugify(name);
+    // Seen already, or lent a painting on purpose (src/lib/icons.ts aliases).
+    if (seen.has(name) || list.some((e) => e.id === `feature-${slug}`)) continue;
+    if (iconPath("feature", name) !== `/assets/icons/feature/${slug}.webp`) continue;
+    seen.add(name);
+    const lore = told.get(name.toLowerCase());
+    const classId = dealtBy ?? lore?.classId ?? null;
+    const tone = CLASS_TONE[classId] || GENRE_TONE[genreOf.get(classId)] || "steel and gold";
+    // What it does, without the bookkeeping (uses, rests, bonuses) that
+    // gives the model nothing to paint.
+    const does = (lore?.does ?? "")
+      .split(/(?<=\.)\s/)[0]
+      .replace(/\.$/, "")
+      .split(", ")
+      .filter((part) => !/\b(rest|times|proficiency|modifier|once|per|bonus action|reaction)\b/i.test(part))
+      .join(", ")
+      .toLowerCase();
+    const subject = does
+      ? `a symbolic icon representing a ${genreOf.has(classId) ? classId.replace(/_/g, " ") : classId || "hero"}'s ability that does this: ${does}, ${tone}, a wordless pictogram, pure imagery of what it does`
+      : `a symbolic icon representing the ${classId || "hero"} class ability ${name}, ${tone}, a wordless pictogram, pure imagery of what it does`;
+    list.push(entry("feature", name, name, subject, { classId, ...(genreOf.has(classId) ? { genre: genreOf.get(classId) } : {}) }));
   }
 
   // Sheet, log and picker glyphs: skills, abilities, coins, dice, rests,

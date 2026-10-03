@@ -16588,6 +16588,2753 @@
       "seed": 692310170
     },
     {
+      "id": "feature-sorcery-points",
+      "group": "feature",
+      "key": "Sorcery Points",
+      "label": "Sorcery Points",
+      "src": "/assets/icons/feature/sorcery-points.webp",
+      "bytes": 2476,
+      "seed": 64461899,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-breath-weapon",
+      "group": "feature",
+      "key": "Breath Weapon",
+      "label": "Breath Weapon",
+      "src": "/assets/icons/feature/breath-weapon.webp",
+      "bytes": 3922,
+      "seed": 2031122529
+    },
+    {
+      "id": "feature-wholeness-of-body",
+      "group": "feature",
+      "key": "Wholeness of Body",
+      "label": "Wholeness of Body",
+      "src": "/assets/icons/feature/wholeness-of-body.webp",
+      "bytes": 3996,
+      "seed": 2108966465,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-dark-ones-own-luck",
+      "group": "feature",
+      "key": "Dark One's Own Luck",
+      "label": "Dark One's Own Luck",
+      "src": "/assets/icons/feature/dark-ones-own-luck.webp",
+      "bytes": 6256,
+      "seed": 1920917908,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-hurl-through-hell",
+      "group": "feature",
+      "key": "Hurl Through Hell",
+      "label": "Hurl Through Hell",
+      "src": "/assets/icons/feature/hurl-through-hell.webp",
+      "bytes": 3498,
+      "seed": 298347639,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-daemon-swarm",
+      "group": "feature",
+      "key": "Daemon Swarm",
+      "label": "Daemon Swarm",
+      "src": "/assets/icons/feature/daemon-swarm.webp",
+      "bytes": 6970,
+      "seed": 1411764661,
+      "classId": "netrunner"
+    },
+    {
+      "id": "feature-one-more-dawn",
+      "group": "feature",
+      "key": "One More Dawn",
+      "label": "One More Dawn",
+      "src": "/assets/icons/feature/one-more-dawn.webp",
+      "bytes": 9020,
+      "seed": 2016112291,
+      "classId": "trauma_doc"
+    },
+    {
+      "id": "feature-oracle-of-the-streets",
+      "group": "feature",
+      "key": "Oracle of the Streets",
+      "label": "Oracle of the Streets",
+      "src": "/assets/icons/feature/oracle-of-the-streets.webp",
+      "bytes": 5854,
+      "seed": 377766727,
+      "classId": "fixer"
+    },
+    {
+      "id": "feature-storm-of-blades",
+      "group": "feature",
+      "key": "Storm of Blades",
+      "label": "Storm of Blades",
+      "src": "/assets/icons/feature/storm-of-blades.webp",
+      "bytes": 5506,
+      "seed": 1837977419,
+      "classId": "street_samurai"
+    },
+    {
+      "id": "feature-synaptic-overload",
+      "group": "feature",
+      "key": "Synaptic Overload",
+      "label": "Synaptic Overload",
+      "src": "/assets/icons/feature/synaptic-overload.webp",
+      "bytes": 4188,
+      "seed": 2059730059,
+      "classId": "esper"
+    },
+    {
+      "id": "feature-candle-in-the-dark",
+      "group": "feature",
+      "key": "Candle in the Dark",
+      "label": "Candle in the Dark",
+      "src": "/assets/icons/feature/candle-in-the-dark.webp",
+      "bytes": 3170,
+      "seed": 1410138892,
+      "classId": "witch_hunter"
+    },
+    {
+      "id": "feature-crowsight-network",
+      "group": "feature",
+      "key": "Crowsight Network",
+      "label": "Crowsight Network",
+      "src": "/assets/icons/feature/crowsight-network.webp",
+      "bytes": 1662,
+      "seed": 500245499,
+      "classId": "plague_doctor"
+    },
+    {
+      "id": "feature-elegy-of-echoes",
+      "group": "feature",
+      "key": "Elegy of Echoes",
+      "label": "Elegy of Echoes",
+      "src": "/assets/icons/feature/elegy-of-echoes.webp",
+      "bytes": 3396,
+      "seed": 1992340080,
+      "classId": "dirgesinger"
+    },
+    {
+      "id": "feature-flashfire-litany",
+      "group": "feature",
+      "key": "Flashfire Litany",
+      "label": "Flashfire Litany",
+      "src": "/assets/icons/feature/flashfire-litany.webp",
+      "bytes": 2916,
+      "seed": 704522389,
+      "classId": "witch_hunter"
+    },
+    {
+      "id": "feature-garden-of-grief",
+      "group": "feature",
+      "key": "Garden of Grief",
+      "label": "Garden of Grief",
+      "src": "/assets/icons/feature/garden-of-grief.webp",
+      "bytes": 2532,
+      "seed": 1121280575,
+      "classId": "grave_knight"
+    },
+    {
+      "id": "feature-immolate-the-sin",
+      "group": "feature",
+      "key": "Immolate the Sin",
+      "label": "Immolate the Sin",
+      "src": "/assets/icons/feature/immolate-the-sin.webp",
+      "bytes": 2788,
+      "seed": 1596060751,
+      "classId": "penitent"
+    },
+    {
+      "id": "feature-murder-of-crows",
+      "group": "feature",
+      "key": "Murder of Crows",
+      "label": "Murder of Crows",
+      "src": "/assets/icons/feature/murder-of-crows.webp",
+      "bytes": 2330,
+      "seed": 1786547874,
+      "classId": "plague_doctor"
+    },
+    {
+      "id": "feature-petal-fall",
+      "group": "feature",
+      "key": "Petal Fall",
+      "label": "Petal Fall",
+      "src": "/assets/icons/feature/petal-fall.webp",
+      "bytes": 2962,
+      "seed": 1787857090,
+      "classId": "grave_knight"
+    },
+    {
+      "id": "feature-the-crown-descends",
+      "group": "feature",
+      "key": "The Crown Descends",
+      "label": "The Crown Descends",
+      "src": "/assets/icons/feature/the-crown-descends.webp",
+      "bytes": 3844,
+      "seed": 63440104,
+      "classId": "vermin_lord"
+    },
+    {
+      "id": "feature-the-flame-that-judges",
+      "group": "feature",
+      "key": "The Flame That Judges",
+      "label": "The Flame That Judges",
+      "src": "/assets/icons/feature/the-flame-that-judges.webp",
+      "bytes": 3198,
+      "seed": 575961961,
+      "classId": "witch_hunter"
+    },
+    {
+      "id": "feature-the-flock-remembers",
+      "group": "feature",
+      "key": "The Flock Remembers",
+      "label": "The Flock Remembers",
+      "src": "/assets/icons/feature/the-flock-remembers.webp",
+      "bytes": 2190,
+      "seed": 728920610,
+      "classId": "plague_doctor"
+    },
+    {
+      "id": "feature-the-last-rose",
+      "group": "feature",
+      "key": "The Last Rose",
+      "label": "The Last Rose",
+      "src": "/assets/icons/feature/the-last-rose.webp",
+      "bytes": 4088,
+      "seed": 541111667,
+      "classId": "grave_knight"
+    },
+    {
+      "id": "feature-the-rite-completed",
+      "group": "feature",
+      "key": "The Rite Completed",
+      "label": "The Rite Completed",
+      "src": "/assets/icons/feature/the-rite-completed.webp",
+      "bytes": 4916,
+      "seed": 36741832,
+      "classId": "dirgesinger"
+    },
+    {
+      "id": "feature-voice-like-embers",
+      "group": "feature",
+      "key": "Voice Like Embers",
+      "label": "Voice Like Embers",
+      "src": "/assets/icons/feature/voice-like-embers.webp",
+      "bytes": 4022,
+      "seed": 358285617,
+      "classId": "penitent"
+    },
+    {
+      "id": "feature-beyond-the-veil",
+      "group": "feature",
+      "key": "Beyond the Veil",
+      "label": "Beyond the Veil",
+      "src": "/assets/icons/feature/beyond-the-veil.webp",
+      "bytes": 4982,
+      "seed": 1661281201,
+      "classId": "parapsychologist"
+    },
+    {
+      "id": "feature-bitter-endurance",
+      "group": "feature",
+      "key": "Bitter Endurance",
+      "label": "Bitter Endurance",
+      "src": "/assets/icons/feature/bitter-endurance.webp",
+      "bytes": 2482,
+      "seed": 739698243,
+      "classId": "survivor"
+    },
+    {
+      "id": "feature-controlled-manifestation",
+      "group": "feature",
+      "key": "Controlled Manifestation",
+      "label": "Controlled Manifestation",
+      "src": "/assets/icons/feature/controlled-manifestation.webp",
+      "bytes": 2858,
+      "seed": 1493404257,
+      "classId": "parapsychologist"
+    },
+    {
+      "id": "feature-quiet-the-voices",
+      "group": "feature",
+      "key": "Quiet the Voices",
+      "label": "Quiet the Voices",
+      "src": "/assets/icons/feature/quiet-the-voices.webp",
+      "bytes": 2408,
+      "seed": 116163342,
+      "classId": "occultist"
+    },
+    {
+      "id": "feature-ritual-echo",
+      "group": "feature",
+      "key": "Ritual Echo",
+      "label": "Ritual Echo",
+      "src": "/assets/icons/feature/ritual-echo.webp",
+      "bytes": 3676,
+      "seed": 1530910608,
+      "classId": "apostate"
+    },
+    {
+      "id": "feature-seance-protocol",
+      "group": "feature",
+      "key": "Séance Protocol",
+      "label": "Séance Protocol",
+      "src": "/assets/icons/feature/seance-protocol.webp",
+      "bytes": 3868,
+      "seed": 1136045278,
+      "classId": "parapsychologist"
+    },
+    {
+      "id": "feature-stitch-the-tear",
+      "group": "feature",
+      "key": "Stitch the Tear",
+      "label": "Stitch the Tear",
+      "src": "/assets/icons/feature/stitch-the-tear.webp",
+      "bytes": 4500,
+      "seed": 839875167,
+      "classId": "occultist"
+    },
+    {
+      "id": "feature-the-last-candle",
+      "group": "feature",
+      "key": "The Last Candle",
+      "label": "The Last Candle",
+      "src": "/assets/icons/feature/the-last-candle.webp",
+      "bytes": 1536,
+      "seed": 1491257124,
+      "classId": "exorcist"
+    },
+    {
+      "id": "feature-the-stake-remembers",
+      "group": "feature",
+      "key": "The Stake Remembers",
+      "label": "The Stake Remembers",
+      "src": "/assets/icons/feature/the-stake-remembers.webp",
+      "bytes": 4976,
+      "seed": 178226897,
+      "classId": "slayer"
+    },
+    {
+      "id": "feature-walk-between",
+      "group": "feature",
+      "key": "Walk Between",
+      "label": "Walk Between",
+      "src": "/assets/icons/feature/walk-between.webp",
+      "bytes": 3784,
+      "seed": 2108576425,
+      "classId": "occultist"
+    },
+    {
+      "id": "feature-archetype-made-flesh",
+      "group": "feature",
+      "key": "Archetype Made Flesh",
+      "label": "Archetype Made Flesh",
+      "src": "/assets/icons/feature/archetype-made-flesh.webp",
+      "bytes": 2636,
+      "seed": 98185754,
+      "classId": "alienist"
+    },
+    {
+      "id": "feature-dream-logic",
+      "group": "feature",
+      "key": "Dream Logic",
+      "label": "Dream Logic",
+      "src": "/assets/icons/feature/dream-logic.webp",
+      "bytes": 5638,
+      "seed": 1049056432,
+      "classId": "alienist"
+    },
+    {
+      "id": "feature-ectoplasmic-shield",
+      "group": "feature",
+      "key": "Ectoplasmic Shield",
+      "label": "Ectoplasmic Shield",
+      "src": "/assets/icons/feature/ectoplasmic-shield.webp",
+      "bytes": 2192,
+      "seed": 673683010,
+      "classId": "spirit_medium"
+    },
+    {
+      "id": "feature-general-strike",
+      "group": "feature",
+      "key": "General Strike",
+      "label": "General Strike",
+      "src": "/assets/icons/feature/general-strike.webp",
+      "bytes": 4286,
+      "seed": 139274973,
+      "classId": "enforcer"
+    },
+    {
+      "id": "feature-house-of-cards",
+      "group": "feature",
+      "key": "House of Cards",
+      "label": "House of Cards",
+      "src": "/assets/icons/feature/house-of-cards.webp",
+      "bytes": 1414,
+      "seed": 1766627768,
+      "classId": "grifter"
+    },
+    {
+      "id": "feature-projection",
+      "group": "feature",
+      "key": "Projection",
+      "label": "Projection",
+      "src": "/assets/icons/feature/projection.webp",
+      "bytes": 2026,
+      "seed": 769521278,
+      "classId": "alienist"
+    },
+    {
+      "id": "feature-rally-the-line",
+      "group": "feature",
+      "key": "Rally the Line",
+      "label": "Rally the Line",
+      "src": "/assets/icons/feature/rally-the-line.webp",
+      "bytes": 1284,
+      "seed": 976721459,
+      "classId": "enforcer"
+    },
+    {
+      "id": "feature-second-sight",
+      "group": "feature",
+      "key": "Second Sight",
+      "label": "Second Sight",
+      "src": "/assets/icons/feature/second-sight.webp",
+      "bytes": 2078,
+      "seed": 1545047249,
+      "classId": "spirit_medium"
+    },
+    {
+      "id": "feature-shared-subconscious",
+      "group": "feature",
+      "key": "Shared Subconscious",
+      "label": "Shared Subconscious",
+      "src": "/assets/icons/feature/shared-subconscious.webp",
+      "bytes": 2786,
+      "seed": 1762312036,
+      "classId": "alienist"
+    },
+    {
+      "id": "feature-syndicated",
+      "group": "feature",
+      "key": "Syndicated",
+      "label": "Syndicated",
+      "src": "/assets/icons/feature/syndicated.webp",
+      "bytes": 2204,
+      "seed": 1813127611,
+      "classId": "muckraker"
+    },
+    {
+      "id": "feature-the-editors-desk",
+      "group": "feature",
+      "key": "The Editor's Desk",
+      "label": "The Editor's Desk",
+      "src": "/assets/icons/feature/the-editors-desk.webp",
+      "bytes": 3830,
+      "seed": 2099234107,
+      "classId": "muckraker"
+    },
+    {
+      "id": "feature-the-game-afoot",
+      "group": "feature",
+      "key": "The Game Afoot",
+      "label": "The Game Afoot",
+      "src": "/assets/icons/feature/the-game-afoot.webp",
+      "bytes": 1504,
+      "seed": 1092127746,
+      "classId": "detective"
+    },
+    {
+      "id": "feature-trance-of-the-crossing",
+      "group": "feature",
+      "key": "Trance of the Crossing",
+      "label": "Trance of the Crossing",
+      "src": "/assets/icons/feature/trance-of-the-crossing.webp",
+      "bytes": 2254,
+      "seed": 985339250,
+      "classId": "spirit_medium"
+    },
+    {
+      "id": "feature-collapse-instinct",
+      "group": "feature",
+      "key": "Collapse Instinct",
+      "label": "Collapse Instinct",
+      "src": "/assets/icons/feature/collapse-instinct.webp",
+      "bytes": 2834,
+      "seed": 558214496,
+      "classId": "scavenger"
+    },
+    {
+      "id": "feature-dawnlight",
+      "group": "feature",
+      "key": "Dawnlight",
+      "label": "Dawnlight",
+      "src": "/assets/icons/feature/dawnlight.webp",
+      "bytes": 3158,
+      "seed": 123574878,
+      "classId": "waste_preacher"
+    },
+    {
+      "id": "feature-halo-of-the-core",
+      "group": "feature",
+      "key": "Halo of the Core",
+      "label": "Halo of the Core",
+      "src": "/assets/icons/feature/halo-of-the-core.webp",
+      "bytes": 3362,
+      "seed": 1264294155,
+      "classId": "salvage_tech"
+    },
+    {
+      "id": "feature-last-ride-of-the-reaver",
+      "group": "feature",
+      "key": "Last Ride of the Reaver",
+      "label": "Last Ride of the Reaver",
+      "src": "/assets/icons/feature/last-ride-of-the-reaver.webp",
+      "bytes": 3408,
+      "seed": 1298477248,
+      "classId": "road_warrior"
+    },
+    {
+      "id": "feature-legend-of-the-pack",
+      "group": "feature",
+      "key": "Legend of the Pack",
+      "label": "Legend of the Pack",
+      "src": "/assets/icons/feature/legend-of-the-pack.webp",
+      "bytes": 1804,
+      "seed": 143710980,
+      "classId": "packmaster"
+    },
+    {
+      "id": "feature-second-sun",
+      "group": "feature",
+      "key": "Second Sun",
+      "label": "Second Sun",
+      "src": "/assets/icons/feature/second-sun.webp",
+      "bytes": 2842,
+      "seed": 1440018836,
+      "classId": "salvage_tech"
+    },
+    {
+      "id": "feature-shared-fury",
+      "group": "feature",
+      "key": "Shared Fury",
+      "label": "Shared Fury",
+      "src": "/assets/icons/feature/shared-fury.webp",
+      "bytes": 4486,
+      "seed": 922465929,
+      "classId": "packmaster"
+    },
+    {
+      "id": "feature-splintered-form",
+      "group": "feature",
+      "key": "Splintered Form",
+      "label": "Splintered Form",
+      "src": "/assets/icons/feature/splintered-form.webp",
+      "bytes": 3638,
+      "seed": 2006139421,
+      "classId": "aberrant"
+    },
+    {
+      "id": "feature-stand-at-the-dawn",
+      "group": "feature",
+      "key": "Stand at the Dawn",
+      "label": "Stand at the Dawn",
+      "src": "/assets/icons/feature/stand-at-the-dawn.webp",
+      "bytes": 2392,
+      "seed": 1666621733,
+      "classId": "waste_preacher"
+    },
+    {
+      "id": "feature-arc-coil",
+      "group": "feature",
+      "key": "Arc Coil",
+      "label": "Arc Coil",
+      "src": "/assets/icons/feature/arc-coil.webp",
+      "bytes": 3544,
+      "seed": 1220915684,
+      "classId": "gadgeteer"
+    },
+    {
+      "id": "feature-broadside",
+      "group": "feature",
+      "key": "Broadside",
+      "label": "Broadside",
+      "src": "/assets/icons/feature/broadside.webp",
+      "bytes": 2606,
+      "seed": 839989200,
+      "classId": "aeronaut"
+    },
+    {
+      "id": "feature-chain-arc",
+      "group": "feature",
+      "key": "Chain Arc",
+      "label": "Chain Arc",
+      "src": "/assets/icons/feature/chain-arc.webp",
+      "bytes": 2450,
+      "seed": 1720579301,
+      "classId": "aether_channeler"
+    },
+    {
+      "id": "feature-dissolving-mist",
+      "group": "feature",
+      "key": "Dissolving Mist",
+      "label": "Dissolving Mist",
+      "src": "/assets/icons/feature/dissolving-mist.webp",
+      "bytes": 3580,
+      "seed": 928529035,
+      "classId": "alchemist"
+    },
+    {
+      "id": "feature-gear-swarm",
+      "group": "feature",
+      "key": "Gear Swarm",
+      "label": "Gear Swarm",
+      "src": "/assets/icons/feature/gear-swarm.webp",
+      "bytes": 3036,
+      "seed": 760750863,
+      "classId": "machinist"
+    },
+    {
+      "id": "feature-tempest-shell",
+      "group": "feature",
+      "key": "Tempest Shell",
+      "label": "Tempest Shell",
+      "src": "/assets/icons/feature/tempest-shell.webp",
+      "bytes": 2172,
+      "seed": 1711141110,
+      "classId": "aether_channeler"
+    },
+    {
+      "id": "feature-terror-of-the-trade-winds",
+      "group": "feature",
+      "key": "Terror of the Trade Winds",
+      "label": "Terror of the Trade Winds",
+      "src": "/assets/icons/feature/terror-of-the-trade-winds.webp",
+      "bytes": 3900,
+      "seed": 1471207684,
+      "classId": "aeronaut"
+    },
+    {
+      "id": "feature-the-great-work-walks",
+      "group": "feature",
+      "key": "The Great Work Walks",
+      "label": "The Great Work Walks",
+      "src": "/assets/icons/feature/the-great-work-walks.webp",
+      "bytes": 3494,
+      "seed": 1911544916,
+      "classId": "machinist"
+    },
+    {
+      "id": "feature-unbreakable-vanguard",
+      "group": "feature",
+      "key": "Unbreakable Vanguard",
+      "label": "Unbreakable Vanguard",
+      "src": "/assets/icons/feature/unbreakable-vanguard.webp",
+      "bytes": 2620,
+      "seed": 1147560603,
+      "classId": "steam_knight"
+    },
+    {
+      "id": "feature-vitriol-ampoule",
+      "group": "feature",
+      "key": "Vitriol Ampoule",
+      "label": "Vitriol Ampoule",
+      "src": "/assets/icons/feature/vitriol-ampoule.webp",
+      "bytes": 2040,
+      "seed": 1871919929,
+      "classId": "alchemist"
+    },
+    {
+      "id": "feature-psionic-energy-dice",
+      "group": "feature",
+      "key": "Psionic Energy Dice",
+      "label": "Psionic Energy Dice",
+      "src": "/assets/icons/feature/psionic-energy-dice.webp",
+      "bytes": 6070,
+      "seed": 749964441
+    },
+    {
+      "id": "feature-fighting-spirit",
+      "group": "feature",
+      "key": "Fighting Spirit",
+      "label": "Fighting Spirit",
+      "src": "/assets/icons/feature/fighting-spirit.webp",
+      "bytes": 4714,
+      "seed": 166705781,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-giants-might",
+      "group": "feature",
+      "key": "Giant's Might",
+      "label": "Giant's Might",
+      "src": "/assets/icons/feature/giants-might.webp",
+      "bytes": 1938,
+      "seed": 1393194113,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-runic-shield",
+      "group": "feature",
+      "key": "Runic Shield",
+      "label": "Runic Shield",
+      "src": "/assets/icons/feature/runic-shield.webp",
+      "bytes": 2504,
+      "seed": 583789473,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-unleash-incarnation",
+      "group": "feature",
+      "key": "Unleash Incarnation",
+      "label": "Unleash Incarnation",
+      "src": "/assets/icons/feature/unleash-incarnation.webp",
+      "bytes": 3456,
+      "seed": 585592600,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-reclaim-potential",
+      "group": "feature",
+      "key": "Reclaim Potential",
+      "label": "Reclaim Potential",
+      "src": "/assets/icons/feature/reclaim-potential.webp",
+      "bytes": 1764,
+      "seed": 337142613,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-shadow-martyr",
+      "group": "feature",
+      "key": "Shadow Martyr",
+      "label": "Shadow Martyr",
+      "src": "/assets/icons/feature/shadow-martyr.webp",
+      "bytes": 2292,
+      "seed": 1267551393,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-warding-maneuver",
+      "group": "feature",
+      "key": "Warding Maneuver",
+      "label": "Warding Maneuver",
+      "src": "/assets/icons/feature/warding-maneuver.webp",
+      "bytes": 3848,
+      "seed": 655869554,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-strength-before-death",
+      "group": "feature",
+      "key": "Strength before Death",
+      "label": "Strength before Death",
+      "src": "/assets/icons/feature/strength-before-death.webp",
+      "bytes": 2568,
+      "seed": 1619720474,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-arcane-shot",
+      "group": "feature",
+      "key": "Arcane Shot",
+      "label": "Arcane Shot",
+      "src": "/assets/icons/feature/arcane-shot.webp",
+      "bytes": 2040,
+      "seed": 2029713137,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-warding-flare",
+      "group": "feature",
+      "key": "Warding Flare",
+      "label": "Warding Flare",
+      "src": "/assets/icons/feature/warding-flare.webp",
+      "bytes": 4506,
+      "seed": 1819559364,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-wrath-of-the-storm",
+      "group": "feature",
+      "key": "Wrath of the Storm",
+      "label": "Wrath of the Storm",
+      "src": "/assets/icons/feature/wrath-of-the-storm.webp",
+      "bytes": 4876,
+      "seed": 2074351877,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-war-priest",
+      "group": "feature",
+      "key": "War Priest",
+      "label": "War Priest",
+      "src": "/assets/icons/feature/war-priest.webp",
+      "bytes": 1856,
+      "seed": 749565131,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-eyes-of-the-grave",
+      "group": "feature",
+      "key": "Eyes of the Grave",
+      "label": "Eyes of the Grave",
+      "src": "/assets/icons/feature/eyes-of-the-grave.webp",
+      "bytes": 2996,
+      "seed": 881033242,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-sentinel-at-deaths-door",
+      "group": "feature",
+      "key": "Sentinel at Death's Door",
+      "label": "Sentinel at Death's Door",
+      "src": "/assets/icons/feature/sentinel-at-deaths-door.webp",
+      "bytes": 3514,
+      "seed": 348563761,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-eyes-of-night",
+      "group": "feature",
+      "key": "Eyes of Night",
+      "label": "Eyes of Night",
+      "src": "/assets/icons/feature/eyes-of-night.webp",
+      "bytes": 3164,
+      "seed": 1153895632,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-steps-of-night",
+      "group": "feature",
+      "key": "Steps of Night",
+      "label": "Steps of Night",
+      "src": "/assets/icons/feature/steps-of-night.webp",
+      "bytes": 2574,
+      "seed": 829660964,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-balm-of-the-summer-court",
+      "group": "feature",
+      "key": "Balm of the Summer Court",
+      "label": "Balm of the Summer Court",
+      "src": "/assets/icons/feature/balm-of-the-summer-court.webp",
+      "bytes": 4488,
+      "seed": 58118511,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-hidden-paths",
+      "group": "feature",
+      "key": "Hidden Paths",
+      "label": "Hidden Paths",
+      "src": "/assets/icons/feature/hidden-paths.webp",
+      "bytes": 3038,
+      "seed": 1885518925,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-spirit-totem",
+      "group": "feature",
+      "key": "Spirit Totem",
+      "label": "Spirit Totem",
+      "src": "/assets/icons/feature/spirit-totem.webp",
+      "bytes": 4104,
+      "seed": 1269264885,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-faithful-summons",
+      "group": "feature",
+      "key": "Faithful Summons",
+      "label": "Faithful Summons",
+      "src": "/assets/icons/feature/faithful-summons.webp",
+      "bytes": 5292,
+      "seed": 974687291,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-fungal-infestation",
+      "group": "feature",
+      "key": "Fungal Infestation",
+      "label": "Fungal Infestation",
+      "src": "/assets/icons/feature/fungal-infestation.webp",
+      "bytes": 4768,
+      "seed": 1741234309,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-star-map",
+      "group": "feature",
+      "key": "Star Map",
+      "label": "Star Map",
+      "src": "/assets/icons/feature/star-map.webp",
+      "bytes": 4754,
+      "seed": 1488233672,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-cosmic-omen",
+      "group": "feature",
+      "key": "Cosmic Omen",
+      "label": "Cosmic Omen",
+      "src": "/assets/icons/feature/cosmic-omen.webp",
+      "bytes": 5898,
+      "seed": 871094978,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-blazing-revival",
+      "group": "feature",
+      "key": "Blazing Revival",
+      "label": "Blazing Revival",
+      "src": "/assets/icons/feature/blazing-revival.webp",
+      "bytes": 6856,
+      "seed": 1092182062,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-walker-in-dreams",
+      "group": "feature",
+      "key": "Walker in Dreams",
+      "label": "Walker in Dreams",
+      "src": "/assets/icons/feature/walker-in-dreams.webp",
+      "bytes": 3380,
+      "seed": 1388923834,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-enthralling-performance",
+      "group": "feature",
+      "key": "Enthralling Performance",
+      "label": "Enthralling Performance",
+      "src": "/assets/icons/feature/enthralling-performance.webp",
+      "bytes": 1834,
+      "seed": 2015485385,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-mantle-of-majesty",
+      "group": "feature",
+      "key": "Mantle of Majesty",
+      "label": "Mantle of Majesty",
+      "src": "/assets/icons/feature/mantle-of-majesty.webp",
+      "bytes": 2102,
+      "seed": 1210134458,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-unbreakable-majesty",
+      "group": "feature",
+      "key": "Unbreakable Majesty",
+      "label": "Unbreakable Majesty",
+      "src": "/assets/icons/feature/unbreakable-majesty.webp",
+      "bytes": 2298,
+      "seed": 1434320452,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-words-of-terror",
+      "group": "feature",
+      "key": "Words of Terror",
+      "label": "Words of Terror",
+      "src": "/assets/icons/feature/words-of-terror.webp",
+      "bytes": 1646,
+      "seed": 1227654763,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-mantle-of-whispers",
+      "group": "feature",
+      "key": "Mantle of Whispers",
+      "label": "Mantle of Whispers",
+      "src": "/assets/icons/feature/mantle-of-whispers.webp",
+      "bytes": 1916,
+      "seed": 1719972341,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-shadow-lore",
+      "group": "feature",
+      "key": "Shadow Lore",
+      "label": "Shadow Lore",
+      "src": "/assets/icons/feature/shadow-lore.webp",
+      "bytes": 4396,
+      "seed": 1592995862,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-infectious-inspiration",
+      "group": "feature",
+      "key": "Infectious Inspiration",
+      "label": "Infectious Inspiration",
+      "src": "/assets/icons/feature/infectious-inspiration.webp",
+      "bytes": 2344,
+      "seed": 1888800837,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-performance-of-creation",
+      "group": "feature",
+      "key": "Performance of Creation",
+      "label": "Performance of Creation",
+      "src": "/assets/icons/feature/performance-of-creation.webp",
+      "bytes": 1572,
+      "seed": 2143141738,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-animating-performance",
+      "group": "feature",
+      "key": "Animating Performance",
+      "label": "Animating Performance",
+      "src": "/assets/icons/feature/animating-performance.webp",
+      "bytes": 2396,
+      "seed": 1631712379,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-spirit-session",
+      "group": "feature",
+      "key": "Spirit Session",
+      "label": "Spirit Session",
+      "src": "/assets/icons/feature/spirit-session.webp",
+      "bytes": 3830,
+      "seed": 2116242112,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-zealous-presence",
+      "group": "feature",
+      "key": "Zealous Presence",
+      "label": "Zealous Presence",
+      "src": "/assets/icons/feature/zealous-presence.webp",
+      "bytes": 2224,
+      "seed": 647493518,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-consult-the-spirits",
+      "group": "feature",
+      "key": "Consult the Spirits",
+      "label": "Consult the Spirits",
+      "src": "/assets/icons/feature/consult-the-spirits.webp",
+      "bytes": 4048,
+      "seed": 10567897,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-magic-awareness",
+      "group": "feature",
+      "key": "Magic Awareness",
+      "label": "Magic Awareness",
+      "src": "/assets/icons/feature/magic-awareness.webp",
+      "bytes": 1632,
+      "seed": 652665719,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-bolstering-magic",
+      "group": "feature",
+      "key": "Bolstering Magic",
+      "label": "Bolstering Magic",
+      "src": "/assets/icons/feature/bolstering-magic.webp",
+      "bytes": 3296,
+      "seed": 2143090265,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-infectious-fury",
+      "group": "feature",
+      "key": "Infectious Fury",
+      "label": "Infectious Fury",
+      "src": "/assets/icons/feature/infectious-fury.webp",
+      "bytes": 2632,
+      "seed": 2027123741,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-call-the-hunt",
+      "group": "feature",
+      "key": "Call the Hunt",
+      "label": "Call the Hunt",
+      "src": "/assets/icons/feature/call-the-hunt.webp",
+      "bytes": 1788,
+      "seed": 758826013,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-hexblades-curse",
+      "group": "feature",
+      "key": "Hexblade's Curse",
+      "label": "Hexblade's Curse",
+      "src": "/assets/icons/feature/hexblades-curse.webp",
+      "bytes": 2880,
+      "seed": 165710322,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-fey-presence",
+      "group": "feature",
+      "key": "Fey Presence",
+      "label": "Fey Presence",
+      "src": "/assets/icons/feature/fey-presence.webp",
+      "bytes": 2198,
+      "seed": 1123042762,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-misty-escape",
+      "group": "feature",
+      "key": "Misty Escape",
+      "label": "Misty Escape",
+      "src": "/assets/icons/feature/misty-escape.webp",
+      "bytes": 2242,
+      "seed": 1603199124,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-entropic-ward",
+      "group": "feature",
+      "key": "Entropic Ward",
+      "label": "Entropic Ward",
+      "src": "/assets/icons/feature/entropic-ward.webp",
+      "bytes": 2576,
+      "seed": 1609477751,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-healing-light",
+      "group": "feature",
+      "key": "Healing Light",
+      "label": "Healing Light",
+      "src": "/assets/icons/feature/healing-light.webp",
+      "bytes": 3204,
+      "seed": 1173601420,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-searing-vengeance",
+      "group": "feature",
+      "key": "Searing Vengeance",
+      "label": "Searing Vengeance",
+      "src": "/assets/icons/feature/searing-vengeance.webp",
+      "bytes": 2256,
+      "seed": 910397059,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-accursed-specter",
+      "group": "feature",
+      "key": "Accursed Specter",
+      "label": "Accursed Specter",
+      "src": "/assets/icons/feature/accursed-specter.webp",
+      "bytes": 2252,
+      "seed": 362405874,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-tentacle-of-the-deep",
+      "group": "feature",
+      "key": "Tentacle of the Deep",
+      "label": "Tentacle of the Deep",
+      "src": "/assets/icons/feature/tentacle-of-the-deep.webp",
+      "bytes": 3084,
+      "seed": 674992243,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-fathomless-plunge",
+      "group": "feature",
+      "key": "Fathomless Plunge",
+      "label": "Fathomless Plunge",
+      "src": "/assets/icons/feature/fathomless-plunge.webp",
+      "bytes": 3242,
+      "seed": 1645056873,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-form-of-dread",
+      "group": "feature",
+      "key": "Form of Dread",
+      "label": "Form of Dread",
+      "src": "/assets/icons/feature/form-of-dread.webp",
+      "bytes": 2392,
+      "seed": 935017790,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-necrotic-husk",
+      "group": "feature",
+      "key": "Necrotic Husk",
+      "label": "Necrotic Husk",
+      "src": "/assets/icons/feature/necrotic-husk.webp",
+      "bytes": 3272,
+      "seed": 1269976124,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-spirit-projection",
+      "group": "feature",
+      "key": "Spirit Projection",
+      "label": "Spirit Projection",
+      "src": "/assets/icons/feature/spirit-projection.webp",
+      "bytes": 3352,
+      "seed": 125102794,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-defy-death",
+      "group": "feature",
+      "key": "Defy Death",
+      "label": "Defy Death",
+      "src": "/assets/icons/feature/defy-death.webp",
+      "bytes": 2902,
+      "seed": 1273433949,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-indestructible-life",
+      "group": "feature",
+      "key": "Indestructible Life",
+      "label": "Indestructible Life",
+      "src": "/assets/icons/feature/indestructible-life.webp",
+      "bytes": 2626,
+      "seed": 364224091,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-bottled-respite",
+      "group": "feature",
+      "key": "Bottled Respite",
+      "label": "Bottled Respite",
+      "src": "/assets/icons/feature/bottled-respite.webp",
+      "bytes": 4236,
+      "seed": 308651790
+    },
+    {
+      "id": "feature-limited-wish",
+      "group": "feature",
+      "key": "Limited Wish",
+      "label": "Limited Wish",
+      "src": "/assets/icons/feature/limited-wish.webp",
+      "bytes": 2752,
+      "seed": 985529663,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-tides-of-chaos",
+      "group": "feature",
+      "key": "Tides of Chaos",
+      "label": "Tides of Chaos",
+      "src": "/assets/icons/feature/tides-of-chaos.webp",
+      "bytes": 2862,
+      "seed": 2042612076,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-favored-by-the-gods",
+      "group": "feature",
+      "key": "Favored by the Gods",
+      "label": "Favored by the Gods",
+      "src": "/assets/icons/feature/favored-by-the-gods.webp",
+      "bytes": 4216,
+      "seed": 582882221,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-unearthly-recovery",
+      "group": "feature",
+      "key": "Unearthly Recovery",
+      "label": "Unearthly Recovery",
+      "src": "/assets/icons/feature/unearthly-recovery.webp",
+      "bytes": 5132,
+      "seed": 2088047123,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-strength-of-the-grave",
+      "group": "feature",
+      "key": "Strength of the Grave",
+      "label": "Strength of the Grave",
+      "src": "/assets/icons/feature/strength-of-the-grave.webp",
+      "bytes": 2600,
+      "seed": 648253668,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-restore-balance",
+      "group": "feature",
+      "key": "Restore Balance",
+      "label": "Restore Balance",
+      "src": "/assets/icons/feature/restore-balance.webp",
+      "bytes": 2830,
+      "seed": 1219078852,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-trance-of-order",
+      "group": "feature",
+      "key": "Trance of Order",
+      "label": "Trance of Order",
+      "src": "/assets/icons/feature/trance-of-order.webp",
+      "bytes": 4536,
+      "seed": 1576875581,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-clockwork-cavalcade",
+      "group": "feature",
+      "key": "Clockwork Cavalcade",
+      "label": "Clockwork Cavalcade",
+      "src": "/assets/icons/feature/clockwork-cavalcade.webp",
+      "bytes": 3860,
+      "seed": 1363045327,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-warping-implosion",
+      "group": "feature",
+      "key": "Warping Implosion",
+      "label": "Warping Implosion",
+      "src": "/assets/icons/feature/warping-implosion.webp",
+      "bytes": 2850,
+      "seed": 682177642,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-lunar-phenomenon",
+      "group": "feature",
+      "key": "Lunar Phenomenon",
+      "label": "Lunar Phenomenon",
+      "src": "/assets/icons/feature/lunar-phenomenon.webp",
+      "bytes": 3716,
+      "seed": 1383249094,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-portent-dice",
+      "group": "feature",
+      "key": "Portent Dice",
+      "label": "Portent Dice",
+      "src": "/assets/icons/feature/portent-dice.webp",
+      "bytes": 2910,
+      "seed": 198248946
+    },
+    {
+      "id": "feature-illusory-self",
+      "group": "feature",
+      "key": "Illusory Self",
+      "label": "Illusory Self",
+      "src": "/assets/icons/feature/illusory-self.webp",
+      "bytes": 2132,
+      "seed": 454905582,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-instinctive-charm",
+      "group": "feature",
+      "key": "Instinctive Charm",
+      "label": "Instinctive Charm",
+      "src": "/assets/icons/feature/instinctive-charm.webp",
+      "bytes": 2876,
+      "seed": 33701069,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-hypnotic-gaze",
+      "group": "feature",
+      "key": "Hypnotic Gaze",
+      "label": "Hypnotic Gaze",
+      "src": "/assets/icons/feature/hypnotic-gaze.webp",
+      "bytes": 2062,
+      "seed": 1489801024,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-benign-transposition",
+      "group": "feature",
+      "key": "Benign Transposition",
+      "label": "Benign Transposition",
+      "src": "/assets/icons/feature/benign-transposition.webp",
+      "bytes": 2248,
+      "seed": 940627646,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-shapechanger",
+      "group": "feature",
+      "key": "Shapechanger",
+      "label": "Shapechanger",
+      "src": "/assets/icons/feature/shapechanger.webp",
+      "bytes": 3142,
+      "seed": 47675517,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-bladesong",
+      "group": "feature",
+      "key": "Bladesong",
+      "label": "Bladesong",
+      "src": "/assets/icons/feature/bladesong.webp",
+      "bytes": 1746,
+      "seed": 7738708,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-chronal-shift",
+      "group": "feature",
+      "key": "Chronal Shift",
+      "label": "Chronal Shift",
+      "src": "/assets/icons/feature/chronal-shift.webp",
+      "bytes": 2698,
+      "seed": 356779635,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-momentary-stasis",
+      "group": "feature",
+      "key": "Momentary Stasis",
+      "label": "Momentary Stasis",
+      "src": "/assets/icons/feature/momentary-stasis.webp",
+      "bytes": 4922,
+      "seed": 1673346250,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-arcane-abeyance",
+      "group": "feature",
+      "key": "Arcane Abeyance",
+      "label": "Arcane Abeyance",
+      "src": "/assets/icons/feature/arcane-abeyance.webp",
+      "bytes": 1656,
+      "seed": 1060034171,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-violent-attraction",
+      "group": "feature",
+      "key": "Violent Attraction",
+      "label": "Violent Attraction",
+      "src": "/assets/icons/feature/violent-attraction.webp",
+      "bytes": 2252,
+      "seed": 1861194496,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-event-horizon",
+      "group": "feature",
+      "key": "Event Horizon",
+      "label": "Event Horizon",
+      "src": "/assets/icons/feature/event-horizon.webp",
+      "bytes": 4674,
+      "seed": 69925298,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-manifest-mind",
+      "group": "feature",
+      "key": "Manifest Mind",
+      "label": "Manifest Mind",
+      "src": "/assets/icons/feature/manifest-mind.webp",
+      "bytes": 2404,
+      "seed": 378888480,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-master-scrivener",
+      "group": "feature",
+      "key": "Master Scrivener",
+      "label": "Master Scrivener",
+      "src": "/assets/icons/feature/master-scrivener.webp",
+      "bytes": 2226,
+      "seed": 890105516,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-one-with-the-word",
+      "group": "feature",
+      "key": "One with the Word",
+      "label": "One with the Word",
+      "src": "/assets/icons/feature/one-with-the-word.webp",
+      "bytes": 2348,
+      "seed": 1816038116,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-hunters-sense",
+      "group": "feature",
+      "key": "Hunter's Sense",
+      "label": "Hunter's Sense",
+      "src": "/assets/icons/feature/hunters-sense.webp",
+      "bytes": 2256,
+      "seed": 1952234653,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-magic-users-nemesis",
+      "group": "feature",
+      "key": "Magic-User's Nemesis",
+      "label": "Magic-User's Nemesis",
+      "src": "/assets/icons/feature/magic-users-nemesis.webp",
+      "bytes": 2620,
+      "seed": 439593847,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-ethereal-step",
+      "group": "feature",
+      "key": "Ethereal Step",
+      "label": "Ethereal Step",
+      "src": "/assets/icons/feature/ethereal-step.webp",
+      "bytes": 2414,
+      "seed": 1656774448,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-detect-portal",
+      "group": "feature",
+      "key": "Detect Portal",
+      "label": "Detect Portal",
+      "src": "/assets/icons/feature/detect-portal.webp",
+      "bytes": 3614,
+      "seed": 1057946885,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-writhing-tide",
+      "group": "feature",
+      "key": "Writhing Tide",
+      "label": "Writhing Tide",
+      "src": "/assets/icons/feature/writhing-tide.webp",
+      "bytes": 2910,
+      "seed": 130289867,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-swarming-dispersal",
+      "group": "feature",
+      "key": "Swarming Dispersal",
+      "label": "Swarming Dispersal",
+      "src": "/assets/icons/feature/swarming-dispersal.webp",
+      "bytes": 2448,
+      "seed": 1369448321,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-misty-wanderer",
+      "group": "feature",
+      "key": "Misty Wanderer",
+      "label": "Misty Wanderer",
+      "src": "/assets/icons/feature/misty-wanderer.webp",
+      "bytes": 2198,
+      "seed": 1186058729,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-fey-reinforcements",
+      "group": "feature",
+      "key": "Fey Reinforcements",
+      "label": "Fey Reinforcements",
+      "src": "/assets/icons/feature/fey-reinforcements.webp",
+      "bytes": 2968,
+      "seed": 1979172562,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-drake-companion",
+      "group": "feature",
+      "key": "Drake Companion",
+      "label": "Drake Companion",
+      "src": "/assets/icons/feature/drake-companion.webp",
+      "bytes": 2274,
+      "seed": 640942407,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-drakes-breath",
+      "group": "feature",
+      "key": "Drake's Breath",
+      "label": "Drake's Breath",
+      "src": "/assets/icons/feature/drakes-breath.webp",
+      "bytes": 2382,
+      "seed": 351689859,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-wails-from-the-grave",
+      "group": "feature",
+      "key": "Wails from the Grave",
+      "label": "Wails from the Grave",
+      "src": "/assets/icons/feature/wails-from-the-grave.webp",
+      "bytes": 1820,
+      "seed": 1043905160,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-ghost-walk",
+      "group": "feature",
+      "key": "Ghost Walk",
+      "label": "Ghost Walk",
+      "src": "/assets/icons/feature/ghost-walk.webp",
+      "bytes": 2686,
+      "seed": 1723412767,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-psychic-veil",
+      "group": "feature",
+      "key": "Psychic Veil",
+      "label": "Psychic Veil",
+      "src": "/assets/icons/feature/psychic-veil.webp",
+      "bytes": 1784,
+      "seed": 2071630530,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-rend-mind",
+      "group": "feature",
+      "key": "Rend Mind",
+      "label": "Rend Mind",
+      "src": "/assets/icons/feature/rend-mind.webp",
+      "bytes": 2330,
+      "seed": 265557390,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-spell-thief",
+      "group": "feature",
+      "key": "Spell Thief",
+      "label": "Spell Thief",
+      "src": "/assets/icons/feature/spell-thief.webp",
+      "bytes": 2022,
+      "seed": 939702740,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-unerring-eye",
+      "group": "feature",
+      "key": "Unerring Eye",
+      "label": "Unerring Eye",
+      "src": "/assets/icons/feature/unerring-eye.webp",
+      "bytes": 1844,
+      "seed": 747701355,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-master-duelist",
+      "group": "feature",
+      "key": "Master Duelist",
+      "label": "Master Duelist",
+      "src": "/assets/icons/feature/master-duelist.webp",
+      "bytes": 1452,
+      "seed": 1464836654,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-hand-of-ultimate-mercy",
+      "group": "feature",
+      "key": "Hand of Ultimate Mercy",
+      "label": "Hand of Ultimate Mercy",
+      "src": "/assets/icons/feature/hand-of-ultimate-mercy.webp",
+      "bytes": 3610,
+      "seed": 2092078022,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-breath-of-the-dragon",
+      "group": "feature",
+      "key": "Breath of the Dragon",
+      "label": "Breath of the Dragon",
+      "src": "/assets/icons/feature/breath-of-the-dragon.webp",
+      "bytes": 2208,
+      "seed": 1482106327,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-wings-unfurled",
+      "group": "feature",
+      "key": "Wings Unfurled",
+      "label": "Wings Unfurled",
+      "src": "/assets/icons/feature/wings-unfurled.webp",
+      "bytes": 2150,
+      "seed": 57250395,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-aspect-of-the-wyrm",
+      "group": "feature",
+      "key": "Aspect of the Wyrm",
+      "label": "Aspect of the Wyrm",
+      "src": "/assets/icons/feature/aspect-of-the-wyrm.webp",
+      "bytes": 4430,
+      "seed": 37243630,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-glorious-defense",
+      "group": "feature",
+      "key": "Glorious Defense",
+      "label": "Glorious Defense",
+      "src": "/assets/icons/feature/glorious-defense.webp",
+      "bytes": 2798,
+      "seed": 738019835,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-undying-sentinel",
+      "group": "feature",
+      "key": "Undying Sentinel",
+      "label": "Undying Sentinel",
+      "src": "/assets/icons/feature/undying-sentinel.webp",
+      "bytes": 2972,
+      "seed": 314301663,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-stones-endurance",
+      "group": "feature",
+      "key": "Stone's Endurance",
+      "label": "Stone's Endurance",
+      "src": "/assets/icons/feature/stones-endurance.webp",
+      "bytes": 2308,
+      "seed": 649738767
+    },
+    {
+      "id": "feature-healing-hands",
+      "group": "feature",
+      "key": "Healing Hands",
+      "label": "Healing Hands",
+      "src": "/assets/icons/feature/healing-hands.webp",
+      "bytes": 3992,
+      "seed": 1527511141
+    },
+    {
+      "id": "feature-celestial-revelation",
+      "group": "feature",
+      "key": "Celestial Revelation",
+      "label": "Celestial Revelation",
+      "src": "/assets/icons/feature/celestial-revelation.webp",
+      "bytes": 4478,
+      "seed": 795728498
+    },
+    {
+      "id": "feature-hidden-step",
+      "group": "feature",
+      "key": "Hidden Step",
+      "label": "Hidden Step",
+      "src": "/assets/icons/feature/hidden-step.webp",
+      "bytes": 3114,
+      "seed": 1651050489
+    },
+    {
+      "id": "feature-firbolg-magic",
+      "group": "feature",
+      "key": "Firbolg Magic",
+      "label": "Firbolg Magic",
+      "src": "/assets/icons/feature/firbolg-magic.webp",
+      "bytes": 2292,
+      "seed": 775329693
+    },
+    {
+      "id": "feature-fury-of-the-small",
+      "group": "feature",
+      "key": "Fury of the Small",
+      "label": "Fury of the Small",
+      "src": "/assets/icons/feature/fury-of-the-small.webp",
+      "bytes": 4726,
+      "seed": 1872170211
+    },
+    {
+      "id": "feature-hungry-jaws",
+      "group": "feature",
+      "key": "Hungry Jaws",
+      "label": "Hungry Jaws",
+      "src": "/assets/icons/feature/hungry-jaws.webp",
+      "bytes": 2722,
+      "seed": 1090386022
+    },
+    {
+      "id": "feature-elemental-legacy",
+      "group": "feature",
+      "key": "Elemental Legacy",
+      "label": "Elemental Legacy",
+      "src": "/assets/icons/feature/elemental-legacy.webp",
+      "bytes": 5264,
+      "seed": 355000075
+    },
+    {
+      "id": "feature-experimental-elixir",
+      "group": "feature",
+      "key": "Experimental Elixir",
+      "label": "Experimental Elixir",
+      "src": "/assets/icons/feature/experimental-elixir.webp",
+      "bytes": 3624,
+      "seed": 1391508822,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-eldritch-cannon",
+      "group": "feature",
+      "key": "Eldritch Cannon",
+      "label": "Eldritch Cannon",
+      "src": "/assets/icons/feature/eldritch-cannon.webp",
+      "bytes": 2876,
+      "seed": 720770962,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-arcane-jolt",
+      "group": "feature",
+      "key": "Arcane Jolt",
+      "label": "Arcane Jolt",
+      "src": "/assets/icons/feature/arcane-jolt.webp",
+      "bytes": 3832,
+      "seed": 157894930,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-restorative-reagents",
+      "group": "feature",
+      "key": "Restorative Reagents",
+      "label": "Restorative Reagents",
+      "src": "/assets/icons/feature/restorative-reagents.webp",
+      "bytes": 4366,
+      "seed": 1632868269,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-starry-form",
+      "group": "feature",
+      "key": "Starry Form",
+      "label": "Starry Form",
+      "src": "/assets/icons/feature/starry-form.webp",
+      "bytes": 5404,
+      "seed": 1841113607,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-embodiment-of-the-law",
+      "group": "feature",
+      "key": "Embodiment of the Law",
+      "label": "Embodiment of the Law",
+      "src": "/assets/icons/feature/embodiment-of-the-law.webp",
+      "bytes": 5756,
+      "seed": 824303436,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-cauterizing-flames",
+      "group": "feature",
+      "key": "Cauterizing Flames",
+      "label": "Cauterizing Flames",
+      "src": "/assets/icons/feature/cauterizing-flames.webp",
+      "bytes": 3418,
+      "seed": 215027358,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-unwavering-mark",
+      "group": "feature",
+      "key": "Unwavering Mark",
+      "label": "Unwavering Mark",
+      "src": "/assets/icons/feature/unwavering-mark.webp",
+      "bytes": 3140,
+      "seed": 705159979,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-bulwark-of-force",
+      "group": "feature",
+      "key": "Bulwark of Force",
+      "label": "Bulwark of Force",
+      "src": "/assets/icons/feature/bulwark-of-force.webp",
+      "bytes": 2274,
+      "seed": 1116341141,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-telekinetic-master",
+      "group": "feature",
+      "key": "Telekinetic Master",
+      "label": "Telekinetic Master",
+      "src": "/assets/icons/feature/telekinetic-master.webp",
+      "bytes": 3842,
+      "seed": 854587273,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-elder-champion",
+      "group": "feature",
+      "key": "Elder Champion",
+      "label": "Elder Champion",
+      "src": "/assets/icons/feature/elder-champion.webp",
+      "bytes": 3740,
+      "seed": 773817529,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-avenging-angel",
+      "group": "feature",
+      "key": "Avenging Angel",
+      "label": "Avenging Angel",
+      "src": "/assets/icons/feature/avenging-angel.webp",
+      "bytes": 5268,
+      "seed": 2066193232,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-invincible-conqueror",
+      "group": "feature",
+      "key": "Invincible Conqueror",
+      "label": "Invincible Conqueror",
+      "src": "/assets/icons/feature/invincible-conqueror.webp",
+      "bytes": 2764,
+      "seed": 1418146733,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-living-legend",
+      "group": "feature",
+      "key": "Living Legend",
+      "label": "Living Legend",
+      "src": "/assets/icons/feature/living-legend.webp",
+      "bytes": 4644,
+      "seed": 1927267264,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-mortal-bulwark",
+      "group": "feature",
+      "key": "Mortal Bulwark",
+      "label": "Mortal Bulwark",
+      "src": "/assets/icons/feature/mortal-bulwark.webp",
+      "bytes": 4832,
+      "seed": 1049954559,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-exalted-champion",
+      "group": "feature",
+      "key": "Exalted Champion",
+      "label": "Exalted Champion",
+      "src": "/assets/icons/feature/exalted-champion.webp",
+      "bytes": 3088,
+      "seed": 560396216,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-dread-lord",
+      "group": "feature",
+      "key": "Dread Lord",
+      "label": "Dread Lord",
+      "src": "/assets/icons/feature/dread-lord.webp",
+      "bytes": 6252,
+      "seed": 1096644661,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-wind-soul",
+      "group": "feature",
+      "key": "Wind Soul",
+      "label": "Wind Soul",
+      "src": "/assets/icons/feature/wind-soul.webp",
+      "bytes": 3830,
+      "seed": 226974987,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-elemental-gift",
+      "group": "feature",
+      "key": "Elemental Gift",
+      "label": "Elemental Gift",
+      "src": "/assets/icons/feature/elemental-gift.webp",
+      "bytes": 3018,
+      "seed": 1483442638,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-defensive-field",
+      "group": "feature",
+      "key": "Defensive Field",
+      "label": "Defensive Field",
+      "src": "/assets/icons/feature/defensive-field.webp",
+      "bytes": 4680,
+      "seed": 1572550225
+    },
+    {
+      "id": "feature-perfected-armor",
+      "group": "feature",
+      "key": "Perfected Armor",
+      "label": "Perfected Armor",
+      "src": "/assets/icons/feature/perfected-armor.webp",
+      "bytes": 4150,
+      "seed": 561534050,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-holy-nimbus",
+      "group": "feature",
+      "key": "Holy Nimbus",
+      "label": "Holy Nimbus",
+      "src": "/assets/icons/feature/holy-nimbus.webp",
+      "bytes": 6606,
+      "seed": 861316979,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-spirit-shield",
+      "group": "feature",
+      "key": "Spirit Shield",
+      "label": "Spirit Shield",
+      "src": "/assets/icons/feature/spirit-shield.webp",
+      "bytes": 2548,
+      "seed": 202431653,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-storm-aura",
+      "group": "feature",
+      "key": "Storm Aura",
+      "label": "Storm Aura",
+      "src": "/assets/icons/feature/storm-aura.webp",
+      "bytes": 1536,
+      "seed": 1738263255,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-raging-storm",
+      "group": "feature",
+      "key": "Raging Storm",
+      "label": "Raging Storm",
+      "src": "/assets/icons/feature/raging-storm.webp",
+      "bytes": 2318,
+      "seed": 1258856758,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-fanatical-focus",
+      "group": "feature",
+      "key": "Fanatical Focus",
+      "label": "Fanatical Focus",
+      "src": "/assets/icons/feature/fanatical-focus.webp",
+      "bytes": 2062,
+      "seed": 514810137,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-mighty-impel",
+      "group": "feature",
+      "key": "Mighty Impel",
+      "label": "Mighty Impel",
+      "src": "/assets/icons/feature/mighty-impel.webp",
+      "bytes": 1768,
+      "seed": 1954581068,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-elemental-fury",
+      "group": "feature",
+      "key": "Elemental Fury",
+      "label": "Elemental Fury",
+      "src": "/assets/icons/feature/elemental-fury.webp",
+      "bytes": 2998,
+      "seed": 1528379804,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-combat-inspiration",
+      "group": "feature",
+      "key": "Combat Inspiration",
+      "label": "Combat Inspiration",
+      "src": "/assets/icons/feature/combat-inspiration.webp",
+      "bytes": 2074,
+      "seed": 761500422,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-mantle-of-inspiration",
+      "group": "feature",
+      "key": "Mantle of Inspiration",
+      "label": "Mantle of Inspiration",
+      "src": "/assets/icons/feature/mantle-of-inspiration.webp",
+      "bytes": 1760,
+      "seed": 1662427903,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-blade-flourish",
+      "group": "feature",
+      "key": "Blade Flourish",
+      "label": "Blade Flourish",
+      "src": "/assets/icons/feature/blade-flourish.webp",
+      "bytes": 2640,
+      "seed": 755747481,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-psychic-blades",
+      "group": "feature",
+      "key": "Psychic Blades",
+      "label": "Psychic Blades",
+      "src": "/assets/icons/feature/psychic-blades.webp",
+      "bytes": 2118,
+      "seed": 1344446673,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-unsettling-words",
+      "group": "feature",
+      "key": "Unsettling Words",
+      "label": "Unsettling Words",
+      "src": "/assets/icons/feature/unsettling-words.webp",
+      "bytes": 1610,
+      "seed": 1692435435,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-corona-of-light",
+      "group": "feature",
+      "key": "Corona of Light",
+      "label": "Corona of Light",
+      "src": "/assets/icons/feature/corona-of-light.webp",
+      "bytes": 6074,
+      "seed": 646121432,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-dampen-elements",
+      "group": "feature",
+      "key": "Dampen Elements",
+      "label": "Dampen Elements",
+      "src": "/assets/icons/feature/dampen-elements.webp",
+      "bytes": 3378,
+      "seed": 820523782,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-blessing-of-the-trickster",
+      "group": "feature",
+      "key": "Blessing of the Trickster",
+      "label": "Blessing of the Trickster",
+      "src": "/assets/icons/feature/blessing-of-the-trickster.webp",
+      "bytes": 4560,
+      "seed": 424129033,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-protective-bond",
+      "group": "feature",
+      "key": "Protective Bond",
+      "label": "Protective Bond",
+      "src": "/assets/icons/feature/protective-bond.webp",
+      "bytes": 4456,
+      "seed": 1075614008,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-vigilant-blessing",
+      "group": "feature",
+      "key": "Vigilant Blessing",
+      "label": "Vigilant Blessing",
+      "src": "/assets/icons/feature/vigilant-blessing.webp",
+      "bytes": 3080,
+      "seed": 1300917711,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-halo-of-spores",
+      "group": "feature",
+      "key": "Halo of Spores",
+      "label": "Halo of Spores",
+      "src": "/assets/icons/feature/halo-of-spores.webp",
+      "bytes": 2588,
+      "seed": 1417384738,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-symbiotic-entity",
+      "group": "feature",
+      "key": "Symbiotic Entity",
+      "label": "Symbiotic Entity",
+      "src": "/assets/icons/feature/symbiotic-entity.webp",
+      "bytes": 5852,
+      "seed": 1652795528,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-summon-wildfire-spirit",
+      "group": "feature",
+      "key": "Summon Wildfire Spirit",
+      "label": "Summon Wildfire Spirit",
+      "src": "/assets/icons/feature/summon-wildfire-spirit.webp",
+      "bytes": 5124,
+      "seed": 767167413,
+      "classId": "druid"
+    },
+    {
+      "id": "feature-hold-the-line",
+      "group": "feature",
+      "key": "Hold the Line",
+      "label": "Hold the Line",
+      "src": "/assets/icons/feature/hold-the-line.webp",
+      "bytes": 2408,
+      "seed": 827113792,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-protective-field",
+      "group": "feature",
+      "key": "Protective Field",
+      "label": "Protective Field",
+      "src": "/assets/icons/feature/protective-field.webp",
+      "bytes": 1488,
+      "seed": 989987110,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-telekinetic-adept",
+      "group": "feature",
+      "key": "Telekinetic Adept",
+      "label": "Telekinetic Adept",
+      "src": "/assets/icons/feature/telekinetic-adept.webp",
+      "bytes": 2590,
+      "seed": 1319440446,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-inspiring-surge",
+      "group": "feature",
+      "key": "Inspiring Surge",
+      "label": "Inspiring Surge",
+      "src": "/assets/icons/feature/inspiring-surge.webp",
+      "bytes": 2798,
+      "seed": 1354499922,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-shadow-step",
+      "group": "feature",
+      "key": "Shadow Step",
+      "label": "Shadow Step",
+      "src": "/assets/icons/feature/shadow-step.webp",
+      "bytes": 2046,
+      "seed": 2129276122,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-opportunist",
+      "group": "feature",
+      "key": "Opportunist",
+      "label": "Opportunist",
+      "src": "/assets/icons/feature/opportunist.webp",
+      "bytes": 1728,
+      "seed": 1508685130,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-tipsy-sway",
+      "group": "feature",
+      "key": "Tipsy Sway",
+      "label": "Tipsy Sway",
+      "src": "/assets/icons/feature/tipsy-sway.webp",
+      "bytes": 1442,
+      "seed": 1482868141,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-drunkards-luck",
+      "group": "feature",
+      "key": "Drunkard's Luck",
+      "label": "Drunkard's Luck",
+      "src": "/assets/icons/feature/drunkards-luck.webp",
+      "bytes": 3266,
+      "seed": 730669491,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-path-of-the-kensei",
+      "group": "feature",
+      "key": "Path of the Kensei",
+      "label": "Path of the Kensei",
+      "src": "/assets/icons/feature/path-of-the-kensei.webp",
+      "bytes": 3106,
+      "seed": 604350886,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-kenseis-shot",
+      "group": "feature",
+      "key": "Kensei's Shot",
+      "label": "Kensei's Shot",
+      "src": "/assets/icons/feature/kenseis-shot.webp",
+      "bytes": 3408,
+      "seed": 288197854,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-sharpen-the-blade",
+      "group": "feature",
+      "key": "Sharpen the Blade",
+      "label": "Sharpen the Blade",
+      "src": "/assets/icons/feature/sharpen-the-blade.webp",
+      "bytes": 3088,
+      "seed": 1374231074,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-searing-arc-strike",
+      "group": "feature",
+      "key": "Searing Arc Strike",
+      "label": "Searing Arc Strike",
+      "src": "/assets/icons/feature/searing-arc-strike.webp",
+      "bytes": 1806,
+      "seed": 1907673641,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-searing-sunburst",
+      "group": "feature",
+      "key": "Searing Sunburst",
+      "label": "Searing Sunburst",
+      "src": "/assets/icons/feature/searing-sunburst.webp",
+      "bytes": 2616,
+      "seed": 1279783105,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-touch-of-the-long-death",
+      "group": "feature",
+      "key": "Touch of the Long Death",
+      "label": "Touch of the Long Death",
+      "src": "/assets/icons/feature/touch-of-the-long-death.webp",
+      "bytes": 5172,
+      "seed": 2106183048,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-arms-of-the-astral-self",
+      "group": "feature",
+      "key": "Arms of the Astral Self",
+      "label": "Arms of the Astral Self",
+      "src": "/assets/icons/feature/arms-of-the-astral-self.webp",
+      "bytes": 2968,
+      "seed": 429595853,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-visage-of-the-astral-self",
+      "group": "feature",
+      "key": "Visage of the Astral Self",
+      "label": "Visage of the Astral Self",
+      "src": "/assets/icons/feature/visage-of-the-astral-self.webp",
+      "bytes": 2056,
+      "seed": 1253706127,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-body-of-the-astral-self",
+      "group": "feature",
+      "key": "Body of the Astral Self",
+      "label": "Body of the Astral Self",
+      "src": "/assets/icons/feature/body-of-the-astral-self.webp",
+      "bytes": 5132,
+      "seed": 749574665,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-awakened-astral-self",
+      "group": "feature",
+      "key": "Awakened Astral Self",
+      "label": "Awakened Astral Self",
+      "src": "/assets/icons/feature/awakened-astral-self.webp",
+      "bytes": 3908,
+      "seed": 1805662624,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-ascendant-aspect",
+      "group": "feature",
+      "key": "Ascendant Aspect",
+      "label": "Ascendant Aspect",
+      "src": "/assets/icons/feature/ascendant-aspect.webp",
+      "bytes": 2612,
+      "seed": 2043440279,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-relentless-avenger",
+      "group": "feature",
+      "key": "Relentless Avenger",
+      "label": "Relentless Avenger",
+      "src": "/assets/icons/feature/relentless-avenger.webp",
+      "bytes": 1904,
+      "seed": 452880446,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-soul-of-vengeance",
+      "group": "feature",
+      "key": "Soul of Vengeance",
+      "label": "Soul of Vengeance",
+      "src": "/assets/icons/feature/soul-of-vengeance.webp",
+      "bytes": 3786,
+      "seed": 590276200,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-aura-of-the-guardian",
+      "group": "feature",
+      "key": "Aura of the Guardian",
+      "label": "Aura of the Guardian",
+      "src": "/assets/icons/feature/aura-of-the-guardian.webp",
+      "bytes": 3162,
+      "seed": 2097593352,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-vigilant-rebuke",
+      "group": "feature",
+      "key": "Vigilant Rebuke",
+      "label": "Vigilant Rebuke",
+      "src": "/assets/icons/feature/vigilant-rebuke.webp",
+      "bytes": 3668,
+      "seed": 484516472,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-divine-allegiance",
+      "group": "feature",
+      "key": "Divine Allegiance",
+      "label": "Divine Allegiance",
+      "src": "/assets/icons/feature/divine-allegiance.webp",
+      "bytes": 5636,
+      "seed": 633442728,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-shadowy-dodge",
+      "group": "feature",
+      "key": "Shadowy Dodge",
+      "label": "Shadowy Dodge",
+      "src": "/assets/icons/feature/shadowy-dodge.webp",
+      "bytes": 2568,
+      "seed": 113546553,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-planar-warrior",
+      "group": "feature",
+      "key": "Planar Warrior",
+      "label": "Planar Warrior",
+      "src": "/assets/icons/feature/planar-warrior.webp",
+      "bytes": 3304,
+      "seed": 738013463,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-spectral-defense",
+      "group": "feature",
+      "key": "Spectral Defense",
+      "label": "Spectral Defense",
+      "src": "/assets/icons/feature/spectral-defense.webp",
+      "bytes": 1830,
+      "seed": 781264141,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-slayers-prey",
+      "group": "feature",
+      "key": "Slayer's Prey",
+      "label": "Slayer's Prey",
+      "src": "/assets/icons/feature/slayers-prey.webp",
+      "bytes": 2118,
+      "seed": 787381038,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-slayers-counter",
+      "group": "feature",
+      "key": "Slayer's Counter",
+      "label": "Slayer's Counter",
+      "src": "/assets/icons/feature/slayers-counter.webp",
+      "bytes": 1866,
+      "seed": 102991643,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-gathered-swarm",
+      "group": "feature",
+      "key": "Gathered Swarm",
+      "label": "Gathered Swarm",
+      "src": "/assets/icons/feature/gathered-swarm.webp",
+      "bytes": 2664,
+      "seed": 1022166915,
+      "classId": "ranger"
+    },
+    {
+      "id": "feature-versatile-trickster",
+      "group": "feature",
+      "key": "Versatile Trickster",
+      "label": "Versatile Trickster",
+      "src": "/assets/icons/feature/versatile-trickster.webp",
+      "bytes": 1980,
+      "seed": 1837828560,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-misdirection",
+      "group": "feature",
+      "key": "Misdirection",
+      "label": "Misdirection",
+      "src": "/assets/icons/feature/misdirection.webp",
+      "bytes": 1954,
+      "seed": 1193313620,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-elegant-maneuver",
+      "group": "feature",
+      "key": "Elegant Maneuver",
+      "label": "Elegant Maneuver",
+      "src": "/assets/icons/feature/elegant-maneuver.webp",
+      "bytes": 2496,
+      "seed": 955721663,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-insightful-fighting",
+      "group": "feature",
+      "key": "Insightful Fighting",
+      "label": "Insightful Fighting",
+      "src": "/assets/icons/feature/insightful-fighting.webp",
+      "bytes": 1806,
+      "seed": 1193566728,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-skirmisher",
+      "group": "feature",
+      "key": "Skirmisher",
+      "label": "Skirmisher",
+      "src": "/assets/icons/feature/skirmisher.webp",
+      "bytes": 1790,
+      "seed": 1710925527,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-tokens-of-the-departed",
+      "group": "feature",
+      "key": "Tokens of the Departed",
+      "label": "Tokens of the Departed",
+      "src": "/assets/icons/feature/tokens-of-the-departed.webp",
+      "bytes": 2318,
+      "seed": 568140763,
+      "classId": "rogue"
+    },
+    {
+      "id": "feature-bend-luck",
+      "group": "feature",
+      "key": "Bend Luck",
+      "label": "Bend Luck",
+      "src": "/assets/icons/feature/bend-luck.webp",
+      "bytes": 5340,
+      "seed": 133282366,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-otherworldly-wings",
+      "group": "feature",
+      "key": "Otherworldly Wings",
+      "label": "Otherworldly Wings",
+      "src": "/assets/icons/feature/otherworldly-wings.webp",
+      "bytes": 3554,
+      "seed": 2142722296,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-hound-of-ill-omen",
+      "group": "feature",
+      "key": "Hound of Ill Omen",
+      "label": "Hound of Ill Omen",
+      "src": "/assets/icons/feature/hound-of-ill-omen.webp",
+      "bytes": 3250,
+      "seed": 469153254,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-shadow-walk",
+      "group": "feature",
+      "key": "Shadow Walk",
+      "label": "Shadow Walk",
+      "src": "/assets/icons/feature/shadow-walk.webp",
+      "bytes": 2968,
+      "seed": 522561255,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-umbral-form",
+      "group": "feature",
+      "key": "Umbral Form",
+      "label": "Umbral Form",
+      "src": "/assets/icons/feature/umbral-form.webp",
+      "bytes": 2154,
+      "seed": 1281549641,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-tempestuous-magic",
+      "group": "feature",
+      "key": "Tempestuous Magic",
+      "label": "Tempestuous Magic",
+      "src": "/assets/icons/feature/tempestuous-magic.webp",
+      "bytes": 2916,
+      "seed": 1501292876,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-storms-fury",
+      "group": "feature",
+      "key": "Storm's Fury",
+      "label": "Storm's Fury",
+      "src": "/assets/icons/feature/storms-fury.webp",
+      "bytes": 4244,
+      "seed": 973130150,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-beguiling-defenses",
+      "group": "feature",
+      "key": "Beguiling Defenses",
+      "label": "Beguiling Defenses",
+      "src": "/assets/icons/feature/beguiling-defenses.webp",
+      "bytes": 2082,
+      "seed": 839646347,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-guardian-coil",
+      "group": "feature",
+      "key": "Guardian Coil",
+      "label": "Guardian Coil",
+      "src": "/assets/icons/feature/guardian-coil.webp",
+      "bytes": 2758,
+      "seed": 1339356217,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-elemental-flight",
+      "group": "feature",
+      "key": "Elemental Flight",
+      "label": "Elemental Flight",
+      "src": "/assets/icons/feature/elemental-flight.webp",
+      "bytes": 2876,
+      "seed": 727876590,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-projected-ward",
+      "group": "feature",
+      "key": "Projected Ward",
+      "label": "Projected Ward",
+      "src": "/assets/icons/feature/projected-ward.webp",
+      "bytes": 4962,
+      "seed": 2030802225,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-arcane-deflection",
+      "group": "feature",
+      "key": "Arcane Deflection",
+      "label": "Arcane Deflection",
+      "src": "/assets/icons/feature/arcane-deflection.webp",
+      "bytes": 2748,
+      "seed": 1580822322,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-song-of-defense",
+      "group": "feature",
+      "key": "Song of Defense",
+      "label": "Song of Defense",
+      "src": "/assets/icons/feature/song-of-defense.webp",
+      "bytes": 2268,
+      "seed": 459982141,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-convergent-future",
+      "group": "feature",
+      "key": "Convergent Future",
+      "label": "Convergent Future",
+      "src": "/assets/icons/feature/convergent-future.webp",
+      "bytes": 2978,
+      "seed": 240584941,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-adjust-density",
+      "group": "feature",
+      "key": "Adjust Density",
+      "label": "Adjust Density",
+      "src": "/assets/icons/feature/adjust-density.webp",
+      "bytes": 2174,
+      "seed": 707271890,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-explosive-cannon",
+      "group": "feature",
+      "key": "Explosive Cannon",
+      "label": "Explosive Cannon",
+      "src": "/assets/icons/feature/explosive-cannon.webp",
+      "bytes": 3540,
+      "seed": 1266630552,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-steel-defender",
+      "group": "feature",
+      "key": "Steel Defender",
+      "label": "Steel Defender",
+      "src": "/assets/icons/feature/steel-defender.webp",
+      "bytes": 3256,
+      "seed": 94307925,
+      "classId": "artificer"
+    },
+    {
+      "id": "feature-flurry-of-blows",
+      "group": "feature",
+      "key": "Flurry of Blows",
+      "label": "Flurry of Blows",
+      "src": "/assets/icons/feature/flurry-of-blows.webp",
+      "bytes": 3846,
+      "seed": 123041315,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-cutting-words",
+      "group": "feature",
+      "key": "Cutting Words",
+      "label": "Cutting Words",
+      "src": "/assets/icons/feature/cutting-words.webp",
+      "bytes": 3506,
+      "seed": 524881092,
+      "classId": "bard"
+    },
+    {
+      "id": "feature-protection",
+      "group": "feature",
+      "key": "Protection",
+      "label": "Protection",
+      "src": "/assets/icons/feature/protection.webp",
+      "bytes": 1774,
+      "seed": 1071588476,
+      "classId": "fighter"
+    },
+    {
       "id": "glyph-skill-acrobatics",
       "group": "glyph",
       "key": "skill-acrobatics",
@@ -19682,6 +22429,116 @@
       "kind": "discipline"
     },
     {
+      "id": "option-hunters-prey-colossus-slayer",
+      "group": "option",
+      "key": "hunters_prey-Colossus Slayer",
+      "label": "Colossus Slayer",
+      "src": "/assets/icons/option/hunters-prey-colossus-slayer.webp",
+      "bytes": 1784,
+      "seed": 1412367050,
+      "kind": "hunters_prey"
+    },
+    {
+      "id": "option-hunters-prey-giant-killer",
+      "group": "option",
+      "key": "hunters_prey-Giant Killer",
+      "label": "Giant Killer",
+      "src": "/assets/icons/option/hunters-prey-giant-killer.webp",
+      "bytes": 2942,
+      "seed": 417256468,
+      "kind": "hunters_prey"
+    },
+    {
+      "id": "option-hunters-prey-horde-breaker",
+      "group": "option",
+      "key": "hunters_prey-Horde Breaker",
+      "label": "Horde Breaker",
+      "src": "/assets/icons/option/hunters-prey-horde-breaker.webp",
+      "bytes": 1626,
+      "seed": 1881001691,
+      "kind": "hunters_prey"
+    },
+    {
+      "id": "option-defensive-tactics-escape-the-horde",
+      "group": "option",
+      "key": "defensive_tactics-Escape the Horde",
+      "label": "Escape the Horde",
+      "src": "/assets/icons/option/defensive-tactics-escape-the-horde.webp",
+      "bytes": 5000,
+      "seed": 142785932,
+      "kind": "defensive_tactics"
+    },
+    {
+      "id": "option-defensive-tactics-multiattack-defense",
+      "group": "option",
+      "key": "defensive_tactics-Multiattack Defense",
+      "label": "Multiattack Defense",
+      "src": "/assets/icons/option/defensive-tactics-multiattack-defense.webp",
+      "bytes": 2570,
+      "seed": 54036918,
+      "kind": "defensive_tactics"
+    },
+    {
+      "id": "option-defensive-tactics-steel-will",
+      "group": "option",
+      "key": "defensive_tactics-Steel Will",
+      "label": "Steel Will",
+      "src": "/assets/icons/option/defensive-tactics-steel-will.webp",
+      "bytes": 2954,
+      "seed": 1579094748,
+      "kind": "defensive_tactics"
+    },
+    {
+      "id": "option-hunter-multiattack-volley",
+      "group": "option",
+      "key": "hunter_multiattack-Volley",
+      "label": "Volley",
+      "src": "/assets/icons/option/hunter-multiattack-volley.webp",
+      "bytes": 4822,
+      "seed": 29219568,
+      "kind": "hunter_multiattack"
+    },
+    {
+      "id": "option-hunter-multiattack-whirlwind-attack",
+      "group": "option",
+      "key": "hunter_multiattack-Whirlwind Attack",
+      "label": "Whirlwind Attack",
+      "src": "/assets/icons/option/hunter-multiattack-whirlwind-attack.webp",
+      "bytes": 5868,
+      "seed": 34908762,
+      "kind": "hunter_multiattack"
+    },
+    {
+      "id": "option-superior-hunters-defense-evasion",
+      "group": "option",
+      "key": "superior_hunters_defense-Evasion",
+      "label": "Evasion",
+      "src": "/assets/icons/option/superior-hunters-defense-evasion.webp",
+      "bytes": 4796,
+      "seed": 1595086645,
+      "kind": "superior_hunters_defense"
+    },
+    {
+      "id": "option-superior-hunters-defense-stand-against-the-tide",
+      "group": "option",
+      "key": "superior_hunters_defense-Stand Against the Tide",
+      "label": "Stand Against the Tide",
+      "src": "/assets/icons/option/superior-hunters-defense-stand-against-the-tide.webp",
+      "bytes": 1794,
+      "seed": 847373745,
+      "kind": "superior_hunters_defense"
+    },
+    {
+      "id": "option-superior-hunters-defense-uncanny-dodge",
+      "group": "option",
+      "key": "superior_hunters_defense-Uncanny Dodge",
+      "label": "Uncanny Dodge",
+      "src": "/assets/icons/option/superior-hunters-defense-uncanny-dodge.webp",
+      "bytes": 3416,
+      "seed": 1642808143,
+      "kind": "superior_hunters_defense"
+    },
+    {
       "id": "family-option-invocation",
       "group": "family",
       "key": "option-invocation",
@@ -19743,6 +22600,42 @@
       "src": "/assets/icons/family/option-discipline.webp",
       "bytes": 3496,
       "seed": 1282766230
+    },
+    {
+      "id": "family-option-hunters-prey",
+      "group": "family",
+      "key": "option-hunters_prey",
+      "label": "Hunter's Prey",
+      "src": "/assets/icons/family/option-hunters-prey.webp",
+      "bytes": 1080,
+      "seed": 323331251
+    },
+    {
+      "id": "family-option-defensive-tactics",
+      "group": "family",
+      "key": "option-defensive_tactics",
+      "label": "Defensive Tactics",
+      "src": "/assets/icons/family/option-defensive-tactics.webp",
+      "bytes": 1814,
+      "seed": 468365730
+    },
+    {
+      "id": "family-option-hunter-multiattack",
+      "group": "family",
+      "key": "option-hunter_multiattack",
+      "label": "Hunter's Multiattack",
+      "src": "/assets/icons/family/option-hunter-multiattack.webp",
+      "bytes": 2744,
+      "seed": 1636095795
+    },
+    {
+      "id": "family-option-superior-hunters-defense",
+      "group": "family",
+      "key": "option-superior_hunters_defense",
+      "label": "Superior Hunter's Defense",
+      "src": "/assets/icons/family/option-superior-hunters-defense.webp",
+      "bytes": 4230,
+      "seed": 242464224
     },
     {
       "id": "condition-blinded",
@@ -20094,6 +22987,33 @@
       "src": "/assets/icons/action/end-turn.webp",
       "bytes": 2736,
       "seed": 858383481
+    },
+    {
+      "id": "action-search",
+      "group": "action",
+      "key": "search",
+      "label": "Search",
+      "src": "/assets/icons/action/search.webp",
+      "bytes": 2466,
+      "seed": 622510167
+    },
+    {
+      "id": "action-escape",
+      "group": "action",
+      "key": "escape",
+      "label": "Escape",
+      "src": "/assets/icons/action/escape.webp",
+      "bytes": 2046,
+      "seed": 1924766121
+    },
+    {
+      "id": "action-stand-up",
+      "group": "action",
+      "key": "stand-up",
+      "label": "Stand up",
+      "src": "/assets/icons/action/stand-up.webp",
+      "bytes": 3124,
+      "seed": 1461678133
     },
     {
       "id": "family-damage-fire",

@@ -29,6 +29,8 @@ const { findSpellByName, spellDamageFor } = await import("../src/lib/content/ind
 const { bundledSpellFacts } = await import("../src/lib/srd/spell-facts.ts");
 const { thirdCasterPickRefusal } = await import("../src/app/campaigns/[campaignId]/level-up-preview.ts");
 const { isWornGear } = await import("../src/components/sheet/sheet-state.ts");
+const { RESOURCE_DEFS } = await import("../src/lib/srd/class-resources.ts");
+const { AUTHORED_TABLE } = await import("../src/lib/srd/authored-effects.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -132,8 +134,8 @@ test("the painted icon index matches the icon folders, so no screen asks for a m
   }
 });
 
-test("every Hand card's icon is a file that exists (Search, Escape, Flurry of Blows included)", () => {
-  const fighter = sheet({ conditions: ["grappled"], equipment: [{ name: "Longsword", qty: 1 }, { name: "Chain Mail", qty: 1, equipped: true }] });
+test("every Hand card's icon is a file that exists (Search, Escape, Stand up, Flurry of Blows included)", () => {
+  const fighter = sheet({ conditions: ["grappled", "prone"], equipment: [{ name: "Longsword", qty: 1 }, { name: "Chain Mail", qty: 1, equipped: true }] });
   const monk = sheet({
     class: "monk",
     features: [{ name: "Martial Arts" }, { name: "Ki" }, { name: "Flurry of Blows" }, { name: "Patient Defense" }, { name: "Step of the Wind" }],
@@ -152,7 +154,25 @@ test("every Hand card's icon is a file that exists (Search, Escape, Flurry of Bl
   assert.deepEqual(missing, []);
   assert.ok(onDisk(iconPath("action", "search")));
   assert.ok(onDisk(iconPath("action", "escape")));
+  assert.ok(onDisk(iconPath("action", "stand-up")));
   assert.ok(onDisk(iconPath("feature", "Flurry of Blows")));
+});
+
+test("every feature the Hand deals by name has its own painting, not its class's emblem", () => {
+  // An innate spell counter (a tiefling's Hellish Rebuke) is painted as its spell.
+  const manifest = JSON.parse(readFileSync(path.join(ROOT, "src", "lib", "srd", "manifest", "spells.json"), "utf8"));
+  const spellNames = new Set((Array.isArray(manifest) ? manifest : manifest.spells ?? Object.values(manifest)).map((spell) => spell.n.toLowerCase()));
+  const names = new Set(["Flurry of Blows", "Uncanny Dodge", "Deflect Missiles", "Slow Fall", "Cutting Words", "Protection"]);
+  for (const def of RESOURCE_DEFS) {
+    if (def.passive || def.id === "ki" || def.id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
+    if (!spellNames.has(def.displayName.toLowerCase())) names.add(def.displayName);
+  }
+  for (const entry of Object.values(AUTHORED_TABLE)) {
+    for (const spend of entry.spends ?? []) if (spend.fight !== "out" && spend.does.kind !== "choose") names.add(spend.name);
+    for (const reaction of entry.reactions ?? []) names.add(reaction.name);
+  }
+  const bare = [...names].filter((name) => !iconCandidates({ kind: "feature", key: name, family: null }).length);
+  assert.deepEqual(bare, [], "paint them: node scripts/generate-icons.mjs --only feature");
 });
 
 test("every condition glyph id resolves to an existing painting", () => {
