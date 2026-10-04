@@ -17,6 +17,8 @@ const OAUTH_ERRORS: Record<string, string> = {
   signups_disabled: "Signups are disabled on this server.",
   invite_required: "This server needs an invite code to create an account.",
   invite_invalid: "That invite code is not valid (or has been used up).",
+  setup_required:
+    "This server has no accounts yet. Create the admin account with a password and the setup code from the server log, then link Discord in settings.",
 };
 
 type SignupMode = "open" | "invite" | "closed";
@@ -132,6 +134,10 @@ export default function AuthForm({
   // next time the same name joins from here.
   const [deviceWorld, setDeviceWorld] = useState(false);
   const [inviteCode, setInviteCode] = useState(urlInvite);
+  // A fresh server: no accounts yet, and the first one (the admin) takes the
+  // one-time setup code from the server log.
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupCode, setSetupCode] = useState("");
   const [pendingReset, setPendingReset] = useState<{ user: SessionUser; tempPassword: string } | null>(
     null,
   );
@@ -142,6 +148,10 @@ export default function AuthForm({
       .then((data) => {
         setDiscordEnabled(data?.discord === true);
         setDeviceWorld(data?.deviceWorld === true);
+        if (data?.needsSetup === true) {
+          setNeedsSetup(true);
+          setMode("register");
+        }
         if (data?.signupMode === "invite" || data?.signupMode === "closed") {
           setSignupMode(data.signupMode);
         }
@@ -173,6 +183,9 @@ export default function AuthForm({
       if (effectiveMode === "register" && inviteCode.trim()) {
         payload.inviteCode = inviteCode.trim().toUpperCase();
       }
+      if (effectiveMode === "register" && needsSetup && setupCode.trim()) {
+        payload.setupCode = setupCode.trim();
+      }
       // The room code from a /join page vouches for the signup on an
       // invite-only server (only a member could have shared it), and is the
       // whole invitation on a world an app hosts.
@@ -194,6 +207,9 @@ export default function AuthForm({
         });
       }
       const data = await response.json().catch(() => ({}));
+      if (data.needsSetup === true) {
+        setNeedsSetup(true);
+      }
       if (!response.ok) {
         setError(
           seatJoin && response.status === 409
@@ -284,7 +300,27 @@ export default function AuthForm({
             />
           </FieldLabel>
         )}
-        {effectiveMode === "register" && signupMode === "invite" && !seatJoin ? (
+        {effectiveMode === "register" && needsSetup && !seatJoin ? (
+          <div className="reveal">
+            <FieldLabel glyph="tab-admin" text="Setup code">
+              <input
+                value={setupCode}
+                onChange={(event) => setSetupCode(event.target.value)}
+                required
+                autoComplete="off"
+                maxLength={40}
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                aria-describedby="setup-code-hint"
+                className={cn(FIELD, "font-mono uppercase tracking-wider")}
+              />
+            </FieldLabel>
+            <span id="setup-code-hint" className="mt-1.5 block text-xs text-stone-500">
+              This server has no accounts yet. The first one becomes its admin and needs the
+              one-time setup code printed in the server log.
+            </span>
+          </div>
+        ) : null}
+        {effectiveMode === "register" && signupMode === "invite" && !seatJoin && !needsSetup ? (
           <div className="reveal">
           <FieldLabel glyph="tab-handout" text="Invite code">
             <input
