@@ -60,7 +60,9 @@ const QUESTION = "What will Bram do? He is 80 ft from the bandit.";
   console.log("ok: bare JSON is found and stripped, prose braces are not");
 }
 
-const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x");
+// An admin: only an admin's campaign runs on a backend address of its own
+// (src/lib/db/settings.ts), and this one talks to the fake model below.
+const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x", { isAdmin: true });
 const probe = createCampaign(lead.id, {
   title: "Catalogue probe",
   description: "Reads the tool catalogue.",

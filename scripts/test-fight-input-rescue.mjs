@@ -92,7 +92,9 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const baseUrl = `http://127.0.0.1:${server.address().port}/v1`;
 
 function table(title, { fight }) {
-  const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x");
+  // An admin: only an admin's campaign runs on a backend address of its own
+  // (src/lib/db/settings.ts), and this one talks to the fake model below.
+  const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x", { isAdmin: true });
   const campaign = createCampaign(lead.id, {
     title,
     description: "A test of the question-only rescue.",

@@ -100,7 +100,9 @@ globalThis.fetch = async (input, init) => {
 };
 
 // ---- the table -------------------------------------------------------------
-const lead = createUser("kaleb", "x");
+// An admin: only an admin's campaign runs on a backend address of its own
+// (src/lib/db/settings.ts).
+const lead = createUser("kaleb", "x", { isAdmin: true });
 // The device starts with a human Dungeon Master, so the campaign freezes "no
 // AI" into its own settings: the case a key saved later used to miss.
 if (DEVICE) saveGlobalConfig({ text: { provider: "none" } });

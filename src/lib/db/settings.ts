@@ -8,7 +8,13 @@ import type { StorySettings } from "@/lib/types";
 // Merge stored campaign StorySettings over the env-configured defaults and
 // coerce every field back into a valid value. Lived in the retired solo
 // module (lib/db.ts) before campaigns took it over.
-export function normalizeSettings(settings?: Partial<StorySettings>): StorySettings {
+// `ownerIsAdmin: false` marks a campaign a player owns, whose backend
+// addresses follow the server's (serverBackend below). Left out, nothing is
+// overlaid: the server's own defaults and the admin's campaigns.
+export function normalizeSettings(
+  settings?: Partial<StorySettings>,
+  options: { ownerIsAdmin?: boolean } = {},
+): StorySettings {
   const defaultSettings = configuredDefaultStorySettings();
   const merged = {
     ...defaultSettings,
@@ -90,7 +96,47 @@ export function normalizeSettings(settings?: Partial<StorySettings>): StorySetti
   merged.utilityApiKey =
     typeof merged.utilityApiKey === "string" ? merged.utilityApiKey.trim().slice(0, 400) : "";
 
-  return isDeviceWorld() ? { ...merged, ...deviceBackend(defaultSettings) } : merged;
+  if (isDeviceWorld()) {
+    return { ...merged, ...deviceBackend(defaultSettings) };
+  }
+  return options.ownerIsAdmin === false ? { ...merged, ...serverBackend(defaultSettings) } : merged;
+}
+
+// Only an admin points the server at an address. A campaign a player owns
+// runs on the backends the admin configured: its own base URLs, ComfyUI URL
+// and keys are never used, whoever saved them and whenever. Applied where
+// settings are read, like deviceBackend, so an address saved before this
+// rule existed stops counting and the next change in the admin panel
+// reaches every player's campaign. The keys go with the addresses:
+// model-client attaches the admin's own at request time. Which model and
+// which of the server's providers stay the campaign's to choose.
+function serverBackend(server: StorySettings): Partial<StorySettings> {
+  return {
+    customBaseUrl: server.customBaseUrl,
+    customApiKey: "",
+    utilityBaseUrl: server.utilityBaseUrl,
+    utilityApiKey: "",
+    comfyUrl: server.comfyUrl,
+  };
+}
+
+// The fields only an admin may write; the story-settings route drops them
+// from anyone else's PATCH rather than refusing it, so an app built before
+// this rule still saves everything else.
+export const ADMIN_ONLY_BACKEND_FIELDS = [
+  "customBaseUrl",
+  "customApiKey",
+  "utilityBaseUrl",
+  "utilityApiKey",
+  "comfyUrl",
+] as const satisfies ReadonlyArray<keyof StorySettings>;
+
+export function withoutAdminOnlyFields<T extends Partial<StorySettings>>(patch: T): T {
+  const kept = { ...patch };
+  for (const field of ADMIN_ONLY_BACKEND_FIELDS) {
+    delete kept[field];
+  }
+  return kept;
 }
 
 // On a world an app hosts, who narrates and who paints is chosen once for the
@@ -138,12 +184,18 @@ export type MaskedStorySettings = Omit<StorySettings, "customApiKey" | "utilityA
   // True on a world an app hosts, where the backend fields follow the device
   // and the panel shows them instead of editing them.
   deviceManaged: boolean;
+  // True when the viewer may not set backend addresses or keys (anyone but
+  // an admin), so the panel leaves those fields out.
+  serverManaged: boolean;
 };
 
 // What the story authority's settings panel receives: every editable field,
 // with the keys reduced to "is one set" booleans. Same contract as the admin
 // route's maskedConfig, so a key can be kept or cleared but never re-read.
-export function maskStorySettings(settings: StorySettings): MaskedStorySettings {
+export function maskStorySettings(
+  settings: StorySettings,
+  viewer: { isAdmin: boolean } = { isAdmin: true },
+): MaskedStorySettings {
   const { customApiKey, utilityApiKey, ...rest } = settings;
   return {
     ...rest,
@@ -151,5 +203,6 @@ export function maskStorySettings(settings: StorySettings): MaskedStorySettings 
     hasUtilityApiKey: utilityApiKey !== "",
     imagesReady: settings.imageBackend === "openai" ? openAiImagesConfigured(settings) : true,
     deviceManaged: isDeviceWorld(),
+    serverManaged: !isDeviceWorld() && !viewer.isAdmin,
   };
 }

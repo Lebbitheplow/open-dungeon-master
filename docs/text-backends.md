@@ -28,7 +28,9 @@ INI instead of flags. Settings to replicate on any server: **context 65536,
 temperature 0.7, top-p 0.8, top-k 20, min-p 0**, plus tool calling enabled
 (`--jinja` for llama.cpp). If the server runs with `--api-key`, set
 `OPENAI_COMPAT_API_KEY` in `.env.server`. Then point the app at the server
-(admin panel, campaign Text Model settings, or `OPENAI_COMPAT_BASE_URL`).
+(admin panel or `OPENAI_COMPAT_BASE_URL`). Only an admin chooses backend
+addresses: a player's campaign always runs on the server's, and only an
+admin's own campaign can set another in its Story AI panel.
 
 Prefer Ollama? The same model is committed as a Modelfile with the context
 and samplers baked in; build it and point the app at

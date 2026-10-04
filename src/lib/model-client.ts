@@ -510,7 +510,7 @@ export async function requestCustomMessage(
       error: Response.json(
         {
           error:
-            "No backend URL set. Add your server's URL (for example http://127.0.0.1:8080/v1) in Text Model settings.",
+            "No backend URL set. An admin sets the server's in the admin panel's text model settings (for example http://127.0.0.1:8080/v1).",
         },
         { status: 400 },
       ),

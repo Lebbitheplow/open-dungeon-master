@@ -64,6 +64,10 @@ export function StoryAiPanel({
   // campaign follows it, so this panel shows it instead of editing it. null
   // until the answer lands, so the editable rows never flash on a device.
   const [deviceManaged, setDeviceManaged] = useState<boolean | null>(null);
+  // Only an admin points the server at an address or holds its keys, so for
+  // anyone else the URL and key fields are left out and the campaign runs on
+  // the server's own backends (src/lib/db/settings.ts).
+  const [serverManaged, setServerManaged] = useState(false);
   // Whether the server's agent program may narrate (and paint for) this
   // campaign; the admin decides (src/lib/harness/policy.ts). Hidden until
   // the answer lands, so the choice never flashes on and off.
@@ -90,6 +94,7 @@ export function StoryAiPanel({
           setHasCustomKey(data.settings.hasCustomApiKey);
           setHasUtilityKey(data.settings.hasUtilityApiKey);
           setImagesReady(data.settings.imagesReady);
+          setServerManaged(data.settings.serverManaged === true);
         }
         if (!cancelled && data?.harness) {
           setHarness(data.harness);
@@ -289,7 +294,25 @@ export function StoryAiPanel({
                 the same rules and caps as the built-in storyteller. It has none of its own tools.
               </p>
             ) : null}
-            {settings.textProvider === "custom" ? (
+            {settings.textProvider === "custom" && serverManaged ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Model</span>
+                  <input
+                    value={drafts.customModel}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
+                    }
+                    onBlur={() => commitText("customModel")}
+                    onKeyDown={blurOnEnter}
+                    className={inputClass}
+                  />
+                </div>
+                <p className="text-stone-500">
+                  Runs on this server&apos;s backend. Only an admin can change where it points.
+                </p>
+              </>
+            ) : settings.textProvider === "custom" ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={labelClass}>Base URL</span>
@@ -363,7 +386,7 @@ export function StoryAiPanel({
                 className={inputClass}
               />
             </div>
-            {settings.utilityProvider === "custom" && settings.utilityModel ? (
+            {settings.utilityProvider === "custom" && settings.utilityModel && !serverManaged ? (
               <div className="reveal flex flex-wrap items-center gap-2">
                 <span className={labelClass}>Utility URL</span>
                 <input
@@ -471,7 +494,9 @@ export function StoryAiPanel({
           <p className="reveal text-amber-400/90">
             {deviceManaged
               ? "No OpenAI API key is saved on this device. Add one from Story AI on the app's home screen and it covers narration and pictures in every campaign."
-              : "The OpenAI picture backend has no API key. Add one in Admin > Image generation, or point this story's text model at OpenAI so its key covers pictures too."}
+              : serverManaged
+                ? "The OpenAI picture backend has no API key. An admin adds one in Admin > Image generation."
+                : "The OpenAI picture backend has no API key. Add one in Admin > Image generation, or point this story's text model at OpenAI so its key covers pictures too."}
           </p>
         ) : settings.imageGenerationEnabled && !imagesConfigured && imagesReady ? (
           <p className="reveal text-amber-400/90">

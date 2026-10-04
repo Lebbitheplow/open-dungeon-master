@@ -78,6 +78,7 @@ export type Campaign = CampaignSummary & {
 
 type CampaignRow = {
   id: string;
+  owner_is_admin?: number | null;
   title: string;
   description: string;
   kind: string | null;
@@ -257,7 +258,9 @@ function mapCampaign(row: CampaignRow): Campaign {
     updatedAt: row.updated_at,
     scene: row.scene,
     questLog: parseJson<string[]>(row.quest_log_json, []),
-    settings: normalizeSettings(parseJson(row.settings_json, {})),
+    settings: normalizeSettings(parseJson(row.settings_json, {}), {
+      ownerIsAdmin: Number(row.owner_is_admin ?? 0) === 1,
+    }),
     gameSettings,
     dmOutline: row.dm_outline ?? "",
     storyArc: normalizeStoryArc(parseJson(row.story_arc_json ?? "", null)),
@@ -271,7 +274,9 @@ function mapCampaign(row: CampaignRow): Campaign {
 const CAMPAIGN_SELECT = `
   SELECT
     c.*,
-    (SELECT COUNT(*) FROM campaign_members m WHERE m.campaign_id = c.id) AS player_count
+    (SELECT COUNT(*) FROM campaign_members m WHERE m.campaign_id = c.id) AS player_count,
+    -- Whether the owner may choose backend addresses (src/lib/db/settings.ts).
+    (SELECT u.is_admin FROM users u WHERE u.id = c.owner_user_id) AS owner_is_admin
   FROM campaigns c
 `;
 
@@ -633,7 +638,9 @@ export function updateStorySettings(
   getDatabase()
     .prepare(`UPDATE campaigns SET settings_json = ?, updated_at = ? WHERE id = ?`)
     .run(JSON.stringify(merged), nowIso(), campaignId);
-  return merged;
+  // Read back, so the answer is what the campaign will actually run on: a
+  // player's campaign follows the server's addresses whatever is stored.
+  return getCampaignById(campaignId)?.settings ?? merged;
 }
 
 // Changing who runs the game keeps the seats in step with the mode: a mode

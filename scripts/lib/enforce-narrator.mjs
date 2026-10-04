@@ -130,6 +130,7 @@ export async function fakeModel() {
   process.env.OPENAI_COMPAT_CONTEXT = process.env.OPENAI_COMPAT_CONTEXT ?? "65536";
 
   const campaigns = await import("../../src/lib/db/campaigns.ts");
+  const { getDatabase } = await import("../../src/lib/db/core.ts");
   const messages = await import("../../src/lib/db/messages.ts");
   const { startDmTurn } = await import("../../src/lib/dm/turn.ts");
 
@@ -143,6 +144,11 @@ export async function fakeModel() {
     },
     // The world's campaign talks to this server, with no pictures to draw.
     pointAt: (world) => {
+      // Only an admin's campaign runs on a backend address of its own
+      // (src/lib/db/settings.ts), so this world's owner is one. Pointing the
+      // server's own backend here instead would send every other world's
+      // turns to the script too.
+      getDatabase().prepare(`UPDATE users SET is_admin = 1 WHERE id = ?`).run(world.owner.id);
       campaigns.updateStorySettings(world.campaignId, {
         textProvider: "custom",
         customBaseUrl: baseUrl,

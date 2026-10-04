@@ -247,8 +247,8 @@ export function AdminSettingsPanel() {
 
       <PageSection id="admin-text" heading="Text model defaults" glyph="system-lore">
         <p className="mb-3 text-xs text-stone-500">
-          Defaults for new campaigns and fallbacks when a campaign leaves a field empty. Each
-          campaign&apos;s own Text Model settings still win.
+          The backend every player&apos;s campaign runs on. A campaign can still pick its model,
+          but only an admin&apos;s own campaigns can point at another address or key.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <SelectField

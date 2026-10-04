@@ -15,7 +15,7 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { maskStorySettings, normalizeSettings, scrubStorySettings } = await import(
+const { maskStorySettings, normalizeSettings, scrubStorySettings, withoutAdminOnlyFields } = await import(
   "../src/lib/db/settings.ts"
 );
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
@@ -99,7 +99,9 @@ test("the scrub blanks only the keys", () => {
   );
 });
 
-const lead = createUser("lead", "x");
+// An admin: only an admin's campaign keeps backend addresses and keys of its
+// own, which is what the next tests store and scrub.
+const lead = createUser("lead", "x", { isAdmin: true });
 const campaign = createCampaign(lead.id, {
   title: "Test Table",
   description: "",
@@ -224,6 +226,36 @@ test("on a device world every campaign follows the device's Story AI", () => {
   } finally {
     delete process.env.ODM_DEVICE_WORLD;
   }
+});
+
+test("only an admin's campaign runs on its own backend address", () => {
+  const admin = createUser("backend-admin", "x", { isAdmin: true });
+  const player = createUser("backend-player", "x");
+  const input = { title: "T", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" };
+  const own = { customBaseUrl: "http://10.0.0.5:8080/v1", customApiKey: "sk-own", utilityBaseUrl: "http://10.0.0.5:8081/v1", comfyUrl: "http://10.0.0.5:8188" };
+  const theirs = createCampaign(player.id, input);
+  const mine = createCampaign(admin.id, input);
+  // Written straight to the row, as a player could before this rule.
+  updateStorySettings(theirs.id, { ...own, customModel: "their-model" });
+  updateStorySettings(mine.id, own);
+  const server = normalizeSettings({});
+  const played = getCampaignById(theirs.id).settings;
+  assert.equal(played.customBaseUrl, server.customBaseUrl);
+  assert.equal(played.utilityBaseUrl, server.utilityBaseUrl);
+  assert.equal(played.comfyUrl, server.comfyUrl);
+  assert.equal(played.customApiKey, "", "a player's key rode along");
+  assert.equal(played.customModel, "their-model", "the model stays the campaign's choice");
+  const run = getCampaignById(mine.id).settings;
+  assert.equal(run.customBaseUrl, own.customBaseUrl);
+  assert.equal(run.comfyUrl, own.comfyUrl);
+  assert.equal(run.customApiKey, "sk-own");
+  assert.equal(maskStorySettings(played, player).serverManaged, true);
+  assert.equal(maskStorySettings(run, admin).serverManaged, false);
+});
+
+test("a non-admin's patch loses its backend addresses and keys, nothing else", () => {
+  const patch = withoutAdminOnlyFields({ ...{ customBaseUrl: "http://x", customApiKey: "k", utilityBaseUrl: "http://y", utilityApiKey: "k", comfyUrl: "http://z" }, customModel: "m", proseSize: "short" });
+  assert.deepEqual(patch, { customModel: "m", proseSize: "short" });
 });
 
 // A campaign picks its own backend URL, so the server's OpenRouter key may
