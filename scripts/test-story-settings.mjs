@@ -267,4 +267,64 @@ test("on a device world every campaign follows the device's Story AI", () => {
   }
 }
 
+// A campaign's backend is not trusted to send the server elsewhere: a
+// redirect is followed only to the same host and only when it keeps the
+// POST whole, and no body is read past a ceiling.
+{
+  const { requestCustomMessage } = await import("../src/lib/model-client.ts");
+  const realFetch = globalThis.fetch;
+  const hits = [];
+  const ok = () => Response.json({ choices: [{ message: { role: "assistant", content: "fine" } }] });
+  const endless = () =>
+    new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(1024 * 1024).fill(120));
+      },
+    });
+  globalThis.fetch = async (url, init) => {
+    hits.push(String(url));
+    assert.equal(init.redirect, "manual", "redirects are never left to fetch");
+    const { hostname, pathname, protocol } = new URL(String(url));
+    if (hostname === "inside.test") return ok();
+    if (hostname === "away.test") {
+      return new Response(null, { status: 307, headers: { location: "http://inside.test/v1/chat/completions" } });
+    }
+    if (hostname === "port.test" && new URL(String(url)).port === "8080") {
+      return new Response(null, { status: 307, headers: { location: "http://port.test:9999/v1/chat/completions" } });
+    }
+    if (hostname === "port.test") return ok();
+    if (hostname === "moved.test" && protocol === "http:") {
+      return new Response(null, { status: 308, headers: { location: "https://moved.test/v1/chat/completions" } });
+    }
+    if (hostname === "moved.test") return ok();
+    if (hostname === "flood.test" && pathname.startsWith("/error")) return new Response(endless(), { status: 500 });
+    if (hostname === "flood.test") return new Response(endless(), { status: 200 });
+    return new Response("nope", { status: 404 });
+  };
+  try {
+    const away = await requestCustomMessage("https://away.test/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(away.error, "a redirect to another host was followed");
+    assert.match((await away.error.json()).error, /redirected/);
+    assert.ok(!hits.some((url) => url.includes("inside.test")), "the other host was contacted");
+
+    const port = await requestCustomMessage("http://port.test:8080/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(port.error, "a redirect to another port on the same host was followed");
+
+    const moved = await requestCustomMessage("http://moved.test/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.equal(moved.message?.content, "fine", "an https upgrade on the same host still works");
+
+    const started = Date.now();
+    const flooded = await requestCustomMessage("https://flood.test/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(flooded.error, "an endless reply was accepted");
+    const erred = await requestCustomMessage("https://flood.test/error/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(erred.error);
+    assert.ok((await erred.error.json()).detail.length <= 300);
+    assert.ok(Date.now() - started < 10_000, "an endless body was read to the end");
+    passed += 1;
+    console.log("ok: a campaign's backend cannot redirect the server elsewhere or flood it");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log(`story settings: ${passed} tests passed`);

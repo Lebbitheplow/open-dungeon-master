@@ -149,7 +149,7 @@ function* streams(bytes: Uint8Array): Generator<string> {
     }
     const raw = Buffer.from(latin.slice(start, end), "latin1");
     let text: string;
-    if (/FlateDecode/.test(head)) {
+    if (/FlateDecode/.test(dictionary)) {
       try {
         const inflated = inflateSync(raw, {
           maxOutputLength: Math.min(MAX_STREAM_BYTES, MAX_INFLATED_BYTES - spent),
@@ -163,7 +163,7 @@ function* streams(bytes: Uint8Array): Generator<string> {
         spent += Math.min(MAX_STREAM_BYTES, MAX_INFLATED_BYTES - spent, raw.length * DEFLATE_MAX_RATIO);
         continue;
       }
-    } else if (/Filter/.test(head)) {
+    } else if (/Filter/.test(dictionary)) {
       // An image or a compression this does not read.
       continue;
     } else {

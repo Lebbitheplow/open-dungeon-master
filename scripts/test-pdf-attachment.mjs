@@ -17,7 +17,8 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const { extractPdfText, isEncryptedPdf, isPdf, PDF_MAX_BYTES } = await import("../src/lib/pdf/text.ts");
 const { isUploadedPdfPath, isUploadedImagePath } = await import("../src/lib/uploads.ts");
-const { chunksForAttachment, feedsRules } = await import("../src/lib/dm/lore-attachments.ts");
+const { chunksForAttachment, feedsRules, rereadRulesAttachments } = await import("../src/lib/dm/lore-attachments.ts");
+const { insertLoreEntry } = await import("../src/lib/db/lore.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { listRuleChunks, replaceSourceChunks, setHouseRules, deleteSourceChunks } = await import("../src/lib/db/rules.ts");
@@ -168,5 +169,34 @@ test("house rules and a PDF's chunks live side by side and are removed apart", (
   deleteSourceChunks(campaign.id, "entry-1");
   assert.deepEqual(listRuleChunks(campaign.id).map((chunk) => chunk.source), ["house"]);
 });
+
+{
+  // Run from the temp folder so the PDF lands in its public/uploads, not the
+  // repo's.
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    const user = createUser("reread", "x");
+    const campaign = createCampaign(user.id, { title: "R", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+    fs.mkdirSync(path.join(dir, "public", "uploads"), { recursive: true });
+    const name = "11111111-2222-4333-8444-555555555555.pdf";
+    const page = (title) => ({
+      flate: true,
+      content: `BT (${title}) Tj ET\n${Array.from({ length: 300 }, (_, i) => `${(i * 7919) % 1000} ${(i * 104729) % 800} m ${(i * 31) % 997} ${(i * 17) % 811} l S`).join("\n")}`,
+    });
+    fs.writeFileSync(path.join(dir, "public", "uploads", name), pdfOf([page("Grappling"), page("Shoving")]));
+    const entry = insertLoreEntry({ campaignId: campaign.id, category: "other", title: "Book", body: "", tags: ["rules"], attachmentPath: `/uploads/${name}` });
+    // What the old reader left behind: the first page only.
+    replaceSourceChunks(campaign.id, entry.id, [{ heading: "Book", text: "Grappling" }]);
+    assert.equal(await rereadRulesAttachments(), 1);
+    const text = listRuleChunks(campaign.id).filter((chunk) => chunk.source === entry.id).map((chunk) => chunk.text).join("\n");
+    assert.match(text, /Shoving/, "the second page arrived");
+    assert.equal(await rereadRulesAttachments(), 0, "it runs once");
+    passed += 1;
+    console.log("ok: rules PDFs already on the server are read again, whole, once");
+  } finally {
+    process.chdir(cwd);
+  }
+}
 
 console.log(`test-pdf-attachment: ${passed} passed`);

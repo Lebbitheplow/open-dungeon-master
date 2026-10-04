@@ -1,3 +1,5 @@
+import { getAppSetting, setAppSetting } from "@/lib/db/app-settings";
+import { listLoreEntriesWithAttachments } from "@/lib/db/lore";
 import { deleteSourceChunks, replaceSourceChunks } from "@/lib/db/rules";
 import { chunkHouseRules, HOUSE_RULES_MAX } from "@/lib/dm/rules-logic";
 import type { WorldLoreEntry } from "@/lib/dm/world-lore-logic";
@@ -60,4 +62,35 @@ export async function ingestLoreAttachment(entry: WorldLoreEntry): Promise<numbe
 
 export function dropLoreAttachment(campaignId: string, entryId: string) {
   deleteSourceChunks(campaignId, entryId);
+}
+
+// The PDF reader used to stop after a book's first page (each "endstream"
+// read as the start of the next stream), and an entry is only read again
+// when its title, tags or attachment change. So every rules PDF already on
+// the server is read once more, by the reader that sees the whole book, the
+// first time the server starts with it. One entry at a time, and recorded
+// as done so it never runs again.
+const RULES_READER_KEY = "rules_pdf_reader";
+const RULES_READER_VERSION = 2;
+
+export async function rereadRulesAttachments(): Promise<number> {
+  if (getAppSetting<number>(RULES_READER_KEY, 0) >= RULES_READER_VERSION) {
+    return 0;
+  }
+  let read = 0;
+  for (const entry of listLoreEntriesWithAttachments()) {
+    if (!feedsRules(entry)) {
+      continue;
+    }
+    try {
+      await ingestLoreAttachment(entry);
+      read += 1;
+    } catch (error) {
+      console.error(`[lore] could not re-read the PDF on ${entry.id}`, error);
+    }
+    // Lets requests in between books.
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  setAppSetting(RULES_READER_KEY, RULES_READER_VERSION);
+  return read;
 }

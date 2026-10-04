@@ -67,6 +67,19 @@ export function listLoreEntries(campaignId: string): WorldLoreEntry[] {
   return rows.map(mapEntry);
 }
 
+// Every entry carrying a PDF, across campaigns; the startup re-read in
+// src/lib/dm/lore-attachments.ts walks these.
+export function listLoreEntriesWithAttachments(): WorldLoreEntry[] {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT ${LORE_COLUMNS} FROM lore_entries
+       WHERE attachment_path IS NOT NULL AND attachment_path != ''
+       ORDER BY created_at ASC`,
+    )
+    .all() as LoreRow[];
+  return rows.map(mapEntry);
+}
+
 export function getLoreEntry(entryId: string): WorldLoreEntry | null {
   const row = getDatabase()
     .prepare(`SELECT ${LORE_COLUMNS} FROM lore_entries WHERE id = ?`)

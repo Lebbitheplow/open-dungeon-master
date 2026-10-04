@@ -211,15 +211,19 @@ export async function probeCustomContextWindow(
     return cached || null;
   }
   try {
+    // Never redirected (the URL is a campaign's; see fetchBackend), and
+    // read under a ceiling: the window is one number in a small object.
     const response = await fetch(url, {
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal: AbortSignal.timeout(2_000),
+      redirect: "error",
     });
     if (!response.ok) {
       probedContextWindows.set(cacheKey, 0);
       return null;
     }
-    const window = readContextWindow(await response.json()) ?? 0;
+    const body = await readBody(response, MAX_BACKEND_ERROR_BYTES);
+    const window = (body.complete ? readContextWindow(JSON.parse(body.text)) : null) ?? 0;
     probedContextWindows.set(cacheKey, window);
     return window || null;
   } catch {
@@ -280,6 +284,71 @@ function createRequestTimeout(ms: number) {
 // Reads an upstream streaming body line by line with an idle timeout that
 // resets on every chunk, so a stalled model server can't hold the turn open
 // forever while a slow-but-alive one is given all the time it needs.
+// SECURITY: a campaign picks its own backend URL, so whatever answers there
+// is not trusted, the same reasoning as src/lib/comfyui.ts. A redirect is
+// followed only to the same host and only when it keeps the request whole
+// (307 or 308, never down to http), so a reverse proxy's https upgrade or a
+// moved path still works while an answer cannot steer the server's request
+// to another address. Every body is read under a ceiling: a reply is
+// kilobytes, a long streamed one a few megabytes.
+const MAX_BACKEND_BODY_BYTES = 16 * 1024 * 1024;
+const MAX_BACKEND_STREAM_BYTES = 64 * 1024 * 1024;
+const MAX_BACKEND_ERROR_BYTES = 64 * 1024;
+const MAX_BACKEND_REDIRECTS = 3;
+
+class BackendRefusal extends Error {}
+
+async function fetchBackend(url: string, init: RequestInit): Promise<Response> {
+  let current = new URL(url);
+  for (let hops = 0; ; hops += 1) {
+    const response = await fetch(current.href, { ...init, redirect: "manual" });
+    if (response.status < 300 || response.status >= 400) {
+      return response;
+    }
+    await response.body?.cancel().catch(() => {});
+    const location = response.headers.get("location");
+    const next = location ? new URL(location, current) : null;
+    // The same host and port, or that host's https on its default port.
+    const sameServer =
+      next !== null &&
+      next.hostname === current.hostname &&
+      ((next.protocol === current.protocol && next.port === current.port) ||
+        (current.protocol === "http:" && next.protocol === "https:" && next.port === ""));
+    const followed =
+      sameServer && hops < MAX_BACKEND_REDIRECTS && (response.status === 307 || response.status === 308);
+    if (!followed) {
+      throw new BackendRefusal(
+        `The backend at ${url} redirected the request elsewhere, which ODM does not follow. Use the address the server itself answers on.`,
+      );
+    }
+    current = next!;
+  }
+}
+
+// Up to `max` bytes of the body as text; `complete` is false when there
+// was more, which is cancelled unread.
+async function readBody(response: Response, max: number): Promise<{ text: string; complete: boolean }> {
+  if (!response.body) {
+    return { text: "", complete: true };
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      return { text: Buffer.concat(chunks).toString("utf8"), complete: true };
+    }
+    total += value.byteLength;
+    if (total > max) {
+      chunks.push(value.subarray(0, value.byteLength - (total - max)));
+      await reader.cancel().catch(() => {});
+      return { text: Buffer.concat(chunks).toString("utf8"), complete: false };
+    }
+    chunks.push(value);
+  }
+}
+
 async function forEachStreamLine(
   upstream: Response,
   idleMs: number,
@@ -289,6 +358,7 @@ async function forEachStreamLine(
   const reader = upstream.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let total = 0;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   const resetIdle = () => {
     clearTimeout(idleTimer);
@@ -303,6 +373,11 @@ async function forEachStreamLine(
         break;
       }
       resetIdle();
+      total += value.byteLength;
+      if (total > MAX_BACKEND_STREAM_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new BackendRefusal("The backend streamed far more than any reply, so the stream was cut off.");
+      }
       buffer += decoder.decode(value, { stream: true });
       let newline = buffer.indexOf("\n");
       while (newline >= 0) {
@@ -556,7 +631,7 @@ export async function requestCustomMessage(
   const requestTimeout = createRequestTimeout(timeoutMs);
   let upstream: Response;
   try {
-    upstream = await fetch(endpoint, {
+    upstream = await fetchBackend(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -571,7 +646,10 @@ export async function requestCustomMessage(
       body: JSON.stringify(requestPayload),
       signal: requestTimeout.signal,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof BackendRefusal) {
+      return { error: Response.json({ error: error.message }, { status: 502 }) };
+    }
     if (requestTimeout.timedOut()) {
       return {
         error: Response.json(
@@ -596,7 +674,8 @@ export async function requestCustomMessage(
   }
 
   if (!upstream.ok) {
-    const text = await upstream.text();
+    // Enough to recognise the error and quote its start; the rest unread.
+    const { text } = await readBody(upstream, MAX_BACKEND_ERROR_BYTES);
 
     // Some servers can't accept image inputs at all (llama.cpp without an
     // mmproj, plain text models); retry the turn with text-only messages.
@@ -713,7 +792,10 @@ export async function requestCustomMessage(
           }
         }
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof BackendRefusal) {
+        return { error: Response.json({ error: error.message }, { status: 502 }) };
+      }
       return {
         error: Response.json(
           {
@@ -749,7 +831,11 @@ export async function requestCustomMessage(
 
   let data: { choices?: Array<{ message?: UpstreamChatMessage }> };
   try {
-    data = (await upstream.json()) as typeof data;
+    const body = await readBody(upstream, MAX_BACKEND_BODY_BYTES);
+    if (!body.complete) {
+      throw new BackendRefusal("The backend's reply was far larger than any reply.");
+    }
+    data = JSON.parse(body.text) as typeof data;
   } catch {
     return {
       error: Response.json(

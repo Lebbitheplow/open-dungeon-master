@@ -24,6 +24,12 @@ export async function register() {
       } catch (error) {
         console.error("[embeddings] could not check the stored vectors against the model", error);
       }
+
+      // Rules PDFs read by the old first-page-only reader get their whole
+      // book, once (src/lib/dm/lore-attachments.ts).
+      void import("@/lib/dm/lore-attachments")
+        .then(({ rereadRulesAttachments }) => rereadRulesAttachments())
+        .catch((error) => console.error("[lore] rules PDF re-read failed", error));
     }
   }
 }
