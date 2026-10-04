@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { sniffImage } from "@/lib/image-format";
 import { scheduleImageVariants } from "@/lib/image-variants";
 import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
 
@@ -19,6 +20,10 @@ const NEGATIVE_PROMPT =
 // Checkpoint-friendly ceiling: SDXL models train at 1024 and degrade past
 // ~1.5K on the long side, unlike the FLUX backends' 2048 slow mode.
 const LONG_SIDE = { fast: 1024, slow: 1344 } as const;
+// Ceilings on what the server reads back. A 1344px PNG is a few MB; the
+// JSON answers (status, checkpoint list, history) are kilobytes.
+export const MAX_COMFY_IMAGE_BYTES = 32 * 1024 * 1024;
+export const MAX_COMFY_JSON_BYTES = 4 * 1024 * 1024;
 
 export function resolveComfyUrl(raw: string | undefined): string {
   return (
@@ -36,6 +41,59 @@ function timeoutSignal(ms: number) {
   return { signal: controller.signal, clear: () => clearTimeout(id) };
 }
 
+// SECURITY: the ComfyUI URL can be a campaign's own setting, so whatever
+// answers there is not trusted. Its answers are never followed elsewhere,
+// never read past a ceiling, and never published unless they are a picture:
+// otherwise a server that speaks just enough of the protocol could redirect
+// the final download to an internal address and have the response saved
+// under /generated for anyone to read.
+class ComfyRefusal extends Error {}
+
+// ComfyUI's API never redirects, so a redirect means whatever is at this
+// URL is steering the server's request somewhere else; it is refused rather
+// than followed.
+async function comfyFetch(url: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(url, { ...init, redirect: "manual" });
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => {});
+    throw new ComfyRefusal("ComfyUI answered with a redirect, which ComfyUI never sends. Check the URL.");
+  }
+  return response;
+}
+
+// The body, refused once it passes `max` bytes, whether declared up front
+// or discovered while streaming.
+async function readCapped(response: Response, max: number): Promise<Buffer> {
+  const tooLarge = () => new ComfyRefusal(`ComfyUI sent more than ${Math.round(max / 1024 / 1024)}MB, which is not a ComfyUI answer.`);
+  if (Number(response.headers.get("content-length")) > max) {
+    await response.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  if (!response.body) {
+    return Buffer.alloc(0);
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  return JSON.parse((await readCapped(response, MAX_COMFY_JSON_BYTES)).toString("utf8")) as T;
+}
+
 export type ComfyStatus = {
   ok: boolean;
   error?: string;
@@ -50,22 +108,23 @@ export async function comfyStatus(rawUrl: string | undefined): Promise<ComfyStat
 
   try {
     const [stats, objectInfo] = await Promise.all([
-      fetch(`${url}/system_stats`, { cache: "no-store", signal: timeout.signal }),
-      fetch(`${url}/object_info/CheckpointLoaderSimple`, {
+      comfyFetch(`${url}/system_stats`, { cache: "no-store", signal: timeout.signal }),
+      comfyFetch(`${url}/object_info/CheckpointLoaderSimple`, {
         cache: "no-store",
         signal: timeout.signal,
       }),
     ]);
 
     if (!stats.ok) {
+      await objectInfo.body?.cancel().catch(() => {});
       return { ok: false, error: `ComfyUI answered ${stats.status}.`, checkpoints: [] };
     }
 
     let checkpoints: string[] = [];
     if (objectInfo.ok) {
-      const info = (await objectInfo.json()) as {
+      const info = await readJson<{
         CheckpointLoaderSimple?: { input?: { required?: { ckpt_name?: unknown[] } } };
-      };
+      }>(objectInfo);
       const names = info.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
       if (Array.isArray(names)) {
         checkpoints = names.filter((name): name is string => typeof name === "string");
@@ -73,7 +132,10 @@ export async function comfyStatus(rawUrl: string | undefined): Promise<ComfyStat
     }
 
     return { ok: true, checkpoints };
-  } catch {
+  } catch (error) {
+    if (error instanceof ComfyRefusal) {
+      return { ok: false, error: error.message, checkpoints: [] };
+    }
     return {
       ok: false,
       error: `Could not reach ComfyUI at ${url}. Start ComfyUI and check the URL.`,
@@ -199,17 +261,17 @@ export async function generateComfyImage(options: {
   const submitTimeout = timeoutSignal(STATUS_TIMEOUT_MS * 2);
   let promptId = "";
   try {
-    const submitted = await fetch(`${url}/prompt`, {
+    const submitted = await comfyFetch(`${url}/prompt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: workflow, client_id: crypto.randomUUID() }),
       signal: submitTimeout.signal,
     });
     if (!submitted.ok) {
-      const detail = (await submitted.text()).slice(0, 500);
+      const detail = (await readCapped(submitted, MAX_COMFY_JSON_BYTES)).toString("utf8").slice(0, 500);
       throw new Error(`ComfyUI rejected the workflow (${submitted.status}): ${detail}`);
     }
-    const payload = (await submitted.json()) as { prompt_id?: string };
+    const payload = await readJson<{ prompt_id?: string }>(submitted);
     promptId = payload.prompt_id || "";
   } catch (error) {
     if (error instanceof Error && !error.message.startsWith("ComfyUI")) {
@@ -235,16 +297,22 @@ export async function generateComfyImage(options: {
 
     const historyTimeout = timeoutSignal(STATUS_TIMEOUT_MS);
     try {
-      const history = await fetch(`${url}/history/${promptId}`, {
+      const history = await comfyFetch(`${url}/history/${promptId}`, {
         cache: "no-store",
         signal: historyTimeout.signal,
       });
       if (!history.ok) {
+        await history.body?.cancel().catch(() => {});
         continue;
       }
-      const payload = (await history.json()) as Record<string, HistoryEntry>;
+      const payload = await readJson<Record<string, HistoryEntry>>(history);
       entry = payload[promptId];
-    } catch {
+    } catch (error) {
+      // A slow or briefly unreachable ComfyUI is polled again; one that
+      // redirects or floods is not going to start behaving.
+      if (error instanceof ComfyRefusal) {
+        throw error;
+      }
       continue;
     } finally {
       historyTimeout.clear();
@@ -275,27 +343,33 @@ export async function generateComfyImage(options: {
   }
 
   const viewTimeout = timeoutSignal(STATUS_TIMEOUT_MS * 4);
-  let bytes: ArrayBuffer;
+  let bytes: Buffer;
   try {
-    const view = await fetch(
+    const view = await comfyFetch(
       `${url}/view?filename=${encodeURIComponent(image.filename)}&subfolder=${encodeURIComponent(image.subfolder || "")}&type=${encodeURIComponent(image.type || "output")}`,
       { cache: "no-store", signal: viewTimeout.signal },
     );
     if (!view.ok) {
+      await view.body?.cancel().catch(() => {});
       throw new Error(`ComfyUI would not return the finished image (${view.status}).`);
     }
-    bytes = await view.arrayBuffer();
+    bytes = await readCapped(view, MAX_COMFY_IMAGE_BYTES);
   } finally {
     viewTimeout.clear();
+  }
+  // Only a picture is published, and under the name of what it really is.
+  const kind = sniffImage(bytes);
+  if (!kind) {
+    throw new Error("ComfyUI returned something that is not a PNG, JPEG or WebP image.");
   }
 
   const generatedDir = path.join(process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
-  const filename = `${Date.now()}-${seed}-comfyui-${promptSlug(options.prompt)}.png`;
+  const filename = `${Date.now()}-${seed}-comfyui-${promptSlug(options.prompt)}.${kind.ext}`;
   const saved = path.join(generatedDir, filename);
-  writeFileSync(saved, Buffer.from(bytes));
+  writeFileSync(saved, bytes);
   // The smaller WebP copies the table draws, written after the fact; the
-  // PNG is what the campaign stores and what a client without them gets.
+  // original is what the campaign stores and what a client without them gets.
   scheduleImageVariants(saved);
 
   return {
