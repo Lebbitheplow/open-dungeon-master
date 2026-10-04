@@ -310,9 +310,13 @@ type BundleArtPaths = {
   factionPortraits: string[];
 };
 
+// `isAdmin` lifts the importer's upload budget (src/lib/upload-budget.ts):
+// the registry install is an admin's, and the workshop route passes the
+// signed-in user's flag.
 export function importWorkshopBundle(
   userId: string,
   bundle: WorkshopBundle,
+  options: { isAdmin?: boolean } = {},
 ): BundleImportResult {
   // Every picture is decoded first and the lot weighed against the
   // importer's upload budget (src/lib/upload-budget.ts), so an import that
@@ -327,7 +331,7 @@ export function importWorkshopBundle(
     .flat()
     .filter((image): image is BundleImage => image !== null);
   const refusal = admitUpload(
-    userId,
+    { id: userId, isAdmin: options.isAdmin },
     images.reduce((sum, image) => sum + image.bytes.length, 0),
     images.length,
   );

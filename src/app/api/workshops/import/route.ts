@@ -66,7 +66,9 @@ export async function POST(request: Request) {
     });
   }
 
-  const result = importWorkshopBundle(user.id, pickBundleKinds(bundle, parsed.data.kinds));
+  const result = importWorkshopBundle(user.id, pickBundleKinds(bundle, parsed.data.kinds), {
+    isAdmin: user.isAdmin,
+  });
   if ("error" in result) {
     return result.refusal
       ? uploadRefusalResponse(result.refusal)

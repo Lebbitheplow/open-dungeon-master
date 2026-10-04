@@ -1218,6 +1218,18 @@ test("an import past the upload budget is refused before it writes anything", ()
   assert.deepEqual(uploadedFiles(), filesBefore, "a refused import still wrote art");
 });
 
+test("an admin's import is not held to the upload budget", () => {
+  const workshopsBefore = workshopCount();
+  process.env.UPLOAD_DAILY_BYTES = "1";
+  try {
+    const result = importWorkshopBundle(userId, exported, { isAdmin: true });
+    assert.ok(!("error" in result), "an admin's import was refused");
+  } finally {
+    delete process.env.UPLOAD_DAILY_BYTES;
+  }
+  assert.equal(workshopCount(), workshopsBefore + 1);
+});
+
 test("an import that fails after its art is written leaves no files behind", () => {
   const filesBefore = uploadedFiles();
   // No such user: the workshop's owner foreign key fails after the art has

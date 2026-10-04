@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     if (isEncryptedPdf(buffer)) {
       return Response.json({ error: "That PDF is password protected." }, { status: 415 });
     }
-    const refusal = admitUpload(user.id, buffer.length, 1);
+    const refusal = admitUpload(user, buffer.length, 1);
     if (refusal) {
       return uploadRefusalResponse(refusal);
     }
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   if (!buffer.length || buffer.length > MAX_UPLOAD_BYTES) {
     return Response.json({ error: "Image is empty or larger than 8MB." }, { status: 413 });
   }
-  const refusal = admitUpload(user.id, buffer.length, 1);
+  const refusal = admitUpload(user, buffer.length, 1);
   if (refusal) {
     return uploadRefusalResponse(refusal);
   }

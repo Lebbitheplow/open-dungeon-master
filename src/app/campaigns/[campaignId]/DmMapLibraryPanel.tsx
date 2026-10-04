@@ -286,6 +286,7 @@ export function DmMapLibraryPanel({
       const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
       const art = backdropDataUrl(parsed);
       let backdropPath: string | undefined;
+      let pictureRefused = "";
       if (art) {
         // UVTT exports carry the drawing as full-size PNG; sized and
         // encoded here like any other picked picture.
@@ -298,9 +299,11 @@ export function DmMapLibraryPanel({
         const payload = await upload.json().catch(() => ({}));
         if (upload.ok) {
           backdropPath = payload.url;
+        } else {
+          pictureRefused = `The picture did not come along: ${payload.error || "it would not upload."}`;
         }
         // A picture that will not upload is not a reason to lose the walls:
-        // the geometry is the part the rules need.
+        // the geometry is the part the rules need, but the DM is told.
       }
       // The picture is already uploaded; sending it again would move the
       // same megabytes twice for a field the import does not read.
@@ -314,7 +317,7 @@ export function DmMapLibraryPanel({
       });
       if (result?.map) {
         select(result.map.id);
-        setNote(result.notes?.[0] ?? "Imported.");
+        setNote([result.notes?.[0] ?? "Imported.", pictureRefused].filter(Boolean).join(" "));
       }
     } catch {
       setError("That file is not a Universal VTT export this can read.");

@@ -208,7 +208,8 @@ export async function fetchRegistryIndex(
 
 // A prepared world from the registry (docs/vtt-parity-implementation-plan.md
 // 12.3): fetched under the same cap, checked against the bundle schema,
-// and imported as a workshop belonging to whoever pressed install.
+// and imported as a workshop belonging to whoever pressed install. Only an
+// admin can, so the import is not held to an upload budget.
 export async function installBundleFromUrl(
   url: string,
   userId: string,
@@ -221,7 +222,7 @@ export async function installBundleFromUrl(
   if (!parsed.success) {
     return { ok: false, status: 422, error: "That download is not a workshop bundle." };
   }
-  const result = importWorkshopBundle(userId, parsed.data);
+  const result = importWorkshopBundle(userId, parsed.data, { isAdmin: true });
   if ("error" in result) {
     return { ok: false, status: result.refusal?.status ?? 409, error: result.error };
   }

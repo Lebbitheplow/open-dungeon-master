@@ -246,6 +246,8 @@ test("on a device world every campaign follows the device's Story AI", () => {
       "https://evil.test/v1?x=.openrouter.ai",
       "https://openrouter.ai@evil.test/v1",
       "https://openrouter.ai.evil.test/api/v1",
+      // The right host, but the key would cross the network in clear text.
+      "http://openrouter.ai/api/v1",
     ];
     for (const base of decoys) {
       await requestCustomMessage(base, "m", "", [{ role: "user", content: "hi" }]);

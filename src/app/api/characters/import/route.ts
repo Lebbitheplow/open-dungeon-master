@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     return refusal(admitted.problems);
   }
   const portraitSize = bundlePortraitSize(parsed.bundle);
-  const overBudget = admitUpload(user.id, portraitSize, portraitSize ? 1 : 0);
+  const overBudget = admitUpload(user, portraitSize, portraitSize ? 1 : 0);
   if (overBudget) {
     return uploadRefusalResponse(overBudget);
   }

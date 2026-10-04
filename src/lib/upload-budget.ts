@@ -10,6 +10,11 @@
 //
 // admitUpload checks and records in one synchronous call, so two requests
 // racing each other cannot both spend the last of a budget.
+//
+// Admins have no budget: the limit is on what any signed-in account can do
+// to a disk that is not theirs, and an admin installing registry worlds or
+// building their own is the person that disk belongs to (on a device world,
+// the device's owner). The floor still applies to them.
 import fs from "node:fs";
 import path from "node:path";
 import { serverEnv } from "@/lib/server-env";
@@ -23,6 +28,8 @@ const DEFAULT_MIN_FREE_BYTES = 1024 * MIB;
 type Spend = { at: number; bytes: number; files: number };
 
 export type UploadRefusal = { error: string; status: 429 | 507; retryAfterSec?: number };
+
+export type UploadAccount = { id: string; isAdmin?: boolean };
 
 declare global {
   var __odmUploadBudget: Map<string, Spend[]> | undefined;
@@ -102,10 +109,25 @@ function retryAfter(spends: Spend[], bytes: number, files: number, max: { bytes:
   return Math.ceil(WINDOW_MS / 1000);
 }
 
-// Null when the user may write `files` new files totalling `bytes`, and the
-// spend is recorded; otherwise why not, and nothing is recorded. Callers
+// "about 3 hours", "about 20 minutes": the Retry-After header in words.
+function waitInWords(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) {
+    return `about ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  const hours = Math.round(minutes / 60);
+  return `about ${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
+// Null when the account may write `files` new files totalling `bytes`, and
+// the spend is recorded; otherwise why not, and nothing is recorded. Callers
 // check before writing anything to disk.
-export function admitUpload(userId: string, bytes: number, files: number, now = Date.now()): UploadRefusal | null {
+export function admitUpload(
+  account: UploadAccount,
+  bytes: number,
+  files: number,
+  now = Date.now(),
+): UploadRefusal | null {
   if (files <= 0 && bytes <= 0) {
     return null;
   }
@@ -118,20 +140,24 @@ export function admitUpload(userId: string, bytes: number, files: number, now = 
     }
   }
 
-  const spends = recent(userId, now);
+  if (account.isAdmin) {
+    return null;
+  }
+  const spends = recent(account.id, now);
   const usedBytes = spends.reduce((sum, spend) => sum + spend.bytes, 0);
   const usedFiles = spends.reduce((sum, spend) => sum + spend.files, 0);
   const overBytes = dailyBytes > 0 && usedBytes + bytes > dailyBytes;
   const overFiles = dailyFiles > 0 && usedFiles + files > dailyFiles;
   if (overBytes || overFiles) {
+    const retryAfterSec = retryAfter(spends, bytes, files, { bytes: dailyBytes, files: dailyFiles }, now);
     return {
-      error: "You have uploaded a lot today. Try again later.",
+      error: `You have uploaded a lot today. Try again in ${waitInWords(retryAfterSec)}.`,
       status: 429,
-      retryAfterSec: retryAfter(spends, bytes, files, { bytes: dailyBytes, files: dailyFiles }, now),
+      retryAfterSec,
     };
   }
 
-  store().set(userId, [...spends, { at: now, bytes, files }]);
+  store().set(account.id, [...spends, { at: now, bytes, files }]);
   return null;
 }
 
