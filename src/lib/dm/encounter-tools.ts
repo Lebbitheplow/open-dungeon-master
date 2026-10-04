@@ -26,7 +26,7 @@ import {
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { getRoll, insertRoll } from "@/lib/db/rolls";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
-import { listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
+import { createDmTurn, listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
@@ -1063,6 +1063,7 @@ export type TurnHolder = {
   order: OrderEntry[];
   turnIndex: number;
   floor: InitiativeFloor | null;
+  partyCouldRise: boolean;
 };
 
 export function turnHolder(campaignId: string): TurnHolder | null {
@@ -1075,6 +1076,7 @@ export function turnHolder(campaignId: string): TurnHolder | null {
     order: [...encounter.order],
     turnIndex: encounter.turnIndex,
     floor: fightFloor(campaignId),
+    partyCouldRise: partyCanRise(encounter),
   };
 }
 
@@ -1110,6 +1112,16 @@ function resumeAfter(before: Pick<TurnHolder, "order" | "turnIndex">, order: Ord
 // they go with that pass (a summon whose spell ran out at the wrap), the
 // floor has moved and nothing is left to settle.
 export function settleTurn(campaign: Campaign, before: TurnHolder | null) {
+  if (!before) {
+    return;
+  }
+  passOnFrom(campaign, before);
+  // The call may have downed the last of the party (a blow on a dying or a
+  // stable character, the death save a pass rolled).
+  partyFallen(campaign, before.partyCouldRise);
+}
+
+function passOnFrom(campaign: Campaign, before: TurnHolder | null) {
   if (!before || JSON.stringify(fightFloor(campaign.id)) !== JSON.stringify(before.floor)) {
     return;
   }
@@ -1387,6 +1399,13 @@ export function autoActSkippedEnemies(
 // passes that the model never attacked with auto-act via the server
 // fallback.
 export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
+  const before = turnHolder(campaign.id);
+  advanceAfterNarration(campaign, turn);
+  // What the turn and its backstop did may have left nobody able to rise.
+  partyFallen(campaign, before?.partyCouldRise ?? false);
+}
+
+function advanceAfterNarration(campaign: Campaign, turn?: DmTurn) {
   const combat = fightFloor(campaign.id);
   if (!combat) {
     return;
@@ -1413,7 +1432,7 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
     // An enemy it plays may take out the summon whose turn it is.
     const holder = turnHolder(campaign.id);
     autoActSkippedEnemies(campaign, turn, encounter, handoff.enemyIds, sheets, sheetsById);
-    settleTurn(campaign, holder);
+    passOnFrom(campaign, holder);
     // The pass the model's end_turn made, said now that the narration is in.
     const live = getActiveEncounter(campaign.id);
     if (live) {
@@ -1467,11 +1486,12 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
 
 // The backstop for the enemies due (handOnEnemyTurns): it plays the ones
 // still owed their action and lifts the hold. An enemy it plays may take
-// out the summon whose turn it is.
+// out the summon whose turn it is. The party's fall is checked once, after
+// the whole DM turn (advanceAfterTurn).
 function playEnemiesDue(campaign: Campaign, turn: DmTurn) {
   const holder = turnHolder(campaign.id);
   handOnEnemyTurns(campaign, turn, true);
-  settleTurn(campaign, holder);
+  passOnFrom(campaign, holder);
 }
 
 // What follows this DM turn: a DM turn woken for what comes next, or, with
@@ -1551,6 +1571,44 @@ function tableNote(campaign: Campaign, content: string) {
 function enemyStanding(encounter: Encounter): boolean {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   return encounter.order.some((entry) => entry.kind === "enemy" && entryAlive(entry, enemiesById));
+}
+
+// The moment the party falls, said once; called after every pass and
+// engine call with whether the party could rise before it. All the party's
+// side dead (characters, companions, summons), an enemy standing and no DM's
+// combatant in the order who could raise them: the fight is lost, as the
+// engine calls a victory. Somebody only stable (healing brings them round,
+// SRD 5.1) or a DM's combatant in the order: the ending is the story's, so
+// the table is told and the DM woken once to say it.
+function partyFallen(campaign: Campaign, couldRise: boolean) {
+  const encounter = getActiveEncounter(campaign.id);
+  if (!encounter || !encounter.orderReady || !encounter.order.some((entry) => entry.kind === "pc")) {
+    return;
+  }
+  if (!enemyStanding(encounter) || partyCanRise(encounter)) {
+    return;
+  }
+  const allDead = encounter.order.every(
+    (entry) => entry.kind === "enemy" || (entry.kind === "pc" && getSheetById(entry.characterId)?.deathSaves?.dead === true),
+  );
+  if (allDead) {
+    const sheets = listSheets(campaign.id);
+    // A turn for the fight's end and its records, closed as soon as it is
+    // used, as an opportunity attack's is (src/lib/dm/opportunity-strike.ts).
+    const turn = createDmTurn(campaign.id, [], "human_dm");
+    try {
+      finishEncounter(campaign, turn, encounter, "party_defeated", sheets, new Map(sheets.map((sheet) => [sheet.id, sheet])));
+    } finally {
+      turn.status = "done";
+      saveDmTurn(turn);
+    }
+    tableNote(campaign, "Every character has fallen: the fight is lost.");
+  } else if (couldRise) {
+    tableNote(campaign, "Every character is down and none can rise on their own.");
+  } else {
+    return;
+  }
+  wakeDm(campaign.id);
 }
 
 // Somebody a round can still change: a PC in the order not dead and not
@@ -1659,11 +1717,13 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
     return false;
   }
   const name = current.name;
-  return Boolean(
-    advancePointer(campaign, encounter, {
-      announce: (next) => `${name} ends their turn. It is now ${next.name}'s turn.`,
-    }),
-  );
+  const couldRise = partyCanRise(encounter);
+  if (!advancePointer(campaign, encounter, { announce: (next) => `${name} ends their turn. It is now ${next.name}'s turn.` })) {
+    return false;
+  }
+  // The death saves the pass rolled may have left nobody able to rise.
+  partyFallen(campaign, couldRise);
+  return true;
 }
 
 // A person running the fight hands the turn on after the enemies the pointer
@@ -1732,9 +1792,14 @@ export function skipCurrentTurn(campaignId: string): boolean {
     return false;
   }
   const skipped = encounter.order[encounter.turnIndex];
-  return Boolean(
-    advancePointer(campaign, encounter, {
+  const couldRise = partyCanRise(encounter);
+  if (
+    !advancePointer(campaign, encounter, {
       announce: (next) => `The party lead skipped ${skipped?.name ?? "the current"}'s turn. It is now ${next.name}'s turn.`,
-    }),
-  );
+    })
+  ) {
+    return false;
+  }
+  partyFallen(campaign, couldRise);
+  return true;
 }

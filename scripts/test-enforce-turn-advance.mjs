@@ -23,6 +23,9 @@
 //     acting does not re-arm what happens once a turn.
 //   - The model's own pass is said once, after its narration, and every
 //     wake the server asks for leaves a note for the woken turn to answer.
+//   - The party falls once: all of it dead with nobody left to raise them
+//     ends the fight as lost; all down with somebody only stable is told
+//     once, and the rounds stop waking the DM.
 //   - Pointer, floor, the engine's turn gate, the Hand and the board always
 //     name the same combatant.
 import assert from "node:assert/strict";
@@ -278,7 +281,7 @@ await test("A save-ends condition is saved against at the wrap while the fight g
   agree(world, kit, "after the save");
 });
 
-await test("The downed roll a death save each round the fight goes round; once all are stable the wakes stop", async () => {
+await test("The downed roll a death save each round the fight goes round; once all are stable the table is told once and the wakes stop", async () => {
   const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
   stun(world, brom.id, "0 hp");
   stun(world, kara.id, "0 hp");
@@ -296,10 +299,14 @@ await test("The downed roll a death save each round the fight goes round; once a
   assert.equal(world.sheet(brom.id).deathSaves.stable, true, "so did Brom");
   assert.equal(deathSavesOf(world, kara.id).length, 3);
   assert.equal(deathSavesOf(world, brom.id).length, 3);
+  assert.ok(world.encounter(), "stable is not dead (healing brings them round): the fight is the story's to end");
+  const fallen = () => listRecentMessages(world.campaignId, 60).filter((message) => /none can rise on their own/.test(message.content)).length;
+  assert.equal(fallen(), 1, "the table is told once");
   const before = wokenFor(world);
   dmTurnEnds(world);
   dmTurnEnds(world);
-  assert.equal(wokenFor(world), before, "the rounds stop waking the DM");
+  assert.equal(wokenFor(world), before, "and the rounds stop waking the DM");
+  assert.equal(fallen(), 1, "nor is it said again");
 });
 
 await test("A natural 20 on the death save the turn brings gives a real turn, and nobody is woken", async () => {
@@ -795,6 +802,75 @@ await test("At a human DM's table a pass leaves no handoff: the DM runs the enem
   assert.equal(handoff(world), null);
 });
 
+// ---- the party falls once ----
+
+await test("Party down: the End Turn whose death save kills the last dying hero ends the fight as lost, at a human DM's table too", async () => {
+  const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId);
+  const encounterId = world.encounter().id;
+  world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  world.patch(brom.id, { currentHp: 0, deathSaves: { successes: 0, failures: 2, stable: false, dead: false } });
+  world.dice(5);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  world.clearDice();
+  assert.equal(world.sheet(brom.id).deathSaves.dead, true, "Brom's third failure");
+  assert.equal(world.encounter(), null, "nobody is left to raise anyone: the fight is over");
+  assert.equal(getDatabase().prepare("SELECT outcome FROM encounters WHERE id = ?").get(encounterId).outcome, "party_defeated");
+  const [passed, died, over] = listRecentMessages(world.campaignId, 3).map((message) => message.content);
+  assert.match(passed, /^Kara ends their turn\. It is now Brom's turn\./, "the pass is said first");
+  assert.match(died, /Brom fails their final death save/, "then the death save that begins his turn");
+  assert.match(over, /fight is lost/, "then the end");
+});
+
+await test("Party down: the DM's step forward whose death save kills the last dying hero ends the fight", async () => {
+  const { world, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId);
+  world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  world.patch(brom.id, { currentHp: 0, deathSaves: { successes: 0, failures: 2, stable: false, dead: false } });
+  world.dice(5);
+  assert.equal(editInitiative(world.campaign(), { op: "step", direction: "forward" }).ok, true);
+  world.clearDice();
+  assert.equal(world.encounter(), null, "the fight is lost");
+});
+
+await test("Party down: the blow that kills the last hero standing, from the console, ends the fight; with one only stable it does not", async () => {
+  const lost = await table(["Kara", "Brom"]);
+  const lostId = lost.world.encounter().id;
+  lost.world.patch(lost.heroes[0].id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  const hit = await lost.world.invoke("apply_damage", { characterId: lost.heroes[1].id, amount: 200 });
+  assert.equal(hit.ok, true, hit.error);
+  assert.equal(lost.world.sheet(lost.heroes[1].id).deathSaves.dead, true, "massive damage: Brom is dead");
+  assert.equal(lost.world.encounter(), null);
+  assert.equal(getDatabase().prepare("SELECT outcome FROM encounters WHERE id = ?").get(lostId).outcome, "party_defeated");
+
+  const down = await table(["Kara", "Brom"]);
+  down.world.patch(down.heroes[0].id, { currentHp: 0, deathSaves: { successes: 3, failures: 0, stable: true, dead: false } });
+  assert.equal((await down.world.invoke("apply_damage", { characterId: down.heroes[1].id, amount: 200 })).ok, true);
+  assert.ok(down.world.encounter(), "Kara is only stable: the fight goes on");
+  assert.match(listRecentMessages(down.world.campaignId, 1)[0].content, /none can rise on their own/);
+});
+
+await test("Party down: a DM's own combatant in the order holds the ending until the DM takes it out", async () => {
+  const { world, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  const captain = newNpcEntryId();
+  assert.equal(editInitiative(world.campaign(), { op: "insert", id: captain, name: "Captain", initiative: 5 }).ok, true);
+  world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  assert.equal((await world.invoke("apply_damage", { characterId: brom.id, amount: 200 })).ok, true);
+  assert.ok(world.encounter(), "the Captain might raise them: the DM decides");
+  assert.match(listRecentMessages(world.campaignId, 1)[0].content, /none can rise on their own/);
+  assert.equal(editInitiative(world.campaign(), { op: "remove", id: captain }).ok, true);
+  assert.equal(world.encounter(), null, "with the Captain gone, nobody is left: the fight is lost");
+});
+
+await test("Party down: a companion still standing keeps the fight going", async () => {
+  const { world, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  companion(world, "Pip", 5, kara);
+  world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  assert.equal((await world.invoke("apply_damage", { characterId: brom.id, amount: 200 })).ok, true);
+  assert.ok(world.encounter(), "Pip can still act");
+  assert.doesNotMatch(listRecentMessages(world.campaignId, 1)[0].content, /none can rise|fight is lost/);
+});
+
 // ---- a turn is named by whose it is ----
 
 await test("An insert above the hero acting keeps her turn's key and a fresh hit on her answerable; her next turn does not", async () => {
@@ -923,9 +999,15 @@ await test("Every route that runs the engine directly settles the turn after it"
   assert.deepEqual(unsettled, []);
   const lib = path.join(import.meta.dirname, "..", "src", "lib", "dm");
   // turn.ts each model call, invoke.ts the console and the DM's controls,
-  // initiative.ts each edit, encounter-tools.ts the backstop.
-  for (const [file, places] of [["turn.ts", 1], ["invoke.ts", 2], ["initiative.ts", 2], ["encounter-tools.ts", 2]]) {
-    const calls = fs.readFileSync(path.join(lib, file), "utf8").match(/(?<!function )\bsettleTurn\(/g) ?? [];
+  // initiative.ts each edit, encounter-tools.ts the backstop (the party's
+  // fall checked once for the DM turn).
+  for (const [file, settle, places] of [
+    ["turn.ts", "settleTurn", 1],
+    ["invoke.ts", "settleTurn", 2],
+    ["initiative.ts", "settleTurn", 2],
+    ["encounter-tools.ts", "passOnFrom", 3],
+  ]) {
+    const calls = fs.readFileSync(path.join(lib, file), "utf8").match(new RegExp(`(?<!function )\\b${settle}\\(`, "g")) ?? [];
     assert.equal(calls.length, places, `${file} settles the turn after each engine call it makes`);
   }
 });

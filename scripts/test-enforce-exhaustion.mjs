@@ -40,6 +40,9 @@ const TABLE = [
 ];
 
 const hero = world.addHero(FIGHTER);
+// A second hero stands by: with the only one dead of exhaustion level 6, the
+// party could no longer rise and the engine would end the fight as lost.
+world.addHero({ name: "Bystander" });
 const tire = (id = hero.id) => world.invoke("set_condition", { characterId: id, condition: "exhaustion" });
 const level = (id = hero.id) => world.sheet(id).exhaustion;
 
