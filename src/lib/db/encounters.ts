@@ -35,6 +35,16 @@ export function orderEntryId(entry: OrderEntry): string {
   return entry.kind === "enemy" ? entry.enemyId : entry.npcId;
 }
 
+// The turn under way, named by its round and its owner, not its slot: an
+// entry spliced in above the one acting (an NPC slot, reinforcements, a
+// summon, a late joiner) shifts the slot mid-turn and re-armed what happens
+// once a turn. A Thief's Reflexes second turn is a turn of its own.
+export function turnKey(encounter: Pick<Encounter, "round" | "order" | "turnIndex">): string {
+  const entry = encounter.order[encounter.turnIndex];
+  const owner = entry ? `${orderEntryId(entry)}${entry.kind === "pc" && entry.reflex ? ":reflex" : ""}` : "";
+  return `${encounter.round}:${owner}`;
+}
+
 export type EncounterStatus = "active" | "ended";
 export type EnemyStatus = "alive" | "dead" | "fled";
 

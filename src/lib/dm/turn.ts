@@ -122,6 +122,8 @@ import { castBuffTool } from "@/lib/dm/cast-tools";
 import {
   advanceAfterTurn,
   fightOwnsFloor,
+  settleTurn,
+  turnHolder,
   applyEncounterCall,
   ENCOUNTER_CAP_PER_TURN,
   ENCOUNTER_TOOL_NAMES,
@@ -1188,7 +1190,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const inputInFight = !spotlightSet && fightOwnsFloor(campaignId);
     let parkedAny = false;
     for (const toolCall of toolCalls) {
+      const holder = turnHolder(campaignId);
       const outcome = ranAbove(toolCall, inputInFight, false) ?? (await resolveModelCall(context, turn, toolCall));
+      // A combatant who left the fight during the call takes no turn with them.
+      settleTurn(context.campaign, holder);
       if (outcome[PARKED]) {
         parkedAny = true;
         continue;

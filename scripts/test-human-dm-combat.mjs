@@ -7,7 +7,9 @@
 //     who is due. The DM hands the turn on (having played them, or letting
 //     the server play the rest) and the next player gets the floor. Before,
 //     the next player got it at once and no enemy ever acted.
-//   - At an AI table nothing is held: the AI's turn plays them.
+//   - At an AI table a pass outside the AI's turn (a player's End Turn) holds
+//     the floor the same way, and the AI turn it wakes plays them: the model
+//     may, and its end plays the rest and opens the floor.
 //   - Releasing the hold from the table's banner hands the turn on too.
 //   - The DM's "on a turn" is a turn ending, not a correction: a downed
 //     character it passes rolls their death save, and the round turns over.
@@ -24,7 +26,8 @@ const { test, finish } = suite("test-human-dm-combat");
 const { getFloor } = await import("../src/lib/db/campaigns.ts");
 const { activePublicEncounter } = await import("../src/lib/db/encounter-view.ts");
 const { getFloor: floorOf, setMemberHoldRolls } = await import("../src/lib/db/campaigns.ts");
-const { listOpenPendingRolls } = await import("../src/lib/db/dm-turns.ts");
+const { createDmTurn, listOpenPendingRolls } = await import("../src/lib/db/dm-turns.ts");
+const { advanceAfterTurn } = await import("../src/lib/dm/encounter-tools.ts");
 const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
 
 async function table(dmMode) {
@@ -108,9 +111,15 @@ await test("releasing the hold from the table's banner hands the turn on", async
   assert.equal(world.encounter().legendary.due, undefined);
 });
 
-await test("at an AI table nothing is held: the AI's turn plays the enemies", async () => {
-  const { world, kit, fast, slow } = await table("ai");
+await test("at an AI table the enemies are held for the AI's turn, whose end plays them and opens the floor", async () => {
+  const { world, kit, fast, slow, goblin } = await table("ai");
   kit.endTurn(fast.userId);
+  assert.equal(getFloor(world.campaignId).mode, "hold");
+  assert.deepEqual(world.encounter().legendary.due, [goblin.id]);
+  world.dice(20, 6);
+  advanceAfterTurn(world.campaign(), createDmTurn(world.campaignId, [], "ai"));
+  world.clearDice();
+  assert.ok(listRecentRolls(world.campaignId, 20).some((roll) => roll.attacker?.id === goblin.id), "the goblin acted");
   const floor = getFloor(world.campaignId);
   assert.equal(floor.mode, "initiative");
   assert.deepEqual(floor.userIds, [slow.userId]);

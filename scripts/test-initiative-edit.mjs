@@ -96,6 +96,14 @@ test("delaying drops a combatant to the bottom and passes the turn on", () => {
   assert.equal(outcome.state.order[3].initiative, 6);
 });
 
+test("delaying from the top passes the turn to the character who moves up into the top slot", () => {
+  const state = { order: [pc("Bree", 18), pc("Ash", 15), enemy("Goblin", 14)], turnIndex: 0, round: 1 };
+  const outcome = applyInitiativeEdit(state, { op: "delay", id: "pc-Bree" });
+  assert.deepEqual(names(outcome.state), ["Ash", "Goblin", "Bree"]);
+  assert.equal(outcome.state.order[outcome.state.turnIndex].name, "Ash");
+  assert.equal(outcome.state.round, 1);
+});
+
 test("delaying somebody who is not acting leaves the turn where it is", () => {
   const outcome = applyInitiativeEdit(fight(2), { op: "delay", id: "enemy-Goblin" });
   assert.deepEqual(names(outcome.state), ["Bree", "Ash", "Wolf", "Goblin"]);

@@ -5,6 +5,7 @@ import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { applyTrade } from "@/lib/dm/trade";
 import { canResolveTrade } from "@/lib/dm/trade-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
+import { settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { canResolveProposal } from "@/lib/dm/proposal-logic";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 import { publishPersisted } from "@/lib/events";
@@ -68,6 +69,7 @@ export async function POST(
     // Fresh sheets: the offer may be hours old and the sheet has moved on.
     const sheets = listSheets(campaignId);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+    const holder = turnHolder(campaignId);
     const { result } = applyDmMutation(
       context.campaign,
       proposal.turnId ?? "",
@@ -76,6 +78,8 @@ export async function POST(
       sheets,
       sheetsById,
     );
+    // A combatant who left the fight during the call takes no turn with them.
+    settleTurn(context.campaign, holder);
     if ("error" in result) {
       // The world moved under the offer (item gone, gold spent); resolve it
       // as declined so the bar clears rather than wedging.

@@ -31,9 +31,6 @@ export type DmTurn = {
   // marks a player's pending whisper answered only when its sender is here, so
   // a turn that never replied cannot silently consume the message.
   answeredWhisperCharacterIds: string[];
-  // Enemies that already attacked this turn (via enemy_attack); the auto-act
-  // fallback skips them so nothing swings twice.
-  actedEnemyIds: string[];
   // PCs whose combat turn was adjudicated this DM turn; the initiative
   // pointer only advances past a PC on this list (or with a landed roll).
   resolvedCharacterIds: string[];
@@ -58,7 +55,6 @@ type TurnRow = {
   roll_ids_json: string;
   player_whisper_ids_json: string;
   answered_whisper_character_ids_json: string | null;
-  acted_enemy_ids_json: string | null;
   resolved_character_ids_json: string | null;
   image_args_json: string | null;
   location_id: string | null;
@@ -84,7 +80,6 @@ function mapTurn(row: TurnRow): DmTurn {
       row.answered_whisper_character_ids_json,
       [],
     ),
-    actedEnemyIds: parseJson<string[]>(row.acted_enemy_ids_json, []),
     resolvedCharacterIds: parseJson<string[]>(row.resolved_character_ids_json, []),
     imageArgs: parseJson<DmTurn["imageArgs"]>(row.image_args_json, null),
     locationId: row.location_id ?? null,
@@ -131,7 +126,7 @@ export function saveDmTurn(turn: DmTurn) {
       `
         UPDATE dm_turns SET
           status = ?, call_index = ?, conversation_json = ?,
-          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, answered_whisper_character_ids_json = ?, acted_enemy_ids_json = ?, resolved_character_ids_json = ?, image_args_json = ?,
+          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, answered_whisper_character_ids_json = ?, resolved_character_ids_json = ?, image_args_json = ?,
           location_id = ?, mutation_count = ?, encounter_count = ?, context_trace_json = ?, updated_at = ?
         WHERE id = ?
       `,
@@ -144,7 +139,6 @@ export function saveDmTurn(turn: DmTurn) {
       JSON.stringify(turn.rollIds),
       JSON.stringify(turn.playerWhisperIds),
       JSON.stringify(turn.answeredWhisperCharacterIds),
-      JSON.stringify(turn.actedEnemyIds),
       JSON.stringify(turn.resolvedCharacterIds),
       turn.imageArgs ? JSON.stringify(turn.imageArgs) : null,
       turn.locationId,
