@@ -15,6 +15,9 @@ export type Camera = { zoom: number; x: number; y: number };
 
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 3;
+// One mouse-wheel notch (100 pixels of scroll) zooms by 1.12; a trackpad
+// pinch sends many small deltas and zooms in proportion.
+const WHEEL_RATE = Math.log(1.12) / 100;
 const IDENTITY: Camera = { zoom: 1, x: 0, y: 0 };
 
 function clampZoom(zoom: number) {
@@ -34,6 +37,14 @@ export function useBoardCamera(
   },
 ) {
   const frameRef = useRef<HTMLDivElement | null>(null);
+  // The frame as state too, so the native listeners below follow it when
+  // the board moves between the side panel and the enlarged view (a new
+  // element each time).
+  const [frameEl, setFrameEl] = useState<HTMLDivElement | null>(null);
+  const attachFrame = useCallback((element: HTMLDivElement | null) => {
+    frameRef.current = element;
+    setFrameEl(element);
+  }, []);
   const [camera, setCamera] = useState<Camera>(IDENTITY);
   // A mirror for effects that need the camera without depending on it.
   const cameraRef = useRef(camera);
@@ -169,29 +180,62 @@ export function useBoardCamera(
 
   // Pointer handling on the frame: wheel zooms at the cursor; two fingers
   // pinch; a drag on the frame background pans (a drag that starts on a
-  // token is the board's, not the camera's).
-  const onWheel = useCallback(
-    (event: React.WheelEvent) => {
-      if (locked) {
-        return;
-      }
+  // token is the board's, not the camera's). The wheel is a native
+  // non-passive listener: React's onWheel is passive, so it could not stop
+  // the panel scrolling under the zoom, nor a trackpad pinch or Ctrl+wheel
+  // zooming the whole page along with the board (issue 67).
+  useEffect(() => {
+    if (!frameEl || locked) {
+      return;
+    }
+    const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const rect = frameRef.current?.getBoundingClientRect();
-      if (!rect) {
-        return;
-      }
-      const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const rect = frameEl.getBoundingClientRect();
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 33 : event.deltaMode === 2 ? 600 : 1);
+      const factor = Math.exp(-Math.max(-100, Math.min(100, pixels)) * WHEEL_RATE);
+      const px = event.clientX - rect.left;
+      const py = event.clientY - rect.top;
+      setEased(false);
       setCamera((current) => {
         const zoom = clampZoom(current.zoom * factor);
-        const px = event.clientX - rect.left;
-        const py = event.clientY - rect.top;
         const ratio = zoom / current.zoom;
         return { zoom, x: px - (px - current.x) * ratio, y: py - (py - current.y) * ratio };
       });
+    };
+    frameEl.addEventListener("wheel", onWheel, { passive: false });
+    return () => frameEl.removeEventListener("wheel", onWheel);
+  }, [frameEl, locked]);
+
+  // The pan is held in the frame's pixels and the board fills the frame's
+  // width, so when the frame changes width (browser zoom, a resized window,
+  // the enlarged view) the pan scales with it and the same part of the
+  // board stays in view. Without this a zoomed-in view slid off to one side
+  // on every resize (issue 67). A hidden frame (width 0) keeps the view for
+  // when it shows again.
+  const frameWidth = useRef(0);
+  useEffect(() => {
+    if (!frameEl) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      const width = frameEl.clientWidth;
+      if (!width) {
+        return;
+      }
+      const before = frameWidth.current;
+      frameWidth.current = width;
+      if (!before || before === width) {
+        return;
+      }
+      const ratio = width / before;
       setEased(false);
-    },
-    [locked],
-  );
+      setCamera((current) =>
+        current.x || current.y ? { ...current, x: current.x * ratio, y: current.y * ratio } : current,
+      );
+    });
+    observer.observe(frameEl);
+    return () => observer.disconnect();
+  }, [frameEl]);
 
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const onPointerDown = useCallback((event: React.PointerEvent) => {
@@ -237,10 +281,14 @@ export function useBoardCamera(
     panRef.current = null;
   }, []);
 
-  // Keyboard pans while the frame is focused; plus and minus zoom.
+  // Keyboard pans while the frame is focused; plus and minus zoom. A key
+  // held with Ctrl, Cmd or Alt is the browser's (Ctrl+plus zooms the page):
+  // taking it too zoomed the board along with the page, and once the page
+  // reflowed and the board lost focus the zoom back out never reached it,
+  // leaving a few huge tiles (issue 67).
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (locked) {
+      if (locked || event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
       const step = 40;
@@ -304,6 +352,7 @@ export function useBoardCamera(
 
   return {
     frameRef,
+    attachFrame,
     camera,
     eased,
     locked,
@@ -315,7 +364,6 @@ export function useBoardCamera(
     centreOn,
     describe,
     frameProps: {
-      onWheel,
       onPointerDown,
       onPointerMove,
       onPointerUp,
