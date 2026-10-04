@@ -133,6 +133,21 @@ function SpellsSection({
   const lower = (name: string) => name.toLowerCase();
   const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
   const isGranted = (name: string) => has(subclassSpells, name);
+  const poolByName = new Map(pool.map((row) => [lower(row.name), row]));
+  // An Eldritch Knight's or Arcane Trickster's two schools, as the server
+  // judges the sheet (src/lib/srd/third-caster.ts). Null when the spell is
+  // fine or the class has no school rule.
+  const schoolOf = (spell: string) => ({
+    name: spell,
+    school: poolByName.get(lower(spell))?.data?.school ?? bundledSpellSchool(spell),
+  });
+  const offSchool = (name: string) =>
+    thirdCasterSchoolProblem({
+      classId: klass.id,
+      subclass: state.subclass,
+      level: state.level,
+      spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf),
+    });
   const suggested = new Set(
     [...(starters?.cantrips ?? []), ...(starters?.spells ?? [])].map((entry) => lower(entry.n)),
   );
@@ -156,14 +171,8 @@ function SpellsSection({
       setBookPrepared((current) => current.filter((entry) => lower(entry) !== lower(name)));
       return;
     }
-    // An Eldritch Knight's or Arcane Trickster's two schools, as the server
-    // judges the sheet (src/lib/srd/third-caster.ts).
-    const schoolOf = (spell: string) => ({ name: spell, school: (pool.find((entry) => entry.name === spell)?.data?.school as string | undefined) ?? bundledSpellSchool(spell) });
-    const offSchool = thirdCasterSchoolProblem({ classId: klass.id, subclass: state.subclass, level: state.level, spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf) });
-    if (offSchool) {
-      setLimitNote(offSchool);
-      return;
-    }
+    // A full list first, as the tile says (blockedFor below), then the
+    // school rule.
     const cap = wizard ? bookCap : spellCap;
     if (cap !== null && chosenSpells.length >= cap) {
       setLimitNote(
@@ -171,6 +180,11 @@ function SpellsSection({
           ? `Your spellbook starts with ${cap} spells. Remove one to write in ${name}.`
           : `You already have ${cap} ${spellAdvice?.label ?? "spells"}. Remove one to choose ${name}.`,
       );
+      return;
+    }
+    const school = offSchool(name);
+    if (school) {
+      setLimitNote(school);
       return;
     }
     setSpells((current) => [...current, name]);
@@ -228,9 +242,32 @@ function SpellsSection({
     }
   }
 
+  // What a tile that is not chosen says when it cannot be chosen now, so a
+  // full list reads as full before anyone taps (issue 66: taps past the cap
+  // did nothing a player could see).
+  const cantripsFull = cantripCap !== null && cantrips.length >= cantripCap;
+  const listCap = wizard ? bookCap : spellCap;
+  const listFull = listCap !== null && chosenSpells.length >= listCap;
+  const preparedFull = spellCap !== null && chosenPrepared.length >= spellCap;
+  const listFullText = wizard ? "Spellbook full" : spellStyle === "known" ? "Known spells full" : "Prepared list full";
+  const blockedFor = (name: string, level: number | null, tileState: SpellTile["state"]) => {
+    if (tileState === "inBook") {
+      return phase === "prepare" && preparedFull ? "Prepared list full" : undefined;
+    }
+    if (tileState !== "available") {
+      return undefined;
+    }
+    if (level === 0) {
+      return cantripsFull ? "Cantrips full" : undefined;
+    }
+    if (listFull) {
+      return listFullText;
+    }
+    return offSchool(name) ? "Outside your two schools" : undefined;
+  };
+
   // Every tile: the class list from the pack, plus anything chosen or
   // suggested the list lacks (a starter from a book the pack does not carry).
-  const poolByName = new Map(pool.map((row) => [lower(row.name), row]));
   const names = [
     ...pool.map((row) => row.name),
     ...cantrips,
@@ -264,6 +301,7 @@ function SpellsSection({
         level,
         state: tileState,
         suggested: suggested.has(lower(name)),
+        blocked: blockedFor(name, level, tileState),
         label: displayName(pack, "spells", name),
         data: row?.data,
         slug: row?.slug,
@@ -351,16 +389,12 @@ function SpellsSection({
           </button>
         </p>
       ) : null}
-      {limitNote ? (
-        <p role="status" className="reveal mb-2 text-xs text-amber-300">
-          {limitNote}
-        </p>
-      ) : null}
       <SpellBook
         tiles={tiles}
         maxLevel={maxSpellLevel}
         counters={counters}
         onTile={onTile}
+        notice={limitNote || undefined}
         emptyText={
           loading
             ? "Loading the spell list..."

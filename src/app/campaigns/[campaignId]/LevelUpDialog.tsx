@@ -48,6 +48,7 @@ import {
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
 import { spellStyleFor, spellbookAllowance } from "@/lib/srd/spell-prep";
+import { isThirdCaster } from "@/lib/srd/third-caster";
 import {
   abilitiesAfterLevel,
   casterPreview,
@@ -444,6 +445,36 @@ export function LevelUpDialog({
       ? Math.max(0, cantripAllowance - Math.max(0, cantripList.length - freeCantrips))
       : null;
   const levelStyle = caster.style;
+  // Why a spell not yet picked cannot be picked now: every new spell or
+  // cantrip for the level is chosen, or an Eldritch Knight's or Arcane
+  // Trickster's school rule (as the server judges it). `short` is the tile's
+  // state line, so a full list reads as full before anyone taps; `long` is
+  // the note a tap shows (issue 66).
+  const schoolOf = (name: string) =>
+    spellPool.find((spell) => spell.name === name)?.data?.school;
+  function pickRefusal(name: string, level: number | null): { short: string; long: string } | null {
+    if (level === 0) {
+      return remainingCantrips !== null && cantripPicks.length >= remainingCantrips
+        ? { short: "Cantrips full", long: `That is every new cantrip for this level. Untick one to choose ${name}.` }
+        : null;
+    }
+    if (remainingPicks !== null && spellPicks.length >= remainingPicks) {
+      return { short: "All new spells chosen", long: `That is every new spell for this level. Untick one to choose ${name}.` };
+    }
+    if (!isThirdCaster(classChoice, effectiveSubclass)) {
+      return null;
+    }
+    const offSchool = thirdCasterPickRefusal({
+      classId: classChoice,
+      subclass: effectiveSubclass,
+      level: classLevelAfter,
+      known: knownList,
+      picks: spellPicks,
+      adding: name,
+      schoolOf,
+    });
+    return offSchool ? { short: "Outside your two schools", long: offSchool } : null;
+  }
   // What can still be learned: the class list minus what is already held,
   // cantrips only while there is a cantrip to choose.
   const levelUpTiles: SpellTile[] = spellPool
@@ -460,6 +491,7 @@ export function LevelUpDialog({
         level: spell.level,
         state: granted ? ("granted" as const) : picked ? ("ready" as const) : ("available" as const),
         note: granted ? "Free with your subclass" : picked ? "New" : undefined,
+        blocked: granted || picked ? undefined : pickRefusal(spell.name, spell.level)?.short,
         data: spell.data,
         slug: spell.slug,
         homebrew: spell.source === "homebrew",
@@ -1096,11 +1128,6 @@ export function LevelUpDialog({
                       <li>Nothing new to choose at this level: your spells stay as they are.</li>
                     ) : null}
                   </ul>
-                  {spellNote ? (
-                    <p role="status" className="reveal text-xs text-amber-300">
-                      {spellNote}
-                    </p>
-                  ) : null}
                   {levelStyle === "known" && !isNewClass && knownList.length ? (
                     <div className="reveal">
                       <p className="mb-1 text-xs text-stone-400">
@@ -1159,26 +1186,14 @@ export function LevelUpDialog({
                       setSpellNote("");
                       const picked =
                         tile.level === 0 ? cantripPicks.includes(tile.name) : spellPicks.includes(tile.name);
-                      if (!picked) {
-                        const full =
-                          tile.level === 0
-                            ? remainingCantrips !== null && cantripPicks.length >= remainingCantrips
-                            : remainingPicks !== null && spellPicks.length >= remainingPicks;
-                        // An Eldritch Knight's or Arcane Trickster's schools, as the server judges them.
-                        const schoolOf = (name: string) => spellPool.find((spell) => spell.name === name)?.data?.school as string | undefined;
-                        const offSchool = tile.level === 0 ? null : thirdCasterPickRefusal({ classId: classChoice, subclass: effectiveSubclass, level: classLevelAfter, known: knownList, picks: spellPicks, adding: tile.name, schoolOf });
-                        if (full || offSchool) {
-                          setSpellNote(
-                            offSchool ??
-                              (tile.level === 0
-                                ? `That is every new cantrip for this level. Untick one to choose ${tile.name}.`
-                                : `That is every new spell for this level. Untick one to choose ${tile.name}.`),
-                          );
-                          return;
-                        }
+                      const refusal = picked ? null : pickRefusal(tile.name, tile.level);
+                      if (refusal) {
+                        setSpellNote(refusal.long);
+                        return;
                       }
                       toggleSpell(tile.name, tile.level ?? undefined);
                     }}
+                    notice={spellNote || undefined}
                     emptyText={poolLoading ? "Loading the spell list..." : "No new spells at this level."}
                   />
                   {spellPicks.length || cantripPicks.length ? (

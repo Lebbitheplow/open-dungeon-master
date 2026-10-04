@@ -288,6 +288,14 @@ html[data-theme="light"] .sheet-medallion-emblem { background: #f6efdc; }
   }
   .spell-tile[data-state="available"] { opacity: 0.72; }
   .spell-tile[data-state="available"]:hover { opacity: 1; }
+  /* Cannot be chosen right now (the list is full, the wrong school): dimmer
+     than available and no lift, the reason on its state line. */
+  .spell-tile[data-blocked],
+  .spell-tile[data-blocked]:hover { opacity: 0.45; }
+  .spell-tile[data-blocked]:has(button:not(:disabled)):hover {
+    transform: none;
+    border-color: rgba(120, 100, 160, 0.25);
+  }
   .spell-tile[data-state="ready"] {
     color: var(--color-amber-100);
     border-color: rgba(212, 171, 58, 0.7);
@@ -345,9 +353,19 @@ html[data-theme="light"] .sheet-medallion-emblem { background: #f6efdc; }
   .spell-tile-dot[data-state="inBook"] { border-color: #a78bfa; background: rgba(139, 92, 246, 0.25); }
 }
 
-html[data-theme="light"] .spell-tile { background: rgba(255, 252, 244, 0.75); border-color: rgba(120, 96, 40, 0.3); color: var(--color-stone-600); }
-html[data-theme="light"] .spell-tile[data-state="ready"],
-html[data-theme="light"] .spell-tile[data-state="granted"] { color: var(--color-stone-900); }
+/* The day palette turns the stone and amber scales over (stone-900 is
+   cream there), so a chosen tile keeps its dark ink from the amber-100 its
+   state already sets, and the state lines get day inks of their own; the
+   night ones were pale on cream and a chosen spell read as switched off. */
+html[data-theme="light"] .spell-tile { background: rgba(255, 252, 244, 0.75); border-color: rgba(120, 96, 40, 0.3); }
+html[data-theme="light"] .spell-tile[data-state="ready"] { background: rgba(212, 171, 58, 0.16); border-color: rgba(166, 132, 42, 0.75); }
+html[data-theme="light"] .spell-tile[data-state="granted"] { border-color: rgba(198, 90, 36, 0.55); }
+html[data-theme="light"] .spell-tile[data-state="ready"] .spell-tile-state { color: #7a5c12; }
+html[data-theme="light"] .spell-tile[data-state="pending"] .spell-tile-state { color: #0b6a99; }
+html[data-theme="light"] .spell-tile[data-state="granted"] .spell-tile-state { color: #a24a14; }
+html[data-theme="light"] .spell-tile[data-state="inBook"] .spell-tile-state { color: #6d4bc4; }
+html[data-theme="light"] .spell-tile[data-state="pending"] { color: #0b4f73; border-color: rgba(11, 106, 153, 0.6); }
+html[data-theme="light"] .spell-tile[data-state="inBook"] { border-color: rgba(109, 75, 196, 0.45); }
 
 @media (prefers-reduced-motion: reduce) {
   .spell-tile { transition: none; }

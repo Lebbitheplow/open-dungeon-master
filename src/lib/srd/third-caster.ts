@@ -63,15 +63,30 @@ export function thirdCasterAnySchoolPicks(level: number): number {
   return level >= 20 ? 4 : level >= 14 ? 3 : level >= 8 ? 2 : level >= 3 ? 1 : 0;
 }
 
+// A pack row's school is a word ("evocation") or, in the newer documents,
+// an object ({ name: "Evocation", key: "evocation" }); either reads as the
+// word. Reading the object as a string threw, and took the builder's spell
+// step down for an Eldritch Knight or Arcane Trickster (issue 66).
+function schoolWord(school: unknown): string {
+  if (typeof school === "string") {
+    return school;
+  }
+  if (school && typeof school === "object") {
+    const { key, name } = school as { key?: unknown; name?: unknown };
+    return typeof key === "string" ? key : typeof name === "string" ? name : "";
+  }
+  return "";
+}
+
 // How many of these levelled spells sit outside the class's two schools. A
 // spell whose school nobody knows (homebrew without one) is not counted.
-export function thirdCasterOutside(classId: string, spells: Array<{ school: string | null | undefined }>): number {
+export function thirdCasterOutside(classId: string, spells: Array<{ school: unknown }>): number {
   const schools = THIRD_CASTER_SCHOOLS[normalize(classId)];
   if (!schools) {
     return 0;
   }
   return spells.filter((spell) => {
-    const school = normalize(spell.school ?? "");
+    const school = normalize(schoolWord(spell.school));
     return Boolean(school) && !schools.includes(school);
   }).length;
 }
@@ -86,7 +101,7 @@ export function thirdCasterSchoolProblem(input: {
   classId: string;
   subclass: string | null | undefined;
   level: number;
-  spells: Array<{ name: string; school: string | null | undefined }>;
+  spells: Array<{ name: string; school: unknown }>;
   heldOutside?: number;
 }): string | null {
   if (!isThirdCaster(input.classId, input.subclass)) {

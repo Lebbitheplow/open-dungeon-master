@@ -151,5 +151,19 @@ await test("a third caster that already held more off-school spells keeps them; 
   );
 });
 
+await test("a pack spell whose school is an object ({ name, key }) is judged by it, not thrown on (issue 66)", () => {
+  const evocation = { name: "Evocation", key: "evocation" };
+  const illusion = { name: "Illusion", key: "illusion" };
+  assert.equal(
+    thirdCasterSchoolProblem({ classId: "fighter", subclass: "Eldritch Knight", level: 3, spells: [{ name: "Anchoring Rope", school: evocation }, { name: "Silent Image", school: illusion }] }),
+    null,
+    "one off-school pick at 3rd level",
+  );
+  assert.match(
+    thirdCasterSchoolProblem({ classId: "fighter", subclass: "Eldritch Knight", level: 3, spells: [{ name: "Silent Image", school: illusion }, { name: "Minor Illusion Two", school: { name: "Illusion" } }] }),
+    /Pick an abjuration or evocation spell/,
+  );
+});
+
 world.close();
 finish();

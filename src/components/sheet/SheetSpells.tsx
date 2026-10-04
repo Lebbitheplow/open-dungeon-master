@@ -87,8 +87,15 @@ function CasterBook({
     ...view.pending,
     ...view.spellbook,
   ]);
-  const tiles = buildTiles(view, [...lookups.values(), ...(editing ? pool : [])], editing);
   const cap = spellCapOf(view, sheet.abilities);
+  // With every slot taken (the ones waiting for a long rest count), the
+  // server refuses another; the tiles say so before a tap does (issue 66).
+  const full = editing && view.style !== "known" && cap !== null && preparedCount(view) >= cap.count;
+  const tiles = buildTiles(view, [...lookups.values(), ...(editing ? pool : [])], editing).map((tile) =>
+    full && (tile.state === "available" || tile.state === "inBook") && tile.level !== 0
+      ? { ...tile, blocked: "Prepared list full" }
+      : tile,
+  );
   const counters = [
     ...(view.cantrips.length ? [{ label: "Cantrips", value: view.cantrips.length }] : []),
     view.style === "known"
