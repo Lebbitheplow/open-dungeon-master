@@ -14,6 +14,7 @@ const {
   MAX_BUNDLE_BYTES,
   MAX_BUNDLE_PORTRAIT_BYTES,
   buildCharacterBundle,
+  bundlePortraitSize,
   characterBundleFilename,
   characterBundleSchema,
   dataUrlBytes,
@@ -109,6 +110,18 @@ await test("a bundle without a portrait imports with none and asks for a paintin
   assert.equal(unpacked.carriedPortrait, false);
   assert.equal(unpacked.sheet.portrait, null);
   assert.equal(written.length, 0);
+});
+
+await test("the portrait's size is known before anything is written", async () => {
+  // The import route weighs it against the upload budget first.
+  const withArt = parseCharacterBundle(JSON.parse(JSON.stringify(await buildCharacterBundle(character(), fakeReader))));
+  assert.ok(withArt.ok);
+  assert.equal(bundlePortraitSize(withArt.bundle), PNG_BYTES.length);
+  const bare = parseCharacterBundle(
+    await buildCharacterBundle(character({ sheet: { ...sheet, portrait: null } }), fakeReader),
+  );
+  assert.ok(bare.ok);
+  assert.equal(bundlePortraitSize(bare.bundle), 0);
 });
 
 await test("portrait paths outside /uploads/ are never read", async () => {

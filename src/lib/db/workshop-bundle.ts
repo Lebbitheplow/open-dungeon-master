@@ -16,6 +16,7 @@ import {
   bundleManifestSchema,
   decodeBundleImage,
   encodeBundleImage,
+  type BundleImage,
   MAX_BUNDLE_BYTES,
   resolveEdges,
   WORKSHOP_BUNDLE_KIND,
@@ -24,6 +25,8 @@ import {
   type WorkshopBundle,
 } from "@/lib/workshop/bundle";
 import { isWorkshop, normalizeTargetParty } from "@/lib/workshop/kind";
+import { removeUnreferencedFiles } from "@/lib/image-files";
+import { admitUpload, type UploadRefusal } from "@/lib/upload-budget";
 
 // Reading a workshop out to a bundle, and writing a stranger's bundle back
 // in as a new workshop.
@@ -283,37 +286,81 @@ export function exportWorkshopBundle(
 
 export type BundleImportResult =
   | { workshopId: string; copied: number }
-  | { error: string };
+  | { error: string; refusal?: UploadRefusal };
 
-// Writes an arriving image to /uploads under a fresh uuid name, exactly the
+// Writes a decoded image to /uploads under a fresh uuid name, exactly the
 // shape /api/upload produces, so isUploadedImagePath accepts it everywhere
-// else. Returns "" when the data URL does not survive decoding.
-function saveBundleImage(dataUrl: string, uploadDir: string): string {
-  if (!dataUrl) {
-    return "";
-  }
-  const image = decodeBundleImage(dataUrl);
+// else, and notes the path in `written`. Returns "" when there was no image
+// or it did not survive decoding.
+function saveBundleImage(image: BundleImage | null, uploadDir: string, written: string[]): string {
   if (!image) {
     return "";
   }
   const filename = `${crypto.randomUUID()}.${image.ext}`;
   writeFileSync(path.join(uploadDir, filename), image.bytes);
-  return `/uploads/${filename}`;
+  const url = `/uploads/${filename}`;
+  written.push(url);
+  return url;
 }
+
+type BundleArtPaths = {
+  npcPortraits: string[];
+  mapBackdrops: string[];
+  loreImages: string[];
+  factionPortraits: string[];
+};
 
 export function importWorkshopBundle(
   userId: string,
   bundle: WorkshopBundle,
 ): BundleImportResult {
-  // Art lands on disk before the transaction opens: a failed import can
-  // orphan a few image files (harmless), while the reverse order would
-  // commit rows pointing at images that were never written.
+  // Every picture is decoded first and the lot weighed against the
+  // importer's upload budget (src/lib/upload-budget.ts), so an import that
+  // is refused writes nothing.
+  const art = {
+    npcs: bundle.npcs.map((npc) => decodeBundleImage(npc.portrait)),
+    maps: bundle.maps.map((map) => decodeBundleImage(map.backdrop)),
+    lore: bundle.lore.map((entry) => decodeBundleImage(entry.image)),
+    factions: bundle.factions.map((faction) => decodeBundleImage(faction.portrait)),
+  };
+  const images = Object.values(art)
+    .flat()
+    .filter((image): image is BundleImage => image !== null);
+  const refusal = admitUpload(
+    userId,
+    images.reduce((sum, image) => sum + image.bytes.length, 0),
+    images.length,
+  );
+  if (refusal) {
+    return { error: refusal.error, refusal };
+  }
+
+  // Art lands on disk before the transaction opens, because the reverse
+  // order would commit rows pointing at images that were never written. If
+  // the rows then fail, the files none of them ended up naming are removed
+  // again rather than left in public/uploads for good.
   const uploadDir = path.join(process.cwd(), "public", "uploads");
   mkdirSync(uploadDir, { recursive: true });
-  const npcPortraits = bundle.npcs.map((npc) => saveBundleImage(npc.portrait, uploadDir));
-  const mapBackdrops = bundle.maps.map((map) => saveBundleImage(map.backdrop, uploadDir));
-  const loreImages = bundle.lore.map((entry) => saveBundleImage(entry.image, uploadDir));
+  const written: string[] = [];
+  try {
+    const paths: BundleArtPaths = {
+      npcPortraits: art.npcs.map((image) => saveBundleImage(image, uploadDir, written)),
+      mapBackdrops: art.maps.map((image) => saveBundleImage(image, uploadDir, written)),
+      loreImages: art.lore.map((image) => saveBundleImage(image, uploadDir, written)),
+      factionPortraits: art.factions.map((image) => saveBundleImage(image, uploadDir, written)),
+    };
+    return writeBundleRows(userId, bundle, paths);
+  } catch (error) {
+    removeUnreferencedFiles(written);
+    throw error;
+  }
+}
 
+function writeBundleRows(
+  userId: string,
+  bundle: WorkshopBundle,
+  { npcPortraits, mapBackdrops, loreImages, factionPortraits }: BundleArtPaths,
+): BundleImportResult {
   const workshop = createCampaign(userId, {
     title: bundle.manifest.name,
     description: bundle.premise || bundle.manifest.blurb,
@@ -414,7 +461,6 @@ export function importWorkshopBundle(
     }
 
     // Factions land after the cast so members can be matched by name.
-    const factionPortraits = bundle.factions.map((faction) => saveBundleImage(faction.portrait, uploadDir));
     for (const [index, faction] of bundle.factions.entries()) {
       const factionId = crypto.randomUUID();
       db.prepare(

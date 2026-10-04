@@ -223,7 +223,7 @@ export async function installBundleFromUrl(
   }
   const result = importWorkshopBundle(userId, parsed.data);
   if ("error" in result) {
-    return { ok: false, status: 409, error: result.error };
+    return { ok: false, status: result.refusal?.status ?? 409, error: result.error };
   }
   return { ok: true, workshopId: result.workshopId, copied: result.copied };
 }
