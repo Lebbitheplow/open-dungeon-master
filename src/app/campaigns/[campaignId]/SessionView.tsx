@@ -39,6 +39,7 @@ import { Composer, type InputKind } from "@/app/campaigns/[campaignId]/Composer"
 import { composerGate } from "@/app/campaigns/[campaignId]/composerGate";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
 import { DiceLookDialog } from "@/components/DiceLookEditor";
+import { DiceTrayDialog, secretAudience } from "@/app/campaigns/[campaignId]/DiceTrayDialog";
 import {
   requestMotionAccess,
   supportsShake,
@@ -208,6 +209,8 @@ export function SessionView({
   }, [dice3d]);
   const [diceLookOpen, setDiceLookOpen] = useState(false);
   const openDiceLook = useCallback(() => setDiceLookOpen(true), []);
+  const [diceTrayOpen, setDiceTrayOpen] = useState(false);
+  const openDiceTray = useCallback(() => setDiceTrayOpen(true), []);
   const [helpOpen, setHelpOpen] = useState(false);
   const openHelp = useCallback(() => setHelpOpen(true), []);
 
@@ -679,6 +682,7 @@ export function SessionView({
         dice3d={dice3d}
         onToggleDice3d={toggleDice3d}
         onCustomizeDice={openDiceLook}
+        onRollDice={openDiceTray}
         shake={shake}
         ttsEnabled={Boolean(campaign.gameSettings?.ttsEnabled)}
         narration={narration}
@@ -920,6 +924,16 @@ export function SessionView({
       />
       <LabelSheet campaignId={campaign.id} label={openedLabel} onClose={() => setOpenedLabel(null)} />
       <DiceLookDialog open={diceLookOpen} onOpenChange={setDiceLookOpen} />
+      <DiceTrayDialog
+        open={diceTrayOpen}
+        onOpenChange={setDiceTrayOpen}
+        campaignId={campaign.id}
+        audience={secretAudience({
+          dmSeat: caps.adjudicates,
+          steersStory: caps.steersStory,
+          aiTable: campaign.gameSettings?.dmMode === "ai",
+        })}
+      />
 
       <HelpDialog
         open={helpOpen}

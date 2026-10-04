@@ -1467,6 +1467,24 @@ html[data-theme="light"] .ts-below .ts-ghost:hover { background: rgba(255, 252, 
 }
 .cine-roll[data-crit="nat1"] .cine-roll-crit { color: #ff9d5c; }
 .cine-roll-crit[data-quiet="true"] { color: var(--cine-ink-dim); }
+/* A roll behind the screen: a violet edge and a Secret stamp, so the seat
+   holding the number never mistakes it for one the table saw. */
+.cine-roll[data-secret] { border-style: dashed; border-color: rgba(167, 139, 250, 0.7); }
+.cine-roll-secret {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(124, 92, 214, 0.25);
+  color: #d9ccff;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
 @keyframes cine-roll-in {
   from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.92); }
   to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
@@ -2028,7 +2046,8 @@ body:has(.ts-root) .server-address-dock { padding-bottom: 4.25rem; padding-right
   from { opacity: 0; transform: translateY(6px) scale(0.8); }
   to { opacity: 1; transform: none; }
 }
-.cine-roll-crit { animation: cine-crit-stamp var(--dur-beat) var(--ease-spring) 560ms backwards; }
+.cine-roll-crit,
+.cine-roll-secret { animation: cine-crit-stamp var(--dur-beat) var(--ease-spring) 560ms backwards; }
 @keyframes cine-crit-stamp {
   from { opacity: 0; transform: scale(1.8); }
   to { opacity: 1; transform: none; }
@@ -2189,6 +2208,7 @@ html[data-theme="light"] .cine-lobby .lobby-hero-art::after { display: block; }
   .cine-roll-die,
   .cine-roll-math,
   .cine-roll-crit,
+  .cine-roll-secret,
   .cine-stage .cine-desk .session-mode[data-on],
   .cine-stage .cine-header .session-hbtn-lit,
   .cine-stage .hand-card[data-picked="true"] .hand-card-frame,

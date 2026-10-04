@@ -61,7 +61,7 @@ export function rulebookContents(): RulebookContents {
       };
     }),
   }));
-  contents = { source: book.source, chapters, quick: QUICK_LINKS, pageCount: book.pages.length };
+  contents = { source: book.source, parts: book.parts, chapters, quick: QUICK_LINKS, pageCount: book.pages.length };
   return contents;
 }
 

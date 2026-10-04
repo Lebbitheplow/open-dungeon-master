@@ -180,6 +180,31 @@ const CHAPTERS = [
   },
 ];
 
+// The reference document gathers the open rules of three books, and the
+// contents shows them that way: what a player reads, what the Dungeon Master
+// reads, and the monsters. The appendices belong to every reader and sit
+// after all three.
+const PARTS = [
+  {
+    id: "players",
+    title: "Players",
+    blurb: "The Player's Handbook, as far as the SRD opens it: making a hero, playing the game, and every spell.",
+    chapters: ["races", "classes", "beyond-1st-level", "personality", "equipment", "feats", "ability-scores", "adventuring", "combat", "spellcasting", "spells"],
+  },
+  {
+    id: "dungeon-master",
+    title: "The Dungeon Master",
+    blurb: "The Dungeon Master's Guide, as far as the SRD opens it: hazards to run and every magic item.",
+    chapters: ["running-the-game", "magic-items"],
+  },
+  {
+    id: "monsters",
+    title: "Monsters",
+    blurb: "The Monster Manual, as far as the SRD opens it: every stat block, the beasts, and the people of the world.",
+    chapters: ["monsters", "creatures", "npcs"],
+  },
+];
+
 // Slips in the conversion, put back to the SRD's own words: page id, the
 // text as converted, the text as printed.
 const ERRATA = [
@@ -349,6 +374,17 @@ async function main() {
       page.md = page.md.replace(from, to);
     }
 
+    // Each book is a run of chapters in the order they are bound.
+    const order = chapters.map((chapter) => chapter.id);
+    let cursor = 0;
+    for (const part of PARTS) {
+      const start = order.indexOf(part.chapters[0]);
+      if (start < cursor || part.chapters.some((id, offset) => order[start + offset] !== id)) {
+        throw new Error(`Part ${part.id} is not a run of chapters in order`);
+      }
+      cursor = start + part.chapters.length;
+    }
+
     const book = {
       source: {
         title: "System Reference Document 5.1",
@@ -357,6 +393,7 @@ async function main() {
         licenseUrl: "https://creativecommons.org/licenses/by/4.0/legalcode",
         conversion: `https://github.com/${REPO}/tree/${COMMIT}`,
       },
+      parts: PARTS.map((part, index) => ({ ...part, numeral: NUMERALS[index] })),
       chapters,
       pages,
     };

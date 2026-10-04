@@ -364,6 +364,32 @@
 .rb-marks .rb-entry { animation: rb-ink-in 420ms var(--ease-settle) both; }
 
 .rb-chapters { margin: 0; padding: 0; list-style: none; }
+/* The three books the reference document opens: a gilt heading over each run
+   of chapters. */
+.rb-part + .rb-part { margin-top: 1.1rem; }
+.rb-part-head {
+  margin: 0 0 0.35rem;
+  padding: 0 0.3rem 0.45rem;
+  border-bottom: 1px solid rgba(138, 106, 66, 0.28);
+  animation: rb-ink-in 480ms var(--ease-settle) both;
+}
+.rb-part-numeral {
+  margin: 0;
+  font-family: var(--font-display, serif);
+  font-size: 0.62rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: #8e2317;
+}
+.rb-part-title {
+  margin: 0.05rem 0 0.15rem;
+  font-family: var(--font-display, serif);
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #3a1a0a;
+}
+.rb-part-blurb { margin: 0; font-size: 0.82rem; font-style: italic; line-height: 1.35; color: #6b4e2c; }
 .rb-chapter { animation: rb-ink-in 480ms var(--ease-settle) both; }
 .rb-chapter-row {
   display: flex;
@@ -1080,6 +1106,7 @@ html[data-effects="low"] .rb-quill { animation: none; }
   .rb-book,
   .rb-leaf,
   .rb-chip,
+  .rb-part-head,
   .rb-chapter,
   .rb-marks .rb-entry,
   .rb-hits > li,

@@ -130,6 +130,7 @@ export const SessionHeader = memo(function SessionHeader({
   dice3d,
   onToggleDice3d,
   onCustomizeDice,
+  onRollDice,
   shake,
   ttsEnabled,
   narration,
@@ -147,6 +148,8 @@ export const SessionHeader = memo(function SessionHeader({
   onToggleDice3d: () => void;
   // Opens the editor for the player's own dice colours.
   onCustomizeDice: () => void;
+  // Opens the dice tray: loose dice, rolled for the table or in secret.
+  onRollDice: () => void;
   // Shake to roll, offered only where the device can be shaken.
   shake: { supported: boolean; on: boolean; onToggle: () => void };
   // Narration audio only exists on a table with TTS on; the control is
@@ -180,15 +183,15 @@ export const SessionHeader = memo(function SessionHeader({
             account menu stay beside it as the app's own furniture. */}
         <div className="session-cluster">
         <VoiceDock {...voice} />
-        {/* The dice menu: the 3D animation switch, the player's own dice,
-            and shake to roll on a phone. The toggle used to be the button
-            itself; the menu keeps it one tap away as its first item. */}
+        {/* The dice menu: the dice tray (open or secret rolls) first, then
+            the 3D animation switch, the player's own dice, and shake to
+            roll on a phone. */}
         <DropdownMenu.Root>
           <Tooltip content="Dice" side="bottom">
             <DropdownMenu.Trigger asChild>
               <button
                 type="button"
-                aria-label="Dice settings"
+                aria-label="Dice"
                 data-tour="header-dice"
                 className={headerButtonClass(dice3d)}
               >
@@ -198,6 +201,14 @@ export const SessionHeader = memo(function SessionHeader({
           </Tooltip>
           <DropdownMenu.Portal>
             <DropdownMenu.Content align="end" sideOffset={4} className="panel z-50 min-w-52 rounded-lg p-1">
+              <DropdownMenu.Item className={diceItem} onSelect={onRollDice}>
+                <GameIcon icon={{ kind: "glyph", key: "die-d20" }} size="size-6" />
+                <span>
+                  Roll dice
+                  <span className="session-menu-hint">For the table, or in secret</span>
+                </span>
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-1 h-px bg-stone-700/60" />
               <DropdownMenu.CheckboxItem
                 checked={dice3d}
                 onCheckedChange={onToggleDice3d}

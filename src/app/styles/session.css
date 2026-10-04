@@ -382,3 +382,166 @@ html[data-theme="light"] .session-dm-body { border-image: linear-gradient(180deg
   padding: 0;
 }
 @media (min-width: 1024px) { .session-voice-mini { width: 1.9rem; height: 1.9rem; } }
+
+/* ---- The dice tray (DiceTrayDialog.tsx) ----
+   Dice lift and tilt under the pointer and glow once they are in the pool;
+   each tap pops the count. Rolling in secret turns the tray violet, edge and
+   button together, so nobody throws a secret die thinking it is public. The
+   newest result tumbles in; a 20 glints gold, a 1 shudders in ember. */
+.dice-tray-dice {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.dice-tray-die {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.45rem 0.1rem 0.35rem;
+  border-radius: 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-stone-600) 45%, transparent);
+  background: color-mix(in srgb, var(--color-stone-900) 70%, transparent);
+  transition:
+    border-color 180ms var(--ease-snap),
+    background-color 180ms var(--ease-snap),
+    box-shadow 220ms var(--ease-snap),
+    translate 240ms var(--ease-spring);
+}
+.dice-tray-die img { transition: rotate 320ms var(--ease-spring), scale 320ms var(--ease-spring); }
+.dice-tray-die:hover { translate: 0 -2px; border-color: rgba(212, 171, 58, 0.45); background: color-mix(in srgb, var(--color-stone-800) 85%, transparent); }
+.dice-tray-die:hover img { rotate: -14deg; scale: 1.08; }
+.dice-tray-die[data-on] {
+  border-color: rgba(212, 171, 58, 0.7);
+  background: rgba(212, 171, 58, 0.1);
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.22);
+}
+.dice-tray-die-name { font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.08em; color: var(--color-stone-400); }
+.dice-tray-die[data-on] .dice-tray-die-name { color: var(--color-amber-200); }
+.dice-tray-count {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.3rem;
+  min-width: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #f4e0a6, #d4ab3a);
+  color: #2a1a05;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(4, 2, 12, 0.5);
+  animation: app-count-pop var(--dur-move) var(--ease-spring) backwards;
+}
+.dice-tray-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px dashed color-mix(in srgb, var(--color-stone-600) 45%, transparent);
+  background: color-mix(in srgb, var(--color-stone-900) 60%, transparent);
+  transition: border-color 260ms var(--ease-snap), background-color 260ms var(--ease-snap), box-shadow 260ms var(--ease-snap);
+}
+.dice-tray-secret-icon { display: flex; color: var(--color-stone-400); transition: color 260ms var(--ease-snap); }
+.dice-tray-secret-icon svg { animation: dice-tray-blink 360ms var(--ease-spring); }
+.dice-tray[data-secret] .dice-tray-secret-row {
+  border-color: rgba(167, 139, 250, 0.7);
+  background: rgba(124, 92, 214, 0.12);
+  box-shadow: 0 0 18px rgba(124, 92, 214, 0.18);
+}
+.dice-tray[data-secret] .dice-tray-secret-icon { color: #c4b5fd; }
+@keyframes dice-tray-blink {
+  from { scale: 1 0.1; opacity: 0.4; }
+  to { scale: 1 1; opacity: 1; }
+}
+.dice-tray-roll { transition: filter 260ms var(--ease-snap), box-shadow 260ms var(--ease-snap); }
+.dice-tray[data-secret] .dice-tray-roll {
+  background-image: linear-gradient(180deg, #ddd6fe, #a78bfa 55%, #7c5cd6);
+  color: #1e1240;
+}
+.dice-tray-results { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0; padding: 0; list-style: none; }
+.dice-tray-result {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-stone-600) 40%, transparent);
+  background: color-mix(in srgb, var(--color-stone-900) 65%, transparent);
+  opacity: 0.72;
+}
+.dice-tray-result-fresh {
+  opacity: 1;
+  border-color: rgba(212, 171, 58, 0.5);
+  animation: dice-tray-arrive 420ms var(--ease-spring) both;
+}
+.dice-tray-result[data-secret] { border-style: dashed; border-color: rgba(167, 139, 250, 0.55); }
+.dice-tray-result[data-crit="nat20"] { border-color: rgba(244, 224, 166, 0.85); box-shadow: 0 0 18px rgba(212, 171, 58, 0.35); }
+.dice-tray-result[data-crit="nat1"] { border-color: rgba(224, 112, 58, 0.65); }
+.dice-tray-result-fresh[data-crit="nat1"] { animation: dice-tray-arrive 420ms var(--ease-spring) both, dice-tray-shudder 420ms var(--ease-snap) 420ms; }
+.dice-tray-total {
+  min-width: 2.6rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-amber-100);
+}
+.dice-tray-result-fresh .dice-tray-total { display: inline-block; animation: dice-tray-tumble 620ms var(--ease-settle) backwards; }
+.dice-tray-result[data-crit="nat20"] .dice-tray-total { color: #f4e0a6; text-shadow: 0 0 12px rgba(212, 171, 58, 0.6); }
+.dice-tray-result[data-crit="nat1"] .dice-tray-total { color: #ffbe8f; }
+.dice-tray-crit,
+.dice-tray-secret {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-amber-200);
+}
+.dice-tray-secret { padding: 0.1rem 0.45rem; border-radius: 9999px; background: rgba(124, 92, 214, 0.22); color: #d9ccff; }
+.dice-tray-result-fresh .dice-tray-crit,
+.dice-tray-result-fresh .dice-tray-secret { animation: dice-tray-stamp var(--dur-beat) var(--ease-spring) 480ms backwards; }
+@keyframes dice-tray-arrive {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dice-tray-tumble {
+  from { opacity: 0; transform: rotate(-200deg) scale(0.4); }
+  70% { opacity: 1; transform: rotate(12deg) scale(1.15); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dice-tray-stamp {
+  from { opacity: 0; transform: scale(1.8); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dice-tray-shudder {
+  0%, 100% { translate: 0 0; }
+  25% { translate: -4px 0; }
+  50% { translate: 3px 0; }
+  75% { translate: -2px 0; }
+}
+/* By day the violet darkens to read on parchment. */
+html[data-theme="light"] .dice-tray-secret { color: #5b3fb8; background: rgba(124, 92, 214, 0.16); }
+html[data-theme="light"] .dice-tray[data-secret] .dice-tray-secret-icon { color: #6d4fd0; }
+html[data-theme="light"] .dice-tray-result[data-crit="nat20"] .dice-tray-total { color: #9a6a12; text-shadow: none; }
+html[data-theme="light"] .dice-tray-result[data-crit="nat1"] .dice-tray-total { color: #b5481c; }
+html[data-effects="low"] .dice-tray-result-fresh .dice-tray-total,
+html[data-effects="low"] .dice-tray-result-fresh[data-crit="nat1"] { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .dice-tray-count,
+  .dice-tray-secret-icon svg,
+  .dice-tray-result-fresh,
+  .dice-tray-result-fresh .dice-tray-total,
+  .dice-tray-result-fresh .dice-tray-crit,
+  .dice-tray-result-fresh .dice-tray-secret { animation: none !important; }
+  .dice-tray-die:hover,
+  .dice-tray-die:hover img { translate: none; rotate: none; scale: none; }
+}
