@@ -1408,6 +1408,11 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
   advanceAfterNarration(campaign, turn);
   // What the turn and its backstop did may have left nobody able to rise.
   partyFallen(campaign, before?.partyCouldRise ?? false);
+  // Somebody can take the turn again: a later stretch with nobody able to
+  // counts its rounds afresh (idledOut).
+  if (!turnStuck(campaign)) {
+    clearIdle(getActiveEncounter(campaign.id));
+  }
 }
 
 function advanceAfterNarration(campaign: Campaign, turn?: DmTurn) {
@@ -1536,8 +1541,12 @@ function wakeForNextTurn(campaign: Campaign): boolean {
   if (!encounter || next?.kind !== "pc") {
     return false;
   }
-  if (enemiesDue(encounter).length || turnStuck(campaign)) {
+  const stuck = turnStuck(campaign);
+  if (enemiesDue(encounter).length || stuck) {
     if (!enemyStanding(encounter) || !partyCanRise(encounter)) {
+      return false;
+    }
+    if (stuck && idledOut(campaign, encounter)) {
       return false;
     }
   } else if (!isCompanionUserId(next.userId)) {
@@ -1545,6 +1554,44 @@ function wakeForNextTurn(campaign: Campaign): boolean {
   }
   wake(campaign, encounter);
   return true;
+}
+
+// Rounds the fight may go round on its own with nobody able to act: a
+// minute, as long as the common timed conditions last. Past that the enemy
+// standing may be one that can never reach or harm anyone (held itself, out
+// of reach, the condition laid with no end), and each wake would be a model
+// call with nothing to show, for ever. The table moves it on by hand (End
+// Turn, the lead's skip), which starts the count again.
+const IDLE_ROUNDS = 10;
+
+// Whether the stretch with nobody able to act has run past IDLE_ROUNDS: the
+// table is told once, and the DM is no longer woken for it.
+function idledOut(campaign: Campaign, encounter: Encounter): boolean {
+  const idle = encounter.legendary.idle;
+  if (!idle) {
+    encounter.legendary.idle = { since: encounter.round };
+    saveEncounter(encounter);
+    return false;
+  }
+  if (encounter.round - idle.since <= IDLE_ROUNDS) {
+    return false;
+  }
+  if (!idle.told) {
+    encounter.legendary.idle = { ...idle, told: true };
+    saveEncounter(encounter);
+    tableNote(
+      campaign,
+      `Nobody has been able to act for ${IDLE_ROUNDS} rounds: the fight waits for the table. End Turn or the lead's skip moves it on.`,
+    );
+  }
+  return true;
+}
+
+function clearIdle(encounter: Encounter | null) {
+  if (encounter?.legendary.idle) {
+    delete encounter.legendary.idle;
+    saveEncounter(encounter);
+  }
 }
 
 // A DM turn the server asks for runs only when something was posted after
@@ -1723,12 +1770,31 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
   }
   const name = current.name;
   const couldRise = partyCanRise(encounter);
+  // A person moved the fight on: the rounds it may go round alone start
+  // again (idledOut). The pass below saves it.
+  delete encounter.legendary.idle;
   if (!advancePointer(campaign, encounter, { announce: (next) => `${name} ends their turn. It is now ${next.name}'s turn.` })) {
     return false;
   }
   // The death saves the pass rolled may have left nobody able to rise.
   partyFallen(campaign, couldRise);
   return true;
+}
+
+// Why endOwnTurn said no, in the End Turn button's words. The pointer is on
+// this player while the floor waits for the enemies before them: their turn
+// has not come yet, and "not your combat turn" would contradict the Hand.
+export function endTurnRefusal(campaignId: string, userId: string): string {
+  const encounter = getActiveEncounter(campaignId);
+  const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  if (encounter && current?.kind === "pc" && current.userId === userId) {
+    const waiting = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
+    if (waiting.length) {
+      const one = waiting.length === 1;
+      return `${waiting.join(" and ")} ${one ? "acts" : "act"} first: wait for ${one ? "its turn" : "their turns"}, then take yours.`;
+    }
+  }
+  return "It is not your combat turn.";
 }
 
 // A person running the fight hands the turn on after the enemies the pointer
@@ -1798,6 +1864,7 @@ export function skipCurrentTurn(campaignId: string): boolean {
   }
   const skipped = encounter.order[encounter.turnIndex];
   const couldRise = partyCanRise(encounter);
+  delete encounter.legendary.idle;
   if (
     !advancePointer(campaign, encounter, {
       announce: (next) => `The party lead skipped ${skipped?.name ?? "the current"}'s turn. It is now ${next.name}'s turn.`,

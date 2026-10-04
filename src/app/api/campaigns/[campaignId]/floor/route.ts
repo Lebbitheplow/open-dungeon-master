@@ -2,9 +2,9 @@ import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
-import { fightOwnsFloor, floorAfterRelease, handOnEnemyTurns, skipCurrentTurn } from "@/lib/dm/encounter-tools";
+import { fightOwnsFloor, floorAfterRelease, skipCurrentTurn } from "@/lib/dm/encounter-tools";
 import { getActiveEncounter } from "@/lib/db/encounters";
-import { onPersonsTurn } from "@/lib/dm/invoke";
+import { handOnFromBanner } from "@/lib/dm/invoke";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishPersisted } from "@/lib/events";
 
@@ -90,10 +90,9 @@ export async function POST(
     return Response.json({ ok: true });
   }
   // A hold put up for the enemies' turns: releasing it is handing the turn
-  // on, so those turns end with it (src/lib/dm/enemies-due.ts).
+  // on (src/lib/dm/enemies-due.ts, src/lib/dm/invoke.ts handOnFromBanner).
   if (floor.mode === "hold" && floor.next.mode === "initiative" && getActiveEncounter(campaignId)?.legendary.due?.length) {
-    const campaign = context.campaign;
-    const error = onPersonsTurn(campaign, (turn) => handOnEnemyTurns(campaign, turn, false));
+    const error = handOnFromBanner(context.campaign);
     return error ? Response.json({ error }, { status: 409 }) : Response.json({ ok: true });
   }
   // A hold opens into its stored spotlight; anything else opens into the

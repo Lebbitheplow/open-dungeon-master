@@ -177,9 +177,10 @@ export function FloorBanners({
             </span>
         </SessionBanner>
       ) : null}
-      {floor.mode === "hold" && floor.next.mode === "initiative" ? (
+      {floor.mode === "hold" && floor.next.mode === "initiative" && encounter?.enemyTurns ? (
         // A fight held for the enemies' turns (src/lib/dm/enemies-due.ts).
-        // Reactions still go through.
+        // Reactions still go through. Held responses wrap the fight's floor
+        // too, and keep their own banner below.
         <SessionBanner
           glyph="tab-battle"
           title="Enemy turns"

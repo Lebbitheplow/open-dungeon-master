@@ -36,10 +36,13 @@ export type PublicEncounter = {
   orderReady: boolean;
   // DM view only. While the order is collected: who has rolled so far.
   staged?: Array<{ name: string; initiative: number }>;
-  // DM view only, at a person's table: the enemies the pointer walked past
-  // that are due before the player up next, the floor held for them
-  // (src/lib/dm/enemies-due.ts); `acted` once one has taken its action.
+  // DM view only: the enemies the pointer walked past that are due before
+  // the player up next, the floor held for them (src/lib/dm/enemies-due.ts);
+  // `acted` once one has taken its action.
   enemiesDue?: Array<{ id: string; name: string; acted: boolean }>;
+  // Every view: the floor is held for the enemies' turns, which a hold for
+  // table talk wrapping the fight's floor (held responses) is not.
+  enemyTurns?: boolean;
   // DM view only: an AI companion is up, and nobody at the table holds it.
   companionTurn?: { id: string; name: string };
   order: Array<{
@@ -311,6 +314,7 @@ export function publicEncounter(
       : {}),
     ...turnView(encounter),
     ...actingView(encounter, hidden, showNumbers),
+    ...(encounter.orderReady && encounter.legendary.due?.length ? { enemyTurns: true } : {}),
     ...(showNumbers ? dmTurnView(encounter, enemies) : {}),
     ...(options.lastHits?.length
       ? { lastHits: options.lastHits.map((record) => lastHitView(record, hidden, showNumbers)) }

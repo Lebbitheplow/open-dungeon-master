@@ -48,9 +48,13 @@ export type LegendaryState = {
   // The enemies that have taken a bonus action in `round` (Nimble Escape's
   // Disengage or Hide).
   bonus?: { round: number; ids: string[] };
-  // At a person's table: the enemies the pointer walked past that the DM has
-  // not yet played or waved through (src/lib/dm/enemies-due.ts).
+  // The enemies a pass outside the model's own end_turn walked past that
+  // nobody has yet played or waved through (src/lib/dm/enemies-due.ts).
   due?: string[];
+  // A stretch with nobody able to act: the round it began, and whether the
+  // table was told it ran too long to keep waking the DM
+  // (src/lib/dm/encounter-tools.ts idledOut).
+  idle?: { since: number; told?: boolean };
 };
 
 function stringList(raw: unknown): string[] {
@@ -73,6 +77,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   const abilities = normalizeAbilityLedgers(record.abilities);
   const handoff = (record.handoff && typeof record.handoff === "object" ? record.handoff : null) as Record<string, unknown> | null;
   const bonus = (record.bonus && typeof record.bonus === "object" ? record.bonus : null) as Record<string, unknown> | null;
+  const idle = (record.idle && typeof record.idle === "object" ? record.idle : null) as Record<string, unknown> | null;
   return {
     pools,
     lair: record.lair === true,
@@ -93,6 +98,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
       : {}),
     ...(bonus ? { bonus: { round: Number(bonus.round) || 0, ids: stringList(bonus.ids) } } : {}),
     ...(stringList(record.due).length ? { due: stringList(record.due) } : {}),
+    ...(idle ? { idle: { since: Number(idle.since) || 0, ...(idle.told === true ? { told: true } : {}) } } : {}),
   };
 }
 
