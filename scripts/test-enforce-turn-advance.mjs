@@ -10,7 +10,7 @@
 //     saved against, and the downed roll death saves, until somebody can act
 //     again or nothing more can change.
 //   - The order locks when the last initiative lands, even with nobody able
-//     to act.
+//     to act; a fight with nobody alive to field never starts.
 //   - A combatant who leaves the order holding the turn (a companion
 //     dismissed, a summon dropped or turned hostile, a PC the DM took out)
 //     takes no turn with them: it passes on as End Turn would, and whoever
@@ -479,6 +479,22 @@ for (const ambushed of [true, false]) {
     agree(world, kit, "locked");
     assert.equal(kit.endTurn(userOf(world, kara.id)), true, "and the turn moves on");
     agree(world, kit, "moved on");
+  });
+}
+
+for (const dmMode of ["ai", "human"]) {
+  await test(`No fight starts with every character dead (${dmMode} DM); a companion alive is somebody to fight it`, async () => {
+    const world = await openWorld({ gameSettings: { dmMode } });
+    const kara = world.addHero({ name: "Kara" });
+    world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+    const refused = await world.invoke("start_encounter", { enemies: [{ monster: "goblin", count: 1 }] });
+    assert.match(refused.error ?? "", /nobody to fight/);
+    assert.equal(world.encounter(), null);
+    const bot = createCompanionUser("Pip");
+    const pip = createSheet(world.campaignId, bot.id, 1, { ...world.sheet(kara.id), name: "Pip", currentHp: 10, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
+    markSheetAsCompanion(pip.id, "party", "cheerful");
+    const started = await world.invoke("start_encounter", { enemies: [{ monster: "goblin", count: 1 }] });
+    assert.equal(started.ok, true, started.error);
   });
 }
 

@@ -233,6 +233,11 @@ function handleStartEncounter(
   if (!sheets.length) {
     return { error: "No party characters to fight." };
   }
+  // The dead roll no initiative (recordInitiativeRoll), so with nobody alive
+  // the order would never be collected.
+  if (!fieldedSheets(campaign, sheets).some((sheet) => !sheet.deathSaves?.dead)) {
+    return { error: "Every character in the party is dead: there is nobody to fight." };
+  }
 
   // Resolve every requested enemy before creating anything.
   const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId);
