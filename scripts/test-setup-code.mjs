@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { fileURLToPath } from "node:url";
 import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-setup-code-"));
@@ -137,12 +138,14 @@ test("a device world never asks: its app makes the host's account", () => {
 // device-world flag are read once per process.
 function spawnNode(script, env) {
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-    cwd: path.dirname(new URL(import.meta.url).pathname),
+    // fileURLToPath, not URL.pathname: on Windows the latter is "/D:/...",
+    // which is no directory at all and the child never starts.
+    cwd: path.dirname(fileURLToPath(import.meta.url)),
     env: { ...process.env, ...env },
     encoding: "utf8",
   });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout.trim().split("\n").pop();
+  assert.equal(result.status, 0, result.error ? String(result.error) : result.stderr);
+  return result.stdout.trim().split(/\r?\n/).pop();
 }
 
 removeTempDir(dir);
