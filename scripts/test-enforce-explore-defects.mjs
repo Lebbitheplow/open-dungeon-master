@@ -55,6 +55,7 @@ await test("A boolean argument sent as the string \"false\" is false: pc_attack 
   world.clearDice();
   world.diceLog();
   world.dice(15, 4);
+  world.say("player", "I swing at it.", fighter);
   const out = await raw("pc_attack", JSON.stringify({ characterId: fighter.id, targetEnemyId: enemy.id, useInspiration: "false" }));
   const d20s = world.diceLog().filter((die) => die.sides === 20).length;
   world.clearDice();

@@ -12,6 +12,7 @@ import { isIncapacitated, pruneMeta } from "@/lib/dm/condition-logic";
 import { onEnemyIncapacitated } from "@/lib/dm/enemy-conditions";
 import { setEnemyExhaustion } from "@/lib/dm/enemy-exhaustion";
 import { enemyCallOutOfTurn, enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
+import { characterCallUnasked } from "@/lib/dm/player-word";
 import { standUpIfProne } from "@/lib/dm/enemy-approach";
 import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { PRONE } from "@/lib/dm/vitals-logic";
@@ -342,8 +343,11 @@ export function applyExtraEncounterCall(
     case "clear_enemy_condition":
       return { result: handleEnemyCondition(campaign, "clear", rawArguments, { turn, sheets, sheetsById }) };
     case "aoe_damage": {
-      // An enemy's breath or spell is its action, on its own turn.
-      const early = enemyCallOutOfTurn(campaign.id, turn, rawArguments, "casterEnemyId");
+      // An enemy's breath or spell is its action, on its own turn; a
+      // character's spell waits for their player's word.
+      const early =
+        enemyCallOutOfTurn(campaign.id, turn, rawArguments, "casterEnemyId") ??
+        characterCallUnasked(campaign.id, turn, rawArguments, "casterId");
       return { result: early ? { error: early } : handleAoeDamage(campaign, turn, rawArguments, sheets, sheetsById) };
     }
     case "legendary_action":

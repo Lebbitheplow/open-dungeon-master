@@ -265,6 +265,7 @@ await test("An enemy takes one action on its turn: one attack, or one Multiattac
   const actor = { kind: "ai", turnId: turn.id };
   // Its turn comes when the pointer passes it (src/lib/dm/enemy-turn-order.ts).
   for (let guard = 0; guard < 4; guard += 1) {
+    world.say("player", "That's my turn.", world.sheet(kit.current().characterId));
     const ended = await invokeEngine(world.campaign(), actor, { name: "end_turn", args: { characterId: kit.current().characterId } });
     if (JSON.stringify(ended.result?.enemiesToAct ?? []).includes(enemy.id)) {
       break;

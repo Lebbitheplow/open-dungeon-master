@@ -302,6 +302,7 @@ await test("the AI DM cannot hand out a spell's effect with set_condition; cast_
   assert.ok(!world.sheet(fighter.id).conditions.includes("blessed"));
   const hasted = await invokeAsAi(world, "set_condition", { characterId: fighter.id, condition: "haste", rounds: 10 });
   assert.equal(hasted.ok, false);
+  world.say("player", "I bless the fighter.", priest);
   const cast = await onTurnOf(world, priest.id, () =>
     invokeAsAi(world, "cast_buff", { characterId: priest.id, spell: "Bless", level: 1, targetCharacterIds: [fighter.id] }),
   );

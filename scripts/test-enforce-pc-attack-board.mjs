@@ -293,6 +293,7 @@ await test("The AI's advantage on an enemy's attack needs a named circumstance t
     // The AI's enemy acts on its own turn: end turns until the pointer
     // hands it over (src/lib/dm/enemy-turn-order.ts).
     for (let guard = 0; guard < 4; guard += 1) {
+      world.say("player", "That's my turn.", world.sheet(kit.current().characterId));
       const ended = await invokeEngine(world.campaign(), { kind: "ai", turnId: turn.id }, {
         name: "end_turn",
         args: { characterId: kit.current().characterId },
