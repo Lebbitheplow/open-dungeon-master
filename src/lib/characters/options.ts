@@ -156,7 +156,10 @@ export function srdClassOptions(): ClassOption[] {
 // The content pack's class rows beside the setting catalog. A pack row for a
 // class the bundled SRD carries takes its numbers from the pack's text and
 // its secret language and one-line pitch from the bundled entry, which Open5e
-// says nothing about.
+// says nothing about. Its training is the bundled entry's too, as the server
+// reads it (catalog.ts classGrantsFor): the pack's druid armor is a sentence
+// ("shields (druids will not wear armor or use shields made of metal)") that
+// the sheet refuses and the no-metal rule cannot read.
 export function packClassOptions(rows: ContentRow[]): ClassOption[] {
   const packOptions: ClassOption[] = rows.map((row) => {
     const bundled = SRD_CLASSES.find((klass) => klass.id === row.slug);
@@ -164,6 +167,9 @@ export function packClassOptions(rows: ContentRow[]): ClassOption[] {
       id: row.slug,
       name: row.name,
       ...classMechanics(row.slug, row.data),
+      ...(bundled
+        ? { armor: bundled.armor, weapons: bundled.weapons, tools: bundled.tools ?? [] }
+        : {}),
       desc: String(row.data?.desc ?? ""),
       blurb: bundled?.blurb,
       languages: bundled?.languages,
