@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
+import { endpointKind } from "@/lib/dm/sampling-logic";
 import { serverEnv } from "@/lib/server-env";
 import { DEFAULT_LOCAL_TEXT_MODEL } from "@/lib/text-models";
 // The same three-stage probe the CLI runs (scripts/probe-openai-backend.mjs):
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
           DEFAULT_LOCAL_TEXT_MODEL
         : config.text.customModel ||
           serverEnv("OPENAI_COMPAT_MODEL") ||
-          (/(^|\.)openrouter\.ai/i.test(resolvedBaseUrl)
+          (endpointKind(resolvedBaseUrl) === "openrouter"
             ? serverEnv("OPENROUTER_MODEL", "google/gemini-3.5-flash")
             : DEFAULT_STORY_SETTINGS.customModel));
   const resolvedKey =

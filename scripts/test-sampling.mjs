@@ -161,6 +161,19 @@ check("a vendor name in the path or a suffixed host is not that vendor", () => {
   assert.equal(endpointKind("https://openrouter.ai.evil.test/v1"), "local");
 });
 
+check("openrouter.ai in a path, query or username is not OpenRouter", () => {
+  // This classification releases the server's OPENROUTER_API_KEY, and a
+  // campaign controls the URL it is applied to.
+  assert.equal(endpointKind("https://evil.test/.openrouter.ai"), "local");
+  assert.equal(endpointKind("https://evil.test/.openrouter.ai/api/v1"), "local");
+  assert.equal(endpointKind("https://evil.test/v1?x=.openrouter.ai"), "local");
+  assert.equal(endpointKind("https://openrouter.ai@evil.test/v1"), "local");
+  assert.equal(endpointKind("https://x.openrouter.ai:pw@evil.test/v1"), "local");
+  assert.equal(endpointKind("https://evilopenrouter.ai/v1"), "local");
+  assert.equal(endpointKind("https://api.openrouter.ai/v1"), "openrouter");
+  assert.equal(endpointKind("HTTPS://OpenRouter.AI/api/v1"), "openrouter");
+});
+
 check("local caps reproduce ODM's pre-existing hardcoded payload", () => {
   // The regression guard for the default install. Every field here is what
   // model-client.ts sent before endpoint capabilities existed, so a change
