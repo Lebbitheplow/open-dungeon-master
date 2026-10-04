@@ -60,6 +60,11 @@ export const deathSavesSchema = z
   .nullable();
 export type DeathSaves = z.infer<typeof deathSavesSchema>;
 
+const trainingName = z
+  .string()
+  .max(300)
+  .transform((value) => value.slice(0, 40));
+
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),
   skills: z.array(z.string().max(40)).max(18),
@@ -68,8 +73,11 @@ export const proficienciesSchema = z.object({
   expertise: z.array(z.string().max(40)).max(6).default([]),
   languages: z.array(z.string().max(40)).max(12),
   tools: z.array(z.string().max(60)).max(12),
-  armor: z.array(z.string().max(40)).max(8),
-  weapons: z.array(z.string().max(40)).max(16),
+  // Clipped rather than refused: the server writes the training itself
+  // (src/lib/srd/legality/proficiencies.ts), and an app built before the
+  // builder read it from the bundled class sends the content pack's sentence.
+  armor: z.array(trainingName).max(8),
+  weapons: z.array(trainingName).max(16),
 });
 export type Proficiencies = z.infer<typeof proficienciesSchema>;
 

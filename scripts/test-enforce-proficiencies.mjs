@@ -398,6 +398,52 @@ await test("a tool sentence is read as a pick among named tools, and the picks a
   assert.ok(tools.toolPickProblem([bard], ["lute", "drum"]));
   assert.ok(tools.toolPickProblem([bard], ["lute", "drum", "smith's tools"]));
   assert.ok(tools.toolPickProblem([bard], ["lute", "drum", "flute", "horn"]));
+  // A content-pack background names the tools it offers (Crime Syndicate
+  // Member), with a curly apostrophe.
+  const named = tools.toolChoiceOf("Your choice of one from Thieves’ Tools, Forgery Kit, or Disguise Kit");
+  assert.deepEqual(named, { count: 1, from: ["thieves' tools", "forgery kit", "disguise kit"], label: "tool" });
+  assert.equal(tools.toolPickProblem([named], ["forgery kit"]), null);
+  assert.ok(tools.toolPickProblem([named], ["lute"]));
+});
+
+// The content pack's druid row, as Open5e writes it: its armor training is a
+// sentence longer than the sheet keeps a training name.
+const PACK_DRUID_ROW = {
+  slug: "druid",
+  name: "Druid",
+  source: "wotc-srd",
+  documentSlug: "wotc-srd",
+  data: {
+    hit_dice: "1d8",
+    prof_armor: "Light armor, medium armor, shields (druids will not wear armor or use shields made of metal)",
+    prof_weapons: "Clubs, daggers, darts, javelins, maces, quarterstaffs, scimitars, sickles, slings, spears",
+    prof_tools: "Herbalism kit",
+    prof_saving_throws: "Intelligence, Wisdom",
+    prof_skills: "Choose two from Arcana, Animal Handling, Insight, Medicine, Nature, Perception, Religion, and Survival",
+    spellcasting_ability: "Wisdom",
+  },
+};
+
+await test("a druid built from the content pack's class list joins the table, trained as the bundled druid", async () => {
+  const options = await import("../src/lib/characters/options.ts");
+  const packDruid = options.packClassOptions([PACK_DRUID_ROW]).find((row) => row.id === "druid");
+  assert.deepEqual(packDruid.armor, CLASSES.druid.armor);
+  const built = buildClass("druid", { class: packDruid });
+  assert.equal(built.blocker, null, built.blocker?.message);
+  const joined = await atTable(built.sheet);
+  assert.equal(joined.status, 201, joined.error);
+  assert.deepEqual(joined.sheet.proficiencies.armor, CLASSES.druid.armor);
+});
+
+await test("an app built before that fix still joins with the pack's armor sentence; the server writes the training", async () => {
+  const druid = buildClass("druid").sheet;
+  const sentence = "shields (druids will not wear armor or use shields made of metal)";
+  const joined = await atTable({
+    ...druid,
+    proficiencies: { ...druid.proficiencies, armor: ["Light armor", "medium armor", sentence] },
+  });
+  assert.equal(joined.status, 201, joined.error);
+  assert.deepEqual(joined.sheet.proficiencies.armor, CLASSES.druid.armor);
 });
 
 await test("A bard is proficient with three musical instruments of their choice, a monk with one artisan's tool or instrument: the sheet names the ones chosen.", () => {

@@ -49,7 +49,16 @@ const COUNTS: Record<string, number> = { one: 1, two: 2, three: 3, a: 1, any: 1 
 
 // The pick a tool entry stands for, or null when the entry names a tool.
 export function toolChoiceOf(entry: string): ToolChoice | null {
-  const text = entry.trim().toLowerCase();
+  const text = entry.trim().toLowerCase().replace(/[‘’]/g, "'");
+  // A content-pack background naming the tools it offers: "Your choice of
+  // one from Thieves' Tools, Forgery Kit, or Disguise Kit".
+  const named = /^(?:your )?choice of (one|two|three|a|any) (?:from|of)(?: among)? (.+?)\.?$/.exec(text);
+  if (named) {
+    const tools = named[2].split(/\s*,\s*(?:or\s+)?|\s+or\s+/).filter(Boolean);
+    if (tools.length > 1) {
+      return { count: COUNTS[named[1]], from: tools, label: "tool" };
+    }
+  }
   const kinds: Array<[RegExp, string[], string]> = [
     [/artisan'?s? tools?/, ARTISANS_TOOLS, "artisan's tools"],
     [/musical instruments?/, MUSICAL_INSTRUMENTS, "musical instrument"],
