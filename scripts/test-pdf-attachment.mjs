@@ -60,6 +60,91 @@ test("text comes out of plain and deflated streams, lines where the page breaks 
   assert.equal(extractPdfText(pdf("BT <48656C6C6F> Tj ET")), "Hello");
 });
 
+// ---- what one file may cost to read ----
+// Deflate packs a run of identical bytes about a thousand to one, so a file
+// well under the upload cap can claim gigabytes once inflated. These files
+// are small on disk and expensive to read without the limits in pdf/text.ts.
+
+// A PDF of several streams, each { content, flate?, dict? } or a ready
+// deflated { body } (so a big body is compressed once and reused).
+function pdfOf(parts) {
+  const chunks = [Buffer.from("%PDF-1.4\n", "latin1")];
+  parts.forEach((part, index) => {
+    const body = part.body ?? (part.flate ? deflateSync(Buffer.from(part.content, "latin1")) : Buffer.from(part.content, "latin1"));
+    const filter = part.body || part.flate ? " /Filter /FlateDecode" : "";
+    chunks.push(
+      Buffer.from(`${index + 4} 0 obj << /Length ${body.length}${filter}${part.dict ?? ""} >>\nstream\n`, "latin1"),
+      body,
+      Buffer.from("\nendstream\nendobj\n", "latin1"),
+    );
+  });
+  chunks.push(Buffer.from("%%EOF", "latin1"));
+  return Buffer.concat(chunks);
+}
+
+test("every page of a book is read, not just the first", () => {
+  // Pages that compress past 400 bytes, as real ones do. Each "endstream"
+  // used to read as the start of another stream, which swallowed the page
+  // after it, so only the first page of a real book ever came out.
+  const page = (title) => ({
+    flate: true,
+    content: `BT (${title}) Tj ET\n${Array.from({ length: 300 }, (_, i) => `${(i * 7919) % 1000} ${(i * 104729) % 800} m ${(i * 31) % 997} ${(i * 17) % 811} l S`).join("\n")}`,
+  });
+  assert.equal(extractPdfText(pdfOf([page("Page one"), page("Page two"), page("Page three")])), "Page one\n\nPage two\n\nPage three");
+});
+
+const MB = 1024 * 1024;
+// A page that draws text, padded with spaces to `size` bytes once inflated.
+const paddedPage = (text, size) => `BT (${text}) Tj ET${" ".repeat(size - text.length - 12)}`;
+const timed = (fn) => {
+  const started = Date.now();
+  const value = fn();
+  return { value, ms: Date.now() - started };
+};
+
+test("one stream that inflates far past a page is skipped, not inflated", () => {
+  const bomb = deflateSync(Buffer.from(paddedPage("BOMB", 48 * MB), "latin1"), { level: 9 });
+  assert.ok(bomb.length < MB, `the bomb is ${bomb.length} bytes on disk`);
+  const file = pdfOf([{ body: bomb }, { content: "BT (After) Tj ET" }]);
+  const { value, ms } = timed(() => extractPdfText(file));
+  assert.equal(value, "After", "the oversized stream was read, or the page after it was lost");
+  assert.ok(ms < 2_000, `took ${ms}ms`);
+});
+
+test("many streams under the per-stream cap stop at the file's inflate budget", () => {
+  const page = (n) => ({ body: deflateSync(Buffer.from(paddedPage(`P${n}`, 4 * MB), "latin1"), { level: 1 }) });
+  const file = pdfOf(Array.from({ length: 30 }, (_, n) => page(n)));
+  const value = extractPdfText(file);
+  assert.ok(value.includes("P0") && value.includes("P10"), "pages inside the budget were lost");
+  assert.ok(!value.includes("P20") && !value.includes("P29"), "reading went past the 64 MB budget");
+});
+
+test("a file of countless tiny streams stops at the stream cap", () => {
+  const parts = Array.from({ length: 20_001 }, () => ({ content: "q Q" }));
+  parts.push({ content: "BT (Too far) Tj ET" });
+  const { value, ms } = timed(() => extractPdfText(pdfOf(parts)));
+  assert.equal(value, "", "a stream past the cap was read");
+  assert.ok(ms < 2_000, `took ${ms}ms`);
+});
+
+test("pictures are never inflated, so a well-illustrated book keeps its text", () => {
+  // Ten 7 MB images would spend the whole budget if they were inflated.
+  const picture = deflateSync(Buffer.alloc(7 * MB), { level: 1 });
+  const parts = Array.from({ length: 10 }, () => ({ body: picture, dict: " /Type /XObject /Subtype /Image /Width 2000 /Height 1200" }));
+  parts.push({ content: "BT (Chapter One) Tj ET", flate: true });
+  assert.equal(extractPdfText(pdfOf(parts)), "Chapter One");
+});
+
+test("reading stops at the caller's text budget", () => {
+  const parts = Array.from({ length: 200 }, (_, n) => ({ content: `BT (Page ${n} ${"text ".repeat(40)}) Tj ET`, flate: true }));
+  const file = pdfOf(parts);
+  const capped = extractPdfText(file, 1_000);
+  assert.ok(capped.length <= 1_000, `got ${capped.length} characters`);
+  assert.ok(capped.startsWith("Page 0"));
+  assert.ok(!capped.includes("Page 10 "), "pages past the budget were read");
+  assert.ok(extractPdfText(file).includes("Page 199"), "without a budget of its own the whole short book is read");
+});
+
 test("a rules-tagged entry with a PDF feeds retrieval; others do not", () => {
   assert.ok(feedsRules({ tags: ["Rules"], attachmentPath: "/uploads/a.pdf" }));
   assert.ok(!feedsRules({ tags: ["lore"], attachmentPath: "/uploads/a.pdf" }));
