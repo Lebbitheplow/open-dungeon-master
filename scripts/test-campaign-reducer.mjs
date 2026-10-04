@@ -68,6 +68,25 @@ test("the DM's passage ends the turn; a player's does not", () => {
   assert.equal(campaignReducer(narrating, event("message_added", { message: halted }, 13)).dmStatus, "idle");
 });
 
+test("issue 68: a narration a player answered mid-stream lands before the answer", () => {
+  const narrating = campaignReducer(loaded, event("dm_delta", { text: "Brom sheathes his axe." }));
+  // The reply arrives first, at seq 12; the narration claimed seq 11 for
+  // itself when the reply came in, and is written (event seq 13) after it.
+  const reply = { id: "p1", seq: 12, authorType: "player", content: "Nice swing, Brom." };
+  const afterReply = campaignReducer(narrating, event("message_added", { message: reply }, 12));
+  const narration = { id: "d1", seq: 11, authorType: "dm", content: "Brom sheathes his axe." };
+  const after = campaignReducer(afterReply, event("message_added", { message: narration }, 13));
+  assert.deepEqual(after.messages.map((m) => m.id), ["d1", "p1"]);
+  assert.equal(after.dmStatus, "idle");
+  assert.equal(after.lastSeq, 13);
+});
+
+test("messages already in seq order keep their array", () => {
+  const one = campaignReducer(loaded, event("message_added", { message: { id: "a", seq: 11, authorType: "player", content: "a" } }, 11));
+  const two = campaignReducer(one, event("message_added", { message: { id: "b", seq: 12, authorType: "player", content: "b" } }, 12));
+  assert.deepEqual(two.messages.map((m) => m.id), ["a", "b"]);
+});
+
 test("E2: the snapshot carries the scene, the active sheet, the handout, the pause and the card", () => {
   const handout = { id: "h1", title: "A letter", style: "parchment", audience: null, at: 1 };
   const next = campaignReducer(INITIAL_CAMPAIGN_STATE, {

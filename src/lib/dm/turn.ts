@@ -24,6 +24,7 @@ import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
+import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
@@ -718,9 +719,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // Fresh reasoning-artifact filter per model call; each call is its own
     // stream. Withheld trailing text is flushed after the call completes.
     const filter = createStreamingArtifactFilter();
-    const batcher = createDeltaBatcher((text) =>
-      publishEphemeral(campaignId, "dm_delta", { text }),
-    );
+    const batcher = createDeltaBatcher((text) => {
+      narrationShown(campaignId, turn.id);
+      publishEphemeral(campaignId, "dm_delta", { text });
+    });
     const { message, error } = await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
@@ -1365,7 +1367,10 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
   const { campaign } = context;
   const campaignId = campaign.id;
   const filter = createStreamingArtifactFilter();
-  const batcher = createDeltaBatcher((text) => publishEphemeral(campaignId, "dm_delta", { text }));
+  const batcher = createDeltaBatcher((text) => {
+    narrationShown(campaignId, turn.id);
+    publishEphemeral(campaignId, "dm_delta", { text });
+  });
   const { message, error } = await requestDmMessage(
     campaign.settings,
     [...turn.conversation, { role: "user", content: TOOLS_CLOSED_PROMPT }],
@@ -1741,9 +1746,14 @@ function emptyTurnPlayer(context: TurnContext): EmptyTurnPlayer | null {
 
 function finalize(context: TurnContext, turn: DmTurn, failed: string) {
   const campaignId = context.campaign.id;
+  // The place a player's reply made this narration take, if one arrived
+  // while it was on screen (src/lib/dm/narration-slot.ts). The message sits
+  // in that slot; its event still takes a fresh seq, since every client has
+  // already seen events past the slot and would drop an older one.
+  const claimed = takeNarrationSeq(campaignId, turn.id);
 
   if (failed) {
-    const seq = allocateSeq(campaignId);
+    const seq = claimed ?? allocateSeq(campaignId);
     const message = insertCampaignMessage({
       campaignId,
       seq,
@@ -1754,7 +1764,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
       // the action, which would duplicate it in the transcript.
       dmTurnId: turn.id,
     });
-    publishWithSeq(campaignId, seq, "message_added", { message });
+    publishWithSeq(campaignId, claimed === null ? seq : allocateSeq(campaignId), "message_added", { message });
     setDmStatus(campaignId, "idle");
     turn.status = "failed";
     saveDmTurn(turn);
@@ -1806,7 +1816,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
 
   const imageEnabled =
     context.campaign.settings.imageGenerationEnabled && context.campaign.settings.autoImages;
-  const seq = allocateSeq(campaignId);
+  const seq = claimed ?? allocateSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,
     seq,
@@ -1830,7 +1840,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
     // turn's tools.
     dmTurnId: turn.id,
   });
-  publishWithSeq(campaignId, seq, "message_added", { message });
+  publishWithSeq(campaignId, claimed === null ? seq : allocateSeq(campaignId), "message_added", { message });
   setDmStatus(campaignId, "idle");
 
   // Combat bookkeeping: if the current PC's turn was adjudicated, hand the

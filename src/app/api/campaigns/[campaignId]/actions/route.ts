@@ -16,6 +16,7 @@ import { floorAfterRelease } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { hasHumanDm } from "@/lib/dm/viewer";
+import { claimNarrationSeq } from "@/lib/dm/narration-slot";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -177,6 +178,9 @@ export async function POST(
     enqueueDmJob(campaignId, () => runResumeRecap(campaignId));
   }
 
+  // A reply to narration still streaming lands after it, not above it: the
+  // narration claims the seq before this one (src/lib/dm/narration-slot.ts).
+  claimNarrationSeq(campaignId);
   const seq = allocateSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,

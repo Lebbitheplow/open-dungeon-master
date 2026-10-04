@@ -287,7 +287,7 @@ export function BattleMapPanel({
     () => (turnToken ? { x: turnToken.x, y: turnToken.y } : null),
     [turnToken],
   );
-  const { frameRef, ...cam } = useBoardCamera(view.width, view.height, {
+  const { frameRef, attachFrame, ...cam } = useBoardCamera(view.width, view.height, {
     followTurn: followTurn && !canDirect,
     turnTile,
     remote: camera,
@@ -894,7 +894,7 @@ export function BattleMapPanel({
 
   const grid = (
     <div
-      ref={frameRef}
+      ref={attachFrame}
       tabIndex={0}
       aria-label="Board view. Scroll or pinch to zoom, arrow keys to pan."
       // A container, so the stage chrome sizes to the board it sits on (the

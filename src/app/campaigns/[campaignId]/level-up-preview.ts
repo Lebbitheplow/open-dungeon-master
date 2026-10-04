@@ -246,7 +246,7 @@ export function thirdCasterPickRefusal(input: {
   known: string[];
   picks: string[];
   adding: string;
-  schoolOf?: (name: string) => string | null | undefined;
+  schoolOf?: (name: string) => unknown;
 }): string | null {
   const of = (name: string) => ({ name, school: input.schoolOf?.(name) ?? bundledSpellSchool(name) });
   return thirdCasterSchoolProblem({

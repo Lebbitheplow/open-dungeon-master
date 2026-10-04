@@ -6,6 +6,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
+import { replayAnimation } from "@/lib/motion/replay";
 
 // The spell book: one tab per spell level (cantrips first), every spell a
 // tile that says at a glance whether it is ready, waiting for a long rest,
@@ -39,6 +40,11 @@ export type SpellTile = {
   homebrew?: boolean;
   // Replaces the state line under the name ("New" for a level-up pick).
   note?: string;
+  // Why this spell cannot be chosen right now ("Full", a third caster's
+  // school). The tile dims and says so before anyone taps it; a tap still
+  // reaches onTile, so the picker can explain at length, and the tile
+  // shakes no.
+  blocked?: string;
 };
 
 export type SpellCounter = { label: string; value: number; max?: number | null; extra?: string };
@@ -51,6 +57,7 @@ const STATE_TEXT: Record<SpellTileState, string> = {
   available: "Available",
 };
 
+const RANK: Record<SpellTileState, number> = { granted: 0, ready: 1, pending: 2, inBook: 3, available: 4 };
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
 const noSubscribe = () => () => {};
 const levelKey = (level: number | null) => (level === null ? "other" : String(level));
@@ -74,6 +81,7 @@ export function SpellBook({
   busy = false,
   header,
   footer,
+  notice,
   emptyText = "No spells yet.",
 }: {
   tiles: SpellTile[];
@@ -87,6 +95,10 @@ export function SpellBook({
   busy?: boolean;
   header?: ReactNode;
   footer?: ReactNode;
+  // A word from the picker about the last tap (why it was refused), shown
+  // beside the level heading right above the tiles, where the eye already
+  // is, instead of a line pushed in above the book.
+  notice?: ReactNode;
   emptyText?: string;
 }) {
   const [filter, setFilter] = useState("");
@@ -131,10 +143,25 @@ export function SpellBook({
       )
     : (byLevel.get(active) ?? []);
   // Chosen first, then what is left to choose, alphabetical inside each.
-  const rank: Record<SpellTileState, number> = { granted: 0, ready: 1, pending: 2, inBook: 3, available: 4 };
-  const ordered = [...shown].sort(
-    (a, b) => rank[a.state] - rank[b.state] || (a.label ?? a.name).localeCompare(b.label ?? b.name),
-  );
+  // The order is taken when a page of tiles opens (a tab, a search, a new
+  // list) and kept while the player taps, so a tile stays under the finger
+  // that chose it. Re-sorting on every tap sent a chosen spell leaping to
+  // the front and the list jumping, and the tap looked lost (issue 66).
+  const byRank = (a: SpellTile, b: SpellTile) =>
+    RANK[a.state] - RANK[b.state] || (a.label ?? a.name).localeCompare(b.label ?? b.name);
+  const pageKey = `${needle ? `?${needle}` : active}|${shown
+    .map((tile) => tile.name)
+    .sort()
+    .join("|")}`;
+  const [page, setPage] = useState<{ key: string; order: string[] }>({ key: "", order: [] });
+  if (page.key !== pageKey) {
+    setPage({ key: pageKey, order: [...shown].sort(byRank).map((tile) => tile.name) });
+  }
+  const position = new Map(page.order.map((name, index) => [name, index]));
+  const ordered =
+    page.key === pageKey
+      ? [...shown].sort((a, b) => (position.get(a.name) ?? 0) - (position.get(b.name) ?? 0))
+      : [...shown].sort(byRank);
   const presentStates = new Set(tiles.map((tile) => tile.state));
   const toggles = (tile: SpellTile) =>
     Boolean(onTile) && (canToggle ? canToggle(tile) : tile.state !== "granted");
@@ -148,6 +175,7 @@ export function SpellBook({
             return (
               <span
                 key={counter.label}
+                data-full={full ? "true" : undefined}
                 className={cn(
                   "rounded-full border px-2.5 py-0.5",
                   full
@@ -210,8 +238,22 @@ export function SpellBook({
         />
       </div>
 
-      <p className="eyebrow mt-2 mb-1.5 text-[10px] text-stone-500">
-        {needle ? `Matching "${filter.trim()}"` : levelLabel(active)}
+      {/* One line, always: a note that wrapped on a phone pushed the tiles
+          down under the finger, the very jump issue 66 was about. The whole
+          note is its tooltip; the full counter shakes with the tile. */}
+      <p className="mt-2 mb-1.5 flex h-4 min-w-0 items-center gap-2">
+        <span className="eyebrow shrink-0 text-[10px] leading-4 text-stone-500">
+          {needle ? `Matching "${filter.trim()}"` : levelLabel(active)}
+        </span>
+        {notice ? (
+          <span
+            role="status"
+            title={typeof notice === "string" ? notice : undefined}
+            className="reveal min-w-0 truncate text-xs leading-4 text-amber-300"
+          >
+            {notice}
+          </span>
+        ) : null}
       </p>
       {ordered.length ? (
         // Columns follow the room the book is drawn in, not the window: the
@@ -223,13 +265,28 @@ export function SpellBook({
             const clickable = toggles(tile) && !busy;
             const summary = tile.data ? spellSummary(tile.data) : undefined;
             return (
-              <li key={tile.name} className="spell-tile" data-state={tile.state}>
+              <li
+                key={tile.name}
+                className="spell-tile"
+                data-state={tile.state}
+                data-blocked={tile.blocked ? "true" : undefined}
+              >
                 <button
                   type="button"
                   disabled={!clickable}
                   aria-pressed={tile.state !== "available" && tile.state !== "inBook"}
-                  onClick={() => onTile?.(tile)}
-                  title={tile.note ?? STATE_TEXT[tile.state]}
+                  onClick={(event) => {
+                    if (tile.blocked) {
+                      const shake = "shake-x var(--dur-beat) var(--ease-snap) both";
+                      replayAnimation(event.currentTarget.closest("li"), shake);
+                      event.currentTarget
+                        .closest(".spellbook")
+                        ?.querySelectorAll<HTMLElement>("[data-full]")
+                        .forEach((pill) => replayAnimation(pill, shake));
+                    }
+                    onTile?.(tile);
+                  }}
+                  title={tile.blocked ?? tile.note ?? STATE_TEXT[tile.state]}
                   className="flex w-full min-w-0 items-center gap-2 text-left disabled:cursor-default"
                 >
                   <span className="relative shrink-0">
@@ -245,7 +302,7 @@ export function SpellBook({
                     </span>
                     <span className="spell-tile-state block text-[10px]">
                       {tile.homebrew ? "homebrew · " : ""}
-                      {tile.note ?? STATE_TEXT[tile.state]}
+                      {tile.blocked ?? tile.note ?? STATE_TEXT[tile.state]}
                     </span>
                   </span>
                 </button>

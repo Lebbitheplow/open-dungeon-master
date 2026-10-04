@@ -46,6 +46,11 @@ export function createValueStore<T>(initial: T): ValueStore<T> {
 export type VoiceSpeaking = { userId: string; at: number } | null;
 
 export const dmDraftStore = createValueStore("");
+// The seq the streaming passage will be written at, once a player's message
+// arrived while it was on screen (src/lib/dm/narration-slot.ts, issue 68):
+// the draft bubble sits there, above that reply, instead of below it. Null
+// while nobody has interjected; the bubble then stays at the bottom.
+export const dmDraftSeqStore = createValueStore<number | null>(null);
 export const voiceSpeakingStore = createValueStore<VoiceSpeaking>(null);
 
 export function appendDmDraft(text: string) {
@@ -56,6 +61,11 @@ export function appendDmDraft(text: string) {
 
 export function clearDmDraft() {
   dmDraftStore.set("");
+  dmDraftSeqStore.set(null);
+}
+
+export function setDmDraftSeq(seq: number | null) {
+  dmDraftSeqStore.set(seq);
 }
 
 export function setVoiceSpeaking(speaking: VoiceSpeaking) {
@@ -64,15 +74,22 @@ export function setVoiceSpeaking(speaking: VoiceSpeaking) {
 
 export function resetLiveStores() {
   dmDraftStore.set("");
+  dmDraftSeqStore.set(null);
   voiceSpeakingStore.set(null);
 }
 
 const serverDraft = () => "";
+const serverDraftSeq = (): number | null => null;
 const serverSpeaking = (): VoiceSpeaking => null;
 
 // The DM's passage as it streams in. Empty between turns.
 export function useDmDraft(): string {
   return useSyncExternalStore(dmDraftStore.subscribe, dmDraftStore.get, serverDraft);
+}
+
+// Where the streaming passage sits in the transcript; null for the bottom.
+export function useDmDraftSeq(): number | null {
+  return useSyncExternalStore(dmDraftSeqStore.subscribe, dmDraftSeqStore.get, serverDraftSeq);
 }
 
 // Who mediasoup's dominant-speaker detection last named, and when. The

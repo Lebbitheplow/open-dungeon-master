@@ -1707,7 +1707,12 @@ html[data-theme="light"] .cine-stage .cine-panel { background: rgba(241, 235, 22
 html[data-theme="light"] .cine-stage .cine-desk { background: linear-gradient(180deg, rgba(244, 239, 228, 0.94), rgba(241, 235, 222, 0.98)); }
 html[data-theme="light"] .cine-stage .cine-desk .session-well { background: linear-gradient(180deg, #fffaf0, #f6eed8); border-color: rgba(122, 88, 20, 0.4); box-shadow: 0 2px 6px rgba(74, 52, 8, 0.12) inset; }
 html[data-theme="light"] .cine-stage .cine-desk .session-mode:not([data-on]) { background: linear-gradient(180deg, #fbf5e4, #efe4c6); border-color: rgba(122, 88, 20, 0.4); }
-html[data-theme="light"] .cine-stage .cine-chat .session-dm-body { text-shadow: none; }
+/* The night inks above are fixed colours, so the day theme sets its own:
+   a player's bubble was ivory on parchment, and the streaming passage (its
+   paragraph is the .session-dm-body itself) read pale until it was written. */
+html[data-theme="light"] .cine-stage .cine-chat .session-dm-body { text-shadow: none; color: var(--color-stone-100); }
+html[data-theme="light"] .cine-stage .cine-chat .session-bubble { color: var(--color-stone-200); }
+html[data-theme="light"] .cine-stage .cine-chat .session-bubble-ooc { color: var(--color-stone-500); }
 html[data-theme="light"] .cine-stage .cine-chat .session-dm .section-head-title { color: #6f500f; }
 html[data-theme="light"] .cine-stage .cine-bottombar { background: linear-gradient(180deg, rgba(251, 245, 228, 0.96), rgba(239, 228, 198, 0.98)); }
 html[data-theme="light"] .cine-quest { background: linear-gradient(180deg, #fbf5e4, #efe4c6); border-color: rgba(122, 88, 20, 0.4); }
