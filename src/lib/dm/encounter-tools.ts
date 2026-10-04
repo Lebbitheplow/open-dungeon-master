@@ -15,6 +15,7 @@ import {
 import {
   createEncounter,
   getActiveEncounter,
+  getLatestEndedEncounter,
   insertEnemy,
   listEnemies,
   saveEncounter,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { getRoll, insertRoll } from "@/lib/db/rolls";
-import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
+import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { createDmTurn, listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -822,6 +823,20 @@ function handleEndEncounter(
 ): Record<string, unknown> {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
+    // The server closes a fight itself when the whole party is dead
+    // (partyFallen), often between the model's calls, so the model reads it
+    // in a table note and still ends the fight. A fight closed since the
+    // last narration is answered with how it ended, not refused.
+    const ended = getLatestEndedEncounter(campaign.id);
+    const narrated = getLatestDmMessage(campaign.id);
+    if (ended && (!narrated || ended.updatedAt >= narrated.createdAt)) {
+      return {
+        ok: true,
+        alreadyEnded: true,
+        outcome: ended.outcome,
+        note: `The server already ended this fight (${ended.outcome}). Narrate how it ended.`,
+      };
+    }
     return { error: "No active encounter." };
   }
   let args: z.infer<typeof endArgsSchema>;

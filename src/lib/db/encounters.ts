@@ -323,6 +323,18 @@ export function getActiveEncounter(campaignId: string): Encounter | null {
   return row ? mapEncounter(row) : null;
 }
 
+// The fight that closed last, for a call that arrives after the server has
+// already closed it (src/lib/dm/encounter-tools.ts handleEndEncounter).
+export function getLatestEndedEncounter(campaignId: string): Encounter | null {
+  const row = getDatabase()
+    .prepare(
+      `SELECT * FROM encounters WHERE campaign_id = ? AND status = 'ended' AND kind = 'fight'
+       ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .get(campaignId) as EncounterRow | undefined;
+  return row ? mapEncounter(row) : null;
+}
+
 export function getActiveScene(campaignId: string): Encounter | null {
   const row = getDatabase()
     .prepare(

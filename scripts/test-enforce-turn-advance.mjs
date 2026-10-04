@@ -1133,6 +1133,31 @@ await test("Only a hold for the enemies' turns reads as one: held responses arou
   assert.match(words(), /enemies are taking their turns/);
 });
 
+await test("The model's end_encounter on a fight the server just ended for a dead party is answered with how it ended, not refused", async () => {
+  const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
+  const narrate = (content) =>
+    insertCampaignMessage({ campaignId: world.campaignId, seq: allocateSeq(world.campaignId), authorType: "dm", content });
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+  const endEncounter = () =>
+    invokeEngine(world.campaign(), { kind: "ai", turnId: createDmTurn(world.campaignId, [], "ai").id }, { name: "end_encounter", args: { outcome: "party_defeated" } });
+  narrate("Steel rings in the dark.");
+  await tick();
+  world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  world.patch(brom.id, { currentHp: 0, deathSaves: { successes: 0, failures: 2, stable: false, dead: false } });
+  world.dice(5);
+  assert.equal(kit.endTurn(userOf(world, kara.id)), true);
+  world.clearDice();
+  assert.equal(world.encounter(), null, "the server ended it");
+  const answered = await endEncounter();
+  assert.equal(answered.ok, true, answered.error);
+  assert.match(JSON.stringify(answered), /already ended this fight \(party_defeated\)/);
+  // Once the defeat is narrated, a later call has no fight to name.
+  await tick();
+  narrate("The darkness takes them.");
+  const late = await endEncounter();
+  assert.match(late.error ?? "", /No active encounter/);
+});
+
 // Last: it adds the column to the one database every test here shares.
 await test("A new database gets no column for the enemies a DM turn acted, and one upgraded with it still saves DM turns", async () => {
   const { world } = await table(["Kara"]);
