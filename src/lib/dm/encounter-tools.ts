@@ -110,7 +110,7 @@ import { VIGILANT_PREFIX } from "@/lib/srd/authored-effects-more";
 import { handleReaperCast } from "@/lib/dm/authored-reaper";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { afflictionsAtCombatStart } from "@/lib/dm/afflictions";
-import { holdForEnemies } from "@/lib/dm/enemies-due";
+import { enemiesDue, enemiesOwedTurn, holdForEnemies } from "@/lib/dm/enemies-due";
 import { approachForCompanion } from "@/lib/dm/companion-approach";
 import { dmRoll } from "@/lib/dm/roll-card";
 
@@ -907,6 +907,14 @@ function handleEndTurn(
   if (actingCombatantId(encounter) !== sheet.id || !current || current.kind !== "pc") {
     return { error: `It is ${current?.name ?? "someone else"}'s turn, not ${sheet.name}'s.` };
   }
+  // A pass now would leave the enemies before this turn behind
+  // (src/lib/dm/enemies-due.ts).
+  const waiting = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
+  if (waiting.length) {
+    return {
+      error: `${waiting.join(" and ")} act${waiting.length === 1 ? "s" : ""} before ${sheet.name}: take ${waiting.length === 1 ? "its turn" : "their turns"} first, then end the turn.`,
+    };
+  }
   markTurnResolved(turn, sheet.id);
   // The pointer moves now, for the AI as for a person at the console, so the
   // enemies whose turns come next are the model's to play in this same reply
@@ -916,8 +924,10 @@ function handleEndTurn(
   // handoff recorded here so it neither moves the pointer twice nor acts an
   // enemy the model already played. An AI's pass is announced after the
   // narration it belongs to, when its DM turn finishes (advanceAfterTurn);
-  // the model reads it in this result.
-  const advanced = advancePointer(campaign, encounter, { announce: turn.actor !== "ai" });
+  // the model reads it in this result, and plays its enemies in this turn
+  // rather than holding the floor for them.
+  const ai = turn.actor === "ai";
+  const advanced = advancePointer(campaign, encounter, { announce: !ai, hold: !ai });
   if (!advanced) {
     return { error: "Nobody is left standing to take the next turn." };
   }
@@ -1120,10 +1130,12 @@ export function settleTurn(campaign: Campaign, before: TurnHolder | null) {
 // options.leaving: the combatant whose turn ends when they are no longer at
 // turnIndex, because they left the order (settleTurn); turnIndex is then
 // the slot before the next turn's, -1 when that is the first.
+// options.hold: false leaves the floor open past the enemies walked past
+// (src/lib/dm/enemies-due.ts), for the model's own end_turn.
 function advancePointer(
   campaign: Campaign,
   encounter: Encounter,
-  options?: { announce?: boolean | ((next: OrderEntry) => string); leaving?: OrderEntry },
+  options?: { announce?: boolean | ((next: OrderEntry) => string); leaving?: OrderEntry; hold?: boolean },
 ): { enemiesPassed: string[]; wrapped: boolean } | null {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const leaving = options?.leaving ?? encounter.order[encounter.turnIndex];
@@ -1230,7 +1242,9 @@ function advancePointer(
   const resume = resumeAfter(landed, encounter.order);
   if (resume !== null) {
     encounter.turnIndex = resume;
-    holdForEnemies(campaign, encounter, next.enemiesPassed);
+    if (options?.hold !== false) {
+      holdForEnemies(campaign, encounter, next.enemiesPassed);
+    }
     for (const characterId of next.pcsPassed) {
       rollDeathSave(campaign, characterId);
     }
@@ -1241,7 +1255,9 @@ function advancePointer(
     };
   }
   setInitiativeFloor(campaign, encounter);
-  holdForEnemies(campaign, encounter, next.enemiesPassed);
+  if (options?.hold !== false) {
+    holdForEnemies(campaign, encounter, next.enemiesPassed);
+  }
   publishEncounter(campaign.id);
   // The pointer move is announced as a table note so the transcript can
   // never silently disagree with the banner about whose turn it is.
@@ -1281,10 +1297,11 @@ export function autoActSkippedEnemies(
 ) {
   const play = options.play !== false;
   const notes: string[] = [];
+  // An enemy that already took its action this round, whoever played it, is
+  // refused by the round's ledger (canEnemyAct). Not by having acted earlier
+  // in this DM turn: one turn can span a wrap, and the new round's turn is
+  // owed too.
   for (const enemyId of play ? enemyIds : []) {
-    if (turn.actedEnemyIds.includes(enemyId)) {
-      continue;
-    }
     const enemy = resolveEnemyRef(encounter.id, enemyId);
     // Read fresh: each attack before this one wrote to the encounter.
     const live = getActiveEncounter(campaign.id);
@@ -1378,6 +1395,12 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
   if (!encounter || !encounter.orderReady || encounter.id !== combat.encounterId) {
     return;
   }
+  // The enemies a pass outside this turn left due, which the model may have
+  // played: the backstop plays the rest, and the turn they held up begins.
+  if (turn && enemiesDue(encounter).length) {
+    playEnemiesDue(campaign, turn);
+    Object.assign(encounter, getActiveEncounter(campaign.id) ?? encounter);
+  }
   // The model's end_turn already moved the pointer in this DM turn and
   // handed it the enemies to play: the pointer stays, and only the enemies
   // it left are acted by the backstop (after the narration, as before).
@@ -1400,7 +1423,7 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
     // now. A wake alone could find nothing posted since this turn's
     // narration, and a DM turn with nothing new to answer does not run.
     if (!turnStuck(campaign)) {
-      wakeForNextTurn(campaign);
+      followTurn(campaign, turn);
       return;
     }
     Object.assign(encounter, getActiveEncounter(campaign.id) ?? encounter);
@@ -1418,7 +1441,8 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
   // here unresolved, as the walk would have passed them: with nobody able
   // to act the pointer still rests on a PC (nextTurn), and this is what
   // moves the fight on round by round.
-  if (!resolved && !turnStuck(campaign)) {
+  const stuck = turnStuck(campaign);
+  if (!resolved && !stuck) {
     // AI companion turn the model never adjudicated: the server takes the
     // basic action (like skipped enemies), so combat cannot wedge on a
     // combatant no human controls.
@@ -1428,23 +1452,38 @@ export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
       return;
     }
   }
-  const advanced = advancePointer(campaign, encounter);
-  if (advanced && turn) {
-    const sheets = listSheets(campaign.id);
-    const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
-    const holder = turnHolder(campaign.id);
-    autoActSkippedEnemies(
-      campaign,
-      turn,
-      encounter,
-      advanced.enemiesPassed,
-      sheets,
-      sheetsById,
-    );
-    settleTurn(campaign, holder);
+  if (!advancePointer(campaign, encounter)) {
+    return;
   }
-  if (advanced) {
-    wakeForNextTurn(campaign);
+  // A turn the model resolved goes on at once, the backstop playing the
+  // enemies its pass left due. One its owner could not take was ended here,
+  // outside any turn the model plays: as after an End Turn, the DM is woken
+  // for them (followTurn).
+  if (turn && !stuck) {
+    playEnemiesDue(campaign, turn);
+  }
+  followTurn(campaign, turn);
+}
+
+// The backstop for the enemies due (handOnEnemyTurns): it plays the ones
+// still owed their action and lifts the hold. An enemy it plays may take
+// out the summon whose turn it is.
+function playEnemiesDue(campaign: Campaign, turn: DmTurn) {
+  const holder = turnHolder(campaign.id);
+  handOnEnemyTurns(campaign, turn, true);
+  settleTurn(campaign, holder);
+}
+
+// What follows this DM turn: a DM turn woken for what comes next, or, with
+// none to follow, the backstop playing any enemies due now, so no hold
+// stays up with no turn coming to lift it.
+function followTurn(campaign: Campaign, turn?: DmTurn) {
+  if (wakeForNextTurn(campaign) || !turn) {
+    return;
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  if (encounter && enemiesDue(encounter).length) {
+    playEnemiesDue(campaign, turn);
   }
 }
 
@@ -1462,25 +1501,25 @@ function turnStuck(campaign: Campaign): boolean {
 
 // After the backstop, read fresh (it may have dropped the PC the pointer
 // now rests on). An AI companion's turn wakes the DM to play it, the
-// auto-act above being the safety net. A turn its owner cannot take wakes
-// it too, but only while a round can still change something (an enemy
-// standing, a PC standing or dying): past that each wake is a model call
-// with nothing to show.
-function wakeForNextTurn(campaign: Campaign) {
+// auto-act above being the safety net. Enemies due, or a turn its owner
+// cannot take, wake it too, but only while a round can still change
+// something (an enemy standing, a PC standing or dying): past that each
+// wake is a model call with nothing to show. Whether it woke the DM.
+function wakeForNextTurn(campaign: Campaign): boolean {
   const encounter = getActiveEncounter(campaign.id);
   const next = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
   if (!encounter || next?.kind !== "pc") {
-    return;
+    return false;
   }
-  if (turnStuck(campaign)) {
-    if (enemyStanding(encounter) && partyCanRise(encounter)) {
-      wake(campaign, encounter);
+  if (enemiesDue(encounter).length || turnStuck(campaign)) {
+    if (!enemyStanding(encounter) || !partyCanRise(encounter)) {
+      return false;
     }
-    return;
+  } else if (!isCompanionUserId(next.userId)) {
+    return false;
   }
-  if (isCompanionUserId(next.userId)) {
-    wake(campaign, encounter);
-  }
+  wake(campaign, encounter);
+  return true;
 }
 
 // A DM turn the server asks for runs only when something was posted after
@@ -1612,6 +1651,11 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
   }
   const current = encounter.order[encounter.turnIndex];
   if (!current || current.kind !== "pc" || current.userId !== userId) {
+    return false;
+  }
+  // The enemies before this turn have not had theirs yet: a second pass
+  // would leave them behind.
+  if (enemiesOwedTurn(encounter).length) {
     return false;
   }
   const name = current.name;

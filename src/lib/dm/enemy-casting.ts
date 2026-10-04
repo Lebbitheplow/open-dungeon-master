@@ -1,5 +1,4 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, saveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
@@ -61,7 +60,7 @@ export type EnemyUse = {
   corrections: string[];
   // Spends the action (or the legendary purchase), the recharge, the use
   // or the slot. Called once the effect resolves.
-  commit: (turn: DmTurn) => void;
+  commit: () => void;
 };
 
 function ledgerOf(encounter: Encounter, enemyId: string): AbilityLedger | undefined {
@@ -242,7 +241,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | { 
   }
   return {
     ...use,
-    commit: (turn: DmTurn) => {
+    commit: () => {
       const live = getActiveEncounter(campaign.id);
       if (!live) {
         return;
@@ -254,9 +253,6 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | { 
         ledger = { ...(ledger ?? {}), bought: rest };
       } else {
         spendEnemyAction(live, enemy.id);
-        if (!turn.actedEnemyIds.includes(enemy.id)) {
-          turn.actedEnemyIds.push(enemy.id);
-        }
       }
       if (ledger) {
         abilities[enemy.id] = ledger;

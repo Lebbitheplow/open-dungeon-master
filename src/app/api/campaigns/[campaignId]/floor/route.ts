@@ -89,8 +89,8 @@ export async function POST(
     }
     return Response.json({ ok: true });
   }
-  // A hold a person's table put up for the enemies' turns: releasing it is
-  // handing the turn on, so those turns end with it (src/lib/dm/enemies-due.ts).
+  // A hold put up for the enemies' turns: releasing it is handing the turn
+  // on, so those turns end with it (src/lib/dm/enemies-due.ts).
   if (floor.mode === "hold" && floor.next.mode === "initiative" && getActiveEncounter(campaignId)?.legendary.due?.length) {
     const campaign = context.campaign;
     const error = onPersonsTurn(campaign, (turn) => handOnEnemyTurns(campaign, turn, false));

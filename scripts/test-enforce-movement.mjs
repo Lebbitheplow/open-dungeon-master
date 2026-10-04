@@ -181,6 +181,8 @@ await test("Dash doubles the movement for the turn, and only that turn", async (
   // Round the order: the next turn is 30 feet again.
   assert.equal(kit.endTurn(runner.userId), true);
   assert.equal(kit.endTurn(friend.userId), true);
+  // The enemy the wrap walked past takes its turn first.
+  kit.handOnEnemies();
   assert.equal(kit.current().characterId, runner.id);
   assert.equal(kit.token(runner.id).movedThisRound, 0);
   assert.ok((await walk(runnerUser, 7, 2)).status >= 400);

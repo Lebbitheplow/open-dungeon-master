@@ -1,25 +1,30 @@
 import { campaignSeats, getFloor, setFloor, type Campaign, type Floor } from "@/lib/db/campaigns";
-import { listEnemies, saveEncounter, type Encounter } from "@/lib/db/encounters";
+import { listEnemies, saveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { canEnemyAct } from "@/lib/dm/can-act";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { publishPersisted } from "@/lib/events";
 
-// The enemies' turns when a person runs the fight.
+// The enemies' turns between two characters' turns.
 //
 // The pointer rests only on player characters; the enemies between two of
 // them act "inside the DM's turn" as the pointer walks past (advanceOrder).
-// With the AI in the seat that turn follows at once: the model plays them,
-// and the server's backstop plays any it left (advanceAfterTurn). A person
-// has no turn that follows. Before this, the next player was handed the
-// floor the moment the last one ended their turn, nothing told the DM the
-// goblins in between were due, and nothing ever played them.
+// A person has no turn that follows. Before this, the next player was
+// handed the floor the moment the last one ended their turn, nothing told
+// the DM the goblins in between were due, and nothing ever played them. The
+// AI's turn follows its own end_turn at once (the model plays them, the
+// backstop the ones it left), but not a pass made outside it (a player's
+// End Turn, the lead's skip, someone leaving): there an enemy after the
+// last character was refused to the model once the round wrapped, and
+// played by nobody.
 //
-// So at a person's table the pointer passing enemies who can act holds the
-// floor (the fight's floor is kept under the hold, as a lead's hold keeps
-// it), and the fight remembers who is due. The DM plays them from the
-// console or has the server play them, then hands the turn on; releasing
-// the hold any other way hands it on too (src/lib/dm/initiative.ts).
+// So the pointer passing enemies who can act holds the floor (the fight's
+// floor is kept under the hold, as a lead's hold keeps it), and the fight
+// remembers who is due; the next player waits for them, End Turn included.
+// A person plays them from the console or has the server play them, then
+// hands the turn on; the AI's next turn may play them and its end plays the
+// rest (src/lib/dm/encounter-tools.ts advanceAfterTurn). Releasing the hold
+// any other way hands it on too (src/lib/dm/initiative.ts).
 
 // Whether a person is playing the monsters right now: a human DM in the seat
 // and no AI cover stretch answering for them.
@@ -34,7 +39,7 @@ export function personRunsTable(campaign: Campaign): boolean {
 // enemies due before the player now up and holds the floor for them.
 // Returns the ids recorded.
 export function holdForEnemies(campaign: Campaign | null, encounter: Encounter, enemyIds: string[]): string[] {
-  if (!campaign || !personRunsTable(campaign)) {
+  if (!campaign) {
     return [];
   }
   const enemies = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
@@ -64,4 +69,15 @@ export function holdForEnemies(campaign: Campaign | null, encounter: Encounter, 
 
 export function enemiesDue(encounter: Encounter): string[] {
   return encounter.legendary.due ?? [];
+}
+
+// The enemies due that still have their action this round (the round's
+// ledger, whoever played them): no character's turn ends before theirs,
+// whether End Turn or end_turn ends it.
+export function enemiesOwedTurn(encounter: Encounter): EncounterEnemy[] {
+  const enemies = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
+  return enemiesDue(encounter).flatMap((id) => {
+    const enemy = enemies.get(id);
+    return enemy && canEnemyAct({ enemy, encounter, kind: "action" }).ok ? [enemy] : [];
+  });
 }

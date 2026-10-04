@@ -216,7 +216,7 @@ export function handleCastAtPlayer(
   if (damage && !isValidExpression(damage)) {
     return { error: `Invalid damage expression "${damage}".` };
   }
-  use?.commit(turn);
+  use?.commit();
 
   const source = (args.source ?? (use ? `${use.enemy.displayName}'s ${use.name}` : "the effect")).trim() || "the effect";
   // The save a requested roll would be (src/lib/dm/forced-save.ts):

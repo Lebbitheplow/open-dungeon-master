@@ -448,11 +448,6 @@ export function handleEnemyAttack(
     ranged: closing?.ranged ?? false,
   });
   notes.push(...authoredAfterHit(campaign, { encounter, attacker: standing, target, dealt: totalDamage }));
-  // The auto-act fallback in advanceAfterTurn skips enemies that already
-  // took their turn here.
-  if (!turn.actedEnemyIds.includes(enemy.id)) {
-    turn.actedEnemyIds.push(enemy.id);
-  }
 
   const names = [...new Set(planned.map((attack) => attack.name))];
   return {

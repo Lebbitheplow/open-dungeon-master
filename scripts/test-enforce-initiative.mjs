@@ -271,7 +271,11 @@ await test("a surprised party loses round 1 to the enemies, and round 2 opens on
   assert.equal(encounter.round, 2);
   assert.deepEqual(encounter.surprisedIds, []);
   assert.equal(tableKit.current().characterId, fast.id);
-  assert.equal(getFloor(table.campaignId).mode, "initiative");
+  // The floor waits for the ambushers' turns, the fight's floor under the
+  // hold (src/lib/dm/enemies-due.ts).
+  const floor = getFloor(table.campaignId);
+  assert.equal(floor.mode, "hold");
+  assert.equal(floor.next.mode, "initiative");
   const [enemy] = table.enemies();
   tableKit.place(fast.id, 5, 5);
   tableKit.place(enemy.id, 6, 5);
