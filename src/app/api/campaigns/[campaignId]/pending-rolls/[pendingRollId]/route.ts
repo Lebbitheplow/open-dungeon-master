@@ -11,7 +11,7 @@ import {
 import { insertRoll } from "@/lib/db/rolls";
 import { defaultRng, expressionDice, rollExpression, rollExpressionWithDice } from "@/lib/dice";
 import { mayTypeFaces } from "@/lib/dice/held-rolls";
-import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
+import { recordInitiativeRoll, settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import { applyPendingDamageRoll } from "@/lib/dm/enemy-damage";
 import { resolvePendingPcAttack } from "@/lib/dm/pc-attack";
@@ -169,6 +169,7 @@ export async function POST(
     source: isFallback || allDigital ? "digital" : "physical",
   });
 
+  const holder = turnHolder(campaignId);
   // Combat initiative submitted from a physical table: record it; the last
   // one locks the order. The note rides pending_rolls.combat_note so the
   // resumed DM turn narrates what actually happened.
@@ -198,6 +199,9 @@ export async function POST(
       setPendingCombatNote(pendingRollId, note);
     }
   }
+
+  // A combatant who left the fight during the call takes no turn with them.
+  settleTurn(context.campaign, holder);
 
   const remaining = listPendingForTurn(pending.turnId).filter(
     (entry) => entry.status === "pending",

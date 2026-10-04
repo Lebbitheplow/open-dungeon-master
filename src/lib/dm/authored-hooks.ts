@@ -29,6 +29,7 @@ import {
   getEnemy,
   listEnemies,
   patchEnemyConditions,
+  turnKey,
   type Encounter,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
@@ -288,7 +289,7 @@ function markEnemy(campaign: Campaign, encounter: Encounter, sheet: CharacterShe
     if (effect.firstRoundOnly && encounter.round > 1) {
       continue;
     }
-    const stamp = `${encounter.round}:${encounter.turnIndex}`;
+    const stamp = turnKey(encounter);
     if (effect.oncePerTurn) {
       const already = listEnemies(encounter.id).some((other) =>
         other.conditions.some((entry) => {
@@ -342,7 +343,7 @@ export function authoredOnKill(
     feet <= 5
       ? holder.id === killerId && killerMelee
       : !board || !killerId || holder.id === killerId || withinFeet(encounter.id, holder.id, killerId, feet);
-  const stamp = `${encounter.id}:${encounter.round}:${encounter.turnIndex}`;
+  const stamp = `${encounter.id}:${turnKey(encounter)}`;
   for (const holder of fielded(campaign.id)) {
     for (const { effect, held } of activeAuthored(holder, "kill_temp_hp")) {
       if (!near(holder, 5)) {

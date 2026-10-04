@@ -35,6 +35,16 @@ export function orderEntryId(entry: OrderEntry): string {
   return entry.kind === "enemy" ? entry.enemyId : entry.npcId;
 }
 
+// The turn under way, named by its round and its owner, not its slot: an
+// entry spliced in above the one acting (an NPC slot, reinforcements, a
+// summon, a late joiner) shifts the slot mid-turn and re-armed what happens
+// once a turn. A Thief's Reflexes second turn is a turn of its own.
+export function turnKey(encounter: Pick<Encounter, "round" | "order" | "turnIndex">): string {
+  const entry = encounter.order[encounter.turnIndex];
+  const owner = entry ? `${orderEntryId(entry)}${entry.kind === "pc" && entry.reflex ? ":reflex" : ""}` : "";
+  return `${encounter.round}:${owner}`;
+}
+
 export type EncounterStatus = "active" | "ended";
 export type EnemyStatus = "alive" | "dead" | "fled";
 
@@ -308,6 +318,18 @@ export function getActiveEncounter(campaignId: string): Encounter | null {
     .prepare(
       `SELECT * FROM encounters WHERE campaign_id = ? AND status = 'active' AND kind = 'fight'
        ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(campaignId) as EncounterRow | undefined;
+  return row ? mapEncounter(row) : null;
+}
+
+// The fight that closed last, for a call that arrives after the server has
+// already closed it (src/lib/dm/encounter-tools.ts handleEndEncounter).
+export function getLatestEndedEncounter(campaignId: string): Encounter | null {
+  const row = getDatabase()
+    .prepare(
+      `SELECT * FROM encounters WHERE campaign_id = ? AND status = 'ended' AND kind = 'fight'
+       ORDER BY updated_at DESC LIMIT 1`,
     )
     .get(campaignId) as EncounterRow | undefined;
   return row ? mapEncounter(row) : null;

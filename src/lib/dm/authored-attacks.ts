@@ -11,7 +11,7 @@
 // from authored-hooks.ts authoredOnHit (the bite, after the hit).
 
 import type { Campaign } from "@/lib/db/campaigns";
-import type { Encounter } from "@/lib/db/encounters";
+import { turnKey, type Encounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { Advantage } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
@@ -23,7 +23,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 const CLAWS_EXTRA = "form of the beast:claws";
 const RAPID_STRIKE = "rapid strike";
-// The turns a bite has healed in, per barbarian: "round:turnIndex".
+// The turn a bite last healed in, per barbarian (turnKey).
 const BITE_HEALED = new Map<string, string>();
 
 // The Attack action's budget after a claw attack: one more attack, the first
@@ -102,7 +102,7 @@ export function naturalWeaponOnHit(
     return [];
   }
   const max = effectiveMaxHp(sheet);
-  const stamp = `${encounter.id}:${encounter.round}:${encounter.turnIndex}`;
+  const stamp = `${encounter.id}:${turnKey(encounter)}`;
   if (sheet.currentHp <= 0 || sheet.currentHp >= max / 2 || BITE_HEALED.get(sheet.id) === stamp) {
     return [];
   }

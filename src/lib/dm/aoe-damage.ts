@@ -256,7 +256,7 @@ export function handleAoeDamage(
     if (args.damage === undefined && !prepared.condition && !zoneRowFor(prepared.name)) {
       return { error: `${prepared.name} forces no save with damage or a condition on ${prepared.enemy.displayName}'s block; narrate what it does, or use its attacks.` };
     }
-    prepared.commit(turn);
+    prepared.commit();
   }
   // Every branch above has set the save and the DC by now, or caught nobody
   // who would roll against them (an enemy's Darkness laid on empty ground).

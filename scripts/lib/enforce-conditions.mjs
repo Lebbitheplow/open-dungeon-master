@@ -7,6 +7,7 @@
 const encounters = await import("../../src/lib/db/encounters.ts");
 const maps = await import("../../src/lib/db/battle-maps.ts");
 const turns = await import("../../src/lib/dm/encounter-tools.ts");
+const { onPersonsTurn } = await import("../../src/lib/dm/invoke.ts");
 const { getDatabase } = await import("../../src/lib/db/core.ts");
 
 export const FIGHTER_TRAINING = {
@@ -147,7 +148,16 @@ export function kit(world) {
     d20s,
     // The player's own End Turn button and the lead's skip, which are the
     // two ways the initiative pointer moves without a model in the loop.
-    endOwnTurn: (userId) => turns.endOwnTurn(world.campaignId, userId),
+    // The button waits for the enemies a pass left due
+    // (src/lib/dm/enemies-due.ts): the lead hands the turn on first, ending
+    // their turns unplayed, as the next pass used to.
+    endOwnTurn: (userId) => {
+      if (world.encounter()?.legendary.due?.length) {
+        const campaign = world.campaign();
+        onPersonsTurn(campaign, (turn) => turns.handOnEnemyTurns(campaign, turn, false));
+      }
+      return turns.endOwnTurn(world.campaignId, userId);
+    },
     skipTurn: () => turns.skipCurrentTurn(world.campaignId),
     pointer: () => {
       const encounter = world.encounter();

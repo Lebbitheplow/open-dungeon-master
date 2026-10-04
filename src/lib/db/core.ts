@@ -1536,9 +1536,6 @@ function ensureSchema(db: SqliteDatabase) {
     // Player whispers this turn consumed; persisted so a turn parked on
     // physical dice still marks them answered when it finishes.
     ["player_whisper_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
-    // Enemies that already attacked this turn; the auto-act fallback in
-    // encounter-tools.ts skips them so nothing swings twice.
-    ["acted_enemy_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
     // PCs whose combat turn was adjudicated this DM turn (pc_attack,
     // cast_at_enemy, or end_turn); advanceAfterTurn only moves the pointer
     // past a PC on this list or with a landed non-initiative roll.

@@ -41,14 +41,20 @@ export type LegendaryState = {
   abilities?: Record<string, AbilityLedger>;
   // The enemies a model's end_turn handed it to act, with the DM turn that
   // got them, so the finalize step neither moves the pointer twice nor acts
-  // them again (src/lib/dm/encounter-tools.ts).
-  handoff?: { turnId: string; enemyIds: string[] };
+  // them again (src/lib/dm/encounter-tools.ts). `wrapped`: that end_turn
+  // began a new round, which the turn's table note says once the narration
+  // is in.
+  handoff?: { turnId: string; enemyIds: string[]; wrapped?: boolean };
   // The enemies that have taken a bonus action in `round` (Nimble Escape's
   // Disengage or Hide).
   bonus?: { round: number; ids: string[] };
-  // At a person's table: the enemies the pointer walked past that the DM has
-  // not yet played or waved through (src/lib/dm/enemies-due.ts).
+  // The enemies a pass outside the model's own end_turn walked past that
+  // nobody has yet played or waved through (src/lib/dm/enemies-due.ts).
   due?: string[];
+  // A stretch with nobody able to act: the round it began, and whether the
+  // table was told it ran too long to keep waking the DM
+  // (src/lib/dm/encounter-tools.ts idledOut).
+  idle?: { since: number; told?: boolean };
 };
 
 function stringList(raw: unknown): string[] {
@@ -71,6 +77,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   const abilities = normalizeAbilityLedgers(record.abilities);
   const handoff = (record.handoff && typeof record.handoff === "object" ? record.handoff : null) as Record<string, unknown> | null;
   const bonus = (record.bonus && typeof record.bonus === "object" ? record.bonus : null) as Record<string, unknown> | null;
+  const idle = (record.idle && typeof record.idle === "object" ? record.idle : null) as Record<string, unknown> | null;
   return {
     pools,
     lair: record.lair === true,
@@ -87,10 +94,11 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
     ...(stringList(record.strikes).length ? { strikes: stringList(record.strikes) } : {}),
     ...(Object.keys(abilities).length ? { abilities } : {}),
     ...(handoff && typeof handoff.turnId === "string"
-      ? { handoff: { turnId: handoff.turnId, enemyIds: stringList(handoff.enemyIds) } }
+      ? { handoff: { turnId: handoff.turnId, enemyIds: stringList(handoff.enemyIds), ...(handoff.wrapped === true ? { wrapped: true } : {}) } }
       : {}),
     ...(bonus ? { bonus: { round: Number(bonus.round) || 0, ids: stringList(bonus.ids) } } : {}),
     ...(stringList(record.due).length ? { due: stringList(record.due) } : {}),
+    ...(idle ? { idle: { since: Number(idle.since) || 0, ...(idle.told === true ? { told: true } : {}) } } : {}),
   };
 }
 

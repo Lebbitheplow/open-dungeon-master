@@ -20,6 +20,7 @@ export function composerGate({
   myName,
   leadPrivate,
   openingNarrationPlaying,
+  enemyTurns = false,
 }: {
   floor: Floor;
   sheets: CharacterSheet[];
@@ -29,6 +30,9 @@ export function composerGate({
   leadPrivate: boolean;
   // The campaign's first DM passage is being read aloud to this user.
   openingNarrationPlaying: boolean;
+  // The fight's floor is held for the enemies' turns (PublicEncounter
+  // enemyTurns), not for table talk.
+  enemyTurns?: boolean;
 }) {
   const exempt = isFloorExempt(kind);
   const spotlighted =
@@ -61,7 +65,7 @@ export function composerGate({
   const placeholder = narrationBlocked
     ? "The Dungeon Master is setting the scene... (OOC still open)"
     : holdBlocked
-      ? floor.mode === "hold" && floor.next.mode === "initiative"
+      ? floor.mode === "hold" && floor.next.mode === "initiative" && enemyTurns
         ? "The enemies are taking their turns... (OOC still open)"
         : "The party lead has the floor held for discussion... (OOC still open)"
       : initiativeBlocked

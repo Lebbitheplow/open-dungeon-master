@@ -10,6 +10,7 @@
 //   kit.place(hero.id, 2, 2);                // a token by sheet or enemy id
 //   kit.setEnemy(enemy.id, { ac: 15, currentHp: 40, stats: { size: "Huge" } });
 //   kit.endTurn(world.owner.id);             // the player's End Turn button
+//   kit.handOnEnemies();                     // the lead's "Hand on the turn"
 //
 // Enemies spawn as goblins and are then rewritten to one fixed stat block
 // (DUMMY below), so the suites read the same with and without the content
@@ -58,6 +59,7 @@ export async function combatKit(world) {
   const encounters = await import("../../src/lib/db/encounters.ts");
   const maps = await import("../../src/lib/db/battle-maps.ts");
   const tools = await import("../../src/lib/dm/encounter-tools.ts");
+  const { onPersonsTurn } = await import("../../src/lib/dm/invoke.ts");
   const rolls = await import("../../src/lib/db/rolls.ts");
 
   const db = () => getDatabase();
@@ -220,9 +222,21 @@ export async function combatKit(world) {
     encounters.saveEncounter({ ...encounter, legendary });
   }
 
-  // The player's own End Turn, without the DM wake the route adds.
+  // The player's own End Turn, without the DM wake the route adds. The
+  // button waits for the enemies a pass left due (src/lib/dm/enemies-due.ts):
+  // here the lead hands the turn on from the banner first, ending their
+  // turns unplayed, as the next pass used to. A suite pinning the wait
+  // calls endOwnTurn itself.
   function endTurn(userId) {
+    handOnEnemies();
     return tools.endOwnTurn(world.campaignId, userId);
+  }
+
+  function handOnEnemies() {
+    if (world.encounter()?.legendary.due?.length) {
+      const campaign = world.campaign();
+      onPersonsTurn(campaign, (turn) => tools.handOnEnemyTurns(campaign, turn, false));
+    }
   }
 
   // Ends whatever fight is running, so one file can stage several.
@@ -265,6 +279,7 @@ export async function combatKit(world) {
     attack,
     swing,
     endTurn,
+    handOnEnemies,
     giveTurn,
     freshTurn,
     freshRound,

@@ -4,8 +4,9 @@
 // backstop plays the rest). So for the AI DM an enemy's action is refused
 // while its place in the order is still ahead of the pointer this round:
 // it may act when the pointer has passed it, when end_turn just handed it
-// over, when it is owed an action (a surprised party's lost round), or with
-// a legendary action that buys an attack. Reactions and legendary actions
+// over or an earlier pass left it due (src/lib/dm/enemies-due.ts), when it
+// is owed an action (a surprised party's lost round), or with a legendary
+// action that buys an attack. Reactions and legendary actions
 // are not actions and never come here. A person at the console keeps a free
 // hand, as with every correction.
 
@@ -26,7 +27,9 @@ export function enemyTurnRefusal(
     return null;
   }
   const legendary = encounter.legendary;
-  const handedOver = legendary.handoff?.turnId === turn.id && legendary.handoff.enemyIds.includes(enemy.id);
+  const handedOver =
+    (legendary.handoff?.turnId === turn.id && legendary.handoff.enemyIds.includes(enemy.id)) ||
+    (legendary.due ?? []).includes(enemy.id);
   const owed = legendary.acted?.round === encounter.round && (legendary.acted.owed ?? []).includes(enemy.id);
   const strike = (legendary.strikes ?? []).includes(enemy.id);
   if (handedOver || owed || strike) {

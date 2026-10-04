@@ -23,7 +23,7 @@
 // have to know about it; old databases simply start without records.
 
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
+import { getActiveEncounter, listEnemies, turnKey } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import type { RollResult, Advantage } from "@/lib/dice";
 import type { RollAttacker } from "@/lib/db/rolls";
@@ -72,8 +72,8 @@ export type VitalsSnapshot = {
 export type LastHit = {
   characterId: string;
   encounterId: string | null;
-  round: number;
-  turnIndex: number;
+  // The turn it landed in (turnKey), "" out of a fight.
+  turn: string;
   attacker: { kind: "enemy" | "hazard"; id: string | null; name: string };
   attack: string;
   type: string;
@@ -155,7 +155,7 @@ export function freshLastHit(campaignId: string, characterId: string): LastHit |
     return null;
   }
   if (encounter) {
-    return encounter.round === record.round && encounter.turnIndex === record.turnIndex ? record : null;
+    return turnKey(encounter) === record.turn ? record : null;
   }
   return Date.now() - Date.parse(record.at) <= FRESH_MS ? record : null;
 }
@@ -267,8 +267,7 @@ export function openLastHit(campaignId: string, characterId: string) {
       writeLastHit(campaignId, {
         characterId,
         encounterId: encounter?.id ?? null,
-        round: encounter?.round ?? 0,
-        turnIndex: encounter?.turnIndex ?? 0,
+        turn: encounter ? turnKey(encounter) : "",
         attacker: what.attacker,
         attack: what.attack,
         type: what.type,
@@ -306,8 +305,7 @@ export function recordFall(
   writeLastHit(campaignId, {
     characterId,
     encounterId: encounter?.id ?? null,
-    round: encounter?.round ?? 0,
-    turnIndex: encounter?.turnIndex ?? 0,
+    turn: encounter ? turnKey(encounter) : "",
     attacker: { kind: "hazard", id: null, name: "the fall" },
     attack: "falling",
     type: "bludgeoning",
