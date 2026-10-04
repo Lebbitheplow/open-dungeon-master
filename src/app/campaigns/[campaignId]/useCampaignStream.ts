@@ -6,6 +6,7 @@ import { coalesceRefresh } from "@/app/campaigns/[campaignId]/coalesce";
 import {
   appendDmDraft,
   clearDmDraft,
+  setDmDraftSeq,
   resetLiveStores,
   setVoiceSpeaking,
 } from "@/app/campaigns/[campaignId]/liveStore";
@@ -367,6 +368,18 @@ function upsertBy<T>(list: T[], item: T, key: (entry: T) => string): T[] {
   return next;
 }
 
+// Messages arrive in seq order but for one case: a DM narration written into
+// the slot a mid-stream reply made it claim (src/lib/dm/narration-slot.ts)
+// arrives after that reply. Already ordered, the list is returned as is.
+function placeBySeq<T extends { seq: number }>(list: T[]): T[] {
+  for (let index = 1; index < list.length; index += 1) {
+    if (list[index - 1].seq > list[index].seq) {
+      return [...list].sort((a, b) => a.seq - b.seq);
+    }
+  }
+  return list;
+}
+
 // Exported for the reducer tests (scripts/test-campaign-reducer.mjs); the
 // page only ever reaches it through useCampaignStream.
 export function campaignReducer(state: CampaignState, action: Action): CampaignState {
@@ -436,7 +449,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           // Long sessions accumulate thousands of messages otherwise; cap
           // like rolls/auditLog so render cost stays flat (the snapshot
           // reload window is 100, so 200 keeps scrollback beyond it).
-          next.messages = upsertBy(state.messages, message, (entry) => entry.id).slice(-200);
+          // In seq order, not arrival order: a narration a player answered
+          // mid-stream arrives after that reply but sits before it (issue 68).
+          next.messages = placeBySeq(upsertBy(state.messages, message, (entry) => entry.id)).slice(-200);
           // A halted-turn notice (system, linked to its dm_turns row) ends the
           // turn just like narration does. The stream handler clears the
           // draft store on the same event (endsDmTurn), so an abandoned
@@ -930,6 +945,8 @@ const EPHEMERAL_EVENTS = [
   "dm_status",
   "utility_calls",
   "dm_delta",
+  // A player answered the streaming passage: where it will be written.
+  "dm_draft_seq",
   "media_status",
   "side_activity",
   "whisper_activity",
@@ -1284,6 +1301,8 @@ export function useCampaignStream(campaignId: string) {
           // the draft bubble and the voice dock alone (liveStore.ts).
           if (eventType === "dm_delta") {
             appendDmDraft(String(payload.text ?? ""));
+          } else if (eventType === "dm_draft_seq") {
+            setDmDraftSeq(typeof payload.seq === "number" ? payload.seq : null);
           } else if (eventType === "voice_speaking") {
             setVoiceSpeaking({ userId: String(payload.userId ?? ""), at: Date.now() });
           } else if (eventType === "message_added" && endsDmTurn(payload.message as CampaignMessage)) {

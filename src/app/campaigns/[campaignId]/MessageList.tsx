@@ -11,7 +11,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { MessageItem } from "@/app/campaigns/[campaignId]/MessageItem";
 import { Prose } from "@/app/campaigns/[campaignId]/Prose";
 import { DM_STATUS_PHRASES } from "@/app/campaigns/[campaignId]/dmStatusPhrases";
-import { useDmDraft } from "@/app/campaigns/[campaignId]/liveStore";
+import { useDmDraft, useDmDraftSeq } from "@/app/campaigns/[campaignId]/liveStore";
 import type {
   CampaignLocation,
   DmStatus,
@@ -293,6 +293,16 @@ export function MessageList({
     follow("smooth");
   }, [messages.length, dmStatus, follow]);
 
+  // The streaming passage sits at the bottom, unless a player answered it
+  // mid-stream: then it already holds a seq before that reply (issue 68) and
+  // is drawn there, so the reply reads after what it answers. One keyed list,
+  // so no message remounts when the bubble moves.
+  const draftSeq = useDmDraftSeq();
+  const draftAt = draftSeq === null ? -1 : messages.findIndex((message) => message.seq > draftSeq);
+  const draftBubble = (
+    <DmDraftBubble key="dm-draft" dmStatus={dmStatus} statusPhrase={statusPhrase} follow={follow} />
+  );
+
   function handleScroll() {
     const el = containerRef.current;
     if (el) {
@@ -303,7 +313,8 @@ export function MessageList({
   return (
     <div ref={containerRef} onScroll={handleScroll} className="session-transcript flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6">
-      {messages.map((message) => (
+      {messages.flatMap((message, index) => [
+        ...(index === draftAt ? [draftBubble] : []),
         <MessageItem
           key={message.id}
           mine={Boolean(message.userId) && message.userId === meUserId}
@@ -341,9 +352,8 @@ export function MessageList({
           }
           onSelectVariant={stableSelectVariant}
         />
-      ))}
-
-      <DmDraftBubble dmStatus={dmStatus} statusPhrase={statusPhrase} follow={follow} />
+      ])}
+      {draftAt === -1 ? draftBubble : null}
 
       <div ref={bottomRef} />
       </div>
