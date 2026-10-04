@@ -168,6 +168,22 @@ export type UnpackedBundle = {
   carriedPortrait: boolean;
 };
 
+// The portrait bytes unpackCharacterBundle would write, or null when it
+// would write none, so the caller can weigh the file against an upload
+// budget before anything reaches the disk.
+function portraitBytes(bundle: CharacterBundle): Uint8Array | null {
+  if (!bundle.portrait) {
+    return null;
+  }
+  const match = bundle.portrait.dataUrl.match(PORTRAIT_DATA_URL);
+  const bytes = fromBase64(match?.[2] ?? "");
+  return bytes.length > 0 && bytes.length <= MAX_BUNDLE_PORTRAIT_BYTES ? bytes : null;
+}
+
+export function bundlePortraitSize(bundle: CharacterBundle): number {
+  return portraitBytes(bundle)?.length ?? 0;
+}
+
 // Import direction, step two: the inlined portrait becomes a fresh file in
 // public/uploads and the sheet points at that; whatever path the sheet
 // carried from its old home is discarded.
@@ -177,9 +193,8 @@ export async function unpackCharacterBundle(
 ): Promise<UnpackedBundle> {
   let portrait: SheetAttachment | null = null;
   if (bundle.portrait) {
-    const match = bundle.portrait.dataUrl.match(PORTRAIT_DATA_URL);
-    const bytes = fromBase64(match?.[2] ?? "");
-    if (bytes.length > 0 && bytes.length <= MAX_BUNDLE_PORTRAIT_BYTES) {
+    const bytes = portraitBytes(bundle);
+    if (bytes) {
       const written = await writePortrait(bytes, bundle.portrait.type);
       portrait = {
         id: written.id,

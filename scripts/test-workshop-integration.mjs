@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -1195,6 +1195,35 @@ test("a bundle naming the same place twice is numbered rather than refused", () 
   const names = placesIn(result.workshopId).map((entry) => entry.name);
   assert.equal(names.length, 2);
   assert.ok(names.some((name) => /\(2\)/.test(name)));
+});
+
+// Every import writes fresh files, so the art a bundle carries counts
+// against the importer's upload budget (src/lib/upload-budget.ts), and an
+// import that fails takes its art back off the disk.
+const uploadedFiles = () => new Set(existsSync(uploadsDir) ? readdirSync(uploadsDir) : []);
+const workshopCount = () => db.prepare(`SELECT COUNT(*) AS n FROM campaigns WHERE kind = 'workshop'`).get().n;
+
+test("an import past the upload budget is refused before it writes anything", () => {
+  const filesBefore = uploadedFiles();
+  const workshopsBefore = workshopCount();
+  process.env.UPLOAD_DAILY_BYTES = "1";
+  try {
+    const result = importWorkshopBundle(userId, exported);
+    assert.ok("error" in result, "an over-budget import went through");
+    assert.equal(result.refusal?.status, 429);
+  } finally {
+    delete process.env.UPLOAD_DAILY_BYTES;
+  }
+  assert.equal(workshopCount(), workshopsBefore, "a refused import still made a workshop");
+  assert.deepEqual(uploadedFiles(), filesBefore, "a refused import still wrote art");
+});
+
+test("an import that fails after its art is written leaves no files behind", () => {
+  const filesBefore = uploadedFiles();
+  // No such user: the workshop's owner foreign key fails after the art has
+  // already landed on disk.
+  assert.throws(() => importWorkshopBundle(randomUUID(), exported));
+  assert.deepEqual(uploadedFiles(), filesBefore, "the failed import orphaned its art");
 });
 
 
