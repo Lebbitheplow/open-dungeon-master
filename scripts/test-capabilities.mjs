@@ -12,6 +12,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { endpointKind } from "../src/lib/dm/sampling-logic.ts";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -235,20 +236,12 @@ check("nothing is probed when there is nothing to probe", () => {
   assert.equal(storyProbeUrl({ textProvider: "custom", customBaseUrl: "" }, ""), "");
 });
 
-function probeHost(baseUrl) {
-  try {
-    return new URL(baseUrl.trim()).hostname;
-  } catch {
-    return baseUrl.trim();
-  }
-}
-
 // Mirrors storyProbeHeaders in src/lib/capabilities.ts.
 function storyProbeHeaders({ textProvider, customBaseUrl = "" }, keys) {
   if (textProvider === "none" || textProvider === "local") {
     return {};
   }
-  const isOpenRouter = /(^|\.)openrouter\.ai$/i.test(probeHost(customBaseUrl));
+  const isOpenRouter = endpointKind(customBaseUrl) === "openrouter";
   const key = (keys.configured || (isOpenRouter ? keys.openRouter : keys.openaiCompat) || "").trim();
   return key ? { Authorization: `Bearer ${key}` } : {};
 }

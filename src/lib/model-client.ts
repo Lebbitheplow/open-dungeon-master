@@ -449,10 +449,10 @@ export async function requestCustomMessage(
   // receives the same payload it always did.
   const caps = describeEndpoint(trimmedBase);
   const dropped = new Set(options.dropParams ?? []);
-  // Kept on its own looser historical test rather than folded into
-  // describeEndpoint: this one only picks attribution headers and error copy,
-  // and rewiring it could change OpenRouter behaviour that already works.
-  const isOpenRouter = /(^|\.)openrouter\.ai/i.test(trimmedBase);
+  // Whole-host match from the parsed URL, never a substring of it: this flag
+  // releases the server's OPENROUTER_API_KEY, and a campaign controls the
+  // URL, so https://evil.test/.openrouter.ai must not read as OpenRouter.
+  const isOpenRouter = caps.kind === "openrouter";
   const resolvedModel =
     (model || "").trim() ||
     globalText.customModel ||
@@ -475,7 +475,7 @@ export async function requestCustomMessage(
   // Per-campaign key wins, then the admin-panel key, then the env vars.
   // Fallback keys belong to the admin-configured backend: attaching them to
   // any other URL would hand the server's key to whatever host a campaign's
-  // settings point at. The OpenRouter env key is already host-gated above.
+  // settings point at. The OpenRouter env key is gated on isOpenRouter above.
   const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
   const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === endpoint;
   // The optional utility backend gets the same treatment: its key is host-

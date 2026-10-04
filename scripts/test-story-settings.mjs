@@ -226,4 +226,43 @@ test("on a device world every campaign follows the device's Story AI", () => {
   }
 });
 
+// A campaign picks its own backend URL, so the server's OpenRouter key may
+// only ride along to OpenRouter's own host. A URL that merely mentions
+// openrouter.ai in its path, query or username used to pass a substring test
+// and receive the key.
+{
+  const { requestCustomMessage } = await import("../src/lib/model-client.ts");
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    seen.push({ url: String(url), auth: init?.headers?.Authorization ?? "" });
+    return new Response("{}", { status: 500 });
+  };
+  process.env.OPENROUTER_API_KEY = "sk-or-server";
+  try {
+    const decoys = [
+      "https://evil.test/.openrouter.ai",
+      "https://evil.test/.openrouter.ai/api/v1",
+      "https://evil.test/v1?x=.openrouter.ai",
+      "https://openrouter.ai@evil.test/v1",
+      "https://openrouter.ai.evil.test/api/v1",
+    ];
+    for (const base of decoys) {
+      await requestCustomMessage(base, "m", "", [{ role: "user", content: "hi" }]);
+    }
+    assert.equal(seen.length, decoys.length);
+    for (const call of seen) {
+      assert.notEqual(call.auth, "Bearer sk-or-server", `key leaked to ${call.url}`);
+    }
+
+    seen.length = 0;
+    await requestCustomMessage("https://openrouter.ai/api/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.equal(seen[0].auth, "Bearer sk-or-server", "OpenRouter itself still gets the key");
+    passed += 1;
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.OPENROUTER_API_KEY;
+  }
+}
+
 console.log(`story settings: ${passed} tests passed`);
