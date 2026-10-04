@@ -53,7 +53,7 @@ export async function ingestLoreAttachment(entry: WorldLoreEntry): Promise<numbe
     deleteSourceChunks(entry.campaignId, entry.id);
     return 0;
   }
-  const chunks = chunksForAttachment(entry.title, extractPdfText(bytes));
+  const chunks = chunksForAttachment(entry.title, extractPdfText(bytes, TEXT_CAP));
   replaceSourceChunks(entry.campaignId, entry.id, chunks);
   return chunks.length;
 }
