@@ -168,9 +168,15 @@ export async function GET(request: Request) {
 
   // New account via Discord. Mirrors /api/auth/register: blocked when
   // signups are disabled, invite-gated when invite-only, and the very first
-  // account becomes admin.
+  // account becomes admin. On a server somebody runs, that first account
+  // needs the setup code from the server log (src/lib/setup-code.ts), which
+  // a Discord round trip has nowhere to carry: it is made with a password
+  // and the code, and can link Discord afterwards.
   const isFirstUser = countUsers() === 0;
   const deviceWorld = isDeviceWorld();
+  if (isFirstUser && !deviceWorld) {
+    return redirect(request.url, "/?error=setup_required");
+  }
   const signupMode = resolveSignupMode(getGlobalConfig(), deviceWorld);
   if (!isFirstUser && signupMode === "closed") {
     return redirect(request.url, "/?error=signups_disabled");

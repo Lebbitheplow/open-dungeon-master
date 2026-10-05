@@ -7,6 +7,7 @@ import { countUsers, createUser, getUserByUsername } from "@/lib/db/users";
 import { checkLogin, clientIp, recordLoginFailure } from "@/lib/login-throttle";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 import { isDeviceWorld } from "@/lib/server-env";
+import { claimFirstAdmin, setupCodeMatches } from "@/lib/setup-code";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,9 @@ const registerSchema = z.object({
   // takes). On an invite-only server a live room code vouches for the
   // signup; it is looked up, never spent.
   joinCode: z.string().trim().toUpperCase().min(4).max(12).optional(),
+  // The one-time code from the server log that claims a fresh server's
+  // first account (src/lib/setup-code.ts).
+  setupCode: z.string().trim().max(40).optional(),
 });
 
 export async function POST(request: Request) {
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { username, password, inviteCode, joinCode } = parsed.data;
+  const { username, password, inviteCode, joinCode, setupCode } = parsed.data;
 
   // Wrong invite codes and username probes share the login throttle's
   // escalating lockout, keyed by IP: registration is the one auth surface
@@ -54,9 +58,25 @@ export async function POST(request: Request) {
   }
 
   // The very first account becomes the admin and may always register, even
-  // if signups were somehow disabled before any user existed.
+  // if signups were somehow disabled before any user existed. On a server
+  // somebody runs, it takes the setup code from the server log: an empty
+  // database says nothing about who is asking. A device world's shell makes
+  // its host's account itself and is exempt.
   const isFirstUser = countUsers() === 0;
   const deviceWorld = isDeviceWorld();
+  const claimsServer = isFirstUser && !deviceWorld;
+  if (claimsServer && !setupCodeMatches(setupCode)) {
+    recordLoginFailure(throttle);
+    return Response.json(
+      {
+        error: setupCode
+          ? "That setup code is not right. Copy it from the server log."
+          : "This server has no accounts yet. Enter the setup code from the server log to create the admin account.",
+        needsSetup: true,
+      },
+      { status: 403 },
+    );
+  }
   const signupMode = resolveSignupMode(getGlobalConfig(), deviceWorld);
   if (!isFirstUser && signupMode === "closed") {
     return Response.json({ error: "Signups are disabled." }, { status: 403 });
@@ -117,7 +137,14 @@ export async function POST(request: Request) {
     }
   }
 
-  const user = createUser(username, hashPassword(password), { isAdmin: isFirstUser });
+  const passwordHash = hashPassword(password);
+  const user = claimsServer
+    ? claimFirstAdmin(username, passwordHash, setupCode)
+    : createUser(username, passwordHash, { isAdmin: isFirstUser });
+  if (!user) {
+    // Somebody else finished setting up the server since the check above.
+    return Response.json({ error: "This server has just been set up. Log in instead." }, { status: 409 });
+  }
   await startSession(user.id);
 
   return Response.json(

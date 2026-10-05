@@ -13,6 +13,16 @@ export async function register() {
     // itself is left running in the background. A failure here must not stop
     // the server: the worst case is the keyword fallback search already has.
     if (process.env.NEXT_PHASE !== "phase-production-build") {
+      // A server nobody has signed up to yet prints the one-time code that
+      // claims its admin account (src/lib/setup-code.ts). The operator
+      // reads it in the log; a stranger who found the port first cannot.
+      try {
+        const { announceSetupCode } = await import("@/lib/setup-code");
+        announceSetupCode();
+      } catch (error) {
+        console.error("[setup] could not check for a first account", error);
+      }
+
       try {
         const { embedMissingVectors, reconcileEmbeddingModel } = await import(
           "@/lib/dm/embedding-reindex"

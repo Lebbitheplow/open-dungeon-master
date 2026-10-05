@@ -5,6 +5,7 @@ import { discordCredentials } from "@/lib/discord-oauth";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 import { livePublicUrl } from "@/lib/server-address";
 import { isDeviceWorld } from "@/lib/server-env";
+import { needsSetup } from "@/lib/setup-code";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,9 @@ export async function GET() {
     // invited to someone's phone should not be inventing a password for it,
     // while a real server's owner keeps passwords and their own signup rules.
     deviceWorld,
+    // No accounts yet: the first one (the admin) needs the one-time setup
+    // code from the server log, so the form asks for it. Never the code.
+    needsSetup: needsSetup(),
     serverName: config.serverName || "Open Dungeon Master",
     version: packageJson.version,
     // How long a deleted account lingers before the purge, so confirmation
