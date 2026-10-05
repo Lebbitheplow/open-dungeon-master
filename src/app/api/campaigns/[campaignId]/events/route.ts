@@ -1,10 +1,9 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { forEachEventSince, sseChunk, subscribe } from "@/lib/events";
+import { STREAM_PING_MS } from "@/app/campaigns/[campaignId]/streamWatchdog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const HEARTBEAT_MS = 20_000;
 
 export async function GET(
   request: Request,
@@ -56,7 +55,14 @@ export async function GET(
       // The member's id rides along so the bus can keep the campaign's
       // online set and announce joins and leaves (presence ephemeral).
       const unsubscribe = subscribe(campaignId, send, context.user.id);
-      const heartbeat = setInterval(() => send(": ping\n\n"), HEARTBEAT_MS);
+      // A named event rather than an SSE comment: a page never sees a
+      // comment, and the beat is how it tells a quiet table from a stream
+      // that died without closing (streamWatchdog.ts, issue 73). No id, so
+      // a reconnect never resumes from a beat.
+      // One beat at once, so a stream that dies in its first seconds is
+      // still noticed.
+      send(sseChunk("ping", {}));
+      const heartbeat = setInterval(() => send(sseChunk("ping", {})), STREAM_PING_MS);
 
       const cleanup = () => {
         if (closed) {

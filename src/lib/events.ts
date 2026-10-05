@@ -165,8 +165,19 @@ function fanOutBySeat(
       viewer = viewers.get(userId) ?? viewerFor(campaignId, userId);
       viewers.set(userId, viewer);
     }
+    // A seat whose view could not be worked out (a read that failed) gets
+    // what the whole table may read, or nothing for an event meant for other
+    // seats. It used to be struck off the bus, which left its connection
+    // open and silent: that tab heard nothing more until it was reloaded,
+    // and the browser had no error to reconnect on (issue 73).
+    let view: unknown;
     try {
-      const view = payloadForViewer(type, stored, viewer, original);
+      view = payloadForViewer(type, stored, viewer, original);
+    } catch (error) {
+      console.error(`[events] ${type} view for one seat failed`, error);
+      view = isSeatOnly(type, stored) ? null : stored;
+    }
+    try {
       if (view !== null) {
         subscriber(sseChunk(type, view, seq));
       }
