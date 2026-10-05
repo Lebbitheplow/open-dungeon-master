@@ -42,6 +42,7 @@ falls through to the env var.
 | `TTS_MODEL` | `kokoro`, or `gpt-4o-mini-tts` on OpenAI | Model name sent with each narration request |
 | `TTS_API_KEY` | — | Bearer key for the narration server. Blank on OpenAI itself falls back to the key saved for pictures |
 | `TTS_VOICE` | `af_heart`, or `alloy` on OpenAI | Voice used when a campaign names one the server does not have |
+| `ODM_UPDATE_CHECK` | on | `off` stops the server asking GitHub whether a newer release exists (one anonymous request every six hours at most; the answer is shown in the account menu's About dialog) |
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
 | `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
