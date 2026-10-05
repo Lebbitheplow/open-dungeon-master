@@ -85,6 +85,14 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "battlefield", label: "Battlefield", kind: "text" },
       {
+        name: "distanceFeet",
+        label: "Opening distance (feet)",
+        kind: "number",
+        min: 5,
+        max: 600,
+        help: "How far the nearest enemy stands from the party. Empty, the sides open across the field.",
+      },
+      {
         name: "lair",
         label: "In a legendary creature's lair",
         kind: "boolean",

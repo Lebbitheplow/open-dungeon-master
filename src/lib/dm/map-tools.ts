@@ -89,6 +89,9 @@ export function createBattleMapForEncounter(
   enemies: EncounterEnemy[],
   sheets: CharacterSheet[],
   battlefield: string | undefined,
+  // How far the nearest enemy stands as the fight opens, when the story
+  // said (start_encounter's distanceFeet); a tile is five feet.
+  distanceFeet?: number,
 ): BattleMap | null {
   const location = getCurrentLocation(campaign.id);
   const generated = generateBattleMap({
@@ -99,6 +102,7 @@ export function createBattleMapForEncounter(
     hint: battlefield,
     pcCount: sheets.length,
     enemyCount: enemies.length,
+    enemyDistanceTiles: distanceFeet ? Math.max(1, Math.round(distanceFeet / 5)) : undefined,
   });
   const map = createBattleMap({
     encounterId: encounter.id,

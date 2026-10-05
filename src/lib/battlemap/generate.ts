@@ -34,6 +34,10 @@ export type GenerateInput = {
   hint?: string;
   pcCount: number;
   enemyCount: number;
+  // How far the nearest enemy stands from the party as the fight opens, in
+  // tiles, when the story has already said (a blow struck at arm's length
+  // must not open across the field). Absent, the sides take opposite edges.
+  enemyDistanceTiles?: number;
   // Overrides for a person building a map on purpose. The keyword reader
   // below is a guess made from a sentence; when the DM says "cave, dark"
   // outright there is nothing left to guess, so their answer wins.
@@ -216,6 +220,46 @@ function carveInterior(tiles: string[], width: number, height: number, rng: () =
   }
 }
 
+// Pick `count` distinct open tiles for the enemies at a stated distance from
+// the party: the nearest of them exactly that far from the nearest
+// character where the ground allows, the rest packed in behind it, none any
+// closer.
+function pickSpawnsAtDistance(
+  tiles: string[],
+  width: number,
+  height: number,
+  rng: () => number,
+  party: XY[],
+  distance: number,
+  count: number,
+  taken: Set<number>,
+): XY[] {
+  const open: Array<XY & { away: number }> = [];
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const idx = tileIndex(width, x, y);
+      if (tiles[idx] !== TERRAIN.floor || taken.has(idx)) {
+        continue;
+      }
+      const away = Math.min(...party.map((spot) => Math.max(Math.abs(spot.x - x), Math.abs(spot.y - y))));
+      if (away >= distance) {
+        open.push({ x, y, away });
+      }
+    }
+  }
+  // Deterministic shuffle, then nearest first: ties fall as the seed has them.
+  for (let i = open.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [open[i], open[j]] = [open[j], open[i]];
+  }
+  open.sort((a, b) => a.away - b.away);
+  const picked = open.slice(0, count).map(({ x, y }) => ({ x, y }));
+  for (const spot of picked) {
+    taken.add(tileIndex(width, spot.x, spot.y));
+  }
+  return picked;
+}
+
 // BFS flood from one open tile; used for the connectivity guarantee.
 function reachableFrom(tiles: string[], width: number, height: number, start: XY): Set<number> {
   const seen = new Set<number>();
@@ -339,7 +383,11 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
   const pcRange: [number, number] = flip ? [width - 1 - band, width - 1] : [1, 1 + band];
   const enemyRange: [number, number] = flip ? [1, 1 + band] : [width - 1 - band, width - 1];
   let pcSpawns = pickSpawns(tiles, width, height, rng, pcRange[0], pcRange[1], input.pcCount, taken);
-  let enemySpawns = pickSpawns(tiles, width, height, rng, enemyRange[0], enemyRange[1], input.enemyCount, taken);
+  const pickEnemies = (party: XY[]) =>
+    input.enemyDistanceTiles && party.length
+      ? pickSpawnsAtDistance(tiles, width, height, rng, party, Math.max(1, Math.round(input.enemyDistanceTiles)), input.enemyCount, taken)
+      : pickSpawns(tiles, width, height, rng, enemyRange[0], enemyRange[1], input.enemyCount, taken);
+  let enemySpawns = pickEnemies(pcSpawns);
 
   // Dense generation can starve an edge band; open the center as a fallback.
   if (pcSpawns.length < input.pcCount || enemySpawns.length < input.enemyCount) {
@@ -352,9 +400,7 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
     pcSpawns = pcSpawns.length < input.pcCount
       ? pickSpawns(tiles, width, height, rng, pcRange[0], pcRange[1], input.pcCount, taken)
       : pcSpawns;
-    enemySpawns = enemySpawns.length < input.enemyCount
-      ? pickSpawns(tiles, width, height, rng, enemyRange[0], enemyRange[1], input.enemyCount, taken)
-      : enemySpawns;
+    enemySpawns = enemySpawns.length < input.enemyCount ? pickEnemies(pcSpawns) : enemySpawns;
   }
 
   // Connectivity guarantee: every spawn must reach the first PC spawn.

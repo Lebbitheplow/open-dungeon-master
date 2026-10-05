@@ -104,6 +104,19 @@ export function markRollApplied(rollId: string, targetEnemyId: string) {
     .run(targetEnemyId, rollId);
 }
 
+// Lands a damage roll with its stamp already on. The blow that ends a fight
+// is counted into the after-fight card inside `land`, so a stamp put on
+// afterwards left every killing blow off its wielder's line (issue 91: 0
+// dealt, 1 slain). A blow the engine refuses gives the stamp back.
+export function landRoll<T extends object>(rollId: string, targetEnemyId: string, land: () => T): T {
+  markRollApplied(rollId, targetEnemyId);
+  const result = land();
+  if ("error" in result) {
+    getDatabase().prepare(`UPDATE rolls SET applied = 0, target_enemy_id = NULL WHERE id = ?`).run(rollId);
+  }
+  return result;
+}
+
 // An attack or damage roll must say who made it, or that nobody did.
 export type RollInsert = {
   campaignId: string;

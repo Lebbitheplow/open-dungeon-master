@@ -60,6 +60,12 @@ export const startEncounterTool: ToolDef = {
           description:
             "One line describing the fighting ground, used to shape the tactical battle map, e.g. 'a torchlit crypt with a flooded channel'.",
         },
+        distanceFeet: {
+          type: "integer",
+          minimum: 5,
+          description:
+            "How far the nearest enemy stands from the party as the fight opens, in feet, whenever the story has already said: 5 for a foe at arm's length, 10 for one two paces off, 30 across a room. The battle map places them there. Omit it and the sides open across the field from each other.",
+        },
         lair: {
           type: "boolean",
           description: "True when the fight is in a legendary creature's lair, so the lair acts on initiative 20 each round (lair_action).",

@@ -175,6 +175,13 @@ const startArgsSchema = z.object({
   surprised: z.enum(["none", "enemies", "party"]).optional(),
   ambush: z.enum(["enemies", "party"]).optional(),
   battlefield: z.string().max(300).optional(),
+  // Feet between the party and the nearest enemy as the fight opens. A
+  // value that is no distance (null, "", 0 from a weak tool caller) is the
+  // same as none given, never a reason to refuse the fight.
+  distanceFeet: z.preprocess((value) => {
+    const feet = Number(value);
+    return value !== null && Number.isFinite(feet) && feet >= 5 ? Math.min(feet, 600) : undefined;
+  }, z.number().optional()),
   lair: z.boolean().optional(),
 });
 
@@ -303,7 +310,7 @@ function handleStartEncounter(
   // plan.md 4.1), written with the fight so the tracker shows them at once.
   initLegendaryPools(encounter, enemies, args.lair === true);
   saveEncounter(encounter);
-  createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.battlefield);
+  createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.battlefield, args.distanceFeet);
   publishEncounter(campaign.id);
   // The fight's card: the opening line in ember, "Ambush" when the party
   // was caught, with the combat sting (SceneTitle.tsx).

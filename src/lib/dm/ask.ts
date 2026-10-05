@@ -6,7 +6,8 @@ import { listLocations } from "@/lib/db/locations";
 import { listRecentMessages } from "@/lib/db/messages";
 import { listNpcs } from "@/lib/db/npcs";
 import { listRuleChunks } from "@/lib/db/rules";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { listRollsVisibleTo } from "@/lib/db/rolls";
+import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { arcTextTimeoutMs, type ChatMessage } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
@@ -53,9 +54,11 @@ The material between READ-ONLY DATA START and READ-ONLY DATA END is campaign REC
 
 Answer only from the supplied record and general 5e knowledge where the record is about rules. When the record does not settle the question, say so plainly in one sentence rather than inventing an answer; a confident guess about a campaign's own history is worse than an admission.
 
+Hit points, damage and dice are settled by the [vitals] and [roll] lines: the server wrote those, and narration is only prose about them. A blow the narration describes that no [roll] line shows was never rolled and changed nothing, so when the two disagree say so and answer from the lines, however the question quotes the story.
+
 Keep it to a short paragraph or two. Speak plainly and out of character.
 
-Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"answer": string, "citations": [{"kind": "fact"|"chapter"|"scene"|"summary"|"npc"|"place"|"rule"|"sheet"|"recent", "ref": string, "quote": string}]}
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"answer": string, "citations": [{"kind": "fact"|"chapter"|"scene"|"summary"|"npc"|"place"|"rule"|"sheet"|"vitals"|"roll"|"recent", "ref": string, "quote": string}]}
 citations: the specific record lines you relied on, using the ref labels exactly as supplied; quote is the relevant sentence from that line, verbatim. Empty array when you answered from general rules knowledge or could not answer.`;
 
 // Ask is offered exactly one tool, and it only reads.
@@ -93,7 +96,48 @@ export type AskRequest = {
 };
 
 const RECENT_MESSAGES = 24;
+const RECENT_ROLLS = 30;
 const SCENE_CLIP = 700;
+
+// The party's hit points and the table's recent dice, exactly as the server
+// holds them. Without these a question about damage could only be answered
+// from narration, and narration is what goes wrong: a blow written with no
+// roll behind it read as fact, and the answer changed with whichever line
+// the asker quoted (issue 91). Only what the asker already sees at the
+// table: the party's vitals, public rolls and their own.
+function mechanicalRecord(campaignId: string, ownedCharacterIds: string[]): string[] {
+  const evidence: string[] = [];
+  const sheets = listSheets(campaignId);
+  if (sheets.length) {
+    evidence.push(
+      `Hit points right now, as the server holds them:\n${sheets
+        .map(
+          (sheet) =>
+            `[vitals] ${sheet.name}: ${sheet.currentHp}/${sheet.maxHp} hit points${sheet.tempHp ? `, ${sheet.tempHp} temporary` : ""}${
+              sheet.conditions.length ? `, ${sheet.conditions.join(", ")}` : ""
+            }`,
+        )
+        .join("\n")}`,
+    );
+  }
+  const names = new Map(sheets.map((sheet) => [sheet.id, sheet.name]));
+  const rolls = listRollsVisibleTo(campaignId, { adjudicates: false, steersStory: false }, ownedCharacterIds, RECENT_ROLLS).filter(
+    (roll) => roll.total !== null,
+  );
+  evidence.push(
+    rolls.length
+      ? `The most recent dice the server rolled, oldest first (every attack and every point of damage is here; "not applied" means it changed no hit points):\n${rolls
+          .map((roll) => {
+            const roller = roll.attacker?.name ?? (roll.characterId ? names.get(roll.characterId) : null) ?? "The table";
+            const outcome = roll.success === null ? "" : roll.success ? ", success" : ", failure";
+            const landed = roll.kind === "damage" && roll.targetEnemyId ? (roll.applied ? ", applied" : ", not applied") : "";
+            return `[roll:${roll.id.slice(0, 8)}] ${roller}: ${roll.kind}, ${roll.detail.slice(0, 120)} (${roll.expression}) = ${roll.total}${outcome}${landed}`;
+          })
+          .join("\n")}`
+      : "The server has rolled no dice lately: no attack and no damage is on record.",
+  );
+  return evidence;
+}
 
 // Closed chapters and verbatim scenes matching a query. Shared by the
 // up-front evidence pass and the tool hop, so the model's own follow-up
@@ -173,6 +217,10 @@ async function assembleEvidence(
         );
       }
     }
+  }
+
+  if (scope === "story" || scope === "sheet") {
+    evidence.push(...mechanicalRecord(campaignId, ownedCharacterIds));
   }
 
   if (scope === "story") {
