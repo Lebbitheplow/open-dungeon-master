@@ -13,7 +13,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { deriveHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
+const { deriveHand, waitingHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 const { previewRows, composeSentence, intentBody } = await import("../src/lib/battlemap/hand-play.ts");
 const { reactionCards, reactionAim } = await import("../src/lib/battlemap/hand-react.ts");
 const { turnFromEncounter, turnPips, turnHudBudget } = await import("../src/lib/battlemap/hand-table.ts");
@@ -96,6 +96,28 @@ test("a card off the character's turn is refused with canAct's own sentence, and
   assert.match(byId(cards, "spell:fire bolt").disabled, /^It is Talia's turn, not Lys's\. Off their own turn a character can only use their reaction\.$/);
   assert.equal(byId(cards, "spell:shield").disabled, null);
   assert.equal(byId(cards, "spell:shield").intent.card, "reaction");
+});
+
+// Issue 96: "look your cards over while you wait" has to be possible.
+test("a hand that is only waiting says so once, and its cards keep everything there is to read", () => {
+  const lys = caster({ id: "s1" });
+  const waiting = waitingHand(lys, talias());
+  assert.equal(waiting.note, "It is Talia's turn, not Lys's. Off their own turn a character can only use their reaction.");
+  const cards = deriveHand(lys, talias(), { spells: FACTS });
+  const bolt = byId(cards, "spell:fire bolt");
+  assert.ok(waiting.sentences.has(bolt.disabled), "the card is held by the wait and nothing else, which is how the hand knows it is still worth reading");
+  assert.ok([bolt.range, bolt.dice, bolt.roll].some(Boolean), "what it does is still on it");
+  assert.ok(previewRows(bolt, { id: "e1", name: "Goblin", kind: "enemy", ac: 13 }, []).length > 0, "and its preview still works out");
+  // Initiative still being rolled is the same wait, in each card's own words.
+  const rolling = talias({ table: { round: 1, orderReady: false, acting: null, surprised: { acting: [], reacting: [] } } });
+  const early = waitingHand(lys, rolling);
+  assert.match(early.note, /Initiative is still being rolled/);
+  for (const card of deriveHand(lys, rolling, { spells: FACTS }).filter((entry) => entry.disabled && entry.cost !== "reaction")) {
+    assert.ok(early.sentences.has(card.disabled), `${card.name}: ${card.disabled}`);
+  }
+  // On their own turn nothing is waiting; and something worse than the wait is not a wait.
+  assert.equal(waitingHand(caster(), mine({ table: { round: 2, orderReady: true, acting: { id: "s1", name: "Lys" }, surprised: { acting: [], reacting: [] } } })), null);
+  assert.equal(waitingHand(caster({ id: "s1", currentHp: 0 }), talias()), null, "a character who is down is told that, not to plan a turn");
 });
 
 test("surprise in round 1 refuses actions and the reaction the way the engine does", () => {

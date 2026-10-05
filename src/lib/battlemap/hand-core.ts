@@ -267,6 +267,34 @@ export function standingGate(sheet: CharacterSheet, turn: HandTurn, kind: ActKin
   return verdict.ok ? null : { reason: verdict.error, spent: false };
 }
 
+// A hand that is only waiting: the one thing in this character's way is
+// that it is somebody else's turn, or that initiative is still being
+// rolled. Nothing about the cards is wrong, so they are still worth reading
+// (issue 96). `note` is the engine's sentence for it; `sentences` are every
+// wording of it a card may carry (canAct names the act: "cannot attack yet",
+// "cannot cast a spell yet"), which is how the hand tells a card held by the
+// wait from one held by something of its own. Null on the character's own
+// turn, and when something worse stops them first (down, stunned, surprised).
+const WAITING: ReadonlySet<string> = new Set(["not_your_turn", "no_initiative"]);
+const ACT_KINDS: ActKind[] = ["action", "attack", "bonus", "move", "free", "cast"];
+
+export function waitingHand(sheet: CharacterSheet, turn: HandTurn): { note: string; sentences: Set<string> } | null {
+  let note = "";
+  const sentences = new Set<string>();
+  for (const kind of ACT_KINDS) {
+    const verdict = canAct({ sheet, encounter: actingEncounter(turn, kind), kind });
+    if (verdict.ok) {
+      continue;
+    }
+    if (!WAITING.has(verdict.reason)) {
+      return null;
+    }
+    note ||= verdict.error;
+    sentences.add(verdict.error);
+  }
+  return sentences.size ? { note, sentences } : null;
+}
+
 // The turn as the engine's own TurnBudget, so a cost is judged by the same
 // spend functions pc_attack, take_action and the cast guard call, and a
 // refusal reads in their words.
