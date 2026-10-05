@@ -846,3 +846,55 @@ export function announcesEncounterStart(narration: string): boolean {
 // start_encounter behind it. Kept beside the other correction text so the
 // wording is testable without a model call.
 export const FAKE_ENCOUNTER_PROMPT = `[System] Your narration announced a fight starting, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. Call start_encounter now with the enemies you announced, then narrate the fight breaking out from the tool results. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;
+
+// ---------------------------------------------------------------------------
+// Part 6: blows landed in prose alone
+// ---------------------------------------------------------------------------
+
+// A whole number standing on its own, never a piece of an id or of dice
+// notation ("2d6", "a8b1-...").
+const BARE_NUMBER = /(?<![\w.-])\d{1,3}(?![\w-])/g;
+
+// The model sometimes resolves a blow it was supposed to ask for: "The
+// Resonance Weaver attacks Alden with Resonance Blast. Hit! 8 damage." with
+// no attack call behind it (issue 91). Nothing happened: the sheet keeps its
+// hit points, and the fight that follows contradicts its own opening. The
+// narration check above is no help outside a fight, where it has no ground
+// truth to hold the figure against. This is narrower and comes earlier: a
+// damage or healing figure on a turn whose tools rolled none, that nothing
+// the model was shown carries either (a table note for a blow the server
+// dealt itself, an earlier line being recalled). Returns the clause, or null.
+export function statesUnrolledDamage(narration: string, conversation: readonly GuardMessage[]): string | null {
+  const outcomes = resolveOutcomes(collectExchanges(conversation));
+  // The turn rolled damage: a figure that misquotes it is the rewrite's to
+  // fix, and sending the model back to the tools would land the blow twice.
+  if (outcomes.damageNumbers.length) {
+    return null;
+  }
+  const shown = new Set(outcomes.numbers);
+  for (const message of conversation) {
+    if (message.role === "system" || typeof message.content !== "string") {
+      continue;
+    }
+    for (const match of message.content.matchAll(BARE_NUMBER)) {
+      shown.add(Number(match[0]));
+    }
+  }
+  for (const clause of narrationClauses(narration)) {
+    if (hedged(clause)) {
+      continue;
+    }
+    for (const match of clause.matchAll(NUMBER_CLAIM)) {
+      if (!shown.has(Number(match[1]))) {
+        return clause;
+      }
+    }
+  }
+  return null;
+}
+
+// What the turn loop sends back for it. Kept beside the other correction
+// text so the wording is testable without a model call.
+export function unrolledDamagePrompt(clause: string): string {
+  return `[System] Your narration states a damage or healing figure that no tool rolled this turn ("${clause}"), so it has not happened: no hit points changed, and the sheets the table reads do not show it. If that blow belongs in the story, resolve it now with its tool and narrate from the result: start_encounter first when no fight is running, then the attack or spell tool on the turn of whoever acts; apply_hazard or apply_damage for a trap, a fall or anything outside a fight. Otherwise write the moment again without it. Never state a hit, a miss or a figure the server did not return.`;
+}

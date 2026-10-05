@@ -328,6 +328,7 @@ await test("A melee attack declared nonlethal that drops a creature to 0 knocks 
 
 async function aiSwing(characterId, enemyId, faces, args) {
   const turn = createDmTurn(world.campaignId, [], "ai");
+  world.say("player", "I swing at it.", world.sheet(characterId));
   const before = new Set(kit.lastRolls(60).map((roll) => roll.id));
   world.clearDice();
   world.dice(...faces);

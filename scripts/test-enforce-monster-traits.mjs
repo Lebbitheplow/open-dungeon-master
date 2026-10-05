@@ -225,6 +225,7 @@ await test("A legendary action comes at the end of another creature's turn, neve
   const [again] = world.enemies();
   mk.stage(again.id, ROWS.adultRedDragon);
   const turn = mk.aiTurn();
+  world.say("player", "That's my turn.", tank);
   const ended = await mk.ai(turn, "end_turn", { characterId: tank.id });
   assert.equal(ended.ok, true, ended.error);
   const during = await mk.ai(turn, "legendary_action", { enemyId: again.id, action: "Detect" });

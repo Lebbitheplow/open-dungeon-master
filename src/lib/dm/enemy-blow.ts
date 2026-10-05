@@ -7,7 +7,7 @@ import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { listSheets } from "@/lib/db/sheets";
 import { getDmTurn, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
-import { markRollApplied, type StoredRoll } from "@/lib/db/rolls";
+import { landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { healthState } from "@/lib/bestiary/health";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
 import { weaponMaterial } from "@/lib/dm/damage-logic";
@@ -127,19 +127,10 @@ export function autoApplyDamageRoll(
       warning: `targetEnemyId "${targetEnemyRef}" matched no living enemy; the damage was NOT applied. Call damage_enemy with an exact enemyId from GAME STATE.`,
     };
   }
-  const result = applyBlow(
-    campaign,
-    turn,
-    encounter,
-    enemy,
-    roll,
-    sheets,
-    sheetsById,
-    damageType,
-    blow,
+  const result = landRoll(roll.id, enemy.id, () =>
+    applyBlow(campaign, turn, encounter, enemy, roll, sheets, sheetsById, damageType, blow),
   );
   if (!("error" in result)) {
-    markRollApplied(roll.id, enemy.id);
     result.note = result.dead
       ? `${enemy.displayName} is slain; the server already applied this damage. Do NOT call damage_enemy for this hit.`
       : `The server already applied this damage to ${enemy.displayName}. Do NOT call damage_enemy for this hit.`;

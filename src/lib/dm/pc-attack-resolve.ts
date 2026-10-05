@@ -7,7 +7,7 @@
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
-import { insertRoll, markRollApplied, type StoredRoll } from "@/lib/db/rolls";
+import { insertRoll, landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { planAttackFx, type RollVisibility } from "@/lib/battlemap/fx-plan";
@@ -254,17 +254,16 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     visibility: hitRoll.visibility,
   });
 
-  const applied = applyHitDamage({
-    plan,
-    typedRiders,
-    damageOutcome,
-    dealt,
-    crit,
-    critExtraDice,
-  });
-  if (!("error" in applied)) {
-    markRollApplied(damageRoll.id, enemy.id);
-  }
+  const applied = landRoll(damageRoll.id, enemy.id, () =>
+    applyHitDamage({
+      plan,
+      typedRiders,
+      damageOutcome,
+      dealt,
+      crit,
+      critExtraDice,
+    }),
+  );
 
   const maneuverOutcome: Record<string, unknown> =
     maneuver?.rider && !applied.dead && !applied.encounterOver
@@ -380,10 +379,9 @@ function missDamage(plan: AttackPlan): Record<string, unknown> | null {
   if (half <= 0) {
     return { damage: 0 };
   }
-  const applied = applyHitDamage({ plan, typedRiders: [], damageOutcome: outcome, dealt: half, crit: false, critExtraDice: 0 });
-  if (!("error" in applied)) {
-    markRollApplied(roll.id, plan.enemy.id);
-  }
+  const applied = landRoll(roll.id, plan.enemy.id, () =>
+    applyHitDamage({ plan, typedRiders: [], damageOutcome: outcome, dealt: half, crit: false, critExtraDice: 0 }),
+  );
   return { ...applied, damage: half };
 }
 

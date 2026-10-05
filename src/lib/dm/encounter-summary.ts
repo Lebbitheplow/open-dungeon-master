@@ -33,7 +33,9 @@ export function computeEncounterSummary(input: {
   rounds: number;
   startedAt: string;
   endedAt: string;
-  enemies: Array<{ status: string }>;
+  // Hit points where the fight's own are known: what the enemies lost is the
+  // least the party's side dealt, whichever tool landed it.
+  enemies: Array<{ status: string; maxHp?: number; currentHp?: number }>;
   sheets: Array<{ id: string; name: string }>;
   rolls: SummaryRoll[];
   audits: SummaryAudit[];
@@ -85,6 +87,15 @@ export function computeEncounterSummary(input: {
     }),
     { dealt: 0, taken: 0, healed: 0, nat20s: 0, nat1s: 0 },
   );
+  // The fighters' lines read the weapon dice the server applied as rolled. A
+  // spell's card shows its dice before the save, an area's one roll lands on
+  // many, a pet has its own: those are on nobody's line, so the total never
+  // reads less than the enemies actually lost.
+  const lost = input.enemies.reduce(
+    (sum, enemy) => sum + (enemy.maxHp === undefined || enemy.currentHp === undefined ? 0 : Math.max(0, enemy.maxHp - Math.max(0, enemy.currentHp))),
+    0,
+  );
+  totals.dealt = Math.max(totals.dealt, lost);
   const seconds = Math.max(0, Math.round((Date.parse(input.endedAt) - Date.parse(input.startedAt)) / 1000)) || 0;
   return {
     outcome: input.outcome,

@@ -106,6 +106,9 @@ export type DmEncounterState = {
   // The acting character's movement left this turn, as the board counts it,
   // or null when they have no token on a board.
   movementLeft: string | null;
+  // The current combatant's name while their turn waits on their player
+  // (src/lib/dm/player-word.ts characterAwaitingPlayer).
+  awaitingPlayer: string | null;
   enemies: Array<{
     enemyId: string;
     name: string;
@@ -692,6 +695,12 @@ export function buildGameStateBlock(state: DmGameState): string {
       }
       if (encounter.movementLeft) {
         lines.push(`Movement left this turn: ${encounter.movementLeft}, counted by the board.`);
+      }
+      if (encounter.awaitingPlayer) {
+        const name = encounter.awaitingPlayer;
+        lines.push(
+          `Waiting on ${name}'s player: they have not declared an action this turn. Set the scene and ask what ${name} does; the server refuses any action or end_turn for ${name} until they do.`,
+        );
       }
     } else {
       lines.push(

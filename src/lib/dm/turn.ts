@@ -48,9 +48,16 @@ import {
   salvageXmlToolCalls,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
-import { announcesEncounterStart, collectExchanges, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
+import {
+  announcesEncounterStart,
+  collectExchanges,
+  FAKE_ENCOUNTER_PROMPT,
+  statesUnrolledDamage,
+  unrolledDamagePrompt,
+} from "@/lib/dm/engine-boundary";
 import { markToolError } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
+import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { personRunsTable } from "@/lib/dm/enemies-due";
 import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
@@ -260,6 +267,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       : sheets.filter((sheet) => !staged.has(sheet.id)).map((sheet) => sheet.name),
     turnBudget: encounter.turnBudget ? describeBudget(encounter.turnBudget) : null,
     movementLeft: encounter.orderReady ? movementLeft(campaignId, encounter, sheets) : null,
+    awaitingPlayer: characterAwaitingPlayer(campaignId)?.name ?? null,
     enemies: enemies.map((enemy) => ({
       enemyId: enemy.id,
       name: enemy.displayName,
@@ -699,6 +707,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // One shot at fixing a fight announced in prose without start_encounter; a
   // model that ignores the correction keeps its text rather than looping.
   let encounterNudged = false;
+  // The same single shot for a blow landed in prose alone: a damage figure
+  // that no tool rolled this turn (statesUnrolledDamage).
+  let damageNudged = false;
   // Whether the last call, sent with toolChoice "none", came back with tool
   // calls anyway (see narrateAfterToolLeak).
   let finalCallLeaked = false;
@@ -1128,6 +1139,26 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         answerRanAbove(fightOwnsFloor(campaignId), false);
         turn.conversation.push({ role: "user", content: FAKE_ENCOUNTER_PROMPT });
         // Saved again: the save above still carried the withheld announcement.
+        saveDmTurn(turn);
+        continue;
+      }
+      // A blow that only the prose landed did not happen either: the sheet
+      // keeps its hit points while the table reads "Hit! 8 damage." (issue
+      // 91). Hold it back and send the model to the tool that resolves it.
+      const unrolled =
+        !finalCall && !damageNudged && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
+          ? statesUnrolledDamage(narration, turn.conversation)
+          : null;
+      if (unrolled) {
+        damageNudged = true;
+        turn.narrationParts.pop();
+        turn.conversation.push({
+          role: "assistant",
+          content: visibleText || "",
+          tool_calls: echoedToolCalls,
+        });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
+        turn.conversation.push({ role: "user", content: unrolledDamagePrompt(unrolled) });
         saveDmTurn(turn);
         continue;
       }

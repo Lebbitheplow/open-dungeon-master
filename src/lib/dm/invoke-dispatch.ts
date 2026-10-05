@@ -61,6 +61,7 @@ import { handleGenerateImage } from "@/lib/dm/images";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { handleSplitDamage } from "@/lib/dm/split-damage";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
+import { characterCallUnasked } from "@/lib/dm/player-word";
 import { EXPLORE_TOOL_NAMES, handleExploreCall } from "@/lib/dm/explore-tools";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -117,8 +118,10 @@ export async function dispatchAdjudication(
         sheetsById,
         context.realDiceUserIds,
       );
-    case "cast_buff":
-      return handleCastBuff(campaign, turn, rawArguments, sheets, sheetsById);
+    case "cast_buff": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
+      return unasked ? { error: unasked } : handleCastBuff(campaign, turn, rawArguments, sheets, sheetsById);
+    }
     case "take_rest":
       return handleTakeRest(campaign, turn.id, rawArguments, sheets, sheetsById);
     case "group_check":
@@ -131,8 +134,10 @@ export async function dispatchAdjudication(
       return handleApplyHazard(campaign, turn, rawArguments, sheets, sheetsById);
     case "summon_pet":
       return handleSummonPet(campaign, turn, rawArguments, sheets, sheetsById);
-    case "pet_attack":
-      return handlePetAttack(campaign, turn, rawArguments, sheets, sheetsById);
+    case "pet_attack": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
+      return unasked ? { error: unasked } : handlePetAttack(campaign, turn, rawArguments, sheets, sheetsById);
+    }
     case "damage_pet":
       return handleDamagePet(campaign, rawArguments, sheets, sheetsById);
     case "dismiss_pet":

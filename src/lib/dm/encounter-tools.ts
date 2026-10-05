@@ -75,6 +75,7 @@ import {
 } from "@/lib/dm/enemy-damage";
 import { enemyFalls } from "@/lib/dm/enemy-fall";
 import { enemyCallOutOfTurn } from "@/lib/dm/enemy-turn-order";
+import { characterCallUnasked } from "@/lib/dm/player-word";
 import {
   applyExtraEncounterCall,
   EXTRA_ENCOUNTER_TOOL_NAMES,
@@ -174,6 +175,13 @@ const startArgsSchema = z.object({
   surprised: z.enum(["none", "enemies", "party"]).optional(),
   ambush: z.enum(["enemies", "party"]).optional(),
   battlefield: z.string().max(300).optional(),
+  // Feet between the party and the nearest enemy as the fight opens. A
+  // value that is no distance (null, "", 0 from a weak tool caller) is the
+  // same as none given, never a reason to refuse the fight.
+  distanceFeet: z.preprocess((value) => {
+    const feet = Number(value);
+    return value !== null && Number.isFinite(feet) && feet >= 5 ? Math.min(feet, 600) : undefined;
+  }, z.number().optional()),
   lair: z.boolean().optional(),
 });
 
@@ -302,7 +310,7 @@ function handleStartEncounter(
   // plan.md 4.1), written with the fight so the tracker shows them at once.
   initLegendaryPools(encounter, enemies, args.lair === true);
   saveEncounter(encounter);
-  createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.battlefield);
+  createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.battlefield, args.distanceFeet);
   publishEncounter(campaign.id);
   // The fight's card: the opening line in ember, "Ambush" when the party
   // was caught, with the combat sting (SceneTitle.tsx).
@@ -1007,6 +1015,10 @@ export function applyEncounterCall(
       return { result: stress.length ? { ...started, afflictions: stress } : started };
     }
     case "pc_attack": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       const result = handlePcAttack(
         campaign,
         turn,
@@ -1020,6 +1032,10 @@ export function applyEncounterCall(
       return { result };
     }
     case "cast_at_enemy": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       // Improved Reaper's second target (src/lib/dm/authored-reaper.ts).
       const result = handleReaperCast(campaign, turn, rawArguments, sheets, sheetsById) ?? handleCastAtEnemy(campaign, turn, rawArguments, sheets, sheetsById);
       markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
@@ -1031,14 +1047,20 @@ export function applyEncounterCall(
       return { result: early ? { error: early } : handleCastAtPlayer(campaign, turn, rawArguments, sheets, sheetsById) };
     }
     case "take_action": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       const result = handleTakeAction(campaign, turn, rawArguments, sheets, sheetsById);
       markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
       return { result };
     }
     case "use_reaction":
       return { result: handleUseReaction(campaign, turn, rawArguments, sheets, sheetsById) };
-    case "end_turn":
-      return { result: handleEndTurn(campaign, turn, rawArguments, sheets, sheetsById) };
+    case "end_turn": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
+      return { result: unasked ? { error: unasked } : handleEndTurn(campaign, turn, rawArguments, sheets, sheetsById) };
+    }
     case "damage_enemy":
       return { result: handleDamageEnemy(campaign, turn, rawArguments, sheets, sheetsById) };
     case "enemy_attack": {
@@ -1049,8 +1071,10 @@ export function applyEncounterCall(
     }
     case "move_token":
       return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById, turn) };
-    case "teleport_token":
-      return { result: handleTeleportToken(campaign, rawArguments, sheets, sheetsById, turn) };
+    case "teleport_token": {
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "casterId");
+      return { result: unasked ? { error: unasked } : handleTeleportToken(campaign, rawArguments, sheets, sheetsById, turn) };
+    }
     case "set_movement":
       return { result: handleSetMovement(campaign, rawArguments, sheets, sheetsById, turn) };
     case "end_encounter":

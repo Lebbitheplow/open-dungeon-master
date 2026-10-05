@@ -37,7 +37,6 @@ import {
 } from "@/lib/battlemap/types";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { getSheetById } from "@/lib/db/sheets";
-import { listRecentMessages } from "@/lib/db/messages";
 import { publishEphemeral } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
@@ -47,6 +46,7 @@ import { canEnemyAct } from "@/lib/dm/can-act";
 import { awayFromFear, enemyMoveTraits, fearSourceAt, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
+import { declaredThisTurn } from "@/lib/dm/player-word";
 import { distancesFrom, payForTeleport, spendEnemyDisengage, stillAt, teleportRangeFeet, walkCharacter } from "@/lib/dm/token-rules";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -89,6 +89,9 @@ export function createBattleMapForEncounter(
   enemies: EncounterEnemy[],
   sheets: CharacterSheet[],
   battlefield: string | undefined,
+  // How far the nearest enemy stands as the fight opens, when the story
+  // said (start_encounter's distanceFeet); a tile is five feet.
+  distanceFeet?: number,
 ): BattleMap | null {
   const location = getCurrentLocation(campaign.id);
   const generated = generateBattleMap({
@@ -99,6 +102,7 @@ export function createBattleMapForEncounter(
     hint: battlefield,
     pcCount: sheets.length,
     enemyCount: enemies.length,
+    enemyDistanceTiles: distanceFeet ? Math.max(1, Math.round(distanceFeet / 5)) : undefined,
   });
   const map = createBattleMap({
     encounterId: encounter.id,
@@ -438,18 +442,6 @@ function resolveMoveTarget(
 function walkedPart(path: Array<{ x: number; y: number }>, landing: { x: number; y: number }) {
   const at = path.findIndex((step) => step.x === landing.x && step.y === landing.y);
   return at >= 0 ? path.slice(0, at + 1) : path;
-}
-
-// Whether the character's player asked for something in the input this DM
-// turn answers: a message of theirs since the DM last spoke, table talk
-// aside. A token never walks on a turn its player did not speak in (issue 17:
-// a token that moved with no input).
-function declaredThisTurn(campaignId: string, characterId: string): boolean {
-  const messages = listRecentMessages(campaignId, 50);
-  const since = messages.slice(messages.findLastIndex((message) => message.authorType === "dm") + 1);
-  return since.some(
-    (message) => message.authorType === "player" && message.characterId === characterId && !message.content.startsWith("(ooc)"),
-  );
 }
 
 export function handleMoveToken(
