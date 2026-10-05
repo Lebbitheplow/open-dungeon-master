@@ -1573,6 +1573,31 @@ html[data-theme="light"] .ts-below .ts-ghost:hover { background: rgba(255, 252, 
 /* The same window without the gold frame (the shared screen). */
 .board-fill { display: flex; min-width: 0; min-height: 0; }
 .board-fill > .board-panel { flex: 1; min-width: 0; min-height: 0; }
+/* The side panel and the phone (issue 87, second pass). The board used to
+   be laid out as tall as it is wide, so on a short screen (a phone on its
+   side, a laptop) it ran past the bottom and the panel scrolled the round
+   header away. Holding the board, the panel body is a column: the board
+   gives up height until the header, the tools and the footer all fit, and
+   the camera fits the whole board into what is left. A screen too short for
+   even the board's floor still scrolls, as the last resort. */
+.side-panel-body:has(> .motion-tab > .board-dock) { display: flex; flex-direction: column; }
+.side-panel-body:has(> .motion-tab > .board-dock) > * { flex: none; }
+.side-panel-body > .motion-tab:has(> .board-dock),
+.board-dock,
+.board-dock > .board-panel { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+.board-dock > *,
+.board-dock > .board-panel > * { flex: none; }
+.board-dock > .board-panel > .board-view { flex: 0 1 auto; min-height: 6rem; touch-action: none; }
+/* In any fixed window the DM's tools keep to one line and scroll sideways,
+   so a narrow window never trades rows of buttons for board. */
+:is(.cine-board-frame, .board-fill, .board-dock) .board-tools {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* The last tool fades at the edge, so a row that runs on says so. */
+  mask-image: linear-gradient(90deg, #000 calc(100% - 1.25rem), transparent);
+}
+:is(.cine-board-frame, .board-fill, .board-dock) .board-tools > * { flex: none; }
 /* The frame burns brighter while its board has the keyboard (issue 90). */
 .cine-board-frame:has(.board-view:focus)::before { animation: none; opacity: 1; }
 .cine-board-frame::before {
@@ -2457,4 +2482,14 @@ html[data-effects="low"] .ts-title.ts-reveal { animation-name: ts-rise; }
    keeps a floor of its own and the desk scrolls before the board shrinks. */
 .cine-chat-staged .hand-fan[data-aiming="true"] { display: none; }
 .cine-fight-board { min-height: 280px; }
+/* The floor belongs to the row too: the row took whatever the desk left
+   (flex-basis 0), so on a laptop screen it fell under the board's floor and
+   the desk slid over the bottom of the frame, footer and all (issue 87). */
+.cine-chat-staged > .cine-fight { min-height: calc(280px + 1rem); }
+/* A short window: smaller cards first, so the desk seldom has to scroll. */
+@media (max-height: 860px) {
+  .cine-chat-staged .hand { --card-w: 106px; --card-h: 150px; --slot-w: 92px; }
+  .cine-chat-staged .hand-fan { height: calc(var(--card-h) + 34px); padding-top: 18px; }
+  .cine-chat-staged .hand-art { flex-basis: 36px; }
+}
 .cine-chat-staged .cine-desk { max-height: 62dvh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(107, 99, 148, 0.4) transparent; }

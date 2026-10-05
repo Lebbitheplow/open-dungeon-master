@@ -1,9 +1,10 @@
 // The board's resting view (issue 87). The board is laid out as wide as the
-// frame around it. Where the frame is as tall as the board (the side panel,
-// a phone) that is the whole board and the resting view is the plain one.
-// Where the frame is a fixed window (the fight stage, the enlarged
-// tabletop, the shared screen) a tall board would run out of the bottom, so
-// the resting view shrinks it until all of it shows and centres it.
+// frame around it. Where the frame is as tall as the board (a phone held
+// upright, a side panel with room) that is the whole board and the resting
+// view is the plain one. Where the frame is a fixed window (the fight stage,
+// the enlarged tabletop, the shared screen, the side panel or a phone on a
+// short screen) a tall board would run out of the bottom, so the resting
+// view shrinks it until all of it shows and centres it.
 
 export type FitCamera = { zoom: number; x: number; y: number };
 

@@ -438,7 +438,9 @@ export function SidePanelRouter({
   }
   if (tab === "battle" && battleMap) {
     return (
-      <>
+      // board-dock: the side panel and the phone hold the board in a fixed
+      // window too, so its header and footer stay on screen (issue 87).
+      <div className="board-dock">
       {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
       <BattleMapPanel
         campaignId={campaignId}
@@ -467,7 +469,7 @@ export function SidePanelRouter({
         chronicle={tabletopChronicle}
         visible={visible}
       />
-      </>
+      </div>
     );
   }
   if (tab === "map") {
