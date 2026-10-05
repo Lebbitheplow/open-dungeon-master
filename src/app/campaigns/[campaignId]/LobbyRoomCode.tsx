@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { buildShareLinks } from "@/lib/share-link";
-import { CopyTick, InviteQr, InviteShareDialog, RoomCodeSigils } from "@/components/InviteShareDialog";
+import { CopyTick, InviteQr, InviteShareDialog, RoomCodeHeldNotice, RoomCodeSigils } from "@/components/InviteShareDialog";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { ui } from "@/lib/ui";
 
@@ -19,6 +19,7 @@ export function LobbyRoomCode({
   inviteCode,
   canRegenerate,
   shareUrl,
+  codeRefused = false,
   className,
   style,
 }: {
@@ -31,6 +32,8 @@ export function LobbyRoomCode({
   // changes matter here: they are the moment the server's publicUrl may
   // have changed too.
   shareUrl: string;
+  // The app's table registry would not take this code (shell-host.ts).
+  codeRefused?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -122,6 +125,9 @@ export function LobbyRoomCode({
           </p>
         </div>
       </div>
+      {codeRefused ? (
+        <RoomCodeHeldNotice onNewCode={canRegenerate ? () => setSharing(true) : undefined} className="mt-4" />
+      ) : null}
       <p role="status" className="sr-only">
         {copied ? "Room code copied." : linkCopied ? "Invite link copied." : ""}
       </p>

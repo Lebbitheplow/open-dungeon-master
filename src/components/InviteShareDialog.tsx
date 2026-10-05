@@ -11,13 +11,14 @@ import {
   QrCode,
   RefreshCw,
   Share2,
+  TriangleAlert,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { buildShareLinks } from "@/lib/share-link";
-import { shareSheet } from "@/lib/shell-host";
+import { roomCodeRefused, shareSheet } from "@/lib/shell-host";
 import { ui } from "@/lib/ui";
 import { useShellShare } from "@/lib/use-shell-share";
 import { Dialog } from "@/components/ui/Dialog";
@@ -103,6 +104,47 @@ export function CopyTick() {
   );
 }
 
+// The table registry holds one claim per room code, and it would not take
+// this one from this app: another device claimed it first (a code left
+// unshared long enough to lapse, or a world that moved to a new device).
+// Sharing still "works" from the host's side while a friend who types the
+// code is sent to wherever that other device points, so the host is told
+// and offered the way out, which is a code the registry has never seen.
+export function RoomCodeHeldNotice({
+  onNewCode,
+  busy = false,
+  className,
+}: {
+  // Absent for someone who may not mint a code.
+  onNewCode?: () => void;
+  busy?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex w-full animate-fade-up flex-col gap-1.5 rounded-lg border border-amber-600/50 bg-amber-950/30 px-3 py-2 text-left text-sm",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2 text-amber-200">
+        <TriangleAlert className="size-4 shrink-0" />
+        <span className="font-medium">Another device holds this room code</span>
+      </div>
+      <p className="text-xs text-stone-300">
+        A friend who types it will not find this table.{" "}
+        {onNewCode ? "Make a new code and share that one." : "Ask the table's lead for a new code."}
+      </p>
+      {onNewCode ? (
+        <button type="button" onClick={onNewCode} disabled={busy} className={cn(ui.btnSmall, "self-start")}>
+          <RefreshCw className={cn("size-4", busy && "animate-spin")} /> Get a new code
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 // One place to hand an invite to someone: QR for a phone camera, the link
 // for chat apps, the bare code for typing, and the OS share sheet where the
 // browser has one (that covers "share to social media" on every phone).
@@ -135,6 +177,7 @@ export function InviteShareDialog({
   const hosting = useShellShare(false);
   const shareState = hosting.status?.state ?? "stopped";
   const shareUrl = hosting.status?.url ?? "";
+  const codeRefused = roomCodeRefused(hosting.status, inviteCode);
 
   // A host sharing their world through a tunnel plays on 127.0.0.1, an
   // address guests cannot reach. The server's publicUrl (set by the apps
@@ -231,9 +274,17 @@ export function InviteShareDialog({
         <div className="flex w-full flex-col items-center text-center">
           <p className="eyebrow mb-1.5 text-[10px] text-amber-200/70">Room code</p>
           <RoomCodeSigils code={inviteCode} size="lg" />
-          <p className="mt-2 text-xs text-stone-400">
-            While you are sharing, a friend can type this code into the app and land here.
-          </p>
+          {codeRefused ? (
+            <RoomCodeHeldNotice
+              onNewCode={canRegenerate ? () => void regenerate() : undefined}
+              busy={regenerating}
+              className="mt-2"
+            />
+          ) : (
+            <p className="mt-2 text-xs text-stone-400">
+              While you are sharing, a friend can type this code into the app and land here.
+            </p>
+          )}
           <p className="mt-1 break-all font-mono text-xs text-stone-500">{joinUrl}</p>
         </div>
         <span className="h-px w-full bg-gradient-to-r from-transparent via-amber-400/40 to-transparent motion-rule" aria-hidden="true" />
