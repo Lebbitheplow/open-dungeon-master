@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import { coalesceRefresh } from "@/app/campaigns/[campaignId]/coalesce";
+import { createStreamWatchdog } from "@/app/campaigns/[campaignId]/streamWatchdog";
 import {
   appendDmDraft,
   clearDmDraft,
@@ -1015,6 +1016,12 @@ export function useCampaignStream(campaignId: string) {
   useEffect(() => {
     capsRef.current = state.caps;
   }, [state.caps]);
+  // Where a stream the watchdog reopens picks up: the newest persisted event
+  // this tab has applied, so the replay hands over exactly what it missed.
+  const lastSeqRef = useRef(state.lastSeq);
+  useEffect(() => {
+    lastSeqRef.current = state.lastSeq;
+  }, [state.lastSeq]);
 
   // Loads the snapshot and returns its latestSeq so the event stream can
   // start exactly where the snapshot left off. `quiet` is the stream probe:
@@ -1246,19 +1253,26 @@ export function useCampaignStream(campaignId: string) {
       }
     };
 
-    refresh().then((lastSeq) => {
-      if (cancelled) {
+    // A stream that went quiet without closing is dropped and opened again
+    // from the last event this tab applied; the open that follows resyncs
+    // like any reconnect (streamWatchdog.ts, issue 73).
+    const reopen = () => {
+      if (cancelled || !source) {
         return;
       }
-      void refreshSideChat();
-      void refreshWhispers();
-      void refreshAsks();
-      void refreshFacts();
-      void refreshBattleMap();
-      source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
+      source.close();
+      dropped = true;
+      openStream(lastSeqRef.current);
+    };
+    const watchdog = createStreamWatchdog(reopen);
+
+    const openStream = (fromSeq: number) => {
+      source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${fromSeq}`);
+      source.addEventListener("ping", () => watchdog.pinged());
       // Both the browser's EventSource and the apps' fetch-backed one
       // (client src/renderer/game/runtime.ts) dispatch open and error.
       source.addEventListener("open", () => {
+        watchdog.heard();
         if (probe !== null) {
           clearTimeout(probe);
           probe = null;
@@ -1288,6 +1302,7 @@ export function useCampaignStream(campaignId: string) {
         }
       });
       const handle = (eventType: string) => (event: MessageEvent) => {
+        watchdog.heard();
         try {
           const payload = JSON.parse(event.data);
           // Ephemeral events carry no SSE id, but the browser's lastEventId
@@ -1372,13 +1387,51 @@ export function useCampaignStream(campaignId: string) {
       for (const type of [...PERSISTED_EVENTS, ...EPHEMERAL_EVENTS]) {
         source.addEventListener(type, handle(type));
       }
+    };
+
+    refresh().then((lastSeq) => {
+      if (cancelled) {
+        return;
+      }
+      void refreshSideChat();
+      void refreshWhispers();
+      void refreshAsks();
+      void refreshFacts();
+      void refreshBattleMap();
+      openStream(lastSeq);
     });
+
+    // Checked on a timer, and at once when the page comes back to the front
+    // or back online: a laptop that slept is the commonest dead stream, and a
+    // background tab's timer may only fire once a minute.
+    const checkStream = () =>
+      watchdog.check(source !== null && source.readyState !== EventSource.CLOSED);
+    const onVisible = () => {
+      if (!document.hidden) {
+        checkStream();
+      }
+    };
+    // A page restored from the back-forward cache had its stream closed
+    // under it, with no error to say so.
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        reopen();
+      }
+    };
+    const watch = setInterval(checkStream, 10_000);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", checkStream);
+    window.addEventListener("pageshow", onPageShow);
 
     return () => {
       cancelled = true;
       if (probe !== null) {
         clearTimeout(probe);
       }
+      clearInterval(watch);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", checkStream);
+      window.removeEventListener("pageshow", onPageShow);
       source?.close();
     };
   }, [
