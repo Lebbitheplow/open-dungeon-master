@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { Select } from "@/components/ui/Select";
-import { TTS_VOICES } from "@/lib/tts-voices";
+import { VoicePicker } from "@/components/VoicePicker";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import { COMPANION_LABELS } from "@/lib/schemas/game-settings-options";
@@ -68,13 +68,12 @@ export function NarratorFields({
       {draft.ttsEnabled ? (
         <div className="block">
           <FieldLabel>Narrator voice</FieldLabel>
-          <div className="flex items-center gap-2">
-            <Select<string>
+          <div className="flex flex-wrap items-center gap-2">
+            <VoicePicker
               value={draft.ttsVoice}
               onChange={(ttsVoice) => patch({ ttsVoice })}
               label="Narrator voice"
-              className="min-w-0 grow"
-              options={TTS_VOICES.map((voice) => ({ value: voice.id as string, label: voice.label }))}
+              className="grow"
             />
             <VoicePreviewButton voice={draft.ttsVoice} />
           </div>

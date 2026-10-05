@@ -1555,6 +1555,26 @@ html[data-theme="light"] .ts-below .ts-ghost:hover { background: rgba(255, 252, 
 /* The board inside scrolls; the frame itself never does, so its bottom
    edge stays on the table. */
 .cine-board-frame > * { flex: 1; min-width: 0; min-height: 0; overflow: auto; border-radius: 3px; border: 2px solid #151229; background: #0d0b1c; padding: 0.5rem; }
+/* The panel in the frame is a fixed window (issue 87): its header and its
+   footer stay where they are and the board takes the room between them,
+   moved by its own camera (useBoardCamera fits it whole to start with).
+   The panel only scrolls when the window is too short to hold even that. */
+.cine-board-frame > .board-panel,
+.board-fill > .board-panel { display: flex; flex-direction: column; }
+.cine-board-frame > .board-panel > *,
+.board-fill > .board-panel > * { flex: none; }
+.cine-board-frame > .board-panel > .board-view,
+.board-fill > .board-panel > .board-view { flex: 1 1 0; min-height: 9rem; }
+/* The enlarged tabletop holds the board alone: the frame is the window. */
+.cine-board-frame > .board-view { overflow: hidden; padding: 0; }
+/* A finger on a fixed window moves the view; there is no page under it. */
+.cine-board-frame .board-view,
+.board-fill .board-view { touch-action: none; }
+/* The same window without the gold frame (the shared screen). */
+.board-fill { display: flex; min-width: 0; min-height: 0; }
+.board-fill > .board-panel { flex: 1; min-width: 0; min-height: 0; }
+/* The frame burns brighter while its board has the keyboard (issue 90). */
+.cine-board-frame:has(.board-view:focus)::before { animation: none; opacity: 1; }
 .cine-board-frame::before {
   content: "";
   position: absolute;

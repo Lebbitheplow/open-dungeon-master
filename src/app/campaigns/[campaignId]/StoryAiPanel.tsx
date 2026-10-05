@@ -3,6 +3,7 @@
 import { AlignLeft, Bot, Image as ImageIcon, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ImagesNote } from "@/app/campaigns/[campaignId]/NarrationNote";
 import { Select } from "@/components/ui/Select";
 import type { MaskedStorySettings } from "@/lib/db/settings";
 import type { HarnessOffer } from "@/lib/harness/policy";
@@ -503,6 +504,8 @@ export function StoryAiPanel({
             The server has no image backend configured; these settings will not take effect
             until it does.
           </p>
+        ) : settings.imageGenerationEnabled && !deviceManaged ? (
+          <ImagesNote backend={settings.imageBackend} />
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">

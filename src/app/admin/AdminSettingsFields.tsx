@@ -33,7 +33,15 @@ export type MaskedConfig = {
     openaiModel: string;
     hasOpenaiApiKey: boolean;
   };
-  speech: { kokoroUrl: string; sttUrl: string };
+  speech: {
+    ttsProvider: "" | "kokoro" | "openai" | "off";
+    kokoroUrl: string;
+    ttsBaseUrl: string;
+    ttsModel: string;
+    hasTtsApiKey: boolean;
+    ttsVoice: string;
+    sttUrl: string;
+  };
   voiceChat: {
     enabled: "" | "on" | "off";
     mode: "" | "sfu" | "mesh";
@@ -54,6 +62,10 @@ export type EnvDefaults = {
   imageBackend: string;
   hasOpenaiImageApiKey: boolean;
   kokoroUrl: string;
+  ttsProvider: string;
+  ttsBaseUrl: string;
+  ttsModel: string;
+  hasTtsApiKey: boolean;
   sttUrl: string;
   discordClientId: string;
   hasDiscordClientSecret: boolean;

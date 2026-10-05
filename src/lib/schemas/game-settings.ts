@@ -71,7 +71,9 @@ export const gameSettingsSchema = z.object({
   campaignLength: z.enum(CAMPAIGN_LENGTHS).default("standard"),
   dicePolicy: z.enum(DICE_POLICIES).default("digital_only"),
   ttsEnabled: z.boolean().default(true),
-  ttsVoice: z.string().trim().max(40).default("af_heart"),
+  // Long enough for a custom voice: a blend ("af_heart(30)+af_bella(70)") or
+  // a described one, on servers that take them (issue 89).
+  ttsVoice: z.string().trim().max(120).default("af_heart"),
   // Theatre inserts (docs/vtt-parity-implementation-plan.md 8.3): the
   // speaking NPC's portrait over the scene art while their lines play.
   presentation: z.enum(["plain", "theatre"]).default("plain"),

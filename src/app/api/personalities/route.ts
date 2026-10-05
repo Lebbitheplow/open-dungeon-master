@@ -15,7 +15,7 @@ const bodySchema = z.object({
   name: z.string().trim().min(1).max(60),
   blurb: z.string().trim().max(160).default(""),
   gm: z.object({ strictness: z.enum(["lenient", "standard", "harsh"]), tone: z.array(z.string()).max(3) }),
-  ttsVoice: z.string().trim().max(40).default("af_heart"),
+  ttsVoice: z.string().trim().max(120).default("af_heart"),
 });
 
 export async function POST(request: Request) {

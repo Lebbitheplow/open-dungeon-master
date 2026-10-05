@@ -14,8 +14,9 @@ import { useEffect, useState } from "react";
 export type ClientCapabilities = {
   story: { configured: boolean; reachable: boolean; model?: string };
   utility: { configured: boolean };
-  images: { configured: boolean; reachable: boolean; backend: string };
-  tts: { configured: boolean; reachable: boolean };
+  images: { configured: boolean; reachable: boolean; backend: string; openaiPlace?: string };
+  // provider and place arrive from servers newer than 0.24.5.
+  tts: { configured: boolean; reachable: boolean; provider?: "kokoro" | "openai" | "off"; place?: string };
   // backend and wantsWav arrive from servers newer than 0.23.11.
   stt: { configured: boolean; backend?: "whisper" | "builtin" | "openai" | "none"; wantsWav?: boolean };
   voice: { enabled: boolean; mode: string };

@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getCampaignMessage } from "@/lib/db/messages";
-import { enqueueNarrationAudio, narrationAudioPath } from "@/lib/tts";
+import { enqueueNarrationAudio, narrationAudioPath, takeNarrationFailure } from "@/lib/tts";
+import { ttsBackend } from "@/lib/tts-backend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,10 @@ export async function POST(
     return Response.json({ error: "Only the DM's narration can be voiced." }, { status: 400 });
   }
 
+  if (ttsBackend().provider === "off") {
+    return Response.json({ error: "Narration is switched off on this server (Admin > Speech)." }, { status: 409 });
+  }
+
   await enqueueNarrationAudio(
     campaignId,
     message.id,
@@ -43,8 +48,9 @@ export async function POST(
   );
 
   if (!existsSync(narrationAudioPath(campaignId, message.id))) {
+    const reason = takeNarrationFailure(message.id);
     return Response.json(
-      { error: "Narration failed. Check that the speech service is reachable." },
+      { error: reason ? `Narration failed. ${reason}` : "Narration failed. Check that the speech service is reachable." },
       { status: 502 },
     );
   }

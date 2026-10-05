@@ -12,6 +12,11 @@ import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audi
 // so server render stays muted and the client snapshot takes over at
 // hydration without a setState cascade. The account keeps a copy so another
 // browser starts the same way; audio-prefs.ts owns that sync.
+//
+// Playback that fails is never dropped in silence (issue 88): a browser that
+// refuses to autoplay hands the narration back to wait for the next gesture,
+// and an audio file that will not load or decode is named in playbackFailure
+// so the passage can say so.
 
 const MUTED_KEY = AUDIO_PREF_FIELDS.narrationMuted.key;
 const VOLUME_KEY = AUDIO_PREF_FIELDS.narrationVolume.key;
@@ -37,6 +42,8 @@ export type NarrationAudio = {
   volume: number;
   unlocked: boolean;
   playingMessageId: string | null;
+  // The message whose audio this device last failed to play, if any.
+  playbackFailure: string | null;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
   unlock: () => void;
@@ -50,6 +57,7 @@ export function useNarrationAudio(): NarrationAudio {
   const volume = useSyncExternalStore(subscribePrefs, readVolume, () => 0.8);
   const [unlocked, setUnlocked] = useState(false);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [playbackFailure, setPlaybackFailure] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioByMessage] = useState(() => new Map<string, string>());
   const unlockedRef = useRef(false);
@@ -122,15 +130,43 @@ export function useNarrationAudio(): NarrationAudio {
           run(next.messageId, next.url);
         }
       };
+      const fail = () => {
+        if (playingRef.current === id) {
+          setPlaybackFailure(id);
+        }
+        finish();
+      };
       audio.onended = finish;
-      audio.onerror = finish;
+      audio.onerror = fail;
       playingRef.current = id;
       setPlayingMessageId(id);
+      setPlaybackFailure((current) => (current === id ? null : current));
       audio.src = src;
       audio.volume = readVolume();
-      audio.play().catch(() => {
-        // Autoplay blocked until a user gesture; the unlock handlers cover it.
-        finish();
+      audio.play().catch((error: unknown) => {
+        if (playingRef.current !== id) {
+          return;
+        }
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          // The browser wants a gesture first (a tab that was never
+          // touched, or one that sat idle). This narration is offered only
+          // once, so it goes back to wait, along with whatever queued
+          // behind it, and the header shows the "enable audio" state again.
+          pendingRef.current = [{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current];
+          queueRef.current = [];
+          playingRef.current = null;
+          setPlayingMessageId(null);
+          unlockedRef.current = false;
+          setUnlocked(false);
+          return;
+        }
+        // A pause() that interrupts a play() rejects with AbortError: that
+        // is this hook stopping it, not a failure.
+        if (error instanceof DOMException && error.name === "AbortError") {
+          finish();
+          return;
+        }
+        fail();
       });
     }
     run(messageId, url);
@@ -212,6 +248,7 @@ export function useNarrationAudio(): NarrationAudio {
       volume,
       unlocked,
       playingMessageId,
+      playbackFailure,
       setMuted,
       setVolume,
       unlock,
@@ -219,6 +256,6 @@ export function useNarrationAudio(): NarrationAudio {
       audioByMessage,
       onTtsReady,
     }),
-    [muted, volume, unlocked, playingMessageId, setMuted, setVolume, unlock, play, audioByMessage, onTtsReady],
+    [muted, volume, unlocked, playingMessageId, playbackFailure, setMuted, setVolume, unlock, play, audioByMessage, onTtsReady],
   );
 }

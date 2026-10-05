@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ShieldQuestion,
   Volume2,
+  VolumeX,
 } from "lucide-react";
 import { memo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { appNotice } from "@/components/ui/ConfirmDialog";
@@ -68,6 +69,7 @@ export const MessageItem = memo(function MessageItem({
   locationsById,
   sheets,
   mediaStatus,
+  narrationFailure,
   onReplayAudio,
   onPinCanon,
   onPinMemory,
@@ -99,6 +101,8 @@ export const MessageItem = memo(function MessageItem({
   locationsById: Map<string, CampaignLocation>;
   sheets: CharacterSheet[];
   mediaStatus: Record<string, MediaStatus>;
+  // Why this passage was not read aloud, when its narration failed.
+  narrationFailure?: string;
   // Plays the stored narration, rendering it first when this passage has
   // never been voiced. Resolves to an error string on failure, null on success.
   onReplayAudio?: (messageId: string) => Promise<string | null>;
@@ -433,6 +437,32 @@ export const MessageItem = memo(function MessageItem({
               status={mediaStatus[message.id]}
               fallbackStartedAt={message.createdAt}
             />
+          ) : null}
+          {narrationFailure ? (
+            // The story carries on without the voice, but not silently
+            // (issue 88): what went wrong, and a way to ask again.
+            <p role="status" className="live-in mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-400/90">
+              <VolumeX className="size-3.5 shrink-0" />
+              <span className="min-w-0">This passage was not read aloud. {narrationFailure}</span>
+              {onReplayAudio ? (
+                <button
+                  type="button"
+                  disabled={narrating}
+                  aria-busy={narrating}
+                  onClick={async () => {
+                    setNarrating(true);
+                    const error = await onReplayAudio(message.id);
+                    setNarrating(false);
+                    if (error) {
+                      void appNotice(error);
+                    }
+                  }}
+                  className="motion-press rounded-md border border-amber-800/60 px-1.5 py-0.5 text-amber-200 hover:border-amber-600 disabled:opacity-60"
+                >
+                  {narrating ? "Trying…" : "Try again"}
+                </button>
+              ) : null}
+            </p>
           ) : null}
           {(() => {
             // The message that introduced an area shows its map inline.

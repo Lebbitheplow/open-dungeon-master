@@ -43,7 +43,15 @@ function maskedConfig(config: GlobalConfig) {
       openaiModel: config.images.openaiModel,
       hasOpenaiApiKey: config.images.openaiApiKey !== "",
     },
-    speech: config.speech,
+    speech: {
+      ttsProvider: config.speech.ttsProvider,
+      kokoroUrl: config.speech.kokoroUrl,
+      ttsBaseUrl: config.speech.ttsBaseUrl,
+      ttsModel: config.speech.ttsModel,
+      hasTtsApiKey: config.speech.ttsApiKey !== "",
+      ttsVoice: config.speech.ttsVoice,
+      sttUrl: config.speech.sttUrl,
+    },
     voiceChat: config.voiceChat,
     discord: {
       clientId: config.discord.clientId,
@@ -66,6 +74,10 @@ function envDefaults() {
     hasOpenaiImageApiKey:
       serverEnv("OPENAI_IMAGE_API_KEY") !== "" || serverEnv("OPENAI_API_KEY") !== "",
     kokoroUrl: serverEnv("KOKORO_URL", "http://127.0.0.1:8880"),
+    ttsProvider: serverEnv("TTS_PROVIDER"),
+    ttsBaseUrl: serverEnv("TTS_BASE_URL"),
+    ttsModel: serverEnv("TTS_MODEL"),
+    hasTtsApiKey: serverEnv("TTS_API_KEY") !== "",
     sttUrl: serverEnv("STT_URL", "http://127.0.0.1:8870"),
     discordClientId: serverEnv("DISCORD_CLIENT_ID"),
     hasDiscordClientSecret: serverEnv("DISCORD_CLIENT_SECRET") !== "",
@@ -142,7 +154,12 @@ const patchSchema = z.object({
     .optional(),
   speech: z
     .object({
+      ttsProvider: z.enum(["", "kokoro", "openai", "off"]).optional(),
       kokoroUrl: z.string().trim().max(500).optional(),
+      ttsBaseUrl: z.string().trim().max(500).optional(),
+      ttsModel: z.string().trim().max(200).optional(),
+      ttsApiKey: z.string().trim().max(400).optional(),
+      ttsVoice: z.string().trim().max(120).optional(),
       sttUrl: z.string().trim().max(500).optional(),
     })
     .optional(),

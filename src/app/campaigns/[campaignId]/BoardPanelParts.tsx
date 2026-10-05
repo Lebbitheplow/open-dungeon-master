@@ -1,6 +1,7 @@
 "use client";
 
-import { LocateFixed, Lock, Maximize2, Unlock, Users, ZoomIn, ZoomOut } from "lucide-react";
+import { Keyboard, LocateFixed, Lock, Maximize2, Unlock, Users, ZoomIn, ZoomOut } from "lucide-react";
+import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { cn } from "@/lib/cn";
 import { TILE_FEET } from "@/lib/battlemap/types";
@@ -14,6 +15,41 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 
 const CAMERA_BUTTON =
   "motion-press rounded-md border border-stone-700/80 bg-stone-950/85 p-1 text-stone-300 hover:text-stone-100";
+
+// What the board does with the keyboard and the mouse (issue 90). The keys
+// only reach the board while it has focus, so the list says that first.
+const BOARD_KEYS: Array<{ keys: string[]; does: string }> = [
+  { keys: ["←", "↑", "↓", "→"], does: "Move the view" },
+  { keys: ["+", "−"], does: "Zoom in and out" },
+  { keys: ["0"], does: "Fit the whole board" },
+  { keys: ["Esc"], does: "Cancel an aim or a drag" },
+  { keys: ["Scroll"], does: "Zoom at the pointer" },
+  { keys: ["Drag"], does: "Move the view" },
+];
+
+// The short form, shown for a few seconds each time the board takes the
+// keyboard (board.css fades it), so the keys are learned by using the board
+// and not by hunting for a help page. Hidden where there is no keyboard to
+// speak of.
+export function BoardKeyStrip() {
+  return (
+    <div className="board-keys-strip" aria-hidden="true">
+      <span>
+        <span className="kbd-key">←</span>
+        <span className="kbd-key">↑</span>
+        <span className="kbd-key">↓</span>
+        <span className="kbd-key">→</span> move
+      </span>
+      <span>
+        <span className="kbd-key">+</span>
+        <span className="kbd-key">−</span> zoom
+      </span>
+      <span>
+        <span className="kbd-key">0</span> fit
+      </span>
+    </div>
+  );
+}
 
 // Camera controls: corner buttons for everyone, the follow toggle for a
 // player in a fight, and the DM's pull, lock and free.
@@ -34,8 +70,52 @@ export function BoardCameraControls({
   // Present for the DM seat only.
   onDirect?: (mode: "pull" | "lock" | "free") => void;
 }) {
+  const [keysOpen, setKeysOpen] = useState(false);
   return (
-    <div className="absolute bottom-2 right-2 z-10 flex flex-col gap-1">
+    <div className={cn("board-cam absolute bottom-2 right-2 z-10 flex flex-col gap-1", onDirect && "board-cam-long")}>
+      {keysOpen ? (
+        <div
+          id="board-keys-card"
+          role="note"
+          className="board-keys-card"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              setKeysOpen(false);
+            }
+          }}
+        >
+          <p className="board-eyebrow mb-1.5">Board controls</p>
+          <dl>
+            {BOARD_KEYS.map((row) => (
+              <div key={row.keys.join()}>
+                <dt>
+                  {row.keys.map((key) => (
+                    <span key={key} className="kbd-key">
+                      {key}
+                    </span>
+                  ))}
+                </dt>
+                <dd>{row.does}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-1.5 text-[10px] leading-snug text-[#8f8aab]">
+            The keys work while the board is lit: click it, or Tab to it.
+          </p>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setKeysOpen((open) => !open)}
+        aria-label="Board keys and mouse controls"
+        aria-expanded={keysOpen}
+        aria-controls="board-keys-card"
+        title="Keys and mouse controls"
+        className={cn(CAMERA_BUTTON, "board-keys-button", keysOpen && "border-amber-600/80 text-amber-200")}
+      >
+        <Keyboard className="size-4" />
+      </button>
       <button type="button" onClick={onZoomIn} aria-label="Zoom in" className={CAMERA_BUTTON}>
         <ZoomIn className="size-4" />
       </button>

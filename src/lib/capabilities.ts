@@ -10,6 +10,7 @@ import { harnessConfig, probeHarness } from "@/lib/harness/status";
 import { isHarnessId } from "@/lib/harness/types";
 import { harnessImagesReady } from "@/lib/harness/images";
 import type { StorySettings } from "@/lib/types";
+import { isOpenAiHost, ttsBackend, type TtsBackend, type TtsProvider } from "@/lib/tts-backend";
 
 // What this server can actually do, derived from the same resolution the DM
 // path uses (configuredDefaultStorySettings, admin settings, env), not from
@@ -26,8 +27,13 @@ export type Capabilities = {
   // ("The DM is awake · qwen3.6-35b"); empty when nothing is configured.
   story: { configured: boolean; reachable: boolean; model: string };
   utility: { configured: boolean };
-  images: { configured: boolean; reachable: boolean; backend: string };
-  tts: { configured: boolean; reachable: boolean };
+  // openaiPlace: where the OpenAI-kind image backend sends its requests,
+  // "local" or the host's name (see `place` below).
+  images: { configured: boolean; reachable: boolean; backend: string; openaiPlace: string };
+  // provider: the kind of speech server (src/lib/tts-backend.ts). place: where
+  // passages are sent, "local" for this machine or its own network, else the
+  // host's name, so a table can see whether narration leaves the building.
+  tts: { configured: boolean; reachable: boolean; provider: TtsProvider; place: string };
   // backend: which engine /api/stt will use; wantsWav: whether the browser
   // must send 16 kHz WAV instead of its own recording (the built-in engine).
   stt: { configured: boolean; backend: SttBackend; wantsWav: boolean };
@@ -166,6 +172,30 @@ export function ttsProbeUrl(kokoroBaseUrl: string): string {
   return `${kokoroBaseUrl.replace(/\/+$/, "")}/health`;
 }
 
+// Where a liveness GET goes for the narration backend. Kokoro-FastAPI has
+// /health beside its /v1; an OpenAI-kind server is asked for its model list,
+// which every one of them serves. OpenAI itself is key-gated and not probed.
+export function speechProbeUrl(backend: Pick<TtsBackend, "provider" | "v1">): string {
+  if (backend.provider === "off" || isOpenAiHost(backend.v1)) {
+    return "";
+  }
+  return backend.provider === "kokoro" ? ttsProbeUrl(backend.v1.replace(/\/v\d+$/, "")) : `${backend.v1}/models`;
+}
+
+// "local" for this machine and private networks, else the host's name.
+export function backendPlace(url: string): string {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  } catch {
+    return "local";
+  }
+  const privateV4 = /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  const privateV6 = host === "::1" || /^f[cd][0-9a-f]{2}:/.test(host) || /^fe80:/.test(host);
+  const localName = host === "localhost" || !host.includes(".") || /\.(local|lan|internal|home|localdomain)$/.test(host);
+  return privateV4 || privateV6 || localName ? "local" : host;
+}
+
 function sttCapability(backend: SttBackend): Capabilities["stt"] {
   return { configured: backend !== "none", backend, wantsWav: sttWantsWav(backend) };
 }
@@ -263,7 +293,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const cfg = getGlobalConfig();
   const configured = storyConfigured(settings);
   const ollamaBase = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
-  const kokoroBase = configValue(cfg.speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
+  const speech = ttsBackend();
   const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
   const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
   const sttBase = configValue(cfg.speech.sttUrl, "STT_URL", "http://127.0.0.1:8870");
@@ -281,7 +311,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
           }),
         )
       : Promise.resolve(false),
-    probeReachable(ttsProbeUrl(kokoroBase)),
+    probeReachable(speechProbeUrl(speech), Date.now(), speech.apiKey ? { Authorization: `Bearer ${speech.apiKey}` } : {}),
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
     whisperSwitchedOff(sttBase) ? Promise.resolve(false) : probeReachable(sttProbeUrl(sttBase)),
   ]);
@@ -312,10 +342,26 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
             ? harnessImagesReady()
             : imagesReachable,
       backend: settings.imageBackend,
+      openaiPlace: backendPlace(configValue(cfg.images.openaiBaseUrl, "OPENAI_IMAGE_BASE_URL", "https://api.openai.com/v1")),
     },
     tts: {
-      configured: speechConfigured(configValue(cfg.speech.kokoroUrl, "KOKORO_URL"), ttsReachable),
-      reachable: ttsReachable,
+      // Off is off. OpenAI itself is ready when it has a key, like the
+      // image backend; a server with an address counts as configured when
+      // the admin or env named it, or when the default one answers.
+      configured:
+        speech.provider === "off"
+          ? false
+          : isOpenAiHost(speech.v1)
+            ? speech.apiKey !== ""
+            : speechConfigured(
+                speech.provider === "openai"
+                  ? configValue(cfg.speech.ttsBaseUrl, "TTS_BASE_URL")
+                  : configValue(cfg.speech.kokoroUrl, "KOKORO_URL"),
+                ttsReachable,
+              ),
+      reachable: speech.provider !== "off" && (isOpenAiHost(speech.v1) ? speech.apiKey !== "" : ttsReachable),
+      provider: speech.provider,
+      place: backendPlace(speech.v1),
     },
     // Whisper (an explicit URL, or the default address answering), then the
     // built-in engine, then an OpenAI key: see src/lib/stt-logic.ts.

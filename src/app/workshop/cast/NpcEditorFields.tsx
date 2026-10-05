@@ -7,7 +7,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { Slider } from "@/components/ui/Slider";
-import { TTS_VOICES } from "@/lib/tts-voices";
+import { VoicePicker } from "@/components/VoicePicker";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import {
   ATTITUDES,
@@ -174,12 +174,12 @@ export function NpcEditorFields({
         ) : null}
 
         {/* Their own read-aloud voice (docs/vtt-parity-implementation-plan.md
-            8.2): a Kokoro voice and a pace, previewed here, heard on every
+            8.2): a voice from the server's speech backend and a pace, previewed here, heard on every
             line attributed to them. */}
         <div className="flex flex-wrap items-center gap-1.5">
           <GameIcon icon={{ kind: "glyph", key: "tab-ambience" }} size="size-7" />
           <span className="min-w-0 flex-1 sm:max-w-72">
-          <Select
+          <VoicePicker
             label="Voice"
             value={draft.voice?.voiceId ?? ""}
             onChange={(voiceId) =>
@@ -188,10 +188,8 @@ export function NpcEditorFields({
                 voice: voiceId ? { voiceId, speed: draft.voice?.speed ?? 1 } : null,
               })
             }
-            options={[
-              { value: "", label: "The narrator's voice" },
-              ...TTS_VOICES.map((voice) => ({ value: voice.id as string, label: voice.label })),
-            ]}
+            noneLabel="The narrator's voice"
+            className="w-full"
           />
           </span>
           {draft.voice ? (
