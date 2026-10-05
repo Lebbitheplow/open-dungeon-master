@@ -4,15 +4,16 @@ import {
   getActiveEncounter,
   insertEnemy,
   listEnemies,
+  renameEnemy,
   saveEncounter,
   type OrderEntry,
 } from "@/lib/db/encounters";
-import { getBattleMapForEncounter, insertToken, listTokens } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, insertToken, listTokens, renameTokenByRef } from "@/lib/db/battle-maps";
 import { d20Expression } from "@/lib/dice";
 import { resolveMonster } from "@/lib/bestiary";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
-import { numberDuplicates, spliceIntoOrder } from "@/lib/dm/encounter-logic";
+import { nameArrivals, spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { findSpawnTiles } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
@@ -186,10 +187,22 @@ export function handleAddEnemies(
     };
   }
 
-  const names = numberDuplicates([
-    ...existing.map((enemy) => enemy.displayName),
-    ...outcome.resolved.map((entry) => entry.name),
-  ]).slice(existing.length);
+  // Numbered with the enemies already in the fight, as one run per kind
+  // (issue 98). One who stood alone under a plain name takes a number now
+  // that there are more of them: in the tracker, in the order, on the board.
+  const { names, renames } = nameArrivals(
+    existing.map((enemy) => enemy.displayName),
+    outcome.resolved.map((entry) => entry.name),
+  );
+  const renamed = renames.map(({ index, name }) => ({ enemy: existing[index], name }));
+  for (const { enemy, name } of renamed) {
+    renameEnemy(enemy.id, name);
+    for (const entry of encounter.order) {
+      if (entry.kind === "enemy" && entry.enemyId === enemy.id) {
+        entry.name = name;
+      }
+    }
+  }
   const inserted = outcome.resolved.map((entry, index) =>
     insertEnemy({
       encounterId: encounter.id,
@@ -216,11 +229,16 @@ export function handleAddEnemies(
     encounter.order = spliced.order;
     encounter.turnIndex = spliced.turnIndex;
     saveEncounter(encounter);
+  } else if (renamed.length) {
+    saveEncounter(encounter);
   }
 
   // Tokens: cluster near existing enemies, or enter far from the party.
   const map = getBattleMapForEncounter(encounter.id);
   if (map) {
+    for (const { enemy, name } of renamed) {
+      renameTokenByRef(map.id, enemy.id, name);
+    }
     const tokens = listTokens(map.id);
     const spots = findSpawnTiles(
       map.terrain,
@@ -257,6 +275,10 @@ export function handleAddEnemies(
       ac: enemy.ac,
       hp: `${enemy.currentHp}/${enemy.maxHp}`,
     })),
+    // Told, so the next call and the next passage use the name on the board.
+    ...(renamed.length
+      ? { renamed: renamed.map(({ enemy, name }) => ({ enemyId: enemy.id, was: enemy.displayName, name })) }
+      : {}),
     note: "The reinforcements are in the fight and on the map. They act at their initiative; narrate their arrival now.",
   };
 }

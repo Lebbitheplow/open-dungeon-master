@@ -39,7 +39,7 @@ import {
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { findSpawnTiles } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
-import { numberDuplicates } from "@/lib/dm/encounter-logic";
+import { nameArrivals } from "@/lib/dm/encounter-logic";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { d20Expression } from "@/lib/dice";
 import { createSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
@@ -89,15 +89,15 @@ export function spawnSummons(campaign: Campaign, caster: CharacterSheet, input: 
   const { form, record } = input;
   const existingNames = listSheets(campaign.id).map((sheet) => sheet.name);
   const wanted = Array.from({ length: input.count }, () => form.name);
-  const names = numberDuplicates([...existingNames.filter((name) => name === form.name), ...wanted]).slice(
-    existingNames.filter((name) => name === form.name).length,
-  );
+  // Numbered on from whatever of its kind is already at the table, so a
+  // third wolf called up later is Wolf 3 and not a second "Wolf" (issue 98).
+  const { names } = nameArrivals(existingNames, wanted);
   const abilities = { ...form.abilities, ...(input.overrides?.int ? { int: Math.max(form.abilities.int, input.overrides.int) } : {}) };
   const hp = input.overrides?.hp ?? form.hp;
   const level = input.overrides?.level ?? levelForCr(form.cr);
   const created: CharacterSheet[] = [];
-  names.forEach((rawName, index) => {
-    const name = input.count > 1 && rawName === form.name ? `${form.name} ${index + 1}` : rawName;
+  names.forEach((rawName) => {
+    const name = rawName;
     const draft = createSheetSchema.parse({
       name: name.slice(0, 60),
       race: "human",
