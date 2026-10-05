@@ -48,11 +48,11 @@ export function checkLogin(key: string, now = Date.now()): { blocked: boolean; r
   return { blocked: true, retryAfterSec: Math.max(1, Math.ceil((entry.blockedUntil - now) / 1000)) };
 }
 
-export function recordLoginFailure(key: string, now = Date.now()) {
+export function recordLoginFailure(key: string, now = Date.now(), maxFailures = MAX_FAILURES) {
   const entry = store().get(key) ?? { failures: [], lockouts: 0, blockedUntil: 0 };
   entry.failures = entry.failures.filter((at) => now - at <= WINDOW_MS);
   entry.failures.push(now);
-  if (entry.failures.length >= MAX_FAILURES) {
+  if (entry.failures.length >= maxFailures) {
     const lockoutMs = Math.min(BASE_LOCKOUT_MS * 2 ** entry.lockouts, MAX_LOCKOUT_MS);
     entry.lockouts += 1;
     entry.blockedUntil = now + lockoutMs;
@@ -65,12 +65,52 @@ export function recordLoginSuccess(key: string) {
   store().delete(key);
 }
 
+// A password attempt is counted twice: against the name from this address,
+// and against the name from anywhere. The address is only as honest as
+// whatever sits in front of the server (see clientIp): reached directly, a
+// caller can send a new made-up address with every guess and never fill the
+// first bucket. The second does not care where a guess came from. Its limit
+// is higher, so one person mistyping from one place meets the first lock
+// long before this one, and it is not cleared by a good login, so a guesser
+// cannot have the owner's own sign-in reset the count.
+const ACCOUNT_MAX_FAILURES = 20;
+
+function accountKey(username: string) {
+  return `account:${username.trim().toLowerCase()}`;
+}
+
+export function checkPasswordAttempt(
+  username: string,
+  ip: string,
+  now = Date.now(),
+): { blocked: boolean; retryAfterSec: number } {
+  const here = checkLogin(throttleKey(username, ip), now);
+  const anywhere = checkLogin(accountKey(username), now);
+  return {
+    blocked: here.blocked || anywhere.blocked,
+    retryAfterSec: Math.max(here.retryAfterSec, anywhere.retryAfterSec),
+  };
+}
+
+export function recordPasswordFailure(username: string, ip: string, now = Date.now()) {
+  recordLoginFailure(throttleKey(username, ip), now);
+  recordLoginFailure(accountKey(username), now, ACCOUNT_MAX_FAILURES);
+}
+
+export function recordPasswordSuccess(username: string, ip: string) {
+  recordLoginSuccess(throttleKey(username, ip));
+}
+
 // The address a request came from, for the per-address throttles. Behind
 // Cloudflare the edge states it outright; behind one reverse proxy the LAST
 // x-forwarded-for entry is the one the proxy appended, while the first is
 // whatever the client chose to send (which is how a caller used to dodge
 // the lockout by rotating a made-up header). With no proxy at all the
 // header is absent and every caller shares one bucket, as before.
+//
+// A server reached directly cannot tell a proxy's header from one the
+// caller typed, so this address is a hint and never the only limit on a
+// password guess (checkPasswordAttempt counts by account as well).
 export function clientIp(request: Request): string {
   const edge = request.headers.get("cf-connecting-ip")?.trim();
   if (edge) return edge;

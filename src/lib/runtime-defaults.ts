@@ -1,5 +1,6 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
+import { endpointKind } from "@/lib/dm/sampling-logic";
 import { serverEnv } from "@/lib/server-env";
 import {
   isLocalTextModelId,
@@ -17,7 +18,7 @@ function clean(value: string) {
 export function configuredDefaultStorySettings(): StorySettings {
   const cfg = getGlobalConfig();
   const customBaseUrl = cfg.text.customBaseUrl || clean(serverEnv("OPENAI_COMPAT_BASE_URL"));
-  const openRouterDefaultModel = /(^|\.)openrouter\.ai/i.test(customBaseUrl)
+  const openRouterDefaultModel = endpointKind(customBaseUrl) === "openrouter"
     ? clean(serverEnv("OPENROUTER_MODEL", "google/gemini-3.5-flash"))
     : "";
   const customModel =

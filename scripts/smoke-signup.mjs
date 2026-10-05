@@ -4,9 +4,10 @@
 //
 //   device world   first account free; every later one needs a live room
 //                  code and nothing else; signups report open and forced
-//   normal server  closed refuses even a room code; invite-only takes a
-//                  live room code or an account invite; open still refuses
-//                  a room code that names no table
+//   normal server  the first account (the admin) takes the setup code and
+//                  nothing else will do; closed refuses even a room code;
+//                  invite-only takes a live room code or an account invite;
+//                  open still refuses a room code that names no table
 //
 // Usage: node scripts/smoke-signup.mjs [built checkout dir]
 // The directory must hold a completed `next build` (defaults to this repo).
@@ -131,6 +132,7 @@ try {
   const providers = await json(world.origin, "/api/auth/providers");
   assert(providers.body?.deviceWorld === true, "the world does not report deviceWorld");
   assert(providers.body?.signupMode === "open", `a device world reports signups ${providers.body?.signupMode}`);
+  assert(providers.body?.needsSetup === false, "a device world asks for a setup code");
 
   const first = await post(world.origin, "/api/auth/register", { username: "host", password: "host-pass-123" });
   assert(first.status === 201, `the host's own account returned ${first.status}`);
@@ -179,10 +181,36 @@ try {
   await world.stop();
 
   // ---- a server someone runs ----
-  const server = await boot({});
-  const admin = await post(server.origin, "/api/auth/register", { username: "admin", password: "admin-pass-123" });
-  assert(admin.status === 201, `admin account returned ${admin.status}`);
+  const SETUP_CODE = "SMOK-ETES-TCOD-E234";
+  const server = await boot({ ODM_SETUP_CODE: SETUP_CODE });
+  const fresh = await json(server.origin, "/api/auth/providers");
+  assert(fresh.body?.needsSetup === true, "a fresh server does not ask for its setup code");
+  const squatter = await post(server.origin, "/api/auth/register", { username: "squatter", password: "squatter-pass-1" });
+  assert(squatter.status === 403 && squatter.body?.needsSetup === true, `the first account was made without the setup code (${squatter.status})`);
+  const guesser = await post(server.origin, "/api/auth/register", {
+    username: "guesser",
+    password: "guesser-pass-12",
+    setupCode: "AAAA-BBBB-CCCC-DDDD",
+  });
+  assert(guesser.status === 403, `a wrong setup code made the first account (${guesser.status})`);
+  ok("normal server: the first account is refused without the right setup code");
+
+  const admin = await post(server.origin, "/api/auth/register", {
+    username: "admin",
+    password: "admin-pass-123",
+    setupCode: SETUP_CODE.toLowerCase(),
+  });
+  assert(admin.status === 201 && admin.body?.user?.isAdmin === true, `the setup code did not make the admin (${admin.status})`);
   const adminToken = await tokenFor(server.origin, "admin", "admin-pass-123");
+  const after = await json(server.origin, "/api/auth/providers");
+  assert(after.body?.needsSetup === false, "the server still asks for a setup code after the admin exists");
+  const replay = await post(server.origin, "/api/auth/register", {
+    username: "second",
+    password: "second-pass-123",
+    setupCode: SETUP_CODE,
+  });
+  assert(replay.status === 201 && replay.body?.user?.isAdmin === false, "the setup code made a second admin");
+  ok("normal server: the setup code makes exactly one admin, then is just ignored");
   const live = await makeCampaign(server.origin, adminToken, "Open Table");
 
   const shut = await patch(server.origin, "/api/admin/settings", { signupMode: "closed" }, adminToken);

@@ -46,11 +46,15 @@ falls through to the env var.
 | `DM_BEAT_JUDGE_EVERY` | `6` | Messages between backstop checks that ask a small model whether the `[NOW]` beat happened |
 | `DM_CHAPTER_MAX` | `120` | Hard cap: a chapter this long closes even with no finished beat |
 | `DB_ENCRYPTION_KEY` | required | Encrypts `data/local-roleplay.sqlite` at rest (chacha20). Belongs in `.env.server` |
+| `ODM_SETUP_CODE` | generated and printed in the server log | The one-time code that creating a fresh server's first (admin) account requires. Unset, the server mints one and prints it at every start until the first account exists. On a device world (`ODM_DEVICE_WORLD=1`) nothing is minted or printed: the app that hosts it sets this itself and sends it with the host's own account, and a device world started without it asks for no code |
 | `DISCORD_CLIENT_ID` | — | Discord OAuth application id for "Sign in with Discord" (or set in `/admin`) |
 | `DISCORD_CLIENT_SECRET` | — | Discord OAuth client secret. Belongs in `.env.server` (or set in `/admin`) |
 | `APP_PUBLIC_URL` | forwarded headers / request origin | Public URL players use (e.g. `https://dungeon.example.org`); needed for OAuth redirect URIs when the reverse proxy doesn't send `X-Forwarded-Host`/`X-Forwarded-Proto` |
 | `WORLD_REGISTRY_URL` | the built-in registry | https JSON index of downloadable campaign plugins, browsable under Admin, Campaign plugins (or set there). Set it to `off` to browse none. The packs any registry lists are third-party content this project neither ships nor vets, and nothing installs without an admin doing it. See [worlds.md](worlds.md) |
 | `WORLD_PACKS_DIR` | `data/worlds` | Where installed campaign plugins are written. Gitignored, and not covered by the app's MIT license |
+| `UPLOAD_DAILY_BYTES` | `524288000` (500 MB) | Bytes one account may add to `public/uploads` in a rolling 24 hours, across uploads, character imports and workshop imports. Admins have no budget. `0` turns it off |
+| `UPLOAD_DAILY_FILES` | `200` | Files one account may add to `public/uploads` in the same window. `0` turns it off |
+| `UPLOAD_MIN_FREE_BYTES` | `1073741824` (1 GB) | Free space the volume holding `public/uploads` must keep; uploads and imports that would go below it are refused for everyone. The desktop and Android apps set 256 MB for the worlds they host. `0` turns it off |
 
 Secrets (model API keys) belong in `.env.server`, never in code or `.env.local`.
 

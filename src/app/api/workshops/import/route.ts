@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { importWorkshopBundle } from "@/lib/db/workshop-bundle";
+import { uploadRefusalResponse } from "@/lib/upload-budget";
 import {
   bundleCounts,
   bundleWarnings,
@@ -65,9 +66,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const result = importWorkshopBundle(user.id, pickBundleKinds(bundle, parsed.data.kinds));
+  const result = importWorkshopBundle(user.id, pickBundleKinds(bundle, parsed.data.kinds), {
+    isAdmin: user.isAdmin,
+  });
   if ("error" in result) {
-    return Response.json({ error: result.error }, { status: 400 });
+    return result.refusal
+      ? uploadRefusalResponse(result.refusal)
+      : Response.json({ error: result.error }, { status: 400 });
   }
   return Response.json(result);
 }

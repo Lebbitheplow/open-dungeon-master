@@ -100,7 +100,8 @@ is several times the price of **fast**. Notes:
 - Nothing is probed: a backend with no key simply records the request and the
   placeholder tells the table a picture is coming.
 - Prompts go to OpenAI, so this is the one backend that is not on-device.
-- A key that lives only in ONE campaign's Text Model panel covers that
+- A key that lives only in ONE campaign's Story AI panel (an admin's
+  campaign: a player's campaign always runs on the server's keys) covers that
   campaign's own pictures: scene art, the story image tool, and location maps.
   Campaign covers and library portraits are painted from the server's default
   image settings, because a library character belongs to no campaign. Put the

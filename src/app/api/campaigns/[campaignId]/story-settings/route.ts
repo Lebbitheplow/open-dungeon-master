@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { updateStorySettings } from "@/lib/db/campaigns";
-import { maskStorySettings, scrubStorySettings } from "@/lib/db/settings";
+import { maskStorySettings, scrubStorySettings, withoutAdminOnlyFields } from "@/lib/db/settings";
 import { publishPersisted } from "@/lib/events";
 import { LOCAL_TEXT_MODEL_IDS } from "@/lib/text-models";
 import { IMAGE_BACKENDS, PROSE_SIZE_VALUES } from "@/lib/types";
@@ -11,8 +11,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Per-campaign AI settings, gated on story authority rather than the lead:
-// at a human-DM table these knobs steer the DM's own tools, and the model
-// key is the DM's to hold. The two keys follow the admin settings route's
+// at a human-DM table these knobs steer the DM's own tools. Backend
+// addresses and keys are an admin's alone; a player's campaign runs on the
+// server's (src/lib/db/settings.ts). The two keys follow the admin settings route's
 // contract: GET reduces them to has* booleans, PATCH treats an omitted field
 // as keep and "" as clear. The server-wide keys have no per-campaign copy to
 // expose; model-client attaches them at request time, host-gated to the
@@ -27,7 +28,7 @@ export async function GET(
     return context;
   }
   return Response.json({
-    settings: maskStorySettings(context.campaign.settings),
+    settings: maskStorySettings(context.campaign.settings, context.user),
     harness: harnessOfferFor(context.campaign),
   });
 }
@@ -94,7 +95,11 @@ export async function PATCH(
     }
   }
 
-  const settings = updateStorySettings(campaignId, parsed.data);
+  // Only an admin points the server at an address (src/lib/db/settings.ts).
+  // Anyone else's backend URLs and keys are dropped, not refused, so an app
+  // built before this rule still saves the rest of the panel.
+  const patch = context.user.isAdmin ? parsed.data : withoutAdminOnlyFields(parsed.data);
+  const settings = updateStorySettings(campaignId, patch);
   if (!settings) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });
   }
@@ -103,5 +108,8 @@ export async function PATCH(
   // the whole room sees the change without a refetch; scrubbed because the
   // stream reaches players who must never see a key.
   publishPersisted(campaignId, "campaign_updated", { settings: scrubStorySettings(settings) });
-  return Response.json({ settings: maskStorySettings(settings), harness: harnessOfferFor(context.campaign) });
+  return Response.json({
+    settings: maskStorySettings(settings, context.user),
+    harness: harnessOfferFor(context.campaign),
+  });
 }

@@ -27,6 +27,7 @@ import {
 // callers that always found it beside the fetch.
 export { MAX_MANIFEST_BYTES };
 const FETCH_TIMEOUT_MS = 20_000;
+const MAX_REDIRECTS = 5;
 
 // The registry every deployment browses unless its operator says otherwise.
 //
@@ -146,11 +147,32 @@ async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(parsedUrl, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { accept: "application/json" },
-    });
+    // Redirects are followed by hand so every hop is held to the rule the
+    // first address is: https. A file host moving a download to its content
+    // domain passes (Google Drive does exactly that); a registry entry that
+    // bounces the server to a plain-http address on its own network does not.
+    let current = parsedUrl;
+    let response: Response;
+    for (let hop = 0; ; hop += 1) {
+      response = await fetch(current, {
+        signal: controller.signal,
+        redirect: "manual",
+        headers: { accept: "application/json" },
+      });
+      const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+      if (!location) {
+        break;
+      }
+      await response.body?.cancel();
+      if (hop >= MAX_REDIRECTS) {
+        return { ok: false, error: "The source redirected too many times." };
+      }
+      const next = new URL(location, current);
+      if (next.protocol !== "https:") {
+        return { ok: false, error: "World pack sources must be https, and this one redirected somewhere that is not." };
+      }
+      current = next;
+    }
     if (!response.ok) {
       return { ok: false, error: `The source answered ${response.status}.` };
     }
@@ -208,7 +230,8 @@ export async function fetchRegistryIndex(
 
 // A prepared world from the registry (docs/vtt-parity-implementation-plan.md
 // 12.3): fetched under the same cap, checked against the bundle schema,
-// and imported as a workshop belonging to whoever pressed install.
+// and imported as a workshop belonging to whoever pressed install. Only an
+// admin can, so the import is not held to an upload budget.
 export async function installBundleFromUrl(
   url: string,
   userId: string,
@@ -221,9 +244,9 @@ export async function installBundleFromUrl(
   if (!parsed.success) {
     return { ok: false, status: 422, error: "That download is not a workshop bundle." };
   }
-  const result = importWorkshopBundle(userId, parsed.data);
+  const result = importWorkshopBundle(userId, parsed.data, { isAdmin: true });
   if ("error" in result) {
-    return { ok: false, status: 409, error: result.error };
+    return { ok: false, status: result.refusal?.status ?? 409, error: result.error };
   }
   return { ok: true, workshopId: result.workshopId, copied: result.copied };
 }

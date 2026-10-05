@@ -14,7 +14,7 @@ import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { imageSize, isVariantFileName, sniffImage, variantFileName, variantUrl, variantWidth } = await import(
+const { imageSize, isVariantFileName, pixelBudget, sniffImage, variantFileName, variantUrl, variantWidth } = await import(
   "../src/lib/image-format.ts"
 );
 const { servedSegments, writeImageVariants } = await import("../src/lib/image-variants.ts");
@@ -119,6 +119,23 @@ await test("sniffImage and imageSize read PNG, JPEG and every WebP header shape"
   assert.deepEqual(imageSize(lossless), { width: 3, height: 2 });
 });
 
+// A small file whose header declares a huge picture: the IHDR of a 1x1 PNG
+// rewritten, which is all a decoder reads before it allocates.
+function declaredPng(width, height) {
+  const png = Buffer.from(noisePng(1, 1));
+  png.writeUInt32BE(width, 16);
+  png.writeUInt32BE(height, 20);
+  return png;
+}
+
+await test("a picture's pixel count is read from its header, before anything decodes it", () => {
+  assert.equal(pixelBudget(noisePng(4, 4)), "ok");
+  assert.equal(pixelBudget(declaredPng(8000, 8000)), "ok");
+  assert.equal(pixelBudget(declaredPng(8001, 8000)), "over");
+  assert.equal(pixelBudget(declaredPng(30000, 30000)), "over");
+  assert.equal(pixelBudget(Buffer.from("not a picture at all")), "unknown");
+});
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-image-variants-"));
 try {
   const generated = path.join(dir, "public", "generated");
@@ -127,6 +144,15 @@ try {
   const noise = noisePng(1024, 768);
   fs.writeFileSync(original, noise);
   assert.deepEqual(imageSize(noise), { width: 1024, height: 768 });
+
+  await test("a picture that declares too many pixels is never handed to the decoder", async () => {
+    const bomb = path.join(generated, "bomb.png");
+    fs.writeFileSync(bomb, declaredPng(30000, 30000));
+    const result = await writeImageVariants(bomb);
+    assert.match(result.error ?? "", /too many pixels/);
+    assert.deepEqual(result.written, []);
+    assert.deepEqual(fs.readdirSync(generated).filter((name) => name.startsWith("bomb.")), ["bomb.png"]);
+  });
 
   await test("the worker writes both WebP copies of a PNG, sized to the long edge", async () => {
     const first = await writeImageVariants(original);

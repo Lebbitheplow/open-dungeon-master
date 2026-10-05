@@ -305,6 +305,46 @@ await test("a registry id mismatch is rejected before any pack is written", asyn
   }
 });
 
+await test("a download follows a redirect to https and refuses one to anything else", async () => {
+  const realFetch = globalThis.fetch;
+  const asked = [];
+  const hops = {
+    "https://example.invalid/moved.json": { status: 303, location: "https://files.example.invalid/pack.json" },
+    "https://example.invalid/inward.json": { status: 302, location: "http://192.168.1.1/admin" },
+    "https://example.invalid/loop.json": { status: 302, location: "https://example.invalid/loop.json" },
+  };
+  try {
+    globalThis.fetch = async (url, init) => {
+      asked.push(String(url));
+      assert.equal(init?.redirect, "manual");
+      const hop = hops[String(url)];
+      if (hop) {
+        return new Response(null, { status: hop.status, headers: { location: hop.location } });
+      }
+      return new Response(JSON.stringify(manifest({ id: "moved_world" })), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const moved = await installFromUrl("https://example.invalid/moved.json", "moved_world");
+    assert.ok(moved.ok, moved.error);
+    assert.deepEqual(asked, ["https://example.invalid/moved.json", "https://files.example.invalid/pack.json"]);
+
+    asked.length = 0;
+    const inward = await installFromUrl("https://example.invalid/inward.json", "moved_world");
+    assert.ok(!inward.ok);
+    assert.match(inward.error, /must be https/);
+    assert.deepEqual(asked, ["https://example.invalid/inward.json"], "the plain-http address was fetched");
+
+    const loop = await installFromUrl("https://example.invalid/loop.json", "moved_world");
+    assert.ok(!loop.ok);
+    assert.match(loop.error, /too many times/);
+  } finally {
+    globalThis.fetch = realFetch;
+    await removeWorldPack("moved_world");
+  }
+});
+
 await test("plugin metadata defaults so an older manifest still parses", () => {
   const parsed = worldPackSchema.parse(manifest());
   assert.equal(parsed.version, "1.0.0");

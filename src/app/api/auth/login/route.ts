@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { hashPassword, startSession, verifyPassword } from "@/lib/auth";
 import { getUserByUsername } from "@/lib/db/users";
-import { checkLogin, clientIp, recordLoginFailure, recordLoginSuccess, throttleKey } from "@/lib/login-throttle";
+import { checkPasswordAttempt, clientIp, recordPasswordFailure, recordPasswordSuccess } from "@/lib/login-throttle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,8 +23,7 @@ export async function POST(request: Request) {
   }
 
   const ip = clientIp(request);
-  const key = throttleKey(parsed.data.username, ip);
-  const gate = checkLogin(key);
+  const gate = checkPasswordAttempt(parsed.data.username, ip);
   if (gate.blocked) {
     return Response.json(
       { error: `Too many attempts. Try again in ${gate.retryAfterSec}s.` },
@@ -37,11 +36,11 @@ export async function POST(request: Request) {
     ? verifyPassword(parsed.data.password, user.passwordHash)
     : verifyPassword(parsed.data.password, DUMMY_HASH) && false;
   if (!user || !valid) {
-    recordLoginFailure(key);
+    recordPasswordFailure(parsed.data.username, ip);
     return Response.json({ error: "Wrong username or password." }, { status: 401 });
   }
 
-  recordLoginSuccess(key);
+  recordPasswordSuccess(parsed.data.username, ip);
   await startSession(user.id);
 
   // Same shape as /api/auth/me: the client renders this object directly

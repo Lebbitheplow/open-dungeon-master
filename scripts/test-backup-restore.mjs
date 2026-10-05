@@ -59,6 +59,31 @@ try {
   assert.equal(restoredDb.prepare("SELECT COUNT(*) AS n FROM campaigns").get().n, 1);
   restoredDb.close();
 
+  // A manifest decides what a live restore deletes first, so one that names
+  // a path the app does not manage is refused before anything is touched.
+  const tampered = path.join(root, "tampered");
+  fs.mkdirSync(tampered);
+  assert.equal(spawnSync("tar", ["-xzf", archive, "-C", tampered]).status, 0);
+  const manifestPath = path.join(tampered, "odm-backup.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const bystander = path.join(root, "bystander");
+  fs.mkdirSync(bystander);
+  fs.writeFileSync(path.join(bystander, "keep.txt"), "not the backup's to delete\n");
+  fs.mkdirSync(path.join(tampered, "bystander"));
+  for (const named of ["../bystander", "bystander", "."]) {
+    fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, includes: [...manifest.includes, named] }));
+    const forged = path.join(root, "forged.tar.gz");
+    assert.equal(spawnSync("tar", ["-czf", forged, "-C", tampered, "."]).status, 0);
+    const refused = spawnSync(
+      process.execPath,
+      [path.join(repo, "scripts", "odm-restore.mjs"), forged, "--live"],
+      { cwd: repo, env: { ...process.env, ODM_ROOT: root, PORT: "65534" }, encoding: "utf8" },
+    );
+    assert.notEqual(refused.status, 0, `a manifest naming ${named} was restored`);
+    assert.match(refused.stderr + refused.stdout, /does not manage/);
+    assert.equal(fs.readFileSync(path.join(bystander, "keep.txt"), "utf8"), "not the backup's to delete\n");
+  }
+
   console.log("backup/restore: verified archive round-trip and encrypted DB integrity");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

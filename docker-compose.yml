@@ -41,6 +41,10 @@ services:
       # Leave empty to have a key generated into the data volume on first boot.
       # Whatever you set here wins over the stored one.
       DB_ENCRYPTION_KEY: ${DB_ENCRYPTION_KEY:-}
+      # The one-time code that creating the first (admin) account requires.
+      # Leave empty to have one generated and printed in the logs at every
+      # start until that account exists.
+      ODM_SETUP_CODE: ${ODM_SETUP_CODE:-}
 
       # Text backend: llama.cpp, or any OpenAI-compatible server.
       OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-http://host.docker.internal:8001/v1}

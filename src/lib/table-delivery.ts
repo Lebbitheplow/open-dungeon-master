@@ -45,8 +45,16 @@ function rollOf(type: string, payload: unknown): RollLike | null {
   return roll && typeof roll === "object" && typeof roll.visibility === "string" ? roll : null;
 }
 
+// The record of the DM's hands on the board (src/lib/dm/board.ts). Its note
+// names the piece, hidden ones included ("The DM hid the assassin from the
+// party"), so it is the DM seats' alone.
+const DM_ONLY_EVENTS = new Set(["dm_board_action"]);
+
 // True for an event no seat is sent unless it may read it.
 export function isSeatOnly(type: string, payload: unknown): boolean {
+  if (DM_ONLY_EVENTS.has(type)) {
+    return true;
+  }
   const roll = rollOf(type, payload);
   return roll !== null && (roll.visibility === "dm" || roll.visibility === "self");
 }
@@ -96,6 +104,10 @@ export function payloadForViewer(
   viewer: Viewer | null,
   original?: unknown,
 ): unknown | null {
+  if (DM_ONLY_EVENTS.has(type)) {
+    const campaign = viewer?.campaign();
+    return viewer && campaign && capsFor(campaign, viewer.userId).fullMap ? stored : null;
+  }
   const roll = rollOf(type, stored);
   if (roll && isSeatOnly(type, stored)) {
     const campaign = viewer?.campaign();

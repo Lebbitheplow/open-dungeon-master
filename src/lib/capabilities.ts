@@ -3,6 +3,7 @@ import { openAiImagesConfigured, openAiSpeechConfig } from "@/lib/openai-images"
 import { builtinSpeechInstalled } from "@/lib/stt-builtin";
 import { pickSttBackend, sttWantsWav, whisperSwitchedOff, type SttBackend } from "@/lib/stt-logic";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
+import { endpointKind } from "@/lib/dm/sampling-logic";
 import { serverEnv } from "@/lib/server-env";
 import { voiceConfig, type VoiceMode } from "@/lib/voice/config";
 import { harnessConfig, probeHarness } from "@/lib/harness/status";
@@ -149,14 +150,6 @@ export function storyProbeUrl(
 // used to read as "backend down" in the creator while turns worked fine. Same
 // precedence as the request-time fallback in model-client.ts, and only ever
 // for the server's own configured backend, so the key goes nowhere else.
-function probeHost(baseUrl: string): string {
-  try {
-    return new URL(baseUrl.trim()).hostname;
-  } catch {
-    return baseUrl.trim();
-  }
-}
-
 export function storyProbeHeaders(
   settings: Pick<StorySettings, "textProvider" | "customBaseUrl">,
   keys: { configured: string; openaiCompat: string; openRouter: string },
@@ -164,7 +157,7 @@ export function storyProbeHeaders(
   if (settings.textProvider === "none" || settings.textProvider === "local" || settings.textProvider === "harness") {
     return {};
   }
-  const isOpenRouter = /(^|\.)openrouter\.ai$/i.test(probeHost(settings.customBaseUrl));
+  const isOpenRouter = endpointKind(settings.customBaseUrl) === "openrouter";
   const key = (keys.configured || (isOpenRouter ? keys.openRouter : keys.openaiCompat) || "").trim();
   return key ? { Authorization: `Bearer ${key}` } : {};
 }

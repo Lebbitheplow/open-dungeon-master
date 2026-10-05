@@ -15,7 +15,7 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { maskStorySettings, normalizeSettings, scrubStorySettings } = await import(
+const { maskStorySettings, normalizeSettings, scrubStorySettings, withoutAdminOnlyFields } = await import(
   "../src/lib/db/settings.ts"
 );
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
@@ -99,7 +99,9 @@ test("the scrub blanks only the keys", () => {
   );
 });
 
-const lead = createUser("lead", "x");
+// An admin: only an admin's campaign keeps backend addresses and keys of its
+// own, which is what the next tests store and scrub.
+const lead = createUser("lead", "x", { isAdmin: true });
 const campaign = createCampaign(lead.id, {
   title: "Test Table",
   description: "",
@@ -225,5 +227,136 @@ test("on a device world every campaign follows the device's Story AI", () => {
     delete process.env.ODM_DEVICE_WORLD;
   }
 });
+
+test("only an admin's campaign runs on its own backend address", () => {
+  const admin = createUser("backend-admin", "x", { isAdmin: true });
+  const player = createUser("backend-player", "x");
+  const input = { title: "T", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" };
+  const own = { customBaseUrl: "http://10.0.0.5:8080/v1", customApiKey: "sk-own", utilityBaseUrl: "http://10.0.0.5:8081/v1", comfyUrl: "http://10.0.0.5:8188" };
+  const theirs = createCampaign(player.id, input);
+  const mine = createCampaign(admin.id, input);
+  // Written straight to the row, as a player could before this rule.
+  updateStorySettings(theirs.id, { ...own, customModel: "their-model" });
+  updateStorySettings(mine.id, own);
+  const server = normalizeSettings({});
+  const played = getCampaignById(theirs.id).settings;
+  assert.equal(played.customBaseUrl, server.customBaseUrl);
+  assert.equal(played.utilityBaseUrl, server.utilityBaseUrl);
+  assert.equal(played.comfyUrl, server.comfyUrl);
+  assert.equal(played.customApiKey, "", "a player's key rode along");
+  assert.equal(played.customModel, "their-model", "the model stays the campaign's choice");
+  const run = getCampaignById(mine.id).settings;
+  assert.equal(run.customBaseUrl, own.customBaseUrl);
+  assert.equal(run.comfyUrl, own.comfyUrl);
+  assert.equal(run.customApiKey, "sk-own");
+  assert.equal(maskStorySettings(played, player).serverManaged, true);
+  assert.equal(maskStorySettings(run, admin).serverManaged, false);
+});
+
+test("a non-admin's patch loses its backend addresses and keys, nothing else", () => {
+  const patch = withoutAdminOnlyFields({ ...{ customBaseUrl: "http://x", customApiKey: "k", utilityBaseUrl: "http://y", utilityApiKey: "k", comfyUrl: "http://z" }, customModel: "m", proseSize: "short" });
+  assert.deepEqual(patch, { customModel: "m", proseSize: "short" });
+});
+
+// A campaign picks its own backend URL, so the server's OpenRouter key may
+// only ride along to OpenRouter's own host. A URL that merely mentions
+// openrouter.ai in its path, query or username used to pass a substring test
+// and receive the key.
+{
+  const { requestCustomMessage } = await import("../src/lib/model-client.ts");
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    seen.push({ url: String(url), auth: init?.headers?.Authorization ?? "" });
+    return new Response("{}", { status: 500 });
+  };
+  process.env.OPENROUTER_API_KEY = "sk-or-server";
+  try {
+    const decoys = [
+      "https://evil.test/.openrouter.ai",
+      "https://evil.test/.openrouter.ai/api/v1",
+      "https://evil.test/v1?x=.openrouter.ai",
+      "https://openrouter.ai@evil.test/v1",
+      "https://openrouter.ai.evil.test/api/v1",
+      // The right host, but the key would cross the network in clear text.
+      "http://openrouter.ai/api/v1",
+    ];
+    for (const base of decoys) {
+      await requestCustomMessage(base, "m", "", [{ role: "user", content: "hi" }]);
+    }
+    assert.equal(seen.length, decoys.length);
+    for (const call of seen) {
+      assert.notEqual(call.auth, "Bearer sk-or-server", `key leaked to ${call.url}`);
+    }
+
+    seen.length = 0;
+    await requestCustomMessage("https://openrouter.ai/api/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.equal(seen[0].auth, "Bearer sk-or-server", "OpenRouter itself still gets the key");
+    passed += 1;
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.OPENROUTER_API_KEY;
+  }
+}
+
+// A campaign's backend is not trusted to send the server elsewhere: a
+// redirect is followed only to the same host and only when it keeps the
+// POST whole, and no body is read past a ceiling.
+{
+  const { requestCustomMessage } = await import("../src/lib/model-client.ts");
+  const realFetch = globalThis.fetch;
+  const hits = [];
+  const ok = () => Response.json({ choices: [{ message: { role: "assistant", content: "fine" } }] });
+  const endless = () =>
+    new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(1024 * 1024).fill(120));
+      },
+    });
+  globalThis.fetch = async (url, init) => {
+    hits.push(String(url));
+    assert.equal(init.redirect, "manual", "redirects are never left to fetch");
+    const { hostname, pathname, protocol } = new URL(String(url));
+    if (hostname === "inside.test") return ok();
+    if (hostname === "away.test") {
+      return new Response(null, { status: 307, headers: { location: "http://inside.test/v1/chat/completions" } });
+    }
+    if (hostname === "port.test" && new URL(String(url)).port === "8080") {
+      return new Response(null, { status: 307, headers: { location: "http://port.test:9999/v1/chat/completions" } });
+    }
+    if (hostname === "port.test") return ok();
+    if (hostname === "moved.test" && protocol === "http:") {
+      return new Response(null, { status: 308, headers: { location: "https://moved.test/v1/chat/completions" } });
+    }
+    if (hostname === "moved.test") return ok();
+    if (hostname === "flood.test" && pathname.startsWith("/error")) return new Response(endless(), { status: 500 });
+    if (hostname === "flood.test") return new Response(endless(), { status: 200 });
+    return new Response("nope", { status: 404 });
+  };
+  try {
+    const away = await requestCustomMessage("https://away.test/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(away.error, "a redirect to another host was followed");
+    assert.match((await away.error.json()).error, /redirected/);
+    assert.ok(!hits.some((url) => url.includes("inside.test")), "the other host was contacted");
+
+    const port = await requestCustomMessage("http://port.test:8080/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(port.error, "a redirect to another port on the same host was followed");
+
+    const moved = await requestCustomMessage("http://moved.test/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.equal(moved.message?.content, "fine", "an https upgrade on the same host still works");
+
+    const started = Date.now();
+    const flooded = await requestCustomMessage("https://flood.test/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(flooded.error, "an endless reply was accepted");
+    const erred = await requestCustomMessage("https://flood.test/error/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.ok(erred.error);
+    assert.ok((await erred.error.json()).detail.length <= 300);
+    assert.ok(Date.now() - started < 10_000, "an endless body was read to the end");
+    passed += 1;
+    console.log("ok: a campaign's backend cannot redirect the server elsewhere or flood it");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
 
 console.log(`story settings: ${passed} tests passed`);

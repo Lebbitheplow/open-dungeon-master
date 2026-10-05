@@ -139,14 +139,17 @@ export function deleteSourceChunks(campaignId: string, source: string): void {
   getDatabase().prepare(`DELETE FROM rule_chunks WHERE campaign_id = ? AND source = ?`).run(campaignId, source);
 }
 
+// The chunk is looked up inside its campaign, so an id from another table
+// finds nothing and nothing is written.
 export function setRuleChunkFlags(
+  campaignId: string,
   chunkId: string,
   flags: { enabled?: boolean; pinned?: boolean },
 ): RuleChunk | null {
   const db = getDatabase();
   const row = db
-    .prepare(`SELECT ${CHUNK_COLUMNS} FROM rule_chunks WHERE id = ?`)
-    .get(chunkId) as RuleChunkRow | undefined;
+    .prepare(`SELECT ${CHUNK_COLUMNS} FROM rule_chunks WHERE id = ? AND campaign_id = ?`)
+    .get(chunkId, campaignId) as RuleChunkRow | undefined;
   if (!row) {
     return null;
   }

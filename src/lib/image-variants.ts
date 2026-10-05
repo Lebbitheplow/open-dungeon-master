@@ -16,7 +16,7 @@ import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { imageSize, sniffImage, VARIANT_WIDTHS, variantFileName, type VariantWidth } from "@/lib/image-format";
+import { imageSize, pixelBudget, sniffImage, VARIANT_WIDTHS, variantFileName, type VariantWidth } from "@/lib/image-format";
 
 // Well past a phone's worst case for a 3 MB picture (about a second on a
 // desktop core, a few on a phone).
@@ -216,6 +216,17 @@ export async function writeImageVariants(
   const kind = sniffImage(bytes);
   if (!kind) {
     return { written: [], skipped: [], error: "not a PNG, JPEG or WebP" };
+  }
+  // The worker decodes the whole picture before it can shrink it, and its
+  // memory is the server's. A picture whose header declares too many pixels,
+  // or hides how many, is left as the original the routes already serve.
+  const budget = pixelBudget(bytes);
+  if (budget !== "ok") {
+    return {
+      written: [],
+      skipped: [],
+      error: budget === "over" ? "too many pixels to make smaller copies of" : "its size could not be read from the header",
+    };
   }
   const dir = path.dirname(source);
   const name = path.basename(source);

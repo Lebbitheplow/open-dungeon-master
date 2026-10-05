@@ -1,4 +1,5 @@
 import { capsFor, getCampaignById, type Floor } from "@/lib/db/campaigns";
+import { isMemberMuted } from "@/lib/db/moderation";
 import { publishRoster, syncProducer } from "@/lib/voice/peers";
 import { getRoom } from "@/lib/voice/room";
 import {
@@ -46,7 +47,9 @@ export async function applyVoiceFloor(campaignId: string): Promise<void> {
   let changed = false;
 
   for (const peer of room.peers.values()) {
-    const next = silenced.has(peer.userId);
+    // A member the party lead has muted at the table is silent on the call
+    // too, whatever the floor says: they keep listening, as they keep reading.
+    const next = silenced.has(peer.userId) || isMemberMuted(campaignId, peer.userId);
     if (peer.forceMuted !== next) {
       peer.forceMuted = next;
       changed = true;

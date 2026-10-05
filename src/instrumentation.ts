@@ -13,6 +13,16 @@ export async function register() {
     // itself is left running in the background. A failure here must not stop
     // the server: the worst case is the keyword fallback search already has.
     if (process.env.NEXT_PHASE !== "phase-production-build") {
+      // A server nobody has signed up to yet prints the one-time code that
+      // claims its admin account (src/lib/setup-code.ts). The operator
+      // reads it in the log; a stranger who found the port first cannot.
+      try {
+        const { announceSetupCode } = await import("@/lib/setup-code");
+        announceSetupCode();
+      } catch (error) {
+        console.error("[setup] could not check for a first account", error);
+      }
+
       try {
         const { embedMissingVectors, reconcileEmbeddingModel } = await import(
           "@/lib/dm/embedding-reindex"
@@ -24,6 +34,12 @@ export async function register() {
       } catch (error) {
         console.error("[embeddings] could not check the stored vectors against the model", error);
       }
+
+      // Rules PDFs read by the old first-page-only reader get their whole
+      // book, once (src/lib/dm/lore-attachments.ts).
+      void import("@/lib/dm/lore-attachments")
+        .then(({ rereadRulesAttachments }) => rereadRulesAttachments())
+        .catch((error) => console.error("[lore] rules PDF re-read failed", error));
     }
   }
 }

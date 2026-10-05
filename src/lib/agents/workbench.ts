@@ -10,6 +10,7 @@
 // settings route), accounts and passwords, the admin panel, backup and
 // restore, and raw sheet edits. Those stay in the browser.
 
+import { listAssignmentsForCharacter } from "@/lib/db/characters";
 import { harnessMcpUrl } from "@/lib/harness/bridge";
 import { grantSessionToken, grantUser, type AgentScope, type ConnectionGrant } from "@/lib/agents/grants";
 import type { McpToolDefinition } from "@/lib/harness/types";
@@ -313,7 +314,12 @@ export function serverOrigin(): string {
   return new URL(harnessMcpUrl()).origin;
 }
 
-export type WorkbenchOutcome = { text: string; isError: boolean; campaignId?: string };
+// Whether one of the player's library characters has a sheet in a campaign.
+function seatedAt(userId: string, campaignId: string, characterId: string): boolean {
+  return listAssignmentsForCharacter(userId, characterId).some((assignment) => assignment.campaignId === campaignId);
+}
+
+export type WorkbenchOutcome ={ text: string; isError: boolean; campaignId?: string };
 
 export async function workbenchCall(grant: ConnectionGrant, name: string, args: Args): Promise<WorkbenchOutcome> {
   if (name === "odm_whoami") {
@@ -340,6 +346,22 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   }
   if (grant.campaignId && tool.name === "odm_create_campaign") {
     return { text: "This connection is limited to one campaign and cannot create new ones.", isError: true };
+  }
+  // The library tools name no campaign, so the check above never sees them.
+  // A pinned connection reaches the library only through the characters
+  // seated at its table: it may not add to the library, and may not read,
+  // rewrite or delete a character that plays somewhere else or nowhere.
+  if (grant.campaignId && tool.name === "odm_create_character") {
+    return { text: "This connection is limited to one campaign and cannot add characters to your library.", isError: true };
+  }
+  if (
+    grant.campaignId &&
+    typeof args.characterId === "string" &&
+    // A malformed id is refused as one when the path is built, below.
+    ID.test(args.characterId) &&
+    !seatedAt(grant.userId, grant.campaignId, args.characterId)
+  ) {
+    return { text: "This connection is limited to one campaign, and that character is not in it.", isError: true };
   }
   const refusal = tool.check?.(args);
   if (refusal) {
@@ -375,6 +397,20 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
       const parsed = JSON.parse(text) as { campaigns?: Array<{ id?: string }> };
       if (Array.isArray(parsed.campaigns)) {
         parsed.campaigns = parsed.campaigns.filter((campaign) => campaign.id === grant.campaignId);
+        text = JSON.stringify(parsed);
+      }
+    } catch {
+      // Leave it as the route answered.
+    }
+  }
+  if (grant.campaignId && tool.name === "odm_list_characters") {
+    try {
+      const parsed = JSON.parse(text) as { characters?: Array<{ id?: string }> };
+      if (Array.isArray(parsed.characters)) {
+        const pinned = grant.campaignId;
+        parsed.characters = parsed.characters.filter(
+          (character) => typeof character.id === "string" && seatedAt(grant.userId, pinned, character.id),
+        );
         text = JSON.stringify(parsed);
       }
     } catch {

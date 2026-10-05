@@ -1,4 +1,5 @@
 import { isErrorResponse } from "@/lib/campaign-api";
+import { isMemberMuted } from "@/lib/db/moderation";
 import { requireVoiceMember } from "@/lib/voice/gate";
 import { MESH_HEARTBEAT_MS } from "@/lib/voice/mesh-logic";
 import { meshIceServers, meshJoin } from "@/lib/voice/mesh";
@@ -17,6 +18,11 @@ export async function POST(
   const context = await requireVoiceMember(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // In a mesh call the audio runs between the players' devices, so the
+  // server cannot let a muted member listen without also letting them speak.
+  if (isMemberMuted(campaignId, context.user.id)) {
+    return Response.json({ error: "The party lead has muted you at this table." }, { status: 403 });
   }
   const peers = meshJoin(campaignId, context.user.id, context.user.username);
   return Response.json({

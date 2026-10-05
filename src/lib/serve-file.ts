@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 
@@ -17,9 +17,11 @@ const CONTENT_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
-// Every response carries this: browsers only seek media (and Safari only
-// plays it at all) when the server says it honours byte ranges.
-const CACHE_CONTROL = "public, max-age=31536000, immutable";
+// Private, because every one of these files is behind a login: a shared
+// cache in front of the server (Cloudflare, a reverse proxy) that kept a
+// "public" answer would hand it to the next caller without asking who they
+// are. The browser's own cache still keeps it for the year.
+const CACHE_CONTROL = "private, max-age=31536000, immutable";
 
 export type ByteRange = { start: number; end: number };
 
@@ -96,6 +98,13 @@ export async function serveGeneratedFile(
   }
   let size: number;
   try {
+    // The check above is on the name. A link inside the folder (one a
+    // restored backup carried in, say) could still point anywhere on the
+    // disk, so where the file really lives has to be inside the folder too.
+    const [realRoot, real] = await Promise.all([realpath(root), realpath(resolved)]);
+    if (!real.startsWith(realRoot + path.sep)) {
+      return Response.json({ error: "Not found." }, { status: 404 });
+    }
     const info = await stat(resolved);
     if (!info.isFile()) {
       return Response.json({ error: "Not found." }, { status: 404 });

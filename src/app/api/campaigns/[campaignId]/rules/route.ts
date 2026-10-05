@@ -67,8 +67,8 @@ export async function PATCH(
   if (!parsed.success) {
     return Response.json({ error: "Invalid chunk update." }, { status: 400 });
   }
-  const chunk = setRuleChunkFlags(parsed.data.chunkId, parsed.data);
-  if (!chunk || chunk.campaignId !== campaignId) {
+  const chunk = setRuleChunkFlags(campaignId, parsed.data.chunkId, parsed.data);
+  if (!chunk) {
     return Response.json({ error: "Rule chunk not found." }, { status: 404 });
   }
   return Response.json({ chunk });

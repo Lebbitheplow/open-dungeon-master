@@ -293,7 +293,9 @@ async function settleRolls(campaignId) {
 
 let lastSettings = null;
 async function playRun(runNumber) {
-  const lead = createUser(`lead${runNumber}${randomBytes(2).toString("hex")}`, "x");
+  // An admin: only an admin's campaign runs on a backend address of its own
+  // (src/lib/db/settings.ts).
+  const lead = createUser(`lead${runNumber}${randomBytes(2).toString("hex")}`, "x", { isAdmin: true });
   const other = createUser(`bram${runNumber}${randomBytes(2).toString("hex")}`, "x");
   const campaign = createCampaign(lead.id, {
     title: "The Salt Road",

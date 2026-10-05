@@ -192,13 +192,16 @@ export async function generateOpenAiImage(
   const entry = payload.data?.[0];
   let bytes: Buffer | null = entry?.b64_json ? Buffer.from(entry.b64_json, "base64") : null;
   if (!bytes && entry?.url) {
-    const download = await fetch(entry.url, { signal: AbortSignal.timeout(60_000) });
-    if (download.ok) {
-      bytes = Buffer.from(await download.arrayBuffer());
-    }
+    bytes = await downloadPicture(entry.url);
   }
   if (!bytes?.length) {
     throw new Error("The OpenAI image API finished without returning an image.");
+  }
+  // Whatever came back is about to be saved where every table can load it,
+  // so it has to be a picture: an endpoint that answers with a web page or
+  // another file gets an error, not a place in public/generated.
+  if (!sniffImage(bytes)) {
+    throw new Error("The OpenAI image API returned something that is not a PNG, JPEG or WebP picture.");
   }
 
   const generatedDir = path.join(process.cwd(), "public", "generated");
@@ -225,4 +228,41 @@ export async function generateOpenAiImage(
       ? ["Character reference images are not used by the OpenAI backend."]
       : undefined,
   };
+}
+
+// Far past any picture these models return (a 1536px PNG is a few MB), and
+// small enough that an endpoint cannot fill the server's memory or disk
+// through the address it hands back.
+const MAX_PICTURE_BYTES = 32 * 1024 * 1024;
+
+// The picture behind the address an endpoint answered with (dall-e's default,
+// and some compatible proxies), read under a ceiling instead of buffered
+// whole. Where the address points is the endpoint's business: the admin
+// chose the backend, and it may live anywhere they can reach.
+async function downloadPicture(url: string): Promise<Buffer | null> {
+  const download = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!download.ok || !download.body) {
+    return null;
+  }
+  const tooLarge = new Error("The OpenAI image API pointed at a file too large to be a picture.");
+  if (Number(download.headers.get("content-length") ?? 0) > MAX_PICTURE_BYTES) {
+    await download.body.cancel();
+    throw tooLarge;
+  }
+  const reader = download.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > MAX_PICTURE_BYTES) {
+      await reader.cancel();
+      throw tooLarge;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
 }

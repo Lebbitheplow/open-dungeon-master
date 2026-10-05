@@ -103,7 +103,15 @@ try {
   }
   fs.mkdirSync(target, { recursive: true });
 
-  const managed = [...new Set([...(Array.isArray(manifest.includes) ? manifest.includes : []), "odm-backup.json"])];
+  // Only the paths this app manages (the list odm-backup.mjs writes): a live
+  // restore deletes each one first, so a manifest must not get to name
+  // anything else.
+  const known = ["data", "public/uploads", "public/generated", "public/generated-audio", "models", ".env.server"];
+  const named = Array.isArray(manifest.includes) ? manifest.includes : [];
+  for (const rel of named) {
+    if (!known.includes(rel)) fail(`backup manifest names a path this app does not manage: ${rel}`);
+  }
+  const managed = [...new Set([...named, "odm-backup.json"])];
   for (const rel of managed) {
     const src = path.join(stage, rel);
     if (!fs.existsSync(src)) continue;

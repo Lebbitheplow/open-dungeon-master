@@ -344,7 +344,12 @@ Then start the DM model with llama.cpp's `llama-server`. See
 [The default DM model](#the-default-dm-model-qwen36-35b-on-llamacpp) below for the
 exact command and settings.
 
-**The first account registered becomes the server admin.** To promote someone on an
+**The first account registered becomes the server admin, and creating it takes a
+one-time setup code.** While the server has no accounts it prints the code in its log
+at every start; enter it in the sign-up form's **Setup code** field. This stops whoever
+reaches a fresh server first from claiming it. To pick the code yourself (for scripted
+installs), set `ODM_SETUP_CODE`. The first account cannot be made with Discord; create
+it with a password and link Discord afterwards in settings. To promote someone on an
 existing install: `node scripts/make-admin.mjs <username>`.
 
 ### Content pack
@@ -424,6 +429,13 @@ docker compose logs | head -20
 recovery path without it. If you would rather manage it yourself, put
 `DB_ENCRYPTION_KEY=...` in a `.env` file next to `docker-compose.yml` before the first
 start; an explicit key always wins over the stored one.
+
+The same log shows the one-time **setup code** that creating the first (admin) account
+needs, in a banner that repeats at every start until that account exists:
+
+```
+docker compose logs | grep -A6 "no accounts yet"
+```
 
 ### Pointing at your AI services
 

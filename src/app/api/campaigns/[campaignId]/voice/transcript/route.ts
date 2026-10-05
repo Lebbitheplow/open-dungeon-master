@@ -1,4 +1,5 @@
 import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
+import { isMemberMuted } from "@/lib/db/moderation";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { insertTranscriptLines, listTranscriptSince } from "@/lib/db/voice-transcript";
 import { describeInstant } from "@/lib/dm/calendar";
@@ -21,6 +22,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const context = await requireMember(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // A transcript line is words in front of the table, like a chat message.
+  if (isMemberMuted(campaignId, context.user.id)) {
+    return Response.json({ error: "The party lead has muted you at this table." }, { status: 403 });
   }
   if (!context.campaign.gameSettings.voice.transcribe) {
     return Response.json({ error: "This table is not being transcribed." }, { status: 400 });
