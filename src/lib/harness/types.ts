@@ -123,6 +123,9 @@ export type HarnessAdapter = {
   label: string;
   binaryNames: readonly string[];
   installHint: string;
+  // The same for Windows PowerShell, where the vendor has one: a curl piped
+  // to bash is no use there.
+  installHintWindows?: string;
   signInHint: string;
   lockdown: Lockdown;
   // Whether the program has its own image tool.

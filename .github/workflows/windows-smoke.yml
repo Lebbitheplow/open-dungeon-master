@@ -38,3 +38,8 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # One payload built on Linux ships to every desktop platform, so the
+      # compiled server has to keep its Windows branches wherever it is built.
+      - name: The built server keeps its Windows code
+        run: node scripts/check-built-platform.mjs

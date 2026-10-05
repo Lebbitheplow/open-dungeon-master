@@ -235,6 +235,7 @@ export const claudeAdapter: HarnessAdapter = {
   label: "Claude Code",
   binaryNames: ["claude"],
   installHint: "curl -fsSL https://claude.ai/install.sh | bash",
+  installHintWindows: "irm https://claude.ai/install.ps1 | iex",
   signInHint: "claude auth login",
   lockdown: "removed",
   paints: false,

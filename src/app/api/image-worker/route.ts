@@ -10,6 +10,7 @@ import path from "node:path";
 import { z } from "zod";
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { hostPlatform, onWindows } from "@/lib/host-platform";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,9 +100,9 @@ function openFolder(folder: string) {
   mkdirSync(folder, { recursive: true });
 
   const command =
-    process.platform === "darwin"
+    hostPlatform() === "darwin"
       ? "open"
-      : process.platform === "win32"
+      : onWindows()
         ? "explorer"
         : "xdg-open";
   const child = spawn(command, [folder], {
@@ -112,7 +113,7 @@ function openFolder(folder: string) {
 }
 
 function npmCommand() {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+  return onWindows() ? "npm.cmd" : "npm";
 }
 
 async function startWorker() {

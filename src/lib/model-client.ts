@@ -15,6 +15,7 @@ import {
 import { serverEnv } from "@/lib/server-env";
 import { localModelContextWindow } from "@/lib/text-models";
 import { harnessContextTokens } from "@/lib/harness/status";
+import { onWindows } from "@/lib/host-platform";
 
 // Shared chat-completion client for both providers:
 // - custom: any OpenAI-compatible /chat/completions (llama.cpp, LM Studio,
@@ -128,7 +129,7 @@ export function localContextTokens(model: string) {
   const parsed = Number.parseInt(raw, 10);
 
   if (!Number.isFinite(parsed)) {
-    return process.platform === "win32"
+    return onWindows()
       ? Math.min(native, WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS)
       : native;
   }
