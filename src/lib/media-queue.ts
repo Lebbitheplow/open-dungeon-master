@@ -7,10 +7,14 @@
 // "tts" is separate on purpose. Kokoro runs on CPU here and does not contend
 // for the iGPU, so narration must not wait behind a 25-step render; keeping it
 // in its own lane is what lets audio start while the scene image is still
-// generating. Lanes live on globalThis so dev-mode HMR cannot fork them (same
-// pattern as src/lib/dm/queue.ts).
+// generating. Narration takes a lane per campaign ("tts:<campaign id>"): a
+// table's passages are read in the order they were written, and one table's
+// long passage never holds up another table's (how many speech requests run
+// at once across all of them is src/lib/tts.ts's to cap). Lanes live on
+// globalThis so dev-mode HMR cannot fork them (same pattern as
+// src/lib/dm/queue.ts).
 
-export type MediaLane = "gpu" | "tts";
+export type MediaLane = "gpu" | "tts" | `tts:${string}`;
 
 declare global {
   var __odmMediaQueues: Partial<Record<MediaLane, Promise<void>>> | undefined;
@@ -27,5 +31,14 @@ export function enqueueMediaJob(
     console.error(`[media:${lane}] job "${label}" failed:`, error);
   });
   lanes[lane] = next;
+  // A campaign's lane is forgotten once it runs dry, so the map does not
+  // keep a settled promise for every table that ever narrated.
+  if (lane.startsWith("tts:")) {
+    void next.then(() => {
+      if (lanes[lane] === next) {
+        delete lanes[lane];
+      }
+    });
+  }
   return next;
 }

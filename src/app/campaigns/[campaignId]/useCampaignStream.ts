@@ -221,7 +221,9 @@ export type CampaignState = {
   // Someone raised the X-card and the table is paused; nobody is named.
   safetyPause: { at: number; reason: "x_card" } | null;
   narrationAudio: Record<string, string>;
-  latestTts: { messageId: string; url: string; seq: number } | null;
+  // `live` marks a passage offered while it is still being rendered
+  // (tts_stream): heard now, by whoever is at the table now.
+  latestTts: { messageId: string; url: string; seq: number; live?: boolean } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   lastSeq: number;
   dmStatus: DmStatus;
@@ -551,6 +553,17 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
             next.narrationAudio = { ...state.narrationAudio, [messageId]: url };
             next.latestTts = { messageId, url, seq: action.seq ?? 0 };
             next.narrationStatus = withoutKey(state.narrationStatus, messageId);
+          }
+          return next;
+        }
+        case "tts_stream": {
+          // The passage's first words exist and the rest are on their way:
+          // start listening now. tts_ready follows with the finished file,
+          // which is what makes it replayable.
+          const messageId = String(payload.messageId ?? "");
+          const url = String(payload.url ?? "");
+          if (messageId && url) {
+            next.latestTts = { messageId, url, seq: 0, live: true };
           }
           return next;
         }
@@ -961,6 +974,7 @@ const EPHEMERAL_EVENTS = [
   "camera",
   "quests_updated",
   "cast_updated",
+  "tts_stream",
   "dm_status",
   "utility_calls",
   "dm_delta",

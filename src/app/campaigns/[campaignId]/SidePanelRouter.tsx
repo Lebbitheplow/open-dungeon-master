@@ -283,7 +283,7 @@ export function SidePanelRouter({
     }
     const speakers = latest.speaker
       ? [latest.speaker]
-      : speakersIn(attributeSpeech(latest.content, cast.map((member) => ({ kind: "npc" as const, id: member.id, name: member.name }))));
+      : speakersIn(attributeSpeech(latest.content, cast.map((member) => ({ kind: "npc" as const, id: member.id, name: member.name, aliases: member.aliases }))));
     return { speakers, cast, messageId: latest.id };
   }, [campaign?.gameSettings?.presentation, messages, cast]);
   const partySize = partySlotCount(

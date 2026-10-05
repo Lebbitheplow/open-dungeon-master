@@ -362,7 +362,8 @@ export async function expandBeat(
       campaign.id,
       updated.id,
       updated.content,
-      campaign.gameSettings.ttsVoice,
+      campaign.gameSettings,
+      updated.speaker ?? null,
     );
   }
   return { content: updated.content };

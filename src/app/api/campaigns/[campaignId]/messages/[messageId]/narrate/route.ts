@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getCampaignMessage } from "@/lib/db/messages";
-import { enqueueNarrationAudio, narrationAudioPath, takeNarrationFailure } from "@/lib/tts";
+import { enqueueNarrationAudio, listNarrationAudio, narrationAudioPath, takeNarrationFailure } from "@/lib/tts";
 import { ttsBackend } from "@/lib/tts-backend";
 
 export const runtime = "nodejs";
@@ -44,7 +44,9 @@ export async function POST(
     campaignId,
     message.id,
     message.content,
-    context.campaign.gameSettings.ttsVoice,
+    context.campaign.gameSettings,
+    // A passage spoken as someone is read as them again, not as the narrator.
+    message.speaker ?? null,
   );
 
   if (!existsSync(narrationAudioPath(campaignId, message.id))) {
@@ -56,5 +58,8 @@ export async function POST(
   }
   // enqueueNarrationAudio already published tts_ready, which is what moves the
   // clients; this is just the acknowledgement for the caller.
-  return Response.json({ ok: true, url: `/generated-audio/${campaignId}/${message.id}.mp3` });
+  return Response.json({
+    ok: true,
+    url: listNarrationAudio(campaignId)[message.id] ?? `/generated-audio/${campaignId}/${message.id}.mp3`,
+  });
 }

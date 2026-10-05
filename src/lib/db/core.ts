@@ -1637,6 +1637,22 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_voice_transcript_campaign ON voice_transcript(campaign_id, started_at);
   `);
 
+  // Read-aloud voices for speakers who are not NPCs (issue 97): a character
+  // at the table ("pc:<sheet id>") or a kind of monster ("monster:<name>").
+  // An NPC's voice stays on its own row (npcs.voice_json), where the cast
+  // editor and the world packs already keep it.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS campaign_voices (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      speaker_key TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      voice_id TEXT NOT NULL,
+      speed REAL NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, speaker_key)
+    );
+  `);
+
   // Calendar events (docs/vtt-parity-implementation-plan.md 7.2): a moment
   // on the in-world clock the world tick fires when the clock crosses it.
   db.exec(`

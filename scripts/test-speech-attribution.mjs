@@ -51,4 +51,45 @@ test("speakers are listed once, in order, and a speaker normalises", () => {
   assert.equal(normalizeSpeaker("x"), null);
 });
 
+// Issue 97: the prose rarely spells a name out in full.
+test("a first name, a last name or an alias finds the person", () => {
+  const table = [
+    { kind: "npc", id: "n1", name: "Captain Marla Venn", aliases: ["the Captain"] },
+    { kind: "npc", id: "n2", name: "Old Pike" },
+    { kind: "pc", id: "s1", name: "Kara Brightwood" },
+  ];
+  const said = (text) => attributeSpeech(text, table).filter((segment) => segment.kind === "speech").map((segment) => segment.speaker.id);
+  assert.deepEqual(said('"Hold the gate," says Marla.'), ["n1"]);
+  assert.deepEqual(said('Venn frowns. "Not tonight."'), ["n1"]);
+  assert.deepEqual(said('"Stand down," orders the Captain.'), ["n1"]);
+  assert.deepEqual(said('"Aye," mutters Pike.'), ["n2"]);
+  assert.deepEqual(said('"I will go first," Kara says.'), ["s1"]);
+  assert.deepEqual(said('"Too old for this," someone says.'), [], "a title or an adjective is nobody's name");
+  const hill = [{ kind: "npc", id: "h", name: "Tom Hill" }];
+  assert.equal(attributeSpeech('"Up the hill," someone calls.', hill).filter((segment) => segment.kind === "speech").length, 0, "a word of a name only counts written as a name");
+  assert.equal(attributeSpeech('"Up we go," Hill calls.', hill).filter((segment) => segment.kind === "speech").length, 1);
+});
+
+test("a short name two people share belongs to neither", () => {
+  const twins = [
+    { kind: "npc", id: "a", name: "Aldric Venn" },
+    { kind: "npc", id: "b", name: "Marla Venn" },
+  ];
+  const segments = attributeSpeech('"We are agreed," says Venn. "Good," says Marla.', twins);
+  assert.deepEqual(segments.filter((segment) => segment.kind === "speech").map((segment) => segment.speaker.id), ["b"]);
+});
+
+test("a line the tag splits in two stays one speaker's, a reply does not", () => {
+  const split = attributeSpeech('"We ride at dawn," said Marla, "and not a moment later."', cast);
+  assert.deepEqual(split.filter((segment) => segment.kind === "speech").map((segment) => segment.text), ["We ride at dawn,", "and not a moment later."]);
+  const crowded = attributeSpeech('"Hold the gate," says Marla, "or we all die here." Old Pike does not look up.', cast);
+  assert.deepEqual(
+    crowded.filter((segment) => segment.kind === "speech").map((segment) => segment.speaker.name),
+    ["Marla", "Marla"],
+    "the next name along does not take the second half of her sentence",
+  );
+  const reply = attributeSpeech('"We ride at dawn," said Marla. "Fine."', cast);
+  assert.equal(reply.filter((segment) => segment.kind === "speech").length, 1);
+});
+
 console.log(`test-speech-attribution: ${passed} passed`);
