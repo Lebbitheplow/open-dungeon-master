@@ -55,7 +55,14 @@ RUN env -u EMBEDDING_MODEL -u EMBEDDING_DTYPE npm run fetch-model \
   && if [ -n "$EMBEDDING_MODEL" ]; then npm run fetch-model; fi
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN DOCKER_BUILD=1 npm run build
+# The build context has no .git, so the commit this image is made from is
+# passed in for the About dialog (next.config.ts). The published image gets
+# it from its workflow; a local build may pass
+# --build-arg ODM_BUILD_COMMIT=$(git rev-parse HEAD), and without it the
+# dialog shows the release number alone.
+ARG ODM_BUILD_COMMIT=
+ARG ODM_BUILD_DESCRIBE=
+RUN DOCKER_BUILD=1 ODM_BUILD_COMMIT="$ODM_BUILD_COMMIT" ODM_BUILD_DESCRIBE="$ODM_BUILD_DESCRIBE" npm run build
 
 # Trim the standalone bundle here, not in the runner stage: deleting a file in a
 # later layer does not reclaim the bytes the earlier COPY already wrote.

@@ -97,6 +97,18 @@ jobs:
             org.opencontainers.image.title=Open Dungeon Master
             org.opencontainers.image.description=Self-hosted multiplayer D&D 5e platform with an AI Dungeon Master
 
+      - name: Describe the build
+        id: build
+        run: |
+          # `git describe` in the shape the app reads: a release tag is that
+          # tag with nothing on top; anything else is the bare commit.
+          short="${GITHUB_SHA::7}"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "describe=${GITHUB_REF_NAME}-0-g${short}" >> "$GITHUB_OUTPUT"
+          else
+            echo "describe=${short}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -110,6 +122,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # The build context has no .git: the About dialog is told which
+          # commit the image was made from (next.config.ts).
+          build-args: |
+            ODM_BUILD_COMMIT=${{ github.sha }}
+            ODM_BUILD_DESCRIBE=${{ steps.build.outputs.describe }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
