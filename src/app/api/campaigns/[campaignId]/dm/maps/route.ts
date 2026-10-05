@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { MAP_SIZE, MAP_THEMES } from "@/lib/battlemap/generate";
-import { UVTT_SIZE } from "@/lib/battlemap/uvtt";
+import { UVTT_MAX_POINTS, UVTT_SIZE } from "@/lib/battlemap/uvtt";
 import { isBackdropPath } from "@/lib/battlemap/backdrop";
 import { skinById } from "@/lib/battlemap/skins";
 import {
@@ -62,10 +62,16 @@ const importSchema = z.object({
       pixels_per_grid: z.number().optional(),
     }),
     // Bounded so a hand-built payload cannot ask the converter to walk a
-    // million segments. A drawn dungeon is a few thousand at most.
-    line_of_sight: z.array(z.array(z.object({ x: z.number(), y: z.number() }))).max(4000).optional(),
+    // million segments. A drawn dungeon is a few thousand at most. The
+    // points in a line are capped here too; the converter also caps them
+    // across the whole file and clips each wall to the board
+    // (src/lib/battlemap/uvtt.ts).
+    line_of_sight: z
+      .array(z.array(z.object({ x: z.number(), y: z.number() })).max(UVTT_MAX_POINTS))
+      .max(4000)
+      .optional(),
     objects_line_of_sight: z
-      .array(z.array(z.object({ x: z.number(), y: z.number() })))
+      .array(z.array(z.object({ x: z.number(), y: z.number() })).max(UVTT_MAX_POINTS))
       .max(4000)
       .optional(),
     portals: z
