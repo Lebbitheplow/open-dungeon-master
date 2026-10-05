@@ -124,7 +124,9 @@ function SidePanelInner({
         wide ? "lg:w-[30rem]" : "lg:w-[24rem]",
       )}
     >
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
+      {/* side-panel-body: holding the board it stops scrolling as one
+          piece and gives the board the room left (world.css, issue 87). */}
+      <div className="side-panel-body min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
         {glance}
         {/* Keyed by tab so the incoming panel rises in instead of cutting. */}
         <div key={tab} className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none">
