@@ -39,7 +39,9 @@ export function useTableAudio(state: CampaignState) {
     }
     if (latestTts && latestTts.messageId !== handedTtsRef.current) {
       handedTtsRef.current = latestTts.messageId;
-      onTtsReady(latestTts.messageId, latestTts.url, latestTts.seq > mountSeqRef.current);
+      // A stream is only ever offered live; a finished file is live when it
+      // is newer than the snapshot.
+      onTtsReady(latestTts.messageId, latestTts.url, Boolean(latestTts.live) || latestTts.seq > mountSeqRef.current);
     }
   }, [latestTts, onTtsReady, loading, lastSeq]);
 

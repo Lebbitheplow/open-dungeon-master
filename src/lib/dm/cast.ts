@@ -6,12 +6,14 @@ import { publishEphemeral } from "@/lib/events";
 // carries it and cast_updated refreshes it whenever the DM changes a
 // person, so a player's transcript can put a face beside a line.
 
-export type CastMember = { id: string; name: string; portraitUrl: string; hasVoice: boolean };
+// `aliases` are the other names they answer to, so a line tagged "Marla"
+// finds Marla Venn (src/lib/dm/speech.ts).
+export type CastMember = { id: string; name: string; portraitUrl: string; hasVoice: boolean; aliases?: string[] };
 
 export function publicCast(campaignId: string): CastMember[] {
   return listNpcs(campaignId)
     .filter((npc) => !npc.archived)
-    .map((npc) => ({ id: npc.id, name: npc.name, portraitUrl: npc.portraitUrl, hasVoice: npc.voice !== null }));
+    .map((npc) => ({ id: npc.id, name: npc.name, portraitUrl: npc.portraitUrl, hasVoice: npc.voice !== null, aliases: npc.aliases }));
 }
 
 export function publishCast(campaignId: string) {

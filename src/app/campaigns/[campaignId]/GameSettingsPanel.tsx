@@ -19,6 +19,7 @@ import type { WorldPackSummary } from "@/lib/worlds/types";
 import { WorldPackGallery } from "@/components/WorldPackGallery";
 import { useTtsVoices, voiceLabel, VoicePicker } from "@/components/VoicePicker";
 import { NarrationNote } from "@/app/campaigns/[campaignId]/NarrationNote";
+import { CharacterVoices } from "@/app/campaigns/[campaignId]/CharacterVoices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { SafetyToneFields } from "@/components/SafetyToneFields";
 import type { GameSettings } from "@/lib/schemas/game-settings";
@@ -246,6 +247,7 @@ export function GameSettingsPanel({
             AI companions: {COMPANION_LABELS[settings.companions]}
           </span>
         </div>
+        {settings.ttsEnabled ? <CharacterVoices campaignId={campaignId} settings={settings} steersStory={false} /> : null}
       </section>
     );
   }
@@ -392,6 +394,9 @@ export function GameSettingsPanel({
             </>
           ) : null}
         </div>
+        {settings.ttsEnabled ? (
+          <CharacterVoices campaignId={campaignId} settings={settings} steersStory patch={patch} />
+        ) : null}
         {settings.ttsEnabled ? <NarrationNote /> : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Faces</span>

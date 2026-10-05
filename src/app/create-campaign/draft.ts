@@ -35,6 +35,10 @@ export type CampaignDraft = {
   dicePolicy: DicePolicy;
   ttsEnabled: boolean;
   ttsVoice: string;
+  // The narrator's pace, and whether speakers nobody chose a voice for are
+  // cast from the server's voices as they first speak (issue 97).
+  ttsSpeed: number;
+  ttsAutoCast: boolean;
   mapsEnabled: boolean;
   ambienceEnabled: boolean;
   // Scene-following is only meaningful once ambience is on, and is shown as
@@ -92,6 +96,8 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   dicePolicy: "digital_only",
   ttsEnabled: true,
   ttsVoice: "af_heart",
+  ttsSpeed: 1,
+  ttsAutoCast: false,
   mapsEnabled: true,
   ambienceEnabled: true,
   ambienceAuto: true,

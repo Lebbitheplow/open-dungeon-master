@@ -43,7 +43,8 @@ function refreshNarrationAudio(campaign: Campaign, message: CampaignMessage) {
     campaign.id,
     message.id,
     message.content,
-    campaign.gameSettings.ttsVoice,
+    campaign.gameSettings,
+    message.speaker ?? null,
   );
 }
 

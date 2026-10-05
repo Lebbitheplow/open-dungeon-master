@@ -107,7 +107,7 @@ export async function POST(
       campaignId,
       message.id,
       parsed.data.content,
-      campaign.gameSettings.ttsVoice,
+      campaign.gameSettings,
       speaker,
     );
   }

@@ -1913,7 +1913,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
       campaignId,
       message.id,
       content,
-      context.campaign.gameSettings.ttsVoice,
+      context.campaign.gameSettings,
     );
   }
 

@@ -1,24 +1,27 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { publishPersisted } from "@/lib/events";
+import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { describeSpeechFailure, synthesizeSpeech, ttsBackend, type TtsBackend } from "@/lib/tts-backend";
-import { listNpcs } from "@/lib/db/npcs";
-import type { Speaker } from "@/lib/dm/speech";
-import { planSpeech, type CastVoice } from "@/lib/tts-segments";
+import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
+import { guessGender, type VoiceGender } from "@/lib/tts-cast";
+import { closeLiveNarration, openLiveNarration, pushLiveNarration, renderSpeech } from "@/lib/tts-render";
+import { castUnvoiced, voiceRoster, type RosterEntry } from "@/lib/tts-roster";
+import { baseCreatureName, planSpeech, speechRequests, type CastVoice } from "@/lib/tts-segments";
 
 // Narration TTS on the server's speech backend (src/lib/tts-backend.ts: the
 // local Kokoro-FastAPI service on :8880 unless the admin chose another).
-// Audio is rendered on the media queue's own "tts" lane after a DM message
-// persists, so narration never waits behind a ComfyUI render, saved under
-// public/generated-audio, and announced with a tts_ready event that clients
-// autoplay (latest-only) with per-user mute. A render that fails says so to
-// the table, with the reason (issue 88).
-
-const CHUNK_CHAR_LIMIT = 1_800;
+// Audio is rendered on the media queue's narration lanes after a DM message
+// persists, so narration never waits behind a ComfyUI render: prose in the
+// narrator's voice, each speaker's lines in their own (issue 97). The
+// passage is offered to the table as a stream the moment its first clip
+// exists (tts_stream), saved under public/generated-audio when the last one
+// does, and announced with a tts_ready event; clients autoplay it
+// (latest-only) with per-user mute. A render that fails says so to the
+// table, with the reason (issue 88).
 
 function stripForSpeech(text: string): string {
   return stripToolText(text)
@@ -29,51 +32,99 @@ function stripForSpeech(text: string): string {
     .trim();
 }
 
-// Split long narration at sentence boundaries so Kokoro gets sane inputs.
-function chunkSentences(text: string): string[] {
-  if (text.length <= CHUNK_CHAR_LIMIT) {
-    return [text];
-  }
-  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|.+$/g) ?? [text];
-  const chunks: string[] = [];
-  let current = "";
-  for (const sentence of sentences) {
-    if (current && current.length + sentence.length > CHUNK_CHAR_LIMIT) {
-      chunks.push(current.trim());
-      current = "";
-    }
-    current += sentence;
-  }
-  if (current.trim()) {
-    chunks.push(current.trim());
-  }
-  return chunks;
-}
-
 export function narrationAudioPath(campaignId: string, messageId: string): string {
   return path.join(process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
 }
 
-// The cast's own voices (docs/vtt-parity-implementation-plan.md 8.2),
-// read when the job runs so a voice picked a moment ago is heard.
+// Where a take is listened to. The files are served to be kept for a year,
+// so each take of a passage needs an address of its own: without the
+// version, a passage that was narrated again (new prose, a new voice) kept
+// playing its first take out of the browser's cache.
+export function narrationAudioUrl(campaignId: string, messageId: string, version: number): string {
+  return `/generated-audio/${campaignId}/${messageId}.mp3?v=${Math.floor(version)}`;
+}
+
+// What a passage is read with: the campaign's narration settings.
+export type NarrationSettings = { ttsVoice: string; ttsSpeed?: number; ttsAutoCast?: boolean };
+
+function castOf(roster: RosterEntry[]): CastVoice[] {
+  return roster.map((entry) => ({
+    name: entry.name,
+    aliases: entry.aliases,
+    voiceId: entry.voice?.voiceId ?? "",
+    speed: entry.voice?.speed ?? 1,
+  }));
+}
+
+// The cast's own voices (docs/vtt-parity-implementation-plan.md 8.2, issue
+// 97), read when the job runs so a voice picked a moment ago is heard.
 export function castVoices(campaignId: string): CastVoice[] {
   try {
-    return listNpcs(campaignId)
-      .filter((npc) => npc.voice && !npc.archived)
-      .map((npc) => ({ name: npc.name, voiceId: npc.voice!.voiceId, speed: npc.voice!.speed }));
+    return castOf(voiceRoster(campaignId)).filter((entry) => entry.voiceId);
   } catch {
     return [];
   }
+}
+
+function edgeWords(text: string, count: number, from: "start" | "end"): string {
+  const words = text.trim().split(/\s+/);
+  return (from === "start" ? words.slice(0, count) : words.slice(-count)).join(" ");
+}
+
+// Who speaks in this passage without a voice yet, and what the prose right
+// beside their lines says about them ("she says", "the old man growls").
+export function unvoicedSpeakers(
+  speech: string,
+  roster: RosterEntry[],
+  speaker: Speaker | null,
+): { keys: Set<string>; hints: Map<string, VoiceGender> } {
+  const keys = new Set<string>();
+  const near = new Map<string, string>();
+  if (speaker && speaker.kind !== "narrator") {
+    const wanted = [speaker.name.toLowerCase(), baseCreatureName(speaker.name).toLowerCase()];
+    const entry = roster.find((candidate) => wanted.includes(candidate.name.toLowerCase()));
+    if (entry && !entry.voice) {
+      keys.add(entry.key);
+    }
+    return { keys, hints: new Map() };
+  }
+  const segments = attributeSpeech(
+    speech,
+    roster.map((entry) => ({ kind: "npc" as const, id: entry.key, name: entry.name, aliases: entry.aliases })),
+  );
+  segments.forEach((segment, index) => {
+    if (segment.kind !== "speech") {
+      return;
+    }
+    const entry = roster.find((candidate) => candidate.key === segment.speaker.id);
+    if (!entry || entry.voice) {
+      return;
+    }
+    keys.add(entry.key);
+    const before = segments[index - 1];
+    const after = segments[index + 1];
+    near.set(
+      entry.key,
+      [
+        near.get(entry.key) ?? "",
+        before?.kind === "prose" ? edgeWords(before.text, 5, "end") : "",
+        after?.kind === "prose" ? edgeWords(after.text, 5, "start") : "",
+      ].join(" "),
+    );
+  });
+  return { keys, hints: new Map([...near].map(([key, text]) => [key, guessGender(text)])) };
 }
 
 export function enqueueNarrationAudio(
   campaignId: string,
   messageId: string,
   text: string,
-  voice: string,
+  // The campaign's narration settings, or just the narrator's voice.
+  narration: NarrationSettings | string,
   // The person the whole message is spoken as, when the DM said so.
   speaker: Speaker | null = null,
 ) {
+  const settings: NarrationSettings = typeof narration === "string" ? { ttsVoice: narration } : narration;
   const speech = stripForSpeech(text);
   // Narration switched off server-wide is not a failure: nothing is asked
   // for, so nothing is announced.
@@ -85,38 +136,61 @@ export function enqueueNarrationAudio(
     `tts ${messageId}`,
     async () => {
       publishMediaStatus(campaignId, "tts", messageId, "generating");
-      // Prose in the narrator's voice, each attributed line in its
-      // speaker's own, concatenated into the one file the transcript keys.
-      const plan = planSpeech(speech, { narratorVoice: voice, cast: castVoices(campaignId), speaker });
-      const buffers: Buffer[] = [];
-      // Read once per passage, so every chunk goes to the same server even
+      // Read once per passage, so every clip goes to the same server even
       // if the admin saves a change halfway through.
       const backend = ttsBackend();
+      const version = Date.now();
+      const url = narrationAudioUrl(campaignId, messageId, version);
+      const live = openLiveNarration(campaignId, messageId);
+      let clips: Buffer[];
       try {
-        for (const part of plan) {
-          for (const chunk of chunkSentences(part.text)) {
-            buffers.push(await synthesizeSpeech(chunk, part.voice, part.speed, backend));
+        let roster: RosterEntry[] = [];
+        try {
+          roster = voiceRoster(campaignId);
+        } catch {
+          // No readable roster: the narrator reads it all.
+        }
+        if (settings.ttsAutoCast && roster.length) {
+          const { keys, hints } = unvoicedSpeakers(speech, roster, speaker);
+          if (keys.size) {
+            await castUnvoiced(campaignId, roster, settings.ttsVoice, { only: keys, hints, backend });
           }
         }
+        // Prose in the narrator's voice, each attributed line in its
+        // speaker's own, concatenated into the one file the transcript keys.
+        const plan = planSpeech(speech, {
+          narratorVoice: settings.ttsVoice,
+          narratorSpeed: settings.ttsSpeed,
+          cast: castOf(roster),
+          speaker,
+        });
+        clips = await renderSpeech(speechRequests(plan), backend, (audio, index) => {
+          pushLiveNarration(live, audio);
+          if (index === 0) {
+            // The first words exist: the table may start listening now.
+            // "live" tells a client that fetches its audio whole (the apps,
+            // which send a token no audio element can) to read this one as
+            // it arrives instead.
+            publishEphemeral(campaignId, "tts_stream", { messageId, url: `${url}&live=1` });
+          }
+        });
       } catch (error) {
+        closeLiveNarration(messageId, live, "failed");
         const reason = describeSpeechFailure(error, backend);
         lastFailures.set(messageId, reason);
         publishMediaStatus(campaignId, "tts", messageId, "failed", reason);
         throw error;
       }
       lastFailures.delete(messageId);
-      // MP3 is plain MPEG frames; the chunks concatenate and play cleanly.
-      const audio = Buffer.concat(buffers);
+      // MP3 is plain MPEG frames; the clips concatenate and play cleanly.
       const file = narrationAudioPath(campaignId, messageId);
       mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, audio);
+      writeFileSync(file, Buffer.concat(clips));
+      closeLiveNarration(messageId, live, "done");
       narrationLists.delete(campaignId);
-      publishPersisted(campaignId, "tts_ready", {
-        messageId,
-        url: `/generated-audio/${campaignId}/${messageId}.mp3`,
-      });
+      publishPersisted(campaignId, "tts_ready", { messageId, url });
     },
-    "tts",
+    `tts:${campaignId}`,
   );
 }
 
@@ -160,7 +234,16 @@ export function listNarrationAudio(campaignId: string): Record<string, string> {
   const audio: Record<string, string> = {};
   for (const file of readdirSync(directory)) {
     if (file.endsWith(".mp3")) {
-      audio[file.slice(0, -".mp3".length)] = `/generated-audio/${campaignId}/${file}`;
+      // Each take is addressed by when it was written (narrationAudioUrl).
+      // One stat per file, paid only when the folder changed.
+      let version = 0;
+      try {
+        version = statSync(path.join(directory, file)).mtimeMs;
+      } catch {
+        continue;
+      }
+      const messageId = file.slice(0, -".mp3".length);
+      audio[messageId] = narrationAudioUrl(campaignId, messageId, version);
     }
   }
   narrationLists.set(campaignId, { mtimeMs, audio });
