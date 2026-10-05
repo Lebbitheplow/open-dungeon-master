@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { MAP_SIZE, MAP_THEMES } from "@/lib/battlemap/generate";
-import { UVTT_SIZE } from "@/lib/battlemap/uvtt";
+import { UVTT_MAX_POINTS, UVTT_SIZE } from "@/lib/battlemap/uvtt";
 import { isBackdropPath } from "@/lib/battlemap/backdrop";
 import { skinById } from "@/lib/battlemap/skins";
 import {
@@ -11,6 +11,7 @@ import {
   importUvttIntoLibrary,
   libraryState,
 } from "@/lib/dm/map-library";
+import { onePageDungeonFileSchema } from "@/lib/battlemap/watabou";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,10 +63,16 @@ const importSchema = z.object({
       pixels_per_grid: z.number().optional(),
     }),
     // Bounded so a hand-built payload cannot ask the converter to walk a
-    // million segments. A drawn dungeon is a few thousand at most.
-    line_of_sight: z.array(z.array(z.object({ x: z.number(), y: z.number() }))).max(4000).optional(),
+    // million segments. A drawn dungeon is a few thousand at most. The
+    // points in a line are capped here too; the converter also caps them
+    // across the whole file and clips each wall to the board
+    // (src/lib/battlemap/uvtt.ts).
+    line_of_sight: z
+      .array(z.array(z.object({ x: z.number(), y: z.number() })).max(UVTT_MAX_POINTS))
+      .max(4000)
+      .optional(),
     objects_line_of_sight: z
-      .array(z.array(z.object({ x: z.number(), y: z.number() })))
+      .array(z.array(z.object({ x: z.number(), y: z.number() })).max(UVTT_MAX_POINTS))
       .max(4000)
       .optional(),
     portals: z
@@ -85,7 +92,19 @@ const importSchema = z.object({
   }),
 });
 
-const bodySchema = z.discriminatedUnion("do", [createSchema, captureSchema, importSchema]);
+// A One Page Dungeon export comes through the same import button and the
+// same `do` as a Universal VTT file (src/lib/dm/map-library.ts tells them
+// apart by shape). It has its own schema rather than the UVTT one, which
+// requires a UVTT header and would strip the rooms before the converter saw
+// them. Tried after the UVTT shape, so a UVTT file reads as one.
+const onePageDungeonImportSchema = z.object({
+  do: z.literal("import-uvtt"),
+  name: z.string().trim().min(1).max(80),
+  backdropPath: z.string().refine(isBackdropPath, "Not an uploaded file.").optional(),
+  file: onePageDungeonFileSchema,
+});
+
+const bodySchema = z.union([createSchema, captureSchema, importSchema, onePageDungeonImportSchema]);
 
 export async function GET(
   _request: Request,

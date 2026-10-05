@@ -43,6 +43,18 @@ export const UVTT_MAX_LIGHTS = 24;
 // enclosing wall and the result would be a slab of rock.
 const OPEN_MAP_RATIO = 0.9;
 
+// What converting one file may cost. The file is somebody else's, and the
+// work used to follow its coordinates rather than the board: one wall a
+// trillion units long was a trillion loop turns on the server's one event
+// loop. Only the stretch of a wall over the board is walked now, and these
+// bound the rest. A real export has a few thousand points within a few
+// dozen units of the origin. Walling every tile edge of a 64x64 board takes
+// about 8,000 steps and a diagonal through every tile about 100,000, so the
+// step budget is ten times the densest map this engine can hold.
+export const UVTT_MAX_POINTS = 50_000;
+const UVTT_MAX_COORDINATE = 1_000_000;
+const UVTT_MAX_STEPS = 1_000_000;
+
 export type UvttPoint = { x: number; y: number };
 
 // Only the fields this conversion reads. Everything else in the format
@@ -91,7 +103,52 @@ type Edges = Set<string>;
 const vertical = (x: number, y: number) => `v:${x}:${y}`;
 const horizontal = (x: number, y: number) => `h:${x}:${y}`;
 
-function blockSegment(edges: Edges, a: UvttPoint, b: UvttPoint, width: number, height: number) {
+// The stretch of the segment a-b that lies inside the box [minX, maxX] x
+// [minY, maxY], as the fractions of the way from a to b where it enters and
+// leaves (Liang-Barsky), or null when the segment misses the box.
+function spanInBox(
+  a: UvttPoint,
+  b: UvttPoint,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): [number, number] | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  let enter = 0;
+  let leave = 1;
+  for (const [p, q] of [
+    [-dx, a.x - minX],
+    [dx, maxX - a.x],
+    [-dy, a.y - minY],
+    [dy, maxY - a.y],
+  ]) {
+    if (p === 0) {
+      if (q < 0) {
+        return null;
+      }
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) {
+      if (t > leave) {
+        return null;
+      }
+      enter = Math.max(enter, t);
+    } else {
+      if (t < enter) {
+        return null;
+      }
+      leave = Math.min(leave, t);
+    }
+  }
+  return [enter, leave];
+}
+
+// Blocks the tile edges the segment lies along and returns the loop turns it
+// took, which stay within the board's size however far the segment runs.
+function blockSegment(edges: Edges, a: UvttPoint, b: UvttPoint, width: number, height: number): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const flat = 1e-6;
@@ -108,30 +165,51 @@ function blockSegment(edges: Edges, a: UvttPoint, b: UvttPoint, width: number, h
   };
 
   // The common case by far: walls drawn along the grid, which the format
-  // stores exactly, so these need no sampling and lose nothing.
+  // stores exactly, so these need no sampling and lose nothing. Only the
+  // stretch that can land on the board is walked; the edges past it were
+  // always thrown away.
   if (Math.abs(dx) < flat) {
     const x = Math.round(a.x);
-    for (let y = Math.floor(Math.min(a.y, b.y)); y < Math.ceil(Math.max(a.y, b.y)); y += 1) {
+    const from = Math.max(0, Math.floor(Math.min(a.y, b.y)));
+    const to = Math.min(height, Math.ceil(Math.max(a.y, b.y)));
+    for (let y = from; y < to; y += 1) {
       addVertical(x, y);
     }
-    return;
+    return Math.max(0, to - from);
   }
   if (Math.abs(dy) < flat) {
     const y = Math.round(a.y);
-    for (let x = Math.floor(Math.min(a.x, b.x)); x < Math.ceil(Math.max(a.x, b.x)); x += 1) {
+    const from = Math.max(0, Math.floor(Math.min(a.x, b.x)));
+    const to = Math.min(width, Math.ceil(Math.max(a.x, b.x)));
+    for (let x = from; x < to; x += 1) {
       addHorizontal(x, y);
     }
-    return;
+    return Math.max(0, to - from);
   }
 
   // A diagonal wall has no exact tile-edge equivalent, so it is walked and
   // every grid line it crosses is blocked. The result is a staircase, which
   // is the only thing a square grid can say about a diagonal.
+  //
+  // Only the samples over the board and a tile of margin are taken: a
+  // sample beyond that can only block an edge off the board, which the
+  // checks above throw away. They are the very samples the whole walk would
+  // take, so the staircase comes out the same however far the wall runs.
   const steps = Math.max(2, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 16));
-  let previous = { x: Math.floor(a.x), y: Math.floor(a.y) };
-  for (let step = 1; step <= steps; step += 1) {
+  const span = spanInBox(a, b, -1, -1, width + 1, height + 1);
+  if (!span) {
+    return 0;
+  }
+  const sample = (step: number) => {
     const t = step / steps;
-    const cell = { x: Math.floor(a.x + dx * t), y: Math.floor(a.y + dy * t) };
+    return { x: Math.floor(a.x + dx * t), y: Math.floor(a.y + dy * t) };
+  };
+  // A step either side of the span, so rounding never drops its ends.
+  const first = Math.max(1, Math.floor(span[0] * steps) - 1);
+  const last = Math.min(steps, Math.ceil(span[1] * steps) + 1);
+  let previous = sample(first - 1);
+  for (let step = first; step <= last; step += 1) {
+    const cell = sample(step);
     if (cell.x !== previous.x) {
       addVertical(Math.max(cell.x, previous.x), previous.y);
     }
@@ -140,6 +218,7 @@ function blockSegment(edges: Edges, a: UvttPoint, b: UvttPoint, width: number, h
     }
     previous = cell;
   }
+  return last - first + 1;
 }
 
 // Every tile reachable from outside the map without crossing a wall. These
@@ -275,16 +354,30 @@ export function parseUvtt(file: unknown): UvttOutcome {
     : { x: 0, y: 0 };
 
   const edges: Edges = new Set();
-  const walls = [...(source.line_of_sight ?? []), ...(source.objects_line_of_sight ?? [])];
+  const walls = [...(source.line_of_sight ?? []), ...(source.objects_line_of_sight ?? [])].filter(
+    (line): line is UvttPoint[] => Array.isArray(line),
+  );
+  const pointCount = walls.reduce((sum, line) => sum + line.length, 0);
+  if (pointCount > UVTT_MAX_POINTS) {
+    return {
+      error: `That file has ${pointCount} wall points. This import reads up to ${UVTT_MAX_POINTS}.`,
+    };
+  }
   let segments = 0;
+  let work = 0;
   for (const line of walls) {
-    if (!Array.isArray(line)) {
-      continue;
-    }
     const points = line.filter(isPoint).map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }));
+    if (points.some((point) => Math.abs(point.x) > UVTT_MAX_COORDINATE || Math.abs(point.y) > UVTT_MAX_COORDINATE)) {
+      return {
+        error: "That file has walls millions of tiles away from its map, so it is not a drawing this import can read.",
+      };
+    }
     for (let i = 0; i + 1 < points.length; i += 1) {
-      blockSegment(edges, points[i], points[i + 1], width, height);
+      work += blockSegment(edges, points[i], points[i + 1], width, height);
       segments += 1;
+      if (work > UVTT_MAX_STEPS) {
+        return { error: "That file has far more wall geometry than a map this size can hold." };
+      }
     }
   }
   if (!segments) {

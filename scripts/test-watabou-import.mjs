@@ -14,7 +14,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const dungeonFile = JSON.parse(readFileSync(path.join(here, "fixtures", "watabou-dungeon.json"), "utf8"));
 const cityFile = JSON.parse(readFileSync(path.join(here, "fixtures", "watabou-city.geojson"), "utf8"));
 
-const { isOnePageDungeon, isWatabouCity, parseOnePageDungeon, parseWatabouCity, WATABOU_LIMITS } = await import("../src/lib/battlemap/watabou.ts");
+const { isOnePageDungeon, isWatabouCity, onePageDungeonFileSchema, parseOnePageDungeon, parseWatabouCity, WATABOU_LIMITS } = await import("../src/lib/battlemap/watabou.ts");
 const { TERRAIN } = await import("../src/lib/battlemap/types.ts");
 
 let passed = 0;
@@ -51,6 +51,14 @@ test("rooms become floor inside a wall, doors sit between, notes land as DM labe
   assert.deepEqual(map.labels[0], { x: 13, y: 4, text: "A drowned altar, still wet.", dmOnly: true });
   assert.match(map.notes[0], /5 rooms and passages, 2 doors/);
   assert.match(map.notes[1], /flooded once/);
+});
+
+test("the import request's schema keeps everything the converter reads", () => {
+  // The route checks a request against this before the converter sees it;
+  // whatever it strips, the converter never gets.
+  const checked = onePageDungeonFileSchema.safeParse(dungeonFile);
+  assert.ok(checked.success, JSON.stringify(checked.error?.issues?.[0]));
+  assert.deepEqual(parseOnePageDungeon(checked.data), parseOnePageDungeon(dungeonFile));
 });
 
 test("a dungeon with no rooms, or one too big, is refused with a reason", () => {

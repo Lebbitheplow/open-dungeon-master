@@ -2,6 +2,7 @@ import { TERRAIN } from "@/lib/battlemap/types";
 import type { MapLabel } from "@/lib/battlemap/scene";
 import type { AmbientLight, MapLight } from "@/lib/battlemap/types";
 import type { MapTheme } from "@/lib/battlemap/generate";
+import { z } from "zod";
 import { normalizePaths, type OverworldLabel, type OverworldPath } from "@/lib/overworld/features";
 
 // Watabou imports (docs/vtt-parity-implementation-plan.md 12.2), the same
@@ -14,6 +15,26 @@ import { normalizePaths, type OverworldLabel, type OverworldPath } from "@/lib/o
 // wall, water, green, plaza, earth).
 
 export const WATABOU_LIMITS = { minSide: 8, maxSide: 80, maxChars: 4_000_000 } as const;
+
+// The fields of a One Page Dungeon export that parseOnePageDungeon reads, for
+// a route to check a request against before it gets here. Everything else in
+// the export (columns, water, version) is dropped. The bounds are far past a
+// real export, which has tens of rooms and a handful of notes, and keep a
+// hand-built file from asking for unbounded work.
+const cellPoint = z.object({ x: z.number(), y: z.number() });
+export const onePageDungeonFileSchema = z.object({
+  title: z.string().max(200).optional(),
+  story: z.string().max(4000).optional(),
+  rects: z
+    .array(z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }))
+    .min(1)
+    .max(1000),
+  doors: z.array(cellPoint).max(2000).optional(),
+  notes: z
+    .array(z.object({ text: z.string().max(2000), pos: cellPoint.optional() }))
+    .max(500)
+    .optional(),
+});
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Door = { x: number; y: number; dir?: { x: number; y: number }; type?: number };

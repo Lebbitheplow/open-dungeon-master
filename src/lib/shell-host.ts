@@ -15,6 +15,18 @@ export interface ShellShareStatus {
   mode: "" | "named" | "quick";
   error: string;
   lanUrl: string;
+  // Room codes the table registry would not take from this app because
+  // another device claimed them first: a friend who types one is not sent
+  // here. Absent in apps that do not report it.
+  refusedCodes?: string[];
+}
+
+// Whether the registry refused this room code while the world is shared.
+export function roomCodeRefused(status: ShellShareStatus | null, code: string): boolean {
+  if (!status?.supported || status.state !== "running" || !Array.isArray(status.refusedCodes)) {
+    return false;
+  }
+  return status.refusedCodes.includes(code.trim().toUpperCase());
 }
 
 export interface ShellShare {

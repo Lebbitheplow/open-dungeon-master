@@ -119,7 +119,15 @@ async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
 // nobody else can point someone's table at their own server. The entry
 // holds a URL and a hash, never a campaign, a name or anything about who
 // plays there.
-const TABLE_TTL_S = 45 * 86_400;
+//
+// A claim outlives a long break. It used to lapse after 45 days without its
+// host, while the campaign kept the same code and everyone ever invited
+// still knew it: whoever registered the lapsed code first owned it, the
+// returning host was refused, and friends typing the familiar code were
+// sent to the newcomer. A table that sits out a season is ordinary, so the
+// claim now holds for over a year. Rows are tiny and written at most once a
+// day per shared code, so the longer life costs nothing that is counted.
+const TABLE_TTL_S = 400 * 86_400;
 const TABLE_REFRESH_MS = 86_400 * 1000;
 const TABLE_CLAIMS_PER_DAY = 60;
 const TABLE_CODE_SHAPE = /^[A-HJ-NP-Z2-9]{4,12}$/;
@@ -179,7 +187,7 @@ async function putTable(env, request, rawCode) {
   // the scarce operation on any free storage (on KV one host with seven
   // campaigns spent the whole day's 1,000 in under three hours; SQLite
   // rows are a hundred times more plentiful but still counted). The row is
-  // rewritten only when the address moves or its 45-day expiry has aged a
+  // rewritten only when the address moves or its expiry has aged a
   // day, which keeps a permanently shared table alive at one write per
   // day per code.
   const now = Date.now();

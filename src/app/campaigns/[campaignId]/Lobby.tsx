@@ -5,6 +5,7 @@ import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { roomCodeRefused } from "@/lib/shell-host";
 import { useShellShare } from "@/lib/use-shell-share";
 import { ScheduleSection } from "@/components/ScheduleSection";
 import { ui } from "@/lib/ui";
@@ -427,6 +428,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               inviteCode={campaign.inviteCode}
               canRegenerate={isLead}
               shareUrl={shareUrl}
+              codeRefused={roomCodeRefused(share.status, campaign.inviteCode)}
               className="lobby-enter order-2"
               style={enter(1)}
             />

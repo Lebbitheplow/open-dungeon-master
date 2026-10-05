@@ -11,7 +11,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { UVTT_SIZE, backdropDataUrl, nameFromFilename, parseUvtt } = await import(
+const { UVTT_MAX_POINTS, UVTT_SIZE, backdropDataUrl, nameFromFilename, parseUvtt } = await import(
   "../src/lib/battlemap/uvtt.ts"
 );
 const { TERRAIN, tileAt } = await import("../src/lib/battlemap/types.ts");
@@ -236,6 +236,58 @@ test("a diagonal wall becomes a staircase rather than a crash", () => {
   const result = parseUvtt(file({ x: 10, y: 8 }, diagonal));
   assert.ok(!result.error, result.error);
   assert.equal(result.map.terrain.length, 80);
+});
+
+// ---- what one file may cost ----
+// The work used to follow the file's coordinates rather than the board: a
+// wall a billion units long was a billion loop turns on the server's one
+// event loop. Only the stretch over the board is walked now.
+
+const timed = (fn) => {
+  const started = Date.now();
+  const value = fn();
+  return { value, ms: Date.now() - started };
+};
+
+// A thousand of them: the old walk took minutes over these, a turn per unit.
+const many = (line) => Array.from({ length: 1_000 }, () => line);
+
+test("straight walls running far off the board convert like ones that stop at its edge", () => {
+  const longWall = timed(() => parseUvtt(file({ x: 10, y: 8 }, [...ROOM_WALLS, ...many([point(-900_000, 4), point(900_000, 4)])])));
+  const shortWall = parseUvtt(file({ x: 10, y: 8 }, [...ROOM_WALLS, [point(0, 4), point(10, 4)]]));
+  assert.ok(!longWall.value.error, longWall.value.error);
+  assert.equal(longWall.value.map.terrain, shortWall.map.terrain);
+  assert.ok(longWall.ms < 1_000, `took ${longWall.ms}ms`);
+});
+
+test("diagonal walls running far off the board are walked only where they cross it", () => {
+  const { value, ms } = timed(() =>
+    parseUvtt(file({ x: 10, y: 8 }, [...ROOM_WALLS, ...many([point(-900_000, -900_000), point(900_000, 900_000)])])),
+  );
+  assert.ok(!value.error, value.error);
+  // The room is still there: the diagonal runs through it, so some of it
+  // stays floor on either side of the staircase.
+  assert.ok(value.map.terrain.includes(TERRAIN.floor));
+  assert.ok(ms < 1_000, `took ${ms}ms`);
+});
+
+test("walls millions of tiles from the map are refused", () => {
+  const result = parseUvtt(file({ x: 10, y: 8 }, [...ROOM_WALLS, [point(0, 0), point(1_000_001, 0)]]));
+  assert.match(result.error ?? "", /millions of tiles/);
+});
+
+test("more wall points than any drawing has are refused", () => {
+  const crowd = [Array.from({ length: UVTT_MAX_POINTS }, () => point(3, 3))];
+  assert.match(parseUvtt(file({ x: 10, y: 8 }, [...ROOM_WALLS, ...crowd])).error ?? "", /wall points/);
+});
+
+test("geometry no map could hold is refused at the work budget, quickly", () => {
+  // Diagonals zig-zagging across the whole board, as many as the point cap
+  // allows: the most work a file under the other limits can ask for.
+  const zigzag = Array.from({ length: UVTT_MAX_POINTS - 10 }, (_, i) => (i % 2 ? point(64, 60) : point(0, 0)));
+  const { value, ms } = timed(() => parseUvtt(file({ x: 64, y: 64 }, [...ROOM_WALLS, zigzag])));
+  assert.match(value.error ?? "", /far more wall geometry/);
+  assert.ok(ms < 3_000, `took ${ms}ms`);
 });
 
 // ---- the picture ----

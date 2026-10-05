@@ -316,8 +316,13 @@ await test("re-sending an unchanged address costs no KV write", async () => {
   }
   assert.equal(env.SESSIONS.writes, before, "a host's minute-by-minute republish must be free");
 
-  // A row that is a day old is rewritten once, so its 45-day expiry
-  // keeps sliding for as long as the table stays shared.
+  // A claim outlives a season away from the table: nobody else can
+  // register the code while its host is on a break.
+  const life = env.SESSIONS.raw("table:EFGH6789").expires_at - Date.now();
+  assert.ok(life > 365 * 86_400 * 1000, "a claim must hold for over a year");
+
+  // A row that is a day old is rewritten once, so its expiry keeps
+  // sliding for as long as the table stays shared.
   const raw = JSON.parse(env.SESSIONS.raw("table:EFGH6789").value);
   raw.at = Date.now() - 2 * 86_400 * 1000;
   env.SESSIONS.setRaw("table:EFGH6789", JSON.stringify(raw));
