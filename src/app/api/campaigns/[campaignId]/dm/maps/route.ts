@@ -11,6 +11,7 @@ import {
   importUvttIntoLibrary,
   libraryState,
 } from "@/lib/dm/map-library";
+import { onePageDungeonFileSchema } from "@/lib/battlemap/watabou";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,7 +92,19 @@ const importSchema = z.object({
   }),
 });
 
-const bodySchema = z.discriminatedUnion("do", [createSchema, captureSchema, importSchema]);
+// A One Page Dungeon export comes through the same import button and the
+// same `do` as a Universal VTT file (src/lib/dm/map-library.ts tells them
+// apart by shape). It has its own schema rather than the UVTT one, which
+// requires a UVTT header and would strip the rooms before the converter saw
+// them. Tried after the UVTT shape, so a UVTT file reads as one.
+const onePageDungeonImportSchema = z.object({
+  do: z.literal("import-uvtt"),
+  name: z.string().trim().min(1).max(80),
+  backdropPath: z.string().refine(isBackdropPath, "Not an uploaded file.").optional(),
+  file: onePageDungeonFileSchema,
+});
+
+const bodySchema = z.union([createSchema, captureSchema, importSchema, onePageDungeonImportSchema]);
 
 export async function GET(
   _request: Request,
