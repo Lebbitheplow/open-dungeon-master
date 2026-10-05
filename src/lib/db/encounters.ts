@@ -465,6 +465,15 @@ export function patchEnemyIdentity(
   return getEnemy(enemyId);
 }
 
+// A new name and nothing else, mid-fight: hit points, conditions and the
+// stat snapshot stay exactly as the fight left them (patchEnemyIdentity
+// above resets hit points, which is right only before anybody has acted).
+export function renameEnemy(enemyId: string, displayName: string) {
+  getDatabase()
+    .prepare(`UPDATE encounter_enemies SET display_name = ?, updated_at = ? WHERE id = ?`)
+    .run(displayName.trim().slice(0, 80), nowIso(), enemyId);
+}
+
 export function patchEnemyHp(
   enemyId: string,
   currentHp: number,

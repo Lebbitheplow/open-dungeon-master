@@ -284,3 +284,73 @@ export function numberDuplicates(names: string[]): string[] {
     return `${name} ${next}`;
   });
 }
+
+// "Hunter 2" is a Hunter: the name without the number the engine (or the
+// model, or a DM) put on the end of it.
+function unnumbered(name: string): { base: string; number: number | null } {
+  const match = /^(.*\S)\s+#?(\d{1,3})$/.exec(name.trim());
+  return match ? { base: match[1], number: Number(match[2]) } : { base: name.trim(), number: null };
+}
+
+// Names for combatants joining ones already there (issue 98). Creatures of
+// one kind are numbered as one run however they arrived: two Hunters and a
+// third who comes later are Hunter 1, 2 and 3, not "Hunter 1", "Hunter 2"
+// and a plain "Hunter". numberDuplicates alone only sees names that match to
+// the letter at that moment, which is how the plain one got through.
+//
+// `names` are the arrivals', in order. `renames` are the ones already there
+// that have to change to keep the run whole: a lone "Hunter" becomes
+// "Hunter 1" when a second walks in. A number once given is never given
+// again, the dead included, so "Hunter 2" always means the same creature. A
+// name with a number of its own and nobody like it ("Unit 7") is left alone.
+export function nameArrivals(
+  existing: string[],
+  wanted: string[],
+): { names: string[]; renames: Array<{ index: number; name: string }> } {
+  const groups = new Map<string, { base: string; existing: number[]; wanted: number[] }>();
+  const groupOf = (name: string) => {
+    const { base } = unnumbered(name);
+    const key = base.toLowerCase();
+    let group = groups.get(key);
+    if (!group) {
+      group = { base, existing: [], wanted: [] };
+      groups.set(key, group);
+    }
+    return group;
+  };
+  existing.forEach((name, index) => groupOf(name).existing.push(index));
+  wanted.forEach((name, index) => groupOf(name).wanted.push(index));
+
+  const names = wanted.map((name) => name.trim());
+  const renames: Array<{ index: number; name: string }> = [];
+  for (const group of groups.values()) {
+    if (!group.wanted.length || group.existing.length + group.wanted.length < 2) {
+      continue;
+    }
+    const taken = new Set<number>();
+    for (const index of group.existing) {
+      const { number } = unnumbered(existing[index]);
+      if (number !== null) {
+        taken.add(number);
+      }
+    }
+    let next = 1;
+    const take = () => {
+      while (taken.has(next)) {
+        next += 1;
+      }
+      taken.add(next);
+      return next;
+    };
+    // Whoever was here first without a number is counted first.
+    for (const index of group.existing) {
+      if (unnumbered(existing[index]).number === null) {
+        renames.push({ index, name: `${group.base} ${take()}` });
+      }
+    }
+    for (const index of group.wanted) {
+      names[index] = `${group.base} ${take()}`;
+    }
+  }
+  return { names, renames };
+}
