@@ -9,12 +9,11 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { hostPlatform, onWindows } from "../host-platform.ts";
 import type { HarnessAvailability } from "./types.ts";
 
-const isWindows = process.platform === "win32";
-
 // Where the vendors' installers and the common package managers put binaries.
-export function knownInstallDirs(home: string, platform: string = process.platform): string[] {
+export function knownInstallDirs(home: string, platform: string = hostPlatform()): string[] {
   // Joined with the separator of the platform asked about, not the host's,
   // so the answer is the same wherever it is computed.
   const p = platform === "win32" ? path.win32 : path.posix;
@@ -74,7 +73,7 @@ function executable(file: string): boolean {
     if (!statSync(file).isFile()) {
       return false;
     }
-    if (!isWindows) {
+    if (!onWindows()) {
       accessSync(file, constants.X_OK);
     }
     return true;
@@ -84,11 +83,13 @@ function executable(file: string): boolean {
 }
 
 function candidatesIn(dir: string, name: string): string[] {
-  if (!isWindows) {
+  if (!onWindows()) {
     return [path.join(dir, name)];
   }
   const exts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
-  return [path.join(dir, name), ...exts.map((ext) => path.join(dir, name + ext.toLowerCase()))];
+  // The runnable names first: npm leaves a bare `claude` beside `claude.cmd`
+  // that is a shell script, and Windows cannot start it.
+  return [...exts.map((ext) => path.join(dir, name + ext.toLowerCase())), path.join(dir, name)];
 }
 
 type LoginPathCache = { value: Promise<string>; at: number };
@@ -100,7 +101,7 @@ declare global {
 // a shell that hangs on a prompt is cut off after three seconds. The lookup
 // is cached while it runs, so the programs probed at once share one shell.
 export function loginShellPath(): Promise<string> {
-  if (isWindows) {
+  if (onWindows()) {
     return Promise.resolve("");
   }
   const cached = globalThis.__odmLoginShellPath;
@@ -207,7 +208,7 @@ export function hostAvailability(deviceWorldOnPhone = false): HarnessAvailabilit
 // re-parse every argument. npm's shims name the real script on their last
 // line; running that script with node skips the shell entirely.
 export function resolveWindowsShim(binary: string): { command: string; prefix: string[] } {
-  if (!isWindows || !/\.(cmd|bat)$/i.test(binary)) {
+  if (!onWindows() || !/\.(cmd|bat)$/i.test(binary)) {
     return { command: binary, prefix: [] };
   }
   try {

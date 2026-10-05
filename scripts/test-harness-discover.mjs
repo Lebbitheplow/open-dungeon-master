@@ -146,3 +146,27 @@ await test("a shell that prints nothing yields an empty PATH", async () => {
 
 removeTempDir(dir);
 console.log(`harness discover: ${passed} checks passed`);
+
+// The bundler evaluates process.platform on the build machine, and the apps
+// ship one Linux-built payload everywhere (src/lib/host-platform.ts): server
+// code asks the host at run time instead.
+{
+  const { readdirSync, readFileSync, statSync } = await import("node:fs");
+  const pathMod = (await import("node:path")).default;
+  const offenders = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const full = pathMod.join(dir, name);
+      if (statSync(full).isDirectory()) {
+        walk(full);
+      } else if (/\.tsx?$/.test(name) && !full.endsWith("host-platform.ts")) {
+        const text = readFileSync(full, "utf8");
+        if (/process\.platform\s*[!=]==|[!=]==\s*process\.platform|=\s*process\.platform\b/.test(text)) {
+          offenders.push(pathMod.relative(process.cwd(), full));
+        }
+      }
+    }
+  };
+  walk((await import("node:url")).fileURLToPath(new URL("../src", import.meta.url)));
+  assert.deepEqual(offenders, [], "a platform check the bundler would compile away");
+}

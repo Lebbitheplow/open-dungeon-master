@@ -304,6 +304,7 @@ export const opencodeAdapter: HarnessAdapter = {
   label: "opencode",
   binaryNames: ["opencode"],
   installHint: "curl -fsSL https://opencode.ai/install | bash",
+  installHintWindows: "npm install -g opencode-ai",
   signInHint: "opencode auth login",
   lockdown: "removed",
   paints: false,

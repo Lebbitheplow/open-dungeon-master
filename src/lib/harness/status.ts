@@ -13,6 +13,7 @@ import { grokAdapter } from "./adapters/grok.ts";
 import { fakeAdapter } from "./adapters/fake.ts";
 import type { HarnessAdapter, HarnessConfig, HarnessId, HarnessStatus } from "./types.ts";
 import { HARNESS_IDS } from "./types.ts";
+import { onWindows } from "../host-platform.ts";
 
 const STATUS_TTL_MS = 5 * 60_000;
 
@@ -102,7 +103,7 @@ export async function probeHarness(id: HarnessId, options: { refresh?: boolean; 
   const base = {
     id,
     label: ADAPTERS[id].label,
-    installHint: ADAPTERS[id].installHint,
+    installHint: (onWindows() && ADAPTERS[id].installHintWindows) || ADAPTERS[id].installHint,
     signInHint: ADAPTERS[id].signInHint,
     lockdown: ADAPTERS[id].lockdown,
     checkedAt: Date.now(),

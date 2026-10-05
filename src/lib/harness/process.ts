@@ -3,6 +3,7 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { resolveWindowsShim } from "./discover.ts";
+import { onWindows } from "../host-platform.ts";
 
 export type SpawnedProgram = {
   child: ChildProcessWithoutNullStreams;
@@ -35,7 +36,7 @@ export function spawnProgram(
     windowsHide: true,
     // Its own process group, so closing the session takes any helper the
     // program started down with it.
-    detached: process.platform !== "win32",
+    detached: !onWindows(),
   });
   let buffer = "";
   let stderr = "";
@@ -79,7 +80,7 @@ export function spawnProgram(
       return;
     }
     try {
-      if (process.platform !== "win32" && child.pid) {
+      if (!onWindows() && child.pid) {
         process.kill(-child.pid, "SIGTERM");
       } else {
         child.kill();
@@ -89,7 +90,7 @@ export function spawnProgram(
     }
     const timer = setTimeout(() => {
       try {
-        if (process.platform !== "win32" && child.pid) {
+        if (!onWindows() && child.pid) {
           process.kill(-child.pid, "SIGKILL");
         } else {
           child.kill("SIGKILL");
