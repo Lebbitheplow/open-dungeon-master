@@ -33,5 +33,11 @@ export async function GET(request: Request) {
     return Response.json({ error: "No table answers to that code." }, { status: 404 });
   }
   recordLoginSuccess(throttle);
-  return Response.json({ preview: joinPreviewFor(campaign) });
+  const preview = joinPreviewFor(campaign);
+  // A guest has no session to fetch an upload with, so a cover kept behind
+  // the login is named by the address that takes the room code instead.
+  if (preview.cover && /^\/(uploads|generated)\//.test(preview.cover.url)) {
+    preview.cover = { url: `/api/campaigns/join/cover/${parsed.data}` };
+  }
+  return Response.json({ preview });
 }

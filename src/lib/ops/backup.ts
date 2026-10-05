@@ -52,6 +52,20 @@ function root() {
   return process.cwd();
 }
 
+// The paths a restore may replace: the ones the manifest names, and only
+// when this app manages them. A live restore deletes each one before copying
+// the archive's over it, so a manifest that could name anything else ("..",
+// "src", another folder on the disk) could delete it.
+function managedPaths(manifest: { includes?: unknown }): string[] {
+  const named = Array.isArray(manifest.includes) ? manifest.includes : [];
+  for (const rel of named) {
+    if (typeof rel !== "string" || !INCLUDES.includes(rel)) {
+      throw new BackupError(`backup manifest names a path this app does not manage: ${String(rel)}`);
+    }
+  }
+  return [...new Set([...(named as string[]), "odm-backup.json"])];
+}
+
 export function backupDir(): string {
   return path.resolve(serverEnv("ODM_BACKUP_DIR") || path.join(os.homedir(), "odm-backups"));
 }
@@ -226,10 +240,12 @@ export async function verifyBackup(name: string): Promise<{ proof: RestoreProof;
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
       format?: number;
       database?: string;
+      includes?: unknown;
     };
     if (manifest.format !== 1 || typeof manifest.database !== "string") {
       throw new Error("unsupported backup manifest");
     }
+    managedPaths(manifest);
     const dbInStage = path.resolve(stage, manifest.database);
     const relative = path.relative(stage, dbInStage);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
@@ -295,8 +311,7 @@ export async function restoreBackup(name: string): Promise<{ proof: RestoreProof
     const manifest = JSON.parse(fs.readFileSync(path.join(stage, "odm-backup.json"), "utf8")) as {
       includes?: string[];
     };
-    const managed = [...new Set([...(Array.isArray(manifest.includes) ? manifest.includes : []), "odm-backup.json"])];
-    for (const rel of managed) {
+    for (const rel of managedPaths(manifest)) {
       const src = path.join(stage, rel);
       if (!fs.existsSync(src)) continue;
       const dst = path.join(root(), rel);

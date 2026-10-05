@@ -84,7 +84,7 @@ await test("without a Range the whole file goes out as a 200, now advertising ra
   assert.equal(response.headers.get("content-type"), "audio/mpeg");
   assert.equal(response.headers.get("content-length"), "1000");
   assert.equal(response.headers.get("accept-ranges"), "bytes");
-  assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assert.equal(response.headers.get("cache-control"), "private, max-age=31536000, immutable");
   assert.equal(response.headers.get("content-range"), null);
   const body = Buffer.from(await response.arrayBuffer());
   assert.ok(body.equals(bytes));
@@ -107,7 +107,7 @@ await test("a Range gets a 206 with exactly those bytes", async () => {
   assert.equal(response.headers.get("content-length"), "100");
   assert.equal(response.headers.get("content-range"), "bytes 100-199/1000");
   assert.equal(response.headers.get("accept-ranges"), "bytes");
-  assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assert.equal(response.headers.get("cache-control"), "private, max-age=31536000, immutable");
   const body = Buffer.from(await response.arrayBuffer());
   assert.ok(body.equals(bytes.subarray(100, 200)));
 });

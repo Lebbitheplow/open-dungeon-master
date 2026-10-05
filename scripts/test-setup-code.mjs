@@ -134,6 +134,35 @@ test("a device world never asks: its app makes the host's account", () => {
   }
 });
 
+test("a device world whose app chose a code takes it for the host's account, and prints nothing", () => {
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "odm-setup-code-shell-"));
+  try {
+    const script = `
+      const { register } = await import("node:module");
+      register("./lib/register-alias.mjs", ${JSON.stringify(new URL(".", import.meta.url).href)});
+      const m = await import(${JSON.stringify(new URL("../src/lib/setup-code.ts", import.meta.url).href)});
+      const lines = [];
+      m.announceSetupCode((line) => lines.push(line));
+      console.log(JSON.stringify({
+        needs: m.needsSetup(),
+        banner: lines.length,
+        stranger: m.claimFirstAdmin("stranger", "x$y", undefined)?.isAdmin ?? null,
+        host: m.claimFirstAdmin("host", "x$y", "shell-made-secret")?.isAdmin ?? null,
+        after: m.needsSetup(),
+      }));
+    `;
+    const output = spawnNode(script, {
+      SQLITE_DB_PATH: path.join(fresh, "device.sqlite"),
+      DB_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
+      ODM_DEVICE_WORLD: "1",
+      ODM_SETUP_CODE: "shell-made-secret",
+    });
+    assert.deepEqual(JSON.parse(output), { needs: true, banner: 0, stranger: null, host: true, after: false });
+  } finally {
+    removeTempDir(fresh);
+  }
+});
+
 // A second process for each environment, since the database path and the
 // device-world flag are read once per process.
 function spawnNode(script, env) {

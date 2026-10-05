@@ -1,5 +1,6 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { setDmMode, updateGameSettings } from "@/lib/db/campaigns";
+import { campaignSeats, setDmMode, updateGameSettings } from "@/lib/db/campaigns";
+import { isPrimaryDm } from "@/lib/dm/viewer";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { layOver } from "@/lib/schemas/parse-keeping-valid";
 import { publishPersisted } from "@/lib/events";
@@ -37,6 +38,20 @@ export async function PATCH(
   // table is owed, same as the seat route publishes it.
   const { dmMode, ...rest } = parsed.data;
   if (dmMode !== context.campaign.gameSettings.dmMode) {
+    // Changing the mode fills or empties the DM seats, so once a person runs
+    // the game it is a seat change like any other (dm/seat/route.ts): the
+    // DM's or the owner's, and never a co-DM's.
+    const { campaign, user } = context;
+    if (
+      campaign.gameSettings.dmMode !== "ai" &&
+      !isPrimaryDm(campaignSeats(campaign), user.id) &&
+      campaign.ownerUserId !== user.id
+    ) {
+      return Response.json(
+        { error: "Only the Dungeon Master can hand the game to someone else or to the AI." },
+        { status: 403 },
+      );
+    }
     const changed = setDmMode(campaignId, dmMode, context.user.id);
     if (!changed) {
       return Response.json({ error: "Campaign not found." }, { status: 404 });

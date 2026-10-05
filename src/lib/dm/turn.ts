@@ -810,6 +810,15 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         ]
       : message?.tool_calls;
     const toolCalls = [...extractToolCalls(message?.tool_calls), ...salvagedCalls];
+    // Only an action this table's turn can be offered is run. The lists
+    // below sort calls by name alone, so without this a model could reach a
+    // tool the table's settings had taken off its list (pictures switched
+    // off, a stage disabled, the lean set) simply by naming it. A call from
+    // the other side of a fight still runs, as it always has: the model
+    // often starts a fight and swings in one reply, and each action checks
+    // the state it needs. A refused call is answered with an error below.
+    const catalogue = dmTurnToolCatalogue(campaign, imageEnabled, leanTools);
+    const runnable = toolCalls.filter((toolCall) => offersTool(catalogue, toolCall.name));
     if (finalCall && toolCalls.length) {
       finalCallLeaked = true;
     }
@@ -835,49 +844,49 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     if (narration && (!calledAttackTool || finalCall)) {
       turn.narrationParts.push(narration);
     }
-    const rollCalls = toolCalls.filter((toolCall) => toolCall.name === "request_roll");
-    const inputCalls = toolCalls.filter(
+    const rollCalls = runnable.filter((toolCall) => toolCall.name === "request_roll");
+    const inputCalls = runnable.filter(
       (toolCall) => toolCall.name === "request_player_input",
     );
-    const mutationCalls = toolCalls.filter((toolCall) => MUTATION_NAMES.has(toolCall.name));
-    const encounterCalls = toolCalls.filter((toolCall) => ENCOUNTER_NAMES.has(toolCall.name));
-    const castBuffCalls = toolCalls.filter((toolCall) => toolCall.name === "cast_buff");
-    const restCalls = toolCalls.filter((toolCall) => toolCall.name === "take_rest");
-    const companionCalls = toolCalls.filter((toolCall) =>
+    const mutationCalls = runnable.filter((toolCall) => MUTATION_NAMES.has(toolCall.name));
+    const encounterCalls = runnable.filter((toolCall) => ENCOUNTER_NAMES.has(toolCall.name));
+    const castBuffCalls = runnable.filter((toolCall) => toolCall.name === "cast_buff");
+    const restCalls = runnable.filter((toolCall) => toolCall.name === "take_rest");
+    const companionCalls = runnable.filter((toolCall) =>
       COMPANION_TOOL_NAMES.has(toolCall.name),
     );
-    const locationCalls = toolCalls.filter(
+    const locationCalls = runnable.filter(
       (toolCall) => toolCall.name === "move_party" || toolCall.name === "update_location",
     );
-    const eventCalls = toolCalls.filter((toolCall) => toolCall.name === "record_event");
-    const beatCalls = toolCalls.filter((toolCall) => toolCall.name === "complete_beat");
-    const recallCalls = toolCalls.filter((toolCall) => toolCall.name === "recall_story");
-    const searchLoreCalls = toolCalls.filter((toolCall) => toolCall.name === "search_lore");
-    const noteCalls = toolCalls.filter((toolCall) => toolCall.name === "write_campaign_note");
-    const whisperCalls = toolCalls.filter((toolCall) => toolCall.name === "send_whisper");
-    const checkCalls = toolCalls.filter((toolCall) =>
+    const eventCalls = runnable.filter((toolCall) => toolCall.name === "record_event");
+    const beatCalls = runnable.filter((toolCall) => toolCall.name === "complete_beat");
+    const recallCalls = runnable.filter((toolCall) => toolCall.name === "recall_story");
+    const searchLoreCalls = runnable.filter((toolCall) => toolCall.name === "search_lore");
+    const noteCalls = runnable.filter((toolCall) => toolCall.name === "write_campaign_note");
+    const whisperCalls = runnable.filter((toolCall) => toolCall.name === "send_whisper");
+    const checkCalls = runnable.filter((toolCall) =>
       (CHECK_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const hazardCalls = toolCalls.filter((toolCall) =>
+    const hazardCalls = runnable.filter((toolCall) =>
       (HAZARD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const splitCalls = toolCalls.filter((toolCall) =>
+    const splitCalls = runnable.filter((toolCall) =>
       (SPLIT_DAMAGE_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const petCalls = toolCalls.filter((toolCall) =>
+    const petCalls = runnable.filter((toolCall) =>
       (PET_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const socialCalls = toolCalls.filter((toolCall) =>
+    const socialCalls = runnable.filter((toolCall) =>
       (SOCIAL_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
     // A social_check or npc_reaction produces a roll the model must narrate
     // from; a lone set_npc is bookkeeping like record_event.
     const socialRollCalls = socialCalls.filter((toolCall) => toolCall.name !== "set_npc");
     const setNpcCalls = socialCalls.filter((toolCall) => toolCall.name === "set_npc");
-    const relationshipCalls = toolCalls.filter((toolCall) =>
+    const relationshipCalls = runnable.filter((toolCall) =>
       (RELATIONSHIP_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const worldCalls = toolCalls.filter(
+    const worldCalls = runnable.filter(
       (toolCall) =>
         (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
         (EXPLORE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
@@ -1193,7 +1202,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     let parkedAny = false;
     for (const toolCall of toolCalls) {
       const holder = turnHolder(campaignId);
-      const outcome = ranAbove(toolCall, inputInFight, false) ?? (await resolveModelCall(context, turn, toolCall));
+      const outcome =
+        ranAbove(toolCall, inputInFight, false) ??
+        (offersTool(catalogue, toolCall.name)
+          ? await resolveModelCall(context, turn, toolCall)
+          : { error: `The engine has no action called "${toolCall.name}".` });
       // A combatant who left the fight during the call takes no turn with them.
       settleTurn(context.campaign, holder);
       if (outcome[PARKED]) {

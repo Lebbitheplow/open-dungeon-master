@@ -5,9 +5,12 @@
 // one-time setup code that only the operator can see, in the server log
 // (printed at every start until it is used) or chosen in ODM_SETUP_CODE.
 //
-// A world one of the apps hosts (ODM_DEVICE_WORLD=1) is exempt: its shell
-// creates the host's account itself the moment it starts the server, and
-// does not know about the code.
+// A world one of the apps hosts (ODM_DEVICE_WORLD=1) never mints or prints
+// a code: nobody is reading its log. Its shell creates the host's account
+// itself the moment it starts the server, and a shell that knows about the
+// code hands the server one in ODM_SETUP_CODE and sends
+// it back with that first registration, so nobody on the same Wi-Fi can get
+// there first. A device world started without one keeps the old behaviour.
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { getAppSetting } from "@/lib/db/app-settings";
 import { getDatabase, nowIso } from "@/lib/db/core";
@@ -40,7 +43,14 @@ function mint(): string {
 // Whether this server is waiting for its first account to be claimed with
 // the setup code.
 export function needsSetup(): boolean {
-  return !isDeviceWorld() && countUsers() === 0;
+  return firstAccountTakesCode() && countUsers() === 0;
+}
+
+// Whether this server's first account is claimed with a code at all: always
+// on a server somebody runs, and on a device world only when its shell
+// chose one.
+export function firstAccountTakesCode(): boolean {
+  return !isDeviceWorld() || Boolean(serverEnv("ODM_SETUP_CODE").trim());
 }
 
 // The code that claims the first account: the operator's own when
@@ -84,9 +94,9 @@ export function claimFirstAdmin(username: string, passwordHash: string, code: st
 }
 
 // The startup banner. Called once per boot; says nothing once anyone has
-// an account, or on a device world.
+// an account, or on a device world (its shell holds the code).
 export function announceSetupCode(log: (line: string) => void = console.log) {
-  if (!needsSetup()) {
+  if (isDeviceWorld() || !needsSetup()) {
     return;
   }
   const code = currentSetupCode();

@@ -72,6 +72,24 @@ export function imageSize(bytes: Buffer): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
+// The most pixels a picture may hold and still be decoded here. A file's
+// bytes say nothing about its size once opened: a few kilobytes of PNG can
+// declare 30,000 by 30,000 pixels, which is 3.6 GB of memory to whoever
+// decodes it, this server's variant worker first and then every browser at
+// the table. 64 megapixels is 8,000 by 8,000, past any map or portrait that
+// fits the upload's byte cap honestly.
+export const MAX_IMAGE_PIXELS = 64_000_000;
+
+// "over" when the header declares more than that, "unknown" when it is not
+// a header this reads (imageSize answers 0x0), "ok" otherwise.
+export function pixelBudget(bytes: Buffer): "ok" | "over" | "unknown" {
+  const { width, height } = imageSize(bytes);
+  if (width <= 0 || height <= 0) {
+    return "unknown";
+  }
+  return width * height > MAX_IMAGE_PIXELS ? "over" : "ok";
+}
+
 // The ?w= value a serve route accepts. Anything but the two sizes the
 // server writes means the original.
 export function variantWidth(value: string | null | undefined): VariantWidth | null {

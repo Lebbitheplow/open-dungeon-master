@@ -7,7 +7,7 @@ import { countUsers, createUser, getUserByUsername } from "@/lib/db/users";
 import { checkLogin, clientIp, recordLoginFailure } from "@/lib/login-throttle";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 import { isDeviceWorld } from "@/lib/server-env";
-import { claimFirstAdmin, setupCodeMatches } from "@/lib/setup-code";
+import { claimFirstAdmin, firstAccountTakesCode, setupCodeMatches } from "@/lib/setup-code";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,10 +61,10 @@ export async function POST(request: Request) {
   // if signups were somehow disabled before any user existed. On a server
   // somebody runs, it takes the setup code from the server log: an empty
   // database says nothing about who is asking. A device world's shell makes
-  // its host's account itself and is exempt.
+  // its host's account itself, with the code it handed the server at start.
   const isFirstUser = countUsers() === 0;
   const deviceWorld = isDeviceWorld();
-  const claimsServer = isFirstUser && !deviceWorld;
+  const claimsServer = isFirstUser && firstAccountTakesCode();
   if (claimsServer && !setupCodeMatches(setupCode)) {
     recordLoginFailure(throttle);
     return Response.json(

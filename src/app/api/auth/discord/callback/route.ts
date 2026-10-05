@@ -6,6 +6,7 @@ import { getGlobalConfig } from "@/lib/db/app-settings";
 import { campaignAdmits } from "@/lib/db/campaigns";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 import { isDeviceWorld } from "@/lib/server-env";
+import { firstAccountTakesCode } from "@/lib/setup-code";
 import {
   countUsers,
   createDiscordUser,
@@ -174,7 +175,7 @@ export async function GET(request: Request) {
   // and the code, and can link Discord afterwards.
   const isFirstUser = countUsers() === 0;
   const deviceWorld = isDeviceWorld();
-  if (isFirstUser && !deviceWorld) {
+  if (isFirstUser && firstAccountTakesCode()) {
     return redirect(request.url, "/?error=setup_required");
   }
   const signupMode = resolveSignupMode(getGlobalConfig(), deviceWorld);
