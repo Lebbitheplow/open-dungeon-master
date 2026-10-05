@@ -69,6 +69,11 @@ import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop, TabletopChronicle } from "@/app/campaigns/[campaignId]/CinematicParts";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
+import {
+  NarrationFailureBanner,
+  useNarrationReplay,
+  useNarrationStatus,
+} from "@/app/campaigns/[campaignId]/NarrationFailureBanner";
 import { turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
 import { useDocked } from "@/app/campaigns/[campaignId]/SidePanel";
 
@@ -255,6 +260,16 @@ export function SessionView({
   }, [canShake, shakeOn, campaignIdForShake]);
 
   const { narration, ambience } = useTableAudio(state);
+  // Narration that was not read aloud, and the way to ask for it again
+  // (issue 88): under the passage in the transcript, and above the composer
+  // where a staged fight still shows it.
+  const narrationStatus = useNarrationStatus(narration, state.narrationStatus);
+  const replayNarration = useNarrationReplay(campaign?.id ?? "", narration, state.narrationAudio);
+  const messageIds = useMemo(() => state.messages.map((message) => message.id), [state.messages]);
+  const narrationNotice = useMemo(
+    () => <NarrationFailureBanner messageIds={messageIds} status={narrationStatus} onRetry={replayNarration} />,
+    [messageIds, narrationStatus, replayNarration],
+  );
   // Chime on new private messages (side chats + DM whispers). The loaded
   // flags keep the page-load backlog silent.
   const chatUnreadTotal =
@@ -761,7 +776,8 @@ export function SessionView({
           campaignId={campaign.id}
           meUserId={me.id}
           steersStory={steersStory}
-          narration={narration}
+          narrationStatus={narrationStatus}
+          onReplayAudio={replayNarration}
           visible={mobileView === "chat"}
           askOpen={askOpen}
           onAskOpenChange={setAskOpen}
@@ -800,6 +816,7 @@ export function SessionView({
               encounter={state.encounter}
               onReleaseFloor={releaseFloor}
               joinBanner={joinBanner}
+              notice={narrationNotice}
               composerRef={composerRef}
               highlight={composerPulse}
               directorArm={state.directorArm}

@@ -108,4 +108,25 @@ test("E2: the snapshot carries the scene, the active sheet, the handout, the pau
   assert.equal(next.titleCard.id, "t1");
 });
 
+// Issue 88: narration status has its own slot. It used to share mediaStatus
+// with the picture for the same message, so a voice that failed turned a
+// picture still being painted into "Illustration failed".
+{
+  const media = (payload) => event("media_status", { startedAt: "2026-10-05T00:00:00.000Z", ...payload });
+  let state = campaignReducer(loaded, media({ kind: "image", targetId: "m1", state: "generating" }));
+  state = campaignReducer(state, media({ kind: "tts", targetId: "m1", state: "failed", reason: "The speech server could not be reached at 127.0.0.1:8880." }));
+  assert.equal(state.mediaStatus.m1.kind, "image");
+  assert.equal(state.mediaStatus.m1.state, "generating");
+  assert.deepEqual(state.narrationStatus.m1, {
+    state: "failed",
+    reason: "The speech server could not be reached at 127.0.0.1:8880.",
+  });
+  // The voice arriving clears its own failure and leaves the picture alone.
+  state = campaignReducer(state, event("tts_ready", { messageId: "m1", url: "/generated-audio/c/m1.mp3" }, 11));
+  assert.equal(state.narrationStatus.m1, undefined);
+  assert.equal(state.mediaStatus.m1.state, "generating");
+  passed += 1;
+  console.log("ok: a narration failure is kept apart from the picture's status");
+}
+
 console.log(`\n${passed} campaign reducer tests passed.`);

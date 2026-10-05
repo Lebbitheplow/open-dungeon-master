@@ -3,26 +3,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TILE } from "@/app/campaigns/[campaignId]/battleMapCells";
 import { prefersReducedMotion } from "@/lib/effects-mode";
+import { clampZoomTo, fitCamera, minZoomFor } from "@/lib/battlemap/camera-fit";
 import type { CameraEvent } from "@/lib/scene/state";
 
 // Zoom and pan for the live board (docs/vtt-parity-implementation-plan.md
-// section 1.2, "Camera"): wheel at the cursor, pinch on touch, corner
-// buttons, a "follow the turn" pan that eases over --dur-scene, and the
-// DM's pull and lock through the `camera` event. The board itself is not
-// touched; the camera is a transform on the frame around it.
+// section 1.2, "Camera"): wheel at the cursor, pinch on touch, a drag on the
+// ground, corner buttons, a "follow the turn" pan that eases over
+// --dur-scene, and the DM's pull and lock through the `camera` event. The
+// board itself is not touched; the camera is a transform on the frame
+// around it. The view rests on the fit (src/lib/battlemap/camera-fit.ts):
+// the whole board, whatever the shape of the window it is shown in.
 
 export type Camera = { zoom: number; x: number; y: number };
 
-const MIN_ZOOM = 0.6;
-const MAX_ZOOM = 3;
 // One mouse-wheel notch (100 pixels of scroll) zooms by 1.12; a trackpad
 // pinch sends many small deltas and zooms in proportion.
 const WHEEL_RATE = Math.log(1.12) / 100;
 const IDENTITY: Camera = { zoom: 1, x: 0, y: 0 };
-
-function clampZoom(zoom: number) {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
-}
+// How far a press travels before it is a drag of the view and not a tap.
+const PAN_SLOP = 6;
+// What a press on the board must not start a drag of the view from: a
+// figure (its own drag), a control, or a surface that reads the drag itself.
+const NO_PAN = "[data-token-id], [data-no-pan], button, a, input, select, textarea";
 
 export function useBoardCamera(
   boardWidth: number,
@@ -64,7 +66,14 @@ export function useBoardCamera(
     return () => window.clearTimeout(timer);
   }, [locked]);
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
-  const panRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
+  const panRef = useRef<{ id: number; x: number; y: number; cx: number; cy: number; active: boolean } | null>(null);
+  // A drag of the view ends in a click on whatever lies under the pointer;
+  // that click is the drag's, not a tap on a tile.
+  const pannedRef = useRef(false);
+  // True while the view rests on the fit, so a window that changes shape
+  // re-fits instead of leaving the board half out of it. Any move the
+  // viewer makes clears it; "Fit the board" sets it again.
+  const fittedRef = useRef(true);
 
   // Frame size in CSS pixels, and the scale from SVG units to pixels.
   const metrics = useCallback(() => {
@@ -77,9 +86,16 @@ export function useBoardCamera(
     return { width, height, unit: width / (boardWidth * TILE) };
   }, [boardWidth, boardHeight]);
 
+  const fit = useCallback((): Camera => {
+    const m = metrics();
+    return m ? fitCamera(m, { width: boardWidth, height: boardHeight }) : IDENTITY;
+  }, [metrics, boardWidth, boardHeight]);
+  const clampZoom = useCallback((zoom: number) => clampZoomTo(zoom, minZoomFor(fit())), [fit]);
+
   const zoomAt = useCallback(
     (nextZoom: number, px: number, py: number) => {
       setEased(false);
+      fittedRef.current = false;
       setCamera((current) => {
         const zoom = clampZoom(nextZoom);
         // Keep the point under the cursor fixed.
@@ -91,13 +107,14 @@ export function useBoardCamera(
         };
       });
     },
-    [],
+    [clampZoom],
   );
 
   const reset = useCallback(() => {
     setEased(true);
-    setCamera(IDENTITY);
-  }, []);
+    fittedRef.current = true;
+    setCamera(fit());
+  }, [fit]);
 
   // Centre a tile in the frame at a zoom, easing over --dur-scene.
   const centreOn = useCallback(
@@ -107,6 +124,7 @@ export function useBoardCamera(
         return;
       }
       setEased(!prefersReducedMotion());
+      fittedRef.current = false;
       setCamera((current) => {
         const z = clampZoom(zoom ?? current.zoom);
         const tx = (tile.x + 0.5) * TILE * m.unit * z;
@@ -114,7 +132,7 @@ export function useBoardCamera(
         return { zoom: z, x: m.width / 2 - tx, y: m.height / 2 - ty };
       });
     },
-    [metrics],
+    [metrics, clampZoom],
   );
 
   const isOffScreen = useCallback(
@@ -196,6 +214,7 @@ export function useBoardCamera(
       const px = event.clientX - rect.left;
       const py = event.clientY - rect.top;
       setEased(false);
+      fittedRef.current = false;
       setCamera((current) => {
         const zoom = clampZoom(current.zoom * factor);
         const ratio = zoom / current.zoom;
@@ -204,14 +223,16 @@ export function useBoardCamera(
     };
     frameEl.addEventListener("wheel", onWheel, { passive: false });
     return () => frameEl.removeEventListener("wheel", onWheel);
-  }, [frameEl, locked]);
+  }, [frameEl, locked, clampZoom]);
 
   // The pan is held in the frame's pixels and the board fills the frame's
   // width, so when the frame changes width (browser zoom, a resized window,
   // the enlarged view) the pan scales with it and the same part of the
   // board stays in view. Without this a zoomed-in view slid off to one side
   // on every resize (issue 67). A hidden frame (width 0) keeps the view for
-  // when it shows again.
+  // when it shows again. A view still resting on the fit is simply fitted
+  // again, which is also how a board first lands whole in a fixed window
+  // (issue 87).
   const frameWidth = useRef(0);
   useEffect(() => {
     if (!frameEl) {
@@ -224,6 +245,14 @@ export function useBoardCamera(
       }
       const before = frameWidth.current;
       frameWidth.current = width;
+      if (fittedRef.current) {
+        const next = fit();
+        setEased(false);
+        setCamera((current) =>
+          current.zoom === next.zoom && current.x === next.x && current.y === next.y ? current : next,
+        );
+        return;
+      }
       if (!before || before === width) {
         return;
       }
@@ -235,12 +264,34 @@ export function useBoardCamera(
     });
     observer.observe(frameEl);
     return () => observer.disconnect();
-  }, [frameEl]);
+  }, [frameEl, fit]);
 
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const onPointerDown = useCallback((event: React.PointerEvent) => {
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    pannedRef.current = false;
+    const frame = frameRef.current;
+    const onGround = !(event.target as HTMLElement).closest?.(NO_PAN);
+    // A press on the board gives it the keyboard: a tile that handles its
+    // own press would otherwise leave the arrow keys with whatever had
+    // them, and nothing would say why they do nothing (issue 90).
+    if (frame && onGround && document.activeElement !== frame) {
+      frame.focus({ preventScroll: true });
+    }
+    // One pointer on the ground may drag the view. A finger does only where
+    // the frame is a fixed window: elsewhere that drag scrolls the page.
+    const mayPan =
+      frame &&
+      onGround &&
+      pointers.current.size === 1 &&
+      (event.pointerType === "touch"
+        ? getComputedStyle(frame).touchAction === "none"
+        : event.button === 0 || event.button === 1);
+    panRef.current = mayPan
+      ? { id: event.pointerId, x: event.clientX, y: event.clientY, cx: cameraRef.current.x, cy: cameraRef.current.y, active: false }
+      : null;
     if (pointers.current.size === 2) {
+      panRef.current = null;
       const [a, b] = [...pointers.current.values()];
       pinchRef.current = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: 0 };
       setCamera((current) => {
@@ -269,9 +320,28 @@ export function useBoardCamera(
         const zoom = clampZoom((pinchRef.current.zoom * distance) / Math.max(1, pinchRef.current.distance));
         zoomAt(zoom, mid.x, mid.y);
         event.preventDefault();
+        return;
       }
+      const pan = panRef.current;
+      if (!pan || pan.id !== event.pointerId) {
+        return;
+      }
+      const dx = event.clientX - pan.x;
+      const dy = event.clientY - pan.y;
+      if (!pan.active) {
+        if (Math.hypot(dx, dy) < PAN_SLOP) {
+          return;
+        }
+        pan.active = true;
+        pannedRef.current = true;
+        fittedRef.current = false;
+        frameRef.current?.setPointerCapture?.(event.pointerId);
+        frameRef.current?.setAttribute("data-panning", "");
+      }
+      setEased(false);
+      setCamera((current) => ({ ...current, x: pan.cx + dx, y: pan.cy + dy }));
     },
-    [locked, zoomAt],
+    [locked, zoomAt, clampZoom],
   );
   const onPointerUp = useCallback((event: React.PointerEvent) => {
     pointers.current.delete(event.pointerId);
@@ -279,6 +349,15 @@ export function useBoardCamera(
       pinchRef.current = null;
     }
     panRef.current = null;
+    frameRef.current?.removeAttribute("data-panning");
+  }, []);
+  // Capture phase, so the tile under a finished drag never hears of it.
+  const onClickCapture = useCallback((event: React.MouseEvent) => {
+    if (pannedRef.current) {
+      pannedRef.current = false;
+      event.stopPropagation();
+      event.preventDefault();
+    }
   }, []);
 
   // Keyboard pans while the frame is focused; plus and minus zoom. A key
@@ -301,6 +380,7 @@ export function useBoardCamera(
       if (moves[event.key]) {
         event.preventDefault();
         setEased(false);
+        fittedRef.current = false;
         setCamera((current) => ({
           ...current,
           x: current.x + moves[event.key][0],
@@ -368,6 +448,7 @@ export function useBoardCamera(
       onPointerMove,
       onPointerUp,
       onPointerCancel: onPointerUp,
+      onClickCapture,
       onKeyDown,
     },
   };

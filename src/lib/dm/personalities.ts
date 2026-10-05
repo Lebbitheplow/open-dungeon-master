@@ -64,6 +64,6 @@ export function insertPersonality(userId: string, input: { name: string; blurb: 
     .prepare(
       `INSERT INTO library_personalities (id, user_id, name, blurb, gm_json, tts_voice, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, userId, input.name.trim().slice(0, 60), input.blurb.trim().slice(0, 160), JSON.stringify(normalizeGm(input.gm)), input.ttsVoice.slice(0, 40), now, now);
+    .run(id, userId, input.name.trim().slice(0, 60), input.blurb.trim().slice(0, 160), JSON.stringify(normalizeGm(input.gm)), input.ttsVoice.slice(0, 120), now, now);
   return listPersonalities(userId).find((entry) => entry.id === id)!;
 }

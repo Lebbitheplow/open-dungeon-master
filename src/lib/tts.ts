@@ -1,20 +1,22 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import { TTS_VOICES } from "@/lib/tts-voices";
-import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { describeSpeechFailure, synthesizeSpeech, ttsBackend, type TtsBackend } from "@/lib/tts-backend";
 import { listNpcs } from "@/lib/db/npcs";
 import type { Speaker } from "@/lib/dm/speech";
 import { planSpeech, type CastVoice } from "@/lib/tts-segments";
 
-// Narration TTS via the local Kokoro-FastAPI service (:8880). Audio is
-// rendered on the media queue's own "tts" lane after a DM message persists,
-// so narration never waits behind a ComfyUI render, saved under
+// Narration TTS on the server's speech backend (src/lib/tts-backend.ts: the
+// local Kokoro-FastAPI service on :8880 unless the admin chose another).
+// Audio is rendered on the media queue's own "tts" lane after a DM message
+// persists, so narration never waits behind a ComfyUI render, saved under
 // public/generated-audio, and announced with a tts_ready event that clients
-// autoplay (latest-only) with per-user mute.
+// autoplay (latest-only) with per-user mute. A render that fails says so to
+// the table, with the reason (issue 88).
 
 const CHUNK_CHAR_LIMIT = 1_800;
 
@@ -48,20 +50,6 @@ function chunkSentences(text: string): string[] {
   return chunks;
 }
 
-async function kokoroSpeech(input: string, voice: string, speed = 1): Promise<Buffer> {
-  const base = configValue(getGlobalConfig().speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
-  const response = await fetch(`${base}/v1/audio/speech`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "kokoro", voice, input, response_format: "mp3", ...(speed !== 1 ? { speed } : {}) }),
-    signal: AbortSignal.timeout(180_000),
-  });
-  if (!response.ok) {
-    throw new Error(`Kokoro TTS failed: HTTP ${response.status}`);
-  }
-  return Buffer.from(await response.arrayBuffer());
-}
-
 export function narrationAudioPath(campaignId: string, messageId: string): string {
   return path.join(process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
 }
@@ -87,7 +75,9 @@ export function enqueueNarrationAudio(
   speaker: Speaker | null = null,
 ) {
   const speech = stripForSpeech(text);
-  if (!speech) {
+  // Narration switched off server-wide is not a failure: nothing is asked
+  // for, so nothing is announced.
+  if (!speech || ttsBackend().provider === "off") {
     return Promise.resolve();
   }
   publishMediaStatus(campaignId, "tts", messageId, "queued");
@@ -99,17 +89,23 @@ export function enqueueNarrationAudio(
       // speaker's own, concatenated into the one file the transcript keys.
       const plan = planSpeech(speech, { narratorVoice: voice, cast: castVoices(campaignId), speaker });
       const buffers: Buffer[] = [];
+      // Read once per passage, so every chunk goes to the same server even
+      // if the admin saves a change halfway through.
+      const backend = ttsBackend();
       try {
         for (const part of plan) {
           for (const chunk of chunkSentences(part.text)) {
-            buffers.push(await kokoroSpeech(chunk, part.voice, part.speed));
+            buffers.push(await synthesizeSpeech(chunk, part.voice, part.speed, backend));
           }
         }
       } catch (error) {
-        publishMediaStatus(campaignId, "tts", messageId, "failed");
+        const reason = describeSpeechFailure(error, backend);
+        lastFailures.set(messageId, reason);
+        publishMediaStatus(campaignId, "tts", messageId, "failed", reason);
         throw error;
       }
-      // Kokoro-FastAPI emits plain MPEG frames; concatenation plays cleanly.
+      lastFailures.delete(messageId);
+      // MP3 is plain MPEG frames; the chunks concatenate and play cleanly.
       const audio = Buffer.concat(buffers);
       const file = narrationAudioPath(campaignId, messageId);
       mkdirSync(path.dirname(file), { recursive: true });
@@ -122,6 +118,17 @@ export function enqueueNarrationAudio(
     },
     "tts",
   );
+}
+
+// Why the last render of a message failed, for the caller that awaited it
+// (the on-demand narrate route): the media queue swallows job errors by
+// design, so the reason has to be left somewhere. Small and self-clearing.
+const lastFailures = new Map<string, string>();
+
+export function takeNarrationFailure(messageId: string): string | null {
+  const reason = lastFailures.get(messageId) ?? null;
+  lastFailures.delete(messageId);
+  return reason;
 }
 
 // Narration already on disk, keyed by message id. The snapshot carries this
@@ -160,43 +167,60 @@ export function listNarrationAudio(campaignId: string): Record<string, string> {
   return { ...audio };
 }
 
-// Voice previews: Kokoro ships no sample clips, but one short line renders in
-// well under a second, so the first request for a voice generates it and every
-// later one is served from disk. Kept off the media queue entirely on purpose,
-// so a preview never waits behind narration either; Kokoro runs on CPU here and
-// does not contend with the GPU jobs that queue exists to serialize.
-const PREVIEW_LINE = "The tavern door creaks open. Roll for initiative, adventurer.";
+// Voice previews: speech servers ship no sample clips, but one short line
+// renders in about a second, so the first request for a voice generates it and
+// every later one is served from disk. Kept off the media queue entirely on
+// purpose, so a preview never waits behind narration either; Kokoro runs on
+// CPU here and does not contend with the GPU jobs that queue exists to
+// serialize.
+export const PREVIEW_LINE = "The tavern door creaks open. Roll for initiative, adventurer.";
 
 const previewRenders = new Map<string, Promise<string>>();
 
+// Any voice a server might take: a listed id, a blend, a described voice.
+// Printable, one line, and short enough to be a setting rather than a text.
 export function isPreviewableVoice(voice: string): boolean {
-  return TTS_VOICES.some((entry) => entry.id === voice);
+  return voice.length > 0 && voice.length <= 120 && !/[\u0000-\u001f\u007f]/.test(voice);
 }
 
-export function voicePreviewPath(voice: string): string {
-  return path.join(process.cwd(), "public", "generated-audio", "previews", `${voice}.mp3`);
+// The clip is named for the server, model and voice together, so a clip from
+// one server is never played as the sample of another's voice, and a custom
+// voice string never becomes a file name.
+export function voicePreviewName(voice: string, backend: Pick<TtsBackend, "v1" | "model">): string {
+  return `${createHash("sha256").update(`${backend.v1}\n${backend.model}\n${voice}`).digest("hex").slice(0, 32)}.mp3`;
 }
 
+export function voicePreviewPath(name: string): string {
+  return path.join(process.cwd(), "public", "generated-audio", "previews", name);
+}
+
+export function voicePreviewCached(voice: string): boolean {
+  return existsSync(voicePreviewPath(voicePreviewName(voice, ttsBackend())));
+}
+
+// Resolves to the clip's file name under generated-audio/previews.
 export function renderVoicePreview(voice: string): Promise<string> {
   if (!isPreviewableVoice(voice)) {
     return Promise.reject(new Error(`Unknown voice: ${voice}`));
   }
-  const file = voicePreviewPath(voice);
+  const backend = ttsBackend();
+  const name = voicePreviewName(voice, backend);
+  const file = voicePreviewPath(name);
   if (existsSync(file)) {
-    return Promise.resolve(file);
+    return Promise.resolve(name);
   }
-  const inFlight = previewRenders.get(voice);
+  const inFlight = previewRenders.get(name);
   if (inFlight) {
     return inFlight;
   }
   const render = (async () => {
-    const audio = await kokoroSpeech(PREVIEW_LINE, voice);
+    const audio = await synthesizeSpeech(PREVIEW_LINE, voice, 1, backend);
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, audio);
-    return file;
+    return name;
   })().finally(() => {
-    previewRenders.delete(voice);
+    previewRenders.delete(name);
   });
-  previewRenders.set(voice, render);
+  previewRenders.set(name, render);
   return render;
 }

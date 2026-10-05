@@ -589,13 +589,23 @@ or a plain icon and the session keeps going.
 All GPU-heavy media (ComfyUI images and TTS) run on a **single serial media queue**.
 On a shared-memory iGPU the image model and the DM model compete for the same pool,
 so jobs are serialized to avoid out-of-memory stalls rather than run in parallel.
-Details in [docs/image-generation.md](docs/image-generation.md).
+Details in [docs/image-generation.md](docs/image-generation.md). Installing ComfyUI
+and pointing the server at it, step by step:
+[docs/media-setup.md](docs/media-setup.md).
 
 ## Voice (TTS and push-to-talk)
+
+Step-by-step setup for narration and dictation (Kokoro in Docker, any
+OpenAI-compatible speech server, the built-in Whisper):
+[docs/media-setup.md](docs/media-setup.md).
 
 - **DM narration**: [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) at
   `KOKORO_URL` (default `http://127.0.0.1:8880`) renders each DM message to speech on
   the media queue, with a per-campaign voice and per-user mute / volume / replay.
+  Admin > Speech can point narration at any OpenAI-compatible speech server instead
+  (its own address, model and key), test it, or switch it off; campaigns pick from
+  the voices that server lists, or type a custom one. A passage that could not be
+  read aloud says why at the table.
 - **Push-to-talk**: a faster-whisper server at `STT_URL` (default
   `http://127.0.0.1:8870`, model `STT_MODEL`) transcribes your voice with a
   confirm-then-send step.

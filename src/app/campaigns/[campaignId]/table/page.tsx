@@ -34,7 +34,7 @@ export default function TablePage({ params }: { params: Promise<{ campaignId: st
     <main className="fixed inset-0 overflow-hidden bg-stone-950">
       <div className="absolute inset-0 flex items-center justify-center p-2">
         {state.battleMap ? (
-          <div className="h-full w-full [&_*]:!cursor-default">
+          <div className="board-fill h-full w-full [&_*]:!cursor-default">
             <BattleMapPanel
               campaignId={campaignId}
               view={state.battleMap}

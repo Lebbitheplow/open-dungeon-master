@@ -20,12 +20,15 @@ export function publishMediaStatus(
   kind: "image" | "map" | "tts",
   targetId: string,
   state: "queued" | "generating" | "failed",
+  // Why it failed, in words the table can read (narration, issue 88).
+  reason?: string,
 ) {
   publishEphemeral(campaignId, "media_status", {
     kind,
     targetId,
     state,
     startedAt: new Date().toISOString(),
+    ...(reason ? { reason } : {}),
   });
 }
 

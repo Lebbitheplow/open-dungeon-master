@@ -67,7 +67,7 @@ import {
   type TurnHudBudget,
 } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { IntentLayer } from "@/app/campaigns/[campaignId]/BoardIntent";
-import { BoardCameraControls, BoardOrderDialog, BoardOrderStrip, boardHintText } from "@/app/campaigns/[campaignId]/BoardPanelParts";
+import { BoardCameraControls, BoardKeyStrip, BoardOrderDialog, BoardOrderStrip, boardHintText } from "@/app/campaigns/[campaignId]/BoardPanelParts";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
@@ -896,10 +896,12 @@ export function BattleMapPanel({
     <div
       ref={attachFrame}
       tabIndex={0}
-      aria-label="Board view. Scroll or pinch to zoom, arrow keys to pan."
+      aria-label="Board view. Scroll or pinch to zoom, drag or use the arrow keys to pan, plus and minus to zoom, 0 to fit."
       // A container, so the stage chrome sizes to the board it sits on (the
       // side panel, a phone, the enlarged dialog) and not to the window.
-      className="@container relative overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
+      // board-view (board.css) draws the ring that says the board has the
+      // keyboard, for a click as much as for Tab (issue 90).
+      className="board-view @container relative overflow-hidden rounded-lg outline-none"
       {...cam.frameProps}
       onPointerDownCapture={onFramePointerDownCapture}
       onPointerMove={(event) => {
@@ -972,6 +974,7 @@ export function BattleMapPanel({
           <div
             className="absolute inset-0 z-10 cursor-crosshair"
             aria-label="Drawing surface"
+            data-no-pan=""
             onPointerDown={onDrawDown}
             onPointerMove={onDrawMove}
             onPointerUp={onDrawUp}
@@ -1074,19 +1077,23 @@ export function BattleMapPanel({
           </button>
         </div>
       ) : null}
+      {/* The corner: End turn and the camera buttons. One layer the size of
+          the frame, so the buttons can ask how tall the board is and lie in
+          a row along the bottom when a column would not fit (board.css). */}
+      <span className="sr-only" aria-live="polite">
+        {!scene && view.currentTurnName ? (myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
+      </span>
+      <div className="board-corner">
       {myTurn && !scene && !targeting ? (
         <button
           type="button"
           onClick={() => void endTurn()}
           disabled={endingTurn}
-          className="motion-press absolute bottom-2 right-11 z-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50"
+          className="board-endturn motion-press absolute bottom-2 right-11 z-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50"
         >
           <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">End turn</span>
         </button>
       ) : null}
-      <span className="sr-only" aria-live="polite">
-        {!scene && view.currentTurnName ? (myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
-      </span>
       {/* Camera controls: corner buttons for everyone, the DM's pull and
           lock, and the escape hatch when a lock has held too long. */}
       <BoardCameraControls
@@ -1110,6 +1117,8 @@ export function BattleMapPanel({
             : undefined
         }
       />
+      </div>
+      {cam.locked ? null : <BoardKeyStrip />}
       {cam.locked ? (
         <div className="absolute bottom-2 left-2 z-10 flex items-center gap-2 rounded-md border border-amber-800/60 bg-stone-950/90 px-2 py-1 text-[11px] text-amber-200 shadow-elev-1">
           <Lock className="size-3" />
@@ -1125,7 +1134,10 @@ export function BattleMapPanel({
   );
 
   return (
-    <div className="space-y-2">
+    // board-panel: where the panel is given a fixed window (the fight stage,
+    // the shared screen) its header and footer stay put and the board takes
+    // what is left (world.css, issue 87).
+    <div className="board-panel space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-sm font-medium text-stone-200">
           {scene ? (

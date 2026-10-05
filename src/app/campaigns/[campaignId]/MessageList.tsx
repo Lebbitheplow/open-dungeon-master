@@ -15,8 +15,10 @@ import { useDmDraft, useDmDraftSeq } from "@/app/campaigns/[campaignId]/liveStor
 import type {
   CampaignLocation,
   DmStatus,
-  MediaStatus,
+  MediaStatus, NarrationStatus,
 } from "@/app/campaigns/[campaignId]/useCampaignStream";
+
+const NO_NARRATION_STATUS: Record<string, NarrationStatus> = {};
 
 // FNV-1a plus a murmur-style finalizer. The avalanche matters: a weaker mix
 // leaves the six-entry pools reachable only at half their entries.
@@ -102,6 +104,7 @@ export function MessageList({
   locations = [],
   dmStatus,
   mediaStatus = {},
+  narrationStatus = NO_NARRATION_STATUS,
   onReplayAudio,
   onPinCanon,
   onPinMemory,
@@ -135,6 +138,8 @@ export function MessageList({
   cast?: CastMember[];
   dmStatus: DmStatus;
   mediaStatus?: Record<string, MediaStatus>;
+  // Only failures are read here; a muted seat is handed none.
+  narrationStatus?: Record<string, NarrationStatus>;
   onReplayAudio?: (messageId: string) => Promise<string | null>;
   onPinCanon?: (message: CampaignMessage) => void;
   // Pin the current selection (or the whole message) into every future prompt.
@@ -331,6 +336,11 @@ export function MessageList({
           cast={cast}
           sheets={sheets}
           mediaStatus={mediaStatus}
+          narrationFailure={
+            narrationStatus[message.id]?.state === "failed"
+              ? narrationStatus[message.id].reason || "The speech server did not return any audio."
+              : undefined
+          }
           onReplayAudio={stableReplay}
           onPinCanon={stablePin}
           onLoreCheck={stableLore}

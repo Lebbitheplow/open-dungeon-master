@@ -17,7 +17,8 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import type { WorldPackSummary } from "@/lib/worlds/types";
 import { WorldPackGallery } from "@/components/WorldPackGallery";
-import { TTS_VOICES } from "@/lib/tts-voices";
+import { useTtsVoices, voiceLabel, VoicePicker } from "@/components/VoicePicker";
+import { NarrationNote } from "@/app/campaigns/[campaignId]/NarrationNote";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { SafetyToneFields } from "@/components/SafetyToneFields";
 import type { GameSettings } from "@/lib/schemas/game-settings";
@@ -86,6 +87,7 @@ export function GameSettingsPanel({
   steersStory: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const voices = useTtsVoices();
   // Every control here renders the server's settings, so a refused PATCH
   // changes nothing on screen; without this line it changes nothing silently.
   const [error, setError] = useState("");
@@ -190,7 +192,7 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "cue-bell" }} size="size-5" />
             {settings.ttsEnabled
-              ? `Narration on (${TTS_VOICES.find((voice) => voice.id === settings.ttsVoice)?.label ?? settings.ttsVoice})`
+              ? `Narration on (${voiceLabel(voices, settings.ttsVoice)})`
               : "Narration off"}
           </span>
           <span className="flex items-center gap-1.5">
@@ -380,18 +382,17 @@ export function GameSettingsPanel({
           </SettingToggle>
           {settings.ttsEnabled ? (
             <>
-              <Select
+              <VoicePicker
                 size="sm"
                 label="Narration voice"
                 value={settings.ttsVoice}
                 onChange={(ttsVoice) => patch({ ttsVoice })}
-                options={TTS_VOICES.map((voice) => ({ value: voice.id as string, label: voice.label }))}
-                className={selectClass}
               />
               <VoicePreviewButton voice={settings.ttsVoice} />
             </>
           ) : null}
         </div>
+        {settings.ttsEnabled ? <NarrationNote /> : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Faces</span>
           <Tooltip content="Theatre inserts: when a passage has someone speaking, their portrait comes up over the scene art while their lines play.">

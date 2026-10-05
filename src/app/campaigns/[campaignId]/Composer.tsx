@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, EyeOff, Hand, Loader2, Send } from "lucide-react";
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -70,6 +70,7 @@ function ComposerInner({
   encounter,
   onReleaseFloor,
   joinBanner,
+  notice,
   leadPrivate,
   onLeadPrivateChange,
   speaker = null,
@@ -110,6 +111,9 @@ function ComposerInner({
   encounter: CampaignState["encounter"];
   onReleaseFloor: () => Promise<void>;
   joinBanner: { text: string; onWriteIntro: () => void; onDismiss: () => void } | null;
+  // One more banner in the stack, owned by the caller (narration that was
+  // not read aloud). Memoized there, so this component's memo still holds.
+  notice?: ReactNode;
   leadPrivate: boolean;
   onLeadPrivateChange: (leadPrivate: boolean) => void;
   // The DM seat's speaker (docs/vtt-parity-implementation-plan.md 8.1).
@@ -169,6 +173,7 @@ function ComposerInner({
           onCapture={onCaptureStory}
           onSnooze={onSnoozeStory}
         />
+        {notice}
         {joinBanner ? (
           <NewAdventurerBanner
             campaignId={campaignId}

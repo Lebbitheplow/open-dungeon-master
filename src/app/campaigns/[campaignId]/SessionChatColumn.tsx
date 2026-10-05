@@ -9,8 +9,7 @@ import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip"
 import { FightSummaryCard } from "@/app/campaigns/[campaignId]/FightSummaryCard";
 import { AskDock } from "@/app/campaigns/[campaignId]/AskPanel";
 import { DmCoverNotice } from "@/app/campaigns/[campaignId]/DmDelegationPanel";
-import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
-import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import type { CampaignState, NarrationStatus } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CampaignMessage } from "@/lib/db/messages";
 
 // The story column: the transcript with every message action wired to its
@@ -25,7 +24,8 @@ export function SessionChatColumn({
   campaignId,
   meUserId,
   steersStory,
-  narration,
+  narrationStatus,
+  onReplayAudio,
   visible,
   askOpen,
   onAskOpenChange,
@@ -42,7 +42,10 @@ export function SessionChatColumn({
   campaignId: string;
   meUserId: string;
   steersStory: boolean;
-  narration: NarrationAudio;
+  // Which passages were not read aloud and why, and the way to ask again
+  // (NarrationFailureBanner.tsx).
+  narrationStatus: Record<string, NarrationStatus> | undefined;
+  onReplayAudio: (messageId: string) => Promise<string | null>;
   // Below lg only one column shows at a time; from lg up both always do.
   visible: boolean;
   askOpen: boolean;
@@ -114,34 +117,8 @@ export function SessionChatColumn({
         locations={locations}
         dmStatus={dmStatus}
         mediaStatus={state.mediaStatus}
-        onReplayAudio={
-          ttsEnabled
-            ? async (messageId) => {
-                // The click doubles as the gesture that gets us past the
-                // browser's autoplay block.
-                narration.unlock();
-                const known = state.narrationAudio[messageId];
-                if (known) {
-                  narration.play(messageId, known);
-                  return null;
-                }
-                // Never voiced: render it now, then play the same take.
-                // Passages from before TTS was switched on, and ones whose
-                // render failed, are otherwise silent forever.
-                const response = await fetch(
-                  `/api/campaigns/${campaignId}/messages/${messageId}/narrate`,
-                  { method: "POST" },
-                );
-                if (!response.ok) {
-                  const data = await response.json().catch(() => ({}));
-                  return data.error || "Could not read that passage aloud.";
-                }
-                const data = await response.json();
-                narration.play(messageId, data.url);
-                return null;
-              }
-            : undefined
-        }
+        narrationStatus={narrationStatus}
+        onReplayAudio={ttsEnabled ? onReplayAudio : undefined}
         onLoreCheck={(message) => {
           // Whatever text was selected when the flag was raised, captured at
           // click, before the dialog steals focus.

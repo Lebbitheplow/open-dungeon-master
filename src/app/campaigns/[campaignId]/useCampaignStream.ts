@@ -53,6 +53,14 @@ export type MediaStatus = {
   startedAt: string;
 };
 
+// Narration on its way for a message, or why it never arrived. Kept apart
+// from mediaStatus: both are keyed by message id, and a passage can be
+// waiting on its picture and its voice at once (issue 88).
+export type NarrationStatus = {
+  state: "queued" | "generating" | "failed";
+  reason?: string;
+};
+
 export type PendingRoll = {
   id: string;
   userId: string;
@@ -232,6 +240,7 @@ export type CampaignState = {
   } | null;
   // Ephemeral progress per media target (message/location id).
   mediaStatus: Record<string, MediaStatus>;
+  narrationStatus: Record<string, NarrationStatus>;
   // Human-DM mode: story the DM has written down, newest first. Only the DM
   // seat is served these; every other seat gets an empty list, because the
   // beats panel is a DM tool (the text itself is public, in the transcript).
@@ -323,6 +332,7 @@ const initialState: CampaignState = {
   utilityCalls: [],
   directorArm: null,
   mediaStatus: {},
+  narrationStatus: {},
   beats: [],
   dmIntents: [],
   voiceRoster: null,
@@ -540,7 +550,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           if (messageId && url) {
             next.narrationAudio = { ...state.narrationAudio, [messageId]: url };
             next.latestTts = { messageId, url, seq: action.seq ?? 0 };
-            next.mediaStatus = withoutKey(state.mediaStatus, messageId);
+            next.narrationStatus = withoutKey(state.narrationStatus, messageId);
           }
           return next;
         }
@@ -647,7 +657,15 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "media_status": {
           const targetId = String(payload.targetId ?? "");
-          if (targetId) {
+          if (targetId && payload.kind === "tts") {
+            next.narrationStatus = {
+              ...state.narrationStatus,
+              [targetId]: {
+                state: payload.state as NarrationStatus["state"],
+                ...(typeof payload.reason === "string" && payload.reason ? { reason: payload.reason } : {}),
+              },
+            };
+          } else if (targetId) {
             next.mediaStatus = {
               ...state.mediaStatus,
               [targetId]: {

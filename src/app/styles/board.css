@@ -119,6 +119,107 @@
 
 /* The chrome sits over painted, lit terrain, which is dark in both themes,
    so its plates are fixed dark glass rather than theme surfaces. */
+/* The board with the keyboard (issue 90). Its keys only work while it has
+   focus, so focus has to show, for a click as much as for Tab: a gold line
+   inside the edge, drawn over the board so no parent can clip it. */
+.board-view::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  border-radius: inherit;
+  border: 2px solid rgba(244, 224, 166, 0.9);
+  box-shadow: inset 0 0 22px rgba(212, 171, 58, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-quick) var(--ease-snap);
+}
+.board-view:focus::after { opacity: 1; }
+.board-view[data-panning],
+.board-view[data-panning] * { cursor: grabbing !important; }
+
+/* The keys, said for a few seconds each time the board takes the keyboard. */
+@keyframes board-keys-say {
+  0% { opacity: 0; transform: translateY(4px); }
+  6% { opacity: 1; transform: none; }
+  82% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: none; }
+}
+.board-keys-strip {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 10;
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(107, 99, 148, 0.45);
+  background: rgba(13, 11, 28, 0.92);
+  padding: 0.25rem 0.5rem;
+  font-size: 10px;
+  line-height: 1;
+  color: #aeaac6;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(4, 2, 12, 0.5);
+}
+.board-keys-strip > span { display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap; }
+.board-keys-button { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .board-keys-strip { display: flex; }
+  .board-keys-button { display: block; }
+  .board-view:focus > .board-keys-strip { animation: board-keys-say 6s var(--ease-snap) forwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-view:focus > .board-keys-strip { animation-name: none; opacity: 1; }
+}
+html[data-effects="low"] .board-view:focus > .board-keys-strip { animation-name: none; opacity: 1; }
+
+.board-view .board-keys-strip .kbd-key,
+.board-view .board-keys-card .kbd-key { border-color: rgba(212, 171, 58, 0.5); background: rgba(43, 32, 8, 0.75); color: #f4e0a6; }
+
+/* The corner layer is the frame's own size, so what stands in it can ask how
+   tall the board is: a column of camera buttons taller than the board lies
+   down along the bottom edge, and End turn steps up out of its way. */
+.board-corner { position: absolute; inset: 0; z-index: 10; pointer-events: none; container: board-corner / size; }
+.board-corner > * { pointer-events: auto; }
+@container board-corner (max-height: 11.5rem) {
+  .board-cam { flex-direction: row-reverse; }
+  .board-cam .board-keys-card { right: 0; bottom: calc(100% + 0.4rem); max-width: 27rem; padding: 0.4rem 0.6rem; }
+  .board-cam .board-keys-card dl { grid-template-columns: auto auto; column-gap: 0.9rem; }
+  .board-cam .board-keys-card > p:first-child { display: none; }
+  .board-endturn { right: 0.5rem; bottom: 2.6rem; }
+}
+@container board-corner (max-height: 17rem) {
+  .board-cam.board-cam-long { flex-direction: row-reverse; }
+  .board-cam.board-cam-long .board-keys-card { right: 0; bottom: calc(100% + 0.4rem); max-width: 27rem; padding: 0.4rem 0.6rem; }
+  .board-cam.board-cam-long .board-keys-card dl { grid-template-columns: auto auto; column-gap: 0.9rem; }
+  .board-cam.board-cam-long .board-keys-card > p:first-child { display: none; }
+  .board-corner:has(.board-cam-long) .board-endturn { right: 0.5rem; bottom: 2.6rem; }
+}
+
+/* The whole list, opened from the keyboard button over the zoom buttons. */
+.board-keys-card {
+  position: absolute;
+  right: calc(100% + 0.4rem);
+  bottom: 0;
+  width: max-content;
+  max-width: 15rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(212, 171, 58, 0.4);
+  background: rgba(13, 11, 28, 0.96);
+  padding: 0.6rem 0.7rem;
+  color: #e9e6f4;
+  box-shadow: 0 10px 28px rgba(4, 2, 12, 0.65);
+  animation: board-spot-in var(--dur-quick) var(--ease-snap);
+}
+.board-keys-card dl { display: grid; gap: 0.3rem; }
+.board-keys-card dl > div { display: flex; align-items: center; gap: 0.5rem; font-size: 11px; }
+.board-keys-card dt { display: inline-flex; min-width: 5.4rem; gap: 0.15rem; }
+.board-keys-card dt .kbd-key { min-width: 1.15rem; padding: 0 0.25rem; font-size: 10px; }
+.board-keys-card dd { color: #c9c6db; }
+
 .board-glass {
   border: 1px solid rgba(107, 99, 148, 0.3);
   background: rgba(13, 11, 28, 0.85);

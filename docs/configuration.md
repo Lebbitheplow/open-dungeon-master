@@ -37,6 +37,11 @@ falls through to the env var.
 | `STT_URL` | `http://127.0.0.1:8870` | Push-to-talk transcription service (odm-stt.service) |
 | `STT_MODEL` | `distil-large-v3` | faster-whisper model the STT proxy requests |
 | `KOKORO_URL` | `http://127.0.0.1:8880` | Kokoro-FastAPI TTS service for DM narration |
+| `TTS_PROVIDER` | `kokoro` | Kind of narration server: `kokoro`, `openai` (any server with OpenAI's `/v1/audio/speech`), or `off`. Also set in Admin > Speech, which wins |
+| `TTS_BASE_URL` | `https://api.openai.com/v1` | Address of the `openai` kind of narration server |
+| `TTS_MODEL` | `kokoro`, or `gpt-4o-mini-tts` on OpenAI | Model name sent with each narration request |
+| `TTS_API_KEY` | — | Bearer key for the narration server. Blank on OpenAI itself falls back to the key saved for pictures |
+| `TTS_VOICE` | `af_heart`, or `alloy` on OpenAI | Voice used when a campaign names one the server does not have |
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
 | `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |

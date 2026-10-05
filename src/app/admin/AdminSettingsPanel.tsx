@@ -12,7 +12,8 @@ import { AdminInvitesSection } from "@/app/admin/AdminInvitesSection";
 import { AdminNetworkSections } from "@/app/admin/AdminNetworkSections";
 import { AdminBackupSection } from "@/app/admin/AdminBackupSection";
 import { BackendProbe } from "@/app/admin/BackendProbe";
-import { BuiltinSpeechCard } from "@/app/admin/BuiltinSpeechCard";
+import { AdminImagesSection } from "@/app/admin/AdminImagesSection";
+import { AdminSpeechSection } from "@/app/admin/AdminSpeechSection";
 import { AdminHarnessSection } from "@/app/admin/AdminHarnessSection";
 import {
   Field,
@@ -51,6 +52,7 @@ export function AdminSettingsPanel() {
   const [apiKey, setApiKey] = useState(SECRET_KEPT);
   const [utilityApiKey, setUtilityApiKey] = useState(SECRET_KEPT);
   const [openaiImageKey, setOpenaiImageKey] = useState(SECRET_KEPT);
+  const [ttsApiKey, setTtsApiKey] = useState(SECRET_KEPT);
   const [discordSecret, setDiscordSecret] = useState(SECRET_KEPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -130,7 +132,15 @@ export function AdminSettingsPanel() {
             openaiModel: config.images.openaiModel,
             ...(openaiImageKey === SECRET_KEPT ? {} : { openaiApiKey: openaiImageKey }),
           },
-          speech: config.speech,
+          speech: {
+            ttsProvider: config.speech.ttsProvider,
+            kokoroUrl: config.speech.kokoroUrl,
+            ttsBaseUrl: config.speech.ttsBaseUrl,
+            ttsModel: config.speech.ttsModel,
+            ttsVoice: config.speech.ttsVoice,
+            sttUrl: config.speech.sttUrl,
+            ...(ttsApiKey === SECRET_KEPT ? {} : { ttsApiKey }),
+          },
         }),
       });
       const data = await response.json().catch(() => null);
@@ -143,6 +153,7 @@ export function AdminSettingsPanel() {
       setApiKey(SECRET_KEPT);
       setUtilityApiKey(SECRET_KEPT);
       setOpenaiImageKey(SECRET_KEPT);
+      setTtsApiKey(SECRET_KEPT);
       setDiscordSecret(SECRET_KEPT);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -393,148 +404,23 @@ export function AdminSettingsPanel() {
         />
       </PageSection>
 
-      <PageSection id="admin-images" heading="Image generation" glyph="sense-truesight">
-        <div className="mb-3">
-          <SelectField<MaskedConfig["images"]["defaultBackend"]>
-            label="Default backend"
-            hint={
-              phoneWorld
-                ? "For new campaigns. The OpenAI API renders in the cloud with the key below and needs no GPU."
-                : "For new campaigns. ComfyUI and the FLUX workers run on this machine; the OpenAI API renders in the cloud with the key below and needs no GPU."
-            }
-            value={config.images.defaultBackend}
-            onChange={(defaultBackend) => setConfig({ ...config, images: { ...config.images, defaultBackend } })}
-            options={[
-              { value: "", label: `Auto (${env.imageBackend || "ComfyUI"})` },
-              ...(phoneWorld ? [] : [{ value: "comfyui" as const, label: "ComfyUI (local)" }]),
-              { value: "openai", label: "OpenAI API (cloud, needs key)" },
-              ...(phoneWorld
-                ? []
-                : [
-                    { value: "mflux-hs" as const, label: "FLUX worker: mflux (Apple Silicon)" },
-                    { value: "sdnq-hs" as const, label: "FLUX worker: sdnq (CUDA/ROCm)" },
-                  ]),
-              // Only once the agent program has painted a real test picture.
-              ...(config.harness?.images === "native" && config.harness.imagesVerifiedAt
-                ? [{ value: "harness" as const, label: "The agent program's own pictures" }]
-                : []),
-            ]}
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {phoneWorld ? null : (
-            <Field label="ComfyUI URL" hint={`Env: ${env.comfyUrl}`}>
-              <input
-                className={ui.input}
-                value={config.images.comfyUrl}
-                onChange={(event) =>
-                  setConfig({ ...config, images: { ...config.images, comfyUrl: event.target.value } })
-                }
-                placeholder={env.comfyUrl}
-              />
-            </Field>
-          )}
-          {phoneWorld ? null : (
-            <Field label="ComfyUI checkpoint">
-              <input
-                className={ui.input}
-                value={config.images.comfyCheckpoint}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    images: { ...config.images, comfyCheckpoint: event.target.value },
-                  })
-                }
-                placeholder="CyberRealisticXLPlay_V6.0.safetensors"
-              />
-            </Field>
-          )}
-          {phoneWorld ? null : (
-            <Field label="FLUX worker URL" hint={`Env: ${env.fluxWorkerUrl}`}>
-              <input
-                className={ui.input}
-                value={config.images.fluxWorkerUrl}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    images: { ...config.images, fluxWorkerUrl: event.target.value },
-                  })
-                }
-                placeholder={env.fluxWorkerUrl}
-              />
-            </Field>
-          )}
-          <Field label="OpenAI image model" hint="Blank = gpt-image-1.">
-            <input
-              className={ui.input}
-              value={config.images.openaiModel}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  images: { ...config.images, openaiModel: event.target.value },
-                })
-              }
-              placeholder="gpt-image-1"
-            />
-          </Field>
-          <Field
-            label="OpenAI base URL"
-            hint="Only for OpenAI-compatible image proxies. Blank = api.openai.com."
-          >
-            <input
-              className={ui.input}
-              value={config.images.openaiBaseUrl}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  images: { ...config.images, openaiBaseUrl: event.target.value },
-                })
-              }
-              placeholder="https://api.openai.com/v1"
-            />
-          </Field>
-          <SecretField
-            label="OpenAI image API key"
-            isSet={config.images.hasOpenaiApiKey}
-            value={openaiImageKey}
-            onChange={setOpenaiImageKey}
-            hint={
-              env.hasOpenaiImageApiKey
-                ? "An env-var key is also set; this one wins when filled."
-                : "Billed to whoever owns the key. Used only when a campaign's backend is the OpenAI API."
-            }
-          />
-        </div>
-      </PageSection>
+      <AdminImagesSection
+        images={config.images}
+        env={env}
+        harness={config.harness}
+        phoneWorld={phoneWorld}
+        openaiKey={openaiImageKey}
+        onImages={(images) => setConfig({ ...config, images })}
+        onOpenaiKey={setOpenaiImageKey}
+      />
 
-      {/* Narration and speech-to-text. Named "Speech" so it is not confused
-          with the Voice chat section below, which is a different feature. */}
-      <PageSection id="admin-speech" heading="Speech" glyph="tab-ambience">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Kokoro TTS URL" hint={`Env: ${env.kokoroUrl}`}>
-            <input
-              className={ui.input}
-              value={config.speech.kokoroUrl}
-              onChange={(event) =>
-                setConfig({ ...config, speech: { ...config.speech, kokoroUrl: event.target.value } })
-              }
-              placeholder={env.kokoroUrl}
-            />
-          </Field>
-          <Field label="Whisper STT URL" hint={`Env: ${env.sttUrl}. Type off when this server has no Whisper service.`}>
-            <input
-              className={ui.input}
-              value={config.speech.sttUrl}
-              onChange={(event) =>
-                setConfig({ ...config, speech: { ...config.speech, sttUrl: event.target.value } })
-              }
-              placeholder={env.sttUrl}
-            />
-          </Field>
-          <BuiltinSpeechCard />
-        </div>
-      </PageSection>
-
+      <AdminSpeechSection
+        speech={config.speech}
+        env={env}
+        apiKey={ttsApiKey}
+        onSpeech={(speech) => setConfig({ ...config, speech })}
+        onApiKey={setTtsApiKey}
+      />
 
       {deviceWorld ? null : (
         <AdminNetworkSections
