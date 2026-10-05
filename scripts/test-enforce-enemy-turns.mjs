@@ -61,6 +61,7 @@ async function walk(hero, x, y) {
 await test("When the model ends a character's turn, the enemies whose turns come next are handed to it to act now, and the auto-act backstop does not act them a second time.", async () => {
   const [enemy] = await stage();
   const turn = mk.aiTurn();
+  world.say("player", "That's my turn.", scout);
   const ended = await mk.ai(turn, "end_turn", { characterId: scout.id });
   assert.equal(ended.ok, true, ended.error);
   assert.ok(JSON.stringify(ended.result.enemiesToAct ?? []).includes(enemy.id), "end_turn named no enemy to act");
@@ -83,6 +84,7 @@ await test("The AI's enemy acts on its own turn: before the pointer reaches it, 
   const spell = await mk.ai(turn, "cast_at_player", { characterId: scout.id, casterEnemyId: enemy.id, saveAbility: "dex", dc: 12, damage: "1d6" });
   assert.equal(spell.ok, false, "an enemy cast during Scout's turn, before its own");
   assert.equal(attacksBy(enemy), attacksBefore);
+  world.say("player", "That's my turn.", scout);
   const ended = await mk.ai(turn, "end_turn", { characterId: scout.id });
   assert.equal(ended.ok, true, ended.error);
   const now = await mk.forced([15, 3], () => mk.ai(turn, "enemy_attack", { enemyId: enemy.id, targetCharacterId: scout.id }));
@@ -238,6 +240,7 @@ await test("The AI moves a combatant by teleport only through the spell that doe
   await stage();
   kit.giveTurn(watcher.id);
   const turn = mk.aiTurn();
+  world.say("player", "I Misty Step away.", watcher);
   const free = await mk.ai(turn, "teleport_token", { tokenName: watcher.id, x: 8, y: 12 });
   assert.equal(free.ok, false, "a free teleport");
   const misty = await mk.ai(turn, "teleport_token", { tokenName: watcher.id, x: 8, y: 12, spell: "Misty Step", casterId: watcher.id });

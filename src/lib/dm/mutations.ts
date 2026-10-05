@@ -49,6 +49,7 @@ import { prepareUseItem } from "@/lib/dm/object-actions";
 import { chargedItemUse } from "@/lib/dm/item-use";
 import { applyConsumable, consumableRefusal } from "@/lib/dm/consumables";
 import { castSpell } from "@/lib/dm/cast-guard";
+import { characterCallUnasked } from "@/lib/dm/player-word";
 import { ZONE_ARGS, zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { castHealingSpell } from "@/lib/dm/heal-spell";
 import { advanceClock, recordShapeEnd } from "@/lib/db/clock";
@@ -699,6 +700,10 @@ export function applyDmMutation(
       };
     }
     case "heal": {
+      const unasked = characterCallUnasked(campaign.id, getDmTurn(turnId), rawArguments, "casterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       // A named healing spell is rolled by the server from the content
       // pack's own dice, exactly as a healing potion is, so the model never
       // decides how much a Cure Wounds restores.
@@ -820,6 +825,10 @@ export function applyDmMutation(
       };
     }
     case "stabilize": {
+      const unasked = characterCallUnasked(campaign.id, getDmTurn(turnId), rawArguments, "healerId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       return {
         result: handleStabilize(campaign, turnId, sheet, resolve(args.healerId), {
           method: args.method,
@@ -952,6 +961,10 @@ export function applyDmMutation(
       return { result: { ok: true, removed: name, qty: math.removed } };
     }
     case "use_item": {
+      const unasked = characterCallUnasked(campaign.id, getDmTurn(turnId), rawArguments, "characterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       const itemName = (args.item ?? args.name ?? "").trim();
       if (!itemName) {
         return { result: { error: "use_item needs an item name." } };
@@ -1055,6 +1068,10 @@ export function applyDmMutation(
       return { result: outcome.result };
     }
     case "use_resource": {
+      const unasked = characterCallUnasked(campaign.id, getDmTurn(turnId), rawArguments, "characterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       const resourceName = (args.resource ?? args.name ?? "").trim();
       if (!resourceName) {
         return { result: { error: "use_resource needs a resource name." } };
@@ -1241,6 +1258,10 @@ export function applyDmMutation(
       return { result: { ok: true, cleared: removed.join(", ") } };
     }
     case "use_spell_slot": {
+      const unasked = characterCallUnasked(campaign.id, getDmTurn(turnId), rawArguments, "characterId");
+      if (unasked) {
+        return { result: { error: unasked } };
+      }
       const level = args.level ?? 0;
       // A missing spell is tolerated (weak tool calling must not break
       // casting, and Divine Smite burns a slot with no spell): the slot

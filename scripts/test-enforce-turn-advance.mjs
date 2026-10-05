@@ -361,6 +361,7 @@ await test("The next hero drops during the enemies' turns before theirs: their t
   kit.place(brom.id, 5, 5);
   kit.place(goblin.id, 5, 6);
   const turn = createDmTurn(world.campaignId, [], "ai");
+  world.say("player", "That's my turn.", world.sheet(kara.id));
   const ended = await aiEndTurn(world, kara.id, turn);
   assert.equal(ended.ok, true, ended.error);
   assert.equal(currentName(world), "Brom");
@@ -451,6 +452,7 @@ await test("Every wake leaves a note: the model's end_turn landing on a companio
   const { world, heroes: [kara] } = await table(["Kara"]);
   const pip = companion(world, "Pip", 18, kara);
   const turn = createDmTurn(world.campaignId, [], "ai");
+  world.say("player", "That's my turn.", world.sheet(kara.id));
   const ended = await aiEndTurn(world, kara.id, turn);
   assert.equal(ended.ok, true, ended.error);
   assert.equal(currentName(world), pip.name);
@@ -572,6 +574,7 @@ await test("The enemy the backstop plays dropping the summon whose turn it is ha
   kit.place(wolf.id, 6, 7);
   world.patch(wolf.id, { currentHp: 1 });
   const turn = createDmTurn(world.campaignId, [], "ai");
+  world.say("player", "That's my turn.", world.sheet(kara.id));
   assert.equal((await aiEndTurn(world, kara.id, turn)).ok, true);
   assert.equal(currentName(world), wolf.name);
   world.dice(20, 6, 6, 6);
@@ -768,6 +771,7 @@ await test("The model's end_turn waits for the enemies due before it; played, th
   goblins.forEach((goblin, index) => kit.place(goblin.id, 4 + index * 2, 6));
   assert.equal(kit.endTurn(userOf(world, kara.id)), true);
   const turn = createDmTurn(world.campaignId, [], "ai");
+  world.say("player", "That's my turn.", world.sheet(kara.id));
   const early = await aiEndTurn(world, kara.id, turn);
   assert.match(early.error ?? "", /Goblin 1 and Goblin 2 act before Kara/, "the round-1 goblins come first");
   for (const goblin of goblins) {
@@ -776,6 +780,7 @@ await test("The model's end_turn waits for the enemies due before it; played, th
     world.clearDice();
     assert.equal(played.ok, true, played.error);
   }
+  world.say("player", "That's my turn.", world.sheet(kara.id));
   const ended = await aiEndTurn(world, kara.id, turn);
   assert.equal(ended.ok, true, ended.error);
   assert.equal(handoff(world).turnId, turn.id, "the model's own pass is handed to it, not held");

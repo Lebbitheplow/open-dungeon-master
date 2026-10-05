@@ -51,6 +51,7 @@ import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import { announcesEncounterStart, collectExchanges, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
 import { markToolError } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
+import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { personRunsTable } from "@/lib/dm/enemies-due";
 import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
@@ -260,6 +261,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       : sheets.filter((sheet) => !staged.has(sheet.id)).map((sheet) => sheet.name),
     turnBudget: encounter.turnBudget ? describeBudget(encounter.turnBudget) : null,
     movementLeft: encounter.orderReady ? movementLeft(campaignId, encounter, sheets) : null,
+    awaitingPlayer: characterAwaitingPlayer(campaignId)?.name ?? null,
     enemies: enemies.map((enemy) => ({
       enemyId: enemy.id,
       name: enemy.displayName,

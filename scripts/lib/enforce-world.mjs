@@ -151,6 +151,7 @@ export async function openWorld(options = {}) {
   const campaigns = await import("../../src/lib/db/campaigns.ts");
   const sheets = await import("../../src/lib/db/sheets.ts");
   const encounters = await import("../../src/lib/db/encounters.ts");
+  const messages = await import("../../src/lib/db/messages.ts");
   const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
   const { fieldedSheets } = await import("../../src/lib/dm/roster.ts");
   const { resolveRollExpression } = await import("../../src/lib/dm/rolls.ts");
@@ -285,6 +286,17 @@ export async function openWorld(options = {}) {
     // The engine, as the DM console calls it. Returns the InvokeOutcome:
     // { ok: true, result } or { ok: false, error }.
     invoke,
+    // A line in the transcript, as the actions route or the server writes
+    // it: the AI acts on a character's own turn only on their player's word
+    // (src/lib/dm/player-word.ts).
+    say: (authorType, content, sheet) =>
+      messages.insertCampaignMessage({
+        campaignId,
+        seq: campaigns.allocateSeq(campaignId),
+        authorType,
+        content,
+        ...(sheet ? { userId: sheet.userId, characterId: sheet.id } : {}),
+      }),
     // Sign a user in for a route handler called directly.
     signIn: (user) => {
       globalThis.__odmTestToken = mintSession(user.id).token;
