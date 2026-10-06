@@ -301,6 +301,16 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
   return mapNpc(db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(npcId) as NpcRow);
 }
 
+// Their read-aloud voice alone, for the table's voices panel (issue 97):
+// the rest of the record is left exactly as it stands.
+export function setNpcVoice(campaignId: string, npcId: string, voice: NpcVoice | null): boolean {
+  return (
+    getDatabase()
+      .prepare(`UPDATE npcs SET voice_json = ?, updated_at = ? WHERE id = ? AND campaign_id = ?`)
+      .run(voice ? JSON.stringify(voice) : null, nowIso(), npcId, campaignId).changes > 0
+  );
+}
+
 // "" takes the face away. Nothing validates the path here: the routes accept
 // only what /api/upload wrote, and the renderer only ever puts it in a src.
 export function setNpcPortrait(npcId: string, url: string): Npc | null {

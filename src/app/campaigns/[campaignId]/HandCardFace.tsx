@@ -99,6 +99,7 @@ function HandCardFaceInner({
   played,
   aim,
   conditions,
+  waiting = false,
   onPick,
 }: {
   card: HandCard;
@@ -114,6 +115,10 @@ function HandCardFaceInner({
   // character holding the hand.
   aim: HandAim | null;
   conditions: string[];
+  // The only thing holding this card is that it is somebody else's turn.
+  // Such a card is still read like a playable one: its preview opens, and
+  // the hand's header, not a tooltip on every card, says whose turn it is.
+  waiting?: boolean;
   onPick: (card: HandCard) => void;
 }) {
   const rows = useMemo(() => previewRows(card, aim, conditions), [card, aim, conditions]);
@@ -182,7 +187,7 @@ function HandCardFaceInner({
       <RadixTooltip.Provider delayDuration={300}>
         <RadixTooltip.Root disableHoverableContent>
           <RadixTooltip.Trigger asChild>{button}</RadixTooltip.Trigger>
-          {card.disabled ? (
+          {card.disabled && !waiting ? (
             <RadixTooltip.Portal>
               <RadixTooltip.Content
                 side="top"
@@ -196,7 +201,7 @@ function HandCardFaceInner({
           ) : null}
         </RadixTooltip.Root>
       </RadixTooltip.Provider>
-      {card.disabled ? null : (
+      {card.disabled && !waiting ? null : (
         <span className="hand-preview" aria-hidden="true">
           <span className="hand-preview-head">
             <span className="hand-type-chip" style={{ "--chip-tone": TYPE_TONE[card.type] } as CSSProperties}>

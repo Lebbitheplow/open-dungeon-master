@@ -42,6 +42,8 @@ falls through to the env var.
 | `TTS_MODEL` | `kokoro`, or `gpt-4o-mini-tts` on OpenAI | Model name sent with each narration request |
 | `TTS_API_KEY` | — | Bearer key for the narration server. Blank on OpenAI itself falls back to the key saved for pictures |
 | `TTS_VOICE` | `af_heart`, or `alloy` on OpenAI | Voice used when a campaign names one the server does not have |
+| `TTS_CONCURRENCY` | `2` | Speech requests sent to the narration server at once, across every table (1 to 8). A passage with character voices is several short requests; two at a time was the fastest on a CPU Kokoro, a hosted API can take more |
+| `ODM_UPDATE_CHECK` | on | `off` stops the server asking GitHub whether a newer release exists (one anonymous request every six hours at most; the answer is shown in the account menu's About dialog) |
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
 | `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
@@ -100,8 +102,11 @@ server refuses to start without `DB_ENCRYPTION_KEY` in `.env.server`.
   `STT_MODEL` env in the unit (e.g. `small` for faster, lower-quality
   transcription).
 - TTS: the existing Kokoro-FastAPI service on :8880; the campaign's
-  narrator voice is picked in campaign settings. Narration MP3s are written
-  under `public/generated-audio/<campaignId>/`.
+  narrator voice is picked in campaign settings, and so is a voice for any
+  character, cast member or monster (Game settings > Voices), whose quoted
+  lines are then read in it. Narration MP3s are written under
+  `public/generated-audio/<campaignId>/`; a passage starts playing as soon
+  as its first clip is rendered.
 
 ## Playing from your phone
 

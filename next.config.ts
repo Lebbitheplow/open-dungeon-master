@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import type { NextConfig } from "next";
 
 // Extra hostnames/IPs allowed to reach the dev server (e.g. a phone on your
@@ -13,9 +14,49 @@ const extraDevOrigins = (process.env.ALLOWED_DEV_ORIGINS || "")
 // plain host (npm run start:lan).
 const dockerBuild = process.env.DOCKER_BUILD === "1";
 
+// What is being built (issue 102): the commit and how far it is past the
+// last release tag, read here because the built app may run with no
+// repository beside it. A build that has no git to ask (the Docker image,
+// whose context leaves .git out) is told through ODM_BUILD_COMMIT and
+// ODM_BUILD_DESCRIBE instead; with neither, the About dialog shows the
+// release number alone. src/lib/build-info.ts turns these into the label.
+function git(...args: string[]): string {
+  try {
+    return execFileSync("git", args, { cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5_000 }).trim();
+  } catch {
+    return "";
+  }
+}
+const buildCommit = process.env.ODM_BUILD_COMMIT?.trim() || git("rev-parse", "HEAD");
+const buildDescribe =
+  process.env.ODM_BUILD_DESCRIBE?.trim() || git("describe", "--tags", "--long", "--dirty", "--always") || buildCommit.slice(0, 7);
+
+// The folders under public/ that hold what players made: uploads, generated
+// pictures and narration audio. Next serves any file that sat under public/
+// when the server started straight from disk, ahead of every route, so after
+// a restart those folders were readable by anyone with the address. A
+// beforeFiles rewrite runs ahead of that and hands them to the route that
+// checks the login (src/app/api/media). It is a path, so it never leaves the
+// server whatever address or scheme the request arrived under; the query (a
+// sized variant, "?w=256") rides along.
+export const LOGIN_MEDIA_ROOTS = ["uploads", "generated", "generated-audio"];
+
+export const loginMediaRewrites = LOGIN_MEDIA_ROOTS.map((root) => ({
+  source: `/${root}/:path*`,
+  destination: `/api/media/${root}/:path*`,
+}));
+
 const nextConfig: NextConfig = {
+  env: {
+    ODM_BUILD_COMMIT: buildCommit,
+    ODM_BUILD_DESCRIBE: buildDescribe,
+    ODM_BUILD_TIME: new Date().toISOString(),
+  },
   allowedDevOrigins: ["localhost", "127.0.0.1", ...extraDevOrigins],
   devIndicators: false,
+  async rewrites() {
+    return { beforeFiles: loginMediaRewrites, afterFiles: [], fallback: [] };
+  },
   // mediasoup spawns a native worker binary and resolves it by path, so
   // bundling it breaks the lookup exactly the way it does for better-sqlite3.
   serverExternalPackages: ["better-sqlite3-multiple-ciphers", "mediasoup"],

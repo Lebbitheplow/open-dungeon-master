@@ -561,3 +561,18 @@ html[data-theme="light"] .hand-row-value[data-tone="applies"] { color: #b4530f; 
 html[data-theme="light"] .hand-row-value[data-tone="cost"] { color: #6b4f0e; }
 html[data-theme="light"] .hand-type-chip { filter: brightness(0.55) saturate(1.4); }
 html[data-theme="light"] .hand-more { background: linear-gradient(180deg, #fbf5e4, #e6dcc3); color: #6b4f0e; border-color: rgba(138, 107, 28, 0.6); box-shadow: 0 8px 20px rgba(60, 40, 10, 0.25); }
+
+/* The rest of the hand opens as a sheet, outside .hand, so the preview rows
+   its cards carry need the panel's colours restated where they are drawn. */
+.hand-more-row {
+  --hand-panel: linear-gradient(180deg, rgba(41, 34, 71, 0.97), rgba(13, 11, 28, 0.98));
+  --hand-panel-ink: #f9ecc8;
+  --hand-panel-mute: #8f8aab;
+  --hand-panel-rule: rgba(48, 40, 83, 0.45);
+}
+html[data-theme="light"] .hand-more-row {
+  --hand-panel: linear-gradient(180deg, #fdf9ee, #f1e7cf);
+  --hand-panel-ink: #2a2014;
+  --hand-panel-mute: #6d6350;
+  --hand-panel-rule: rgba(122, 96, 40, 0.28);
+}

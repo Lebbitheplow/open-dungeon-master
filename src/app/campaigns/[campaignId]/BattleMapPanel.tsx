@@ -1135,8 +1135,8 @@ export function BattleMapPanel({
 
   return (
     // board-panel: where the panel is given a fixed window (the fight stage,
-    // the shared screen) its header and footer stay put and the board takes
-    // what is left (world.css, issue 87).
+    // the shared screen, the side panel and the phone) its header and footer
+    // stay put and the board takes what is left (world.css, issue 87).
     <div className="board-panel space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-sm font-medium text-stone-200">

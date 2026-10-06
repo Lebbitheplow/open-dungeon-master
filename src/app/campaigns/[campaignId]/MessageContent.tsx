@@ -95,7 +95,16 @@ export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }
     parts.push({ kind: "text", text: cleaned.slice(lastIndex) });
   }
 
-  const speakers: Speaker[] = cast.map((member) => ({ kind: "npc", id: member.id, name: member.name }));
+  // Anyone the prose may quote: the cast, and the characters at the table
+  // (an AI companion talks as much as any NPC), each under every name they
+  // answer to.
+  const speakers: Speaker[] = [
+    ...cast.map((member) => ({ kind: "npc" as const, id: member.id, name: member.name, aliases: member.aliases })),
+    ...[...sheetsById.values()]
+      .filter((sheet) => !sheet.summon && !cast.some((member) => member.name.toLowerCase() === sheet.name.toLowerCase()))
+      .map((sheet) => ({ kind: "pc" as const, id: sheet.id, name: sheet.name })),
+  ];
+  const faceOf = (who: Speaker) => (who.kind === "pc" ? sheetsById.get(who.id)?.portrait?.url : undefined);
   if (speaker) {
     return (
       <div className="narration space-y-2">
@@ -118,7 +127,7 @@ export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }
           <div key={index} className="space-y-2">
             {attributeSpeech(part.text.trim(), speakers).map((segment, at) =>
               segment.kind === "speech" ? (
-                <SpeechLine key={at} speaker={segment.speaker} cast={cast}>
+                <SpeechLine key={at} speaker={segment.speaker} cast={cast} face={faceOf(segment.speaker)}>
                   <Prose text={segment.text} />
                 </SpeechLine>
               ) : (

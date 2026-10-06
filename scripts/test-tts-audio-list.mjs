@@ -18,7 +18,14 @@ process.chdir(dir);
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { listNarrationAudio } = await import("../src/lib/tts.ts");
+const { listNarrationAudio: listVersioned } = await import("../src/lib/tts.ts");
+
+// Each take is addressed with the moment it was written (?v=), so a passage
+// narrated again is never answered from a browser's copy of the first take.
+// The listing itself is checked without it; the version has its own test.
+function listNarrationAudio(campaignId) {
+  return Object.fromEntries(Object.entries(listVersioned(campaignId)).map(([id, url]) => [id, url.replace(/\?v=\d+$/, "")]));
+}
 
 let passed = 0;
 async function test(name, fn) {
@@ -63,6 +70,15 @@ await test("a take written by anyone else shows up on the next read", () => {
     m1: "/generated-audio/camp-1/m1.mp3",
     m2: "/generated-audio/camp-1/m2.mp3",
   });
+});
+
+await test("a take written again gets a new address", () => {
+  const first = listVersioned("camp-1").m2;
+  assert.match(first, /^\/generated-audio\/camp-1\/m2\.mp3\?v=\d+$/);
+  fs.writeFileSync(path.join(audioDir, "m2.mp3"), "second take");
+  fs.utimesSync(path.join(audioDir, "m2.mp3"), tick + 50, tick + 50);
+  touchDir();
+  assert.notEqual(listVersioned("camp-1").m2, first);
 });
 
 await test("a take removed from disk drops out", () => {

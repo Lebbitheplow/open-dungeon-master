@@ -14,7 +14,7 @@ import { HandReactPrompt } from "@/app/campaigns/[campaignId]/HandReactPrompt";
 import { HandPips } from "@/app/campaigns/[campaignId]/HandPips";
 import { handTargets } from "@/app/campaigns/[campaignId]/handTargets";
 import { holdPendingCards, useHandChoices, useHandPending } from "@/app/campaigns/[campaignId]/useHandChoices";
-import { deriveHand, splitHand, type HandCard } from "@/lib/battlemap/hand";
+import { deriveHand, splitHand, waitingHand, type HandCard } from "@/lib/battlemap/hand";
 import {
   HAND_TARGET_EVENT,
   composeSentence,
@@ -317,6 +317,13 @@ function HandInner({
 
   if (!sheet || !turn) return null;
 
+  // Off this character's turn (or while initiative is rolled) the whole
+  // hand is held for one reason, the engine's own. The header already says
+  // to look the cards over, so a card held only by that stays readable
+  // (issue 96): its preview still opens, and the reason is said once.
+  const waitingOn = waitingHand(sheet, turn);
+  const isWaiting = (card: HandCard) => card.disabled !== null && Boolean(waitingOn?.sentences.has(card.disabled));
+
   const { fan, more } = splitHand(cards);
   // A card chosen from behind the spine takes the last seat before End turn.
   const shown = picked && more.includes(picked) ? [...fan.slice(0, -2), picked, fan[fan.length - 1]] : fan;
@@ -441,6 +448,7 @@ function HandInner({
                 played={played?.card.id === card.id}
                 aim={card.intent.card === "reaction" ? null : defaultAim}
                 conditions={conditions}
+                waiting={isWaiting(card)}
                 onPick={pick}
               />
             ))}
@@ -492,7 +500,16 @@ function HandInner({
       <p ref={noticeRef} role="status" className={cn("mt-1 text-xs text-amber-300", notice ? "" : "hidden")}>
         {notice}
       </p>
-      <HandMoreSheet open={moreOpen} onOpenChange={setMoreOpen} cards={more} onPick={pick} />
+      <HandMoreSheet
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        cards={more}
+        onPick={pick}
+        waitingNote={waitingOn?.note ?? null}
+        isWaiting={isWaiting}
+        aim={defaultAim}
+        conditions={conditions}
+      />
     </section>
   );
 }

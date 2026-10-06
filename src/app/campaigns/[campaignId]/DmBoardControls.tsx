@@ -41,7 +41,9 @@ export function BoardToolRail({
   disabled: boolean;
 }) {
   return (
-    <div data-pill-group="" className="flex flex-wrap gap-1">
+    // board-tools: in a fixed window the row keeps to one line and scrolls
+    // sideways, so it never takes the board's height (world.css, issue 87).
+    <div data-pill-group="" className="board-tools flex flex-wrap gap-1">
       {(Object.keys(TOOL_LABELS) as BoardTool[]).map((option) => {
         const Icon = TOOL_ICONS[option];
         return (

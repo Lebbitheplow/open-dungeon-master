@@ -41,7 +41,7 @@ import {
   advanceOrder,
   buildOrder,
   coerceEncounterOutcome,
-  numberDuplicates,
+  nameArrivals,
   pickEnemyTarget,
   spliceIntoOrder,
   withoutReflexTurns,
@@ -275,7 +275,9 @@ function handleStartEncounter(
     return { error: "An encounter is already active." };
   }
 
-  const names = numberDuplicates(resolved.map((entry) => entry.name));
+  // One run of numbers per kind, whatever the caller numbered itself
+  // ("Hunter", "Hunter 1", "Hunter 2" are Hunter 1, 2 and 3: issue 98).
+  const { names } = nameArrivals([], resolved.map((entry) => entry.name));
   const enemies = resolved.map((entry, index) =>
     insertEnemy({
       encounterId: encounter.id,

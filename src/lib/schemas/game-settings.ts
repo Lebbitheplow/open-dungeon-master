@@ -74,6 +74,13 @@ export const gameSettingsSchema = z.object({
   // Long enough for a custom voice: a blend ("af_heart(30)+af_bella(70)") or
   // a described one, on servers that take them (issue 89).
   ttsVoice: z.string().trim().max(120).default("af_heart"),
+  // The narrator's pace, on the scale every speaker's voice uses
+  // (src/lib/tts-segments.ts).
+  ttsSpeed: z.number().min(0.7).max(1.4).default(1),
+  // Character voices (issue 97). Off: only speakers someone chose a voice
+  // for are heard in it. On: anyone who speaks without one is cast from the
+  // server's voices the first time they do, and keeps that voice.
+  ttsAutoCast: z.boolean().default(false),
   // Theatre inserts (docs/vtt-parity-implementation-plan.md 8.3): the
   // speaking NPC's portrait over the scene art while their lines play.
   presentation: z.enum(["plain", "theatre"]).default("plain"),

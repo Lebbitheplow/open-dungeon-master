@@ -276,6 +276,27 @@ await test("reinforcements roll initiative and take a place in the order", async
   assert.deepEqual(counts, [...counts].sort((a, b) => b - a));
 });
 
+// Issue 98: "Hunter", "Hunter 1" and "Hunter 2" stood in one fight, because
+// arrivals were only numbered against names that matched to the letter.
+await test("reinforcements are numbered as one run with the enemies already there", async () => {
+  const [lone] = await stage(1);
+  const kind = lone.displayName;
+  assert.doesNotMatch(kind, /\d$/, "one of a kind needs no number");
+  const hp = world.enemies()[0].currentHp;
+  const first = await world.invoke("add_enemies", { enemies: [{ monster: lone.slug, count: 1 }] });
+  assert.equal(first.ok, true, first.error);
+  assert.deepEqual(world.enemies().map((enemy) => enemy.displayName).sort(), [`${kind} 1`, `${kind} 2`]);
+  const renamed = world.enemies().find((enemy) => enemy.id === lone.id);
+  assert.equal(renamed.displayName, `${kind} 1`, "the one who was there first is counted first");
+  assert.equal(renamed.currentHp, hp, "and a new name costs it nothing");
+  assert.equal(world.encounter().order.find((slot) => slot.enemyId === lone.id).name, `${kind} 1`, "the order follows");
+  assert.deepEqual(first.result.renamed, [{ enemyId: lone.id, was: kind, name: `${kind} 1` }], "and the caller is told");
+  const second = await world.invoke("add_enemies", { enemies: [{ monster: lone.slug, name: kind, count: 1 }] });
+  assert.equal(second.ok, true, second.error);
+  assert.deepEqual(world.enemies().map((enemy) => enemy.displayName).sort(), [`${kind} 1`, `${kind} 2`, `${kind} 3`]);
+  assert.equal(second.result.renamed, undefined);
+});
+
 await test("a fight past the party's deadly ceiling is refused and nothing is created", async () => {
   await kit.endFight();
   // One level 1 character: deadly at 100 XP, the normal ceiling 125.

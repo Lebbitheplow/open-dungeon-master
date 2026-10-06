@@ -1,12 +1,14 @@
 import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
 
 // Which voice reads which part of a message (docs/vtt-parity-
-// implementation-plan.md section 8.2). Prose is the narrator's; a line
-// attributed to someone with a voice of their own is theirs; a message
+// implementation-plan.md section 8.2, issue 97). Prose is the narrator's; a
+// line attributed to someone with a voice of their own is theirs; a message
 // spoken outright as one person is all theirs. Pure: tts.ts renders what
 // this plans, the test checks the plan.
 
-export type CastVoice = { name: string; voiceId: string; speed: number };
+// Anyone who may speak: a cast member, a character at the table, a monster.
+// `aliases` are other names the prose may use for them.
+export type CastVoice = { name: string; voiceId: string; speed: number; aliases?: string[] };
 
 export type SpeechPlan = Array<{ text: string; voice: string; speed: number; speaker: string | null }>;
 
@@ -21,15 +23,28 @@ export function clampSpeed(raw: unknown): number {
   return Math.round(Math.min(SPEED_MAX, Math.max(SPEED_MIN, speed)) * 100) / 100;
 }
 
+// "Goblin 2" and "Goblin B" on the board are both a Goblin: monsters are
+// given a voice by what they are, not by which one of them is talking.
+export function baseCreatureName(name: string): string {
+  return name.trim().replace(/\s+(?:#?\d+|[A-Z])$/, "").trim() || name.trim();
+}
+
 export function planSpeech(
   text: string,
-  options: { narratorVoice: string; cast: CastVoice[]; speaker?: Speaker | null },
+  options: { narratorVoice: string; narratorSpeed?: number; cast: CastVoice[]; speaker?: Speaker | null },
 ): SpeechPlan {
-  const byName = new Map(options.cast.map((entry) => [entry.name.toLowerCase(), entry]));
-  const narrator = { voice: options.narratorVoice, speed: 1 };
+  const byName = new Map<string, CastVoice>();
+  for (const entry of options.cast) {
+    for (const name of [entry.name, ...(entry.aliases ?? [])]) {
+      if (!byName.has(name.toLowerCase())) {
+        byName.set(name.toLowerCase(), entry);
+      }
+    }
+  }
+  const narrator = { voice: options.narratorVoice, speed: clampSpeed(options.narratorSpeed ?? 1) };
   const voiceFor = (name: string) => {
-    const own = byName.get(name.toLowerCase());
-    return own ? { voice: own.voiceId, speed: own.speed } : narrator;
+    const own = byName.get(name.toLowerCase()) ?? byName.get(baseCreatureName(name).toLowerCase());
+    return own?.voiceId ? { voice: own.voiceId, speed: own.speed } : narrator;
   };
   // Spoken outright as one person: the whole message in their voice.
   if (options.speaker && options.speaker.kind !== "narrator") {
@@ -37,7 +52,9 @@ export function planSpeech(
     return text.trim() ? [{ text: text.trim(), ...chosen, speaker: options.speaker.name }] : [];
   }
   // Only someone with a voice of their own is worth a cut in the audio.
-  const speakers: Speaker[] = options.cast.filter((entry) => entry.voiceId).map((entry) => ({ kind: "npc", id: "", name: entry.name }));
+  const speakers: Speaker[] = options.cast
+    .filter((entry) => entry.voiceId)
+    .map((entry) => ({ kind: "npc", id: "", name: entry.name, aliases: entry.aliases }));
   const plan: SpeechPlan = [];
   for (const segment of attributeSpeech(text, speakers)) {
     if (segment.kind === "speech") {
@@ -53,4 +70,47 @@ export function planSpeech(
     }
   }
   return plan;
+}
+
+// Text cut for the speech server. A long run is split at sentence ends so
+// no request is unreasonably large, and the passage's very first request is
+// kept short on purpose: it is the one the table waits on before a word is
+// heard, and a short one comes back in well under a second.
+export const FIRST_CHUNK_CHARS = 320;
+export const CHUNK_CHARS = 1_200;
+
+export function chunkSentences(text: string, firstLimit = CHUNK_CHARS, limit = CHUNK_CHARS): string[] {
+  if (text.length <= firstLimit) {
+    return [text];
+  }
+  const sentences = text.match(/[^.!?]+[.!?]+["')\]”’]*\s*|.+$/g) ?? [text];
+  const chunks: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    const cap = chunks.length ? limit : firstLimit;
+    if (current && current.length + sentence.length > cap) {
+      chunks.push(current.trim());
+      current = "";
+    }
+    current += sentence;
+  }
+  if (current.trim()) {
+    chunks.push(current.trim());
+  }
+  return chunks;
+}
+
+export type SpeechRequest = { text: string; voice: string; speed: number };
+
+// The plan as the requests actually sent, in the order they are heard.
+export function speechRequests(plan: SpeechPlan): SpeechRequest[] {
+  const requests: SpeechRequest[] = [];
+  for (const part of plan) {
+    for (const text of chunkSentences(part.text, requests.length ? CHUNK_CHARS : FIRST_CHUNK_CHARS)) {
+      if (/[\p{L}\p{N}]/u.test(text)) {
+        requests.push({ text, voice: part.voice, speed: part.speed });
+      }
+    }
+  }
+  return requests;
 }

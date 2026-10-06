@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { buildOrder, advanceOrder, coerceEncounterOutcome, critDamageExpression, enemyDamageMath, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
+const { buildOrder, advanceOrder, coerceEncounterOutcome, critDamageExpression, enemyDamageMath, nameArrivals, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
   "../src/lib/dm/encounter-logic.ts"
 );
 
@@ -125,6 +125,31 @@ test("enemyDamageMath clamps and flags the drop", () => {
 test("numberDuplicates numbers only repeats", () => {
   assert.deepEqual(numberDuplicates(["Wolf", "Wolf", "Bear"]), ["Wolf 1", "Wolf 2", "Bear"]);
   assert.deepEqual(numberDuplicates(["Ogre"]), ["Ogre"]);
+});
+
+// Issue 98: "Hunter", "Hunter 1", "Hunter 2" in one fight.
+test("nameArrivals numbers a kind as one run, however its members arrived", () => {
+  // A fresh fight is numbered as it always was.
+  assert.deepEqual(nameArrivals([], ["Wolf", "Wolf", "Bear"]), { names: ["Wolf 1", "Wolf 2", "Bear"], renames: [] });
+  assert.deepEqual(nameArrivals([], ["Ogre"]).names, ["Ogre"]);
+  // The reported case: two numbered Hunters, and a third comes later.
+  assert.deepEqual(nameArrivals(["Hunter 1", "Hunter 2"], ["Hunter"]), { names: ["Hunter 3"], renames: [] });
+  // One stood alone under the plain name: it is counted first.
+  assert.deepEqual(nameArrivals(["Hunter", "Bear"], ["Hunter", "Hunter"]), {
+    names: ["Hunter 2", "Hunter 3"],
+    renames: [{ index: 0, name: "Hunter 1" }],
+  });
+  // The model numbered them itself, badly.
+  assert.deepEqual(nameArrivals([], ["Hunter", "Hunter 1", "Hunter 2"]).names, ["Hunter 1", "Hunter 2", "Hunter 3"]);
+  assert.deepEqual(nameArrivals(["Hunter 1", "Hunter 2"], ["Hunter 2"]).names, ["Hunter 3"], "a number already on the board is not handed out twice");
+  // A number is never reused, so a name always means the same creature.
+  assert.deepEqual(nameArrivals(["Hunter 1", "Hunter 3"], ["Hunter", "Hunter"]).names, ["Hunter 2", "Hunter 4"]);
+  // Nothing of its kind around: the name is the caller's, number and all.
+  assert.deepEqual(nameArrivals(["Bear"], ["Unit 7", " Snik "]), { names: ["Unit 7", "Snik"], renames: [] });
+  // Kinds are matched whatever the capitals; the first spelling stands.
+  assert.deepEqual(nameArrivals(["Gutter Punk 1"], ["gutter punk"]).names, ["Gutter Punk 2"]);
+  // Somebody else's arrival never renames a bystander.
+  assert.deepEqual(nameArrivals(["Hunter"], ["Bear"]), { names: ["Bear"], renames: [] });
 });
 
 test("pickEnemyTarget prefers nearest, then lowest AC", () => {

@@ -218,17 +218,27 @@ await test("a file under public/ is answered only to somebody signed in, and cac
   }
 });
 
-await test("the proxy sends the three login folders to that route, and nothing else", async () => {
+await test("the three login folders are sent to that route by path, never by an absolute address", async () => {
+  const { loginMediaRewrites } = await import("../next.config.ts");
+  assert.deepEqual(loginMediaRewrites, [
+    { source: "/uploads/:path*", destination: "/api/media/uploads/:path*" },
+    { source: "/generated/:path*", destination: "/api/media/generated/:path*" },
+    { source: "/generated-audio/:path*", destination: "/api/media/generated-audio/:path*" },
+  ]);
+  const config = (await import("../next.config.ts")).default;
+  assert.deepEqual((await config.rewrites()).beforeFiles, loginMediaRewrites);
+
+  // A rewrite made in the proxy is absolute. Next proxies it over the network
+  // unless its origin matches the one it is bound to, which a server bound to
+  // 127.0.0.1 never does, and behind an https tunnel that request fails.
   const { proxy } = await import("../src/proxy.ts");
   const { NextRequest } = await import("next/server");
-  const rewriteOf = (pathname) =>
-    proxy(new NextRequest(`http://test${pathname}`)).headers.get("x-middleware-rewrite");
-  assert.equal(new URL(rewriteOf("/uploads/a.png?w=256")).pathname, "/api/media/uploads/a.png");
-  assert.equal(new URL(rewriteOf("/uploads/a.png?w=256")).search, "?w=256");
-  assert.equal(new URL(rewriteOf("/generated/b.webp")).pathname, "/api/media/generated/b.webp");
-  assert.equal(new URL(rewriteOf("/generated-audio/c.mp3")).pathname, "/api/media/generated-audio/c.mp3");
-  assert.equal(rewriteOf("/assets/d.png"), null);
-  assert.equal(rewriteOf("/api/campaigns"), null);
+  const rewriteOf = (pathname, headers = {}) =>
+    proxy(new NextRequest(`http://test${pathname}`, { headers })).headers.get("x-middleware-rewrite");
+  for (const pathname of ["/uploads/a.png?w=256", "/generated/b.webp", "/generated-audio/c.mp3", "/assets/d.png", "/api/campaigns"]) {
+    assert.equal(rewriteOf(pathname), null, pathname);
+    assert.equal(rewriteOf(pathname, { "x-forwarded-proto": "https" }), null, pathname);
+  }
 });
 
 if (process.platform !== "win32") {

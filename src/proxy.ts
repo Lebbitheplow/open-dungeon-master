@@ -19,20 +19,17 @@ import {
 //   planted a host and a token, every data request is answered by that
 //   host instead of this server.
 //
-// Without an app origin or the portal cookies nothing here changes, except
-// for one thing every caller gets:
+// Without an app origin or the portal cookies nothing here changes.
 //
-// - Uploads, generated pictures and narration audio are answered by the
-//   route that checks the login (src/app/api/media). Next serves any file
-//   that sat under public/ when the server started straight from disk, ahead
-//   of every route, so after a restart those folders were readable by anyone
-//   with the address. Proxy runs before that, and sends them to the route.
-
-const LOGIN_MEDIA_PREFIXES = ["/uploads/", "/generated/", "/generated-audio/"];
-
-function isLoginMediaPath(pathname: string): boolean {
-  return LOGIN_MEDIA_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
+// Uploads, generated pictures and narration audio reach the route that
+// checks the login (src/app/api/media) through the rewrites in
+// next.config.ts, not from here. A rewrite made here carries an absolute
+// address, and Next only keeps it inside the server when that address has
+// the origin it thinks it is listening on. A server bound to 127.0.0.1 (the
+// world a desktop app hosts) never matches, since the address here always
+// says "localhost", so every picture was fetched back over the network from
+// itself; behind a tunnel that speaks https that fetch went to its own plain
+// http port as TLS and every picture answered 500.
 
 const extra = extraAppOrigins(process.env.ODM_APP_ORIGINS);
 
@@ -63,10 +60,6 @@ export function proxy(request: NextRequest) {
         response.cookies.set(name, "", { path: "/", maxAge: 0 });
       }
     }
-  } else if (isLoginMediaPath(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = `/api/media${pathname}`;
-    response = NextResponse.rewrite(url);
   } else {
     response = NextResponse.next();
   }

@@ -1,11 +1,12 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { AppWindow, BookOpen, CircleHelp, LogOut, SlidersHorizontal, UserRound } from "lucide-react";
+import { AppWindow, BookOpen, CircleHelp, Info, LogOut, SlidersHorizontal, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import { AboutDialog } from "@/components/AboutDialog";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
@@ -100,6 +101,7 @@ export function AccountMenu({
   onHelp?: () => void;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const pathname = usePathname();
   // Inside the desktop or Android app the menu grows a door back to the
   // app's server list. The host object is a client-only global, so it is
@@ -219,6 +221,13 @@ export function AccountMenu({
             >
               <CircleHelp className="size-4" /> Help
             </DropdownMenu.Item>
+            {/* What this server is running, and whether a newer release is
+                out (issue 102). */}
+            <DropdownMenu.Item onSelect={() => setAboutOpen(true)} className={itemClass}>
+              {/* Inside the app there are two versions: the app's own is in
+                  its settings, this one is the server's. */}
+              <Info className="size-4" /> {shell ? "About this server" : "About"}
+            </DropdownMenu.Item>
             <DropdownMenu.Separator className="my-1 h-px bg-stone-800" />
             {shell ? (
               <DropdownMenu.Item onSelect={() => shell.showServers()} className={itemClass}>
@@ -245,6 +254,7 @@ export function AccountMenu({
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       {onHelp ? null : <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />}
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </>
   );
 }

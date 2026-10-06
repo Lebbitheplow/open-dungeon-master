@@ -8,8 +8,21 @@ import type { Speaker } from "@/lib/dm/speech";
 // plan.md 8.1): the face at the left, the name in eyebrow caps, the words
 // in a speech tone, entering with the fade-up the rest of the log uses.
 
-export function SpeechLine({ speaker, cast, children, className }: { speaker: Speaker; cast: CastMember[]; children: React.ReactNode; className?: string }) {
-  const face = cast.find((member) => member.id === speaker.id || member.name.toLowerCase() === speaker.name.toLowerCase())?.portraitUrl;
+export function SpeechLine({
+  speaker,
+  cast,
+  children,
+  className,
+  // A face from somewhere other than the cast: a character's own portrait.
+  face: given,
+}: {
+  speaker: Speaker;
+  cast: CastMember[];
+  children: React.ReactNode;
+  className?: string;
+  face?: string;
+}) {
+  const face = given || cast.find((member) => member.id === speaker.id || member.name.toLowerCase() === speaker.name.toLowerCase())?.portraitUrl;
   return (
     <div className={cn("animate-fade-up flex items-start gap-2.5", className)}>
       {face ? (
