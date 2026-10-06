@@ -37,8 +37,26 @@ export type HandIntent = (
   | { card: "feature"; resourceId: string }
   | { card: "basic"; action: BasicActionId }
   | { card: "reaction"; feature: string; spell?: string; slotLevel?: number | null }
+  // A monster's card in the DM's hand (src/lib/battlemap/monster-hand.ts):
+  // one of its stat block's attacks, a save ability, or breaking off. Sent
+  // to the console's invoke route, never to the actions route.
+  | { card: "monster"; enemyId: string; action: "attack" | "ability" | "flee"; attackName?: string; ability?: MonsterAbilityUse }
 ) &
   HandIntentExtras;
+
+// The numbers an ability card carries to cast_at_player or aoe_damage, as
+// the DM projection read them off the block (src/lib/dm/enemy-actions-view.ts).
+// The server re-reads the block whatever is sent; these only fill the form.
+export type MonsterAbilityUse = {
+  name: string;
+  save: string;
+  dc: number;
+  damage?: string;
+  damageType?: string;
+  halfOnSave?: boolean;
+  condition?: string;
+  rounds?: number;
+};
 
 export type HandCard = {
   id: string;

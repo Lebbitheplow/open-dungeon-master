@@ -13,7 +13,8 @@ import { classArt } from "../lineage";
 import { OptionCardGrid, type OptionCardGroup } from "../OptionCardGrid";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
 import { classInfoText } from "../usePickerGroups";
-import type { ArchetypeOption, BackgroundOption, ClassOption } from "../useBuilderOptions";
+import { grantedSkillSources, grantingTrait } from "../reconcile";
+import type { ArchetypeOption, BackgroundOption, ClassOption, RaceOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { ClassChoices } from "./ClassChoices";
@@ -29,30 +30,48 @@ export function CallingStep({
   derived,
   actions,
   klass,
+  race,
   background,
   pack,
   classes,
   classGroups,
   subclassGroups,
   offersSubclass,
+  subclassLockedAt,
   chosenArchetype,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
   actions: BuilderActions;
   klass: ClassOption | undefined;
+  race: RaceOption | undefined;
   background: BackgroundOption | undefined;
   pack: WorldPack | null;
   classes: Array<Reskinned<ClassOption>>;
   classGroups: PickerGroup[];
   subclassGroups: PickerGroup[];
   offersSubclass: boolean;
+  // The level the class picks a subclass at, while this level is below it.
+  subclassLockedAt: number | null;
   chosenArchetype: ArchetypeOption | null;
 }) {
   const { subclass } = state;
   const { effectiveLevel, grantedFeatures } = derived;
   const { gender } = state;
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  // The skills already the character's from race or background, and the
+  // source each came from: the same map the toggle refuses by, so every
+  // greyed pill says why (issue #109).
+  const skillSources = useMemo(
+    () =>
+      grantedSkillSources({
+        race,
+        background,
+        racialSkills: state.racialSkills,
+        backgroundSkills: state.backgroundSkills,
+      }),
+    [race, background, state.racialSkills, state.backgroundSkills],
+  );
 
   const cardGroups = useMemo<OptionCardGroup[]>(
     () =>
@@ -163,6 +182,16 @@ export function CallingStep({
               )}
             </span>
           </Field>
+        ) : subclassLockedAt !== null && klass ? (
+          // Below the class's subclass level the menu stays shut and says
+          // when the choice comes, instead of listing picks that vanished.
+          <Field label="Subclass" className="mt-3">
+            <p className="rounded-lg border border-dashed border-stone-700/70 bg-stone-950/40 px-3 py-2 text-xs text-stone-400">
+              A {klass.name.toLowerCase()} chooses a <GameTerm id="subclass">subclass</GameTerm> at level{" "}
+              {subclassLockedAt}; there is nothing to pick at level {effectiveLevel}. The choice comes with
+              that level-up.
+            </p>
+          </Field>
         ) : null}
       </StepPanel>
 
@@ -201,26 +230,32 @@ export function CallingStep({
               ) : null}
               A <GameTerm id="skill">skill</GameTerm> you are proficient in adds your{" "}
               <GameTerm id="proficiency_bonus">proficiency bonus</GameTerm> to rolls that use
-              it. Tap any ⓘ to see which ability a skill leans on.
+              it. Tap any ⓘ to see which ability a skill leans on. A greyed skill is already yours
+              from your race or background, so a class pick on it would be wasted.
             </>
           }
         >
           <div className="flex flex-wrap gap-2">
             {klass.skillChoices.from.map((skillId) => {
               const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
-              const fromBackground =
-                (background?.skills.includes(skillId) ?? false) || state.backgroundSkills.includes(skillId);
+              const name = skill?.name ?? skillId;
+              const source = skillSources.get(skillId.trim().toLowerCase());
+              const grantedBy = source === "race" ? race?.name : source === "background" ? background?.name : "";
+              const trait = source === "race" && race ? grantingTrait(race.id, name) : null;
+              const info = source
+                ? `${name} is already yours: your ${source}${grantedBy ? ` (${grantedBy})` : ""} grants it${trait ? ` through ${trait}` : ""}, so it is not offered as a class pick here.\n\n${describeSkill(skillId) ?? ""}`.trim()
+                : describeSkill(skillId);
               return (
                 <PickPill
                   key={skillId}
-                  label={skill?.name ?? skillId}
+                  label={name}
                   selected={state.chosenSkills.includes(skillId)}
-                  disabled={fromBackground}
+                  disabled={Boolean(source)}
                   onClick={() => actions.toggleSkill(skillId)}
-                  info={{ text: describeSkill(skillId) }}
+                  info={{ text: info }}
                 >
-                  {skill?.name ?? skillId}
-                  {fromBackground ? " (background)" : ""}
+                  {name}
+                  {source ? ` (${source})` : ""}
                 </PickPill>
               );
             })}

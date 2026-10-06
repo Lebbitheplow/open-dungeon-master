@@ -1,5 +1,5 @@
 import type { Ability } from "@/lib/schemas/sheet";
-import { classFeaturesFor, expertiseSlotsFor, subclassLevelFor } from "@/lib/srd/features";
+import { classFeaturesFor, expertiseSlotsFor, racialTraitsFor, subclassLevelFor } from "@/lib/srd/features";
 import { fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
@@ -72,6 +72,53 @@ function slotted<T extends string>(list: T[], count: number, valid: (entry: T, i
     seen.add(lower(entry));
     return entry;
   });
+}
+
+// Which skills the class step must grey out, and why: the race's fixed
+// grants (a wood elf's Perception), the background's (an outlander's
+// Survival), and the skills picked for either (a half-elf's two, a
+// background's "choose one"). The pill and the toggle both read this, so a
+// skill the toggle refuses is one the pill explains (issue #109: Perception
+// looked pickable and silently did nothing). A background's claim outranks
+// the race's only in the label; both are "already yours".
+export type SkillGrantSource = "race" | "background";
+
+export function grantedSkillSources(input: {
+  race?: Pick<RaceOption, "skills">;
+  background?: Pick<BackgroundOption, "skills">;
+  racialSkills?: string[];
+  backgroundSkills?: string[];
+}): Map<string, SkillGrantSource> {
+  const sources = new Map<string, SkillGrantSource>();
+  for (const skill of [...(input.background?.skills ?? []), ...(input.backgroundSkills ?? [])]) {
+    if (skill) {
+      sources.set(lower(skill), "background");
+    }
+  }
+  for (const skill of [...(input.race?.skills ?? []), ...(input.racialSkills ?? [])]) {
+    if (skill && !sources.has(lower(skill))) {
+      sources.set(lower(skill), "race");
+    }
+  }
+  return sources;
+}
+
+// The racial trait that hands a skill over, by name, for the pill's
+// explanation: a wood elf's Perception is "Keen Senses". The SRD trait
+// lines read "Perception proficiency (Keen Senses)"; the bracketed name is
+// what a player knows it as. Null when no trait line names the skill (a
+// pack race, or a grant with no trait behind it).
+export function grantingTrait(raceId: string, skillName: string): string | null {
+  const wanted = skillName.trim().toLowerCase();
+  if (!wanted) {
+    return null;
+  }
+  const line = racialTraitsFor(raceId).find((trait) => trait.name.toLowerCase().includes(wanted));
+  if (!line) {
+    return null;
+  }
+  const bracketed = /\(([^)]+)\)/.exec(line.name);
+  return bracketed ? bracketed[1].trim() : line.name.trim();
 }
 
 export function reconcilePicks(

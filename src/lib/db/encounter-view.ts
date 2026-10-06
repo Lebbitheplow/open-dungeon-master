@@ -1,4 +1,5 @@
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
+import { enemyActionsView, type PublicEnemyActions } from "@/lib/dm/enemy-actions-view";
 import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
 import { isCompanionUserId } from "@/lib/db/users";
 import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
@@ -90,6 +91,9 @@ export type PublicEncounter = {
     // DM view only: legendary actions left this round and resistances
     // left this fight (docs/vtt-parity-implementation-plan.md 4.1).
     legendary?: { actions: number; actionsMax: number; resistances: number; resistancesMax: number };
+    // DM view only: what it can do on its turn, as cards for the person
+    // running it (src/lib/dm/enemy-actions-view.ts, issue #108).
+    actions?: PublicEnemyActions;
   }>;
   // Whether the lair acts on initiative 20, and whether it has this round.
   lair?: { active: boolean; usedThisRound: boolean };
@@ -306,6 +310,7 @@ export function publicEncounter(
             ac: enemy.ac,
             initiative: enemy.initiative,
             ...legendaryView(encounter, enemy),
+            actions: enemyActionsView(encounter, enemy),
           }
         : {}),
     })),
