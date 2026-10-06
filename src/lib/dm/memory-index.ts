@@ -12,7 +12,7 @@ import {
   listSceneChunksMissingVectors,
   setSceneChunkEmbedding,
 } from "@/lib/db/scene-chunks";
-import { getDatabase, nowIso } from "@/lib/db/core";
+import { getDatabase } from "@/lib/db/core";
 import { bufferToVector, cosine, embed, similarityOf, vectorToBuffer } from "@/lib/embeddings";
 import { chunkScenes } from "@/lib/dm/scene-logic";
 import {
@@ -167,7 +167,7 @@ export async function indexChapter(campaignId: string, chapterId: string): Promi
       const [vector] = await embed([summaryText]);
       setChapterEmbedding(chapterId, vectorToBuffer(vector));
     }
-    await dedupFactsSemantically(campaignId);
+    await embedPendingFacts(campaignId);
   } catch (error) {
     console.error("[memory-index] indexing failed", error);
   }
@@ -344,10 +344,10 @@ export async function indexClosedChapters(campaignId: string, chapters: Chapter[
   }
 }
 
-const FACT_DUP_SIMILARITY = 0.92;
-
 // Embeds every active fact that lacks a vector. Facts are written without
-// one; this runs from the dedup below and from the re-embed pass.
+// one; this runs when a chapter is indexed, before an extraction call ranks
+// the facts on file (src/lib/dm/fact-consolidation.ts), and from the
+// re-embed pass.
 export async function embedPendingFacts(campaignId: string): Promise<number> {
   const db = getDatabase();
   const missing = (
@@ -368,51 +368,4 @@ export async function embedPendingFacts(campaignId: string): Promise<number> {
     update.run(vectorToBuffer(vectors[index]), row.id);
   });
   return missing.length;
-}
-
-// Semantic upgrade over the token-overlap dedup that runs at insert time:
-// embeds facts that lack a vector, then retires an unpinned active fact
-// whose wording near-duplicates an older one in the same category. Runs on
-// the chapter-close heartbeat, so drift never accumulates for long.
-export async function dedupFactsSemantically(campaignId: string): Promise<void> {
-  await embedPendingFacts(campaignId);
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT id, category, fact, pinned, embedding, created_at FROM world_facts
-       WHERE campaign_id = ? AND status = 'active'
-       ORDER BY created_at ASC, id ASC`,
-    )
-    .all(campaignId) as Array<{
-    id: string;
-    category: string;
-    fact: string;
-    pinned: number;
-    embedding: Buffer | null;
-    created_at: string;
-  }>;
-  if (!rows.length) {
-    return;
-  }
-  const retire = db.prepare(
-    `UPDATE world_facts SET status = 'superseded', updated_at = ? WHERE id = ?`,
-  );
-  const kept: Array<{ category: string; vector: Float32Array; pinned: boolean }> = [];
-  for (const row of rows) {
-    const vector = bufferToVector(row.embedding);
-    if (!vector) {
-      continue;
-    }
-    const duplicate =
-      row.pinned !== 1 &&
-      kept.some(
-        (entry) =>
-          entry.category === row.category && cosine(entry.vector, vector) >= FACT_DUP_SIMILARITY,
-      );
-    if (duplicate) {
-      retire.run(nowIso(), row.id);
-    } else {
-      kept.push({ category: row.category, vector, pinned: row.pinned === 1 });
-    }
-  }
 }

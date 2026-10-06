@@ -43,7 +43,7 @@ const {
   reconcileEmbeddingModel,
   runtimeNotInstalled,
 } = await import("../src/lib/dm/embedding-reindex.ts");
-const { dedupFactsSemantically } = await import("../src/lib/dm/memory-index.ts");
+const { indexChapter } = await import("../src/lib/dm/memory-index.ts");
 
 const OTHER_KEY = "Xenova/paraphrase-multilingual-MiniLM-L12-v2@q8";
 const ELSEWHERE_KEY = "Test/never-configured@fp32";
@@ -313,7 +313,10 @@ await test("concurrent catch-up requests share one pass", async () => {
   assert.equal(calls.filter((text) => text.startsWith("The Sundering")).length, 1);
 });
 
-await test("the semantic fact dedup still embeds, then retires a near-duplicate", async () => {
+await test("indexing a chapter embeds its pending facts and retires none of them", async () => {
+  // Two facts saying the same thing, under a model that scores every pair
+  // 1.0: no cosine decides they are one. Whether a fact repeats another is
+  // the extraction call's to say (src/lib/dm/fact-consolidation.ts).
   const insert = db.prepare(
     `INSERT INTO world_facts (id, campaign_id, category, subject, fact, status, created_at, updated_at)
      VALUES (?, ?, 'location', 'Mill', ?, 'active', ?, ?)`,
@@ -321,11 +324,12 @@ await test("the semantic fact dedup still embeds, then retires a near-duplicate"
   insert.run("dup-a", cid, "The mill stands by the river.", "2020-01-01T00:00:00.000Z", now);
   insert.run("dup-b", cid, "By the river stands the mill.", "2020-01-02T00:00:00.000Z", now);
   stubModel(0.4);
-  await dedupFactsSemantically(cid);
+  await indexChapter(cid, "ch-closed");
   const status = (id) => db.prepare(`SELECT status FROM world_facts WHERE id = ?`).get(id).status;
   assert.equal(status("dup-a"), "active");
-  assert.equal(status("dup-b"), "superseded");
+  assert.equal(status("dup-b"), "active");
   assert.ok(bufferToVector(vectorOf("world_facts", "dup-a")));
+  assert.ok(bufferToVector(vectorOf("world_facts", "dup-b")));
 });
 
 await test("the backfill script refuses a database indexed with another model", () => {

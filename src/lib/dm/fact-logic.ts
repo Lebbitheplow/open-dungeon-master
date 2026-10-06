@@ -128,7 +128,7 @@ export function classifyCandidate(
   return sawSubject ? "supersedes" : "new";
 }
 
-const CATEGORY_LABELS: Record<FactCategory, string> = {
+export const CATEGORY_LABELS: Record<FactCategory, string> = {
   location: "Places",
   npc: "People",
   promise: "Promises and debts",
@@ -137,8 +137,8 @@ const CATEGORY_LABELS: Record<FactCategory, string> = {
   lore: "Lore and rules",
 };
 
-const RENDER_CHAR_BUDGET = 2000;
-const PER_CATEGORY_CAP = 6;
+export const RENDER_CHAR_BUDGET = 2000;
+export const PER_CATEGORY_CAP = 6;
 
 // Renders the fact sheet for GAME STATE: pinned facts always survive, the
 // rest fill per-category slots newest-first until the character budget runs
