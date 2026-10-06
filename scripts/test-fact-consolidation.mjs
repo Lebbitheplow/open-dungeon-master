@@ -30,7 +30,7 @@ const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, setCampaignStatus, updateStorySettings, allocateSeq } = await import("../src/lib/db/campaigns.ts");
 const { insertCampaignMessage, listMessagesInSeqRange } = await import("../src/lib/db/messages.ts");
-const { insertFact, getFactById, retireFacts } = await import("../src/lib/db/facts.ts");
+const { insertFact, getFactById, retireFacts, recordExtractedFacts, listActiveFacts } = await import("../src/lib/db/facts.ts");
 const { factsOnFileFor } = await import("../src/lib/dm/fact-consolidation.ts");
 const { maybeCloseChapter } = await import("../src/lib/dm/chapter-close.ts");
 const { ensureOpenChapter } = await import("../src/lib/db/chapters.ts");
@@ -120,6 +120,23 @@ await test("retiring by id stays inside the campaign and spares pinned facts", (
   assert.equal(count, 0);
   assert.equal(getFactById(elsewhere).status, "active");
   assert.equal(getFactById(pinnedFact).status, "active");
+});
+
+await test("one batch's facts on a subject all stay, while an earlier batch's fact on it is superseded", () => {
+  const batches = table("Batches");
+  recordExtractedFacts(batches, [{ category: "party", subject: "Kara", fact: "Kara is sworn to the Grey Guard." }], "chapter");
+  recordExtractedFacts(
+    batches,
+    [
+      { category: "party", subject: "Kara", fact: "Kara lost the bronze key in the lake." },
+      { category: "party", subject: "Kara", fact: "Kara means to return with rope and a lantern." },
+    ],
+    "chapter",
+  );
+  assert.deepEqual(
+    listActiveFacts(batches).map((entry) => entry.fact).sort(),
+    ["Kara lost the bronze key in the lake.", "Kara means to return with rope and a lantern."],
+  );
 });
 
 await test("a chapter close retires what its summary call replaces or lists, and nothing of another campaign", async () => {

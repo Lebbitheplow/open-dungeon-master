@@ -213,8 +213,10 @@ export function updateFactText(
 }
 
 // Retires every active fact sharing the candidate's category+subject; used
-// when a newer fact supersedes what was on file about that subject.
-function supersedeSubject(campaignId: string, category: FactCategory, subject: string) {
+// when a newer fact supersedes what was on file about that subject. `spare`
+// are facts that stay whatever their subject: those the same batch just
+// recorded, which describe the same moment as the candidate.
+function supersedeSubject(campaignId: string, category: FactCategory, subject: string, spare: string[]) {
   if (!subject) {
     return;
   }
@@ -223,10 +225,10 @@ function supersedeSubject(campaignId: string, category: FactCategory, subject: s
       `
         UPDATE world_facts SET status = 'superseded', updated_at = ?
         WHERE campaign_id = ? AND category = ? AND subject = ? AND status = 'active'
-          AND pinned = 0
+          AND pinned = 0${spare.length ? ` AND id NOT IN (${spare.map(() => "?").join(", ")})` : ""}
       `,
     )
-    .run(nowIso(), campaignId, category, subject);
+    .run(nowIso(), campaignId, category, subject, ...spare);
 }
 
 // Records a batch of extracted candidates with dedup and supersede
@@ -246,7 +248,15 @@ export function recordExtractedFacts(
       continue;
     }
     if (verdict === "supersedes") {
-      supersedeSubject(campaignId, candidate.category, normalizeSubject(candidate.subject));
+      // A batch states one moment: "Kara lost the key" and "Kara means to
+      // return" from one chapter are both true, so the second never retires
+      // the first.
+      supersedeSubject(
+        campaignId,
+        candidate.category,
+        normalizeSubject(candidate.subject),
+        inserted.map((fact) => fact.id),
+      );
     }
     inserted.push(
       insertFact({
