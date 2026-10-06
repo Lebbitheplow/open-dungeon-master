@@ -3,11 +3,13 @@ import { listChapters } from "@/lib/db/chapters";
 import { listActiveFacts } from "@/lib/db/facts";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { getNpcByName, listNpcs } from "@/lib/db/npcs";
-import { arcTextTimeoutMs } from "@/lib/model-client";
+import { arcTextTimeoutMs, utilityContextTokens } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { scoreChaptersByKeywords } from "@/lib/dm/recall-logic";
+import { fitChaptersToBudget } from "@/lib/dm/chapter-lod";
+import { computeBudgets } from "@/lib/dm/context-budget";
 import { searchScenes } from "@/lib/dm/memory-index";
 import { agencyFragment } from "@/lib/dm/npc-logic";
 import {
@@ -44,7 +46,7 @@ export type LoreCheckRequest = {
   npcName?: string;
 };
 
-async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
+async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number): Promise<string[]> {
   const { campaignId, selection } = request;
   const evidence: string[] = [];
 
@@ -75,7 +77,7 @@ async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
   const relevantChapters = chapterIndexes.length
     ? closed.filter((chapter) => chapterIndexes.includes(chapter.index))
     : scoreChaptersByKeywords(closed, selection).slice(0, 2);
-  for (const chapter of relevantChapters.slice(0, 3)) {
+  for (const chapter of fitChaptersToBudget(relevantChapters.slice(0, 3), chapterBudget)) {
     evidence.push(
       `[chapter:${chapter.index}] "${chapter.title}": ${chapter.summary}${
         chapter.highlights.length ? `\nHighlights: ${chapter.highlights.join(" | ")}` : ""
@@ -124,7 +126,8 @@ export async function runLoreCheck(
   }
   const selection = request.selection.trim().slice(0, 2000) || message.content.slice(0, 2000);
 
-  const evidence = await assembleEvidence({ ...request, selection });
+  const chapterBudget = computeBudgets(await utilityContextTokens(campaign.settings)).chapters;
+  const evidence = await assembleEvidence({ ...request, selection }, chapterBudget);
   if (!evidence.length) {
     return { error: "Nothing recorded yet to check against." };
   }

@@ -1231,7 +1231,7 @@ export const recallStoryTool = {
   function: {
     name: "recall_story",
     description:
-      "Look up the full summary of a past chapter when players reference old events you no longer remember. Give a chapter number, or a query to search titles and summaries.",
+      "Look up past chapters when players reference old events you no longer remember. Give a chapter number for that chapter's summary, or a query for the verbatim scenes that match it, nearest first, and the chapters they come from.",
     parameters: {
       type: "object",
       additionalProperties: false,

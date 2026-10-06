@@ -984,7 +984,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     for (const recallCall of recallCalls) {
       recallResults.set(
         recallCall.id ?? "recall_story",
-        await handleRecallStory(campaignId, recallCall.rawArguments),
+        await handleRecallStory(campaign, recallCall.rawArguments),
       );
     }
     const searchLoreResults = new Map<string, Record<string, unknown>>();

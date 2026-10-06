@@ -33,7 +33,7 @@ import { serverEnv } from "@/lib/server-env";
 import { isPrivateBackendHost } from "@/lib/backend-host";
 import { chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { localModelContextWindow } from "@/lib/text-models";
-import { harnessContextTokens } from "@/lib/harness/status";
+import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
 
 // Shared chat-completion client for both providers:
@@ -279,6 +279,42 @@ export async function probeCustomContextWindow(
     probedContextWindows.set(cacheKey, 0);
     return null;
   }
+}
+
+// The context window of the model a utility call (Ask, the lore check) runs
+// on, resolved the way requestUtilityMessage (src/lib/dm/model.ts) routes it.
+// A local or custom utility model that fails is retried on the story model
+// with the same messages, so those two routes answer the smaller of the two
+// windows: what is sized for the utility model must still fit the story
+// model it may land on. A custom endpoint is probed once, as the turn probes
+// the story endpoint (src/lib/dm/context-retrieval.ts).
+export async function utilityContextTokens(settings: {
+  textProvider: string;
+  localTextModel: string;
+  customBaseUrl?: string;
+  customModel?: string;
+  utilityProvider: string;
+  utilityModel: string;
+  utilityBaseUrl: string;
+  utilityApiKey: string;
+}): Promise<number> {
+  const model = settings.utilityModel.trim();
+  if (settings.utilityProvider === "harness" || (settings.textProvider === "harness" && !model)) {
+    const config = harnessConfig();
+    return harnessContextTokens({ ...config, model: config.utilityModel || config.model });
+  }
+  const story = storyContextTokens(settings);
+  if (!model) {
+    return story;
+  }
+  if (settings.utilityProvider === "local") {
+    return Math.min(localContextTokens(model), story);
+  }
+  if (endpointKind(settings.utilityBaseUrl) === "openai") {
+    return Math.min(openAiContextWindow(model), story);
+  }
+  const probed = await probeCustomContextWindow(settings.utilityBaseUrl, settings.utilityApiKey, model);
+  return Math.min(probed ? Math.max(2_048, probed) : DEFAULT_CUSTOM_CONTEXT_TOKENS, story);
 }
 
 export function resolveTextTimeoutMs(

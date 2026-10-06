@@ -257,7 +257,7 @@ export async function dispatchAdjudication(
     case "send_whisper":
       return handleSendWhisper(campaign, turn.id, rawArguments, sheets, sheetsById);
     case "recall_story":
-      return handleRecallStory(campaign.id, rawArguments);
+      return handleRecallStory(campaign, rawArguments);
     case "search_lore":
       return handleSearchLore(campaign.id, rawArguments);
     default:

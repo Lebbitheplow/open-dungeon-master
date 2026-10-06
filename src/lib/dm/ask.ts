@@ -8,7 +8,7 @@ import { listNpcs } from "@/lib/db/npcs";
 import { listRuleChunks } from "@/lib/db/rules";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
-import { arcTextTimeoutMs, type ChatMessage } from "@/lib/model-client";
+import { arcTextTimeoutMs, utilityContextTokens, type ChatMessage } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
@@ -16,6 +16,8 @@ import { computeIdf, lexicalScore } from "@/lib/dm/fusion-logic";
 import { extractToolCalls } from "@/lib/dm/rolls";
 import { searchScenes } from "@/lib/dm/memory-index";
 import { scoreChaptersByKeywords } from "@/lib/dm/recall-logic";
+import { fitChaptersToBudget } from "@/lib/dm/chapter-lod";
+import { computeBudgets } from "@/lib/dm/context-budget";
 import { describeSheet } from "@/lib/dm/prompt";
 import {
   clampQuestion,
@@ -142,7 +144,7 @@ function mechanicalRecord(campaignId: string, ownedCharacterIds: string[]): stri
 // Closed chapters and verbatim scenes matching a query. Shared by the
 // up-front evidence pass and the tool hop, so the model's own follow-up
 // search reads exactly the same archive the first pass did.
-async function retrieveArchive(campaignId: string, query: string): Promise<string[]> {
+async function retrieveArchive(campaignId: string, query: string, chapterBudget: number): Promise<string[]> {
   const evidence: string[] = [];
   let sceneLines: string[] = [];
   let chapterIndexes: number[] = [];
@@ -160,7 +162,7 @@ async function retrieveArchive(campaignId: string, query: string): Promise<strin
   const relevantChapters = chapterIndexes.length
     ? closed.filter((chapter) => chapterIndexes.includes(chapter.index))
     : scoreChaptersByKeywords(closed, query).slice(0, 2);
-  for (const chapter of relevantChapters.slice(0, 3)) {
+  for (const chapter of fitChaptersToBudget(relevantChapters.slice(0, 3), chapterBudget)) {
     evidence.push(
       `[chapter:${chapter.index}] "${chapter.title}": ${chapter.summary}${
         chapter.highlights.length ? `\nHighlights: ${chapter.highlights.join(" | ")}` : ""
@@ -179,6 +181,7 @@ async function retrieveArchive(campaignId: string, query: string): Promise<strin
 async function assembleEvidence(
   request: AskRequest,
   ownedCharacterIds: string[],
+  chapterBudget: number,
 ): Promise<string[]> {
   const { campaignId, question, scope } = request;
   const evidence: string[] = [];
@@ -275,7 +278,7 @@ async function assembleEvidence(
     // Archive retrieval is the expensive part, so it is gated: a question
     // with no recall hint and no proper noun has nothing to find back there.
     if (shouldSearchArchive(question)) {
-      evidence.push(...(await retrieveArchive(campaignId, question)));
+      evidence.push(...(await retrieveArchive(campaignId, question, chapterBudget)));
     }
 
     const recent = listRecentMessages(campaignId, RECENT_MESSAGES);
@@ -331,9 +334,11 @@ export async function runAsk(
   }
 
   const sheet = getSheetForUser(request.campaignId, request.userId);
+  const chapterBudget = computeBudgets(await utilityContextTokens(campaign.settings)).chapters;
   const evidence = await assembleEvidence(
     { ...request, question },
     sheet ? [sheet.id] : [],
+    chapterBudget,
   );
   // Mirrors the gate inside assembleEvidence; decides whether the model is
   // offered a follow-up search below.
@@ -400,7 +405,7 @@ export async function runAsk(
     } catch {
       // bounded fallback
     }
-    const found = await retrieveArchive(request.campaignId, searchQuery);
+    const found = await retrieveArchive(request.campaignId, searchQuery, chapterBudget);
 
     const second = await requestUtilityMessage(
       campaign.settings,
