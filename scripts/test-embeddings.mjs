@@ -15,7 +15,7 @@ function test(name, fn) {
 }
 
 test("a 384-dim model passes", () => {
-  checkEmbeddingDim("Xenova/paraphrase-multilingual-MiniLM-L12-v2", 384);
+  checkEmbeddingDim("Xenova/multilingual-e5-small", 384);
 });
 
 test("any other size throws, naming the model and both sizes", () => {
@@ -52,7 +52,7 @@ test("the index is stale only when the recorded model differs from the configure
   assert.equal(embeddingIndexStale("A/model@q8", "B/model@q8"), true);
   // Never recorded: built by the original model, so only it can reuse it.
   assert.equal(embeddingIndexStale(null, LEGACY_EMBEDDING_KEY), false);
-  assert.equal(embeddingIndexStale(null, "Xenova/paraphrase-multilingual-MiniLM-L12-v2@q8"), true);
+  assert.equal(embeddingIndexStale(null, "Xenova/multilingual-e5-small@q8"), true);
 });
 
 console.log(`test-embeddings: ${passed} tests passed`);

@@ -365,7 +365,7 @@ The default, `Xenova/all-MiniLM-L6-v2`, understands English only. For a table th
 plays in another language, set a multilingual model in `.env.server`:
 
 ```bash
-EMBEDDING_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_MODEL=Xenova/multilingual-e5-small
 EMBEDDING_DTYPE=q8
 ```
 

@@ -45,7 +45,7 @@ const {
 } = await import("../src/lib/dm/embedding-reindex.ts");
 const { indexChapter } = await import("../src/lib/dm/memory-index.ts");
 
-const OTHER_KEY = "Xenova/paraphrase-multilingual-MiniLM-L12-v2@q8";
+const OTHER_KEY = "Xenova/multilingual-e5-small@q8";
 const ELSEWHERE_KEY = "Test/never-configured@fp32";
 const db = getDatabase();
 let passed = 0;
