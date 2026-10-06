@@ -3,12 +3,11 @@ import { getQuest } from "@/lib/db/quests";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { latestSeq } from "@/lib/db/campaigns";
 import { publishEphemeral } from "@/lib/events";
-import { cosine, embed } from "@/lib/embeddings";
 import { narratorIsAi } from "@/lib/dm/viewer";
 import { requestDmMessage } from "@/lib/dm/model";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
-import type { StoryArc, Waypoint } from "@/lib/dm/arc-logic";
+import type { StoryArc } from "@/lib/dm/arc-logic";
 import {
   activeBeat,
   lexicalMatch,
@@ -16,8 +15,8 @@ import {
   openWaypoints,
   parseWaypointJudge,
   signalFromToolCall,
+  taggedWaypoint,
   tickWaypoints,
-  type WaypointSignal,
 } from "@/lib/dm/waypoint-logic";
 
 // Ticking the [NOW] beat's waypoints (issue #31). Two sources, in order of
@@ -25,25 +24,24 @@ import {
 // objective or foe outright and cost no model call; and the judge, one
 // small YES-list call on the chapter's cadence for whatever the tools did
 // not catch (a narrative step, or an arrival the DM narrated without
-// move_party). A name the tools used is matched lexically first, then by
-// the local MiniLM embeddings when the words differ ("Sunken Cathedral"
-// against "the drowned cathedral"), so the DM's naming can drift without
-// the beat sticking.
-
-// Cosine at which two short names are taken as the same thing. MiniLM puts
-// paraphrases of one place well above this and different places well below.
-const EMBED_MATCH = 0.62;
+// move_party). A tool call ticks a step when the DM tags it with the step's
+// number, or when the name it used matches the step's words. A name worded
+// differently and untagged is left to the judge: no similarity score can
+// tell "the drowned cathedral" from a different place that reads like it,
+// and its scale changes with the embedding model.
 
 type ToolCall = { name: string; rawArguments: string };
 
 // Which open waypoints, if any, the turn's tool calls satisfied. Returns
 // the texts ticked, for the caller's debug line. `enemyNames` are the foes
 // of the encounter as it stood BEFORE the calls ran, since end_encounter
-// has no names of its own.
+// has no names of its own. `accepted` holds the calls the engine has run
+// without an error: a step a call's tag names ticks only for one of those,
+// so a refused move_party cannot claim an arrival.
 export async function tickWaypointsFromCalls(
   campaignId: string,
   calls: ToolCall[],
-  extra: { enemyNames?: string[] } = {},
+  extra: { enemyNames?: string[]; accepted?: ReadonlySet<ToolCall> } = {},
 ): Promise<string[]> {
   const campaign = getCampaignById(campaignId);
   if (!campaign?.storyArc || !narratorIsAi(campaign.gameSettings.dmMode) || !calls.length) {
@@ -53,71 +51,26 @@ export async function tickWaypointsFromCalls(
   if (!active || !openWaypoints(active.beat).length) {
     return [];
   }
-  const signals: WaypointSignal[] = [];
+  const matched = new Set<number>();
   for (const call of calls) {
+    const tagged = extra.accepted?.has(call) ? taggedWaypoint(active.beat, call.name, call.rawArguments) : null;
+    if (tagged !== null) {
+      matched.add(tagged);
+    }
     const signal = signalFromToolCall(call.name, call.rawArguments, {
       enemyNames: extra.enemyNames,
       objectiveText: call.name === "tick_objective" ? objectiveText(campaignId, call.rawArguments) : undefined,
     });
     if (signal) {
-      signals.push(signal);
-    }
-  }
-  if (!signals.length) {
-    return [];
-  }
-  const matched = new Set<number>();
-  for (const signal of signals) {
-    for (const index of matchSignal(active.beat, signal)) {
-      matched.add(index);
-    }
-  }
-  // Whatever the words missed, the meaning may still catch.
-  const stillOpen = (active.beat.waypoints ?? [])
-    .map((waypoint, index) => ({ waypoint, index }))
-    .filter(({ waypoint, index }) => !waypoint.done && waypoint.kind !== "narrative" && !matched.has(index));
-  if (stillOpen.length) {
-    for (const index of await embeddingMatches(stillOpen, signals)) {
-      matched.add(index);
+      for (const index of matchSignal(active.beat, signal)) {
+        matched.add(index);
+      }
     }
   }
   if (!matched.size) {
     return [];
   }
   return applyTicks(campaignId, campaign.storyArc, active.number, [...matched]);
-}
-
-async function embeddingMatches(
-  open: Array<{ waypoint: Waypoint; index: number }>,
-  signals: WaypointSignal[],
-): Promise<number[]> {
-  const pairs: Array<{ index: number; kind: string; name: string }> = [];
-  for (const signal of signals) {
-    for (const name of signal.names) {
-      pairs.push(...open.filter((entry) => entry.waypoint.kind === signal.kind).map((entry) => ({ index: entry.index, kind: signal.kind, name })));
-    }
-  }
-  if (!pairs.length) {
-    return [];
-  }
-  try {
-    const texts = [...new Set([...open.map((entry) => entry.waypoint.text), ...pairs.map((pair) => pair.name)])];
-    const vectors = await embed(texts);
-    const vectorOf = new Map(texts.map((text, at) => [text, vectors[at]]));
-    const hits = new Set<number>();
-    for (const pair of pairs) {
-      const waypoint = open.find((entry) => entry.index === pair.index);
-      const a = waypoint ? vectorOf.get(waypoint.waypoint.text) : undefined;
-      const b = vectorOf.get(pair.name);
-      if (a && b && cosine(a, b) >= EMBED_MATCH) {
-        hits.add(pair.index);
-      }
-    }
-    return [...hits];
-  } catch {
-    // No embedder on this install: the words were the whole test.
-    return [];
-  }
 }
 
 function objectiveText(campaignId: string, rawArguments: string): string | undefined {

@@ -1949,7 +1949,7 @@ const EVENT_LABELS: Record<ArcEventKind, string> = {
 // aim scenes at the [NOW] beat, improvise the path, never dump the plot.
 export function renderArcForPrompt(arc: StoryArc): string {
   const lines = [
-    "DM story arc (secret; steer scenes toward the [NOW] beat while improvising freely on the way there; never reveal, quote, or rush it). When your narration actually accomplishes the [NOW] beat, call complete_beat in that same reply. A beat listed with waypoints cannot complete until every one is ticked; the server ticks them from your move_party, update_location, set_npc, npc_reaction, social_check, grant_item, buy_item, tick_objective and end_encounter calls, so use those tools when the party reaches a place, meets a person, gains a thing, finishes an objective or wins a fight:",
+    "DM story arc (secret; steer scenes toward the [NOW] beat while improvising freely on the way there; never reveal, quote, or rush it). When your narration actually accomplishes the [NOW] beat, call complete_beat in that same reply. A beat listed with waypoints cannot complete until every one is ticked; the server ticks them from your move_party, update_location, set_npc, npc_reaction, social_check, grant_item, buy_item, tick_objective and end_encounter calls, so use those tools when the party reaches a place, meets a person, gains a thing, finishes an objective or wins a fight, and pass the step's number as `waypoint` on the call that accomplishes it, whatever you call the place, person or thing:",
     `Premise: ${arc.premise}`,
   ];
   if (arc.stakes) {
@@ -2004,7 +2004,7 @@ export function renderArcForPrompt(arc: StoryArc): string {
     if (beat.status === "active" && beat.waypoints?.length) {
       lines.push(
         `   waypoints: ${beat.waypoints
-          .map((waypoint) => `[${waypoint.done ? "x" : " "}] ${waypoint.text} (${waypoint.kind})`)
+          .map((waypoint, index) => `${index + 1}. [${waypoint.done ? "x" : " "}] ${waypoint.text} (${waypoint.kind})`)
           .join(" | ")}`,
       );
     }

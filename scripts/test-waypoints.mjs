@@ -24,6 +24,7 @@ import {
   setWaypointDone,
   signalFromToolCall,
   stems,
+  taggedWaypoint,
   tickWaypoints,
 } from "../src/lib/dm/waypoint-logic.ts";
 import { applyBeatEdit } from "../src/lib/dm/arc-edit-logic.ts";
@@ -186,7 +187,7 @@ test("the planners' beats parse with or without waypoints, and land on the new a
 test("only the beat in play shows its checklist to the DM", () => {
   const arc = tickWaypoints(gatedArc(), 2, [1]);
   const rendered = renderArcForPrompt(arc);
-  assert.ok(rendered.includes("waypoints: [ ] Speak with Brisca Hale about the safe path (npc) | [x] Reach the Drowned Cathedral of Vael (place)"));
+  assert.ok(rendered.includes("waypoints: 1. [ ] Speak with Brisca Hale about the safe path (npc) | 2. [x] Reach the Drowned Cathedral of Vael (place)"));
   assert.equal((rendered.match(/waypoints:/g) ?? []).length, 1);
   assert.ok(rendered.includes("cannot complete until every one is ticked"));
 });
@@ -222,6 +223,33 @@ test("the lead ticks and clears waypoints by hand, never on a settled beat", () 
   assert.ok("error" in applyBeatEdit(arc, { op: "waypoint", beat: 1, index: 0, done: true }));
   assert.ok("error" in applyBeatEdit(arc, { op: "waypoint", beat: 2, index: 7, done: true }));
   assert.ok("error" in applyBeatEdit(arc, { op: "waypoint", beat: 3, index: 0, done: true }));
+});
+
+test("a tool call's waypoint tag names an open step of the kind the tool can satisfy", () => {
+  const beat = {
+    text: "Cross to the cathedral.",
+    status: "active",
+    act: 1,
+    waypoints: [
+      { kind: "place", text: "Reach the Drowned Cathedral of Vael", done: false },
+      { kind: "npc", text: "Speak with Brisca Hale", done: false },
+      { kind: "place", text: "Reach the ferry", done: true },
+    ],
+  };
+  const tag = (tool, args) => taggedWaypoint(beat, tool, JSON.stringify(args));
+  // The DM names the step, whatever it calls the place.
+  assert.equal(tag("move_party", { name: "the sunken church of Vael", waypoint: 1 }), 0);
+  assert.equal(tag("set_npc", { name: "the old boatwoman", waypoint: 2 }), 1);
+  // A step of another kind, a done step, or one past the list: no tag.
+  assert.equal(tag("move_party", { name: "Brisca's hut", waypoint: 2 }), null);
+  assert.equal(tag("move_party", { name: "the ferry", waypoint: 3 }), null);
+  assert.equal(tag("move_party", { name: "nowhere", waypoint: 9 }), null);
+  // Malformed tags count as no tag; a tool that ticks nothing takes none.
+  for (const waypoint of [0, -1, 1.5, "1", null]) {
+    assert.equal(tag("move_party", { name: "x", waypoint }), null);
+  }
+  assert.equal(taggedWaypoint(beat, "move_party", "not json"), null);
+  assert.equal(tag("apply_damage", { waypoint: 1 }), null);
 });
 
 console.log(`test-waypoints: ${passed} tests passed`);

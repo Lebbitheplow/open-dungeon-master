@@ -38,6 +38,7 @@ import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper } from "@/lib/srd/currency";
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 // The shop tools (docs/vtt-parity-implementation-plan.md 11.1). The server
 // prices everything: the model names the item, the shelf says what it
@@ -78,6 +79,7 @@ export const shopTools: ToolDef[] = [
       parameters: {
         type: "object",
         properties: {
+          ...waypointProperty,
           characterId: { type: "string" },
           shop: { type: "string", description: "The shop's name." },
           item: { type: "string" },

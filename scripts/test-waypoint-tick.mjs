@@ -100,8 +100,7 @@ try {
   })();
 
   await (async () => {
-    // A signal of a kind the checklist does not wait for changes nothing
-    // and costs no embedding.
+    // A signal of a kind the checklist does not wait for changes nothing.
     const none = await tickWaypointsFromCalls(campaign.id, [{ name: "grant_item", rawArguments: '{"name":"rope"}' }]);
     test("a tool of the wrong kind ticks nothing", () => {
       assert.deepEqual(none, []);
@@ -129,6 +128,56 @@ try {
     // The next beat has no checklist: it gates nothing and counts as one.
     assert.equal(completeActiveBeat(campaign.id).gated, false);
   });
+
+  // A name worded differently from its step ticks only by the DM's tag, and
+  // only on a call the engine accepted; untagged, it is the judge's to catch.
+  setStoryArc(
+    campaign.id,
+    normalizeStoryArc({
+      premise: "The heart wakes beneath the drowned cathedral.",
+      beats: [
+        {
+          text: "Cross the glass plain to the drowned cathedral.",
+          status: "active",
+          act: 1,
+          waypoints: [
+            { kind: "place", text: "Reach the Drowned Cathedral of Vael" },
+            { kind: "npc", text: "Speak with Brisca Hale about the safe path" },
+          ],
+        },
+        { text: "Confront the vicar.", status: "pending", act: 1 },
+      ],
+    }),
+  );
+  const untagged = { name: "move_party", rawArguments: '{"name":"the sunken church of Vael"}' };
+  const tagged = { name: "move_party", rawArguments: '{"name":"the sunken church of Vael","waypoint":1}' };
+  const wrongKind = { name: "move_party", rawArguments: '{"name":"Brisca\'s hut","waypoint":2}' };
+
+  await (async () => {
+    const none = await tickWaypointsFromCalls(campaign.id, [untagged], { accepted: new Set([untagged]) });
+    test("a differently worded name with no tag ticks nothing and is left to the judge", () => {
+      assert.deepEqual(none, []);
+      assert.deepEqual(open(), ["Reach the Drowned Cathedral of Vael", "Speak with Brisca Hale about the safe path"]);
+    });
+  })();
+
+  await (async () => {
+    const refused = await tickWaypointsFromCalls(campaign.id, [tagged], { accepted: new Set() });
+    const misfiled = await tickWaypointsFromCalls(campaign.id, [wrongKind], { accepted: new Set([wrongKind]) });
+    test("a refused call's tag, or a tag naming a step of another kind, ticks nothing", () => {
+      assert.deepEqual(refused, []);
+      assert.deepEqual(misfiled, []);
+      assert.equal(open().length, 2);
+    });
+  })();
+
+  await (async () => {
+    const ticked = await tickWaypointsFromCalls(campaign.id, [tagged], { accepted: new Set([tagged]) });
+    test("an accepted call tagged with its step ticks it, whatever the name", () => {
+      assert.deepEqual(ticked, ["Reach the Drowned Cathedral of Vael"]);
+      assert.deepEqual(open(), ["Speak with Brisca Hale about the safe path"]);
+    });
+  })();
 } finally {
   removeTempDir(dir);
 }

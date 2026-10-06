@@ -59,6 +59,7 @@ import { summonStateLine } from "@/lib/dm/summon-rules";
 import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/prompt-rules";
 import { rollerName } from "@/lib/roll-labels";
 import { tableHazards } from "@/lib/srd/table-hazards";
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -1130,6 +1131,7 @@ export const movePartyTool = {
       type: "object",
       additionalProperties: false,
       properties: {
+        ...waypointProperty,
         name: { type: "string", description: "Short place name, e.g. The Rusted Flagon." },
         layoutDescription: {
           type: "string",
@@ -1253,6 +1255,7 @@ export const updateLocationTool = {
       type: "object",
       additionalProperties: false,
       properties: {
+        ...waypointProperty,
         layoutDescription: { type: "string" },
         connections: { type: "array", items: { type: "string" } },
         visionClear: { type: "boolean" },

@@ -39,6 +39,7 @@ import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 // The social-interaction engine: NPC disposition was pure narration with no
 // state, so a shopkeeper the party bullied yesterday greeted them warmly today
@@ -68,6 +69,7 @@ export const socialTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
+          ...waypointProperty,
           name: { type: "string", description: "The NPC's name, unique within the campaign." },
           attitude: {
             type: "string",
@@ -103,6 +105,7 @@ export const socialTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
+          ...waypointProperty,
           name: { type: "string", description: "The new NPC's name." },
           modifier: {
             type: "integer",
@@ -126,6 +129,7 @@ export const socialTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
+          ...waypointProperty,
           characterId: { type: "string", description: "The character making the appeal." },
           npc: { type: "string", description: "The exact name of the tracked NPC." },
           approach: {

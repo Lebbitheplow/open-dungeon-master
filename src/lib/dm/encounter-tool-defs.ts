@@ -2,6 +2,8 @@
 // descriptions and argument schemas. Split from encounter-tools.ts, which
 // offers them (encounterTools) and handles every call.
 
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
+
 export type ToolDef = {
   type: "function";
   function: { name: string; description: string; parameters: Record<string, unknown> };
@@ -154,6 +156,7 @@ export const endEncounterTool: ToolDef = {
       type: "object",
       additionalProperties: false,
       properties: {
+        ...waypointProperty,
         outcome: {
           type: "string",
           enum: ["victory", "enemies_fled", "party_fled", "party_defeated", "truce"],

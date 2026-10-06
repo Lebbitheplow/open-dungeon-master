@@ -1,8 +1,8 @@
 // Pure waypoint mechanics (issue #31): which of a beat's steps a tool call
 // satisfies, how a tick is recorded, and how the judge's reply is read.
 // Database-free and model-free so scripts/test-waypoints.mjs can exercise
-// every branch; waypoint-tick.ts wraps this with the campaign, the
-// embeddings and the model.
+// every branch; waypoint-tick.ts wraps this with the campaign and the
+// model.
 
 import type { ArcBeat, StoryArc, Waypoint, WaypointKind } from "./arc-logic.ts";
 
@@ -118,6 +118,51 @@ export function matchSignal(beat: ArcBeat, signal: WaypointSignal): number[] {
     }
   });
   return matched;
+}
+
+// The kind of step each ticking tool can satisfy, for the `waypoint` tag
+// below. tick_objective ticks by its quest's own ids and takes no tag.
+const TOOL_WAYPOINT_KIND: Record<string, WaypointKind> = {
+  move_party: "place",
+  update_location: "place",
+  set_npc: "npc",
+  npc_reaction: "npc",
+  social_check: "npc",
+  grant_item: "item",
+  buy_item: "item",
+  end_encounter: "fight",
+};
+
+// The optional argument those tools take: the DM names the [NOW] step its
+// call accomplishes, so a place or person it calls by another name than the
+// step's still ticks it.
+export const waypointProperty = {
+  waypoint: {
+    type: "integer",
+    minimum: 1,
+    description: "The number of the [NOW] checklist step this call accomplishes, if it accomplishes one.",
+  },
+};
+
+// The 0-based index of the step a call's `waypoint` tag names, when that step
+// is open on the active beat and of the kind the tool can satisfy; null
+// otherwise. A malformed tag counts as no tag: the call itself still stands.
+export function taggedWaypoint(beat: ArcBeat, toolName: string, rawArguments: string): number | null {
+  const kind = TOOL_WAYPOINT_KIND[toolName];
+  if (!kind) {
+    return null;
+  }
+  let tag: unknown;
+  try {
+    tag = (JSON.parse(rawArguments || "{}") as Record<string, unknown>).waypoint;
+  } catch {
+    return null;
+  }
+  if (typeof tag !== "number" || !Number.isInteger(tag) || tag < 1) {
+    return null;
+  }
+  const waypoint = beat.waypoints?.[tag - 1];
+  return waypoint && !waypoint.done && waypoint.kind === kind ? tag - 1 : null;
 }
 
 // Records ticks on one beat. Out-of-range or already-done indexes are

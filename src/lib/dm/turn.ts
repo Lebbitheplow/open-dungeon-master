@@ -962,6 +962,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         (SETTLEMENT_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
 
+    const accepted = new Set<(typeof toolCalls)[number]>();
     // Location bookkeeping is synchronous and cheap; maps render async on
     // the media queue when vision allows.
     const locationResults = new Map<string, Record<string, unknown>>();
@@ -979,6 +980,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       delete result._locationId;
       delete result._mapAvailable;
       locationResults.set(locationCall.id ?? locationCall.name, result);
+      if (!("error" in result)) {
+        accepted.add(locationCall);
+      }
     }
     const recallResults = new Map<string, Record<string, unknown>>();
     for (const recallCall of recallCalls) {
@@ -1021,12 +1025,16 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // dropped for want of a follow-up call.
     const setNpcResults = new Map<string, Record<string, unknown>>();
     for (const npcCall of setNpcCalls) {
-      setNpcResults.set(npcCall.id ?? "set_npc", handleSetNpc(campaign, npcCall.rawArguments));
+      const result = handleSetNpc(campaign, npcCall.rawArguments);
+      setNpcResults.set(npcCall.id ?? "set_npc", result);
+      if (!("error" in result)) {
+        accepted.add(npcCall);
+      }
     }
     // Waypoints tick before the beat is judged, so an arrival and the beat
     // it lands in the same reply resolve in order (issue #31). The location
     // calls above already ran; the rest of the tools tick again below.
-    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore });
+    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore, accepted });
     const beatResults = new Map<string, Record<string, unknown>>();
     for (const beatCall of beatCalls) {
       const outcome = handleCompleteBeat(campaignId, beatCall.rawArguments, beatCompleted);
@@ -1294,6 +1302,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         parkedAny = true;
         continue;
       }
+      if (!("error" in outcome)) {
+        accepted.add(toolCall);
+      }
       turn.conversation.push({
         role: "tool",
         ...(toolCall.id ? { tool_call_id: toolCall.id } : {}),
@@ -1304,7 +1315,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // The NPC, item, objective and combat tools ran after the beat check:
     // their waypoints tick now, for the next reply's checklist, and before
     // a park so a resumed turn does not lose them.
-    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore });
+    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore, accepted });
 
     if (parkedAny) {
       // Park: the queue job ends here. Submissions resume the turn.
