@@ -286,7 +286,9 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string, ba
     .filter((entry): entry is FactCandidate => entry !== null);
   if (candidates.length) {
     try {
-      const inserted = recordExtractedFacts(campaign.id, candidates, "compaction");
+      const inserted = recordExtractedFacts(campaign.id, candidates, "compaction", {
+        shownIds: onFile.shown.map((fact) => fact.id),
+      });
       if (inserted.length) {
         publishEphemeral(campaign.id, "facts_updated", {});
       }

@@ -139,6 +139,23 @@ await test("one batch's facts on a subject all stay, while an earlier batch's fa
   );
 });
 
+await test("a fact shown to the extraction call is not superseded by subject; one not shown still is", () => {
+  const shownTable = table("Shown");
+  const [shownFact] = recordExtractedFacts(shownTable, [{ category: "party", subject: "Kara", fact: "Kara is sworn to the Grey Guard." }], "chapter");
+  const [unshown] = recordExtractedFacts(shownTable, [{ category: "npc", subject: "Maren", fact: "Maren rows the ferry." }], "chapter");
+  recordExtractedFacts(
+    shownTable,
+    [
+      { category: "party", subject: "Kara", fact: "Kara means to return with rope and a lantern." },
+      { category: "npc", subject: "Maren", fact: "Maren waits at the landing every dawn." },
+    ],
+    "chapter",
+    { shownIds: [shownFact.id] },
+  );
+  assert.equal(getFactById(shownFact.id).status, "active");
+  assert.equal(getFactById(unshown.id).status, "superseded");
+});
+
 await test("a chapter close retires what its summary call replaces or lists, and nothing of another campaign", async () => {
   const chapter = ensureOpenChapter(mine);
   const { shown } = await factsOnFileFor(mine, listMessagesInSeqRange(mine, chapter.seqStart, allocateSeq(mine)));

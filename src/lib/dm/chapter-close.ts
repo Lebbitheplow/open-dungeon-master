@@ -397,6 +397,7 @@ export async function maybeCloseChapter(
       const inserted = recordExtractedFacts(campaignId, parsed.facts, "chapter", {
         sourceSeq: seqEnd,
         witnessedBy,
+        shownIds: onFile.shown.map((fact) => fact.id),
       });
       if (inserted.length) {
         publishEphemeral(campaignId, "facts_updated", {});

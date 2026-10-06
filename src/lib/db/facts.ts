@@ -213,9 +213,8 @@ export function updateFactText(
 }
 
 // Retires every active fact sharing the candidate's category+subject; used
-// when a newer fact supersedes what was on file about that subject. `spare`
-// are facts that stay whatever their subject: those the same batch just
-// recorded, which describe the same moment as the candidate.
+// when a newer fact supersedes what was on file about that subject, except
+// the `spare` ids.
 function supersedeSubject(campaignId: string, category: FactCategory, subject: string, spare: string[]) {
   if (!subject) {
     return;
@@ -238,7 +237,12 @@ export function recordExtractedFacts(
   campaignId: string,
   candidates: FactCandidate[],
   source: WorldFactSource,
-  options: { knownBy?: FactKnownBy; sourceSeq?: number | null; witnessedBy?: string[] } = {},
+  options: {
+    knownBy?: FactKnownBy;
+    sourceSeq?: number | null;
+    witnessedBy?: string[];
+    shownIds?: string[];
+  } = {},
 ): WorldFact[] {
   const inserted: WorldFact[] = [];
   for (const candidate of candidates) {
@@ -248,14 +252,15 @@ export function recordExtractedFacts(
       continue;
     }
     if (verdict === "supersedes") {
-      // A batch states one moment: "Kara lost the key" and "Kara means to
-      // return" from one chapter are both true, so the second never retires
-      // the first.
+      // Spared: this batch's own facts, since a batch states one moment
+      // ("Kara lost the key" and "Kara means to return" are both true), and
+      // the facts the call was shown, since it says itself which of those to
+      // retire (src/lib/dm/fact-consolidation-logic.ts).
       supersedeSubject(
         campaignId,
         candidate.category,
         normalizeSubject(candidate.subject),
-        inserted.map((fact) => fact.id),
+        [...(options.shownIds ?? []), ...inserted.map((fact) => fact.id)],
       );
     }
     inserted.push(
