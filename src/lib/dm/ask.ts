@@ -168,7 +168,8 @@ async function retrieveArchive(campaignId: string, query: string): Promise<strin
     );
   }
   if (sceneLines.length) {
-    evidence.push(`Verbatim past scenes, which are the actual play:\n${sceneLines.join("\n\n")}`);
+    // Retrieval has no relevance cut-off (fusion-logic.ts).
+    evidence.push(`Verbatim past scenes, which are the actual play, nearest to the question first; some may not bear on it:\n${sceneLines.join("\n\n")}`);
   }
   return evidence;
 }

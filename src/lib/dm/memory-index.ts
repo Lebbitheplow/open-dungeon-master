@@ -233,7 +233,6 @@ export type RecalledScene = {
 
 const PHASE1_CHAPTERS = 3;
 const PHASE2_SCENES = 3;
-const SCENE_FLOOR = 0.25;
 // Scene chunks are cut from a continuous transcript, so pull a wider fused
 // set and let MMR thin it: without that, the three best matches for "the
 // vault" are routinely three overlapping windows onto the same conversation.
@@ -278,7 +277,7 @@ export async function searchScenes(
       lexical: lexicalScore(trimmed, `${row.title} ${row.summary}`, chapterIdf),
       similarity: similarityOf(queryVector, row.embedding),
     })),
-    { similarityFloor: SCENE_FLOOR, limit: PHASE1_CHAPTERS },
+    { limit: PHASE1_CHAPTERS },
   );
   if (!pickedIds.length) {
     return [];
@@ -297,7 +296,7 @@ export async function searchScenes(
       lexical: lexicalScore(trimmed, scene.text, sceneIdf),
       similarity: similarityOf(queryVector, scene.embedding),
     })),
-    { similarityFloor: SCENE_FLOOR, limit: PHASE2_CANDIDATES },
+    { limit: PHASE2_CANDIDATES },
   );
 
   const shortlist = fusedSceneIds

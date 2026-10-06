@@ -83,7 +83,8 @@ async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
     );
   }
   if (sceneLines.length) {
-    evidence.push(`Verbatim past scenes (the actual play):\n${sceneLines.join("\n\n")}`);
+    // Retrieval has no relevance cut-off (fusion-logic.ts).
+    evidence.push(`Verbatim past scenes (the actual play), nearest to the passage first; some may not bear on it:\n${sceneLines.join("\n\n")}`);
   }
 
   const { summary } = getCampaignSummaryState(campaignId);

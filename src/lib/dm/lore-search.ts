@@ -50,7 +50,6 @@ export const searchLoreTool = {
 
 const RESULT_LIMIT = 8;
 const TEXT_CLIP = 400;
-const VECTOR_FLOOR = 0.28;
 
 // Fact categories that a tool-call category filter maps onto.
 const FACT_CATEGORY_MAP: Record<string, string[]> = {
@@ -221,7 +220,7 @@ export async function handleSearchLore(
           ? candidate.similarity
           : similarityOf(queryVector, candidate.embedding),
     })),
-    { similarityFloor: VECTOR_FLOOR, limit: RESULT_LIMIT },
+    { limit: RESULT_LIMIT },
   )
     .map((id) => byId.get(id))
     .filter((candidate): candidate is LoreCandidate => candidate !== undefined)
@@ -234,7 +233,8 @@ export async function handleSearchLore(
   }
   return {
     results,
-    note: "These are established canon; stay strictly consistent with them.",
+    // Retrieval has no relevance cut-off (fusion-logic.ts).
+    note: "These are established canon, nearest to your query first; some may not concern it. Stay strictly consistent with every one that does. If none does, this detail is not established and you may invent it, consistent with what you do know.",
   };
 }
 

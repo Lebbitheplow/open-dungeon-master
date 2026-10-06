@@ -137,33 +137,30 @@ export type RankableCandidate = {
 // The shared retrieval shape: score every candidate both ways, rank each
 // signal independently, fuse the ranks, and return the best ids.
 //
-// Eligibility is still enforced per signal, because fusion only orders and
-// would otherwise happily return the least-bad match when nothing matches at
-// all. A candidate qualifies on ANY lexical overlap or on clearing the cosine
-// floor, so neither signal can veto the other. That is the point: cosine
-// alone misses a rare name, and lexical alone misses a paraphrase.
+// There is no cosine floor. What a cosine means depends on the embedding
+// model and the language (one model scores unrelated text at 0.3, another at
+// 0.8), so no fixed value can tell relevant from unrelated. Every caller hands
+// the result to a reader that judges relevance itself (the DM, the Ask and
+// lore-check calls, a person at the console), and every caller caps how many
+// it hands over. A candidate qualifies on any lexical overlap or any vector.
+//
+// Each ranking is cut to the limit before fusing. RRF scores a candidate in
+// both lists above one in a single list, so without the cut a weak word
+// overlap with a weak cosine would outrank the strongest cosine-only match:
+// a paraphrase sharing no word with the query would lose to noise.
 export function fuseRanked(
   candidates: RankableCandidate[],
-  options: { similarityFloor: number; limit: number; k?: number },
+  options: { limit: number; k?: number },
 ): string[] {
-  const eligible = candidates.filter(
-    (candidate) =>
-      candidate.lexical > 0 ||
-      (candidate.similarity !== null && candidate.similarity >= options.similarityFloor),
-  );
-  if (!eligible.length) {
-    return [];
-  }
-  const lexicalRanking = eligible
+  const lexicalRanking = candidates
     .filter((candidate) => candidate.lexical > 0)
     .sort((a, b) => b.lexical - a.lexical)
+    .slice(0, options.limit)
     .map((candidate) => candidate.id);
-  const semanticRanking = eligible
-    .filter(
-      (candidate) =>
-        candidate.similarity !== null && candidate.similarity >= options.similarityFloor,
-    )
+  const semanticRanking = candidates
+    .filter((candidate) => candidate.similarity !== null)
     .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+    .slice(0, options.limit)
     .map((candidate) => candidate.id);
   return rankByFusion(fuseRRF([lexicalRanking, semanticRanking], options.k)).slice(
     0,

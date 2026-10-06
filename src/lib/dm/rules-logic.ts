@@ -213,8 +213,9 @@ export function renderHouseRules(
 ): string {
   const lines: string[] = [];
   let used = 0;
+  let retrievedShown = false;
   const seen = new Set<string>();
-  for (const chunk of [...pinned, ...retrieved]) {
+  for (const [index, chunk] of [...pinned, ...retrieved].entries()) {
     const key = fingerprint(chunk.text);
     if (seen.has(key)) {
       continue;
@@ -226,9 +227,14 @@ export function renderHouseRules(
     }
     lines.push(line);
     used += line.length;
+    retrievedShown ||= index >= pinned.length;
   }
   if (!lines.length) {
     return "";
   }
-  return `HOUSE RULES (set by the party lead; they override the standard rules):\n${lines.join("\n")}`;
+  // Retrieval has no relevance cut-off (fusion-logic.ts).
+  const picked = retrievedShown
+    ? ". The sections picked for this moment are the nearest matches, nearest first; apply only those that bear on it"
+    : "";
+  return `HOUSE RULES (set by the party lead; they override the standard rules${picked}):\n${lines.join("\n")}`;
 }

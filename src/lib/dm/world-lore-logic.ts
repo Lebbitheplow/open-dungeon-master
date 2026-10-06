@@ -266,8 +266,9 @@ export function renderLoreForPrompt(
 ): string {
   const lines: string[] = [];
   let used = 0;
+  let retrievedShown = false;
   const seen = new Set<string>();
-  for (const entry of [...pinned, ...retrieved]) {
+  for (const [index, entry] of [...pinned, ...retrieved].entries()) {
     if (seen.has(entry.id)) {
       continue;
     }
@@ -279,9 +280,14 @@ export function renderLoreForPrompt(
     }
     lines.push(line);
     used += line.length;
+    retrievedShown ||= index >= pinned.length;
   }
   if (!lines.length) {
     return "";
   }
-  return `WORLD LORE (established by the party lead; treat as canon):\n${lines.join("\n")}`;
+  // Retrieval has no relevance cut-off (fusion-logic.ts).
+  const picked = retrievedShown
+    ? ". The entries picked for this moment are the nearest matches, nearest first; use only those that bear on it"
+    : "";
+  return `WORLD LORE (established by the party lead; treat as canon${picked}):\n${lines.join("\n")}`;
 }

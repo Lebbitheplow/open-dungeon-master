@@ -62,6 +62,16 @@ test("renderLoreForPrompt pins first, dedupes, and clips", () => {
   assert.ok(!block.includes("z".repeat(400)));
 });
 
+test("renderLoreForPrompt says retrieved entries are the nearest matches, and only when there are some", () => {
+  // Retrieval has no relevance cut-off, so the DM is told what it got.
+  const retrieved = renderLoreForPrompt([], [entry({ id: "r1", title: "Retrieved" })], 1600);
+  assert.ok(retrieved.startsWith("WORLD LORE (established by the party lead; treat as canon. The entries picked"));
+  assert.match(retrieved, /nearest matches, nearest first; use only those that bear on it\):/);
+  // Pinned entries are the lead's choice, not a pick: unchanged.
+  const pinned = renderLoreForPrompt([entry({ id: "p1", title: "Pinned" })], [], 1600);
+  assert.ok(pinned.startsWith("WORLD LORE (established by the party lead; treat as canon):\n"));
+});
+
 test("renderLoreForPrompt respects the budget and empty case", () => {
   const entries = Array.from({ length: 10 }, (_, index) =>
     entry({ id: `e${index}`, title: `Entry ${index}`, body: "b".repeat(300) }),

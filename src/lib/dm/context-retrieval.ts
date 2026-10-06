@@ -24,9 +24,6 @@ import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 // same thing. Both are now handled by rank fusion (src/lib/dm/fusion-logic.ts),
 // which reads order rather than magnitude.
 
-// Cosine-only eligibility. Lexical eligibility is any overlap at all, so a
-// rare proper noun still qualifies a candidate that cosine would have missed.
-const SIMILARITY_FLOOR = 0.3;
 const RULES_TOP = 3;
 const LORE_TOP = 2;
 
@@ -71,7 +68,7 @@ function pickFused<T>(
       lexical: lexicalScore(query, entry.text, idf),
       similarity: similarityOf(queryVector, entry.embedding),
     })),
-    { similarityFloor: SIMILARITY_FLOOR, limit },
+    { limit },
   );
   return picked
     .map((id) => byId.get(id))
