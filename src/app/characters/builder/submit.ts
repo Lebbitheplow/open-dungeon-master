@@ -240,7 +240,13 @@ export function abilitiesBlocker(
 
 // The pack: what it costs against the coin the character starts with.
 export function gearBlocker(derived: BuilderDerived): string | null {
-  return derived.purse?.problems[0] ?? null;
+  const problems = [...new Set(derived.purse?.problems ?? [])];
+  if (!problems.length) {
+    return null;
+  }
+  // The equipment block lists every problem beside the items; the footer
+  // says the first and how many more.
+  return problems.length === 1 ? problems[0] : `${problems[0]} (${problems.length - 1} more listed under Equipment.)`;
 }
 
 // The final check before the payload is built. The same rules as the step

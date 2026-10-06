@@ -11,6 +11,7 @@
 //
 // Nothing magical and nothing without a listed price can be bought at
 // creation: such things are found or granted in play.
+import { gearPriceCopper } from "@/lib/srd/adventuring-gear";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 
 export const STARTING_WEALTH_METHODS = ["equipment", "rolled"] as const;
@@ -99,7 +100,13 @@ const key = (name: string) =>
 export function bundledPriceCopper(name: string): number | null {
   const wanted = key(name);
   const gold = PRICES_GP[wanted] ?? PRICES_GP[wanted.replace(/ armor$/, "")] ?? null;
-  return gold === null ? null : Math.round(gold * 100);
+  if (gold !== null) {
+    return Math.round(gold * 100);
+  }
+  // Adventuring gear, tools and instruments (adventuring-gear.ts): before
+  // this a backpack bought in the builder was refused as unpriced while the
+  // server, pricing from the content pack, took it (issue #111).
+  return gearPriceCopper(name);
 }
 
 export type ItemPrice = { copper: number | null; magic: boolean };
