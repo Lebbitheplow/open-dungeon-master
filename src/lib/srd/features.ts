@@ -140,6 +140,17 @@ export function subclassLevelFor(classId: string): number | null {
   return CLASS_FEATURES[classId]?.subclassLevel ?? null;
 }
 
+// Whether a class may pick its subclass at this level: `locked` with the
+// level it unlocks at while it may not. The builder's picker, the pack-only
+// archetypes included, waits on this: a pick made early is one the sheet
+// rules drop (sheet-legality subclassesOf), so offering it was a menu whose
+// choices vanished (issue #109). A class outside the tables (homebrew) has
+// no pick level and is never locked.
+export function subclassGate(classId: string, level: number): { pickLevel: number | null; locked: boolean } {
+  const pickLevel = subclassLevelFor(classId);
+  return { pickLevel, locked: pickLevel !== null && level < pickLevel };
+}
+
 // SRD expertise grants: levels at which a class doubles proficiency in two
 // skills. Rogues at 1 and 6, bards at 3 and 10.
 const EXPERTISE_GRANTS: Record<string, number[]> = {

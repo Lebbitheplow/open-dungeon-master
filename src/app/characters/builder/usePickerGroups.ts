@@ -6,7 +6,7 @@ import { GENRE_PRESETS } from "@/lib/genres";
 import { describeRace } from "@/lib/help";
 import type { Genre } from "@/lib/schemas/game-settings";
 import { SRD_SKILLS } from "@/lib/srd";
-import { subclassBlurb, subclassLevelFor, subclassNamesFor } from "@/lib/srd/features";
+import { subclassBlurb, subclassGate, subclassNamesFor } from "@/lib/srd/features";
 import { packRecommends, type Reskinned } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import type { PickerGroup, PickerOption } from "./OptionPicker";
@@ -301,19 +301,27 @@ export function usePickerGroups({
   // level reaches the class's subclass level. Content-pack archetypes are
   // listed after them: those are prose only, so a player picking one gets no
   // features, and these should be the obvious choice.
-  const builtInSubclasses = useMemo(() => {
-    if (!klass) {
-      return [];
-    }
-    const pickLevel = subclassLevelFor(klass.id);
-    return pickLevel !== null && effectiveLevel >= pickLevel ? subclassNamesFor(klass.id) : [];
-  }, [klass, effectiveLevel]);
+  // Below the class's subclass level nothing is offered, the pack's
+  // archetypes included: reconcile drops a subclass picked early, so a menu
+  // that listed them took a pick and showed "None yet" (issue #109). The
+  // step says when the choice comes instead (subclassLockedAt).
+  const gate = useMemo(
+    () => (klass ? subclassGate(klass.id, effectiveLevel) : { pickLevel: null, locked: false }),
+    [klass, effectiveLevel],
+  );
+  const builtInSubclasses = useMemo(
+    () => (klass && !gate.locked ? subclassNamesFor(klass.id) : []),
+    [klass, gate.locked],
+  );
 
   // Pack archetypes we already have a table for would otherwise appear twice.
   const packOnlyArchetypes = useMemo(() => {
+    if (gate.locked) {
+      return [];
+    }
     const known = new Set(builtInSubclasses.map((entry) => entry.toLowerCase()));
     return archetypes.filter((entry) => !known.has(entry.name.toLowerCase()));
-  }, [archetypes, builtInSubclasses]);
+  }, [archetypes, builtInSubclasses, gate.locked]);
 
   // The pack row behind the chosen subclass, which carries its write-up.
   const chosenArchetype = useMemo(
@@ -404,6 +412,9 @@ export function usePickerGroups({
     backgroundGroups,
     // Whether the subclass picker has anything to offer at this level.
     offersSubclass: builtInSubclasses.length > 0 || packOnlyArchetypes.length > 0,
+    // The level the class picks its subclass at, while this level is below
+    // it; null once the pick is open (or for a class with no pick level).
+    subclassLockedAt: gate.locked ? gate.pickLevel : null,
     chosenArchetype,
   };
 }

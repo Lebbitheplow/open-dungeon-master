@@ -13,6 +13,7 @@ import { useLingeringEncounter } from "@/app/campaigns/[campaignId]/useLingering
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
+import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
 import {
   DirectorArmedBanner,
@@ -186,6 +187,16 @@ function ComposerInner({
             as cards, only while a fight is on. It adds to everything below and
             takes nothing away: the pills, the box, the mic and the send button
             work exactly as they do without it. */}
+        {/* The DM's hand (issue #108): the monsters' attacks and abilities
+            as the same cards, played through the console's invoke route. */}
+        {isDm && hand.encounter ? (
+          <MonsterHand
+            campaignId={campaignId}
+            sheets={sheets}
+            encounter={hand.encounter}
+            leaving={hand.leaving}
+          />
+        ) : null}
         {!isDm && hand.encounter ? (
           <CombatHand
             campaignId={campaignId}

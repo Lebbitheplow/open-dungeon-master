@@ -30,6 +30,7 @@ import {
 } from "@/lib/srd/starting-kit";
 import { suggestWeapons } from "@/lib/srd/weapons";
 import { builderCasting, builderSpellAdvice } from "./casting";
+import { grantedSkillSources } from "./reconcile";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
@@ -529,9 +530,15 @@ export function builderActions(
   race?: RaceOption,
   background?: BackgroundOption,
 ) {
-  // A skill the background or race grants outright is not a class pick;
-  // taking it again would spend a slot on nothing.
-  const granted = new Set([...(background?.skills ?? []), ...state.backgroundSkills, ...(race?.skills ?? [])]);
+  // A skill the background or race grants outright, or one picked for
+  // either, is not a class pick; taking it again would spend a slot on
+  // nothing. The same map greys the pill and labels it (CallingStep).
+  const granted = grantedSkillSources({
+    race,
+    background,
+    racialSkills: state.racialSkills,
+    backgroundSkills: state.backgroundSkills,
+  });
   return {
     addEquipmentItem(entry: {
       name: string;
@@ -598,7 +605,7 @@ export function builderActions(
       }
     },
     toggleSkill(skillId: string) {
-      if (!klass || granted.has(skillId)) {
+      if (!klass || granted.has(skillId.trim().toLowerCase())) {
         return;
       }
       state.setChosenSkills((current) =>

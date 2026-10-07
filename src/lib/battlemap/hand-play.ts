@@ -236,6 +236,11 @@ export function composeSentence(
   if (intent.card === "rider") {
     return `I use ${intent.rider} on my next hit.`;
   }
+  // The DM's monster cards write their own line (monster-hand.ts) and go
+  // to the console's route, so there is no player sentence for them.
+  if (intent.card === "monster") {
+    return "";
+  }
   // The feature that routes it to the bonus action is the card's name
   // before the colon ("Cunning Action: Dash").
   const route = intent.bonus ? card.name.split(":")[0].trim() : "";

@@ -16,7 +16,8 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-const { reconcilePicks } = await import("../src/app/characters/builder/reconcile.ts");
+const { reconcilePicks, grantedSkillSources, grantingTrait } = await import("../src/app/characters/builder/reconcile.ts");
+const { subclassGate, subclassNamesFor } = await import("../src/lib/srd/features.ts");
 const { srdRaceOptions, srdClassOptions, srdBackgroundOptions } = await import(
   "../src/app/characters/builder/useBuilderOptions.ts"
 );
@@ -244,6 +245,122 @@ test("an either-or racial increase takes one of its two abilities only", () => {
   // Constitution is neither Strength nor Dexterity; Intelligence the delver already raises.
   assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["con"] }, context).picks.racialAsi, [""]);
   assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["int"] }, context).picks.racialAsi, [""]);
+});
+
+// ---- issue #109: every race, class and background, every level ----
+//
+// The reporter asked for a running table of which combinations have been
+// checked. This is it, run on every change: for every class skill of every
+// class against every race and every background, the skills reconcile
+// refuses are exactly the ones the class step greys and labels; and for
+// every class at every level, the subclass menu is shut exactly when the
+// rules would drop a pick.
+
+test("a wood elf ranger: Perception is greyed as the race's, Survival as the background's", () => {
+  const sources = grantedSkillSources({ race: race("wood_elf"), background: background("outlander") });
+  assert.equal(sources.get("perception"), "race");
+  assert.equal(sources.get("survival"), "background");
+  assert.equal(sources.get("stealth"), undefined);
+  // A half-elf's two chosen skills count as the race's too.
+  const half = grantedSkillSources({ race: race("half_elf"), racialSkills: ["insight", ""] });
+  assert.equal(half.get("insight"), "race");
+  // The trait behind the grant, named for the pill's explanation.
+  assert.equal(grantingTrait("wood_elf", "Perception"), "Keen Senses");
+  assert.equal(grantingTrait("half_orc", "Intimidation"), "Menacing");
+  assert.equal(grantingTrait("human", "Perception"), null);
+});
+
+test("the races the follow-up on #109 listed each grey their granted skill as the race's", () => {
+  const expected = {
+    high_elf: ["perception"],
+    wood_elf: ["perception"],
+    drow: ["perception"],
+    tabaxi: ["perception", "stealth"],
+    half_orc: ["intimidation"],
+    goliath: ["athletics"],
+    tortle: ["survival"],
+    bugbear: ["stealth"],
+  };
+  for (const [raceId, skills] of Object.entries(expected)) {
+    const r = race(raceId);
+    assert.ok(r, `${raceId} is in the race list`);
+    const sources = grantedSkillSources({ race: r });
+    for (const skill of skills) {
+      assert.equal(sources.get(skill), "race", `${raceId} ${skill}`);
+    }
+  }
+  // The half-orc barbarian the follow-up reproduced on: Intimidation is in
+  // the barbarian's pool, refused by reconcile, and labelled.
+  const { picks } = reconcilePicks({ ...empty, chosenSkills: ["intimidation", "athletics"] }, { race: race("half_orc"), klass: klass("barbarian"), level: 1 });
+  assert.deepEqual(picks.chosenSkills, ["athletics"]);
+  assert.equal(grantedSkillSources({ race: race("half_orc") }).get("intimidation"), "race");
+});
+
+test("every race x class: the class skills the engine refuses are exactly the greyed ones, each labelled race", () => {
+  let combos = 0;
+  for (const r of races) {
+    for (const k of classes) {
+      const pool = k.skillChoices?.from ?? [];
+      if (!pool.length) continue;
+      const sources = grantedSkillSources({ race: r });
+      for (const skill of pool) {
+        const { picks } = reconcilePicks({ ...empty, chosenSkills: [skill] }, { race: r, klass: k, level: 1 });
+        const refused = !picks.chosenSkills.includes(skill);
+        assert.equal(refused, sources.has(skill), `${r.id} ${k.id} ${skill}: refused ${refused}, greyed ${sources.has(skill)}`);
+        if (refused) assert.equal(sources.get(skill), "race", `${r.id} ${k.id} ${skill}`);
+      }
+      combos += 1;
+    }
+  }
+  assert.ok(combos > 100, `only ${combos} race/class pairs checked`);
+  console.log(`  (${races.length} races x ${classes.length} classes)`);
+});
+
+test("every background x class: the class skills the engine refuses are exactly the greyed ones, each labelled background", () => {
+  const human = race("human");
+  for (const b of backgrounds) {
+    for (const k of classes) {
+      const pool = k.skillChoices?.from ?? [];
+      const sources = grantedSkillSources({ race: human, background: b });
+      for (const skill of pool) {
+        const { picks } = reconcilePicks({ ...empty, chosenSkills: [skill] }, { race: human, klass: k, background: b, level: 1 });
+        const refused = !picks.chosenSkills.includes(skill);
+        assert.equal(refused, sources.has(skill), `${b.id} ${k.id} ${skill}`);
+        if (refused) assert.equal(sources.get(skill), "background", `${b.id} ${k.id} ${skill}`);
+      }
+    }
+  }
+});
+
+test("every class at every level: the subclass menu is shut exactly when a pick would be dropped", () => {
+  for (const k of classes) {
+    const name = subclassNamesFor(k.id)[0] ?? "Some Archetype";
+    for (let level = 1; level <= 20; level += 1) {
+      const gate = subclassGate(k.id, level);
+      const { picks } = reconcilePicks({ ...empty, subclass: name }, { race: race("human"), klass: k, background: background("acolyte"), level });
+      assert.equal(picks.subclass === "", gate.locked, `${k.id} level ${level}: dropped ${picks.subclass === ""}, locked ${gate.locked}`);
+      if (gate.locked) assert.ok(gate.pickLevel > level, `${k.id} level ${level}`);
+    }
+    // A pack-only archetype is dropped below the pick level too, so the
+    // menu must not offer it there either (what issue #109 saw).
+    if (subclassGate(k.id, 1).locked) {
+      const early = reconcilePicks({ ...empty, subclass: "Forest Warden" }, { race: race("human"), klass: k, background: background("acolyte"), level: 1 });
+      assert.equal(early.picks.subclass, "", `${k.id}: a pack archetype survived level 1`);
+    }
+  }
+  // A class outside the tables is never locked.
+  assert.deepEqual(subclassGate("no-such-class", 1), { pickLevel: null, locked: false });
+  // The follow-up on #109 counted the classes the open menu misled: every
+  // one whose subclass level is above 1 (all SRD classes but the cleric,
+  // sorcerer and warlock).
+  const lockedAtOne = classes.filter((k) => subclassGate(k.id, 1).locked).map((k) => k.id);
+  for (const id of ["barbarian", "bard", "druid", "fighter", "monk", "paladin", "ranger", "rogue", "wizard"]) {
+    assert.ok(lockedAtOne.includes(id), `${id} locked at level 1`);
+  }
+  for (const id of ["cleric", "sorcerer", "warlock"]) {
+    assert.ok(!lockedAtOne.includes(id), `${id} open at level 1`);
+  }
+  console.log(`  (${lockedAtOne.length} of ${classes.length} classes shut at level 1)`);
 });
 
 console.log(`\ntest-builder-reconcile: ${passed} tests passed.`);

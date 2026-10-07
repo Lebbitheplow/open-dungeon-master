@@ -218,12 +218,14 @@ export default function CharacterBuilder({
             derived={derived}
             actions={actions}
             klass={klass}
+            race={race}
             background={background}
             pack={pack}
             classes={classes}
             classGroups={pickers.classGroups}
             subclassGroups={pickers.subclassGroups}
             offersSubclass={pickers.offersSubclass}
+            subclassLockedAt={pickers.subclassLockedAt}
             chosenArchetype={pickers.chosenArchetype}
           />
           <StepBlocker message={blockers.calling} />
