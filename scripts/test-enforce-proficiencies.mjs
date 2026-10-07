@@ -478,7 +478,7 @@ await test("the builder picks no tool for the player: the class step waits until
   // The Calling step's own gate says the same, on the step where it is fixed.
   const bardRow = builder.classes.find((row) => row.id === "bard");
   assert.equal(
-    builder.submit.callingBlocker(bardRow, none.state, none.derived),
+    builder.submit.callingBlocker(bardRow, none.state, none.derived)?.message,
     "Pick 3 more musical instruments for your tool proficiency.",
   );
   const two = buildClass("bard", { toolPicks: ["viol", "lute"] });

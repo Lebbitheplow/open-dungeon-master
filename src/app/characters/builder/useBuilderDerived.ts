@@ -8,6 +8,7 @@ import { applyAsiChoices, asiLevelsFor, asiSlotsTakenInPlay } from "@/lib/srd/as
 import { derivedMaxHp, hpBonusPerLevelFor, hpRange, type HpMethod } from "@/lib/srd/hit-points";
 import { featureHitPoints } from "@/lib/srd/trait-rules";
 import { hpBonusPerLevel, srdRaceId } from "@/lib/srd/race-id";
+import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
   bundledPrices,
@@ -469,7 +470,29 @@ export function useBuilderDerived({
   // allowance except the subclass's always-prepared ones, which are free. For
   // a wizard `chosenSpells` is the book and `chosenPrepared` what is
   // prepared from it; for everyone else the two are the same list.
-  const chosenCantrips = cantrips;
+  // Cantrips the race gives (a tiefling's Thaumaturgy, a forest gnome's
+  // Minor Illusion, the high elf's pick on the ancestry step) are known on
+  // top of the class's, so the spell step shows them granted and the class
+  // count leaves them out, as the sheet and a level-up already did (issue
+  // #118: a tiefling cleric filled with Thaumaturgy left play two cantrips
+  // down).
+  const racialCantripPick = state.racialCantrip;
+  const racialCantrips = useMemo(() => {
+    const own = race ? innateCantripsFor(race.id, effectiveLevel) : [];
+    const seen = new Set<string>();
+    return [...(racialCantripPick ? [racialCantripPick] : []), ...own].filter((name) => {
+      const key = name.trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [race, effectiveLevel, racialCantripPick]);
+  const chosenCantrips = useMemo(() => {
+    const free = new Set(racialCantrips.map((name) => name.trim().toLowerCase()));
+    return cantrips.filter((name) => !free.has(name.trim().toLowerCase()));
+  }, [cantrips, racialCantrips]);
   const chosenSpells = useMemo(() => {
     const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
     return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
@@ -510,6 +533,7 @@ export function useBuilderDerived({
     cantripAdvice,
     starters,
     subclassSpells,
+    racialCantrips,
     castingLabel,
     chosenCantrips,
     chosenSpells,

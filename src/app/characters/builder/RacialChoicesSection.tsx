@@ -87,7 +87,7 @@ export function RacialChoicesSection({
       <p className="text-xs text-amber-200/90">{race.name} choices</p>
 
       {race.asiChoice ? (
-        <div>
+        <div data-builder-target="racialAsi">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             <GameTerm id="ability_score">Ability</GameTerm> increases (+{race.asiChoice.amount} to{" "}
             {asiFrom
@@ -127,7 +127,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {race.skillChoice ? (
-        <div>
+        <div data-builder-target="racialSkills">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             <GameTerm id="skill">Skill</GameTerm> proficiencies ({race.skillChoice.count} of your
             choice)
@@ -161,7 +161,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {draconic && onAncestryChange ? (
-        <label className="block">
+        <label className="block" data-builder-target="ancestry">
           <span className="mb-1 block text-stone-400">
             Draconic ancestry: your breath weapon&apos;s damage and save, and the damage you resist
           </span>
@@ -183,7 +183,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {repeated.length && onRepeatChange ? (
-        <div>
+        <div data-builder-target="repeatSkills">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             Your race and background both give {repeated.map(skillName).join(" and ")}; choose
             {repeated.length === 1 ? " another skill" : ` ${repeated.length} other skills`} in its place
@@ -216,7 +216,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {race.toolChoice ? (
-        <label className="block">
+        <label className="block" data-builder-target="racialTool">
           <span className="mb-1 block text-stone-400">Tool proficiency</span>
           <Select<string>
             value={tool}
@@ -230,7 +230,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {race.cantripChoice ? (
-        <div>
+        <div data-builder-target="racialCantrip">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             Bonus <GameTerm id="cantrip">cantrip</GameTerm> (one {race.cantripChoice.list}{" "}
             cantrip)

@@ -61,6 +61,7 @@ export function AbilitiesStep({
   }
   return (
     <div className="space-y-4">
+      <div data-builder-target="scores">
       <AbilityEditor
         method={state.method}
         onMethodChange={state.setMethod}
@@ -75,7 +76,9 @@ export function AbilitiesStep({
         who={race && klass ? `${race.name} ${klass.name}`.toLowerCase() : ""}
         hp={hpExplainerInput(state, derived, race, klass)}
       />
+      </div>
       {asiSlotLevels.length ? (
+        <div data-builder-target="asi">
         <AsiFeatEditor
           level={effectiveLevel}
           slotLevels={asiSlotLevels}
@@ -92,6 +95,7 @@ export function AbilitiesStep({
             })
           }
         />
+        </div>
       ) : null}
     </div>
   );

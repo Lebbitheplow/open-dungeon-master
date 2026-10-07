@@ -65,7 +65,9 @@ for (const gender of GENDER_INPUTS) {
   for (const race of races) {
     check(R.characterPlaceholder({ race: race.id, gender }), `race ${race.id}/${gender}`);
   }
-  for (const klass of [...srdClasses.map((entry) => entry.id), ...genreClasses]) {
+  // The content pack's classes from other books (Marshal, Mechanist) have
+  // two-gender plates like the genre classes (issue #116).
+  for (const klass of [...srdClasses.map((entry) => entry.id), ...genreClasses, "marshal", "mechanist"]) {
     check(R.characterPlaceholder({ class: klass, gender }), `class ${klass}/${gender}`);
   }
   for (const genre of GENRES) {

@@ -926,3 +926,26 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   .die-flicker { display: none; }
   .wizard-continue { transition: none; }
 }
+
+/* The footer's "Show me" lights the block that holds the missing pick for a
+   moment after scrolling to it (CharacterBuilder locate, issue #117). The
+   held Continue keeps the disabled look while staying tappable. */
+@keyframes builder-flash {
+  0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  18% { box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.8), 0 0 28px rgba(251, 191, 36, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+}
+[data-builder-target][data-flash] {
+  animation: builder-flash 1.5s var(--ease-snap, ease-out) both;
+  border-radius: 0.5rem;
+}
+.wizard-continue-held {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wizard-continue-held:hover {
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-builder-target][data-flash] { animation-duration: 0.6s; }
+}

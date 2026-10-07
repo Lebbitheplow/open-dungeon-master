@@ -10934,6 +10934,24 @@
       "seed": 1816466173
     },
     {
+      "id": "family-class-marshal",
+      "group": "family",
+      "key": "class-marshal",
+      "label": "marshal",
+      "src": "/assets/icons/family/class-marshal.webp",
+      "bytes": 3842,
+      "seed": 165740999
+    },
+    {
+      "id": "family-class-mechanist",
+      "group": "family",
+      "key": "class-mechanist",
+      "label": "mechanist",
+      "src": "/assets/icons/family/class-mechanist.webp",
+      "bytes": 6634,
+      "seed": 70547016
+    },
+    {
       "id": "feature-deck-interface",
       "group": "feature",
       "key": "Deck Interface",

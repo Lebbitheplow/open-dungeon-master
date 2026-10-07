@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { Wizard, type WizardStep } from "@/components/ui/Wizard";
 import { cn } from "@/lib/cn";
@@ -14,7 +14,6 @@ import { AncestryStep } from "./steps/AncestryStep";
 import { CallingStep } from "./steps/CallingStep";
 import { FinishStep } from "./steps/FinishStep";
 import { IdentityStep, type BuilderRole } from "./steps/IdentityStep";
-import { StepBlocker } from "./steps/shared";
 import { SpellsGearStep } from "./steps/SpellsGearStep";
 import {
   abilitiesBlocker,
@@ -25,7 +24,9 @@ import {
   identityBlocker,
   spellsBlocker,
   validateBuilder,
+  type BlockerTarget,
   type BuilderResult,
+  type StepBlock,
 } from "./submit";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
@@ -128,6 +129,40 @@ export default function CharacterBuilder({
 
   const paintsPortraits = offersImages(useCapabilities());
   const [cropping, setCropping] = useState(false);
+  // This builder's own root, so the footer's "Show me" looks inside it and
+  // not in another builder on the page.
+  const rootId = useId();
+
+  // Takes the player to the block that holds the missing pick: scrolls the
+  // active step to it, lights it for a moment and puts focus on its first
+  // control (issue #117).
+  function locate(target: BlockerTarget) {
+    const found = document.querySelector<HTMLElement>(
+      `[data-builder-root="${rootId}"] [data-active] [data-builder-target="${target}"]`,
+    );
+    if (!found) {
+      return;
+    }
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    found.scrollIntoView({ block: "start", inline: "nearest", behavior: still ? "auto" : "smooth" });
+    found.removeAttribute("data-flash");
+    void found.offsetWidth;
+    found.setAttribute("data-flash", "");
+    window.setTimeout(() => found.removeAttribute("data-flash"), 1600);
+    // The first control that takes the pick: a field or a select before any
+    // card, and never a block's own "what is this" button.
+    const control =
+      found.querySelector<HTMLElement>('input:not([type="hidden"]), select, textarea, button[aria-haspopup]') ??
+      found.querySelector<HTMLElement>(
+        'button:not(.creator-help):not([aria-label^="Details"]):not([aria-label^="What is"]), [tabindex="0"]',
+      );
+    control?.focus({ preventScroll: true });
+  }
+  const gate = (blocked: StepBlock | null) => ({
+    canContinue: !blocked,
+    blocker: blocked?.message ?? null,
+    onBlocked: blocked ? () => locate(blocked.target) : undefined,
+  });
 
   function submit() {
     const input = { state, derived, race, klass, background, initial };
@@ -167,7 +202,7 @@ export default function CharacterBuilder({
       key: "identity",
       label: "Identity",
       title: "Who is this?",
-      canContinue: !blockers.identity,
+      ...gate(blockers.identity),
       content: (
         <>
           <IdentityStep
@@ -181,7 +216,6 @@ export default function CharacterBuilder({
             backgroundGroups={pickers.backgroundGroups}
             background={background}
           />
-          <StepBlocker message={blockers.identity} />
         </>
       ),
     },
@@ -190,7 +224,7 @@ export default function CharacterBuilder({
       label: "Ancestry",
       title: "Ancestry",
       blurb: "Where are they from, and what does that grant?",
-      canContinue: !blockers.ancestry,
+      ...gate(blockers.ancestry),
       continueLabel: race ? `Continue as ${race.name}` : undefined,
       content: (
         <>
@@ -201,7 +235,6 @@ export default function CharacterBuilder({
             races={races}
             raceGroups={pickers.raceGroups}
           />
-          <StepBlocker message={blockers.ancestry} />
         </>
       ),
     },
@@ -210,7 +243,7 @@ export default function CharacterBuilder({
       label: "Calling",
       title: "Calling",
       blurb: "The class decides how this character plays.",
-      canContinue: !blockers.calling,
+      ...gate(blockers.calling),
       content: (
         <>
           <CallingStep
@@ -228,7 +261,6 @@ export default function CharacterBuilder({
             subclassLockedAt={pickers.subclassLockedAt}
             chosenArchetype={pickers.chosenArchetype}
           />
-          <StepBlocker message={blockers.calling} />
         </>
       ),
     },
@@ -237,11 +269,10 @@ export default function CharacterBuilder({
       label: "Ability scores",
       title: "Ability scores",
       blurb: "How do you roll?",
-      canContinue: !blockers.abilities,
+      ...gate(blockers.abilities),
       content: (
         <>
           <AbilitiesStep state={state} derived={derived} race={race} klass={klass} />
-          <StepBlocker message={blockers.abilities} />
         </>
       ),
     },
@@ -250,7 +281,7 @@ export default function CharacterBuilder({
       label: casts ? "Spells and gear" : "Gear",
       title: casts ? "Spells and gear" : "Gear",
       blurb: casts ? "Pick what they can cast, then arm your hero." : "Arm your hero.",
-      canContinue: !blockers.spells,
+      ...gate(blockers.spells),
       content: (
         <>
           <SpellsGearStep
@@ -262,7 +293,6 @@ export default function CharacterBuilder({
             table={table}
             pack={pack}
           />
-          <StepBlocker message={blockers.spells} />
         </>
       ),
     },
@@ -292,7 +322,7 @@ export default function CharacterBuilder({
   return (
     // A bounded height so each step scrolls on its own and the Continue
     // button stays put; the fallback keeps a usable pane on a short phone.
-    <div className={cn("flex h-[max(30rem,calc(100dvh-14rem))] flex-col text-sm", className)}>
+    <div data-builder-root={rootId} className={cn("flex h-[max(30rem,calc(100dvh-14rem))] flex-col text-sm", className)}>
       <Wizard
         title={state.name.trim() || "New character"}
         variant="diamonds"

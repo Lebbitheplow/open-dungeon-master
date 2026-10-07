@@ -19,6 +19,10 @@ export type LineageSlide = LineageEntry & {
   art: string;
   // Canonical SRD name behind a world pack's reskin.
   canonical?: string;
+  // The book the lineage is from ("Tome of Heroes"); a fact in the dialog,
+  // and on the card where the grid is not already grouped by book.
+  source?: string;
+  sourceOnCard?: string;
   packBlurb?: string;
   group: string | null;
   recommended: boolean;
@@ -116,6 +120,7 @@ export function LineageCarousel({
     { key: "Speed", value: `${slide.speed} ft` },
     ...(srd?.size ? [{ key: "Size", value: srd.size }] : []),
     { key: "Traits", value: String(lines.length) },
+    ...(slide.source ? [{ key: "Source", value: slide.source }] : []),
   ];
   const chosen = slide.id === chosenId;
   const navButton = cn(ui.btnSmall, "min-w-0 max-w-[38%] px-2 py-1 text-xs");

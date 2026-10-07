@@ -266,6 +266,12 @@ export async function buildIconList() {
     list.push(entry("family", `class-${classId}`, classId, `the emblem of the ${classId} class, ${CLASS_TONE[classId] || "steel and gold"}`));
   }
 
+  // Classes the content pack brings from other books (Level Up's Marshal,
+  // Black Flag's Mechanist), the only class cards without an emblem (issue
+  // #116).
+  list.push(entry("family", "class-marshal", "marshal", "the emblem of the marshal class, a war banner over crossed longswords, steel and crimson with gold"));
+  list.push(entry("family", "class-mechanist", "mechanist", "the emblem of the mechanist class, interlocking brass gears around a wrench, brass and arcane blue"));
+
   // Genre classes (src/lib/classes/*.json): six settings, six classes each,
   // with their own feature tables. Same treatment as the SRD classes so a
   // netrunner's card carries a painted icon like a wizard's.
