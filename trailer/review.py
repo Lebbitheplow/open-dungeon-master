@@ -4,7 +4,7 @@ import subprocess, json, io, sys, math
 from PIL import Image, ImageDraw
 
 root=Path(__file__).resolve().parent
-version='v4' if '--v4' in sys.argv else 'v3' if '--v3' in sys.argv else 'v2' if '--v2' in sys.argv else None
+version='v8' if '--v8' in sys.argv else 'v7' if '--v7' in sys.argv else 'v6' if '--v6' in sys.argv else 'v5' if '--v5' in sys.argv else 'v4' if '--v4' in sys.argv else 'v3' if '--v3' in sys.argv else 'v2' if '--v2' in sys.argv else None
 video=root/'output'/(f'{version}/open-dungeon-master-trailer-{version}.mp4' if version else 'open-dungeon-master-trailer.mp4')
 timeline=json.loads((root/(f'timeline-{version}.json' if version else 'timeline.json')).read_text())
 expected=sum(round(s['duration']*30)/30 for s in timeline)
