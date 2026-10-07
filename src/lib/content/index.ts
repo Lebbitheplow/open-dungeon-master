@@ -32,6 +32,9 @@ export type ContentEntry = {
   name: string;
   source: "open5e" | "homebrew";
   documentSlug: string;
+  // The book the row is from, by title ("Tome of Heroes"), so a picker can
+  // say where an entry comes from (issue #116). "Homebrew" for a table's own.
+  document?: string;
   data: Record<string, unknown>;
 };
 
@@ -96,6 +99,7 @@ function homebrewEntries(userId: string | undefined, kind: HomebrewKind, q?: str
       name: entry.name,
       source: "homebrew" as const,
       documentSlug: "homebrew",
+      document: "Homebrew",
       data: entry.data,
     }));
 }
@@ -143,7 +147,7 @@ export function allPackSpells(): SpellEntry[] {
       aliases: row.aliases_csv ? row.aliases_csv.split("|") : [],
       data: parseData(row.data_json),
     })),
-  ).map((row) => ({ ...row, source: "open5e" as const }));
+  ).map((row) => ({ ...row, source: "open5e" as const, document: documentTitle(row.documentSlug) }));
   globalThis.__odmServedSpells = { db, rows };
   return rows;
 }
@@ -360,6 +364,7 @@ function searchSimpleTable(
     name: row.name,
     source: "open5e" as const,
     documentSlug: row.document_slug,
+    document: documentTitle(row.document_slug),
     data: parseData(row.data_json),
   }));
 }
@@ -489,6 +494,32 @@ export type ContentDocument = {
   url: string;
 };
 
+// A document slug a row carries that the documents table spells another way
+// (the Black Flag classes say "bfrd"; the table has "blackflag").
+const DOCUMENT_ALIASES: Record<string, string> = { bfrd: "blackflag" };
+
+declare global {
+  var __odmDocumentTitles: { db: unknown; titles: Map<string, string> } | undefined;
+}
+
+// The title behind a document slug, read once from the pack; the slug itself
+// when the pack does not list it.
+export function documentTitle(documentSlug: string): string {
+  if (documentSlug === "homebrew") {
+    return "Homebrew";
+  }
+  const db = getContentDb();
+  if (!db) {
+    return documentSlug;
+  }
+  if (globalThis.__odmDocumentTitles?.db !== db) {
+    const rows = db.prepare(`SELECT slug, name FROM documents`).all() as Array<{ slug: string; name: string }>;
+    globalThis.__odmDocumentTitles = { db, titles: new Map(rows.map((row) => [row.slug, row.name])) };
+  }
+  const titles = globalThis.__odmDocumentTitles.titles;
+  return titles.get(documentSlug) ?? titles.get(DOCUMENT_ALIASES[documentSlug] ?? "") ?? documentSlug;
+}
+
 export function listDocuments(): ContentDocument[] {
   const db = getContentDb();
   if (!db) {
@@ -528,6 +559,7 @@ export function getEntryDetail(
     name: row.name,
     source: "open5e",
     documentSlug: row.document_slug,
+    document: documentTitle(row.document_slug),
     data: parseData(row.data_json),
   };
 }

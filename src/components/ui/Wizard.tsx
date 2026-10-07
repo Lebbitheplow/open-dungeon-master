@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { DiamondStepper } from "@/components/ui/DiamondStepper";
 import { GoldTitle } from "@/components/ui/GoldTitle";
 import { StepWipe, useStepWipe } from "@/components/ui/StepWipe";
@@ -42,6 +42,11 @@ export type WizardStep = {
   label?: string;
   // Replaces "Continue" on this step ("Continue as Half-Orc").
   continueLabel?: ReactNode;
+  // Why Continue is held, shown beside it and read out as its description,
+  // so the reason is never screens away from the button. With `onBlocked`
+  // a tap on the held button (or on the message) goes to the missing pick.
+  blocker?: string | null;
+  onBlocked?: () => void;
 };
 
 export function Wizard({
@@ -83,6 +88,8 @@ export function Wizard({
   const last = step >= total - 1;
   const current = steps[step];
   const canContinue = current?.canContinue !== false;
+  const blocker = !canContinue && current?.blocker ? current.blocker : null;
+  const blockerId = useId();
   const { wiping, run } = useStepWipe(wipe);
 
   const labelOf = (s: WizardStep, index: number) =>
@@ -100,7 +107,10 @@ export function Wizard({
     else go(step - 1);
   };
   const forward = () => {
-    if (!canContinue) return;
+    if (!canContinue) {
+      current?.onBlocked?.();
+      return;
+    }
     if (last) onDone();
     else go(step + 1);
   };
@@ -196,12 +206,42 @@ export function Wizard({
       </div>
 
       <footer className="mt-4 flex shrink-0 items-center justify-end gap-2">
+        {blocker ? (
+          // The reason Continue is held, right next to it. A button when the
+          // step can take the player to the pick, a plain line otherwise.
+          current?.onBlocked ? (
+            <button
+              type="button"
+              id={blockerId}
+              onClick={current.onBlocked}
+              className="wizard-blocker reveal min-w-0 flex-1 text-left text-xs text-amber-300/90 underline-offset-2 hover:text-amber-200 hover:underline"
+            >
+              <span role="status">{blocker}</span>
+              <span className="ml-1 whitespace-nowrap font-mono text-[10px] text-stone-500">Show me</span>
+            </button>
+          ) : (
+            <p id={blockerId} role="status" className="wizard-blocker reveal min-w-0 flex-1 text-xs text-amber-300/90">
+              {blocker}
+            </p>
+          )
+        ) : null}
         {step > 0 ? (
           <button type="button" onClick={back} className={ui.btnSecondary}>
             Back
           </button>
         ) : null}
-        <button type="button" onClick={forward} disabled={!canContinue} className={cn(ui.btnPrimary, "wizard-continue")}>
+        {/* Held with aria-disabled rather than disabled when there is a
+            reason to show: a disabled button swallows the tap and cannot be
+            described, so nothing told the player why (issue #117). */}
+        <button
+          type="button"
+          onClick={forward}
+          disabled={!canContinue && !blocker}
+          aria-disabled={!canContinue || undefined}
+          aria-describedby={blocker ? blockerId : undefined}
+          title={blocker ?? undefined}
+          className={cn(ui.btnPrimary, "wizard-continue", blocker && "wizard-continue-held")}
+        >
           {last ? doneLabel : (current?.continueLabel ?? "Continue")}
         </button>
       </footer>

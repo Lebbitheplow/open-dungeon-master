@@ -76,6 +76,8 @@ export function AncestryStep({
             ...entry,
             art: lineageArt(entry.id, `${option.meta ?? ""} ${entry.name}`, gender),
             canonical: option.meta,
+            // Named on the card only where the group heading is not the book.
+            sourceOnCard: option.source,
             group,
             recommended,
             info: { text: option.infoText, reference: option.reference },
@@ -102,8 +104,9 @@ export function AncestryStep({
               meta: slide.canonical,
               art: slide.art,
               // Under a reskin the canonical name leads, so a player always
-              // knows which SRD race they are actually taking.
-              tagline: [slide.canonical, lineageTagline(slide)].filter(Boolean).join(" · "),
+              // knows which SRD race they are actually taking; then the
+              // book, where the heading does not say it (issue #116).
+              tagline: [slide.canonical, slide.sourceOnCard, lineageTagline(slide)].filter(Boolean).join(" · "),
               chips: asiChips(slide.asi)
                 .slice(0, 2)
                 .map((chip) => chip.label),
@@ -119,6 +122,7 @@ export function AncestryStep({
       <StepPanel
         title="Where are they from?"
         ornate
+        anchor="race"
         help={
           race
             ? `${race.name} is chosen. Every lineage grants its own ability bumps, senses and tongues: tap a card to choose it, or its ? to read what it hands you first.`
@@ -128,13 +132,15 @@ export function AncestryStep({
         {race?.note ? (
           <span className="mb-3 flex items-start gap-1 text-xs text-stone-500">
             <span className="line-clamp-2 grow">
-              <span className="text-amber-200">{race.name}: </span>
+              <span className="text-amber-200">{race.name}</span>
+              {race.source ? <span className="font-mono text-[10px] text-stone-500"> · {race.source}</span> : null}
+              <span className="text-amber-200">: </span>
               {race.note}
             </span>
             <InfoButton
               label={race.name}
               text={describeRace(race.id) ?? race.note}
-              reference={{ kind: "races", slug: race.id }}
+              reference={{ kind: "races", slug: race.slug ?? race.id }}
             />
           </span>
         ) : null}
@@ -168,6 +174,7 @@ export function AncestryStep({
             </span>
           }
           help={languageHelp(race, background)}
+          anchor="languages"
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {Array.from({ length: languageCount }, (_, index) => (

@@ -70,7 +70,7 @@ export function IdentityStep({
         </div>
       ) : null}
 
-      <StepPanel title="Name your hero" ornate>
+      <StepPanel title="Name your hero" ornate anchor="name">
         <input
           value={state.name}
           onChange={(event) => state.setName(event.target.value)}
@@ -190,6 +190,13 @@ export function IdentityStep({
                 />
               </span>
             ) : null}
+            {background?.languages ? (
+              // What the background asks for on a later step, said here so
+              // the hold on step 2 is no surprise (issue #117).
+              <span className="mt-1 block text-xs text-stone-500">
+                On the Ancestry step you will pick {background.languages === 1 ? "one more language" : `${background.languages} more languages`} for this background.
+              </span>
+            ) : null}
             {background?.skillChoice ? (
               <BackgroundSkillChoice state={state} background={background} choice={background.skillChoice} />
             ) : null}
@@ -234,7 +241,7 @@ function BackgroundSkillChoice({
   const picks = state.backgroundSkills;
   const taken = new Set([...background.skills, ...state.chosenSkills, ...state.racialSkills]);
   return (
-    <div className="mt-2">
+    <div className="mt-2" data-builder-target="backgroundSkills">
       <span className="mb-1 flex flex-wrap items-center gap-1 text-xs text-stone-400">
         <GameTerm id="skill">Skill</GameTerm> {choice.count === 1 ? "proficiency" : "proficiencies"} (
         {choice.count} of your choice)

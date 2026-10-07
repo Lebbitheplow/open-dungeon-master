@@ -21,17 +21,21 @@ export function StepPanel({
   title,
   help,
   ornate = false,
+  anchor,
   children,
   className,
 }: {
   title: ReactNode;
   help?: ReactNode;
   ornate?: boolean;
+  // The pick this block collects, as the step blockers name it
+  // (submit.ts BlockerTarget), so the footer can scroll to it.
+  anchor?: string;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={cn(ui.card, ornate && "ornate", "p-4", className)}>
+    <section className={cn(ui.card, ornate && "ornate", "p-4", className)} data-builder-target={anchor}>
       <Ribbon className="mb-3">{title}</Ribbon>
       {help ? <p className="mb-3 text-xs text-stone-500">{help}</p> : null}
       {children}
@@ -45,15 +49,17 @@ export function StepPanel({
 // dialog from the word "Alignment" and closed the list from a group heading.
 export function Field({
   label,
+  anchor,
   children,
   className,
 }: {
   label: ReactNode;
+  anchor?: string;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("block", className)}>
+    <div className={cn("block", className)} data-builder-target={anchor}>
       <span className="mb-1 block text-xs text-stone-400">{label}</span>
       {children}
     </div>
@@ -162,18 +168,5 @@ export function PickPill({
         reference={info.reference}
       />
     </span>
-  );
-}
-
-// Why Continue is disabled on this step, shown under the step's content so
-// the answer is right where the player is looking.
-export function StepBlocker({ message }: { message: string | null }) {
-  if (!message) {
-    return null;
-  }
-  return (
-    <p className="mt-4 text-xs text-amber-300/90" role="status">
-      {message}
-    </p>
   );
 }

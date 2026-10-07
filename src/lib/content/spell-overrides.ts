@@ -52,6 +52,21 @@ const SCHOOL_NAMES: Record<string, string> = {
 // Documents this engine does not play.
 const EXCLUDED_DOCUMENTS = new Set(["srd-2024"]);
 
+// Rules this engine does not play: Level Up's expertise die (a d4 added to a
+// check) and its maneuver DC have no 2014 reading, so a third-party row
+// written on them is not served. Where the SRD prints the same name
+// (Guidance, Resistance) its row serves anyway; a name only such a row
+// carries (Level Up's Friends, Ceremony) is not offered (issue #116).
+const FOREIGN_MECHANICS = /\bexpertise (?:die|dice)\b|\bmaneuver dc\b/i;
+
+function playsHere(row: RawSpellRow): boolean {
+  if (documentRank(row.documentSlug) < 2) {
+    return true;
+  }
+  const text = `${String(row.data.desc ?? "")} ${String(row.data.higher_level ?? "")}`;
+  return !FOREIGN_MECHANICS.test(text);
+}
+
 export const AUTHORED_DOCUMENT = "odm-expanded";
 export const SRD_DOCUMENT = "wotc-srd";
 
@@ -127,7 +142,7 @@ export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
     }
   };
   for (const row of packRows) {
-    if (EXCLUDED_DOCUMENTS.has(row.documentSlug)) {
+    if (EXCLUDED_DOCUMENTS.has(row.documentSlug) || !playsHere(row)) {
       continue;
     }
     if (row.documentSlug === AUTHORED_DOCUMENT) {

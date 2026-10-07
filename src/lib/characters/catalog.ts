@@ -68,11 +68,12 @@ export function classGrantsFor(classId: string): ClassGrants | null {
   return packClassOptions(rows).find((option) => lower(option.id) === id) ?? null;
 }
 
-// Every row a race id may mean, the likeliest first. A content pack can
-// carry a third-party race under the slug a bundled one uses (Tome of
-// Heroes' drow beside the SRD family's), and a sheet built from the bundled
-// list holds the bundled id, so both readings are offered and the sheet is
-// judged against the one it fits.
+// Every row a race id may mean, the likeliest first. A sheet built from the
+// bundled list holds the bundled id ("drow") while the pack offers the same
+// race as "odm-drow", so both readings are offered and the sheet is judged
+// against the one it fits. (A third-party race under a bundled slug, Tome
+// of Heroes' drow, carries its document in its id since issue #115 and
+// matches only its own row.)
 export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): RaceGrants[] {
   const id = raceId.trim();
   if (!id) {
@@ -86,6 +87,7 @@ export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): Rac
           slug: row.slug,
           name: row.name,
           documentSlug: row.documentSlug,
+          document: row.document,
           data: row.data,
         })),
         [id],

@@ -153,7 +153,11 @@ test("'Any' ability increases become the builder's asiChoice pickers", () => {
 });
 
 test("only wotc-srd and odm-expanded rows defer to the bundled race; a srd-2024 species is not offered unless a stored character names it", () => {
-  const drow = race("drow");
+  // Tome of Heroes' drow shares the bundled drow's slug, so its id carries
+  // its document and no SRD reader mistakes it (issue #115).
+  assert.equal(raceOptions.some((entry) => entry.id === "drow"), false);
+  const drow = race("toh-drow");
+  assert.equal(drow.slug, "drow");
   assert.deepEqual(drow.asi, { int: 2 });
   assert.equal(drow.speed, 25);
   assert.equal(drow.weapons, undefined);
@@ -211,7 +215,7 @@ test("Lightfoot finds its bundled traits; parents that require a subrace are not
   }
   for (const kept of [
     "hill-dwarf", "high-elf", "lightfoot", "rock-gnome", "human-chassis", "humanhalf-elf-heritage", "acid-cap",
-    "catfolk", "malkin", "minotaur", "bhain-kwai", "derro", "mutated", "drow", "delver", "human",
+    "catfolk", "malkin", "minotaur", "bhain-kwai", "derro", "mutated", "toh-drow", "delver", "human",
   ]) {
     assert.ok(ids.has(kept), kept);
   }

@@ -12,6 +12,9 @@ export type PickerOption = {
   name: string;
   // Small right-aligned text on the row (hit die, granted skills).
   meta?: string;
+  // The book the entry is from ("Tome of Heroes"), shown after the name when
+  // the group heading does not already say it (issue #116).
+  source?: string;
   infoText?: string | null;
   reference?: ContentRef;
 };
@@ -129,6 +132,9 @@ export default function OptionPicker({
                           <span className="size-3.5 shrink-0" />
                         )}
                         {option.name}
+                        {option.source ? (
+                          <span className="truncate font-mono text-[10px] text-stone-500">{option.source}</span>
+                        ) : null}
                         {/* A star, not a word: these rows sit in half-width
                             columns, and the group heading says the rest. */}
                         {group.recommended ? (

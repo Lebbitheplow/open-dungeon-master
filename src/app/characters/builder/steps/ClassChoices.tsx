@@ -52,6 +52,7 @@ export function ClassChoices({
         return (
           <StepPanel
             key={`${choice.label}-${index}`}
+            anchor="tools"
             title={`Tool proficiency: ${choice.count} ${choice.label}${choice.count === 1 ? "" : "s"}`}
             help={
               left > 0 ? <span className="text-amber-300">{left} still to choose.</span> : undefined
@@ -98,6 +99,7 @@ export function ClassChoices({
           left until its expertise is picked. */}
       {klass && expertiseSlots > 0 ? (
         <StepPanel
+          anchor="expertise"
           title={`Expertise (pick ${expertiseSlots})`}
           help={
             <>
@@ -147,6 +149,7 @@ export function ClassChoices({
 
       {styleSlots > 0 ? (
         <StepPanel
+          anchor="styles"
           title={`Fighting style (pick ${styleSlots})`}
           help={
             styleSlots - state.stylePicks.length > 0 ? (
@@ -188,6 +191,7 @@ export function ClassChoices({
       {optionSlots.map((slot) => (
         <StepPanel
           key={slot.kind}
+          anchor="options"
           title={`${slot.label} (pick ${slot.total})`}
           help={
             <>

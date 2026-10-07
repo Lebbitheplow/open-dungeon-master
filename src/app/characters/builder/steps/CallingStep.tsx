@@ -88,7 +88,9 @@ export function CallingStep({
             name: option.name,
             meta: canonical,
             art: classArt(option.id, gender),
-            tagline: [canonical, entry ? `Saves ${entry.saves.map((save) => save.toUpperCase()).join(" ")}` : ""]
+            // The book leads where the group heading does not say it
+            // (issue #116: a Marshal looked like a Core Rules class).
+            tagline: [canonical, option.source, entry ? `Saves ${entry.saves.map((save) => save.toUpperCase()).join(" ")}` : ""]
               .filter(Boolean)
               .join(" · "),
             chips: entry
@@ -106,7 +108,7 @@ export function CallingStep({
 
   return (
     <div className="space-y-4">
-      <StepPanel title="Choose a class" ornate>
+      <StepPanel title="Choose a class" ornate anchor="class">
         <Field label="Class">
           {klass ? (
             <span className="mb-3 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">
@@ -149,7 +151,7 @@ export function CallingStep({
           />
         </Field>
         {offersSubclass ? (
-          <Field label="Subclass" className="mt-3">
+          <Field label="Subclass" className="mt-3" anchor="subclass">
             <OptionPicker
               value={subclass}
               groups={subclassGroups}
@@ -220,6 +222,7 @@ export function CallingStep({
 
       {klass ? (
         <StepPanel
+          anchor="classSkills"
           title={`Class skills (pick ${klass.skillChoices.count})`}
           help={
             <>

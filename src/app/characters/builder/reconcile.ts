@@ -2,6 +2,7 @@ import type { Ability } from "@/lib/schemas/sheet";
 import { classFeaturesFor, expertiseSlotsFor, racialTraitsFor, subclassLevelFor } from "@/lib/srd/features";
 import { fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
+import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { builderCasting } from "./casting";
 import { bonusLanguageCount } from "./submit";
@@ -259,8 +260,15 @@ export function reconcilePicks(
   // it has to go here or the player is asked to remove what they cannot see.
   // An Eldritch Knight or Arcane Trickster casts too (./casting.ts).
   const { maxSpellLevel, cantripCap, casts } = builderCasting(klass, subclass, level);
-  const cantrips = casts && cantripCap !== null ? unique(picks.cantrips) : [];
-  note("cantrip", picks.cantrips, cantrips);
+  // The race's cantrips are not class picks: a stored sheet lists them with
+  // the class's (submit.ts finalCantrips), and read back they would count
+  // against the class's allowance (issue #118).
+  const racialKnown = new Set(
+    [racialCantrip, ...innateCantripsFor(race?.id ?? "", level)].filter(Boolean).map(lower),
+  );
+  const classCantrips = unique(picks.cantrips).filter((name) => !racialKnown.has(lower(name)));
+  const cantrips = casts && cantripCap !== null ? classCantrips : [];
+  note("cantrip", classCantrips, cantrips);
   const spells = casts
     ? unique(picks.spells).filter((name) => {
         const spellLevel = spellLevelOf(name);
