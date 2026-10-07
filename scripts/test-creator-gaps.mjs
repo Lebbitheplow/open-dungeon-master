@@ -1,8 +1,8 @@
 // Issues 115 to 118 in the character creator: a third-party race under a
 // bundled slug gets its own id (Tome of Heroes' Drow is not the SRD drow),
 // a race the bundled documents print twice is offered once, every pack row
-// names its book, Level Up rules this engine cannot play stay out of the
-// 2014 spell list, racial cantrips do not count as class cantrips, and each
+// names its book, Level Up rules this engine cannot play are read into 2014
+// terms, racial cantrips do not count as class cantrips, and each
 // step blocker says where its missing pick is.
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -120,22 +120,30 @@ const spellRow = (name, documentSlug, desc, level = 0) => ({
   data: { desc, higher_level: "" },
 });
 
-await test("a Level Up spell written on an expertise die or a maneuver DC is not served; the SRD's row of the name is (issue 116)", () => {
+await test("a Level Up spell written on an expertise die or a maneuver DC is read into 2014 terms, and ODM's Friends and Ceremony serve ahead of Level Up's (issue 116)", () => {
   const served = servedSpellRows([
     spellRow("Friends", "a5e", "You gain an expertise die on Charisma checks."),
+    spellRow("Ceremony", "a5e", "Offering: gain an expertise die on the check.", 1),
     spellRow("Guidance", "a5e", "The target gains an expertise die on one ability check."),
     spellRow("Guidance", "wotc-srd", "The target can roll a d4 and add the number rolled to one ability check."),
-    spellRow("Mental Grip", "a5e", "The target must succeed on a save against your maneuver DC.", 2),
+    spellRow("Calculate", "a5e", "You gain an expertise die on Engineering checks."),
+    spellRow("Mental Grip", "a5e", "Attempt to grapple a creature by making a concentration check against its maneuver DC. The target can escape using your spell save DC instead of your maneuver DC.", 2),
     spellRow("Befriend", "spells-that-dont-suck", "You have advantage on Charisma checks."),
     spellRow("Expertise Strike", "dmag", "Your expertise with the blade shows.", 1),
   ]);
-  const names = served.map((row) => `${row.name}@${row.documentSlug}`);
-  assert.ok(!names.includes("Friends@a5e"));
-  assert.ok(!names.includes("Mental Grip@a5e"));
-  assert.ok(!names.includes("Guidance@a5e"));
-  assert.ok(names.includes("Guidance@wotc-srd"));
-  assert.ok(names.includes("Befriend@spells-that-dont-suck"));
-  assert.ok(names.includes("Expertise Strike@dmag"), "the word expertise alone is not the rule");
+  const by = (name) => served.find((row) => row.name === name);
+  assert.equal(by("Friends").documentSlug, "odm-expanded", "ODM's own Friends, not Level Up's");
+  assert.match(by("Friends").data.desc, /advantage on every Charisma check/);
+  assert.equal(by("Ceremony").documentSlug, "odm-expanded");
+  assert.match(by("Ceremony").data.desc, /Bless Water/);
+  assert.equal(by("Guidance").documentSlug, "wotc-srd");
+  assert.equal(by("Calculate").documentSlug, "a5e", "a Level Up original is still offered");
+  assert.equal(by("Calculate").data.desc, "You add a d4 to the roll (Level Up's expertise die, read as a d4 here) on Engineering checks.");
+  assert.match(by("Mental Grip").data.desc, /against a DC of 8 \+ its proficiency bonus \+ its Strength or Dexterity modifier, whichever is higher \(Level Up's maneuver DC\)/);
+  assert.match(by("Mental Grip").data.desc, /instead of that DC/);
+  assert.ok(!/maneuver DC/.test(by("Mental Grip").data.desc.replace(/\(Level Up's maneuver DC\)/g, "")), "no untranslated maneuver DC remains");
+  assert.ok(by("Befriend"));
+  assert.equal(by("Expertise Strike").data.desc, "Your expertise with the blade shows.", "the word expertise alone is not the rule");
 });
 
 const races = srdRaceOptions();

@@ -52,19 +52,49 @@ const SCHOOL_NAMES: Record<string, string> = {
 // Documents this engine does not play.
 const EXCLUDED_DOCUMENTS = new Set(["srd-2024"]);
 
-// Rules this engine does not play: Level Up's expertise die (a d4 added to a
-// check) and its maneuver DC have no 2014 reading, so a third-party row
-// written on them is not served. Where the SRD prints the same name
-// (Guidance, Resistance) its row serves anyway; a name only such a row
-// carries (Level Up's Friends, Ceremony) is not offered (issue #116).
+// Rules this engine does not play, read into 2014 terms where a third-party
+// row uses them: Level Up's expertise die is a d4 added to the roll, and its
+// maneuver DC is 8 + proficiency bonus + the better of Strength and
+// Dexterity, which is exactly how the book defines them. The row keeps its
+// name and its place; only these phrases change, and each says what it was
+// (issue #116). Where the SRD or ODM prints the same name (Guidance,
+// Friends, Ceremony) that row serves instead by rank.
 const FOREIGN_MECHANICS = /\bexpertise (?:die|dice)\b|\bmaneuver dc\b/i;
 
-function playsHere(row: RawSpellRow): boolean {
+const TRANSLATIONS: Array<[RegExp, string]> = [
+  [/\bgain(s)? an expertise die\b/gi, "add$1 a d4 to the roll (Level Up's expertise die, read as a d4 here)"],
+  [/\ban expertise die\b/gi, "a d4 added to the roll (Level Up's expertise die)"],
+  [/\bexpertise dice\b/gi, "a d4 added to the roll (Level Up's expertise dice)"],
+  [
+    /\bagainst (its|their|the target's) maneuver DC\b/gi,
+    "against a DC of 8 + $1 proficiency bonus + $1 Strength or Dexterity modifier, whichever is higher (Level Up's maneuver DC)",
+  ],
+  [/\b(?:instead of|rather than) your maneuver DC\b/gi, "instead of that DC"],
+  [/\byour maneuver DC\b/gi, "a DC of 8 + your proficiency bonus + your Strength or Dexterity modifier, whichever is higher"],
+  // The bare phrase, except where an earlier rule left it as a label.
+  [/(?<!Level Up's )\bmaneuver DC\b/gi, "a DC of 8 + the creature's proficiency bonus + its Strength or Dexterity modifier, whichever is higher"],
+];
+
+function translated(row: RawSpellRow): RawSpellRow {
   if (documentRank(row.documentSlug) < 2) {
-    return true;
+    return row;
   }
-  const text = `${String(row.data.desc ?? "")} ${String(row.data.higher_level ?? "")}`;
-  return !FOREIGN_MECHANICS.test(text);
+  const fields = ["desc", "higher_level"] as const;
+  if (!fields.some((field) => FOREIGN_MECHANICS.test(String(row.data[field] ?? "")))) {
+    return row;
+  }
+  const data = { ...row.data };
+  for (const field of fields) {
+    let text = String(data[field] ?? "");
+    if (!text) {
+      continue;
+    }
+    for (const [pattern, replacement] of TRANSLATIONS) {
+      text = text.replace(pattern, replacement);
+    }
+    data[field] = text;
+  }
+  return { ...row, data };
 }
 
 export const AUTHORED_DOCUMENT = "odm-expanded";
@@ -142,7 +172,7 @@ export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
     }
   };
   for (const row of packRows) {
-    if (EXCLUDED_DOCUMENTS.has(row.documentSlug) || !playsHere(row)) {
+    if (EXCLUDED_DOCUMENTS.has(row.documentSlug)) {
       continue;
     }
     if (row.documentSlug === AUTHORED_DOCUMENT) {
@@ -153,7 +183,7 @@ export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
       }
       continue;
     }
-    offer(row);
+    offer(translated(row));
   }
   // Authored since the pack was built.
   for (const spell of authored.values()) {
