@@ -32,6 +32,7 @@ import {
 import { suggestWeapons } from "@/lib/srd/weapons";
 import { builderCasting, builderSpellAdvice } from "./casting";
 import { grantedSkillSources } from "./reconcile";
+import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
@@ -88,7 +89,7 @@ export function useBuilderDerived({
 }) {
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
-    racialSkills, racialTool, backgroundSkills, hpOverride, acOverride, equipment, removedAutoNames,
+    racialSkills, racialTool, backgroundSkills, backgroundGearPicks, hpOverride, acOverride, equipment, removedAutoNames,
     toolPicks, repeatSkills,
     subclass, optionPicks, spells, cantrips, bookPrepared, keepsStoredGear, asiRecorded, asiReachedLevel,
   } = state;
@@ -182,6 +183,28 @@ export function useBuilderDerived({
     () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks),
     [klass, background, toolPicks],
   );
+  // Every tool the character is trained with, the list the sheet carries;
+  // the background's kit fills its "of your choice" lines from it.
+  const trainedTools = useMemo(
+    () => [
+      ...new Set(
+        [...toolGrants.fixed, ...(race?.tools ?? []), racialTool, ...toolGrants.chosen].filter(Boolean),
+      ),
+    ],
+    [toolGrants, race, racialTool],
+  );
+  // The background's kit with its choice lines answered (issue #127): a
+  // tool line from the training above, an either-or line from the pick
+  // made on the gear step, the book's first until then.
+  const backgroundKit = useMemo(
+    () =>
+      expandBackgroundGear(background?.equipment, {
+        tools: trainedTools,
+        backgroundTools: background?.tools ?? [],
+        picks: backgroundGearPicks,
+      }),
+    [background, trainedTools, backgroundGearPicks],
+  );
 
   const preview = useMemo(() => {
     if (!shownAbilities || !race || !klass || !background) {
@@ -204,16 +227,7 @@ export function useBuilderDerived({
           ...(klass.languages ?? []),
         ]),
       ],
-      tools: [
-        ...new Set(
-          [
-            ...toolGrants.fixed,
-            ...(race.tools ?? []),
-            racialTool,
-            ...toolGrants.chosen,
-          ].filter(Boolean),
-        ),
-      ],
+      tools: trainedTools,
       // Races can teach combat training too: mountain dwarf armor, drow
       // and wood elf weapons.
       armor: [...new Set([...klass.armor, ...(race.armor ?? [])])],
@@ -260,7 +274,7 @@ export function useBuilderDerived({
     const maxHp =
       hpOverride ?? derivedMaxHp(method === "max" ? "max" : "average", hpInput);
     return { proficiencies, derived, maxHp, hpMethod: method, hpRange: hpRange(hpInput) };
-  }, [shownAbilities, halfFeats, race, klass, subclass, background, proficientSkills, expertisePicks, bonusLanguages, racialTool, toolGrants, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
+  }, [shownAbilities, halfFeats, race, klass, subclass, background, proficientSkills, expertisePicks, bonusLanguages, trainedTools, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
 
   // The class's starting equipment rides along automatically (removable
   // chips): the book's list with the either-or choices the player made on
@@ -321,7 +335,7 @@ export function useBuilderDerived({
       .filter((item) => !removedAutoNames.includes(item.name))
       .map((item) => ({ name: item.name, qty: item.qty }));
     // Backgrounds hand over a starting kit too, not just skills.
-    const backgroundGear = (background?.equipment ?? [])
+    const backgroundGear = backgroundKit.names
       .filter((itemName) => !removedAutoNames.includes(itemName))
       .map((itemName) => ({ name: itemName, qty: 1 }));
     // One row per name: a dagger bought beside the rogue's two is a third.
@@ -335,7 +349,7 @@ export function useBuilderDerived({
       }
     }
     return rows;
-  }, [equipment, autoLoadout, removedAutoNames, background, keepsStoredGear]);
+  }, [equipment, autoLoadout, removedAutoNames, backgroundKit, keepsStoredGear]);
 
   // What the pack costs. Under "equipment" the class's gear and the
   // background's kit are free and the background's coin is the purse; under
@@ -353,7 +367,7 @@ export function useBuilderDerived({
       ? equipment.flatMap((item) => Array.from({ length: item.qty }, () => item.name))
       : wealthMethod === "rolled"
         ? []
-        : [...kitNames(autoLoadout), ...(background?.equipment ?? [])];
+        : [...kitNames(autoLoadout), ...backgroundKit.names];
     const coinCopper = keepsStoredGear
       ? state.gold * 100
       : Math.round(
@@ -368,13 +382,13 @@ export function useBuilderDerived({
       // The kit's choices matter where the kit is free; under rolled wealth
       // they only say what is pre-added to buy.
       problems: [
-        ...(keepsStoredGear || wealthMethod === "rolled" ? [] : (startingKit?.problems ?? [])),
+        ...(keepsStoredGear || wealthMethod === "rolled" ? [] : [...(startingKit?.problems ?? []), ...backgroundKit.problems]),
         ...verdict.problems,
       ],
       gold: Math.floor(left / 100),
       copper: left % 100,
     };
-  }, [equipment, fullEquipment, autoLoadout, startingKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
+  }, [equipment, fullEquipment, autoLoadout, startingKit, backgroundKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
 
   // AC is derived from the gear above, never typed: equipping a breastplate
   // moves the number here and on the sheet. Pinning an armor class is a
@@ -520,6 +534,7 @@ export function useBuilderDerived({
     classKit,
     kitChoices,
     kitTraining,
+    backgroundKit,
     fullEquipment,
     purse,
     acInfo,
@@ -627,6 +642,18 @@ export function builderActions(
         );
         state.setRemovedAutoNames([]);
       }
+    },
+    // One either-or line of the background's kit answered, by the words of
+    // the alternative taken.
+    pickBackgroundGear(index: number, label: string) {
+      state.setBackgroundGearPicks((current) => {
+        const next = current.slice();
+        while (next.length < index) {
+          next.push("");
+        }
+        next[index] = label;
+        return next;
+      });
     },
     toggleSkill(skillId: string) {
       if (!klass || granted.has(skillId.trim().toLowerCase())) {

@@ -501,7 +501,10 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         ancestry: takesDraconicAncestry(race.id) ? (findDraconicAncestry(state.racialAncestry ?? "")?.id ?? "") : "",
         ...(racialFeatAbility ? { featAbility: racialFeatAbility } : {}),
       },
-      backgroundChoices: { skills: picks.backgroundSkills.filter(Boolean) },
+      backgroundChoices: {
+        skills: picks.backgroundSkills.filter(Boolean),
+        gear: derived.backgroundKit.choices.map((choice) => choice.alternatives[choice.chosen].label),
+      },
       // The class kit's either-or choices, which the server hands out free.
       ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),
       spellcasting: casting.ability

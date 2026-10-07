@@ -48,6 +48,7 @@ import {
   takesDraconicAncestry,
   type DraconicAncestry,
 } from "@/lib/srd/racial-grants";
+import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { kitNames, startingKitFor } from "@/lib/srd/starting-kit";
 import { judgeStartingGear, wealthCeilingGold } from "@/lib/srd/starting-wealth";
 import { abilityProblems, baseSpans } from "@/lib/srd/legality/abilities";
@@ -217,7 +218,7 @@ function freeKitOf(
   klass: ClassGrants,
   background: LegalityContext["background"],
   input: CreateSheetInput,
-  who: { armor: string[]; weapons: string[]; subclass: string },
+  who: { armor: string[]; weapons: string[]; tools: string[]; subclass: string },
 ) {
   const kit = startingKitFor(
     { id: klass.id, armor: who.armor, weapons: who.weapons },
@@ -225,9 +226,17 @@ function freeKitOf(
     who.subclass,
     klass.name,
   );
+  // The background's kit with its choice lines answered: a tool line from
+  // the training the character holds, an either-or line from the pick the
+  // sheet records (issue #127).
+  const backgroundKit = expandBackgroundGear(background?.equipment, {
+    tools: who.tools,
+    backgroundTools: background?.tools ?? [],
+    picks: input.backgroundChoices?.gear ?? [],
+  });
   return {
-    names: [...kitNames(kit.items), ...(background?.equipment ?? [])],
-    problems: kit.problems,
+    names: [...kitNames(kit.items), ...backgroundKit.names],
+    problems: [...kit.problems, ...backgroundKit.problems],
     choices: kit.tabled ? kit.choices : undefined,
   };
 }
@@ -537,6 +546,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     freeKitOf(klass, background, input, {
       armor: trained.proficiencies.armor,
       weapons: trained.proficiencies.weapons,
+      tools: trained.proficiencies.tools,
       subclass: classes[0].subclass ?? "",
     });
   if (policy.made && context.door !== "engine") {

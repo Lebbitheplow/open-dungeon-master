@@ -80,6 +80,7 @@ export async function openBuilder() {
       repeatSkills: [],
       racialCantrip: "",
       backgroundSkills: [],
+      backgroundGearPicks: [],
       bonusLanguages: [],
       asiChoices: [],
       asiRecorded: 0,

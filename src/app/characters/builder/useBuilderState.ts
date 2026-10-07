@@ -167,6 +167,11 @@ export function useBuilderState({
   const [backgroundSkills, setBackgroundSkills] = useState<string[]>(
     initial?.backgroundChoices?.skills ?? [],
   );
+  // The alternative taken on each either-or line of the background's kit
+  // ("a dagger or light hammer"), by its words (src/lib/srd/gear-choices.ts).
+  const [backgroundGearPicks, setBackgroundGearPicks] = useState<string[]>(
+    initial?.backgroundChoices?.gear ?? [],
+  );
   // Prefixed feature names, e.g. "Invocation: Agonizing Blast".
   const [optionPicks, setOptionPicks] = useState<string[]>(() =>
     (initial?.features ?? [])
@@ -403,6 +408,7 @@ export function useBuilderState({
   // The background's own skill pick belongs to the old background.
   function changeBackground(id: string) {
     setBackgroundId(id);
+    setBackgroundGearPicks([]);
     applyChange("background", { backgroundId: id }, { ...picks, backgroundSkills: [] });
   }
   function changeSubclass(name: string) {
@@ -465,6 +471,7 @@ export function useBuilderState({
     toolPicks, setToolPicks,
     repeatSkills, setRepeatSkills,
     backgroundSkills, setBackgroundSkills,
+    backgroundGearPicks, setBackgroundGearPicks,
     optionPicks, setOptionPicks,
     spellWarningAck, setSpellWarningAck,
     backstory, setBackstory,

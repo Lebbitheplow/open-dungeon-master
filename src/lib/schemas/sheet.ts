@@ -304,6 +304,10 @@ export const createSheetSchema = z.object({
   backgroundChoices: z
     .object({
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+      // The alternative taken on each either-or line of the background's kit
+      // ("a dagger or light hammer"), by its words, in kit order
+      // (src/lib/srd/gear-choices.ts). Absent or short: the book's first.
+      gear: z.array(z.string().trim().max(80)).max(8).default([]),
     })
     .optional(),
   // The either-or choices of the class's starting equipment
