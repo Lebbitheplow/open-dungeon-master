@@ -288,8 +288,9 @@ test("a new character's gear is the kit, or bought from the purse", () => {
   const rolled = { startingWealth: "rolled", wealthRoll: 120 };
   assert.equal(taken({ ...FIGHTER, equipment: [{ name: "Chain Mail", qty: 1 }, { name: "Longsword", qty: 1 }] }, rolled).gold, 30);
   refused({ ...FIGHTER, equipment: [{ name: "Chain Mail", qty: 1 }, { name: "Longbow", qty: 1 }] }, rolled);
-  assert.deepEqual(splitPurse(["holy symbol", "15 gp"]), { equipment: ["holy symbol"], purse: 15 });
-  assert.deepEqual(splitPurse(["a belt pouch containing 10 gp"]), { equipment: ["a belt pouch"], purse: 10 });
+  // The kit comes out under its catalog names (src/lib/srd/adventuring-gear.ts, issue #113).
+  assert.deepEqual(splitPurse(["holy symbol", "15 gp"]), { equipment: ["Holy Symbol"], purse: 15 });
+  assert.deepEqual(splitPurse(["a belt pouch containing 10 gp"]), { equipment: ["Pouch"], purse: 10 });
 });
 
 test("a character is made single-class, and a played one keeps a split it could have", () => {

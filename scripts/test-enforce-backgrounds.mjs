@@ -37,6 +37,7 @@ const hasPack = contentPackInstalled();
 const { builderMaxHp } = await import("../src/app/characters/builder/abilityDice.ts");
 const { defaultArmor, suggestArmor } = await import("../src/lib/srd/armor.ts");
 const { classKitFor, startingKitFor } = await import("../src/lib/srd/starting-kit.ts");
+const { resolveBackgroundGear } = await import("../src/lib/srd/adventuring-gear.ts");
 
 // SRD 5.1 (Acolyte) and the 2014 Player's Handbook: skills, how many tools,
 // how many languages of choice, the purse in gold pieces, the feature.
@@ -152,8 +153,10 @@ await test("the stored sheet carries the background: skills, tools, languages, k
     // A wizard and a dragonborn bring no tools; Common and Draconic are the race's.
     assert.deepEqual(profs.tools, namedTools(background.tools), `${background.id} tools`);
     assert.equal(profs.languages.length, 2 + background.languages, `${background.id} languages`);
+    // The kit arrives as catalog items, the way the class kit does: a pack
+    // opened, "common clothes" as "Clothes, Common" (issue #113).
     const kit = sheet.equipment.map((item) => item.name);
-    for (const item of background.equipment.filter((entry) => !/ gp$/.test(entry))) {
+    for (const item of resolveBackgroundGear(background.equipment).filter((entry) => !/ gp$/.test(entry))) {
       assert.ok(kit.includes(item), `${background.id} kit lacks ${item}`);
     }
     // The server grants the feature itself, once.
@@ -231,10 +234,12 @@ await test("A new character starts with its class's SRD 5.1 starting equipment, 
   assert.deepEqual(names.slice(0, 3), ["Quarterstaff", "Component Pouch", "Backpack"]);
   assert.ok(names.includes("Spellbook"), names.join(", "));
   assert.equal(sheet.equipment.find((item) => item.name === "Parchment (one sheet)")?.qty, 10);
-  for (const item of ACOLYTE_KIT) {
+  // The acolyte's kit under its catalog names (issue #113): "holy symbol"
+  // is the Holy Symbol, "common clothes" is Clothes, Common.
+  for (const item of resolveBackgroundGear(ACOLYTE_KIT)) {
     assert.ok(names.includes(item), `${item} is missing: ${names.join(", ")}`);
   }
-  assert.ok(names.indexOf("Spellbook") < names.indexOf("holy symbol"));
+  assert.ok(names.indexOf("Spellbook") < names.indexOf("Holy Symbol"));
   // Nobody starts in plate (1,500 gp) or with anything magical, whatever
   // the choices.
   for (const klass of srd.SRD_CLASSES) {

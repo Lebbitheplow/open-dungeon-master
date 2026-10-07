@@ -30,8 +30,9 @@ export type PurseView = {
   gold: number;
   copper: number;
   source: string;
-  // The first thing the purse cannot pay for, in the rules' words.
-  problem: string | null;
+  // Everything the purse cannot pay for, in the rules' words; empty when
+  // the pack is fine.
+  problems: string[];
   // A table that rolls starting wealth: the server's roll, or the button
   // that asks for it.
   wealth: {
@@ -68,8 +69,11 @@ export default function EquipmentSection({
   purse: PurseView;
   inputClass: string;
 }) {
-  const have = new Set(equipment.map((item) => item.name));
-  const openSuggestions = suggestions.filter((entry) => !have.has(entry.name));
+  const have = new Set(equipment.map((item) => item.name.trim().toLowerCase()));
+  const openSuggestions = suggestions.filter((entry) => !have.has(entry.name.trim().toLowerCase()));
+  // Only what the kit does not already carry: most class kits come with a
+  // pack, and a second backpack on top was what blocked the step (issue #111).
+  const starterMissing = STARTER_PACK.filter((entry) => !have.has(entry.name.trim().toLowerCase()));
 
   return (
     <section className="panel rounded-xl p-4">
@@ -101,16 +105,33 @@ export default function EquipmentSection({
           </div>
         </div>
       ) : null}
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => onAddMany(STARTER_PACK)}
-          className="rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-300 hover:bg-stone-900"
+          onClick={() => onAddMany(starterMissing)}
+          disabled={!starterMissing.length}
+          title={
+            starterMissing.length
+              ? `Adds ${starterMissing.map((entry) => (entry.qty > 1 ? `${entry.name} x${entry.qty}` : entry.name)).join(", ")}.`
+              : "Your kit already carries the basics: a backpack, bedroll, rations, rope, torches and a waterskin."
+          }
+          className="rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:cursor-not-allowed disabled:opacity-50 motion-press"
         >
-          Add adventurer&apos;s starter pack
+          {starterMissing.length
+            ? `Add adventurer's starter pack (${starterMissing.length} ${starterMissing.length === 1 ? "item" : "items"} the kit lacks)`
+            : "Starter pack already in the kit"}
         </button>
         <span className="text-xs text-stone-500">plus search armor, weapons, and gear:</span>
       </div>
+      {/* What stops Continue, where the items are added: the purse's line
+          sat under the whole inventory and out of view (issue #111). */}
+      {purse.problems.length ? (
+        <ul role="alert" className="reveal mb-2 space-y-1 rounded-lg border border-amber-500/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+          {purse.problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      ) : null}
       <ContentPicker
         kind="items"
         placeholder="Search items (e.g. longsword, chain mail, rope)"
@@ -228,9 +249,10 @@ export default function EquipmentSection({
             {purse.wealth.error}
           </p>
         ) : null}
-        {purse.problem ? (
-          <p role="alert" className={cn("reveal text-[11px] text-amber-300")}>
-            {purse.problem}
+        {purse.problems.length ? (
+          <p className={cn("reveal text-[11px] text-amber-300")}>
+            {purse.problems.length === 1 ? "One item above" : `${purse.problems.length} items above`} cannot be paid for; the
+            Continue button waits on that.
           </p>
         ) : null}
       </div>

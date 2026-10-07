@@ -1,0 +1,52 @@
+Artisan | a5e | One set of artisan's tools, traveler's clothes.
+Charlatan | a5e | Common clothes, disguise kit, forgery kit.
+Criminal | a5e | Common clothes, dark cloak, thieves' tools.
+Entertainer | a5e | Lute or other musical instrument, costume.
+Exile | a5e | Traveler's clothes, 10 days rations.
+Farmer | a5e | Common clothes, shovel, mule with saddlebags, 5 Supply.
+Folk Hero | a5e | Any artisan's tools except alchemist's supplies, common clothes.
+Gambler | a5e | Fine clothes, dice set, playing card set.
+Guildmember | a5e | One set of artisan's tools or one instrument, traveler's clothes, guild badge.
+Hermit | a5e | Healer's satchel, herbalism kit, common clothes, 7 days rations, and a prayer book, prayer wheel, or prayer beads.
+Marauder | a5e | Traveler's clothes, signal whistle, tent (one person).
+Outlander | a5e | Traveler's clothes, waterskin, healer's kit, 7 days rations.
+Sage | a5e | Bottle of ink, pen, 50 sheets of parchment, common clothes.
+Sailor | a5e | Common clothes, navigator's tools, 50 feet of rope.
+Trader | a5e | Traveler's clothes, abacus, merchant's scale.
+Urchin | a5e | Common clothes, disguise kit.
+Cultist | a5e-ag | Holy symbol (amulet or reliquary), common clothes, robes, 5 torches.
+Guard | a5e-ag | Common clothes, halberd, uniform.
+Noble | a5e-ag | Fine clothes, signet ring, writ detailing your family tree.
+Soldier | a5e-ag | Uniform, common clothes, 7 days rations.
+Deep Hunter | a5e-ddg | chalk, traveler’s clothes, 2 hunting traps
+Dungeon Robber | a5e-ddg | Cartographers’ tools, miner’s pick, traveler’s clothes, shovel.
+Escapee from Below | a5e-ddg | Common clothes, thieves’ tools.
+Imposter | a5e-ddg | Common clothes, disguise kit.
+Cursed | a5e-gpg | 4 days of rations, one person tent, traveler’s clothes
+Haunted | a5e-gpg | 2 days worth of rations, bell, 5 candles, ink, ink pen, 10 sheets of paper, 5 pieces of chalk, traveler’s clothes
+Con Artist | o5e | A set of fine clothes, a disguise kit, tools for your typical con (such as bottles full of colored water, a set of weighted dice, a deck of marked or filed cards, or a seal from an imaginary-or real-noble), and a pouch containing 15gp
+Scoundrel | o5e | A bag of 1,000 ball bearings, a pet monkey wearing a tiny fez, a set of common clothes, and a pouch containing 10 gp
+Crime Syndicate Member | taldorei | A set of dark common clothes including a hood, a set of tools to match your choice of tool proficiency, and a belt pouch containing 10g.
+Elemental Warden | taldorei | A staff, hunting gear (a shortbow with 20 arrows, or a hunting trap), a set of traveler’s clothes, a belt pouch containing 10 gp.
+Fate-Touched | taldorei | 
+Lyceum Student | taldorei | A set of fine clothes, a lyceum student uniform, a writing kit (small pouch with a quill, ink, folded parchment, and a small penknife), and a belt pouch containing 10g.
+Recovered Cultist | taldorei | Vestments and a holy symbol of your previous cult, a set of common clothes, a belt pouch containing 15 gp.
+Court Servant | toh | A set of artisan's tools of your choice, a unique piece of jewelry, a set of fine clothes, a handcrafted pipe, and a belt pouch containing 20 gp
+Desert Runner | toh | Traveler's clothes, herbalist kit, waterskin, pouch with 10 gp
+Destined | toh | A dagger, quarterstaff, or spear, a set of traveler's clothes, a memento of your destiny (a keepsake from your betrothed, the seal of your destined office, your family signet ring, or similar), a belt pouch containing 15 gp
+Diplomat | toh | A set of fine clothes, a letter of passage from a local minor authority or traveling papers that signify you as a traveling diplomat, and a belt pouch containing 20 gp
+Forest Dweller | toh | A set of common clothes, a hunting trap, a wood staff, a whetstone, an explorer's pack, and a pouch containing 5 gp
+Former Adventurer | toh | A dagger, quarterstaff, or shortsword (if proficient), an old souvenir from your previous adventuring days, a set of traveler's clothes, 50 feet of hempen rope, and a belt pouch containing 15 gp
+Freebooter | toh | A pirate flag from your ship, several tattoos, 50 feet of rope, a set of traveler's clothes, and a belt pouch containing 10 gp
+Gamekeeper | toh | A set of leatherworker's tools, a hunting trap, fishing tackle, a set of traveler's clothes, and a belt pouch containing 10 gp
+Innkeeper | toh | A set of either brewer's supplies or cook's utensils, a dagger or light hammer, traveler's clothes, and a pouch containing 20 gp
+Mercenary Company Scion | toh | A backpack, a signet ring emblazoned with the symbol of your family's free company, a musical instrument of your choice, a mess kit, a set of traveler's clothes, and a belt pouch containing 20 gp
+Mercenary Recruit | toh | A letter of introduction from an old teacher, a gaming set of your choice, traveling clothes, and a pouch containing 10 gp
+Monstrous Adoptee | toh | A club, handaxe, or spear, a trinket from your life before you were adopted, a set of traveler's clothes, a collection of bones, shells, or other natural objects, and a belt pouch containing 5 gp
+Mysterious Origins | toh | A mysterious trinket from your past life, a set of artisan's tools or a musical instrument (one of your choice), a set of common clothes, and a belt pouch containing 5 gp
+Northern Minstrel | toh | A book collecting all the songs, poems, or stories you know, a pair of snowshoes, one musical instrument of your choice, a heavy fur-lined cloak, and a belt pouch containing 10 gp
+Occultist | toh | A book of obscure lore holding clues to an occult location, a bottle of black ink, a quill, a leather-bound journal in which you record your secrets, a bullseye lantern, a set of common clothes, and a belt pouch containing 5 gp
+Parfumier | toh | Herbalism kit, a leather satchel containing perfume recipes, research notes, and chemical and botanical samples; 1d4 metal or crystal (shatter-proof) perfume bottles, a set of fine clothes, and a silk purse containing 10 gp
+Sentry | toh | A set of dice or deck of cards, a shield bearing your previous employer's symbol, a set of common clothes, a hooded lantern, a signal whistle, and a belt pouch containing 10 gp
+Trophy Hunter | toh | A donkey or mule with bit and bridle, a set of cold-weather or warm-weather clothes, and a belt pouch containing 5 gp
+Acolyte | wotc-srd | A holy symbol (a gift to you when you entered the priesthood), a prayer book or prayer wheel, 5 sticks of incense, vestments, a set of common clothes, and a pouch containing 15 gp

@@ -306,7 +306,7 @@ export function useBuilderDerived({
     }
     return [
       ...suggestWeapons(klass.weapons).map((weapon) => ({ name: weapon.name, note: weapon.damage })),
-      ...suggestArmor(klass.armor).map((armor) => ({
+      ...suggestArmor(klass.armor, klass.genres).map((armor) => ({
         name: armor.name,
         note: armor.category === "shield" ? `+${armor.baseAc} AC` : `AC ${armor.baseAc}`,
       })),

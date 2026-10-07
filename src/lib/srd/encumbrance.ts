@@ -7,12 +7,14 @@
 // counting it is exactly the bookkeeping a person wants the machine to do.
 //
 // Weight comes from the content pack (data/content/open5e.sqlite stamps a
-// `weight` on every item row it has one for), with two fallbacks here: the
-// SRD armor table, because Open5e ships every armor row blank, and the
-// ammunition table, because an arrow line's count moves as it is fired.
+// `weight` on every item row it has one for), with three fallbacks here: the
+// SRD armor table, because Open5e ships every armor row blank, the SRD gear
+// table, and the ammunition table, because an arrow line's count moves as
+// it is fired.
 // Anything still unknown is COUNTED AS UNKNOWN, never as zero: the result
 // reports how many carried items had no weight so nobody reads a total as
 // exact when it is not.
+import { gearWeightLb } from "@/lib/srd/adventuring-gear";
 import { matchArmor } from "@/lib/srd/armor";
 import { ammoCount, ammoKindForItem, AMMO_WEIGHT_LB } from "@/lib/srd/ammunition";
 import { magicItemRiders, type Wearer, type WornMagicItem } from "@/lib/srd/magic-items";
@@ -88,6 +90,12 @@ export function lineWeightLb(item: CarriedItem): number | null {
   const armor = matchArmor(item.name);
   if (armor) {
     return round2(armor.weightLb * qty);
+  }
+  // Adventuring gear and tools by their SRD weights (adventuring-gear.ts),
+  // for a kit the content pack did not stamp.
+  const gear = gearWeightLb(item.name);
+  if (gear !== null) {
+    return round2(gear * qty);
   }
   return null;
 }

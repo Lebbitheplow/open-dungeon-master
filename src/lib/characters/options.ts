@@ -14,6 +14,7 @@ import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASSES } from "@/lib/classes";
 import type { Genre } from "@/lib/schemas/game-settings-options";
 import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
+import { resolveBackgroundGear } from "@/lib/srd/adventuring-gear";
 
 export type RaceOption = { id: string; name: string; note: string } & RaceMechanics;
 export type ClassOption = { id: string; name: string } & ClassMechanics & {
@@ -85,7 +86,11 @@ export function splitPurse(kit: string[] | undefined): { equipment: string[]; pu
     }
     equipment.push(line);
   }
-  return { equipment, purse };
+  // The kit as catalog items, the way a class kit arrives: a pack opened
+  // into its contents, counts as quantities, the book's names ("Clothes,
+  // Common"); a line the catalog does not know stays as written
+  // (src/lib/srd/adventuring-gear.ts, issue #113).
+  return { equipment: resolveBackgroundGear(equipment), purse };
 }
 
 export function srdRaceOptions(): RaceOption[] {
