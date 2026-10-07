@@ -2070,6 +2070,12 @@ function ensureSchema(db: SqliteDatabase) {
     ).run("sheet_portrait_backfill_done", "true", new Date().toISOString());
   }
 
+  // Workshops imported from a bundle before 0.24.9 were written with the
+  // campaign defaults (an AI narrator, no human seat), so their owner had no
+  // DM caps and the DM-only panels came up blank (issue #121). Seat every
+  // such owner as the DM. Idempotent: a repaired row no longer matches.
+  repairWorkshopDmSeats(db);
+
   // Connected agents (docs/harness-mcp-plan.md 7): a player's own agent
   // session (Claude Code, Codex, any MCP client) acting as that player over
   // /api/mcp. Only the token's hash is kept, the same rule as sessions.
@@ -2220,6 +2226,44 @@ function rebuildCharacterSheets(db: SqliteDatabase) {
 
 // Copy each library character's portrait onto linked campaign sheets that
 // have none; sheets with their own portrait are left alone.
+// A workshop is its owner's prep space and the owner is always its DM
+// (src/lib/db/workshops.ts WORKSHOP_GAME_SETTINGS). Rows that say otherwise
+// were written by the bundle importer before it shared that constant; this
+// rewrites the seat and the four settings that keep a workshop silent, and
+// leaves every other setting (genre, target party, variant rules) alone.
+// Exported so scripts/test-workshop-integration.mjs can drive it against a
+// row it has broken on purpose.
+export function repairWorkshopDmSeats(db: SqliteDatabase): number {
+  const rows = db
+    .prepare(
+      `SELECT id, owner_user_id, game_settings_json FROM campaigns
+       WHERE kind = 'workshop' AND human_dm_user_id IS NULL`,
+    )
+    .all() as Array<{ id: string; owner_user_id: string; game_settings_json: string | null }>;
+  const update = db.prepare(
+    `UPDATE campaigns SET human_dm_user_id = owner_user_id, game_settings_json = ? WHERE id = ?`,
+  );
+  let repaired = 0;
+  for (const row of rows) {
+    let settings: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(row.game_settings_json ?? "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        settings = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Unreadable settings are replaced by the workshop defaults alone.
+    }
+    settings.dmMode = "human";
+    settings.aiStorySetup = false;
+    settings.worldSimulation = false;
+    settings.holdSubmissions = false;
+    update.run(JSON.stringify(settings), row.id);
+    repaired += 1;
+  }
+  return repaired;
+}
+
 function backfillSheetPortraits(db: SqliteDatabase) {
   const rows = db
     .prepare(
