@@ -32,6 +32,8 @@ import {
 import { suggestWeapons } from "@/lib/srd/weapons";
 import { builderCasting, builderSpellAdvice } from "./casting";
 import { grantedSkillSources } from "./reconcile";
+import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -79,6 +81,7 @@ export function useBuilderDerived({
   background,
   fixedLevel,
   rules,
+  featDescs,
 }: {
   state: BuilderState;
   race: RaceOption | undefined;
@@ -86,6 +89,10 @@ export function useBuilderDerived({
   background: BackgroundOption | undefined;
   fixedLevel?: number;
   rules?: TableRules;
+  // The text of content-pack feats the builder has fetched, by lower-case
+  // name (useFeatDescs); ODM's own feats are bundled. What a feat grants is
+  // read from its text (src/lib/srd/feat-grants.ts).
+  featDescs?: Record<string, string>;
 }) {
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
@@ -159,6 +166,21 @@ export function useBuilderDerived({
   }, [abilities, activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
   const shownAbilities = halfFeats?.abilities ?? null;
 
+  // Every feat on the sheet, racial and ASI, with its text where known.
+  const featNames = useMemo(
+    () => [
+      ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
+      ...racialFeatNames,
+    ],
+    [activeAsiChoices, racialFeatNames],
+  );
+  const featDescOf = useMemo(
+    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
+    [featDescs],
+  );
+  const featSpecOf = useMemo(() => (name: string): FeatGrantSpec => featGrantSpec(featDescOf(name)), [featDescOf]);
+  const { featChoices } = state;
+
   // Skills come from five places, not two: the class picks, the
   // background's fixed grants and its picks, the race's fixed grants (high
   // elf Perception, half-orc Intimidation) and the race's choice grants
@@ -206,13 +228,15 @@ export function useBuilderDerived({
     [background, trainedTools, backgroundGearPicks],
   );
 
-  const preview = useMemo(() => {
-    if (!shownAbilities || !race || !klass || !background) {
-      return null;
-    }
+  // The training as it stands, known before any ability score is (the feat
+  // pickers on the ancestry step read it): the class's, the race's and the
+  // background's grants, every skill and language picked, and what the
+  // feats grant beyond their point (issue #125), the picks as made so far
+  // and the fixed grants always, the way the server applies them.
+  const training = useMemo(() => {
     const skills = proficientSkills;
     const proficiencies = {
-      saves: klass.saves,
+      saves: klass?.saves ?? [],
       skills,
       // Expertise picks only count while still proficient in the skill.
       expertise: expertisePicks.filter((skillId) => skills.includes(skillId)),
@@ -221,18 +245,31 @@ export function useBuilderDerived({
       // though the feature says they do.
       languages: [
         ...new Set([
-          ...race.languages,
-          ...(background.knownLanguages ?? []),
+          ...(race?.languages ?? []),
+          ...(background?.knownLanguages ?? []),
           ...bonusLanguages.filter(Boolean),
-          ...(klass.languages ?? []),
+          ...(klass?.languages ?? []),
         ]),
       ],
       tools: trainedTools,
       // Races can teach combat training too: mountain dwarf armor, drow
       // and wood elf weapons.
-      armor: [...new Set([...klass.armor, ...(race.armor ?? [])])],
-      weapons: [...new Set([...klass.weapons, ...(race.weapons ?? [])])],
+      armor: [...new Set([...(klass?.armor ?? []), ...(race?.armor ?? [])])],
+      weapons: [...new Set([...(klass?.weapons ?? []), ...(race?.weapons ?? [])])],
     };
+    return applyFeatGrants({
+      proficiencies,
+      feats: featNames.map((name) => ({ name, desc: featDescOf(name) })),
+      choices: featChoices,
+      strict: false,
+    }).proficiencies;
+  }, [proficientSkills, klass, race, background, expertisePicks, bonusLanguages, trainedTools, featNames, featDescOf, featChoices]);
+
+  const preview = useMemo(() => {
+    if (!shownAbilities || !race || !klass || !background) {
+      return null;
+    }
+    const trained = training;
     // A third caster's Intelligence counts as a spellcasting ability too.
     const castingAbility = builderCasting(klass, subclass, effectiveLevel).ability;
     // Resilient's save counts in what is shown; the server writes it itself,
@@ -249,7 +286,7 @@ export function useBuilderDerived({
         ...state.feats,
         ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
       ],
-      proficiencies: { ...proficiencies, saves },
+      proficiencies: { ...trained, saves },
       spellcasting: castingAbility
         ? { ability: castingAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
@@ -273,8 +310,8 @@ export function useBuilderDerived({
     const method = rules?.hpMethod ?? "average";
     const maxHp =
       hpOverride ?? derivedMaxHp(method === "max" ? "max" : "average", hpInput);
-    return { proficiencies, derived, maxHp, hpMethod: method, hpRange: hpRange(hpInput) };
-  }, [shownAbilities, halfFeats, race, klass, subclass, background, proficientSkills, expertisePicks, bonusLanguages, trainedTools, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
+    return { proficiencies: trained, derived, maxHp, hpMethod: method, hpRange: hpRange(hpInput) };
+  }, [shownAbilities, halfFeats, race, klass, subclass, background, training, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
 
   // The class's starting equipment rides along automatically (removable
   // chips): the book's list with the either-or choices the player made on
@@ -529,6 +566,10 @@ export function useBuilderDerived({
     shownAbilities,
     proficientSkills,
     toolGrants,
+    featNames,
+    featDescOf,
+    featSpecOf,
+    training,
     preview,
     equipmentSuggestions,
     classKit,

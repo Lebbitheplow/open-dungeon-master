@@ -215,13 +215,17 @@ export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts 
   }
   const authored = AUTHORED_FEATS.find((feat) => lower(feat.name) === wanted);
   if (authored) {
-    return { name: authored.name, prerequisite: authored.prerequisite ?? "" };
+    return { name: authored.name, prerequisite: authored.prerequisite ?? "", desc: authored.desc ?? "" };
   }
   const found = searchFeats({ q: name.trim(), limit: 50, userId: homebrewOwnerId }).find(
     (entry) => lower(entry.name) === wanted,
   );
   return found
-    ? { name: found.name, prerequisite: String(found.data.prerequisite ?? "") }
+    ? {
+        name: found.name,
+        prerequisite: String(found.data.prerequisite ?? ""),
+        desc: String(found.data.desc ?? found.data.description ?? ""),
+      }
     : null;
 }
 

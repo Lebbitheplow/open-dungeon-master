@@ -1,6 +1,8 @@
 "use client";
 
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import type { FeatChoices, FeatGrantSpec, FeatPicks } from "@/lib/srd/feat-grants";
+import FeatChoicesFields, { type KnownTraining } from "./FeatChoicesFields";
 import { X } from "lucide-react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
@@ -33,6 +35,10 @@ export default function AsiFeatEditor({
   choices,
   takenInPlay = [],
   onChange,
+  featSpecOf,
+  featChoices,
+  onFeatPicks,
+  known,
 }: {
   // Character level for the builder's "Level N: X earned" heading; absent in
   // the level-up dialog, which introduces the section with its own copy.
@@ -44,6 +50,12 @@ export default function AsiFeatEditor({
   // shown as settled rather than asked for again (asiSlotsTakenInPlay).
   takenInPlay?: boolean[];
   onChange: (choices: Array<AsiChoice | null>) => void;
+  // What a feat grants beyond its point and the picks it leaves open
+  // (src/lib/srd/feat-grants.ts), picked under the feat's chip.
+  featSpecOf?: (name: string) => FeatGrantSpec;
+  featChoices?: FeatChoices;
+  onFeatPicks?: (feat: string, picks: FeatPicks) => void;
+  known?: KnownTraining;
 }) {
   function setChoice(index: number, choice: AsiChoice | null) {
     const next = slotLevels.map((_, slot) => choices[slot] ?? null);
@@ -251,6 +263,16 @@ export default function AsiFeatEditor({
                       }))}
                     />
                   </label>
+                ) : null}
+
+                {choice?.mode === "feat" && featSpecOf && onFeatPicks && known ? (
+                  <FeatChoicesFields
+                    feat={choice.feat}
+                    spec={featSpecOf(choice.feat)}
+                    picks={featChoices?.[choice.feat.trim().toLowerCase()]}
+                    known={known}
+                    onChange={(picks) => onFeatPicks(choice.feat, picks)}
+                  />
                 ) : null}
 
                 {choice ? (

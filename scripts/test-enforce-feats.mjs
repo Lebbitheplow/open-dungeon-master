@@ -462,6 +462,89 @@ await test("a variant human's own half-feat raises the score it names, and the s
   assert.equal((await creation.atTable(blank)).status, 400);
 });
 
+await test("a feat's other grants land on the sheet: Linguist's languages are picked with the feat and stored, Skill Expert's skill and expertise too, and a feat left unpicked holds the character (issue #125)", async () => {
+  // A variant human Linguist: three languages, picked beside the feat.
+  const linguist = madeFighter({
+    race: "variant_human",
+    racialAsi: ["str", "dex"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Skill Expert", ability: "wis" }],
+    feats: ["Linguist"],
+    featChoices: {
+      linguist: { languages: ["Dwarvish", "Elvish", "Orc"] },
+      "skill expert": { skills: ["insight"], expertise: ["insight"] },
+    },
+  });
+  assert.equal(linguist.blocker, null, linguist.blocker?.message);
+  assert.deepEqual(linguist.sheet.featChoices, {
+    linguist: { languages: ["Dwarvish", "Elvish", "Orc"] },
+    "skill expert": { skills: ["insight"], expertise: ["insight"] },
+  });
+  // The builder's preview already shows them.
+  for (const language of ["Dwarvish", "Elvish", "Orc"]) {
+    assert.ok(linguist.derived.preview.proficiencies.languages.includes(language), `preview lacks ${language}`);
+  }
+  assert.ok(linguist.derived.preview.proficiencies.expertise.includes("insight"));
+  const at = await creation.atTable(linguist.sheet);
+  assert.equal(at.status, 201, at.error);
+  for (const language of ["Common", "Giant", "Dwarvish", "Elvish", "Orc"]) {
+    assert.ok(at.sheet.proficiencies.languages.includes(language), `stored sheet lacks ${language}: ${at.sheet.proficiencies.languages}`);
+  }
+  assert.ok(at.sheet.proficiencies.skills.includes("insight"), `skills: ${at.sheet.proficiencies.skills}`);
+  assert.deepEqual(at.sheet.proficiencies.expertise, ["insight"]);
+  assert.equal(at.sheet.abilities.int, linguist.sheet.abilities.int + 1, "Linguist's Intelligence");
+  // Unpicked: the builder holds, and the table refuses.
+  const unpicked = madeFighter({
+    race: "variant_human",
+    racialAsi: ["str", "dex"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
+    feats: ["Linguist"],
+  });
+  assert.equal(unpicked.blocker?.message, "Linguist: pick 3 languages.");
+  const refused = await creation.atTable({ ...linguist.sheet, featChoices: { "skill expert": { skills: ["insight"], expertise: ["insight"] } } });
+  assert.equal(refused.status, 400, "a Linguist with no languages was seated");
+  assert.match(refused.error, /Linguist: pick 3 languages/);
+  // A language the character already speaks is not a new one.
+  const known = await creation.atTable({ ...linguist.sheet, featChoices: { ...linguist.sheet.featChoices, linguist: { languages: ["Common", "Elvish", "Orc"] } } });
+  assert.equal(known.status, 400);
+  assert.match(known.error, /already speaks Common/);
+  // A fixed grant needs no pick: Heavily Armored hands a rogue heavy armor
+  // at the table's level-up, Tavern Brawler improvised weapons.
+  const brawler = madeFighter({
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Tavern Brawler", ability: "con" }],
+  });
+  assert.equal(brawler.blocker, null, brawler.blocker?.message);
+  const brawlerAt = await creation.atTable(brawler.sheet);
+  assert.equal(brawlerAt.status, 201, brawlerAt.error);
+  assert.ok(brawlerAt.sheet.proficiencies.weapons.includes("improvised weapons"), `weapons: ${brawlerAt.sheet.proficiencies.weapons}`);
+});
+
+await test("a feat taken at a level-up grants the same, and the level is refused until its picks are named (issue #125)", async () => {
+  const rogue = await table(fighter(3), 4);
+  const before = rogue.sheet();
+  const blank = await rogue.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Linguist" }] });
+  assert.equal(blank.status, 400, "Linguist taken with no languages named");
+  assert.match(blank.json.error, /Linguist: pick 3 languages/);
+  assert.deepEqual(rogue.sheet().proficiencies.languages, before.proficiencies.languages);
+  const named = await rogue.patch({
+    ...oneLevel(before),
+    asiChoices: [{ mode: "feat", feat: "Linguist" }],
+    featChoices: { linguist: { languages: ["Dwarvish", "Giant", "Orc"] } },
+  });
+  assert.equal(named.status, 200, named.json.error);
+  for (const language of ["Dwarvish", "Giant", "Orc"]) {
+    assert.ok(rogue.sheet().proficiencies.languages.includes(language), `after the level-up: ${rogue.sheet().proficiencies.languages}`);
+  }
+  assert.equal(rogue.sheet().abilities.int, before.abilities.int + 1);
+  const brawler = await table(fighter(3), 4);
+  const fists = await brawler.patch({ ...oneLevel(brawler.sheet()), asiChoices: [{ mode: "feat", feat: "Tavern Brawler", ability: "con" }] });
+  assert.equal(fists.status, 200, fists.json.error);
+  assert.ok(brawler.sheet().proficiencies.weapons.includes("improvised weapons"), `weapons: ${brawler.sheet().proficiencies.weapons}`);
+});
+
 await test("a half-feat's point is taken once: a character made in the library keeps the same scores when it comes to a table", async () => {
   const resilient = madeFighter({
     asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Resilient", ability: "wis" }],

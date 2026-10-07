@@ -10,6 +10,7 @@ import type {
 } from "@/lib/schemas/sheet";
 import { removeAsiChoices } from "@/lib/srd/asi";
 import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
+import type { FeatChoices, FeatPicks } from "@/lib/srd/feat-grants";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import type { KitChoices } from "@/lib/srd/starting-kit";
 import { findOptionByFeatureName } from "@/lib/srd/options";
@@ -130,6 +131,19 @@ export function useBuilderState({
     );
     return (initial.feats ?? []).filter((feat) => !asiFeats.has(feat));
   });
+  // The picks a feat leaves open (Linguist's three languages, Skill Expert's
+  // skill and expertise), keyed by the feat's name in lower case
+  // (src/lib/srd/feat-grants.ts). Kept for every feat ever picked here, so
+  // a feat dropped and taken again finds its picks; the payload sends only
+  // the feats on the sheet.
+  const [featChoices, setFeatChoices] = useState<FeatChoices>(() =>
+    Object.fromEntries(
+      Object.entries(initial?.featChoices ?? {}).map(([feat, picks]) => [feat.trim().toLowerCase(), picks]),
+    ),
+  );
+  function setFeatPicks(feat: string, picks: FeatPicks) {
+    setFeatChoices((current) => ({ ...current, [feat.trim().toLowerCase()]: picks }));
+  }
   // One slot per ASI threshold the effective level has earned; kept full
   // length so lowering and re-raising the level restores earlier picks.
   const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>(
@@ -460,6 +474,7 @@ export function useBuilderState({
     removedAutoNames, setRemovedAutoNames,
     kitChoices, setKitChoices,
     feats, setFeats,
+    featChoices, setFeatPicks,
     asiChoices, setAsiChoices,
     bonusLanguages, setBonusLanguages,
     racialAsi, setRacialAsi,

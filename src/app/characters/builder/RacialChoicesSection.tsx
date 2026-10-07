@@ -11,6 +11,8 @@ import { contentSlug, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import type { FeatChoices, FeatGrantSpec, FeatPicks } from "@/lib/srd/feat-grants";
+import FeatChoicesFields, { type KnownTraining } from "./FeatChoicesFields";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { Chip } from "./steps/shared";
@@ -52,6 +54,10 @@ export function RacialChoicesSection({
   onFeatsChange,
   featAbility = "",
   onFeatAbilityChange,
+  featSpecOf,
+  featChoices,
+  onFeatPicks,
+  known,
 }: {
   race: RaceOption;
   // Skills already granted by class and background, so they are not offered
@@ -80,6 +86,12 @@ export function RacialChoicesSection({
   onFeatsChange?: (feats: string[]) => void;
   featAbility?: Ability | "";
   onFeatAbilityChange?: (ability: Ability | "") => void;
+  // What the feat grants beyond its point and the picks it leaves open
+  // (src/lib/srd/feat-grants.ts), picked right under the feat.
+  featSpecOf?: (name: string) => FeatGrantSpec;
+  featChoices?: FeatChoices;
+  onFeatPicks?: (feat: string, picks: FeatPicks) => void;
+  known?: KnownTraining;
   inputClass: string;
 }) {
   const draconic = takesDraconicAncestry(race.id);
@@ -278,6 +290,18 @@ export function RacialChoicesSection({
               />
             </>
           ) : null}
+          {featSpecOf && onFeatPicks && known
+            ? feats.slice(0, racialFeats).map((feat) => (
+                <FeatChoicesFields
+                  key={feat}
+                  feat={feat}
+                  spec={featSpecOf(feat)}
+                  picks={featChoices?.[feat.trim().toLowerCase()]}
+                  known={known}
+                  onChange={(picks) => onFeatPicks(feat, picks)}
+                />
+              ))
+            : null}
           {featScores.length > 1 && onFeatAbilityChange ? (
             <label className="mt-2 block sm:w-64">
               <span className="mb-1 block text-xs text-stone-500">{feats[0]} raises by 1</span>

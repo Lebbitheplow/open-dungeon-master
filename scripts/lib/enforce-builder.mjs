@@ -98,6 +98,7 @@ export async function openBuilder() {
       removedAutoNames: [],
       keepsStoredGear: false,
       feats: [],
+      featChoices: {},
       gold: 0,
       hpOverride: null,
       acOverride: null,

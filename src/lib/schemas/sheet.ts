@@ -65,6 +65,16 @@ const trainingName = z
   .max(300)
   .transform((value) => value.slice(0, 40));
 
+const featPicksSchema = z.object({
+  languages: z.array(z.string().trim().max(40)).max(6).optional(),
+  skills: z.array(z.string().trim().max(40)).max(6).optional(),
+  expertise: z.array(z.string().trim().max(40)).max(4).optional(),
+  weapons: z.array(z.string().trim().max(60)).max(8).optional(),
+  tools: z.array(z.string().trim().max(60)).max(6).optional(),
+});
+export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema);
+export type FeatChoicesInput = z.infer<typeof featChoicesSchema>;
+
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),
   skills: z.array(z.string().max(40)).max(18),
@@ -299,6 +309,10 @@ export const createSheetSchema = z.object({
       featAbility: z.enum(ABILITIES).optional(),
     })
     .optional(),
+  // The picks a feat leaves to the player (Linguist's three languages, Skill
+  // Expert's skill and expertise, Weapon Master's four weapons), keyed by
+  // the feat's name; src/lib/srd/feat-grants.ts applies them.
+  featChoices: featChoicesSchema.optional(),
   // The same for a background: the skills a content-pack background offers
   // as a pick ("Persuasion, and either Insight or History").
   backgroundChoices: z
@@ -379,6 +393,9 @@ export const patchSheetSchema = z.object({
   // The Ability Score Improvements taken with this level: two points each,
   // or a feat. Only as many as the class's new level owes.
   asiChoices: z.array(asiChoiceSchema).max(MAX_ASI_CHOICES).optional(),
+  // The picks the feats taken with this level leave open (Linguist's three
+  // languages), keyed by feat name.
+  featChoices: featChoicesSchema.optional(),
   // Under a table that rolls hit points, "average" takes the fixed value
   // instead of the server's roll. Ignored under any other method.
   hpChoice: z.enum(["roll", "average"]).optional(),

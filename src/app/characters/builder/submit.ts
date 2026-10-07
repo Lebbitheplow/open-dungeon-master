@@ -5,6 +5,7 @@ import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import { featPicksOwed, type FeatChoices, type FeatGrantSpec } from "@/lib/srd/feat-grants";
 import { STANDARD_ARRAY } from "@/lib/srd/legality/abilities";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import {
@@ -87,10 +88,30 @@ export function bonusLanguageCount(
   return (race?.bonusLanguages ?? 0) + (background?.languages ?? 0);
 }
 
+// The picks a feat leaves open, as the gate asks for them: what the feat's
+// text grants (derived.featSpecOf) against what is picked so far.
+function featPicksBlock(
+  feats: string[],
+  featChoices: FeatChoices | undefined,
+  specOf: ((name: string) => FeatGrantSpec) | undefined,
+): string | null {
+  if (!specOf) {
+    return null;
+  }
+  for (const feat of feats) {
+    const owed = featPicksOwed(feat, specOf(feat), featChoices?.[feat.trim().toLowerCase()]);
+    if (owed) {
+      return owed;
+    }
+  }
+  return null;
+}
+
 export function ancestryBlocker(
   state: BuilderState,
   race: RaceOption | undefined,
   background?: BackgroundOption,
+  derived?: Pick<BuilderDerived, "featSpecOf">,
 ): StepBlock | null {
   if (!race) {
     return block("race", "Pick a race.");
@@ -118,6 +139,12 @@ export function ancestryBlocker(
   const featsOwed = racialFeatCount(race.id) - (state.feats ?? []).length;
   if (featsOwed > 0) {
     return block("racialFeat", `Pick your ${race.name} feat first.`);
+  }
+  // What the feat itself leaves open: Linguist's three languages, Skill
+  // Expert's skill and expertise (issue #125).
+  const featPicks = featPicksBlock((state.feats ?? []).slice(0, racialFeatCount(race.id)), state.featChoices, derived?.featSpecOf);
+  if (featPicks) {
+    return block("racialFeat", featPicks);
   }
   if (takesDraconicAncestry(race.id) && !findDraconicAncestry(state.racialAncestry ?? "")) {
     return block("ancestry", `Pick your ${race.name}'s draconic ancestry first.`);
@@ -247,7 +274,7 @@ const sameNumbers = (left: number[], right: number[]) =>
 // its budget, and rolled scores that are the six totals thrown.
 export function abilitiesBlocker(
   derived: BuilderDerived,
-  state?: Pick<BuilderState, "method" | "scores"> & Partial<Pick<BuilderState, "rollPool">>,
+  state?: Pick<BuilderState, "method" | "scores"> & Partial<Pick<BuilderState, "rollPool" | "featChoices">>,
 ): StepBlock | null {
   if (!derived.abilities) {
     return block("scores", "Assign all six ability scores first.");
@@ -277,6 +304,12 @@ export function abilitiesBlocker(
   );
   if (unresolvedSlot !== -1) {
     return block("asi", `Resolve your level ${derived.asiSlotLevels[unresolvedSlot]} ability score improvement first.`);
+  }
+  // A feat taken with an improvement names what it leaves open (issue #125).
+  const asiFeats = derived.activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : []));
+  const featPicks = featPicksBlock(asiFeats, state?.featChoices, derived.featSpecOf);
+  if (featPicks) {
+    return block("asi", featPicks);
   }
   return null;
 }
@@ -318,7 +351,7 @@ export function validateBuilder(
   const blocked =
     identityBlocker(state, background) ??
     abilitiesBlocker(derived, state) ??
-    ancestryBlocker(state, race, background) ??
+    ancestryBlocker(state, race, background, derived) ??
     callingBlocker(klass, state, derived) ??
     spellsBlocker(state, derived, klass) ??
     gearBlocker(derived);
@@ -479,6 +512,13 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       gold: derived.purse?.gold ?? state.gold,
       copper: derived.purse?.copper ?? 0,
       feats: [...new Set([...asiFeats, ...state.feats])],
+      // The picks those feats leave open, for the feats on the sheet only
+      // (src/lib/srd/feat-grants.ts); the server applies them.
+      featChoices: Object.fromEntries(
+        [...new Set([...asiFeats, ...state.feats])]
+          .map((feat) => [feat.trim().toLowerCase(), (state.featChoices ?? {})[feat.trim().toLowerCase()]] as const)
+          .filter((entry): entry is readonly [string, NonNullable<(typeof entry)[1]>] => Boolean(entry[1])),
+      ),
       // Server-side creation populates SRD class features, racial traits
       // and the background feature; the builder contributes only what has
       // no other home, like a non-caster's racial cantrip.
@@ -503,7 +543,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       },
       backgroundChoices: {
         skills: picks.backgroundSkills.filter(Boolean),
-        gear: derived.backgroundKit.choices.map((choice) => choice.alternatives[choice.chosen].label),
+        gear: (derived.backgroundKit?.choices ?? []).map((choice) => choice.alternatives[choice.chosen].label),
       },
       // The class kit's either-or choices, which the server hands out free.
       ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),

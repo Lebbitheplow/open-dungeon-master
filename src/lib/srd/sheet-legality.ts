@@ -48,6 +48,7 @@ import {
   takesDraconicAncestry,
   type DraconicAncestry,
 } from "@/lib/srd/racial-grants";
+import { applyFeatGrants, withoutFeatPicks } from "@/lib/srd/feat-grants";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { kitNames, startingKitFor } from "@/lib/srd/starting-kit";
 import { judgeStartingGear, wealthCeilingGold } from "@/lib/srd/starting-wealth";
@@ -438,9 +439,11 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     // What the stored character holds stays with it while it is the same
     // class, race and background; an edit that changes one of them picks
     // again from what the new one offers.
+    // The picks its feats made come off first and go back on below, so an
+    // edit that re-picks Linguist's languages replaces them (issue #125).
     held:
       held && held.class === input.class && held.race === input.race && held.background === input.background
-        ? held.proficiencies
+        ? withoutFeatPicks(held.proficiencies, held.featChoices)
         : null,
     // The builder's doors name the tools an open grant leaves to the player.
     requireToolPicks: context.door === "table" || context.door === "library",
@@ -448,6 +451,21 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   if (policy.judgesPicks) {
     problems.push(...trained.problems);
   }
+  // What the feats grant beyond their ability point: Linguist's languages,
+  // Heavily Armored's armor, Skill Expert's skill and expertise, each pick
+  // the sheet records (featChoices). A character made or edited here, or
+  // imported, names every pick; a stored one or an engine's companion is
+  // read as it is (issue #125).
+  const granted = applyFeatGrants({
+    proficiencies: trained.proficiencies,
+    feats: feats.feats.map((name) => ({ name, desc: context.featOf(name)?.desc ?? "" })),
+    choices: input.featChoices ?? {},
+    strict: policy.judgesPicks && context.door !== "engine",
+  });
+  if (policy.judgesPicks) {
+    problems.push(...granted.problems);
+  }
+  const training = granted.proficiencies;
 
   // ---- spells ----
   const cantripPick = (input.racialChoices?.cantrip ?? "").trim();
@@ -544,9 +562,9 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   let kitChoices = input.kitChoices;
   const kitOf = () =>
     freeKitOf(klass, background, input, {
-      armor: trained.proficiencies.armor,
-      weapons: trained.proficiencies.weapons,
-      tools: trained.proficiencies.tools,
+      armor: training.armor,
+      weapons: training.weapons,
+      tools: training.tools,
       subclass: classes[0].subclass ?? "",
     });
   if (policy.made && context.door !== "engine") {
@@ -639,10 +657,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     abilities,
     proficiencies: featSaves.length
       ? {
-          ...trained.proficiencies,
-          saves: [...new Set([...trained.proficiencies.saves, ...featSaves])],
+          ...training,
+          saves: [...new Set([...training.saves, ...featSaves])],
         }
-      : trained.proficiencies,
+      : training,
     feats: feats.feats,
     features,
     asiChoices: recorded.slice(0, earned),

@@ -60,6 +60,9 @@ import {
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellPool } from "@/components/sheet/useSpellPool";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
+import { useFeatDescs } from "@/app/characters/builder/useFeatDescs";
+import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { featGrantSpec, featPicksOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -108,6 +111,21 @@ export function LevelUpDialog({
   // A caster who knows their spells may give one up for another.
   const [forgetPick, setForgetPick] = useState("");
   const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
+  // The picks a feat taken this level leaves open (Linguist's languages),
+  // by feat name; the server applies them (src/lib/srd/feat-grants.ts).
+  const [featChoices, setFeatChoices] = useState<FeatChoices>({});
+  const featsPicked = asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : []));
+  const featDescs = useFeatDescs(featsPicked);
+  const featSpecOf = (name: string) =>
+    featGrantSpec(featDescs[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "");
+  const setFeatPicks = (feat: string, picks: FeatPicks) =>
+    setFeatChoices((current) => ({ ...current, [feat.trim().toLowerCase()]: picks }));
+  const featPicksSent = Object.fromEntries(
+    featsPicked
+      .map((feat) => [feat.trim().toLowerCase(), featChoices[feat.trim().toLowerCase()]] as const)
+      .filter((entry): entry is readonly [string, FeatPicks] => Boolean(entry[1])),
+  );
+  const featPicksOpen = featsPicked.some((feat) => featPicksOwed(feat, featSpecOf(feat), featChoices[feat.trim().toLowerCase()]));
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
@@ -526,6 +544,7 @@ export function LevelUpDialog({
           ...(hpMethod === "rolled" ? { hpChoice } : {}),
           ...(skillPick ? { levelUpSkill: skillPick } : {}),
           ...(choices.length ? { asiChoices: choices } : {}),
+          ...(Object.keys(featPicksSent).length ? { featChoices: featPicksSent } : {}),
           ...(needsSubclass && subclassChoice ? { subclass: subclassChoice } : {}),
           ...(expertisePicks.length ? { expertise: [...currentExpertise, ...expertisePicks] } : {}),
           ...(spellPicks.length || cantripPicks.length
@@ -570,7 +589,7 @@ export function LevelUpDialog({
     step === "class"
       ? needsSkillPick && !skillPick
       : step === "asi"
-        ? asiLevels.some((_, index) => !asiChoices[index])
+        ? asiLevels.some((_, index) => !asiChoices[index]) || featPicksOpen
         : step === "expertise"
           ? expertisePicks.length < Math.min(expertiseToPick, expertiseOptions.length)
           : step === "style"
@@ -890,6 +909,16 @@ export function LevelUpDialog({
                     baseScores={sheet.abilities}
                     choices={asiLevels.map((_, index) => asiChoices[index] ?? null)}
                     onChange={setAsiChoices}
+                    featSpecOf={featSpecOf}
+                    featChoices={featChoices}
+                    onFeatPicks={setFeatPicks}
+                    known={{
+                      languages: sheet.proficiencies.languages,
+                      skills: sheet.proficiencies.skills,
+                      expertise: sheet.proficiencies.expertise ?? [],
+                      weapons: sheet.proficiencies.weapons,
+                      tools: sheet.proficiencies.tools,
+                    }}
                   />
                 </>
               ) : null}

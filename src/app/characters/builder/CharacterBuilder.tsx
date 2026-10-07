@@ -35,6 +35,7 @@ import {
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
 import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState";
+import { useFeatDescs } from "./useFeatDescs";
 import { usePickerGroups } from "./usePickerGroups";
 import { useTableRules } from "./useTableRules";
 
@@ -179,7 +180,13 @@ export default function CharacterBuilder({
   const archetypes = useArchetypes(klass?.id ?? "");
 
   const table = useTableRules(campaignId, klass?.id);
-  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules });
+  // The text of every feat picked, for what each grants (issue #125); a
+  // content pack's is fetched once.
+  const featDescs = useFeatDescs([
+    ...state.feats,
+    ...state.asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
+  ]);
+  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs });
   const actions = builderActions(state, klass, race, background);
   const pickers = usePickerGroups({
     races,
@@ -258,7 +265,7 @@ export default function CharacterBuilder({
   // about a missing pick on the step where they can fix it.
   const blockers = {
     identity: identityBlocker(state, background),
-    ancestry: ancestryBlocker(state, race, background),
+    ancestry: ancestryBlocker(state, race, background, derived),
     calling: callingBlocker(klass, state, derived),
     abilities: abilitiesBlocker(derived, state),
     spells: spellsBlocker(state, derived, klass) ?? gearBlocker(derived),
@@ -298,6 +305,7 @@ export default function CharacterBuilder({
         <>
           <AncestryStep
             state={state}
+            derived={derived}
             race={race}
             background={background}
             races={races}

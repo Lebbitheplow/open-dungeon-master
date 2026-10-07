@@ -5,6 +5,7 @@ import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import AbilityEditor from "../AbilityEditor";
 import type { HpExplainerInput } from "../AbilityExplainers";
 import AsiFeatEditor from "../AsiFeatEditor";
+import { knownTraining } from "../FeatChoicesFields";
 import type { ClassOption, RaceOption } from "../useBuilderOptions";
 import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
@@ -85,6 +86,10 @@ export function AbilitiesStep({
           baseScores={baseAbilities}
           choices={activeAsiChoices}
           takenInPlay={asiTakenInPlay}
+          featSpecOf={derived.featSpecOf}
+          featChoices={state.featChoices}
+          onFeatPicks={state.setFeatPicks}
+          known={knownTraining(derived)}
           onChange={(next) =>
             state.setAsiChoices((current) => {
               const merged = [...current];

@@ -31,8 +31,7 @@ import {
   PortraitMedallion,
   SheetBlock,
   SkillRows,
-  VitalTiles,
-} from "@/components/sheet/SheetParts";
+  VitalTiles, TrainingLines } from "@/components/sheet/SheetParts";
 import { SheetSpells } from "@/components/sheet/SheetSpells";
 import { DefensesLine, HitDiceSpend, StateTags } from "@/components/sheet/SheetState";
 import { SheetBetween } from "@/components/sheet/SheetBetween";
@@ -351,6 +350,10 @@ export function CharacterSheetDialog({
               proficient={sheet.proficiencies.skills}
               explain={(skillId) => explainParts(derived.parts.skills[skillId])}
             />
+          </SheetBlock>
+
+          <SheetBlock className="mt-4" title="Languages and training">
+            <TrainingLines proficiencies={sheet.proficiencies} />
           </SheetBlock>
 
           {sheet.spellcasting ? (

@@ -11,8 +11,10 @@ import { LineageCarousel, type LineageSlide } from "../LineageCarousel";
 import { asiChips, flattenGroups, lineageArt, lineageTagline } from "../lineage";
 import { OptionCardGrid, type OptionCardGroup } from "../OptionCardGrid";
 import type { PickerGroup } from "../OptionPicker";
+import { knownTraining } from "../FeatChoicesFields";
 import { RacialChoicesSection } from "../RacialChoicesSection";
 import type { BackgroundOption, RaceOption } from "../useBuilderOptions";
+import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { bonusLanguageCount } from "../submit";
 import { StepPanel, inputClass } from "./shared";
@@ -45,12 +47,14 @@ function languageHelp(race: RaceOption, background: BackgroundOption | undefined
 // cantrip.
 export function AncestryStep({
   state,
+  derived,
   race,
   background,
   races,
   raceGroups,
 }: {
   state: BuilderState;
+  derived: BuilderDerived;
   race: RaceOption | undefined;
   background: BackgroundOption | undefined;
   races: Array<Reskinned<RaceOption>>;
@@ -255,6 +259,10 @@ export function AncestryStep({
           onFeatsChange={state.setFeats}
           featAbility={state.racialFeatAbility}
           onFeatAbilityChange={state.setRacialFeatAbility}
+          featSpecOf={derived.featSpecOf}
+          featChoices={state.featChoices}
+          onFeatPicks={state.setFeatPicks}
+          known={knownTraining(derived)}
           inputClass={inputClass}
         />
       ) : null}
