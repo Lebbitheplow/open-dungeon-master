@@ -17,6 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-tool-routes-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -341,5 +342,6 @@ try {
   ok("transcripts, tools and replies translate both ways");
 }
 
-fs.rmSync(dir, { recursive: true, force: true });
+// The database handle stays open on purpose; Windows refuses rmSync on it.
+removeTempDir(dir);
 console.log(`openai-tool-routes: ${passed} tests passed`);
