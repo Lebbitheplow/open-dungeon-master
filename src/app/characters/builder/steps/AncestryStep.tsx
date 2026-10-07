@@ -251,6 +251,10 @@ export function AncestryStep({
               return next;
             })
           }
+          feats={state.feats}
+          onFeatsChange={state.setFeats}
+          featAbility={state.racialFeatAbility}
+          onFeatAbilityChange={state.setRacialFeatAbility}
           inputClass={inputClass}
         />
       ) : null}

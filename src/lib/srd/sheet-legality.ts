@@ -298,6 +298,20 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
         },
       });
   problems.push(...feats.problems);
+  // A variant human starts with a feat of their choice. A character made or
+  // edited here names it, as it names a draconic ancestry; a stored sheet
+  // is trusted, and a companion the engine drafts may go without.
+  if (race.feats > 0 && (policy.made || policy.edit) && context.door !== "engine") {
+    const recordedFeats = new Set(
+      recorded.flatMap((choice) => (choice.mode === "feat" ? [lower(choice.feat)] : [])),
+    );
+    const racial = feats.feats.filter((name) => !recordedFeats.has(lower(name)));
+    if (racial.length < race.feats) {
+      problems.push(
+        `A ${race.name} starts with ${race.feats === 1 ? "a feat" : `${race.feats} feats`} of their choice; pick ${race.feats === 1 ? "one" : "them"} from the feat list.`,
+      );
+    }
+  }
   // Half-feats (Actor's Charisma, Resilient's score and save). A character
   // made or edited in the builder arrives with the scores before them and
   // takes them here, as a level-up does; a stored or imported one already

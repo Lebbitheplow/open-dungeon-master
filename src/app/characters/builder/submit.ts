@@ -6,6 +6,7 @@ import { expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { STANDARD_ARRAY } from "@/lib/srd/legality/abilities";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import {
   POINT_BUY_BUDGET,
   POINT_BUY_MAX,
@@ -34,6 +35,7 @@ export type BlockerTarget =
   | "racialSkills"
   | "racialTool"
   | "racialCantrip"
+  | "racialFeat"
   | "ancestry"
   | "repeatSkills"
   | "class"
@@ -110,6 +112,12 @@ export function ancestryBlocker(
   }
   if (race.cantripChoice && !racialCantrip) {
     return block("racialCantrip", `Pick your ${race.name} cantrip first.`);
+  }
+  // The variant human's feat is a racial choice like the others, and used
+  // to be the one no gate asked for (issue #124).
+  const featsOwed = racialFeatCount(race.id) - (state.feats ?? []).length;
+  if (featsOwed > 0) {
+    return block("racialFeat", `Pick your ${race.name} feat first.`);
   }
   if (takesDraconicAncestry(race.id) && !findDraconicAncestry(state.racialAncestry ?? "")) {
     return block("ancestry", `Pick your ${race.name}'s draconic ancestry first.`);
@@ -294,10 +302,19 @@ export function gearBlocker(derived: BuilderDerived): StepBlock | null {
 export function validateBuilder(
   input: SubmitInput,
 ): { kind: "error" | "spellWarning"; message: string } | null {
-  const { state, derived, race, klass, background } = input;
+  const { derived, race, klass, background } = input;
   if (!derived.abilities || !derived.preview || !race || !klass || !background) {
     return { kind: "error", message: "Assign all six ability scores first." };
   }
+  // The gates read the picks as the sheet will carry them, not as they were
+  // typed: buildBuilderResult reconciles once more, and a pick that step
+  // would blank (a racial skill also taken as a class skill) has to be asked
+  // for here, or the sheet leaves with one fewer than the race gave (issue
+  // #124). In the wizard the state is already reconciled, so this changes
+  // nothing it shows; a caller that fills the fields directly is held to
+  // the same sheet.
+  const { picks } = reconcilePicks(input.state, { race, klass, background, level: derived.effectiveLevel });
+  const state: BuilderState = { ...input.state, ...picks };
   const blocked =
     identityBlocker(state, background) ??
     abilitiesBlocker(derived, state) ??

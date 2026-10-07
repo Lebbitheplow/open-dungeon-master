@@ -27,7 +27,7 @@ import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { bundledSubclassName } from "@/lib/srd/features";
-import { srdRaceId } from "@/lib/srd/race-id";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import { checklistSpell } from "@/lib/srd/spell-lists";
 import { bundledSpellSchool } from "@/lib/srd/spell-facts";
 import {
@@ -48,11 +48,6 @@ import type {
 
 const lower = (value: string) => value.trim().toLowerCase();
 const AUTHORED_FEATS = (authoredFeatsJson as { feats: FeatFacts[] }).feats;
-
-// Only the variant human is handed a feat by its race.
-function racialFeats(raceId: string): number {
-  return srdRaceId(raceId) === "variant_human" ? 1 : 0;
-}
 
 // ---- classes, races, backgrounds ----
 
@@ -94,12 +89,12 @@ export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): Rac
       ).find((option) => option.id === id)
     : undefined;
   if (packed) {
-    found.push({ ...packed, feats: racialFeats(packed.id) });
+    found.push({ ...packed, feats: racialFeatCount(packed.id) });
   }
   const bundled = srdRaceFor(id);
   const option = bundled ? srdRaceOptions().find((entry) => entry.id === bundled.id) : undefined;
   if (option) {
-    found.push({ ...option, id, feats: racialFeats(option.id) });
+    found.push({ ...option, id, feats: racialFeatCount(option.id) });
   }
   return found;
 }

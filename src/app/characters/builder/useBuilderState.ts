@@ -10,7 +10,7 @@ import type {
 } from "@/lib/schemas/sheet";
 import { removeAsiChoices } from "@/lib/srd/asi";
 import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
-import { srdRaceId } from "@/lib/srd/race-id";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import type { KitChoices } from "@/lib/srd/starting-kit";
 import { findOptionByFeatureName } from "@/lib/srd/options";
 import {
@@ -21,13 +21,18 @@ import {
 import { canonicalRaceId } from "@/lib/content/race-options";
 import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
-import { reconcilePicks, type BuilderPicks } from "./reconcile";
+import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 
 // `priceCp` is the listed price of one, in copper, as the catalog row it was
 // picked from gave it; it is what the purse is charged, and the server
 // charges its own catalog's price again when the sheet is saved.
 export type EquipmentItem = { name: string; qty: number; slug?: string; priceCp?: number };
+
+// What the last change set aside, for the notice the wizard shows: the
+// change that did it ("race") and the picks that no longer fit. Null once
+// the player has seen it, or when nothing was dropped.
+export type DroppedNotice = { because: string; drops: DroppedPick[] };
 
 // Every field the character builder edits, in one hook so the wizard steps
 // can share it without the orchestrator re-declaring forty useStates. The
@@ -189,6 +194,10 @@ export function useBuilderState({
     initial?.acOverride ? initial.ac : null,
   );
   const [localError, setLocalError] = useState("");
+  // The picks the last change dropped, until the player dismisses the
+  // notice or the next change replaces it (issue #124: reconcilePicks named
+  // them and nothing showed the list).
+  const [dropped, setDropped] = useState<DroppedNotice | null>(null);
 
   // The picks that depend on an earlier choice, gathered so one call can
   // check them all against the current race, class, background and level
@@ -220,19 +229,47 @@ export function useBuilderState({
   // list's first row stands in (CharacterBuilder.tsx does the same), and
   // the picks have to be checked against what is shown, or an unpicked
   // background's language slots would be trimmed away by the next change.
-  function reconciled(next: Partial<Selection>, current: BuilderPicks): BuilderPicks {
+  function reconciled(
+    next: Partial<Selection>,
+    current: BuilderPicks,
+  ): { picks: BuilderPicks; drops: DroppedPick[] } {
     const ids = { ...selection, ...next };
     const background = backgrounds.find((entry) => entry.id === ids.backgroundId);
-    const picks = reconcilePicks(current, {
+    const { picks, drops } = reconcilePicks(current, {
       race: findRace(races, ids.raceId) ?? races[0],
       klass: classes.find((entry) => entry.id === ids.classId) ?? classes[0],
       background: background ?? backgrounds[0],
       level: fixedLevel ?? ids.level,
-    }).picks;
+    });
     // A stored content-pack background is not in the bundled list the
     // builder opens with; its skill pick waits for the pack's rows rather
     // than being checked against the stand-in and lost.
-    return ids.backgroundId && !background ? { ...picks, backgroundSkills: current.backgroundSkills } : picks;
+    if (ids.backgroundId && !background) {
+      return {
+        picks: { ...picks, backgroundSkills: current.backgroundSkills },
+        drops: drops.filter((drop) => drop.target !== "backgroundSkills"),
+      };
+    }
+    return { picks, drops };
+  }
+  // Apply what still fits and say what did not. A change the player made
+  // replaces the notice, so it always describes the last change, and clears
+  // it when nothing was dropped; the option rows arriving (`keep`) leave an
+  // earlier notice alone unless they dropped something themselves.
+  function applyReconciled(
+    because: string,
+    { picks, drops }: { picks: BuilderPicks; drops: DroppedPick[] },
+    keep = false,
+  ) {
+    applyPicks(picks);
+    if (drops.length) {
+      setDropped({ because, drops });
+    } else if (!keep) {
+      setDropped(null);
+    }
+  }
+  function applyChange(because: string, next: Partial<Selection>, current: BuilderPicks) {
+    applyReconciled(because, reconciled(next, current));
   }
 
   // Prefill pieces that need the async option lists: base ability scores
@@ -256,8 +293,7 @@ export function useBuilderState({
       const base: Record<Ability, number> = { ...withoutAsi };
       // A half-feat's point was added by the server when the character was
       // saved, and is added again when it is saved from here.
-      const racialFeats = srdRaceId(initial.race) === "variant_human" ? 1 : 0;
-      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeats))) {
+      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeatCount(initial.race)))) {
         base[ability] = Math.max(1, base[ability] - 1);
       }
       for (const [ability, bonus] of Object.entries(initialRace?.asi ?? {})) {
@@ -292,17 +328,24 @@ export function useBuilderState({
         ...(initialClass?.languages ?? []),
         ...(initialBackground?.knownLanguages ?? []),
       ]);
-      applyPicks(
+      // A stored pick the rows no longer offer is said so, like any other
+      // drop; the gates then ask for it again on its step.
+      applyReconciled(
+        "stored character",
         reconciled(ids, {
           ...picks,
           chosenSkills: initial.proficiencies.skills.filter((skill) => !grantedSkills.has(skill)),
           expertisePicks: initial.proficiencies.expertise ?? [],
           bonusLanguages: initial.proficiencies.languages.filter((language) => !spoken.has(language)),
         }),
+        true,
       );
       return;
     }
-    applyPicks(reconciled(ids, picks));
+    // The content pack's rows replacing the bundled ones: a pick made
+    // against the bundled row that the pack's does not offer is dropped,
+    // and said so.
+    applyReconciled("content pack", reconciled(ids, picks), true);
     // Runs when the option rows change; the picks it reads are this render's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial, races, classes, backgrounds]);
@@ -310,16 +353,25 @@ export function useBuilderState({
   // Choosing a different race throws away every race-specific pick, since
   // none of them make sense for the new one, and re-checks the rest (a class
   // skill the new race grants outright, a language it already speaks).
+  // The race's own picks are cleared first, so they are not reported as
+  // dropped: the new race asks for its own. The feat is the race's too.
   function changeRace(id: string) {
     setRaceId(id);
-    applyPicks(
-      reconciled(
-        { raceId: id },
-        { ...picks, racialAsi: [], racialSkills: [], racialCantrip: "", racialTool: "" },
-      ),
+    applyChange(
+      "race",
+      { raceId: id },
+      { ...picks, racialAsi: [], racialSkills: [], racialCantrip: "", racialTool: "" },
     );
     setRacialAncestry("");
     setRepeatSkills([]);
+    // The old race's own feats lead the list (submit.ts reads the racial
+    // feat as the first); they go with it. Feats granted in play, which an
+    // edit carries after them, stay.
+    const oldRacialFeats = racialFeatCount(raceId);
+    if (oldRacialFeats > 0) {
+      setFeats((current) => current.slice(oldRacialFeats));
+    }
+    setRacialFeatAbility("");
   }
 
   // Same for the class: skills, subclass, spells, loadout edits and the
@@ -328,21 +380,20 @@ export function useBuilderState({
     setClassId(id);
     setRemovedAutoNames([]);
     setKitChoices({ options: [], picks: [] });
-    applyPicks(
-      reconciled(
-        { classId: id },
-        {
-          ...picks,
-          chosenSkills: [],
-          subclass: "",
-          spells: [],
-          bookPrepared: [],
-          cantrips: [],
-          optionPicks: [],
-          stylePicks: [],
-          expertisePicks: [],
-        },
-      ),
+    applyChange(
+      "class",
+      { classId: id },
+      {
+        ...picks,
+        chosenSkills: [],
+        subclass: "",
+        spells: [],
+        bookPrepared: [],
+        cantrips: [],
+        optionPicks: [],
+        stylePicks: [],
+        expertisePicks: [],
+      },
     );
   }
 
@@ -352,14 +403,17 @@ export function useBuilderState({
   // The background's own skill pick belongs to the old background.
   function changeBackground(id: string) {
     setBackgroundId(id);
-    applyPicks(reconciled({ backgroundId: id }, { ...picks, backgroundSkills: [] }));
+    applyChange("background", { backgroundId: id }, { ...picks, backgroundSkills: [] });
   }
   function changeSubclass(name: string) {
-    applyPicks(reconciled({}, { ...picks, subclass: name }));
+    applyChange("subclass", {}, { ...picks, subclass: name });
   }
   function changeLevel(next: number) {
     setLevel(next);
-    applyPicks(reconciled({ level: next }, picks));
+    applyChange("level", { level: next }, picks);
+  }
+  function dismissDropped() {
+    setDropped(null);
   }
 
   // An edit keeps the gear the character actually carries. The class
@@ -421,6 +475,7 @@ export function useBuilderState({
     hpOverride, setHpOverride,
     acOverride, setAcOverride,
     localError, setLocalError,
+    dropped, dismissDropped,
   };
 }
 

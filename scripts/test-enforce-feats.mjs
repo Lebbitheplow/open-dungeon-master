@@ -443,7 +443,9 @@ await test("a variant human's own half-feat raises the score it names, and the s
   const human = madeFighter({
     race: "variant_human",
     racialAsi: ["str", "dex"],
-    racialSkills: ["athletics"],
+    // Not Athletics: the soldier grants it, and a racial pick on it is
+    // blanked and asked for again (issue #124).
+    racialSkills: ["stealth"],
     chosenSkills: ["acrobatics", "perception"],
     asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
     feats: ["Resilient"],
@@ -482,7 +484,7 @@ await test("the builder shows the scores, saves and hit points the server stores
     madeFighter({
       race: "variant_human",
       racialAsi: ["str", "con"],
-      racialSkills: ["athletics"],
+      racialSkills: ["stealth"],
       asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
       // The racial half-feat's score left unpicked: the builder sends the first.
       feats: ["Resilient"],

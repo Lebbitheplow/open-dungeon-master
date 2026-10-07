@@ -3,12 +3,16 @@
 import { Loader2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
-import { Wizard, type WizardStep } from "@/components/ui/Wizard";
+import { Wizard, type WizardNotice, type WizardStep } from "@/components/ui/Wizard";
 import { cn } from "@/lib/cn";
 import type { Genre } from "@/lib/schemas/game-settings";
-import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import type { Ability, CreateSheetInput } from "@/lib/schemas/sheet";
+import { SRD_SKILLS } from "@/lib/srd";
+import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { applyClassReskins, applyIdReskins } from "@/lib/worlds/reskin-logic";
+import { ABILITY_LABELS } from "./AbilityEditor";
+import type { DroppedPick } from "./reconcile";
 import { AbilitiesStep } from "./steps/AbilitiesStep";
 import { AncestryStep } from "./steps/AncestryStep";
 import { CallingStep } from "./steps/CallingStep";
@@ -30,11 +34,75 @@ import {
 } from "./submit";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
-import { findRace, useBuilderState } from "./useBuilderState";
+import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState";
 import { usePickerGroups } from "./usePickerGroups";
 import { useTableRules } from "./useTableRules";
 
 export type { BuilderResult } from "./submit";
+
+// The step each pick is made on, by the block that collects it, so a notice
+// about a dropped pick can take the player to where it is made again.
+const STEP_OF_TARGET: Record<BlockerTarget, string> = {
+  name: "identity",
+  backgroundSkills: "identity",
+  race: "ancestry",
+  languages: "ancestry",
+  racialAsi: "ancestry",
+  racialSkills: "ancestry",
+  racialTool: "ancestry",
+  racialCantrip: "ancestry",
+  racialFeat: "ancestry",
+  ancestry: "ancestry",
+  repeatSkills: "ancestry",
+  class: "calling",
+  classSkills: "calling",
+  tools: "calling",
+  subclass: "calling",
+  styles: "calling",
+  expertise: "calling",
+  options: "calling",
+  scores: "abilities",
+  asi: "abilities",
+  spells: "spells-gear",
+  gear: "spells-gear",
+};
+
+// A dropped pick as the player knows it: skill and style ids by name, an
+// ability by its word, everything else as it was picked.
+function droppedName(drop: DroppedPick): string {
+  switch (drop.target) {
+    case "classSkills":
+    case "racialSkills":
+    case "backgroundSkills":
+    case "expertise":
+      return SRD_SKILLS.find((skill) => skill.id === drop.value)?.name ?? drop.value;
+    case "styles":
+      return FIGHTING_STYLES.find((style) => style.id === drop.value)?.name ?? drop.value;
+    case "racialAsi":
+      return ABILITY_LABELS[drop.value as Ability] ?? drop.value;
+    default:
+      return drop.value;
+  }
+}
+
+// "Changing the race set aside bonus language Dwarvish and bonus language
+// Giant: they no longer fit. Anything still owed is asked for on the
+// Ancestry step." The notice says what went, never that it must be picked
+// again: a language dropped because the new race has fewer slots is not
+// owed, and the step's own gate knows which picks are.
+function droppedMessage({ because, drops }: DroppedNotice, stepLabel: string | undefined): string {
+  const list = drops.map((drop) => `${drop.label} ${droppedName(drop)}`);
+  const named =
+    list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  const where = stepLabel ? ` Anything still owed is asked for on the ${stepLabel} step.` : "";
+  if (because === "stored character") {
+    return `${list.length === 1 ? "A stored pick is" : "Stored picks are"} no longer on offer: ${named}.${where}`;
+  }
+  if (because === "content pack") {
+    return `The content pack's rows set aside ${named}.${where}`;
+  }
+  return `Changing the ${because} set aside ${named}: ${list.length === 1 ? "it no longer fits" : "they no longer fit"}.${where}`;
+}
 
 // Full character creation flow as a six-step wizard: identity, ancestry,
 // calling, abilities, spells and gear, finishing touches, paced by the diamond
@@ -319,6 +387,19 @@ export default function CharacterBuilder({
     },
   ];
 
+  // What the last change set aside, said above the steps with a way to the
+  // step it belongs to (issue #124: the list was computed and thrown away).
+  const dropped = state.dropped;
+  const droppedStep = dropped ? steps.findIndex((entry) => entry.key === STEP_OF_TARGET[dropped.drops[0].target]) : -1;
+  const notice: WizardNotice | undefined = dropped
+    ? {
+        message: droppedMessage(dropped, droppedStep >= 0 ? steps[droppedStep].label : undefined),
+        step: droppedStep >= 0 ? droppedStep : undefined,
+        onShow: () => locate(dropped.drops[0].target),
+        onDismiss: state.dismissDropped,
+      }
+    : undefined;
+
   return (
     // A bounded height so each step scrolls on its own and the Continue
     // button stays put; the fallback keeps a usable pane on a short phone.
@@ -328,6 +409,7 @@ export default function CharacterBuilder({
         variant="diamonds"
         wipe
         goldTitles
+        notice={notice}
         aside={
           race && klass
             ? `${race.name} ${klass.name} · level ${derived.effectiveLevel} · d${klass.hitDie}`
