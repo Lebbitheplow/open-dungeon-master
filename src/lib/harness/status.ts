@@ -108,8 +108,19 @@ export async function probeHarness(id: HarnessId, options: { refresh?: boolean; 
     lockdown: ADAPTERS[id].lockdown,
     checkedAt: Date.now(),
   };
-  const availability = hostAvailability(options.phone);
   const config = harnessConfig();
+  let availability = hostAvailability(options.phone);
+  // A container cannot start programs on its host, but one installed inside
+  // the container is local to it and runs there (issue #132: the image plus
+  // `npm install -g @openai/codex`). So the container verdict only stands
+  // when no program is found inside; a found one is as available as on a
+  // bare server. Sandboxed packages and phones stay as they are: nothing can
+  // be installed into them.
+  const binary =
+    availability === "ok" || availability === "container" ? await resolveHarnessBinary(id, config) : null;
+  if (availability === "container" && binary) {
+    availability = "ok";
+  }
   if (availability !== "ok") {
     const status: HarnessStatus = {
       ...base,
@@ -121,7 +132,7 @@ export async function probeHarness(id: HarnessId, options: { refresh?: boolean; 
       availability,
       message:
         availability === "container"
-          ? "This server runs in a container, which cannot start programs installed on its host."
+          ? "This server runs in a container, which cannot start programs installed on its host. A program installed inside the container is found and used."
           : availability === "sandboxed-package"
             ? "This copy of the app is sandboxed (Flatpak or Snap) and cannot start other programs. The AppImage, deb, rpm, dmg and Windows builds can."
             : "Agent programs run on a computer, not a phone.",
@@ -129,7 +140,6 @@ export async function probeHarness(id: HarnessId, options: { refresh?: boolean; 
     cache().set(id, status);
     return status;
   }
-  const binary = await resolveHarnessBinary(id, config);
   if (!binary) {
     const status: HarnessStatus = {
       ...base,

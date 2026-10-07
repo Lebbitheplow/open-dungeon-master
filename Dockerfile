@@ -94,11 +94,22 @@ RUN cd .next/standalone \
 FROM node:22.23.2-trixie-slim AS runner
 WORKDIR /app
 
-# The patched Debian packages, as in the deps stage; nothing else is
-# installed here, so the runner stays the base image plus the app.
+# The patched Debian packages, as in the deps stage, plus the system CA
+# store: Node carries its own roots, so ODM never needed it, but an agent
+# program installed into this image (Codex is a native binary) fails every
+# HTTPS request without it, the device-code sign-in first (issue #132).
 RUN apt-get update \
   && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+
+# Agent programs to bake into the image, as npm package names separated by
+# spaces: "@openai/codex", "@anthropic-ai/claude-code", "opencode-ai". Empty
+# by default. A program installed here is found and run by the server
+# (src/lib/harness/status.ts); its sign-in lives in /home/node, which
+# docker-compose.yml keeps on a volume. See docs/agent-harness.md.
+ARG AGENT_PROGRAMS=""
+RUN if [ -n "$AGENT_PROGRAMS" ]; then npm install -g $AGENT_PROGRAMS && npm cache clean --force; fi
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -129,9 +140,11 @@ COPY --from=build --chown=node:node /app/tsconfig.json ./tsconfig.json
 
 # Runtime state. Creating these before any volume is attached is what seeds a
 # fresh named volume with ownership the unprivileged user can write to.
-RUN mkdir -p data public/uploads public/generated public/generated-audio logs \
+# models/speech holds the built-in speech recognition model the admin
+# downloads (src/lib/stt-builtin.ts); on a volume it survives an update.
+RUN mkdir -p data public/uploads public/generated public/generated-audio logs models/speech \
   && chmod +x scripts/docker-entrypoint.sh \
-  && chown node:node data public/uploads public/generated public/generated-audio logs
+  && chown node:node data public/uploads public/generated public/generated-audio logs models models/speech
 
 USER node
 

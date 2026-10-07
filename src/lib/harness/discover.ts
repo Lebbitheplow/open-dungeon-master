@@ -184,6 +184,9 @@ export async function findBinary(names: readonly string[], explicit = ""): Promi
 // Why a program could not run here even if it were installed. A container
 // cannot start programs on its host, and a Flatpak or Snap app is sandboxed
 // away from them; the admin page says so instead of reporting "not found".
+// "container" is only a verdict about the host's programs: status.ts still
+// looks inside the container, and a program installed there runs (issue
+// #132).
 export function hostAvailability(deviceWorldOnPhone = false): HarnessAvailability {
   if (deviceWorldOnPhone) {
     return "phone";
