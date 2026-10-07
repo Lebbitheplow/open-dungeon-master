@@ -120,6 +120,11 @@ test("the pool is six 4d6 throws, rerollable only under 70", () => {
   assert.equal(canRerollPool(at([18, 18, 18, 18, 10, 10])), false);
   assert.equal(canRerollPool(at([12, 12, 12, 12, 11, 11])), false, "exactly 70 is not under 70");
   assert.equal(canRerollPool(at([12, 12, 12, 12, 11, 10])), true);
+  // The server's threshold is an admin setting (issue #128): 0 allows no
+  // second throw, a higher number lets a better pool be thrown back.
+  assert.equal(canRerollPool(at([8, 8, 8, 8, 8, 8]), 0), false, "no rerolls at 0");
+  assert.equal(canRerollPool(null, 0), true, "the first throw is always allowed");
+  assert.equal(canRerollPool(at([12, 12, 12, 12, 11, 11]), 71), true);
 });
 
 test("placing a throw moves it, swaps with its holder, and a second tap sends it back", () => {

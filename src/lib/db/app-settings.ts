@@ -59,6 +59,7 @@ export type GlobalConfigPatch = {
   signupMode?: GlobalConfig["signupMode"];
   serverName?: string;
   accountDeletionGraceDays?: number;
+  abilityRerollBelow?: number;
   publicUrl?: string;
   worldRegistryUrl?: string;
   sampling?: Partial<GlobalConfig["sampling"]>;
@@ -89,6 +90,7 @@ export function saveGlobalConfig(patch: GlobalConfigPatch): GlobalConfig {
     serverName: patch.serverName ?? current.serverName,
     accountDeletionGraceDays:
       patch.accountDeletionGraceDays ?? current.accountDeletionGraceDays,
+    abilityRerollBelow: patch.abilityRerollBelow ?? current.abilityRerollBelow,
     publicUrl: patch.publicUrl ?? current.publicUrl,
     worldRegistryUrl: patch.worldRegistryUrl ?? current.worldRegistryUrl,
     sampling: { ...current.sampling, ...patch.sampling },

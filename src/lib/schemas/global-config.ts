@@ -19,6 +19,12 @@ export const globalConfigSchema = z.object({
   // erasing it (src/lib/account-deletion.ts). Signing in before the due
   // date lets them keep the account. 0 erases at the moment of the request.
   accountDeletionGraceDays: z.number().int().min(0).max(90).default(14),
+  // The house rule for the builder's 4d6 method: a player may throw a fresh
+  // six only while the kept six add up to less than this. 0 allows no
+  // reroll at all; 108 (six 18s) rerolls anything. SRD 5.1 names no rule;
+  // 70 was ODM's (issue #128). Server-wide, since characters are built in
+  // the library before they join a table.
+  abilityRerollBelow: z.number().int().min(0).max(108).default(70),
   // The URL players actually reach the app on (e.g. https://dungeon.example.org).
   // Used for OAuth redirect URIs; blank = APP_PUBLIC_URL env, then forwarded
   // proxy headers, then the raw request origin.

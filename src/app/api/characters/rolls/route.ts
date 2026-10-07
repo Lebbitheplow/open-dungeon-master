@@ -2,6 +2,7 @@ import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { getCampaignById, isCampaignMember } from "@/lib/db/campaigns";
 import {
+  abilityRerollBelow,
   openAbilityPool,
   openWealthRoll,
   rollAbilityPool,
@@ -67,7 +68,9 @@ export async function GET(request: Request) {
     const open = openWealthRoll(user.id, campaignId, classId);
     wealth = open ? wealthAnswer(classId, open) : null;
   }
-  return Response.json({ abilities: openAbilityPool(user.id), wealth });
+  // The server's reroll rule rides along even with no pool open, so the
+  // builder's words match the setting before the first throw.
+  return Response.json({ abilities: openAbilityPool(user.id), wealth, rerollBelow: abilityRerollBelow() });
 }
 
 export async function POST(request: Request) {
@@ -83,8 +86,8 @@ export async function POST(request: Request) {
     );
   }
   if (parsed.data.kind === "abilities") {
-    // Six that add up to 70 or more stand: asking again answers with the
-    // same six.
+    // Six at or over the server's threshold stand: asking again answers
+    // with the same six, marked kept.
     return Response.json({ abilities: rollAbilityPool(user.id) });
   }
   const refused = wealthRefusal(user.id, parsed.data.campaignId);

@@ -12,6 +12,7 @@ export type MaskedConfig = {
   signupMode: "open" | "invite" | "closed";
   serverName: string;
   accountDeletionGraceDays: number;
+  abilityRerollBelow: number;
   publicUrl: string;
   text: {
     provider: "" | "local" | "custom" | "none" | "harness";
