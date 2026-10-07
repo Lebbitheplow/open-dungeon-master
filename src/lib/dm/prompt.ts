@@ -202,9 +202,15 @@ export type DmGameState = {
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
   directorBlock?: string;
-  // The model's context window in tokens, so the budget can scale with it
-  // rather than assuming one. Falls back to a modest default when unset.
+  // The window the message blocks are packed against: the model's context
+  // window less the tool definitions and the reply reserve
+  // (promptWindowTokens in src/lib/dm/context-budget.ts). Falls back to a
+  // modest default when unset.
   contextLimitTokens?: number;
+  // What the tool definitions cost on every call, already taken off
+  // contextLimitTokens; recorded so the Context panel shows them beside the
+  // blocks rather than as missing room.
+  toolTokens?: number;
   // Excerpts the table pinned; injected unconditionally, no relevance filter.
   pins?: Array<{ text: string }>;
   // Filled in by buildDmMessages: what each block cost and what was dropped.
@@ -1271,12 +1277,17 @@ export function buildDmMessages(
   // must never be evicted, so the trace exists to make the sizes visible
   // rather than to gate them. History is the one kind actually trimmed, and
   // its cut is reported above.
+  // The tool definitions are part of every call's prompt, so they count in
+  // both figures: the limit is the packing window with them added back, the
+  // prompt is the messages with them added on.
+  const toolTokens = state.toolTokens ?? 0;
   state.contextTrace = {
-    limitTokens: usableTokens(state.contextLimitTokens),
+    limitTokens: usableTokens(state.contextLimitTokens) + toolTokens,
     promptTokens:
       estimateTokens(systemParts.join("\n\n")) +
       fitted.tokens +
-      estimateTokens(state.directorBlock ?? ""),
+      estimateTokens(state.directorBlock ?? "") +
+      toolTokens,
     blocks: [
       // The table's lines stand at the head of the first system part; they
       // are costed on their own so the inspector shows what the limit costs.
@@ -1338,6 +1349,18 @@ export function buildDmMessages(
               included: true,
               reason: "one-turn steer armed by the lead",
               position: systemParts.length + 2,
+            },
+          ]
+        : []),
+      ...(toolTokens
+        ? [
+            {
+              id: "tools",
+              kind: "tools" as BlockKind,
+              tokens: toolTokens,
+              included: true,
+              reason: "offered on every call; taken off the window before the blocks are packed",
+              position: systemParts.length + 3,
             },
           ]
         : []),

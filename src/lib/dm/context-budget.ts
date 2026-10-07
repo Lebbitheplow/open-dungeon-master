@@ -24,8 +24,42 @@ export const DEFAULT_CONTEXT_TOKENS = 16_384;
 // entire window and leave no room to answer.
 export const RESPONSE_RESERVE_TOKENS = 2_048;
 
+// The reply reserve grows with the window (issue #120). A fixed 2,048 was
+// sized for a short narration; a thinking model (Qwen3.6 on llama-server)
+// spends several thousand tokens reasoning before its first tool call, and
+// the turn loop adds tool results and state updates to the same window for
+// up to MAX_MODEL_CALLS calls. One eighth of the window, never under the
+// base reserve and never over this cap: 8K on a 64K window, the base on
+// 16K.
+export const MAX_RESPONSE_RESERVE_TOKENS = 8_192;
+export const RESPONSE_RESERVE_SHARE = 1 / 8;
+
 export function estimateTokens(text: string): number {
   return Math.ceil((text?.length ?? 0) / CHARS_PER_TOKEN);
+}
+
+export function responseReserveTokens(contextWindowTokens: number): number {
+  const window = Number.isFinite(contextWindowTokens) && contextWindowTokens > 0 ? contextWindowTokens : DEFAULT_CONTEXT_TOKENS;
+  return Math.min(
+    MAX_RESPONSE_RESERVE_TOKENS,
+    Math.max(RESPONSE_RESERVE_TOKENS, Math.floor(window * RESPONSE_RESERVE_SHARE)),
+  );
+}
+
+// The limit the message blocks are packed against: the model's window less
+// the tool definitions, which ride on every call and were never budgeted
+// (issue #120: 70 tools came to ~27K tokens of a 64K window, so the packed
+// prompt left a local model ~1K to answer in and it stopped mid-thought),
+// less the part of the reply reserve above the base that usableTokens
+// already takes off. Pass the result wherever contextLimitTokens is taken.
+export function promptWindowTokens(contextWindowTokens: number, toolTokens: number): number {
+  const window = Number.isFinite(contextWindowTokens) && contextWindowTokens > 0 ? contextWindowTokens : DEFAULT_CONTEXT_TOKENS;
+  const tools = Number.isFinite(toolTokens) && toolTokens > 0 ? toolTokens : 0;
+  const reserveAboveBase = responseReserveTokens(window) - RESPONSE_RESERVE_TOKENS;
+  // Floored so usableTokens still lands on its own 1,024 floor: a window
+  // smaller than its tool set (the 16K default with the full set) packs the
+  // contract, the rules and the newest line, and nothing else.
+  return Math.max(1_024 + RESPONSE_RESERVE_TOKENS, window - tools - reserveAboveBase);
 }
 
 // What a block is for. Drives both the packing order and how the inspector
@@ -42,7 +76,8 @@ export type BlockKind =
   | "shop" // the shelves at the party's place, while a shop is open
   | "retrieval" // house rules and world lore pulled for this moment
   | "chapters" // sealed chapter summaries
-  | "history"; // the transcript
+  | "history" // the transcript
+  | "tools"; // the tool definitions: not packed, taken off the window first
 
 // Floors for the small blocks docs/vtt-parity-implementation-plan.md
 // section 15 adds, as shares of the remainder so the allocation keeps its
@@ -179,6 +214,9 @@ export function computeBudgets(contextLimitTokens?: number | null): Record<Block
     // The residual, following NE-P: whatever the other kinds did not claim
     // goes to the transcript. Never negative, however the shares are tuned.
     history: Math.max(0, remainder - rules - state - chapters - floors),
+    // Never packed: the tool definitions come off the window before any
+    // share is computed (promptWindowTokens), so they hold no share here.
+    tools: 0,
   };
 }
 
