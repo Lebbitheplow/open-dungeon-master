@@ -21,7 +21,17 @@ type ProbeResult = {
   endpoint?: string;
   model?: string;
   error?: string;
+  // How the model's tools ran (scripts/lib/openai-tool-route.mjs): plain
+  // Chat Completions, Chat Completions with reasoning off, or OpenAI's
+  // Responses API. Worth a word when it is not the plain one, because a
+  // campaign on this model runs the same way.
+  route?: "chat" | "chat-no-reasoning" | "responses";
   stages?: Record<string, ProbeStage>;
+};
+
+const ROUTE_NOTES: Record<string, string> = {
+  "chat-no-reasoning": "with its reasoning off, the only way its tools run on Chat Completions",
+  responses: "through OpenAI's Responses API, the only place its tools run",
 };
 
 // baseUrl/model/apiKey are the field values as typed; blanks fall back to the
@@ -103,7 +113,8 @@ export function BackendProbe({
           })}
           {result.ok ? (
             <p role="status" className="inline-flex items-center gap-1 text-emerald-400">
-              <Check className="size-4" /> {result.model} can run the storyteller loop.
+              <Check className="size-4" /> {result.model} can run the storyteller loop
+              {result.route && ROUTE_NOTES[result.route] ? ` (${ROUTE_NOTES[result.route]})` : ""}.
             </p>
           ) : (
             <p role="alert" className="motion-shake text-red-400">

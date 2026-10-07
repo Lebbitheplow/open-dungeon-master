@@ -17,6 +17,7 @@ try {
   } else {
     console.log(`backend: ${result.endpoint}`);
     console.log(`model: ${result.model}`);
+    console.log(`route: ${result.route}`);
     console.log(`streaming: ${result.stages.streaming.ok ? "PASS" : "FAIL"}`);
     console.log(`tool call: ${result.stages.toolCall.ok ? "PASS" : "FAIL"}`);
     console.log(`tool continuation: ${result.stages.toolContinuation.ok ? "PASS" : "FAIL"}`);
