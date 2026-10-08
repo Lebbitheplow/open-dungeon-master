@@ -1,5 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { allocateSeq } from "@/lib/db/campaigns";
+import { audienceOf } from "@/lib/event-audience";
 import { isSeatOnly, payloadForViewer, tablePayload, viewerFor, type Viewer } from "@/lib/table-delivery";
 
 type Subscriber = (chunk: string) => void;
@@ -135,20 +136,34 @@ export function publishWithSeq(campaignId: string, seq: number, type: string, pa
       `INSERT INTO campaign_events (campaign_id, seq, type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)`,
     )
     .run(campaignId, seq, type, JSON.stringify(stored), nowIso());
-  if (stored === payload && !isSeatOnly(type, stored)) {
-    fanOut(campaignId, sseChunk(type, stored, seq));
-  } else {
-    fanOutBySeat(campaignId, seq, type, stored, payload);
-  }
+  deliver(campaignId, seq, type, stored, payload);
   globalThis.__odmVoiceEventHook?.(campaignId, type);
   return seq;
+}
+
+// Every event leaves through here. A type the audience table never
+// declared (src/lib/event-audience.ts) reaches nobody and is logged: the
+// stream denies by default, so a new event is never a spoiler by accident.
+// A table event that stored as it was published takes the fast path, one
+// text for every seat; anything else is sent seat by seat.
+function deliver(campaignId: string, seq: number | undefined, type: string, stored: unknown, original: unknown) {
+  const audience = audienceOf(type);
+  if (!audience) {
+    console.error(`[events] "${type}" is not in the audience table (src/lib/event-audience.ts); sent to nobody`);
+    return;
+  }
+  if (audience.kind === "table" && stored === original) {
+    fanOut(campaignId, sseChunk(type, stored, seq));
+  } else {
+    fanOutBySeat(campaignId, seq, type, stored, original);
+  }
 }
 
 // The slow path, for an event that differs by seat: each listener is sent
 // its own view, and a listener owed nothing hears nothing.
 function fanOutBySeat(
   campaignId: string,
-  seq: number,
+  seq: number | undefined,
   type: string,
   stored: unknown,
   original: unknown,
@@ -197,7 +212,9 @@ export function publishPersisted(campaignId: string, type: string, payload: unkn
 // events still arrive with the previous persisted event's lastEventId; the
 // stream hook must ignore lastEventId for ephemeral event types.
 export function publishEphemeral(campaignId: string, type: string, payload: unknown) {
-  fanOut(campaignId, sseChunk(type, payload));
+  // The same door as a persisted event: an effect's damage figure, for one,
+  // is ephemeral and still only for the seats allowed it.
+  deliver(campaignId, undefined, type, tablePayload(type, payload), payload);
   globalThis.__odmVoiceEventHook?.(campaignId, type);
 }
 
