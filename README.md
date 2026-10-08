@@ -457,10 +457,15 @@ docker compose -f docker-compose.yml -f docker-compose.host-net.yml up -d
 
 ### Data, backups and maintenance
 
-Four named volumes hold everything worth keeping: `odm-data` (the encrypted database
+Six named volumes hold everything worth keeping: `odm-data` (the encrypted database
 and the generated key), `odm-uploads` (avatars and portraits), `odm-generated` (scene
-art and maps) and `odm-audio` (cached narration). `docker compose down` leaves them
-alone; `docker compose down -v` destroys them.
+art and maps), `odm-audio` (cached narration), `odm-speech` (the built-in speech
+recognition model, once downloaded) and `odm-home` (an agent program's sign-in).
+`docker compose down` leaves them alone; `docker compose down -v` destroys them.
+
+An agent program (Codex, Claude Code, opencode) can narrate from inside the
+container: build with `AGENT_PROGRAMS=@openai/codex` in `.env` and sign in once
+through `docker compose exec`. See [docs/agent-harness.md](docs/agent-harness.md).
 
 Maintenance scripts need the database key, so run them through the entrypoint, which
 loads it:

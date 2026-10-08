@@ -55,7 +55,14 @@ opencode cannot paint.
 - **A server started with npm or systemd:** yes. The program is found even
   when the server does not have your shell's `PATH`; set **Path to the
   program** if it lives somewhere unusual.
-- **The Docker image:** no. A container cannot start programs on its host.
+- **The Docker image:** only with the program installed inside the
+  container; a container cannot start programs on its host. Build the image
+  with `AGENT_PROGRAMS=@openai/codex` in `.env` (`docker compose up -d
+  --build`; `@anthropic-ai/claude-code` and `opencode-ai` work the same way),
+  then sign in once with `docker compose exec open-dungeon-master codex login
+  --device-auth`. The sign-in lives in the `odm-home` volume and survives
+  updates. The image carries the system CA store for this: Codex is a native
+  binary and cannot use Node's bundled roots.
 - **The desktop app:** yes, from **Story AI > An agent you already have**,
   except the Flatpak build, whose sandbox cannot start other programs.
 - **The Android app:** no.
