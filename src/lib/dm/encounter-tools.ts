@@ -1,3 +1,4 @@
+import type { SystemGlyph } from "@/lib/system-glyphs";
 import { fieldedSheets } from "@/lib/dm/roster";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { z } from "zod";
@@ -1377,7 +1378,7 @@ function advancePointer(
   // The pointer move is announced as a table note so the transcript can
   // never silently disagree with the banner about whose turn it is.
   if (typeof options?.announce === "function") {
-    tableNote(campaign, options.announce(encounter.order[encounter.turnIndex]));
+    tableNote(campaign, options.announce(encounter.order[encounter.turnIndex]), "cue-battle");
   } else if (options?.announce !== false) {
     announceTurn(campaign, encounter, lairOpen(encounter) ? LAIR_NOTE : "");
   }
@@ -1487,6 +1488,7 @@ export function autoActSkippedEnemies(
       campaignId: campaign.id,
       seq,
       authorType: "system",
+      glyph: "cue-battle",
       content: play ? `Skipped enemy turns resolve automatically: ${notes.join(" ")}` : notes.join(" "),
     });
     publishWithSeq(campaign.id, seq, "message_added", { message });
@@ -1680,6 +1682,7 @@ function idledOut(campaign: Campaign, encounter: Encounter): boolean {
     tableNote(
       campaign,
       `Nobody has been able to act for ${IDLE_ROUNDS} rounds: the fight waits for the table. End Turn or the lead's skip moves it on.`,
+      "cue-battle",
     );
   }
   return true;
@@ -1714,13 +1717,13 @@ function lairOpen(encounter: Encounter): boolean {
 function announceTurn(campaign: Campaign, encounter: Encounter, extra = "") {
   const current = encounter.order[encounter.turnIndex];
   if (current) {
-    tableNote(campaign, `It is now ${current.name}'s turn (round ${encounter.round}).${extra}`);
+    tableNote(campaign, `It is now ${current.name}'s turn (round ${encounter.round}).${extra}`, "cue-battle");
   }
 }
 
-function tableNote(campaign: Campaign, content: string) {
+function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
   const seq = allocateSeq(campaign.id);
-  const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", content });
+  const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph, content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }
 
@@ -1758,9 +1761,9 @@ function partyFallen(campaign: Campaign, couldRise: boolean) {
       turn.status = "done";
       saveDmTurn(turn);
     }
-    tableNote(campaign, "Every character has fallen: the fight is lost.");
+    tableNote(campaign, "Every character has fallen: the fight is lost.", "cue-death");
   } else if (couldRise) {
-    tableNote(campaign, "Every character is down and none can rise on their own.");
+    tableNote(campaign, "Every character is down and none can rise on their own.", "cue-death");
   } else {
     return;
   }
@@ -1848,6 +1851,7 @@ function companionAutoAct(
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "cue-battle",
     content: `${sheet.name}'s turn resolves automatically: ${note}`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });

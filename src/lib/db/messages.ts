@@ -3,6 +3,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
 import type { GeneratedImage, ImageRequest } from "@/lib/types";
 import { parseMessageIntent, type MessageIntent } from "@/lib/dm/intent-logic";
+import { isSystemGlyph, type SystemGlyph } from "@/lib/system-glyphs";
 
 export type CampaignMessage = {
   id: string;
@@ -34,6 +35,9 @@ export type CampaignMessage = {
   speaker?: Speaker;
   // The card a player's action was played from, when it came from the Hand.
   intent?: MessageIntent;
+  // A system line's icon, stored by its writer. Absent on other messages and
+  // on lines written before it, which draw the neutral bell.
+  glyph?: SystemGlyph;
   createdAt: string;
 };
 
@@ -53,6 +57,7 @@ type MessageRow = {
   dm_turn_id: string | null;
   speaker_json: string | null;
   intent_json?: string | null;
+  glyph?: string | null;
   created_at: string;
 };
 
@@ -73,32 +78,35 @@ function mapMessage(row: MessageRow): CampaignMessage {
     dmTurnId: row.dm_turn_id ?? undefined,
     speaker: normalizeSpeaker(parseJson<unknown>(row.speaker_json ?? "null", null)) ?? undefined,
     intent: parseMessageIntent(parseJson<unknown>(row.intent_json ?? "null", null)) ?? undefined,
+    glyph: isSystemGlyph(row.glyph) ? row.glyph : undefined,
     createdAt: row.created_at,
   };
 }
 
-export function insertCampaignMessage(input: {
-  campaignId: string;
-  seq: number;
-  authorType: "player" | "dm" | "system";
-  userId?: string | null;
-  characterId?: string | null;
-  content: string;
-  imageRequest?: ImageRequest;
-  locationId?: string;
-  dmTurnId?: string;
-  speaker?: Speaker | null;
-  intent?: MessageIntent | null;
-}): CampaignMessage {
+export function insertCampaignMessage(
+  input: {
+    campaignId: string;
+    seq: number;
+    userId?: string | null;
+    characterId?: string | null;
+    content: string;
+    imageRequest?: ImageRequest;
+    locationId?: string;
+    dmTurnId?: string;
+    speaker?: Speaker | null;
+    intent?: MessageIntent | null;
+    // A system line always says what it is (src/lib/system-glyphs.ts).
+  } & ({ authorType: "player" | "dm"; glyph?: never } | { authorType: "system"; glyph: SystemGlyph }),
+): CampaignMessage {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, created_at
+          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, glyph, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -114,6 +122,7 @@ export function insertCampaignMessage(input: {
       input.dmTurnId ?? null,
       input.speaker && input.speaker.kind !== "narrator" ? JSON.stringify(input.speaker) : null,
       input.intent ? JSON.stringify(input.intent) : null,
+      input.glyph ?? null,
       nowIso(),
     );
   touchCampaign(input.campaignId);

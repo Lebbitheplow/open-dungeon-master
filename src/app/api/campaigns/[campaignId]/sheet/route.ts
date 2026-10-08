@@ -54,6 +54,7 @@ function announceMidGameJoin(context: MemberContext, sheet: CharacterSheet) {
     campaignId,
     seq,
     authorType: "system",
+    glyph: "system-party",
     content: `${JOIN_NOTE_PREFIX}${context.user.username} has joined the party as ${sheet.name}, a ${sheet.race.replaceAll("_", " ")} ${sheet.class}.${backstoryHint} Introduce them into the scene at the next natural moment.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });

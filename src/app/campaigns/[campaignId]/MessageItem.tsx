@@ -198,7 +198,7 @@ export const MessageItem = memo(function MessageItem({
         />
       );
     }
-    return <SystemMessage content={message.content} />;
+    return <SystemMessage content={message.content} glyph={message.glyph} />;
   }
   if (message.authorType === "dm") {
     const actions: MessageAction[] = [];

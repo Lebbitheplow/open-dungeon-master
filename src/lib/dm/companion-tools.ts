@@ -572,6 +572,7 @@ export function dismissGuestCompanions(campaign: Campaign, reason: string): stri
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "system-party",
     content: `${names.join(" and ")} ${names.length === 1 ? "was" : "were"} a temporary ally and leaves the party now that the fight is over. Narrate the goodbye.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });

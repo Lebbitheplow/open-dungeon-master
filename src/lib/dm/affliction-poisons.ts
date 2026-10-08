@@ -157,7 +157,7 @@ export function poisonClockTick(campaignId: string, to: number) {
       if (poison.atMidnight) {
         const save = characterSave(campaign, sheet, { ability: "con", dc: poison.dc, detail: `${sheet.name}: CON save vs ${poison.name} at midnight`, against: "poison" });
         const dealt = damage(campaign, "clock", sheet.id, poison.damage ?? "9d6", save.success, poison);
-        tableNote(campaign, `Midnight: ${poison.name} takes ${sheet.name} (${dealt} poison damage).`);
+        tableNote(campaign, `Midnight: ${poison.name} takes ${sheet.name} (${dealt} poison damage).`, "cue-bell");
         continue;
       }
       let current = entry;
@@ -174,7 +174,7 @@ export function poisonClockTick(campaignId: string, to: number) {
         current = { ...current, successes, nextAt: current.nextAt + MINUTES_PER_DAY };
         if (successes >= (poison.repeat?.successes ?? 1)) {
           dropConditions(campaignId, fresh.id, current.conditions);
-          tableNote(campaign, `${fresh.name} is free of ${poison.name}.`);
+          tableNote(campaign, `${fresh.name} is free of ${poison.name}.`, "cue-heal");
           current = { ...current, nextAt: undefined };
           break;
         }

@@ -1584,6 +1584,11 @@ function ensureSchema(db: SqliteDatabase) {
     // the prompt shows it to the model and the turn can check it was
     // resolved. Null on typed actions and on messages written before it.
     ["intent_json", `TEXT`],
+    // A system line's icon, stored by the code that writes the line
+    // (src/lib/system-glyphs.ts) rather than read from its words, which only
+    // worked in English. Null on other messages and on lines written before
+    // it, which draw the neutral bell.
+    ["glyph", `TEXT`],
   ]);
 
   addColumns("dm_turns", [

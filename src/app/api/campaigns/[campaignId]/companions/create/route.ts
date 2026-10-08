@@ -119,6 +119,7 @@ export async function POST(
       campaignId,
       seq,
       authorType: "system",
+      glyph: "system-party",
       content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${sheet.race.replaceAll("_", " ")} ${sheet.class}. Introduce them into the scene at the next natural moment.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });

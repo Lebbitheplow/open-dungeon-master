@@ -15,7 +15,7 @@ import {
   toContextItems,
   type MessageAction,
 } from "@/app/campaigns/[campaignId]/MessageActions";
-import { systemLineGlyph } from "@/app/campaigns/[campaignId]/sessionGlyphs";
+import type { SystemGlyph } from "@/lib/system-glyphs";
 
 // The transcript's smaller voices: the table's own notices and what the
 // players say. The DM's passage, the hero of the screen, is MessageItem.tsx.
@@ -64,8 +64,9 @@ export function reportAction(message: CampaignMessage, onReport: (message: Campa
 }
 
 // A notice that is not a halted turn: the lead's public direction as a card,
-// a joiner, or a plain line with the painting its words call for.
-export function SystemMessage({ content }: { content: string }) {
+// a joiner, or a plain line with the painting its writer stored (a line
+// written before the icon was stored draws the neutral bell).
+export function SystemMessage({ content, glyph }: { content: string; glyph?: SystemGlyph }) {
   if (content.startsWith(LEAD_NOTE_PREFIX)) {
     return (
       <div data-tone="ember" className="panel session-banner-card rounded-xl border-ember-500/40">
@@ -78,7 +79,7 @@ export function SystemMessage({ content }: { content: string }) {
   const text = join ? content.slice(JOIN_NOTE_PREFIX.length) : content;
   return (
     <p className="session-sysline">
-      <GameIcon icon={{ kind: "glyph", key: join ? "system-party" : systemLineGlyph(text) }} size="size-6" />
+      <GameIcon icon={{ kind: "glyph", key: join ? "system-party" : (glyph ?? "cue-bell") }} size="size-6" />
       <span className="min-w-0">{text}</span>
     </p>
   );

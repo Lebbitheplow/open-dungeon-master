@@ -575,6 +575,7 @@ function noteAtTable(campaignId: string, lines: string[]) {
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content: lines.join(" "),
   });
   publishWithSeq(campaignId, seq, "message_added", { message });

@@ -190,6 +190,7 @@ function rollbackNow(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content: `The story rewinds to the start of Chapter ${targetChapterIndex}.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: divider });

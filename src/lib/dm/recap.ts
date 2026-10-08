@@ -92,6 +92,7 @@ export async function runResumeRecap(campaignId: string) {
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content: `Previously: ${recap.slice(0, 2_000)}`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: inserted });

@@ -160,6 +160,22 @@ await test("An embedder that fails is logged: the model's pick still answers, an
   assert.ok(errors.some((line) => line.includes("[assist] the embedder failed")), errors.join("\n"));
 });
 
+await test("A system line keeps the icon its writer stored; one written before icons were stored has none.", async () => {
+  const { insertCampaignMessage, getCampaignMessage } = await import("../src/lib/db/messages.ts");
+  const { allocateSeq } = await import("../src/lib/db/campaigns.ts");
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  const line = insertCampaignMessage({
+    campaignId: italian.campaignId,
+    seq: allocateSeq(italian.campaignId),
+    authorType: "system",
+    glyph: "cue-death",
+    content: "Kara muore per le ferite.",
+  });
+  assert.equal(getCampaignMessage(line.id).glyph, "cue-death");
+  getDatabase().prepare("UPDATE campaign_messages SET glyph = NULL WHERE id = ?").run(line.id);
+  assert.equal(getCampaignMessage(line.id).glyph, undefined);
+});
+
 // ---- every call site, classified ----
 
 const root = path.resolve(import.meta.dirname, "..");

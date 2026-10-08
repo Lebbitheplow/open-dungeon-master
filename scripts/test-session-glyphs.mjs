@@ -7,9 +7,10 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { TAB_GLYPHS, TABLE_GLYPH, SUBTAB_GLYPHS, MODE_GLYPHS, systemLineGlyph } = await import(
+const { TAB_GLYPHS, TABLE_GLYPH, SUBTAB_GLYPHS, MODE_GLYPHS } = await import(
   "../src/app/campaigns/[campaignId]/sessionGlyphs.ts"
 );
+const { SYSTEM_GLYPHS, isSystemGlyph } = await import("../src/lib/system-glyphs.ts");
 const { TABLE_TAB_IDS } = await import("../src/lib/dm/table-tabs.ts").catch(() => ({}));
 
 let passed = 0;
@@ -43,28 +44,15 @@ test("every composer mode has a painting", () => {
   }
 });
 
-test("a system line is read for its subject", () => {
-  assert.equal(systemLineGlyph("Talia rolled a 17 on her Stealth check"), "die-d20");
-  assert.equal(systemLineGlyph("Durgan rolls 2d6 for damage"), "die-d6");
-  assert.equal(systemLineGlyph("The party takes a long rest"), "rest-long");
-  assert.equal(systemLineGlyph("The party takes a short rest"), "rest-short");
-  assert.equal(systemLineGlyph("Nyx reaches level 4"), "rest-level-up");
-  assert.equal(systemLineGlyph("Combat begins"), "cue-battle");
-  assert.equal(systemLineGlyph("Brannoc paid 12 gp for rope"), "cue-coin");
-  assert.equal(systemLineGlyph("The party arrives at the Drowned Market"), "cue-travel");
-  assert.equal(systemLineGlyph("Wight 2 is slain"), "cue-death");
-});
-
-test("a line about nothing in particular rings the bell", () => {
-  assert.equal(systemLineGlyph("The lead changed the table's settings"), "cue-bell");
-  assert.equal(systemLineGlyph(""), "cue-bell");
-});
-
-test("whatever a system line picks is a file that ships", () => {
-  const lines = ["rolled a d4", "d8", "d10", "d12", "d100", "heals 5", "x-card", "level up", "nothing"];
-  for (const line of lines) {
-    assert.equal(existsSync(glyphFile(systemLineGlyph(line))), true, line);
+// A system line's icon is stored by the code that writes it (the type of
+// insertCampaignMessage requires one), never read from its words.
+test("every icon a system line can store is a file that ships", () => {
+  for (const glyph of SYSTEM_GLYPHS) {
+    assert.equal(existsSync(glyphFile(glyph)), true, glyph);
   }
+  assert.ok(isSystemGlyph("cue-death"));
+  assert.ok(!isSystemGlyph("cue-unknown"));
+  assert.ok(!isSystemGlyph(null));
 });
 
 console.log(`session glyphs: ${passed} passed`);

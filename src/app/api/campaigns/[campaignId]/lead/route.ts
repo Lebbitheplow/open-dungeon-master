@@ -41,6 +41,7 @@ export async function POST(
       campaignId,
       seq,
       authorType: "system",
+      glyph: "system-party",
       content: `${target.username} is now the party lead.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });

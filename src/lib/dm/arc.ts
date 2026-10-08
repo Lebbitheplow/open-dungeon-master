@@ -1080,6 +1080,6 @@ async function writeActRecap(
 
 function noteAtTable(campaignId: string, content: string) {
   const seq = allocateSeq(campaignId);
-  const message = insertCampaignMessage({ campaignId, seq, authorType: "system", content });
+  const message = insertCampaignMessage({ campaignId, seq, authorType: "system", glyph: "cue-bell", content });
   publishWithSeq(campaignId, seq, "message_added", { message });
 }

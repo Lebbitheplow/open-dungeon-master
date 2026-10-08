@@ -38,6 +38,7 @@ function announce(campaign: Campaign, note: string) {
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "cue-battle",
     content: note,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });

@@ -311,7 +311,7 @@ export function handleExploreCall(
     setTravelPace(campaign.id, null);
     const lines = resolved.flatMap((entry) => spendDowntime(campaign, turn.id, entry, args.days));
     const now = describeInstant(moved.clock.calendar, moved.clock.instant);
-    tableNote(campaign, `${describeDuration(moved.minutes)} of downtime passes. It is now ${now}.`);
+    tableNote(campaign, `${describeDuration(moved.minutes)} of downtime passes. It is now ${now}.`, "cue-bell");
     return { ok: true, days: args.days, now, results: lines, note: "Narrate the days from these results." };
   }
   if (name === "afflict") {

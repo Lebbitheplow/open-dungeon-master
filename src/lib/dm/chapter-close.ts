@@ -448,6 +448,7 @@ export async function maybeCloseChapter(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content: `Chapter ${result.closed.index}${result.closed.title ? `, "${result.closed.title}",` : ""} comes to a close.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: divider });

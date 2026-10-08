@@ -35,6 +35,7 @@ export async function POST(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     userId: context.user.id,
     content: `${LEAD_NOTE_PREFIX}${content}`,
   });

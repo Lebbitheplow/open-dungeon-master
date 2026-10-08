@@ -100,6 +100,7 @@ function tableNote(campaign: Campaign, content: string) {
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "cue-travel",
     content,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });

@@ -1901,6 +1901,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
       campaignId,
       seq,
       authorType: "system",
+      glyph: "cue-bell",
       content: `${DM_HALTED_PREFIX}${failed}`,
       // Link the notice to the halted turn so the lead can retry it from its
       // persisted conversation (src/lib/dm/retry-turn.ts) instead of retyping

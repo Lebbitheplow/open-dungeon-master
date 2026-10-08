@@ -229,6 +229,7 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
       campaignId: campaign.id,
       seq,
       authorType: "system",
+      glyph: "cue-battle",
       content: `The monsters act: ${notes.join(" ")}`,
     });
     publishWithSeq(campaign.id, seq, "message_added", { message });
