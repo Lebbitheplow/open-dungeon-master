@@ -1,13 +1,13 @@
 // Ask: reply parsing (with the scope an "auto" answer names), and a
 // source-level guard that the evidence builder cannot leak DM secrets.
-// Nothing routes a question by its words any more: the evidence an "auto"
-// question gets, and the archive search the model may ask for, are pinned
-// against a fake model in test-table-language-calls.mjs.
+// The evidence an "auto" question gets, and the archive search the model may
+// ask for, are pinned against a fake model in test-table-language-calls.mjs.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   QUESTION_MAX_CHARS,
   clampQuestion,
+  filedScope,
   isAskScope,
   parseAskJson,
 } from "../src/lib/dm/ask-logic.ts";
@@ -69,11 +69,16 @@ test("parseAskJson drops malformed citations but keeps the answer", () => {
   assert.equal(parsed.citations[0].kind, "record");
 });
 
-test("an answer keeps the scope asked for; an auto answer takes the one it names, and is unusable without one", () => {
+test("an answer keeps the scope asked for; an auto answer takes the one it names, else the story's", () => {
   assert.equal(parseAskJson('{"answer":"Yes.","scope":"rules"}', "sheet").scope, "sheet");
   assert.equal(parseAskJson('{"answer":"Sì.","scope":"rules","citations":[]}', "auto").scope, "rules");
-  assert.equal(parseAskJson('{"answer":"Sì.","citations":[]}', "auto"), null);
-  assert.equal(parseAskJson('{"answer":"Sì.","scope":"weather"}', "auto"), null);
+  // The label only files the ask: an answer without a usable one is kept.
+  assert.deepEqual(parseAskJson('{"answer":"Sì.","citations":[]}', "auto"), { answer: "Sì.", citations: [], scope: "story" });
+  assert.equal(parseAskJson('{"answer":"Sì.","scope":"weather"}', "auto").scope, "story");
+  // A failed ask is filed the same way: under what was asked, an auto one
+  // under the story.
+  assert.equal(filedScope("rules"), "rules");
+  assert.equal(filedScope("auto"), "story");
 });
 
 // A real end-to-end redaction test would need a seeded encrypted database,

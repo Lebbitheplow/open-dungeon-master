@@ -23,14 +23,22 @@ export type AskCitation = {
 export type AskResult = {
   answer: string;
   citations: AskCitation[];
-  // What the answer drew on: the scope asked for, or, for "auto", the one
-  // the model says it answered from. Nothing routes a question by its words,
-  // which only ever worked in English.
+  // What the answer drew on (filedScope).
   scope: AskScope;
 };
 
 export function isAskScope(value: unknown): value is AskScope {
   return ASK_SCOPES.includes(value as AskScope);
+}
+
+// The scope an ask is filed under: the one asked for, or for "auto" the one
+// the answer names, else the story's, which gathers the most evidence. The
+// label only files the ask, so an answer that names none is still kept.
+export function filedScope(asked: AskScope | "auto", named?: unknown): AskScope {
+  if (asked !== "auto") {
+    return asked;
+  }
+  return isAskScope(named) ? named : "story";
 }
 
 export function clampQuestion(question: string): string {
@@ -42,9 +50,7 @@ function asString(value: unknown, max: number): string {
 }
 
 // Parses the model's JSON reply. Tolerates code fences and surrounding
-// prose, because a small utility model will sometimes wrap its JSON. An
-// "auto" question needs the scope the reply names; without one the reply is
-// unusable, like an answerless one.
+// prose, because a small utility model will sometimes wrap its JSON.
 export function parseAskJson(raw: string, asked: AskScope | "auto"): AskResult | null {
   const text = (raw ?? "").trim();
   if (!text) {
@@ -90,9 +96,5 @@ export function parseAskJson(raw: string, asked: AskScope | "auto"): AskResult |
       quote,
     });
   }
-  const scope = asked === "auto" ? record.scope : asked;
-  if (!isAskScope(scope)) {
-    return null;
-  }
-  return { answer, citations, scope };
+  return { answer, citations, scope: filedScope(asked, record.scope) };
 }
