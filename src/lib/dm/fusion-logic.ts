@@ -13,34 +13,27 @@
 // Reciprocal rank fusion dissolves that by construction: it reads ORDER, not
 // magnitude, so no two scorers ever have to agree on what 0.3 means.
 
-// Common words carry no retrieval signal and would otherwise dominate the
-// term overlap in a prose-heavy transcript.
-const STOP_WORDS = new Set([
-  "the", "and", "for", "are", "but", "not", "you", "your", "his", "her", "its",
-  "our", "their", "they", "them", "this", "that", "these", "those", "with",
-  "from", "into", "onto", "was", "were", "been", "have", "has", "had", "does",
-  "did", "will", "would", "could", "should", "can", "may", "might", "must",
-  "what", "when", "where", "who", "whom", "why", "how", "all", "any", "some",
-  "each", "than", "then", "there", "here", "out", "off", "over", "under",
-  "again", "once", "about", "after", "before", "between", "through", "during",
-]);
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
+import { stems } from "../language/language.ts";
 
-export function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}']+/u)
-    .filter((token) => token.length > 2 && !STOP_WORDS.has(token));
+// The terms a text is scored by: Snowball stems in the table's language,
+// its function words dropped (src/lib/language), so "dell'Oracolo" and
+// "oracolo" are one term and "della" is none at an Italian table, as
+// "spiders" and "spider" are one at an English one. Two-letter stems carry
+// no signal.
+export function tokenize(text: string, language: TableLanguage): string[] {
+  return stems(text, language).filter((term) => term.length > 2);
 }
 
 // Inverse document frequency with BM25's smoothing, so a term in every
 // document scores near zero and a term in one document scores high. Never
 // negative: the +1 inside the log keeps a term present everywhere at 0
 // rather than dragging a score below a term that is simply absent.
-export function computeIdf(documents: string[]): Map<string, number> {
+export function computeIdf(documents: string[], language: TableLanguage): Map<string, number> {
   const total = documents.length;
   const documentFrequency = new Map<string, number>();
   for (const document of documents) {
-    for (const term of new Set(tokenize(document))) {
+    for (const term of new Set(tokenize(document, language))) {
       documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
     }
   }
@@ -66,12 +59,13 @@ export function lexicalScore(
   query: string,
   document: string,
   idf: Map<string, number>,
+  language: TableLanguage,
 ): number {
-  const queryTerms = new Set(tokenize(query));
+  const queryTerms = new Set(tokenize(query, language));
   if (!queryTerms.size) {
     return 0;
   }
-  const documentTerms = tokenize(document);
+  const documentTerms = tokenize(document, language);
   if (!documentTerms.length) {
     return 0;
   }
@@ -189,10 +183,11 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 export function applyMmr<T extends { id: string; text: string }>(
   candidates: T[],
   limit: number,
+  language: TableLanguage,
   lambda = 0.7,
 ): T[] {
   const remaining = [...candidates];
-  const tokens = new Map(remaining.map((entry) => [entry.id, new Set(tokenize(entry.text))]));
+  const tokens = new Map(remaining.map((entry) => [entry.id, new Set(tokenize(entry.text, language))]));
   const picked: T[] = [];
   // Relevance is the incoming order as a reciprocal rank, which keeps it in
   // (0, 1] and comparable with the Jaccard redundancy term. Decaying linearly

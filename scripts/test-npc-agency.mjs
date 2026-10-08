@@ -97,22 +97,66 @@ test("goal advancement respects the DC and personality modifier", () => {
   assert.equal(done.completed, true);
 });
 
-test("collisions need a shared significant token", () => {
-  const collisions = detectGoalCollisions([
+test("collisions need a shared significant word", () => {
+  const goals = [
     { name: "Marla", goalText: "seize the Dunfall mill" },
     { name: "Brekk", goalText: "buy the mill at Dunfall" },
     { name: "Aldous", goalText: "translate the codex" },
-  ]);
+  ];
+  const collisions = detectGoalCollisions(goals, "english", goals.map((goal) => goal.goalText));
   assert.equal(collisions.length, 1);
   assert.equal(collisions[0].a, "Marla");
   assert.equal(collisions[0].b, "Brekk");
-  assert.deepEqual(
-    detectGoalCollisions([
-      { name: "A", goalText: "win the tourney" },
-      { name: "B", goalText: "rob the vault" },
-    ]),
-    [],
-  );
+  const apart = [
+    { name: "A", goalText: "win the tourney" },
+    { name: "B", goalText: "rob the vault" },
+  ];
+  assert.deepEqual(detectGoalCollisions(apart, "english", apart.map((goal) => goal.goalText)), []);
+});
+
+test("each table language's function words never make a collision, its nouns do, plurals included", () => {
+  const cases = [
+    ["italian", "conquistare la torre della strega", "trovare il tesoro della gilda", "comprare i mulini di Dunfall", "bruciare il mulino"],
+    ["french", "cacher le trésor dans la crypte", "trouver un allié dans la ville", "acheter les moulins", "brûler le moulin"],
+    ["spanish", "robar oro para la cofradía", "buscar ayuda para el viaje", "comprar los molinos", "quemar el molino"],
+    ["german", "seiner Familie Gold bringen", "seiner Gilde Rache schwören", "die Mühlen kaufen", "die Mühle verbrennen"],
+  ];
+  for (const [language, functionA, functionB, nounA, nounB] of cases) {
+    const apart = [
+      { name: "A", goalText: functionA },
+      { name: "B", goalText: functionB },
+    ];
+    assert.deepEqual(detectGoalCollisions(apart, language, apart.map((goal) => goal.goalText)), [], language);
+    const rivals = [
+      { name: "C", goalText: nounA },
+      { name: "D", goalText: nounB },
+    ];
+    const found = detectGoalCollisions(rivals, language, rivals.map((goal) => goal.goalText));
+    assert.equal(found.length, 1, language);
+  }
+});
+
+test("what most of the campaign's goals say is no rivalry; a word only two goals share is", () => {
+  const pool = [
+    "help the party find the relic",
+    "betray the party to the duke",
+    "hide from the party",
+    "sell the party a map",
+    "seize the Dunfall mill",
+    "buy the mill at Dunfall",
+  ];
+  const sharedOnlyParty = [
+    { name: "A", goalText: pool[0] },
+    { name: "B", goalText: pool[1] },
+  ];
+  assert.deepEqual(detectGoalCollisions(sharedOnlyParty, "english", pool), []);
+  const millRivals = [
+    { name: "C", goalText: pool[4] },
+    { name: "D", goalText: pool[5] },
+  ];
+  const [collision] = detectGoalCollisions(millRivals, "english", pool);
+  // The rivalry is reported with the goal's own word, not a stem.
+  assert.ok(["Dunfall", "mill"].includes(collision.over), collision.over);
 });
 
 test("pressure ticks, resets on engagement, and caps", () => {

@@ -1,3 +1,4 @@
+import { campaignLanguage } from "@/lib/db/campaigns";
 import {
   getChapter,
   listChapterEmbeddings,
@@ -270,11 +271,12 @@ export async function searchScenes(
     // embedder unavailable; lexical ranking carries the search
   }
 
-  const chapterIdf = computeIdf(chapters.map((row) => `${row.title} ${row.summary}`));
+  const language = campaignLanguage(campaignId);
+  const chapterIdf = computeIdf(chapters.map((row) => `${row.title} ${row.summary}`), language);
   const pickedIds = fuseRanked(
     chapters.map((row) => ({
       id: row.id,
-      lexical: lexicalScore(trimmed, `${row.title} ${row.summary}`, chapterIdf),
+      lexical: lexicalScore(trimmed, `${row.title} ${row.summary}`, chapterIdf, language),
       similarity: similarityOf(queryVector, row.embedding),
     })),
     { limit: PHASE1_CHAPTERS },
@@ -288,12 +290,12 @@ export async function searchScenes(
   if (!scenes.length) {
     return [];
   }
-  const sceneIdf = computeIdf(scenes.map((scene) => scene.text));
+  const sceneIdf = computeIdf(scenes.map((scene) => scene.text), language);
   const sceneById = new Map(scenes.map((scene) => [scene.id, scene]));
   const fusedSceneIds = fuseRanked(
     scenes.map((scene) => ({
       id: scene.id,
-      lexical: lexicalScore(trimmed, scene.text, sceneIdf),
+      lexical: lexicalScore(trimmed, scene.text, sceneIdf, language),
       similarity: similarityOf(queryVector, scene.embedding),
     })),
     { limit: PHASE2_CANDIDATES },
@@ -322,7 +324,7 @@ export async function searchScenes(
     .filter((scene): scene is NonNullable<typeof scene> => scene !== undefined)
     .map((scene) => ({ id: scene.id, text: scene.text, scene }));
 
-  return applyMmr(candidates, PHASE2_SCENES, MMR_LAMBDA).map(({ scene }) => {
+  return applyMmr(candidates, PHASE2_SCENES, language, MMR_LAMBDA).map(({ scene }) => {
     const vector = bufferToVector(scene.embedding);
     return {
       chapterIndex: chapterIndexById.get(scene.chapterId) ?? 0,

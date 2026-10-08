@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   normalizeLoreInput,
   renderLoreForPrompt,
-  scoreLoreByKeywords,
 } from "../src/lib/dm/world-lore-logic.ts";
 
 let passed = 0;
@@ -43,12 +42,6 @@ test("normalizeLoreInput validates and bounds", () => {
   assert.ok(ok.tags.includes("one") && ok.tags.includes("two"));
   assert.ok(ok.tags.length <= 8);
   assert.ok(!ok.tags.includes(""));
-});
-
-test("scoreLoreByKeywords matches title, tags, and body", () => {
-  assert.ok(scoreLoreByKeywords("who runs the salt roads", entry()) > 0.3);
-  assert.ok(scoreLoreByKeywords("grey ring tattoo", entry()) > 0.5);
-  assert.equal(scoreLoreByKeywords("dragons atop frozen peaks", entry()), 0);
 });
 
 test("renderLoreForPrompt pins first, dedupes, and clips", () => {

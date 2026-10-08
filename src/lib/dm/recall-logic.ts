@@ -2,6 +2,7 @@
 // load it directly. Extracted from the old turn.ts recall handler; still
 // the fallback path whenever the semantic index has nothing for a chapter.
 import { computeIdf, lexicalScore } from "./fusion-logic.ts";
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
 
 export type RecallableChapter = {
   index: number;
@@ -21,6 +22,7 @@ export type RecallableChapter = {
 export function scoreChaptersByKeywords<T extends RecallableChapter>(
   chapters: T[],
   query: string,
+  language: TableLanguage,
 ): T[] {
   if (!chapters.length || !query.trim()) {
     return [];
@@ -28,11 +30,11 @@ export function scoreChaptersByKeywords<T extends RecallableChapter>(
   const documents = chapters.map(
     (chapter) => `${chapter.title} ${chapter.summary} ${chapter.highlights.join(" ")}`,
   );
-  const idf = computeIdf(documents);
+  const idf = computeIdf(documents, language);
   return chapters
     .map((chapter, index) => ({
       chapter,
-      score: lexicalScore(query, documents[index], idf),
+      score: lexicalScore(query, documents[index], idf, language),
     }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score)

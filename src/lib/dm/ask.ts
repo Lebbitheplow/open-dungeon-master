@@ -1,4 +1,4 @@
-import { getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
+import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listRecentAsksForThread } from "@/lib/db/asks";
 import { listChapters } from "@/lib/db/chapters";
 import { listFactsVisibleTo } from "@/lib/db/facts";
@@ -161,7 +161,7 @@ async function retrieveArchive(campaignId: string, query: string, chapterBudget:
   const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
   const relevantChapters = chapterIndexes.length
     ? closed.filter((chapter) => chapterIndexes.includes(chapter.index))
-    : scoreChaptersByKeywords(closed, query).slice(0, 2);
+    : scoreChaptersByKeywords(closed, query, campaignLanguage(campaignId)).slice(0, 2);
   for (const chapter of fitChaptersToBudget(relevantChapters.slice(0, 3), chapterBudget)) {
     evidence.push(
       `[chapter:${chapter.index}] "${chapter.title}": ${chapter.summary}${
@@ -204,11 +204,12 @@ async function assembleEvidence(
     // which optional rules this table turned on.
     const chunks = listRuleChunks(campaignId).filter((chunk) => chunk.enabled);
     if (chunks.length) {
-      const idf = computeIdf(chunks.map((chunk) => `${chunk.heading} ${chunk.text}`));
+      const language = campaignLanguage(campaignId);
+      const idf = computeIdf(chunks.map((chunk) => `${chunk.heading} ${chunk.text}`), language);
       const relevant = chunks
         .map((chunk) => ({
           chunk,
-          score: lexicalScore(question, `${chunk.heading} ${chunk.text}`, idf),
+          score: lexicalScore(question, `${chunk.heading} ${chunk.text}`, idf, language),
         }))
         .filter((entry) => entry.chunk.pinned || entry.score > 0)
         .sort((a, b) => b.score - a.score)

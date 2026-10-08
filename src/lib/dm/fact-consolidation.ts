@@ -1,3 +1,4 @@
+import { campaignLanguage } from "@/lib/db/campaigns";
 import { listActiveFacts, listActiveFactVectors } from "@/lib/db/facts";
 import { bufferToVector, cosine, embed } from "@/lib/embeddings";
 import { embedPendingFacts } from "@/lib/dm/memory-index";
@@ -38,11 +39,12 @@ export async function factsOnFileFor(
   }
   const passage = pieces.join("\n\n");
   const haystack = (fact: (typeof facts)[number]) => `${fact.subject} ${fact.fact}`;
-  const idf = computeIdf(facts.map(haystack));
+  const language = campaignLanguage(campaignId);
+  const idf = computeIdf(facts.map(haystack), language);
   const ranked = fuseRanked(
     facts.map((fact) => ({
       id: fact.id,
-      lexical: lexicalScore(passage, haystack(fact), idf),
+      lexical: lexicalScore(passage, haystack(fact), idf, language),
       similarity: similarity.get(fact.id) ?? null,
     })),
     { limit: facts.length },

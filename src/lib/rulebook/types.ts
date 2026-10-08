@@ -100,7 +100,10 @@ export type SearchHit = {
   heading?: string;
   at?: string;
   snippet: string;
+  // The page's words the query matched, as written (lower case), for the
+  // reader to mark.
+  words: string[];
   score: number;
 };
 
-export type SearchResponse = { hits: SearchHit[]; terms: string[] };
+export type SearchResponse = { hits: SearchHit[] };

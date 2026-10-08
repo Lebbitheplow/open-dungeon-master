@@ -1,3 +1,4 @@
+import { campaignLanguage } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { embed, similarityOf } from "@/lib/embeddings";
@@ -209,12 +210,13 @@ export async function handleSearchLore(
     // Chapter memory unavailable; the other sources still answer.
   }
 
-  const idf = computeIdf(candidates.map((candidate) => candidate.haystack));
+  const language = campaignLanguage(campaignId);
+  const idf = computeIdf(candidates.map((candidate) => candidate.haystack), language);
   const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const results = fuseRanked(
     candidates.map((candidate) => ({
       id: candidate.id,
-      lexical: lexicalScore(query, candidate.haystack, idf),
+      lexical: lexicalScore(query, candidate.haystack, idf, language),
       similarity:
         candidate.similarity !== undefined
           ? candidate.similarity

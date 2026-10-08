@@ -5,6 +5,8 @@
 // model.
 
 import type { ArcBeat, StoryArc, Waypoint, WaypointKind } from "./arc-logic.ts";
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
+import { stems } from "../language/language.ts";
 
 export type WaypointSignal = { kind: WaypointKind; names: string[] };
 
@@ -62,38 +64,17 @@ export function signalFromToolCall(
   }
 }
 
-const STOPWORDS = new Set([
-  "the", "a", "an", "of", "to", "at", "in", "on", "with", "and", "or", "for", "from", "into",
-  "reach", "reaches", "reaching", "arrive", "arrives", "arriving", "find", "finds", "finding",
-  "go", "goes", "get", "gets", "meet", "meets", "meeting", "speak", "speaks", "talk", "talks",
-  "obtain", "obtains", "recover", "recovers", "take", "takes", "defeat", "defeats", "kill",
-  "kills", "beat", "beats", "win", "wins", "party", "their", "its", "his", "her", "them", "it",
-  "is", "are", "be", "by", "up", "out", "down",
-]);
-
-// Lower-case, unaccented, punctuation-free word stems (five letters, so
-// "cathedral" and "cathedrals" agree) minus the words every waypoint
-// shares. The stems are what the two sides are compared on.
-export function stems(text: string): string[] {
-  return text
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/['’]s\b/g, "")
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length >= 3 && !STOPWORDS.has(word))
-    .map((word) => word.slice(0, 5));
-}
-
 // Whether a name the DM used (a location, a person, an item) is the thing
-// a waypoint names. Every distinctive stem of the name has to appear in the
-// waypoint, or the two have to share most of their stems: "the drowned
-// cathedral" matches "Reach the Drowned Cathedral of Vael", and "Brisca"
-// matches "speak with Brisca Hale", while "the ferry" does not match
-// "reach the drowned cathedral".
-export function lexicalMatch(waypointText: string, name: string): boolean {
-  const target = new Set(stems(waypointText));
-  const given = stems(name);
+// a waypoint names. The two are compared as Snowball stems in the table's
+// language, its function words dropped (src/lib/language). Every stem of
+// the name has to appear in the waypoint, or the two have to share most of
+// their stems: "the drowned cathedral" matches "Reach the Drowned Cathedral
+// of Vael", and "Brisca" matches "speak with Brisca Hale", while "the ferry"
+// does not match "reach the drowned cathedral", nor "Porta della Gilda"
+// "Casa della Gilda".
+export function lexicalMatch(waypointText: string, name: string, language: TableLanguage): boolean {
+  const target = new Set(stems(waypointText, language));
+  const given = stems(name, language);
   if (!target.size || !given.length) {
     return false;
   }
@@ -107,13 +88,13 @@ export function lexicalMatch(waypointText: string, name: string): boolean {
 
 // Open waypoints of the beat that a signal satisfies by name. Narrative
 // waypoints never match here: only the judge can settle those.
-export function matchSignal(beat: ArcBeat, signal: WaypointSignal): number[] {
+export function matchSignal(beat: ArcBeat, signal: WaypointSignal, language: TableLanguage): number[] {
   const matched: number[] = [];
   (beat.waypoints ?? []).forEach((waypoint, index) => {
     if (waypoint.done || waypoint.kind !== signal.kind || waypoint.kind === "narrative") {
       return;
     }
-    if (signal.names.some((name) => lexicalMatch(waypoint.text, name))) {
+    if (signal.names.some((name) => lexicalMatch(waypoint.text, name, language))) {
       matched.push(index);
     }
   });

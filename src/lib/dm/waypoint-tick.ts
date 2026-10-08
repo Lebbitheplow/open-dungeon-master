@@ -62,7 +62,7 @@ export async function tickWaypointsFromCalls(
       objectiveText: call.name === "tick_objective" ? objectiveText(campaignId, call.rawArguments) : undefined,
     });
     if (signal) {
-      for (const index of matchSignal(active.beat, signal)) {
+      for (const index of matchSignal(active.beat, signal, campaign.gameSettings.tableLanguage)) {
         matched.add(index);
       }
     }

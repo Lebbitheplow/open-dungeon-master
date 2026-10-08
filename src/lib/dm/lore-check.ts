@@ -1,4 +1,4 @@
-import { getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
+import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { listActiveFacts } from "@/lib/db/facts";
 import { getCampaignMessage } from "@/lib/db/messages";
@@ -76,7 +76,7 @@ async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number
   const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
   const relevantChapters = chapterIndexes.length
     ? closed.filter((chapter) => chapterIndexes.includes(chapter.index))
-    : scoreChaptersByKeywords(closed, selection).slice(0, 2);
+    : scoreChaptersByKeywords(closed, selection, campaignLanguage(campaignId)).slice(0, 2);
   for (const chapter of fitChaptersToBudget(relevantChapters.slice(0, 3), chapterBudget)) {
     evidence.push(
       `[chapter:${chapter.index}] "${chapter.title}": ${chapter.summary}${

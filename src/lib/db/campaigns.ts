@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { normalizeSettings, scrubStorySettings } from "@/lib/db/settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
-import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
+import { normalizeGameSettings, type GameSettings, type TableLanguage } from "@/lib/schemas/game-settings";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type {
   CampaignCover,
@@ -465,6 +465,16 @@ export function getCampaignById(campaignId: string): Campaign | null {
     .prepare(`${CAMPAIGN_SELECT} WHERE c.id = ?`)
     .get(campaignId) as CampaignRow | undefined;
   return row ? mapCampaign(row) : null;
+}
+
+// The language a campaign plays in, for the readers that are handed only
+// its id (src/lib/language). A campaign that is gone is a caller's bug.
+export function campaignLanguage(campaignId: string): TableLanguage {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    throw new Error(`Campaign ${campaignId} not found.`);
+  }
+  return campaign.gameSettings.tableLanguage;
 }
 
 export function listMembers(campaignId: string): CampaignMember[] {

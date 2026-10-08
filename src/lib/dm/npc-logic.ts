@@ -8,6 +8,10 @@
 // ignored. Everything here is deterministic given its inputs; dice come in
 // as injected rolls so the engines cost zero model calls.
 
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
+import { stems } from "../language/language.ts";
+import { words } from "../language/text-logic.ts";
+
 export type NpcPersonality = {
   drive: number;
   diligence: number;
@@ -286,39 +290,51 @@ export function advanceSessionGoal(
 
 // ---- goal collisions ----
 
-const STOPWORDS = new Set([
-  "the", "and", "for", "with", "from", "into", "over", "their", "them",
-  "they", "that", "this", "his", "her", "its", "our", "your", "who",
-  "what", "where", "when", "will", "wants", "want", "take", "get", "keep",
-  "make", "become", "becomes", "out", "off", "own", "new", "old", "all",
-  "party", "gold",
-]);
-
-function goalTokens(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, " ")
-      .split(/\s+/)
-      .filter((token) => token.length > 3 && !STOPWORDS.has(token)),
-  );
-}
-
 export type GoalCollision = { a: string; b: string; over: string };
+
+// Each goal's words keyed by their Snowball stem in the table's language,
+// function words dropped (src/lib/language), keeping the word as the goal
+// wrote it for the fact that reports the rivalry.
+function goalTerms(text: string, language: TableLanguage): Map<string, string> {
+  const terms = new Map<string, string>();
+  for (const word of words(text)) {
+    const [stem] = stems(word, language);
+    if (stem && word.length > 3 && !terms.has(stem)) {
+      terms.set(stem, word);
+    }
+  }
+  return terms;
+}
 
 // Two NPCs whose session goals name the same significant thing are after
 // the same prize; the caller resolves each collision with opposed dice.
+// "Significant" is read off the campaign's own goals rather than a word
+// list: a stem in more than half of `pool` (every goal the campaign's NPCs
+// have) is what goals in this campaign all say ("wants", "the party"),
+// while one only two goals share always counts, so a small campaign still
+// sees its rivalries.
 export function detectGoalCollisions(
   npcs: Array<{ name: string; goalText: string }>,
+  language: TableLanguage,
+  pool: readonly string[],
 ): GoalCollision[] {
+  const frequency = new Map<string, number>();
+  for (const goal of pool) {
+    for (const stem of goalTerms(goal, language).keys()) {
+      frequency.set(stem, (frequency.get(stem) ?? 0) + 1);
+    }
+  }
+  const common = (stem: string) => {
+    const count = frequency.get(stem) ?? 0;
+    return count > 2 && count > pool.length / 2;
+  };
+  const terms = npcs.map((npc) => goalTerms(npc.goalText, language));
   const collisions: GoalCollision[] = [];
   for (let indexA = 0; indexA < npcs.length; indexA += 1) {
     for (let indexB = indexA + 1; indexB < npcs.length; indexB += 1) {
-      const tokensA = goalTokens(npcs[indexA].goalText);
-      const tokensB = goalTokens(npcs[indexB].goalText);
-      const shared = [...tokensA].find((token) => tokensB.has(token));
+      const shared = [...terms[indexA]].find(([stem]) => terms[indexB].has(stem) && !common(stem));
       if (shared) {
-        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: shared });
+        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: shared[1] });
       }
     }
   }

@@ -5,6 +5,10 @@
 // ladder and reaction rolls; tone becomes adjectives and a bed bias. The
 // routes, the prompt and the guard call this; the test loads it directly.
 
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
+import { stems } from "../language/language.ts";
+import { hasWord } from "../language/text-logic.ts";
+
 export const BOUNDARIES = ["family", "standard", "mature"] as const;
 export type Boundaries = (typeof BOUNDARIES)[number];
 
@@ -70,21 +74,17 @@ export function renderSafetyBlock(safety: SafetySettings): string {
 }
 
 // The line a narration crossed, if any. A line is matched as a whole
-// phrase or as each of its words of four letters or more, so "spiders"
-// catches "spider" and "harm to children" catches "children".
-export function lineViolations(text: string, lines: string[]): string[] {
-  const haystack = text.toLowerCase();
+// phrase or by any of its words, compared as Snowball stems in the table's
+// language (src/lib/language), so "spiders" catches "spider" and "ragni"
+// catches "ragno", while "rat" never fires inside "pirate".
+export function lineViolations(text: string, lines: string[], language: TableLanguage): string[] {
+  const narration = new Set(stems(text, language));
   const out: string[] = [];
   for (const line of lines) {
-    const phrase = line.trim().toLowerCase();
-    if (!phrase) {
+    if (!line.trim()) {
       continue;
     }
-    const stems = phrase.split(/\s+/).filter((word) => word.length >= 4).map((word) => word.replace(/(s|es|ing|ed)$/u, ""));
-    const hit =
-      haystack.includes(phrase) ||
-      stems.some((stem) => new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*`, "i").test(haystack));
-    if (hit) {
+    if (hasWord(text, line) || stems(line, language).some((stem) => narration.has(stem))) {
       out.push(line);
     }
   }

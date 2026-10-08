@@ -231,26 +231,6 @@ export function loreLinkNames(text: string): string[] {
   return [...new Set([...text.matchAll(LINK)].map((match) => match[1].trim()))];
 }
 
-// Keyword fallback when an entry has no embedding yet (or the embedder is
-// down): overlap of query words against title/body/tags.
-export function scoreLoreByKeywords(query: string, entry: WorldLoreEntry): number {
-  const words = query
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
-    .filter((word) => word.length > 2);
-  if (!words.length) {
-    return 0;
-  }
-  const haystack = `${entry.title} ${entry.tags.join(" ")} ${entry.body}`.toLowerCase();
-  let hits = 0;
-  for (const word of words) {
-    if (haystack.includes(word)) {
-      hits += 1;
-    }
-  }
-  return hits / words.length;
-}
-
 function clipBody(body: string, max: number): string {
   return body.length <= max ? body : `${body.slice(0, max - 3)}...`;
 }

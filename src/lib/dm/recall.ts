@@ -93,7 +93,7 @@ export async function handleRecallStory(
     };
   }
 
-  const scored = scoreChaptersByKeywords(closed, query);
+  const scored = scoreChaptersByKeywords(closed, query, campaign.gameSettings.tableLanguage);
   if (!scored.length) {
     return {
       error: "Nothing matched.",

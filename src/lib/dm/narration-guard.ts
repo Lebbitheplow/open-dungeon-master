@@ -86,7 +86,7 @@ export async function enforceEngineBoundary(
   // (docs/vtt-parity-implementation-plan.md 9.1), whether or not the
   // outcome check is on: safety is not a setting.
   const lines = campaign.gameSettings.safety?.lines ?? [];
-  const crossed = lineViolations(narration, lines);
+  const crossed = lineViolations(narration, lines, campaign.gameSettings.tableLanguage);
   const partyNames = sheets.map((sheet) => sheet.name);
   const live = liveStateFor(campaign.id);
   const leveledSpells = leveledSpellNames();
@@ -156,7 +156,7 @@ export async function enforceEngineBoundary(
         leveledSpells,
       })
     : [];
-  const stillCrossed = lineViolations(corrected, lines);
+  const stillCrossed = lineViolations(corrected, lines, campaign.gameSettings.tableLanguage);
   if (remaining.length + stillCrossed.length >= contradictions.length + crossed.length) {
     console.warn(
       `[engine-boundary] turn ${turn.id}: correction did not resolve the contradiction (${summary})`,
