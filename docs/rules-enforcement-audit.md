@@ -284,6 +284,55 @@ extended (the authored tiers; every console form offers every field its handler
 takes).
 
 
+## Third pass: the gap suites (2026-10-08)
+
+### Why it was run
+
+Two weeks of issues (#30 to #132) and the pull requests that closed them
+clustered in four places: picks a character creator loses on the way to the
+sheet (#111 to #128), a human DM's console and the fight it runs (#63, #69,
+#108), narration and state drifting apart over time (#30, #31, #91), and
+rolls the table never sees (#58, #61). Four suites were written to hunt in
+those places rather than to re-prove the rows already held.
+
+### The suites
+
+- `test-enforce-console-reach`: every adjudication in the catalog, run as a
+  person in the DM seat with the console's own field shapes (a hero or enemy
+  for a picker, the first option of a select, the minimum of a number), at a
+  table with a fight on and at a quiet one. A rules refusal is the engine
+  answering; an argument fault or a throw is a door painted on a wall.
+  `ODM_CONSOLE_OUTCOMES=<file>` writes every entry's answer for reading.
+- `test-enforce-creator-doors`: a legal character from the builder with one
+  thing added by hand (a racial skill on a race with no skill choice, a feat
+  on a plain human, a fighting style on a wizard, a subclass at 1st level,
+  a third language, tool, save or skill, a faster speed, experience and
+  spent hit dice), posted through both creation doors.
+- `test-enforce-between-fights`: what a spell or feature with a duration
+  does when the in-world clock moves rather than the initiative order:
+  Bless and Spiritual Weapon's minute, Rage's minute, Hunter's Mark across
+  the end of a fight, Conjure Animals' hour, Mage Armor through a short rest
+  and not past a long one, Aid's eight hours, rounds left at a fight's end
+  becoming minutes.
+- `test-enforce-settings-honored`: every key of the game-settings schema is
+  read by something outside the schema and the panels that edit it, and
+  the hit point method (average, max, rolled) through the level-up route.
+
+### What they found, each fixed the same day
+
+| Severity | Finding | Where it was |
+|---|---|---|
+| high | `set_effect` ("A lasting effect") could not be run by anyone since 0.12.0. The console's `field`, `mode` and `value` were folded into `modifiers` and the required `field` then reported missing; the model's `modifiers` alone failed the same check. The suites that used it passed only by sending both shapes at once. | `invoke.ts` normalizeArgs, `catalog-types.ts` checkArgs |
+| medium | An NPC reaction with a penalty rolled `2d6+-3`, which no dice parser reads: a DM could not give a reaction roll a penalty from the console or the model. | `social-tools.ts` handleNpcReaction |
+| medium | A conjuring spell's creatures faded on the clock or at the round wrap and the caster went on concentrating on the spell: the next concentration spell was told it replaced one that no longer existed. | `concentration-upkeep.ts` endConcentrationOnFadedSummons, called from `condition-tick.ts` and `encounter-tools.ts` |
+| low | `aoe_damage` and `use_reaction` were offered at a quiet table and refused for want of a fight (`needsEncounter` unset). | `catalog-combat.ts` |
+| low | Under `hpMethod: rolled` the hit die a level-up rolled left no dice card: the player saw a number arrive and no die. | `sheet/route.ts` (now `rollCard`) |
+
+Everything else the four suites ask is held: 192 + 15 + 11 + 67 rules, no
+known gaps. The character creator's doors refused or corrected every
+smuggled pick; every duration on the clock ran out when the rulebook says;
+every other console form reached the engine or a refusal in words.
+
 ## The ruleset ODM is held to
 
 ODM implements **D&D 5e, SRD 5.1 (the 2014 rules)**. It is not a pure

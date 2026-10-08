@@ -111,6 +111,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { VIGILANT_PREFIX } from "@/lib/srd/authored-effects-more";
 import { handleReaperCast } from "@/lib/dm/authored-reaper";
 import { sweepSummons } from "@/lib/dm/summon-store";
+import { endConcentrationOnFadedSummons } from "@/lib/dm/concentration-upkeep";
 import { afflictionsAtCombatStart } from "@/lib/dm/afflictions";
 import { enemiesDue, enemiesOwedTurn, holdForEnemies } from "@/lib/dm/enemies-due";
 import { approachForCompanion } from "@/lib/dm/companion-approach";
@@ -1292,7 +1293,13 @@ function advancePointer(
   const landed = { order: [...encounter.order], turnIndex: next.turnIndex };
   // A creature a spell made that went during the move leaves the order now,
   // after the save that would have put it back (src/lib/dm/summon-store.ts).
-  if (sweepSummons(campaign).length || encounter.order.some((entry) => entry.kind === "pc" && !getSheetById(entry.characterId))) {
+  const faded = sweepSummons(campaign);
+  if (faded.length) {
+    // The last creature of a conjuring spell gone takes the concentration
+    // on it with it (src/lib/dm/concentration-upkeep.ts).
+    endConcentrationOnFadedSummons(campaign, []);
+  }
+  if (faded.length || encounter.order.some((entry) => entry.kind === "pc" && !getSheetById(entry.characterId))) {
     Object.assign(encounter, getActiveEncounter(campaign.id) ?? encounter);
   }
   // The one the turn reached went as it began (its spell ran out at the

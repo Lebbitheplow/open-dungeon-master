@@ -281,6 +281,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     label: "Area of effect",
     category: "combat",
     summary: "One save, many targets: each rolls, and the halves and evasions resolve themselves.",
+    needsEncounter: true,
     fields: [
       { name: "casterId", label: "Cast by character", kind: "character", help: "A player's spell: the server spends the slot once and derives the dice, save and DC." },
       { name: "spell", label: "Spell", kind: "text", placeholder: "Fireball" },
@@ -420,6 +421,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     label: "Reaction",
     category: "combat",
     summary: "Spends a character's reaction on a named feature and applies what it does.",
+    needsEncounter: true,
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       {
