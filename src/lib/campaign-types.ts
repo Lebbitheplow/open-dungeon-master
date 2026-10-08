@@ -5,6 +5,8 @@ export type SessionUser = {
   username: string;
   avatar?: { url: string } | null;
   isAdmin?: boolean;
+  // False on a server whose admin starts every campaign (src/lib/shared-host.ts).
+  canCreateCampaigns?: boolean;
   mustChangePassword?: boolean;
   // Set while the account is scheduled for deletion; the header banner
   // offers to keep it until then.

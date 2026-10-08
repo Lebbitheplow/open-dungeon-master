@@ -227,10 +227,11 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             ) : continueCampaign ? (
               <ContinueHero campaign={continueCampaign} userId={user.id} />
             ) : (
-              <EmptyHero onNewCampaign={() => setCreateOpen(true)} />
+              <EmptyHero onNewCampaign={() => setCreateOpen(true)} canCreate={user.canCreateCampaigns !== false} />
             )}
             <HomeMenu
               onNewCampaign={() => setCreateOpen(true)}
+              showNew={user.canCreateCampaigns !== false}
               onSolo={() => setSoloOpen(true)}
               showSolo={offersStoryModel(capabilities)}
               onJoin={focusJoin}

@@ -3,6 +3,7 @@ import { capsFor as capsForCampaign, getCampaignForUser, type Campaign } from "@
 import type { ViewerCaps } from "@/lib/dm/viewer";
 import type { User } from "@/lib/db/users";
 import { isMemberMuted } from "@/lib/db/moderation";
+import { enterUsageScope } from "@/lib/usage/scope";
 
 export type MemberContext = { user: User; campaign: Campaign };
 
@@ -24,6 +25,9 @@ export async function requireMember(
   if (!campaign) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });
   }
+  // Everything this request goes on to ask of a model, a painter or a
+  // speech server is this campaign's in the usage ledger.
+  enterUsageScope({ campaignId: campaign.id, userId: user.id });
   return { user, campaign };
 }
 

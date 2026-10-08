@@ -304,6 +304,19 @@ function threadMessages(campaignId: string, userId: string): ChatMessage[] {
   return messages;
 }
 
+// A backend that could not be reached is "unavailable"; a refusal the
+// server itself made (the shared-host policy, src/lib/shared-host.ts) is
+// said in its own words, since retrying would not change it.
+async function modelFailure(error: Response): Promise<string> {
+  if (error.status === 403) {
+    const payload = (await error.json().catch(() => null)) as { error?: string } | null;
+    if (payload?.error) {
+      return payload.error;
+    }
+  }
+  return "The model is unavailable; try again shortly.";
+}
+
 export async function runAsk(
   request: AskRequest,
 ): Promise<AskResult | { error: string }> {
@@ -360,7 +373,7 @@ export async function runAsk(
       ...(offerSearch ? { tools: [ASK_SEARCH_TOOL] } : {}),
     });
     if (first.error) {
-      result = { error: "The model is unavailable; try again shortly." };
+      result = { error: await modelFailure(first.error) };
       return;
     }
 
@@ -411,7 +424,7 @@ export async function runAsk(
       { timeoutMs: arcTextTimeoutMs() },
     );
     if (second.error) {
-      result = { error: "The model is unavailable; try again shortly." };
+      result = { error: await modelFailure(second.error) };
       return;
     }
     const parsed = parseAskJson(

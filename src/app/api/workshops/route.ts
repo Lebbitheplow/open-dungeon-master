@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { publicCampaign, type Campaign } from "@/lib/db/campaigns";
 import { createWorkshop, listWorkshopsForUser } from "@/lib/db/workshops";
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
   }
   if (user.mustChangePassword) {
     return Response.json({ error: "Set a new password to continue." }, { status: 403 });
+  }
+  if (!canCreateCampaigns(user)) {
+    return campaignCreationRefusal();
   }
 
   const parsed = createWorkshopSchema.safeParse(await request.json().catch(() => ({})));

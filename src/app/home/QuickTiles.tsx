@@ -11,17 +11,21 @@ import { GameIcon } from "@/components/ui/GameIcon";
 // shells' own home tiles carry, so a guide can point at either.
 export function HomeMenu({
   onNewCampaign,
+  showNew = true,
   onSolo,
   showSolo,
   onJoin,
 }: {
   onNewCampaign: () => void;
+  // False on a server whose admin starts every campaign: the door is not
+  // there rather than greyed, like Solo adventure.
+  showNew?: boolean;
   onSolo: () => void;
   showSolo: boolean;
   onJoin: () => void;
 }) {
   const items: Array<{ id: string; label: string; glyph: string; href?: string; onClick?: () => void; tour: string }> = [
-    { id: "new", label: "New campaign", glyph: "tab-campaigns", onClick: onNewCampaign, tour: "tile-new-campaign" },
+    ...(showNew ? [{ id: "new", label: "New campaign", glyph: "tab-campaigns", onClick: onNewCampaign, tour: "tile-new-campaign" }] : []),
     ...(showSolo ? [{ id: "solo", label: "Solo adventure", glyph: "tab-story", onClick: onSolo, tour: "tile-solo" }] : []),
     { id: "characters", label: "Characters", glyph: "tab-characters", href: "/characters", tour: "tile-characters" },
     { id: "workshop", label: "Workshop", glyph: "system-homebrew", href: "/workshop", tour: "tile-workshop" },

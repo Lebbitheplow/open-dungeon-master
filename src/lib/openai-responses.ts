@@ -18,6 +18,7 @@ import {
   readBody,
 } from "@/lib/backend-fetch";
 import type { SamplingConfig } from "@/lib/dm/sampling-logic";
+import { responsesUsage, type TokenUsage } from "@/lib/usage/parse";
 import type {
   ChatMessage,
   StreamDeltaHandler,
@@ -209,7 +210,7 @@ export function responsesPayload(input: {
 // "max_output_tokens"), the same word the Chat Completions reader reports,
 // so the turn's empty-reply warning (issue #120) names it on both routes.
 export type ResponsesReply =
-  | { message: UpstreamChatMessage; finishReason?: string }
+  | { message: UpstreamChatMessage; finishReason?: string; usage?: TokenUsage }
   | { failure: string };
 
 const cutByOutputCap = (response: { status?: unknown; incomplete_details?: { reason?: unknown } | null } | null | undefined) =>
@@ -234,6 +235,7 @@ export async function readResponsesReply(
     let output: unknown = null;
     let failure = "";
     let finishReason = "";
+    let usage: TokenUsage | null = null;
     await forEachStreamLine(upstream, options.idleMs, options.onIdleAbort, (line) => {
       if (!line.startsWith("data:")) return;
       const payload = line.slice(5).trim();
@@ -274,6 +276,7 @@ export async function readResponsesReply(
         case "response.completed":
         case "response.incomplete":
           output = event.response?.output ?? null;
+          usage = responsesUsage(event.response) ?? usage;
           if (cutByOutputCap(event.response)) {
             finishReason = "length";
           }
@@ -302,7 +305,7 @@ export async function readResponsesReply(
     if (!message.content && deltas.length) {
       message.content = deltas.join("");
     }
-    return { message, ...(finishReason ? { finishReason } : {}) };
+    return { message, ...(finishReason ? { finishReason } : {}), ...(usage ? { usage } : {}) };
   }
 
   const body = await readBody(upstream, MAX_BACKEND_BODY_BYTES);
@@ -327,8 +330,10 @@ export async function readResponsesReply(
         "The backend reported a failed response.",
     };
   }
+  const usage = responsesUsage(data);
   return {
     message: fromResponsesOutput(data?.output),
     ...(cutByOutputCap(data) ? { finishReason: "length" } : {}),
+    ...(usage ? { usage } : {}),
   };
 }

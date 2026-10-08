@@ -4,6 +4,8 @@
 // concurrency stays low naturally (jobs from different campaigns queue at the
 // model server).
 
+import { bindUsageScope } from "@/lib/usage/scope";
+
 type Pause = { reason: string; promise: Promise<void>; resolve: () => void };
 
 declare global {
@@ -54,9 +56,12 @@ function gate(campaignId: string): Promise<void> {
 
 export function enqueueDmJob(campaignId: string, job: () => Promise<void>) {
   const tail = queues().get(campaignId) ?? Promise.resolve();
+  // The job runs later, off the request that queued it; it still answers
+  // to this campaign in the usage ledger (src/lib/usage/scope.ts).
+  const scoped = bindUsageScope(job, { campaignId });
   const next = tail
     .then(() => gate(campaignId))
-    .then(job)
+    .then(scoped)
     .catch((error) => {
       console.error(`[dm] job failed for campaign ${campaignId}:`, error);
     });

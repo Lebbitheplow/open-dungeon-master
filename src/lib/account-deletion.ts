@@ -1,4 +1,5 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { forgetUsageFor } from "@/lib/usage/ledger";
 import { removeCampaignAudio } from "@/lib/campaign-deletion";
 import { deleteCampaign } from "@/lib/db/campaigns";
 import { getDatabase, parseJson } from "@/lib/db/core";
@@ -133,6 +134,8 @@ export function purgeAccount(userId: string) {
 
     // The transcript keeps its words, minus the link to a person.
     db.prepare(`UPDATE campaign_messages SET user_id = NULL WHERE user_id = ?`).run(userId);
+    // The usage ledger too: counts stay, the name goes.
+    forgetUsageFor(userId);
 
     // Things only this person could act on.
     for (const table of [
