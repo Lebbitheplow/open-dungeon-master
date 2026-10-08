@@ -183,8 +183,8 @@ export function pcOpportunitySwing(input: {
     // Sentinel: the creature's speed is 0 for the rest of its turn.
     if (hasSentinel(sheet)) {
       const fresh = getEnemy(enemy.id);
-      if (fresh && !fresh.conditions.includes("halted")) {
-        patchEnemyConditions(fresh.id, [...fresh.conditions, "halted"], { ...fresh.conditionMeta, halted: { source: sheet.id, untilTurnEndOf: enemy.id } });
+      if (fresh && !fresh.conditions.includes("stopped")) {
+        patchEnemyConditions(fresh.id, [...fresh.conditions, "stopped"], { ...fresh.conditionMeta, stopped: { source: sheet.id, untilTurnEndOf: enemy.id } });
         notes.push("Sentinel: its speed is 0 for the rest of the turn");
       }
     }

@@ -199,9 +199,10 @@ export type ResourceDef = {
   // Require the feature name to BE the match term, not merely contain it as
   // a word: "Rage" is barbarian rage, "Road Rage" (road_warrior) is not.
   exact?: boolean;
-  // A feat's counter under the same id as a class's: the two add up
-  // (Inner Resilience's ki on a monk's).
-  stacks?: boolean;
+  // A feat's counter that pours into a class's (Inner Resilience's ki into
+  // "ki"): the sheet carries one counter under that id, the two maxima
+  // added, and the class's definition answers for it.
+  into?: string;
   // The classes whose feature this counter belongs to. A feature of the
   // same name granted by any other class is not this feature: the grifter's
   // Vanish is counted, the ranger's is not.
@@ -326,33 +327,33 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
       "Lucky (or Level Up's Fortunate): three luck points a long rest. One spent on their own attack roll, ability check or saving throw rolls an extra d20 and keeps the best (pc_attack luck: true, request_roll luck: true; the server spends the point), or on an attack made against them (use_reaction 'lucky' after the hit: the attacker's d20 is rolled again and the lower kept; no reaction is spent).",
   },
   {
-    id: "ki",
+    id: "ki_inner_resilience",
+    into: "ki",
     match: ["inner resilience"],
     exact: true,
-    stacks: true,
-    displayName: "Ki Points",
+    displayName: "Ki Points (Inner Resilience)",
     maxFor: () => 3,
     recharge: "short",
     effect: { kind: "narrative" },
     guidance: "Inner Resilience (Tome of Heroes): 3 ki points for Patient Defense or Step of the Wind, 3 more on a monk's own; back after a short rest.",
   },
   {
-    id: "superiority_dice",
+    id: "superiority_dice_martial_adept",
+    into: "sub_superiority_dice",
     match: ["martial adept"],
     exact: true,
-    stacks: true,
-    displayName: "Superiority Dice",
+    displayName: "Superiority Dice (Martial Adept)",
     maxFor: () => 1,
     recharge: "short",
     effect: { kind: "narrative" },
     guidance: "Martial Adept: one superiority die (a d6) for the two maneuvers the feat taught, one more on a Battle Master's own; back after a short rest.",
   },
   {
-    id: "sorcery_points",
+    id: "sorcery_points_metamagic_adept",
+    into: "sorcery_points",
     match: ["metamagic adept"],
     exact: true,
-    stacks: true,
-    displayName: "Sorcery Points",
+    displayName: "Sorcery Points (Metamagic Adept)",
     maxFor: () => 2,
     recharge: "long",
     effect: { kind: "narrative" },
@@ -895,11 +896,12 @@ export function populateResources(
       const stated = def.upgrades ? usesNamed(name) : null;
       max = Math.max(max, row?.uses ?? 0, stated ?? 0);
     }
-    if (def.stacks && out[def.id]) {
-      max += out[def.id].max;
+    const key = def.into ?? def.id;
+    if (def.into && out[key]) {
+      max += out[key].max;
     }
-    const used = Math.min(existing?.[def.id]?.used ?? 0, max);
-    out[def.id] = { max, used };
+    const used = Math.min(existing?.[key]?.used ?? 0, max);
+    out[key] = { max, used };
   }
   // A spell a feat lets the character cast once without a slot ("Free
   // cast: Misty Step (Fey Touched)", src/lib/srd/feat-spells.ts): one use,

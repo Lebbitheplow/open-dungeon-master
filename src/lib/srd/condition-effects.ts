@@ -213,9 +213,9 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
   },
   // What the feats leave on a creature (src/lib/srd/feat-combat.ts).
   {
-    id: "halted",
-    match: ["halted"],
-    summary: "Halted: speed 0 for the rest of the turn (Sentinel's opportunity attack hit).",
+    id: "stopped",
+    match: ["stopped"],
+    summary: "Stopped: speed 0 for the rest of the turn (Sentinel's opportunity attack hit).",
     speedSet: 0,
   },
   {

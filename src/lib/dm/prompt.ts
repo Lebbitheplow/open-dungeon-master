@@ -1010,6 +1010,11 @@ export const requestRollTool = {
           description:
             "True when the player spends their character's Inspiration on this roll for advantage. Refused when they hold none.",
         },
+        luck: {
+          type: "boolean",
+          description:
+            "Lucky: spend a luck point for an extra d20 on this roll, the best kept. The server checks the feat and spends the point; ignored without one left.",
+        },
         againstEnemyId: {
           type: "string",
           description:
@@ -1242,16 +1247,6 @@ export function buildDmMessages(
     return { message, id: message.id, text: `${content}${card}` };
   });
 
-  const budgets = computeBudgets(state.contextLimitTokens);
-  const fitted = fitHistory(rendered, budgets.history);
-  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
-  const historyMessages: ChatMessage[] = rendered
-    .filter((entry) => keptIds.has(entry.id))
-    .map((entry) => ({
-      role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
-      content: entry.text,
-    }));
-
   const physicalDiceUsers = realDiceUserIds(state.campaign, state.members);
   const anyPhysicalDice = state.sheets.some((sheet) => physicalDiceUsers.has(sheet.userId));
   const systemParts = [buildDmSystem(state.campaign)];
@@ -1275,6 +1270,27 @@ export function buildDmMessages(
   }
   const gameStateBlock = buildGameStateBlock(state);
   systemParts.push(gameStateBlock);
+
+  // The transcript takes its share of the window, and never more than what
+  // the rules, the game state and the director's note leave of it: those
+  // blocks are not dropped, so when they run past their shares (a table
+  // whose heroes carry many feats, say) the history gives way, and the
+  // packed prompt stays inside the limit the trace reports.
+  const budgets = computeBudgets(state.contextLimitTokens);
+  const fixedTokens =
+    estimateTokens(systemParts.join("\n\n")) + estimateTokens(state.directorBlock ?? "");
+  const historyAllowance = Math.max(
+    0,
+    Math.min(budgets.history, usableTokens(state.contextLimitTokens) - fixedTokens),
+  );
+  const fitted = fitHistory(rendered, historyAllowance);
+  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
+  const historyMessages: ChatMessage[] = rendered
+    .filter((entry) => keptIds.has(entry.id))
+    .map((entry) => ({
+      role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
+      content: entry.text,
+    }));
 
   // Record what this prompt cost, block by block. Nothing here is dropped:
   // the rules and game-state blocks are load-bearing and the engine boundary

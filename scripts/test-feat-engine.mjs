@@ -112,7 +112,7 @@ test("the option slots and counters the feats carry", () => {
   assert.deepEqual(fighter.luck_points, { max: 3, used: 0 });
   assert.deepEqual(fighter.inspiring_leader, { max: 6, used: 0 });
   assert.deepEqual(fighter.ki, { max: 3, used: 0 }, "Inner Resilience's ki without a monk's");
-  assert.deepEqual(fighter.superiority_dice, { max: 1, used: 0 }, "Martial Adept's one die");
+  assert.deepEqual(fighter.sub_superiority_dice, { max: 1, used: 0 }, "Martial Adept's one die, under the fighter's own counter");
   const monk = populateResources([{ name: "Ki" }], 5, {}, undefined, undefined, ["Inner Resilience"]);
   assert.equal(monk.ki.max, 5 + 3, "a monk's ki plus the feat's three");
   assert.equal(luckPointsLeft(fighter), 3);
