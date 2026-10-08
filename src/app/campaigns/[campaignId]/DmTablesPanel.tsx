@@ -8,7 +8,8 @@ import { ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Switch } from "@/components/ui/Switch";
-import { PanelLoading, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { LoadFailed, PanelLoading, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { DeskCard } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import {
   dieForTable,
@@ -50,7 +51,9 @@ export function DmTablesPanel({
   layout?: "list" | "rows";
 }) {
   const [tables, setTables] = useState<RollTable[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  // Loaded only once the server has answered yes; a no is kept in its own
+  // words (issue 140), so "No tables yet" is never drawn over a refusal.
+  const { loaded, loadError, settle } = useLoadStatus();
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -69,18 +72,16 @@ export function DmTablesPanel({
   const [result, setResult] = useState<RollResult | null>(null);
   const rows = layout === "rows";
 
-  const load = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/roll-tables`);
-      if (!response.ok) {
-        return;
-      }
-      const data = await response.json();
-      setTables(data.tables ?? []);
-    } finally {
-      setLoaded(true);
-    }
-  }, [campaignId]);
+  const load = useCallback(
+    () =>
+      readLoad<{ tables?: RollTable[] }>(fetch(`/api/campaigns/${campaignId}/dm/roll-tables`), "The tables").then((outcome) => {
+        if (outcome.payload) {
+          setTables(outcome.payload.tables ?? []);
+        }
+        settle(outcome);
+      }),
+    [campaignId, settle],
+  );
 
   // Refetches on mount and after every edit, the same shape as BondsPanel.
   useEffect(() => {
@@ -389,6 +390,8 @@ export function DmTablesPanel({
         <TableRows
           tables={tables}
           loaded={loaded}
+          loadError={loadError}
+          onRetry={() => void load()}
           busy={busy}
           result={result}
           onOpen={open}
@@ -471,9 +474,12 @@ export function DmTablesPanel({
           </ul>
         ) : loaded ? (
           <EmptyState size="sm" art="scrolls" title="No tables yet. Paste one in below." />
+        ) : loadError ? (
+          <LoadFailed error={loadError} onRetry={() => void load()} />
         ) : (
           <PanelLoading label="Loading..." rows={2} />
         )}
+        {loaded && loadError ? <LoadFailed error={loadError} onRetry={() => void load()} /> : null}
       </DeskCard>
 
       <DeskCard glyph="system-homebrew" title="New table">
