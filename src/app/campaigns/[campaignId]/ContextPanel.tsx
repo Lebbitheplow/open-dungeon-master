@@ -28,6 +28,7 @@ const KIND_LABEL: Record<BlockKind, string> = {
   retrieval: "Lore and house rules",
   chapters: "Chapters",
   history: "Transcript",
+  tools: "Tool definitions",
 };
 
 // Palette is stone, amber and ember only (src/app/globals.css remaps the
@@ -45,6 +46,7 @@ const KIND_COLOR: Record<BlockKind, string> = {
   retrieval: "text-ember-300",
   chapters: "text-ember-400",
   history: "text-stone-200",
+  tools: "text-stone-400",
 };
 
 export function ContextPanel({ campaignId }: { campaignId: string }) {

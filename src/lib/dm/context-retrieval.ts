@@ -5,7 +5,7 @@ import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
 import { probeCustomContextWindow, storyContextTokens } from "@/lib/model-client";
 import { renderLoreForPrompt, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
-import { computeBudgets } from "@/lib/dm/context-budget";
+import { computeBudgets, promptWindowTokens } from "@/lib/dm/context-budget";
 import { selectRuleChunks } from "@/lib/dm/rules-activation-logic";
 import { renderHouseRules, renderVariantRules } from "@/lib/dm/rules-logic";
 import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
@@ -81,6 +81,9 @@ function pickFused<T>(
 export async function buildTurnRetrieval(
   campaign: Campaign,
   history: CampaignMessage[],
+  // What the turn's tool definitions cost, so the rules budget is a share of
+  // the same window the prompt is packed against (issue #120).
+  toolTokens = 0,
 ): Promise<TurnRetrieval> {
   // Resolved from the campaign's own provider and model rather than assuming
   // a default window, so the rules budget matches what the backend will
@@ -96,7 +99,7 @@ export async function buildTurnRetrieval(
       campaign.settings.customModel,
     );
   }
-  const contextLimitTokens = storyContextTokens(campaign.settings);
+  const contextLimitTokens = promptWindowTokens(storyContextTokens(campaign.settings), toolTokens);
   const variantRulesBlock = renderVariantRules(campaign.gameSettings.variantRules);
   let houseRulesBlock = "";
   let loreBlock = "";

@@ -67,6 +67,11 @@ export type UpstreamChatMessage = {
 export type UpstreamResult = {
   message?: UpstreamChatMessage;
   error?: Response;
+  // The backend's finish_reason for the first choice, when it sent one:
+  // "stop", "tool_calls", or "length" for a reply cut at the output cap.
+  // Read by the DM turn loop to tell a model that ran out of room from one
+  // that chose to say nothing (issue #120).
+  finishReason?: string;
 };
 
 export type ChatRequestOptions = {
@@ -737,6 +742,7 @@ export async function requestCustomMessage(
     const contentParts: string[] = [];
     const toolCalls: Array<StreamedToolCall | undefined> = [];
     let upstreamError = "";
+    let finishReason = "";
 
     try {
       await forEachStreamLine(upstream, timeoutMs, requestTimeout.abortNow, (line) => {
@@ -754,7 +760,7 @@ export async function requestCustomMessage(
           return;
         }
         const record = parsed as {
-          choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown } }>;
+          choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown }; finish_reason?: unknown }>;
           error?: { message?: string } | string;
         };
         if (record.error) {
@@ -763,6 +769,10 @@ export async function requestCustomMessage(
               ? record.error
               : record.error.message || "The backend reported a stream error.";
           return;
+        }
+        const reason = record.choices?.[0]?.finish_reason;
+        if (typeof reason === "string" && reason) {
+          finishReason = reason;
         }
         const delta = record.choices?.[0]?.delta;
         if (typeof delta?.content === "string" && delta.content) {
@@ -827,10 +837,11 @@ export async function requestCustomMessage(
         content: contentParts.join(""),
         ...(completedToolCalls.length ? { tool_calls: completedToolCalls } : {}),
       },
+      ...(finishReason ? { finishReason } : {}),
     };
   }
 
-  let data: { choices?: Array<{ message?: UpstreamChatMessage }> };
+  let data: { choices?: Array<{ message?: UpstreamChatMessage; finish_reason?: unknown }> };
   try {
     const body = await readBody(upstream, MAX_BACKEND_BODY_BYTES);
     if (!body.complete) {
@@ -846,7 +857,11 @@ export async function requestCustomMessage(
     };
   }
 
-  return { message: data?.choices?.[0]?.message };
+  const finishReason = data?.choices?.[0]?.finish_reason;
+  return {
+    message: data?.choices?.[0]?.message,
+    ...(typeof finishReason === "string" && finishReason ? { finishReason } : {}),
+  };
 }
 
 export async function requestLocalMessage(

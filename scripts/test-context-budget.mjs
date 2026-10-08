@@ -17,6 +17,9 @@ import {
   fitHistory,
   packBlocks,
   usableTokens,
+  MAX_RESPONSE_RESERVE_TOKENS,
+  promptWindowTokens,
+  responseReserveTokens,
 } from "../src/lib/dm/context-budget.ts";
 
 let passed = 0;
@@ -325,6 +328,36 @@ check("the small sections have floors, sit in order, and the lines never drop", 
   assert.ok(packed.kept.some((block) => block.id === "lines"), "the lines were dropped");
   assert.ok(packed.kept.some((block) => block.id === "sky"));
   assert.ok(!packed.kept.some((block) => block.id === "shop"), "a shop over the window stayed");
+});
+
+check("the reply reserve grows with the window, between the base and the cap (issue #120)", () => {
+  assert.equal(responseReserveTokens(16_384), RESPONSE_RESERVE_TOKENS, "a 16K window keeps the base reserve");
+  assert.equal(responseReserveTokens(32_768), 4_096, "one eighth of a 32K window");
+  assert.equal(responseReserveTokens(65_536), MAX_RESPONSE_RESERVE_TOKENS, "64K hits the cap");
+  assert.equal(responseReserveTokens(131_072), MAX_RESPONSE_RESERVE_TOKENS, "the cap holds at 128K");
+  assert.equal(responseReserveTokens(0), responseReserveTokens(DEFAULT_CONTEXT_TOKENS), "no window means the default");
+});
+
+check("the packing window takes the tool definitions and the grown reserve off the model's window", () => {
+  // Issue #120's shape: a 64K window and ~27K of tool definitions. Packing
+  // against the full window left ~1K for the reply; this leaves the reserve.
+  const window = 65_536;
+  const tools = 27_246;
+  const packed = promptWindowTokens(window, tools);
+  assert.equal(
+    usableTokens(packed),
+    window - tools - responseReserveTokens(window),
+    "messages may fill the window less the tools and less the whole reserve",
+  );
+  assert.ok(computeBudgets(packed).history < computeBudgets(window).history, "the transcript share shrank to make room");
+  // No tools: only the reserve above the base comes off.
+  assert.equal(usableTokens(promptWindowTokens(window, 0)), window - responseReserveTokens(window));
+  // A 16K window keeps the base reserve, so with no tools it packs exactly as before.
+  assert.equal(promptWindowTokens(16_384, 0), 16_384);
+  assert.equal(usableTokens(promptWindowTokens(16_384, 0)), usableTokens(16_384));
+  // Tools larger than the window: the floor keeps usableTokens on its own floor rather than going negative.
+  assert.equal(usableTokens(promptWindowTokens(16_384, 27_246)), 1_024);
+  assert.equal(promptWindowTokens(Number.NaN, Number.NaN), promptWindowTokens(DEFAULT_CONTEXT_TOKENS, 0), "bad inputs fall back");
 });
 
 console.log(`context-budget: ${passed} tests passed`);
