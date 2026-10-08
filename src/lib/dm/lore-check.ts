@@ -71,8 +71,9 @@ async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number
       (scene) => `[scene:ch${scene.chapterIndex}@${scene.seqStart}] ${scene.text}`,
     );
     chapterIndexes = [...new Set(scenes.map((scene) => scene.chapterIndex))];
-  } catch {
+  } catch (error) {
     // embedder unavailable; chapters below still anchor the check
+    console.error("[lore-check] scene search failed", error);
   }
   const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
   const relevantChapters = chapterIndexes.length

@@ -101,8 +101,9 @@ export async function handleSearchLore(
   let queryVector: Float32Array | null = null;
   try {
     [queryVector] = await embed([query]);
-  } catch {
+  } catch (error) {
     // Keyword fallback carries the search.
+    console.error("[lore-search] embedding failed", error);
   }
 
   const candidates: LoreCandidate[] = [];

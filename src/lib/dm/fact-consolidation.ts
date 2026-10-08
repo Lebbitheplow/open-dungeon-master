@@ -33,8 +33,9 @@ export async function factsOnFileFor(
           similarity.set(row.id, Math.max(...pieceVectors.map((piece) => cosine(piece, vector))));
         }
       }
-    } catch {
+    } catch (error) {
       // No embedder on this host: words and recency carry the ranking.
+      console.error("[fact-consolidation] embedding failed", error);
     }
   }
   const passage = pieces.join("\n\n");

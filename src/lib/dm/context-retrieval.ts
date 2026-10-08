@@ -115,8 +115,9 @@ export async function buildTurnRetrieval(
       if (query && anyEmbedding) {
         try {
           [queryVector] = await embed([query]);
-        } catch {
+        } catch (error) {
           // Embedder unavailable; keyword fallback carries the turn.
+          console.error("[context-retrieval] embedding failed", error);
         }
       }
 

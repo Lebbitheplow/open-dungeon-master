@@ -267,8 +267,9 @@ export async function searchScenes(
   let queryVector: Float32Array | null = null;
   try {
     [queryVector] = await embed([trimmed]);
-  } catch {
+  } catch (error) {
     // embedder unavailable; lexical ranking carries the search
+    console.error("[memory-index] embedding failed", error);
   }
 
   const language = campaignLanguage(campaignId);
