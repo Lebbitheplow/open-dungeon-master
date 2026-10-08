@@ -10,11 +10,13 @@ import { requestUtilityMessage } from "@/lib/dm/model";
 import { ADJUDICATIONS } from "@/lib/dm/invoke-catalog";
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { embed } from "@/lib/embeddings";
+import { rulebookPages } from "@/lib/rulebook/book";
 import {
   availableEntries,
-  catalogEntryText,
+  catalogPassages,
   parseSuggestionJson,
   rankBySimilarity,
+  srdSections,
   type ParsedSuggestion,
 } from "@/lib/dm/assist-logic";
 import { parseRollTable, TABLE_MAX_ENTRIES, type RollTableEntry } from "@/lib/dm/roll-table-logic";
@@ -41,13 +43,26 @@ const SUGGEST_SYSTEM =
 // How many of the nearest actions the DM is shown before the model answers.
 const SHORTLIST = 5;
 
-let catalogVectors: Promise<Map<string, Float32Array>> | null = null;
+let catalogVectors: Promise<Map<string, Float32Array[]>> | null = null;
 
-// The catalog's vectors, embedded once per process: the catalog only
-// changes with the code.
-function catalogVectorsOnce(): Promise<Map<string, Float32Array>> {
-  catalogVectors ??= embed(ADJUDICATIONS.map(catalogEntryText)).then(
-    (vectors) => new Map(ADJUDICATIONS.map((entry, index) => [entry.name, vectors[index]])),
+// The catalog's passage vectors, embedded once per process: the catalog
+// and the SRD only change with the code.
+function catalogVectorsOnce(): Promise<Map<string, Float32Array[]>> {
+  if (catalogVectors) {
+    return catalogVectors;
+  }
+  const sections = srdSections(rulebookPages());
+  const passages = ADJUDICATIONS.flatMap((entry) =>
+    catalogPassages(entry, sections).map((text) => ({ name: entry.name, text })),
+  );
+  catalogVectors = embed(passages.map((passage) => passage.text)).then(
+    (vectors) => {
+      const byName = new Map<string, Float32Array[]>();
+      passages.forEach((passage, index) => {
+        byName.set(passage.name, [...(byName.get(passage.name) ?? []), vectors[index]]);
+      });
+      return byName;
+    },
     (error: unknown) => {
       catalogVectors = null;
       throw error;

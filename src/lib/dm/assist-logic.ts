@@ -5,10 +5,13 @@
 // catalog entry are embedded (src/lib/embeddings.ts, on the server with no
 // model call) and ordered by similarity, so a DM typing in Italian gets the
 // same help as one typing in English. This replaced a list of English stop
-// words and synonyms, which suggested nothing for any other language. The
-// model call that follows picks from the whole catalog, not from the
-// shortlist, so a shortlist that missed still leaves the right action
-// reachable.
+// words and synonyms, which suggested nothing for any other language. An
+// entry is embedded with the SRD's own text for each choice it offers (a
+// skill check carries the Athletics paragraph, "climb a sheer or slippery
+// cliff..."), because an entry's summary says what it does to the sheet,
+// never what a player says that calls for it. The model call that follows
+// picks from the whole catalog, not from the shortlist, so a shortlist that
+// missed still leaves the right action reachable.
 //
 // Pure and dependency-free apart from the catalog's own types, so
 // scripts/test-assist.mjs can import it.
@@ -18,6 +21,56 @@ import type { CatalogEntry } from "@/lib/dm/catalog-types";
 // What an entry is embedded as: its name as words, its label and its summary.
 export function catalogEntryText(entry: CatalogEntry): string {
   return `${entry.name.replace(/_/g, " ")}: ${entry.label}. ${entry.summary}`;
+}
+
+// How much of an SRD section an entry carries: the opening of a long one is
+// what says what it covers, and the embedding models read no further.
+const SECTION_CHARS = 1200;
+
+// Every titled stretch of the SRD's rules pages, by lowercased title: a
+// heading's section, or a bold-italic run-in paragraph ("***Athletics***.
+// Your Strength (Athletics) check covers ...") with the lines after it, as
+// plain text.
+export function srdSections(pages: readonly { kind: string; md: string }[]): Map<string, string> {
+  const sections = new Map<string, string>();
+  for (const page of pages) {
+    if (page.kind !== "rules") {
+      continue;
+    }
+    const lines = page.md.split("\n");
+    lines.forEach((line, index) => {
+      const heading = /^#{2,4} (.+)$/.exec(line);
+      const runIn = /^\*\*\*(.+?)\*\*\*/.exec(line);
+      const title = (heading?.[1] ?? runIn?.[1])?.trim().toLowerCase();
+      if (!title || sections.has(title)) {
+        return;
+      }
+      const body = [line];
+      for (const next of lines.slice(index + 1)) {
+        if (/^#{2,4} /.test(next) || (runIn && next.startsWith("***"))) {
+          break;
+        }
+        body.push(next);
+      }
+      sections.set(title, body.join(" ").replace(/[*_#>|`]/g, "").replace(/\s+/g, " ").trim().slice(0, SECTION_CHARS));
+    });
+  }
+  return sections;
+}
+
+// Everything an entry is embedded as: its own text, then the SRD section
+// named by each choice it offers, when the SRD has a section of that title.
+export function catalogPassages(entry: CatalogEntry, sections: ReadonlyMap<string, string>): string[] {
+  const passages = [catalogEntryText(entry)];
+  for (const field of entry.fields) {
+    for (const option of field.options ?? []) {
+      const section = sections.get(option.label.trim().toLowerCase());
+      if (section) {
+        passages.push(`${entry.label}: ${option.label}. ${section}`);
+      }
+    }
+  }
+  return passages;
 }
 
 // The actions this moment of play allows: a fight tool with no fight running
@@ -34,20 +87,21 @@ function dot(a: Float32Array, b: Float32Array): number {
   return sum;
 }
 
-// Nearest first, by cosine (the vectors are unit-normalized). Order only:
-// no similarity value decides anything, so no threshold depends on the
-// embedding model or the language. Ties keep catalog order, which groups by
-// category and puts the common things first inside each one.
+// Nearest first, by cosine (the vectors are unit-normalized), an entry
+// scored by its nearest passage. Order only: no similarity value decides
+// anything, so no threshold depends on the embedding model or the language.
+// Ties keep catalog order, which groups by category and puts the common
+// things first inside each one.
 export function rankBySimilarity(
   intent: Float32Array,
   entries: readonly CatalogEntry[],
-  vectors: ReadonlyMap<string, Float32Array>,
+  vectors: ReadonlyMap<string, readonly Float32Array[]>,
   limit: number,
 ): CatalogEntry[] {
   return entries
-    .map((entry, index) => ({ entry, index, vector: vectors.get(entry.name) }))
-    .filter((item): item is { entry: CatalogEntry; index: number; vector: Float32Array } => item.vector !== undefined)
-    .map(({ entry, index, vector }) => ({ entry, index, score: dot(intent, vector) }))
+    .map((entry, index) => ({ entry, index, passages: vectors.get(entry.name) ?? [] }))
+    .filter(({ passages }) => passages.length > 0)
+    .map(({ entry, index, passages }) => ({ entry, index, score: Math.max(...passages.map((vector) => dot(intent, vector))) }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, limit)
     .map(({ entry }) => entry);
