@@ -143,9 +143,37 @@ Two things follow from that one field:
 
 Reasoning models (the gpt-5.x and o-series lines) reject `temperature`
 outright. That is handled rather than fatal: the 400 names the field, ODM
-drops it and retries, and the turn lands with its tool calls intact. The only
-cost is one wasted round trip per call, which a sampling profile of **ODM
-default** with no per-role temperature avoids entirely.
+drops it and retries, and the turn lands with its tool calls intact. The
+dropped field is remembered for that model for the life of the process, so
+the one wasted round trip is paid once rather than on every turn; a sampling
+profile of **ODM default** with no per-role temperature avoids it entirely.
+
+**The GPT-6 line** reasons by default, and on Chat Completions that cannot
+be combined with function tools. ODM routes by model name
+(`scripts/lib/openai-tool-route.mjs`, shared with the admin panel's **Test
+backend**):
+
+| model | how its tools run |
+|---|---|
+| `gpt-6-sol`, `gpt-6-luna` | Chat Completions with `reasoning_effort: "none"` |
+| `gpt-6.1-sol`, `gpt-6-astra` | the Responses API (`/v1/responses`); they do not accept `"none"` |
+| everything else | Chat Completions, as before |
+
+The Responses route (`src/lib/openai-responses.ts`) translates the table's
+transcript and tool definitions on the way out and the reply on the way
+back, so the DM loop never learns which transport answered. Nothing is
+stored on OpenAI's side (`store: false`); the model reasons afresh over each
+tool result, which OpenAI allows. A model this table has never heard of
+starts on Chat Completions, and when OpenAI's 400 names a route ("set
+reasoning_effort to 'none'", or "use /v1/responses") ODM switches to it,
+remembers it for the model, and retries the same call. The same learning
+applies to any OpenAI-compatible proxy that relays those errors.
+
+What never happens is the quiet alternative: a 400 that mentions reasoning
+or the Responses API is not read as "this server has no function calling",
+and neither is any tool refusal from `api.openai.com`, so the turn fails
+with OpenAI's own message rather than being retried without tools and
+narrated with no `request_roll` and no engines.
 
 Two of those rows are why a paid key works. Reasoning models dropped
 `max_tokens` in favour of `max_completion_tokens`, and they reject
