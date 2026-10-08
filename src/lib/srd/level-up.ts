@@ -31,7 +31,9 @@ import { XP_THRESHOLDS, findSkill, levelForXp } from "@/lib/srd";
 import { ABILITY_SCORE_CAP, applyAsiChoices, earnedAsiCountFor } from "@/lib/srd/asi";
 import { asiTaken, withAsiLedger } from "@/lib/srd/asi-ledger";
 import { applyFeatIncrease, featSaveProficiency } from "@/lib/srd/feat-effects";
-import { applyFeatGrants } from "@/lib/srd/feat-grants";
+import { applyFeatGrants, featGrantSpec } from "@/lib/srd/feat-grants";
+import { elementalAdeptFeatureName } from "@/lib/srd/feat-combat";
+import { featSpellGrants, freeCastFeatures, withFeatSpells } from "@/lib/srd/feat-spells";
 import {
   bundledSubclassName,
   expertiseSlotsFor,
@@ -405,6 +407,24 @@ export function buildLevelUp(
     }
     proficiencies = granted.proficiencies;
   }
+  // And the spells they teach (src/lib/srd/feat-spells.ts): every pick
+  // named in the request, held to the feat's list, school and level.
+  const raisedThisLevel = new Map(
+    asked.choices.flatMap((choice) => (choice.mode === "feat" ? [[lower(choice.feat), choice.ability ?? null] as const] : [])),
+  );
+  const taught = featSpellGrants({
+    feats: featsTaken.map((name) => {
+      const facts = context.featOf(name);
+      return { name: facts?.name ?? name, desc: facts?.desc ?? "" };
+    }),
+    choices: request.featChoices ?? {},
+    raisedAbility: (feat) => raisedThisLevel.get(lower(feat)) ?? null,
+    spellOf: context.spellOf,
+    strict: true,
+  });
+  if (taught.problems.length) {
+    return refuse(taught.problems[0]);
+  }
   if (request.expertise) {
     const held = proficiencies.expertise ?? [];
     const picks = dedupeNames(request.expertise.map(lower)).filter((skill) => !held.includes(skill));
@@ -438,7 +458,13 @@ export function buildLevelUp(
         !heldNames.has(lower(feature.name)),
     )
     .map((feature) => ({ name: feature.name, source: "choice" as const }));
-  let features = populateFeaturesForClasses([...sheet.features, ...picked], classes, sheet.race);
+  const elementPicks = featsTaken.flatMap((name) => {
+    const spec = featGrantSpec(context.featOf(name)?.desc ?? "");
+    const picked = lower(request.featChoices?.[lower(name)]?.damageType ?? "");
+    return spec.damageTypes.length && spec.damageTypes.includes(picked) ? [elementalAdeptFeatureName(picked)] : [];
+  });
+  const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks].map((name) => ({ name: name.slice(0, 80), source: "story" as const }));
+  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race);
   const takenAfter = taken + asked.choices.length;
   if (target >= 4 || takenAfter > 0) {
     features = withAsiLedger(features, takenAfter);
@@ -535,6 +561,9 @@ export function buildLevelUp(
     );
   }
 
+  // The feat's spells join the lists, on top of the class's own; a
+  // character with no Spellcasting gets a slotless block for them.
+  spellcasting = withFeatSpells(spellcasting, taught.grants);
   const patch: FullPatchSheetInput = {
     maxHp,
     currentHp,

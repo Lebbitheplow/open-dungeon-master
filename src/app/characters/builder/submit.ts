@@ -5,7 +5,7 @@ import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
-import { featPicksOwed, type FeatChoices, type FeatGrantSpec } from "@/lib/srd/feat-grants";
+import { featOwed, type FeatChoices, type FeatGrantSpec } from "@/lib/srd/feat-grants";
 import { STANDARD_ARRAY } from "@/lib/srd/legality/abilities";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import {
@@ -99,7 +99,7 @@ function featPicksBlock(
     return null;
   }
   for (const feat of feats) {
-    const owed = featPicksOwed(feat, specOf(feat), featChoices?.[feat.trim().toLowerCase()]);
+    const owed = featOwed(feat, specOf(feat), featChoices?.[feat.trim().toLowerCase()]);
     if (owed) {
       return owed;
     }

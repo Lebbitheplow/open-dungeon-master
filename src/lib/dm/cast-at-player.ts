@@ -1,3 +1,5 @@
+import { hasDungeonDelver, hasMageSlayer } from "@/lib/srd/feat-combat";
+import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
 import { globeProblemFor } from "@/lib/dm/zone-rules";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -50,6 +52,9 @@ const castAtPlayerSchema = z.object({
   ability: z.string().max(80).optional(),
   spell: z.string().max(80).optional(),
   reason: z.string().optional(),
+  // Set by apply_hazard for a trap: Dungeon Delver saves at advantage and
+  // takes half (src/lib/srd/feat-combat.ts).
+  hazard: z.enum(["trap"]).optional(),
 });
 
 // Best-effort enemy concentration: when a tool call names the casting enemy
@@ -223,6 +228,21 @@ export function handleCastAtPlayer(
   // conditions, exhaustion, a nearby paladin's aura, the lasting effects on
   // saves, the traits keyed to what it resists, and a held Bardic
   // Inspiration die, which the roll spends.
+  const base0: Record<string, unknown> = {};
+  // Mage Slayer: advantage on the save against a spell cast by a creature
+  // within 5 feet. Dungeon Delver: advantage against a trap.
+  // Off the battle map the distance is the fiction's; a melee character
+  // is read as beside the caster, as the attack engine reads reach.
+  const adjacentCaster =
+    use?.enemy && (use.spell || args.spell) && hasMageSlayer(sheet)
+      ? (tilesBetween(use.enemy.encounterId, sheet.id, use.enemy.id) ?? 1) <= 1
+      : false;
+  const trapWard = args.hazard === "trap" && hasDungeonDelver(sheet);
+  const claim = adjacentCaster
+    ? { advantage: "advantage" as const, reason: "Mage Slayer: the caster is within 5 feet" }
+    : trapWard
+      ? { advantage: "advantage" as const, reason: "Dungeon Delver: a trap" }
+      : null;
   const save = rollCharacterSave(
     campaign,
     turn,
@@ -237,9 +257,14 @@ export function handleCastAtPlayer(
       spellBy: args.spell ? use?.enemy.stats.type : undefined,
     }),
     use?.enemy ?? null,
+    claim,
   );
+  if (claim) {
+    base0.featAdvantage = claim.reason;
+  }
   const saved = save.success;
   const base: Record<string, unknown> = {
+    ...base0,
     ok: true,
     target: sheet.name,
     source,
@@ -258,7 +283,12 @@ export function handleCastAtPlayer(
     // The one save-for-half rule every path shares, Evasion included
     // (src/lib/srd/trait-rules.ts).
     const taken = saveDamageTaken({ total: outcome.total, saved, halfOnSave, ability, sheet });
-    const dealt = taken.damage;
+    let dealt = taken.damage;
+    // Dungeon Delver: resistance to the damage dealt by traps.
+    if (trapWard && dealt > 0) {
+      dealt = Math.floor(dealt / 2);
+      base.dungeonDelver = "Dungeon Delver: resistance to trap damage, halved.";
+    }
     if (taken.evasion) {
       base.evasion = taken.evasion;
     }

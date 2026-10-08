@@ -5,7 +5,9 @@ import { STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import type { FeatGrantSpec, FeatPicks } from "@/lib/srd/feat-grants";
+import { featSpellsAnything, type CastingAbility } from "@/lib/srd/feat-spells";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import ContentPicker from "./ContentPicker";
 import { PickPill } from "./steps/shared";
 
 // What the character already has, so a feat's pick is never one of them.
@@ -66,7 +68,7 @@ export default function FeatChoicesFields({
     const own = new Set(mine[kind].map(lower));
     return new Set(known[kind].map(lower).filter((entry) => !own.has(entry)));
   };
-  const set = (kind: keyof FeatPicks, index: number, value: string) => {
+  const set = (kind: keyof KnownTraining, index: number, value: string) => {
     const next = [...(mine[kind] ?? [])];
     while (next.length < index) {
       next.push("");
@@ -91,10 +93,61 @@ export default function FeatChoicesFields({
   // The feat's expertise goes on a skill the character has, the feat's own
   // skill included.
   const expertiseFrom = [...new Set([...known.skills, ...mine.skills])].filter((skill) => !heldExpertise.has(lower(skill)));
-  const hasPicks = spec.languages + spec.skills + spec.expertise + spec.weapons + spec.tools > 0;
-  if (!hasPicks) {
+  const hasPicks = spec.languages + spec.skills + spec.expertise + spec.weapons + spec.tools + spec.damageTypes.length > 0;
+  const taught = spec.taught;
+  const teaches = featSpellsAnything(taught) && taught.cantrips + taught.spells > 0;
+  if (!hasPicks && !teaches) {
     return null;
   }
+  // The spells the feat teaches (src/lib/srd/feat-spells.ts): the class
+  // list and casting ability where the feat leaves them open, then one
+  // search per cantrip and per spell, held to the feat's level, school and
+  // list by the content API's filters.
+  const spellPicks = { cantrips: picks?.cantrips ?? [], spells: picks?.spells ?? [] };
+  const listPicked = (picks?.list ?? "").trim().toLowerCase();
+  const listParam = taught.listChoice ? listPicked : taught.lists.length === 1 ? taught.lists[0] : "";
+  const needsList = taught.listChoice && !listPicked;
+  const setSpell = (kind: "cantrips" | "spells", index: number, value: string) => {
+    const next = [...spellPicks[kind]];
+    while (next.length < index) {
+      next.push("");
+    }
+    next[index] = value;
+    onChange({ ...picks, [kind]: next.filter((entry, at) => entry || at < index) });
+  };
+  const spellSlots = (kind: "cantrips" | "spells", count: number, level: number) =>
+    Array.from({ length: count }, (_, index) => {
+      const chosen = spellPicks[kind][index] ?? "";
+      const label = `${feat} ${kind === "cantrips" ? (taught.attackCantrip ? "attack cantrip" : "cantrip") : `${level === 1 ? "1st" : `${level}th`}-level ${taught.schools.length ? `${taught.schools.join(" or ")} ` : ""}${taught.ritualBook ? "ritual " : ""}spell`} ${index + 1}`;
+      return (
+        <div key={`${kind}-${index}`} data-feat-spell={`${feat}:${kind}:${index + 1}`}>
+          <span className="mb-1 block text-[11px] text-stone-400">{label}</span>
+          {chosen ? (
+            <div className="flex items-center gap-2">
+              <PickPill label={chosen} selected onClick={() => setSpell(kind, index, "")}>
+                {capital(chosen)}
+              </PickPill>
+              <span className="text-[11px] text-stone-500">Tap to change</span>
+            </div>
+          ) : needsList ? (
+            <span className="text-xs text-stone-500">Pick the spell list first.</span>
+          ) : (
+            <ContentPicker
+              kind="spells"
+              extraParams={{
+                level: String(level),
+                exact: "1",
+                ...(listParam ? { class: listParam } : {}),
+                ...(taught.schools.length ? { school: taught.schools.join(",") } : {}),
+                ...(kind === "cantrips" && taught.attackCantrip ? { attack: "1" } : {}),
+              }}
+              placeholder={`Search ${kind === "cantrips" ? "cantrips" : "spells"}...`}
+              onPick={(entry) => setSpell(kind, index, entry.name)}
+            />
+          )}
+        </div>
+      );
+    });
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-amber-900/40 bg-amber-950/10 p-2.5" data-feat-choices={feat}>
       <p className="text-xs text-amber-200/90">{feat} choices</p>
@@ -183,6 +236,55 @@ export default function FeatChoicesFields({
           ))}
         </div>
       ) : null}
+      {spec.damageTypes.length ? (
+        <Select<string>
+          value={picks?.damageType ?? ""}
+          onChange={(picked) => onChange({ ...picks, damageType: picked })}
+          className="w-full sm:w-64"
+          label={`${feat} damage type`}
+          placeholder="Choose a damage type..."
+          options={[
+            { value: "", label: "Choose a damage type..." },
+            ...spec.damageTypes.map((type) => ({ value: type, label: capital(type) })),
+          ]}
+        />
+      ) : null}
+      {teaches && taught.listChoice ? (
+        <Select<string>
+          value={listPicked}
+          onChange={(picked) => onChange({ ...picks, list: picked, cantrips: [], spells: [] })}
+          className="w-full sm:w-64"
+          label={`${feat} spell list`}
+          placeholder="Choose a spell list..."
+          options={[
+            { value: "", label: "Choose a spell list..." },
+            ...taught.lists.map((list) => ({ value: list, label: capital(list) })),
+          ]}
+        />
+      ) : null}
+      {teaches && taught.ability === "choice" ? (
+        <Select<CastingAbility | "">
+          value={picks?.ability ?? ""}
+          onChange={(picked) => onChange({ ...picks, ...(picked ? { ability: picked } : {}) })}
+          className="w-full sm:w-64"
+          label={`${feat} spellcasting ability`}
+          placeholder="Choose the ability..."
+          options={[
+            { value: "", label: "Choose the ability..." },
+            { value: "int", label: "Intelligence" },
+            { value: "wis", label: "Wisdom" },
+            { value: "cha", label: "Charisma" },
+          ]}
+        />
+      ) : null}
+      {teaches && taught.fixedSpells.length ? (
+        <p className="text-[11px] text-stone-400">
+          Known from the feat: {taught.fixedSpells.map(capital).join(", ")}
+          {taught.freeCast ? ", castable once per long rest without a slot" : ""}.
+        </p>
+      ) : null}
+      {teaches && taught.cantrips > 0 ? <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{spellSlots("cantrips", taught.cantrips, 0)}</div> : null}
+      {teaches && taught.spells > 0 ? <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{spellSlots("spells", taught.spells, taught.spellLevel)}</div> : null}
       {spec.tools > 0 ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {Array.from({ length: spec.tools }, (_, index) => (

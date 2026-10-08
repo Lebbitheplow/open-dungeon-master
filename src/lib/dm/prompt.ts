@@ -8,6 +8,7 @@ import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, 
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { resourceDef } from "@/lib/srd/class-resources";
+import { featEngineTag } from "@/lib/srd/feat-combat";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { authoredFeatureTags } from "@/lib/srd/authored-effects";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
@@ -415,7 +416,7 @@ export function describeSheet(
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
     `  Languages (complete list; they cannot speak, read, or understand any other language): ${sheet.proficiencies.languages.join(", ") || "Common only"} | Tool proficiencies: ${sheet.proficiencies.tools.join(", ") || "none"} | Armor training: ${sheet.proficiencies.armor.join(", ") || "none"} | Weapon training: ${sheet.proficiencies.weapons.join(", ") || "none"}`,
-    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats: ${sheet.feats.join(", ")}` : ""}`,
+    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats: ${sheet.feats.map((feat) => `${feat}${featEngineTag(feat) ? ` ${featEngineTag(feat)}` : ""}`).join(", ")}` : ""}`,
   ];
   if (loadLine) {
     lines.push(loadLine);

@@ -403,10 +403,14 @@ function arcanumTop(view: Pick<CasterView, "classId" | "level">): number {
 // are left out of the count.
 export function spellListProblems(
   sheet: SheetLike & { abilities: CharacterSheet["abilities"] },
-  options: { bookAllowance?: boolean; freeCantrips?: string[]; freeCantripCount?: number } = {},
+  options: { bookAllowance?: boolean; freeCantrips?: string[]; freeCantripCount?: number; freeSpells?: string[] } = {},
 ): string[] {
   const problems: string[] = [];
   const free = new Set((options.freeCantrips ?? []).map(lower).filter(Boolean));
+  // Spells a feat teaches (Fey Touched's misty step) are known on top of
+  // the class's own and from any list, so they are left out of the count
+  // and the level cap alike.
+  const freeSpells = new Set((options.freeSpells ?? []).map(lower).filter(Boolean));
   // A sheet in play does not say which cantrip the race gave, only that it
   // gave one: `freeCantripCount` is that many, whichever they are, and they
   // sit with the first caster's.
@@ -421,7 +425,7 @@ export function spellListProblems(
       problems.push(`A ${label} knows ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}; that list has ${cantrips.length}.`);
     }
     const granted = grantedSpellsOf(view);
-    const held = dedupeNames([...heldSpells(view), ...view.pending]).filter((name) => !isCantripName(name));
+    const held = dedupeNames([...heldSpells(view), ...view.pending]).filter((name) => !isCantripName(name) && !freeSpells.has(lower(name)));
     const cap = spellCapOf(view, sheet.abilities);
     const counted = spellsAgainstLimit(held, granted);
     if (cap && counted > cap.count) {
@@ -435,7 +439,7 @@ export function spellListProblems(
       }
     }
     const top = Math.max(maxSpellLevelOf(view), arcanumTop(view));
-    for (const name of dedupeNames([...held, ...view.spellbook])) {
+    for (const name of dedupeNames([...held, ...view.spellbook]).filter((name) => !freeSpells.has(lower(name)))) {
       const spellLevel = spellLevelOf(name);
       if (spellLevel !== null && spellLevel > top) {
         problems.push(

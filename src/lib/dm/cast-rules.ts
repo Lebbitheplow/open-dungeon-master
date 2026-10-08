@@ -103,6 +103,11 @@ export function spellHeldProblem(
   ) {
     return null;
   }
+  // Ritual Caster's book (src/lib/srd/feat-spells.ts): its rituals are read
+  // from the sheet's spellbook whatever the class, as rituals only.
+  if (options.ritual && hasFeat(sheet, "ritual caster") && hasName(casting.spellbook, names)) {
+    return null;
+  }
   const ready = [...new Set(lists.flatMap((entry) => [...(entry.cantrips ?? []), ...entry.known, ...entry.prepared]))];
   return (
     notReadyReason(casting, facts?.name ?? spell) ??

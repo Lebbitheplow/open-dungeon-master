@@ -112,10 +112,19 @@ export function rollCharacterSave(
   // The creature forcing the save, for the features that answer it
   // (Supernatural Defense against the Monster Slayer's prey).
   from?: EncounterEnemy | null,
+  // Advantage or disadvantage the engine itself has established (Mage
+  // Slayer against an adjacent caster, Dungeon Delver against a trap).
+  claim?: { advantage: "advantage" | "disadvantage"; reason: string } | null,
 ): ForcedSave {
   const sheet = getSheetById(stale.id) ?? stale;
   const resolved = resolveRollExpression(
-    { kind: "saving_throw", ability, dc, ...(against ? { against } : {}) } as RollArgs,
+    {
+      kind: "saving_throw",
+      ability,
+      dc,
+      ...(against ? { against } : {}),
+      ...(claim ? { advantage: claim.advantage, advantageReason: claim.reason } : {}),
+    } as RollArgs,
     sheet,
     rollExtrasFor(campaign, sheet, "saving_throw"),
   );

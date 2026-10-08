@@ -101,6 +101,11 @@ export const pcAttackTool: ToolDef = {
           description:
             "Monk 5+: Stunning Strike on this melee weapon hit. The server spends 1 ki on a hit and rolls the target's CON save against the ki DC; a failed save stuns it.",
         },
+        powerAttack: {
+          type: "boolean",
+          description:
+            "Great Weapon Master (a heavy melee weapon) or Sharpshooter (a ranged weapon): take -5 on this attack roll for +10 damage. The player's choice before the roll; the server checks the feat and the weapon. After a melee critical hit or a kill, a Great Weapon Master's bonus-action attack is bonusAttack 'feature'.",
+        },
         reckless: {
           type: "boolean",
           description:
@@ -207,6 +212,7 @@ const pcAttackArgsSchema = z.object({
     z.enum(BONUS_ATTACKS).optional(),
   ),
   stunningStrike: z.coerce.boolean().optional(),
+  powerAttack: z.coerce.boolean().optional(),
   reckless: z.coerce.boolean().optional(),
   nonlethal: z.coerce.boolean().optional(),
   hordeBreaker: z.coerce.boolean().optional(),

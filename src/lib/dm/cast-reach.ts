@@ -8,6 +8,7 @@
 // Self spreads from the caster (a cone, a line, an aura): it reaches as far
 // as its area when the range line prints one, and never through a wall.
 
+import { spellRangeFactor } from "@/lib/srd/feat-combat";
 import type { Campaign } from "@/lib/db/campaigns";
 import { spellDamageFor, spellFactsFor } from "@/lib/content";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
@@ -75,15 +76,17 @@ export function spellReachProblem(input: {
 // higher slot, the dice are the slot's.
 export function spellAttackReach(
   campaign: Campaign,
-  sheet: Pick<CharacterSheet, "level">,
+  sheet: Pick<CharacterSheet, "level"> & Partial<Pick<CharacterSheet, "feats" | "features">>,
   spell: string,
   profile: AttackProfile,
   slotLevel: number | null,
 ): AttackProfile {
   const authors = spellAuthorsFor(campaign);
   const facts = spellFactsFor(spell, authors);
+  // Spell Sniper doubles an attack-roll spell's range (feat-combat.ts).
+  const factor = spellRangeFactor(sheet);
   const rangeTiles =
-    facts?.range.kind === "feet" ? Math.max(1, Math.floor(facts.range.feet / FEET_PER_TILE)) : profile.rangeTiles;
+    facts?.range.kind === "feet" ? Math.max(1, Math.floor((facts.range.feet * factor) / FEET_PER_TILE)) : profile.rangeTiles * factor;
   let damageExpression = profile.damageExpression;
   if (facts && slotLevel && slotLevel > facts.level) {
     const base = spellDamageFor({ spell, userIds: authors, casterLevel: sheet.level, slotLevel: facts.level })?.dice;

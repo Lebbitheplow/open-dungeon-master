@@ -195,6 +195,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
       level: published?.level ?? listed!.level,
       classes: [...new Set([...(published?.classes ?? []), ...(listed?.classes ?? [])].map(lower))],
       school: published?.school ? lower(published.school) : bundledSpellSchool(published?.name ?? listed!.name),
+      ...(published ? { ritual: published.ritual } : {}),
     };
   }
   if (!homebrewOwnerId) {
@@ -204,7 +205,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
     (entry) => entry.source === "homebrew" && spellNameMatches(entry, wanted),
   );
   return brewed
-    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower), school: brewed.school ? lower(brewed.school) : null }
+    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower), school: brewed.school ? lower(brewed.school) : null, ritual: brewed.ritual }
     : null;
 }
 
@@ -224,9 +225,25 @@ export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts 
     ? {
         name: found.name,
         prerequisite: String(found.data.prerequisite ?? ""),
-        desc: String(found.data.desc ?? found.data.description ?? ""),
+        desc: packFeatDesc(found.data),
       }
     : null;
+}
+
+// A feat's text as one string: the 2014 rows carry `desc`, the 2024 rows a
+// `benefits` list of paragraphs (Magic Initiate's four), read in order so
+// the grants in them (src/lib/srd/feat-grants.ts, feat-spells.ts) are found.
+export function packFeatDesc(data: Record<string, unknown>): string {
+  const plain = String(data.desc ?? data.description ?? "").trim();
+  if (plain) {
+    return plain;
+  }
+  return Array.isArray(data.benefits)
+    ? (data.benefits as Array<{ desc?: unknown }>)
+        .map((benefit) => String(benefit?.desc ?? "").trim())
+        .filter(Boolean)
+        .join(" ")
+    : "";
 }
 
 export function subclassIsOffered(

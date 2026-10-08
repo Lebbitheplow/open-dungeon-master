@@ -34,6 +34,7 @@ import { builderCasting, builderSpellAdvice } from "./casting";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
+import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -540,10 +541,24 @@ export function useBuilderDerived({
       return true;
     });
   }, [race, effectiveLevel, racialCantripPick]);
+  // The spells the feats teach (src/lib/srd/feat-spells.ts) are known the
+  // same way: shown granted, left out of the class's counts.
+  const featSpells = useMemo(
+    () =>
+      featSpellNames(
+        featSpellGrants({
+          feats: featNames.map((name) => ({ name, desc: featDescOf(name) })),
+          choices: featChoices,
+          raisedAbility: () => null,
+          strict: false,
+        }).grants,
+      ),
+    [featNames, featDescOf, featChoices],
+  );
   const chosenCantrips = useMemo(() => {
-    const free = new Set(racialCantrips.map((name) => name.trim().toLowerCase()));
+    const free = new Set([...racialCantrips, ...featSpells.cantrips].map((name) => name.trim().toLowerCase()));
     return cantrips.filter((name) => !free.has(name.trim().toLowerCase()));
-  }, [cantrips, racialCantrips]);
+  }, [cantrips, racialCantrips, featSpells]);
   const chosenSpells = useMemo(() => {
     const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
     return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
@@ -590,6 +605,7 @@ export function useBuilderDerived({
     starters,
     subclassSpells,
     racialCantrips,
+    featSpells,
     castingLabel,
     chosenCantrips,
     chosenSpells,

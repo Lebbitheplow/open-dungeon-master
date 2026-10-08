@@ -368,6 +368,7 @@ export function handleApplyHazard(
         damageType,
         halfOnSave,
         condition: args.condition,
+        ...(args.type === "trap" ? { hazard: "trap" } : {}),
       }),
       sheets,
       sheetsById,

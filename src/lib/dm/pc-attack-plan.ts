@@ -6,6 +6,7 @@
 // the quiver is only counted, the maneuver's pool and the smite's slot are
 // only looked at, and the budget is a copy until pc-attack.ts stores it.
 
+import { elementalAdeptApplies, floorDamageDice, hasMageSlayer, POWER_ATTACK_DAMAGE, POWER_ATTACK_TO_HIT, powerAttackFeat, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover } from "@/lib/srd/feat-combat";
 import { underwaterRangeProblem } from "@/lib/dm/underwater";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -94,6 +95,11 @@ export type AttackPlan = {
   targetSpent: string[];
   advantage: Advantage;
   budget: TurnBudget | null;
+  // Elemental Adept covers this attack spell's damage type (feat-combat.ts).
+  elementalAdept: boolean;
+  // A Mage Slayer's melee weapon hit from within 5 feet: the target's
+  // concentration save is at disadvantage (feat-combat.ts).
+  mageSlayer: boolean;
   // The features and effects that ride this attack beyond its damage
   // (src/lib/dm/attack-features.ts, attack-onhit.ts).
   extras: AttackExtras;
@@ -190,8 +196,39 @@ export function planPcAttack(input: {
   if (blown) {
     return { refused: { error: blown } };
   }
-  const geometry = attackGeometry(campaign.id, encounter.id, sheet.id, enemy, profile);
+  let geometry = attackGeometry(campaign.id, encounter.id, sheet.id, enemy, profile);
   const { atRange } = geometry;
+  const featNotes: string[] = [];
+  // Sharpshooter's shot and Spell Sniper's spell pass half and
+  // three-quarters cover; Sharpshooter's shot takes no disadvantage at long
+  // range (src/lib/srd/feat-combat.ts).
+  const ignoresCover = (weaponAttack && atRange && shotIgnoresCover(sheet)) || (kind === "spell" && spellIgnoresCover(sheet));
+  if (ignoresCover && geometry.cover) {
+    featNotes.push(`${kind === "spell" ? "Spell Sniper" : "Sharpshooter"}: ${enemy.displayName}'s ${geometry.cover === 2 ? "half" : "three-quarters"} cover does not count`);
+    geometry = { ...geometry, effectiveAc: geometry.effectiveAc - geometry.cover, cover: 0, screen: null };
+  }
+  if (weaponAttack && atRange && geometry.spatials.longRange && shotIgnoresLongRange(sheet)) {
+    featNotes.push("Sharpshooter: no disadvantage at long range");
+    geometry = { ...geometry, spatials: { ...geometry.spatials, longRange: false } };
+  }
+  // The -5/+10 trade of Great Weapon Master and Sharpshooter, asked for
+  // before the roll.
+  if (args.powerAttack) {
+    const power = powerAttackFeat(sheet, { weaponAttack, ranged: atRange, heavy: profile.heavy, proficient: profile.proficient });
+    if ("refused" in power) {
+      return { refused: { error: `${sheet.name}: ${power.refused} Nothing was spent.` } };
+    }
+    profile = { ...profile, toHit: profile.toHit + POWER_ATTACK_TO_HIT, damageExpression: `${profile.damageExpression}+${POWER_ATTACK_DAMAGE}` };
+    featNotes.push(`${power.feat}: -5 to hit, +10 damage`);
+  }
+  // Elemental Adept on an attack-roll spell of its type: every 1 on the
+  // damage dice counts as 2, and the target's resistance is ignored.
+  const elementalAdept = kind === "spell" && elementalAdeptApplies(sheet, profile.damageType);
+  const mageSlayer = weaponAttack && !atRange && geometry.withinFiveFeet && hasMageSlayer(sheet);
+  if (elementalAdept) {
+    profile = { ...profile, damageExpression: floorDamageDice(profile.damageExpression) };
+    featNotes.push(`Elemental Adept: ${profile.damageType} ignores resistance and every 1 on the dice is a 2`);
+  }
 
   // A Battle Master maneuver riding this swing. The pick and the pool are
   // checked here; the die is spent on the roll for Precision Attack and on
@@ -352,7 +389,7 @@ export function planPcAttack(input: {
     inspired: args.useInspiration === true,
   });
   const context = situation.context;
-  context.notes.push(...context0);
+  context.notes.push(...context0, ...featNotes);
   // Rapid Strike: the advantage of this attack traded for one more attack of
   // the action, once a turn (src/lib/dm/authored-attacks.ts).
   let advantage = situation.advantage;
@@ -411,6 +448,8 @@ export function planPcAttack(input: {
     sheetsById,
     args,
     enemy,
+    elementalAdept,
+    mageSlayer,
     derived: built.derived,
     riders,
     kind,

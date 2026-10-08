@@ -12,6 +12,7 @@
 // src/lib/srd/level-up.ts); the builder applies them to its preview. Pure.
 import type { Proficiencies } from "@/lib/schemas/sheet";
 import { ALL_SKILLS } from "@/lib/content/mechanics";
+import { featSpellSpec, featSpellsOwed, type CastingAbility, type FeatSpellSpec } from "@/lib/srd/feat-spells";
 import { ARTISANS_TOOLS, GAMING_SETS, MUSICAL_INSTRUMENTS } from "@/lib/srd/tool-choices";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 
@@ -21,6 +22,15 @@ export type FeatPicks = {
   expertise?: string[];
   weapons?: string[];
   tools?: string[];
+  // The spells a feat teaches (src/lib/srd/feat-spells.ts): the cantrips
+  // and spells named, the class list and the casting ability where the
+  // feat leaves those open.
+  cantrips?: string[];
+  spells?: string[];
+  list?: string;
+  ability?: CastingAbility;
+  // Elemental Adept's damage type (src/lib/srd/feat-combat.ts).
+  damageType?: string;
 };
 
 export type FeatChoices = Record<string, FeatPicks>;
@@ -39,10 +49,17 @@ export type FeatGrantSpec = {
   armor: string[];
   fixedWeapons: string[];
   fixedTools: string[];
+  // The spells the feat teaches, read by src/lib/srd/feat-spells.ts.
+  taught: FeatSpellSpec;
+  // The damage types the feat lets the player choose one of (Elemental
+  // Adept's "acid, cold, fire, lightning or thunder"); empty for none.
+  damageTypes: string[];
 };
 
 const EMPTY: FeatGrantSpec = {
   languages: 0, skills: 0, expertise: 0, weapons: 0, tools: 0, toolsFrom: [], armor: [], fixedWeapons: [], fixedTools: [],
+  taught: featSpellSpec(""),
+  damageTypes: [],
 };
 
 const COUNTS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
@@ -75,7 +92,11 @@ export function featGrantSpec(desc: string): FeatGrantSpec {
   if (!text) {
     return EMPTY;
   }
-  const spec: FeatGrantSpec = { ...EMPTY, toolsFrom: [], armor: [], fixedWeapons: [], fixedTools: [] };
+  const spec: FeatGrantSpec = { ...EMPTY, toolsFrom: [], armor: [], fixedWeapons: [], fixedTools: [], taught: featSpellSpec(text), damageTypes: [] };
+  const elements = /\bchoose ((?:acid|cold|fire|lightning|thunder)(?:, (?:acid|cold|fire|lightning|thunder))*,? or (?:acid|cold|fire|lightning|thunder))\b/.exec(text);
+  if (elements) {
+    spec.damageTypes = elements[1].split(/,|\bor\b/).map((entry) => entry.trim()).filter(Boolean);
+  }
   const languages = /\blearn (one|two|three|four|\d) (?:additional |new )?languages?\b|\b(one|two|three) languages? of your choice\b/.exec(text);
   if (languages) {
     spec.languages = count(languages[1] ?? languages[2]);
@@ -143,7 +164,16 @@ export function featPicksOwed(feat: string, spec: FeatGrantSpec, picks: FeatPick
   if (spec.tools > has(picks?.tools)) {
     owed.push(plural(spec.tools - has(picks?.tools), "tool"));
   }
+  if (spec.damageTypes.length && !(picks?.damageType ?? "").trim()) {
+    owed.push("a damage type");
+  }
   return owed.length ? `${feat}: pick ${owed.join(", ")}.` : null;
+}
+
+// Everything a feat still waits for, training and spells alike: the one
+// sentence the builder's gate and the level-up dialog show.
+export function featOwed(feat: string, spec: FeatGrantSpec, picks: FeatPicks | undefined): string | null {
+  return featPicksOwed(feat, spec, picks) ?? featSpellsOwed(feat, spec.taught, picks);
 }
 
 export type FeatGrantInput = {
@@ -177,7 +207,7 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
   const has = (list: string[], entry: string) => list.some((held) => lower(held) === lower(entry));
   for (const feat of input.feats) {
     const spec = featGrantSpec(feat.desc);
-    if (!featGrantsAnything(spec)) {
+    if (!featGrantsAnything(spec) && !spec.damageTypes.length) {
       continue;
     }
     const picks = input.choices[lower(feat.name)] ?? input.choices[feat.name] ?? {};
@@ -200,6 +230,10 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
       const owed = featPicksOwed(feat.name, spec, picks);
       if (owed) {
         problems.push(owed);
+      }
+      const element = lower(picks.damageType ?? "");
+      if (spec.damageTypes.length && element && !spec.damageTypes.includes(element)) {
+        problems.push(`"${picks.damageType}" is not a damage type ${feat.name} offers; pick one of ${spec.damageTypes.join(", ")}.`);
       }
     }
     // Languages: new ones, each once.
@@ -301,7 +335,8 @@ export function withoutFeatPicks(proficiencies: Proficiencies, choices: FeatChoi
     return proficiencies;
   }
   const picked = Object.values(choices);
-  const drop = (kind: keyof FeatPicks) => new Set(picked.flatMap((picks) => (picks[kind] ?? []).map(lower)));
+  const drop = (kind: "languages" | "skills" | "expertise" | "weapons" | "tools") =>
+    new Set(picked.flatMap((picks) => (picks[kind] ?? []).map(lower)));
   const languages = drop("languages");
   const skills = drop("skills");
   const expertise = drop("expertise");
