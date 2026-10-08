@@ -180,7 +180,7 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "system-region" }} size="size-5" />
             {selectedPack?.name ?? preset.name}
-            {settings.dmMode === "human" ? " · human DM" : ""}
+            {settings.dmMode === "human" ? " · human DM" : settings.dmMode === "steered" ? " · AI narrates, a person steers" : ""}
             {settings.dmMode !== "human" && settings.aiStorySetup ? " · AI story setup" : ""}
             {settings.dmMode !== "human"
               ? ` · ${CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign`

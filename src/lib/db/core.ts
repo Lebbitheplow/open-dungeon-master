@@ -890,6 +890,27 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_item_proposals
       ON item_proposals(campaign_id, status);
 
+    -- Disputed rulings (src/lib/dm/dispute-logic.ts): a player's objection
+    -- to a passage the AI narrated, and how whoever steers the story (or
+    -- the table, by vote) settled it.
+    CREATE TABLE IF NOT EXISTS ruling_disputes (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      message_id TEXT NOT NULL,
+      raised_by_user_id TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open','voting','upheld','overruled','withdrawn')),
+      votes_json TEXT NOT NULL DEFAULT '{}',
+      voters_json TEXT NOT NULL DEFAULT '[]',
+      decided_by_user_id TEXT,
+      decided_at TEXT,
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ruling_disputes
+      ON ruling_disputes(campaign_id, status);
+
     -- Procedural region map: seeded terrain grid (one char per tile), known
     -- locations anchored at tile coordinates, and lead-placed pins
     -- (src/lib/overworld/generate.ts). One per campaign, lazily created.

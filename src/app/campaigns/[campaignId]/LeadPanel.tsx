@@ -288,7 +288,8 @@ export function LeadPanel({
   // in the composer for a lead steering an AI narrator: a human DM has
   // replaced the thing a direction would steer, so the card follows the
   // composer rather than the route.
-  const directsAi = steersStory && (campaign.gameSettings?.dmMode ?? "ai") === "ai";
+  const mode = campaign.gameSettings?.dmMode ?? "ai";
+  const directsAi = steersStory && (mode === "ai" || mode === "steered");
   const dmUserIds = [campaign.dmUserId, campaign.assistantDmUserId].filter(
     (id): id is string => typeof id === "string" && id.length > 0,
   );
