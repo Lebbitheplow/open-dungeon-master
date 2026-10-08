@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createCampaign, getCampaignById } from "@/lib/db/campaigns";
+import { WORKSHOP_GAME_SETTINGS } from "@/lib/db/workshops";
 import { getHouseRulesText, setHouseRules } from "@/lib/db/rules";
 import { createHomebrewMonster, listHomebrewMonsters } from "@/lib/bestiary/homebrew-monsters";
 import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
@@ -374,6 +375,11 @@ function writeBundleRows(
     difficulty: "normal",
     kind: "workshop",
     gameSettings: {
+      // The same seat and silence a workshop made by the button gets: the
+      // importer is its DM, and nothing in it narrates on a cadence. Left
+      // out, the row defaulted to an AI narrator with no human seat, so the
+      // owner had no DM caps and the DM-only panels came up blank (#121).
+      ...WORKSHOP_GAME_SETTINGS,
       genre: bundle.genre,
       targetParty: bundle.targetParty,
       // The engine's own normalizer runs inside createCampaign, so a flag

@@ -43,7 +43,7 @@ globalThis.__odmEmbedderPromise = Promise.resolve((texts) =>
 
 const reopening = process.argv[2] === "--reopen";
 
-const { getDatabase, nowIso } = await import("../src/lib/db/core.ts");
+const { getDatabase, nowIso, repairWorkshopDmSeats } = await import("../src/lib/db/core.ts");
 const db = getDatabase();
 
 // ---- child mode: the upgrade path ----
@@ -127,6 +127,7 @@ const { exportWorkshopBundle, importWorkshopBundle } = await import(
 const { readBundle } = await import("../src/lib/workshop/bundle.ts");
 const { createHomebrew, listHomebrew } = await import("../src/lib/db/homebrew.ts");
 const { runsAiTurns } = await import("../src/lib/workshop/kind.ts");
+const { isDmSeat } = await import("../src/lib/dm/viewer.ts");
 const deleteBeatModule = await import("../src/lib/db/workshop-beats.ts");
 const updateBeatModule = deleteBeatModule;
 
@@ -1128,6 +1129,67 @@ test("importing a bundle creates a new workshop that runs no AI turns", () => {
   assert.equal(imported.kind, "workshop");
   assert.notEqual(imported.id, workshop.id, "it wrote into the source workshop");
   assert.equal(runsAiTurns(imported), false);
+});
+
+// Issue #121: the importer used to leave the campaign defaults in place (an
+// AI narrator, no human seat), so the importer owned a workshop they had no
+// DM caps in and every DM-only panel drew empty under a header that still
+// counted the rows.
+test("an imported workshop seats its importer as the DM, like one made by the button", () => {
+  assert.equal(imported.gameSettings.dmMode, "human");
+  assert.equal(imported.dmUserId, userId);
+  assert.equal(imported.gameSettings.aiStorySetup, false);
+  assert.equal(imported.gameSettings.worldSimulation, false);
+  assert.equal(imported.gameSettings.holdSubmissions, false);
+  // The bundle's own settings still arrive alongside the seat.
+  assert.equal(imported.gameSettings.genre, exported.genre);
+  assert.deepEqual(imported.gameSettings.targetParty, exported.targetParty);
+  assert.ok(
+    isDmSeat(
+      { dmMode: imported.gameSettings.dmMode, humanDmUserId: imported.dmUserId, assistantDmUserId: null },
+      userId,
+    ),
+    "the importer does not hold the DM seat",
+  );
+});
+
+test("workshops imported before the fix are reseated on boot, and only those", () => {
+  // Break a fresh import the way the old importer wrote it.
+  const result = importWorkshopBundle(userId, exported);
+  assert.ok(!("error" in result), result.error);
+  const broken = getCampaignById(result.workshopId);
+  const settings = { ...broken.gameSettings, dmMode: "ai", aiStorySetup: true, worldSimulation: true };
+  db.prepare(`UPDATE campaigns SET human_dm_user_id = NULL, game_settings_json = ? WHERE id = ?`).run(
+    JSON.stringify(settings),
+    broken.id,
+  );
+  assert.equal(getCampaignById(broken.id).dmUserId, null);
+  // A real AI-narrated campaign has no human seat either; the repair must
+  // not touch it.
+  const table = createCampaign(userId, {
+    title: "An AI table",
+    description: "",
+    theme: "",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+    gameSettings: { dmMode: "ai" },
+  });
+
+  assert.equal(repairWorkshopDmSeats(db), 1);
+  const repaired = getCampaignById(broken.id);
+  assert.equal(repaired.dmUserId, userId);
+  assert.equal(repaired.gameSettings.dmMode, "human");
+  assert.equal(repaired.gameSettings.aiStorySetup, false);
+  assert.equal(repaired.gameSettings.worldSimulation, false);
+  assert.equal(repaired.gameSettings.holdSubmissions, false);
+  assert.equal(repaired.gameSettings.genre, exported.genre, "the repair clobbered the bundle's settings");
+  assert.deepEqual(repaired.gameSettings.targetParty, exported.targetParty);
+  const untouched = getCampaignById(table.id);
+  assert.equal(untouched.dmUserId, null);
+  assert.equal(untouched.gameSettings.dmMode, "ai");
+  // Idempotent: a second boot finds nothing to do.
+  assert.equal(repairWorkshopDmSeats(db), 0);
 });
 
 test("the imported workshop holds the same content under new ids", () => {

@@ -32,13 +32,13 @@ export const WORKSHOP_SYSTEMS = [
   { id: "storyboard", label: "Storyboard", blurb: "Plan the arc", icon: LayoutGrid },
   { id: "party", label: "Party", blurb: "Who it is built for", icon: UserRound },
   { id: "maps", label: "Battle maps", blurb: "Rooms to fight in", icon: MapIcon },
-  { id: "region", label: "Region", blurb: "The overworld map", icon: Globe2 },
+  { id: "region", label: "Region", blurb: "The overworld & its places", icon: Globe2 },
   { id: "encounters", label: "Encounters", blurb: "Fights, budgeted", icon: Swords },
   { id: "cast", label: "Cast", blurb: "NPCs & agendas", icon: Users },
   { id: "factions", label: "Factions", blurb: "Powers & standing", icon: Flag },
   { id: "bestiary", label: "Bestiary", blurb: "Homebrew monsters", icon: Skull },
   { id: "homebrew", label: "Homebrew", blurb: "Items, spells & options", icon: FlaskConical },
-  { id: "lore", label: "Lore", blurb: "World facts & places", icon: BookOpen },
+  { id: "lore", label: "Lore", blurb: "World facts & history", icon: BookOpen },
   { id: "tables", label: "Tables", blurb: "Roll tables", icon: Dices },
   { id: "rules", label: "Rules", blurb: "House & variant", icon: Scale },
   { id: "plugin", label: "Plugin", blurb: "Build a world pack", icon: Puzzle },
@@ -109,11 +109,16 @@ export function systemCount(
     case "maps":
       return { figure: String(contents.maps), phrase: `${contents.maps} in the drawer`, total: contents.maps };
     case "region": {
+      // Places live here: the overworld pins every location the workshop
+      // knows, so they are counted on this card rather than on Lore, whose
+      // tab lists only lore entries (issue #121 saw a 28 over a list of 16).
       const count = contents.overworld;
+      const places = contents.locations;
+      const drawn = count ? "the overworld is drawn" : "no overworld yet";
       return {
-        figure: String(count),
-        phrase: count ? "the overworld is drawn" : "no overworld yet",
-        total: count,
+        figure: String(count + places),
+        phrase: places ? `${drawn}, ${plural(places, "place", "places")} on it` : drawn,
+        total: count + places,
       };
     }
     case "encounters":
@@ -138,8 +143,8 @@ export function systemCount(
         total: bestiary ?? 0,
       };
     case "lore": {
-      const count = contents.lore + contents.locations;
-      return { figure: String(count), phrase: `${count} facts & places`, total: count };
+      const count = contents.lore;
+      return { figure: String(count), phrase: plural(count, "entry", "entries"), total: count };
     }
     case "tables":
       return {
