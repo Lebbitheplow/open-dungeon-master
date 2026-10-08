@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { listActiveFacts } from "@/lib/db/facts";
@@ -145,7 +146,7 @@ export async function runLoreCheck(
         requestUtilityMessage(
           campaign.settings,
           [
-            { role: "system", content: CHECK_SYSTEM },
+            { role: "system", content: withLanguage(CHECK_SYSTEM, campaign.gameSettings.tableLanguage) },
             {
               role: "user",
               content: [

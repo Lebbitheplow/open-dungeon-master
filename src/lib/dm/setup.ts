@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   getCampaignById,
   setCampaignScene,
@@ -42,8 +43,10 @@ export async function runStorySetup(campaignId: string) {
     [
       {
         role: "system",
-        content:
+        content: withLanguage(
           "You design the seed of a D&D 5e campaign. Reply with ONLY a JSON object, no code fences, shaped exactly: {\"premise\": string, \"openingScene\": string, \"secretOutline\": string}. premise: 2-3 sentences the players will read. openingScene: one sentence naming where the story opens. secretOutline: 6-10 numbered beats for the DM only, with a central antagonist, two twists, and a finale; players never see this.",
+          campaign.gameSettings.tableLanguage,
+        ),
       },
       {
         role: "user",

@@ -1,6 +1,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { generateStoryImage } from "@/lib/image-generate";
 import { enqueueMediaJob } from "@/lib/media-queue";
@@ -21,8 +22,12 @@ import { typeFor } from "@/lib/worldforge/model";
 
 type Failure = { error: string };
 
-async function ask(campaign: Campaign, messages: Array<{ role: "system" | "user"; content: string }>): Promise<string | Failure> {
-  const { message, error } = await requestUtilityMessage(campaign.settings, messages, { timeoutMs: arcTextTimeoutMs() });
+async function ask(campaign: Campaign, [system, ...rest]: Array<{ role: "system" | "user"; content: string }>): Promise<string | Failure> {
+  const { message, error } = await requestUtilityMessage(
+    campaign.settings,
+    [{ ...system, content: withLanguage(system.content, campaign.gameSettings.tableLanguage) }, ...rest],
+    { timeoutMs: arcTextTimeoutMs() },
+  );
   if (error) return { error: "The model could not be reached." };
   const text = stripReasoningArtifacts(String(message?.content ?? "")).trim();
   return text || { error: "The model returned nothing usable." };

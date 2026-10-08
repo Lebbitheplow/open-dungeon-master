@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   allocateSeq,
   getCampaignById,
@@ -174,8 +175,10 @@ export async function maybeCompactHistory(campaignId: string): Promise<boolean> 
       [
         {
           role: "system",
-          content:
+          content: withLanguage(
             "You maintain the canonical campaign memory for an ongoing D&D 5e game. Merge the existing summary with the new passages into one updated summary. Preserve plot threads, NPCs met, promises, injuries, loot, locations, and party decisions. Compact past-tense prose, at most 500 words. Output only the summary.",
+            campaign.gameSettings.tableLanguage,
+          ),
         },
         {
           role: "user",
@@ -230,9 +233,11 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string, ba
       [
         {
           role: "system",
-          content:
+          content: withLanguage(
             'Extract durable memory from this D&D transcript as JSON only, shaped: {"events": [{"characterName": string, "kind": "achievement"|"item"|"relationship"|"death"|"level_up"|"story", "summary": string}], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. events: lasting per-character milestones worth remembering months later (victories, treasures, bonds, deaths, oaths), one past-tense sentence each. facts: up to 6 world-state facts the passages established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about. Empty arrays if none. No code fences.' +
             (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""),
+            campaign.gameSettings.tableLanguage,
+          ),
         },
         {
           role: "user",

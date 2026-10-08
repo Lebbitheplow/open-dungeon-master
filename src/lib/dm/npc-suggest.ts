@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
@@ -70,7 +71,7 @@ export async function suggestNpcField(
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
-      { role: "system", content: SYSTEM },
+      { role: "system", content: withLanguage(SYSTEM, campaign.gameSettings.tableLanguage) },
       {
         role: "user",
         content: [

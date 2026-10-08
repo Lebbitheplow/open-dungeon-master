@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listRecentAsksForThread } from "@/lib/db/asks";
 import { listChapters } from "@/lib/db/chapters";
@@ -346,7 +347,7 @@ export async function runAsk(
   const searchedArchive = request.scope === "story" && shouldSearchArchive(question);
 
   const messages: ChatMessage[] = [
-    { role: "system", content: ASK_SYSTEM },
+    { role: "system", content: withLanguage(ASK_SYSTEM, campaign.gameSettings.tableLanguage) },
     ...threadMessages(request.campaignId, request.userId),
     {
       role: "user",

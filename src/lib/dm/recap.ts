@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   allocateSeq,
   getCampaignById,
@@ -56,8 +57,10 @@ export async function runResumeRecap(campaignId: string) {
     [
       {
         role: "system",
-        content:
+        content: withLanguage(
           "Write a short 'Previously, on...' recap for a D&D table returning after a break. 3-5 sentences, past tense, second person plural, ending on where the party stands now. Output only the recap.",
+          campaign.gameSettings.tableLanguage,
+        ),
       },
       {
         role: "user",

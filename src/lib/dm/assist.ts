@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { bestiaryFor, resolveMonster, suggestEnemies } from "@/lib/bestiary";
@@ -70,7 +71,7 @@ export async function suggestAdjudication(
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
-      { role: "system", content: SUGGEST_SYSTEM },
+      { role: "system", content: withLanguage(SUGGEST_SYSTEM, campaign.gameSettings.tableLanguage) },
       {
         role: "user",
         content: [
@@ -207,7 +208,7 @@ export async function generateRollTable(
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
-      { role: "system", content: TABLE_SYSTEM },
+      { role: "system", content: withLanguage(TABLE_SYSTEM, campaign.gameSettings.tableLanguage) },
       {
         role: "user",
         content: [

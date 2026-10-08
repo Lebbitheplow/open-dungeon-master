@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertDmBeat, type DmBeat } from "@/lib/db/dm-beats";
 import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
@@ -161,7 +162,7 @@ export async function draftBeat(
     requestUtilityMessage(
       campaign.settings,
       [
-        { role: "system", content: DRAFT_SYSTEM },
+        { role: "system", content: withLanguage(DRAFT_SYSTEM, campaign.gameSettings.tableLanguage) },
         { role: "user", content: `The record of play:\n${beatSourceText(lines)}` },
       ],
       { timeoutMs: arcTextTimeoutMs() },

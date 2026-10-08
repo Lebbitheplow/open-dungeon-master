@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { publishTitleCard } from "@/lib/dm/scene-state";
 import { listTranscriptSince } from "@/lib/db/voice-transcript";
 import { renderTranscript } from "@/lib/voice/transcript";
@@ -339,9 +340,11 @@ export async function maybeCloseChapter(
             [
               {
                 role: "system",
-                content:
+                content: withLanguage(
                   'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.' +
                   (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""),
+                  campaign.gameSettings.tableLanguage,
+                ),
               },
               {
                 role: "user",

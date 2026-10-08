@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   allocateSeq,
   campaignSeats,
@@ -264,7 +265,7 @@ export async function generateStoryArc(
     const { message, error } = await requestDmMessage(
       campaign.settings,
       [
-        { role: "system", content: sagaGenerateSystem(profile) },
+        { role: "system", content: withLanguage(sagaGenerateSystem(profile), campaign.gameSettings.tableLanguage) },
         { role: "user", content: context },
       ],
       { timeoutMs: arcTextTimeoutMs() },
@@ -603,7 +604,7 @@ async function arcModelCall(
   const { message, error } = await requestDmMessage(
     campaign.settings,
     [
-      { role: "system", content: system },
+      { role: "system", content: withLanguage(system, campaign.gameSettings.tableLanguage) },
       { role: "user", content: user },
     ],
     { timeoutMs: arcTextTimeoutMs() },
@@ -1054,7 +1055,7 @@ async function writeActRecap(
       requestUtilityMessage(
         campaign.settings,
         [
-          { role: "system", content: ACT_RECAP_SYSTEM },
+          { role: "system", content: withLanguage(ACT_RECAP_SYSTEM, campaign.gameSettings.tableLanguage) },
           {
             role: "user",
             content: `Act ${romanNumeral(ended.act)}${ended.title ? ` ("${ended.title}")` : ""} has just ended.${
