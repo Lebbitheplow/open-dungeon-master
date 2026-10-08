@@ -1,5 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { matchEntity, mergeAliases, normalizeName } from "@/lib/dm/entity-logic";
+import { matchEntity, mergeAliases, normalizeName, type EntityMatch } from "@/lib/dm/entity-logic";
 import { normalizeNpcVoice, type NpcDraft, type NpcVoice } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
 import {
@@ -114,13 +114,11 @@ export function listNpcs(campaignId: string): Npc[] {
   ).map(mapNpc);
 }
 
-// Looks an NPC up by any name they have answered to.
-//
-// The literal spelling is tried first, so the common case stays a single
-// indexed lookup. Only when that misses does it fall back to entity
-// resolution across every known name and alias, which is what keeps
-// "marla" and "MARLA", or "Église" and "église", pointing at one row with
-// one attitude and one approval meter instead of forking into two.
+// Looks an NPC up by any name they have answered to, by entity resolution
+// across every known name and alias, which is what keeps "marla" and
+// "MARLA", or "Église" and "église", pointing at one row with one attitude
+// and one approval meter instead of forking into two. Compared in
+// JavaScript: SQLite folds case only for ASCII letters.
 //
 // Containment and fuzzy matches are deliberately NOT accepted here.
 // "Aldric" and "Alaric" may be two different people, and so may "Bruno the
@@ -128,38 +126,36 @@ export function listNpcs(campaignId: string): Npc[] {
 // wrong NPC is worse than not finding one, so those surface as lead-facing
 // suggestions instead (see suggestNpcMerges).
 export function getNpcByName(campaignId: string, name: string): Npc | null {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const row = getDatabase()
-    .prepare(
-      `SELECT * FROM npcs WHERE campaign_id = ? AND name = ? COLLATE NOCASE LIMIT 1`,
-    )
-    .get(campaignId, trimmed) as NpcRow | undefined;
-  if (row) {
-    return mapNpc(row);
-  }
+  const found = matchRoster(campaignId, name.trim());
+  return found && !found.match.needsConfirmation ? found.npc : null;
+}
 
-  const roster = listNpcs(campaignId);
-  if (!roster.length) {
-    return null;
-  }
-  // Aliases are matched alongside canonical names, then mapped back.
-  const ownerByName = new Map<string, Npc>();
-  for (const npc of roster) {
-    ownerByName.set(npc.name, npc);
+// The roster's best match for a name, across every name and alias.
+function matchRoster(campaignId: string, name: string): { npc: Npc; match: EntityMatch } | null {
+  // Aliases are matched alongside canonical names, then mapped back. Every
+  // canonical name is listed first, so it wins a tie with another NPC's
+  // alias.
+  const npcs = listNpcs(campaignId);
+  const ownerByName = new Map<string, Npc>(npcs.map((npc) => [npc.name, npc]));
+  for (const npc of npcs) {
     for (const alias of npc.aliases) {
       if (!ownerByName.has(alias)) {
         ownerByName.set(alias, npc);
       }
     }
   }
-  const match = matchEntity(trimmed, [...ownerByName.keys()]);
-  if (!match || match.needsConfirmation) {
-    return null;
-  }
-  return ownerByName.get(match.name) ?? null;
+  const match = matchEntity(name, [...ownerByName.keys()]);
+  const npc = match ? ownerByName.get(match.name) : undefined;
+  return match && npc ? { npc, match } : null;
+}
+
+// The known NPC a name nearly matches (one name inside the other, or a typo
+// away), which getNpcByName never resolves on its own. A tool that misses
+// names it to the model, who knows whether the two are one person, so the
+// known name is used instead of a duplicate being registered.
+export function nearestNpcName(campaignId: string, name: string): string | null {
+  const found = matchRoster(campaignId, name.trim());
+  return found?.match.needsConfirmation ? found.npc.name : null;
 }
 
 // Near-misses across the roster (one name inside another, or a typo away),

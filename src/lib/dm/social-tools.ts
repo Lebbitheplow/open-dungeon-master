@@ -10,13 +10,14 @@ import { renderWitnessNote } from "@/lib/dm/witness-logic";
 import {
   getNpcByName,
   listNpcs,
+  nearestNpcName,
   patchNpcAgency,
   setNpcAttitude,
   upsertNpc,
   type Attitude,
   type Npc,
 } from "@/lib/db/npcs";
-import { agencyFragment, derivePersonality, driftPersonality } from "@/lib/dm/npc-logic";
+import { agencyFragment, derivePersonality, driftPersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import { ensureRelationship, patchRelationship } from "@/lib/db/relationships";
 import {
   applyApproval,
@@ -321,7 +322,7 @@ export function handleSocialCheck(
   const npc = getNpcByName(campaign.id, args.npc);
   if (!npc) {
     return {
-      error: `No tracked NPC named "${args.npc}". Register them with set_npc or npc_reaction first.`,
+      error: `No tracked NPC named "${args.npc}".${nearestNpcHint(nearestNpcName(campaign.id, args.npc))} Register them with set_npc or npc_reaction first.`,
     };
   }
   const skill = approachSkill(args.approach);

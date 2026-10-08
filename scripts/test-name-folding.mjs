@@ -20,12 +20,16 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { getLocationByName, listLocations, upsertCurrentLocation } = await import("../src/lib/db/locations.ts");
-const { getNpcByName, upsertNpc } = await import("../src/lib/db/npcs.ts");
+const { getNpcByName, nearestNpcName, upsertNpc } = await import("../src/lib/db/npcs.ts");
+const { handleSocialCheck } = await import("../src/lib/dm/social-tools.ts");
+const { handleRelationshipBeat } = await import("../src/lib/dm/relationship-tools.ts");
+const { beatSpec, RELATIONSHIP_BEAT_NAMES } = await import("../src/lib/dm/relationship-logic.ts");
 const { findFactionByName, insertFaction } = await import("../src/lib/db/factions.ts");
 const { ensureRelationship, getRelationship, listRelationshipsForSubject } = await import(
   "../src/lib/db/relationships.ts"
 );
 const { deleteEffectsByName, insertEffect, listEffects } = await import("../src/lib/db/active-effects.ts");
+const { getDatabase } = await import("../src/lib/db/core.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -67,10 +71,19 @@ test("an NPC, a faction and a relationship subject resolve across Unicode case",
   assert.equal(getNpcByName(french.id, "ÉLODIE")?.id, npc.id);
   assert.equal(getNpcByName(french.id, "élodie")?.id, npc.id);
   assert.equal(getNpcByName(other.id, "Élodie"), null);
+  // A canonical name wins over another NPC's alias that differs only in case.
+  const sister = upsertNpc({ campaignId: french.id, name: "Odile" });
+  const younger = upsertNpc({ campaignId: french.id, name: "Élodie la Jeune" });
+  assert.notEqual(younger.id, sister.id);
+  getDatabase().prepare("UPDATE npcs SET aliases_json = ? WHERE id = ?").run(JSON.stringify(["élodie la jeune"]), sister.id);
+  assert.equal(getNpcByName(french.id, "ÉLODIE LA JEUNE")?.id, younger.id);
+  assert.equal(getNpcByName(french.id, "Odile")?.id, sister.id);
+  assert.equal(getNpcByName(french.id, "   "), null);
 
   const faction = insertFaction(french.id, { name: "La Cour des Roseaux" });
   assert.equal(findFactionByName(french.id, "LA COUR DES ROSEAUX")?.id, faction.id);
-  // The loose match finds one name inside the other, so the article does not matter.
+  // The loose match finds one name inside the other, so the article does
+  // not matter.
   assert.equal(findFactionByName(french.id, "cour des roseaux")?.id, faction.id);
   assert.equal(findFactionByName(other.id, "La Cour des Roseaux"), null);
 
@@ -110,6 +123,35 @@ test("an effect is lifted by name whatever the case of its accented letters", ()
   assert.equal(deleteEffectsByName(french.id, target, "BÉNÉDICTION"), 1);
   assert.equal(listEffects(french.id, target).length, 0);
   assert.equal(listEffects(other.id, target).length, 1, "another campaign's effect stays");
+});
+
+// A name that only nearly matches is never resolved (the lead confirms it),
+// but the tool that missed it names the known one, so the model can use it
+// rather than register the same person twice.
+test("a tool that finds no NPC by a name names the near match, from its own campaign only", () => {
+  upsertNpc({ campaignId: french.id, name: "Warden" });
+  upsertNpc({ campaignId: french.id, name: "Harbourmaster" });
+  upsertNpc({ campaignId: other.id, name: "Gruber" });
+  assert.equal(getNpcByName(french.id, "the Warden"), null);
+  assert.equal(nearestNpcName(french.id, "the Warden"), "Warden");
+  assert.equal(nearestNpcName(french.id, "Harbormaster"), "Harbourmaster", "a typo away");
+  assert.equal(nearestNpcName(french.id, "Hans Gruber"), null, "another campaign's NPC");
+  assert.equal(nearestNpcName(french.id, "Bruno"), null);
+
+  const sheet = { id: "kara", name: "Kara" };
+  const sheets = [sheet];
+  const byId = new Map([[sheet.id, sheet]]);
+  const social = handleSocialCheck(french, {}, JSON.stringify({ characterId: "kara", npc: "the Warden", approach: "persuade" }), sheets, byId);
+  assert.equal(
+    social.error,
+    'No tracked NPC named "the Warden". If you mean "Warden", use that name. Someone new? Register them with set_npc or npc_reaction first.',
+  );
+  const beat = RELATIONSHIP_BEAT_NAMES.find((name) => beatSpec(name).track !== "romantic");
+  const relation = handleRelationshipBeat(french, {}, JSON.stringify({ characterId: "kara", subject: "the Warden", beat }), sheets, byId);
+  assert.match(relation.error, /named "the Warden"\. If you mean "Warden", use that name\. Someone new\? Register them with set_npc/);
+  // Nothing near: the error is as it was.
+  const none = handleSocialCheck(french, {}, JSON.stringify({ characterId: "kara", npc: "Bruno", approach: "persuade" }), sheets, byId);
+  assert.equal(none.error, 'No tracked NPC named "Bruno". Register them with set_npc or npc_reaction first.');
 });
 
 console.log(`\n${passed} name folding tests passed`);

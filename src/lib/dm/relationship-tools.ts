@@ -5,7 +5,7 @@ import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { insertFact } from "@/lib/db/facts";
-import { getNpcByName, setNpcAttitude, type Npc } from "@/lib/db/npcs";
+import { getNpcByName, nearestNpcName, setNpcAttitude, type Npc } from "@/lib/db/npcs";
 import {
   ensureRelationship,
   getRelationship,
@@ -14,7 +14,7 @@ import {
   type Relationship,
   type RelationshipSubjectKind,
 } from "@/lib/db/relationships";
-import { derivePersonality } from "@/lib/dm/npc-logic";
+import { derivePersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import {
   addFlag,
   addMemory,
@@ -215,7 +215,7 @@ function resolveSubject(
   const npc = getNpcByName(campaign.id, rawName);
   if (!npc) {
     return {
-      error: `No tracked NPC or companion named "${rawName}". Register them with set_npc (or npc_reaction), or add_companion, before recording how they take things.`,
+      error: `No tracked NPC or companion named "${rawName}".${nearestNpcHint(nearestNpcName(campaign.id, rawName))} Register them with set_npc (or npc_reaction), or add_companion, before recording how they take things.`,
     };
   }
   return {

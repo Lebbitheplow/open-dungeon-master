@@ -288,6 +288,17 @@ export function advanceSessionGoal(
   };
 }
 
+// ---- names a tool did not find ----
+
+// What a tool that found no NPC by a name adds to its error when the roster
+// nearly has it (db/npcs.ts nearestNpcName), ahead of the error's own
+// "Register them" sentence: an either/or, so the model, who knows whether
+// the two are one person, neither registers a duplicate nor takes the known
+// name for someone new.
+export function nearestNpcHint(nearest: string | null): string {
+  return nearest ? ` If you mean "${nearest}", use that name. Someone new?` : "";
+}
+
 // ---- goal collisions ----
 
 export type GoalCollision = { a: string; b: string; over: string };
