@@ -62,7 +62,7 @@ import { useSpellPool } from "@/components/sheet/useSpellPool";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useFeatDescs } from "@/app/characters/builder/useFeatDescs";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
-import { featGrantSpec, featPicksOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
+import { featGrantSpec, featOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -125,7 +125,7 @@ export function LevelUpDialog({
       .map((feat) => [feat.trim().toLowerCase(), featChoices[feat.trim().toLowerCase()]] as const)
       .filter((entry): entry is readonly [string, FeatPicks] => Boolean(entry[1])),
   );
-  const featPicksOpen = featsPicked.some((feat) => featPicksOwed(feat, featSpecOf(feat), featChoices[feat.trim().toLowerCase()]));
+  const featPicksOpen = featsPicked.some((feat) => featOwed(feat, featSpecOf(feat), featChoices[feat.trim().toLowerCase()]));
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);

@@ -11,6 +11,7 @@
 // The counters live in the sheet's resources (src/lib/srd/class-resources.ts:
 // overchannel, signature_spell_1, signature_spell_2).
 
+import { freeCastResourceId } from "@/lib/srd/feat-spells";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
@@ -112,6 +113,23 @@ export function signatureCounter(
   const id = `signature_spell_${index + 1}`;
   const state = sheet.resources?.[id];
   return state && state.used >= state.max ? null : id;
+}
+
+// The counter that pays for this spell as a feat's free cast, or null: the
+// sheet holds a "Free cast: <spell> (<feat>)" feature for it (so the counter
+// exists), the cast is at the spell's own level, and the use is unspent.
+export function freeCastCounter(
+  sheet: Pick<CharacterSheet, "resources">,
+  spell: string,
+  facts: SpellFacts | null,
+  named: number | undefined,
+): string | null {
+  if (facts && named !== undefined && named !== facts.level) {
+    return null;
+  }
+  const id = freeCastResourceId(facts?.name ?? spell);
+  const state = sheet.resources?.[id];
+  return state && state.used < state.max ? id : null;
 }
 
 // The resources after a Signature Spell is cast.

@@ -244,10 +244,13 @@ export function applyEnemyDamage(
     // A silvered or adamantine weapon (damage-logic.ts weaponMaterial).
     silvered?: boolean;
     adamantine?: boolean;
+    // Elemental Adept: the creature's resistance to this type does not
+    // count (src/lib/srd/feat-combat.ts).
+    ignoreResistance?: boolean;
   },
 ): Record<string, unknown> {
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
-  const ignores = damageType && authoredIgnoresResistance(campaign.id, damageType);
+  const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? "Elemental Adept" : null);
   const adjusted = options?.death
     ? { amount: Math.max(1, enemy.currentHp), note: null }
     : damageAdjust(

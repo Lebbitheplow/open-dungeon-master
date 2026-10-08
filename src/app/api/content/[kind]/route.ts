@@ -50,6 +50,12 @@ export async function GET(
         ...base,
         classSlug: url.searchParams.get("class") ?? undefined,
         ...(Number.isFinite(levelRaw) ? { level: levelRaw } : {}),
+        // A feat's pick: a 1st-level divination or enchantment spell
+        // (school=divination,enchantment), an attack cantrip (attack=1),
+        // exactly that level (exact=1).
+        school: url.searchParams.get("school") ?? undefined,
+        attack: url.searchParams.get("attack") === "1",
+        exactLevel: url.searchParams.get("exact") === "1",
       });
       break;
     }

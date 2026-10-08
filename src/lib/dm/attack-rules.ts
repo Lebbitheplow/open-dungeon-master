@@ -143,7 +143,7 @@ export function loadingProblem(input: {
   if (!(input.profile.properties ?? []).includes("loading") || !input.budget) {
     return null;
   }
-  if (hasFeat(input.feats, "crossbow expert")) {
+  if (hasFeat(input.feats, "crossbow expert") || hasFeat(input.feats, "gunner")) {
     return null;
   }
   const fired = (input.budget.loadingFired ?? []).includes(input.profile.weapon.toLowerCase());

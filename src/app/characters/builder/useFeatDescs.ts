@@ -21,11 +21,19 @@ export function useFeatDescs(names: string[]): Record<string, string> {
     for (const name of key.split("|")) {
       fetch(`/api/content/feats/${encodeURIComponent(contentSlug(name))}`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((body: { entry?: { data?: { desc?: unknown; description?: unknown } } } | null) => {
+        .then((body: { entry?: { data?: { desc?: unknown; description?: unknown; benefits?: unknown } } } | null) => {
           if (cancelled) {
             return;
           }
-          const desc = body?.entry?.data?.desc ?? body?.entry?.data?.description;
+          const data = body?.entry?.data;
+          // A 2024 row carries its text as benefits (Magic Initiate's four
+          // paragraphs), read in order as the server does (catalog.ts).
+          const desc =
+            data?.desc ??
+            data?.description ??
+            (Array.isArray(data?.benefits)
+              ? (data.benefits as Array<{ desc?: unknown }>).map((benefit) => String(benefit?.desc ?? "").trim()).filter(Boolean).join(" ")
+              : undefined);
           // An unknown feat is remembered as empty, so it is asked for once.
           setFetched((current) => ({ ...current, [name]: typeof desc === "string" ? desc : "" }));
         })

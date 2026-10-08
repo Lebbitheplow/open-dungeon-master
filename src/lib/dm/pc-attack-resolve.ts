@@ -4,6 +4,8 @@
 // Split from pc-attack.ts, which has already refused or paid for everything
 // this rolls; nothing here refuses the attack.
 
+import { GREAT_WEAPON_MASTER_READY } from "@/lib/srd/feat-combat";
+import { holdsFeat } from "@/lib/srd/feat-effects";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
@@ -265,6 +267,17 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     }),
   );
 
+  // Great Weapon Master: a melee weapon crit or kill opens a bonus-action
+  // melee attack this turn (pc-attack-options.ts reads the key).
+  if (
+    plan.weaponAttack && !profile.ranged && !plan.atRange && (crit || applied.dead) && budget &&
+    holdsFeat(sheet, "Great Weapon Master") && !budget.oncePerTurn.includes(GREAT_WEAPON_MASTER_READY)
+  ) {
+    budget.oncePerTurn.push(GREAT_WEAPON_MASTER_READY);
+    // The budget was stored before the roll; the key goes on the stored copy.
+    storeBudget(encounter, budget);
+    context.notes.push(`Great Weapon Master: ${crit ? "the critical hit" : "the kill"} opens a bonus-action melee attack this turn (bonusAttack "feature")`);
+  }
   const maneuverOutcome: Record<string, unknown> =
     maneuver?.rider && !applied.dead && !applied.encounterOver
       ? maneuverRiderSave(plan, maneuver)

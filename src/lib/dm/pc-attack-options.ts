@@ -5,6 +5,8 @@
 // AI claims for a roll. Split from pc-attack-plan.ts, which asks these in its
 // refusal pass and carries the answers to the roll. Nothing here writes.
 
+import { GREAT_WEAPON_MASTER_READY } from "@/lib/srd/feat-combat";
+import { holdsFeat } from "@/lib/srd/feat-effects";
 import type { Advantage } from "@/lib/dice";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
@@ -123,11 +125,16 @@ export function checkAttackOptions(input: {
         };
       }
     } else if (args.bonusAttack === "feature") {
+      // Great Weapon Master: a melee weapon attack as a bonus action on the
+      // turn a melee crit or a kill was scored (src/lib/srd/feat-combat.ts).
+      const greatWeapon =
+        meleeWeapon && holdsFeat(sheet, "Great Weapon Master") && budget.oncePerTurn.includes(GREAT_WEAPON_MASTER_READY);
       // Battle Magic, War Magic, Sudden Strike, Telekinetic Master...
       // (src/lib/srd/authored-effects.ts).
-      const granted = authoredBonusAttackProblem(sheet, budget);
+      const granted = greatWeapon ? { ok: true } : authoredBonusAttackProblem(sheet, budget);
       if ("refused" in granted || !weaponAttack) {
-        return { refused: "refused" in granted ? `${sheet.name}: ${granted.refused}` : "A feature's bonus-action attack is a weapon attack." };
+        const gwmHint = holdsFeat(sheet, "Great Weapon Master") ? " Great Weapon Master's bonus attack follows a melee critical hit or a kill on this turn." : "";
+        return { refused: "refused" in granted ? `${sheet.name}: ${granted.refused}${gwmHint}` : "A feature's bonus-action attack is a weapon attack." };
       }
     } else {
       if (!hasFeature(sheet, "frenzy")) {

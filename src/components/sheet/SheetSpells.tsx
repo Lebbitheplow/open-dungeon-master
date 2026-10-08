@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { spellClassFor } from "@/lib/classes";
+import { spellSlotsFor } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import {
@@ -36,7 +37,32 @@ export function SheetSpells({
   // The owner, in a campaign: may change prepared spells.
   editable?: boolean;
 }) {
-  const views = casterViewsOf(sheet);
+  // A character whose class casts nothing may still hold a feat's spells
+  // (Fey Touched's misty step, Ritual Caster's book, src/lib/srd/feat-spells.ts):
+  // one book, read as spells known, with no slots to prepare from.
+  const classCasts = (view: CasterView) => Object.keys(spellSlotsFor(view.classId, 20, view.subclass)).length > 0;
+  let views = casterViewsOf(sheet).map((view) =>
+    classCasts(view)
+      ? view
+      : { ...view, classId: "feats", style: "known" as const, known: [...view.known, ...view.prepared], prepared: [], pending: [] },
+  );
+  const casting = sheet.spellcasting;
+  if (!views.length && casting && (casting.known.length || casting.cantrips.length || casting.prepared.length || casting.spellbook?.length)) {
+    views = [
+      {
+        classId: "feats",
+        ability: casting.ability,
+        level: sheet.level,
+        subclass: "",
+        style: "known",
+        known: [...casting.known, ...casting.prepared],
+        prepared: [],
+        cantrips: casting.cantrips,
+        pending: [],
+        spellbook: casting.spellbook ?? [],
+      },
+    ];
+  }
   if (!views.length) {
     return null;
   }

@@ -9,6 +9,7 @@ import { COMBAT_RESOURCE_DEFS } from "@/lib/srd/combat-rows";
 import customResourcesJson from "@/lib/classes/resources.json";
 import authoredResourcesJson from "@/lib/srd/authored-resources.json";
 import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
+import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } from "@/lib/srd/feat-spells";
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
 
@@ -641,7 +642,25 @@ export type ResourceState = { max: number; used: number };
 export type ResourceMap = Record<string, ResourceState>;
 
 export function resourceDef(id: string): ResourceDef | null {
+  if (isFreeCastResource(id)) {
+    return freeCastDef(id);
+  }
   return RESOURCE_DEFS.find((def) => def.id === id) ?? null;
+}
+
+// The counter behind a feat's free cast, made from its id: the spell is in
+// the id, the rule is the same for every one of them.
+function freeCastDef(id: string): ResourceDef {
+  const spell = freeCastSpellOf(id).replace(/(^|\s)([a-z])/g, (_, before, letter) => `${before}${letter.toUpperCase()}`);
+  return {
+    id,
+    match: [],
+    displayName: `${spell} (free cast)`,
+    maxFor: () => 1,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: `${spell} once without a spell slot, at its own level, and again after a long rest; the cast tool spends this use itself when the spell is cast, so use_resource is not needed. With a slot of its level or higher it can also be cast as usual.`,
+  };
 }
 
 // Whole-word containment: the fragment must appear as its own word(s), so
@@ -798,6 +817,16 @@ export function populateResources(
     }
     const used = Math.min(existing?.[def.id]?.used ?? 0, max);
     out[def.id] = { max, used };
+  }
+  // A spell a feat lets the character cast once without a slot ("Free
+  // cast: Misty Step (Fey Touched)", src/lib/srd/feat-spells.ts): one use,
+  // back after a long rest, spent by the cast guard in place of a slot.
+  for (const feature of features) {
+    const free = freeCastOf(feature.name);
+    if (free) {
+      const id = freeCastResourceId(free.spell);
+      out[id] = { max: 1, used: Math.min(existing?.[id]?.used ?? 0, 1) };
+    }
   }
   // Inspiration belongs to no feature: the DM awarded it, and it stays until
   // it is spent.
