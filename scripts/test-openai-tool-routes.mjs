@@ -128,6 +128,14 @@ const fakeOpenAi = async (url, init) => {
             ? [{ type: "function_call", id: "fc_1", call_id: "call_resp_1", name: "request_roll", arguments: '{"kind":"perception"}', status: "completed" }]
             : []),
         ];
+    // A model name ending in "-cut" plays the output cap: OpenAI answers
+    // status "incomplete" with the reason, and nothing said.
+    if (String(body.model).endsWith("-cut")) {
+      const cut = { id: "resp_1", status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: [] };
+      return body.stream
+        ? sse([{ type: "response.created", response: { id: "resp_1", status: "in_progress" } }, { type: "response.incomplete", response: cut }])
+        : Response.json(cut);
+    }
     if (body.stream) {
       const text = output.find((item) => item.type === "message").content[0].text;
       return sse([
@@ -165,6 +173,23 @@ try {
       { id: "call_resp_1", type: "function", function: { name: "request_roll", arguments: '{"kind":"perception"}' } },
     ]);
     ok("gpt-6.1-sol runs its tools on /v1/responses with no wasted request");
+  }
+
+  // --- the output cap is reported as finish_reason "length" on Responses --
+  {
+    for (const stream of [false, true]) {
+      seen.length = 0;
+      const result = await requestCustomMessage(OPENAI, "gpt-6.1-sol-cut", "sk-test", ask, {
+        tools: TOOLS,
+        thinking: true,
+        ...(stream ? { onDelta: () => {} } : {}),
+      });
+      assert.ok(!result.error, result.error ? await result.error.text() : "");
+      assert.equal(seen[0].path, "/v1/responses");
+      assert.equal(result.finishReason, "length", `${stream ? "streamed" : "whole"} reply names the output cap`);
+      assert.equal(result.message.content ?? "", "");
+    }
+    ok("a Responses reply cut by the output cap reports finish_reason length, streamed or whole");
   }
 
   // --- the tool result goes back as function_call_output, streamed --------

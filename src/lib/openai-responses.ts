@@ -204,7 +204,16 @@ export function responsesPayload(input: {
   };
 }
 
-export type ResponsesReply = { message: UpstreamChatMessage } | { failure: string };
+// finishReason is "length" when the output cap cut the response (OpenAI
+// says status "incomplete" with incomplete_details.reason
+// "max_output_tokens"), the same word the Chat Completions reader reports,
+// so the turn's empty-reply warning (issue #120) names it on both routes.
+export type ResponsesReply =
+  | { message: UpstreamChatMessage; finishReason?: string }
+  | { failure: string };
+
+const cutByOutputCap = (response: { status?: unknown; incomplete_details?: { reason?: unknown } | null } | null | undefined) =>
+  response?.status === "incomplete" && response?.incomplete_details?.reason === "max_output_tokens";
 
 // Reads a 2xx reply, streamed or whole. Streaming is OpenAI's typed events:
 // response.output_text.delta carries the prose as it lands, and
@@ -224,6 +233,7 @@ export async function readResponsesReply(
     const doneItems: Array<[number, unknown]> = [];
     let output: unknown = null;
     let failure = "";
+    let finishReason = "";
     await forEachStreamLine(upstream, options.idleMs, options.onIdleAbort, (line) => {
       if (!line.startsWith("data:")) return;
       const payload = line.slice(5).trim();
@@ -241,7 +251,12 @@ export async function readResponsesReply(
         output_index?: unknown;
         message?: unknown;
         error?: { message?: unknown } | null;
-        response?: { output?: unknown; error?: { message?: unknown } | null } | null;
+        response?: {
+          output?: unknown;
+          error?: { message?: unknown } | null;
+          status?: unknown;
+          incomplete_details?: { reason?: unknown } | null;
+        } | null;
       };
       switch (event.type) {
         case "response.output_text.delta":
@@ -259,6 +274,9 @@ export async function readResponsesReply(
         case "response.completed":
         case "response.incomplete":
           output = event.response?.output ?? null;
+          if (cutByOutputCap(event.response)) {
+            finishReason = "length";
+          }
           break;
         case "response.failed":
           failure =
@@ -284,14 +302,19 @@ export async function readResponsesReply(
     if (!message.content && deltas.length) {
       message.content = deltas.join("");
     }
-    return { message };
+    return { message, ...(finishReason ? { finishReason } : {}) };
   }
 
   const body = await readBody(upstream, MAX_BACKEND_BODY_BYTES);
   if (!body.complete) {
     throw new BackendRefusal("The backend's reply was far larger than any reply.");
   }
-  let data: { output?: unknown; error?: { message?: unknown } | null };
+  let data: {
+    output?: unknown;
+    error?: { message?: unknown } | null;
+    status?: unknown;
+    incomplete_details?: { reason?: unknown } | null;
+  };
   try {
     data = JSON.parse(body.text) as typeof data;
   } catch {
@@ -304,5 +327,8 @@ export async function readResponsesReply(
         "The backend reported a failed response.",
     };
   }
-  return { message: fromResponsesOutput(data?.output) };
+  return {
+    message: fromResponsesOutput(data?.output),
+    ...(cutByOutputCap(data) ? { finishReason: "length" } : {}),
+  };
 }

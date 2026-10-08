@@ -731,7 +731,7 @@ export async function requestCustomMessage(
           ),
         };
       }
-      return { message: reply.message };
+      return { message: reply.message, ...(reply.finishReason ? { finishReason: reply.finishReason } : {}) };
     } catch (error) {
       return readFailure(error);
     }
