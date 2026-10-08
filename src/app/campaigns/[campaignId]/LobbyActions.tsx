@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PregenPicker } from "@/app/campaigns/[campaignId]/PregenPicker";
 import { Check, Loader2, Pencil, Play, Trash2, UserRound } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -148,6 +149,7 @@ export function LobbyActions({
             <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "px-6")}>
               Create your character
             </Link>
+            <PregenPicker campaignId={campaign.id} />
           </div>
         ) : (
           <>
@@ -174,9 +176,12 @@ export function LobbyActions({
           </>
         )
       ) : !mySheet ? (
-        <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "w-full")}>
-          Create your character
-        </Link>
+        <>
+          <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "w-full")}>
+            Create your character
+          </Link>
+          <PregenPicker campaignId={campaign.id} />
+        </>
       ) : (
         <>
           <button
