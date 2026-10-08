@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { isPrivateBackendHost } from "@/lib/backend-host";
+import { PaidAiRefusedError, paidAiAllowedNow } from "@/lib/shared-host";
+import { recordUsage } from "@/lib/usage/ledger";
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
@@ -139,6 +142,7 @@ export function enqueueNarrationAudio(
       // Read once per passage, so every clip goes to the same server even
       // if the admin saves a change halfway through.
       const backend = ttsBackend();
+      const paid = backend.provider === "openai" && backend.apiKey !== "" && !isPrivateBackendHost(backend.v1);
       const version = Date.now();
       const url = narrationAudioUrl(campaignId, messageId, version);
       const live = openLiveNarration(campaignId, messageId);
@@ -155,6 +159,11 @@ export function enqueueNarrationAudio(
           if (keys.size) {
             await castUnvoiced(campaignId, roster, settings.ttsVoice, { only: keys, hints, backend });
           }
+        }
+        // OpenAI speech runs on the host's key; the shared-host policy
+        // answers before a word is rendered (src/lib/shared-host.ts).
+        if (paid && !paidAiAllowedNow()) {
+          throw new PaidAiRefusedError("speech");
         }
         // Prose in the narrator's voice, each attributed line in its
         // speaker's own, concatenated into the one file the transcript keys.
@@ -176,12 +185,20 @@ export function enqueueNarrationAudio(
         });
       } catch (error) {
         closeLiveNarration(messageId, live, "failed");
-        const reason = describeSpeechFailure(error, backend);
+        const reason = error instanceof PaidAiRefusedError ? error.message : describeSpeechFailure(error, backend);
         lastFailures.set(messageId, reason);
         publishMediaStatus(campaignId, "tts", messageId, "failed", reason);
         throw error;
       }
       lastFailures.delete(messageId);
+      recordUsage({
+        kind: "tts",
+        role: "narration",
+        backend: backend.provider,
+        model: backend.model,
+        paid,
+        units: speech.length,
+      });
       // MP3 is plain MPEG frames; the clips concatenate and play cleanly.
       const file = narrationAudioPath(campaignId, messageId);
       mkdirSync(path.dirname(file), { recursive: true });

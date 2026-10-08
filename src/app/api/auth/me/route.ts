@@ -1,6 +1,7 @@
 import { currentUser } from "@/lib/auth";
 import { NO_PASSWORD_SENTINEL, getUserByUsername, getUserDiscordId } from "@/lib/db/users";
 import { discordCredentials } from "@/lib/discord-oauth";
+import { canCreateCampaigns } from "@/lib/shared-host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ export async function GET() {
           username: user.username,
           avatar: user.avatar,
           isAdmin: user.isAdmin,
+          // Whether the home page offers "New campaign" (src/lib/shared-host.ts).
+          canCreateCampaigns: canCreateCampaigns(user),
           mustChangePassword: user.mustChangePassword,
       deletionDueAt: user.deletionDueAt,
           discordLinked: getUserDiscordId(user.id) !== null,

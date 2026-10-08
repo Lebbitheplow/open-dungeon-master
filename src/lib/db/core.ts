@@ -2110,6 +2110,29 @@ function ensureSchema(db: SqliteDatabase) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_agent_activity_grant ON agent_activity(grant_id, id);
+
+    -- The usage ledger (src/lib/usage/ledger.ts, issue #137): one row per
+    -- AI call, counted from what the backend reported. No prompt or
+    -- transcript is kept. campaign_id and user_id are plain columns, not
+    -- foreign keys: a campaign's history outlives the campaign, and an
+    -- erased account's rows are unlinked rather than dropped.
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      campaign_id TEXT,
+      user_id TEXT,
+      kind TEXT NOT NULL CHECK (kind IN ('text','image','tts','stt','agent')),
+      role TEXT NOT NULL DEFAULT '',
+      backend TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      paid INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      units REAL NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_events_campaign ON usage_events(campaign_id, at);
+    CREATE INDEX IF NOT EXISTS idx_usage_events_user ON usage_events(user_id, at);
   `);
 }
 

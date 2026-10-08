@@ -166,7 +166,22 @@ export class BridgeSession {
       for (const call of this.queue.splice(0)) {
         call.answer(TURN_OVER, true);
       }
-      this.deliver({ message: { content } });
+      const usage = event.usage;
+      this.deliver({
+        message: { content },
+        ...(usage && (usage.inputTokens || usage.outputTokens)
+          ? {
+              usage: {
+                inputTokens: usage.inputTokens ?? 0,
+                outputTokens: usage.outputTokens ?? 0,
+                model: harnessConfig().model,
+                backend: "harness" as const,
+                keyed: true,
+                paid: true,
+              },
+            }
+          : {}),
+      });
       return;
     }
     if (event.type === "rate_limit") {
