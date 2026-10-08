@@ -6,7 +6,9 @@ import {
   proposalExpired,
   proposalSummary,
   PROPOSAL_TOOL_NAMES,
+  shouldProposeChange,
   shouldProposeItemChange,
+  VITALS_PROPOSAL_TOOL_NAMES,
 } from "../src/lib/dm/proposal-logic.ts";
 
 let passed = 0;
@@ -23,6 +25,42 @@ test("only inventory/gold tools are eligible, only when enabled", () => {
   assert.ok(!shouldProposeItemChange(true, "heal", {}));
   assert.ok(!shouldProposeItemChange(true, "use_item", {}));
   assert.equal(PROPOSAL_TOOL_NAMES.size, 4);
+});
+
+test("vitals tools answer to their own switch, items to theirs, nothing to neither", () => {
+  const both = { inventoryApprovals: true, vitalsApprovals: true };
+  const itemsOnly = { inventoryApprovals: true, vitalsApprovals: false };
+  const vitalsOnly = { inventoryApprovals: false, vitalsApprovals: true };
+  const neither = { inventoryApprovals: false, vitalsApprovals: false };
+  const pc = { isCompanion: false };
+  for (const tool of VITALS_PROPOSAL_TOOL_NAMES) {
+    assert.equal(shouldProposeChange(both, tool, pc), true, tool);
+    assert.equal(shouldProposeChange(vitalsOnly, tool, pc), true, tool);
+    assert.equal(shouldProposeChange(itemsOnly, tool, pc), false, tool);
+    assert.equal(shouldProposeChange(neither, tool, pc), false, tool);
+    assert.equal(shouldProposeChange(both, tool, { isCompanion: true }), false, tool);
+    assert.equal(shouldProposeChange(both, tool, null), false, tool);
+  }
+  for (const tool of PROPOSAL_TOOL_NAMES) {
+    assert.equal(shouldProposeChange(itemsOnly, tool, pc), true, tool);
+    assert.equal(shouldProposeChange(vitalsOnly, tool, pc), false, tool);
+  }
+  // Rolls, rests and XP are never staged.
+  for (const tool of ["award_xp", "take_rest", "request_roll", "use_resource", "update_sheet"]) {
+    assert.equal(shouldProposeChange(both, tool, pc), false, tool);
+  }
+});
+
+test("vitals summaries read as the blow, the cure or the condition", () => {
+  assert.equal(proposalSummary("apply_damage", { amount: 7, type: "fire" }, "Kara"), "Deal 7 fire damage to Kara");
+  assert.equal(proposalSummary("apply_damage", { amount: 3 }, "Kara"), "Deal 3 damage to Kara");
+  assert.equal(proposalSummary("heal", { amount: 5 }, "Kara"), "Heal Kara for 5");
+  assert.equal(proposalSummary("heal", { spell: "Cure Wounds" }, "Kara"), "Heal Kara with Cure Wounds");
+  assert.equal(proposalSummary("heal", { amount: 8, temp: true }, "Kara"), "Give Kara 8 temporary hit points");
+  assert.equal(proposalSummary("set_condition", { condition: "poisoned", rounds: 3 }, "Kara"), "Make Kara poisoned for 3 rounds");
+  assert.equal(proposalSummary("set_condition", { condition: "frightened", rounds: 1 }, "Kara"), "Make Kara frightened for 1 round");
+  assert.equal(proposalSummary("set_condition", { condition: "prone" }, "Kara"), "Make Kara prone");
+  assert.equal(proposalSummary("clear_condition", { condition: "poisoned" }, "Kara"), "Clear poisoned from Kara");
 });
 
 test("companions and missing targets stay auto-applied", () => {

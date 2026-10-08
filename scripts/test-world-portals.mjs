@@ -69,7 +69,7 @@ const TABLE = {
   ttsAvailable: true,
   mapsAvailable: true,
 };
-const ALL_ON = { ...DRAFT, inventoryApprovals: true, midGameJoinOpen: true, holdSubmissions: true };
+const ALL_ON = { ...DRAFT, inventoryApprovals: true, vitalsApprovals: true, midGameJoinOpen: true, holdSubmissions: true };
 
 // ---- the portals ----
 
@@ -168,10 +168,10 @@ function rowsOf(draft, gates) {
   return tableSheet(draft, gates).flatMap((group) => group.rows);
 }
 
-test("featuresOn still counts thirteen", () => {
-  assert.equal(featuresOn(ALL_ON, TABLE), 13);
-  assert.equal(countableRows(TABLE), 13);
-  assert.equal(rowsOf(ALL_ON, TABLE).filter((row) => row.counted).length, 13);
+test("featuresOn still counts fourteen", () => {
+  assert.equal(featuresOn(ALL_ON, TABLE), 14);
+  assert.equal(countableRows(TABLE), 14);
+  assert.equal(rowsOf(ALL_ON, TABLE).filter((row) => row.counted).length, 14);
   // The four that are shown but uncounted stay uncounted.
   const uncounted = rowsOf(ALL_ON, TABLE).filter((row) => !row.counted).map((row) => row.key);
   assert.deepEqual(uncounted.sort(), ["boardDrawing", "enemyIntent", "multiCharacter", "presentation"]);

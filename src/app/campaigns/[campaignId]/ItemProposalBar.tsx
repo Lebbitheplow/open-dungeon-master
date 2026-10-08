@@ -8,9 +8,11 @@ import { KitButton, PanelError } from "./PanelKit";
 import type { ItemProposal } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-// Pending DM item/gold offers (inventoryApprovals): the owning player gets
+// Pending DM offers: item and gold changes (inventoryApprovals) and damage,
+// healing and conditions (vitalsApprovals). The owning player gets
 // Accept/Decline, everyone else sees a passive chip, the lead may withdraw.
 // Driven by item_proposal_added/item_proposal_resolved on the stream.
+const VITALS_TOOLS = new Set(["apply_damage", "heal", "set_condition", "clear_condition"]);
 export function ItemProposalBar({
   campaignId,
   proposals,
@@ -73,7 +75,11 @@ export function ItemProposalBar({
               mine ? "ornate border-amber-500/50 text-amber-100" : "text-stone-400",
             )}
           >
-            <GameIcon icon={{ kind: "glyph", key: trade ? "tab-trade" : "tab-loot" }} size="size-6" className="shrink-0" />
+            <GameIcon
+              icon={{ kind: "glyph", key: trade ? "tab-trade" : VITALS_TOOLS.has(proposal.toolName) ? "tab-friends" : "tab-loot" }}
+              size="size-6"
+              className="shrink-0"
+            />
             <span className="min-w-0 flex-1">
               {proposal.summary}
               {proposal.reason ? (
