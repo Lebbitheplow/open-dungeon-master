@@ -120,7 +120,10 @@ export type ChatRequestOptions = {
   // llama.cpp and vLLM honor chat_template_kwargs, and OpenRouter ignores
   // the unknown field. OpenAI answers 400 for it, so describeEndpoint keeps
   // it off that backend entirely. Reasoning deltas never reach onDelta: the
-  // stream parser forwards only delta.content.
+  // stream parser forwards only delta.content. `false` is sent too, not
+  // left to the server: Qwen's and Gemma's chat templates reason by default,
+  // so a call that wants none (the final narration) would think anyway.
+  // Left unset, the server's default stands.
   thinking?: boolean;
   // Body fields a previous attempt was rejected for, omitted on the retry.
   // Set only by requestCustomMessage's own unsupported-parameter path; no
@@ -609,8 +612,8 @@ export async function requestCustomMessage(
         // it from config. Skipped on backends with no preset to override, where
         // 0 is already the default and reasoning models reject the field.
         ...(caps.sendZeroPresencePenalty ? { presence_penalty: 0 } : {}),
-        ...(caps.allowTemplateKwargs && options.thinking
-          ? { chat_template_kwargs: { enable_thinking: true } }
+        ...(caps.allowTemplateKwargs && options.thinking !== undefined
+          ? { chat_template_kwargs: { enable_thinking: options.thinking } }
           : {}),
         // The last chunk of a stream carries the token counts only when
         // asked (OpenAI, llama-server, vLLM, LM Studio and OpenRouter all

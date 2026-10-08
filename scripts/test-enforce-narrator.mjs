@@ -689,6 +689,27 @@ await test("The narration guard's rewrite has one reserved call outside the four
   assert.equal(message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim(), rewrite);
 });
 
+await test("Every call tells the server whether to reason: the tool decisions do, the forced narration, the guard's rewrite and the claims reader do not.", async () => {
+  const enemy = await karaUp();
+  const check = () => call("request_roll", { characterId: kara.id, kind: "skill_check", skill: "perception", difficulty: "easy" });
+  world.clearDice();
+  world.dice(2, 10, 10);
+  model.script([
+    reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, weapon: "Longsword" })] }),
+    reply({ calls: [check()] }),
+    reply({ calls: [check()] }),
+    reply({ text: "Kara's blade bites into the goblin." }),
+    reply({ text: "Kara's blade whistles past the goblin, and the creature snarls as it circles back toward her with its club raised, looking for an opening." }),
+  ]);
+  model.claims([[{ kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName), quote: "Kara's blade bites into the goblin." }]]);
+  await model.turn(world, "I attack the goblin.", kara.id);
+  world.clearDice();
+  const thinking = (body) => body.chat_template_kwargs?.enable_thinking;
+  assert.deepEqual(model.requests.map(thinking), [true, true, true, false, false], "decisions, the forced narration, the rewrite");
+  assert.ok(model.readerRequests.length > 0, "the narration was read");
+  assert.ok(model.readerRequests.every((body) => thinking(body) === false), "the claims reader reasons");
+});
+
 await test("Prose read before the turn's attack resolved is read again by the guard for what that attack lets it check.", async () => {
   const enemy = await karaUp();
   const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
