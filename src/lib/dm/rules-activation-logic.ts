@@ -18,6 +18,7 @@
 // Dependency-free so scripts/test-rules-activation.mjs can import it directly.
 
 import { estimateTokens } from "./context-budget.ts";
+import { hasWord } from "../language/text-logic.ts";
 
 // NE-P's headroom factor. Retrieval is only worth its complexity when the
 // document genuinely cannot fit; at 1.2x the budget the whole thing still
@@ -46,20 +47,12 @@ export function serializeTriggerKeywords(keywords: string[]): string {
   return keywords.map((value) => value.trim()).filter(Boolean).join(", ");
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 // Word-bounded so a keyword like "rest" does not fire on "arrest" or
-// "restrain". Multi-word keywords are matched as a phrase.
+// "restrain", by Unicode letters so "riposo" or "Ölmühle" bound the same way.
+// Multi-word keywords are matched as a phrase.
 export function matchesTrigger(query: string, keywords: string[]): string | null {
-  const text = query.toLowerCase();
   for (const keyword of keywords) {
-    const trimmed = keyword.trim().toLowerCase();
-    if (!trimmed) {
-      continue;
-    }
-    if (new RegExp(`\\b${escapeRegex(trimmed)}\\b`, "i").test(text)) {
+    if (keyword.trim() && hasWord(query, keyword)) {
       return keyword;
     }
   }

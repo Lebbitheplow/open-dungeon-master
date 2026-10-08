@@ -17,12 +17,13 @@ import {
   planMerge,
   planRename,
 } from "@/lib/dm/entity-review-logic";
+import { stopWordsFor } from "@/lib/language/language";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// The NPC review queue: the fuzzy name matches entity-logic.ts deliberately
-// refuses to resolve on its own.
+// The NPC review queue: the containment and fuzzy name matches
+// entity-logic.ts deliberately refuses to resolve on its own.
 //
 // suggestNpcMerges has existed and been computed for a while, and nothing
 // ever read it, so "Aldric" and "Alaric" stayed two NPCs with two attitudes
@@ -41,6 +42,7 @@ export async function GET(
   const suggestions = filterDismissed(
     suggestNpcMerges(campaignId),
     listDismissedMerges(campaignId),
+    stopWordsFor(context.campaign.gameSettings.tableLanguage),
   );
   return Response.json({
     suggestions,
@@ -91,7 +93,7 @@ export async function POST(
   const body = parsed.data;
 
   if (body.action === "dismiss") {
-    dismissMerge(campaignId, pairKey(body.name, body.matches));
+    dismissMerge(campaignId, pairKey(body.name, body.matches, stopWordsFor(context.campaign.gameSettings.tableLanguage)));
     return Response.json({ ok: true });
   }
 
@@ -123,7 +125,7 @@ export async function POST(
   if (!keep || !merge || keep.campaignId !== campaignId || merge.campaignId !== campaignId) {
     return Response.json({ error: "NPC not found." }, { status: 404 });
   }
-  const plan = planMerge(keep, merge);
+  const plan = planMerge(keep, merge, stopWordsFor(context.campaign.gameSettings.tableLanguage));
   if (isReviewError(plan)) {
     return Response.json({ error: plan.error }, { status: 409 });
   }

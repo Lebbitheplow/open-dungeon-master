@@ -78,10 +78,12 @@ export function RelationGraph({
       className={cn("panel w-full rounded-lg", className)}
     >
       <defs>
-        {graph.nodes.map((node) => {
+        {graph.nodes.map((node, index) => {
           const face = portraits.get(node.name);
+          // By the node's place, not its name: a slug of the name gave every
+          // name with no ASCII letter one id, and so one face.
           return face ? (
-            <pattern key={node.name} id={`face-${slug(node.name)}`} patternUnits="objectBoundingBox" width="1" height="1">
+            <pattern key={node.name} id={`face-${index}`} patternUnits="objectBoundingBox" width="1" height="1">
               <HostSvgImage href={face} width={RADIUS * 2} height={RADIUS * 2} preserveAspectRatio="xMidYMid slice" />
             </pattern>
           ) : null;
@@ -127,7 +129,7 @@ export function RelationGraph({
           </g>
         );
       })}
-      {graph.nodes.map((node) => {
+      {graph.nodes.map((node, index) => {
         const at = layout.get(node.name);
         if (!at) {
           return null;
@@ -155,7 +157,7 @@ export function RelationGraph({
           >
             <circle
               r={RADIUS}
-              fill={face ? `url(#face-${slug(node.name)})` : node.known ? "#1c1917" : "#0c0a09"}
+              fill={face ? `url(#face-${index})` : node.known ? "#1c1917" : "#0c0a09"}
               stroke={node.known ? "#d4ab3a" : "#57534e"}
               strokeWidth={node.known ? 1.5 : 1}
               strokeDasharray={node.known ? undefined : "3 3"}
@@ -173,8 +175,4 @@ export function RelationGraph({
       })}
     </svg>
   );
-}
-
-function slug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }

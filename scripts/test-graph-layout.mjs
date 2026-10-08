@@ -2,6 +2,7 @@
 // section 5.5): the same roster lands in the same place, nobody overlaps,
 // and everyone stays in frame.
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
@@ -60,6 +61,16 @@ test("an empty roster and a lone node both lay out", () => {
   assert.deepEqual(layoutGraph({ nodes: [], edges: [], width: 100, height: 100 }), []);
   const one = layoutGraph({ nodes: ["Solo"], edges: [], width: 100, height: 100 });
   assert.equal(one.length, 1);
+});
+
+// The graph component is drawn in the browser, so its portrait ids are
+// pinned by reading its source: by the node's place in the graph, which two
+// names in any script never share, never by a slug of the name.
+test("each node's portrait pattern is named by its place in the graph, never by its name", () => {
+  const source = fs.readFileSync(new URL("../src/app/campaigns/[campaignId]/RelationGraph.tsx", import.meta.url), "utf8");
+  const ids = [...source.matchAll(/id=\{`face-\$\{(\w+)\}`\}|url\(#face-\$\{(\w+)\}\)/g)].map((match) => match[1] ?? match[2]);
+  assert.deepEqual(ids, ["index", "index"]);
+  assert.doesNotMatch(source, /face-\$\{[^}]*name/);
 });
 
 console.log(`test-graph-layout: ${passed} passed`);

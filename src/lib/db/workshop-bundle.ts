@@ -17,6 +17,7 @@ import {
 import { normalizeAmbience } from "@/lib/battlemap/scene";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
 import { normalizeNpcVoice } from "@/lib/npcs/forge";
+import { foldName } from "@/lib/language/text-logic";
 import {
   EXTRAS_LIMITS,
   normalizeTemplateExtras,
@@ -310,6 +311,9 @@ function writeBundleRows(
     }
 
     const usedNpcNames = new Set<string>();
+    // Faction members are matched to this cast by name, folded in JavaScript:
+    // SQLite folds case only for ASCII letters.
+    const npcIdByName = new Map<string, string>();
     for (const [index, npc] of bundle.npcs.entries()) {
       const linked = sharedRow("npcs", npc);
       if (linked) {
@@ -356,6 +360,7 @@ function writeBundleRows(
       );
       keyed("npcs", id, npc.ref);
       ids.npcs.push(id);
+      npcIdByName.set(foldName(name), id);
       copied += 1;
     }
 
@@ -368,7 +373,10 @@ function writeBundleRows(
       ).run(factionId, workshop.id, faction.name, faction.blurb, faction.goal, faction.attitude, faction.power, JSON.stringify(faction.tags), factionPortraits[index], now, now);
       ids.factions.push(factionId);
       for (const member of faction.members) {
-        db.prepare(`UPDATE npcs SET faction_id = ? WHERE campaign_id = ? AND name = ? COLLATE NOCASE`).run(factionId, workshop.id, member);
+        const memberId = npcIdByName.get(foldName(member));
+        if (memberId) {
+          db.prepare(`UPDATE npcs SET faction_id = ? WHERE id = ?`).run(factionId, memberId);
+        }
       }
       copied += 1;
     }

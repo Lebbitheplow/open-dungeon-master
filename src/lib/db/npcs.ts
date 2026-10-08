@@ -1,5 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { campaignLanguage } from "@/lib/db/campaigns";
 import { matchEntity, mergeAliases, normalizeName } from "@/lib/dm/entity-logic";
+import { stopWordsFor } from "@/lib/language/language";
 import { normalizeNpcVoice, type NpcDraft, type NpcVoice } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
 import {
@@ -119,12 +121,13 @@ export function listNpcs(campaignId: string): Npc[] {
 // The literal spelling is tried first, so the common case stays a single
 // indexed lookup. Only when that misses does it fall back to entity
 // resolution across every known name and alias, which is what keeps
-// "Marla", "Marla Venn", and "Captain Marla" pointing at one row with one
-// attitude and one approval meter instead of forking into three.
+// "marla" and "MARLA", or "Église" and "église", pointing at one row with
+// one attitude and one approval meter instead of forking into two.
 //
-// Fuzzy matches are deliberately NOT accepted here. "Aldric" and "Alaric"
-// may be two different people, and silently answering a social check against
-// the wrong NPC is worse than not finding one; those surface as lead-facing
+// Containment and fuzzy matches are deliberately NOT accepted here.
+// "Aldric" and "Alaric" may be two different people, and so may "Bruno the
+// smith" and "the smith"; silently answering a social check against the
+// wrong NPC is worse than not finding one, so those surface as lead-facing
 // suggestions instead (see suggestNpcMerges).
 export function getNpcByName(campaignId: string, name: string): Npc | null {
   const trimmed = name.trim();
@@ -154,23 +157,24 @@ export function getNpcByName(campaignId: string, name: string): Npc | null {
       }
     }
   }
-  const match = matchEntity(trimmed, [...ownerByName.keys()]);
+  const match = matchEntity(trimmed, [...ownerByName.keys()], stopWordsFor(campaignLanguage(campaignId)));
   if (!match || match.needsConfirmation) {
     return null;
   }
   return ownerByName.get(match.name) ?? null;
 }
 
-// Fuzzy near-misses across the roster, for the party lead to confirm or
-// dismiss. Never applied automatically.
+// Near-misses across the roster (one name inside another, or a typo away),
+// for the party lead to confirm or dismiss. Never applied automatically.
 export function suggestNpcMerges(
   campaignId: string,
 ): Array<{ name: string; matches: string }> {
   const roster = listNpcs(campaignId);
+  const stopWords = stopWordsFor(campaignLanguage(campaignId));
   const suggestions: Array<{ name: string; matches: string }> = [];
   for (let index = 0; index < roster.length; index += 1) {
     const others = roster.slice(index + 1).map((npc) => npc.name);
-    const match = matchEntity(roster[index].name, others);
+    const match = matchEntity(roster[index].name, others, stopWords);
     if (match?.needsConfirmation) {
       suggestions.push({ name: roster[index].name, matches: match.name });
     }
@@ -195,10 +199,11 @@ export function upsertNpc(input: {
     // Registering a known NPC under a new spelling records that spelling
     // rather than creating a second row. The canonical name never changes,
     // so nothing already written about them has to be rewritten.
+    const stopWords = stopWordsFor(campaignLanguage(input.campaignId));
     const aliases =
-      normalizeName(input.name) === normalizeName(existing.name)
+      normalizeName(input.name, stopWords) === normalizeName(existing.name, stopWords)
         ? existing.aliases
-        : mergeAliases(existing.aliases, input.name);
+        : mergeAliases(existing.aliases, input.name, stopWords);
     db.prepare(
       `UPDATE npcs
        SET attitude = ?, trait = ?, location = ?, aliases_json = ?, updated_at = ?

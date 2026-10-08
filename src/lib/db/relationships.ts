@@ -1,3 +1,4 @@
+import { foldName } from "@/lib/language/text-logic";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import {
   parseBeatCounts,
@@ -95,17 +96,14 @@ export function listRelationships(campaignId: string): Relationship[] {
   ).map(mapRelationship);
 }
 
+// Subjects are compared in JavaScript, by Unicode case and form
+// (src/lib/language): SQLite's NOCASE folds ASCII only.
 export function listRelationshipsForSubject(
   campaignId: string,
   subjectName: string,
 ): Relationship[] {
-  return (
-    getDatabase()
-      .prepare(
-        `SELECT * FROM relationships WHERE campaign_id = ? AND subject_name = ? COLLATE NOCASE`,
-      )
-      .all(campaignId, subjectName.trim()) as RelationshipRow[]
-  ).map(mapRelationship);
+  const wanted = foldName(subjectName);
+  return listRelationships(campaignId).filter((relationship) => foldName(relationship.subjectName) === wanted);
 }
 
 export function getRelationship(
@@ -113,13 +111,11 @@ export function getRelationship(
   characterId: string,
   subjectName: string,
 ): Relationship | null {
-  const row = getDatabase()
-    .prepare(
-      `SELECT * FROM relationships
-       WHERE campaign_id = ? AND character_id = ? AND subject_name = ? COLLATE NOCASE
-       LIMIT 1`,
-    )
-    .get(campaignId, characterId, subjectName.trim()) as RelationshipRow | undefined;
+  const wanted = foldName(subjectName);
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM relationships WHERE campaign_id = ? AND character_id = ?`)
+    .all(campaignId, characterId) as RelationshipRow[];
+  const row = rows.find((candidate) => foldName(candidate.subject_name) === wanted);
   return row ? mapRelationship(row) : null;
 }
 

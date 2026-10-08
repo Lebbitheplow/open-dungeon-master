@@ -38,6 +38,12 @@ check("trigger matching is word-bounded", () => {
   // "rest" must not fire on "arrest" or "restrain".
   assert.equal(matchesTrigger("we arrest the thief", ["rest"]), null);
   assert.equal(matchesTrigger("we take a long rest", ["rest"]), "rest");
+  // Unicode letters bound a keyword the same way: "riposo" never fires inside
+  // "riposò", nor "Mühle" inside "Ölmühle".
+  assert.equal(matchesTrigger("facciamo un riposo lungo", ["riposo"]), "riposo");
+  assert.equal(matchesTrigger("il drago riposò", ["riposo"]), null);
+  assert.equal(matchesTrigger("wir erreichen die Ölmühle", ["Mühle"]), null);
+  assert.equal(matchesTrigger("wir erreichen die Ölmühle", ["ölmühle"]), "ölmühle");
 });
 
 check("multi-word triggers match as a phrase", () => {

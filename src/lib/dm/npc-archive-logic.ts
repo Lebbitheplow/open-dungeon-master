@@ -16,7 +16,7 @@
 //
 // Dependency-free so scripts/test-npc-archive.mjs can import it directly.
 
-import { normalizeName } from "./entity-logic.ts";
+import { hasWord } from "../language/text-logic.ts";
 
 // Chapters of being unmentioned before an NPC leaves the roster. ODM's
 // pressureState already calls an NPC "ignored" at 2, which is a behavioural
@@ -74,22 +74,12 @@ export function shouldArchive(npc: ArchiveCandidate): ArchiveDecision {
   };
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 // Word-bounded, unlike the substring check ODM's chapter tick uses for the
 // pressure counters. Archiving is a bigger decision than a counter tick, and
 // a short name like "Al" matching inside "always" would resurrect the wrong
 // NPC every chapter.
 export function mentionsNpc(text: string, npc: ArchiveCandidate): boolean {
-  const patterns = [npc.name, ...(npc.aliases ?? [])]
-    .map((value) => normalizeName(value ?? ""))
-    .filter(Boolean);
-  const lower = text.toLowerCase();
-  return patterns.some((pattern) =>
-    new RegExp(`\\b${escapeRegex(pattern)}\\b`, "i").test(lower),
-  );
+  return [npc.name, ...(npc.aliases ?? [])].some((name) => hasWord(text, name ?? ""));
 }
 
 // Naming an archived NPC brings them straight back, so archiving is never a

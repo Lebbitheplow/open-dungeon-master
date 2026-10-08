@@ -1,3 +1,4 @@
+import { foldName } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   endEncounterEffects,
@@ -123,20 +124,29 @@ export function deleteEffect(campaignId: string, effectId: string): boolean {
 }
 
 // Removing by name, which is how a person says it: "the bless is over".
-// Case-insensitive because a DM types "Bless" and the AI wrote "bless".
+// Case-insensitive because a DM types "Bless" and the AI wrote "bless", and
+// by Unicode case (src/lib/language): SQLite's LOWER folds ASCII only.
 export function deleteEffectsByName(
   campaignId: string,
   target: { kind: EffectTargetKind; id: string },
   name: string,
 ): number {
-  const result = getDatabase()
-    .prepare(
-      `DELETE FROM active_effects
-        WHERE campaign_id = ? AND target_kind = ? AND target_id = ?
-          AND LOWER(name) = LOWER(?)`,
-    )
-    .run(campaignId, target.kind, target.id, name.trim());
-  return result.changes;
+  const db = getDatabase();
+  const wanted = foldName(name);
+  const ids = (
+    db
+      .prepare(`SELECT id, name FROM active_effects WHERE campaign_id = ? AND target_kind = ? AND target_id = ?`)
+      .all(campaignId, target.kind, target.id) as Array<{ id: string; name: string }>
+  )
+    .filter((row) => foldName(row.name) === wanted)
+    .map((row) => row.id);
+  const remove = db.prepare(`DELETE FROM active_effects WHERE campaign_id = ? AND id = ?`);
+  db.transaction(() => {
+    for (const id of ids) {
+      remove.run(campaignId, id);
+    }
+  })();
+  return ids.length;
 }
 
 function persistTick(
