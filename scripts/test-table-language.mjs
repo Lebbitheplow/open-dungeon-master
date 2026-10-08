@@ -111,6 +111,12 @@ await test("English has no directive; every other language names itself", () => 
     const name = language[0].toUpperCase() + language.slice(1);
     assert.ok(directive.startsWith(`TABLE LANGUAGE: The players read ${name}.`), language);
   }
+  // What the engine matches stays as it is, and the wording fits every prose
+  // call, not only the DM turn's prompt with its GAME STATE.
+  const italian = languageDirective("italian");
+  assert.match(italian, /every listed value and JSON key, written exactly as listed/);
+  assert.match(italian, /English rules name/);
+  assert.ok(!italian.includes("GAME STATE"));
 });
 
 await test("the DM's system prompt carries the directive, and an English one reads as before", async () => {
