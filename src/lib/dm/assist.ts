@@ -54,6 +54,24 @@ declare global {
   var __odmAssistCatalogVectors: Promise<Map<string, Float32Array[]>> | undefined;
 }
 
+// Texts per embedding call when the catalog is embedded. One call pads
+// every text to the longest SRD section; short texts batched with their own
+// length took a fifth of the time (about 2 seconds instead of 9 on CPU).
+const EMBED_BATCH = 16;
+
+async function embedByLength(texts: readonly string[]): Promise<Float32Array[]> {
+  const order = texts.map((text, index) => ({ text, index })).sort((a, b) => a.text.length - b.text.length);
+  const vectors = new Array<Float32Array>(texts.length);
+  for (let start = 0; start < order.length; start += EMBED_BATCH) {
+    const batch = order.slice(start, start + EMBED_BATCH);
+    const embedded = await embed(batch.map((item) => item.text));
+    batch.forEach((item, at) => {
+      vectors[item.index] = embedded[at];
+    });
+  }
+  return vectors;
+}
+
 // The catalog's passage vectors, embedded once per process: the catalog
 // and the SRD only change with the code.
 function catalogVectorsOnce(): Promise<Map<string, Float32Array[]>> {
@@ -64,7 +82,7 @@ function catalogVectorsOnce(): Promise<Map<string, Float32Array[]>> {
   const passages = ADJUDICATIONS.flatMap((entry) =>
     catalogPassages(entry, sections).map((text) => ({ name: entry.name, text })),
   );
-  globalThis.__odmAssistCatalogVectors = embed(passages.map((passage) => passage.text)).then(
+  globalThis.__odmAssistCatalogVectors = embedByLength(passages.map((passage) => passage.text)).then(
     (vectors) => {
       const byName = new Map<string, Float32Array[]>();
       passages.forEach((passage, index) => {
