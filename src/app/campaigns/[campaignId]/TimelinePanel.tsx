@@ -1,11 +1,12 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { useEffect, useState } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
-import { PanelLoading } from "./PanelKit";
+import { LoadFailed, PanelLoading } from "./PanelKit";
 import type { TimelineKind, TimelineRow } from "@/lib/dm/timeline-logic";
 
 // The campaign on one axis (docs/vtt-parity-implementation-plan.md 5.5):
@@ -45,26 +46,33 @@ const KIND_TONE: Record<TimelineKind, string> = {
 
 export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; refreshKey: number }) {
   const [rows, setRows] = useState<TimelineRow[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [hidden, setHidden] = useState<Set<TimelineKind>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/timeline`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { rows?: TimelineRow[] } | null) => {
-        if (!cancelled) {
-          setRows(data?.rows ?? []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRows([]);
-        }
-      });
+    readLoad<{ rows?: TimelineRow[] }>(fetch(`/api/campaigns/${campaignId}/timeline`), "The timeline").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload) {
+        setRows(outcome.payload.rows ?? []);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, refreshKey]);
+  }, [campaignId, refreshKey, reloads, settle]);
+
+  if (rows === null && loadError) {
+
+    return <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} />;
+
+  }
 
   if (rows === null) {
     return <PanelLoading label="Laying out the years..." />;
@@ -105,7 +113,7 @@ export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; 
         </div>
       ) : null}
       {shown.length <= 1 ? (
-        <EmptyState size="sm" art="scrolls" title="Nothing has happened yet. The first closed chapter starts the line." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState size="sm" art="scrolls" title="Nothing has happened yet. The first closed chapter starts the line." /> : null)
       ) : null}
       <ol className="stagger relative space-y-2 lg:before:absolute lg:before:bottom-0 lg:before:left-1/2 lg:before:top-0 lg:before:w-px lg:before:bg-gradient-to-b lg:before:from-amber-700/0 lg:before:via-amber-600/70 lg:before:to-amber-700/0">
         {shown.map((row, index) => {

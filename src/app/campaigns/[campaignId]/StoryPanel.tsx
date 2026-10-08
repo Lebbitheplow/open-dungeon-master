@@ -1,5 +1,6 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Crosshair, Loader2, Pencil, Plus, RefreshCw, Rewind, Scissors, SkipForward, X } from "lucide-react";
@@ -7,7 +8,7 @@ import { Book } from "@/components/ui/Book";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { KitButton, PanelError, PanelLoading, RowMenu, panelField } from "./PanelKit";
+import { KitButton, LoadFailed, PanelError, panelField, PanelLoading, RowMenu } from "./PanelKit";
 import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -778,6 +779,10 @@ export function StoryPanel({
 }) {
   const [closing, setClosing] = useState(false);
   const [rewindable, setRewindable] = useState<number[]>([]);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [rewindTarget, setRewindTarget] = useState<{
     chapterIndex: number;
     warnings: string[];
@@ -794,24 +799,26 @@ export function StoryPanel({
   // rewind to is lead-only UI and only arrives for the lead.
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/chapters`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (cancelled || !data) {
-          return;
-        }
-        if (Array.isArray(data.acts)) {
-          setActs(data.acts as PublicAct[]);
-        }
-        if (steersStory && Array.isArray(data.rewindableChapters)) {
-          setRewindable(data.rewindableChapters as number[]);
-        }
-      })
-      .catch(() => {});
+    readLoad<{ acts?: unknown; rewindableChapters?: unknown }>(fetch(`/api/campaigns/${campaignId}/chapters`), "The chapters").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      const data = outcome.payload;
+      if (!data) {
+        return;
+      }
+      if (Array.isArray(data.acts)) {
+        setActs(data.acts as PublicAct[]);
+      }
+      if (steersStory && Array.isArray(data.rewindableChapters)) {
+        setRewindable(data.rewindableChapters as number[]);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, steersStory, chapters.length]);
+  }, [campaignId, steersStory, chapters.length, reloads, settle]);
 
   async function postRewind(chapterIndex: number, confirm: boolean) {
     setRewindBusy(true);
@@ -853,7 +860,7 @@ export function StoryPanel({
       <div className="space-y-2">
         {steersStory ? <ArcCard campaignId={campaignId} /> : null}
         {steersStory ? <NpcReviewCard campaignId={campaignId} /> : null}
-        <EmptyState art="scrolls" size="sm" title="The story has not begun" hint="Chapters appear here as the adventure unfolds." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState art="scrolls" size="sm" title="The story has not begun" hint="Chapters appear here as the adventure unfolds." /> : null)
       </div>
     );
   }

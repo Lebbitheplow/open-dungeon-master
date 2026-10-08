@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { ShieldBan } from "lucide-react";
 import { useEffect, useState } from "react";
 import { UserAvatar, ui } from "@/lib/ui";
@@ -16,13 +18,20 @@ type Blocked = {
 // Who this account has blocked on this server, with the way back.
 export function BlockedPlayersSection() {
   const [blocked, setBlocked] = useState<Blocked[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [busyId, setBusyId] = useState("");
 
   useEffect(() => {
-    fetch("/api/profile/blocks")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setBlocked(data?.blocked ?? []));
-  }, []);
+    readLoad<{ blocked?: Blocked[] }>(fetch("/api/profile/blocks"), "The blocked list").then((outcome) => {
+      settle(outcome);
+      if (outcome.payload) {
+        setBlocked(outcome.payload.blocked ?? []);
+      }
+    });
+  }, [reloads, settle]);
 
   async function unblock(userId: string) {
     setBusyId(userId);
@@ -50,7 +59,7 @@ export function BlockedPlayersSection() {
       {blocked === null ? (
         <div className="skeleton-block h-12 rounded-xl" aria-label="Loading blocked players" />
       ) : blocked.length === 0 ? (
-        <EmptyState art="board" size="sm" title="Nobody blocked." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState art="board" size="sm" title="Nobody blocked." /> : null)
       ) : (
         <ul className="stagger space-y-2">
           {blocked.map((entry) => (

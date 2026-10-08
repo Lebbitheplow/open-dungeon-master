@@ -1,5 +1,6 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
@@ -11,7 +12,7 @@ import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { formatCopper } from "@/lib/srd/currency";
-import { KitButton, PanelLoading, panelField } from "./PanelKit";
+import { KitButton, LoadFailed, panelField, PanelLoading } from "./PanelKit";
 
 // The market (docs/vtt-parity-implementation-plan.md 11.1): the shops at
 // the party's place, stock as tiles with a price chip in coin, a Buy on
@@ -64,6 +65,10 @@ export function MarketPanel({
 }) {
   const [shops, setShops] = useState<ShopView[] | null>(null);
   const [here, setHere] = useState<{ id: string; name: string } | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [opening, setOpening] = useState(false);
@@ -72,23 +77,20 @@ export function MarketPanel({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/shops`)
-      .then((response) => (response.ok ? response.json() : {}))
-      .then((data: { shops?: ShopView[]; here?: { id: string; name: string } | null }) => {
-        if (!cancelled) {
-          setShops(data.shops ?? []);
-          setHere(data.here ?? null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setShops([]);
-        }
-      });
+    readLoad<{ shops?: ShopView[]; here?: { id: string; name: string } | null }>(fetch(`/api/campaigns/${campaignId}/shops`), "The market").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload) {
+        setShops(outcome.payload.shops ?? []);
+        setHere(outcome.payload.here ?? null);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, refreshKey, reload]);
+  }, [campaignId, refreshKey, reload, settle]);
 
   async function counter(shop: ShopView, action: "buy" | "sell" | "haggle", item = "") {
     setBusy(`${shop.id}:${action}:${item}`);
@@ -137,6 +139,12 @@ export function MarketPanel({
   const purse = mySheet ? mySheet.gold * 100 + mySheet.copper : 0;
   const coinFx = coins && mySheet && coins.characterId === mySheet.id ? coins : null;
 
+  if (shops === null && loadError) {
+
+    return <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} />;
+
+  }
+
   if (shops === null) {
     return <PanelLoading label="Looking over the stalls..." />;
   }
@@ -173,7 +181,7 @@ export function MarketPanel({
           </KitButton>
         )
       ) : null}
-      {!shops.length ? <EmptyState size="sm" art="chest" title={here ? `No shops at ${here.name}.` : "The party is nowhere with a market yet."} /> : null}
+      {!shops.length ? (loadError ? <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} /> : loaded ? <EmptyState size="sm" art="chest" title={here ? `No shops at ${here.name}.` : "The party is nowhere with a market yet."} /> : null) : null}
       {shops.map((shop) => {
         const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
         const shopItems: ContextMenuItem[] = [

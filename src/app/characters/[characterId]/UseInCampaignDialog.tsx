@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -40,27 +42,29 @@ export function UseInCampaignDialog({
   onClose: () => void;
 }) {
   const [campaigns, setCampaigns] = useState<CampaignRow[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState<{ campaignId: string; text: string; taken: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/campaigns")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        const rows: CampaignRow[] = data?.campaigns ?? [];
+    readLoad<{ campaigns?: CampaignRow[] }>(fetch("/api/campaigns"), "Your campaigns").then((outcome) => {
+      if (cancelled) return;
+      settle(outcome);
+      if (outcome.payload) {
+        const rows: CampaignRow[] = outcome.payload.campaigns ?? [];
         setCampaigns(
           rows.filter((row) => row.status !== "ended" && row.kind !== "workshop" && !row.isWorkshop),
         );
-      })
-      .catch(() => {
-        if (!cancelled) setCampaigns([]);
-      });
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloads, settle]);
 
   async function seat(campaign: CampaignRow) {
     setBusyId(campaign.id);
@@ -100,7 +104,9 @@ export function UseInCampaignDialog({
         The table gets its own copy of the sheet, adapted to its starting level. Your library keeps
         this one as it is.
       </p>
-      {campaigns === null ? (
+      {campaigns === null && loadError ? (
+        <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} />
+      ) : campaigns === null ? (
         <div className="skeleton-block h-24 rounded-xl" aria-label="Loading your campaigns" />
       ) : campaigns.length === 0 ? (
         <EmptyState

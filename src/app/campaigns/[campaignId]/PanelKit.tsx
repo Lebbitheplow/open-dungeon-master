@@ -1,7 +1,7 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, Loader2, MoreVertical } from "lucide-react";
+import { Check, Loader2, MoreVertical, RotateCw, TriangleAlert } from "lucide-react";
 import { Children, Fragment, type ButtonHTMLAttributes, type LabelHTMLAttributes, type ReactNode } from "react";
 import type { ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -172,6 +172,64 @@ export function PanelLoading({ label, rows = 3 }: { label: string; rows?: number
         <div key={index} className="skeleton-block h-10 rounded-lg" />
       ))}
     </div>
+  );
+}
+
+// What a list shows when its request was refused or never answered (issue
+// 140): the server's sentence and a way to ask again, where the rows or the
+// empty plate would be. Not the empty plate: "nothing here yet" is a claim
+// about the campaign, and a panel whose request failed cannot make it.
+//
+// Ember for the frame and the mark, ink for the words: ember is the one
+// colour the parchment theme keeps, and the stone ramp flips with the theme,
+// so the sentence reads on night and day alike (red text does not on cream).
+export function LoadFailed({ error, onRetry, className }: { error: string; onRetry: () => void; className?: string }) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "animate-fade-up flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-ember-600/40 bg-ember-500/10 px-3 py-2",
+        className,
+      )}
+    >
+      <TriangleAlert className="size-4 shrink-0 text-ember-500" aria-hidden="true" />
+      <p className="min-w-0 flex-1 text-xs leading-5 text-stone-200">{error}</p>
+      <button type="button" onClick={onRetry} className={cn(ui.btnSmall, "pk-tap shrink-0 px-2.5 py-1 text-xs")}>
+        <RotateCw className="size-3.5" aria-hidden="true" /> Try again
+      </button>
+    </div>
+  );
+}
+
+// A list behind its request (src/lib/load-state.ts): the loading line until
+// the server has answered once, the refusal in the list's place when that
+// first answer was no, the list itself after a yes, and the refusal under
+// the list when a later reload failed (the rows are still the last good
+// answer). The list's own empty sentence is thereby drawn only after a reply
+// that said empty.
+export function Listed({
+  loaded,
+  error,
+  onRetry,
+  loading,
+  rows = 2,
+  children,
+}: {
+  loaded: boolean;
+  error: string;
+  onRetry: () => void;
+  loading: string;
+  rows?: number;
+  children?: ReactNode;
+}) {
+  if (!loaded) {
+    return error ? <LoadFailed error={error} onRetry={onRetry} /> : <PanelLoading label={loading} rows={rows} />;
+  }
+  return (
+    <>
+      {children}
+      {error ? <LoadFailed error={error} onRetry={onRetry} className="mt-3" /> : null}
+    </>
   );
 }
 

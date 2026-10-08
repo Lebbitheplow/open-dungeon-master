@@ -7,6 +7,8 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { FieldLabel, quietRow } from "@/app/campaigns/[campaignId]/DmConsoleParts";
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import {
@@ -75,19 +77,19 @@ export function DmStoryboardPanel({
   const [error, setError] = useState("");
   const board = layout === "board";
 
+  // A refused or failed load is settled, not dropped (issue 140): the
+  // skeleton below gives way to the server's sentence instead of staying up
+  // for good.
+  const { loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
-      fetch(`/api/campaigns/${campaignId}/dm/storyboard`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: Payload | null) => {
-          if (payload) {
-            setData(payload);
-          }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+      readLoad<Payload>(fetch(`/api/campaigns/${campaignId}/dm/storyboard`), "The storyboard").then((outcome) => {
+        if (outcome.payload) {
+          setData(outcome.payload);
+        }
+        settle(outcome);
+      }),
+    [campaignId, settle],
   );
 
   useEffect(() => {
@@ -153,7 +155,11 @@ export function DmStoryboardPanel({
   }
 
   if (!data) {
-    return <div className="skeleton-block h-24 rounded-xl" aria-busy="true" aria-label="Loading the storyboard" />;
+    return loadError ? (
+      <LoadFailed error={loadError} onRetry={() => void load()} />
+    ) : (
+      <div className="skeleton-block h-24 rounded-xl" aria-busy="true" aria-label="Loading the storyboard" />
+    );
   }
 
   const nodes = data.board.nodes;
@@ -163,6 +169,8 @@ export function DmStoryboardPanel({
   // it differs.
   const addRow = (
     <>
+      {/* A reload that failed after the board was up: the board stays, the reason shows. */}
+      {loadError ? <LoadFailed error={loadError} onRetry={() => void load()} /> : null}
       <div className="flex flex-wrap items-end gap-2">
         <div className="w-full sm:w-52">
           <FieldLabel>Card</FieldLabel>

@@ -1,6 +1,8 @@
 "use client";
 
 import { EmptyState } from "@/components/EmptyState";
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { useCallback, useEffect, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { Plus, Search } from "lucide-react";
@@ -44,6 +46,9 @@ export function HomebrewPanel({
   const [editing, setEditing] = useState<{ id: string | null; draft: HomebrewDraft } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // A refused or failed read of the shelf is said so, with a way to ask
+  // again, never shown as "nothing of your own yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
 
   // The tour's "open the editor" step.
   useTourPrepare((name) => {
@@ -55,17 +60,13 @@ export function HomebrewPanel({
 
   const load = useCallback(
     () =>
-      fetch("/api/homebrew")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { entries?: HomebrewEntryView[] } | null) => {
-          if (payload?.entries) {
-            setEntries(payload.entries.filter((entry) => entry.kind !== "monster"));
-          }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [],
+      readLoad<{ entries?: HomebrewEntryView[] }>(fetch("/api/homebrew"), "Your homebrew").then((outcome) => {
+        settle(outcome);
+        if (outcome.payload?.entries) {
+          setEntries(outcome.payload.entries.filter((entry) => entry.kind !== "monster"));
+        }
+      }),
+    [settle],
   );
 
   useEffect(() => {
@@ -240,7 +241,10 @@ export function HomebrewPanel({
         </li>
       </ul>
 
-      {ofKind.length === 0 ? (
+      {loadError ? <LoadFailed error={loadError} onRetry={() => void load()} /> : null}
+      {!loaded && !loadError ? (
+        <p className="text-xs text-stone-500" aria-busy="true">Reading your shelf...</p>
+      ) : loaded && ofKind.length === 0 ? (
         <EmptyState art="chest" title="Nothing of your own yet. Start from something in the books and change what you like." />
       ) : shown.length === 0 ? (
         <p className="live-in text-xs text-stone-500">Nothing by that name.</p>

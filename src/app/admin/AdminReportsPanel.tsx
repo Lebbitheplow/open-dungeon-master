@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { Check, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -43,15 +45,22 @@ const REASON_LABEL: Record<string, string> = {
 // and closed.
 export function AdminReportsPanel() {
   const [reports, setReports] = useState<Report[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+
   const [showAll, setShowAll] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const refresh = useCallback(() => {
-    fetch(`/api/admin/reports${showAll ? "?status=all" : ""}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setReports(data?.reports ?? null));
-  }, [showAll]);
+    readLoad<{ reports?: Report[] }>(fetch(`/api/admin/reports${showAll ? "?status=all" : ""}`), "The reports").then((outcome) => {
+      settle(outcome);
+      if (outcome.payload) {
+        setReports(outcome.payload.reports ?? []);
+      }
+    });
+  }, [showAll, settle]);
 
   useEffect(() => {
     refresh();
@@ -102,7 +111,7 @@ export function AdminReportsPanel() {
       {error ? <p role="alert" className="motion-shake mb-3 text-sm text-red-400">{error}</p> : null}
 
       {reports.length === 0 ? (
-        <EmptyState art="board" title={showAll ? "No reports yet." : "Nothing waiting. Open reports show up here."} />
+        (loadError ? <LoadFailed error={loadError} onRetry={refresh} /> : loaded ? <EmptyState art="board" title={showAll ? "No reports yet." : "Nothing waiting. Open reports show up here."} /> : null)
       ) : (
         <ul className="stagger space-y-2">
           {reports.map((report) => (

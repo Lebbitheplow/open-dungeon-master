@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { Check, DatabaseBackup, Download, Loader2, ShieldCheck, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -28,6 +30,10 @@ function formatSize(bytes: number) {
 
 export function AdminBackupSection() {
   const [backups, setBackups] = useState<BackupEntry[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [dir, setDir] = useState("");
   const [creating, setCreating] = useState(false);
   const [busyName, setBusyName] = useState("");
@@ -36,14 +42,14 @@ export function AdminBackupSection() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/backup")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        setBackups(data?.backups ?? []);
-        if (data?.dir) setDir(data.dir);
-      })
-      .catch(() => setBackups([]));
-  }, []);
+    readLoad<{ backups?: BackupEntry[]; dir?: string }>(fetch("/api/admin/backup"), "The backups").then((outcome) => {
+      settle(outcome);
+      if (outcome.payload) {
+        setBackups(outcome.payload.backups ?? []);
+        if (outcome.payload.dir) setDir(outcome.payload.dir);
+      }
+    });
+  }, [reloads, settle]);
 
   async function create() {
     setCreating(true);
@@ -125,6 +131,12 @@ export function AdminBackupSection() {
     }
   }
 
+  if (backups === null && loadError) {
+
+    return <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} />;
+
+  }
+
   if (backups === null) {
     return <div className="skeleton-block mt-3 h-16 rounded-xl" aria-label="Loading backups" />;
   }
@@ -155,7 +167,7 @@ export function AdminBackupSection() {
         </p>
       ) : null}
       {backups.length === 0 ? (
-        <EmptyState art="scrolls" size="sm" title="No backups yet. Take one before a big session, or restore one you made with scripts/odm-backup.mjs." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState art="scrolls" size="sm" title="No backups yet. Take one before a big session, or restore one you made with scripts/odm-backup.mjs." /> : null)
       ) : (
         <ul className="stagger space-y-2">
           {backups.map((backup) => (

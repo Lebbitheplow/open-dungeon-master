@@ -1,5 +1,6 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -8,7 +9,7 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
-import { KitButton, PanelLoading, panelField } from "./PanelKit";
+import { KitButton, LoadFailed, panelField, PanelLoading } from "./PanelKit";
 import type { CalendarDefinition, CampaignClock } from "@/lib/dm/calendar";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
@@ -44,6 +45,10 @@ export function CalendarSection({ campaignId }: { campaignId: string }) {
   const [draft, setDraft] = useState<CalendarDefinition | null>(null);
   const [saving, setSaving] = useState(false);
   const [events, setEvents] = useState<EventView[]>([]);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [eventDraft, setEventDraft] = useState<EventDraft>(blankEvent());
   const [addingEvent, setAddingEvent] = useState(false);
   const [reload, setReload] = useState(0);
@@ -51,24 +56,28 @@ export function CalendarSection({ campaignId }: { campaignId: string }) {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch(`/api/campaigns/${campaignId}/dm/clock`).then((response) => (response.ok ? response.json() : {})),
-      fetch(`/api/campaigns/${campaignId}/calendar/events`).then((response) => (response.ok ? response.json() : {})),
-    ])
-      .then(([clockData, eventData]: [{ clock?: CampaignClock; reads?: string; presets?: Preset[] }, { events?: EventView[] }]) => {
-        if (cancelled) {
-          return;
-        }
+      readLoad<{ clock?: CampaignClock; reads?: string; presets?: Preset[] }>(fetch(`/api/campaigns/${campaignId}/dm/clock`), "The clock"),
+      readLoad<{ events?: EventView[] }>(fetch(`/api/campaigns/${campaignId}/calendar/events`), "The calendar"),
+    ]).then(([clockLoad, eventLoad]) => {
+      if (cancelled) {
+        return;
+      }
+      settle(clockLoad.error ? clockLoad : eventLoad);
+      const clockData = clockLoad.payload ?? {};
+      if (clockLoad.payload) {
         setClock(clockData.clock ?? null);
         setReads(clockData.reads ?? "");
         setPresets(clockData.presets ?? []);
         setDraft(clockData.clock ? { ...clockData.clock.calendar, moons: clockData.clock.calendar.moons ?? [], festivals: clockData.clock.calendar.festivals ?? [] } : null);
-        setEvents(eventData.events ?? []);
-      })
-      .catch(() => {});
+      }
+      if (eventLoad.payload) {
+        setEvents(eventLoad.payload.events ?? []);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, reload]);
+  }, [campaignId, reload, reloads, settle]);
 
   async function applyPreset(preset: string) {
     setSaving(true);
@@ -241,7 +250,7 @@ export function CalendarSection({ campaignId }: { campaignId: string }) {
             ))}
           </ul>
         ) : (
-          <EmptyState size="sm" art="scrolls" title="Nothing on the calendar yet." />
+          (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState size="sm" art="scrolls" title="Nothing on the calendar yet." /> : null)
         )}
         <div className="flex flex-wrap items-center gap-1.5">
           <input value={eventDraft.title} placeholder="What happens" aria-label="What happens" onChange={(event) => setEventDraft({ ...eventDraft, title: event.target.value })} maxLength={120} className={cn(field, "min-w-[9rem] flex-1")} />

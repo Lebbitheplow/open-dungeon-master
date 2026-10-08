@@ -9,6 +9,7 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
 import { GlyphPlate, RowMenu } from "@/app/workshop/kit";
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
 import type { RollTable } from "@/lib/db/roll-tables";
 
 // The workshop's view of the DM's tables: one full-width row per table with
@@ -73,6 +74,9 @@ export type RollResult = {
 type RowsProps = {
   tables: RollTable[];
   loaded: boolean;
+  // The list request's refusal, if any, and the way to ask again (issue 140).
+  loadError: string;
+  onRetry: () => void;
   // The panel's busy key: a table id while it rolls, "copy-" and the id
   // while it copies. Same convention as the console list.
   busy: string;
@@ -86,6 +90,8 @@ type RowsProps = {
 export function TableRows({
   tables,
   loaded,
+  loadError,
+  onRetry,
   busy,
   result,
   onOpen,
@@ -211,13 +217,16 @@ export function TableRows({
         </li>
       </ul>
 
-      {tables.length === 0 ? (
+      {loadError && !loaded ? (
+        <LoadFailed error={loadError} onRetry={onRetry} />
+      ) : tables.length === 0 ? (
         <p className="reveal text-[11px] text-stone-500">
           {loaded ? "No tables yet. Start one with New table, or paste one out of a book." : "Loading..."}
         </p>
       ) : shown.length === 0 ? (
         <p className="live-in text-xs text-stone-500">No table by that name.</p>
       ) : null}
+      {loaded && loadError ? <LoadFailed error={loadError} onRetry={onRetry} /> : null}
     </div>
   );
 }
