@@ -60,6 +60,7 @@ import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/pro
 import { rollerName } from "@/lib/roll-labels";
 import { tableHazards } from "@/lib/srd/table-hazards";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
+import { languageDirective } from "@/lib/dm/table-language-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -96,6 +97,10 @@ export function buildDmSystem(campaign: Campaign): string {
   const cover = coverPromptBlock(campaign.dmCover);
   if (cover) {
     parts.push(cover);
+  }
+  const language = languageDirective(campaign.gameSettings.tableLanguage);
+  if (language) {
+    parts.push(language);
   }
   return parts.join("\n\n");
 }

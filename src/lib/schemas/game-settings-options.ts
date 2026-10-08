@@ -84,3 +84,57 @@ export const STARTING_WEALTH_LABELS: Record<StartingWealthSetting, string> = {
   equipment: "Class and background gear, plus the background's coin",
   rolled: "Rolled wealth by class (the server rolls), spent on gear",
 };
+
+// The language the table plays in: the DM writes in it, and the server reads
+// story and player text with its Snowball stemmer and stop list
+// (src/lib/language). Exactly the languages Snowball covers with both, so
+// every one is read the same way; the ids are Snowball's own names.
+export const TABLE_LANGUAGES = [
+  "english",
+  "danish",
+  "dutch",
+  "finnish",
+  "french",
+  "german",
+  "hungarian",
+  "indonesian",
+  "irish",
+  "italian",
+  "norwegian",
+  "portuguese",
+  "russian",
+  "spanish",
+  "swedish",
+] as const;
+export type TableLanguage = (typeof TABLE_LANGUAGES)[number];
+
+// The English name, for the prompt, and the language's own, for the people
+// who choose it.
+export const TABLE_LANGUAGE_NAMES: Record<TableLanguage, { english: string; native: string }> = {
+  english: { english: "English", native: "English" },
+  danish: { english: "Danish", native: "Dansk" },
+  dutch: { english: "Dutch", native: "Nederlands" },
+  finnish: { english: "Finnish", native: "Suomi" },
+  french: { english: "French", native: "Français" },
+  german: { english: "German", native: "Deutsch" },
+  hungarian: { english: "Hungarian", native: "Magyar" },
+  indonesian: { english: "Indonesian", native: "Bahasa Indonesia" },
+  irish: { english: "Irish", native: "Gaeilge" },
+  italian: { english: "Italian", native: "Italiano" },
+  norwegian: { english: "Norwegian", native: "Norsk" },
+  portuguese: { english: "Portuguese", native: "Português" },
+  russian: { english: "Russian", native: "Русский" },
+  spanish: { english: "Spanish", native: "Español" },
+  swedish: { english: "Swedish", native: "Svenska" },
+};
+
+export const TABLE_LANGUAGE_LABELS: Record<TableLanguage, string> = Object.fromEntries(
+  TABLE_LANGUAGES.map((id) => {
+    const { english, native } = TABLE_LANGUAGE_NAMES[id];
+    return [id, english === native ? english : `${native} (${english})`];
+  }),
+) as Record<TableLanguage, string>;
+
+// Shared by the create dialog and the settings panel.
+export const TABLE_LANGUAGE_HELP =
+  "The Dungeon Master writes the story in this language, and the server reads the story and your messages in it. The app, the rules and the rulebook stay in English. Any language but English needs a multilingual embedding model on the server (EMBEDDING_MODEL in the README).";

@@ -78,6 +78,7 @@ function makeState({ dicePolicy = "digital_only", useRealDice = false } = {}) {
       gameSettings: {
         genre: "high_fantasy",
         customGenreText: "",
+        tableLanguage: "english",
         aiStorySetup: true,
         dicePolicy,
         ttsEnabled: false,
