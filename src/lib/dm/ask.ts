@@ -23,7 +23,6 @@ import { describeSheet } from "@/lib/dm/prompt";
 import {
   clampQuestion,
   parseAskJson,
-  shouldSearchArchive,
   type AskResult,
   type AskScope,
 } from "@/lib/dm/ask-logic";
@@ -61,7 +60,8 @@ Hit points, damage and dice are settled by the [vitals] and [roll] lines: the se
 
 Keep it to a short paragraph or two. Speak plainly and out of character.
 
-Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"answer": string, "citations": [{"kind": "fact"|"chapter"|"scene"|"summary"|"npc"|"place"|"rule"|"sheet"|"vitals"|"roll"|"recent", "ref": string, "quote": string}]}
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"answer": string, "scope": "story"|"rules"|"sheet", "citations": [{"kind": "fact"|"chapter"|"scene"|"summary"|"npc"|"place"|"rule"|"sheet"|"vitals"|"roll"|"recent", "ref": string, "quote": string}]}
+scope: what the answer is about: "story" for the world and what happened in it, "rules" for how the game works, "sheet" for the asker's own character.
 citations: the specific record lines you relied on, using the ref labels exactly as supplied; quote is the relevant sentence from that line, verbatim. Empty array when you answered from general rules knowledge or could not answer.`;
 
 // Ask is offered exactly one tool, and it only reads.
@@ -95,7 +95,9 @@ export type AskRequest = {
   campaignId: string;
   userId: string;
   question: string;
-  scope: AskScope;
+  // "auto" gathers every kind of evidence and lets the model say which it
+  // answered from.
+  scope: AskScope | "auto";
 };
 
 const RECENT_MESSAGES = 24;
@@ -179,15 +181,11 @@ async function retrieveArchive(campaignId: string, query: string, chapterBudget:
 
 // Assembles what the asker is allowed to know. Every list here is either
 // public to the party or owned by the asker.
-async function assembleEvidence(
-  request: AskRequest,
-  ownedCharacterIds: string[],
-  chapterBudget: number,
-): Promise<string[]> {
+async function assembleEvidence(request: AskRequest, ownedCharacterIds: string[]): Promise<string[]> {
   const { campaignId, question, scope } = request;
   const evidence: string[] = [];
 
-  if (scope === "sheet") {
+  if (scope === "sheet" || scope === "auto") {
     const sheet = getSheetForUser(campaignId, request.userId);
     if (sheet) {
       const campaign = getCampaignById(campaignId);
@@ -199,7 +197,7 @@ async function assembleEvidence(
     }
   }
 
-  if (scope === "rules" || scope === "sheet") {
+  if (scope === "rules" || scope === "sheet" || scope === "auto") {
     // House rules and variants the table actually plays with. The SRD itself
     // is general knowledge the model already has; what it cannot know is
     // which optional rules this table turned on.
@@ -225,11 +223,11 @@ async function assembleEvidence(
     }
   }
 
-  if (scope === "story" || scope === "sheet") {
+  if (scope === "story" || scope === "sheet" || scope === "auto") {
     evidence.push(...mechanicalRecord(campaignId, ownedCharacterIds));
   }
 
-  if (scope === "story") {
+  if (scope === "story" || scope === "auto") {
     // listFactsVisibleTo, NOT listActiveFacts: the third argument is
     // includeDmSecrets and must stay false. DM-only facts are off-screen
     // developments the party has not learned.
@@ -275,12 +273,6 @@ async function assembleEvidence(
     const { summary } = getCampaignSummaryState(campaignId);
     if (summary) {
       evidence.push(`[summary] The story so far:\n${summary}`);
-    }
-
-    // Archive retrieval is the expensive part, so it is gated: a question
-    // with no recall hint and no proper noun has nothing to find back there.
-    if (shouldSearchArchive(question)) {
-      evidence.push(...(await retrieveArchive(campaignId, question, chapterBudget)));
     }
 
     const recent = listRecentMessages(campaignId, RECENT_MESSAGES);
@@ -337,14 +329,7 @@ export async function runAsk(
 
   const sheet = getSheetForUser(request.campaignId, request.userId);
   const chapterBudget = computeBudgets(await utilityContextTokens(campaign.settings)).chapters;
-  const evidence = await assembleEvidence(
-    { ...request, question },
-    sheet ? [sheet.id] : [],
-    chapterBudget,
-  );
-  // Mirrors the gate inside assembleEvidence; decides whether the model is
-  // offered a follow-up search below.
-  const searchedArchive = request.scope === "story" && shouldSearchArchive(question);
+  const evidence = await assembleEvidence({ ...request, question }, sheet ? [sheet.id] : []);
 
   const messages: ChatMessage[] = [
     { role: "system", content: withLanguage(ASK_SYSTEM, campaign.gameSettings.tableLanguage) },
@@ -372,10 +357,10 @@ export async function runAsk(
   // reads as a failure rather than as progress.
   await enqueueDmJob(request.campaignId, () =>
     trackUtilityCall(request.campaignId, "ask", async () => {
-    // The tool is offered only when the up-front pass did NOT already search
-    // the archive. Having just retrieved against this question, a second
-    // search over the same text would cost a model call to learn nothing.
-    const offerSearch = !searchedArchive;
+    // The archive is searched only when the model asks for it: nothing
+    // guesses from the question's words whether it is about the past, which
+    // only ever worked in English. A rules or sheet question has no archive.
+    const offerSearch = request.scope === "story" || request.scope === "auto";
     const first = await requestUtilityMessage(campaign.settings, messages, {
       timeoutMs: arcTextTimeoutMs(),
       ...(offerSearch ? { tools: [ASK_SEARCH_TOOL] } : {}),
@@ -391,6 +376,7 @@ export async function runAsk(
     if (!searchCall) {
       const parsed = parseAskJson(
         typeof first.message?.content === "string" ? first.message.content : "",
+        request.scope,
       );
       result = parsed ?? { error: "The answer came back unusable; try again." };
       return;
@@ -437,6 +423,7 @@ export async function runAsk(
     }
     const parsed = parseAskJson(
       typeof second.message?.content === "string" ? second.message.content : "",
+      request.scope,
     );
     result = parsed ?? { error: "The answer came back unusable; try again." };
     }),

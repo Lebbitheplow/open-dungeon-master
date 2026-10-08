@@ -23,6 +23,10 @@ export type AskCitation = {
 export type AskResult = {
   answer: string;
   citations: AskCitation[];
+  // What the answer drew on: the scope asked for, or, for "auto", the one
+  // the model says it answered from. Nothing routes a question by its words,
+  // which only ever worked in English.
+  scope: AskScope;
 };
 
 export function isAskScope(value: unknown): value is AskScope {
@@ -33,59 +37,15 @@ export function clampQuestion(question: string): string {
   return question.replace(/\s+/g, " ").trim().slice(0, QUESTION_MAX_CHARS);
 }
 
-// Rules questions are about the system; sheet questions are about the
-// asker's own character; everything else is about the world and the story.
-// Deliberately keyword-driven and cheap: this only picks which evidence to
-// gather, and gathering slightly wrong evidence costs a worse answer, not a
-// broken one.
-const RULES_HINT =
-  /\b(rule|rules|how do(es)?|mechanic|advantage|disadvantage|grapple|grappling|opportunity attack|concentration|save|saving throw|proficienc|initiative|condition|exhaustion|cover|stealth rules|resistance|attunement|short rest|long rest|spell slot|ritual|counterspell|difficulty class|\bdc\b|\bac\b)\b/i;
-const SHEET_HINT =
-  /\b(my|mine|i have|do i|can i|am i|my character|my sheet|my spells?|my inventory|my gold|my hp|my ac|my level|know how to|proficient|trained in)\b/i;
-
-export function inferScope(question: string): AskScope {
-  // Sheet wins over rules: "how does my Bardic Inspiration work" is best
-  // answered from the character who actually has it.
-  if (SHEET_HINT.test(question)) {
-    return "sheet";
-  }
-  if (RULES_HINT.test(question)) {
-    return "rules";
-  }
-  return "story";
-}
-
-// Whether a question is worth spending archive retrieval on. Recall hints
-// or a proper noun mean there is probably something on the record to find;
-// "how does grappling work" should never cost an embedding pass.
-const RECALL_HINT =
-  /\b(earlier|previous|previously|before|past|history|remember|recall|happened|ago|last time|back then|who|where|when|whose|lore|chapter|said|promised|owe)\b/i;
-const QUESTION_WORDS = new Set([
-  "what", "when", "where", "who", "why", "how", "can", "does", "do", "is",
-  "are", "was", "were", "tell", "please", "should", "could", "would", "will",
-  "may", "did", "the", "and", "but", "my", "our", "their", "his", "her",
-]);
-
-export function shouldSearchArchive(question: string, force = false): boolean {
-  if (force) {
-    return true;
-  }
-  if (RECALL_HINT.test(question)) {
-    return true;
-  }
-  // A capitalized word that is not just the sentence opener suggests a name.
-  return (question.match(/\b[A-Z][a-z]{2,}\b/g) ?? []).some(
-    (word) => !QUESTION_WORDS.has(word.toLowerCase()),
-  );
-}
-
 function asString(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
 // Parses the model's JSON reply. Tolerates code fences and surrounding
-// prose, because a small utility model will sometimes wrap its JSON.
-export function parseAskJson(raw: string): AskResult | null {
+// prose, because a small utility model will sometimes wrap its JSON. An
+// "auto" question needs the scope the reply names; without one the reply is
+// unusable, like an answerless one.
+export function parseAskJson(raw: string, asked: AskScope | "auto"): AskResult | null {
   const text = (raw ?? "").trim();
   if (!text) {
     return null;
@@ -130,5 +90,9 @@ export function parseAskJson(raw: string): AskResult | null {
       quote,
     });
   }
-  return { answer, citations };
+  const scope = asked === "auto" ? record.scope : asked;
+  if (!isAskScope(scope)) {
+    return null;
+  }
+  return { answer, citations, scope };
 }

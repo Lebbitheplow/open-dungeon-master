@@ -8,10 +8,13 @@ import { listSheets } from "@/lib/db/sheets";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { ADJUDICATIONS } from "@/lib/dm/invoke-catalog";
-import { findAdjudication } from "@/lib/dm/catalog-types";
+import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import { embed } from "@/lib/embeddings";
 import {
+  availableEntries,
+  catalogEntryText,
   parseSuggestionJson,
-  rankAdjudications,
+  rankBySimilarity,
   type ParsedSuggestion,
 } from "@/lib/dm/assist-logic";
 import { parseRollTable, TABLE_MAX_ENTRIES, type RollTableEntry } from "@/lib/dm/roll-table-logic";
@@ -33,31 +36,61 @@ export type SuggestedAdjudication = {
 };
 
 const SUGGEST_SYSTEM =
-  'You map a player\'s stated intention onto exactly one action the rules engine can perform. You are given a shortlist of candidate actions with their arguments. Return STRICT JSON only, no code fences, shaped: {"name": string, "args": object, "why": string}. name MUST be one of the candidate names. args fills in what you can infer from the intention and leaves out what you cannot; never invent a character name or an id that is not given to you. why is one short clause saying what the roll or effect is for. If none of the candidates fits, return the closest one with empty args.';
+  'You map a player\'s stated intention onto exactly one action the rules engine can perform. You are given every action the engine can perform right now, with their arguments. Return STRICT JSON only, no code fences, shaped: {"name": string, "args": object, "why": string}. name MUST be one of the listed action names. args fills in what you can infer from the intention and leaves out what you cannot; never invent a character name or an id that is not given to you. why is one short clause saying what the roll or effect is for. If no action fits well, return the closest one with empty args.';
 
-// A keyword shortlist first, always, then one small model call to pick among
-// it and prefill. The shortlist is what the DM sees if the model is slow,
-// unreachable, or simply wrong.
+// How many of the nearest actions the DM is shown before the model answers.
+const SHORTLIST = 5;
+
+let catalogVectors: Promise<Map<string, Float32Array>> | null = null;
+
+// The catalog's vectors, embedded once per process: the catalog only
+// changes with the code.
+function catalogVectorsOnce(): Promise<Map<string, Float32Array>> {
+  catalogVectors ??= embed(ADJUDICATIONS.map(catalogEntryText)).then(
+    (vectors) => new Map(ADJUDICATIONS.map((entry, index) => [entry.name, vectors[index]])),
+    (error: unknown) => {
+      catalogVectors = null;
+      throw error;
+    },
+  );
+  return catalogVectors;
+}
+
+export type AssistSuggestion = { suggestions: SuggestedAdjudication[]; picked: ParsedSuggestion | null };
+
+// The actions nearest the intent by meaning first, in any language (embedded
+// on this server, no model call), then one small model call that picks from
+// every action this moment allows and prefills it. The shortlist is what the
+// DM sees if the model is slow, unreachable, or simply wrong. An embedder that
+// fails leaves the model's pick alone; with no model either, there is
+// nothing to suggest, and the DM is told so.
 export async function suggestAdjudication(
   campaign: Campaign,
   intent: string,
   options: { inEncounter: boolean; useModel?: boolean },
-): Promise<{ suggestions: SuggestedAdjudication[]; picked: ParsedSuggestion | null }> {
-  const ranked = rankAdjudications(intent, ADJUDICATIONS, {
-    inEncounter: options.inEncounter,
-    limit: 5,
-  });
-  const suggestions: SuggestedAdjudication[] = ranked.map(({ entry }) => ({
+): Promise<AssistSuggestion | { error: string }> {
+  const available = availableEntries(ADJUDICATIONS, options.inEncounter);
+  const toSuggestion = (entry: CatalogEntry): SuggestedAdjudication => ({
     name: entry.name,
     label: entry.label,
     summary: entry.summary,
-  }));
-  if (!ranked.length || options.useModel === false) {
-    return { suggestions, picked: null };
+  });
+  let suggestions: SuggestedAdjudication[] = [];
+  let embedded = true;
+  try {
+    const [vectors, [intentVector]] = await Promise.all([catalogVectorsOnce(), embed([intent])]);
+    suggestions = rankBySimilarity(intentVector, available, vectors, SHORTLIST).map(toSuggestion);
+  } catch (error) {
+    embedded = false;
+    console.error("[assist] the embedder failed; the shortlist is empty", error);
+  }
+  const unavailable = { error: "Suggestions are unavailable: the embedding model could not be loaded." };
+  if (options.useModel === false) {
+    return embedded ? { suggestions, picked: null } : unavailable;
   }
 
-  const candidates = ranked
-    .map(({ entry }) => {
+  const candidates = available
+    .map((entry) => {
       const fields = entry.fields
         .map((field) => `${field.name} (${field.kind}${field.required ? ", required" : ""})`)
         .join(", ");
@@ -77,7 +110,7 @@ export async function suggestAdjudication(
         content: [
           `Player's intention: ${intent}`,
           roster ? `The party: ${roster}` : "",
-          `Candidate actions:\n${candidates}`,
+          `Actions:\n${candidates}`,
         ]
           .filter(Boolean)
           .join("\n\n"),
@@ -85,25 +118,17 @@ export async function suggestAdjudication(
     ],
     { timeoutMs: arcTextTimeoutMs() },
   );
-  if (error) {
-    return { suggestions, picked: null };
+  const parsed = error ? null : parseSuggestionJson(stripReasoningArtifacts(String(message?.content ?? "")));
+  // A pick that names no action this moment allows is discarded rather than
+  // trusted: the console would render a form for an action it cannot run.
+  const entry = parsed ? available.find((candidate) => candidate.name === parsed.name) : undefined;
+  if (!parsed || !entry) {
+    return embedded ? { suggestions, picked: null } : unavailable;
   }
-  const parsed = parseSuggestionJson(stripReasoningArtifacts(String(message?.content ?? "")));
-  // A pick that names something outside the shortlist is discarded rather
-  // than trusted: the console would render a form for an action the DM never
-  // saw proposed.
-  if (!parsed || !ranked.some(({ entry }) => entry.name === parsed.name)) {
-    return { suggestions, picked: null };
-  }
-  const entry = findAdjudication(ADJUDICATIONS, parsed.name);
-  if (entry) {
-    const index = suggestions.findIndex((item) => item.name === parsed.name);
-    if (index >= 0) {
-      suggestions[index] = { ...suggestions[index], args: parsed.args, why: parsed.why };
-      // The model's pick leads the list.
-      suggestions.unshift(...suggestions.splice(index, 1));
-    }
-  }
+  // The model's pick leads the list, prefilled, whether or not the
+  // shortlist had it.
+  const picked = { ...toSuggestion(entry), args: parsed.args, why: parsed.why };
+  suggestions = [picked, ...suggestions.filter((item) => item.name !== entry.name)].slice(0, SHORTLIST);
   return { suggestions, picked: parsed };
 }
 

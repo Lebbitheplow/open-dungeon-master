@@ -4,10 +4,13 @@
 // to 8,000 characters reaches a small window as its first sentence and a
 // large one whole. A recall_story query points at chapters without their
 // summaries. Ask and the lore check run on the fake harness, whose log holds
-// exactly what the model would have been sent.
+// exactly what the model would have been sent. Ask reaches the archive only
+// through the search the model asks for, so its fake searches over ODM's real
+// MCP door, served here on a loopback port.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
@@ -37,6 +40,23 @@ const { handleRecallStory } = await import("../src/lib/dm/recall.ts");
 const { runAsk } = await import("../src/lib/dm/ask.ts");
 const { runLoreCheck } = await import("../src/lib/dm/lore-check.ts");
 const { removeTempDir } = await import("./lib/remove-temp-dir.mjs");
+const { handleMcpRequest } = await import("../src/lib/agents/mcp-server.ts");
+
+const server = http.createServer(async (req, res) => {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const response = await handleMcpRequest(
+    new Request(`http://${req.headers.host}${req.url}`, {
+      method: req.method,
+      headers: req.headers,
+      body: req.method === "GET" || req.method === "HEAD" ? undefined : Buffer.concat(chunks),
+    }),
+  );
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  res.end(Buffer.from(await response.arrayBuffer()));
+});
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+process.env.HARNESS_MCP_URL = `http://127.0.0.1:${server.address().port}/api/mcp`;
 
 let passed = 0;
 async function test(name, fn) {
@@ -117,8 +137,10 @@ const assertWhole = (sent) => {
 };
 const sentToModel = () =>
   (globalThis.__odmFakeHarnessLog ?? [])
-    .filter((entry) => entry.kind === "start" || entry.kind === "prompt")
-    .map((entry) => (entry.kind === "start" ? entry.detail.system ?? "" : String(entry.detail)))
+    .filter((entry) => entry.kind === "start" || entry.kind === "prompt" || entry.kind === "result")
+    .map((entry) =>
+      entry.kind === "start" ? entry.detail.system ?? "" : entry.kind === "result" ? entry.detail.text : String(entry.detail),
+    )
     .join("\n");
 
 await test("a recall_story query points at chapters without their summaries", async () => {
@@ -147,7 +169,20 @@ await test("recall_story by number fits the chapter to the window", async () => 
 });
 
 await test("Ask sends a small window the chapters' first sentences and a large one their whole summaries", async () => {
-  const ask = () => runAsk({ campaignId: campaign.id, userId: lead.id, question: "What happened at the Lantern Mill back then?", scope: "story" });
+  // The model searches the archive, then answers.
+  const ask = () => {
+    fs.writeFileSync(
+      process.env.HARNESS_FAKE_SCRIPT,
+      JSON.stringify([
+        [
+          { call: "search_campaign_records", args: { query: "the Lantern Mill back then" } },
+          { text: '{"answer":"The mill burned.","scope":"story","citations":[]}' },
+        ],
+      ]),
+    );
+    const asked = runAsk({ campaignId: campaign.id, userId: lead.id, question: "What happened at the Lantern Mill back then?", scope: "story" });
+    return asked.finally(() => fs.writeFileSync(process.env.HARNESS_FAKE_SCRIPT, JSON.stringify([[{ text: "{}" }]])));
+  };
   await atWindow(8_000, async () => {
     globalThis.__odmFakeHarnessLog = [];
     await ask();
@@ -176,4 +211,5 @@ await test("the lore check does the same", async () => {
 });
 
 console.log(`test-recall-budget: ${passed} tests passed`);
+server.close();
 removeTempDir(dir);

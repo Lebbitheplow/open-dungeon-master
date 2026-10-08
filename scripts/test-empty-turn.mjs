@@ -54,26 +54,26 @@ test("the last refusal wins, and beats reading the message", () => {
   assert.match(line, /Bless is not on Ada's spell list/);
 });
 
-test("'use the ambush spell' is told to give the slot level and the target", () => {
-  const line = emptyTurnLine([], mage("use the ambush spell"));
-  assert.match(line, /could not resolve Ambush: say the slot level \(level 1 or higher\) and who or what you cast it on/);
-  assert.match(line, /"I cast Ambush using a level 1 slot on myself\."/);
+test("a spell the message names as the sheet does gets its slot and an example, in any language", () => {
+  for (const text of ["use the ambush spell", "usa la magia Ambush", "lance le sort ambush sur l'orc"]) {
+    const line = emptyTurnLine([], mage(text));
+    assert.match(line, /could not resolve Ambush\. Try again with the spell, slot and target spelled out/, text);
+    assert.match(line, /"I cast Ambush using a level 1 slot on myself\."/, text);
+  }
 });
 
 test("a cantrip is never asked for a slot", () => {
   const line = emptyTurnLine([], mage("cast fire bolt"));
-  assert.ok(!line.includes("slot level"));
-  assert.match(line, /who or what you cast it on/);
+  assert.ok(!line.includes("slot on myself"));
+  assert.match(line, /"I cast Fire Bolt on myself\."/);
 });
 
-test("a spell cast with slot and target asks only for a retry", () => {
-  const line = emptyTurnLine([], mage("I cast Shield using a level 1 slot on myself"));
-  assert.match(line, /could not resolve Shield\. Try again/);
-});
-
-test("an unknown spell asks for the name on the sheet", () => {
-  const line = emptyTurnLine([], mage("cast guardian angel"));
-  assert.match(line, /could not tell which spell you meant/);
+test("a message naming no spell on the sheet gets the plain hint, which says what a spell needs", () => {
+  for (const text of ["cast guardian angel", "lancio un incantesimo", "I open the door"]) {
+    const line = emptyTurnLine([], mage(text));
+    assert.match(line, /Try again saying plainly what your character does/, text);
+    assert.match(line, /its name as it is on your sheet, the slot level and the target/, text);
+  }
 });
 
 test("a spell waiting for the long rest says so", () => {
@@ -82,7 +82,6 @@ test("a spell waiting for the long rest says so", () => {
 });
 
 test("anything else gets a plain hint, and no player keeps the old line", () => {
-  assert.match(emptyTurnLine([], mage("I open the door")), /Try again saying plainly what your character does/);
   assert.equal(emptyTurnLine([call("a", "reveal_item"), result("a", { error: "The ring is a mimic." })]), EMPTY_TURN_LINE);
   assert.equal(emptyTurnLine([]), EMPTY_TURN_LINE);
 });

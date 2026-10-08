@@ -9,7 +9,6 @@ import {
   ASK_VISIBILITIES,
   QUESTION_MAX_CHARS,
   clampQuestion,
-  inferScope,
 } from "@/lib/dm/ask-logic";
 
 export const runtime = "nodejs";
@@ -46,12 +45,15 @@ export async function POST(
   }
 
   const question = clampQuestion(parsed.data.question);
-  const scope =
-    parsed.data.scope === "auto" ? inferScope(question) : parsed.data.scope;
+  const asked = parsed.data.scope;
 
-  const result = await runAsk({ campaignId, userId: user.id, question, scope });
+  const result = await runAsk({ campaignId, userId: user.id, question, scope: asked });
   const sheet = getSheetForUser(campaignId, user.id);
   const failed = "error" in result;
+  // An answer records the scope it drew on (an "auto" one, the model's). A
+  // failed "auto" ask drew on nothing; it is filed under the story, the
+  // scope that gathers the most.
+  const scope = failed ? (asked === "auto" ? "story" : asked) : result.scope;
 
   const ask = insertAsk({
     campaignId,

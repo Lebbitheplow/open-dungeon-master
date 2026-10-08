@@ -8,9 +8,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
-import { fakeModel, reply } from "./lib/enforce-narrator.mjs";
+import { call, fakeModel, reply } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-table-language-calls");
+
+// A stand-in embedder: every text the same vector, so the assist shortlist is
+// the catalog's first entries in order, and no model is loaded from disk.
+const sameVector = (texts) => Promise.resolve({ tolist: () => texts.map(() => [1, ...new Array(383).fill(0)]) });
+globalThis.__odmEmbedderPromise = Promise.resolve(sameVector);
 const italian = await openWorld({ gameSettings: { ttsEnabled: false, tableLanguage: "italian" } });
 const english = await openWorld({ gameSettings: { ttsEnabled: false } });
 
@@ -20,6 +25,8 @@ const { suggestNpcField } = await import("../src/lib/dm/npc-suggest.ts");
 const { describeOverworld } = await import("../src/lib/dm/overworld-describe.ts");
 const { readClaims } = await import("../src/lib/dm/claims.ts");
 const { guardOutcomes } = await import("../src/lib/dm/engine-boundary.ts");
+const { runAsk } = await import("../src/lib/dm/ask.ts");
+const { setHouseRules } = await import("../src/lib/db/rules.ts");
 const { forgeFromNotes, askTheWorld, draftEntry } = await import("../src/lib/dm/world-ai.ts");
 const { createWorldEntity } = await import("../src/lib/db/world-forge.ts");
 
@@ -84,6 +91,73 @@ await test("The claims reader, which only a machine reads, never carries the dir
   );
   assert.equal(sent.italian.length, 1);
   assert.ok(!sent.italian[0].includes("TABLE LANGUAGE"));
+});
+
+await test("An Italian question needs no English word to reach the rules, the sheet and the archive.", async () => {
+  const model = await fakeModel();
+  model.pointAt(italian);
+  italian.addHero({ name: "Kara", class: "fighter", level: 3 });
+  setHouseRules(italian.campaignId, "## Riposo breve\nIl riposo breve dura dieci minuti e restituisce metà dei dadi vita.");
+  const ask = (question, replies) => {
+    model.script(replies);
+    return runAsk({ campaignId: italian.campaignId, userId: italian.owner.id, question, scope: "auto" });
+  };
+
+  const rules = await ask("Come funziona il riposo breve?", [
+    reply({ text: '{"answer":"Dura dieci minuti.","scope":"rules","citations":[]}' }),
+  ]);
+  assert.equal(rules.scope, "rules");
+  const evidence = model.requests[0].messages.at(-1).content;
+  assert.match(evidence, /house rules[\s\S]*Il riposo breve dura dieci minuti/, "the house rule never reached the answer");
+  assert.match(evidence, /\[sheet\] Your character/, "the asker's sheet never reached the answer");
+  assert.ok(model.requests[0].messages[0].content.endsWith(DIRECTIVE));
+
+  // The archive is the model's to search: it is offered, and searched when asked.
+  const recall = await ask("Cosa ci aveva promesso Marla al porto?", [
+    reply({ calls: [call("search_campaign_records", { query: "promessa di Marla al porto" })] }),
+    reply({ text: '{"answer":"Nulla di registrato.","scope":"story","citations":[]}' }),
+  ]);
+  assert.equal(recall.scope, "story");
+  assert.ok(model.requests[0].tools.some((tool) => tool.function.name === "search_campaign_records"));
+  assert.ok(model.requests[1].messages.some((message) => message.role === "tool"), "the search never ran");
+  model.close();
+});
+
+await test("The assist's model picks from every action this moment allows, and its pick leads the shortlist.", async () => {
+  const model = await fakeModel();
+  model.pointAt(italian);
+  model.script([reply({ text: '{"name":"take_rest","args":{"kind":"short"},"why":"riposano"}' })]);
+  const result = await suggestAdjudication(italian.campaign(), "Ci accampiamo per la notte", { inEncounter: false });
+  assert.equal(result.suggestions[0].name, "take_rest");
+  assert.deepEqual(result.suggestions[0].args, { kind: "short" });
+  assert.ok(result.suggestions.length <= 5);
+  const { ADJUDICATIONS } = await import("../src/lib/dm/invoke-catalog.ts");
+  const offered = model.requests[0].messages.at(-1).content.split("\n").filter((line) => line.startsWith("- ")).length;
+  assert.equal(offered, ADJUDICATIONS.filter((entry) => !entry.needsEncounter).length, "the model was not shown the whole catalog");
+  model.close();
+});
+
+await test("An embedder that fails is logged: the model's pick still answers, and with no model the DM is told suggestions are unavailable.", async () => {
+  const failing = Promise.reject(new Error("the embedding model could not be loaded"));
+  failing.catch(() => {});
+  globalThis.__odmEmbedderPromise = failing;
+  const model = await fakeModel();
+  model.pointAt(italian);
+  const errors = [];
+  const original = console.error;
+  console.error = (...parts) => errors.push(parts.join(" "));
+  try {
+    const offline = await suggestAdjudication(italian.campaign(), "Cerco trappole", { inEncounter: false, useModel: false });
+    assert.match(offline.error, /unavailable/);
+    model.script([reply({ text: '{"name":"request_roll","args":{},"why":"cerca"}' })]);
+    const picked = await suggestAdjudication(italian.campaign(), "Cerco trappole", { inEncounter: false });
+    assert.deepEqual(picked.suggestions.map((entry) => entry.name), ["request_roll"]);
+  } finally {
+    console.error = original;
+    globalThis.__odmEmbedderPromise = Promise.resolve(sameVector);
+    model.close();
+  }
+  assert.ok(errors.some((line) => line.includes("[assist] the embedder failed")), errors.join("\n"));
 });
 
 // ---- every call site, classified ----

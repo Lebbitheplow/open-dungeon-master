@@ -89,47 +89,25 @@ function lastActionRefusal(conversation: ChatMessage[]): string | null {
   return null;
 }
 
-// Words that say "a spell" in the languages players have written in.
-const SPELL_WORDS =
-  /\b(cast|casts|casting|spell|spells|magia|magie|incantesimo|incantesimi|lancio|lancia|lanciare|trucchetto|sort|hechizo|conjuro|zauber)\b/i;
-// A slot level: "level 1", "1st level", "livello 2", "slot 3".
-const SLOT_WORDS =
-  /\b(level|lvl|livello|slot)\s*\d|\b\d\s*(st|nd|rd|th)?[\s-]*(level|livello)\b|\bslot\s+(di\s+)?(livello\s+)?\d/i;
-// A target: "on", "at", "against", "su", "contro", "myself"...
-const TARGET_WORDS =
-  /\b(on|at|against|toward|towards|onto|myself|me|self|su|sul|sulla|sui|sugli|sulle|contro|verso|addosso|me stesso|me stessa|mio|mia)\b/i;
-
+// What a loosely written action is missing, read from the sheet alone: a
+// spell the message names as the sheet writes it, whether it can be cast
+// now, and its slot level. No word list reads the message, so every table
+// language gets the same hint.
 function explainLooseAction(player: EmptyTurnPlayer): string {
-  const text = player.text.trim();
-  const lower = text.toLowerCase();
+  const lower = player.text.trim().toLowerCase();
   const named = [...player.spells]
     .sort((a, b) => b.length - a.length)
     .find((spell) => lower.includes(spell.trim().toLowerCase()));
-  const looksLikeSpell = SPELL_WORDS.test(text) || Boolean(named);
-  if (!looksLikeSpell) {
-    return `The DM had no answer to that. Try again saying plainly what your character does, and to whom or what. ${CARDS_HINT}`;
-  }
   if (!named) {
-    return `The DM could not tell which spell you meant. Write its name as it is on your sheet, with the slot level and the target, for example: "I cast Magic Missile using a level 1 slot at the goblin." ${CARDS_HINT}`;
+    return `The DM had no answer to that. Try again saying plainly what your character does, and to whom or what; for a spell, its name as it is on your sheet, the slot level and the target. ${CARDS_HINT}`;
   }
   const waiting = player.notReady?.(named);
   if (waiting) {
     return `The DM could not resolve that: ${waiting}`;
   }
   const level = player.levelOf(named);
-  const missing: string[] = [];
-  if (level !== 0 && !SLOT_WORDS.test(text)) {
-    missing.push(level ? `the slot level (level ${level} or higher)` : "the slot level");
-  }
-  if (!TARGET_WORDS.test(text)) {
-    missing.push("who or what you cast it on (yourself, an ally, an enemy)");
-  }
   const slot = level === 0 ? "" : ` using a level ${level ?? 1} slot`;
-  const example = `"I cast ${named}${slot} on myself."`;
-  if (missing.length) {
-    return `The DM could not resolve ${named}: say ${missing.join(" and ")}, for example ${example} ${CARDS_HINT}`;
-  }
-  return `The DM could not resolve ${named}. Try again with the spell, slot and target spelled out, for example ${example} ${CARDS_HINT}`;
+  return `The DM could not resolve ${named}. Try again with the spell, slot and target spelled out, for example "I cast ${named}${slot} on myself." ${CARDS_HINT}`;
 }
 
 // Tool errors often go on to coach the model ("spend the slot with
