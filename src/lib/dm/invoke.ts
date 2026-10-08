@@ -172,11 +172,21 @@ export function normalizeArgs(
   // that built an array of objects would be a worse form. The handler takes
   // the array the model sends, so the shapes meet here rather than in either
   // of them (src/lib/dm/effect-tools.ts).
-  if (entry.name === "set_effect" && !out.modifiers && typeof out.field === "string") {
-    out.modifiers = [
-      { field: out.field, mode: out.mode ?? "add", ...(out.value === undefined ? {} : { value: out.value }) },
-    ];
-    delete out.field;
+  // `field` stays beside the array it was folded into: checkArgs below
+  // reads the catalog's required fields off these same args, and the
+  // handler's schema drops the keys it does not know. The model sends the
+  // array alone, so the first change it names stands in for the field.
+  if (entry.name === "set_effect") {
+    if (!out.modifiers && typeof out.field === "string") {
+      out.modifiers = [
+        { field: out.field, mode: out.mode ?? "add", ...(out.value === undefined ? {} : { value: out.value }) },
+      ];
+    } else if (Array.isArray(out.modifiers) && out.field === undefined) {
+      const first = out.modifiers[0];
+      if (first && typeof first === "object" && typeof (first as { field?: unknown }).field === "string") {
+        out.field = (first as { field: string }).field;
+      }
+    }
     delete out.mode;
     delete out.value;
   }

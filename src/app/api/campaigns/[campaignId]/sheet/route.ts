@@ -32,7 +32,7 @@ import {
   spellFactsFor,
   subclassIsOffered,
 } from "@/lib/characters/catalog";
-import { defaultRng } from "@/lib/dice";
+import { rollCard } from "@/lib/dm/roll-card";
 import { buildLevelUp } from "@/lib/srd/level-up";
 import { freeCantripCount } from "@/lib/srd/free-cantrips";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -491,7 +491,18 @@ export async function PATCH(
       spellOf: (name) => spellFactsFor(name, owner),
       featOf: (name) => featFactsFor(name, owner),
       subclassOffered: (classId, name) => subclassIsOffered(classId, name, owner),
-      rollDie: defaultRng,
+      // Under hpMethod "rolled" the hit die is a roll the table sees, as
+      // every roll the server makes is (PR #61): a dice card on the record.
+      rollDie: (sides) =>
+        rollCard(
+          context.campaign,
+          null,
+          sheet.id,
+          "custom",
+          `level ${parsed.data.level}: hit die d${sides}`,
+          `1d${sides}`,
+          null,
+        ).total,
     });
     if ("error" in built) {
       return Response.json({ error: built.error }, { status: built.status ?? 400 });

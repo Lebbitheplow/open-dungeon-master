@@ -10,6 +10,28 @@ import { spellMechanicsFor } from "@/lib/content";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { breakConcentration } from "@/lib/dm/concentration";
 import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";
+import { summonsOf } from "@/lib/dm/summon-store";
+import { summonSpellFor } from "@/lib/srd/summon-spells";
+
+// A conjuring spell places no condition: what it holds is the creatures it
+// brought. When the last of them has faded (its hour run out on the clock,
+// or its rounds at the wrap) the spell has ended, and so has the
+// concentration on it. Called after every sweep of the summons.
+export function endConcentrationOnFadedSummons(campaign: Campaign, lines: string[]) {
+  for (const stale of listSheets(campaign.id)) {
+    const sheet = getSheetById(stale.id) ?? stale;
+    const spell = sheet.concentratingOn;
+    if (!spell || sheet.deathSaves?.dead || !summonSpellFor(spell)) {
+      continue;
+    }
+    if (summonsOf(campaign.id, sheet.id, spell).length) {
+      continue;
+    }
+    if (breakConcentration(campaign, null, sheet.id, `${spell} has run its course`)) {
+      lines.push(`${sheet.name} stops concentrating: ${spell} has run its course.`);
+    }
+  }
+}
 
 // Concentration lasts no longer than the spell. When durations have run out,
 // a caster whose spell is known to hold conditions in place, and whose
