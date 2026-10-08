@@ -204,7 +204,7 @@ test("the dots on the sheet always add up to featuresOn", () => {
 
 test("gating is the old gating", () => {
   const keys = (draft, gates) => rowsOf(draft, gates).map((row) => row.key);
-  assert.equal(keys(ALL_ON, TABLE).length, 17);
+  assert.equal(keys(ALL_ON, TABLE).length, 18);
   const human = keys(ALL_ON, { ...TABLE, aiNarrates: false });
   for (const key of ["aiStorySetup", "narrationGuard", "worldSimulation"]) {
     assert.ok(!human.includes(key), `${key} shows with a human narrator`);
