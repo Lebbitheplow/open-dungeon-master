@@ -70,7 +70,7 @@ test("an NPC, a faction and a relationship subject resolve across Unicode case",
 
   const faction = insertFaction(french.id, { name: "La Cour des Roseaux" });
   assert.equal(findFactionByName(french.id, "LA COUR DES ROSEAUX")?.id, faction.id);
-  // The loose match drops the table language's own leading article.
+  // The loose match finds one name inside the other, so the article does not matter.
   assert.equal(findFactionByName(french.id, "cour des roseaux")?.id, faction.id);
   assert.equal(findFactionByName(other.id, "La Cour des Roseaux"), null);
 

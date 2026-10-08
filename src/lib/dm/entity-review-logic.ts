@@ -32,8 +32,8 @@ export function clampNpcName(raw: string): string {
 // alphabetically between two others flips which one is reported first. Keying
 // on the sorted normalized pair makes "Aldric/Alaric" and "Alaric/Aldric" the
 // same decision.
-export function pairKey(a: string, b: string, stopWords: ReadonlySet<string>): string {
-  return [normalizeName(a, stopWords), normalizeName(b, stopWords)].sort().join("\u0000");
+export function pairKey(a: string, b: string): string {
+  return [normalizeName(a), normalizeName(b)].sort().join("\u0000");
 }
 
 export type MergePlan = {
@@ -51,37 +51,37 @@ export type MergePlan = {
 export function planMerge(
   keep: { name: string; aliases: string[] },
   merge: { name: string; aliases: string[] },
-  stopWords: ReadonlySet<string>,
 ): MergePlan | { error: string } {
   const keepName = clampNpcName(keep.name);
   const mergeName = clampNpcName(merge.name);
   if (!keepName || !mergeName) {
     return { error: "Both NPCs need a name." };
   }
-  if (normalizeName(keepName, stopWords) === normalizeName(mergeName, stopWords)) {
+  if (normalizeName(keepName) === normalizeName(mergeName)) {
     return { error: "Those are already the same name." };
   }
 
   const aliases: string[] = [];
   const seen = new Set<string>();
   // The keeper's existing aliases are carried over unconditionally. They are
-  // NOT checked against the keeper's own name, because a leading function
-  // word normalizes away: "The Warden" reduces to "warden", and dropping it
-  // would make a merge silently delete a spelling the row already answered to.
+  // NOT checked against the keeper's own name, because a spelling that
+  // differs only in case or punctuation ("WARDEN") normalizes to it, and
+  // dropping it would make a merge silently delete a spelling the row
+  // already answered to.
   // Only the incoming names dedupe against the keeper.
   for (const candidate of keep.aliases) {
     const clamped = clampNpcName(candidate);
-    const normalized = normalizeName(clamped, stopWords);
+    const normalized = normalizeName(clamped);
     if (!clamped || !normalized || seen.has(normalized)) {
       continue;
     }
     seen.add(normalized);
     aliases.push(clamped);
   }
-  seen.add(normalizeName(keepName, stopWords));
+  seen.add(normalizeName(keepName));
   for (const candidate of [mergeName, ...merge.aliases]) {
     const clamped = clampNpcName(candidate);
-    const normalized = normalizeName(clamped, stopWords);
+    const normalized = normalizeName(clamped);
     if (!clamped || !normalized || seen.has(normalized)) {
       continue;
     }
@@ -134,10 +134,9 @@ export function isReviewError<T>(result: T | { error: string }): result is { err
 export function filterDismissed<T extends { name: string; matches: string }>(
   suggestions: T[],
   dismissedKeys: Iterable<string>,
-  stopWords: ReadonlySet<string>,
 ): T[] {
   const dismissed = new Set(dismissedKeys);
   return suggestions.filter(
-    (suggestion) => !dismissed.has(pairKey(suggestion.name, suggestion.matches, stopWords)),
+    (suggestion) => !dismissed.has(pairKey(suggestion.name, suggestion.matches)),
   );
 }

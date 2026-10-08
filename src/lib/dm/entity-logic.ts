@@ -14,6 +14,8 @@
 // not something a table can easily undo. No title or role-word list decides
 // it, in any language: telling a title from a name needs a person.
 
+import { foldName } from "../language/text-logic.ts";
+
 export type MatchTier = "exact" | "containment" | "fuzzy";
 
 export type EntityMatch = {
@@ -23,28 +25,20 @@ export type EntityMatch = {
   needsConfirmation: boolean;
 };
 
-// Unicode lower case and form, punctuation stripped, whitespace collapsed,
-// and leading function words dropped: the table language's Snowball stop
-// list (src/lib/language), passed in so this module stays loadable in the
-// browser. "Il fabbro" and "fabbro", "The Warden" and "Warden" are one name.
-export function normalizeName(name: string, stopWords: ReadonlySet<string>): string {
-  return tokensOf(name, stopWords).join(" ");
+// Folded as every name lookup folds (foldName), punctuation stripped.
+// Nothing is dropped: an article or a title in one language is a name in
+// another ("Hans" is "his" in Danish), so "The Warden" and "Warden" are a
+// containment match the lead confirms once, after which the merged alias
+// resolves exactly.
+export function normalizeName(name: string): string {
+  return tokensOf(name).join(" ");
 }
 
-export function tokensOf(name: string, stopWords: ReadonlySet<string>): string[] {
-  const tokens = name
-    .normalize("NFC")
-    .toLowerCase()
+export function tokensOf(name: string): string[] {
+  return foldName(name)
     .replace(/[^\p{L}\p{N}\s'’-]/gu, " ")
     .split(/[\s'’-]+/u)
     .filter((token) => token.length > 0);
-  // Never drop the final token, or a name that is nothing but a function
-  // word vanishes entirely.
-  let start = 0;
-  while (start < tokens.length - 1 && stopWords.has(tokens[start])) {
-    start += 1;
-  }
-  return tokens.slice(start);
 }
 
 // Classic Levenshtein over two short strings; names are never long enough
@@ -99,8 +93,8 @@ function containmentMatch(a: string[], b: string[]): boolean {
 // Resolves a name against known ones. Returns the best match, or null when
 // this is somebody new. Candidates are checked tier by tier, so an exact
 // match always wins over a fuzzy one.
-export function matchEntity(name: string, known: string[], stopWords: ReadonlySet<string>): EntityMatch | null {
-  const tokens = tokensOf(name, stopWords);
+export function matchEntity(name: string, known: string[]): EntityMatch | null {
+  const tokens = tokensOf(name);
   if (!tokens.length) {
     return null;
   }
@@ -108,8 +102,8 @@ export function matchEntity(name: string, known: string[], stopWords: ReadonlySe
 
   const prepared = known.map((candidate) => ({
     original: candidate,
-    tokens: tokensOf(candidate, stopWords),
-    normalized: normalizeName(candidate, stopWords),
+    tokens: tokensOf(candidate),
+    normalized: normalizeName(candidate),
   }));
 
   for (const candidate of prepared) {
@@ -145,9 +139,9 @@ export function matchEntity(name: string, known: string[], stopWords: ReadonlySe
 // Merging records the variant rather than rewriting history: past narration
 // keeps the words it was written with, and the lexical retriever still
 // matches them because the aliases ride along in the searchable text.
-export function mergeAliases(existing: string[], incoming: string, stopWords: ReadonlySet<string>): string[] {
-  const seen = new Set(existing.map((alias) => normalizeName(alias, stopWords)));
-  const normalized = normalizeName(incoming, stopWords);
+export function mergeAliases(existing: string[], incoming: string): string[] {
+  const seen = new Set(existing.map((alias) => normalizeName(alias)));
+  const normalized = normalizeName(incoming);
   if (!normalized || seen.has(normalized)) {
     return existing;
   }

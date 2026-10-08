@@ -1,6 +1,3 @@
-import { campaignLanguage } from "@/lib/db/campaigns";
-import { normalizeName } from "@/lib/dm/entity-logic";
-import { stopWordsFor } from "@/lib/language/language";
 import { foldName } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { clampPower, normalizeFactionAttitude, type Faction, type FactionAttitude } from "@/lib/dm/faction-logic";
@@ -52,9 +49,8 @@ export function getFaction(factionId: string): Faction | null {
 }
 
 // Exact first, then the loose match a model tends to produce ("the reed
-// court", "Reed Court"): one side contains the other, a leading article
-// aside. Both compare by Unicode case and the table language's own articles
-// (src/lib/language), never SQLite's ASCII-only NOCASE.
+// court", "Reed Court"): one side contains the other. Both compare by Unicode
+// case (src/lib/language), never SQLite's ASCII-only NOCASE.
 export function findFactionByName(campaignId: string, name: string): Faction | null {
   const factions = listFactions(campaignId);
   const wanted = foldName(name);
@@ -62,14 +58,12 @@ export function findFactionByName(campaignId: string, name: string): Faction | n
   if (exact) {
     return exact;
   }
-  const stopWords = stopWordsFor(campaignLanguage(campaignId));
-  const loose = normalizeName(name, stopWords);
-  if (loose.length < 3) {
+  if (wanted.length < 3) {
     return null;
   }
   const candidates = factions.filter((faction) => {
-    const own = normalizeName(faction.name, stopWords);
-    return own === loose || own.includes(loose) || loose.includes(own);
+    const own = foldName(faction.name);
+    return own.includes(wanted) || wanted.includes(own);
   });
   return candidates.length === 1 ? candidates[0] : null;
 }

@@ -17,7 +17,6 @@ import {
   planMerge,
   planRename,
 } from "@/lib/dm/entity-review-logic";
-import { stopWordsFor } from "@/lib/language/language";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +41,6 @@ export async function GET(
   const suggestions = filterDismissed(
     suggestNpcMerges(campaignId),
     listDismissedMerges(campaignId),
-    stopWordsFor(context.campaign.gameSettings.tableLanguage),
   );
   return Response.json({
     suggestions,
@@ -93,7 +91,7 @@ export async function POST(
   const body = parsed.data;
 
   if (body.action === "dismiss") {
-    dismissMerge(campaignId, pairKey(body.name, body.matches, stopWordsFor(context.campaign.gameSettings.tableLanguage)));
+    dismissMerge(campaignId, pairKey(body.name, body.matches));
     return Response.json({ ok: true });
   }
 
@@ -125,7 +123,7 @@ export async function POST(
   if (!keep || !merge || keep.campaignId !== campaignId || merge.campaignId !== campaignId) {
     return Response.json({ error: "NPC not found." }, { status: 404 });
   }
-  const plan = planMerge(keep, merge, stopWordsFor(context.campaign.gameSettings.tableLanguage));
+  const plan = planMerge(keep, merge);
   if (isReviewError(plan)) {
     return Response.json({ error: plan.error }, { status: 409 });
   }

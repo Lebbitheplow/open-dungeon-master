@@ -1,7 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { campaignLanguage } from "@/lib/db/campaigns";
 import { matchEntity, mergeAliases, normalizeName } from "@/lib/dm/entity-logic";
-import { stopWordsFor } from "@/lib/language/language";
 import { normalizeNpcVoice, type NpcDraft, type NpcVoice } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
 import {
@@ -157,7 +155,7 @@ export function getNpcByName(campaignId: string, name: string): Npc | null {
       }
     }
   }
-  const match = matchEntity(trimmed, [...ownerByName.keys()], stopWordsFor(campaignLanguage(campaignId)));
+  const match = matchEntity(trimmed, [...ownerByName.keys()]);
   if (!match || match.needsConfirmation) {
     return null;
   }
@@ -170,11 +168,10 @@ export function suggestNpcMerges(
   campaignId: string,
 ): Array<{ name: string; matches: string }> {
   const roster = listNpcs(campaignId);
-  const stopWords = stopWordsFor(campaignLanguage(campaignId));
   const suggestions: Array<{ name: string; matches: string }> = [];
   for (let index = 0; index < roster.length; index += 1) {
     const others = roster.slice(index + 1).map((npc) => npc.name);
-    const match = matchEntity(roster[index].name, others, stopWords);
+    const match = matchEntity(roster[index].name, others);
     if (match?.needsConfirmation) {
       suggestions.push({ name: roster[index].name, matches: match.name });
     }
@@ -199,11 +196,10 @@ export function upsertNpc(input: {
     // Registering a known NPC under a new spelling records that spelling
     // rather than creating a second row. The canonical name never changes,
     // so nothing already written about them has to be rewritten.
-    const stopWords = stopWordsFor(campaignLanguage(input.campaignId));
     const aliases =
-      normalizeName(input.name, stopWords) === normalizeName(existing.name, stopWords)
+      normalizeName(input.name) === normalizeName(existing.name)
         ? existing.aliases
-        : mergeAliases(existing.aliases, input.name, stopWords);
+        : mergeAliases(existing.aliases, input.name);
     db.prepare(
       `UPDATE npcs
        SET attitude = ?, trait = ?, location = ?, aliases_json = ?, updated_at = ?
