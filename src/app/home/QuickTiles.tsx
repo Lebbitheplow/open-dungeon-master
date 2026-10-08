@@ -11,12 +11,15 @@ import { GameIcon } from "@/components/ui/GameIcon";
 // shells' own home tiles carry, so a guide can point at either.
 export function HomeMenu({
   onNewCampaign,
+  onStarter,
   showNew = true,
   onSolo,
   showSolo,
   onJoin,
 }: {
   onNewCampaign: () => void;
+  // The quick start: a one-evening adventure with ready-made heroes.
+  onStarter: () => void;
   // False on a server whose admin starts every campaign: the door is not
   // there rather than greyed, like Solo adventure.
   showNew?: boolean;
@@ -25,6 +28,7 @@ export function HomeMenu({
   onJoin: () => void;
 }) {
   const items: Array<{ id: string; label: string; glyph: string; href?: string; onClick?: () => void; tour: string }> = [
+    ...(showNew && showSolo ? [{ id: "starter", label: "Quick start", glyph: "tab-story", onClick: onStarter, tour: "tile-quick-start" }] : []),
     ...(showNew ? [{ id: "new", label: "New campaign", glyph: "tab-campaigns", onClick: onNewCampaign, tour: "tile-new-campaign" }] : []),
     ...(showSolo ? [{ id: "solo", label: "Solo adventure", glyph: "tab-story", onClick: onSolo, tour: "tile-solo" }] : []),
     { id: "characters", label: "Characters", glyph: "tab-characters", href: "/characters", tour: "tile-characters" },

@@ -7,6 +7,7 @@ import { ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { offersStoryModel, useCapabilities, type ClientCapabilities } from "@/lib/use-capabilities";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
+import { StarterDialog } from "@/app/home/StarterDialog";
 import { AccountMenu, AppBrand, AppHomeButton } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -53,6 +54,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   const [cloningId, setCloningId] = useState("");
   const [createOpen, setCreateOpen] = useState(() => requestedWizard() === "campaign");
   const [soloOpen, setSoloOpen] = useState(() => requestedWizard() === "solo");
+  const [starterOpen, setStarterOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const joinInputRef = useRef<HTMLInputElement | null>(null);
   const capabilities = useCapabilities();
@@ -231,6 +233,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             )}
             <HomeMenu
               onNewCampaign={() => setCreateOpen(true)}
+              onStarter={() => setStarterOpen(true)}
               showNew={user.canCreateCampaigns !== false}
               onSolo={() => setSoloOpen(true)}
               showSolo={offersStoryModel(capabilities)}
@@ -261,6 +264,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
 
         <CreateCampaignDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={onCreated} />
         <CreateCampaignDialog solo open={soloOpen} onOpenChange={setSoloOpen} onCreated={onCreated} />
+        <StarterDialog open={starterOpen} onOpenChange={setStarterOpen} onCreated={onCreated} />
         <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
       </div>
     </main>
