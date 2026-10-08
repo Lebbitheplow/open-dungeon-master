@@ -1,6 +1,8 @@
 // The engine boundary: one authoritative statement of which facts the server
-// owns, plus the deterministic guard that checks the DM's finished prose
-// against the outcomes the turn's tools actually resolved.
+// owns, plus the deterministic guard that rules on what the DM's finished
+// prose claims against the outcomes the turn's tools actually resolved. The
+// prose itself is read by a model, in the table's language
+// (dm/claims-logic.ts, dm/claims.ts); the ruling is here.
 //
 // Pure by design: no "@/" imports and no I/O, so scripts/test-engine-boundary.mjs
 // can import it directly. The DB/model rim lives in dm/narration-guard.ts.
@@ -10,7 +12,7 @@
 // used to throw it away the moment the narration was assembled. Nothing here
 // mutates mechanical state; a detection at most costs one corrective model call.
 
-import { LEVELED_SPELL_NAMES } from "./leveled-spells";
+import type { NarrationClaim } from "./claims-logic.ts";
 
 // ---------------------------------------------------------------------------
 // Part 1: the contract block
@@ -477,154 +479,18 @@ export function resolveOutcomes(
 }
 
 // ---------------------------------------------------------------------------
-// Part 3: reading the prose
+// Part 3: ruling on what the narration claims
 // ---------------------------------------------------------------------------
 
-// Quoted speech is a character talking, and characters lie, boast, and swear
-// oaths about deaths that never happened. Every matcher runs on prose with the
-// dialogue cut out, which is what makes "It's dead, I swear it!" safe.
-export function stripQuotedSpeech(text: string): string {
-  const paired = text.replace(/"[^"\n]*"/g, " ").replace(/“[^”\n]*”/g, " ");
-  // An unbalanced quote means the dialogue runs to the end of its line; drop
-  // the rest of that line rather than guess where the speech ended.
-  return paired
-    .split("\n")
-    .map((line) => {
-      const opener = line.search(/["“”]/);
-      return opener === -1 ? line : line.slice(0, opener);
-    })
-    .join("\n");
-}
-
-// Clause-level, not sentence-level: a semicolon or a dash joins two separate
-// claims, and checking them apart keeps a name in one clause from being read as
-// the subject of the next.
-export function narrationClauses(narration: string): string[] {
-  return stripQuotedSpeech(narration.replace(/\[roll:[^\]]*\]/g, " "))
-    .split(/\n+|(?<=[.!?…;:])\s+|\s+—\s*|\s*—\s+|\s+--\s+/)
-    .map((clause) => clause.trim())
-    .filter(Boolean);
-}
-
-// Anything that turns a statement into a comparison, a possibility, or a report
-// of what somebody believes or says. Every matcher skips clauses carrying one:
-// a guard that misfires on "the blow felt like death" is worse than one that
-// misses a real contradiction, so hedged prose is never checked at all.
-const HEDGE =
-  /\b(?:if|unless|almost|nearly|barely|would|wouldn't|will|won't|could|couldn't|might|may|must|should|shall|seem|seems|seemed|look|looks|looked|appear|appears|appeared|sound|sounds|sounded|feel|feels|felt|as if|as though|like|unlike|imagine|imagines|imagined|dream|dreams|dreamt|perhaps|maybe|about to|threaten|threatens|threatened|hope|hopes|hoped|fear|fears|feared|think|thinks|thought|believe|believes|believed|pretend|pretends|claim|claims|claimed|insist|insists|swear|swears|say|says|said|shout|shouts|shouted|call|calls|called|mutter|mutters|muttered|whisper|whispers|whispered|snarl|snarls|snarled|promise|promises|promised|warn|warns|warned|ask|asks|asked|wonder|wonders|wondered|expect|expects|expected|remember|remembers|remembered|scarcely|hardly|were it|had it|report|reports|reported|tell|tells|told|announce|announces|announced|declare|declares|declared|boast|boasts|boasted|cry|cries|cried|yell|yells|yelled|murmur|murmurs|murmured|hear|hears|heard|sense|senses|sensed|guess|guesses|guessed|doubt|doubts|doubted|assume|assumes|assumed|pray|prays|prayed|vow|vows|vowed)\b/i;
-
-// Applied on top of the hedge filter for the assertion matchers: a clause that
-// denies its own verb is not the claim we are looking for.
-const NEGATION =
-  /\b(?:not|n't|never|no longer|nothing|neither|nor|fails? to|failed to|without)\b/i;
-
-function hedged(clause: string): boolean {
-  return HEDGE.test(clause);
-}
-
-function escapeRegExp(raw: string): string {
-  return raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// The name as prose would write it, with flexible internal whitespace.
-function namePattern(name: string): string {
-  return escapeRegExp(name).replace(/\s+/g, "\\s+");
-}
+// The claims arrive already checked against the narration and the engine's
+// refs (dm/claims-logic.ts); what follows decides, from the engine's own
+// state alone, which of them contradict it.
 
 export type Contradiction = {
   kind: "hit" | "miss" | "death" | "number" | "spell";
   detail: string;
   clause: string;
 };
-
-// A hit verb must take the target as its object. "strikes AT the goblin" and
-// "swings toward the goblin" are attempts, not outcomes, so the lookahead
-// throws them out.
-const HIT_VERBS =
-  "hits|strikes|slashes|stabs|slams into|smashes into|bites into|sinks into|tears into|rips into|cuts into|slices into|connects with|impales|skewers|bludgeons|gashes|wounds|batters|crashes into|carves into|hammers into";
-const HIT_VERB_NOT =
-  "at\\b|toward|towards|past\\b|for\\b|through the air|the air\\b|nothing\\b|only\\b|air\\b";
-const MISS_PHRASES =
-  "misses|missed|whiffs|goes wide|went wide|glances off|glanced off|deflects off|sails past|sailed past|whistles past|falls short|fell short|clangs off|bounces off|finds nothing but air|found nothing but air|turns the blade aside";
-
-function hitClaimPatterns(name: string): RegExp[] {
-  const target = namePattern(name);
-  return [
-    new RegExp(
-      `\\b(?:${HIT_VERBS})\\s+(?!${HIT_VERB_NOT})(?:the|that|this|a|an|his|her|its|their)?\\s*${target}\\b`,
-      "i",
-    ),
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\bis\\s+(?:struck|hit|wounded|impaled|skewered|gashed)\\b`,
-      "i",
-    ),
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\btakes\\s+the\\s+(?:blow|hit|strike|full force)\\b`,
-      "i",
-    ),
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\breels\\s+(?:back\\s+)?from\\s+the\\s+(?:blow|hit|strike|impact)\\b`,
-      "i",
-    ),
-  ];
-}
-
-// The name must be the thing MISSED, never the thing missing. The attacks map
-// is keyed by target, so "the goblin swipes back and misses" is about the
-// goblin's own swing (which this turn's results may say nothing about) and is
-// deliberately unmatched: only a miss phrase that takes the name as its object
-// counts.
-function missClaimPatterns(name: string): RegExp[] {
-  const target = namePattern(name);
-  return [
-    new RegExp(
-      `\\b(?:${MISS_PHRASES})\\s+(?:of\\s+|by\\s+|over\\s+)?(?:the|that|this|his|her|its|their)?\\s*${target}\\b`,
-      "i",
-    ),
-  ];
-}
-
-function deathClaimPatterns(name: string): RegExp[] {
-  const target = namePattern(name);
-  return [
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\b(?:dies|drops dead|falls dead|is dead|lies dead|is slain|is killed|breathes (?:its|his|her|their) last|goes limp and still|is no more)\\b`,
-      "i",
-    ),
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\b(?:crumples|collapses|slumps|folds)(?:,| and)\\s+(?:dead|lifeless)\\b`,
-      "i",
-    ),
-    new RegExp(
-      `\\b(?:kills|slays|finishes off|cuts down|strikes down|fells|puts down)\\s+(?:the|that|this)?\\s*${target}\\b`,
-      "i",
-    ),
-    new RegExp(`\\b${target}(?:'s|s')?\\s+(?:corpse|lifeless body|dead body)\\b`, "i"),
-  ];
-}
-
-function downedClaimPatterns(name: string): RegExp[] {
-  const target = namePattern(name);
-  return [
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\b(?:falls|drops|collapses|slumps)\\s+unconscious\\b`,
-      "i",
-    ),
-    new RegExp(
-      `\\b${target}\\b[^.;]{0,25}?\\b(?:falls|drops)\\s+to\\s+0\\s+(?:hp|hit points)\\b`,
-      "i",
-    ),
-  ];
-}
-
-// A number in an explicitly mechanical frame. The lookbehind keeps "2d6 damage"
-// from reading as "6 damage", and the frame is narrow enough that "twenty gold"
-// and "the third bell" never reach the check.
-const NUMBER_CLAIM = /(?<![\dd])(\d{1,3})\s+(?:points?\s+of\s+)?(damage|healing)\b/gi;
-
-// Only leveled SRD spells whose casting genuinely costs a slot
-// (src/lib/dm/leveled-spells.ts), normalized as the guard compares them.
-const LEVELED_SPELLS = LEVELED_SPELL_NAMES.map(normalizeSpellName);
 
 // Every subset sum of the turn's damage numbers, so prose that adds two hits
 // into one figure ("nine damage in all") is never called a contradiction.
@@ -643,27 +509,7 @@ function allowedNumbers(outcomes: ResolvedOutcomes): Set<number> {
   return allowed;
 }
 
-// ---------------------------------------------------------------------------
-// Part 4: the matchers
-// ---------------------------------------------------------------------------
-
-// The verbs a narrator casts with. Present tense only, so a recap of an
-// earlier casting is left alone.
-const CAST_VERBS = "casts|unleashes|hurls|calls down|conjures|looses";
-const CAST_VERB = new RegExp(`\\b(?:${CAST_VERBS})\\b`, "i");
-
-export function findNarrationContradictions(
-  narration: string,
-  outcomes: ResolvedOutcomes,
-  partyNames: readonly string[] = [],
-  // Every leveled spell the table's spell data knows, normalized; the short
-  // built-in list stands in when the caller has none.
-  leveledSpells: readonly string[] = LEVELED_SPELLS,
-): Contradiction[] {
-  const clauses = narrationClauses(narration);
-  if (!clauses.length) {
-    return [];
-  }
+export function ruleClaims(claims: readonly NarrationClaim[], outcomes: ResolvedOutcomes): Contradiction[] {
   const found: Contradiction[] = [];
   const seen = new Set<string>();
   const add = (contradiction: Contradiction) => {
@@ -673,136 +519,83 @@ export function findNarrationContradictions(
       found.push(contradiction);
     }
   };
+  // A figure is only checked when the turn produced numbers or a fight is
+  // running: with no ground truth there is nothing to contradict, and in a
+  // fight a figure no roll produced is invented whether or not a tool ran.
   const allowed = outcomes.numbers.size || outcomes.liveFight ? allowedNumbers(outcomes) : null;
-  const casters = partyNames.map((name) => name.trim()).filter((name) => name.length >= 3);
 
-  for (const clause of clauses) {
-    if (hedged(clause)) {
-      continue;
-    }
-    const negated = NEGATION.test(clause);
-
-    // 1. A hit claimed on a resolved miss, a miss claimed on a resolved hit.
-    for (const [key, attack] of outcomes.attacks) {
-      if (attack.ambiguous) {
-        continue;
+  for (const claim of claims) {
+    switch (claim.kind) {
+      // 1. A hit claimed on a resolved miss, a miss claimed on a resolved hit.
+      case "hit":
+      case "miss": {
+        const attack = outcomes.attacks.get(claim.target);
+        if (!attack || attack.ambiguous) {
+          break;
+        }
+        if (claim.kind === "hit" && !attack.hit) {
+          add({ kind: "hit", detail: `the attack on ${attack.display} MISSED, but the narration lands it`, clause: claim.quote });
+        }
+        if (claim.kind === "miss" && attack.hit) {
+          add({ kind: "miss", detail: `the attack on ${attack.display} HIT, but the narration has it miss`, clause: claim.quote });
+        }
+        break;
       }
-      if (!attack.hit && !negated && hitClaimPatterns(key).some((rx) => rx.test(clause))) {
-        add({
-          kind: "hit",
-          detail: `the attack on ${attack.display} MISSED, but the narration lands it`,
-          clause,
-        });
-      }
-      if (attack.hit && !negated && missClaimPatterns(key).some((rx) => rx.test(clause))) {
-        add({
-          kind: "miss",
-          detail: `the attack on ${attack.display} HIT, but the narration has it miss`,
-          clause,
-        });
-      }
-    }
-
-    // 2. A death or a drop claimed against live, resolved hit points.
-    if (!negated) {
-      for (const [key, creature] of outcomes.creatures) {
-        if (creature.ambiguous || creature.dead || creature.downed) {
-          continue;
+      // 2. A death or a drop claimed against live, resolved hit points.
+      case "dies":
+      case "downed": {
+        const creature = outcomes.creatures.get(claim.target);
+        if (!creature || creature.ambiguous || creature.dead || creature.downed) {
+          break;
         }
         if (creature.hp === null || creature.hp <= 0) {
-          continue;
+          break;
         }
         const hpLabel = `${creature.hp}${creature.maxHp === null ? "" : `/${creature.maxHp}`}`;
-        if (deathClaimPatterns(key).some((rx) => rx.test(clause))) {
-          add({
-            kind: "death",
-            detail: `${creature.display} is alive at ${hpLabel} HP, but the narration kills it`,
-            clause,
-          });
-        }
-        if (downedClaimPatterns(key).some((rx) => rx.test(clause))) {
-          add({
-            kind: "death",
-            detail: `${creature.display} is still up at ${hpLabel} HP, but the narration drops it`,
-            clause,
-          });
-        }
+        add({
+          kind: "death",
+          detail:
+            claim.kind === "dies"
+              ? `${creature.display} is alive at ${hpLabel} HP, but the narration kills it`
+              : `${creature.display} is still up at ${hpLabel} HP, but the narration drops it`,
+          clause: claim.quote,
+        });
+        break;
       }
-    }
-
-    // 3. A stated damage or healing figure the engine never produced. Only runs
-    // when the turn produced numbers or a fight is running: with no ground
-    // truth there is nothing to contradict, and in a fight a figure no roll
-    // produced is invented whether or not a tool ran.
-    if (allowed) {
-      NUMBER_CLAIM.lastIndex = 0;
-      let match = NUMBER_CLAIM.exec(clause);
-      while (match) {
-        const stated = Number(match[1]);
-        if (!allowed.has(stated)) {
+      // 3. A stated damage or healing figure the engine never produced.
+      case "amount":
+        if (allowed && !allowed.has(claim.value)) {
           add({
             kind: "number",
-            detail: `the narration states ${stated} ${match[2].toLowerCase()}, which no roll this turn produced`,
-            clause,
+            detail: `the narration states ${claim.value} ${claim.of}, which no roll this turn produced`,
+            clause: claim.quote,
           });
         }
-        match = NUMBER_CLAIM.exec(clause);
-      }
-    }
-
-    // 4. A party character casting a leveled spell the turn never accounted
-    // for. Enemy casters are excluded (their spells run through other tools and
-    // spend nothing), and only the present tense counts, so a recap of an
-    // earlier casting is left alone.
-    if (casters.length && CAST_VERB.test(clause)) {
-      const lowered = clause.toLowerCase().replace(/[‘’]/g, "'");
-      for (const caster of casters) {
-        for (const spell of leveledSpells) {
-          if (outcomes.spells.has(spell) || !lowered.includes(spell)) {
-            continue;
-          }
-          // Either apostrophe spelling reads as the same spell in prose.
-          const spellInProse = namePattern(spell).replace(/'/g, "['‘’]");
-          const pattern = new RegExp(
-            `\\b${namePattern(caster)}\\b[^.;]{0,30}?\\b(?:${CAST_VERBS})\\s+(?:the\\s+|a\\s+|an\\s+)?(?:spell\\s+)?${spellInProse}\\b`,
-            "i",
-          );
-          if (pattern.test(clause)) {
-            add({
-              kind: "spell",
-              detail: `${caster} casts ${spell}, but no spell slot or resource was spent for it this turn`,
-              clause,
-            });
-          }
+        break;
+      // 4. A party character casting a leveled spell the turn never
+      // accounted for. Enemy casters are never claims (their spells run
+      // through other tools and spend nothing).
+      case "cast":
+        if (!outcomes.spells.has(claim.spell)) {
+          add({
+            kind: "spell",
+            detail: `${claim.caster} casts ${claim.spell}, but no spell slot or resource was spent for it this turn`,
+            clause: claim.quote,
+          });
         }
-      }
+        break;
+      case "fight_start":
+      case "roll_ask":
+        break;
     }
   }
-
   return found;
 }
 
-// The whole guard: read the turn's tool exchanges, then check the prose.
-export function checkNarration(input: {
-  conversation: readonly GuardMessage[];
-  narration: string;
-  partyNames?: readonly string[];
-  // The running encounter, when there is one (see LiveState).
-  live?: LiveState | null;
-  // Every leveled spell the spell data knows, already normalized.
-  leveledSpells?: readonly string[];
-}): Contradiction[] {
-  const narration = (input.narration ?? "").trim();
-  if (!narration) {
-    return [];
-  }
-  const outcomes = resolveOutcomes(collectExchanges(input.conversation), input.live ?? null);
-  return findNarrationContradictions(
-    narration,
-    outcomes,
-    input.partyNames ?? [],
-    input.leveledSpells?.length ? input.leveledSpells : LEVELED_SPELLS,
-  );
+// The ground truth the claims are ruled against: the turn's tool exchanges
+// and the encounter as it stands.
+export function guardOutcomes(conversation: readonly GuardMessage[], live: LiveState | null): ResolvedOutcomes {
+  return resolveOutcomes(collectExchanges(conversation), live);
 }
 
 // The correction the model is asked to make. Kept here so the wording is
@@ -818,28 +611,18 @@ Rewrite the whole narration so it matches the real results exactly. Keep everyth
 }
 
 // ---------------------------------------------------------------------------
-// Part 5: fights announced in prose alone
+// Part 4: fights announced in prose alone
 // ---------------------------------------------------------------------------
 
 // The model sometimes writes the encounter it was supposed to start:
 // "**Start Encounter: Ward Construct (CR 1/4)** **Enemies:** 1x ..." with no
 // start_encounter call behind it. Nothing exists behind that text: no
 // enemies, no initiative order, no HP, and the next player action has nothing
-// to swing at. The matchers are deliberately narrow, in the spirit of the
-// rest of this file: an announcement header, a call for initiative, or a
-// stat-block style enemy roster; never mere talk of fighting.
-export function announcesEncounterStart(narration: string): boolean {
-  const clauses = narrationClauses(narration);
-  const phrase =
-    /\bstart(?:s|ing|ed)?\s+(?:the\s+|an?\s+)?encounter\b|\bencounter\s+(?:start(?:s|ed)?|begins|began)\b|\broll\s+(?:for\s+)?initiative\b/i;
-  if (clauses.some((clause) => !hedged(clause) && phrase.test(clause))) {
-    return true;
-  }
-  // A roster line ("**Enemies:** 1x ...") only counts alongside another
-  // stat-block field, so a shopping list or a scouting report never fires.
-  const text = stripQuotedSpeech(narration);
-  const roster = /(?:^|[\n*#>-])\s*\**enemies\**\s*:/i.test(text);
-  return roster && /\bCR\s*\d|\(\s*CR\b|\**surprise\**\s*:|\binitiative\b/i.test(text);
+// to swing at. The reader reports it as a fight_start claim: an announcement,
+// a call for initiative, or a stat-block style roster; never mere talk of
+// fighting.
+export function fightAnnounced(claims: readonly NarrationClaim[]): boolean {
+  return claims.some((claim) => claim.kind === "fight_start");
 }
 
 // What the turn loop sends back when a fight was announced with no
@@ -848,7 +631,7 @@ export function announcesEncounterStart(narration: string): boolean {
 export const FAKE_ENCOUNTER_PROMPT = `[System] Your narration announced a fight starting, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. Call start_encounter now with the enemies you announced, then narrate the fight breaking out from the tool results. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;
 
 // ---------------------------------------------------------------------------
-// Part 6: blows landed in prose alone
+// Part 5: blows landed in prose alone
 // ---------------------------------------------------------------------------
 
 // A whole number standing on its own, never a piece of an id or of dice
@@ -859,12 +642,12 @@ const BARE_NUMBER = /(?<![\w.-])\d{1,3}(?![\w-])/g;
 // Resonance Weaver attacks Alden with Resonance Blast. Hit! 8 damage." with
 // no attack call behind it (issue 91). Nothing happened: the sheet keeps its
 // hit points, and the fight that follows contradicts its own opening. The
-// narration check above is no help outside a fight, where it has no ground
-// truth to hold the figure against. This is narrower and comes earlier: a
-// damage or healing figure on a turn whose tools rolled none, that nothing
-// the model was shown carries either (a table note for a blow the server
-// dealt itself, an earlier line being recalled). Returns the clause, or null.
-export function statesUnrolledDamage(narration: string, conversation: readonly GuardMessage[]): string | null {
+// ruling above is no help outside a fight, where it has no ground truth to
+// hold the figure against. This is narrower and comes earlier: a damage or
+// healing figure on a turn whose tools rolled none, that nothing the model
+// was shown carries either (a table note for a blow the server dealt itself,
+// an earlier line being recalled). Returns the claim's quote, or null.
+export function unrolledFigure(claims: readonly NarrationClaim[], conversation: readonly GuardMessage[]): string | null {
   const outcomes = resolveOutcomes(collectExchanges(conversation));
   // The turn rolled damage: a figure that misquotes it is the rewrite's to
   // fix, and sending the model back to the tools would land the blow twice.
@@ -880,14 +663,9 @@ export function statesUnrolledDamage(narration: string, conversation: readonly G
       shown.add(Number(match[0]));
     }
   }
-  for (const clause of narrationClauses(narration)) {
-    if (hedged(clause)) {
-      continue;
-    }
-    for (const match of clause.matchAll(NUMBER_CLAIM)) {
-      if (!shown.has(Number(match[1]))) {
-        return clause;
-      }
+  for (const claim of claims) {
+    if (claim.kind === "amount" && !shown.has(claim.value)) {
+      return claim.quote;
     }
   }
   return null;

@@ -44,18 +44,21 @@ import { setDmStatus } from "@/lib/dm/status";
 import {
   extractToolCalls,
   resolveSheetRef,
-  salvageProseRollAsks,
+  rollAsksFromClaims,
   salvageTextualToolCalls,
   salvageXmlToolCalls,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import {
-  announcesEncounterStart,
   collectExchanges,
   FAKE_ENCOUNTER_PROMPT,
-  statesUnrolledDamage,
+  fightAnnounced,
+  guardOutcomes,
+  unrolledFigure,
   unrolledDamagePrompt,
 } from "@/lib/dm/engine-boundary";
+import { claimKindsFor, type PartRead } from "@/lib/dm/claims-logic";
+import { guardGate, liveStateFor, readClaims } from "@/lib/dm/claims";
 import { markToolError } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
@@ -601,6 +604,25 @@ export async function reenterDmTurn(campaign: Campaign, turn: DmTurn) {
   await advance(loadContext(campaign), turn);
 }
 
+// One read of a reply's prose (src/lib/dm/claims.ts), asking only what this
+// moment of the turn could act on.
+async function readReply(
+  context: TurnContext,
+  turn: DmTurn,
+  text: string,
+  state: { inEncounter: boolean; encounterNudged: boolean; damageNudged: boolean },
+): Promise<PartRead> {
+  const { campaign, sheets } = context;
+  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
+  const kinds = claimKindsFor({
+    ...guardGate(campaign, outcomes, sheets),
+    rollAsk: true,
+    fightStart: !state.inEncounter && !state.encounterNudged,
+    unrolled: !state.damageNudged && !outcomes.damageNumbers.length,
+  });
+  return { kinds, claims: await readClaims(campaign, { label: `turn ${turn.id}`, text, kinds, outcomes, sheets }) };
+}
+
 // A throwing tool handler used to leave dm_turns stuck at 'running' until
 // failStaleRunningTurns reaped it ten minutes later, with the table watching
 // a DM that never speaks. Any unexpected throw now finalizes the turn at
@@ -746,8 +768,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // model that ignores the correction keeps its text rather than looping.
   let encounterNudged = false;
   // The same single shot for a blow landed in prose alone: a damage figure
-  // that no tool rolled this turn (statesUnrolledDamage).
+  // that no tool rolled this turn (unrolledFigure).
   let damageNudged = false;
+  // What each kept reply was read for, by its persisted text, so the guard
+  // at the end of the turn reads only what no read covered.
+  const partReads = new Map<string, PartRead>();
   // Whether the last call, sent with toolChoice "none", came back with tool
   // calls anyway (see narrateAfterToolLeak).
   let finalCallLeaked = false;
@@ -844,20 +869,30 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const xmlSalvage = salvageXmlToolCalls(extractReplyText(message?.content));
     const jsonSalvage = salvageJsonToolCalls(xmlSalvage.text, tools);
     const salvage = salvageTextualToolCalls(extractStoryText(jsonSalvage.text));
-    // Prose roll-asks ("Avery, make an Investigation check, DC 15.")
-    // become real request_roll calls. Skipped when the reply already rolls
-    // (no double dice) and on the forced-narration final call, where a
-    // synthesized roll could never resolve.
-    const alreadyRolls = [
+    // The reply's prose, read once by the claims reader in the table's
+    // language (src/lib/dm/claims.ts): the rolls it asks for ("Avery, make an
+    // Investigation check, DC 15." becomes a real request_roll), a fight it
+    // announces, a blow it lands, and, with the guard on, what it claims
+    // against the turn's results. Not read on the forced-narration final
+    // call, where nothing it found could run; nor when the reply already
+    // rolls (no double dice); nor beside an attack, whose text is the model
+    // guessing the outcome and is dropped below. Prose that is kept unread
+    // is read by the guard at the end of the turn.
+    const structuredCalls = [
       ...extractToolCalls(message?.tool_calls),
       ...xmlSalvage.calls,
       ...jsonSalvage.calls,
       ...salvage.calls,
-    ].some((toolCall) => toolCall.name === "request_roll");
-    const proseRolls =
-      finalCall || alreadyRolls
-        ? { text: salvage.text, calls: [] }
-        : salvageProseRollAsks(salvage.text, sheets);
+    ];
+    const replyRead =
+      !finalCall &&
+      Boolean(salvage.text.trim()) &&
+      !structuredCalls.some((toolCall) => toolCall.name === "request_roll" || resolvesOutcome(toolCall));
+    const read = replyRead
+      ? await readReply(context, turn, salvage.text, { inEncounter, encounterNudged, damageNudged })
+      : null;
+    const claims = read?.claims ?? [];
+    const proseRolls = rollAsksFromClaims(salvage.text, claims, sheets);
     const salvagedCalls = [...xmlSalvage.calls, ...jsonSalvage.calls, ...salvage.calls, ...proseRolls.calls];
     const visibleText = proseRolls.text;
     const echoedToolCalls = salvagedCalls.length
@@ -904,6 +939,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // is dropped), so its prose is the only narration there will be.
     if (narration && (!calledAttackTool || finalCall)) {
       turn.narrationParts.push(narration);
+      if (read) {
+        partReads.set(narration, read);
+      }
     }
     const rollCalls = runnable.filter((toolCall) => toolCall.name === "request_roll");
     const inputCalls = runnable.filter(
@@ -1185,7 +1223,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         !inEncounter &&
         narration &&
         turn.narrationParts[turn.narrationParts.length - 1] === narration &&
-        announcesEncounterStart(narration)
+        fightAnnounced(claims)
       ) {
         encounterNudged = true;
         turn.narrationParts.pop();
@@ -1205,7 +1243,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // 91). Hold it back and send the model to the tool that resolves it.
       const unrolled =
         !finalCall && !damageNudged && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
-          ? statesUnrolledDamage(narration, turn.conversation)
+          ? unrolledFigure(claims, turn.conversation)
           : null;
       if (unrolled) {
         damageNudged = true;
@@ -1346,7 +1384,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
     // disagree.
-    await enforceEngineBoundary(campaign, turn, sheets);
+    await enforceEngineBoundary(campaign, turn, sheets, partReads);
   }
   finalize(context, turn, failed);
   if (!failed) {

@@ -15,8 +15,9 @@ import { getDatabase } from "@/lib/db/core";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { listSheets } from "@/lib/db/sheets";
 import type { Campaign } from "@/lib/db/campaigns";
-import { checkNarration } from "@/lib/dm/engine-boundary";
-import { leveledSpellNames, liveStateFor } from "@/lib/dm/narration-guard";
+import { guardOutcomes, ruleClaims } from "@/lib/dm/engine-boundary";
+import { liveStateFor, readClaims } from "@/lib/dm/claims";
+import { guardKinds } from "@/lib/dm/narration-guard";
 
 // Every request an agent program sends carries this header
 // (src/lib/agents/workbench.ts workbenchCall).
@@ -74,17 +75,24 @@ export function recordAgentCall(
 
 // What in the agent's narration contradicts the engine, as one sentence for
 // the refusal, or null. With the guard switched off at the table, nothing.
-export function agentNarrationProblem(campaign: Campaign, narration: string): string | null {
-  if (!campaign.gameSettings.narrationGuard) {
+// The narration is read by the same claims reader as the storyteller's
+// (src/lib/dm/claims.ts), in the table's language.
+export async function agentNarrationProblem(campaign: Campaign, narration: string): Promise<string | null> {
+  const turn = findAgentTurn(campaign.id);
+  const sheets = listSheets(campaign.id);
+  const outcomes = guardOutcomes(turn?.conversation ?? [], liveStateFor(campaign.id));
+  const kinds = guardKinds(campaign, outcomes, sheets);
+  if (!kinds.length) {
     return null;
   }
-  const found = checkNarration({
-    conversation: findAgentTurn(campaign.id)?.conversation ?? [],
-    narration,
-    partyNames: listSheets(campaign.id).map((sheet) => sheet.name),
-    live: liveStateFor(campaign.id),
-    leveledSpells: leveledSpellNames(),
+  const claims = await readClaims(campaign, {
+    label: `agent turn ${turn?.id ?? "(none yet)"}`,
+    text: narration,
+    kinds,
+    outcomes,
+    sheets,
   });
+  const found = ruleClaims(claims, outcomes);
   if (!found.length) {
     return null;
   }

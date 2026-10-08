@@ -7,17 +7,18 @@ import { extractStoryText } from "@/lib/story-prompt";
 import { stripToolText } from "@/lib/dm/tool-text";
 import {
   buildCorrectionPrompt,
-  checkNarration,
-  normalizeSpellName,
-  type LiveState,
+  guardOutcomes,
+  ruleClaims,
+  type Contradiction,
+  type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
-import spellManifest from "@/lib/srd/manifest/spells.json";
+import { claimKindsFor, type ClaimKind, type PartRead } from "@/lib/dm/claims-logic";
+import { guardGate, liveStateFor, readClaims } from "@/lib/dm/claims";
 
-// The DB/model rim of the engine-boundary guard. All the matching lives in
-// dm/engine-boundary.ts (pure); this file only decides what to do about a
-// detection, and its answer is deliberately small: ask the model to fix its
-// own prose, once.
+// The DB/model rim of the engine-boundary guard. The ruling lives in
+// dm/engine-boundary.ts (pure) and the reading in dm/claims.ts; this file
+// only decides what to do about a detection, and its answer is deliberately
+// small: ask the model to fix its own prose, once.
 //
 // That one call is held in reserve outside the turn's four-call budget
 // (GUARD_RESERVED_CALLS). The turns most likely to contradict their results
@@ -33,50 +34,64 @@ import spellManifest from "@/lib/srd/manifest/spells.json";
 
 export const GUARD_RESERVED_CALLS = 1;
 
-type ManifestSpell = { n: string; l: number; a?: string[] };
-
-let leveled: string[] | null = null;
-
-// Every leveled spell in the bundled spell checklist, with its aliases,
-// normalized the way the guard compares names. Cantrips are left out:
-// casting one spends nothing, so a missing tool call proves nothing.
-export function leveledSpellNames(): string[] {
-  if (!leveled) {
-    leveled = [
-      ...new Set(
-        (spellManifest as { spells: ManifestSpell[] }).spells
-          .filter((spell) => spell.l >= 1)
-          .flatMap((spell) => [spell.n, ...(spell.a ?? [])])
-          .map(normalizeSpellName)
-          .filter((name) => name.length >= 3),
-      ),
-    ];
-  }
-  return leveled;
+// The claim kinds the guard rules on for this turn, from engine state alone.
+export function guardKinds(
+  campaign: Campaign,
+  outcomes: ResolvedOutcomes,
+  sheets: readonly CharacterSheet[],
+): ClaimKind[] {
+  return claimKindsFor({
+    ...guardGate(campaign, outcomes, sheets),
+    rollAsk: false,
+    fightStart: false,
+    unrolled: false,
+  });
 }
 
-// The running fight's enemies as they stand now, after every call this
-// turn made: what a tool-less kill or a refused attack is checked against.
-export function liveStateFor(campaignId: string): LiveState | null {
-  const encounter = getActiveEncounter(campaignId);
-  if (!encounter) {
-    return null;
+// What the narration contradicts: the claims already read with each part
+// (the turn loop reads every reply it keeps), plus one read of the parts no
+// read covered, ruled against the turn's outcomes and the encounter as it
+// now stands.
+async function contradictionsIn(
+  campaign: Campaign,
+  turn: DmTurn,
+  sheets: readonly CharacterSheet[],
+  parts: readonly string[],
+  partReads: ReadonlyMap<string, PartRead>,
+): Promise<Contradiction[]> {
+  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
+  const kinds = guardKinds(campaign, outcomes, sheets);
+  if (!kinds.length) {
+    return [];
   }
-  return {
-    enemies: listEnemies(encounter.id).map((enemy) => ({
-      id: enemy.id,
-      name: enemy.displayName,
-      hp: enemy.currentHp,
-      maxHp: enemy.maxHp,
-      status: enemy.status,
-    })),
+  // A part read before this turn's outcomes gave the guard more to check (an
+  // attack resolved after its prose was read) was never asked those kinds,
+  // so it is read again with all of them, and that read replaces its own.
+  const covered = (part: string) => {
+    const read = partReads.get(part);
+    return read && kinds.every((kind) => read.kinds.includes(kind)) ? read : null;
   };
+  const known = parts.flatMap((part) => covered(part)?.claims ?? []);
+  const unread = parts.filter((part) => !covered(part));
+  const read = await readClaims(campaign, {
+    label: `turn ${turn.id}`,
+    text: unread.join("\n\n"),
+    kinds,
+    outcomes,
+    sheets,
+  });
+  return ruleClaims(
+    [...known, ...read].filter((claim) => kinds.includes(claim.kind)),
+    outcomes,
+  );
 }
 
 export async function enforceEngineBoundary(
   campaign: Campaign,
   turn: DmTurn,
   sheets: readonly CharacterSheet[],
+  // What each kept reply was read for, by its persisted text.
+  partReads: ReadonlyMap<string, PartRead>,
 ): Promise<void> {
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
@@ -87,18 +102,7 @@ export async function enforceEngineBoundary(
   // outcome check is on: safety is not a setting.
   const lines = campaign.gameSettings.safety?.lines ?? [];
   const crossed = lineViolations(narration, lines, campaign.gameSettings.tableLanguage);
-  const partyNames = sheets.map((sheet) => sheet.name);
-  const live = liveStateFor(campaign.id);
-  const leveledSpells = leveledSpellNames();
-  const contradictions = campaign.gameSettings.narrationGuard
-    ? checkNarration({
-        conversation: turn.conversation,
-        narration,
-        partyNames,
-        live,
-        leveledSpells,
-      })
-    : [];
+  const contradictions = await contradictionsIn(campaign, turn, sheets, turn.narrationParts, partReads);
   if (!contradictions.length && !crossed.length) {
     return;
   }
@@ -147,15 +151,7 @@ export async function enforceEngineBoundary(
   // A rewrite is only an improvement if it actually removes contradictions. A
   // model that swapped one wrong claim for another keeps its original text,
   // which at least the table already saw streaming.
-  const remaining = campaign.gameSettings.narrationGuard
-    ? checkNarration({
-        conversation: turn.conversation,
-        narration: corrected,
-        partyNames,
-        live,
-        leveledSpells,
-      })
-    : [];
+  const remaining = await contradictionsIn(campaign, turn, sheets, [corrected], new Map());
   const stillCrossed = lineViolations(corrected, lines, campaign.gameSettings.tableLanguage);
   if (remaining.length + stillCrossed.length >= contradictions.length + crossed.length) {
     console.warn(

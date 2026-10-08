@@ -5,7 +5,8 @@
 // Ask the DM had neither the hit points nor the dice to answer from.
 //   - a damage or healing figure in prose that no tool rolled this turn is
 //     held back once and the model is sent to the tool that resolves it
-//     (src/lib/dm/engine-boundary.ts statesUnrolledDamage);
+//     (src/lib/dm/engine-boundary.ts unrolledFigure, over what the claims
+//     reader found in the prose);
 //   - a figure the turn's tools rolled, or one already on the table (a
 //     table note, an earlier line), is left alone;
 //   - start_encounter takes distanceFeet, and the board opens with the
@@ -24,7 +25,7 @@ import { caster } from "./lib/enforce-spell-kit.mjs";
 const { test, finish } = suite("test-enforce-fight-opening");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
 const kit = await combatKit(world);
-const { statesUnrolledDamage, unrolledDamagePrompt } = await import("../src/lib/dm/engine-boundary.ts");
+const { unrolledFigure, unrolledDamagePrompt } = await import("../src/lib/dm/engine-boundary.ts");
 const { getBattleMapForEncounter, listTokens } = await import("../src/lib/db/battle-maps.ts");
 const { runAsk } = await import("../src/lib/dm/ask.ts");
 
@@ -41,15 +42,17 @@ const userLines = (request) => request.messages.filter((message) => message.role
 
 // ---- the matcher ----
 
-await test("A damage figure no tool rolled is found; dice notation, speech, a hedge and a figure already on the table are not.", () => {
+// What the claims reader returns for the blast: one figure, stated as fact.
+// Dice notation, speech and a hedge are no claim at all (the reader's job,
+// measured against a real model), so they reach this check as nothing.
+const EIGHT = { kind: "amount", value: 8, of: "damage", quote: "8 damage." };
+
+await test("A damage figure no tool rolled is found; no claim, or a figure already on the table, is not.", () => {
   const input = [{ role: "system", content: "Alden Veyr HP 10/10, AC 8" }, { role: "user", content: "[Alden Veyr | attempt] I step into the chamber." }];
-  assert.equal(statesUnrolledDamage(BLAST, input), "8 damage.");
-  assert.equal(statesUnrolledDamage("The blast deals 2d6 damage on a failed save.", input), null);
-  assert.equal(statesUnrolledDamage('"That was 8 damage, easily," Alden mutters.', input), null);
-  assert.equal(statesUnrolledDamage("It looks like 8 damage at least.", input), null);
-  assert.equal(statesUnrolledDamage("The blast scorches the wall and Alden ducks.", input), null);
+  assert.equal(unrolledFigure([EIGHT], input), "8 damage.");
+  assert.equal(unrolledFigure([], input), null);
   const noted = [...input, { role: "user", content: "[Table note] The spikes deal 8 piercing damage to Alden Veyr." }];
-  assert.equal(statesUnrolledDamage("The spikes bite deep: 8 damage.", noted), null);
+  assert.equal(unrolledFigure([EIGHT], noted), null);
 });
 
 // ---- the turn loop ----
@@ -61,6 +64,7 @@ await test("An attack written in prose before any fight exists is held back: the
     reply({ calls: [start] }),
     reply({ text: "The Resonance Weaver unfolds from the dark, humming, ten feet from Alden." }),
   ]);
+  model.claims([[EIGHT]]);
   const dm = await model.turn(world, "I step into the chamber.", alden.id, alden.userId);
   assert.ok(userLines(model.requests[1]).includes(unrolledDamagePrompt("8 damage.")), "the model was not sent back to the tools");
   assert.ok(dm, "the turn wrote no narration");
@@ -72,6 +76,7 @@ await test("An attack written in prose before any fight exists is held back: the
 await test("One correction, never a loop: a model that writes the blow again keeps its text.", async () => {
   await kit.endFight();
   model.script([reply({ text: BLAST }), reply({ text: BLAST })]);
+  model.claims([[EIGHT], [EIGHT]]);
   const dm = await model.turn(world, "I look around.", alden.id, alden.userId);
   assert.equal(model.served(), 2);
   assert.ok(dm.content.includes("8 damage"));
@@ -98,6 +103,7 @@ await test("A figure the turn's own tool rolled is the truth and is narrated as 
 await test("A figure a table note already carries is not sent back: the server dealt it.", async () => {
   world.say("system", "The spikes deal 8 piercing damage to Alden Veyr.");
   model.script([reply({ text: "The spikes punch through Alden's boot: 8 damage." })]);
+  model.claims([[EIGHT]]);
   const dm = await model.turn(world, "I pull my foot free.", alden.id, alden.userId);
   assert.equal(model.served(), 1);
   assert.ok(dm.content.includes("8 damage"));

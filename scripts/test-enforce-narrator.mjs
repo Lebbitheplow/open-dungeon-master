@@ -32,7 +32,10 @@ model.pointAt(world);
 const { buildDmMessages, requestRollTool } = await import("../src/lib/dm/prompt.ts");
 const { mutationTools } = await import("../src/lib/dm/mutations.ts");
 const { listMembers } = await import("../src/lib/db/campaigns.ts");
-const { checkNarration } = await import("../src/lib/dm/engine-boundary.ts");
+const { guardOutcomes, normalizeCreatureName, normalizeSpellName, ruleClaims } = await import(
+  "../src/lib/dm/engine-boundary.ts"
+);
+const { checkClaims } = await import("../src/lib/dm/claims-logic.ts");
 const { emptyTurnLine } = await import("../src/lib/dm/empty-turn.ts");
 
 const kara = world.addHero({
@@ -521,10 +524,13 @@ function conversationOf(exchanges) {
 }
 
 const LIVE = { enemies: [{ id: "enemy-1", name: "Goblin 1", hp: 7, maxHp: 7, status: "alive" }] };
-const kinds = (narration, exchanges, extra = {}) =>
-  checkNarration({ conversation: conversationOf(exchanges), narration, partyNames: party, ...extra })
+// The ruling on what a reader claims a narration states (src/lib/dm/claims.ts
+// reads the prose; each case gives the claims it returns).
+const kinds = (claims, exchanges, live = null) =>
+  ruleClaims(claims, guardOutcomes(conversationOf(exchanges), live))
     .map((entry) => entry.kind)
     .sort();
+const goblin = normalizeCreatureName("Goblin 1");
 
 await test("A hit narrated on an attack the engine refused is a contradiction.", () => {
   const refused = {
@@ -532,23 +538,32 @@ await test("A hit narrated on an attack the engine refused is a contradiction.",
     args: { characterId: kara.id, targetEnemyId: "enemy-1", weapon: "Longsword" },
     result: { error: "Kara is 30 ft from Goblin 1 and cannot reach them." },
   };
-  assert.deepEqual(kinds("Kara's blade bites into the goblin.", [refused], { live: LIVE }), ["hit"]);
+  assert.deepEqual(kinds([{ kind: "hit", target: goblin, quote: "Kara's blade bites into the goblin." }], [refused], LIVE), ["hit"]);
 });
 
 await test("A death narrated with no tool call, on an enemy the live encounter shows alive, is a contradiction.", () => {
-  assert.deepEqual(kinds("Kara cuts down the goblin.", [], { live: LIVE }), ["death"]);
-  assert.deepEqual(kinds("The goblin snarls and circles.", [], { live: LIVE }), []);
+  assert.deepEqual(kinds([{ kind: "dies", target: goblin, quote: "Kara cuts down the goblin." }], [], LIVE), ["death"]);
+  assert.deepEqual(kinds([], [], LIVE), [], "a goblin that only snarls and circles claims nothing");
   // In a running fight a damage figure needs a roll behind it, tool or none.
-  assert.deepEqual(kinds("Kara deals 14 damage to the goblin.", [], { live: LIVE }), ["number"]);
+  assert.deepEqual(kinds([{ kind: "amount", value: 14, of: "damage", quote: "14 damage" }], [], LIVE), ["number"]);
 });
 
-await test("The prose-spell check knows every leveled spell in the spell data and the verbs a narrator casts with.", async () => {
-  const guard = await import("../src/lib/dm/narration-guard.ts");
-  assert.equal(typeof guard.leveledSpellNames, "function", "no spell list from the data");
-  const leveledSpells = guard.leveledSpellNames();
-  assert.deepEqual(kinds("Mira casts Guiding Bolt at the goblin.", [], { leveledSpells }), ["spell"]);
-  assert.deepEqual(kinds("Mira hurls a fireball into the goblins.", [], { leveledSpells }), ["spell"]);
-  assert.deepEqual(kinds("Mira casts Fire Bolt at the goblin.", [], { leveledSpells }), []);
+await test("The prose-spell check knows every leveled spell in the spell data, and a cantrip proves nothing.", async () => {
+  const { leveledSpellNames } = await import("../src/lib/dm/claims.ts");
+  const casts = (spell) =>
+    checkClaims([{ kind: "cast", caster: mira.id, spell, quote: `Mira casts ${spell}` }], {
+      kinds: ["cast"],
+      text: `Mira casts ${spell} at the goblin.`,
+      attackRefs: new Set(),
+      creatureRefs: new Set(),
+      party: new Map([[mira.id, "Mira"]]),
+      leveledSpells: leveledSpellNames(),
+      normalizeSpell: normalizeSpellName,
+      skills: new Set(),
+    });
+  assert.deepEqual(kinds(casts("Guiding Bolt"), []), ["spell"]);
+  assert.deepEqual(kinds(casts("Fireball"), []), ["spell"]);
+  assert.deepEqual(casts("Fire Bolt"), [], "a cantrip spends nothing, so its cast is no claim");
 });
 
 // ---- tool results: argument faults and rules refusals ----
@@ -644,6 +659,8 @@ await test("A kill narrated with no tool call, on an enemy the encounter holds a
   const enemy = await karaUp();
   const rewrite = "Kara's blade flashes, but the goblin twists aside and keeps its feet, snarling as it circles her with its club held low and ready.";
   model.script([reply({ text: "Kara cuts down the goblin." }), reply({ text: rewrite })]);
+  // The reader finds the kill in the reply; the rewrite claims nothing.
+  model.claims([[{ kind: "dies", target: normalizeCreatureName(kit.enemy(enemy.id).displayName), quote: "Kara cuts down the goblin." }]]);
   const message = await model.turn(world, "I attack the goblin.", kara.id);
   assert.equal(kit.enemy(enemy.id).status, "alive");
   assert.equal(model.served(), 2, "no correction call was made");
@@ -663,10 +680,37 @@ await test("The narration guard's rewrite has one reserved call outside the four
     reply({ text: "Kara's blade bites into the goblin." }),
     reply({ text: rewrite }),
   ]);
+  // The last call's prose is read once, by the guard at the end of the turn.
+  model.claims([[{ kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName), quote: "Kara's blade bites into the goblin." }]]);
   const message = await model.turn(world, "I attack the goblin.", kara.id);
   world.clearDice();
   assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "the swing was meant to miss");
   assert.equal(model.served(), 5, "the correction had no call left");
+  assert.equal(message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim(), rewrite);
+});
+
+await test("Prose read before the turn's attack resolved is read again by the guard for what that attack lets it check.", async () => {
+  const enemy = await karaUp();
+  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
+  const rewrite = "Kara's blade whistles past the goblin, and the creature snarls as it circles back toward her with its club raised, looking for an opening.";
+  world.clearDice();
+  world.dice(2, 10, 10);
+  model.script([
+    // Read at once, when no attack had resolved: nobody asked it about hits.
+    reply({ text: "Kara's blade bites into the goblin.", calls: [call("search_lore", { query: "goblin" })] }),
+    reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, weapon: "Longsword" })] }),
+    reply({ text: "The goblin snarls." }),
+    reply({ text: rewrite }),
+  ]);
+  // The two replies' own reads find nothing they were asked; the guard's
+  // read of the first reply, now asked about the miss, finds the hit.
+  model.claims([[], [], [{ kind: "hit", target, quote: "Kara's blade bites into the goblin." }]]);
+  const message = await model.turn(world, "I attack the goblin.", kara.id);
+  world.clearDice();
+  assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "the swing was meant to miss");
+  const guardRead = model.readerRequests[2]?.messages.at(-1)?.content ?? "";
+  assert.match(guardRead, /Ask: hit, miss/, "the guard never asked about the attack");
+  assert.match(guardRead, /bites into the goblin/, "the guard did not read the first reply again");
   assert.equal(message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim(), rewrite);
 });
 
@@ -803,6 +847,8 @@ await test("An agent program in the DM seat gets the AI's rails: update_sheet ca
 await test("An agent program's narration is checked against the live encounter, and a kill the engine denies is refused unposted.", async () => {
   await agentWorld.beginFight([{ monster: "goblin", count: 1 }]);
   const before = listRecentMessages(agentWorld.campaignId, 50).length;
+  const [goblinEnemy] = agentWorld.enemies();
+  routeModel.claims([[{ kind: "dies", target: normalizeCreatureName(goblinEnemy.displayName), quote: "Tamsin cuts down the goblin." }]]);
   const refused = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/narrate", {
     content: "Tamsin cuts down the goblin.",
   });

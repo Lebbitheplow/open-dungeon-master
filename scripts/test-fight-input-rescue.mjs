@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
 import { removeTempDir } from "./lib/remove-temp-dir.mjs";
+import { answerReader, isReaderRequest } from "./lib/claims-reader.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-fight-input-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -67,7 +68,12 @@ const server = http.createServer((req, res) => {
       res.writeHead(404).end();
       return;
     }
-    requests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (isReaderRequest(body)) {
+      answerReader(res);
+      return;
+    }
+    requests.push(body);
     const reply = script[calls] ?? "narrate";
     if (reply === "ask") {
       sse(res, [ask()]);

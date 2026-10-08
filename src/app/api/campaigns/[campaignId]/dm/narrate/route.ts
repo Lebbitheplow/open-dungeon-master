@@ -68,7 +68,7 @@ export async function POST(
   // A connected agent program's prose is checked like the storyteller's,
   // and a contradiction comes back to it as the rewrite prompt.
   const agent = isAgentRequest(request);
-  const problem = agent ? agentNarrationProblem(campaign, parsed.data.content) : null;
+  const problem = agent ? await agentNarrationProblem(campaign, parsed.data.content) : null;
   if (problem) {
     return Response.json({ error: problem }, { status: 409 });
   }

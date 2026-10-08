@@ -1,12 +1,14 @@
-// Prose roll-ask salvage: sentences like "Avery, make an Investigation
-// check, DC 15" become synthetic request_roll calls with the meta-text
-// stripped from narration.
+// Prose roll asks: a narration that asks for dice in words ("Avery, make an
+// Investigation check, DC 15"), in any language, is read by the claims
+// reader (src/lib/dm/claims.ts) into roll_ask claims, which become synthetic
+// request_roll calls with the asking sentence stripped from the narration.
+// Each case gives the claims a reader returns for its text.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { salvageProseRollAsks } = await import("../src/lib/dm/rolls.ts");
+const { rollAsksFromClaims } = await import("../src/lib/dm/rolls.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -21,87 +23,72 @@ function args(result, index = 0) {
   return JSON.parse(result.calls[index].rawArguments);
 }
 
+const ask = (fields) => ({ kind: "roll_ask", ...fields });
+
 test("the exact live failure: bold skill check with DC", () => {
   const text =
     "Avery approaches, wiping dust off the casing. It's going to take some work.\n\n**Avery, make an Intelligence (Investigation) check, DC 15.**";
-  const result = salvageProseRollAsks(text, [avery, brom]);
+  const result = rollAsksFromClaims(
+    text,
+    [ask({ character: "c-avery", check: "skill", skill: "investigation", dc: 15, quote: "Avery, make an Intelligence (Investigation) check, DC 15." })],
+    [avery, brom],
+  );
   assert.equal(result.calls.length, 1);
-  assert.deepEqual(args(result), {
-    kind: "skill_check",
-    characterId: "c-avery",
-    skill: "investigation",
-    dc: 15,
-  });
+  assert.deepEqual(args(result), { kind: "skill_check", characterId: "c-avery", skill: "investigation", dc: 15 });
   assert.ok(!result.text.includes("check"), result.text);
   assert.ok(!result.text.includes("**"), result.text);
   assert.ok(result.text.includes("wiping dust"), result.text);
 });
 
-test("saving throw with leading DC", () => {
-  const result = salvageProseRollAsks(
-    "The gas floods the corridor. Brom, make a DC 12 Constitution saving throw!",
+test("the same ask written in Italian becomes the same call", () => {
+  const text = "Avery si avvicina al meccanismo. **Avery, fai una prova di Intelligenza (Indagare), CD 15.**";
+  const result = rollAsksFromClaims(
+    text,
+    [ask({ character: "c-avery", check: "skill", skill: "investigation", dc: 15, quote: "fai una prova di Intelligenza (Indagare), CD 15" })],
     [avery, brom],
   );
-  assert.equal(result.calls.length, 1);
-  assert.deepEqual(args(result), {
-    kind: "saving_throw",
-    characterId: "c-brom",
-    ability: "con",
-    dc: 12,
-  });
-  assert.ok(result.text.includes("gas floods"));
+  assert.deepEqual(args(result), { kind: "skill_check", characterId: "c-avery", skill: "investigation", dc: 15 });
+  assert.equal(result.text, "Avery si avvicina al meccanismo.");
 });
 
-test("bare ability check without skill", () => {
-  const result = salvageProseRollAsks("Avery, make a Strength check, DC 10.", [avery, brom]);
-  assert.deepEqual(args(result), {
-    kind: "ability_check",
-    characterId: "c-avery",
-    ability: "str",
-    dc: 10,
-  });
+test("a saving throw and a bare ability check carry their ability", () => {
+  const save = rollAsksFromClaims(
+    "The gas floods the corridor. Brom, make a DC 12 Constitution saving throw!",
+    [ask({ character: "c-brom", check: "save", ability: "con", dc: 12, quote: "make a DC 12 Constitution saving throw" })],
+    [avery, brom],
+  );
+  assert.deepEqual(args(save), { kind: "saving_throw", characterId: "c-brom", ability: "con", dc: 12 });
+  assert.ok(save.text.includes("gas floods"));
+  const bare = rollAsksFromClaims(
+    "Avery, make a Strength check, DC 10.",
+    [ask({ character: "c-avery", check: "ability", ability: "str", dc: 10, quote: "Avery, make a Strength check, DC 10." })],
+    [avery, brom],
+  );
+  assert.deepEqual(args(bare), { kind: "ability_check", characterId: "c-avery", ability: "str", dc: 10 });
 });
 
-test("solo campaign needs no name", () => {
-  const result = salvageProseRollAsks("Roll a Stealth check, DC 13.", [avery]);
-  assert.deepEqual(args(result), {
-    kind: "skill_check",
-    characterId: "c-avery",
-    skill: "stealth",
-    dc: 13,
-  });
+test("initiative takes no DC, and a missing DC is left out", () => {
+  const initiative = rollAsksFromClaims(
+    "Weapons out! Roll initiative, Avery!",
+    [ask({ character: "c-avery", check: "initiative", dc: 12, quote: "Roll initiative, Avery!" })],
+    [avery, brom],
+  );
+  assert.deepEqual(args(initiative), { kind: "initiative", characterId: "c-avery" });
+  const noDc = rollAsksFromClaims(
+    "Avery, give me a Sleight of Hand check.",
+    [ask({ character: "c-avery", check: "skill", skill: "sleight_of_hand", quote: "give me a Sleight of Hand check" })],
+    [avery, brom],
+  );
+  assert.deepEqual(args(noDc), { kind: "skill_check", characterId: "c-avery", skill: "sleight_of_hand" });
 });
 
-test("ambiguous target in multiplayer is skipped", () => {
-  const result = salvageProseRollAsks("Make a Perception check, DC 12.", [avery, brom]);
-  assert.equal(result.calls.length, 0);
-  assert.ok(result.text.includes("Perception"));
-});
-
-test("initiative ask", () => {
-  const result = salvageProseRollAsks("Weapons out! Roll initiative, Avery!", [avery, brom]);
-  assert.deepEqual(args(result), { kind: "initiative", characterId: "c-avery" });
-});
-
-test("plain narration containing 'checks' is untouched", () => {
-  const text = "The guard checks his list and waves you through. He makes a note of your name.";
-  const result = salvageProseRollAsks(text, [avery]);
-  assert.equal(result.calls.length, 0);
-  assert.equal(result.text, text);
-});
-
-test("missing DC still salvages the check", () => {
-  const result = salvageProseRollAsks("Avery, give me a Sleight of Hand check.", [avery, brom]);
-  assert.deepEqual(args(result), {
-    kind: "skill_check",
-    characterId: "c-avery",
-    skill: "sleight_of_hand",
-  });
-});
-
-test("two asks in one reply both salvage", () => {
-  const result = salvageProseRollAsks(
+test("two asks in one reply both become calls, and both sentences go", () => {
+  const result = rollAsksFromClaims(
     "Avery, make a Dexterity saving throw, DC 14. Brom, make an Athletics check, DC 10.",
+    [
+      ask({ character: "c-avery", check: "save", ability: "dex", dc: 14, quote: "Avery, make a Dexterity saving throw, DC 14." }),
+      ask({ character: "c-brom", check: "skill", skill: "athletics", dc: 10, quote: "Brom, make an Athletics check, DC 10." }),
+    ],
     [avery, brom],
   );
   assert.equal(result.calls.length, 2);
@@ -110,39 +97,20 @@ test("two asks in one reply both salvage", () => {
   assert.equal(result.text, "");
 });
 
-test("group check hits every named character", () => {
-  const result = salvageProseRollAsks(
-    "Avery and Brom, both of you make Stealth checks, DC 12.",
+test("an ask of everyone rolls for the whole party", () => {
+  const result = rollAsksFromClaims(
+    "Everyone make a Perception check, DC 13.",
+    [ask({ character: "all", check: "skill", skill: "perception", dc: 13, quote: "Everyone make a Perception check, DC 13." })],
     [avery, brom],
   );
-  assert.equal(result.calls.length, 2);
-  assert.equal(args(result, 0).skill, "stealth");
-  assert.equal(args(result, 1).characterId, "c-brom");
+  assert.deepEqual(result.calls.map((call) => JSON.parse(call.rawArguments).characterId).sort(), ["c-avery", "c-brom"]);
 });
 
-test("'everyone' targets the whole party", () => {
-  const result = salvageProseRollAsks("Everyone make a Perception check, DC 13.", [avery, brom]);
-  assert.equal(result.calls.length, 2);
-  assert.deepEqual(
-    result.calls.map((call) => JSON.parse(call.rawArguments).characterId).sort(),
-    ["c-avery", "c-brom"],
-  );
-});
-
-test("other skills and phrasings: nature, 'needs to'", () => {
-  const result = salvageProseRollAsks("Brom needs to make a Nature check, DC 11.", [avery, brom]);
-  assert.deepEqual(args(result), {
-    kind: "skill_check",
-    characterId: "c-brom",
-    skill: "nature",
-    dc: 11,
-  });
-});
-
-test("empty and no-sheet inputs are inert", () => {
-  assert.deepEqual(salvageProseRollAsks("", [avery]), { text: "", calls: [] });
-  const text = "Make a Stealth check, DC 10.";
-  assert.deepEqual(salvageProseRollAsks(text, []), { text, calls: [] });
+test("claims of other kinds, or none, leave the narration as it is", () => {
+  const text = "The guard checks his list and waves you through. He makes a note of your name.";
+  assert.deepEqual(rollAsksFromClaims(text, [], [avery]), { text, calls: [] });
+  assert.deepEqual(rollAsksFromClaims(text, [{ kind: "fight_start", quote: "waves you through" }], [avery]), { text, calls: [] });
+  assert.deepEqual(rollAsksFromClaims("", [], [avery]), { text: "", calls: [] });
 });
 
 console.log(`test-prose-rolls: ${passed} passed`);
