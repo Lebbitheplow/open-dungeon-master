@@ -229,6 +229,8 @@ export type AttackStance = {
   // the riders say", which is what the hand and the PDF, with no armor
   // reading of their own, have always shown.
   martialArts?: boolean;
+  // Tavern Brawler: the unarmed strike deals 1d4 (src/lib/srd/feat-combat.ts).
+  brawler?: boolean;
 };
 
 // SRD 5.1 monk weapons: shortswords and any simple melee weapon that has
@@ -286,9 +288,11 @@ export function weaponAttackProfile(
     const martial = resolved.unarmed ? martialArtsDie : null;
     const useDex = Boolean(martial) && derived.abilityMods.dex > derived.abilityMods.str;
     const mod = useDex ? derived.abilityMods.dex : derived.abilityMods.str;
-    const dice = martial ? `1${martial}` : resolved.unarmed ? "1" : "1d4";
+    const dice = martial ? `1${martial}` : resolved.unarmed ? (stance.brawler ? "1d4" : "1") : "1d4";
     if (martial) {
       notes.push(`Martial Arts: 1${martial}${useDex ? " with DEX" : ""}`);
+    } else if (resolved.unarmed && stance.brawler) {
+      notes.push("Tavern Brawler: the unarmed strike deals 1d4");
     }
     return {
       weapon: resolved.displayName,

@@ -890,6 +890,27 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_item_proposals
       ON item_proposals(campaign_id, status);
 
+    -- Disputed rulings (src/lib/dm/dispute-logic.ts): a player's objection
+    -- to a passage the AI narrated, and how whoever steers the story (or
+    -- the table, by vote) settled it.
+    CREATE TABLE IF NOT EXISTS ruling_disputes (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      message_id TEXT NOT NULL,
+      raised_by_user_id TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open','voting','upheld','overruled','withdrawn')),
+      votes_json TEXT NOT NULL DEFAULT '{}',
+      voters_json TEXT NOT NULL DEFAULT '[]',
+      decided_by_user_id TEXT,
+      decided_at TEXT,
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ruling_disputes
+      ON ruling_disputes(campaign_id, status);
+
     -- Procedural region map: seeded terrain grid (one char per tile), known
     -- locations anchored at tile coordinates, and lead-placed pins
     -- (src/lib/overworld/generate.ts). One per campaign, lazily created.
@@ -2110,6 +2131,29 @@ function ensureSchema(db: SqliteDatabase) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_agent_activity_grant ON agent_activity(grant_id, id);
+
+    -- The usage ledger (src/lib/usage/ledger.ts, issue #137): one row per
+    -- AI call, counted from what the backend reported. No prompt or
+    -- transcript is kept. campaign_id and user_id are plain columns, not
+    -- foreign keys: a campaign's history outlives the campaign, and an
+    -- erased account's rows are unlinked rather than dropped.
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      campaign_id TEXT,
+      user_id TEXT,
+      kind TEXT NOT NULL CHECK (kind IN ('text','image','tts','stt','agent')),
+      role TEXT NOT NULL DEFAULT '',
+      backend TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      paid INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      units REAL NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_events_campaign ON usage_events(campaign_id, at);
+    CREATE INDEX IF NOT EXISTS idx_usage_events_user ON usage_events(user_id, at);
   `);
 }
 
@@ -2427,7 +2471,7 @@ function backfillSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
       `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json,
-              classes_json
+              classes_json, feats_json
          FROM character_sheets`,
     )
     .all() as Array<{
@@ -2440,6 +2484,7 @@ function backfillSheetResources(db: SqliteDatabase) {
     features_json: string | null;
     resources_json: string | null;
     classes_json: string | null;
+    feats_json: string | null;
   }>;
   if (!sheets.length) {
     return;
@@ -2469,15 +2514,17 @@ function backfillSheetResources(db: SqliteDatabase) {
         ? (JSON.parse(row.classes_json) as Array<{ id: string; subclass: string; level: number }>)
         : [];
       const multiclass = Array.isArray(classes) && classes.length > 1;
+      const rowFeats = row.feats_json ? (JSON.parse(row.feats_json) as string[]) : [];
       const features = multiclass
-        ? populateFeaturesForClasses(existingFeatures, classes, row.race)
-        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level);
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats);
       const resources = populateResources(
         features,
         row.level,
         mods,
         existingResources,
         multiclass ? classes : undefined,
+        rowFeats,
       );
       const nextFeatures = JSON.stringify(features);
       const nextResources = JSON.stringify(resources);

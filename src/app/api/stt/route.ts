@@ -4,6 +4,11 @@ import { serverEnv } from "@/lib/server-env";
 import { decodeWav, SPEECH_SAMPLE_RATE } from "@/lib/speech-wav";
 import { currentSttBackend, whisperUrl } from "@/lib/stt-backend";
 import { transcribeBuiltin } from "@/lib/stt-builtin";
+import { isCampaignMember } from "@/lib/db/campaigns";
+import { isPrivateBackendHost } from "@/lib/backend-host";
+import { paidAiAllowedNow, paidAiRefusalResponse } from "@/lib/shared-host";
+import { recordUsage } from "@/lib/usage/ledger";
+import { enterUsageScope } from "@/lib/usage/scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,11 +38,24 @@ export async function POST(request: Request) {
 
   const backend = await currentSttBackend();
   if (backend === "builtin") {
+    recordUsage({ kind: "stt", role: "dictation", backend: "builtin", paid: false, units: 1 });
     return builtin(audio);
   }
   if (backend === "openai") {
+    // OpenAI listens on the host's key (src/lib/shared-host.ts); the
+    // campaign named with the clip decides, else the account itself.
+    const campaignId = form?.get("campaignId");
+    if (typeof campaignId === "string" && campaignId && isCampaignMember(campaignId, user.id)) {
+      enterUsageScope({ campaignId });
+    }
+    const paid = !isPrivateBackendHost(openAiSpeechConfig().baseUrl);
+    if (paid && !paidAiAllowedNow()) {
+      return paidAiRefusalResponse("speech");
+    }
+    recordUsage({ kind: "stt", role: "dictation", backend: "openai", paid, units: 1 });
     return openAi(audio);
   }
+  recordUsage({ kind: "stt", role: "dictation", backend: "whisper", paid: false, units: 1 });
   if (backend === "none") {
     return Response.json(
       { error: "This server has no speech-to-text. An admin can install it under Admin > Speech." },

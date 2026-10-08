@@ -68,7 +68,7 @@ export function PremiseStep({
 
       <div>
         <FieldLabel className="mb-1.5">Who runs this table?</FieldLabel>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {DM_MODES.filter(
             // A server that positively has no AI DM (provider "none")
             // offers only the human seat; "assisted" leans on the same
@@ -95,7 +95,14 @@ export function PremiseStep({
             AI turns will fail until it is back.
           </p>
         ) : null}
-        {draft.dmMode !== "ai" ? (
+        {draft.dmMode === "steered" ? (
+          <p className="mt-1.5 text-xs text-stone-500">
+            You take the steering seat: no character and no party slot. You see the arc, the
+            sheets, the stat blocks and the whole map, direct the AI between turns and settle a
+            disputed ruling; the AI narrates every turn, and the party lead is a player like any
+            other.
+          </p>
+        ) : draft.dmMode !== "ai" ? (
           <p className="mt-1.5 text-xs text-stone-500">
             You take the Dungeon Master seat: no character, no party slot, and you see the
             sheets, the stat blocks and the whole map. The server still rolls every die and holds

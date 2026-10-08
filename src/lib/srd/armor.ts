@@ -228,11 +228,13 @@ export function isWorn(
 // How much of the Dexterity modifier a suit lets through. Heavy armor takes
 // none of it, in either direction: a clumsy wearer is not penalized (SRD 5.1,
 // Armor). Medium armor caps the bonus and passes a penalty on whole.
-function dexThrough(armor: SrdArmor, dexMod: number): number {
+function dexThrough(armor: SrdArmor, dexMod: number, mediumArmorMaster = false): number {
   if (armor.category === "heavy") {
     return 0;
   }
-  return Math.min(dexMod, armor.dexCap ?? dexMod);
+  // Medium Armor Master: medium armor takes 3 of the modifier, not 2.
+  const cap = armor.dexCap !== undefined && mediumArmorMaster && armor.category === "medium" ? Math.max(armor.dexCap, 3) : armor.dexCap;
+  return Math.min(dexMod, cap ?? dexMod);
 }
 
 // Whether the character wears armor or carries a shield they were never
@@ -353,6 +355,9 @@ export function computeArmorClass(input: {
   bonus?: number;
   // The wearer's race, for the one race heavy armor does not slow.
   race?: string;
+  // Medium Armor Master: 3 of the Dexterity modifier through medium armor,
+  // and no Stealth disadvantage from it (src/lib/srd/feat-combat.ts).
+  mediumArmorMaster?: boolean;
 }): AcBreakdown {
   const worn = input.equipment.filter((item) => isWorn(item, input.equipment));
 
@@ -371,9 +376,9 @@ export function computeArmorClass(input: {
       }
       continue;
     }
-    const score = armor.baseAc + resolved.bonus + dexThrough(armor, input.dexMod);
+    const score = armor.baseAc + resolved.bonus + dexThrough(armor, input.dexMod, input.mediumArmorMaster);
     const bestScore = armorItem
-      ? armorItem.armor.baseAc + armorItem.bonus + dexThrough(armorItem.armor, input.dexMod)
+      ? armorItem.armor.baseAc + armorItem.bonus + dexThrough(armorItem.armor, input.dexMod, input.mediumArmorMaster)
       : -Infinity;
     if (score > bestScore) {
       armorItem = { item, ...resolved };
@@ -389,14 +394,14 @@ export function computeArmorClass(input: {
   if (armorItem) {
     const { armor, item } = armorItem;
     const magic = armorItem.bonus;
-    const dex = dexThrough(armor, input.dexMod);
+    const dex = dexThrough(armor, input.dexMod, input.mediumArmorMaster);
     ac = armor.baseAc + magic + dex;
     parts.push(`${item.name} ${armor.baseAc + magic}`);
     if (dex !== 0) {
       parts.push(`DEX ${dex >= 0 ? "+" : ""}${dex}`);
     }
     unproficient = !armorItem.proficientAnyway && !isArmorProficient(input.armorProfs, armor);
-    stealthDisadvantage = Boolean(armor.stealthDisadvantage);
+    stealthDisadvantage = Boolean(armor.stealthDisadvantage) && !(input.mediumArmorMaster && armor.category === "medium");
     if (
       armor.strengthRequirement &&
       input.strength < armor.strengthRequirement &&

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { copyText } from "@/lib/clipboard";
@@ -24,6 +26,10 @@ type AccountInvite = {
 // campaign membership; the campaign room code is a different thing.
 export function AdminInvitesSection() {
   const [invites, setInvites] = useState<AccountInvite[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [note, setNote] = useState("");
   const [maxUses, setMaxUses] = useState(1);
   const [creating, setCreating] = useState(false);
@@ -31,11 +37,13 @@ export function AdminInvitesSection() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/invites")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setInvites(data?.invites ?? []))
-      .catch(() => setInvites([]));
-  }, []);
+    readLoad<{ invites?: AccountInvite[] }>(fetch("/api/admin/invites"), "The invite codes").then((outcome) => {
+      settle(outcome);
+      if (outcome.payload) {
+        setInvites(outcome.payload.invites ?? []);
+      }
+    });
+  }, [reloads, settle]);
 
   async function create() {
     setCreating(true);
@@ -118,7 +126,7 @@ export function AdminInvitesSection() {
       </div>
       {error ? <p role="alert" className="motion-shake text-sm text-red-400">{error}</p> : null}
       {invites.length === 0 ? (
-        <EmptyState art="scrolls" size="sm" title="No invite codes yet. Nobody can register until you create one." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState art="scrolls" size="sm" title="No invite codes yet. Nobody can register until you create one." /> : null)
       ) : (
         <ul className="stagger space-y-2">
           {invites.map((invite) => {

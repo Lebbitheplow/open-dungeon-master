@@ -30,6 +30,8 @@ import {
   readContextWindow,
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
+import { isPrivateBackendHost } from "@/lib/backend-host";
+import { chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { localModelContextWindow } from "@/lib/text-models";
 import { harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
@@ -89,6 +91,21 @@ export type UpstreamResult = {
   // Read by the DM turn loop to tell a model that ran out of room from one
   // that chose to say nothing (issue #120).
   finishReason?: string;
+  // What the backend said the call cost, for the usage ledger
+  // (src/lib/usage/ledger.ts); absent when it said nothing.
+  usage?: UpstreamUsage;
+};
+
+export type UpstreamUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  backend: "local" | "custom" | "openai" | "openrouter" | "harness";
+  // Sent with a key.
+  keyed: boolean;
+  // Sent with a key to a public host: the host pays per call
+  // (src/lib/shared-host.ts isPrivateBackendHost says which hosts are local).
+  paid: boolean;
 };
 
 export type ChatRequestOptions = {
@@ -393,6 +410,50 @@ export function customChatEndpoint(baseUrl: string): string {
 // per-chat settings; the key is optional (most local servers need none). When
 // the URL is OpenRouter we add its attribution headers and fall back to the
 // OPENROUTER_* env vars; otherwise the fallback is OPENAI_COMPAT_API_KEY.
+// Which key, if any, a request to this base URL goes out with. Per-campaign
+// key wins, then the admin-panel key, then the env vars. Fallback keys
+// belong to the admin-configured backend: attaching them to any other URL
+// would hand the server's key to whatever host a campaign's settings point
+// at. The OpenRouter env key is gated on the host being OpenRouter, and on
+// https: a campaign's http://openrouter.ai would send it in clear text
+// (OpenRouter itself only answers https, so nothing working is lost). The
+// optional utility backend gets the same treatment: its key is host-gated
+// to its own configured URL, so pointing a campaign elsewhere cannot borrow
+// it.
+function resolveCustomKey(
+  trimmedBase: string,
+  apiKey: string,
+  endpoint: string,
+): { isGlobalBackend: boolean; isUtilityBackend: boolean; resolvedKey: string } {
+  const globalText = getGlobalConfig().text;
+  const isOpenRouter = describeEndpoint(trimmedBase).kind === "openrouter";
+  const chatEndpoint = customChatEndpoint(trimmedBase);
+  const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
+  const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === chatEndpoint;
+  const utilityBase = (globalText.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL") || "").trim();
+  const isUtilityBackend = Boolean(utilityBase) && customChatEndpoint(utilityBase) === chatEndpoint;
+  const resolvedKey =
+    (apiKey || "").trim() ||
+    (isGlobalBackend ? globalText.customApiKey : "") ||
+    (isUtilityBackend ? globalText.utilityApiKey : "") ||
+    (isOpenRouter && /^https:\/\//i.test(endpoint) ? serverEnv("OPENROUTER_API_KEY") : "") ||
+    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "") ||
+    (isUtilityBackend ? serverEnv("UTILITY_TEXT_API_KEY") : "");
+  return { isGlobalBackend, isUtilityBackend, resolvedKey };
+}
+
+// Whether a request to this backend would carry a key to a public host:
+// the shared-host policy (src/lib/shared-host.ts) reads it before the call.
+// A keyed server on this machine or the LAN is the host's own; a keyed
+// public one bills the host per call.
+export function customBackendIsPaid(baseUrl: string, apiKey: string): boolean {
+  const trimmedBase = (baseUrl || "").trim();
+  if (!trimmedBase || isPrivateBackendHost(trimmedBase)) {
+    return false;
+  }
+  return resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey !== "";
+}
+
 export async function requestCustomMessage(
   baseUrl: string,
   model: string,
@@ -471,26 +532,7 @@ export async function requestCustomMessage(
   ]);
   const chatEndpoint = customChatEndpoint(trimmedBase);
   const endpoint = viaResponses ? customResponsesEndpoint(trimmedBase) : chatEndpoint;
-  // Per-campaign key wins, then the admin-panel key, then the env vars.
-  // Fallback keys belong to the admin-configured backend: attaching them to
-  // any other URL would hand the server's key to whatever host a campaign's
-  // settings point at. The OpenRouter env key is gated on isOpenRouter above,
-  // and on https: a campaign's http://openrouter.ai would send it in clear
-  // text (OpenRouter itself only answers https, so nothing working is lost).
-  const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
-  const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === chatEndpoint;
-  // The optional utility backend gets the same treatment: its key is host-
-  // gated to its own configured URL, so pointing a campaign elsewhere cannot
-  // borrow it.
-  const utilityBase = (globalText.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL") || "").trim();
-  const isUtilityBackend = Boolean(utilityBase) && customChatEndpoint(utilityBase) === chatEndpoint;
-  const resolvedKey =
-    (apiKey || "").trim() ||
-    (isGlobalBackend ? globalText.customApiKey : "") ||
-    (isUtilityBackend ? globalText.utilityApiKey : "") ||
-    (isOpenRouter && /^https:\/\//i.test(endpoint) ? serverEnv("OPENROUTER_API_KEY") : "") ||
-    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "") ||
-    (isUtilityBackend ? serverEnv("UTILITY_TEXT_API_KEY") : "");
+  const { isUtilityBackend, resolvedKey } = resolveCustomKey(trimmedBase, apiKey, endpoint);
   // Thinking runs cooler per Qwen guidance; 0.9 there makes the thought
   // ramble past the point of ever emitting the tool call.
   // Per-role sampling, resolved from the admin config
@@ -534,7 +576,11 @@ export async function requestCustomMessage(
         ...(caps.allowTemplateKwargs && options.thinking
           ? { chat_template_kwargs: { enable_thinking: true } }
           : {}),
-        ...(onDelta ? { stream: true } : {}),
+        // The last chunk of a stream carries the token counts only when
+        // asked (OpenAI, llama-server, vLLM, LM Studio and OpenRouter all
+        // honour it); a backend that rejects the field names it in its 400
+        // and the retry drops it (DROPPABLE_PARAMS).
+        ...(onDelta ? { stream: true, stream_options: { include_usage: true } } : {}),
       };
 
   if (!viaResponses) {
@@ -716,6 +762,20 @@ export async function requestCustomMessage(
     };
   };
 
+  // The ledger's view of this call, once the backend has said what it cost.
+  const tagged = (usage: TokenUsage | null): { usage?: UpstreamUsage } =>
+    usage
+      ? {
+          usage: {
+            ...usage,
+            model: resolvedModel,
+            backend: isOpenRouter ? "openrouter" : caps.kind === "openai" ? "openai" : "custom",
+            keyed: resolvedKey !== "",
+            paid: resolvedKey !== "" && !isPrivateBackendHost(trimmedBase),
+          },
+        }
+      : {};
+
   if (viaResponses) {
     try {
       const reply = await readResponsesReply(upstream, {
@@ -731,7 +791,11 @@ export async function requestCustomMessage(
           ),
         };
       }
-      return { message: reply.message, ...(reply.finishReason ? { finishReason: reply.finishReason } : {}) };
+      return {
+        message: reply.message,
+        ...(reply.finishReason ? { finishReason: reply.finishReason } : {}),
+        ...tagged(reply.usage ?? null),
+      };
     } catch (error) {
       return readFailure(error);
     }
@@ -740,6 +804,7 @@ export async function requestCustomMessage(
   if (onDelta && upstream.body) {
     // OpenAI-compatible SSE: "data: {...}" lines carrying content and
     // tool-call fragments, terminated by "data: [DONE]".
+    let streamUsage = null as TokenUsage | null;
     const contentParts: string[] = [];
     const toolCalls: Array<StreamedToolCall | undefined> = [];
     let upstreamError = "";
@@ -775,6 +840,7 @@ export async function requestCustomMessage(
         if (typeof reason === "string" && reason) {
           finishReason = reason;
         }
+        streamUsage = chatUsage(record) ?? streamUsage;
         const delta = record.choices?.[0]?.delta;
         if (typeof delta?.content === "string" && delta.content) {
           contentParts.push(delta.content);
@@ -827,6 +893,7 @@ export async function requestCustomMessage(
         ...(completedToolCalls.length ? { tool_calls: completedToolCalls } : {}),
       },
       ...(finishReason ? { finishReason } : {}),
+      ...tagged(streamUsage),
     };
   }
 
@@ -850,6 +917,7 @@ export async function requestCustomMessage(
   return {
     message: data?.choices?.[0]?.message,
     ...(typeof finishReason === "string" && finishReason ? { finishReason } : {}),
+    ...tagged(chatUsage(data)),
   };
 }
 
@@ -952,6 +1020,7 @@ export async function requestLocalMessage(
   if (onDelta && upstream.body) {
     // Ollama streams NDJSON: one JSON object per line with message.content
     // fragments; tool calls arrive whole on whichever line carries them.
+    let localUsage = null as TokenUsage | null;
     const contentParts: string[] = [];
     const toolCalls: unknown[] = [];
     let upstreamError = "";
@@ -979,6 +1048,7 @@ export async function requestLocalMessage(
         if (Array.isArray(record.message?.tool_calls)) {
           toolCalls.push(...record.message.tool_calls);
         }
+        localUsage = ollamaUsage(record) ?? localUsage;
       });
     } catch {
       return {
@@ -1010,6 +1080,7 @@ export async function requestLocalMessage(
         content: contentParts.join(""),
         ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
       },
+      ...(localUsage ? { usage: { ...localUsage, model, backend: "local" as const, keyed: false, paid: false } } : {}),
     };
   }
 
@@ -1024,5 +1095,6 @@ export async function requestLocalMessage(
       ),
     };
   }
-  return { message: data?.message };
+  const usage = ollamaUsage(data);
+  return { message: data?.message, ...(usage ? { usage: { ...usage, model, backend: "local" as const, keyed: false, paid: false } } : {}) };
 }

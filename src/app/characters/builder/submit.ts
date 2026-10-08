@@ -5,7 +5,7 @@ import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
-import { featPicksOwed, type FeatChoices, type FeatGrantSpec } from "@/lib/srd/feat-grants";
+import { featOwed, type FeatChoices, type FeatGrantSpec } from "@/lib/srd/feat-grants";
 import { STANDARD_ARRAY } from "@/lib/srd/legality/abilities";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import {
@@ -99,7 +99,7 @@ function featPicksBlock(
     return null;
   }
   for (const feat of feats) {
-    const owed = featPicksOwed(feat, specOf(feat), featChoices?.[feat.trim().toLowerCase()]);
+    const owed = featOwed(feat, specOf(feat), featChoices?.[feat.trim().toLowerCase()]);
     if (owed) {
       return owed;
     }
@@ -380,9 +380,18 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const preview = derived.preview as NonNullable<BuilderDerived["preview"]>;
   const { effectiveLevel } = derived;
 
-  const resolvedAsiChoices = derived.activeAsiChoices.filter(
-    (choice): choice is AsiChoice => choice !== null,
-  );
+  const resolvedAsiChoices = derived.activeAsiChoices
+    .filter((choice): choice is AsiChoice => choice !== null)
+    // A half-feat with a choice of score raises the first it offers when
+    // the player left the choice: a content pack feat's text arrives after
+    // the pick, and the editor shows that same first score.
+    .map((choice) => {
+      if (choice.mode !== "feat" || choice.ability) {
+        return choice;
+      }
+      const from = featAbilityIncrease(choice.feat, derived.featDescOf?.(choice.feat))?.from ?? [];
+      return from.length > 1 ? { ...choice, ability: from[0] } : choice;
+    });
   const asiFeats = resolvedAsiChoices.flatMap((choice) =>
     choice.mode === "feat" ? [choice.feat] : [],
   );
@@ -459,7 +468,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // races' (racialTraitsFor) and has no other copy of a Catfolk's.
   // The score a variant human's half-feat raises where it offers a choice;
   // the server adds the point (src/lib/srd/legality/half-feats.ts).
-  const racialFeatChoice = featAbilityIncrease(state.feats[0] ?? "")?.from ?? [];
+  const racialFeatChoice = featAbilityIncrease(state.feats[0] ?? "", derived.featDescOf?.(state.feats[0] ?? ""))?.from ?? [];
   const racialFeatAbility =
     racialFeatChoice.length > 1
       ? racialFeatChoice.includes(state.racialFeatAbility as Ability)
@@ -499,11 +508,12 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       classes: [],
       hitDicePools: null,
       proficiencies,
-      // The catalog price rode along for the purse; the server prices the
-      // pack again from its own catalog.
+      // The catalog price and magic mark rode along for the purse; the
+      // server prices the pack again from its own catalog.
       equipment: derived.fullEquipment.map((entry) => {
         const item: EquipmentItem = { ...entry };
         delete item.priceCp;
+        delete item.magic;
         return item;
       }),
       // The coin left once the pack is paid for: the background's purse (or
@@ -543,7 +553,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       },
       backgroundChoices: {
         skills: picks.backgroundSkills.filter(Boolean),
-        gear: (derived.backgroundKit?.choices ?? []).map((choice) => choice.alternatives[choice.chosen].label),
+        gear: (derived.backgroundKit?.choices ?? []).map((choice) => choice.pick),
       },
       // The class kit's either-or choices, which the server hands out free.
       ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),

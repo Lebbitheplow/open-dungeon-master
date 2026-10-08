@@ -111,6 +111,19 @@ export type ItemProposal = {
   offer?: { toCharacterId: string; give: Array<{ name: string; qty: number }>; giveCp: number; want: Array<{ name: string; qty: number }>; wantCp: number } | null;
 };
 
+// A disputed ruling (src/lib/dm/dispute-logic.ts), open or under vote.
+export type RulingDispute = {
+  id: string;
+  messageId: string;
+  raisedByUserId: string;
+  reason: string;
+  status: "open" | "voting" | "upheld" | "overruled" | "withdrawn";
+  votes: Record<string, "uphold" | "overrule">;
+  voterIds: string[];
+  decidedByUserId: string | null;
+  createdAt: string;
+};
+
 export type CampaignLocation = {
   id: string;
   name: string;
@@ -184,6 +197,8 @@ export type CampaignState = {
   encounter: PublicEncounter | null;
   // Open DM item/gold offers (inventoryApprovals).
   itemProposals: ItemProposal[];
+  // Open disputed rulings, settled ones gone (RulingBar.tsx).
+  disputes: RulingDispute[];
   // The caller's fogged battle-map projection; null outside combat.
   battleMap: PlayerMapView | null;
   // The last person to point at the board. Ephemeral by nature: a ping is
@@ -315,6 +330,7 @@ const initialState: CampaignState = {
   characterEvents: [],
   encounter: null,
   itemProposals: [],
+  disputes: [],
   battleMap: null,
   mapPing: null,
   ambience: EMPTY_AMBIENCE,
@@ -811,6 +827,20 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           }
           return next;
         }
+        case "ruling_disputed": {
+          const dispute = payload.dispute as RulingDispute | undefined;
+          if (dispute) {
+            next.disputes = upsertBy(state.disputes, dispute, (entry) => entry.id);
+          }
+          return next;
+        }
+        case "ruling_resolved": {
+          const dispute = payload.dispute as RulingDispute | undefined;
+          if (dispute) {
+            next.disputes = state.disputes.filter((entry) => entry.id !== dispute.id);
+          }
+          return next;
+        }
         case "encounter_updated": {
           const shared = (payload.encounter as PublicEncounter | null) ?? null;
           // The stream carries the player-safe projection. A DM sees real hit
@@ -948,6 +978,8 @@ const PERSISTED_EVENTS = [
   "campaign_rewound",
   "item_proposal_added",
   "item_proposal_resolved",
+  "ruling_disputed",
+  "ruling_resolved",
   // A player acted at a human-DM table: the message already arrived through
   // message_added, so this only tells the DM's console there is something
   // waiting. Persisted so a DM who reconnects still sees the backlog.
@@ -1099,6 +1131,7 @@ export function useCampaignStream(campaignId: string) {
           characterEvents: data.characterEvents ?? [],
           encounter: data.encounter ?? null,
           itemProposals: data.itemProposals ?? [],
+          disputes: data.disputes ?? [],
           beats: data.beats ?? [],
           // The DM's "waiting on you" queue, rebuilt from the transcript: the
           // live events that fed it are never replayed after a reload.

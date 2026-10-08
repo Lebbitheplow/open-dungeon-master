@@ -11,7 +11,7 @@ import { hpBonusPerLevel, racialFeatCount } from "@/lib/srd/race-id";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { halfFeatPicks, scoresWithHalfFeats, settledHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
-  bundledPrices,
+  layeredPrice,
   judgeStartingGear,
   type StartingWealthMethod,
 } from "@/lib/srd/starting-wealth";
@@ -35,6 +35,7 @@ import { builderCasting, builderSpellAdvice } from "./casting";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
+import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -168,6 +169,13 @@ export function useBuilderDerived({
     () => (improved && primalChampion && primalChampionHeld ? withPrimalChampion(improved) : improved),
     [improved, primalChampion, primalChampionHeld],
   );
+  // The text of a feat on the sheet, where known: ODM's own, or a content
+  // pack's as fetched (useFeatDescs). What its grants and its ability
+  // point are read from.
+  const featDescOf = useMemo(
+    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
+    [featDescs],
+  );
   // The scores the server will STORE, with those points in, and the saving
   // throw Resilient adds: what every number on screen is worked out from.
   const raceId = race?.id;
@@ -183,10 +191,11 @@ export function useBuilderDerived({
         racialChoices: { featAbility: racialFeatAbility },
       },
       raceId ? racialFeatCount(raceId) : 0,
+      featDescOf,
     );
-    const fromImprovements = halfFeatPicks({ asiChoices: asiChoicesMade }, 0).length;
+    const fromImprovements = halfFeatPicks({ asiChoices: asiChoicesMade }, 0, featDescOf).length;
     return { all, racial: all.slice(fromImprovements) };
-  }, [activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
+  }, [activeAsiChoices, racialFeatNames, racialFeatAbility, raceId, featDescOf]);
   const halfFeats = useMemo(() => {
     if (!improved) {
       return null;
@@ -228,10 +237,6 @@ export function useBuilderDerived({
       ...racialFeatNames,
     ],
     [activeAsiChoices, racialFeatNames],
-  );
-  const featDescOf = useMemo(
-    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
-    [featDescs],
   );
   const featSpecOf = useMemo(() => (name: string): FeatGrantSpec => featGrantSpec(featDescOf(name)), [featDescOf]);
   const { featChoices } = state;
@@ -449,11 +454,19 @@ export function useBuilderDerived({
   // stored character's pack was earned, so an edit charges only what it adds.
   const wealthMethod = rules?.startingWealth ?? "equipment";
   const purse = useMemo(() => {
+    // The pack's price rode in on the pick (EquipmentSection); it is layered
+    // under the bundled table exactly as the server layers its catalog, so
+    // the purse here and the purse the server works agree (issue #136).
     const priceOf = (itemName: string) => {
       const picked = equipment.find((item) => item.name === itemName);
-      return picked?.priceCp !== undefined
-        ? { copper: picked.priceCp, magic: false }
-        : bundledPrices(itemName);
+      return layeredPrice(
+        itemName,
+        picked?.magic
+          ? { copper: null, magic: true }
+          : picked?.priceCp !== undefined
+            ? { copper: picked.priceCp, magic: false }
+            : undefined,
+      );
     };
     const freeKit = keepsStoredGear
       ? equipment.flatMap((item) => Array.from({ length: item.qty }, () => item.name))
@@ -522,9 +535,10 @@ export function useBuilderDerived({
             subclass,
             level: effectiveLevel,
             features: optionPicks.map((optionName) => ({ name: optionName })),
+            feats: featNames,
           })
         : [],
-    [klass, subclass, effectiveLevel, optionPicks],
+    [klass, subclass, effectiveLevel, optionPicks, featNames],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog
@@ -595,10 +609,24 @@ export function useBuilderDerived({
       return true;
     });
   }, [race, effectiveLevel, racialCantripPick]);
+  // The spells the feats teach (src/lib/srd/feat-spells.ts) are known the
+  // same way: shown granted, left out of the class's counts.
+  const featSpells = useMemo(
+    () =>
+      featSpellNames(
+        featSpellGrants({
+          feats: featNames.map((name) => ({ name, desc: featDescOf(name) })),
+          choices: featChoices,
+          raisedAbility: () => null,
+          strict: false,
+        }).grants,
+      ),
+    [featNames, featDescOf, featChoices],
+  );
   const chosenCantrips = useMemo(() => {
-    const free = new Set(racialCantrips.map((name) => name.trim().toLowerCase()));
+    const free = new Set([...racialCantrips, ...featSpells.cantrips].map((name) => name.trim().toLowerCase()));
     return cantrips.filter((name) => !free.has(name.trim().toLowerCase()));
-  }, [cantrips, racialCantrips]);
+  }, [cantrips, racialCantrips, featSpells]);
   const chosenSpells = useMemo(() => {
     const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
     return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
@@ -649,6 +677,7 @@ export function useBuilderDerived({
     starters,
     subclassSpells,
     racialCantrips,
+    featSpells,
     castingLabel,
     chosenCantrips,
     chosenSpells,
@@ -686,6 +715,7 @@ export function builderActions(
       gear?: EquipmentItem["gear"];
       weight?: number;
       priceCp?: number;
+      magic?: boolean;
     }) {
       state.setEquipment((current) => {
         const existing = current.find((item) => item.name === entry.name);
@@ -705,6 +735,7 @@ export function builderActions(
             ...(entry.gear ? { gear: entry.gear } : {}),
             ...(entry.weight !== undefined ? { weight: entry.weight } : {}),
             ...(entry.priceCp !== undefined ? { priceCp: entry.priceCp } : {}),
+            ...(entry.magic ? { magic: true } : {}),
           },
         ];
       });

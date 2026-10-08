@@ -4,6 +4,7 @@
 // the features that answer one. Split from cast-at-enemy.ts, which has
 // checked and paid for the cast and rolled the save before calling this.
 
+import { elementalAdeptApplies, floorDamageDice } from "@/lib/srd/feat-combat";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -51,7 +52,10 @@ export function landSpellDamage(input: {
   });
   // Blight on a plant: the dice's maximum, rolled as no dice at all.
   // A subclass feature's die rides the roll (Enhanced Bond, Arcane Firearm).
-  const rolledExpression = [damageExpression, ...riders.dice].join("+");
+  // Elemental Adept: on a spell of its type every 1 on the dice is a 2
+  // and resistance is ignored (src/lib/srd/feat-combat.ts).
+  const adept = elementalAdeptApplies(sheet, damageType);
+  const rolledExpression = [adept ? floorDamageDice(damageExpression) : damageExpression, ...riders.dice].join("+");
   const maxed = maximizedDamage(mech, enemy, rolledExpression);
   // The card shows the dice as rolled; the save halves or stops what lands.
   // A maximized blow rolls no dice, so it has no card.
@@ -78,7 +82,11 @@ export function landSpellDamage(input: {
   if (damageDealt > 0) {
     const applied = applyEnemyDamage(campaign, turn, encounter, enemy, damageDealt, sheets, sheetsById, floored === null ? damageType : undefined, {
       magical: true,
+      ...(adept ? { ignoreResistance: true } : {}),
     });
+    if (adept) {
+      base.elementalAdept = `Elemental Adept: ${damageType} ignores resistance; every 1 on the dice counted as 2.`;
+    }
     Object.assign(base, {
       damage: damageDealt,
       ...(damageType ? { damageType } : {}),

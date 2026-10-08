@@ -180,10 +180,20 @@ function isPublishedSpellName(name: string): boolean {
 }
 
 export function searchSpells(
-  options: SearchOptions & SpellAuthors & { classSlug?: string; level?: number } = {},
+  options: SearchOptions & SpellAuthors & {
+    classSlug?: string;
+    level?: number;
+    // The spell's level exactly, rather than up to it.
+    exactLevel?: boolean;
+    // Schools, comma-separated ("divination,enchantment").
+    school?: string;
+    // Only spells that make a spell attack roll.
+    attack?: boolean;
+  } = {},
 ): SpellEntry[] {
   const needle = (options.q ?? "").trim().replace(/[%_]/g, "").toLowerCase();
   const classSlug = (options.classSlug ?? "").trim().toLowerCase();
+  const schools = (options.school ?? "").split(",").map((entry) => entry.trim().toLowerCase()).filter(Boolean);
   const offset = Math.max(0, options.offset ?? 0);
   const rows = allPackSpells()
     .filter(
@@ -192,7 +202,9 @@ export function searchSpells(
           row.name.toLowerCase().includes(needle) ||
           row.aliases.some((alias) => alias.toLowerCase().includes(needle))) &&
         (!classSlug || row.classes.some((entry) => entry.includes(classSlug))) &&
-        (options.level === undefined || row.level <= options.level),
+        (options.level === undefined || (options.exactLevel ? row.level === options.level : row.level <= options.level)) &&
+        (!schools.length || schools.includes(row.school.toLowerCase())) &&
+        (!options.attack || /\bspell attack\b/i.test(String(row.data.desc ?? ""))),
     )
     .slice(offset, offset + clampLimit(options.limit));
   // A published name is the published spell's: a homebrew row that takes the

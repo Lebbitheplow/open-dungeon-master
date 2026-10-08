@@ -11,6 +11,8 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { ListHead, useListHead } from "@/app/workshop/ListHead";
 import { rowIcon } from "@/app/workshop/kit";
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import type { TargetParty } from "@/lib/workshop/kind";
 
 // The Party system (docs/workshop-parity-audit.md phase 15): the party a
@@ -68,33 +70,31 @@ export function PartyPanel({
   const [error, setError] = useState("");
   // Bumped after a change so the roster and the library are read again.
   const [version, setVersion] = useState(0);
+  // A roster that did not load is said so, with a way to ask again (issue
+  // 140); "Reading the roster..." never stands in for a refusal.
+  const { loaded, loadError, settle } = useLoadStatus();
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch(`/api/workshops/${workshopId}/pregens`).then((response) =>
-        response.ok ? response.json() : null,
-      ),
-      fetch("/api/characters").then((response) => (response.ok ? response.json() : null)),
-    ])
-      .then(([roster, shelf]) => {
-        if (cancelled) {
-          return;
-        }
-        if (roster?.pregens) {
-          setPregens(roster.pregens);
-        }
-        if (shelf?.characters) {
-          setLibrary(shelf.characters);
-        }
-      })
-      .catch(() => {
-        // transient; the next action reloads
-      });
+      readLoad<{ pregens?: Pregen[] }>(fetch(`/api/workshops/${workshopId}/pregens`), "The roster"),
+      readLoad<{ characters?: LibraryEntry[] }>(fetch("/api/characters"), "Your characters"),
+    ]).then(([roster, shelf]) => {
+      if (cancelled) {
+        return;
+      }
+      settle(roster.error ? roster : shelf.error ? shelf : roster);
+      if (roster.payload?.pregens) {
+        setPregens(roster.payload.pregens);
+      }
+      if (shelf.payload?.characters) {
+        setLibrary(shelf.payload.characters);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [workshopId, version]);
+  }, [workshopId, version, settle]);
 
   async function change(method: "POST" | "DELETE", characterId: string) {
     setBusy(true);
@@ -132,7 +132,10 @@ export function PartyPanel({
         down without one. They ride along in the bundle.
       </p>
 
-      {pregens === null ? (
+      {loadError && (pregens !== null || loaded) ? <LoadFailed error={loadError} onRetry={() => setVersion((current) => current + 1)} /> : null}
+      {pregens === null && loadError ? (
+        <LoadFailed error={loadError} onRetry={() => setVersion((current) => current + 1)} />
+      ) : pregens === null ? (
         <div aria-busy="true">
           <p className="mb-1.5 text-xs text-stone-500">Reading the roster...</p>
           <div className="grid gap-2 sm:grid-cols-2">

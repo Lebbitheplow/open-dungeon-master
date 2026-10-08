@@ -1,5 +1,6 @@
 "use client";
 
+import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { toolChoiceOf } from "@/lib/srd/tool-choices";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -28,8 +29,10 @@ import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOpti
 
 // `priceCp` is the listed price of one, in copper, as the catalog row it was
 // picked from gave it; it is what the purse is charged, and the server
-// charges its own catalog's price again when the sheet is saved.
-export type EquipmentItem = { name: string; qty: number; slug?: string; priceCp?: number };
+// charges its own catalog's price again when the sheet is saved. `magic`
+// marks a row the pack files as a magic item, which the purse refuses in the
+// server's words. Neither is saved (submit.ts).
+export type EquipmentItem = { name: string; qty: number; slug?: string; priceCp?: number; magic?: boolean };
 
 // What the last change set aside, for the notice the wizard shows: the
 // change that did it ("race") and the picks that no longer fit. Null once
@@ -42,6 +45,7 @@ export type DroppedNotice = { because: string; drops: DroppedPick[] };
 // submit payload (submit.ts) reads these unchanged.
 export function useBuilderState({
   initial,
+  initialFeatDescs,
   initialLevel,
   fixedLevel,
   races,
@@ -49,6 +53,10 @@ export function useBuilderState({
   backgrounds,
 }: {
   initial?: CreateSheetInput;
+  // The text of the stored character's feats, by lower-case name, as
+  // fetched (useFeatDescs): a content pack half-feat's point comes off the
+  // stored scores below, so the scores are read back once it is known.
+  initialFeatDescs?: Record<string, string>;
   // The level the stored character reached (its library row's level).
   initialLevel?: number;
   fixedLevel?: number;
@@ -310,8 +318,18 @@ export function useBuilderState({
   // effect twice) it would read this render's picks, which are from before
   // the stored character's were applied, and wipe them.
   const checkedRows = useRef<unknown[] | null>(null);
+  // The stored character's feats, and whether the text of each is at hand:
+  // a content pack half-feat's point comes off the stored scores below, so
+  // they are read back once it is (an unknown feat is remembered as empty,
+  // so the wait ends).
+  const storedFeats = [
+    ...(initial?.feats ?? []),
+    ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
+  ];
+  const storedFeatDescOf = (feat: string) => initialFeatDescs?.[feat.trim().toLowerCase()] ?? authoredFeatDesc(feat) ?? "";
+  const storedFeatsKnown = storedFeats.every((feat) => authoredFeatDesc(feat) || initialFeatDescs?.[feat.trim().toLowerCase()] !== undefined);
   useEffect(() => {
-    if (!races.length || !classes.length || !backgrounds.length) {
+    if (!races.length || !classes.length || !backgrounds.length || !storedFeatsKnown) {
       return;
     }
     const rows = [races, classes, backgrounds];
@@ -328,7 +346,7 @@ export function useBuilderState({
       const base: Record<Ability, number> = { ...withoutAsi };
       // A half-feat's point was added by the server when the character was
       // saved, and is added again when it is saved from here.
-      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeatCount(initial.race)))) {
+      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeatCount(initial.race), storedFeatDescOf))) {
         base[ability] = Math.max(1, base[ability] - 1);
       }
       // Primal Champion's +4 too (a barbarian at 20): the builder adds it
@@ -394,7 +412,7 @@ export function useBuilderState({
     applyReconciled("content pack", reconciled(ids, picks), true);
     // Runs when the option rows change; the picks it reads are this render's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial, races, classes, backgrounds]);
+  }, [initial, storedFeatsKnown, races, classes, backgrounds]);
 
   // Choosing a different race throws away every race-specific pick, since
   // none of them make sense for the new one, and re-checks the rest (a class

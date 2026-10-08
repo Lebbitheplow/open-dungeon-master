@@ -39,8 +39,7 @@ import {
   PlayerMessage,
   SystemMessage,
   copyAction,
-  reportAction,
-} from "@/app/campaigns/[campaignId]/MessageParts";
+  reportAction, disputeAction } from "@/app/campaigns/[campaignId]/MessageParts";
 import type { CampaignLocation, MediaStatus } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 // A right-click on the prose opens the passage's menu, but a long press must
@@ -81,6 +80,7 @@ export const MessageItem = memo(function MessageItem({
   mine,
   blocked,
   onReport,
+  onDispute,
   cast,
 }: {
   message: CampaignMessage;
@@ -93,6 +93,8 @@ export const MessageItem = memo(function MessageItem({
   blocked: boolean;
   // Flag a DM passage or another player's message to this server's admins.
   onReport?: (message: CampaignMessage) => void;
+  // Object to a narrated ruling; whoever steers the story settles it.
+  onDispute?: (message: CampaignMessage) => void;
   // Whoever runs the story may put a picture of their own under a passage.
   canIllustrate: boolean;
   rollsById: Map<string, StoredRoll>;
@@ -301,6 +303,9 @@ export const MessageItem = memo(function MessageItem({
       });
     }
     actions.push(copyAction(message));
+    if (onDispute) {
+      actions.push(disputeAction(message, onDispute));
+    }
     if (onReport) {
       actions.push(reportAction(message, onReport, true));
     }

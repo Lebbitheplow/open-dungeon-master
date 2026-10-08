@@ -19,6 +19,7 @@
 //   mote            rolls.ts, forced-save.ts (Mote of Potential)
 //   swarm_prone     authored-spend-more.ts (Mighty Swarm)
 
+import { standsCheaply } from "@/lib/srd/feat-combat";
 import { activeAuthored, resolveFormula, type AuthoredSheet } from "@/lib/srd/authored-effects";
 import type { NaturalWeapon } from "@/lib/srd/authored-effects-types";
 import type { SrdWeapon } from "@/lib/srd/weapons";
@@ -217,6 +218,10 @@ export const VIGILANT_PREFIX = "vigilant:";
 // own price (Tipsy Sway: 5 feet).
 export function standUpTiles(sheet: AuthoredSheet, speedTiles: number): number {
   const found = activeAuthored(sheet, "stand_cost")[0];
+  // Athlete: standing from prone costs 5 feet (src/lib/srd/feat-combat.ts).
+  if (!found && standsCheaply(sheet as { feats?: string[]; features?: Array<{ name: string }> })) {
+    return 1;
+  }
   return found ? Math.max(0, Math.round(found.effect.feet / 5)) : Math.floor(speedTiles / 2);
 }
 

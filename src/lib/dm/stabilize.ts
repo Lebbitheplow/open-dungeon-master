@@ -11,6 +11,9 @@
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { patchSheet } from "@/lib/db/sheets";
+import { holdsFeat } from "@/lib/srd/feat-effects";
+import { survivorTended } from "@/lib/srd/feat-combat";
+import { removeConditions } from "@/lib/dm/condition-logic";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
@@ -168,7 +171,14 @@ export function handleStabilize(
   let check: Record<string, unknown> = {};
   if (method === "check") {
     const resolved = resolveRollExpression(
-      { kind: "skill_check", skill: "medicine", dc: STABILIZE_DC, characterId: healer.id },
+      {
+        kind: "skill_check",
+        skill: "medicine",
+        dc: STABILIZE_DC,
+        characterId: healer.id,
+        // Survivor: Medicine checks to stabilize them have advantage.
+        ...(survivorTended(sheet) ? { advantage: "advantage" as const, advantageReason: "Survivor: Medicine checks to stabilize them have advantage" } : {}),
+      },
       healer,
       rollExtrasFor(campaign, healer, "skill_check"),
     );
@@ -214,6 +224,24 @@ export function handleStabilize(
   if (kitPatch) {
     write(campaign, turnId, healer, "use_item", { item: "healer's kit" }, reason, kitPatch);
   }
+  // Healer: a creature stabilized with the kit also regains 1 hit point,
+  // which wakes them (src/lib/srd/feat-combat.ts).
+  if (method === "kit" && holdsFeat(healer, "Healer")) {
+    const nextTrack = { successes: 0, failures: 0, stable: false, dead: false };
+    const woken = removeConditions(sheet.conditions, sheet.conditionMeta, ["unconscious", "dying"]);
+    write(campaign, turnId, sheet, "stabilize", { deathSaves: nextTrack, healer: healer.name, currentHp: 1 }, reason, {
+      deathSaves: nextTrack,
+      currentHp: 1,
+      conditions: woken.conditions,
+      conditionMeta: woken.meta,
+    });
+    return {
+      ok: true,
+      stabilized: true,
+      ...check,
+      note: `${how}. Healer: ${sheet.name} is stable and regains 1 hit point, awake again.`,
+    };
+  }
   const wait = rollStableTimer(campaign, sheet);
   const nextTrack = { ...track, stable: true };
   write(campaign, turnId, sheet, "stabilize", { deathSaves: nextTrack, healer: healer.name }, reason, {
@@ -226,5 +254,76 @@ export function handleStabilize(
     stabilized: true,
     ...check,
     note: `${how}. ${sheet.name} is stable: no more death saves, but still unconscious at 0 HP. They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}, or sooner if healed.`,
+  };
+}
+
+// A creature a Healer has already tended since its last rest.
+export const TENDED = "tended by a healer";
+
+// Healer's kit, in a Healer's hands (src/lib/srd/feat-combat.ts): as an
+// action, one use restores 1d6 + 4 hit points plus the creature's Hit Dice
+// count, once per creature per rest. Null when this is not that (the kit
+// is not carried, the user lacks the feat, the item is something else);
+// the amount comes back for the heal mutation to apply.
+export function healerKitUse(
+  campaign: Campaign,
+  turnId: string,
+  healer: CharacterSheet,
+  target: CharacterSheet,
+  itemName: string,
+): { error: string } | { ok: true; amount: number; note: string } | null {
+  if (!/healer'?s kit/i.test(itemName) || !holdsFeat(healer, "Healer")) {
+    return null;
+  }
+  const kit = findCarriedItem(healer.equipment, "healer's kit");
+  if (!kit || (kit.charges ?? HEALERS_KIT_USES) <= 0) {
+    return { error: `${healer.name} carries no healer's kit with a use left. Nothing was spent.` };
+  }
+  if (target.deathSaves?.dead) {
+    return { error: `${target.name} is dead; a healer's kit cannot help them. Nothing was spent.` };
+  }
+  if (target.conditions.some((entry) => entry.toLowerCase() === TENDED)) {
+    return { error: `${target.name} has already been tended with a healer's kit since their last rest; the Healer feat works once per creature per rest. Nothing was spent.` };
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  if (encounter) {
+    const able = canAct({ sheet: healer, encounter, kind: "action" });
+    if (!able.ok) {
+      return { error: able.error };
+    }
+    const far = outOfTouch(encounter.id, healer, target);
+    if (far && healer.id !== target.id) {
+      return { error: far };
+    }
+    const budget = budgetFor(encounter, healer.id, attacksAllowedFor(healer));
+    if (budget) {
+      const spent = spendAction(budget, "action", "the healer's kit", healer.name);
+      if (!spent.ok) {
+        return { error: spent.error };
+      }
+      storeBudget(encounter, spent.budget);
+    }
+  }
+  const used = kitAfterUse(healer.equipment, kit);
+  write(campaign, turnId, healer, "use_item", { item: "healer's kit", healer: true }, "Healer", { equipment: used.equipment });
+  const dice = Math.max(0, target.hitDice?.total ?? target.level);
+  const outcome = rollExpression(`1d6+4+${dice}`);
+  const roll = insertRoll({
+    campaignId: campaign.id,
+    characterId: healer.id,
+    requestedBy: "dm",
+    kind: "custom",
+    detail: `Healer: a healer's kit use on ${target.name} (1d6 + 4 + ${dice} Hit Dice)`,
+    result: outcome,
+  });
+  publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
+  const tended = patchSheet(target.id, { conditions: [...target.conditions, TENDED] });
+  if (tended) {
+    publishPersisted(campaign.id, "sheet_updated", { sheet: tended });
+  }
+  return {
+    ok: true,
+    amount: Math.max(0, outcome.total),
+    note: `Healer: ${healer.name} spends a use of their healer's kit (${used.left} left) on ${target.name}, who regains ${outcome.total} hit points (1d6 + 4 + ${dice} Hit Dice); not again for ${target.name} until they rest.`,
   };
 }

@@ -33,6 +33,10 @@ const ICON_ALIASES: Record<string, { kind: IconKind; slug: string }> = {
   "feature/indomitable": { kind: "feature", slug: "indomitable-1-use" },
   "feature/lay-on-hands-hp-pool": { kind: "feature", slug: "lay-on-hands" },
   "feature/maneuver": { kind: "family", slug: "option-maneuver" },
+  // The feats' counters (src/lib/srd/class-resources.ts) wear paintings
+  // of their kin.
+  "feature/luck-points": { kind: "feature", slug: "bend-luck" },
+  "feature/inspiring-leader": { kind: "feature", slug: "combat-inspiration" },
 };
 
 export function iconPath(kind: IconKind, key: string): string {

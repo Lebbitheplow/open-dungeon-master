@@ -126,7 +126,10 @@ export function RecapPanel({ campaign }: { campaign: HomeCampaign }) {
 // The same slot when the account has no campaigns at all. Kept word for
 // word from the old dashboard: it is a statement about the account, which
 // is why a failed list fetch never shows it.
-export function EmptyHero({ onNewCampaign }: { onNewCampaign: () => void }) {
+// `canCreate` is false on a server whose admin starts every campaign
+// (src/lib/shared-host.ts): the invitation then points at the room code
+// instead of a door this account cannot open.
+export function EmptyHero({ onNewCampaign, canCreate = true }: { onNewCampaign: () => void; canCreate?: boolean }) {
   return (
     <div className="ts-title-block">
       <span className="ts-eyebrow ts-reveal" style={{ animationDelay: "140ms" }}>Your first tale</span>
@@ -134,14 +137,18 @@ export function EmptyHero({ onNewCampaign }: { onNewCampaign: () => void }) {
         <span className="ts-title-face">Every campaign starts with an empty table.</span>
       </h1>
       <p className="ts-lede ts-reveal" style={{ animationDelay: "420ms" }}>
-        Create one and invite your friends, or join theirs with a room code below.
+        {canCreate
+          ? "Create one and invite your friends, or join theirs with a room code below."
+          : "On this server an administrator starts the campaigns. Ask them for a room code and join below."}
       </p>
-      <div className="ts-actions ts-reveal" style={{ animationDelay: "640ms" }}>
-        <button type="button" onClick={onNewCampaign} className="ts-enter motion-magnet">
-          <span className="ts-enter-sheen" aria-hidden="true" />
-          <Swords className="size-4" aria-hidden="true" /> Forge a new world
-        </button>
-      </div>
+      {canCreate ? (
+        <div className="ts-actions ts-reveal" style={{ animationDelay: "640ms" }}>
+          <button type="button" onClick={onNewCampaign} className="ts-enter motion-magnet">
+            <span className="ts-enter-sheen" aria-hidden="true" />
+            <Swords className="size-4" aria-hidden="true" /> Forge a new world
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

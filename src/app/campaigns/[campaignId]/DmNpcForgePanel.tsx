@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Listed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import {
   Archive,
   ArchiveRestore,
@@ -96,21 +98,22 @@ export function DmNpcForgePanel({
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
   // effect linter, which is what it is.
+  // A refused or failed list is settled, not dropped (issue 140), so the
+  // list says "nobody written yet" only once the server has said so.
+  const { loaded, loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
-      fetch(`/api/campaigns/${campaignId}/dm/npcs`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { npcs: Npc[]; graph: RelationGraph; genre?: string } | null) => {
-          if (payload) {
-            setNpcs(payload.npcs);
-            setGraph(payload.graph);
-            setGenre(payload.genre ?? "");
+      readLoad<{ npcs: Npc[]; graph: RelationGraph; genre?: string }>(fetch(`/api/campaigns/${campaignId}/dm/npcs`), "The cast").then(
+        (outcome) => {
+          if (outcome.payload) {
+            setNpcs(outcome.payload.npcs);
+            setGraph(outcome.payload.graph);
+            setGenre(outcome.payload.genre ?? "");
           }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+          settle(outcome);
+        },
+      ),
+    [campaignId, settle],
   );
 
   useEffect(() => {
@@ -481,7 +484,9 @@ export function DmNpcForgePanel({
     return (
       <div className="space-y-3">
         {graphView}
-        <CastRows npcs={npcs} onOpen={open} factionNames={new Map(factions.map((faction) => [faction.id, faction.name]))} />
+        <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Calling the cast...">
+          <CastRows npcs={npcs} onOpen={open} factionNames={new Map(factions.map((faction) => [faction.id, faction.name]))} />
+        </Listed>
         <Sheet
           open={editorOpen}
           onOpenChange={setEditorOpen}
@@ -498,7 +503,9 @@ export function DmNpcForgePanel({
     <div className="space-y-3">
       {graphView}
       {/* The chips and the editor fields draw their own heads and cards. */}
-      <CastChips npcs={npcs} selectedId={selectedId} onOpen={open} />
+      <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Calling the cast...">
+        <CastChips npcs={npcs} selectedId={selectedId} onOpen={open} />
+      </Listed>
       {editor}
     </div>
   );

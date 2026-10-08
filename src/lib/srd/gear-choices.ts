@@ -12,6 +12,12 @@
 //   - An either-or line whose every alternative is a catalog item ("a dagger
 //     or light hammer") is a pick, stored on the sheet as the alternative's
 //     words (backgroundChoices.gear); unanswered, the book's first.
+//   - An alternative that is a tool KIND rather than an item ("one set of
+//     artisan's tools or one instrument", "lute or other musical
+//     instrument") opens on the tools of that kind, the way a class kit's
+//     "any musical instrument" does; the pick is stored as the tool's name,
+//     and until it is made the tool the character is trained with, or the
+//     kind's first (Smoebo's follow-up on issue #127).
 //
 // Anything else stays as written, as before. Pure, and shared by the builder
 // (what the chips show) and the server (what the free kit is), so the two
@@ -84,7 +90,26 @@ export function fillToolLine(
 
 // ---- an either-or line, answered by the player ----
 
-export type GearAlternative = { label: string; items: KitItem[] };
+export type GearAlternative = {
+  // The book's words for the alternative.
+  label: string;
+  // What it comes to; for a kind, the tool it currently comes to.
+  items: KitItem[];
+  // A tool kind rather than an item: every tool it may come to, catalog
+  // names, in the SRD's order.
+  options?: string[];
+};
+
+// The tools a kind phrase ("artisan's tools", "other musical instrument",
+// "gaming set") may come to, or null when the phrase is not a kind.
+function kindOptions(phrase: string): string[] | null {
+  const text = lower(phrase).replace(/^(?:other|any|another)\s+/, "");
+  const kinds = TOOL_KINDS.filter((kind) => kind.pattern.test(text));
+  if (!kinds.length || resolveGearLine(phrase).resolved) {
+    return null;
+  }
+  return kinds.flatMap((kind) => kind.from.map(toolItemName));
+}
 
 const LEAD_IN = /^(?:a set of either|one set of either|either|a set of|one set of|a|an|one)\s+/i;
 
@@ -121,6 +146,10 @@ function resolveAlternative(phrase: string): { items: KitItem[]; resolved: boole
 // alternative is something the catalog does not know (the line then stays
 // as written, which is what #114 decided for it).
 export function gearAlternatives(line: string): GearAlternative[] | null {
+  // "(one of your choice)": the tool grant's line, not an either-or.
+  if (isToolChoiceLine(line)) {
+    return null;
+  }
   let text = line.trim().replace(/\s+/g, " ").replace(/\.$/, "");
   text = text.replace(/\s*\(if proficient\)/i, "");
   // "Hunting gear (a shortbow with 20 arrows, or a hunting trap)": the
@@ -138,7 +167,7 @@ export function gearAlternatives(line: string): GearAlternative[] | null {
   } else {
     text = text.replace(/\s*\([^)]*\)/g, "");
   }
-  if (!/\bor\b/i.test(text) || isToolChoiceLine(text)) {
+  if (!/\bor\b/i.test(text)) {
     return null;
   }
   // "A donkey or mule with bit and bridle": what follows "with" rides on
@@ -157,6 +186,11 @@ export function gearAlternatives(line: string): GearAlternative[] | null {
   const alternatives: GearAlternative[] = [];
   for (const part of parts) {
     const phrase = tail ? `${part} and ${tail}` : part;
+    const options = tail ? null : kindOptions(part);
+    if (options) {
+      alternatives.push({ label: part.replace(/^./, (first) => first.toUpperCase()), items: [{ name: options[0], qty: 1 }], options });
+      continue;
+    }
     let resolved = resolveAlternative(phrase);
     // "cold-weather or warm-weather clothes": an earlier alternative may
     // share the last one's noun.
@@ -169,7 +203,38 @@ export function gearAlternatives(line: string): GearAlternative[] | null {
     }
     alternatives.push({ label: phrase.replace(/^./, (first) => first.toUpperCase()), items: resolved.items });
   }
+  // "Lute or other musical instrument": the kind is the instruments the
+  // line did not already name.
+  const named = new Set(alternatives.filter((entry) => !entry.options).flatMap((entry) => entry.items.map((item) => lower(item.name))));
+  for (const entry of alternatives) {
+    if (entry.options && named.size) {
+      entry.options = entry.options.filter((name) => !named.has(lower(name)));
+      entry.items = [{ name: entry.options[0], qty: 1 }];
+    }
+  }
   return alternatives;
+}
+
+// A "tool of your choice" line as a kind choice, for when no training can
+// fill it: a background that hands out "a musical instrument of your
+// choice" without teaching one (a homebrew row, say) still lets the player
+// name it, instead of pointing at a pick the Calling step never asks for.
+export function kindAlternatives(line: string): GearAlternative[] | null {
+  const text = line.trim().replace(/\s*\([^)]*\)/g, "").replace(/\s+(?:of your choice|one of your choice)\s*$/i, "");
+  const parts = text
+    .replace(LEAD_IN, "")
+    .split(/\s*,\s*or\s+|\s+or\s+|\s*,\s*/i)
+    .map((part) => part.trim().replace(LEAD_IN, ""))
+    .filter(Boolean);
+  const alternatives: GearAlternative[] = [];
+  for (const part of parts) {
+    const options = kindOptions(part);
+    if (!options) {
+      return null;
+    }
+    alternatives.push({ label: part.replace(/^./, (first) => first.toUpperCase()), items: [{ name: options[0], qty: 1 }], options });
+  }
+  return alternatives.length ? alternatives : null;
 }
 
 // ---- the whole kit ----
@@ -180,6 +245,9 @@ export type BackgroundGearChoice = {
   alternatives: GearAlternative[];
   // Which alternative the sheet carries.
   chosen: number;
+  // The words the sheet stores for it (backgroundChoices.gear): the
+  // alternative's, or the tool's name when the alternative is a kind.
+  pick: string;
 };
 
 export type BackgroundKit = {
@@ -211,26 +279,50 @@ export function expandBackgroundGear(
       names.push(line);
       continue;
     }
+    let alternatives: GearAlternative[] | null = null;
     if (isToolChoiceLine(line)) {
       const item = fillToolLine(line, { tools: input.tools, backgroundTools: input.backgroundTools, used });
-      toolLines.push({ line, item });
-      names.push(item ?? line);
-      continue;
+      // No tool to fill it from and no pick owed on the Calling step: the
+      // player names the tool here instead.
+      alternatives = item || splitToolGrants(input.backgroundTools).choices.length ? null : kindAlternatives(line);
+      if (!alternatives) {
+        toolLines.push({ line, item });
+        names.push(item ?? line);
+        continue;
+      }
     }
-    const alternatives = gearAlternatives(line);
+    alternatives ??= gearAlternatives(line);
     if (!alternatives) {
       names.push(line);
       continue;
     }
     const asked = (input.picks[choices.length] ?? "").trim();
+    // A pick is the alternative's words, or, for a kind, the tool's name.
     let chosen = asked ? alternatives.findIndex((entry) => lower(entry.label) === lower(asked)) : 0;
+    let named: string | undefined;
+    if (asked && chosen < 0) {
+      chosen = alternatives.findIndex((entry) => entry.options?.some((name) => lower(name) === lower(asked)));
+      named = alternatives[chosen]?.options?.find((name) => lower(name) === lower(asked));
+    }
     if (chosen < 0) {
       problems.push(
         `The background's kit offers ${alternatives.map((entry) => entry.label.toLowerCase()).join(" or ")}; "${asked}" is not one of them.`,
       );
       chosen = 0;
     }
-    choices.push({ line, alternatives, chosen });
+    const taken = alternatives[chosen];
+    if (taken.options) {
+      // Unnamed: a tool of the kind the character is trained with, not yet
+      // handed out by another line, else the kind's first.
+      const held = input.tools.map(lower);
+      const tool =
+        named ??
+        taken.options.find((name) => held.includes(lower(name)) && !used.has(lower(name))) ??
+        taken.options[0];
+      used.add(lower(tool));
+      alternatives = alternatives.map((entry, at) => (at === chosen ? { ...entry, items: [{ name: tool, qty: 1 }] } : entry));
+    }
+    choices.push({ line, alternatives, chosen, pick: taken.options ? alternatives[chosen].items[0].name : taken.label });
     for (const item of alternatives[chosen].items) {
       for (let count = 0; count < item.qty; count += 1) {
         names.push(item.name);

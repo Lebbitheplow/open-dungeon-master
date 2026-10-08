@@ -29,16 +29,64 @@ function featRow(name: string): AuthoredFeat | null {
   return FEATS.find((feat) => key(feat.name) === wanted) ?? null;
 }
 
+// A content pack feat with the same rules as one of ODM's, under another
+// name (issue #147): Level Up's Attentive is Alert, its Hardy Adventurer
+// is Tough. The engines read the twin as the feat they know. Only feats
+// whose every benefit the engine applies is the same are listed; a near
+// twin (Battle Caster's expertise die, Powerful Attacker's disadvantage)
+// stays its own feat, and so does one whose name a class feature shares
+// (Level Up's Skirmisher is Mobile, but the Scout ranger's feature is
+// named Skirmisher and this table reads features too).
+export const FEAT_TWINS: Record<string, string> = {
+  attentive: "alert",
+  intuitive: "observant",
+  "hardy adventurer": "tough",
+  "crossbow expertise": "crossbow expert",
+  "power caster": "spell sniper",
+  dungeoneer: "dungeon delver",
+  "heavy armor expertise": "heavy armor master",
+  tenacious: "resilient",
+  "street fighter": "tavern brawler",
+  "dual-wielding expert": "dual wielder",
+  "rite master": "ritual caster",
+  deflector: "defensive duelist",
+  "primordial caster": "elemental adept",
+  "stealth expert": "skulker",
+  "shield focus": "shield master",
+  "polearm savant": "polearm master",
+  "guarded warrior": "sentinel",
+  "rallying speaker": "inspiring leader",
+  "keen intellect": "keen mind",
+  thespian: "actor",
+  athletic: "athlete",
+  "mounted warrior": "mounted combatant",
+  "medium armor expert": "medium armor master",
+  "linguistics expert": "linguist",
+  "heavily outfitted": "heavily armored",
+  "moderately outfitted": "moderately armored",
+  "lightly outfitted": "lightly armored",
+  "weapons specialist": "weapon master",
+  fortunate: "lucky",
+  "mystical talent": "magic initiate",
+  skillful: "skilled",
+};
+
+// The feat the engines know a name as: its twin's, or its own, lower case.
+export function featTwinOf(name: string): string {
+  const own = key(name);
+  return FEAT_TWINS[own] ?? own;
+}
+
 // A sheet holds a feat when it is in sheet.feats, or (for sheets written by
-// the DM's tools) among its features by the same name.
+// the DM's tools) among its features by the same name, or holds its twin.
 export function holdsFeat(
   sheet: { feats?: string[]; features?: Array<{ name: string }> },
   name: string,
 ): boolean {
   const wanted = key(name);
   return (
-    (sheet.feats ?? []).some((feat) => key(feat) === wanted) ||
-    (sheet.features ?? []).some((feature) => key(feature.name) === wanted)
+    (sheet.feats ?? []).some((feat) => featTwinOf(feat) === wanted) ||
+    (sheet.features ?? []).some((feature) => featTwinOf(feature.name) === wanted)
   );
 }
 
@@ -53,22 +101,38 @@ export function authoredFeatDesc(name: string): string | null {
 
 export type FeatIncrease = { from: Ability[]; amount: 1 };
 
-// The ability increase a feat opens with: "Increase your Charisma by 1, to a
-// maximum of 20" (from: cha), "Strength or Dexterity" (a choice of two), "one
-// ability score" (any). Null for a feat that raises nothing.
-export function featAbilityIncrease(name: string): FeatIncrease | null {
-  const row = featRow(name);
-  const clause = row ? /increase ([^.]*?) by 1, to a maximum of 20/i.exec(row.desc)?.[1] : null;
+// The ability increase a feat's text opens with, in every wording the
+// packs use: ODM's "Increase your Charisma by 1, to a maximum of 20" (from:
+// cha), "Strength or Dexterity" (a choice of two), "one ability score"
+// (any); Tome of Heroes' "Increase your Wisdom score by 1, up to a maximum
+// of 20"; Level Up's "Raise your Strength attribute by 1, up to the
+// attribute cap of 20", "Your Strength or Dexterity score increases by 1",
+// "An ability score of your choice increases by 1" and "Choose an
+// attribute and raise it by 1". Null for text that raises nothing.
+export function featAbilityIncreaseFrom(desc: string | null | undefined): FeatIncrease | null {
+  const text = (desc ?? "").toLowerCase().replace(/[*_]/g, "").replace(/\s+/g, " ");
+  const clause = /\bchoose an? (?:attribute|ability score) and (?:raise|increase) it by 1\b|\b(?:an|one|any) (?:ability score|attribute) of your choice increases by 1\b/.test(text)
+    ? "one ability score"
+    : (/\b(?:increase|raise) (?:your )?([a-z ,]*?)(?: score| attribute)? by 1\b/.exec(text)?.[1] ??
+      /\b(?:your )?((?:[a-z]+(?: or [a-z]+)?)) (?:score|attribute) increases by 1\b/.exec(text)?.[1] ??
+      null);
   if (!clause) {
     return null;
-  }
-  if (/one ability score/i.test(clause)) {
-    return { from: [...ABILITIES], amount: 1 };
   }
   const from = Object.entries(ABILITY_WORDS)
     .filter(([word]) => new RegExp(`\\b${word}\\b`, "i").test(clause))
     .map(([, ability]) => ability);
-  return from.length ? { from, amount: 1 } : null;
+  if (from.length) {
+    return { from, amount: 1 };
+  }
+  return /\b(?:ability|attribute)\b/.test(clause) ? { from: [...ABILITIES], amount: 1 } : null;
+}
+
+// The ability increase a feat opens with: ODM's feats by name, a content
+// pack's from the text handed in (the catalog's, or the builder's fetch).
+// Null for a feat that raises nothing, or a pack feat with no text at hand.
+export function featAbilityIncrease(name: string, desc?: string | null): FeatIncrease | null {
+  return featAbilityIncreaseFrom(featRow(name)?.desc ?? desc ?? "");
 }
 
 // The scores after taking a feat. `chosen` names the ability where the feat
@@ -79,8 +143,9 @@ export function applyFeatIncrease(
   abilities: Record<Ability, number>,
   feat: string,
   chosen?: Ability | null,
+  desc?: string | null,
 ): { abilities: Record<Ability, number>; raised: Ability | null } | { error: string } {
-  const increase = featAbilityIncrease(feat);
+  const increase = featAbilityIncrease(feat, desc);
   if (!increase) {
     return { abilities, raised: null };
   }
@@ -96,9 +161,14 @@ export function applyFeatIncrease(
   };
 }
 
-// Resilient: proficiency in saving throws of the ability it raised.
-export function featSaveProficiency(feat: string, raised: Ability | null): Ability | null {
-  return key(feat) === "resilient" ? raised : null;
+// Resilient: proficiency in saving throws of the ability it raised. A pack
+// feat says so in its text (Level Up's Tenacious: "become proficient with
+// saving throws using the selected attribute").
+export function featSaveProficiency(feat: string, raised: Ability | null, desc?: string | null): Ability | null {
+  if (featTwinOf(feat) === "resilient") {
+    return raised;
+  }
+  return /\bsaving throws? (?:using|with|of) (?:the |that )?(?:selected|chosen) (?:attribute|ability|score)\b/i.test(desc ?? "") ? raised : null;
 }
 
 // ---- numbers read from sheet.feats ----

@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, EyeOff, Flag } from "lucide-react";
+import { Copy, EyeOff, Flag, Scale } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -31,6 +31,20 @@ export function copyAction(message: CampaignMessage): MessageAction {
     onSelect: () => {
       void navigator.clipboard?.writeText(message.content).catch(() => {});
     },
+  };
+}
+
+// A player's objection to a narrated ruling (DisputeDialog.tsx): the
+// steerer upholds or overrules it, or the table votes.
+export function disputeAction(message: CampaignMessage, onDispute: (message: CampaignMessage) => void): MessageAction {
+  return {
+    id: "dispute",
+    name: "Dispute",
+    label: "Dispute this ruling",
+    hint: "Dispute: object to what the narrator ruled here; whoever steers the story settles it, or the table votes",
+    glyph: "system-rules",
+    icon: <Scale className="size-3.5" />,
+    onSelect: () => onDispute(message),
   };
 }
 

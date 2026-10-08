@@ -1,5 +1,6 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { Pin, Save } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -8,7 +9,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { KitButton, PanelLoading, panelField } from "./PanelKit";
+import { KitButton, LoadFailed, panelField, PanelLoading } from "./PanelKit";
 import { CalendarSection } from "@/app/campaigns/[campaignId]/CalendarSection";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 
@@ -141,6 +142,10 @@ export function RulesPanel({
   isDm: boolean;
 }) {
   const [loading, setLoading] = useState(true);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [text, setText] = useState("");
   const [savedText, setSavedText] = useState("");
   const [chunks, setChunks] = useState<RuleChunkView[]>([]);
@@ -151,25 +156,23 @@ export function RulesPanel({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/rules`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!cancelled && data) {
-          setText(String(data.text ?? ""));
-          setSavedText(String(data.text ?? ""));
-          setChunks(Array.isArray(data.chunks) ? data.chunks : []);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
+    readLoad<{ text?: unknown; chunks?: unknown }>(fetch(`/api/campaigns/${campaignId}/rules`), "The house rules").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      const data = outcome.payload;
+      if (data) {
+        setText(String(data.text ?? ""));
+        setSavedText(String(data.text ?? ""));
+        setChunks(Array.isArray(data.chunks) ? (data.chunks as RuleChunkView[]) : []);
+      }
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [campaignId, reloads, settle]);
 
   async function saveText() {
     setSaving(true);
@@ -294,7 +297,7 @@ export function RulesPanel({
         ) : savedText ? (
           <p className="reveal whitespace-pre-wrap text-xs leading-5 text-stone-400">{savedText}</p>
         ) : (
-          <EmptyState size="sm" art="board" title="No house rules set." />
+          (loadError ? <LoadFailed error={loadError} onRetry={() => { setLoading(true); setReloads((current) => current + 1); }} /> : loaded ? <EmptyState size="sm" art="board" title="No house rules set." /> : null)
         )}
       </div>
 

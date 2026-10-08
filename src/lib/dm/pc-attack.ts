@@ -24,6 +24,7 @@ import { spendGiantKiller } from "@/lib/dm/reaction-attacks";
 import { withAmmoCount } from "@/lib/srd/ammunition";
 import { OPEN_HAND_CHOICES } from "@/lib/dm/attack-onhit";
 import { spendInspirationCounter } from "@/lib/dm/roll-riders";
+import { spendLuckCounter } from "@/lib/srd/class-resources";
 import { moteBurst, moteOf } from "@/lib/dm/authored-mote";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -94,12 +95,32 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           enum: ["martial arts", "frenzy", "feature"],
           description:
-            "A bonus-action attack a feature grants: 'martial arts' (a monk's unarmed strike after taking the Attack action with an unarmed strike or monk weapon; send weapon 'unarmed strike'), 'frenzy' (a raging Berserker's melee weapon attack), or 'feature' (a subclass's bonus weapon attack: Battle Magic or War Magic after casting with the action, Sudden Strike or Curving Shot after attacking, Telekinetic Master while concentrating on telekinesis; the server checks the feature and the turn). The server spends the bonus action.",
+            "A bonus-action attack a feature grants: 'martial arts' (a monk's unarmed strike after taking the Attack action with an unarmed strike or monk weapon; send weapon 'unarmed strike'), 'frenzy' (a raging Berserker's melee weapon attack), or 'feature' (a subclass's bonus weapon attack: Battle Magic or War Magic after casting with the action, Sudden Strike or Curving Shot after attacking, Telekinetic Master while concentrating on telekinesis; or a feat's: Great Weapon Master after a melee crit or kill, Polearm Master's butt-end strike after an Attack action with a polearm (1d4 bludgeoning), Crossbow Expert's hand crossbow shot after an Attack action with a one-handed weapon, Charger's melee attack after a Dash; the server checks the feature and the turn). The server spends the bonus action.",
         },
         stunningStrike: {
           type: "boolean",
           description:
             "Monk 5+: Stunning Strike on this melee weapon hit. The server spends 1 ki on a hit and rolls the target's CON save against the ki DC; a failed save stuns it.",
+        },
+        luck: {
+          type: "boolean",
+          description:
+            "Lucky: spend a luck point for an extra d20 on this attack roll, the best kept. The server checks the feat and spends the point; ignored without one left.",
+        },
+        stunShot: {
+          type: "boolean",
+          description:
+            "Stunning Sniper (a Tome of Heroes feat): on a ranged weapon critical hit, stun the target until the start of the shooter's next turn instead of doubling the damage. The player's choice before the roll; the server checks the feat.",
+        },
+        charged: {
+          type: "boolean",
+          description:
+            "Charger's bonus-action attack after a Dash (bonusAttack 'feature'): true when they moved at least 10 feet in a straight line at the target first, which adds 5 damage.",
+        },
+        powerAttack: {
+          type: "boolean",
+          description:
+            "The accuracy-for-damage trade: Great Weapon Master (a heavy melee weapon) or Sharpshooter (a ranged weapon) take -5 on this attack roll for +10 damage; Level Up's Powerful Attacker rolls a heavy weapon attack at disadvantage for +10; Deadeye drops the proficiency bonus from a ranged attack roll for twice it on the damage. The player's choice before the roll; the server checks the feat and the weapon. After a melee critical hit or a kill, a Great Weapon Master's bonus-action attack is bonusAttack 'feature'.",
         },
         reckless: {
           type: "boolean",
@@ -207,6 +228,14 @@ const pcAttackArgsSchema = z.object({
     z.enum(BONUS_ATTACKS).optional(),
   ),
   stunningStrike: z.coerce.boolean().optional(),
+  powerAttack: z.coerce.boolean().optional(),
+  // Stunning Sniper: a ranged critical hit stuns instead of doubling.
+  stunShot: z.coerce.boolean().optional(),
+  // Lucky: a luck point for an extra d20 on this attack roll, the best kept.
+  luck: z.coerce.boolean().optional(),
+  // Charger: they ran at least 10 feet straight at the target before the
+  // bonus-action attack, for its +5.
+  charged: z.coerce.boolean().optional(),
   reckless: z.coerce.boolean().optional(),
   nonlethal: z.coerce.boolean().optional(),
   hordeBreaker: z.coerce.boolean().optional(),
@@ -354,8 +383,11 @@ function spendPcAttack(plan: AttackPlan) {
   // whether it lands or not), an attack ends Invisibility (not Greater
   // Invisibility, attack-marks.ts), and one-shot riders like True Strike and
   // a held Help are spent by this roll: clear them all together.
+  // Skulker keeps the hiding through a ranged attack's roll; a hit spends it
+  // (pc-attack-plan.ts hitSpent).
+  const keepsHiding = plan.hitSpent.includes("hidden");
   const spentConditions = [
-    ...(sheet.conditions.some((entry) => entry.toLowerCase() === "hidden") ? ["hidden"] : []),
+    ...(!keepsHiding && sheet.conditions.some((entry) => entry.toLowerCase() === "hidden") ? ["hidden"] : []),
     ...invisibilityEndedByAction(sheet),
     // An attack ends the attacker's own Sanctuary (spell-defenses.ts).
     ...sanctuaryEndedByAttack(sheet),
@@ -370,6 +402,17 @@ function spendPcAttack(plan: AttackPlan) {
     });
     if (revealed) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: revealed });
+    }
+  }
+  // A luck point spent on this roll (Lucky).
+  if (plan.extras.luck) {
+    const fresh = getSheetById(sheet.id) ?? sheet;
+    const lucked = spendLuckCounter(fresh.resources);
+    if (lucked) {
+      const spent = patchSheet(sheet.id, { resources: lucked });
+      if (spent) {
+        publishPersisted(campaign.id, "sheet_updated", { sheet: spent });
+      }
     }
   }
   // Inspiration spent for this roll's advantage.

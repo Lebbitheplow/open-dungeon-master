@@ -98,6 +98,11 @@
       "desc": "You have three luck points, regained on a long rest. Spend one to roll an extra d20 on your own attack roll, ability check or saving throw and choose which die to use, or to roll an extra d20 on an attack made against you and choose which the attacker uses."
     },
     {
+      "name": "Magic Initiate",
+      "prerequisite": "",
+      "desc": "Choose a class: bard, cleric, druid, sorcerer, warlock or wizard. You learn two cantrips of your choice from that class's spell list. Choose one 1st-level spell from the same list: you learn it and can cast it once without expending a spell slot, at its lowest level, and again after a long rest. Your spellcasting ability for these spells depends on the class you chose: Charisma for bard, sorcerer or warlock; Wisdom for cleric or druid; Intelligence for wizard."
+    },
+    {
       "name": "Mage Slayer",
       "prerequisite": "",
       "desc": "When a creature within 5 feet casts a spell you can use your reaction to attack it. When you damage a creature concentrating on a spell it has disadvantage on the concentration save, and you have advantage on saves against spells cast by creatures within 5 feet."
@@ -261,6 +266,11 @@
       "name": "Alert",
       "prerequisite": "",
       "desc": "Your guard never quite drops. Add 5 to every initiative roll you make. While you are conscious no ambush catches you off guard, and an attacker hidden from your sight gets no advantage against you merely because you cannot see it."
+    },
+    {
+      "name": "Skilled",
+      "prerequisite": "",
+      "desc": "Pick any three skills or tools, in any combination, and gain proficiency with each. This feat raises no ability score."
     }
   ]
 }

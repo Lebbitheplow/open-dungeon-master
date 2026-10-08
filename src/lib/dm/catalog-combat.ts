@@ -138,6 +138,10 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       { name: "maneuver", label: "Maneuver", kind: "text", help: "Battle Master only. The Superiority Die is spent on a hit (on the roll for Precision Attack)." },
       { name: "bonusAttack", label: "Bonus-action attack", kind: "select", options: BONUS_ATTACK, help: "Martial Arts' unarmed strike after the Attack action, or a raging Berserker's frenzy. Spends the bonus action." },
       { name: "stunningStrike", label: "Stunning Strike", kind: "boolean", help: "Monk 5+. One ki on a melee hit; the target saves CON or is stunned." },
+      { name: "powerAttack", label: "Power attack", kind: "boolean", help: "Great Weapon Master (heavy melee) or Sharpshooter (ranged): -5 to hit for +10 damage. Powerful Attacker: disadvantage for +10. Deadeye: the proficiency bonus off the roll for twice it on the damage." },
+      { name: "luck", label: "Spend a luck point", kind: "boolean", help: "Lucky: an extra d20 on this attack roll, the best kept; the point is spent." },
+      { name: "stunShot", label: "Stun on a crit (Stunning Sniper)", kind: "boolean", help: "A ranged weapon critical hit stuns the target until the shooter's next turn instead of doubling the damage." },
+      { name: "charged", label: "Charged 10 ft straight (Charger)", kind: "boolean", help: "Charger's bonus-action attack after a Dash: +5 damage when they ran at least 10 feet straight at the target." },
       { name: "reckless", label: "Reckless Attack", kind: "boolean", help: "Barbarian 2+, first attack of the turn. Attacks against them have advantage until their next turn." },
       { name: "nonlethal", label: "Knock out", kind: "boolean", help: "Melee only. A creature dropped to 0 falls unconscious instead of dying." },
       { name: "hordeBreaker", label: "Horde Breaker", kind: "boolean", help: "Hunter ranger, once a turn: an extra attack on a different creature within 5 feet of one already attacked." },
@@ -281,6 +285,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     label: "Area of effect",
     category: "combat",
     summary: "One save, many targets: each rolls, and the halves and evasions resolve themselves.",
+    needsEncounter: true,
     fields: [
       { name: "casterId", label: "Cast by character", kind: "character", help: "A player's spell: the server spends the slot once and derives the dice, save and DC." },
       { name: "spell", label: "Spell", kind: "text", placeholder: "Fireball" },
@@ -420,6 +425,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     label: "Reaction",
     category: "combat",
     summary: "Spends a character's reaction on a named feature and applies what it does.",
+    needsEncounter: true,
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       {

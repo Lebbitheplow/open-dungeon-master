@@ -121,6 +121,7 @@ function SpellsSection({
     starters,
     subclassSpells,
     racialCantrips,
+    featSpells,
     spellSearchClass,
     spellStyle,
     spellbookAdvice,
@@ -148,6 +149,9 @@ function SpellsSection({
   const isGranted = (name: string) => has(subclassSpells, name);
   // Known from the race, on top of the class's count (issue #118).
   const isRacial = (name: string) => has(racialCantrips, name);
+  // Known from a feat (Fey Touched's misty step, Spell Sniper's cantrip),
+  // on top of the class's count too.
+  const isFeat = (name: string) => has([...featSpells.cantrips, ...featSpells.spells], name);
   const poolByName = new Map(pool.map((row) => [lower(row.name), row]));
   // An Eldritch Knight's or Arcane Trickster's two schools, as the server
   // judges the sheet (src/lib/srd/third-caster.ts). Null when the spell is
@@ -289,6 +293,8 @@ function SpellsSection({
     ...spells,
     ...subclassSpells,
     ...racialCantrips,
+    ...featSpells.cantrips,
+    ...featSpells.spells,
     ...(starters?.cantrips ?? []).map((entry) => entry.n),
     ...(starters?.spells ?? []).map((entry) => entry.n),
   ].filter((name, index, all) => all.findIndex((other) => lower(other) === lower(name)) === index);
@@ -300,8 +306,8 @@ function SpellsSection({
     }
     let tileState: SpellTile["state"];
     if (level === 0) {
-      tileState = isRacial(name) ? "granted" : has(cantrips, name) ? "ready" : "available";
-    } else if (isGranted(name)) {
+      tileState = isRacial(name) || isFeat(name) ? "granted" : has(cantrips, name) ? "ready" : "available";
+    } else if (isGranted(name) || isFeat(name)) {
       tileState = "granted";
     } else if (wizard) {
       if (phase === "prepare" && !has(spells, name)) {
@@ -316,13 +322,13 @@ function SpellsSection({
         name,
         level,
         state: tileState,
-        suggested: suggested.has(lower(name)) && !(level === 0 && isRacial(name)),
+        suggested: suggested.has(lower(name)) && !(level === 0 && isRacial(name)) && !isFeat(name),
         blocked: blockedFor(name, level, tileState),
         label: displayName(pack, "spells", name),
         data: row?.data,
         slug: row?.slug,
         homebrew: row?.source === "homebrew",
-        ...(level === 0 && isRacial(name) ? { note: "From your race" } : {}),
+        ...(level === 0 && isRacial(name) ? { note: "From your race" } : isFeat(name) ? { note: "From your feat" } : {}),
         ...(row?.document && row.documentSlug !== "wotc-srd" ? { source: row.document } : {}),
       },
     ];

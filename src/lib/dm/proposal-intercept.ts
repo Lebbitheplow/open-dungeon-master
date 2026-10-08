@@ -5,15 +5,17 @@ import { insertItemProposal, type ItemProposal } from "@/lib/db/item-proposals";
 import { publishPersisted } from "@/lib/events";
 import {
   proposalSummary,
-  shouldProposeItemChange,
+  shouldProposeChange,
+  VITALS_PROPOSAL_TOOL_NAMES,
   type ProposalArgs,
 } from "@/lib/dm/proposal-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-// Interception for the inventoryApprovals game setting: a DM inventory or
-// gold mutation aimed at a player character becomes a pending offer the
-// owning player answers, instead of applying immediately. Returns null when
-// the normal auto-apply path should run.
+// Interception for the inventoryApprovals and vitalsApprovals game
+// settings: a DM inventory, gold, damage, healing or condition mutation
+// aimed at a player character becomes a pending offer the owning player
+// answers, instead of applying immediately. Returns null when the normal
+// auto-apply path should run.
 
 // Inventory is party-visible, so the full proposal may ride the persisted
 // stream (unlike notes/whispers).
@@ -59,13 +61,7 @@ export function maybeProposeItemChange(
     return null;
   }
   const sheet = args.characterId ? sheetsById.get(String(args.characterId)) : undefined;
-  if (
-    !shouldProposeItemChange(
-      campaign.gameSettings.inventoryApprovals,
-      toolName,
-      sheet ?? null,
-    )
-  ) {
+  if (!shouldProposeChange(campaign.gameSettings, toolName, sheet ?? null)) {
     return null;
   }
 
@@ -86,6 +82,16 @@ export function maybeProposeItemChange(
     return { error: "purchase needs item, price, and action buy|sell." };
   }
 
+  if (toolName === "apply_damage" && !(Number(args.amount ?? 0) >= 1)) {
+    return { error: "apply_damage needs a positive amount." };
+  }
+  if (toolName === "heal" && !(Number(args.amount ?? 0) >= 1) && !String(args.spell ?? "").trim()) {
+    return { error: "heal needs an amount or a spell." };
+  }
+  if ((toolName === "set_condition" || toolName === "clear_condition") && !String(args.condition ?? "").trim()) {
+    return { error: `${toolName} needs a condition.` };
+  }
+
   const summary = proposalSummary(toolName, args, sheet!.name);
   const proposal = insertItemProposal({
     campaignId: campaign.id,
@@ -104,6 +110,8 @@ export function maybeProposeItemChange(
   return {
     ok: true,
     proposed: summary,
-    note: `Recorded as an offer; ${sheet!.name}'s player will accept or decline it. Narrate the offer without assuming acceptance.`,
+    note: VITALS_PROPOSAL_TOOL_NAMES.has(toolName)
+      ? `Recorded as a pending change; ${sheet!.name}'s player will confirm or refuse it. Narrate the blow or the cure as landing, but do not state the new hit points or the condition as fact until it is confirmed.`
+      : `Recorded as an offer; ${sheet!.name}'s player will accept or decline it. Narrate the offer without assuming acceptance.`,
   };
 }

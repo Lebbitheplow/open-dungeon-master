@@ -107,6 +107,7 @@ export function AdminSettingsPanel() {
                 accountDeletionGraceDays: config.accountDeletionGraceDays,
                 abilityRerollBelow: config.abilityRerollBelow,
                 publicUrl: config.publicUrl,
+                sharedHost: config.sharedHost,
                 voiceChat: config.voiceChat,
                 discord: {
                   clientId: config.discord.clientId,
@@ -231,6 +232,31 @@ export function AdminSettingsPanel() {
             keep their access.
           </p>
           {config.signupMode === "invite" ? <AdminInvitesSection /> : null}
+          {/* Sharing the server with friends who run their own tables
+              (issues #137, #138): who may start one, and whose tables may
+              spend the paid backends. Usage per account and campaign is on
+              the Usage tab. */}
+          <div className="mt-4 space-y-3">
+            <SelectField
+              label="Who may start campaigns and workshops"
+              value={config.sharedHost.campaignCreation || "everyone"}
+              onChange={(campaignCreation) => setConfig({ ...config, sharedHost: { ...config.sharedHost, campaignCreation } })}
+              options={[
+                { value: "everyone", label: "Everyone with an account" },
+                { value: "admins", label: "Administrators only: others join by room code" },
+              ]}
+            />
+            <SelectField
+              label="Paid AI backends"
+              hint="Paid means a text, picture or speech backend on a public host that takes this server's key (OpenAI, OpenRouter, a hosted model), and the agent program. Backends on this machine or your network (llama-server, Ollama, ComfyUI, Kokoro, Whisper) stay open to every table, keyed or not. A table that may not spend the paid ones can bring its own key in the client app."
+              value={config.sharedHost.paidAi || "everyone"}
+              onChange={(paidAi) => setConfig({ ...config, sharedHost: { ...config.sharedHost, paidAi } })}
+              options={[
+                { value: "everyone", label: "Every campaign may use them" },
+                { value: "admins", label: "Only campaigns an administrator leads" },
+              ]}
+            />
+          </div>
           <div className="mt-4">
             <Field
               group

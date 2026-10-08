@@ -949,7 +949,7 @@ export function SessionView({
         audience={secretAudience({
           dmSeat: caps.adjudicates,
           steersStory: caps.steersStory,
-          aiTable: campaign.gameSettings?.dmMode === "ai",
+          aiTable: campaign.gameSettings?.dmMode === "ai" || campaign.gameSettings?.dmMode === "steered",
         })}
       />
 

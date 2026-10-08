@@ -6,7 +6,7 @@ gap leaves this list by being fixed and turned into a `test()`. What the
 suites are, which ruleset they hold ODM to and the order of repair are in
 `docs/rules-enforcement-audit.md`.
 
-131 suites, 2607 rules enforced, 0 known gaps (0 high, 0 medium, 0 low).
+145 suites, 3110 rules enforced, 0 known gaps (0 high, 0 medium, 0 low).
 
 | Severity | Gap | Rule | Where | Observed |
 |---|---|---|---|---|
@@ -19,12 +19,14 @@ suites are, which ruleset they hold ODM to and the order of repair are in
 | `test-enforce-advantage` | 19 | 0 |
 | `test-enforce-afflictions` | 14 | 0 |
 | `test-enforce-ai-rolls` | 7 | 0 |
+| `test-enforce-area-attacker` | 3 | 0 |
 | `test-enforce-armor` | 30 | 0 |
 | `test-enforce-attack-riders` | 23 | 0 |
 | `test-enforce-attacks` | 18 | 0 |
 | `test-enforce-attunement` | 26 | 0 |
 | `test-enforce-authored` | 36 | 0 |
-| `test-enforce-backgrounds` | 15 | 0 |
+| `test-enforce-backgrounds` | 16 | 0 |
+| `test-enforce-between-fights` | 11 | 0 |
 | `test-enforce-board-moves` | 3 | 0 |
 | `test-enforce-bonus-actions` | 18 | 0 |
 | `test-enforce-campaign-config` | 18 | 0 |
@@ -41,23 +43,28 @@ suites are, which ruleset they hold ODM to and the order of repair are in
 | `test-enforce-conditions-actions` | 51 | 0 |
 | `test-enforce-conditions-attacks` | 66 | 0 |
 | `test-enforce-conditions-duration` | 57 | 0 |
+| `test-enforce-console-reach` | 192 | 0 |
 | `test-enforce-consumables` | 4 | 0 |
+| `test-enforce-coverage-holes` | 17 | 0 |
 | `test-enforce-creation-grants` | 21 | 0 |
 | `test-enforce-creation-routes` | 20 | 0 |
+| `test-enforce-creator-doors` | 15 | 0 |
 | `test-enforce-currency` | 19 | 0 |
+| `test-enforce-damage-cards` | 18 | 0 |
 | `test-enforce-damage-types` | 96 | 0 |
 | `test-enforce-death` | 41 | 0 |
 | `test-enforce-downtime` | 9 | 0 |
 | `test-enforce-economy` | 5 | 0 |
-| `test-enforce-enemies` | 22 | 0 |
+| `test-enforce-enemies` | 23 | 0 |
 | `test-enforce-enemy-turns` | 14 | 0 |
 | `test-enforce-exhaustion` | 40 | 0 |
 | `test-enforce-exploration` | 8 | 0 |
 | `test-enforce-explore-defects` | 17 | 0 |
 | `test-enforce-explore-rules` | 13 | 0 |
-| `test-enforce-feats` | 26 | 0 |
+| `test-enforce-feats` | 28 | 0 |
 | `test-enforce-feature-saves` | 17 | 0 |
 | `test-enforce-feature-uses` | 27 | 0 |
+| `test-enforce-fight-opening` | 8 | 0 |
 | `test-enforce-final-engine` | 27 | 0 |
 | `test-enforce-final-features` | 17 | 0 |
 | `test-enforce-final-ui` | 4 | 0 |
@@ -75,6 +82,7 @@ suites are, which ruleset they hold ODM to and the order of repair are in
 | `test-enforce-last-spells` | 17 | 0 |
 | `test-enforce-levelup` | 20 | 0 |
 | `test-enforce-long-rest` | 17 | 0 |
+| `test-enforce-look-fixes` | 7 | 0 |
 | `test-enforce-magic-gear` | 20 | 0 |
 | `test-enforce-magic-items` | 20 | 0 |
 | `test-enforce-maneuvers` | 16 | 0 |
@@ -89,7 +97,7 @@ suites are, which ruleset they hold ODM to and the order of repair are in
 | `test-enforce-narration-guard` | 7 | 0 |
 | `test-enforce-narrator` | 54 | 0 |
 | `test-enforce-objects-terrain` | 4 | 0 |
-| `test-enforce-patch-fields` | 27 | 0 |
+| `test-enforce-patch-fields` | 28 | 0 |
 | `test-enforce-pc-attack-board` | 15 | 0 |
 | `test-enforce-pc-attack-features` | 19 | 0 |
 | `test-enforce-pc-attack-spells` | 14 | 0 |
@@ -97,15 +105,18 @@ suites are, which ruleset they hold ODM to and the order of repair are in
 | `test-enforce-persistence` | 13 | 0 |
 | `test-enforce-player-bypass` | 31 | 0 |
 | `test-enforce-player-patch` | 18 | 0 |
-| `test-enforce-proficiencies` | 15 | 0 |
-| `test-enforce-races` | 23 | 0 |
+| `test-enforce-player-word` | 24 | 0 |
+| `test-enforce-proficiencies` | 17 | 0 |
+| `test-enforce-races` | 25 | 0 |
 | `test-enforce-range` | 16 | 0 |
 | `test-enforce-reactions` | 26 | 0 |
 | `test-enforce-resource-spend` | 25 | 0 |
 | `test-enforce-resource-tables` | 16 | 0 |
 | `test-enforce-rest-choice` | 4 | 0 |
+| `test-enforce-roll-attacker` | 27 | 0 |
 | `test-enforce-roll-carriers` | 6 | 0 |
-| `test-enforce-rolls-trust` | 20 | 0 |
+| `test-enforce-rolls-trust` | 22 | 0 |
+| `test-enforce-settings-honored` | 67 | 0 |
 | `test-enforce-sheet-between` | 2 | 0 |
 | `test-enforce-short-rest` | 21 | 0 |
 | `test-enforce-spell-counts` | 10 | 0 |
@@ -131,7 +142,10 @@ suites are, which ruleset they hold ODM to and the order of repair are in
 | `test-enforce-temp-hp-healing` | 16 | 0 |
 | `test-enforce-tool-args` | 20 | 0 |
 | `test-enforce-turn-actions` | 28 | 0 |
+| `test-enforce-turn-advance` | 69 | 0 |
 | `test-enforce-turn-end` | 6 | 0 |
+| `test-enforce-turn-movement-2` | 7 | 0 |
+| `test-enforce-turn-movement` | 27 | 0 |
 | `test-enforce-turn-order` | 18 | 0 |
 | `test-enforce-ui-dm` | 19 | 0 |
 | `test-enforce-ui-play` | 11 | 0 |

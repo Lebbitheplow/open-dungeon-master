@@ -6,7 +6,7 @@
 // is taken once. SRD 5.1 prints one feat, Grappler (Strength 13 or higher).
 //
 // ODM ships the feat rule switched on: the content pack carries Grappler and
-// the third-party feats, and src/lib/srd/authored-feats.json adds 52 in
+// the third-party feats, and src/lib/srd/authored-feats.json adds 54 in
 // ODM's own wording. A feat is a name in sheet.feats. Two have a mechanic
 // the server applies to derived numbers (Alert, Observant); Elven Accuracy
 // says it has one; the rest are guidance the model narrates
@@ -170,8 +170,8 @@ await test("Alert and Observant, taken as feats, reach the numbers they change",
   assert.equal(entry.initiative, 10 + abilityMod(SCORES.dex) + 5);
 });
 
-await test("ODM's own feats: 52 (the 2014 Alert among them), each named once, each with rules text", () => {
-  assert.equal(authoredFeats.length, 52);
+await test("ODM's own feats: 54 (the 2014 Alert, Magic Initiate and Skilled among them), each named once, each with rules text", () => {
+  assert.equal(authoredFeats.length, 54);
   const names = authoredFeats.map((feat) => feat.name.toLowerCase());
   assert.equal(new Set(names).size, names.length);
   // SRD 5.1's one feat comes from the content pack, not from this list.
@@ -711,6 +711,11 @@ await test("the feat pickers offer exactly one Alert, the 2014 feat, with the co
       const shown = getEntryDetail("feats", "alert");
       assert.equal(shown?.documentSlug, "odm-expanded", `${label}: the Alert a picker's info button opens`);
       assert.match(String(shown.data.desc), /initiative/);
+      // Magic Initiate the same: ODM's 2014 wording, not the hidden 2024 row.
+      assert.equal(all.filter((name) => name === "Magic Initiate").length, 1, `${label}: one Magic Initiate`);
+      const initiate = getEntryDetail("feats", "magic-initiate");
+      assert.equal(initiate?.documentSlug, "odm-expanded", `${label}: the Magic Initiate the info button opens`);
+      assert.match(String(initiate.data.desc), /two cantrips/);
     });
   }
 });
@@ -739,6 +744,365 @@ await test("ODM's 2014 Alert is written in ODM's own words, not the Player's Han
   ]) {
     assert.equal(alert.desc.toLowerCase().includes(printed.toLowerCase()), false, printed);
   }
+});
+
+// ---- the spells a feat teaches (issue #125, src/lib/srd/feat-spells.ts) ----
+
+const { fightDummies } = await import("./lib/enforce-spells.mjs");
+
+await test("a Fey Touched fighter knows misty step and the spell picked, each cast once a day without a slot, with the score the feat raised (issue #125)", async () => {
+  const fey = madeFighter({
+    race: "variant_human",
+    racialAsi: ["str", "dex"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
+    feats: ["Fey Touched"],
+    racialFeatAbility: "wis",
+    featChoices: { "fey touched": { spells: ["Bane"] } },
+  });
+  assert.equal(fey.blocker, null, fey.blocker?.message);
+  const at = await creation.atTable(fey.sheet);
+  assert.equal(at.status, 201, at.error);
+  assert.ok(at.sheet.spellcasting, "a fighter with Fey Touched casts the feat's spells");
+  assert.deepEqual(at.sheet.spellcasting.known, ["Misty Step", "Bane"]);
+  assert.equal(at.sheet.spellcasting.ability, "wis", "the feat's spells use the score it raised");
+  assert.deepEqual(at.sheet.spellcasting.slots, {});
+  const names = at.sheet.features.map((feature) => feature.name);
+  assert.ok(names.includes("Free cast: Misty Step (Fey Touched)"), names.join(", "));
+  assert.ok(names.includes("Free cast: Bane (Fey Touched)"), names.join(", "));
+  assert.deepEqual(at.sheet.resources.free_cast_misty_step, { max: 1, used: 0 });
+  assert.deepEqual(at.sheet.resources.free_cast_bane, { max: 1, used: 0 });
+  // The pick is held to the feat: a school it does not offer, or none.
+  const unpicked = madeFighter({
+    race: "variant_human",
+    racialAsi: ["str", "dex"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
+    feats: ["Fey Touched"],
+    racialFeatAbility: "wis",
+  });
+  assert.equal(unpicked.blocker?.message, "Fey Touched: pick 1 1st-level divination or enchantment spell.");
+  const wrong = await creation.atTable({ ...fey.sheet, featChoices: { "fey touched": { spells: ["Burning Hands"] } } });
+  assert.equal(wrong.status, 400, "an evocation spell was taken for Fey Touched");
+  assert.match(wrong.error, /Burning Hands is a evocation spell; Fey Touched's spell is picked from divination or enchantment/i);
+  const none = await creation.atTable({ ...fey.sheet, featChoices: {} });
+  assert.equal(none.status, 400);
+  assert.match(none.error, /Fey Touched: pick 1 1st-level divination or enchantment spell/);
+});
+
+await test("the free cast spends its counter instead of a slot, is refused once spent, and comes back with a long rest (issue #125)", async () => {
+  const world = await openWorld();
+  // Seeded as the judge stores a Fey Touched fighter (the first test above
+  // proves that shape): the feat's spells in a slotless block, a Free cast
+  // feature for each, which the counters read.
+  const hero = world.addHero({
+    class: "fighter",
+    level: 4,
+    abilities: { str: 16, dex: 14, con: 14, int: 10, wis: 14, cha: 10 },
+    feats: ["Fey Touched"],
+    featChoices: { "fey touched": { spells: ["Charm Person"], ability: "wis" } },
+    spellcasting: { ability: "wis", slots: {}, known: ["Misty Step", "Charm Person"], prepared: [], cantrips: [] },
+    features: [
+      { name: "Free cast: Misty Step (Fey Touched)", source: "story" },
+      { name: "Free cast: Charm Person (Fey Touched)", source: "story" },
+    ],
+  });
+  const made = world.sheet(hero.id);
+  assert.deepEqual(made.spellcasting?.known, ["Misty Step", "Charm Person"], JSON.stringify(made.spellcasting));
+  assert.deepEqual(made.resources.free_cast_charm_person, { max: 1, used: 0 }, "the counter follows the Free cast feature");
+  const [goblin] = await fightDummies(world, 1);
+  world.dice(1);
+  const cast = await world.invoke("cast_at_enemy", { characterId: hero.id, targetEnemyId: goblin.id, spell: "Charm Person", saveAbility: "wis" });
+  world.clearDice();
+  assert.equal(cast.ok, true, JSON.stringify(cast.result ?? cast).slice(0, 300));
+  assert.match(String(cast.result.slot ?? ""), /free cast/i);
+  assert.deepEqual(world.sheet(hero.id).resources.free_cast_charm_person, { max: 1, used: 1 });
+  assert.deepEqual(world.sheet(hero.id).spellcasting.slots, {}, "no slot appeared");
+  // The use spent and no slot to fall back on: the second cast is refused.
+  const again = await world.invoke("cast_at_enemy", { characterId: hero.id, targetEnemyId: goblin.id, spell: "Charm Person", saveAbility: "wis" });
+  assert.equal(again.ok, false, `a second Charm Person with the free cast spent and no slots was allowed: ${JSON.stringify(again.result ?? {}).slice(0, 200)}`);
+  assert.match(String(again.error ?? again.result?.error ?? ""), /no free level 1 spell slot/);
+  const ended = await world.invoke("end_encounter", { outcome: "victory", summary: "the goblin flees" });
+  assert.equal(ended.ok, true, JSON.stringify(ended).slice(0, 200));
+  const rested = await world.invoke("take_rest", { kind: "long" });
+  assert.equal(rested.ok, true, JSON.stringify(rested).slice(0, 200));
+  assert.deepEqual(world.sheet(hero.id).resources.free_cast_charm_person, { max: 1, used: 0 }, "the long rest gives the free cast back");
+  world.close();
+});
+
+await test("Ritual Caster's book: a fighter casts its two rituals as rituals and nothing else, and Spell Sniper's cantrip rides on a wizard's own (issue #125)", async () => {
+  const world = await openWorld();
+  const ritualist = world.addHero({
+    class: "fighter",
+    level: 4,
+    abilities: { str: 16, dex: 14, con: 14, int: 14, wis: 10, cha: 10 },
+    feats: ["Ritual Caster"],
+    featChoices: { "ritual caster": { list: "wizard", spells: ["Find Familiar", "Detect Magic"] } },
+    spellcasting: { ability: "int", slots: {}, known: [], prepared: [], cantrips: [], spellbook: ["Find Familiar", "Detect Magic"] },
+  });
+  const book = world.sheet(ritualist.id);
+  assert.deepEqual(book.spellcasting?.spellbook, ["Find Familiar", "Detect Magic"], JSON.stringify(book.spellcasting));
+  assert.equal(Object.keys(book.resources).some((id) => id.startsWith("free_cast_")), false, "a ritual book has no free cast");
+  // The cast rules read the book as a ritual book: held for a ritual cast,
+  // not for a cast from a slot (src/lib/dm/cast-rules.ts).
+  const { canCastRituals, spellHeldProblem } = await import("../src/lib/dm/cast-rules.ts");
+  const { spellFactsFor } = await import("../src/lib/content/index.ts");
+  const facts = spellFactsFor("Detect Magic", []);
+  assert.equal(canCastRituals(book), true, "Ritual Caster casts rituals");
+  assert.equal(spellHeldProblem(book, "Detect Magic", facts, { ritual: true }), null, "a book ritual is held for a ritual cast");
+  assert.match(spellHeldProblem(book, "Detect Magic", facts) ?? "", /cannot be cast|cannot cast/, "a book ritual is not cast from a slot");
+  assert.match(spellHeldProblem(book, "Fireball", spellFactsFor("Fireball", []), { ritual: true }) ?? "", /cannot cast/);
+  world.close();
+
+  const sniper = await table(
+    {
+      class: "wizard",
+      level: 3,
+      maxHp: 20,
+      abilities: { int: 16, con: 14, dex: 14, str: 8, wis: 12, cha: 10 },
+      spellcasting: {
+        ability: "int",
+        slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } },
+        known: [],
+        prepared: ["Magic Missile", "Shield", "Mage Armor", "Burning Hands"],
+        cantrips: ["Ray of Frost", "Mage Hand", "Light"],
+        spellbook: ["Magic Missile", "Shield", "Mage Armor", "Burning Hands", "Detect Magic", "Hold Person"],
+      },
+    },
+    5,
+  );
+  const before = sniper.sheet();
+  const blank = await sniper.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Spell Sniper" }] });
+  assert.equal(blank.status, 400, "Spell Sniper taken with no cantrip named");
+  assert.match(blank.json.error, /Spell Sniper: pick 1 attack cantrip/);
+  const named = await sniper.patch({
+    ...oneLevel(before),
+    asiChoices: [{ mode: "feat", feat: "Spell Sniper" }],
+    featChoices: { "spell sniper": { cantrips: ["Fire Bolt"] } },
+    levelUpSpells: ["Blur"],
+  });
+  assert.equal(named.status, 200, named.json.error);
+  const after = sniper.sheet();
+  assert.deepEqual(after.spellcasting.cantrips, ["Ray of Frost", "Mage Hand", "Light", "Fire Bolt"], "the feat's cantrip rides on the class's three");
+  assert.ok(after.feats.includes("Spell Sniper"));
+  // A further level keeps it: the lists are judged with the feat's cantrip left out of the count.
+  const next = await sniper.patch({ ...oneLevel(after), levelUpSpells: ["Misty Step"] });
+  assert.equal(next.status, 200, next.json.error);
+  assert.ok(sniper.sheet().spellcasting.cantrips.includes("Fire Bolt"));
+});
+
+await test("Elemental Adept's damage type is picked with the feat and kept on the sheet as a feature (issue #125)", async () => {
+  const mage = await table(
+    {
+      class: "wizard", level: 3, maxHp: 20, abilities: { int: 16, con: 14, dex: 14, str: 8, wis: 12, cha: 10 },
+      spellcasting: { ability: "int", slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } }, known: [], prepared: ["Magic Missile", "Burning Hands"], cantrips: ["Fire Bolt"], spellbook: ["Magic Missile", "Burning Hands"] },
+    },
+    4,
+  );
+  const before = mage.sheet();
+  const blank = await mage.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Elemental Adept" }], levelUpSpells: ["Blur"] });
+  assert.equal(blank.status, 400, "Elemental Adept taken with no type named");
+  assert.match(blank.json.error, /Elemental Adept: pick a damage type/);
+  const wrong = await mage.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Elemental Adept" }], featChoices: { "elemental adept": { damageType: "necrotic" } }, levelUpSpells: ["Blur"] });
+  assert.equal(wrong.status, 400);
+  assert.match(wrong.json.error, /not a damage type Elemental Adept offers/);
+  const named = await mage.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Elemental Adept" }], featChoices: { "elemental adept": { damageType: "fire" } }, levelUpSpells: ["Blur"] });
+  assert.equal(named.status, 200, named.json.error);
+  assert.ok(mage.sheet().features.some((feature) => feature.name === "Elemental Adept: fire"), mage.sheet().features.map((feature) => feature.name).join(", "));
+});
+
+await test("a feat taken at a level-up teaches its spells the same way, refused until they are named (issue #125)", async () => {
+  const human = await table(fighter(3), 4);
+  const before = human.sheet();
+  assert.equal(before.spellcasting, null);
+  const blank = await human.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Shadow Touched", ability: "wis" }] });
+  assert.equal(blank.status, 400, "Shadow Touched taken with no spell named");
+  assert.match(blank.json.error, /Shadow Touched: pick 1 1st-level illusion or necromancy spell/);
+  assert.equal(human.sheet().spellcasting, null, "a refused level wrote nothing");
+  const named = await human.patch({
+    ...oneLevel(before),
+    asiChoices: [{ mode: "feat", feat: "Shadow Touched", ability: "wis" }],
+    featChoices: { "shadow touched": { spells: ["Disguise Self"] } },
+  });
+  assert.equal(named.status, 200, named.json.error);
+  const after = human.sheet();
+  assert.deepEqual(after.spellcasting.known, ["Invisibility", "Disguise Self"]);
+  assert.equal(after.spellcasting.ability, "wis");
+  assert.ok(after.features.some((feature) => feature.name === "Free cast: Invisibility (Shadow Touched)"), after.features.map((feature) => feature.name).join(", "));
+  assert.deepEqual(after.resources.free_cast_invisibility, { max: 1, used: 0 });
+  assert.deepEqual(after.resources.free_cast_disguise_self, { max: 1, used: 0 });
+  assert.equal(after.abilities.wis, before.abilities.wis + 1);
+});
+
+// ---- issue #147: the content pack's Level Up and Tome of Heroes feats ----
+
+const { featFactsFor } = await import("../src/lib/characters/catalog.ts");
+const PACK_FEATS = ["Linguistics Expert", "Stalker", "Diehard", "Tenacious", "Hardy Adventurer", "Attentive", "Covert Training", "Heavily Outfitted"];
+const packDescs = Object.fromEntries(PACK_FEATS.map((feat) => [feat.toLowerCase(), featFactsFor(feat)?.desc ?? ""]));
+const packInstalled = Boolean(packDescs["linguistics expert"]);
+
+await test("a Level Up feat grants what its benefits list says: Linguistics Expert's three languages are picked with the feat, its Intelligence point lands, and the feat holds the character until they are named (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  assert.match(packDescs["linguistics expert"], /Select three languages/, "the pack row's effects list is read as its text");
+  const human = {
+    race: "variant_human",
+    racialAsi: ["str", "dex"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
+    featDescs: packDescs,
+  };
+  const expert = madeFighter({ ...human, feats: ["Linguistics Expert"], featChoices: { "linguistics expert": { languages: ["Dwarvish", "Elvish", "Orc"] } } });
+  assert.equal(expert.blocker, null, expert.blocker?.message);
+  for (const language of ["Dwarvish", "Elvish", "Orc"]) {
+    assert.ok(expert.derived.preview.proficiencies.languages.includes(language), `preview lacks ${language}`);
+  }
+  // The builder shows the Intelligence point the server will add.
+  assert.equal(expert.derived.shownAbilities.int, expert.sheet.abilities.int + 1);
+  const at = await creation.atTable(expert.sheet);
+  assert.equal(at.status, 201, at.error);
+  for (const language of ["Common", "Giant", "Dwarvish", "Elvish", "Orc"]) {
+    assert.ok(at.sheet.proficiencies.languages.includes(language), `stored sheet lacks ${language}: ${at.sheet.proficiencies.languages}`);
+  }
+  assert.equal(at.sheet.abilities.int, expert.sheet.abilities.int + 1, "Linguistics Expert's Intelligence point");
+  // Unpicked: the builder holds, and the table refuses.
+  const unpicked = madeFighter({ ...human, feats: ["Linguistics Expert"] });
+  assert.equal(unpicked.blocker?.message, "Linguistics Expert: pick 3 languages.");
+  const refused = await creation.atTable({ ...expert.sheet, featChoices: {} });
+  assert.equal(refused.status, 400, "a Linguistics Expert with no languages was seated");
+  assert.match(refused.error, /Linguistics Expert: pick 3 languages/);
+  // The feat's point is taken once: the library copy keeps its scores at the table.
+  const viaLibrary = await creation.throughLibrary(expert.sheet, 8);
+  assert.equal(viaLibrary.status, 201, viaLibrary.error);
+  assert.equal(viaLibrary.sheet.abilities.int, at.sheet.abilities.int);
+});
+
+await test("Skilled's three are skills or tools in any combination: two skills and thieves' tools picked beside the feat, shown in the builder, seated at the table with the preview's training sent as it is (issue #147)", async () => {
+  const skilled = madeFighter({
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Skilled" }],
+    featChoices: { skilled: { skills: ["arcana", "history"], tools: ["thieves' tools"] } },
+  });
+  assert.equal(skilled.blocker, null, skilled.blocker?.message);
+  assert.ok(skilled.derived.preview.proficiencies.tools.includes("thieves' tools"), `preview tools: ${skilled.derived.preview.proficiencies.tools}`);
+  assert.ok(skilled.sheet.proficiencies.tools.includes("thieves' tools"), "the builder sends the preview's training");
+  const at = await creation.atTable(skilled.sheet);
+  assert.equal(at.status, 201, at.error);
+  assert.ok(at.sheet.proficiencies.tools.includes("thieves' tools"), `tools: ${at.sheet.proficiencies.tools}`);
+  assert.ok(at.sheet.proficiencies.skills.includes("arcana") && at.sheet.proficiencies.skills.includes("history"), `skills: ${at.sheet.proficiencies.skills}`);
+  assert.equal(at.sheet.abilities.str, skilled.sheet.abilities.str, "Skilled raises nothing");
+  // Two picks: the builder holds, the table refuses; four: the fourth is left off.
+  const short = madeFighter({
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Skilled" }],
+    featChoices: { skilled: { skills: ["arcana"], tools: ["thieves' tools"] } },
+  });
+  assert.equal(short.blocker?.message, "Skilled: pick 1 skill or tool.");
+  const refused = await creation.atTable({ ...skilled.sheet, featChoices: { skilled: { skills: ["arcana"], tools: ["thieves' tools"] } } });
+  assert.equal(refused.status, 400);
+  assert.match(refused.error, /Skilled: pick 1 skill or tool/);
+  const library = await creation.throughLibrary(skilled.sheet, 8);
+  assert.equal(library.status, 201, library.error);
+  assert.ok(library.sheet.proficiencies.tools.includes("thieves' tools"), `library tools: ${library.sheet.proficiencies.tools}`);
+});
+
+await test("Tome of Heroes' Stalker hands over Stealth and Survival outright, Diehard its Constitution point, and Level Up's Tenacious is Resilient: the chosen score and its saving throw (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  const improvements = (feat, ability) => [
+    { mode: "plus2", ability: "str" },
+    { mode: "plus2", ability: "str" },
+    { mode: "feat", feat, ...(ability ? { ability } : {}) },
+  ];
+  const stalker = madeFighter({ asiChoices: improvements("Stalker"), featDescs: packDescs });
+  assert.equal(stalker.blocker, null, stalker.blocker?.message);
+  assert.ok(stalker.derived.preview.proficiencies.skills.includes("stealth"), `preview skills: ${stalker.derived.preview.proficiencies.skills}`);
+  const stalkerAt = await creation.atTable(stalker.sheet);
+  assert.equal(stalkerAt.status, 201, stalkerAt.error);
+  assert.ok(stalkerAt.sheet.proficiencies.skills.includes("stealth") && stalkerAt.sheet.proficiencies.skills.includes("survival"), `skills: ${stalkerAt.sheet.proficiencies.skills}`);
+  assert.equal(stalkerAt.sheet.abilities.con, stalker.sheet.abilities.con, "Stalker raises nothing");
+  const diehard = madeFighter({ asiChoices: improvements("Diehard"), featDescs: packDescs });
+  assert.equal(diehard.blocker, null, diehard.blocker?.message);
+  const diehardAt = await creation.atTable(diehard.sheet);
+  assert.equal(diehardAt.status, 201, diehardAt.error);
+  assert.equal(diehardAt.sheet.abilities.con, diehard.sheet.abilities.con + 1, "Diehard's Constitution point");
+  assert.equal(diehardAt.sheet.maxHp, 10 + 2 + 7 * (6 + 2), "hit points follow the raised Constitution");
+  const tenacious = madeFighter({ asiChoices: improvements("Tenacious", "wis"), featDescs: packDescs });
+  assert.equal(tenacious.blocker, null, tenacious.blocker?.message);
+  const tenaciousAt = await creation.atTable(tenacious.sheet);
+  assert.equal(tenaciousAt.status, 201, tenaciousAt.error);
+  assert.equal(tenaciousAt.sheet.abilities.wis, tenacious.sheet.abilities.wis + 1, "Tenacious's chosen point");
+  assert.ok(tenaciousAt.sheet.proficiencies.saves.includes("wis"), "Tenacious gave no Wisdom save");
+  // Covert Training's choice: thieves' tools or the poisoner's kit, never the first outright.
+  const covert = madeFighter({ asiChoices: improvements("Covert Training"), featDescs: packDescs });
+  assert.equal(covert.blocker?.message, "Covert Training: pick 1 tool.");
+  const covertAt = await creation.atTable({ ...covert.sheet, featChoices: { "covert training": { tools: ["poisoner's kit"] } } });
+  assert.equal(covertAt.status, 201, covertAt.error);
+  assert.ok(covertAt.sheet.proficiencies.tools.includes("poisoner's kit"), `tools: ${covertAt.sheet.proficiencies.tools}`);
+  assert.ok(!covertAt.sheet.proficiencies.tools.includes("thieves' tools"));
+  const wrongTool = await creation.atTable({ ...covert.sheet, featChoices: { "covert training": { tools: ["smith's tools"] } } });
+  assert.equal(wrongTool.status, 400);
+  assert.match(wrongTool.error, /not a tool Covert Training offers/);
+});
+
+await test("a Level Up twin reaches ODM's engine: Hardy Adventurer's hit points are Tough's, Attentive's +5 initiative is Alert's, and a pack prerequisite is held to (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  const improvements = (feat) => [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat }];
+  const plain = await creation.atTable(madeFighter({ asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }] }).sheet);
+  assert.equal(plain.status, 201, plain.error);
+  const hardy = await creation.atTable(madeFighter({ asiChoices: improvements("Hardy Adventurer"), featDescs: packDescs }).sheet);
+  assert.equal(hardy.status, 201, hardy.error);
+  const tough = await creation.atTable(madeFighter({ asiChoices: improvements("Tough") }).sheet);
+  assert.equal(tough.status, 201, tough.error);
+  assert.equal(hardy.sheet.maxHp, tough.sheet.maxHp, "Hardy Adventurer's hit points differ from Tough's");
+  assert.equal(hardy.sheet.maxHp, plain.sheet.maxHp + 2 * 8);
+  const attentive = await creation.atTable(madeFighter({ asiChoices: improvements("Attentive"), featDescs: packDescs }).sheet);
+  assert.equal(attentive.status, 201, attentive.error);
+  // Against the same sheet without the feat: a Champion's Remarkable Athlete
+  // already adds half the proficiency bonus to initiative.
+  assert.equal(computeSheetDerived(attentive.sheet).initiative, computeSheetDerived({ ...attentive.sheet, feats: [] }).initiative + 5);
+  // Diehard asks Constitution 13 or higher, written "*Constitution 13 or higher*".
+  const frail = madeFighter({ scores: standardScores(["str", "dex", "wis", "int", "cha", "con"]), asiChoices: improvements("Diehard"), featDescs: packDescs });
+  const frailAt = await creation.atTable(frail.sheet);
+  assert.equal(frailAt.status, 400, "Diehard taken at Constitution 9");
+  assert.match(frailAt.error, /Diehard requires Constitution 13 or higher/);
+});
+
+await test("a pack feat taken at a level-up grants the same: Diehard's Constitution point, Stalker's skills, Covert Training's pick named or refused, and a prerequisite held to (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  const hardy = await table(fighter(3), 4);
+  const before = hardy.sheet();
+  const levelled = await hardy.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Diehard" }] });
+  assert.equal(levelled.status, 200, levelled.json.error);
+  assert.equal(hardy.sheet().abilities.con, before.abilities.con + 1, "Diehard's Constitution point at a level-up");
+  assert.deepEqual(hardy.sheet().feats, ["Diehard"]);
+  const hunter = await table(fighter(3), 4);
+  const stalked = await hunter.patch({ ...oneLevel(hunter.sheet()), asiChoices: [{ mode: "feat", feat: "Stalker" }] });
+  assert.equal(stalked.status, 200, stalked.json.error);
+  assert.ok(hunter.sheet().proficiencies.skills.includes("stealth") && hunter.sheet().proficiencies.skills.includes("survival"), `skills: ${hunter.sheet().proficiencies.skills}`);
+  const spy = await table(fighter(3), 4);
+  const blank = await spy.patch({ ...oneLevel(spy.sheet()), asiChoices: [{ mode: "feat", feat: "Covert Training" }] });
+  assert.equal(blank.status, 400, "Covert Training taken with no tool named");
+  assert.match(blank.json.error, /Covert Training: pick 1 tool/);
+  const named = await spy.patch({ ...oneLevel(spy.sheet()), asiChoices: [{ mode: "feat", feat: "Covert Training" }], featChoices: { "covert training": { tools: ["thieves' tools"] } } });
+  assert.equal(named.status, 200, named.json.error);
+  assert.ok(spy.sheet().proficiencies.tools.includes("thieves' tools"), `tools: ${spy.sheet().proficiencies.tools}`);
+  // Diehard asks Constitution 13 or higher.
+  const frail = await table(fighter(3, { abilities: { ...SCORES, con: 10 } }), 4);
+  const refused = await frail.patch({ ...oneLevel(frail.sheet()), asiChoices: [{ mode: "feat", feat: "Diehard" }] });
+  assert.equal(refused.status, 400, "Diehard taken at Constitution 10");
+  assert.match(refused.json.error, /Diehard requires Constitution 13 or higher/);
 });
 
 creation.world.close();

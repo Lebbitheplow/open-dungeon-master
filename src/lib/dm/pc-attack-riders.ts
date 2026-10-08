@@ -3,6 +3,7 @@
 // conditions a rider can leave on the target. Split from pc-attack.ts, which
 // decides the attack these belong to.
 
+import { holdsFeat } from "@/lib/srd/feat-effects";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { PendingAttack } from "@/lib/db/dm-turns";
@@ -76,7 +77,8 @@ export function pickManeuver(
     maneuver: {
       name: asked.trim(),
       // Multiclass: the superiority die grows with FIGHTER levels.
-      die: superiorityDie(classLevelFor(sheet, "fighter") || sheet.level),
+      // Martial Adept's die is a d6 without a Battle Master's own.
+      die: classLevelFor(sheet, "fighter") ? superiorityDie(classLevelFor(sheet, "fighter")) : holdsFeat(sheet, "Martial Adept") ? "d6" : superiorityDie(sheet.level),
       precision: /precision/i.test(term),
       rider: MANEUVER_RIDERS.find((entry) => entry.match.test(term)) ?? null,
     },

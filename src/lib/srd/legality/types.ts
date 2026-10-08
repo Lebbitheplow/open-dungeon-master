@@ -29,6 +29,8 @@ export type SpellFacts = {
   // The school of magic ("evocation"), where known: the third casters learn
   // from two schools (src/lib/srd/third-caster.ts).
   school?: string | null;
+  // Whether it carries the ritual tag, where the source knows.
+  ritual?: boolean;
 };
 
 // The feat's text rides along: what it grants beyond its ability point is

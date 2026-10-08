@@ -52,6 +52,7 @@ export type MaskedConfig = {
   };
   discord: { clientId: string; hasClientSecret: boolean };
   harness: HarnessConfig;
+  sharedHost: { campaignCreation: "" | "everyone" | "admins"; paidAi: "" | "everyone" | "admins" };
 };
 
 export type EnvDefaults = {

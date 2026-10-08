@@ -2,6 +2,7 @@ import { easeOrdeal } from "@/lib/dm/ordeal";
 import { effectiveMaxHp, pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
 import type { RollResult } from "@/lib/dice";
 import { RAGING } from "@/lib/srd/class-resources";
+import { TENDED } from "@/lib/dm/stabilize";
 import { refillResources } from "@/lib/srd/resource-refills";
 import { findClass, spellSlotsFor } from "@/lib/srd";
 import { isMulticlass, slotTableFor } from "@/lib/srd/multiclass";
@@ -120,6 +121,15 @@ export function longRestPatch(
         (condition) => !condition.startsWith("exhaustion"),
       );
       patch.conditionMeta = pruneMeta(patch.conditions, sheet.conditionMeta);
+    }
+  }
+  // A Healer's kit may tend a creature again after a rest (stabilize.ts).
+  {
+    const tendedBefore = patch.conditions ?? sheet.conditions;
+    if (tendedBefore.some((condition) => condition.toLowerCase() === TENDED)) {
+      const cleared = removeConditions(tendedBefore, patch.conditionMeta ?? sheet.conditionMeta, [TENDED]);
+      patch.conditions = cleared.conditions;
+      patch.conditionMeta = cleared.meta;
     }
   }
   // A rage never survives the night, whatever its remaining rounds said.
@@ -282,15 +292,22 @@ export function hitDicePlanExpression(
 export function hitDiceHealing(
   outcome: Pick<RollResult, "terms">,
   conMod: number,
-  withSong: boolean,
+  // How many extra dice ride at the end of the expression, outside the
+  // Constitution modifier: Song of Rest's, Chef's.
+  extraDice: boolean | number,
 ): number {
   const diceTerms = outcome.terms.filter((term) => term.kind === "dice");
-  const song = withSong ? diceTerms.pop() : undefined;
+  const count = typeof extraDice === "number" ? extraDice : extraDice ? 1 : 0;
+  let extra = 0;
+  for (let index = 0; index < count; index += 1) {
+    const term = diceTerms.pop();
+    extra += term && term.kind === "dice" ? term.subtotal : 0;
+  }
   const fromDice = diceTerms
     .flatMap((term) => (term.kind === "dice" ? term.dice : []))
     .filter((die) => die.kept)
     .reduce((sum, die) => sum + Math.max(0, die.value + conMod), 0);
-  return fromDice + (song && song.kind === "dice" ? song.subtotal : 0);
+  return fromDice + extra;
 }
 
 // Attuning takes a short rest spent with the item (SRD 5.1, Attunement), so

@@ -60,6 +60,7 @@ function maskedConfig(config: GlobalConfig) {
     },
     // No secrets in here: the agent program uses its own sign-in.
     harness: config.harness,
+    sharedHost: config.sharedHost,
   };
 }
 
@@ -178,6 +179,12 @@ const patchSchema = z.object({
     .object({
       clientId: z.string().trim().max(100).optional(),
       clientSecret: z.string().trim().max(200).optional(),
+    })
+    .optional(),
+  sharedHost: z
+    .object({
+      campaignCreation: z.enum(["", "everyone", "admins"]).optional(),
+      paidAi: z.enum(["", "everyone", "admins"]).optional(),
     })
     .optional(),
   // imagesVerifiedAt is deliberately absent: only a real test picture

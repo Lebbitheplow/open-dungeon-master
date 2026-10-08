@@ -23,6 +23,7 @@ import type {
   ClassEntry,
   CreateSheetInput,
   HitDicePool,
+  SheetFeature,
 } from "@/lib/schemas/sheet";
 import { earnedAsiCountFor } from "@/lib/srd/asi";
 import { legacyAsiTaken, readAsiLedger, withAsiLedger } from "@/lib/srd/asi-ledger";
@@ -55,7 +56,10 @@ import {
   takesDraconicAncestry,
   type DraconicAncestry,
 } from "@/lib/srd/racial-grants";
-import { applyFeatGrants, withoutFeatPicks } from "@/lib/srd/feat-grants";
+import { featSpellGrants, freeCastFeatures, freeCastOf } from "@/lib/srd/feat-spells";
+import { featSaveProficiency } from "@/lib/srd/feat-effects";
+import { applyFeatGrants, featGrantSpec, withoutFeatPicks } from "@/lib/srd/feat-grants";
+import { elementalAdeptFeatureName, elementalAdeptFeatureOf } from "@/lib/srd/feat-combat";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { kitNames, startingKitFor } from "@/lib/srd/starting-kit";
 import { judgeStartingGear, wealthCeilingGold } from "@/lib/srd/starting-wealth";
@@ -312,6 +316,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
           casts,
           raceId: race.id,
           raceName: race.name,
+          skills: input.proficiencies.skills,
+          tools: input.proficiencies.tools,
+          weapons: [...klass.weapons, ...input.proficiencies.weapons],
+          level,
         },
       });
   problems.push(...feats.problems);
@@ -334,7 +342,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // takes them here, as a level-up does; a stored or imported one already
   // holds them in its scores.
   const takesHalfFeats = policy.made || policy.edit;
-  const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats);
+  const featText = (feat: string) => context.featOf(feat)?.desc ?? "";
+  const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats, featText);
   const increase = racialIncrease(input, context, problems);
   // On an edit the stored scores are a pool too: they may be moved about,
   // as the builder lets them be, and not raised.
@@ -344,7 +353,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
           scores: context.baseline.sheet.abilities,
           racial: increase.racial,
           recorded: context.baseline.sheet.asiChoices ?? [],
-          halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats)),
+          halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats, featText)),
           freePoints: 0,
           mode: "bounds",
           pools: [],
@@ -376,7 +385,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const primalHeld =
     primalChampion && Boolean(context.baseline && holdsFeature(context.baseline.sheet, "primal champion"));
   let abilities = primalHeld ? withoutPrimalChampion(input.abilities) : input.abilities;
-  let featSaves = halfFeatPoints(halfFeats.filter((pick) => lower(pick.feat) === "resilient"));
+  let featSaves = halfFeatPoints(halfFeats.filter((pick) => featSaveProficiency(pick.feat, pick.ability, pick.desc)));
   if (takesHalfFeats) {
     const applied = applyHalfFeats(abilities, halfFeats);
     if ("error" in applied) {
@@ -448,7 +457,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
 
   // ---- training, skills, languages ----
   const trained = judgeProficiencies({
-    sent: input.proficiencies,
+    // The builder's preview already holds its feats' picks (Skilled's
+    // thieves' tools); they come off here, since the class and background
+    // never offered them, and go back on with the grants below (issue #147).
+    sent: withoutFeatPicks(input.proficiencies, input.featChoices),
     classes,
     classOf: context.classOf,
     race,
@@ -484,6 +496,28 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     problems.push(...granted.problems);
   }
   const training = granted.proficiencies;
+  // The spells the feats teach (src/lib/srd/feat-spells.ts): Fey Touched's
+  // misty step and its pick, Magic Initiate's cantrips, Ritual Caster's
+  // book. They are written into the spell lists below, on top of the
+  // class's counts, and each free cast becomes a feature the counters read.
+  const raisedByFeat = (feat: string) => halfFeats.find((pick) => lower(pick.feat) === lower(feat))?.ability ?? null;
+  const taught = featSpellGrants({
+    feats: feats.feats.map((name) => ({ name, desc: context.featOf(name)?.desc ?? "" })),
+    choices: input.featChoices ?? {},
+    raisedAbility: raisedByFeat,
+    spellOf: context.spellOf,
+    strict: policy.judgesPicks && context.door !== "engine",
+  });
+  if (policy.judgesPicks) {
+    problems.push(...taught.problems);
+  }
+  // Elemental Adept's type is kept the same way ("Elemental Adept: fire").
+  const elementPicks = feats.feats.flatMap((name) => {
+    const spec = featGrantSpec(context.featOf(name)?.desc ?? "");
+    const picked = lower(input.featChoices?.[lower(name)]?.damageType ?? "");
+    return spec.damageTypes.length && spec.damageTypes.includes(picked) ? [elementalAdeptFeatureName(picked)] : [];
+  });
+  const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks];
 
   // ---- spells ----
   const cantripPick = (input.racialChoices?.cantrip ?? "").trim();
@@ -499,6 +533,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     // Cantrips the race casts by nature (a tiefling's thaumaturgy) ride on
     // the caster's list, free.
     innateCantrips: innateCantripsFor(race.id, level),
+    featSpells: taught.grants,
     held: held?.spellcasting ?? null,
     judgeLists: policy.judgesPicks && context.door !== "engine",
     bookAllowance: policy.made,
@@ -539,13 +574,13 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // ---- features ----
   const bundledTraits = racialTraitsFor(race.id).length > 0;
   const featured = policy.trustsHeld
-    ? { problems: [], features: input.features ?? [] }
+    ? { problems: [], features: withFreeCasts(input.features ?? [], freeCasts) }
     : judgeFeatures({
-        sent: (input.features ?? []).filter((feature) => !isAncestry(feature)),
-        held: held?.features ?? [],
+        sent: (input.features ?? []).filter((feature) => !isAncestry(feature) && !featDerived(feature.name)),
+        held: (held?.features ?? []).filter((feature) => !featDerived(feature.name)),
         raceTraits: bundledTraits ? [] : race.traitNames,
         backgroundFeature: backgroundFeatureOf(background),
-        derived: racialCantrip && !casts ? [`Racial cantrip: ${racialCantrip.name}`] : [],
+        derived: [...(racialCantrip && !casts ? [`Racial cantrip: ${racialCantrip.name}`] : []), ...freeCasts],
         allowPlainStory: policy.plainStory,
         sameBackground: (held?.background ?? "") === input.background,
       });
@@ -708,4 +743,16 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
 // The check alone, for callers that only want to know.
 export function sheetProblems(input: CreateSheetInput, context: LegalityContext): string[] {
   return legalizeSheet(input, context).problems;
+}
+
+// A stored sheet's features with the free casts its feats call for today:
+// one taken away by a re-pick comes off, one the feat teaches goes on.
+// A feature a feat's picks wrote: a free cast, or Elemental Adept's type.
+const featDerived = (name: string) => Boolean(freeCastOf(name) || elementalAdeptFeatureOf(name));
+
+function withFreeCasts(features: SheetFeature[], freeCasts: string[]): SheetFeature[] {
+  const wanted = new Set(freeCasts.map(lower));
+  const kept = features.filter((feature) => !featDerived(feature.name) || wanted.has(lower(feature.name)));
+  const held = new Set(kept.map((feature) => lower(feature.name)));
+  return [...kept, ...freeCasts.filter((name) => !held.has(lower(name))).map((name) => ({ name: name.slice(0, 80), source: "story" as const }))];
 }

@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { isPrivateBackendHost } from "@/lib/backend-host";
 import path from "node:path";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
 import { endpointKind } from "@/lib/dm/sampling-logic";
@@ -63,6 +64,14 @@ function resolveConfig(story?: TextBackendKey) {
       serverEnv("OPENAI_API_KEY") ||
       borrowedTextKey(story),
   };
+}
+
+// Whether the "openai" picture backend bills the host: a key to a public
+// host. A local server speaking the images API is the host's own
+// (src/lib/shared-host.ts).
+export function openAiImagesPaid(story?: TextBackendKey): boolean {
+  const config = resolveConfig(story);
+  return config.apiKey !== "" && !isPrivateBackendHost(config.baseUrl);
 }
 
 // The same key, lent to speech-to-text: when a server has no Whisper of its

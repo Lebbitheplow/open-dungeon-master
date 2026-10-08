@@ -54,6 +54,8 @@ export function abilitiesAfterLevel(
   sheet: Pick<CharacterSheet, "abilities" | "features">,
   choices: AsiChoice[],
   leveled: { id: string; level: number },
+  // The text of a feat where known, for a content pack half-feat's score.
+  descOf?: (feat: string) => string,
 ): { abilities: AbilityScores; feats: string[]; primalChampion: boolean } {
   let abilities = applyChoices(sheet.abilities, choices);
   const feats: string[] = [];
@@ -62,7 +64,7 @@ export function abilitiesAfterLevel(
       continue;
     }
     feats.push(choice.feat);
-    const raised = applyFeatIncrease(abilities, choice.feat, choice.ability ?? null);
+    const raised = applyFeatIncrease(abilities, choice.feat, choice.ability ?? null, descOf?.(choice.feat));
     if (!("error" in raised)) {
       abilities = raised.abilities;
     }

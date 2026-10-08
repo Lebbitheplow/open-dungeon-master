@@ -2,6 +2,7 @@
 // spell planned by aoe-spell.ts, an enemy's breath or spell by enemy-casting.ts,
 // a trap). Split out of encounter-tools-extra.ts; never imports encounter-tools.
 
+import { elementalAdeptApplies, floorDamageDice } from "@/lib/srd/feat-combat";
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
@@ -301,8 +302,10 @@ export function handleAoeDamage(
     }
     const split = splitDamageExpression(args.damage, plan?.mech?.secondType);
     for (const [index, expression] of (split ?? [args.damage]).entries()) {
-      const outcome = rollExpression(expression);
       const type = index === 0 ? args.type : plan?.mech?.secondType;
+      // Elemental Adept: the caster's chosen type floors its dice at 2.
+      const adept = plan ? elementalAdeptApplies(plan.caster, type) : false;
+      const outcome = rollExpression(adept ? floorDamageDice(expression) : expression);
       rolled.push({ amount: outcome.total, type });
       const roll = insertRoll({
         campaignId: campaign.id,
@@ -387,7 +390,7 @@ export function handleAoeDamage(
         sheets,
         sheetsById,
         part.type,
-        plan ? { magical: true } : undefined,
+        plan ? { magical: true, ...(elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
       );
       if (applied.damageNote) {
         row.note = [row.note, applied.damageNote].filter(Boolean).join(" ");

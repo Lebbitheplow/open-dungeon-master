@@ -12,6 +12,7 @@
 // Nothing magical and nothing without a listed price can be bought at
 // creation: such things are found or granted in play.
 import { gearPriceCopper } from "@/lib/srd/adventuring-gear";
+import { parseCoins } from "@/lib/srd/currency";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 
 export const STARTING_WEALTH_METHODS = ["equipment", "rolled"] as const;
@@ -127,6 +128,34 @@ export const bundledPrices: PriceLookup = (name) => ({
   copper: bundledPriceCopper(name),
   magic: looksMagical(name),
 });
+
+// A content pack row read as a price: a magic item has none to buy at
+// creation, mundane gear costs what its cost column says (null when the
+// row prices nothing).
+export function packRowPrice(row: { kind: string; cost: string }): ItemPrice {
+  if (row.kind === "magic_item") {
+    return { copper: null, magic: true };
+  }
+  const copper = parseCoins(row.cost ?? "");
+  return { copper: copper === null || copper <= 0 ? null : copper, magic: false };
+}
+
+// The price a pick is judged at, in one order on both sides of the wire:
+// the bundled table first (the book's prices and the setting gear), then
+// the pack's row for a name the table never priced, else the bundled
+// verdict (unpriced, or magical). The server's catalog
+// (src/lib/characters/catalog.ts catalogPrices) layers its pack through
+// here; the builder's purse (useBuilderDerived.ts) layers the price that
+// rode in on the pick. Before this the builder knew the bundled table only,
+// so an arrow, a wagon or a smith's tools from the pack was refused as
+// unpriced at creation while the server would have sold it (issue #136).
+export function layeredPrice(name: string, packed: ItemPrice | undefined): ItemPrice {
+  const bundled = bundledPrices(name);
+  if (bundled.copper !== null && !bundled.magic) {
+    return bundled;
+  }
+  return packed ?? bundled;
+}
 
 export type GearItem = { name: string; qty: number; slug?: string };
 

@@ -180,7 +180,7 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "system-region" }} size="size-5" />
             {selectedPack?.name ?? preset.name}
-            {settings.dmMode === "human" ? " · human DM" : ""}
+            {settings.dmMode === "human" ? " · human DM" : settings.dmMode === "steered" ? " · AI narrates, a person steers" : ""}
             {settings.dmMode !== "human" && settings.aiStorySetup ? " · AI story setup" : ""}
             {settings.dmMode !== "human"
               ? ` · ${CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign`
@@ -232,7 +232,13 @@ export function GameSettingsPanel({
           </span>
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "tab-loot" }} size="size-5" />
-            {settings.inventoryApprovals ? "Item offers need approval" : "Item changes auto-apply"}
+            {settings.inventoryApprovals && settings.vitalsApprovals
+              ? "Item and vitals changes need approval"
+              : settings.inventoryApprovals
+                ? "Item offers need approval"
+                : settings.vitalsApprovals
+                  ? "Vitals changes need approval"
+                  : "Item changes auto-apply"}
           </span>
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "tab-bonds" }} size="size-5" />
@@ -564,7 +570,7 @@ export function GameSettingsPanel({
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Items</span>
-          <Tooltip content="When on, DM-granted loot, item removals, and gold changes become offers the owning player accepts or declines before they land on the sheet. Damage, healing, XP, and conditions still apply normally.">
+          <Tooltip content="When on, DM-granted loot, item removals, and gold changes become offers the owning player accepts or declines before they land on the sheet. Damage, healing and conditions have their own switch.">
             <SettingToggle on={settings.inventoryApprovals} onToggle={() => patch({ inventoryApprovals: !settings.inventoryApprovals })}>
               Item offers {settings.inventoryApprovals ? "on" : "off"}
             </SettingToggle>
@@ -573,6 +579,19 @@ export function GameSettingsPanel({
             {settings.inventoryApprovals
               ? "Players confirm DM item and gold changes before they apply."
               : "DM item and gold changes apply immediately (lead can undo)."}
+          </span>
+        </div>
+        <div className="pk-row">
+          <span className="pk-rowlabel">Vitals</span>
+          <Tooltip content="When on, damage, healing and conditions the AI DM or a connected agent aims at a player character wait for that player (or the lead) to confirm before they land, so a wrong target, a doubled hit or a misread rule never sticks unseen. The engine's own dice, an enemy's attack or a fall, apply as always. A slower table; off by default.">
+            <SettingToggle on={settings.vitalsApprovals} onToggle={() => patch({ vitalsApprovals: !settings.vitalsApprovals })}>
+              Vitals changes {settings.vitalsApprovals ? "need confirming" : "auto-apply"}
+            </SettingToggle>
+          </Tooltip>
+          <span className="text-stone-500">
+            {settings.vitalsApprovals
+              ? "Players confirm DM damage, healing and conditions before they apply."
+              : "DM damage, healing and conditions apply immediately (lead can undo)."}
           </span>
         </div>
         <div className="rounded-lg border border-amber-500/15 bg-stone-950/40 p-2.5">

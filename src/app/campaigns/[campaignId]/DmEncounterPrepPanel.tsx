@@ -8,7 +8,8 @@ import { ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { Listed, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { formatRoster, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
@@ -82,19 +83,20 @@ export function DmEncounterPrepPanel({
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
   // effect linter, which is what it is.
+  // A refused or failed list is settled, not dropped (issue 140), so the
+  // list says "nothing prepared" only once the server has said so.
+  const { loaded, loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
-      fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { templates: PreparedEncounter[] } | null) => {
-          if (payload) {
-            setTemplates(payload.templates);
+      readLoad<{ templates: PreparedEncounter[] }>(fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`), "The prepared fights").then(
+        (outcome) => {
+          if (outcome.payload) {
+            setTemplates(outcome.payload.templates);
           }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+          settle(outcome);
+        },
+      ),
+    [campaignId, settle],
   );
 
   // The map drawer, for the "On which map" link. Same load-once shape as the
@@ -273,16 +275,18 @@ export function DmEncounterPrepPanel({
     return (
       <div className="space-y-3">
         <DmWorkbenchPanel campaignId={campaignId} collapsible />
-        <EncounterRows
-          encounters={templates}
-          maps={maps}
-          thresholds={thresholds}
-          busy={busy}
-          onOpen={openEditor}
-          onDeploy={(template) => void deploy(template.id)}
-          onDuplicate={(template) => void duplicate(template)}
-          onDelete={(template) => void remove(template)}
-        />
+        <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the fights...">
+          <EncounterRows
+            encounters={templates}
+            maps={maps}
+            thresholds={thresholds}
+            busy={busy}
+            onOpen={openEditor}
+            onDeploy={(template) => void deploy(template.id)}
+            onDuplicate={(template) => void duplicate(template)}
+            onDelete={(template) => void remove(template)}
+          />
+        </Listed>
         {feedback}
         <Sheet
           open={editorOpen}
@@ -314,6 +318,7 @@ export function DmEncounterPrepPanel({
           glyph="system-encounters"
           aside={templates.length ? <span key={templates.length} className="count-pop">{templates.length}</span> : undefined}
         />
+        <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the fights...">
         {templates.length ? (
           <ul className="stagger space-y-1.5">
             {templates.map((template) => {
@@ -361,6 +366,7 @@ export function DmEncounterPrepPanel({
         ) : (
           <EmptyState size="sm" art="map" title="Nothing prepared. Write a roster below and it is one button at the table." />
         )}
+        </Listed>
       </section>
 
       <EncounterForm

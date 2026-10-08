@@ -258,6 +258,7 @@ export function createSheet(
     withBackgroundFeature(input.features ?? [], input.background),
     classList,
     input.race,
+    input.feats,
   );
   // Limited-use counters (Rage, Ki, Second Wind...) sized for the features
   // just granted; the resource engine spends and refills them.
@@ -273,6 +274,7 @@ export function createSheet(
     abilityMods,
     undefined,
     classList.length > 1 ? classList : undefined,
+    input.feats,
   );
   // Unless the AC is pinned, it comes from the gear they are actually
   // carrying rather than the builder's suggestion. An absent flag means a
@@ -607,6 +609,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
             ),
             existing.resources,
             classes.length ? classes : undefined,
+            patch.feats ?? existing.feats,
           )
         : existing.resources),
     equipment: patch.equipment ?? existing.equipment,
@@ -673,6 +676,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       ),
       patch.resources ?? existing.resources,
       next.classes.length ? next.classes : undefined,
+      next.feats,
     );
   }
 

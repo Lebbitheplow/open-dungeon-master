@@ -69,7 +69,7 @@ const TABLE = {
   ttsAvailable: true,
   mapsAvailable: true,
 };
-const ALL_ON = { ...DRAFT, inventoryApprovals: true, midGameJoinOpen: true, holdSubmissions: true };
+const ALL_ON = { ...DRAFT, inventoryApprovals: true, vitalsApprovals: true, midGameJoinOpen: true, holdSubmissions: true };
 
 // ---- the portals ----
 
@@ -168,10 +168,10 @@ function rowsOf(draft, gates) {
   return tableSheet(draft, gates).flatMap((group) => group.rows);
 }
 
-test("featuresOn still counts thirteen", () => {
-  assert.equal(featuresOn(ALL_ON, TABLE), 13);
-  assert.equal(countableRows(TABLE), 13);
-  assert.equal(rowsOf(ALL_ON, TABLE).filter((row) => row.counted).length, 13);
+test("featuresOn still counts fourteen", () => {
+  assert.equal(featuresOn(ALL_ON, TABLE), 14);
+  assert.equal(countableRows(TABLE), 14);
+  assert.equal(rowsOf(ALL_ON, TABLE).filter((row) => row.counted).length, 14);
   // The four that are shown but uncounted stay uncounted.
   const uncounted = rowsOf(ALL_ON, TABLE).filter((row) => !row.counted).map((row) => row.key);
   assert.deepEqual(uncounted.sort(), ["boardDrawing", "enemyIntent", "multiCharacter", "presentation"]);
@@ -204,7 +204,7 @@ test("the dots on the sheet always add up to featuresOn", () => {
 
 test("gating is the old gating", () => {
   const keys = (draft, gates) => rowsOf(draft, gates).map((row) => row.key);
-  assert.equal(keys(ALL_ON, TABLE).length, 17);
+  assert.equal(keys(ALL_ON, TABLE).length, 18);
   const human = keys(ALL_ON, { ...TABLE, aiNarrates: false });
   for (const key of ["aiStorySetup", "narrationGuard", "worldSimulation"]) {
     assert.ok(!human.includes(key), `${key} shows with a human narrator`);

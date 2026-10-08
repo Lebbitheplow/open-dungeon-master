@@ -7,6 +7,7 @@ import { ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { offersStoryModel, useCapabilities, type ClientCapabilities } from "@/lib/use-capabilities";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
+import { StarterDialog } from "@/app/home/StarterDialog";
 import { AccountMenu, AppBrand, AppHomeButton } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -22,17 +23,17 @@ import { WorkshopSection } from "@/app/home/WorkshopSection";
 import { pickContinue, type HomeCampaign } from "@/app/home/types";
 import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
 
-// The desktop and Android shells' quick tiles land here with ?new=1 or
-// ?new=solo and expect the wizard already open. Read once, at mount, as the
+// The desktop and Android shells' quick tiles land here with ?new=1,
+// ?new=solo or ?new=starter and expect that wizard already open. Read once, at mount, as the
 // initial dialog state: Home only mounts the dashboard after the session
 // check resolves on the client, so there is no server render to disagree
 // with, and no effect has to set state after the fact.
-function requestedWizard(): "campaign" | "solo" | null {
+function requestedWizard(): "campaign" | "solo" | "starter" | null {
   if (typeof window === "undefined") {
     return null;
   }
   const value = currentQuery().get("new");
-  return value === "solo" ? "solo" : value === "1" ? "campaign" : null;
+  return value === "solo" ? "solo" : value === "starter" ? "starter" : value === "1" ? "campaign" : null;
 }
 
 // The home is a title screen (docs: "ODM World Concepts", round 3a): the
@@ -53,6 +54,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   const [cloningId, setCloningId] = useState("");
   const [createOpen, setCreateOpen] = useState(() => requestedWizard() === "campaign");
   const [soloOpen, setSoloOpen] = useState(() => requestedWizard() === "solo");
+  const [starterOpen, setStarterOpen] = useState(() => requestedWizard() === "starter");
   const [howToOpen, setHowToOpen] = useState(false);
   const joinInputRef = useRef<HTMLInputElement | null>(null);
   const capabilities = useCapabilities();
@@ -227,10 +229,12 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             ) : continueCampaign ? (
               <ContinueHero campaign={continueCampaign} userId={user.id} />
             ) : (
-              <EmptyHero onNewCampaign={() => setCreateOpen(true)} />
+              <EmptyHero onNewCampaign={() => setCreateOpen(true)} canCreate={user.canCreateCampaigns !== false} />
             )}
             <HomeMenu
               onNewCampaign={() => setCreateOpen(true)}
+              onStarter={() => setStarterOpen(true)}
+              showNew={user.canCreateCampaigns !== false}
               onSolo={() => setSoloOpen(true)}
               showSolo={offersStoryModel(capabilities)}
               onJoin={focusJoin}
@@ -260,6 +264,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
 
         <CreateCampaignDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={onCreated} />
         <CreateCampaignDialog solo open={soloOpen} onOpenChange={setSoloOpen} onCreated={onCreated} />
+        <StarterDialog open={starterOpen} onOpenChange={setStarterOpen} onCreated={onCreated} />
         <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
       </div>
     </main>

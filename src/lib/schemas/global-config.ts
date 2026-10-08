@@ -148,6 +148,18 @@ export const globalConfigSchema = z.object({
       clientSecret: z.string().trim().max(200).default(""),
     })
     .prefault({}),
+  // Sharing this server with people who are not its admin
+  // (src/lib/shared-host.ts, issues #137 and #138). Blank is "everyone", the
+  // behaviour every install had. campaignCreation: who may start a
+  // campaign or workshop. paidAi: whose campaigns may spend the backends
+  // that carry the host's key (and the agent program, which runs on the
+  // admin's plan); the local backends stay open to every table.
+  sharedHost: z
+    .object({
+      campaignCreation: z.enum(["", "everyone", "admins"]).default(""),
+      paidAi: z.enum(["", "everyone", "admins"]).default(""),
+    })
+    .prefault({}),
   // The agent program that narrates when text.provider (or a campaign) is
   // "harness" (src/lib/harness/). No vendor credential is ever stored here:
   // the program uses the sign-in it already has on this machine.

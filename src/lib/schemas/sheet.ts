@@ -71,6 +71,15 @@ const featPicksSchema = z.object({
   expertise: z.array(z.string().trim().max(40)).max(4).optional(),
   weapons: z.array(z.string().trim().max(60)).max(8).optional(),
   tools: z.array(z.string().trim().max(60)).max(6).optional(),
+  // Armor a feat offers as a pick (Heraldic Training's shields).
+  armor: z.array(z.string().trim().max(20)).max(2).optional(),
+  // The spells a feat teaches (src/lib/srd/feat-spells.ts).
+  cantrips: z.array(z.string().trim().max(80)).max(4).optional(),
+  spells: z.array(z.string().trim().max(80)).max(4).optional(),
+  list: z.string().trim().max(20).optional(),
+  ability: z.enum(["int", "wis", "cha"]).optional(),
+  // Elemental Adept's damage type (src/lib/srd/feat-combat.ts).
+  damageType: z.string().trim().max(20).optional(),
 });
 export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema);
 export type FeatChoicesInput = z.infer<typeof featChoicesSchema>;
@@ -319,7 +328,8 @@ export const createSheetSchema = z.object({
     .object({
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
       // The alternative taken on each either-or line of the background's kit
-      // ("a dagger or light hammer"), by its words, in kit order
+      // ("a dagger or light hammer"), by its words, or the tool's name where
+      // the alternative is a kind ("one instrument"), in kit order
       // (src/lib/srd/gear-choices.ts). Absent or short: the book's first.
       gear: z.array(z.string().trim().max(80)).max(8).default([]),
     })

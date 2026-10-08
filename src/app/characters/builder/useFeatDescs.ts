@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { contentSlug } from "@/lib/help";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { packFeatText } from "@/lib/srd/feat-text";
+import { registerFeatRules } from "@/lib/srd/feature-effects";
 
 // The text of the feats on the sheet, by lower-case name, for what each
 // grants (src/lib/srd/feat-grants.ts). ODM's own feats are bundled; a
@@ -21,13 +23,21 @@ export function useFeatDescs(names: string[]): Record<string, string> {
     for (const name of key.split("|")) {
       fetch(`/api/content/feats/${encodeURIComponent(contentSlug(name))}`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((body: { entry?: { data?: { desc?: unknown; description?: unknown } } } | null) => {
+        .then((body: { entry?: { data?: Record<string, unknown> } } | null) => {
           if (cancelled) {
             return;
           }
-          const desc = body?.entry?.data?.desc ?? body?.entry?.data?.description;
-          // An unknown feat is remembered as empty, so it is asked for once.
-          setFetched((current) => ({ ...current, [name]: typeof desc === "string" ? desc : "" }));
+          // The row's text wherever the pack keeps it, read as the server
+          // reads it (src/lib/srd/feat-text.ts). An unknown feat is
+          // remembered as empty, so it is asked for once.
+          const data = body?.entry?.data;
+          const desc = data ? packFeatText(data).desc : "";
+          // The builder's own numbers (speed, initiative, passive scores)
+          // read the feat through the same table the server does.
+          if (desc) {
+            registerFeatRules(name, desc);
+          }
+          setFetched((current) => ({ ...current, [name]: desc }));
         })
         .catch(() => {
           if (!cancelled) {

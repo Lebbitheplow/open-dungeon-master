@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { PageSkeleton } from "@/components/PageSkeleton";
@@ -57,6 +59,10 @@ export default function CharactersPage() {
   const [characters, setCharacters] = useState<LibraryCharacter[]>([]);
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(true);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [croppingId, setCroppingId] = useState("");
   const [cloningId, setCloningId] = useState("");
   const [importing, setImporting] = useState(false);
@@ -66,21 +72,20 @@ export default function CharactersPage() {
   const importInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch("/api/characters")
-      .then((response) => {
-        if (response.status === 401) {
-          setAuthed(false);
-          return null;
-        }
-        return response.ok ? response.json() : null;
-      })
-      .then((data) => {
-        if (data?.characters) {
-          setCharacters(data.characters);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    readLoad<{ characters?: LibraryCharacter[] }>(fetch("/api/characters"), "Your characters").then((outcome) => {
+      // Signed out: the page says so itself, not as a failed load.
+      if (outcome.error && /answered 401/.test(outcome.error)) {
+        setAuthed(false);
+        setLoading(false);
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload?.characters) {
+        setCharacters(outcome.payload.characters);
+      }
+      setLoading(false);
+    });
+  }, [reloads, settle]);
 
   // While a portrait renders in the background, re-fetch until it lands (or
   // fails); the finished image then appears without a reload.
@@ -248,6 +253,8 @@ export default function CharactersPage() {
 
       {loading ? (
         <PageSkeleton kind="roster" className="px-0 py-2" />
+      ) : loadError ? (
+        <LoadFailed error={loadError} onRetry={() => { setLoading(true); setReloads((current) => current + 1); }} />
       ) : characters.length === 0 ? (
         <div className={cn(ui.tile, "px-6 py-6")}>
           <EmptyState

@@ -7,9 +7,11 @@ import { encodeImageForUpload } from "@/lib/image-encode";
 import { ui } from "@/lib/ui";
 import { backdropDataUrl, nameFromFilename } from "@/lib/battlemap/uvtt";
 import { Sheet } from "@/components/ui/Sheet";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { useTourPrepare } from "@/lib/tours/prepare";
 import { DEFAULT_MAP_TOOLS, type MapTools } from "@/app/campaigns/[campaignId]/MapToolbox";
 import { useMapToasts } from "@/app/campaigns/[campaignId]/MapToasts";
+import { Listed } from "@/app/campaigns/[campaignId]/PanelKit";
 import { MapCreateControls } from "@/app/workshop/maps/MapCreateControls";
 import { MapEditor } from "@/app/workshop/maps/MapEditor";
 import { MapGallery } from "@/app/workshop/maps/MapGallery";
@@ -60,19 +62,20 @@ export function DmMapLibraryPanel({
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
   // effect linter, which is what it is. Same shape as DmMapStudioPanel.
+  //
+  // A refused or failed list is settled, not dropped (issue 140): until the
+  // server has said what is in the drawer, the drawer is loading, and a no
+  // is shown as a no. `maps: []` above is a placeholder, never an answer.
+  const { loaded, loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
-      fetch(`/api/campaigns/${campaignId}/dm/maps`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: LibraryState | null) => {
-          if (payload) {
-            setState(payload);
-          }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+      readLoad<LibraryState>(fetch(`/api/campaigns/${campaignId}/dm/maps`), "The maps").then((outcome) => {
+        if (outcome.payload) {
+          setState(outcome.payload);
+        }
+        settle(outcome);
+      }),
+    [campaignId, settle],
   );
 
   useEffect(() => {
@@ -386,7 +389,9 @@ export function DmMapLibraryPanel({
         </section>
 
         <div data-tour="maps-gallery">
-          <MapGallery maps={state.maps} selectedId={selectedId} genre={state.genre} onOpen={(map) => select(map.id)} />
+          <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the drawer...">
+            <MapGallery maps={state.maps} selectedId={selectedId} genre={state.genre} onOpen={(map) => select(map.id)} />
+          </Listed>
         </div>
         {feedback}
 
@@ -414,6 +419,7 @@ export function DmMapLibraryPanel({
         onImport={(file) => void importUvtt(file)}
       />
 
+      <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the drawer...">
       {state.maps.length ? (
         <div data-pill-group="" className="flex flex-wrap gap-1">
           {state.maps.map((map) => (
@@ -440,6 +446,7 @@ export function DmMapLibraryPanel({
           Nothing in the drawer yet. Roll one, start from blank rock, or import a drawing.
         </p>
       )}
+      </Listed>
 
       {editor ? <div className="h-[min(86dvh,48rem)]">{editor}</div> : null}
       {feedback}

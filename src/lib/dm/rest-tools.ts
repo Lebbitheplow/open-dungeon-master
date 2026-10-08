@@ -18,7 +18,7 @@ import { normalizeRestKind } from "@/lib/dm/arg-coerce";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import { advanceClock, getClock, openShortRestWindow, recordLongRests, setTravelPace } from "@/lib/db/clock";
 import { getDmTurn } from "@/lib/db/dm-turns";
-import { partySongOfRestDie, playerChoosesHitDice, spendHitDice } from "@/lib/dm/hit-dice";
+import { partyChefDie, partySongOfRestDie, playerChoosesHitDice, spendHitDice } from "@/lib/dm/hit-dice";
 import { goingWithout } from "@/lib/dm/supplies";
 import { afflictedRestPatch, afflictionsAfterLongRest } from "@/lib/dm/afflictions";
 import { chargeLifestyle } from "@/lib/dm/lifestyle";
@@ -331,6 +331,8 @@ export function handleTakeRest(
   // Song of Rest: each creature that spends at least one Hit Die regains
   // ONE extra die, not one per die spent. The bard benefits too.
   const songDie = partySongOfRestDie(sheets);
+  // Chef: the cook's meal adds a d8 to everyone who spends a die.
+  const chefDie = partyChefDie(sheets);
 
   const results: Array<Record<string, unknown>> = [];
   for (const [sheetId, requested] of plan) {
@@ -340,6 +342,7 @@ export function handleTakeRest(
       sheetId,
       requested,
       songDie,
+      chefDie,
       reason,
       requestedBy: "dm",
     });
@@ -394,6 +397,9 @@ export function handleTakeRest(
       : {}),
     ...(refilled.length ? { resourcesRefilled: refilled } : {}),
     // Only for a rest where somebody spent a Hit Die: the song adds to that.
+    ...(chefDie && results.some((row) => typeof row.diceSpent === "number")
+      ? { chef: `Chef: everyone who spent a Hit Die regained an extra 1${chefDie} from the meal.` }
+      : {}),
     ...(songDie && results.some((row) => typeof row.diceSpent === "number")
       ? {
           songOfRest: `Song of Rest: everyone who spent a Hit Die regained an extra 1${songDie}.`,

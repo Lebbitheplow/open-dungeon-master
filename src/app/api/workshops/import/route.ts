@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { importWorkshopBundle } from "@/lib/db/workshop-bundle";
 import { uploadRefusalResponse } from "@/lib/upload-budget";
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) {
     return unauthorized();
+  }
+  if (!canCreateCampaigns(user)) {
+    return campaignCreationRefusal();
   }
   const raw = await request.json().catch(() => ({}));
   const parsed = bodySchema.safeParse(raw);

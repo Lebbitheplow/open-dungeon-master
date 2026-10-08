@@ -11,6 +11,15 @@ export const PROPOSAL_TOOL_NAMES = new Set([
   "purchase",
 ]);
 
+// The vitals the second switch (vitalsApprovals) stages: what a DM tool
+// call does to a player character's hit points and conditions.
+export const VITALS_PROPOSAL_TOOL_NAMES = new Set([
+  "apply_damage",
+  "heal",
+  "set_condition",
+  "clear_condition",
+]);
+
 export const PROPOSAL_TTL_HOURS = 24;
 
 export type ProposalArgs = {
@@ -20,7 +29,37 @@ export type ProposalArgs = {
   delta?: number;
   price?: number;
   action?: string;
+  // apply_damage, heal, set_condition, clear_condition
+  amount?: number;
+  type?: string;
+  temp?: boolean;
+  spell?: string;
+  condition?: string;
+  rounds?: number;
 };
+
+export type ApprovalSettings = { inventoryApprovals: boolean; vitalsApprovals: boolean };
+
+// Which DM tool calls become offers under this table's two switches: items
+// and gold under the first, hit points and conditions under the second.
+// Only a real player's character is staged; companions, pets and enemies
+// stay auto-applied (nobody is at the table to approve for them).
+export function shouldProposeChange(
+  settings: ApprovalSettings,
+  toolName: string,
+  target: { isCompanion?: boolean } | null,
+): boolean {
+  if (!target || target.isCompanion) {
+    return false;
+  }
+  if (PROPOSAL_TOOL_NAMES.has(toolName)) {
+    return settings.inventoryApprovals;
+  }
+  if (VITALS_PROPOSAL_TOOL_NAMES.has(toolName)) {
+    return settings.vitalsApprovals;
+  }
+  return false;
+}
 
 // Only DM-initiated inventory/gold changes to a real player's character are
 // staged; companions, pets, and enemies stay auto-applied (nobody is at the
@@ -59,6 +98,30 @@ export function proposalSummary(
       return args.action === "sell"
         ? `${characterName} sells ${itemName}${suffix} for ${price} gold`
         : `${characterName} buys ${itemName}${suffix} for ${price} gold`;
+    }
+    case "apply_damage": {
+      const amount = Math.max(1, Number(args.amount ?? 0));
+      const type = String(args.type ?? "").trim();
+      return `Deal ${amount} ${type ? `${type} ` : ""}damage to ${characterName}`;
+    }
+    case "heal": {
+      const amount = Number(args.amount ?? 0);
+      const spell = String(args.spell ?? "").trim();
+      if (args.temp) {
+        return `Give ${characterName} ${Math.max(1, amount)} temporary hit points`;
+      }
+      return spell
+        ? `Heal ${characterName} with ${spell}${amount > 0 ? ` (${amount})` : ""}`
+        : `Heal ${characterName} for ${Math.max(1, amount)}`;
+    }
+    case "set_condition": {
+      const condition = String(args.condition ?? "a condition").trim() || "a condition";
+      const rounds = Number(args.rounds ?? 0);
+      return `Make ${characterName} ${condition}${rounds > 0 ? ` for ${rounds} round${rounds === 1 ? "" : "s"}` : ""}`;
+    }
+    case "clear_condition": {
+      const condition = String(args.condition ?? "a condition").trim() || "a condition";
+      return `Clear ${condition} from ${characterName}`;
     }
     default:
       return `${toolName} for ${characterName}`;

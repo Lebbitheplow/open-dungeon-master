@@ -321,7 +321,7 @@ export async function buildIconList() {
     if (!cardNames.has(name)) cardNames.set(name, classId);
   };
   for (const def of RESOURCE_DEFS) {
-    if (def.passive || def.id === "ki" || def.id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
+    if (def.passive || def.into || def.id === "ki" || def.id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
     // An innate spell counter is named for its spell, painted as a spell.
     if (spells.some((s) => s.n.toLowerCase() === def.displayName.toLowerCase())) continue;
     deal(def.displayName, def.classIds?.[0] ?? def.grantedBy?.[0] ?? null);
