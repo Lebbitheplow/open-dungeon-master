@@ -22,9 +22,9 @@ export type AmbienceCue = {
   // One line describing what a player hears. Written for a person choosing
   // from a list, and handed to the model as the tool argument's description.
   blurb: string;
-  // Words that make this cue the right answer for a piece of narration or a
-  // place description. Matched on word boundaries by inferBedCue, so "sea"
-  // never fires on "season".
+  // Plain words for the sound, which scripts/fetch-ambience.mjs adds to its
+  // search of the sound archives after `search`. Nothing reads a place or a
+  // narration with them: a place's bed is its kind, set by the tools.
   keywords: string[];
   // What scripts/fetch-ambience.mjs searches the archives for. Ordered best
   // first; the script takes the first query that returns a usable file.
@@ -781,4 +781,19 @@ export function cueIds(layer: AmbienceLayer): string[] {
 // caller's business: silence means different things per layer.
 export function cueOptions(layer: AmbienceLayer): Array<{ value: string; label: string }> {
   return cuesForLayer(layer).map((cue) => ({ value: cue.id, label: cue.label }));
+}
+
+// The beds that name a kind of place: what move_party, update_location and
+// the map tools offer as a place's scene. The sky and the clock are left
+// out: rain, storm and wind follow the campaign's weather by themselves
+// (followWeatherAmbience), and a place stored as one would replay it after
+// the sky cleared.
+const NOT_PLACES = new Set(["wind", "rain", "storm", "night"]);
+
+export function sceneIds(): string[] {
+  return cueIds("bed").filter((id) => !NOT_PLACES.has(id));
+}
+
+export function sceneOptions(): Array<{ value: string; label: string }> {
+  return cueOptions("bed").filter((option) => !NOT_PLACES.has(option.value));
 }

@@ -1,6 +1,6 @@
 // The Map Forge's pure half (docs/visual-overhaul-plan.md 4.1 and 4.8): the
-// preview and the saved map are the same map, the read-back names the word the
-// generator matched, the history keeps seven, and the reveal floods outward.
+// preview and the saved map are the same map, the read-back says what the kind
+// of place decided, the history keeps seven, and the reveal floods outward.
 // The agreement check needs the library, and so a throwaway database.
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -30,49 +30,27 @@ function test(name, fn) {
 
 const label = (theme) => ({ cave: "Cave", forest: "Forest", swamp: "Swamp", riverside: "Water", interior: "Indoors", field: "Open ground" })[theme];
 
-test("the read-back names the word that chose the theme and the word that set the light", () => {
-  const read = forge.readHint("a flooded crypt, pitch-black", null);
-  assert.equal(read.theme, "cave");
-  assert.equal(read.ambient, "dark");
-  assert.equal(read.themeWord, "crypt");
-  assert.equal(read.lightWord, "pitch-black");
-  assert.deepEqual(
-    read.words.map((word) => word.hit),
-    [null, null, "theme", "light"],
-  );
-  assert.equal(read.words[2].text, "crypt,", "the word is shown as typed, comma and all");
-});
+const sceneLabel = (scene) => ({ crypt: "Crypt", desert: "Desert", tavern: "Tavern" })[scene] ?? scene;
 
-test("the read-back agrees with the generator for every kind of place, and says nothing when nothing matched", () => {
-  for (const hint of ["a mossy forest at dusk", "the harbor at noon", "tavern brawl", "a bog", "somewhere", "", "an ice cave, torchlit"]) {
-    const read = forge.readHint(hint, null);
-    const real = generateBattleMap({ seed: 7, hint: hint || undefined, pcCount: 4, enemyCount: 4 });
-    assert.equal(read.theme, real.theme, hint);
-    assert.equal(read.ambient, real.ambient, hint);
+test("the outcome is what the generator draws for every kind of place, and open ground for none", () => {
+  for (const scene of ["", "crypt", "forest", "coast", "tavern", "swamp", "desert", "plains"]) {
+    for (const [theme, ambient] of [["", ""], ["forest", ""], ["", "dim"]]) {
+      const settings = { scene, theme, ambient };
+      const real = generateBattleMap({ seed: 7, scene: scene || null, theme: theme || undefined, ambient: ambient || undefined, pcCount: 4, enemyCount: 4 });
+      assert.deepEqual(forge.forgeOutcome(settings), { theme: real.theme, ambient: real.ambient }, JSON.stringify(settings));
+    }
   }
-  const plain = forge.readHint("somewhere", null);
-  assert.deepEqual([plain.themeWord, plain.lightWord, plain.roughWord], [null, null, null]);
-  assert.equal(forge.readHint("a mossy forest at dusk", null).lightWord, "dusk");
-  // A word for daylight changes nothing in a place that is bright anyway, but
-  // the generator did match it, so it is still named; under a cave's dark it
-  // is what made the difference.
-  assert.equal(forge.readHint("the harbor at noon", null).lightWord, "noon");
-  assert.equal(forge.readHint("a cave at noon", null).ambient, "bright");
-  assert.equal(forge.readHint("a cave at noon", null).lightWord, "noon");
-  const ice = forge.readHint("an ice cave", null);
-  assert.equal(ice.roughWord, "ice");
-  assert.equal(ice.themeWord, "cave");
 });
 
-test("the sentences say who decided: the word, the DM, or nobody", () => {
-  const read = forge.readHint("a flooded crypt, pitch-black", null);
-  const said = forge.explainRead(read, { theme: "", ambient: "" }, label);
-  assert.match(said[0], /crypt.*cave/);
-  assert.match(said[1], /pitch-black.*light/);
-  const overruled = forge.explainRead(read, { theme: "forest", ambient: "bright" }, label);
+test("the sentences say who decided: the kind of place, the DM, or nobody", () => {
+  const said = forge.explainForge({ scene: "crypt", theme: "", ambient: "" }, label, sceneLabel);
+  assert.match(said[0], /Crypt is fought on cave/);
+  assert.match(said[1], /The light is what cave usually has/);
+  const overruled = forge.explainForge({ scene: "crypt", theme: "forest", ambient: "bright" }, label, sceneLabel);
   assert.match(overruled[0], /You said forest outright/);
   assert.match(overruled[1], /You set the light to daylight/);
-  assert.match(forge.explainRead(forge.readHint("", null), { theme: "", ambient: "" }, label)[0], /open ground/);
+  assert.match(forge.explainForge({ scene: "", theme: "", ambient: "" }, label, sceneLabel)[0], /open ground/);
+  assert.match(forge.explainForge({ scene: "desert", theme: "", ambient: "" }, label, sceneLabel)[2], /Desert scatters rough ground/);
   for (const sentence of [...said, ...overruled]) {
     assert.ok(!sentence.includes(String.fromCharCode(0x2014)), "an em dash crept into the copy");
   }
@@ -136,18 +114,18 @@ const workshop = createWorkshop(userId, { title: "Forge prep", targetParty: { si
 
 test("the client's preview and the server's saved map agree on ten seeds", () => {
   const cases = [
-    { hint: "", theme: "", ambient: "" },
-    { hint: "a flooded crypt, pitch-black", theme: "", ambient: "" },
-    { hint: "the river docks at dusk", theme: "", ambient: "" },
-    { hint: "an icy forest", theme: "", ambient: "dim" },
-    { hint: "anything at all", theme: "interior", ambient: "" },
+    { scene: "", theme: "", ambient: "" },
+    { scene: "crypt", theme: "", ambient: "" },
+    { scene: "river", theme: "", ambient: "" },
+    { scene: "tundra", theme: "", ambient: "dim" },
+    { scene: "forest", theme: "interior", ambient: "" },
   ];
   let seed = 20260915;
   for (let index = 0; index < 10; index += 1) {
     const settings = cases[index % cases.length];
     const size = forge.clampSize(12 + index, 10 + (index % 9));
     const roll = { ...settings, ...size, seed: (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) };
-    const previewed = forge.forgeGenerate(roll, workshop.gameSettings.genre);
+    const previewed = forge.forgeGenerate(roll);
     const body = forge.createBodyFor(roll);
     assert.equal(body.do, "create");
     const saved = createLibraryMap(workshop, { name: `Roll ${index}`, ...body }).map;

@@ -6,20 +6,15 @@
 // a sting is an event and is gone the moment it has played.
 //
 // Two callers write this state and they are not equals. A person or the AI
-// DM naming a cue outright is a DECISION; the engine inferring one from a
-// place description is a GUESS. A guess never overwrites a decision that was
-// held, which is the whole reason `held` exists: without it, a DM who set
-// the tavern bed by hand would watch the next `move_party` throw it away.
+// DM naming a cue outright is a DECISION; the engine following the place the
+// party moved to is AUTOMATIC. An automatic change never overwrites a
+// decision that was held, which is the whole reason `held` exists: without
+// it, a DM who set the tavern bed by hand would watch the next `move_party`
+// throw it away.
 //
 // Pure by design: no imports beyond the catalog, no I/O.
 // scripts/test-ambience.mjs loads it directly.
-import { AMBIENCE_CUES, cueById, type AmbienceCue, type AmbienceLayer } from "@/lib/ambience/catalog";
-
-const BY_LAYER: Record<AmbienceLayer, AmbienceCue[]> = {
-  bed: AMBIENCE_CUES.filter((cue) => cue.layer === "bed"),
-  music: AMBIENCE_CUES.filter((cue) => cue.layer === "music"),
-  sting: AMBIENCE_CUES.filter((cue) => cue.layer === "sting"),
-};
+import { cueById, type AmbienceLayer } from "@/lib/ambience/catalog";
 
 export type AmbienceState = {
   // Cue ids, or null for silence on that layer.
@@ -117,44 +112,6 @@ export function applyAuto(
     next = setCue(next, layer, value, { at }).state;
   }
   return { state: next, changed: !sameAmbience(state, next) };
-}
-
-// ---- reading a scene ----
-
-// Word-boundary matching on a space-padded, letters-only copy of the text,
-// so "sea" never fires on "season" and a two-word keyword still matches.
-function padded(text: string): string {
-  return ` ${text.toLowerCase().replace(/[^a-z]+/g, " ").replace(/\s+/g, " ").trim()} `;
-}
-
-export type CueGuess = { cueId: string; score: number } | null;
-
-// The best cue for a piece of narration or a place description, or null when
-// nothing in it says anything about sound. Longer keyword phrases outscore
-// shorter ones ("dark forest" beats "forest"), so the specific cue wins.
-export function inferCue(text: string, layer: AmbienceLayer): CueGuess {
-  const haystack = padded(String(text ?? ""));
-  if (haystack.trim().length < 3) {
-    return null;
-  }
-  let best: CueGuess = null;
-  for (const cue of BY_LAYER[layer]) {
-    let score = 0;
-    for (const keyword of cue.keywords) {
-      const needle = padded(keyword);
-      if (needle.trim() && haystack.includes(needle)) {
-        score += needle.trim().split(" ").length;
-      }
-    }
-    if (score > 0 && (!best || score > best.score)) {
-      best = { cueId: cue.id, score };
-    }
-  }
-  return best;
-}
-
-export function inferBedCue(text: string): string | null {
-  return inferCue(text, "bed")?.cueId ?? null;
 }
 
 // ---- describing it ----

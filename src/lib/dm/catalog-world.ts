@@ -2,7 +2,7 @@
 // fight and outside the party's own sheets. Names match the tool names the
 // AI DM is offered exactly.
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
-import { cueOptions } from "@/lib/ambience/catalog";
+import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
 import {
   ABILITY_OPTIONS as ABILITIES,
@@ -29,6 +29,16 @@ const NOTE = {
   placeholder: "One short line for the record",
 };
 
+// The kind of place, from the ambience beds: its sound, battle map and
+// stand-in picture follow it.
+const SCENE_FIELD = {
+  name: "scene",
+  label: "Kind of place",
+  kind: "select",
+  options: sceneOptions(),
+  help: "Sets the place's sound, battle map and picture. Blank keeps what it was.",
+} as const;
+
 export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
   {
     name: "move_party",
@@ -40,6 +50,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "layoutDescription", label: "Layout", kind: "longtext", help: "Rooms, exits, landmarks. This is what the map is drawn from." },
       { name: "connections", label: "Leads to", kind: "text", help: "Other place names, comma separated." },
       { name: "visionClear", label: "They can see it", kind: "boolean", default: true, help: "Off in darkness or fog: no map is drawn." },
+      SCENE_FIELD,
     ],
   },
   {
@@ -51,6 +62,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "layoutDescription", label: "Layout", kind: "longtext", required: true },
       { name: "connections", label: "Leads to", kind: "text" },
       { name: "visionClear", label: "They can see it", kind: "boolean", default: true, help: "Off in darkness or fog: the map is not redrawn." },
+      SCENE_FIELD,
     ],
   },
   {

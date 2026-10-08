@@ -8,8 +8,10 @@ import {
 } from "@/lib/battlemap/types";
 
 // Seeded procedural battle-map generation. Deterministic under the seed so
-// a map can always be regenerated from its encounter. The scene keywords
-// (DM battlefield hint, location layout, genre) steer terrain and lighting.
+// a map can always be regenerated from its encounter. The place's scene kind
+// (one of the ambience bed ids, stored on the location) picks the terrain,
+// the default light and rough ground, in any language; a person building a
+// map can also name the theme and the light outright.
 
 export type MapTheme = "cave" | "forest" | "swamp" | "riverside" | "interior" | "field";
 
@@ -28,19 +30,17 @@ export type GenerateInput = {
   seed: number;
   width?: number;
   height?: number;
-  genre?: string;
-  locationName?: string;
-  layoutDescription?: string;
-  hint?: string;
+  // The place's scene kind (an ambience bed id), or null for a place nobody
+  // classified: an open field.
+  scene?: string | null;
   pcCount: number;
   enemyCount: number;
   // How far the nearest enemy stands from the party as the fight opens, in
   // tiles, when the story has already said (a blow struck at arm's length
   // must not open across the field). Absent, the sides take opposite edges.
   enemyDistanceTiles?: number;
-  // Overrides for a person building a map on purpose. The keyword reader
-  // below is a guess made from a sentence; when the DM says "cave, dark"
-  // outright there is nothing left to guess, so their answer wins.
+  // Overrides for a person building a map on purpose: when the DM says "cave,
+  // dark" outright, their answer wins over the scene's.
   theme?: MapTheme;
   ambient?: AmbientLight;
 };
@@ -77,32 +77,47 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-function pickTheme(text: string, rng: () => number): { theme: MapTheme; ambient: AmbientLight } {
-  const has = (re: RegExp) => re.test(text);
-  let theme: MapTheme = "field";
-  if (has(/\bcave|cavern|dungeon|crypt|tomb|tunnel|mine|underdark|barrow\b/)) {
-    theme = "cave";
-  } else if (has(/\bswamp|marsh|bog|mire|fen\b/)) {
-    theme = "swamp";
-  } else if (has(/\bforest|wood|grove|jungle|thicket\b/)) {
-    theme = "forest";
-  } else if (has(/\briver|lake|shore|beach|sewer|canal|dock|harbor\b/)) {
-    theme = "riverside";
-  } else if (has(/\bstreet|alley|warehouse|tavern|inn|room|hall|temple|church|castle|keep|tower|deck|ship|manor|library\b/)) {
-    theme = "interior";
-  }
-  let ambient: AmbientLight =
-    theme === "cave" ? "dark" : theme === "interior" ? "dim" : "bright";
-  if (has(/\bnight|midnight|moonlit|dark|darkness|pitch-black\b/)) {
-    ambient = "dark";
-  } else if (has(/\bdim|dusk|twilight|torchlit|candlelit|foggy|misty\b/)) {
-    ambient = ambient === "dark" ? "dark" : "dim";
-  } else if (has(/\bdaylight|noon|sunny|bright\b/)) {
-    ambient = "bright";
-  }
-  // Unused rng draw keeps theme choice stable if branches change later.
-  void rng;
-  return { theme, ambient };
+// The terrain each scene kind is fought on. A scene missing here is an open
+// field, which is also what a place with no scene gets.
+const SCENE_THEMES: Partial<Record<string, MapTheme>> = {
+  dungeon: "cave",
+  cave: "cave",
+  crypt: "cave",
+  sewer: "cave",
+  mine: "cave",
+  temple: "interior",
+  tavern: "interior",
+  keep: "interior",
+  library: "interior",
+  forge: "interior",
+  arcane: "interior",
+  forest: "forest",
+  deep_forest: "forest",
+  jungle: "forest",
+  swamp: "swamp",
+  river: "riverside",
+  waterfall: "riverside",
+  coast: "riverside",
+  ship: "riverside",
+  underwater: "riverside",
+};
+
+// Ground that slows every step: sand, snow, rubble, scree, mud.
+const ROUGH_SCENES = new Set(["desert", "tundra", "ruins", "mine", "mountain", "swamp"]);
+
+export function sceneRough(scene: string | null | undefined): boolean {
+  return Boolean(scene && ROUGH_SCENES.has(scene));
+}
+
+export function sceneTheme(scene: string | null | undefined): MapTheme {
+  return (scene && SCENE_THEMES[scene]) || "field";
+}
+
+// The light a board starts in: dark underground, dim indoors, bright in the
+// open. An outdoor board's light follows the campaign clock and the sky once
+// it is drawn (src/lib/battlemap/daylight.ts).
+export function defaultAmbient(theme: MapTheme): AmbientLight {
+  return theme === "cave" ? "dark" : theme === "interior" ? "dim" : "bright";
 }
 
 // A low wall across part of the field, broken by a gap of two tiles, so it
@@ -331,13 +346,8 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
   const width = Math.min(MAP_SIZE.maxWidth, Math.max(MAP_SIZE.minWidth, input.width ?? 20));
   const height = Math.min(MAP_SIZE.maxHeight, Math.max(MAP_SIZE.minHeight, input.height ?? 15));
   const rng = mulberry32(input.seed);
-  const text = [input.hint, input.layoutDescription, input.locationName, input.genre]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  const read = pickTheme(text, rng);
-  const theme = input.theme ?? read.theme;
-  const ambient = input.ambient ?? read.ambient;
+  const theme = input.theme ?? sceneTheme(input.scene);
+  const ambient = input.ambient ?? defaultAmbient(theme);
 
   const tiles: string[] = new Array(width * height).fill(TERRAIN.floor);
   for (let x = 0; x < width; x += 1) {
@@ -372,7 +382,7 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
       carveFence(tiles, width, height, rng);
     }
   }
-  if (/\brubble|ice|mud|sand|snow\b/.test(text)) {
+  if (sceneRough(input.scene)) {
     scatterBlobs(tiles, width, height, rng, TERRAIN.difficult, 5, 2);
   }
 

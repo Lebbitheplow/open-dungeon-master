@@ -1,4 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
+import { sceneIds } from "@/lib/ambience/catalog";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -1126,6 +1127,15 @@ export const requestPlayerInputTool = {
 
 // Location tools: the DM keeps a structured record of where the party is
 // and how areas connect, feeding GAME STATE and the map renderer.
+
+// A place's kind from a fixed list, so its sound, battle map and picture
+// never depend on reading its name in some language.
+const sceneProperty = {
+  type: "string",
+  enum: sceneIds(),
+  description: "What kind of place this is, for its sound, battle map and picture. Set it when the party arrives somewhere new.",
+} as const;
+
 export const movePartyTool = {
   type: "function",
   function: {
@@ -1153,6 +1163,7 @@ export const movePartyTool = {
           description:
             "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
         },
+        scene: sceneProperty,
       },
       required: ["name", "visionClear"],
     },
@@ -1264,6 +1275,7 @@ export const updateLocationTool = {
         layoutDescription: { type: "string" },
         connections: { type: "array", items: { type: "string" } },
         visionClear: { type: "boolean" },
+        scene: sceneProperty,
       },
       required: ["layoutDescription", "visionClear"],
     },

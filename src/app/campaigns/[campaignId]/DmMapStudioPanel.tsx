@@ -85,14 +85,13 @@ function settingsBody(roll: ForgeRoll | null): Record<string, unknown> {
   if (!roll) {
     return {};
   }
-  const hint = roll.hint.trim();
   return {
     seed: roll.seed,
     width: roll.width,
     height: roll.height,
     ...(roll.theme ? { theme: roll.theme } : {}),
     ...(roll.ambient ? { ambient: roll.ambient } : {}),
-    ...(hint ? { hint } : {}),
+    ...(roll.scene ? { scene: roll.scene } : {}),
   };
 }
 

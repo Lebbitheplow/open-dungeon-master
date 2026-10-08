@@ -119,9 +119,11 @@ import { enqueueLocationMap } from "@/lib/dm/maps";
 import {
   getCurrentLocation,
   listLocations,
+  setLocationLinks,
   updateCurrentLocationDetails,
   upsertCurrentLocation,
 } from "@/lib/db/locations";
+import { sceneIds } from "@/lib/ambience/catalog";
 import { compactHistoryInBackground } from "@/lib/dm/compaction";
 import { createDeltaBatcher } from "@/lib/dm/delta-buffer";
 import {
@@ -869,15 +871,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const xmlSalvage = salvageXmlToolCalls(extractReplyText(message?.content));
     const jsonSalvage = salvageJsonToolCalls(xmlSalvage.text, tools);
     const salvage = salvageTextualToolCalls(extractStoryText(jsonSalvage.text));
-    // The reply's prose, read once by the claims reader in the table's
-    // language (src/lib/dm/claims.ts): the rolls it asks for ("Avery, make an
-    // Investigation check, DC 15." becomes a real request_roll), a fight it
-    // announces, a blow it lands, and, with the guard on, what it claims
-    // against the turn's results. Not read on the forced-narration final
-    // call, where nothing it found could run; nor when the reply already
-    // rolls (no double dice); nor beside an attack, whose text is the model
-    // guessing the outcome and is dropped below. Prose that is kept unread
-    // is read by the guard at the end of the turn.
+    // The reply's prose, read once by the claims reader (src/lib/dm/claims.ts)
+    // for the rolls it asks in words, a fight it announces, a blow it lands
+    // and, with the guard on, what it claims. Not read on the forced final
+    // call, where nothing found could run; nor when the reply already rolls
+    // (no double dice); nor beside an attack, whose text is dropped below.
+    // Kept prose left unread is read by the guard at the end of the turn.
     const structuredCalls = [
       ...extractToolCalls(message?.tool_calls),
       ...xmlSalvage.calls,
@@ -1723,12 +1722,19 @@ export function handleLocationCall(
     layoutDescription?: unknown;
     connections?: unknown;
     visionClear?: unknown;
+    scene?: unknown;
   };
   try {
     args = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments." };
   }
+  // The kind of place, from the ambience beds (src/lib/ambience/catalog.ts).
+  const beds = sceneIds();
+  if (args.scene !== undefined && !beds.includes(String(args.scene))) {
+    return { error: `Unknown scene "${String(args.scene)}"; use one of: ${beds.join(", ")}.` };
+  }
+  const scene = args.scene === undefined ? undefined : String(args.scene);
   const layoutDescription =
     typeof args.layoutDescription === "string" ? args.layoutDescription : undefined;
   const connections = Array.isArray(args.connections)
@@ -1776,13 +1782,21 @@ export function handleLocationCall(
     }
   }
 
+  // The kind of place is its sound: stored as the place's bed, so the
+  // battle map and the stand-in picture read the same value.
+  if (scene !== undefined) {
+    const ambience = { bed: scene, music: location.ambience?.music ?? "" };
+    setLocationLinks(location.id, { ambience });
+    location = { ...location, ambience };
+  }
+
   publishPersisted(campaign.id, "location_updated", { location });
 
-  // The place is what the room should be hearing. Inferred rather than
-  // asked for, so a DM who never touches the sound controls still gets a
-  // cave that sounds like one; a held layer and a table with scene
-  // following switched off are both left alone inside the helper.
-  followSceneAmbience(campaign, `${location.name} ${location.layoutDescription}`);
+  // The place is what the room should be hearing, so a DM who never touches
+  // the sound controls still gets a cave that sounds like one; a held layer
+  // and a table with scene following switched off are both left alone
+  // inside the helper.
+  followSceneAmbience(campaign, location.ambience?.bed || null);
 
   // Render when the area has no map yet, or when an update materially
   // changed the recorded layout.

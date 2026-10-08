@@ -54,7 +54,7 @@ const goblin = insertEnemy({
   encounterId: encounter.id, campaignId: campaign.id, slug: "goblin", displayName: "Goblin", initiative: 12,
   stats: { ac: 15, maxHp: 7, dexMod: 2, speed: "30 ft.", attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2", damageType: "slashing", reach: 5, kind: "melee" }], traits: [], resist: "", immune: "", vulnerable: "", conditionImmune: "", cr: 0.25, xp: 50 },
 });
-createBattleMapForEncounter(getCampaignById(campaign.id), encounter, [goblin], listSheets(campaign.id), "open field");
+createBattleMapForEncounter(getCampaignById(campaign.id), encounter, [goblin], listSheets(campaign.id));
 encounter.order = [
   { kind: "pc", characterId: karaSheet.id, userId: kara.id, name: "Kara", initiative: 18 },
   { kind: "pc", characterId: bromSheet.id, userId: brom.id, name: "Brom", initiative: 7 },

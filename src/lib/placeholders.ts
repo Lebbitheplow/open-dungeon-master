@@ -370,97 +370,129 @@ export function campaignPlaceholder(genre: string | null | undefined, seed = "")
 
 // ---- maps ----
 
-// A location has a name and a layout description but no typed setting, so
-// this is the one resolver that reads free text. It is held to a short list
-// of unambiguous words (a "crypt" is a crypt) and falls back honestly: a
-// place in a reskinned genre draws one of that genre's own plates by hash,
-// and a fantasy place nobody can classify draws the journey plate, which
-// says "somewhere on the road" and nothing more.
+// A place's kind of scene (one of the ambience beds, src/lib/ambience/catalog.ts)
+// picks its plate, whatever language the place was named in. A kind with
+// several plates draws one by hash, so every plate stays reachable. A place
+// with no kind, or a kind no plate shows, draws one of a reskinned genre's
+// own plates, and in fantasy the journey plate, which says "somewhere on the
+// road" and nothing more.
 //
-// Order matters twice: a genre's own list runs before the shared one so a
-// mystery "alley" is the back alley and not a fantasy market street, and
-// within a list the more specific phrase comes first ("deep forest" before
-// "forest", "ship" before "deck").
-type MapCue = [id: string, pattern: RegExp];
+// A genre's own table runs before the shared one, so a mystery town is the
+// back alley and not a fantasy village.
+type ScenePlates = Partial<Record<string, string[]>>;
 
-const SHARED_MAP_CUES: MapCue[] = [
-  ["deep-forest", /\bdeep forest|old[- ]growth|ancient wood/],
-  ["throne-room", /\bthrone/],
-  ["castle-hall", /\bcastle hall|great hall|\bkeep\b|\bcastle\b|\bfortress\b/],
-  ["city-gate", /\bcity gate|\bgatehouse|\bgate\b/],
-  ["mountain-pass", /\bmountain|\bpass\b|\bcliff|\bpeak\b|\bcrag/],
-  ["ship-deck", /\bship deck|\bship\b|\bdeck\b|\bgalleon|\bvessel/],
-  ["dungeon", /\bdungeon|\bcell block|\bprison|\bjail|\boubliette/],
-  ["cavern", /\bcavern|\bcave\b|\bcaves\b|\bgrotto/],
-  ["crypt", /\bcrypt|\btomb|\bmausoleum|\bbarrow|\bcatacomb/],
-  ["sewer", /\bsewer|\bdrain|\bculvert/],
-  ["temple", /\btemple|\bshrine|\bchapel|\bcathedral|\bchurch|\bsanctum/],
-  ["library", /\blibrary|\barchive|\bscriptorium/],
-  ["tavern", /\btavern|\binn\b|\balehouse|\bpub\b|\btaproom/],
-  ["market", /\bmarket|\bbazaar|\bplaza/],
-  ["village", /\bvillage|\bhamlet|\bfarmstead|\bfarm\b/],
-  ["forest", /\bforest|\bwood(s|land)?\b|\bgrove|\bglade/],
-  ["swamp", /\bswamp|\bmarsh|\bbog\b|\bfen\b|\bmire/],
-  ["desert", /\bdesert|\bdune|\bsands\b|\bwastes\b/],
-  ["tundra", /\btundra|\bglacier|\bfrozen|\bsnow|\bice\b/],
-  ["coast", /\bcoast|\bshore|\bharbou?r|\bbeach|\bcove\b|\bwharf|\bdocks?\b/],
-  ["ruins", /\bruin/],
-  ["arena", /\barena|\bcolosseum|\bpit\b/],
-  ["laboratory", /\blaborator|\bworkshop|\balchemist/],
-  ["wasteland", /\bwasteland|\bbadlands|\bblighted/],
-];
+const SHARED_SCENE_PLATES: ScenePlates = {
+  dungeon: ["dungeon"],
+  cave: ["cavern"],
+  mine: ["cavern"],
+  crypt: ["crypt"],
+  graveyard: ["crypt"],
+  sewer: ["sewer"],
+  ruins: ["ruins"],
+  temple: ["temple"],
+  forest: ["forest"],
+  deep_forest: ["deep-forest"],
+  jungle: ["deep-forest"],
+  swamp: ["swamp"],
+  desert: ["desert", "wasteland"],
+  mountain: ["mountain-pass"],
+  tundra: ["tundra"],
+  coast: ["coast"],
+  ship: ["ship-deck"],
+  town: ["village"],
+  city: ["city-gate"],
+  market: ["market"],
+  crowd: ["market", "arena"],
+  tavern: ["tavern"],
+  keep: ["castle-hall", "throne-room"],
+  library: ["library"],
+  forge: ["laboratory"],
+  arcane: ["laboratory"],
+};
 
-const GENRE_MAP_CUES: Record<string, MapCue[]> = {
-  cyberpunk: [
-    ["cyberpunk-neon-alley", /\balley|\bstreet|\bneon/],
-    ["cyberpunk-arcology", /\barcology|\btower|\bcorp|\batrium|\boffice/],
-    ["cyberpunk-server-farm", /\bserver|\bdata|\bmainframe|\bnode\b/],
-    ["cyberpunk-undercity", /\bundercity|\bslum|\bwarren|\bunderground/],
-  ],
-  steampunk: [
-    ["steampunk-factory", /\bfactory|\bworks\b|\bfoundry|\bmill\b/],
-    ["steampunk-airship-dock", /\bairship|\bdock|\bmooring|\bhangar/],
-    ["steampunk-clockwork-vault", /\bclockwork|\bvault|\bgear/],
-    ["steampunk-gaslit-street", /\bgaslit|\bstreet|\balley|\bboulevard/],
-  ],
-  "post-apocalyptic": [
-    ["post-apocalyptic-overpass", /\boverpass|\bbridge|\bflyover/],
-    ["post-apocalyptic-scrap-market", /\bscrap market|\bmarket|\bbazaar|\btrading/],
-    ["post-apocalyptic-shelter", /\bshelter|\bbunker|\bvault|\bsilo/],
-    ["post-apocalyptic-dead-highway", /\bdead highway|\bhighway|\broad\b|\bmotorway/],
-  ],
-  horror: [
-    ["horror-manor", /\bmanor|\bmansion|\bhouse|\bestate|\bhall\b/],
-    ["horror-asylum", /\basylum|\bhospital|\bsanatorium|\bward\b/],
-    ["horror-crypt-chapel", /\bcrypt chapel|\bchapel|\bcrypt|\bchurch|\btomb/],
-    ["horror-graveyard", /\bgraveyard|\bcemetery|\bgraves?\b/],
-  ],
-  mystery: [
-    ["mystery-precinct", /\bprecinct|\bpolice|\bstation|\bconstabulary/],
-    ["mystery-parlour", /\bparlou?r|\bdrawing room|\blounge|\bstudy\b/],
-    ["mystery-back-alley", /\bback alley|\balley|\bbackstreet/],
-    ["mystery-morgue", /\bmorgue|\bmortuary|\bcoroner/],
-  ],
+const GENRE_SCENE_PLATES: Record<string, ScenePlates> = {
+  cyberpunk: {
+    town: ["cyberpunk-neon-alley"],
+    city: ["cyberpunk-neon-alley"],
+    market: ["cyberpunk-neon-alley"],
+    crowd: ["cyberpunk-neon-alley"],
+    keep: ["cyberpunk-arcology"],
+    library: ["cyberpunk-server-farm"],
+    arcane: ["cyberpunk-server-farm"],
+    forge: ["cyberpunk-server-farm"],
+    sewer: ["cyberpunk-undercity"],
+    dungeon: ["cyberpunk-undercity"],
+    mine: ["cyberpunk-undercity"],
+    cave: ["cyberpunk-undercity"],
+  },
+  steampunk: {
+    forge: ["steampunk-factory"],
+    mine: ["steampunk-factory"],
+    ship: ["steampunk-airship-dock"],
+    coast: ["steampunk-airship-dock"],
+    river: ["steampunk-airship-dock"],
+    keep: ["steampunk-clockwork-vault"],
+    library: ["steampunk-clockwork-vault"],
+    arcane: ["steampunk-clockwork-vault"],
+    dungeon: ["steampunk-clockwork-vault"],
+    town: ["steampunk-gaslit-street"],
+    city: ["steampunk-gaslit-street"],
+    market: ["steampunk-gaslit-street"],
+    crowd: ["steampunk-gaslit-street"],
+  },
+  "post-apocalyptic": {
+    city: ["post-apocalyptic-overpass"],
+    ruins: ["post-apocalyptic-overpass"],
+    river: ["post-apocalyptic-overpass"],
+    town: ["post-apocalyptic-scrap-market"],
+    market: ["post-apocalyptic-scrap-market"],
+    crowd: ["post-apocalyptic-scrap-market"],
+    dungeon: ["post-apocalyptic-shelter"],
+    keep: ["post-apocalyptic-shelter"],
+    cave: ["post-apocalyptic-shelter"],
+    mine: ["post-apocalyptic-shelter"],
+    plains: ["post-apocalyptic-dead-highway"],
+    desert: ["post-apocalyptic-dead-highway"],
+  },
+  horror: {
+    keep: ["horror-manor"],
+    library: ["horror-manor"],
+    tavern: ["horror-manor"],
+    dungeon: ["horror-asylum"],
+    temple: ["horror-crypt-chapel"],
+    crypt: ["horror-crypt-chapel"],
+    graveyard: ["horror-graveyard"],
+  },
+  mystery: {
+    dungeon: ["mystery-precinct"],
+    keep: ["mystery-parlour"],
+    library: ["mystery-parlour"],
+    tavern: ["mystery-parlour"],
+    town: ["mystery-back-alley"],
+    city: ["mystery-back-alley"],
+    sewer: ["mystery-back-alley"],
+    crypt: ["mystery-morgue"],
+    graveyard: ["mystery-morgue"],
+  },
 };
 
 export type MapLook = {
-  name?: string | null;
-  description?: string | null;
+  // The place's ambience bed, or nothing when it has none.
+  scene?: string | null;
   genre?: string | null;
 };
 
 export function mapPlaceholder(look: MapLook, seed = ""): string {
-  const text = `${look.name ?? ""} ${look.description ?? ""}`.toLowerCase();
   const slug = genreSlug(look.genre);
-  const genreCues = GENRE_MAP_CUES[slug] ?? [];
-  for (const [id, pattern] of [...genreCues, ...SHARED_MAP_CUES]) {
-    if (pattern.test(text)) {
-      return `${BASE}/map/${id}.webp`;
-    }
+  const scene = look.scene ?? "";
+  const own = GENRE_SCENE_PLATES[slug];
+  const plates = (scene && (own?.[scene] ?? SHARED_SCENE_PLATES[scene])) || null;
+  if (plates) {
+    return `${BASE}/map/${plates[hash(seed || scene) % plates.length]}.webp`;
   }
-  if (genreCues.length) {
-    const own = genreCues[hash(seed || text || slug) % genreCues.length][0];
-    return `${BASE}/map/${own}.webp`;
+  if (own) {
+    const genrePlates = [...new Set(Object.values(own).flat())] as string[];
+    return `${BASE}/map/${genrePlates[hash(seed || slug) % genrePlates.length]}.webp`;
   }
   return `${BASE}/misc/journey.webp`;
 }

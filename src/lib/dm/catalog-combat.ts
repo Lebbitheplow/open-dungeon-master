@@ -84,7 +84,6 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         ],
         help: "Overrides the ambush roll for a whole side.",
       },
-      { name: "battlefield", label: "Battlefield", kind: "text" },
       {
         name: "distanceFeet",
         label: "Opening distance (feet)",

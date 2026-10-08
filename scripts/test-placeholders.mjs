@@ -5,7 +5,7 @@
 // The resolver is a table of constants rather than a manifest lookup, which is
 // the right call for a render path but means the table can drift from what
 // scripts/generate-placeholders.mjs actually rendered. This walks the whole
-// input space - every race, class, gender, genre, role, map cue and creature
+// input space - every race, class, gender, genre, role, scene kind and creature
 // type the app can hold, plus all 576 bestiary entries at their real cr - and
 // asserts the answer resolves. A missing plate is a broken image in front of
 // a player, so it fails the build rather than warning. The reverse check
@@ -158,37 +158,32 @@ for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", 
 // and free text that matches nothing still lands on a real file. Each map
 // id is spelled as a person would name the place, which is what the cue
 // table has to recognise for the plate to ever be drawn.
-const MAP_NAMES = {
-  "": [
-    "dungeon", "cavern", "crypt", "sewer", "castle hall", "throne room", "temple",
-    "library", "tavern", "market", "village", "city gate", "forest", "deep forest",
-    "swamp", "desert", "tundra", "mountain pass", "coast", "ship deck", "ruins",
-    "arena", "laboratory", "wasteland",
-  ],
-  cyberpunk: ["neon alley", "arcology", "server farm", "undercity"],
-  steampunk: ["factory", "airship dock", "clockwork vault", "gaslit street"],
-  post_apocalyptic: ["overpass", "scrap market", "shelter", "dead highway"],
-  horror: ["manor", "asylum", "crypt chapel", "graveyard"],
-  mystery: ["precinct", "parlour", "back alley", "morgue"],
-};
-for (const [genre, names] of Object.entries(MAP_NAMES)) {
-  for (const name of names) {
-    const url = R.mapPlaceholder({ name, genre });
-    check(url, `map ${genre || "fantasy"}/${name}`);
-    const expected = `${genre ? `${genre.replace(/_/g, "-")}-` : ""}${name.replace(/\s+/g, "-")}`;
-    if (!url.endsWith(`/${expected}.webp`)) {
-      failures.push(`map ${genre || "fantasy"}/${name} drew ${url}, expected ${expected}`);
+// A kind of scene draws its plate whatever language the place is named in;
+// a genre's own plate comes first, and a kind with several plates draws each
+// for some place. No kind falls back to the genre's plates, or the journey.
+const { cueIds } = await import("../src/lib/ambience/catalog.ts");
+const SEEDS = Array.from({ length: 24 }, (_, index) => `loc-${index}`);
+for (const genre of GENRES) {
+  for (const scene of [...cueIds("bed"), null]) {
+    for (const seed of SEEDS) {
+      check(R.mapPlaceholder({ scene, genre }, seed), `map ${genre || "fantasy"}/${scene ?? "no kind"}`);
     }
   }
 }
-for (const genre of GENRES) {
-  for (const name of ["The Gilded Nothing", "", "Xyzzy"]) {
-    check(R.mapPlaceholder({ name, genre }, "loc-1"), `map fallback ${genre}/${name}`);
+for (const [look, plate] of [
+  [{ scene: "crypt", genre: "high_fantasy" }, "map/crypt"],
+  [{ scene: "crypt", genre: "horror" }, "map/horror-crypt-chapel"],
+  [{ scene: "town", genre: "mystery" }, "map/mystery-back-alley"],
+  [{ scene: "plains", genre: "high_fantasy" }, "misc/journey"],
+  [{ scene: null, genre: "" }, "misc/journey"],
+]) {
+  const url = R.mapPlaceholder(look, "loc-1");
+  if (!url.endsWith(`/${plate}.webp`)) {
+    failures.push(`map ${JSON.stringify(look)} drew ${url}, expected ${plate}`);
   }
-  check(
-    R.mapPlaceholder({ name: "A room", description: "A vaulted crypt of old kings", genre }),
-    `map by description ${genre}`,
-  );
+}
+if (!R.mapPlaceholder({ scene: null, genre: "cyberpunk" }, "loc-1").includes("/map/cyberpunk-")) {
+  failures.push("a cyberpunk place with no kind should draw a cyberpunk plate");
 }
 
 // The reverse check: every plate on disk is one of the answers above.

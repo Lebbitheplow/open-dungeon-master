@@ -57,11 +57,6 @@ export const startEncounterTool: ToolDef = {
           description:
             "A whole side the story has already decided is caught off guard, overriding ambush. Default none.",
         },
-        battlefield: {
-          type: "string",
-          description:
-            "One line describing the fighting ground, used to shape the tactical battle map, e.g. 'a torchlit crypt with a flooded channel'.",
-        },
         distanceFeet: {
           type: "integer",
           minimum: 5,

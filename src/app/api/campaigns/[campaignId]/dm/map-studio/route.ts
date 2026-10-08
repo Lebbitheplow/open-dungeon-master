@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { sceneIds } from "@/lib/ambience/catalog";
 import { MAP_SIZE, MAP_THEMES } from "@/lib/battlemap/generate";
 import { BACKDROP_LIMITS, isBackdropPath } from "@/lib/battlemap/backdrop";
 import {
@@ -24,7 +25,7 @@ const settingsSchema = z.object({
   height: z.number().int().min(MAP_SIZE.minHeight).max(MAP_SIZE.maxHeight).optional(),
   theme: z.enum(MAP_THEMES as [string, ...string[]]).optional(),
   ambient: z.enum(["bright", "dim", "dark"]).optional(),
-  hint: z.string().trim().max(200).optional(),
+  scene: z.enum(sceneIds()).optional(),
   summary: z.string().trim().max(300).optional(),
 });
 
