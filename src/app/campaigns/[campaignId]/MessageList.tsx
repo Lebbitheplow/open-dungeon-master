@@ -116,6 +116,7 @@ export function MessageList({
   meUserId = "",
   blockedUserIds = [],
   onReport,
+  onDispute,
 }: {
   messages: CampaignMessage[];
   campaignId: string;
@@ -123,6 +124,8 @@ export function MessageList({
   // Players the viewer has blocked; their rows fold away.
   blockedUserIds?: string[];
   onReport?: (message: CampaignMessage) => void;
+  // A player objects to a narrated ruling (DisputeDialog.tsx).
+  onDispute?: (message: CampaignMessage) => void;
   // The party lead may send a halted DM turn back in. Plain booleans and
   // strings rather than a callback: the memoized rows stay cheap without the
   // stable-identity dance the callback props above need.
@@ -255,6 +258,15 @@ export function MessageList({
     () => (hasReport ? (message: CampaignMessage) => reportRef.current?.(message) : undefined),
     [hasReport],
   );
+  const disputeRef = useRef(onDispute);
+  useEffect(() => {
+    disputeRef.current = onDispute;
+  });
+  const hasDispute = Boolean(onDispute);
+  const stableDispute = useMemo(
+    () => (hasDispute ? (message: CampaignMessage) => disputeRef.current?.(message) : undefined),
+    [hasDispute],
+  );
   const editSaveRef = useRef(onEditSave);
   useEffect(() => {
     editSaveRef.current = onEditSave;
@@ -325,6 +337,7 @@ export function MessageList({
           mine={Boolean(message.userId) && message.userId === meUserId}
           blocked={Boolean(message.userId && blockedSet.has(message.userId))}
           onReport={stableReport}
+          onDispute={stableDispute}
           message={message}
           campaignId={campaignId}
           canRetryTurn={canRetryTurn}

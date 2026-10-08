@@ -94,6 +94,10 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // Offers and trades are party knowledge.
   item_proposal_added: TABLE,
   item_proposal_resolved: TABLE,
+  // A disputed ruling and its outcome: who objected and to what is the
+  // table's business, and the vote is the table's.
+  ruling_disputed: TABLE,
+  ruling_resolved: TABLE,
   shops_updated: TABLE,
   // Notes: public active notes travel; private ones never do (notes route).
   note_updated: TABLE,

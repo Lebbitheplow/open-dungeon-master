@@ -12,6 +12,8 @@ const {
   capsForRole,
   hasHumanDm,
   isDmSeat,
+  isPrimaryDm,
+  lobbyBlocker,
   narratorIsAi,
   partySlotCount,
   redactRoll,
@@ -111,6 +113,28 @@ test("assisted mode seats behave like human mode", () => {
   assert.equal(isDmSeat(assistedSeats, "gm"), true);
   assert.deepEqual(viewerCaps(assistedSeats, "gm"), viewerCaps(humanSeats, "gm"));
   assert.deepEqual(viewerCaps(assistedSeats, "lead"), viewerCaps(humanSeats, "lead"));
+});
+
+test("steered mode: the AI narrates, the seat steers without a character, and the lead is a player", () => {
+  const seats = { ownerUserId: "owner", leadUserId: "lead", humanDmUserId: "steerer", assistantDmUserId: null, dmMode: "steered" };
+  const steerer = viewerCaps(seats, "steerer");
+  assert.equal(steerer.role, "dm");
+  assert.equal(steerer.secretStory, true);
+  assert.equal(steerer.steersStory, true);
+  assert.equal(steerer.adjudicates, true);
+  assert.equal(steerer.needsCharacter, false);
+  assert.equal(steerer.countsInParty, false);
+  const lead = viewerCaps(seats, "lead");
+  assert.equal(lead.role, "lead");
+  assert.equal(lead.secretStory, false, "the lead carries no spoiler at a steered table");
+  assert.equal(lead.steersStory, false);
+  assert.equal(lead.needsCharacter, true);
+  assert.equal(narratorIsAi("steered"), true);
+  assert.equal(hasHumanDm(seats), false, "actions wake the AI, not a person");
+  assert.equal(isDmSeat(seats, "steerer"), true);
+  assert.equal(isPrimaryDm(seats, "steerer"), true);
+  assert.equal(partySlotCount(seats, ["steerer", "lead", "p2"]), 2);
+  assert.equal(lobbyBlocker(seats, [{ userId: "steerer", ready: true, hasSheet: false }, { userId: "lead", ready: true, hasSheet: true }]), "");
 });
 
 test("only human mode silences the AI narrator", () => {

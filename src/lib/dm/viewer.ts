@@ -15,7 +15,11 @@
 // Pure by design: no "@/" imports and no I/O, so scripts/test-viewer-roles.mjs
 // can import it directly.
 
-export type DmMode = "ai" | "human" | "assisted";
+// "steered": the AI narrates every turn as in "ai", and a person holds the
+// DM seat without playing a character: the arc, the console, directions to
+// the AI and the last word on a disputed ruling are theirs, so no player
+// has to carry the secrets to steer the story.
+export type DmMode = "ai" | "steered" | "human" | "assisted";
 
 // "ai" is not a user; it is the role the server assumes when it assembles the
 // DM prompt, so prompt building reads the same rules the UI does.
@@ -70,10 +74,11 @@ export function narratorIsAi(mode: DmMode): boolean {
   return mode !== "human";
 }
 
-// True when a person holds the DM seat, so player actions queue for them
-// instead of waking a DM turn.
+// True when a person holds the DM seat AND narrates, so player actions
+// queue for them instead of waking a DM turn. A steering seat is a DM seat
+// (isDmSeat) whose table the AI still runs turn by turn.
 export function hasHumanDm(seats: DmSeats): boolean {
-  return seats.dmMode !== "ai" && Boolean(seats.humanDmUserId);
+  return (seats.dmMode === "human" || seats.dmMode === "assisted") && Boolean(seats.humanDmUserId);
 }
 
 export function isDmSeat(seats: DmSeats, userId: string): boolean {

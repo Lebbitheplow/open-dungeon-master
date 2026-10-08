@@ -5,6 +5,8 @@ import { cn } from "@/lib/cn";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
 import { ReportDialog, type ReportTarget } from "@/app/campaigns/[campaignId]/ReportDialog";
 import { ItemProposalBar } from "@/app/campaigns/[campaignId]/ItemProposalBar";
+import { RulingBar } from "@/app/campaigns/[campaignId]/RulingBar";
+import { DisputeDialog } from "@/app/campaigns/[campaignId]/DisputeDialog";
 import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip";
 import { FightSummaryCard } from "@/app/campaigns/[campaignId]/FightSummaryCard";
 import { AskDock } from "@/app/campaigns/[campaignId]/AskPanel";
@@ -64,6 +66,10 @@ export function SessionChatColumn({
 }) {
   const { campaign, messages, rolls, sheets, locations, dmStatus, utilityCalls } = state;
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  // The passage a player is objecting to (DisputeDialog.tsx); only a table
+  // the AI narrates has rulings to dispute this way.
+  const [disputeMessageId, setDisputeMessageId] = useState<string | null>(null);
+  const narratedByAi = (state.campaign?.gameSettings?.dmMode ?? "ai") !== "human";
   // Blocks made from this table, hidden at once; the snapshot carries them
   // on the next load.
   const [justBlocked, setJustBlocked] = useState<string[]>([]);
@@ -98,6 +104,7 @@ export function SessionChatColumn({
         cast={state.cast}
         meUserId={meUserId}
         blockedUserIds={blockedUserIds}
+        onDispute={narratedByAi && !steersStory ? (message) => setDisputeMessageId(message.id) : undefined}
         onReport={(message) => {
           if (message.authorType === "dm") {
             setReportTarget({ messageId: message.id, authorType: "dm", label: "the Dungeon Master" });
@@ -234,6 +241,15 @@ export function SessionChatColumn({
         }
       />
       )}
+
+      <RulingBar
+        campaignId={campaignId}
+        disputes={state.disputes}
+        members={state.members}
+        meUserId={meUserId}
+        steersStory={steersStory}
+      />
+      <DisputeDialog campaignId={campaignId} messageId={disputeMessageId} onClose={() => setDisputeMessageId(null)} />
 
       <ItemProposalBar
         campaignId={campaignId}
