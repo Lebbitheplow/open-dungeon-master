@@ -8,6 +8,8 @@ import { AddFromList } from "@/components/ui/AddFromList";
 import { ContentPick } from "@/components/ui/ContentPick";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Select } from "@/components/ui/Select";
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad } from "@/lib/load-state";
 
 // A row that IS a thing: "@monster: wolf", "@table: Gems". The table body
 // takes them typed, which means knowing the exact name of everything in the
@@ -58,39 +60,40 @@ export function RefPicker({
   const [lore, setLore] = useState<Named[] | null>(null);
   const [monsters, setMonsters] = useState<Named[] | null>(null);
   const [fetchedTables, setFetchedTables] = useState<RollTable[] | null>(null);
+  // A list that did not load is said so, by kind, with a way to ask again
+  // (issue 140); it is never shown as "nothing of that kind yet".
+  const [loadErrors, setLoadErrors] = useState<Partial<Record<RollRefKind, string>>>({});
+  const [retries, setRetries] = useState(0);
 
   // Each list is fetched once, the first time its kind is chosen; the
   // state lands in .then so the effect reads as a subscription.
   useEffect(() => {
-    if (kind === "table" && !tables && fetchedTables === null) {
-      fetch(`/api/campaigns/${campaignId}/dm/roll-tables`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { tables?: RollTable[] } | null) => setFetchedTables(data?.tables ?? []))
-        .catch(() => setFetchedTables([]));
+    const failed = (which: RollRefKind, error: string) => setLoadErrors((current) => ({ ...current, [which]: error }));
+    if (kind === "table" && !tables && fetchedTables === null && !loadErrors.table) {
+      readLoad<{ tables?: RollTable[] }>(fetch(`/api/campaigns/${campaignId}/dm/roll-tables`), "The tables").then((outcome) =>
+        outcome.payload ? setFetchedTables(outcome.payload.tables ?? []) : failed("table", outcome.error),
+      );
     }
-    if (kind === "npc" && npcs === null) {
-      fetch(`/api/campaigns/${campaignId}/dm/npcs`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { npcs?: Named[] } | null) => setNpcs(data?.npcs ?? []))
-        .catch(() => setNpcs([]));
+    if (kind === "npc" && npcs === null && !loadErrors.npc) {
+      readLoad<{ npcs?: Named[] }>(fetch(`/api/campaigns/${campaignId}/dm/npcs`), "The cast").then((outcome) =>
+        outcome.payload ? setNpcs(outcome.payload.npcs ?? []) : failed("npc", outcome.error),
+      );
     }
-    if (kind === "lore" && lore === null) {
-      fetch(`/api/campaigns/${campaignId}/lore`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { entries?: Array<{ title: string }> } | null) =>
-          setLore((data?.entries ?? []).map((entry) => ({ name: entry.title }))),
-        )
-        .catch(() => setLore([]));
+    if (kind === "lore" && lore === null && !loadErrors.lore) {
+      readLoad<{ entries?: Array<{ title: string }> }>(fetch(`/api/campaigns/${campaignId}/lore`), "The lore").then((outcome) =>
+        outcome.payload ? setLore((outcome.payload.entries ?? []).map((entry) => ({ name: entry.title }))) : failed("lore", outcome.error),
+      );
     }
-    if (kind === "monster" && monsters === null) {
-      fetch(`/api/campaigns/${campaignId}/dm/bestiary`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { monsters?: Array<{ draft: { name: string } }> } | null) =>
-          setMonsters((data?.monsters ?? []).map((monster) => ({ name: monster.draft.name }))),
-        )
-        .catch(() => setMonsters([]));
+    if (kind === "monster" && monsters === null && !loadErrors.monster) {
+      readLoad<{ monsters?: Array<{ draft: { name: string } }> }>(fetch(`/api/campaigns/${campaignId}/dm/bestiary`), "The bestiary").then((outcome) =>
+        outcome.payload ? setMonsters((outcome.payload.monsters ?? []).map((monster) => ({ name: monster.draft.name }))) : failed("monster", outcome.error),
+      );
     }
-  }, [kind, campaignId, npcs, lore, monsters, tables, fetchedTables]);
+  }, [kind, campaignId, npcs, lore, monsters, tables, fetchedTables, loadErrors, retries]);
+  const retry = () => {
+    setLoadErrors((current) => ({ ...current, [kind]: undefined }));
+    setRetries((current) => current + 1);
+  };
 
   const insert = (name: string) => onInsert(`@${kind}: ${name}`);
 
@@ -146,6 +149,8 @@ export function RefPicker({
           onPick={insert}
           className={cn("min-w-44")}
         />
+      ) : list === null && loadErrors[kind] ? (
+        <LoadFailed error={loadErrors[kind] ?? ""} onRetry={retry} className="min-w-44" />
       ) : (
         <span className="text-xs text-stone-500">
           {list === null ? "Reading..." : `Nothing of that kind in this workshop yet.`}

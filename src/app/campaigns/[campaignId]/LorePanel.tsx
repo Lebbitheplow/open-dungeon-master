@@ -8,7 +8,8 @@ import { collectTags } from "@/lib/workshop/pickers";
 import { WORLD_LORE_CATEGORIES, type LoreLinkTarget } from "@/lib/dm/world-lore-logic";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Sheet } from "@/components/ui/Sheet";
-import { KitButton, PanelLoading } from "./PanelKit";
+import { KitButton, LoadFailed, PanelLoading } from "./PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { LoreEntryActions } from "@/app/workshop/lore/LoreEntryActions";
 import { LoreEditorForm } from "@/app/workshop/lore/LoreEditorForm";
 import { LoreEntryRow, MentionedIn } from "@/app/workshop/lore/LoreEntryRow";
@@ -42,6 +43,10 @@ export function LorePanel({
   members?: Array<{ userId: string; username: string }>;
 }) {
   const [loading, setLoading] = useState(true);
+  // Whether a load has landed and what the last one said (issue 140): a
+  // refused list is shown in the server's words, never as "no lore yet".
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reload, setReload] = useState(0);
   const [entries, setEntries] = useState<LoreEntryView[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,23 +63,24 @@ export function LorePanel({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/lore`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!cancelled && data && Array.isArray(data.entries)) {
-          setEntries(data.entries);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
+    readLoad<{ entries?: LoreEntryView[] }>(fetch(`/api/campaigns/${campaignId}/lore`), "The lore").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload && Array.isArray(outcome.payload.entries)) {
+        setEntries(outcome.payload.entries);
+      }
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [campaignId, reload, settle]);
+  const retry = () => {
+    setLoading(true);
+    setReload((current) => current + 1);
+  };
 
   // What [[links]] in a body may point at: the other entries. An NPC or a
   // place by that name is the workshop's to resolve later; here a link to
@@ -307,8 +313,11 @@ export function LorePanel({
     const reading = readingId ? entries.find((entry) => entry.id === readingId) ?? null : null;
     return (
       <div className="space-y-3">
+        {loaded && loadError ? <LoadFailed error={loadError} onRetry={retry} /> : null}
         {loading ? (
           <PanelLoading label="Loading..." />
+        ) : !loaded && loadError ? (
+          <LoadFailed error={loadError} onRetry={retry} />
         ) : (
           <LoreRows
             entries={entries}
@@ -369,7 +378,8 @@ export function LorePanel({
       {loading ? (
         <PanelLoading label="Loading..." />
       ) : null}
-      {!loading && !entries.length && !editorOpen ? (
+      {!loading && loadError ? <LoadFailed error={loadError} onRetry={retry} /> : null}
+      {!loading && loaded && !entries.length && !editorOpen ? (
         <EmptyState size="sm" art="scrolls" title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."} />
       ) : null}
       {editorOpen ? (

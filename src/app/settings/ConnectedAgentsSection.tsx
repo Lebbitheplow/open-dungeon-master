@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { Loader2, Plug, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ui } from "@/lib/ui";
@@ -60,6 +62,10 @@ function setupLines(url: string, token: string) {
 // account can do in the browser and nothing more. The token is shown once.
 export function ConnectedAgentsSection() {
   const [grants, setGrants] = useState<Grant[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [mcpUrl, setMcpUrl] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [creating, setCreating] = useState(false);
@@ -72,12 +78,13 @@ export function ConnectedAgentsSection() {
   const [leaving, setLeaving] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/profile/agents")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        setGrants(data?.grants ?? []);
-        setMcpUrl(data?.mcpUrl ?? "");
-      });
+    readLoad<{ grants?: Grant[]; mcpUrl?: string }>(fetch("/api/profile/agents"), "The connected agents").then((outcome) => {
+      settle(outcome);
+      if (outcome.payload) {
+        setGrants(outcome.payload.grants ?? []);
+        setMcpUrl(outcome.payload.mcpUrl ?? "");
+      }
+    });
     fetch("/api/campaigns")
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
@@ -85,7 +92,7 @@ export function ConnectedAgentsSection() {
         setCampaigns(list.map((campaign) => ({ id: campaign.id, title: campaign.title })));
       })
       .catch(() => undefined);
-  }, []);
+  }, [reloads, settle]);
 
   async function create() {
     setBusy(true);
@@ -152,7 +159,7 @@ export function ConnectedAgentsSection() {
       {grants === null ? (
         <div className="skeleton-block h-12 rounded-xl" aria-label="Loading connected agents" />
       ) : grants.length === 0 && !creating ? (
-        <EmptyState art="board" size="sm" title="No agents connected." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState art="board" size="sm" title="No agents connected." /> : null)
       ) : (
         <ul className="stagger space-y-2">
           {grants.map((grant) => (

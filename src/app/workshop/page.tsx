@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { CircleHelp, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -35,6 +37,10 @@ import { navigateTo } from "@/lib/navigation";
 export default function WorkshopListPage() {
   const [workshops, setWorkshops] = useState<WorkshopSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState(DEFAULT_TARGET_PARTY.size);
@@ -59,25 +65,20 @@ export default function WorkshopListPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/workshops")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!cancelled && data) {
-          setWorkshops(data.workshops ?? []);
-        }
-      })
-      .catch(() => {
-        // transient; the next action reloads
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
+    readLoad<{ workshops?: WorkshopSummary[] }>(fetch("/api/workshops"), "Your workshops").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload) {
+        setWorkshops(outcome.payload.workshops ?? []);
+      }
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloads, settle]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -305,7 +306,7 @@ export default function WorkshopListPage() {
         </ul>
       ) : (
         <div className={`${ui.card} ornate p-4`}>
-          <EmptyState art="map" title="No workshops yet." hint="A workshop is yours alone. Nothing in it reaches a table until you import it." />
+          (loadError ? <LoadFailed error={loadError} onRetry={() => { setLoading(true); setReloads((current) => current + 1); }} /> : loaded ? <EmptyState art="map" title="No workshops yet." hint="A workshop is yours alone. Nothing in it reaches a table until you import it." /> : null)
         </div>
       )}
     </main>
