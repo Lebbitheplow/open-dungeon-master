@@ -11,7 +11,7 @@ import { hpBonusPerLevel, srdRaceId } from "@/lib/srd/race-id";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
-  bundledPrices,
+  layeredPrice,
   judgeStartingGear,
   type StartingWealthMethod,
 } from "@/lib/srd/starting-wealth";
@@ -394,11 +394,19 @@ export function useBuilderDerived({
   // stored character's pack was earned, so an edit charges only what it adds.
   const wealthMethod = rules?.startingWealth ?? "equipment";
   const purse = useMemo(() => {
+    // The pack's price rode in on the pick (EquipmentSection); it is layered
+    // under the bundled table exactly as the server layers its catalog, so
+    // the purse here and the purse the server works agree (issue #136).
     const priceOf = (itemName: string) => {
       const picked = equipment.find((item) => item.name === itemName);
-      return picked?.priceCp !== undefined
-        ? { copper: picked.priceCp, magic: false }
-        : bundledPrices(itemName);
+      return layeredPrice(
+        itemName,
+        picked?.magic
+          ? { copper: null, magic: true }
+          : picked?.priceCp !== undefined
+            ? { copper: picked.priceCp, magic: false }
+            : undefined,
+      );
     };
     const freeKit = keepsStoredGear
       ? equipment.flatMap((item) => Array.from({ length: item.qty }, () => item.name))
@@ -627,6 +635,7 @@ export function builderActions(
       gear?: EquipmentItem["gear"];
       weight?: number;
       priceCp?: number;
+      magic?: boolean;
     }) {
       state.setEquipment((current) => {
         const existing = current.find((item) => item.name === entry.name);
@@ -646,6 +655,7 @@ export function builderActions(
             ...(entry.gear ? { gear: entry.gear } : {}),
             ...(entry.weight !== undefined ? { weight: entry.weight } : {}),
             ...(entry.priceCp !== undefined ? { priceCp: entry.priceCp } : {}),
+            ...(entry.magic ? { magic: true } : {}),
           },
         ];
       });

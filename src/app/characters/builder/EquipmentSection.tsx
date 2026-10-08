@@ -6,9 +6,30 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import { gearFromHomebrewData, type HomebrewGear } from "@/lib/homebrew/gear";
+import { packRowPrice } from "@/lib/srd/starting-wealth";
 import CatalogBrowser from "./CatalogBrowser";
-import ContentPicker from "./ContentPicker";
+import ContentPicker, { type PickerEntry } from "./ContentPicker";
 import { Chip } from "./steps/shared";
+
+// What a catalog row brings into the pack beside its name: a homebrew row
+// its mechanics (so the live AC and attack lines read it before it is
+// saved), a pack row its listed price, so the purse can charge for gear the
+// bundled table never priced. An arrow, a sled or a smith's tools picked
+// here used to be refused as "no listed price" while the server, pricing
+// from the same pack, would have sold it (issue #136). A magic row carries
+// no price: those are found in play.
+function pickedGear(entry: PickerEntry) {
+  if (entry.source === "homebrew") {
+    return { name: entry.name, slug: entry.slug, gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined };
+  }
+  const price = packRowPrice({ kind: entry.kind ?? "gear", cost: entry.cost ?? "" });
+  return {
+    name: entry.name,
+    slug: entry.slug,
+    ...(price.copper !== null ? { priceCp: price.copper } : {}),
+    ...(price.magic ? { magic: true } : {}),
+  };
+}
 
 const STARTER_PACK: Array<{ name: string; qty: number }> = [
   { name: "Backpack", qty: 1 },
@@ -135,15 +156,7 @@ export default function EquipmentSection({
       <ContentPicker
         kind="items"
         placeholder="Search items (e.g. longsword, chain mail, rope)"
-        onPick={(entry) =>
-          onAdd({
-            name: entry.name,
-            slug: entry.slug,
-            ...(entry.source === "homebrew"
-              ? { gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined }
-              : {}),
-          })
-        }
+        onPick={(entry) => onAdd(pickedGear(entry))}
         renderMeta={(entry) => entry.rarity || entry.kind || ""}
       />
       {/* Searching only finds what you can already name. The catalog itself
@@ -153,15 +166,7 @@ export default function EquipmentSection({
         kind="items"
         buttonLabel="Browse every weapon, armor and item"
         selectedNames={equipment.map((item) => item.name)}
-        onPick={(entry) =>
-          onAdd({
-            name: entry.name,
-            slug: entry.slug,
-            ...(entry.source === "homebrew"
-              ? { gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined }
-              : {}),
-          })
-        }
+        onPick={(entry) => onAdd(pickedGear(entry))}
         onUnpick={onRemove}
         recommended={
           suggestions.length
