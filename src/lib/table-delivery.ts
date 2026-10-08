@@ -4,7 +4,9 @@
 // with one seat had to be left out when the event was made, at every one of
 // the dozens of places that publish a sheet or a roll. This module is the
 // single place instead: src/lib/events.ts stores what the WHOLE table may
-// read, and asks here what each listener gets.
+// read, and asks here what each listener gets. Which seats an event type is
+// for at all is written down in src/lib/event-audience.ts; a type missing
+// from that table is sent to nobody.
 //
 //   a sheet is stored and sent without its notes; the owner and the DM
 //   seats are sent the sheet whole;
@@ -12,12 +14,19 @@
 //   to the seats that may read it, with its number, and to nobody else, not
 //   even redacted. That is what the snapshot already did
 //   (src/lib/db/rolls.ts listRollsVisibleTo), so the two now agree;
-//   a blind roll is sent to everyone without its number, as before.
+//   a blind roll is sent to everyone without its number, as before;
+//   an effect whose numbers are the DM's is stored and sent without the
+//   damage figure; seats allowed real enemy numbers are sent it whole. The
+//   client used to strip it on arrival, which left the number on every
+//   device;
+//   the DM's cover is sent to everyone without the brief handed to the AI;
+//   the seats that hold the story's secrets are sent it whole.
 import { campaignSeats, capsFor, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getRoll } from "@/lib/db/rolls";
 import { getSheetById, listSheetsForUser } from "@/lib/db/sheets";
 import { mayReadNotes, publicSheet } from "@/lib/dm/sheet-view";
 import { redactRoll, rollAccessFor, type RollView } from "@/lib/dm/viewer";
+import { audienceOf, type SeatRight } from "@/lib/event-audience";
 
 type Payload = Record<string, unknown>;
 type SheetLike = { id: string; userId: string; notes?: string };
@@ -45,21 +54,36 @@ function rollOf(type: string, payload: unknown): RollLike | null {
   return roll && typeof roll === "object" && typeof roll.visibility === "string" ? roll : null;
 }
 
-// The record of the DM's hands on the board (src/lib/dm/board.ts). Its note
-// names the piece, hidden ones included ("The DM hid the assassin from the
-// party"), so it is the DM seats' alone.
-const DM_ONLY_EVENTS = new Set(["dm_board_action"]);
+// An effect whose damage figure is the DM's (src/lib/battlemap/fx-plan.ts).
+function dmNumberedFx(type: string, payload: unknown): Payload | null {
+  if (type !== "fx") {
+    return null;
+  }
+  const fx = asPayload(payload);
+  return fx && fx.numbers === "dm" && typeof fx.amount === "number" ? fx : null;
+}
+
+// The DM's cover, when it carries a brief for the AI.
+function coverBriefOf(type: string, payload: unknown): string | null {
+  if (type !== "dm_cover_changed") {
+    return null;
+  }
+  const cover = asPayload(asPayload(payload)?.cover);
+  return cover && typeof cover.brief === "string" && cover.brief ? cover.brief : null;
+}
 
 // True for an event no seat is sent unless it may read it.
 export function isSeatOnly(type: string, payload: unknown): boolean {
-  if (DM_ONLY_EVENTS.has(type)) {
+  const audience = audienceOf(type);
+  if (!audience || audience.kind === "dm") {
     return true;
   }
   const roll = rollOf(type, payload);
   return roll !== null && (roll.visibility === "dm" || roll.visibility === "self");
 }
 
-// The payload as the whole table may hold it, which is what the log stores.
+// The payload as the whole table may hold it, which is what the log stores
+// and what the fast path sends every seat.
 export function tablePayload(type: string, payload: unknown): unknown {
   const sheet = sheetOf(type, payload);
   if (sheet) {
@@ -72,6 +96,16 @@ export function tablePayload(type: string, payload: unknown): unknown {
       ...(payload as Payload),
       roll: redactRoll(roll as Parameters<typeof redactRoll>[0]),
     };
+  }
+  const fx = dmNumberedFx(type, payload);
+  if (fx) {
+    const rest = { ...fx };
+    delete rest.amount;
+    return rest;
+  }
+  if (coverBriefOf(type, payload)) {
+    const cover = asPayload((payload as Payload).cover)!;
+    return { ...(payload as Payload), cover: { ...cover, brief: "" } };
   }
   return payload;
 }
@@ -94,20 +128,33 @@ export function viewerFor(campaignId: string, userId: string): Viewer {
   };
 }
 
+function holds(viewer: Viewer | null, right: SeatRight): boolean {
+  const campaign = viewer?.campaign();
+  return Boolean(viewer && campaign && capsFor(campaign, viewer.userId)[right]);
+}
+
 // What `viewer` is sent of a stored event: the payload, or null for nothing.
-// A null viewer is a listener nobody vouched for, who gets the table's view.
-// `original` is the payload as it was published, when it is still at hand
-// (live); a replay reads what the log left out back from the database.
+// A null viewer is a listener nobody vouched for, who gets the table's view
+// of a table event and nothing of the rest. `original` is the payload as it
+// was published, when it is still at hand (live); a replay reads what the
+// log left out back from the database.
 export function payloadForViewer(
   type: string,
   stored: unknown,
   viewer: Viewer | null,
   original?: unknown,
 ): unknown | null {
-  if (DM_ONLY_EVENTS.has(type)) {
-    const campaign = viewer?.campaign();
-    return viewer && campaign && capsFor(campaign, viewer.userId).fullMap ? stored : null;
+  const audience = audienceOf(type);
+  if (!audience) {
+    return null;
   }
+  if (audience.kind === "dm") {
+    return holds(viewer, audience.right) ? stored : null;
+  }
+  if (audience.kind === "table") {
+    return stored;
+  }
+
   const roll = rollOf(type, stored);
   if (roll && isSeatOnly(type, stored)) {
     const campaign = viewer?.campaign();
@@ -130,6 +177,28 @@ export function payloadForViewer(
     }
     const whole = sheetOf(type, original) ?? getSheetById(sheet.id);
     return whole?.notes ? { ...(stored as Payload), sheet: { ...sheet, notes: whole.notes } } : stored;
+  }
+
+  // The figure rides only live: an effect is ephemeral and never replayed.
+  const fx = dmNumberedFx(type, original);
+  if (fx) {
+    return holds(viewer, "enemyNumbers") ? fx : stored;
+  }
+
+  // Live, the brief is still on the published payload; on replay it is
+  // read back from the campaign's current cover, when the stored event is
+  // that cover (a cover already handed back has nothing to add).
+  if (type === "dm_cover_changed" && holds(viewer, "secretStory")) {
+    const cover = asPayload((stored as Payload).cover);
+    const brief =
+      coverBriefOf(type, original) ??
+      (() => {
+        const current = viewer!.campaign()?.dmCover;
+        return current && cover && current.startedAt === cover.startedAt ? current.brief : null;
+      })();
+    if (cover && brief) {
+      return { ...(stored as Payload), cover: { ...cover, brief } };
+    }
   }
   return stored;
 }
