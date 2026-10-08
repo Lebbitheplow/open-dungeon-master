@@ -10,8 +10,8 @@
 // skill check carries the Athletics paragraph, "climb a sheer or slippery
 // cliff..."), because an entry's summary says what it does to the sheet,
 // never what a player says that calls for it. The model call that follows
-// picks from the whole catalog, not from the shortlist, so a shortlist that
-// missed still leaves the right action reachable.
+// picks from the nearer half of the catalog, not from the shortlist, so a
+// shortlist that missed still leaves the right action reachable.
 //
 // Pure and dependency-free apart from the catalog's own types, so
 // scripts/test-assist.mjs can import it.
@@ -71,6 +71,23 @@ export function catalogPassages(entry: CatalogEntry, sections: ReadonlyMap<strin
     }
   }
   return passages;
+}
+
+// One action as the model sees it: its name, what it does, and its
+// arguments. A pick list names its values, because the console's form only
+// prefills a value it offers: a model left to guess writes "check" for
+// skill_check, or the table's own word for a skill. A list that also takes
+// a typed value says so.
+export function candidateLine(entry: CatalogEntry): string {
+  const fields = entry.fields
+    .map((field) => {
+      const values = field.options?.length
+        ? `: ${field.options.map((option) => option.value).join("|")}${field.other ? "|other text" : ""}`
+        : "";
+      return `${field.name} (${field.kind}${field.required ? ", required" : ""}${values})`;
+    })
+    .join(", ");
+  return `- ${entry.name}: ${entry.summary}\n  arguments: ${fields || "none"}`;
 }
 
 // The actions this moment of play allows: a fight tool with no fight running

@@ -9,7 +9,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { availableEntries, catalogEntryText, catalogPassages, parseSuggestionJson, rankBySimilarity, srdSections } =
+const { availableEntries, candidateLine, catalogEntryText, catalogPassages, parseSuggestionJson, rankBySimilarity, srdSections } =
   await import("../src/lib/dm/assist-logic.ts");
 const { ADJUDICATIONS } = await import("../src/lib/dm/invoke-catalog.ts");
 const { rulebookPages } = await import("../src/lib/rulebook/book.ts");
@@ -45,6 +45,20 @@ test("an entry also carries the SRD's text for each choice it offers, and only w
   // An entry whose choices the SRD does not title has its own text alone.
   const gold = ADJUDICATIONS.find((entry) => entry.name === "modify_gold");
   assert.deepEqual(catalogPassages(gold, sections), [catalogEntryText(gold)]);
+});
+
+test("the model sees each action's arguments, a pick list with its values, so a prefill is one the form offers", () => {
+  const roll = candidateLine(ADJUDICATIONS.find((entry) => entry.name === "request_roll"));
+  assert.ok(roll.startsWith("- request_roll: "));
+  assert.match(roll, /skill \(select: acrobatics\|animal_handling\|[^)]*athletics[^)]*\)/);
+  assert.match(roll, /arguments: characterId \(character\), kind \(select, required: skill_check\|/);
+  // A pick list that also takes a typed value says so.
+  const typed = ADJUDICATIONS.flatMap((entry) => entry.fields.filter((field) => field.options?.length && field.other).map(() => entry))[0];
+  if (typed) {
+    assert.match(candidateLine(typed), /\|other text\)/);
+  }
+  const gold = candidateLine(ADJUDICATIONS.find((entry) => entry.name === "modify_gold"));
+  assert.ok(!gold.includes("select"));
 });
 
 test("fight tools are not offered when there is no fight", () => {

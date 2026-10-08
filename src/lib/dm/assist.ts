@@ -13,6 +13,7 @@ import { embed } from "@/lib/embeddings";
 import { rulebookPages } from "@/lib/rulebook/book";
 import {
   availableEntries,
+  candidateLine,
   catalogPassages,
   parseSuggestionJson,
   rankBySimilarity,
@@ -38,24 +39,32 @@ export type SuggestedAdjudication = {
 };
 
 const SUGGEST_SYSTEM =
-  'You map a player\'s stated intention onto exactly one action the rules engine can perform. You are given every action the engine can perform right now, with their arguments. Return STRICT JSON only, no code fences, shaped: {"name": string, "args": object, "why": string}. name MUST be one of the listed action names. args fills in what you can infer from the intention and leaves out what you cannot; never invent a character name or an id that is not given to you. why is one short clause saying what the roll or effect is for. If no action fits well, return the closest one with empty args.';
+  'You map a player\'s stated intention onto exactly one action the rules engine can perform. You are given the actions the engine can perform right now that are nearest the intention, with their arguments. Return STRICT JSON only, no code fences, shaped: {"name": string, "args": object, "why": string}. name MUST be one of the listed action names. args fills in what you can infer from the intention and leaves out what you cannot; never invent a character name or an id that is not given to you. An argument with listed values takes one of them, written exactly as listed. why is one short clause saying what the roll or effect is for. If no action fits well, return the closest one with empty args.';
 
 // How many of the nearest actions the DM is shown before the model answers.
 const SHORTLIST = 5;
 
-let catalogVectors: Promise<Map<string, Float32Array[]>> | null = null;
+// The model is shown the nearer half of what this moment allows. On 32
+// player intents, in English and Italian, the right action was in it every
+// time with the suggested multilingual model (once missed with MiniLM, in
+// English), for about half the tokens of the whole catalog.
+
+// Survives dev-mode HMR, same pattern as the embedder (src/lib/embeddings.ts).
+declare global {
+  var __odmAssistCatalogVectors: Promise<Map<string, Float32Array[]>> | undefined;
+}
 
 // The catalog's passage vectors, embedded once per process: the catalog
 // and the SRD only change with the code.
 function catalogVectorsOnce(): Promise<Map<string, Float32Array[]>> {
-  if (catalogVectors) {
-    return catalogVectors;
+  if (globalThis.__odmAssistCatalogVectors) {
+    return globalThis.__odmAssistCatalogVectors;
   }
   const sections = srdSections(rulebookPages());
   const passages = ADJUDICATIONS.flatMap((entry) =>
     catalogPassages(entry, sections).map((text) => ({ name: entry.name, text })),
   );
-  catalogVectors = embed(passages.map((passage) => passage.text)).then(
+  globalThis.__odmAssistCatalogVectors = embed(passages.map((passage) => passage.text)).then(
     (vectors) => {
       const byName = new Map<string, Float32Array[]>();
       passages.forEach((passage, index) => {
@@ -64,21 +73,21 @@ function catalogVectorsOnce(): Promise<Map<string, Float32Array[]>> {
       return byName;
     },
     (error: unknown) => {
-      catalogVectors = null;
+      globalThis.__odmAssistCatalogVectors = undefined;
       throw error;
     },
   );
-  return catalogVectors;
+  return globalThis.__odmAssistCatalogVectors;
 }
 
 export type AssistSuggestion = { suggestions: SuggestedAdjudication[]; picked: ParsedSuggestion | null };
 
 // The actions nearest the intent by meaning first, in any language (embedded
 // on this server, no model call), then one small model call that picks from
-// every action this moment allows and prefills it. The shortlist is what the
-// DM sees if the model is slow, unreachable, or simply wrong. An embedder that
-// fails leaves the model's pick alone; with no model either, there is
-// nothing to suggest, and the DM is told so.
+// the nearer half and prefills it. The shortlist is what the DM sees if the
+// model is slow, unreachable, or simply wrong. An embedder that fails leaves
+// the model to pick from everything; with no model either, there is nothing
+// to suggest, and the DM is told so.
 export async function suggestAdjudication(
   campaign: Campaign,
   intent: string,
@@ -90,28 +99,24 @@ export async function suggestAdjudication(
     label: entry.label,
     summary: entry.summary,
   });
-  let suggestions: SuggestedAdjudication[] = [];
+  let ranked: CatalogEntry[] = [];
   let embedded = true;
   try {
     const [vectors, [intentVector]] = await Promise.all([catalogVectorsOnce(), embed([intent])]);
-    suggestions = rankBySimilarity(intentVector, available, vectors, SHORTLIST).map(toSuggestion);
+    ranked = rankBySimilarity(intentVector, available, vectors, Math.ceil(available.length / 2));
   } catch (error) {
     embedded = false;
     console.error("[assist] the embedder failed; the shortlist is empty", error);
   }
+  let suggestions = ranked.slice(0, SHORTLIST).map(toSuggestion);
   const unavailable = { error: "Suggestions are unavailable: the embedding model could not be loaded." };
   if (options.useModel === false) {
     return embedded ? { suggestions, picked: null } : unavailable;
   }
 
-  const candidates = available
-    .map((entry) => {
-      const fields = entry.fields
-        .map((field) => `${field.name} (${field.kind}${field.required ? ", required" : ""})`)
-        .join(", ");
-      return `- ${entry.name}: ${entry.summary}\n  arguments: ${fields || "none"}`;
-    })
-    .join("\n");
+  // With no ranking the model still picks, from everything.
+  const offered = embedded ? ranked : available;
+  const candidates = offered.map(candidateLine).join("\n");
   const roster = listSheets(campaign.id)
     .map((sheet) => `${sheet.name} (id ${sheet.id})`)
     .join("; ");
@@ -134,9 +139,9 @@ export async function suggestAdjudication(
     { timeoutMs: arcTextTimeoutMs() },
   );
   const parsed = error ? null : parseSuggestionJson(stripReasoningArtifacts(String(message?.content ?? "")));
-  // A pick that names no action this moment allows is discarded rather than
+  // A pick that names no action it was offered is discarded rather than
   // trusted: the console would render a form for an action it cannot run.
-  const entry = parsed ? available.find((candidate) => candidate.name === parsed.name) : undefined;
+  const entry = parsed ? offered.find((candidate) => candidate.name === parsed.name) : undefined;
   if (!parsed || !entry) {
     return embedded ? { suggestions, picked: null } : unavailable;
   }
