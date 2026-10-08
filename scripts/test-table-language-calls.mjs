@@ -123,7 +123,7 @@ await test("An Italian question needs no English word to reach the rules, the sh
   model.close();
 });
 
-await test("The assist's model picks from the nearer half with each pick list's values, its pick leads the shortlist, and a pick it was not offered is dropped.", async () => {
+await test("The assist's model picks from every action with each pick list's values, its pick leads the shortlist, and a pick this moment does not allow is dropped.", async () => {
   // Resting and camping share a direction; everything else shares another.
   const restful = (texts) =>
     Promise.resolve({ tolist: () => texts.map((text) => (/take rest|accampiamo/i.test(text) ? [1, 0, ...new Array(382).fill(0)] : [0, 1, ...new Array(382).fill(0)])) });
@@ -140,13 +140,11 @@ await test("The assist's model picks from the nearer half with each pick list's 
     assert.deepEqual(result.suggestions[0].args, { kind: "short" });
     assert.ok(result.suggestions.length <= 5);
     const offered = model.requests[0].messages.at(-1).content.split("\n").filter((line) => line.startsWith("- "));
-    assert.equal(offered.length, Math.ceil(available.length / 2), "the model was not shown the nearer half");
-    assert.ok(offered[0].startsWith("- take_rest:"), offered[0]);
+    assert.equal(offered.length, available.length, "the model was not shown every action");
     assert.match(model.requests[0].messages.at(-1).content, /kind \(select, required: short\|long\)/, "a pick list's values were not shown");
-    // An action outside the half is not trusted.
-    const shown = new Set(offered.map((line) => line.slice(2, line.indexOf(":"))));
-    const outside = available.find((entry) => !shown.has(entry.name));
-    model.script([reply({ text: JSON.stringify({ name: outside.name, args: {}, why: "x" }) })]);
+    // A fight tool with no fight running is not trusted.
+    const fightOnly = ADJUDICATIONS.find((entry) => entry.needsEncounter);
+    model.script([reply({ text: JSON.stringify({ name: fightOnly.name, args: {}, why: "x" }) })]);
     const dropped = await suggestAdjudication(italian.campaign(), "Ci accampiamo per la notte", { inEncounter: false });
     assert.equal(dropped.picked, null);
     assert.equal(dropped.suggestions[0].name, "take_rest");
@@ -172,7 +170,7 @@ await test("An embedder that fails is logged: the model's pick still answers, an
     model.script([reply({ text: '{"name":"request_roll","args":{},"why":"cerca"}' })]);
     const picked = await suggestAdjudication(italian.campaign(), "Cerco trappole", { inEncounter: false });
     assert.deepEqual(picked.suggestions.map((entry) => entry.name), ["request_roll"]);
-    // With nothing ranked, the model picks from everything.
+    // With nothing ranked, the model still picks from everything.
     const { ADJUDICATIONS } = await import("../src/lib/dm/invoke-catalog.ts");
     const offered = model.requests.at(-1).messages.at(-1).content.split("\n").filter((line) => line.startsWith("- ")).length;
     assert.equal(offered, ADJUDICATIONS.filter((entry) => !entry.needsEncounter).length);

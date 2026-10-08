@@ -2,16 +2,14 @@
 // shortlist of adjudications, and reading back what the model proposed.
 //
 // The shortlist is ranked by meaning, not by words: the intent and each
-// catalog entry are embedded (src/lib/embeddings.ts, on the server with no
-// model call) and ordered by similarity, so a DM typing in Italian gets the
-// same help as one typing in English. This replaced a list of English stop
-// words and synonyms, which suggested nothing for any other language. An
-// entry is embedded with the SRD's own text for each choice it offers (a
-// skill check carries the Athletics paragraph, "climb a sheer or slippery
-// cliff..."), because an entry's summary says what it does to the sheet,
-// never what a player says that calls for it. The model call that follows
-// picks from the nearer half of the catalog, not from the shortlist, so a
-// shortlist that missed still leaves the right action reachable.
+// catalog entry are embedded (src/lib/embeddings.ts, on the server, no model
+// call), so a DM typing in Italian gets the same help as one typing in
+// English. An entry also carries the SRD's text for each choice it offers (a
+// skill check, the Athletics paragraph: "climb a sheer or slippery
+// cliff..."), because its summary says what it does to the sheet, never what
+// a player says that calls for it. The model call that follows picks from the
+// whole catalog, so a shortlist that missed still leaves the right action
+// reachable.
 //
 // Pure and dependency-free apart from the catalog's own types, so
 // scripts/test-assist.mjs can import it.
