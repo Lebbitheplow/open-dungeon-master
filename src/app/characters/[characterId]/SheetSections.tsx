@@ -10,8 +10,7 @@ import {
   FeatChips,
   FeatureChips,
   SkillRows,
-  VitalTiles,
-} from "@/components/sheet/SheetParts";
+  VitalTiles, TrainingLines } from "@/components/sheet/SheetParts";
 import { SheetSpells } from "@/components/sheet/SheetSpells";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
@@ -124,6 +123,10 @@ export function SheetSections({ sheet, level = 1 }: { sheet: CreateSheetInput; l
           proficient={sheet.proficiencies.skills}
           explain={(skillId) => explain(derived.parts.skills[skillId])}
         />
+      </SheetPanel>
+
+      <SheetPanel title="Languages and training">
+        <TrainingLines proficiencies={sheet.proficiencies} />
       </SheetPanel>
 
       {sheet.spellcasting ? (

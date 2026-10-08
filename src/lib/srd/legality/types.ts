@@ -31,7 +31,9 @@ export type SpellFacts = {
   school?: string | null;
 };
 
-export type FeatFacts = { name: string; prerequisite: string };
+// The feat's text rides along: what it grants beyond its ability point is
+// read from it (src/lib/srd/feat-grants.ts).
+export type FeatFacts = { name: string; prerequisite: string; desc: string };
 
 export type LegalityContext = {
   door: Door;

@@ -31,6 +31,7 @@ import { XP_THRESHOLDS, findSkill, levelForXp } from "@/lib/srd";
 import { ABILITY_SCORE_CAP, applyAsiChoices, earnedAsiCountFor } from "@/lib/srd/asi";
 import { asiTaken, withAsiLedger } from "@/lib/srd/asi-ledger";
 import { applyFeatIncrease, featSaveProficiency } from "@/lib/srd/feat-effects";
+import { applyFeatGrants } from "@/lib/srd/feat-grants";
 import {
   bundledSubclassName,
   expertiseSlotsFor,
@@ -383,6 +384,26 @@ export function buildLevelUp(
         proficiencies = { ...proficiencies, skills: [...proficiencies.skills, skillPick] };
       }
     }
+  }
+  // What the feats taken with this level grant beyond their point
+  // (src/lib/srd/feat-grants.ts): Linguist's three languages, Heavily
+  // Armored's armor. Every pick the feat leaves open is named in the
+  // request, or the level is refused with what is still to pick.
+  const featsTaken = asked.choices.flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : []));
+  if (featsTaken.length) {
+    const granted = applyFeatGrants({
+      proficiencies,
+      feats: featsTaken.map((name) => {
+        const facts = context.featOf(name);
+        return { name: facts?.name ?? name, desc: facts?.desc ?? "" };
+      }),
+      choices: request.featChoices ?? {},
+      strict: true,
+    });
+    if (granted.problems.length) {
+      return refuse(granted.problems[0]);
+    }
+    proficiencies = granted.proficiencies;
   }
   if (request.expertise) {
     const held = proficiencies.expertise ?? [];

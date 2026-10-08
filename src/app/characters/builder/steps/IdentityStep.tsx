@@ -12,9 +12,12 @@ import OptionPicker, { type PickerGroup } from "../OptionPicker";
 import { backgroundInfoText } from "../usePickerGroups";
 import type { BackgroundOption } from "../useBuilderOptions";
 import type { BuilderState } from "../useBuilderState";
+import { splitToolGrants } from "@/lib/srd/tool-choices";
 import { Field, StepPanel, inputClass } from "./shared";
 
 const GENDERS = ["Female", "Male", "Nonbinary"];
+// How many tools a background's open grant leaves to the player, in words.
+const COUNT_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three" };
 
 export type BuilderRole = "pc" | "companion";
 
@@ -195,6 +198,18 @@ export function IdentityStep({
               // the hold on step 2 is no surprise (issue #117).
               <span className="mt-1 block text-xs text-stone-500">
                 On the Ancestry step you will pick {background.languages === 1 ? "one more language" : `${background.languages} more languages`} for this background.
+              </span>
+            ) : null}
+            {background?.tools?.length && splitToolGrants(background.tools).choices.length ? (
+              // A background's open tool grant ("one type of artisan's
+              // tools") is picked on the class step, under the class's own;
+              // said here like the languages (issue #117 follow-up).
+              <span className="mt-1 block text-xs text-stone-500">
+                On the Calling step you will pick{" "}
+                {splitToolGrants(background.tools)
+                  .choices.map((choice) => `${COUNT_WORDS[choice.count] ?? choice.count} ${choice.label}${choice.count === 1 || choice.label.endsWith("s") ? "" : "s"}`)
+                  .join(" and ")}{" "}
+                for this background.
               </span>
             ) : null}
             {background?.skillChoice ? (

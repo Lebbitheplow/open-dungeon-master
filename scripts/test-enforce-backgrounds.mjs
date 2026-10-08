@@ -168,6 +168,65 @@ await test("the stored sheet carries the background: skills, tools, languages, k
   }
 });
 
+await test("a background kit's 'of your choice' line follows the tool the player picked, and an either-or line follows the gear pick, at the builder and at the table (issue #127)", async () => {
+  if (!hasPack) {
+    return;
+  }
+  const { mergedBackgroundOptions } = await import("../src/lib/characters/options.ts");
+  const rows = mergedBackgroundOptions(listBackgrounds({ limit: 200 }));
+  const withRow = (row, fields) => {
+    const classSkills = ["acrobatics", "history", "insight", "perception", "survival"].filter((skill) => !row.skills.includes(skill)).slice(0, 2);
+    return builder.build({
+      race: "human",
+      class: "fighter",
+      background: row,
+      chosenSkills: classSkills,
+      stylePicks: ["defense"],
+      bonusLanguages: ["Elvish", "Dwarvish", "Giant"].slice(0, 1 + (row.languages ?? 0)),
+      backgroundSkills: row.skillChoice ? row.skillChoice.from.filter((skill) => !row.skills.includes(skill)).slice(0, row.skillChoice.count) : [],
+      ...fields,
+    });
+  };
+  // Court Servant: "A set of artisan's tools of your choice" is the tool
+  // proficiency the class step asked for.
+  const courtServant = rows.find((row) => row.name === "Court Servant");
+  assert.ok(courtServant, "the pack's Court Servant");
+  const servant = withRow(courtServant, { toolPicks: ["calligrapher's supplies"] });
+  assert.equal(servant.blocker, null, servant.blocker?.message);
+  const servantKit = servant.sheet.equipment.map((item) => item.name);
+  assert.ok(servantKit.includes("Calligrapher's Supplies"), `kit: ${servantKit}`);
+  assert.ok(!servantKit.some((name) => /of your choice/i.test(name)), `kit still carries the line: ${servantKit}`);
+  const servantAt = await atTable(servant.sheet);
+  assert.equal(servantAt.status, 201, servantAt.error);
+  assert.ok(servantAt.sheet.equipment.some((item) => item.name === "Calligrapher's Supplies"));
+  // The kit is free: the purse is the background's 20 gp, untouched.
+  assert.equal(servantAt.sheet.gold, 20, "the filled tool was charged for");
+  // Innkeeper: two either-or lines, the book's first until picked.
+  const innkeeper = rows.find((row) => row.name === "Innkeeper");
+  assert.ok(innkeeper, "the pack's Innkeeper");
+  const first = withRow(innkeeper, {});
+  assert.equal(first.blocker, null, first.blocker?.message);
+  const firstKit = first.sheet.equipment.map((item) => item.name);
+  assert.ok(firstKit.includes("Brewer's Supplies") && firstKit.includes("Dagger"), `kit: ${firstKit}`);
+  assert.deepEqual(first.sheet.backgroundChoices.gear, ["Brewer's supplies", "Dagger"]);
+  const picked = withRow(innkeeper, { backgroundGearPicks: ["Cook's utensils", "Light hammer"] });
+  const pickedKit = picked.sheet.equipment.map((item) => item.name);
+  assert.ok(pickedKit.includes("Cook's Utensils") && pickedKit.includes("Light Hammer"), `kit: ${pickedKit}`);
+  assert.ok(!pickedKit.includes("Brewer's Supplies") && !pickedKit.some((name) => /\bor\b/.test(name)), `kit: ${pickedKit}`);
+  assert.deepEqual(picked.sheet.backgroundChoices.gear, ["Cook's utensils", "Light hammer"]);
+  const pickedAt = await atTable(picked.sheet);
+  assert.equal(pickedAt.status, 201, pickedAt.error);
+  assert.ok(pickedAt.sheet.equipment.some((item) => item.name === "Light Hammer"));
+  assert.equal(pickedAt.sheet.gold, 20, "the picked alternative was charged for");
+  // The table copy keeps the gear, not the builder's picks: those live on
+  // the library copy, where an edit reopens with them.
+  // A pick the line does not offer is refused at the table.
+  const wrong = { ...picked.sheet, backgroundChoices: { ...picked.sheet.backgroundChoices, gear: ["Greatsword", "Light hammer"] } };
+  const wrongAt = await atTable(wrong);
+  assert.equal(wrongAt.status, 400, "an alternative the kit does not offer");
+  assert.match(wrongAt.error, /brewer's supplies or cook's utensils/);
+});
+
 await test("a background's feature is the server's grant: a request cannot swap it or stack another", async () => {
   const built = buildBackground("acolyte");
   const swapped = await atTable({ ...built.sheet, features: [{ name: "Position of Privilege (Noble)", source: "class" }] });

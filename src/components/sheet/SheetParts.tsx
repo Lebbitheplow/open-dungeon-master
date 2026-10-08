@@ -210,6 +210,34 @@ export function HpBar({
   );
 }
 
+// What the character speaks and is trained with, beside the skills, so a
+// Linguist's languages or a feat's armor are never only in the DM's prompt
+// (issue #125). Ids read as names; an empty kind says so.
+export function TrainingLines({
+  proficiencies,
+}: {
+  proficiencies: { languages: string[]; tools: string[]; armor: string[]; weapons: string[] };
+}) {
+  const nice = (value: string) =>
+    value.replace(/[-_]/g, " ").replace(/(^|\s|')([a-z])/g, (_, before: string, letter: string) => `${before}${letter.toUpperCase()}`);
+  const rows: Array<[string, string[]]> = [
+    ["Languages", proficiencies.languages],
+    ["Tools", proficiencies.tools],
+    ["Armor", proficiencies.armor],
+    ["Weapons", proficiencies.weapons],
+  ];
+  return (
+    <dl className="stagger-up grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      {rows.map(([label, values]) => (
+        <div key={label} className="contents">
+          <dt className="text-stone-500">{label}</dt>
+          <dd className="text-stone-200">{values.length ? [...new Set(values.map(nice))].join(", ") : <span className="text-stone-600">none</span>}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function SkillRows({
   skills,
   proficient,

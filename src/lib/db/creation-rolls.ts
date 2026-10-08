@@ -1,3 +1,4 @@
+import { getGlobalConfig } from "@/lib/db/app-settings";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { defaultRng } from "@/lib/dice";
 import { startingWealthDice, wealthFromFaces } from "@/lib/srd/starting-wealth";
@@ -14,8 +15,13 @@ import { startingWealthDice, wealthFromFaces } from "@/lib/srd/starting-wealth";
 // The table is this module's own and is created on first use, so the schema
 // file does not have to know about it.
 
-const REROLL_BELOW = 70;
 const POOL_SIZE = 6;
+
+// The house rule, an admin setting (Admin > Server): a fresh six only while
+// the kept six add up to less than this; 0 allows no reroll (issue #128).
+export function abilityRerollBelow(): number {
+  return getGlobalConfig().abilityRerollBelow;
+}
 
 // Keyed by the connection, so a process that opens a second database (a
 // test, a restore) makes the table there too.
@@ -43,16 +49,26 @@ export type AbilityPoolRoll = {
   // The four faces of each throw and the total with the lowest set aside.
   throws: Array<{ dice: number[]; dropIndex: number; total: number }>;
   totals: number[];
-  // Whether a fresh six may be asked for: ODM's rule, only while the pool
-  // adds up to less than 70.
+  // Whether a fresh six may be asked for: only while the pool adds up to
+  // less than the server's threshold.
   canReroll: boolean;
+  rerollBelow: number;
+  // True when these six were already on record and are handed back again
+  // rather than thrown now, with when they were thrown; the builder shows a
+  // kept roll as kept, not as dice in the air (issue #128).
+  kept: boolean;
+  createdAt: string | null;
 };
 
-function read<T>(userId: string, kind: string, scope: string): T | null {
+function read<T>(userId: string, kind: string, scope: string): { payload: T; createdAt: string } | null {
   const row = db()
-    .prepare(`SELECT payload_json FROM creation_rolls WHERE user_id = ? AND kind = ? AND scope = ?`)
-    .get(userId, kind, scope) as { payload_json: string } | undefined;
-  return row ? parseJson<T | null>(row.payload_json, null) : null;
+    .prepare(`SELECT payload_json, created_at FROM creation_rolls WHERE user_id = ? AND kind = ? AND scope = ?`)
+    .get(userId, kind, scope) as { payload_json: string; created_at: string } | undefined;
+  if (!row) {
+    return null;
+  }
+  const payload = parseJson<T | null>(row.payload_json, null);
+  return payload === null ? null : { payload, createdAt: row.created_at };
 }
 
 function write(userId: string, kind: string, scope: string, payload: unknown) {
@@ -84,23 +100,28 @@ function throwFour(): AbilityPoolRoll["throws"][number] {
   return { dice, dropIndex, total };
 }
 
-const shaped = (throws: AbilityPoolRoll["throws"]): AbilityPoolRoll => {
+const shaped = (throws: AbilityPoolRoll["throws"], kept: boolean, createdAt: string | null): AbilityPoolRoll => {
   const totals = throws.map((entry) => entry.total);
+  const rerollBelow = abilityRerollBelow();
   return {
     throws,
     totals,
-    canReroll: totals.reduce((sum, total) => sum + total, 0) < REROLL_BELOW,
+    canReroll: totals.reduce((sum, total) => sum + total, 0) < rerollBelow,
+    rerollBelow,
+    kept,
+    createdAt,
   };
 };
 
 // The player's open pool, or null when none was rolled.
 export function openAbilityPool(userId: string): AbilityPoolRoll | null {
-  const throws = read<AbilityPoolRoll["throws"]>(userId, "abilities", "");
-  return throws?.length === POOL_SIZE ? shaped(throws) : null;
+  const open = read<AbilityPoolRoll["throws"]>(userId, "abilities", "");
+  return open?.payload.length === POOL_SIZE ? shaped(open.payload, true, open.createdAt) : null;
 }
 
-// Six throws of 4d6, the lowest die of each set aside. A pool worth 70 or
-// more stands: asking again returns the same six.
+// Six throws of 4d6, the lowest die of each set aside. A pool at or over
+// the server's threshold stands: asking again returns the same six, marked
+// as kept.
 export function rollAbilityPool(userId: string): AbilityPoolRoll {
   const open = openAbilityPool(userId);
   if (open && !open.canReroll) {
@@ -108,7 +129,7 @@ export function rollAbilityPool(userId: string): AbilityPoolRoll {
   }
   const throws = Array.from({ length: POOL_SIZE }, throwFour);
   write(userId, "abilities", "", throws);
-  return shaped(throws);
+  return shaped(throws, false, nowIso());
 }
 
 export function spendAbilityPool(userId: string) {
@@ -121,7 +142,7 @@ const wealthScope = (campaignId: string, classId: string) =>
   `${campaignId}:${classId.trim().toLowerCase()}`;
 
 export function openWealthRoll(userId: string, campaignId: string, classId: string): WealthRoll | null {
-  return read<WealthRoll>(userId, "wealth", wealthScope(campaignId, classId));
+  return read<WealthRoll>(userId, "wealth", wealthScope(campaignId, classId))?.payload ?? null;
 }
 
 // The class's starting wealth, rolled once: asking again returns the same

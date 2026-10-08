@@ -12,6 +12,7 @@ import { thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import { armorClassLine, purseViewFor } from "../derivedReasons";
+import BackgroundKitSection from "../BackgroundKitSection";
 import EquipmentSection from "../EquipmentSection";
 import KitChoicesSection from "../KitChoicesSection";
 import type { BackgroundOption, ClassOption } from "../useBuilderOptions";
@@ -66,17 +67,26 @@ export function SpellsGearStep({
         purse={purse}
         inputClass={inputClass}
         kit={
-          klass && derived.classKit && derived.kitChoices ? (
-            <KitChoicesSection
-              kit={derived.classKit}
-              choices={derived.kitChoices}
-              training={derived.kitTraining}
-              className={klass.name.toLowerCase()}
-              armorClass={armorClassLine(derived.acInfo?.ac ?? derived.ac, derived.acInfo?.parts)}
-              onOption={actions.chooseKitOption}
-              onPick={actions.pickKitSlot}
-            />
-          ) : null
+          <>
+            {klass && derived.classKit && derived.kitChoices ? (
+              <KitChoicesSection
+                kit={derived.classKit}
+                choices={derived.kitChoices}
+                training={derived.kitTraining}
+                className={klass.name.toLowerCase()}
+                armorClass={armorClassLine(derived.acInfo?.ac ?? derived.ac, derived.acInfo?.parts)}
+                onOption={actions.chooseKitOption}
+                onPick={actions.pickKitSlot}
+              />
+            ) : null}
+            {background && !state.keepsStoredGear ? (
+              <BackgroundKitSection
+                kit={derived.backgroundKit}
+                backgroundName={background.name}
+                onPick={actions.pickBackgroundGear}
+              />
+            ) : null}
+          </>
         }
       />
       </div>

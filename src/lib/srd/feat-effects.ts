@@ -42,6 +42,13 @@ export function holdsFeat(
   );
 }
 
+// The text of one of ODM's own feats, for the grants read from it
+// (src/lib/srd/feat-grants.ts) where the catalog is not at hand; null for
+// a content pack's feat, whose text the pack serves.
+export function authoredFeatDesc(name: string): string | null {
+  return featRow(name)?.desc ?? null;
+}
+
 // ---- the half-feats ----
 
 export type FeatIncrease = { from: Ability[]; amount: 1 };

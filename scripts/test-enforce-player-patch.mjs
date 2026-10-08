@@ -88,6 +88,9 @@ const SAMPLE = {
   levelUpSpells: ["Shield"],
   levelUpForget: "Shield",
   asiChoices: [{ mode: "plus2", ability: "str" }],
+  // The picks a feat taken this level leaves open: a level-up's, like the
+  // improvement it comes with (issue #125).
+  featChoices: { linguist: { languages: ["Dwarvish", "Giant", "Orc"] } },
   hpChoice: "average",
 };
 

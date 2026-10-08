@@ -48,6 +48,8 @@ import {
   takesDraconicAncestry,
   type DraconicAncestry,
 } from "@/lib/srd/racial-grants";
+import { applyFeatGrants, withoutFeatPicks } from "@/lib/srd/feat-grants";
+import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { kitNames, startingKitFor } from "@/lib/srd/starting-kit";
 import { judgeStartingGear, wealthCeilingGold } from "@/lib/srd/starting-wealth";
 import { abilityProblems, baseSpans } from "@/lib/srd/legality/abilities";
@@ -217,7 +219,7 @@ function freeKitOf(
   klass: ClassGrants,
   background: LegalityContext["background"],
   input: CreateSheetInput,
-  who: { armor: string[]; weapons: string[]; subclass: string },
+  who: { armor: string[]; weapons: string[]; tools: string[]; subclass: string },
 ) {
   const kit = startingKitFor(
     { id: klass.id, armor: who.armor, weapons: who.weapons },
@@ -225,9 +227,17 @@ function freeKitOf(
     who.subclass,
     klass.name,
   );
+  // The background's kit with its choice lines answered: a tool line from
+  // the training the character holds, an either-or line from the pick the
+  // sheet records (issue #127).
+  const backgroundKit = expandBackgroundGear(background?.equipment, {
+    tools: who.tools,
+    backgroundTools: background?.tools ?? [],
+    picks: input.backgroundChoices?.gear ?? [],
+  });
   return {
-    names: [...kitNames(kit.items), ...(background?.equipment ?? [])],
-    problems: kit.problems,
+    names: [...kitNames(kit.items), ...backgroundKit.names],
+    problems: [...kit.problems, ...backgroundKit.problems],
     choices: kit.tabled ? kit.choices : undefined,
   };
 }
@@ -298,6 +308,20 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
         },
       });
   problems.push(...feats.problems);
+  // A variant human starts with a feat of their choice. A character made or
+  // edited here names it, as it names a draconic ancestry; a stored sheet
+  // is trusted, and a companion the engine drafts may go without.
+  if (race.feats > 0 && (policy.made || policy.edit) && context.door !== "engine") {
+    const recordedFeats = new Set(
+      recorded.flatMap((choice) => (choice.mode === "feat" ? [lower(choice.feat)] : [])),
+    );
+    const racial = feats.feats.filter((name) => !recordedFeats.has(lower(name)));
+    if (racial.length < race.feats) {
+      problems.push(
+        `A ${race.name} starts with ${race.feats === 1 ? "a feat" : `${race.feats} feats`} of their choice; pick ${race.feats === 1 ? "one" : "them"} from the feat list.`,
+      );
+    }
+  }
   // Half-feats (Actor's Charisma, Resilient's score and save). A character
   // made or edited in the builder arrives with the scores before them and
   // takes them here, as a level-up does; a stored or imported one already
@@ -415,9 +439,11 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     // What the stored character holds stays with it while it is the same
     // class, race and background; an edit that changes one of them picks
     // again from what the new one offers.
+    // The picks its feats made come off first and go back on below, so an
+    // edit that re-picks Linguist's languages replaces them (issue #125).
     held:
       held && held.class === input.class && held.race === input.race && held.background === input.background
-        ? held.proficiencies
+        ? withoutFeatPicks(held.proficiencies, held.featChoices)
         : null,
     // The builder's doors name the tools an open grant leaves to the player.
     requireToolPicks: context.door === "table" || context.door === "library",
@@ -425,6 +451,21 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   if (policy.judgesPicks) {
     problems.push(...trained.problems);
   }
+  // What the feats grant beyond their ability point: Linguist's languages,
+  // Heavily Armored's armor, Skill Expert's skill and expertise, each pick
+  // the sheet records (featChoices). A character made or edited here, or
+  // imported, names every pick; a stored one or an engine's companion is
+  // read as it is (issue #125).
+  const granted = applyFeatGrants({
+    proficiencies: trained.proficiencies,
+    feats: feats.feats.map((name) => ({ name, desc: context.featOf(name)?.desc ?? "" })),
+    choices: input.featChoices ?? {},
+    strict: policy.judgesPicks && context.door !== "engine",
+  });
+  if (policy.judgesPicks) {
+    problems.push(...granted.problems);
+  }
+  const training = granted.proficiencies;
 
   // ---- spells ----
   const cantripPick = (input.racialChoices?.cantrip ?? "").trim();
@@ -521,8 +562,9 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   let kitChoices = input.kitChoices;
   const kitOf = () =>
     freeKitOf(klass, background, input, {
-      armor: trained.proficiencies.armor,
-      weapons: trained.proficiencies.weapons,
+      armor: training.armor,
+      weapons: training.weapons,
+      tools: training.tools,
       subclass: classes[0].subclass ?? "",
     });
   if (policy.made && context.door !== "engine") {
@@ -615,10 +657,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     abilities,
     proficiencies: featSaves.length
       ? {
-          ...trained.proficiencies,
-          saves: [...new Set([...trained.proficiencies.saves, ...featSaves])],
+          ...training,
+          saves: [...new Set([...training.saves, ...featSaves])],
         }
-      : trained.proficiencies,
+      : training,
     feats: feats.feats,
     features,
     asiChoices: recorded.slice(0, earned),

@@ -55,6 +55,36 @@ test("a class skill the new background grants outright is dropped, and named", (
   assert.deepEqual(dropped, ["class skill: stealth"]);
 });
 
+test("every dropped pick names the block it is made on again, so a notice can go there (issue #124)", () => {
+  // A human acolyte fighter with three languages and two class skills
+  // becomes a hill dwarf: Dwarvish is now spoken and the third slot is gone.
+  const before = { ...empty, bonusLanguages: ["Elvish", "Dwarvish", "Giant"], chosenSkills: ["athletics", "survival"] };
+  const { picks, dropped, drops } = reconcilePicks(before, {
+    race: race("hill_dwarf"), klass: klass("fighter"), background: background("acolyte"), level: 1,
+  });
+  assert.deepEqual(picks.bonusLanguages, ["Elvish", ""]);
+  assert.deepEqual(dropped, ["bonus language: Dwarvish", "bonus language: Giant"]);
+  assert.deepEqual(drops, [
+    { label: "bonus language", value: "Dwarvish", target: "languages" },
+    { label: "bonus language", value: "Giant", target: "languages" },
+  ]);
+  // Every kind of pick has a target: a sheet with one of each, under a
+  // class and race that offer none of them, drops them all.
+  const everything = {
+    chosenSkills: ["stealth"], racialSkills: ["arcana"], racialAsi: ["str"], racialCantrip: "Light", racialTool: "smith's tools",
+    backgroundSkills: ["insight"], bonusLanguages: ["Elvish"], subclass: "Champion", expertisePicks: ["stealth"],
+    stylePicks: ["defense"], optionPicks: ["Maneuver: Riposte"], spells: ["Fireball"], bookPrepared: ["Fireball"], cantrips: ["Fire Bolt"],
+  };
+  const all = reconcilePicks(everything, { race: race("half_orc"), klass: klass("barbarian"), background: background("soldier"), level: 1 });
+  const targets = Object.fromEntries(all.drops.map((drop) => [drop.label, drop.target]));
+  assert.deepEqual(targets, {
+    "class skill": "classSkills", "racial skill": "racialSkills", "racial ability bump": "racialAsi", "racial cantrip": "racialCantrip",
+    "racial tool": "racialTool", "background skill": "backgroundSkills", "bonus language": "languages", subclass: "subclass",
+    expertise: "expertise", "fighting style": "styles", "class option": "options", spell: "spells", prepared: "spells", cantrip: "spells",
+  });
+  assert.equal(all.dropped.length, all.drops.length);
+});
+
 test("an acolyte's two languages do not survive a change to a background with none", () => {
   const before = { ...empty, bonusLanguages: ["Elvish", "Dwarvish", "Giant"] };
   const human = race("human");

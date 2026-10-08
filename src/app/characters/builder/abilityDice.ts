@@ -138,8 +138,10 @@ export function poolSum(pool: PoolEntry[]): number {
   return pool.reduce((sum, entry) => sum + entry.total, 0);
 }
 
-export function canRerollPool(pool: PoolEntry[] | null): boolean {
-  return !pool || poolSum(pool) < REROLL_BELOW;
+// `below` is the server's threshold (an admin setting, issue #128); the
+// constant above is the default a builder shows before it has heard it.
+export function canRerollPool(pool: PoolEntry[] | null, below: number = REROLL_BELOW): boolean {
+  return !pool || poolSum(pool) < below;
 }
 
 // Which pool entry each ability holds, by index.

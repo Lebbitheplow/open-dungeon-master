@@ -105,6 +105,7 @@ export function AdminSettingsPanel() {
                 signupMode: config.signupMode,
                 serverName: config.serverName,
                 accountDeletionGraceDays: config.accountDeletionGraceDays,
+                abilityRerollBelow: config.abilityRerollBelow,
                 publicUrl: config.publicUrl,
                 voiceChat: config.voiceChat,
                 discord: {
@@ -248,6 +249,26 @@ export function AdminSettingsPanel() {
                   setConfig({
                     ...config,
                     accountDeletionGraceDays: Number.isFinite(days) ? Math.min(90, Math.max(0, days)) : 0,
+                  });
+                }}
+              />
+            </Field>
+            <Field
+              label="Reroll the 4d6 ability dice under a total of"
+              hint="The server throws and keeps a player's six 4d6 totals; they may throw again only while the six add up to less than this. 0 allows no reroll; 108 lets anything be rethrown. The book names no rule; 70 is the default."
+            >
+              <NumberStepper
+                label="Reroll the 4d6 ability dice under a total of"
+                min={0}
+                max={108}
+                step={1}
+                suffix={config.abilityRerollBelow === 0 ? "no rerolls" : "total"}
+                value={config.abilityRerollBelow}
+                onChange={(next) => {
+                  const below = Math.round(Number(next));
+                  setConfig({
+                    ...config,
+                    abilityRerollBelow: Number.isFinite(below) ? Math.min(108, Math.max(0, below)) : 70,
                   });
                 }}
               />

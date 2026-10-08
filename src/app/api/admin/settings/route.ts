@@ -21,6 +21,7 @@ function maskedConfig(config: GlobalConfig) {
     signupModeForced: isDeviceWorld(),
     serverName: config.serverName,
     accountDeletionGraceDays: config.accountDeletionGraceDays,
+    abilityRerollBelow: config.abilityRerollBelow,
     publicUrl: config.publicUrl,
     worldRegistryUrl: config.worldRegistryUrl,
     text: {
@@ -124,6 +125,7 @@ const patchSchema = z.object({
   signupMode: z.enum(["open", "invite", "closed"]).optional(),
   serverName: z.string().trim().max(100).optional(),
   accountDeletionGraceDays: z.number().int().min(0).max(90).optional(),
+  abilityRerollBelow: z.number().int().min(0).max(108).optional(),
   publicUrl: z.string().trim().max(500).optional(),
   worldRegistryUrl: z.string().trim().max(500).optional(),
   text: z
