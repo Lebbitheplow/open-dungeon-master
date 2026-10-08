@@ -389,6 +389,7 @@ export function applyHitDamage(input: {
     magical: strikesAsMagic(plan),
     nonlethal: plan.options.nonlethal,
     ignoreResistance: plan.elementalAdept,
+    concentrationDisadvantage: plan.mageSlayer,
   });
 }
 
@@ -410,6 +411,8 @@ export function landBlow(input: {
   magical: boolean;
   // Elemental Adept covers this attack spell's type (feat-combat.ts).
   ignoreResistance?: boolean;
+  // Mage Slayer's melee hit from within 5 feet (feat-combat.ts).
+  concentrationDisadvantage?: boolean;
   nonlethal?: boolean;
   // An opportunity attack leaves the fight open (enemy-damage.ts).
   holdVictory?: boolean;
@@ -442,7 +445,7 @@ export function landBlow(input: {
       sheets,
       sheetsById,
       profile.damageType,
-      { magical, nonlethal, holdVictory, ...material, ...(input.ignoreResistance ? { ignoreResistance: true } : {}) },
+      { magical, nonlethal, holdVictory, ...material, ...(input.ignoreResistance ? { ignoreResistance: true } : {}), ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}) },
     );
   } else {
     // Two damage types in one blow: each meets the creature's resistances
@@ -467,6 +470,7 @@ export function landBlow(input: {
             magical: true,
             nonlethal,
             holdVictory,
+            ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}),
           })
         : unharmed;
     applied = {

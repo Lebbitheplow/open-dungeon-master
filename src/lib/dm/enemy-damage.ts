@@ -247,6 +247,9 @@ export function applyEnemyDamage(
     // Elemental Adept: the creature's resistance to this type does not
     // count (src/lib/srd/feat-combat.ts).
     ignoreResistance?: boolean;
+    // Mage Slayer: a melee weapon hit from within 5 feet puts the caster's
+    // concentration save at disadvantage (src/lib/srd/feat-combat.ts).
+    concentrationDisadvantage?: boolean;
   },
 ): Record<string, unknown> {
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
@@ -383,8 +386,15 @@ export function applyEnemyDamage(
     } else {
       const dc = Math.max(10, Math.floor(adjusted.amount / 2));
       // A save like any other (forced-save.ts): exhaustion, Bane, its roll row.
-      const outcome = rollEnemySave(campaign.id, enemy, "con", dc, { record: { turn, detail: `${enemy.displayName}: concentration on ${spell} (CON save)` } });
+      const slain = options?.concentrationDisadvantage === true;
+      const outcome = rollEnemySave(campaign.id, enemy, "con", dc, {
+        ...(slain ? { disadvantage: true } : {}),
+        record: { turn, detail: `${enemy.displayName}: concentration on ${spell} (CON save${slain ? ", Mage Slayer: disadvantage" : ""})` },
+      });
       const held = outcome.success;
+      if (slain) {
+        base.mageSlayer = `Mage Slayer: ${updated.displayName}'s concentration save was at disadvantage.`;
+      }
       if (!held) {
         setEnemyConcentration(enemy.id, null);
         clearSpellConditionsByName(campaign, spell, undefined, enemy.id);

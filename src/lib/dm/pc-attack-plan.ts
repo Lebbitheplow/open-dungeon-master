@@ -6,7 +6,7 @@
 // the quiver is only counted, the maneuver's pool and the smite's slot are
 // only looked at, and the budget is a copy until pc-attack.ts stores it.
 
-import { elementalAdeptApplies, floorDamageDice, POWER_ATTACK_DAMAGE, POWER_ATTACK_TO_HIT, powerAttackFeat, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover } from "@/lib/srd/feat-combat";
+import { elementalAdeptApplies, floorDamageDice, hasMageSlayer, POWER_ATTACK_DAMAGE, POWER_ATTACK_TO_HIT, powerAttackFeat, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover } from "@/lib/srd/feat-combat";
 import { underwaterRangeProblem } from "@/lib/dm/underwater";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -97,6 +97,9 @@ export type AttackPlan = {
   budget: TurnBudget | null;
   // Elemental Adept covers this attack spell's damage type (feat-combat.ts).
   elementalAdept: boolean;
+  // A Mage Slayer's melee weapon hit from within 5 feet: the target's
+  // concentration save is at disadvantage (feat-combat.ts).
+  mageSlayer: boolean;
   // The features and effects that ride this attack beyond its damage
   // (src/lib/dm/attack-features.ts, attack-onhit.ts).
   extras: AttackExtras;
@@ -221,6 +224,7 @@ export function planPcAttack(input: {
   // Elemental Adept on an attack-roll spell of its type: every 1 on the
   // damage dice counts as 2, and the target's resistance is ignored.
   const elementalAdept = kind === "spell" && elementalAdeptApplies(sheet, profile.damageType);
+  const mageSlayer = weaponAttack && !atRange && geometry.withinFiveFeet && hasMageSlayer(sheet);
   if (elementalAdept) {
     profile = { ...profile, damageExpression: floorDamageDice(profile.damageExpression) };
     featNotes.push(`Elemental Adept: ${profile.damageType} ignores resistance and every 1 on the dice is a 2`);
@@ -445,6 +449,7 @@ export function planPcAttack(input: {
     args,
     enemy,
     elementalAdept,
+    mageSlayer,
     derived: built.derived,
     riders,
     kind,

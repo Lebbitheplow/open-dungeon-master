@@ -71,6 +71,14 @@ test("Magic Initiate is read in both wordings", () => {
   assert.deepEqual(now.lists, ["cleric", "druid", "wizard"]);
   assert.equal(now.freeCast, true);
   assert.equal(now.ability, "choice");
+  // ODM's own Magic Initiate (the 2024 row is not offered by the pickers).
+  const own = spec("Magic Initiate");
+  assert.equal(own.cantrips, 2);
+  assert.equal(own.spells, 1);
+  assert.equal(own.listChoice, true);
+  assert.deepEqual(own.lists, ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"]);
+  assert.equal(own.freeCast, true);
+  assert.equal(own.ability, "list");
   assert.equal(listAbility("wizard"), "int");
   assert.equal(listAbility("druid"), "wis");
   assert.equal(listAbility("bard"), "cha");

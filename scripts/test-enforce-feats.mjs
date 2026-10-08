@@ -6,7 +6,7 @@
 // is taken once. SRD 5.1 prints one feat, Grappler (Strength 13 or higher).
 //
 // ODM ships the feat rule switched on: the content pack carries Grappler and
-// the third-party feats, and src/lib/srd/authored-feats.json adds 52 in
+// the third-party feats, and src/lib/srd/authored-feats.json adds 53 in
 // ODM's own wording. A feat is a name in sheet.feats. Two have a mechanic
 // the server applies to derived numbers (Alert, Observant); Elven Accuracy
 // says it has one; the rest are guidance the model narrates
@@ -170,8 +170,8 @@ await test("Alert and Observant, taken as feats, reach the numbers they change",
   assert.equal(entry.initiative, 10 + abilityMod(SCORES.dex) + 5);
 });
 
-await test("ODM's own feats: 52 (the 2014 Alert among them), each named once, each with rules text", () => {
-  assert.equal(authoredFeats.length, 52);
+await test("ODM's own feats: 53 (the 2014 Alert and Magic Initiate among them), each named once, each with rules text", () => {
+  assert.equal(authoredFeats.length, 53);
   const names = authoredFeats.map((feat) => feat.name.toLowerCase());
   assert.equal(new Set(names).size, names.length);
   // SRD 5.1's one feat comes from the content pack, not from this list.
@@ -640,6 +640,11 @@ await test("the feat pickers offer exactly one Alert, the 2014 feat, with the co
       const shown = getEntryDetail("feats", "alert");
       assert.equal(shown?.documentSlug, "odm-expanded", `${label}: the Alert a picker's info button opens`);
       assert.match(String(shown.data.desc), /initiative/);
+      // Magic Initiate the same: ODM's 2014 wording, not the hidden 2024 row.
+      assert.equal(all.filter((name) => name === "Magic Initiate").length, 1, `${label}: one Magic Initiate`);
+      const initiate = getEntryDetail("feats", "magic-initiate");
+      assert.equal(initiate?.documentSlug, "odm-expanded", `${label}: the Magic Initiate the info button opens`);
+      assert.match(String(initiate.data.desc), /two cantrips/);
     });
   }
 });

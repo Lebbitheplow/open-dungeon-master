@@ -192,6 +192,28 @@ await test("Defensive Duelist adds the proficiency bonus to AC against the melee
   assert.match(none.error ?? "", /takes the feat and a finesse weapon/);
 });
 
+await test("a Mage Slayer's melee hit from within 5 feet puts the caster's concentration save at disadvantage", async () => {
+  const [enemy] = await stage(slayer);
+  encounters.setEnemyConcentration(enemy.id, "Hold Person");
+  // The hit lands for 3 + 3, DC 10; the save reads two d20s and keeps the lower.
+  const swing = await kit.swing(slayer.id, enemy.id, [15, 3, 20, 2], { weapon: "Longsword" });
+  assert.equal(swing.ok, true, swing.error);
+  assert.equal(swing.result.hit, true, JSON.stringify(swing.result));
+  assert.match(String(swing.result.mageSlayer ?? ""), /disadvantage/);
+  const save = kit.lastRolls(8).find((roll) => roll.kind === "saving_throw" && /concentration/.test(roll.detail ?? ""));
+  assert.ok(save, "the concentration save is on the record");
+  assert.equal(d20Faces(save).length, 2, "two d20s: disadvantage");
+  assert.match(String(swing.result.concentration ?? ""), /loses concentration/);
+  // A plain fighter's hit leaves the save as it is.
+  const [other] = await stage(plain);
+  encounters.setEnemyConcentration(other.id, "Hold Person");
+  const flat = await kit.swing(plain.id, other.id, [15, 3, 20, 2], { weapon: "Greatsword" });
+  assert.equal(flat.ok, true, flat.error);
+  const plainSave = kit.lastRolls(8).find((roll) => roll.kind === "saving_throw" && /concentration/.test(roll.detail ?? ""));
+  assert.equal(d20Faces(plainSave).length, 1);
+  assert.equal(flat.result.mageSlayer, undefined);
+});
+
 await test("Mage Slayer's reaction is one melee weapon attack on a caster within 5 feet; nobody else has it", async () => {
   const [enemy] = await stage(slayer);
   // On the caster's turn, not the fighter's: a reaction.
