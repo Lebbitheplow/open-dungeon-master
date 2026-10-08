@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { uniqueByName } from "./pickerRows";
 
 export type PickerEntry = {
   slug: string;
@@ -12,21 +13,12 @@ export type PickerEntry = {
   kind?: string;
   rarity?: string;
   cost?: string;
+  // An item's price as the server would charge it at creation, worked out
+  // by the server's own catalog so a pick and its purchase check agree
+  // even where the pack files the name twice (src/lib/characters/catalog.ts).
+  price?: { copper: number | null; magic: boolean };
 };
 
-// The pack files the same SRD entry under more than one document, so a
-// search for "light" answers Light twice. One row per name.
-function uniqueByName(rows: PickerEntry[]): PickerEntry[] {
-  const seen = new Set<string>();
-  return rows.filter((entry) => {
-    const key = entry.name.trim().toLowerCase();
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
 
 // Debounced search against /api/content/[kind]; shared by the single-pick
 // ContentPicker and the multi-select MultiContentPicker. An empty query

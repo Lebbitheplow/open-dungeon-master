@@ -22,7 +22,9 @@ function pickedGear(entry: PickerEntry) {
   if (entry.source === "homebrew") {
     return { name: entry.name, slug: entry.slug, gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined };
   }
-  const price = packRowPrice({ kind: entry.kind ?? "gear", cost: entry.cost ?? "" });
+  // The server's own answer rides with the row (the items API); the row's
+  // kind and cost stand in for a client built before it did.
+  const price = entry.price ?? packRowPrice({ kind: entry.kind ?? "gear", cost: entry.cost ?? "" });
   return {
     name: entry.name,
     slug: entry.slug,

@@ -1,4 +1,5 @@
 import { currentUser, unauthorized } from "@/lib/auth";
+import { catalogPrices } from "@/lib/characters/catalog";
 import { contentPackInstalled } from "@/lib/content/db";
 import {
   listArchetypes,
@@ -55,12 +56,15 @@ export async function GET(
     }
     case "items": {
       const itemKind = url.searchParams.get("kind") ?? undefined;
+      // The price rides with the row, worked out by the same catalog the
+      // sheet route will charge by, so the builder's purse and the server
+      // agree even where the pack files a name twice (issue #136).
       results = searchItems({
         ...base,
         ...(itemKind && ITEM_KINDS.has(itemKind)
           ? { kind: itemKind as ItemEntry["kind"] }
           : {}),
-      });
+      }).map((entry) => (entry.source === "open5e" ? { ...entry, price: catalogPrices(entry.name) } : entry));
       break;
     }
     case "feats":
