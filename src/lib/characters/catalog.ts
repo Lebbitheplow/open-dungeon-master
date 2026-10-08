@@ -22,7 +22,6 @@ import {
 } from "@/lib/characters/options";
 import { openAbilityPool, openWealthRoll } from "@/lib/db/creation-rolls";
 import { defaultRng } from "@/lib/dice";
-import { costToCopper } from "@/lib/dm/shop-logic";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
@@ -32,8 +31,8 @@ import { racialFeatCount } from "@/lib/srd/race-id";
 import { checklistSpell } from "@/lib/srd/spell-lists";
 import { bundledSpellSchool } from "@/lib/srd/spell-facts";
 import {
-  bundledPriceCopper,
-  looksMagical,
+  layeredPrice,
+  packRowPrice,
   type ItemPrice,
   type PriceLookup,
 } from "@/lib/srd/starting-wealth";
@@ -153,8 +152,7 @@ function packPrices(): Map<string, ItemPrice> {
       if (!key) {
         continue;
       }
-      const magic = row.kind === "magic_item";
-      const copper = magic ? null : costToCopper(row.cost ?? "");
+      const { copper, magic } = packRowPrice({ kind: row.kind, cost: row.cost ?? "" });
       const held = index.get(key);
       if (!held || (held.magic && !magic) || (held.copper === null && copper !== null && !magic)) {
         index.set(key, { copper, magic });
@@ -165,17 +163,9 @@ function packPrices(): Map<string, ItemPrice> {
   return index;
 }
 
-export const catalogPrices: PriceLookup = (name) => {
-  const bundled = bundledPriceCopper(name);
-  if (bundled !== null && !looksMagical(name)) {
-    return { copper: bundled, magic: false };
-  }
-  const packed = packPrices().get(priceKey(name));
-  if (packed) {
-    return packed;
-  }
-  return { copper: bundled, magic: looksMagical(name) };
-};
+// The bundled table, then the pack: the same layering the builder's purse
+// applies to the price a pick carried (issue #136).
+export const catalogPrices: PriceLookup = (name) => layeredPrice(name, packPrices().get(priceKey(name)));
 
 // ---- spells, feats, subclasses ----
 

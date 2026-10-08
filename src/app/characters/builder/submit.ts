@@ -508,11 +508,12 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       classes: [],
       hitDicePools: null,
       proficiencies,
-      // The catalog price rode along for the purse; the server prices the
-      // pack again from its own catalog.
+      // The catalog price and magic mark rode along for the purse; the
+      // server prices the pack again from its own catalog.
       equipment: derived.fullEquipment.map((entry) => {
         const item: EquipmentItem = { ...entry };
         delete item.priceCp;
+        delete item.magic;
         return item;
       }),
       // The coin left once the pack is paid for: the background's purse (or

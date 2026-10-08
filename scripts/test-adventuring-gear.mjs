@@ -13,7 +13,7 @@ const { SRD_GEAR, matchGear, gearPriceCopper, gearWeightLb, resolveGearLine, res
   "../src/lib/srd/adventuring-gear.ts"
 );
 const { PACKS } = await import("../src/lib/srd/starting-kit-data.ts");
-const { bundledPrices, bundledPriceCopper, judgeStartingGear } = await import("../src/lib/srd/starting-wealth.ts");
+const { bundledPrices, bundledPriceCopper, judgeStartingGear, layeredPrice, packRowPrice } = await import("../src/lib/srd/starting-wealth.ts");
 const { lineWeightLb } = await import("../src/lib/srd/encumbrance.ts");
 const { matchArmor, suggestArmor, armorOfRow } = await import("../src/lib/srd/armor.ts");
 const { srdBackgroundOptions } = await import("../src/lib/characters/options.ts");
@@ -212,6 +212,60 @@ test("the setting armor is suggested to its own genre's classes only (#112)", ()
     if (["Armorweave Vest", "Kevlar Vest", "Riot Plating", "Brass Carapace", "Scrap Plate", "Ballistic Shield"].includes(armor.name)) {
       assert.ok(armor.genres?.length, armor.name);
     }
+  }
+});
+
+test("a priced pack row the bundled table never priced is bought at the pack's price, and the table still answers first (#136)", () => {
+  // Open5e's SRD gear the bundled table has no row for.
+  assert.equal(bundledPriceCopper("Arrow (bow)"), null);
+  assert.equal(bundledPriceCopper("Smith's Tools (20 GP)"), null);
+  // A pack row read as a price: mundane rows cost what they say, magic rows
+  // are not for sale at creation, an unpriced row stays unpriced.
+  assert.deepEqual(packRowPrice({ kind: "gear", cost: "0.05 gp" }), { copper: 5, magic: false });
+  assert.deepEqual(packRowPrice({ kind: "armor", cost: "2,000 gp" }), { copper: 200000, magic: false });
+  assert.deepEqual(packRowPrice({ kind: "weapon", cost: "1 sp" }), { copper: 10, magic: false });
+  assert.deepEqual(packRowPrice({ kind: "magic_item", cost: "500 gp" }), { copper: null, magic: true });
+  assert.deepEqual(packRowPrice({ kind: "gear", cost: "" }), { copper: null, magic: false });
+  // Layered as the server layers its catalog: the pack fills what the table
+  // lacks, the table wins where both price a name (the pack's pistol is
+  // 25 gp, the setting's 75 gp is what the server charges), and a name
+  // neither prices stays unpriced.
+  assert.deepEqual(layeredPrice("Arrow (bow)", { copper: 5, magic: false }), { copper: 5, magic: false });
+  assert.deepEqual(layeredPrice("Pistol", { copper: 2500, magic: false }), { copper: 7500, magic: false });
+  assert.deepEqual(layeredPrice("Longsword", undefined), { copper: 1500, magic: false });
+  assert.deepEqual(layeredPrice("Wagon", undefined), { copper: null, magic: false });
+  // A name the table reads as magical but the pack lists as mundane gear is
+  // the pack's to price, as the server's catalog already ruled.
+  assert.deepEqual(layeredPrice("Longsword +1", { copper: 100, magic: false }), { copper: 100, magic: false });
+  assert.deepEqual(layeredPrice("Longsword +1", undefined), { copper: null, magic: true });
+  // Through the purse: twenty arrows at 5 cp each are 1 gp of a 10 gp purse.
+  const arrows = [{ name: "Arrow (bow)", qty: 20, slug: "srd_arrow-bow" }];
+  const withPack = (name) => layeredPrice(name, name === "Arrow (bow)" ? { copper: 5, magic: false } : undefined);
+  assert.deepEqual(judgeStartingGear({ equipment: arrows, freeKit: [], coinCopper: 1000, priceOf: withPack }), { problems: [], spentCopper: 100 });
+  // A pack row filed as a magic item is refused as one, in the server's words,
+  // even where the bundled matcher does not know the name.
+  assert.match(judgeStartingGear({ equipment: [{ name: "Bag of Holding", qty: 1 }], freeKit: [], coinCopper: 1000, priceOf: (name) => layeredPrice(name, { copper: null, magic: true }) }).problems[0], /Bag of Holding is a magic item/);
+  // The same pick with no price riding along is what the builder had: refused.
+  assert.match(judgeStartingGear({ equipment: arrows, freeKit: [], coinCopper: 1000, priceOf: bundledPrices }).problems[0], /Arrow \(bow\) has no listed price/);
+});
+
+test("a name the pack files as both a magic item and priced gear is offered as the gear row, the one the server prices (#136 review)", async () => {
+  const { uniqueByName } = await import("../src/app/characters/builder/pickerRows.ts");
+  const magic = { slug: "spell-scroll", name: "Spell Scroll", source: "open5e", kind: "magic_item", cost: "" };
+  const gear = { slug: "srd-2024_spell-scroll", name: "Spell Scroll", source: "open5e", kind: "gear", cost: "30 gp" };
+  const other = { slug: "rope", name: "Rope, Hempen (50 feet)", source: "open5e", kind: "gear", cost: "1 gp" };
+  // Whichever order the pack answers in, the gear row is the one kept, in the name's first position.
+  assert.deepEqual(uniqueByName([magic, other, gear]).map((row) => row.slug), ["srd-2024_spell-scroll", "rope"]);
+  assert.deepEqual(uniqueByName([gear, magic, other]).map((row) => row.slug), ["srd-2024_spell-scroll", "rope"]);
+  // Two rows of the same kind: the first wins, as before.
+  assert.deepEqual(uniqueByName([{ ...magic, slug: "a" }, { ...magic, slug: "b" }]).map((row) => row.slug), ["a"]);
+  assert.deepEqual(uniqueByName([{ ...gear, slug: "a" }, { ...gear, slug: "b" }]).map((row) => row.slug), ["a"]);
+  // The server's catalog rules the same way, when the pack is here to ask.
+  const { contentPackInstalled } = await import("../src/lib/content/db.ts");
+  if (contentPackInstalled()) {
+    const { catalogPrices } = await import("../src/lib/characters/catalog.ts");
+    assert.deepEqual(catalogPrices("Spell Scroll"), { copper: 3000, magic: false });
+    assert.deepEqual(catalogPrices("Potion of Healing"), { copper: 5000, magic: false });
   }
 });
 

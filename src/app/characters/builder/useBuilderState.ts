@@ -28,8 +28,10 @@ import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOpti
 
 // `priceCp` is the listed price of one, in copper, as the catalog row it was
 // picked from gave it; it is what the purse is charged, and the server
-// charges its own catalog's price again when the sheet is saved.
-export type EquipmentItem = { name: string; qty: number; slug?: string; priceCp?: number };
+// charges its own catalog's price again when the sheet is saved. `magic`
+// marks a row the pack files as a magic item, which the purse refuses in the
+// server's words. Neither is saved (submit.ts).
+export type EquipmentItem = { name: string; qty: number; slug?: string; priceCp?: number; magic?: boolean };
 
 // What the last change set aside, for the notice the wizard shows: the
 // change that did it ("race") and the picks that no longer fit. Null once

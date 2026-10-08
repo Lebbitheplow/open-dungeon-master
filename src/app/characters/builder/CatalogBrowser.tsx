@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
+import { uniqueByName } from "./pickerRows";
 import type { PickerEntry } from "./useContentSearch";
 
 // The whole catalog, not just what you can name.
@@ -48,19 +49,6 @@ export type CatalogSuggestion = { name: string; note?: string; level?: number };
 
 type Loaded = { rows: PickerEntry[]; truncated: boolean };
 
-// The pack files the same SRD spell under more than one document, so a
-// browse shows Fire Bolt twice. One row per name is what a player expects.
-function uniqueByName(rows: PickerEntry[]): PickerEntry[] {
-  const seen = new Set<string>();
-  return rows.filter((entry) => {
-    const key = entry.name.trim().toLowerCase();
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
 
 export default function CatalogBrowser({
   kind,
