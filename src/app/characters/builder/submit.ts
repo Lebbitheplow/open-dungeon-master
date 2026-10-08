@@ -553,7 +553,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       },
       backgroundChoices: {
         skills: picks.backgroundSkills.filter(Boolean),
-        gear: (derived.backgroundKit?.choices ?? []).map((choice) => choice.alternatives[choice.chosen].label),
+        gear: (derived.backgroundKit?.choices ?? []).map((choice) => choice.pick),
       },
       // The class kit's either-or choices, which the server hands out free.
       ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),

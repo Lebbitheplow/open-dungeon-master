@@ -175,7 +175,12 @@ await test("a background kit's 'of your choice' line follows the tool the player
   const { mergedBackgroundOptions } = await import("../src/lib/characters/options.ts");
   const rows = mergedBackgroundOptions(listBackgrounds({ limit: 200 }));
   const withRow = (row, fields) => {
-    const classSkills = ["acrobatics", "history", "insight", "perception", "survival"].filter((skill) => !row.skills.includes(skill)).slice(0, 2);
+    // A background's own skill picks (Guildmember: "two of your choice") must
+    // not be the class's, so each side picks around the other.
+    const backgroundSkills = row.skillChoice ? row.skillChoice.from.filter((skill) => !row.skills.includes(skill)).slice(0, row.skillChoice.count) : [];
+    const classSkills = ["acrobatics", "history", "insight", "perception", "survival"]
+      .filter((skill) => !row.skills.includes(skill) && !backgroundSkills.includes(skill))
+      .slice(0, 2);
     return builder.build({
       race: "human",
       class: "fighter",
@@ -183,7 +188,7 @@ await test("a background kit's 'of your choice' line follows the tool the player
       chosenSkills: classSkills,
       stylePicks: ["defense"],
       bonusLanguages: ["Elvish", "Dwarvish", "Giant"].slice(0, 1 + (row.languages ?? 0)),
-      backgroundSkills: row.skillChoice ? row.skillChoice.from.filter((skill) => !row.skills.includes(skill)).slice(0, row.skillChoice.count) : [],
+      backgroundSkills,
       ...fields,
     });
   };
@@ -225,6 +230,33 @@ await test("a background kit's 'of your choice' line follows the tool the player
   const wrongAt = await atTable(wrong);
   assert.equal(wrongAt.status, 400, "an alternative the kit does not offer");
   assert.match(wrongAt.error, /brewer's supplies or cook's utensils/);
+  // Guildmember (a5e): "One set of artisan's tools or one instrument", a
+  // choice between two KINDS of tool with no tool proficiency to fill it
+  // from (Smoebo's follow-up on #127). The kind's first until named, the
+  // named tool when named, and a tool of neither kind refused.
+  const guildmember = rows.find((row) => row.name === "Guildmember");
+  assert.ok(guildmember, "the pack's Guildmember");
+  const guild = withRow(guildmember, {});
+  assert.equal(guild.blocker, null, guild.blocker?.message);
+  const guildKit = guild.sheet.equipment.map((item) => item.name);
+  assert.ok(guildKit.includes("Alchemist's Supplies"), `kit: ${guildKit}`);
+  assert.ok(!guildKit.some((name) => /\bor\b/.test(name)), `kit still carries the line: ${guildKit}`);
+  assert.deepEqual(guild.sheet.backgroundChoices.gear, ["Alchemist's Supplies"]);
+  const drummer = withRow(guildmember, { backgroundGearPicks: ["Drum"] });
+  const drummerKit = drummer.sheet.equipment.map((item) => item.name);
+  assert.ok(drummerKit.includes("Drum") && !drummerKit.includes("Alchemist's Supplies"), `kit: ${drummerKit}`);
+  assert.deepEqual(drummer.sheet.backgroundChoices.gear, ["Drum"]);
+  const guildAt = await atTable(guild.sheet);
+  assert.equal(guildAt.status, 201, guildAt.error);
+  const drummerAt = await atTable(drummer.sheet);
+  assert.equal(drummerAt.status, 201, drummerAt.error);
+  assert.ok(drummerAt.sheet.equipment.some((item) => item.name === "Drum"));
+  // The kit is free whichever tool is named: the same purse either way.
+  assert.equal(drummerAt.sheet.gold, guildAt.sheet.gold, "the named instrument was charged for");
+  const wrongTool = { ...drummer.sheet, backgroundChoices: { ...drummer.sheet.backgroundChoices, gear: ["Thieves' Tools"] } };
+  const wrongToolAt = await atTable(wrongTool);
+  assert.equal(wrongToolAt.status, 400, "a tool of neither kind");
+  assert.match(wrongToolAt.error, /artisan's tools or instrument/);
 });
 
 await test("a background's feature is the server's grant: a request cannot swap it or stack another", async () => {

@@ -328,7 +328,8 @@ export const createSheetSchema = z.object({
     .object({
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
       // The alternative taken on each either-or line of the background's kit
-      // ("a dagger or light hammer"), by its words, in kit order
+      // ("a dagger or light hammer"), by its words, or the tool's name where
+      // the alternative is a kind ("one instrument"), in kit order
       // (src/lib/srd/gear-choices.ts). Absent or short: the book's first.
       gear: z.array(z.string().trim().max(80)).max(8).default([]),
     })
