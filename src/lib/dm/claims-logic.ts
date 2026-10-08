@@ -6,13 +6,9 @@
 // its own deterministic conditions (engine-boundary.ts ruleClaims), so the
 // rules enforcement never depends on the model's judgement, only on its
 // reading. Pure, so scripts/test-claims.mjs loads it directly.
-//
-// This replaced English word lists and regexes (hedges, negations, hit and
-// cast verbs, "roll for initiative", skill names) that caught nothing at a
-// table playing in another language: the model reads every language the
-// same way, English included.
 
 import { z } from "zod";
+import { replyJsonObject } from "../reply-json-logic.ts";
 
 export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
@@ -162,22 +158,10 @@ const claimSchema = z.discriminatedUnion("kind", [
 ]);
 const replySchema = z.object({ claims: z.array(z.unknown()).max(40) });
 
-// The JSON object in a reply, fences and stray prose around it ignored;
-// null when there is none.
+// The claims in a reply, fences and stray prose around its JSON object
+// ignored; null when there is no such object.
 export function parseReaderReply(raw: string): unknown[] | null {
-  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-  const reply = replySchema.safeParse(parsed);
+  const reply = replySchema.safeParse(replyJsonObject(raw));
   return reply.success ? reply.data.claims : null;
 }
 

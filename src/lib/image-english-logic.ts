@@ -8,6 +8,7 @@
 // first (src/lib/image-english.ts).
 
 import { z } from "zod";
+import { replyJsonObject } from "./reply-json-logic.ts";
 
 export const IMAGE_ENGLISH_SYSTEM =
   "You prepare text for an image generator that reads only English. You get a JSON object whose values are text from a tabletop RPG story, written in another language. Reply with only a JSON object with exactly the same keys, each value rewritten in plain English with the same meaning. Keep proper names as they are written. Add nothing and leave nothing out.";
@@ -17,19 +18,7 @@ const replySchema = z.record(z.string(), z.string());
 // The rewritten values for exactly the keys asked, or null when the reply
 // is not that: a missing key would send the untranslated text.
 export function parseImageEnglish<K extends string>(raw: string, keys: readonly K[]): Record<K, string> | null {
-  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-  const reply = replySchema.safeParse(parsed);
+  const reply = replySchema.safeParse(replyJsonObject(raw));
   if (!reply.success || !keys.every((key) => reply.data[key]?.trim())) {
     return null;
   }

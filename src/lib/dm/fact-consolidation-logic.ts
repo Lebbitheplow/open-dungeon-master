@@ -16,6 +16,7 @@ import {
   RENDER_CHAR_BUDGET,
   type FactCategory,
 } from "./fact-logic.ts";
+import { replyJsonObject } from "../reply-json-logic.ts";
 
 export type FactOnFile = {
   id: string;
@@ -59,18 +60,8 @@ export const CONSOLIDATION_INSTRUCTIONS =
 // nothing; an unreadable reply retires nothing. Pins are kept by retireFacts
 // (src/lib/db/facts.ts).
 export function consolidationRetirements(raw: string, shown: ShownFact[]): string[] {
-  const cleaned = raw.replace(/```[a-z]*/gi, "");
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    return [];
-  }
-  let parsed: { facts?: unknown; retire?: unknown };
-  try {
-    parsed = JSON.parse(cleaned.slice(start, end + 1)) as { facts?: unknown; retire?: unknown };
-  } catch {
-    return [];
-  }
+  const reply = replyJsonObject(raw);
+  const parsed = (reply && typeof reply === "object" ? reply : {}) as { facts?: unknown; retire?: unknown };
   const handles: unknown[] = [
     ...(Array.isArray(parsed.facts)
       ? parsed.facts.map((entry) => (entry && typeof entry === "object" ? (entry as { replaces?: unknown }).replaces : undefined))
