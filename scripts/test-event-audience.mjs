@@ -9,9 +9,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { fileURLToPath } from "node:url";
 import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
-const repo = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-event-audience-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
