@@ -78,13 +78,10 @@ export async function PATCH(
       return Response.json({ error: "That NPC is not at this table." }, { status: 404 });
     }
     if (body.generatePortrait) {
-      queueNpcPortrait({
+      queueNpcPortrait(context.campaign, {
         id: npcId,
-        campaignId,
         trait: outcome.draft.trait,
         personality: describePersonality(outcome.draft.personality),
-        genre: context.campaign.gameSettings.genre,
-        worldPack: context.campaign.gameSettings.worldPack,
       });
     }
   }

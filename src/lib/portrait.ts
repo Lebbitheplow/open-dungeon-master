@@ -8,8 +8,9 @@ import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
 import { setNpcPortrait } from "@/lib/db/npcs";
 import { publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
+import { toEnglishForImage } from "@/lib/image-english";
+import type { Campaign } from "@/lib/db/campaigns";
 import { presetFor } from "@/lib/worlds/preset";
-import type { Genre } from "@/lib/schemas/game-settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import type { CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
 
@@ -90,36 +91,37 @@ export function mirrorToCampaignSheets(
 
 // Fire-and-forget for AI companions: campaign sheets with no library row,
 // so the render patches the sheet directly. Same serial media queue.
-export function queueCompanionPortrait(sheet: {
-  id: string;
-  campaignId: string;
-  name: string;
-  race: string;
-  class: string;
-  background: string;
-  personality: string;
-  genre: Genre;
-  // The campaign's selected world pack, so a companion is painted in the
-  // world's own style rather than its base genre's.
-  worldPack?: string;
-}): void {
+export function queueCompanionPortrait(
+  // The table: its world pack paints the companion in the world's own style
+  // rather than its base genre's, and its language is rewritten to English.
+  campaign: Pick<Campaign, "id" | "settings" | "gameSettings">,
+  sheet: {
+    id: string;
+    name: string;
+    race: string;
+    class: string;
+    background: string;
+    personality: string;
+  },
+): void {
   const map = statusMap();
-  const prompt = buildPortraitPrompt(
-    {
-      gender: "",
-      race: sheet.race,
-      class: sheet.class,
-      background: sheet.background,
-      appearance: sheet.personality.slice(0, 160),
-      backstory: "",
-    } as CreateSheetInput,
-    presetFor({ genre: sheet.genre, worldPack: sheet.worldPack }).portraitStyle,
-  );
   void whenImagesAvailable(() => {
     map.set(sheet.id, "queued");
     return enqueueMediaJob(`portrait ${sheet.id}`, async () => {
     map.set(sheet.id, "generating");
     try {
+      const { personality } = await toEnglishForImage(campaign, { personality: sheet.personality.slice(0, 160) });
+      const prompt = buildPortraitPrompt(
+        {
+          gender: "",
+          race: sheet.race,
+          class: sheet.class,
+          background: sheet.background,
+          appearance: personality,
+          backstory: "",
+        } as CreateSheetInput,
+        presetFor(campaign.gameSettings).portraitStyle,
+      );
       const settings = configuredDefaultStorySettings();
       const image = await generateStoryImage(settings, {
         prompt,
@@ -135,7 +137,7 @@ export function queueCompanionPortrait(sheet: {
       };
       const updated = patchSheet(sheet.id, { portrait });
       if (updated) {
-        publishPersisted(sheet.campaignId, "sheet_updated", { sheet: updated });
+        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
       }
       map.delete(sheet.id);
     } catch (error) {
@@ -153,30 +155,32 @@ export function queueCompanionPortrait(sheet: {
 // Status is not tracked here the way a character portrait's is: an NPC has
 // no creation flow waiting on it, so the panel simply shows the face when
 // the row next reports one.
-export function queueNpcPortrait(npc: {
-  id: string;
-  campaignId: string;
-  // Their distinguishing trait and their personality in words, which is all
-  // a face needs. The name is deliberately absent: a render prompt is not
-  // improved by a proper noun the model has never seen.
-  trait: string;
-  personality: string;
-  genre: Genre;
-  worldPack?: string;
-}): void {
-  const style = presetFor({ genre: npc.genre, worldPack: npc.worldPack }).portraitStyle;
-  const prompt = [
-    "Tabletop RPG character portrait, head and shoulders, centered, looking at viewer",
-    style,
-    npc.trait,
-    npc.personality,
-    "Detailed digital painting, dramatic lighting, plain dark background",
-  ]
-    .filter(Boolean)
-    .join(". ");
+export function queueNpcPortrait(
+  campaign: Pick<Campaign, "id" | "settings" | "gameSettings">,
+  npc: {
+    id: string;
+    // Their distinguishing trait and their personality in words, which is all
+    // a face needs. The name is deliberately absent: a render prompt is not
+    // improved by a proper noun the model has never seen.
+    trait: string;
+    // The engine's own English adjectives (describePersonality).
+    personality: string;
+  },
+): void {
+  const style = presetFor(campaign.gameSettings).portraitStyle;
   void whenImagesAvailable(() =>
     enqueueMediaJob(`npc portrait ${npc.id}`, async () => {
       try {
+        const { trait } = await toEnglishForImage(campaign, { trait: npc.trait });
+        const prompt = [
+          "Tabletop RPG character portrait, head and shoulders, centered, looking at viewer",
+          style,
+          trait,
+          npc.personality,
+          "Detailed digital painting, dramatic lighting, plain dark background",
+        ]
+          .filter(Boolean)
+          .join(". ");
         const settings = configuredDefaultStorySettings();
         const image = await generateStoryImage(settings, {
           prompt,
@@ -185,7 +189,7 @@ export function queueNpcPortrait(npc: {
         });
         const copied = copyIntoUploads(image.url);
         if (setNpcPortrait(npc.id, copied.url)) {
-          publishPersisted(npc.campaignId, "npc_updated", { npcId: npc.id, portraitUrl: copied.url });
+          publishPersisted(campaign.id, "npc_updated", { npcId: npc.id, portraitUrl: copied.url });
         }
       } catch (error) {
         console.error(`[portrait] npc generation failed for ${npc.id}:`, error);

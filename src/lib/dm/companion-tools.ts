@@ -408,16 +408,13 @@ export function finalizeNewCompanion(
   // model, so only lasting party members are worth a portrait; a sheet built
   // with its own portrait already (manual build) keeps it.
   if (kind === "party" && !sheet.portrait) {
-    queueCompanionPortrait({
+    queueCompanionPortrait(campaign, {
       id: sheet.id,
-      campaignId: campaign.id,
       name: sheet.name,
       race: sheet.race,
       class: sheet.class,
       background: sheet.background,
       personality,
-      genre: campaign.gameSettings.genre,
-      worldPack: campaign.gameSettings.worldPack,
     });
   }
 

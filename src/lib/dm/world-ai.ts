@@ -4,6 +4,7 @@ import { requestUtilityMessage } from "@/lib/dm/model";
 import { withLanguage } from "@/lib/dm/table-language-logic";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { generateStoryImage } from "@/lib/image-generate";
+import { toEnglishForImage } from "@/lib/image-english";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { presetFor } from "@/lib/worlds/preset";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
@@ -92,10 +93,11 @@ export function paintEntry(campaign: Campaign, ref: string): boolean {
       ? presetFor({ genre: campaign.gameSettings.genre, worldPack: campaign.gameSettings.worldPack }).portraitStyle
       : `${campaign.gameSettings.genre.replace(/_/g, " ")} setting`;
   const about = [entity.tagline, entity.entry.article || entity.text].filter(Boolean).join(" ");
-  const prompt = paintPrompt(entity.shelf, type.name, about, style);
   void whenImagesAvailable(() =>
     enqueueMediaJob(`world picture ${ref}`, async () => {
       try {
+        const english = await toEnglishForImage(campaign, { type: type.name, about });
+        const prompt = paintPrompt(entity.shelf, english.type, english.about, style);
         const image = await generateStoryImage(configuredDefaultStorySettings(), { prompt, mode: "fast", aspect: entity.shelf === "location" ? "landscape" : "square" });
         updateWorldEntity(campaign.id, ref, { portrait: copyIntoUploads(image.url).url });
       } catch (error) {

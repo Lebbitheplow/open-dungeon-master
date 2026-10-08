@@ -215,6 +215,8 @@ const CLASSIFIED = {
   // step numbers.
   "src/lib/dm/claims.ts": { prose: 0, machine: 1 },
   "src/lib/dm/waypoint-tick.ts": { prose: 0, machine: 1 },
+  // The image rewrite: English for an image model, never the table's language.
+  "src/lib/image-english.ts": { prose: 0, machine: 1 },
   // The rules desk has no campaign, so no table language.
   "src/lib/reference/desk.ts": { prose: 0, machine: 1 },
   // The routers themselves.
