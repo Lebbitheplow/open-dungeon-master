@@ -55,7 +55,7 @@ import {
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import { casterViewsOf, dedupeNames, withCasterViews, type CasterView } from "@/lib/srd/spell-prep";
 import { isThirdCaster } from "@/lib/srd/third-caster";
-import { featureHitPoints, holdsFeature, PRIMAL_CHAMPION_CAP } from "@/lib/srd/trait-rules";
+import { featureHitPoints, holdsFeature, withPrimalChampion } from "@/lib/srd/trait-rules";
 import { isChoiceFeature, unmetPrerequisite } from "@/lib/srd/legality/features";
 import { castingClassesOf } from "@/lib/srd/legality/spells";
 import {
@@ -322,11 +322,7 @@ export function buildLevelUp(
     leveled.level === 20 &&
     !holdsFeature(sheet, "primal champion");
   if (primalChampion) {
-    abilities = {
-      ...abilities,
-      str: Math.min(PRIMAL_CHAMPION_CAP, abilities.str + 4),
-      con: Math.min(PRIMAL_CHAMPION_CAP, abilities.con + 4),
-    };
+    abilities = withPrimalChampion(abilities);
   }
 
   // ---- hit points ----

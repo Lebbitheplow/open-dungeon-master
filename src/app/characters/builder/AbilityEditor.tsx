@@ -1,8 +1,9 @@
 "use client";
 
 import { Dices } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
+import { CountPop } from "@/components/ui/Reveal";
 import { cn } from "@/lib/cn";
 import { abilityMod, formatModifier } from "@/lib/srd";
 import { POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, pointBuyRemaining } from "@/lib/srd/point-buy";
@@ -22,6 +23,7 @@ import {
   type PoolEntry,
   type PoolSlots,
 } from "./abilityDice";
+import { gainLabel, type AbilityGain } from "./abilityGains";
 import { HelpDot, MethodInfoDialog, type HpExplainerInput } from "./AbilityExplainers";
 import { AbilitySummary } from "./AbilitySummary";
 import { DiceDefs, DiceRow } from "./Dice";
@@ -82,8 +84,9 @@ const DRAG_TYPE = "application/x-odm-pool";
 // Method-aware ability score editor: standard array slots, 27-point buy
 // steppers, or 4d6-drop-lowest, where all six throws land in a tray at once
 // and are then placed on the abilities by tap or drag. There is no rolling a
-// single ability and no typing a score in. Racial bonuses are displayed but
-// applied by the parent.
+// single ability and no typing a score in. Racial bonuses and the later
+// gains (improvements, half-feats, Primal Champion) are displayed but applied
+// by the parent.
 export default function AbilityEditor({
   method,
   onMethodChange,
@@ -94,6 +97,7 @@ export default function AbilityEditor({
   slots,
   onSlotsChange,
   racialBonus,
+  gains = {},
   asiCount = 0,
   who = "",
   hp = null,
@@ -108,6 +112,9 @@ export default function AbilityEditor({
   slots: PoolSlots<Ability>;
   onSlotsChange: (slots: PoolSlots<Ability>) => void;
   racialBonus: Partial<Record<Ability, number>>;
+  // What each score gains after the race's bonus, in the server's order and
+  // already capped (abilityGains.ts): "+1 Linguist", "+2 at level 4".
+  gains?: Partial<Record<Ability, AbilityGain[]>>;
   // Ability score improvements the chosen level has earned; > 0 adds a hint
   // that base scores are level-1 rules and the bonuses are picked below.
   asiCount?: number;
@@ -389,7 +396,7 @@ export default function AbilityEditor({
           <span className="text-amber-200">
             {asiCount} ability score {asiCount === 1 ? "improvement" : "improvements"}
           </span>{" "}
-          on top of them; pick those in the section below.
+          on top of them; pick those in the section below, and each Final here counts them.
         </p>
       ) : null}
 
@@ -512,8 +519,36 @@ export default function AbilityEditor({
       <div className="flex flex-col gap-1.5">
         {ABILITY_KEYS.map((ability) => {
           const bonus = racialBonus[ability] ?? 0;
+          const extra = gains[ability] ?? [];
           const assigned = scores[ability];
-          const finalScore = assigned !== null ? assigned + bonus : null;
+          const finalScore =
+            assigned !== null ? assigned + bonus + extra.reduce((sum, gain) => sum + gain.amount, 0) : null;
+          // Racial bonus, then every later gain by name, then the final. A
+          // gain the player just made or changed lands (reveal-pop, keyed by
+          // its words so the others stay put) and the final pops when it
+          // moves.
+          const notes: Array<{ key: string; tone: string; motion?: string; body: ReactNode }> = [
+            ...(bonus ? [{ key: "racial", tone: "text-amber-300", body: `+${bonus} racial` }] : []),
+            ...extra.map((gain) => ({
+              key: `gain-${gainLabel(gain)}`,
+              tone: "text-amber-200",
+              motion: "reveal-pop",
+              body: gainLabel(gain),
+            })),
+            ...(finalScore !== null
+              ? [
+                  {
+                    key: "final",
+                    tone: "",
+                    body: (
+                      <>
+                        Final <CountPop value={finalScore}>{finalScore}</CountPop> ({formatModifier(abilityMod(finalScore))})
+                      </>
+                    ),
+                  },
+                ]
+              : []),
+          ];
           const label = ABILITY_LABELS[ability];
           const slot = method === "roll" ? slots[ability] : null;
           const armed = method === "roll" && held !== null && !anyRolling;
@@ -530,18 +565,21 @@ export default function AbilityEditor({
               <span className="dice-abbr" aria-hidden="true">
                 {ability.toUpperCase()}
               </span>
-              {/* The racial bonus and the final score ride under the name, so
-                  the dice, the total, the typed field and the Roll button
-                  all fit one line in the builder's column. */}
+              {/* The bonuses and the final score ride under the name, so the
+                  controls keep one line in the builder's column; with feats
+                  and improvements the notes wrap between whole pieces. */}
               <span className="flex min-w-0 flex-[1_1_104px] flex-col gap-px">
                 <span className="truncate font-display text-[13.5px] font-semibold text-stone-100">
                   <GameTerm id={ability}>{label}</GameTerm>
                 </span>
-                {bonus || finalScore !== null ? (
-                  <span className="truncate font-mono text-[10px] text-stone-400">
-                    {bonus ? <span className="text-amber-300">+{bonus} racial</span> : null}
-                    {bonus && finalScore !== null ? " · " : null}
-                    {finalScore !== null ? `Final ${finalScore} (${formatModifier(abilityMod(finalScore))})` : null}
+                {notes.length ? (
+                  <span className="flex flex-wrap gap-x-1 font-mono text-[10px] leading-snug text-stone-400" data-ability-notes={ability}>
+                    {notes.map((note, index) => (
+                      <span key={note.key} className={cn("whitespace-nowrap", note.motion)}>
+                        {index ? <span className="text-stone-600">· </span> : null}
+                        <span className={note.tone || undefined}>{note.body}</span>
+                      </span>
+                    ))}
                   </span>
                 ) : null}
               </span>
@@ -645,6 +683,7 @@ export default function AbilityEditor({
             label: ABILITY_LABELS[ability],
             base: scores[ability] ?? 0,
             bonus: racialBonus[ability] ?? 0,
+            added: (gains[ability] ?? []).reduce((sum, gain) => sum + gain.amount, 0),
           }))}
         />
       ) : null}

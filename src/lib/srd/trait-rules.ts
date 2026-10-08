@@ -355,6 +355,31 @@ export function featureAbilityGrants(sheet: TraitSheet): Partial<Record<Ability,
 
 export const PRIMAL_CHAMPION_CAP = 24;
 
+// Primal Champion's points added to scores that do not hold them yet.
+export function withPrimalChampion<T extends Record<Ability, number>>(abilities: T): T {
+  return {
+    ...abilities,
+    str: Math.min(PRIMAL_CHAMPION_CAP, abilities.str + 4),
+    con: Math.min(PRIMAL_CHAMPION_CAP, abilities.con + 4),
+  };
+}
+
+// Primal Champion's points taken back off scores stored with them, so that
+// improvements and half-feats are counted beneath them (an edit of a
+// barbarian at 20) and the 20 cap does not eat them.
+export function withoutPrimalChampion<T extends Record<Ability, number>>(abilities: T): T {
+  return {
+    ...abilities,
+    str: Math.max(1, abilities.str - 4),
+    con: Math.max(1, abilities.con - 4),
+  };
+}
+
+// Whether a sheet at this level has Primal Champion: a barbarian at 20.
+export function reachesPrimalChampion(sheet: TraitSheet): boolean {
+  return classLevelOf(sheet, "barbarian") >= 20;
+}
+
 // Sunlight Sensitivity (drow): disadvantage on attack rolls and on sight
 // Perception checks in direct sunlight.
 export function hasSunlightSensitivity(sheet: TraitSheet): boolean {

@@ -137,7 +137,9 @@ export default function AsiFeatEditor({
                             // Clears back to the feat search; picking a feat resolves it.
                             setChoice(index, null);
                           } else if (mode === "plus2") {
-                            setChoice(index, { mode: "plus2", ability: firstOpenAbility(current) });
+                            // A score the whole +2 fits under the cap first, so
+                            // the default never throws a point away.
+                            setChoice(index, { mode: "plus2", ability: firstOpenAbility(current, undefined, 2) });
                           } else {
                             const first = firstOpenAbility(current);
                             const second = firstOpenAbility(current, first);
@@ -323,11 +325,10 @@ function featRaise(current: AbilityScores, choice: AsiChoice): string {
     : "";
 }
 
-function firstOpenAbility(scores: AbilityScores, skip?: Ability): Ability {
-  const open = ABILITY_KEYS.find(
-    (ability) => ability !== skip && scores[ability] < ABILITY_SCORE_CAP,
-  );
-  return open ?? ABILITY_KEYS.find((ability) => ability !== skip) ?? "str";
+function firstOpenAbility(scores: AbilityScores, skip?: Ability, room = 1): Ability {
+  const fits = (need: number) =>
+    ABILITY_KEYS.find((ability) => ability !== skip && scores[ability] + need <= ABILITY_SCORE_CAP);
+  return fits(room) ?? fits(1) ?? ABILITY_KEYS.find((ability) => ability !== skip) ?? "str";
 }
 
 function summarizeChoice(current: AbilityScores, choice: AsiChoice): string {

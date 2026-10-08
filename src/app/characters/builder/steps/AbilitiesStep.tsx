@@ -1,6 +1,5 @@
 "use client";
 
-import type { Ability } from "@/lib/schemas/sheet";
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import AbilityEditor from "../AbilityEditor";
 import type { HpExplainerInput } from "../AbilityExplainers";
@@ -48,18 +47,8 @@ export function AbilitiesStep({
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
 }) {
-  const { asiSlotLevels, activeAsiChoices, asiTakenInPlay, baseAbilities, effectiveLevel } = derived;
+  const { asiSlotLevels, activeAsiChoices, asiTakenInPlay, asiBaseAbilities, effectiveLevel } = derived;
   const asiToPick = asiTakenInPlay.filter((taken) => !taken).length;
-  // The fixed bumps plus the ones the player chose on the ancestry step
-  // (half-elf), so "Final" here is the number the sheet will carry.
-  const racialBonus: Partial<Record<Ability, number>> = { ...(race?.asi ?? {}) };
-  if (race?.asiChoice) {
-    for (const ability of state.racialAsi) {
-      if (ability) {
-        racialBonus[ability] = (racialBonus[ability] ?? 0) + race.asiChoice.amount;
-      }
-    }
-  }
   return (
     <div className="space-y-4">
       <div data-builder-target="scores">
@@ -72,7 +61,11 @@ export function AbilitiesStep({
         onPoolChange={state.setRollPool}
         slots={state.rollSlots}
         onSlotsChange={state.setRollSlots}
-        racialBonus={racialBonus}
+        // The race's bumps (the half-elf's chosen ones too) and what the
+        // improvements, half-feats and Primal Champion add after them, so
+        // "Final" here is the number the sheet will carry (issue #149).
+        racialBonus={derived.racialBonus}
+        gains={derived.abilityGains}
         asiCount={asiToPick}
         who={race && klass ? `${race.name} ${klass.name}`.toLowerCase() : ""}
         hp={hpExplainerInput(state, derived, race, klass)}
@@ -83,7 +76,8 @@ export function AbilitiesStep({
         <AsiFeatEditor
           level={effectiveLevel}
           slotLevels={asiSlotLevels}
-          baseScores={baseAbilities}
+          // A variant human's feat point is in from the first card on.
+          baseScores={asiBaseAbilities}
           choices={activeAsiChoices}
           takenInPlay={asiTakenInPlay}
           featSpecOf={derived.featSpecOf}

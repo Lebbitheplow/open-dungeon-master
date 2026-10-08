@@ -100,10 +100,15 @@ export function scoresWithHalfFeats(
   abilities: AbilityScores,
   picks: HalfFeatPick[],
 ): { abilities: AbilityScores; saves: Ability[] } {
-  const settled = picks.map((pick) => ({
+  const out = applyHalfFeats(abilities, settledHalfFeats(picks));
+  return "error" in out ? { abilities, saves: [] } : out;
+}
+
+// The picks with a choosing feat's unpicked score filled in as the builder
+// sends it: the first the feat offers.
+export function settledHalfFeats(picks: HalfFeatPick[]): HalfFeatPick[] {
+  return picks.map((pick) => ({
     ...pick,
     ability: pick.ability ?? featAbilityIncrease(pick.feat)?.from[0] ?? null,
   }));
-  const out = applyHalfFeats(abilities, settled);
-  return "error" in out ? { abilities, saves: [] } : out;
 }

@@ -37,7 +37,14 @@ import {
   type HpClass,
 } from "@/lib/srd/hit-points";
 import { MULTICLASS_CAP, describePrereq, meetsPrereq } from "@/lib/srd/multiclass";
-import { featureAbilityGrants, featureHitPoints } from "@/lib/srd/trait-rules";
+import {
+  featureAbilityGrants,
+  featureHitPoints,
+  holdsFeature,
+  reachesPrimalChampion,
+  withPrimalChampion,
+  withoutPrimalChampion,
+} from "@/lib/srd/trait-rules";
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import {
   ancestryOf,
@@ -360,16 +367,27 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       ],
     }),
   );
-  let abilities = input.abilities;
+  // Primal Champion (barbarian 20): +4 Strength and Constitution, to 24,
+  // added last as a level-up adds it. A character made at 20 arrives
+  // without them. An edit of a sheet that already holds the feature sends
+  // its scores with them in, as they were stored; they come off first, so a
+  // half-feat's point is counted beneath them and not lost to the cap of 20.
+  const primalChampion = takesHalfFeats && reachesPrimalChampion({ class: input.class, level, classes });
+  const primalHeld =
+    primalChampion && Boolean(context.baseline && holdsFeature(context.baseline.sheet, "primal champion"));
+  let abilities = primalHeld ? withoutPrimalChampion(input.abilities) : input.abilities;
   let featSaves = halfFeatPoints(halfFeats.filter((pick) => lower(pick.feat) === "resilient"));
   if (takesHalfFeats) {
-    const applied = applyHalfFeats(input.abilities, halfFeats);
+    const applied = applyHalfFeats(abilities, halfFeats);
     if ("error" in applied) {
       problems.push(applied.error);
     } else {
       abilities = applied.abilities;
       featSaves = applied.saves;
     }
+  }
+  if (primalChampion) {
+    abilities = withPrimalChampion(abilities);
   }
 
   // ---- hit dice and hit points ----

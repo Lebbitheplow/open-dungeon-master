@@ -10,8 +10,9 @@ import type {
 } from "@/lib/schemas/sheet";
 import { removeAsiChoices } from "@/lib/srd/asi";
 import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
-import type { FeatChoices, FeatPicks } from "@/lib/srd/feat-grants";
+import { withoutFeatPicks, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { racialFeatCount } from "@/lib/srd/race-id";
+import { holdsFeature, reachesPrimalChampion, withoutPrimalChampion } from "@/lib/srd/trait-rules";
 import type { KitChoices } from "@/lib/srd/starting-kit";
 import { findOptionByFeatureName } from "@/lib/srd/options";
 import {
@@ -173,7 +174,12 @@ export function useBuilderState({
   // Named tools for a grant that leaves the choice open ("three musical
   // instruments"); a stored sheet's named tools come back as its picks.
   const [toolPicks, setToolPicks] = useState<string[]>(
-    () => (initial?.proficiencies.tools ?? []).filter((tool) => !toolChoiceOf(tool)),
+    // The feats' own tool picks (Skilled) are not the class's or the
+    // background's; FeatChoicesFields holds them.
+    () =>
+      (initial ? withoutFeatPicks(initial.proficiencies, initial.featChoices).tools : []).filter(
+        (tool) => !toolChoiceOf(tool),
+      ),
   );
   // The skill chosen in place of one the race and the background both give.
   const [repeatSkills, setRepeatSkills] = useState<string[]>([]);
@@ -299,10 +305,20 @@ export function useBuilderState({
   // fallback), because a pick that was valid against one catalog may not be
   // against the other.
   const hydratedInitial = useRef(false);
+  // The rows the picks were last checked against. The check runs once per
+  // set of rows: run again on the same rows (React runs a development
+  // effect twice) it would read this render's picks, which are from before
+  // the stored character's were applied, and wipe them.
+  const checkedRows = useRef<unknown[] | null>(null);
   useEffect(() => {
     if (!races.length || !classes.length || !backgrounds.length) {
       return;
     }
+    const rows = [races, classes, backgrounds];
+    if (checkedRows.current && rows.every((row, index) => row === checkedRows.current![index])) {
+      return;
+    }
+    checkedRows.current = rows;
     const ids = { ...selection };
     if (initial && !hydratedInitial.current) {
       hydratedInitial.current = true;
@@ -314,6 +330,12 @@ export function useBuilderState({
       // saved, and is added again when it is saved from here.
       for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeatCount(initial.race)))) {
         base[ability] = Math.max(1, base[ability] - 1);
+      }
+      // Primal Champion's +4 too (a barbarian at 20): the builder adds it
+      // back after the improvements, which would otherwise meet the cap of
+      // 20 with it already in, and the server expects it sent.
+      if (initialHoldsPrimalChampion(initial, initialLevel)) {
+        Object.assign(base, withoutPrimalChampion(base));
       }
       for (const [ability, bonus] of Object.entries(initialRace?.asi ?? {})) {
         base[ability as Ability] -= bonus ?? 0;
@@ -347,15 +369,20 @@ export function useBuilderState({
         ...(initialClass?.languages ?? []),
         ...(initialBackground?.knownLanguages ?? []),
       ]);
+      // What the feats' own picks added (a Linguist's three languages,
+      // Skilled's skills) is theirs, held by FeatChoicesFields: read as a
+      // bonus language or a class skill it overflowed the slots and was
+      // reported as no longer on offer.
+      const held = withoutFeatPicks(initial.proficiencies, initial.featChoices);
       // A stored pick the rows no longer offer is said so, like any other
       // drop; the gates then ask for it again on its step.
       applyReconciled(
         "stored character",
         reconciled(ids, {
           ...picks,
-          chosenSkills: initial.proficiencies.skills.filter((skill) => !grantedSkills.has(skill)),
-          expertisePicks: initial.proficiencies.expertise ?? [],
-          bonusLanguages: initial.proficiencies.languages.filter((language) => !spoken.has(language)),
+          chosenSkills: held.skills.filter((skill) => !grantedSkills.has(skill)),
+          expertisePicks: held.expertise ?? [],
+          bonusLanguages: held.languages.filter((language) => !spoken.has(language)),
         }),
         true,
       );
@@ -453,6 +480,7 @@ export function useBuilderState({
     keepsStoredGear,
     asiRecorded,
     asiReachedLevel,
+    primalChampionHeld: initialHoldsPrimalChampion(initial, initialLevel),
     name, setName,
     alignment, setAlignment,
     level, changeLevel,
@@ -514,5 +542,18 @@ export function findRace(races: RaceOption[], raceId: string): RaceOption | unde
   return (
     races.find((entry) => entry.id === raceId) ??
     races.find((entry) => canonicalRaceId(entry.id) === canonicalRaceId(raceId))
+  );
+}
+
+// A stored barbarian at 20 whose scores carry Primal Champion's +4: what the
+// edit takes off on loading and puts back after the improvements.
+function initialHoldsPrimalChampion(initial: CreateSheetInput | undefined, initialLevel: number | undefined): boolean {
+  if (!initial) {
+    return false;
+  }
+  const level = initialLevel ?? initial.hitDice?.total ?? 1;
+  return (
+    reachesPrimalChampion({ class: initial.class, classes: initial.classes, level }) &&
+    holdsFeature(initial, "primal champion")
   );
 }

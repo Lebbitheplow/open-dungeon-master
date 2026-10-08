@@ -588,6 +588,77 @@ await test("the builder shows the scores, saves and hit points the server stores
   assert.equal(cases[0].sheet.abilities.con + 1, cases[0].derived.shownAbilities.con);
 });
 
+await test("the Abilities step's Final counts every gain after the race's bonus: a variant human's feat point, the improvements, a half-feat taken with one, each named, and the improvement cards start from the feat's point (issue #149)", async () => {
+  const total = (built, ability) => {
+    const assigned = built.state.scores[ability];
+    const racial = built.derived.racialBonus[ability] ?? 0;
+    return assigned === null
+      ? null
+      : assigned + racial + built.derived.abilityGains[ability].reduce((sum, gain) => sum + gain.amount, 0);
+  };
+  const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+  // The issue's own case: a variant human fighter with Linguist on Intelligence 12.
+  const linguist = builder.build({
+    race: "variant_human",
+    class: "fighter",
+    background: "soldier",
+    racialAsi: ["str", "con"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    stylePicks: ["defense"],
+    bonusLanguages: ["Giant"],
+    feats: ["Linguist"],
+    featChoices: { linguist: { languages: ["Elvish", "Dwarvish", "Draconic"] } },
+  });
+  assert.equal(linguist.state.scores.int, 12);
+  assert.equal(linguist.derived.shownAbilities.int, 13);
+  assert.deepEqual(linguist.derived.abilityGains.int, [{ source: "Linguist", amount: 1, capped: false }]);
+  assert.equal(total(linguist, "int"), 13, "Final reads 13, the score stored");
+  // A level 8 variant human: the feat's point is in before the first card.
+  const leveled = madeFighter({
+    race: "variant_human",
+    racialAsi: ["str", "con"],
+    racialSkills: ["stealth"],
+    feats: ["Linguist"],
+    featChoices: { linguist: { languages: ["Elvish", "Dwarvish", "Draconic"] } },
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus1x2", abilities: ["dex", "int"] }, { mode: "feat", feat: "Resilient", ability: "wis" }],
+  });
+  assert.equal(leveled.blocker, null, leveled.blocker?.message);
+  assert.equal(leveled.derived.asiBaseAbilities.int, 13, "the improvement cards read Intelligence 13");
+  assert.equal(leveled.derived.baseAbilities.int, 12);
+  assert.deepEqual(
+    leveled.derived.abilityGains.int.map((gain) => [gain.source, gain.amount]),
+    [["at level 6", 1], ["Linguist", 1]],
+  );
+  assert.deepEqual(leveled.derived.abilityGains.wis.map((gain) => gain.source), ["Resilient"]);
+  const at = await creation.atTable(leveled.sheet);
+  assert.equal(at.status, 201, at.error);
+  for (const ability of ABILITY_KEYS) {
+    assert.equal(total(leveled, ability), at.sheet.abilities[ability], `${ability}: Final is the score stored`);
+  }
+  // A score at the cap says so instead of showing a gain it cannot take.
+  const capped = madeFighter({
+    method: "roll",
+    scores: { str: 18, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "con" }],
+  });
+  assert.deepEqual(
+    capped.derived.abilityGains.str.map((gain) => [gain.amount, gain.capped]),
+    [[1, true], [0, true]],
+  );
+  assert.equal(total(capped, "str"), 20);
+  // Before the six are placed the gain still shows, so the point is seen.
+  const unplaced = builder.build({
+    race: "variant_human",
+    class: "fighter",
+    background: "soldier",
+    feats: ["Linguist"],
+    scores: { str: 15, dex: 14, con: 13, int: null, wis: 10, cha: 8 },
+  });
+  assert.deepEqual(unplaced.derived.abilityGains.int.map((gain) => gain.source), ["Linguist"]);
+  assert.equal(total(unplaced, "int"), null);
+});
+
 // ---- Alert: the 2014 feat, one of it ----
 //
 // The pack's only Alert is a 2024 row, which a 2014 character is never

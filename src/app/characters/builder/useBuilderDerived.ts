@@ -6,10 +6,10 @@ import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/sch
 import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { applyAsiChoices, asiLevelsFor, asiSlotsTakenInPlay } from "@/lib/srd/asi";
 import { derivedMaxHp, hpBonusPerLevelFor, hpRange, type HpMethod } from "@/lib/srd/hit-points";
-import { featureHitPoints } from "@/lib/srd/trait-rules";
-import { hpBonusPerLevel, srdRaceId } from "@/lib/srd/race-id";
+import { featureHitPoints, reachesPrimalChampion, withPrimalChampion } from "@/lib/srd/trait-rules";
+import { hpBonusPerLevel, racialFeatCount } from "@/lib/srd/race-id";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
-import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
+import { halfFeatPicks, scoresWithHalfFeats, settledHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
   bundledPrices,
   judgeStartingGear,
@@ -30,6 +30,7 @@ import {
   type KitTraining,
 } from "@/lib/srd/starting-kit";
 import { suggestWeapons } from "@/lib/srd/weapons";
+import { abilityGains } from "./abilityGains";
 import { builderCasting, builderSpellAdvice } from "./casting";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
@@ -119,52 +120,106 @@ export function useBuilderDerived({
     [asiSlotLevels, asiRecorded, asiReachedLevel],
   );
 
-  // Base scores after racial bonuses, before level ASIs; what the ASI cards
-  // build on.
+  // The race's bumps by ability: the fixed ones and those of the player's
+  // choice (half-elf).
+  const racialBonus = useMemo(() => {
+    const bonus: Partial<Record<Ability, number>> = { ...(race?.asi ?? {}) };
+    if (race?.asiChoice) {
+      for (const ability of racialAsi) {
+        if (ability) {
+          bonus[ability] = (bonus[ability] ?? 0) + race.asiChoice.amount;
+        }
+      }
+    }
+    return bonus;
+  }, [race, racialAsi]);
+
+  // Base scores after racial bonuses, before level ASIs.
   const baseAbilities = useMemo<AbilityScores | null>(() => {
     if (!race || Object.values(scores).some((value) => value === null)) {
       return null;
     }
     const final = { ...(scores as Record<Ability, number>) };
-    for (const [ability, bonus] of Object.entries(race.asi)) {
+    for (const [ability, bonus] of Object.entries(racialBonus)) {
       final[ability as Ability] += bonus ?? 0;
     }
-    // Races that grant ability bumps of the player's choice (half-elf).
-    if (race.asiChoice) {
-      for (const ability of racialAsi) {
-        if (ability) {
-          final[ability] += race.asiChoice.amount;
-        }
-      }
-    }
     return final as AbilityScores;
-  }, [scores, race, racialAsi]);
+  }, [scores, race, racialBonus]);
 
-  // The scores the builder SENDS: the improvements in, the half-feats' points
-  // not (the server adds those, src/lib/srd/legality/half-feats.ts).
-  const abilities = useMemo<AbilityScores | null>(
+  // The scores with the improvements in, before the half-feats' points and
+  // Primal Champion's.
+  const improved = useMemo<AbilityScores | null>(
     () => (baseAbilities ? applyAsiChoices(baseAbilities, activeAsiChoices) : null),
     [baseAbilities, activeAsiChoices],
+  );
+  // Primal Champion's +4 Strength and Constitution, at barbarian 20. The
+  // server adds it after the half-feats (src/lib/srd/sheet-legality.ts).
+  const primalChampion = useMemo(
+    () => (klass ? reachesPrimalChampion({ class: klass.id, level: effectiveLevel }) : false),
+    [klass, effectiveLevel],
+  );
+  // The scores the builder SENDS: the improvements in, the half-feats' points
+  // not (the server adds those, src/lib/srd/legality/half-feats.ts). An edit
+  // of a barbarian whose stored scores carried Primal Champion's +4 sends
+  // them with it, as they were stored (useBuilderState took it off to count
+  // the improvements beneath it); a new one leaves it to the server.
+  const { primalChampionHeld } = state;
+  const abilities = useMemo<AbilityScores | null>(
+    () => (improved && primalChampion && primalChampionHeld ? withPrimalChampion(improved) : improved),
+    [improved, primalChampion, primalChampionHeld],
   );
   // The scores the server will STORE, with those points in, and the saving
   // throw Resilient adds: what every number on screen is worked out from.
   const raceId = race?.id;
   const { feats: racialFeatNames, racialFeatAbility } = state;
-  const halfFeats = useMemo(() => {
-    if (!abilities) {
-      return null;
-    }
-    const picks = halfFeatPicks(
+  // The half-feats in the server's order: the improvements' first, then the
+  // race's own feat (a variant human's).
+  const halfFeatList = useMemo(() => {
+    const asiChoicesMade = activeAsiChoices.filter((choice): choice is AsiChoice => choice !== null);
+    const all = halfFeatPicks(
       {
-        asiChoices: activeAsiChoices.filter((choice): choice is AsiChoice => choice !== null),
+        asiChoices: asiChoicesMade,
         feats: racialFeatNames,
         racialChoices: { featAbility: racialFeatAbility },
       },
-      raceId && srdRaceId(raceId) === "variant_human" ? 1 : 0,
+      raceId ? racialFeatCount(raceId) : 0,
     );
-    return scoresWithHalfFeats(abilities, picks);
-  }, [abilities, activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
+    const fromImprovements = halfFeatPicks({ asiChoices: asiChoicesMade }, 0).length;
+    return { all, racial: all.slice(fromImprovements) };
+  }, [activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
+  const halfFeats = useMemo(() => {
+    if (!improved) {
+      return null;
+    }
+    const out = scoresWithHalfFeats(improved, halfFeatList.all);
+    return primalChampion ? { ...out, abilities: withPrimalChampion(out.abilities) } : out;
+  }, [improved, halfFeatList, primalChampion]);
   const shownAbilities = halfFeats?.abilities ?? null;
+  // What the improvement cards build on: the base scores with the race's
+  // feat point in, since it is taken at 1st level.
+  const asiBaseAbilities = useMemo(
+    () => (baseAbilities ? scoresWithHalfFeats(baseAbilities, halfFeatList.racial).abilities : null),
+    [baseAbilities, halfFeatList],
+  );
+  // Each score's gains past its racial bonus, for the Abilities step's rows
+  // and summary (issue #149). Its finals are shownAbilities once all six
+  // are assigned.
+  const gains = useMemo(
+    () =>
+      abilityGains({
+        start: Object.fromEntries(
+          (Object.keys(scores) as Ability[]).map((ability) => {
+            const assigned = scores[ability];
+            return [ability, assigned === null ? null : assigned + (racialBonus[ability] ?? 0)];
+          }),
+        ) as Record<Ability, number | null>,
+        slotLevels: asiSlotLevels,
+        choices: activeAsiChoices,
+        halfFeats: settledHalfFeats(halfFeatList.all),
+        primalChampion,
+      }),
+    [scores, racialBonus, asiSlotLevels, activeAsiChoices, halfFeatList, primalChampion],
+  );
 
   // Every feat on the sheet, racial and ASI, with its text where known.
   const featNames = useMemo(
@@ -562,6 +617,10 @@ export function useBuilderDerived({
     activeAsiChoices,
     asiTakenInPlay,
     baseAbilities,
+    asiBaseAbilities,
+    racialBonus,
+    abilityGains: gains.gains,
+    primalChampion,
     abilities,
     shownAbilities,
     proficientSkills,

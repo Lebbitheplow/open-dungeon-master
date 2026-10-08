@@ -176,6 +176,68 @@ await test("F:M21: Primal Champion: barbarian 20 raises STR and CON by 4, to a m
   }), []);
 });
 
+await test("F:M21: Primal Champion counts for a barbarian made at 20 too: the builder shows the +4 the server stores, after the improvements and a half-feat's point, and an edit keeps it once (issue #149)", async () => {
+  const { openCreation } = await import("./lib/enforce-creation.mjs");
+  const { openBuilder } = await import("./lib/enforce-builder.mjs");
+  const { removeAsiChoices } = await import("../src/lib/srd/asi.ts");
+  const { halfFeatPicks, halfFeatPoints } = await import("../src/lib/srd/legality/half-feats.ts");
+  const creation = await openCreation({ campaign: { startingLevel: 20 } });
+  const builder = await openBuilder();
+  const editRoute = await creation.world.route("characters/[characterId]");
+  const fields = {
+    race: "human",
+    class: "barbarian",
+    background: "soldier",
+    level: 20,
+    subclass: "Path of the Berserker",
+    chosenSkills: ["survival", "perception"],
+    bonusLanguages: ["Giant"],
+    // Standard array in order: STR 15, CON 13 before the human's +1s.
+    asiChoices: [
+      { mode: "plus2", ability: "str" },
+      { mode: "plus2", ability: "str" },
+      { mode: "feat", feat: "Resilient", ability: "con" },
+      { mode: "plus2", ability: "con" },
+      { mode: "plus2", ability: "dex" },
+    ],
+  };
+  const built = builder.build(fields);
+  assert.equal(built.blocker, null, built.blocker?.message);
+  // STR 16 + 2 + 2 = 20, + 4 = 24. CON 14 + 2 + 1 (Resilient) = 17, + 4 = 21.
+  assert.equal(built.derived.shownAbilities.str, 24);
+  assert.equal(built.derived.shownAbilities.con, 21);
+  assert.deepEqual(built.derived.abilityGains.con.map((gain) => gain.source), ["at level 16", "Resilient", "Primal Champion"]);
+  // What is sent leaves the half-feat and Primal Champion to the server.
+  assert.equal(built.sheet.abilities.str, 20);
+  const made = await creation.throughLibrary(built.sheet, 20);
+  assert.equal(made.status, 201, made.error);
+  const stored = made.character.sheet;
+  assert.deepEqual(stored.abilities, built.derived.shownAbilities, "the scores shown are the scores stored");
+  assert.equal(stored.maxHp, built.derived.preview.maxHp, "the hit points shown are the hit points stored");
+  assert.deepEqual(made.sheet.abilities, stored.abilities, "the table copy at the same level");
+
+  // The edit loads the scores the way useBuilderState does: improvements,
+  // half-feats, Primal Champion and the race's +1s taken off.
+  const base = removeAsiChoices(stored.abilities, stored.asiChoices ?? []);
+  for (const ability of halfFeatPoints(halfFeatPicks(stored, 0))) {
+    base[ability] -= 1;
+  }
+  base.str -= 4;
+  base.con -= 4;
+  for (const ability of Object.keys(base)) {
+    base[ability] -= 1;
+  }
+  const edit = builder.build({ ...fields, method: "roll", scores: base, primalChampionHeld: true, name: "Renamed" });
+  assert.equal(edit.blocker, null, edit.blocker?.message);
+  assert.deepEqual(edit.derived.shownAbilities, stored.abilities);
+  creation.world.signIn(creation.player);
+  const saved = await creation.call(editRoute, "PATCH", { level: 20, sheet: { ...edit.sheet, portrait: stored.portrait } }, {
+    characterId: made.character.id,
+  });
+  assert.equal(saved.status, 200, saved.json.error);
+  assert.deepEqual(saved.json.character.sheet.abilities, stored.abilities, "an edit neither drops nor doubles the +4");
+});
+
 await test("X:AH1: An item that sets Constitution raises the hit point maximum by the modifier change times the level.", async () => {
   const hero = world.addHero({ class: "fighter", level: 10, maxHp: 60, abilities: { con: 10 } });
   world.patch(hero.id, { currentHp: 30, equipment: [{ name: "Amulet of Health", equipped: true, attuned: true }] });

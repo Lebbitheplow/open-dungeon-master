@@ -5,6 +5,12 @@ import { readAsiLedger, withAsiLedger } from "@/lib/srd/asi-ledger";
 import { derivedMaxHp, hpBonusPerLevelFor } from "@/lib/srd/hit-points";
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import { isThirdCaster } from "@/lib/srd/third-caster";
+import {
+  holdsFeature,
+  reachesPrimalChampion,
+  withPrimalChampion,
+  withoutPrimalChampion,
+} from "@/lib/srd/trait-rules";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { suggestedCantripCount } from "@/lib/content/mechanics";
 import { spellClassFor } from "@/lib/classes";
@@ -41,7 +47,9 @@ import {
 // ability score improvement cannot restore a score that hit the 20 cap on
 // the way up. Up-scaling grants no automatic extra improvements either; the
 // player edits the sheet in play instead. Both of those are the old
-// behaviour, written down rather than changed.
+// behaviour, written down rather than changed. Primal Champion is not an
+// improvement but a fixed +4 at barbarian 20, so it is given and taken back
+// here.
 
 export function adaptSheetToLevel(
   input: CreateSheetInput,
@@ -117,6 +125,22 @@ export function adaptSheetToLevel(
   const taken = readAsiLedger(sheet.features ?? []);
   if (taken !== null && taken > keptChoiceCount) {
     sheet.features = withAsiLedger(sheet.features ?? [], keptChoiceCount);
+  }
+
+  // Primal Champion (barbarian 20): +4 Strength and Constitution, to 24. A
+  // sheet taken past 20 gains it, as the level-up there would have given
+  // it; one taken below gives it back with the feature. Whether the scores
+  // carry it is read off the feature, as the level-up reads it.
+  const wasChampion =
+    reachesPrimalChampion({
+      class: input.class,
+      classes: (input.classes ?? []).length > 1 ? input.classes : [{ id: input.class, level: fromLevel }],
+    }) && holdsFeature(input, "primal champion");
+  const isChampion = reachesPrimalChampion({ class: sheet.class, classes: classList });
+  if (wasChampion && !isChampion) {
+    sheet.abilities = withoutPrimalChampion(sheet.abilities);
+  } else if (!wasChampion && isChampion && !holdsFeature(input, "primal champion")) {
+    sheet.abilities = withPrimalChampion(sheet.abilities);
   }
 
   sheet.hitDice = { ...sheet.hitDice, total: level, spent: 0 };
