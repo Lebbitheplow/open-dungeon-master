@@ -109,8 +109,10 @@ export function retroactiveHp(
   );
 }
 
-// Flat hit points per level from race and feats.
+// Flat hit points per level from race and feats. Level Up's Hardy
+// Adventurer is Tough under another name (feat-effects.ts FEAT_TWINS);
+// named here too, since this module stays import-free.
 export function hpBonusPerLevelFor(raceHillDwarf: boolean, feats: string[]): number {
-  const tough = feats.some((feat) => feat.trim().toLowerCase() === "tough");
+  const tough = feats.some((feat) => ["tough", "hardy adventurer"].includes(feat.trim().toLowerCase()));
   return (raceHillDwarf ? 1 : 0) + (tough ? 2 : 0);
 }

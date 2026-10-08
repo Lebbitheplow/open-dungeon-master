@@ -172,7 +172,13 @@ export default function CharacterBuilder({
     [rawBackgrounds, pack],
   );
 
-  const state = useBuilderState({ initial, initialLevel, fixedLevel, races, classes, backgrounds });
+  // The text of a stored character's feats, fetched before its scores are
+  // read back (a content pack half-feat's point comes off them).
+  const initialFeatDescs = useFeatDescs([
+    ...(initial?.feats ?? []),
+    ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
+  ]);
+  const state = useBuilderState({ initial, initialFeatDescs, initialLevel, fixedLevel, races, classes, backgrounds });
   const race = findRace(races, state.raceId) ?? races[0];
   const klass = classes.find((entry) => entry.id === state.classId) ?? classes[0];
   const background =

@@ -27,6 +27,7 @@ import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { bundledSubclassName } from "@/lib/srd/features";
+import { packFeatText } from "@/lib/srd/feat-text";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { checklistSpell } from "@/lib/srd/spell-lists";
 import { bundledSpellSchool } from "@/lib/srd/spell-facts";
@@ -221,29 +222,18 @@ export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts 
   const found = searchFeats({ q: name.trim(), limit: 50, userId: homebrewOwnerId }).find(
     (entry) => lower(entry.name) === wanted,
   );
-  return found
-    ? {
-        name: found.name,
-        prerequisite: String(found.data.prerequisite ?? ""),
-        desc: packFeatDesc(found.data),
-      }
-    : null;
+  if (!found) {
+    return null;
+  }
+  const text = packFeatText(found.data);
+  return { name: found.name, prerequisite: text.prerequisite, desc: text.desc };
 }
 
-// A feat's text as one string: the 2014 rows carry `desc`, the 2024 rows a
-// `benefits` list of paragraphs (Magic Initiate's four), read in order so
-// the grants in them (src/lib/srd/feat-grants.ts, feat-spells.ts) are found.
+// A feat's text as one string, wherever the pack keeps it (src/lib/srd/
+// feat-text.ts), so the grants in it (feat-grants.ts, feat-spells.ts) are
+// found.
 export function packFeatDesc(data: Record<string, unknown>): string {
-  const plain = String(data.desc ?? data.description ?? "").trim();
-  if (plain) {
-    return plain;
-  }
-  return Array.isArray(data.benefits)
-    ? (data.benefits as Array<{ desc?: unknown }>)
-        .map((benefit) => String(benefit?.desc ?? "").trim())
-        .filter(Boolean)
-        .join(" ")
-    : "";
+  return packFeatText(data).desc;
 }
 
 export function subclassIsOffered(

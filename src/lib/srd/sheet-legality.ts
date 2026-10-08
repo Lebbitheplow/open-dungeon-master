@@ -50,6 +50,7 @@ import {
   type DraconicAncestry,
 } from "@/lib/srd/racial-grants";
 import { featSpellGrants, freeCastFeatures, freeCastOf } from "@/lib/srd/feat-spells";
+import { featSaveProficiency } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, withoutFeatPicks } from "@/lib/srd/feat-grants";
 import { elementalAdeptFeatureName, elementalAdeptFeatureOf } from "@/lib/srd/feat-combat";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
@@ -308,6 +309,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
           casts,
           raceId: race.id,
           raceName: race.name,
+          skills: input.proficiencies.skills,
+          tools: input.proficiencies.tools,
+          weapons: [...klass.weapons, ...input.proficiencies.weapons],
+          level,
         },
       });
   problems.push(...feats.problems);
@@ -330,7 +335,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // takes them here, as a level-up does; a stored or imported one already
   // holds them in its scores.
   const takesHalfFeats = policy.made || policy.edit;
-  const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats);
+  const featText = (feat: string) => context.featOf(feat)?.desc ?? "";
+  const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats, featText);
   const increase = racialIncrease(input, context, problems);
   // On an edit the stored scores are a pool too: they may be moved about,
   // as the builder lets them be, and not raised.
@@ -340,7 +346,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
           scores: context.baseline.sheet.abilities,
           racial: increase.racial,
           recorded: context.baseline.sheet.asiChoices ?? [],
-          halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats)),
+          halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats, featText)),
           freePoints: 0,
           mode: "bounds",
           pools: [],
@@ -364,7 +370,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     }),
   );
   let abilities = input.abilities;
-  let featSaves = halfFeatPoints(halfFeats.filter((pick) => lower(pick.feat) === "resilient"));
+  let featSaves = halfFeatPoints(halfFeats.filter((pick) => featSaveProficiency(pick.feat, pick.ability, pick.desc)));
   if (takesHalfFeats) {
     const applied = applyHalfFeats(input.abilities, halfFeats);
     if ("error" in applied) {
@@ -433,7 +439,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
 
   // ---- training, skills, languages ----
   const trained = judgeProficiencies({
-    sent: input.proficiencies,
+    // The builder's preview already holds its feats' picks (Skilled's
+    // thieves' tools); they come off here, since the class and background
+    // never offered them, and go back on with the grants below (issue #147).
+    sent: withoutFeatPicks(input.proficiencies, input.featChoices),
     classes,
     classOf: context.classOf,
     race,

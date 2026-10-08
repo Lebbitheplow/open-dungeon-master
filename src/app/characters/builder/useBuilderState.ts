@@ -1,5 +1,6 @@
 "use client";
 
+import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { toolChoiceOf } from "@/lib/srd/tool-choices";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -41,6 +42,7 @@ export type DroppedNotice = { because: string; drops: DroppedPick[] };
 // submit payload (submit.ts) reads these unchanged.
 export function useBuilderState({
   initial,
+  initialFeatDescs,
   initialLevel,
   fixedLevel,
   races,
@@ -48,6 +50,10 @@ export function useBuilderState({
   backgrounds,
 }: {
   initial?: CreateSheetInput;
+  // The text of the stored character's feats, by lower-case name, as
+  // fetched (useFeatDescs): a content pack half-feat's point comes off the
+  // stored scores below, so the scores are read back once it is known.
+  initialFeatDescs?: Record<string, string>;
   // The level the stored character reached (its library row's level).
   initialLevel?: number;
   fixedLevel?: number;
@@ -299,8 +305,18 @@ export function useBuilderState({
   // fallback), because a pick that was valid against one catalog may not be
   // against the other.
   const hydratedInitial = useRef(false);
+  // The stored character's feats, and whether the text of each is at hand:
+  // a content pack half-feat's point comes off the stored scores below, so
+  // they are read back once it is (an unknown feat is remembered as empty,
+  // so the wait ends).
+  const storedFeats = [
+    ...(initial?.feats ?? []),
+    ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
+  ];
+  const storedFeatDescOf = (feat: string) => initialFeatDescs?.[feat.trim().toLowerCase()] ?? authoredFeatDesc(feat) ?? "";
+  const storedFeatsKnown = storedFeats.every((feat) => authoredFeatDesc(feat) || initialFeatDescs?.[feat.trim().toLowerCase()] !== undefined);
   useEffect(() => {
-    if (!races.length || !classes.length || !backgrounds.length) {
+    if (!races.length || !classes.length || !backgrounds.length || !storedFeatsKnown) {
       return;
     }
     const ids = { ...selection };
@@ -312,7 +328,7 @@ export function useBuilderState({
       const base: Record<Ability, number> = { ...withoutAsi };
       // A half-feat's point was added by the server when the character was
       // saved, and is added again when it is saved from here.
-      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeatCount(initial.race)))) {
+      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeatCount(initial.race), storedFeatDescOf))) {
         base[ability] = Math.max(1, base[ability] - 1);
       }
       for (const [ability, bonus] of Object.entries(initialRace?.asi ?? {})) {
@@ -367,7 +383,7 @@ export function useBuilderState({
     applyReconciled("content pack", reconciled(ids, picks), true);
     // Runs when the option rows change; the picks it reads are this render's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial, races, classes, backgrounds]);
+  }, [initial, storedFeatsKnown, races, classes, backgrounds]);
 
   // Choosing a different race throws away every race-specific pick, since
   // none of them make sense for the new one, and re-checks the rest (a class

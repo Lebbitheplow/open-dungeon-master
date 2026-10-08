@@ -202,8 +202,12 @@ export function songOfRestDie(level: number): string {
 // so they resolve through the same table. defenseRiders and the derived
 // stats read features AND feats together.
 export const FEATURE_EFFECTS: FeatureDef[] = [
+  // A Level Up feat with the same rules as one of ODM's answers to both
+  // names (feat-effects.ts FEAT_TWINS): Attentive is Alert, Intuitive is
+  // Observant. (Level Up's Skirmisher is Mobile too, but the Scout
+  // ranger's 3rd-level feature is named Skirmisher, so it is not listed.)
   {
-    match: ["alert"],
+    match: ["alert", "attentive"],
     effects: [{ kind: "initiative_bonus", amount: 5 }],
     guidance: "Alert: +5 to initiative, and they cannot be surprised while conscious.",
   },
@@ -214,7 +218,7 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     guidance: "Mobile: +10 feet of speed; a Dash ignores difficult terrain; a creature they attack in melee cannot make opportunity attacks against them that turn.",
   },
   {
-    match: ["observant"],
+    match: ["observant", "intuitive"],
     effects: [{ kind: "passive_bonus", amount: 5 }],
     guidance: "Observant: +5 to passive Perception and passive Investigation.",
   },

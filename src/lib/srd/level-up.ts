@@ -300,17 +300,21 @@ export function buildLevelUp(
       casts,
       raceId: sheet.race,
       raceName: sheet.race,
+      skills: sheet.proficiencies.skills,
+      tools: sheet.proficiencies.tools,
+      weapons: sheet.proficiencies.weapons,
+      level: target,
     });
     if (unmet) {
       return refuse(`${facts.name} requires ${unmet}, which ${sheet.name} does not have.`);
     }
     feats.push(facts.name);
-    const raised = applyFeatIncrease(abilities, facts.name, choice.ability ?? null);
+    const raised = applyFeatIncrease(abilities, facts.name, choice.ability ?? null, facts.desc);
     if ("error" in raised) {
       return refuse(raised.error);
     }
     abilities = raised.abilities;
-    const save = featSaveProficiency(facts.name, raised.raised);
+    const save = featSaveProficiency(facts.name, raised.raised, facts.desc);
     if (save) {
       featSaves.push(save);
     }

@@ -266,6 +266,11 @@
       "name": "Alert",
       "prerequisite": "",
       "desc": "Your guard never quite drops. Add 5 to every initiative roll you make. While you are conscious no ambush catches you off guard, and an attacker hidden from your sight gets no advantage against you merely because you cannot see it."
+    },
+    {
+      "name": "Skilled",
+      "prerequisite": "",
+      "desc": "Pick any three skills or tools, in any combination, and gain proficiency with each. This feat raises no ability score."
     }
   ]
 }

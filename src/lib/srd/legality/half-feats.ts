@@ -16,7 +16,13 @@ import {
 } from "@/lib/srd/feat-effects";
 import { lower } from "@/lib/srd/legality/types";
 
-export type HalfFeatPick = { feat: string; ability: Ability | null };
+// The feat's text rides with the pick, for a content pack's feat whose
+// increase is read from it (src/lib/srd/feat-effects.ts).
+export type HalfFeatPick = { feat: string; ability: Ability | null; desc?: string };
+
+// The text of a feat, where the caller has the catalog: the server's
+// featOf, or the builder's fetched descriptions.
+export type FeatDescOf = (feat: string) => string;
 
 type FeatHolder = {
   feats?: string[];
@@ -29,22 +35,23 @@ type FeatHolder = {
 // race's feats are the ones not recorded against an improvement, first in
 // the list: the builder writes them after the improvements' feats, and a
 // level-up records its own choice.
-export function halfFeatPicks(sheet: FeatHolder, racialFeats: number): HalfFeatPick[] {
+export function halfFeatPicks(sheet: FeatHolder, racialFeats: number, descOf?: FeatDescOf): HalfFeatPick[] {
   const picks: HalfFeatPick[] = [];
   const recorded = new Set<string>();
+  const text = (feat: string) => descOf?.(feat) ?? "";
   for (const choice of sheet.asiChoices ?? []) {
     if (choice.mode !== "feat") {
       continue;
     }
     recorded.add(lower(choice.feat));
-    if (featAbilityIncrease(choice.feat)) {
-      picks.push({ feat: choice.feat, ability: resolved(choice.feat, choice.ability ?? null) });
+    if (featAbilityIncrease(choice.feat, text(choice.feat))) {
+      picks.push({ feat: choice.feat, ability: resolved(choice.feat, choice.ability ?? null, text(choice.feat)), desc: text(choice.feat) });
     }
   }
   const racial = (sheet.feats ?? []).filter((feat) => !recorded.has(lower(feat))).slice(0, racialFeats);
   for (const feat of racial) {
-    if (featAbilityIncrease(feat)) {
-      picks.push({ feat, ability: resolved(feat, sheet.racialChoices?.featAbility || null) });
+    if (featAbilityIncrease(feat, text(feat))) {
+      picks.push({ feat, ability: resolved(feat, sheet.racialChoices?.featAbility || null, text(feat)), desc: text(feat) });
     }
   }
   return picks;
@@ -52,8 +59,8 @@ export function halfFeatPicks(sheet: FeatHolder, racialFeats: number): HalfFeatP
 
 // The score a feat raises: its only one, or the chosen one when the feat
 // offers it.
-function resolved(feat: string, chosen: Ability | null): Ability | null {
-  const increase = featAbilityIncrease(feat);
+function resolved(feat: string, chosen: Ability | null, desc: string): Ability | null {
+  const increase = featAbilityIncrease(feat, desc);
   if (!increase) {
     return null;
   }
@@ -79,12 +86,12 @@ export function applyHalfFeats(
   let next = { ...abilities };
   const saves: Ability[] = [];
   for (const pick of picks) {
-    const raised = applyFeatIncrease(next, pick.feat, pick.ability);
+    const raised = applyFeatIncrease(next, pick.feat, pick.ability, pick.desc);
     if ("error" in raised) {
       return { error: raised.error };
     }
     next = raised.abilities;
-    const save = featSaveProficiency(pick.feat, raised.raised);
+    const save = featSaveProficiency(pick.feat, raised.raised, pick.desc);
     if (save) {
       saves.push(save);
     }
@@ -102,7 +109,7 @@ export function scoresWithHalfFeats(
 ): { abilities: AbilityScores; saves: Ability[] } {
   const settled = picks.map((pick) => ({
     ...pick,
-    ability: pick.ability ?? featAbilityIncrease(pick.feat)?.from[0] ?? null,
+    ability: pick.ability ?? featAbilityIncrease(pick.feat, pick.desc)?.from[0] ?? null,
   }));
   const out = applyHalfFeats(abilities, settled);
   return "error" in out ? { abilities, saves: [] } : out;

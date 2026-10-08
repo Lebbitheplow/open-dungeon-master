@@ -6,7 +6,7 @@
 // is taken once. SRD 5.1 prints one feat, Grappler (Strength 13 or higher).
 //
 // ODM ships the feat rule switched on: the content pack carries Grappler and
-// the third-party feats, and src/lib/srd/authored-feats.json adds 53 in
+// the third-party feats, and src/lib/srd/authored-feats.json adds 54 in
 // ODM's own wording. A feat is a name in sheet.feats. Two have a mechanic
 // the server applies to derived numbers (Alert, Observant); Elven Accuracy
 // says it has one; the rest are guidance the model narrates
@@ -170,8 +170,8 @@ await test("Alert and Observant, taken as feats, reach the numbers they change",
   assert.equal(entry.initiative, 10 + abilityMod(SCORES.dex) + 5);
 });
 
-await test("ODM's own feats: 53 (the 2014 Alert and Magic Initiate among them), each named once, each with rules text", () => {
-  assert.equal(authoredFeats.length, 53);
+await test("ODM's own feats: 54 (the 2014 Alert, Magic Initiate and Skilled among them), each named once, each with rules text", () => {
+  assert.equal(authoredFeats.length, 54);
   const names = authoredFeats.map((feat) => feat.name.toLowerCase());
   assert.equal(new Set(names).size, names.length);
   // SRD 5.1's one feat comes from the content pack, not from this list.
@@ -863,6 +863,175 @@ await test("a feat taken at a level-up teaches its spells the same way, refused 
   assert.deepEqual(after.resources.free_cast_invisibility, { max: 1, used: 0 });
   assert.deepEqual(after.resources.free_cast_disguise_self, { max: 1, used: 0 });
   assert.equal(after.abilities.wis, before.abilities.wis + 1);
+});
+
+// ---- issue #147: the content pack's Level Up and Tome of Heroes feats ----
+
+const { featFactsFor } = await import("../src/lib/characters/catalog.ts");
+const PACK_FEATS = ["Linguistics Expert", "Stalker", "Diehard", "Tenacious", "Hardy Adventurer", "Attentive", "Covert Training", "Heavily Outfitted"];
+const packDescs = Object.fromEntries(PACK_FEATS.map((feat) => [feat.toLowerCase(), featFactsFor(feat)?.desc ?? ""]));
+const packInstalled = Boolean(packDescs["linguistics expert"]);
+
+await test("a Level Up feat grants what its benefits list says: Linguistics Expert's three languages are picked with the feat, its Intelligence point lands, and the feat holds the character until they are named (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  assert.match(packDescs["linguistics expert"], /Select three languages/, "the pack row's effects list is read as its text");
+  const human = {
+    race: "variant_human",
+    racialAsi: ["str", "dex"],
+    racialSkills: ["stealth"],
+    chosenSkills: ["acrobatics", "perception"],
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }],
+    featDescs: packDescs,
+  };
+  const expert = madeFighter({ ...human, feats: ["Linguistics Expert"], featChoices: { "linguistics expert": { languages: ["Dwarvish", "Elvish", "Orc"] } } });
+  assert.equal(expert.blocker, null, expert.blocker?.message);
+  for (const language of ["Dwarvish", "Elvish", "Orc"]) {
+    assert.ok(expert.derived.preview.proficiencies.languages.includes(language), `preview lacks ${language}`);
+  }
+  // The builder shows the Intelligence point the server will add.
+  assert.equal(expert.derived.shownAbilities.int, expert.sheet.abilities.int + 1);
+  const at = await creation.atTable(expert.sheet);
+  assert.equal(at.status, 201, at.error);
+  for (const language of ["Common", "Giant", "Dwarvish", "Elvish", "Orc"]) {
+    assert.ok(at.sheet.proficiencies.languages.includes(language), `stored sheet lacks ${language}: ${at.sheet.proficiencies.languages}`);
+  }
+  assert.equal(at.sheet.abilities.int, expert.sheet.abilities.int + 1, "Linguistics Expert's Intelligence point");
+  // Unpicked: the builder holds, and the table refuses.
+  const unpicked = madeFighter({ ...human, feats: ["Linguistics Expert"] });
+  assert.equal(unpicked.blocker?.message, "Linguistics Expert: pick 3 languages.");
+  const refused = await creation.atTable({ ...expert.sheet, featChoices: {} });
+  assert.equal(refused.status, 400, "a Linguistics Expert with no languages was seated");
+  assert.match(refused.error, /Linguistics Expert: pick 3 languages/);
+  // The feat's point is taken once: the library copy keeps its scores at the table.
+  const viaLibrary = await creation.throughLibrary(expert.sheet, 8);
+  assert.equal(viaLibrary.status, 201, viaLibrary.error);
+  assert.equal(viaLibrary.sheet.abilities.int, at.sheet.abilities.int);
+});
+
+await test("Skilled's three are skills or tools in any combination: two skills and thieves' tools picked beside the feat, shown in the builder, seated at the table with the preview's training sent as it is (issue #147)", async () => {
+  const skilled = madeFighter({
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Skilled" }],
+    featChoices: { skilled: { skills: ["arcana", "history"], tools: ["thieves' tools"] } },
+  });
+  assert.equal(skilled.blocker, null, skilled.blocker?.message);
+  assert.ok(skilled.derived.preview.proficiencies.tools.includes("thieves' tools"), `preview tools: ${skilled.derived.preview.proficiencies.tools}`);
+  assert.ok(skilled.sheet.proficiencies.tools.includes("thieves' tools"), "the builder sends the preview's training");
+  const at = await creation.atTable(skilled.sheet);
+  assert.equal(at.status, 201, at.error);
+  assert.ok(at.sheet.proficiencies.tools.includes("thieves' tools"), `tools: ${at.sheet.proficiencies.tools}`);
+  assert.ok(at.sheet.proficiencies.skills.includes("arcana") && at.sheet.proficiencies.skills.includes("history"), `skills: ${at.sheet.proficiencies.skills}`);
+  assert.equal(at.sheet.abilities.str, skilled.sheet.abilities.str, "Skilled raises nothing");
+  // Two picks: the builder holds, the table refuses; four: the fourth is left off.
+  const short = madeFighter({
+    asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat: "Skilled" }],
+    featChoices: { skilled: { skills: ["arcana"], tools: ["thieves' tools"] } },
+  });
+  assert.equal(short.blocker?.message, "Skilled: pick 1 skill or tool.");
+  const refused = await creation.atTable({ ...skilled.sheet, featChoices: { skilled: { skills: ["arcana"], tools: ["thieves' tools"] } } });
+  assert.equal(refused.status, 400);
+  assert.match(refused.error, /Skilled: pick 1 skill or tool/);
+  const library = await creation.throughLibrary(skilled.sheet, 8);
+  assert.equal(library.status, 201, library.error);
+  assert.ok(library.sheet.proficiencies.tools.includes("thieves' tools"), `library tools: ${library.sheet.proficiencies.tools}`);
+});
+
+await test("Tome of Heroes' Stalker hands over Stealth and Survival outright, Diehard its Constitution point, and Level Up's Tenacious is Resilient: the chosen score and its saving throw (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  const improvements = (feat, ability) => [
+    { mode: "plus2", ability: "str" },
+    { mode: "plus2", ability: "str" },
+    { mode: "feat", feat, ...(ability ? { ability } : {}) },
+  ];
+  const stalker = madeFighter({ asiChoices: improvements("Stalker"), featDescs: packDescs });
+  assert.equal(stalker.blocker, null, stalker.blocker?.message);
+  assert.ok(stalker.derived.preview.proficiencies.skills.includes("stealth"), `preview skills: ${stalker.derived.preview.proficiencies.skills}`);
+  const stalkerAt = await creation.atTable(stalker.sheet);
+  assert.equal(stalkerAt.status, 201, stalkerAt.error);
+  assert.ok(stalkerAt.sheet.proficiencies.skills.includes("stealth") && stalkerAt.sheet.proficiencies.skills.includes("survival"), `skills: ${stalkerAt.sheet.proficiencies.skills}`);
+  assert.equal(stalkerAt.sheet.abilities.con, stalker.sheet.abilities.con, "Stalker raises nothing");
+  const diehard = madeFighter({ asiChoices: improvements("Diehard"), featDescs: packDescs });
+  assert.equal(diehard.blocker, null, diehard.blocker?.message);
+  const diehardAt = await creation.atTable(diehard.sheet);
+  assert.equal(diehardAt.status, 201, diehardAt.error);
+  assert.equal(diehardAt.sheet.abilities.con, diehard.sheet.abilities.con + 1, "Diehard's Constitution point");
+  assert.equal(diehardAt.sheet.maxHp, 10 + 2 + 7 * (6 + 2), "hit points follow the raised Constitution");
+  const tenacious = madeFighter({ asiChoices: improvements("Tenacious", "wis"), featDescs: packDescs });
+  assert.equal(tenacious.blocker, null, tenacious.blocker?.message);
+  const tenaciousAt = await creation.atTable(tenacious.sheet);
+  assert.equal(tenaciousAt.status, 201, tenaciousAt.error);
+  assert.equal(tenaciousAt.sheet.abilities.wis, tenacious.sheet.abilities.wis + 1, "Tenacious's chosen point");
+  assert.ok(tenaciousAt.sheet.proficiencies.saves.includes("wis"), "Tenacious gave no Wisdom save");
+  // Covert Training's choice: thieves' tools or the poisoner's kit, never the first outright.
+  const covert = madeFighter({ asiChoices: improvements("Covert Training"), featDescs: packDescs });
+  assert.equal(covert.blocker?.message, "Covert Training: pick 1 tool.");
+  const covertAt = await creation.atTable({ ...covert.sheet, featChoices: { "covert training": { tools: ["poisoner's kit"] } } });
+  assert.equal(covertAt.status, 201, covertAt.error);
+  assert.ok(covertAt.sheet.proficiencies.tools.includes("poisoner's kit"), `tools: ${covertAt.sheet.proficiencies.tools}`);
+  assert.ok(!covertAt.sheet.proficiencies.tools.includes("thieves' tools"));
+  const wrongTool = await creation.atTable({ ...covert.sheet, featChoices: { "covert training": { tools: ["smith's tools"] } } });
+  assert.equal(wrongTool.status, 400);
+  assert.match(wrongTool.error, /not a tool Covert Training offers/);
+});
+
+await test("a Level Up twin reaches ODM's engine: Hardy Adventurer's hit points are Tough's, Attentive's +5 initiative is Alert's, and a pack prerequisite is held to (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  const improvements = (feat) => [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "feat", feat }];
+  const plain = await creation.atTable(madeFighter({ asiChoices: [{ mode: "plus2", ability: "str" }, { mode: "plus2", ability: "str" }, { mode: "plus2", ability: "dex" }] }).sheet);
+  assert.equal(plain.status, 201, plain.error);
+  const hardy = await creation.atTable(madeFighter({ asiChoices: improvements("Hardy Adventurer"), featDescs: packDescs }).sheet);
+  assert.equal(hardy.status, 201, hardy.error);
+  const tough = await creation.atTable(madeFighter({ asiChoices: improvements("Tough") }).sheet);
+  assert.equal(tough.status, 201, tough.error);
+  assert.equal(hardy.sheet.maxHp, tough.sheet.maxHp, "Hardy Adventurer's hit points differ from Tough's");
+  assert.equal(hardy.sheet.maxHp, plain.sheet.maxHp + 2 * 8);
+  const attentive = await creation.atTable(madeFighter({ asiChoices: improvements("Attentive"), featDescs: packDescs }).sheet);
+  assert.equal(attentive.status, 201, attentive.error);
+  // Against the same sheet without the feat: a Champion's Remarkable Athlete
+  // already adds half the proficiency bonus to initiative.
+  assert.equal(computeSheetDerived(attentive.sheet).initiative, computeSheetDerived({ ...attentive.sheet, feats: [] }).initiative + 5);
+  // Diehard asks Constitution 13 or higher, written "*Constitution 13 or higher*".
+  const frail = madeFighter({ scores: standardScores(["str", "dex", "wis", "int", "cha", "con"]), asiChoices: improvements("Diehard"), featDescs: packDescs });
+  const frailAt = await creation.atTable(frail.sheet);
+  assert.equal(frailAt.status, 400, "Diehard taken at Constitution 9");
+  assert.match(frailAt.error, /Diehard requires Constitution 13 or higher/);
+});
+
+await test("a pack feat taken at a level-up grants the same: Diehard's Constitution point, Stalker's skills, Covert Training's pick named or refused, and a prerequisite held to (issue #147)", async () => {
+  if (!packInstalled) {
+    console.log("  (content pack not installed; skipped)");
+    return;
+  }
+  const hardy = await table(fighter(3), 4);
+  const before = hardy.sheet();
+  const levelled = await hardy.patch({ ...oneLevel(before), asiChoices: [{ mode: "feat", feat: "Diehard" }] });
+  assert.equal(levelled.status, 200, levelled.json.error);
+  assert.equal(hardy.sheet().abilities.con, before.abilities.con + 1, "Diehard's Constitution point at a level-up");
+  assert.deepEqual(hardy.sheet().feats, ["Diehard"]);
+  const hunter = await table(fighter(3), 4);
+  const stalked = await hunter.patch({ ...oneLevel(hunter.sheet()), asiChoices: [{ mode: "feat", feat: "Stalker" }] });
+  assert.equal(stalked.status, 200, stalked.json.error);
+  assert.ok(hunter.sheet().proficiencies.skills.includes("stealth") && hunter.sheet().proficiencies.skills.includes("survival"), `skills: ${hunter.sheet().proficiencies.skills}`);
+  const spy = await table(fighter(3), 4);
+  const blank = await spy.patch({ ...oneLevel(spy.sheet()), asiChoices: [{ mode: "feat", feat: "Covert Training" }] });
+  assert.equal(blank.status, 400, "Covert Training taken with no tool named");
+  assert.match(blank.json.error, /Covert Training: pick 1 tool/);
+  const named = await spy.patch({ ...oneLevel(spy.sheet()), asiChoices: [{ mode: "feat", feat: "Covert Training" }], featChoices: { "covert training": { tools: ["thieves' tools"] } } });
+  assert.equal(named.status, 200, named.json.error);
+  assert.ok(spy.sheet().proficiencies.tools.includes("thieves' tools"), `tools: ${spy.sheet().proficiencies.tools}`);
+  // Diehard asks Constitution 13 or higher.
+  const frail = await table(fighter(3, { abilities: { ...SCORES, con: 10 } }), 4);
+  const refused = await frail.patch({ ...oneLevel(frail.sheet()), asiChoices: [{ mode: "feat", feat: "Diehard" }] });
+  assert.equal(refused.status, 400, "Diehard taken at Constitution 10");
+  assert.match(refused.json.error, /Diehard requires Constitution 13 or higher/);
 });
 
 creation.world.close();

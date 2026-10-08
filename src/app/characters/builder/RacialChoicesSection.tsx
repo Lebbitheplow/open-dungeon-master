@@ -55,6 +55,7 @@ export function RacialChoicesSection({
   featAbility = "",
   onFeatAbilityChange,
   featSpecOf,
+  featDescOf,
   featChoices,
   onFeatPicks,
   known,
@@ -89,6 +90,8 @@ export function RacialChoicesSection({
   // What the feat grants beyond its point and the picks it leaves open
   // (src/lib/srd/feat-grants.ts), picked right under the feat.
   featSpecOf?: (name: string) => FeatGrantSpec;
+  // The feat's text where known, for a content pack half-feat's score.
+  featDescOf?: (name: string) => string;
   featChoices?: FeatChoices;
   onFeatPicks?: (feat: string, picks: FeatPicks) => void;
   known?: KnownTraining;
@@ -100,7 +103,7 @@ export function RacialChoicesSection({
     race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || repeated.length || racialFeats,
   );
   // The half-feat's choice of score, offered once the feat is picked.
-  const featScores = racialFeats ? (featAbilityIncrease(feats[0] ?? "")?.from ?? []) : [];
+  const featScores = racialFeats ? (featAbilityIncrease(feats[0] ?? "", featDescOf?.(feats[0] ?? ""))?.from ?? []) : [];
   const pickFeat = (name: string) => {
     if (!onFeatsChange || feats.includes(name) || feats.length >= racialFeats) {
       return;

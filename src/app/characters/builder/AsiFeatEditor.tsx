@@ -36,6 +36,7 @@ export default function AsiFeatEditor({
   takenInPlay = [],
   onChange,
   featSpecOf,
+  featDescOf,
   featChoices,
   onFeatPicks,
   known,
@@ -53,6 +54,8 @@ export default function AsiFeatEditor({
   // What a feat grants beyond its point and the picks it leaves open
   // (src/lib/srd/feat-grants.ts), picked under the feat's chip.
   featSpecOf?: (name: string) => FeatGrantSpec;
+  // The feat's text where known, for a content pack half-feat's score.
+  featDescOf?: (name: string) => string;
   featChoices?: FeatChoices;
   onFeatPicks?: (feat: string, picks: FeatPicks) => void;
   known?: KnownTraining;
@@ -100,7 +103,7 @@ export default function AsiFeatEditor({
             const choice = choices[index] ?? null;
             // Scores as they stand entering this slot: base plus all
             // earlier choices, a half-feat's point among them.
-            const current = scoresEntering(baseScores, choices.slice(0, index));
+            const current = scoresEntering(baseScores, choices.slice(0, index), featDescOf);
             if (takenInPlay[index]) {
               return (
                 <div
@@ -230,7 +233,7 @@ export default function AsiFeatEditor({
                         <ContentPicker
                           kind="feats"
                           placeholder="Search feats (e.g. alert, tough)"
-                          onPick={(entry) => setChoice(index, featChoice(entry.name))}
+                          onPick={(entry) => setChoice(index, featChoice(entry.name, featDescOf?.(entry.name)))}
                         />
                         {/* Nobody picks a feat they cannot name; the list is
                             here, with what each one does on every row. */}
@@ -246,17 +249,17 @@ export default function AsiFeatEditor({
                   </div>
                 ) : null}
 
-                {choice?.mode === "feat" && (featAbilityIncrease(choice.feat)?.from.length ?? 0) > 1 ? (
+                {choice?.mode === "feat" && (featAbilityIncrease(choice.feat, featDescOf?.(choice.feat))?.from.length ?? 0) > 1 ? (
                   // A half-feat that offers a choice of score (Resilient,
                   // Athlete) asks which one it raises.
                   <label className="mt-2 block sm:w-64">
                     <span className="mb-1 block text-xs text-stone-500">{choice.feat} raises by 1</span>
                     <Select<Ability>
-                      value={choice.ability ?? featAbilityIncrease(choice.feat)!.from[0]}
+                      value={choice.ability ?? featAbilityIncrease(choice.feat, featDescOf?.(choice.feat))!.from[0]}
                       onChange={(ability) => setChoice(index, { ...choice, ability })}
                       label={`${choice.feat} raises`}
                       className="w-full"
-                      options={featAbilityIncrease(choice.feat)!.from.map((ability) => ({
+                      options={featAbilityIncrease(choice.feat, featDescOf?.(choice.feat))!.from.map((ability) => ({
                         value: ability,
                         label: `${ABILITY_LABELS[ability]} (${current[ability]})`,
                         disabled: current[ability] >= ABILITY_SCORE_CAP && ability !== choice.ability,
@@ -278,7 +281,7 @@ export default function AsiFeatEditor({
                 {choice ? (
                   <p className="mt-2 text-xs text-stone-500">
                     {choice.mode === "feat"
-                      ? `Feat: ${choice.feat}${featRaise(current, choice)}`
+                      ? `Feat: ${choice.feat}${featRaise(current, choice, featDescOf)}`
                       : summarizeChoice(current, choice)}
                   </p>
                 ) : (
@@ -297,8 +300,8 @@ export default function AsiFeatEditor({
 
 // A feat pick, with the first score a choosing half-feat offers already set
 // so the choice is never left blank.
-function featChoice(feat: string): AsiChoice {
-  const increase = featAbilityIncrease(feat);
+function featChoice(feat: string, desc?: string): AsiChoice {
+  const increase = featAbilityIncrease(feat, desc);
   return increase && increase.from.length > 1
     ? { mode: "feat", feat, ability: increase.from[0] }
     : { mode: "feat", feat };
@@ -306,17 +309,17 @@ function featChoice(feat: string): AsiChoice {
 
 // The scores after these choices, with each half-feat's point added the way
 // the server adds it (src/lib/srd/legality/half-feats.ts).
-function scoresEntering(base: AbilityScores, earlier: Array<AsiChoice | null>): AbilityScores {
+function scoresEntering(base: AbilityScores, earlier: Array<AsiChoice | null>, descOf?: (name: string) => string): AbilityScores {
   const picks = earlier.filter((choice): choice is AsiChoice => choice !== null);
-  return scoresWithHalfFeats(applyAsiChoices(base, picks), halfFeatPicks({ asiChoices: picks }, 0)).abilities;
+  return scoresWithHalfFeats(applyAsiChoices(base, picks), halfFeatPicks({ asiChoices: picks }, 0, descOf)).abilities;
 }
 
 // ", Charisma 15 to 16 (+3)" for a half-feat, nothing for any other feat.
-function featRaise(current: AbilityScores, choice: AsiChoice): string {
+function featRaise(current: AbilityScores, choice: AsiChoice, descOf?: (name: string) => string): string {
   if (choice.mode !== "feat") {
     return "";
   }
-  const after = scoresEntering(current, [choice]);
+  const after = scoresEntering(current, [choice], descOf);
   const raised = ABILITY_KEYS.find((ability) => after[ability] > current[ability]);
   return raised
     ? `, ${ABILITY_LABELS[raised]} ${current[raised]} to ${after[raised]} (${formatModifier(abilityMod(after[raised]))})`

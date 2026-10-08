@@ -260,6 +260,7 @@ export function AncestryStep({
           featAbility={state.racialFeatAbility}
           onFeatAbilityChange={state.setRacialFeatAbility}
           featSpecOf={derived.featSpecOf}
+          featDescOf={derived.featDescOf}
           featChoices={state.featChoices}
           onFeatPicks={state.setFeatPicks}
           known={knownTraining(derived)}

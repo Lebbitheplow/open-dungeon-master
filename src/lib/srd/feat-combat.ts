@@ -3,7 +3,7 @@
 // Crossbow Expert's shot in melee, Mage Slayer, Defensive Duelist, Dungeon
 // Delver were words on the sheet and nothing more). Pure: the attack and
 // cast engines ask these and apply the answers.
-import { holdsFeat } from "@/lib/srd/feat-effects";
+import { featTwinOf, holdsFeat } from "@/lib/srd/feat-effects";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 
 type FeatHolder = { feats?: string[]; features?: Array<{ name: string }> };
@@ -170,7 +170,7 @@ export function defensiveDuelistBonus(
 // The one-word tag the DM prompt hangs on a feat the server applies, so
 // the model routes it through the right tool instead of narrating it.
 export function featEngineTag(feat: string): string | null {
-  const name = feat.trim().toLowerCase();
+  const name = featTwinOf(feat);
   if (name === "great weapon master" || name === "sharpshooter") return "[pc_attack powerAttack]";
   if (name === "defensive duelist" || name === "mage slayer") return "[use_reaction]";
   if (["spell sniper", "elemental adept", "gunner", "crossbow expert", "dungeon delver", "war caster", "tough", "mobile", "heavy armor master", "alert", "observant", "lucky", "dual wielder", "resilient"].includes(name)) return "[server]";

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { contentSlug } from "@/lib/help";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { packFeatText } from "@/lib/srd/feat-text";
 
 // The text of the feats on the sheet, by lower-case name, for what each
 // grants (src/lib/srd/feat-grants.ts). ODM's own feats are bundled; a
@@ -21,21 +22,15 @@ export function useFeatDescs(names: string[]): Record<string, string> {
     for (const name of key.split("|")) {
       fetch(`/api/content/feats/${encodeURIComponent(contentSlug(name))}`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((body: { entry?: { data?: { desc?: unknown; description?: unknown; benefits?: unknown } } } | null) => {
+        .then((body: { entry?: { data?: Record<string, unknown> } } | null) => {
           if (cancelled) {
             return;
           }
+          // The row's text wherever the pack keeps it, read as the server
+          // reads it (src/lib/srd/feat-text.ts). An unknown feat is
+          // remembered as empty, so it is asked for once.
           const data = body?.entry?.data;
-          // A 2024 row carries its text as benefits (Magic Initiate's four
-          // paragraphs), read in order as the server does (catalog.ts).
-          const desc =
-            data?.desc ??
-            data?.description ??
-            (Array.isArray(data?.benefits)
-              ? (data.benefits as Array<{ desc?: unknown }>).map((benefit) => String(benefit?.desc ?? "").trim()).filter(Boolean).join(" ")
-              : undefined);
-          // An unknown feat is remembered as empty, so it is asked for once.
-          setFetched((current) => ({ ...current, [name]: typeof desc === "string" ? desc : "" }));
+          setFetched((current) => ({ ...current, [name]: data ? packFeatText(data).desc : "" }));
         })
         .catch(() => {
           if (!cancelled) {
