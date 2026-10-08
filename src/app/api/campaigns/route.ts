@@ -43,6 +43,9 @@ export async function GET() {
       playingAs: playingAs.get(campaign.id) ?? null,
       glance: homeGlanceFor(campaign.id, faces.get(campaign.id) ?? []),
     })),
+    // The shells' home menus offer New campaign and Quick start only where
+    // this account may start one (src/lib/shared-host.ts).
+    canCreateCampaigns: canCreateCampaigns(user),
   });
 }
 
