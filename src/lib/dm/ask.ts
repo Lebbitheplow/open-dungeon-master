@@ -13,6 +13,7 @@ import { arcTextTimeoutMs, utilityContextTokens, type ChatMessage } from "@/lib/
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
+import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { computeIdf, lexicalScore } from "@/lib/dm/fusion-logic";
 import { extractToolCalls } from "@/lib/dm/rolls";
 import { searchScenes } from "@/lib/dm/memory-index";
@@ -159,7 +160,7 @@ async function retrieveArchive(campaignId: string, query: string, chapterBudget:
     );
     chapterIndexes = [...new Set(scenes.map((scene) => scene.chapterIndex))];
   } catch (error) {
-    // The chapter summaries below still anchor it.
+    // Embedder unavailable; the chapter summaries below still anchor it.
     console.error("[ask] scene search failed", error);
   }
   const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
@@ -350,17 +351,9 @@ export async function runAsk(
   let result: AskResult | { error: string } = {
     error: "The DM did not answer; try again.",
   };
-  // Queued behind any live narration so the model server never interleaves
-  // two jobs for this campaign.
-  //
-  // Tracked as ONE call rather than per model request: an Ask may take a
-  // search hop and make two, and a chip that vanishes and reappears mid-answer
-  // reads as a failure rather than as progress.
-  await enqueueDmJob(request.campaignId, () =>
-    trackUtilityCall(request.campaignId, "ask", async () => {
-    // The archive is searched only when the model asks for it: nothing
-    // guesses from the question's words whether it is about the past, which
-    // only ever worked in English. A rules or sheet question has no archive.
+  const answer = async () => {
+    // The archive is searched only when the model asks for it, never guessed
+    // from the question's words. A rules or sheet question has no archive.
     const offerSearch = request.scope === "story" || request.scope === "auto";
     const first = await requestUtilityMessage(campaign.settings, messages, {
       timeoutMs: arcTextTimeoutMs(),
@@ -427,7 +420,22 @@ export async function runAsk(
       request.scope,
     );
     result = parsed ?? { error: "The answer came back unusable; try again." };
-    }),
+  };
+  // Queued behind any live narration so the model server never interleaves
+  // two jobs for this campaign.
+  //
+  // Tracked as ONE call rather than per model request: an Ask may take a
+  // search hop and make two, and a chip that vanishes and reappears mid-answer
+  // reads as a failure rather than as progress.
+  //
+  // A call offering the search tool holds one of the agent program's few
+  // sessions (src/lib/harness/bridge.ts) until released or idle for 90
+  // seconds, so a third Ask in a row waited for the first. Released here as
+  // the DM turn releases its own; a no-op for every other provider.
+  await enqueueDmJob(request.campaignId, () =>
+    trackUtilityCall(request.campaignId, "ask", () =>
+      answer().finally(() => releaseHarnessConversation(messages)),
+    ),
   );
   return result;
 }

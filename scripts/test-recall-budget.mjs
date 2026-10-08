@@ -25,7 +25,8 @@ process.env.DM_THINKING = "0";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-// One vector for every text: scene recall finds every scene, with no model on disk.
+// One vector for every text: scene recall finds every scene, with no model
+// on disk.
 globalThis.__odmEmbedderPromise = Promise.resolve((texts) =>
   Promise.resolve({ tolist: () => texts.map(() => new Array(384).fill(0.1)) }),
 );
@@ -41,6 +42,7 @@ const { runAsk } = await import("../src/lib/dm/ask.ts");
 const { runLoreCheck } = await import("../src/lib/dm/lore-check.ts");
 const { removeTempDir } = await import("./lib/remove-temp-dir.mjs");
 const { handleMcpRequest } = await import("../src/lib/agents/mcp-server.ts");
+const { activeBridgeSessions } = await import("../src/lib/harness/bridge.ts");
 
 const server = http.createServer(async (req, res) => {
   const chunks = [];
@@ -193,6 +195,28 @@ await test("Ask sends a small window the chapters' first sentences and a large o
     await ask();
     assertWhole(sentToModel());
   });
+});
+
+await test("an Ask frees its agent session when it is done, so Asks in a row never wait for a slot", async () => {
+  // Searched and answered, then answered at once with the tool on offer.
+  const scripts = [
+    [
+      { call: "search_campaign_records", args: { query: "the Lantern Mill" } },
+      { text: '{"answer":"The mill burned.","scope":"story","citations":[]}' },
+    ],
+    [{ text: '{"answer":"Nothing on record.","scope":"story","citations":[]}' }],
+  ];
+  const started = Date.now();
+  // Three in a row: with the default two slots, a session held until it idled
+  // out would make the third wait the 90 seconds the bridge gives it.
+  for (const script of [scripts[0], scripts[1], scripts[0]]) {
+    fs.writeFileSync(process.env.HARNESS_FAKE_SCRIPT, JSON.stringify([script]));
+    const result = await runAsk({ campaignId: campaign.id, userId: lead.id, question: "What happened at the Lantern Mill?", scope: "story" });
+    assert.ok(!("error" in result), JSON.stringify(result));
+    assert.equal(activeBridgeSessions(), 0, "the Ask left its agent session open");
+  }
+  assert.ok(Date.now() - started < 30_000, "an Ask waited for an agent slot");
+  fs.writeFileSync(process.env.HARNESS_FAKE_SCRIPT, JSON.stringify([[{ text: "{}" }]]));
 });
 
 await test("the lore check does the same", async () => {
