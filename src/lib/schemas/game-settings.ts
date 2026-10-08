@@ -177,6 +177,13 @@ export const gameSettingsSchema = z.object({
   // pending offers the owning player accepts or declines instead of applying
   // immediately (src/lib/dm/proposal-logic.ts). Off preserves auto-apply.
   inventoryApprovals: z.boolean().default(false),
+  // The same offer step for a character's vitals: damage, healing and
+  // conditions a DM tool call aims at a player character wait for the owning
+  // player (or the lead) before they land. Covers the AI's turn and anything
+  // a connected agent invokes, which is who the step is for; the engine's
+  // own dice (an enemy's attack, a fall) are rules, not a judgment, and
+  // apply as they always did. Off by default: it is a slower table.
+  vitalsApprovals: z.boolean().default(false),
   // Cross-check the DM's finished narration against the tool outcomes the
   // turn actually resolved (a hit narrated on a miss, a death the hit points
   // deny, a damage figure no die produced), and spend one corrective model
