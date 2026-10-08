@@ -9,6 +9,8 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { resourceDef } from "@/lib/srd/class-resources";
 import { featEngineTag } from "@/lib/srd/feat-combat";
+import { featFactsFor } from "@/lib/characters/catalog";
+import { featTwinOf } from "@/lib/srd/feat-effects";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { authoredFeatureTags } from "@/lib/srd/authored-effects";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
@@ -332,7 +334,8 @@ export function describeSheet(
   // The table's optional encumbrance rule. On, the speed shown already has
   // the load penalty in it and a carried-weight line is added, so the model
   // never has to work the pounds out itself.
-  options: { encumbrance?: boolean } = {},
+  // The table owner's id, for the feats they brewed themselves.
+  options: { encumbrance?: boolean; ownerUserId?: string } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   const abilities = (Object.entries(sheet.abilities) as Array<[string, number]>)
@@ -416,7 +419,7 @@ export function describeSheet(
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
     `  Languages (complete list; they cannot speak, read, or understand any other language): ${sheet.proficiencies.languages.join(", ") || "Common only"} | Tool proficiencies: ${sheet.proficiencies.tools.join(", ") || "none"} | Armor training: ${sheet.proficiencies.armor.join(", ") || "none"} | Weapon training: ${sheet.proficiencies.weapons.join(", ") || "none"}`,
-    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats: ${sheet.feats.map((feat) => `${feat}${featEngineTag(feat) ? ` ${featEngineTag(feat)}` : ""}`).join(", ")}` : ""}`,
+    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats (each with its rules; the server applies what its tag names, the rest is yours to run): ${sheet.feats.map((feat) => featPromptLine(feat, options.ownerUserId)).join("; ")}` : ""}`,
   ];
   if (loadLine) {
     lines.push(loadLine);
@@ -857,7 +860,7 @@ export function buildGameStateBlock(state: DmGameState): string {
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
-          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false },
+          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         const between = state.betweenBySheet?.get(sheet.id);
@@ -1006,6 +1009,11 @@ export const requestRollTool = {
           type: "boolean",
           description:
             "True when the player spends their character's Inspiration on this roll for advantage. Refused when they hold none.",
+        },
+        luck: {
+          type: "boolean",
+          description:
+            "Lucky: spend a luck point for an extra d20 on this roll, the best kept. The server checks the feat and spends the point; ignored without one left.",
         },
         againstEnemyId: {
           type: "string",
@@ -1239,16 +1247,6 @@ export function buildDmMessages(
     return { message, id: message.id, text: `${content}${card}` };
   });
 
-  const budgets = computeBudgets(state.contextLimitTokens);
-  const fitted = fitHistory(rendered, budgets.history);
-  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
-  const historyMessages: ChatMessage[] = rendered
-    .filter((entry) => keptIds.has(entry.id))
-    .map((entry) => ({
-      role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
-      content: entry.text,
-    }));
-
   const physicalDiceUsers = realDiceUserIds(state.campaign, state.members);
   const anyPhysicalDice = state.sheets.some((sheet) => physicalDiceUsers.has(sheet.userId));
   const systemParts = [buildDmSystem(state.campaign)];
@@ -1272,6 +1270,27 @@ export function buildDmMessages(
   }
   const gameStateBlock = buildGameStateBlock(state);
   systemParts.push(gameStateBlock);
+
+  // The transcript takes its share of the window, and never more than what
+  // the rules, the game state and the director's note leave of it: those
+  // blocks are not dropped, so when they run past their shares (a table
+  // whose heroes carry many feats, say) the history gives way, and the
+  // packed prompt stays inside the limit the trace reports.
+  const budgets = computeBudgets(state.contextLimitTokens);
+  const fixedTokens =
+    estimateTokens(systemParts.join("\n\n")) + estimateTokens(state.directorBlock ?? "");
+  const historyAllowance = Math.max(
+    0,
+    Math.min(budgets.history, usableTokens(state.contextLimitTokens) - fixedTokens),
+  );
+  const fitted = fitHistory(rendered, historyAllowance);
+  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
+  const historyMessages: ChatMessage[] = rendered
+    .filter((entry) => keptIds.has(entry.id))
+    .map((entry) => ({
+      role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
+      content: entry.text,
+    }));
 
   // Record what this prompt cost, block by block. Nothing here is dropped:
   // the rules and game-state blocks are load-bearing and the engine boundary
@@ -1377,4 +1396,19 @@ export function buildDmMessages(
       ? [{ role: "user" as const, content: state.directorBlock }]
       : []),
   ];
+}
+
+
+// A feat on the prompt: its name, the tag of what the server applies, the
+// feat ODM knows it as when a content pack's feat has the same rules, and
+// its rules text (ODM's own words, or the pack's) cut at a sentence near
+// 360 characters. The model used to see the name alone, and a Level Up or
+// Tome of Heroes feat meant nothing to it (issue #147).
+function featPromptLine(feat: string, ownerUserId: string | undefined): string {
+  const tag = featEngineTag(feat);
+  const twin = featTwinOf(feat);
+  const known = twin !== feat.trim().toLowerCase() ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";
+  const text = (featFactsFor(feat, ownerUserId)?.desc ?? "").replace(/\s+/g, " ").trim();
+  const cut = text.length <= 360 ? text : `${text.slice(0, 360).replace(/\s+\S*$/, "")}...`;
+  return `${feat}${known}${tag ? ` ${tag}` : ""}${cut ? `: ${cut}` : ""}`;
 }

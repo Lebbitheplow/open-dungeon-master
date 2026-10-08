@@ -4,6 +4,7 @@
 // and no arrow. Database-free like attack-logic.ts;
 // scripts/test-attack-rules.mjs walks the branches.
 
+import { featTwinOf } from "@/lib/srd/feat-effects";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { matchResource } from "@/lib/srd/class-resources";
@@ -13,8 +14,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 type Carried = { name: string; qty?: number; equipped?: boolean };
 type XY = { x: number; y: number };
 
+// A content pack twin (Level Up's Dual-Wielding Expert) counts as the feat.
 const hasFeat = (feats: string[] | undefined, name: string) =>
-  (feats ?? []).some((feat) => feat.trim().toLowerCase().startsWith(name));
+  (feats ?? []).some((feat) => featTwinOf(feat).startsWith(name));
 
 const isLightMelee = (profile: Pick<AttackProfile, "properties" | "ranged">) =>
   !profile.ranged && (profile.properties ?? []).includes("light");

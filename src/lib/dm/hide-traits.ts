@@ -10,6 +10,7 @@
 //     phenomena.
 // A trait answers only for the watchers it covers; any other clear view
 // still stops the hide.
+import { hasSkulker } from "@/lib/srd/feat-combat";
 import { zoneHidesFrom } from "@/lib/dm/zone-rules";
 import { enemySenses } from "@/lib/dm/attack-light";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -67,6 +68,10 @@ export function seenClearlyDespiteTraits(
   }
   const masked = holdsFeature(sheet, "mask of the wild") && lightlyObscuredByNature(campaign, map);
   if (masked) {
+    return null;
+  }
+  // Skulker: lightly obscured is enough to hide, indoors or out (feat-combat.ts).
+  if (hasSkulker(sheet) && (map.ambient === "dim" || lightlyObscuredByNature(campaign, map))) {
     return null;
   }
   const stealthy = holdsFeature(sheet, "naturally stealthy");

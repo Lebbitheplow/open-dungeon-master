@@ -1,3 +1,4 @@
+import { healerKitUse } from "@/lib/dm/stabilize";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
 import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
 import { getDmTurn } from "@/lib/db/dm-turns";
@@ -972,6 +973,22 @@ export function applyDmMutation(
       const target = args.targetCharacterId ? resolve(args.targetCharacterId) : sheet;
       if (!target) {
         return { result: { error: "Unknown targetCharacterId; use one from GAME STATE." } };
+      }
+      // A Healer's kit use heals (src/lib/dm/stabilize.ts); null otherwise.
+      const kitHeal = healerKitUse(campaign, turnId, sheet, target, itemName);
+      if (kitHeal) {
+        if ("error" in kitHeal) {
+          return { result: kitHeal };
+        }
+        const healed = applyDmMutation(
+          campaign,
+          turnId,
+          "heal",
+          JSON.stringify({ characterId: target.id, amount: kitHeal.amount, reason: "Healer: a healer's kit" }),
+          sheets,
+          sheetsById,
+        ).result;
+        return { result: { ok: true, note: kitHeal.note, ...healed } };
       }
       // A charged item (a wand, a staff) spends charges and stays in the
       // pack (src/lib/dm/item-use.ts); null for anything else.

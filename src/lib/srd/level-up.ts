@@ -300,17 +300,21 @@ export function buildLevelUp(
       casts,
       raceId: sheet.race,
       raceName: sheet.race,
+      skills: sheet.proficiencies.skills,
+      tools: sheet.proficiencies.tools,
+      weapons: sheet.proficiencies.weapons,
+      level: target,
     });
     if (unmet) {
       return refuse(`${facts.name} requires ${unmet}, which ${sheet.name} does not have.`);
     }
     feats.push(facts.name);
-    const raised = applyFeatIncrease(abilities, facts.name, choice.ability ?? null);
+    const raised = applyFeatIncrease(abilities, facts.name, choice.ability ?? null, facts.desc);
     if ("error" in raised) {
       return refuse(raised.error);
     }
     abilities = raised.abilities;
-    const save = featSaveProficiency(facts.name, raised.raised);
+    const save = featSaveProficiency(facts.name, raised.raised, facts.desc);
     if (save) {
       featSaves.push(save);
     }
@@ -464,7 +468,7 @@ export function buildLevelUp(
     return spec.damageTypes.length && spec.damageTypes.includes(picked) ? [elementalAdeptFeatureName(picked)] : [];
   });
   const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks].map((name) => ({ name: name.slice(0, 80), source: "story" as const }));
-  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race);
+  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race, feats);
   const takenAfter = taken + asked.choices.length;
   if (target >= 4 || takenAfter > 0) {
     features = withAsiLedger(features, takenAfter);

@@ -1,3 +1,5 @@
+import { FEAT_ONLY_SPEED } from "@/lib/srd/feature-effects";
+import { hasMediumArmorMaster } from "@/lib/srd/feat-combat";
 import backgroundsJson from "@/lib/srd/backgrounds.json";
 import classesJson from "@/lib/srd/classes.json";
 import racesJson from "@/lib/srd/races.json";
@@ -116,6 +118,8 @@ export type AcSource = {
   // Active conditions, so effect conditions (Shield of Faith, Mage Armor,
   // Barkskin) land in the stored AC for as long as they hold.
   conditions?: string[];
+  // Feats, for the ones that move the armor class (Medium Armor Master).
+  feats?: string[];
   // The spell being concentrated on (Durable Magic's +2 AC holds while one is).
   concentratingOn?: string | null;
   // Extra flat adds on top of whatever the feature table already grants.
@@ -145,6 +149,7 @@ export function acBreakdownFor(source: AcSource): AcBreakdown {
     equipment: source.equipment,
     race: source.race,
     armorProfs: source.proficiencies.armor,
+    mediumArmorMaster: hasMediumArmorMaster({ feats: source.feats, features: source.features }),
     dexMod: abilityMod(abilities.dex),
     abilityMods: {
       con: abilityMod(abilities.con),
@@ -294,7 +299,10 @@ export function speedFor(
     }
     bySource.set(entry.source, Math.max(bySource.get(entry.source) ?? 0, entry.amount));
   }
-  const bonus = [...bySource.values()].reduce((sum, amount) => sum + amount, 0);
+  // A feat whose name a class feature shares is read from sheet.feats alone
+  // (feature-effects.ts FEAT_ONLY_SPEED: Level Up's Skirmisher).
+  const featOnly = (source.feats ?? []).reduce((sum, feat) => sum + (FEAT_ONLY_SPEED[feat.trim().toLowerCase()] ?? 0), 0);
+  const bonus = [...bySource.values()].reduce((sum, amount) => sum + amount, 0) + featOnly;
   const carried = source.abilities
     ? encumbranceFor({
         strength: source.abilities.str,

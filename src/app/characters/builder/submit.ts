@@ -380,9 +380,18 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const preview = derived.preview as NonNullable<BuilderDerived["preview"]>;
   const { effectiveLevel } = derived;
 
-  const resolvedAsiChoices = derived.activeAsiChoices.filter(
-    (choice): choice is AsiChoice => choice !== null,
-  );
+  const resolvedAsiChoices = derived.activeAsiChoices
+    .filter((choice): choice is AsiChoice => choice !== null)
+    // A half-feat with a choice of score raises the first it offers when
+    // the player left the choice: a content pack feat's text arrives after
+    // the pick, and the editor shows that same first score.
+    .map((choice) => {
+      if (choice.mode !== "feat" || choice.ability) {
+        return choice;
+      }
+      const from = featAbilityIncrease(choice.feat, derived.featDescOf?.(choice.feat))?.from ?? [];
+      return from.length > 1 ? { ...choice, ability: from[0] } : choice;
+    });
   const asiFeats = resolvedAsiChoices.flatMap((choice) =>
     choice.mode === "feat" ? [choice.feat] : [],
   );
@@ -459,7 +468,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // races' (racialTraitsFor) and has no other copy of a Catfolk's.
   // The score a variant human's half-feat raises where it offers a choice;
   // the server adds the point (src/lib/srd/legality/half-feats.ts).
-  const racialFeatChoice = featAbilityIncrease(state.feats[0] ?? "")?.from ?? [];
+  const racialFeatChoice = featAbilityIncrease(state.feats[0] ?? "", derived.featDescOf?.(state.feats[0] ?? ""))?.from ?? [];
   const racialFeatAbility =
     racialFeatChoice.length > 1
       ? racialFeatChoice.includes(state.racialFeatAbility as Ability)

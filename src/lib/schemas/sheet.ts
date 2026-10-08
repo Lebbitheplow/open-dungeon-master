@@ -71,6 +71,8 @@ const featPicksSchema = z.object({
   expertise: z.array(z.string().trim().max(40)).max(4).optional(),
   weapons: z.array(z.string().trim().max(60)).max(8).optional(),
   tools: z.array(z.string().trim().max(60)).max(6).optional(),
+  // Armor a feat offers as a pick (Heraldic Training's shields).
+  armor: z.array(z.string().trim().max(20)).max(2).optional(),
   // The spells a feat teaches (src/lib/srd/feat-spells.ts).
   cantrips: z.array(z.string().trim().max(80)).max(4).optional(),
   spells: z.array(z.string().trim().max(80)).max(4).optional(),

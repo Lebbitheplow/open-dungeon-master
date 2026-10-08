@@ -147,6 +147,13 @@ export function useBuilderDerived({
     () => (baseAbilities ? applyAsiChoices(baseAbilities, activeAsiChoices) : null),
     [baseAbilities, activeAsiChoices],
   );
+  // The text of a feat on the sheet, where known: ODM's own, or a content
+  // pack's as fetched (useFeatDescs). What its grants and its ability
+  // point are read from.
+  const featDescOf = useMemo(
+    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
+    [featDescs],
+  );
   // The scores the server will STORE, with those points in, and the saving
   // throw Resilient adds: what every number on screen is worked out from.
   const raceId = race?.id;
@@ -162,9 +169,10 @@ export function useBuilderDerived({
         racialChoices: { featAbility: racialFeatAbility },
       },
       raceId && srdRaceId(raceId) === "variant_human" ? 1 : 0,
+      featDescOf,
     );
     return scoresWithHalfFeats(abilities, picks);
-  }, [abilities, activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
+  }, [abilities, activeAsiChoices, racialFeatNames, racialFeatAbility, raceId, featDescOf]);
   const shownAbilities = halfFeats?.abilities ?? null;
 
   // Every feat on the sheet, racial and ASI, with its text where known.
@@ -174,10 +182,6 @@ export function useBuilderDerived({
       ...racialFeatNames,
     ],
     [activeAsiChoices, racialFeatNames],
-  );
-  const featDescOf = useMemo(
-    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
-    [featDescs],
   );
   const featSpecOf = useMemo(() => (name: string): FeatGrantSpec => featGrantSpec(featDescOf(name)), [featDescOf]);
   const { featChoices } = state;
@@ -468,9 +472,10 @@ export function useBuilderDerived({
             subclass,
             level: effectiveLevel,
             features: optionPicks.map((optionName) => ({ name: optionName })),
+            feats: featNames,
           })
         : [],
-    [klass, subclass, effectiveLevel, optionPicks],
+    [klass, subclass, effectiveLevel, optionPicks, featNames],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog

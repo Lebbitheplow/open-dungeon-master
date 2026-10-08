@@ -1,3 +1,6 @@
+import { LUCK_SPEND } from "@/lib/dm/roll-riders";
+import { luckPointsLeft } from "@/lib/srd/class-resources";
+import { actorAdvantage, featCheckRider, hasSkulker } from "@/lib/srd/feat-combat";
 import { d20Expression, type Advantage } from "@/lib/dice";
 import {
   exhaustionRollState,
@@ -440,6 +443,11 @@ export function resolveRollExpression(
   // rides the leading d20 term as the grammar's "r1" reroll suffix (placed
   // before any Reliable Talent floor, which raises the surviving face).
   const lucky = sheet && derivationKind ? hasHalflingLuck(sheet) : false;
+  // Lucky's point: an extra d20 in the pool, the best kept, whatever the
+  // advantage (the feat lets them choose among all the dice).
+  const luckPoint = Boolean(args.luck) && sheet !== null && sheet !== undefined && derivationKind !== null && luckPointsLeft(sheet.resources) > 0;
+  const withLuck = (expression: string) =>
+    luckPoint ? expression.replace(/^(\d+)d20(?:k[hl]\d+)?/, (_, count) => `${Number(count) + 1}d20kh1`) : expression;
   // The features, traits, items and held dice that ride this roll
   // (src/lib/dm/roll-feature-riders.ts).
   const riders = rollFeatureRiders(sheet, args, {
@@ -516,7 +524,9 @@ export function resolveRollExpression(
     ...riders.authoredSpent,
     riders.inspired ? INSPIRATION_SPEND : null,
   ].filter(Boolean) as string[];
-  const inspirationFields = spent.length ? { spendInspiration: spent.join("|") } : {};
+  const carriersSpent = [...spent, ...(luckPoint ? [LUCK_SPEND] : [])];
+  const inspirationFields = carriersSpent.length ? { spendInspiration: carriersSpent.join("|") } : {};
+
   const allNotes = [
     ...derivation.notes,
     ...(exhaustion.note ? [exhaustion.note] : []),
@@ -529,6 +539,7 @@ export function resolveRollExpression(
       : []),
     ...(overloaded && load?.note ? [load.note] : []),
     ...(lucky ? ["Lucky: a natural 1 on the d20 is rerolled once"] : []),
+    ...(luckPoint ? ["Lucky: a luck point buys an extra d20, the best kept"] : []),
   ];
   const conditionNotes = allNotes.length ? allNotes : undefined;
 
@@ -557,9 +568,20 @@ export function resolveRollExpression(
     // Stealth checks; the AC breakdown already knows what is worn.
     const armorStealth = skill.id === "stealth" && Boolean(wornBreakdown?.stealthDisadvantage);
     const sunlit = skill.id === "perception" && Boolean(extras?.sunlight);
-    const veiled = skill.id === "perception" ? (extras?.obscured ?? null) : null;
-    const finalAdvantage =
-      armorStealth || sunlit || veiled ? mergeAdvantage([advantage, "disadvantage"]) : advantage;
+    // Skulker: dim light costs their Perception nothing (feat-combat.ts).
+    const veiledBy = skill.id === "perception" ? (extras?.obscured ?? null) : null;
+    const veiled = veiledBy && hasSkulker(sheet) && /dim light/i.test(veiledBy) ? null : veiledBy;
+    // Actor: advantage on Deception and Performance while passing as
+    // someone else, read from the check's reason.
+    const acting = actorAdvantage(sheet, skill.id, args.reason);
+    // The other feats' check riders: an expertise die, an advantage, a
+    // doubled proficiency (src/lib/srd/feat-combat.ts).
+    const featRider = featCheckRider(sheet, skill.id, args.reason);
+    const finalAdvantage = mergeAdvantage([
+      advantage,
+      ...(armorStealth || sunlit || veiled ? ["disadvantage" as const] : []),
+      ...(acting || featRider?.advantage ? ["advantage" as const] : []),
+    ]);
     // A skill check is an ability check: a lasting effect on checks counts,
     // and so does an item that rides checks.
     const skillEffect = (extras?.effectBonus ?? 0) + riders.checkBonus;
@@ -573,7 +595,9 @@ export function resolveRollExpression(
         : 0;
     // Sight rot: its penalty rides the checks that rely on sight.
     const sightRot = skill.id === "perception" || skill.id === "investigation" ? sightRotPenalty(sheet.conditions) : 0;
-    const skillModifier = (derived.skills[skill.id] ?? 0) + abilitySwap + skillEffect - sightRot;
+    const featProficiency =
+      featRider?.expertise && !proficientSkill ? 2 * derived.proficiencyBonus : featRider?.expertise && !(sheet.proficiencies.expertise ?? []).includes(skill.id) ? derived.proficiencyBonus : 0;
+    const skillModifier = (derived.skills[skill.id] ?? 0) + abilitySwap + skillEffect - sightRot + featProficiency;
     // Indomitable Might: a Strength check never totals below the score.
     const mightFloor =
       checkAbility === "str"
@@ -583,7 +607,7 @@ export function resolveRollExpression(
     // Reroll (Lucky) comes before floor (Reliable Talent): the 1 is rerolled,
     // then the surviving face is raised to 10 if still low.
     const d20Mods = `${lucky ? "r1" : ""}${floor > 1 ? `f${floor}` : ""}`;
-    const base = d20Expression(skillModifier, finalAdvantage).replace(
+    const base = withLuck(d20Expression(skillModifier, finalAdvantage)).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
       `$1${d20Mods}`,
     );
@@ -593,12 +617,15 @@ export function resolveRollExpression(
       ...(checkAbility !== skill.ability ? [`a ${checkAbility.toUpperCase()} (${skill.name}) check: ${checkAbility.toUpperCase()} in place of ${skill.ability.toUpperCase()}, the skill's proficiency kept`] : []),
       ...(reliable ? ["Reliable Talent: a d20 face below 10 counts as 10"] : []),
       ...(armorStealth ? ["their armor imposes disadvantage on Stealth"] : []),
+      ...(acting ? ["Actor: advantage while passing as someone else"] : []),
+      ...(featRider ? [featRider.note] : []),
+      ...(veiledBy && !veiled ? ["Skulker: dim light costs their Perception nothing"] : []),
       ...(sunlit ? ["Sunlight Sensitivity: disadvantage on Perception in direct sunlight"] : []),
       ...(veiled ? [veiled] : []),
       ...(extras?.effectNote ? [extras.effectNote] : []),
     ];
     return {
-      expression: `${base}${bonusDie}`,
+      expression: `${base}${bonusDie}${featRider?.die ? `+${featRider.die}` : ""}`,
       detail: skill.id,
       ...(skillNotes.length ? { conditionNotes: skillNotes } : {}),
       ...inspirationFields,
@@ -653,7 +680,7 @@ export function resolveRollExpression(
       ...(extras?.effectNote ? [extras.effectNote] : []),
       ...(mightFloor ? ["Indomitable Might: the check totals at least their Strength score"] : []),
     ];
-    const luckyBase = d20Expression(modifier, advantage).replace(
+    const luckyBase = withLuck(d20Expression(modifier, advantage)).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
       `$1${lucky ? "r1" : ""}${mightFloor ? `f${mightFloor}` : ""}`,
     );
@@ -672,7 +699,7 @@ export function resolveRollExpression(
     const derived = computeSheetDerived(sheet);
     // A lasting effect on initiative (Gift of Alacrity) adds to the roll.
     const initiativeEffect = extras?.effectBonus ?? 0;
-    const luckyBase = d20Expression(derived.initiative + initiativeEffect, advantage).replace(
+    const luckyBase = withLuck(d20Expression(derived.initiative + initiativeEffect, advantage)).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
       lucky ? "$1r1" : "$1",
     );

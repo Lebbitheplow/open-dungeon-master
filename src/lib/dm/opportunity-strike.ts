@@ -13,6 +13,7 @@
 // keep their rolls and audit rows on one, so a short human-DM turn is
 // opened for the swing and closed with it.
 
+import { hasSentinel } from "@/lib/srd/feat-combat";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
@@ -179,6 +180,14 @@ export function pcOpportunitySwing(input: {
   // Relentless Avenger answers the hit (src/lib/dm/authored-reactions-more.ts).
   if (adjudicated.hit) {
     markOpportunityHit(campaign, sheet);
+    // Sentinel: the creature's speed is 0 for the rest of its turn.
+    if (hasSentinel(sheet)) {
+      const fresh = getEnemy(enemy.id);
+      if (fresh && !fresh.conditions.includes("stopped")) {
+        patchEnemyConditions(fresh.id, [...fresh.conditions, "stopped"], { ...fresh.conditionMeta, stopped: { source: sheet.id, untilTurnEndOf: enemy.id } });
+        notes.push("Sentinel: its speed is 0 for the rest of the turn");
+      }
+    }
   }
   if (!adjudicated.hit) {
     return {

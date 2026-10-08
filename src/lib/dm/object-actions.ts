@@ -14,6 +14,8 @@
 //     pc_attack it allows spends it and the reaction
 //     (src/lib/dm/pc-attack-plan.ts).
 
+import { coatsAsBonusAction, drinksAsBonusAction } from "@/lib/srd/feat-combat";
+import { isBasicPoison } from "@/lib/dm/attack-onhit";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -75,7 +77,15 @@ export function prepareUseItem(
   if (!budget || !encounter) {
     return { commit: () => ({}) };
   }
-  const price = spendAction(budget, "action", USE_AN_OBJECT, sheet.name);
+  // Rapid Drinker drinks a potion as a bonus action; Poisoner coats a
+  // weapon as one (src/lib/srd/feat-combat.ts).
+  const name = carried?.name ?? itemName;
+  const asBonus =
+    (drinksAsBonusAction(sheet) && /\b(?:potion|elixir|philter)\b/i.test(name)) ||
+    (coatsAsBonusAction(sheet) && isBasicPoison(name));
+  const price = asBonus
+    ? spendAction(budget, "bonus", `${drinksAsBonusAction(sheet) && /\b(?:potion|elixir|philter)\b/i.test(name) ? "Rapid Drinker" : "Poisoner"} (${USE_AN_OBJECT})`, sheet.name)
+    : spendAction(budget, "action", USE_AN_OBJECT, sheet.name);
   if (!price.ok) {
     return { error: price.error };
   }

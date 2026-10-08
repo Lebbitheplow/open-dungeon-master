@@ -6,7 +6,9 @@
 // the quiver is only counted, the maneuver's pool and the smite's slot are
 // only looked at, and the budget is a copy until pc-attack.ts stores it.
 
-import { elementalAdeptApplies, floorDamageDice, hasMageSlayer, POWER_ATTACK_DAMAGE, POWER_ATTACK_TO_HIT, powerAttackFeat, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover } from "@/lib/srd/feat-combat";
+import { luckPointsLeft } from "@/lib/srd/class-resources";
+import { mergeAdvantage } from "@/lib/dm/condition-logic";
+import { coverFeatName, damageShakesConcentration, elementalAdeptApplies, floorDamageDice, hasSkulker, polearmButtDamage, powerAttackFeat, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover, stunningSniperApplies } from "@/lib/srd/feat-combat";
 import { underwaterRangeProblem } from "@/lib/dm/underwater";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -108,6 +110,10 @@ export type AttackPlan = {
 export type AttackExtras = {
   // Inspiration spent for the roll's advantage.
   inspired: boolean;
+  // Stunning Sniper's stun in place of the doubled damage (resolve).
+  stunShot?: boolean;
+  // A luck point on the attack roll: an extra d20, the best kept.
+  luck?: boolean;
   // Stroke of Luck declared: a miss becomes a hit and spends the use.
   strokeOfLuck: boolean;
   // Foe Slayer's bonus open to this attack (0 when none).
@@ -204,7 +210,7 @@ export function planPcAttack(input: {
   // range (src/lib/srd/feat-combat.ts).
   const ignoresCover = (weaponAttack && atRange && shotIgnoresCover(sheet)) || (kind === "spell" && spellIgnoresCover(sheet));
   if (ignoresCover && geometry.cover) {
-    featNotes.push(`${kind === "spell" ? "Spell Sniper" : "Sharpshooter"}: ${enemy.displayName}'s ${geometry.cover === 2 ? "half" : "three-quarters"} cover does not count`);
+    featNotes.push(`${kind === "spell" ? "Spell Sniper" : coverFeatName(sheet)}: ${enemy.displayName}'s ${geometry.cover === 2 ? "half" : "three-quarters"} cover does not count`);
     geometry = { ...geometry, effectiveAc: geometry.effectiveAc - geometry.cover, cover: 0, screen: null };
   }
   if (weaponAttack && atRange && geometry.spatials.longRange && shotIgnoresLongRange(sheet)) {
@@ -213,18 +219,22 @@ export function planPcAttack(input: {
   }
   // The -5/+10 trade of Great Weapon Master and Sharpshooter, asked for
   // before the roll.
+  let powerDisadvantage = false;
   if (args.powerAttack) {
-    const power = powerAttackFeat(sheet, { weaponAttack, ranged: atRange, heavy: profile.heavy, proficient: profile.proficient });
+    const power = powerAttackFeat(sheet, { weaponAttack, ranged: atRange, heavy: profile.heavy, proficient: profile.proficient, proficiencyBonus: built.derived.proficiencyBonus });
     if ("refused" in power) {
       return { refused: { error: `${sheet.name}: ${power.refused} Nothing was spent.` } };
     }
-    profile = { ...profile, toHit: profile.toHit + POWER_ATTACK_TO_HIT, damageExpression: `${profile.damageExpression}+${POWER_ATTACK_DAMAGE}` };
-    featNotes.push(`${power.feat}: -5 to hit, +10 damage`);
+    profile = { ...profile, toHit: profile.toHit + power.toHit, damageExpression: `${profile.damageExpression}+${power.damage}` };
+    powerDisadvantage = power.disadvantage;
+    featNotes.push(power.note);
   }
   // Elemental Adept on an attack-roll spell of its type: every 1 on the
   // damage dice counts as 2, and the target's resistance is ignored.
   const elementalAdept = kind === "spell" && elementalAdeptApplies(sheet, profile.damageType);
-  const mageSlayer = weaponAttack && !atRange && geometry.withinFiveFeet && hasMageSlayer(sheet);
+  // Mage Slayer's melee hit, or any damage from a Spellbreaker, shakes the
+  // target's concentration (enemy-damage.ts).
+  const mageSlayer = damageShakesConcentration(sheet, { weaponAttack, melee: !atRange, withinFiveFeet: geometry.withinFiveFeet }) !== null;
   if (elementalAdept) {
     profile = { ...profile, damageExpression: floorDamageDice(profile.damageExpression) };
     featNotes.push(`Elemental Adept: ${profile.damageType} ignores resistance and every 1 on the dice is a 2`);
@@ -308,6 +318,22 @@ export function planPcAttack(input: {
     return { refused: { error: checked.refused } };
   }
   const options = checked.options;
+  // Polearm Master's butt end strikes for 1d4 bludgeoning; Charger's attack
+  // after a 10-foot straight run deals 5 more (the player says they ran
+  // straight: charged).
+  if (options.bonusFeat === "Polearm Master") {
+    profile = { ...profile, damageExpression: polearmButtDamage(profile.damageExpression), damageType: "bludgeoning", heavy: false };
+    featNotes.push("Polearm Master: the butt end, 1d4 bludgeoning, as the bonus action");
+  } else if (options.bonusFeat === "Charger") {
+    if (args.charged) {
+      profile = { ...profile, damageExpression: `${profile.damageExpression}+5` };
+      featNotes.push("Charger: +5 damage after a 10-foot straight charge");
+    } else {
+      featNotes.push("Charger: the bonus-action attack after a Dash (charged: true adds 5 damage when they ran at least 10 feet straight at the target first)");
+    }
+  } else if (options.bonusFeat === "Crossbow Expert") {
+    featNotes.push("Crossbow Expert: the hand crossbow shot as the bonus action");
+  }
   // The part of the turn the attack spends (src/lib/dm/pc-attack-spend.ts).
   const spent = spendAttackEconomy({
     sheet,
@@ -393,6 +419,10 @@ export function planPcAttack(input: {
   // Rapid Strike: the advantage of this attack traded for one more attack of
   // the action, once a turn (src/lib/dm/authored-attacks.ts).
   let advantage = situation.advantage;
+  // Powerful Attacker's trade: the roll at disadvantage (feat-combat.ts).
+  if (powerDisadvantage) {
+    advantage = mergeAdvantage([advantage, "disadvantage"]);
+  }
   if (args.rapidStrike) {
     const traded = rapidStrike({ sheet, budget, advantage, weaponAttack, bonus: Boolean(options.bonusAttack || args.offHand || grantedBonusAction) });
     if ("refused" in traded) {
@@ -467,7 +497,12 @@ export function planPcAttack(input: {
     helped: situation.helped,
     attackRiders: situation.attackRiders,
     marks,
-    hitSpent: folded.hitSpent,
+    // Skulker: a ranged attack from hiding gives them away only when it
+    // hits (pc-attack.ts leaves the hiding in place for the roll).
+    hitSpent: [
+      ...folded.hitSpent,
+      ...(hasSkulker(sheet) && profile.ranged && weaponAttack && sheet.conditions.some((entry) => entry.toLowerCase() === "hidden") ? ["hidden"] : []),
+    ],
     targetSpent: conditionsSpentAgainst(enemy.conditions),
     maneuver,
     smite,
@@ -482,6 +517,11 @@ export function planPcAttack(input: {
         ? { choice: args.openHand, dc: 8 + built.derived.proficiencyBonus + built.derived.abilityMods.wis }
         : null,
       hurl: args.hurlThroughHell === true,
+      // Stunning Sniper: a ranged critical hit stuns instead of doubling
+      // (feat-combat.ts), when the shooter asked for it.
+      stunShot: args.stunShot === true && stunningSniperApplies(sheet, { weaponAttack, ranged: profile.ranged }),
+      // Lucky's point on this roll, when one is left.
+      luck: args.luck === true && luckPointsLeft(sheet.resources) > 0,
       poison: carriesPoison(sheet, weaponAttack, profile.damageType),
       giantKiller,
     },

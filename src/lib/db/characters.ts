@@ -101,7 +101,7 @@ function libraryFeatures(input: CreateSheetInput, level: number) {
     (input.classes ?? []).length > 1
       ? input.classes
       : [{ id: input.class, subclass: input.subclass, level }];
-  return populateFeaturesForClasses(input.features ?? [], classList, input.race);
+  return populateFeaturesForClasses(input.features ?? [], classList, input.race, input.feats);
 }
 
 export function createCharacter(

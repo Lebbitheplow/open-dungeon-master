@@ -3,18 +3,22 @@
 // content pack's feats count as much as ODM's (issue #125: Linguist's three
 // languages, Heavily Armored's armor and Skill Expert's skill were words on
 // the sheet and nothing more, while the DM held the character to "only
-// their listed languages").
+// their listed languages"; issue #147: the Level Up and Tome of Heroes
+// wordings, and a pick that may be a skill or a tool).
 //
 // A grant that leaves a choice (which three languages, which skill, which
 // four weapons) is picked where the feat is picked and stored on the sheet
 // as featChoices, keyed by the feat's name. The server applies the grants
 // when the sheet is made, edited or levelled (src/lib/srd/sheet-legality.ts,
-// src/lib/srd/level-up.ts); the builder applies them to its preview. Pure.
+// src/lib/srd/level-up.ts); the builder applies them to its preview. The
+// reading of the text is src/lib/srd/feat-grant-text.ts. Pure.
 import type { Proficiencies } from "@/lib/schemas/sheet";
 import { ALL_SKILLS } from "@/lib/content/mechanics";
-import { featSpellSpec, featSpellsOwed, type CastingAbility, type FeatSpellSpec } from "@/lib/srd/feat-spells";
-import { ARTISANS_TOOLS, GAMING_SETS, MUSICAL_INSTRUMENTS } from "@/lib/srd/tool-choices";
+import { featSpellsOwed, type CastingAbility } from "@/lib/srd/feat-spells";
+import { featGrantSpec, featGrantsAnything, lowerText as lower, type FeatGrantSpec, type PickKind } from "@/lib/srd/feat-grant-text";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+
+export { featGrantSpec, featGrantsAnything, KNOWN_TOOLS, type FeatGrantSpec, type PickKind } from "@/lib/srd/feat-grant-text";
 
 export type FeatPicks = {
   languages?: string[];
@@ -22,6 +26,8 @@ export type FeatPicks = {
   expertise?: string[];
   weapons?: string[];
   tools?: string[];
+  // Armor a feat offers as a pick (shields).
+  armor?: string[];
   // The spells a feat teaches (src/lib/srd/feat-spells.ts): the cantrips
   // and spells named, the class list and the casting ability where the
   // feat leaves those open.
@@ -35,119 +41,30 @@ export type FeatPicks = {
 
 export type FeatChoices = Record<string, FeatPicks>;
 
-// What a feat's text grants: how many of each kind are the player's to
-// name, and what it hands over outright.
-export type FeatGrantSpec = {
-  languages: number;
-  skills: number;
-  expertise: number;
-  weapons: number;
-  tools: number;
-  // What a tool pick may be: artisan's tools, instruments, gaming sets, or
-  // every tool when the text says only "tool".
-  toolsFrom: string[];
-  armor: string[];
-  fixedWeapons: string[];
-  fixedTools: string[];
-  // The spells the feat teaches, read by src/lib/srd/feat-spells.ts.
-  taught: FeatSpellSpec;
-  // The damage types the feat lets the player choose one of (Elemental
-  // Adept's "acid, cold, fire, lightning or thunder"); empty for none.
-  damageTypes: string[];
-};
+const PICK_KINDS: PickKind[] = ["skills", "languages", "tools", "weapons", "armor"];
+const SINGULAR: Record<PickKind, string> = { skills: "skill", languages: "language", tools: "tool", weapons: "weapon", armor: "armor" };
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 || word === "armor" ? "" : "s"}`;
+const named = (list: string[] | undefined) => (list ?? []).filter((entry) => entry && entry.trim());
+const dedicated = (spec: FeatGrantSpec, kind: PickKind) => (kind === "armor" ? 0 : spec[kind]);
 
-const EMPTY: FeatGrantSpec = {
-  languages: 0, skills: 0, expertise: 0, weapons: 0, tools: 0, toolsFrom: [], armor: [], fixedWeapons: [], fixedTools: [],
-  taught: featSpellSpec(""),
-  damageTypes: [],
-};
-
-const COUNTS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
-const count = (word: string | undefined) => (word ? (COUNTS[word.toLowerCase()] ?? Number(word) ?? 0) : 0);
-
-const OTHER_TOOLS = [
-  "thieves' tools", "disguise kit", "forgery kit", "herbalism kit", "navigator's tools", "poisoner's kit",
-  "vehicles (land)", "vehicles (water)", "tinker's tools",
-];
-export const KNOWN_TOOLS = [...new Set([...ARTISANS_TOOLS, ...MUSICAL_INSTRUMENTS, ...GAMING_SETS, ...OTHER_TOOLS])];
-
-const lower = (value: string) => value.trim().toLowerCase().replace(/[‘’]/g, "'");
-
-// Whether a feat's text grants anything this module applies.
-export function featGrantsAnything(spec: FeatGrantSpec): boolean {
-  return (
-    spec.languages + spec.skills + spec.expertise + spec.weapons + spec.tools > 0 ||
-    spec.armor.length + spec.fixedWeapons.length + spec.fixedTools.length > 0
-  );
+// How many of a feat's shared picks ("three skills or tools") are made:
+// every pick of those kinds beyond the kind's own count.
+export function anyPicksMade(spec: FeatGrantSpec, picks: FeatPicks | undefined, except?: PickKind): number {
+  return spec.anyKinds
+    .filter((kind) => kind !== except)
+    .reduce((sum, kind) => sum + Math.max(0, named(picks?.[kind]).length - dedicated(spec, kind)), 0);
 }
 
-// The grants in a feat's text. The clauses ODM's feats and the 2014 packs
-// use: "you learn three languages", "gain proficiency in one skill",
-// "expertise in one skill", "proficiency with heavy armor", "medium armor
-// and shields", "four weapons of your choice", "proficient with improvised
-// weapons", "proficiency with cook's utensils", "one type of artisan's
-// tools". Any other wording grants nothing here and stays the table's.
-export function featGrantSpec(desc: string): FeatGrantSpec {
-  const text = lower(desc ?? "");
-  if (!text) {
-    return EMPTY;
-  }
-  const spec: FeatGrantSpec = { ...EMPTY, toolsFrom: [], armor: [], fixedWeapons: [], fixedTools: [], taught: featSpellSpec(text), damageTypes: [] };
-  const elements = /\bchoose ((?:acid|cold|fire|lightning|thunder)(?:, (?:acid|cold|fire|lightning|thunder))*,? or (?:acid|cold|fire|lightning|thunder))\b/.exec(text);
-  if (elements) {
-    spec.damageTypes = elements[1].split(/,|\bor\b/).map((entry) => entry.trim()).filter(Boolean);
-  }
-  const languages = /\blearn (one|two|three|four|\d) (?:additional |new )?languages?\b|\b(one|two|three) languages? of your choice\b/.exec(text);
-  if (languages) {
-    spec.languages = count(languages[1] ?? languages[2]);
-  }
-  const skills = /\bproficien(?:cy|t) (?:in|with) (?:any combination of )?(one|two|three|four) skills?\b/.exec(text);
-  if (skills) {
-    spec.skills = count(skills[1]);
-  }
-  if (/\bexpertise (?:in|with) (?:one|a|that) skill\b/.test(text)) {
-    spec.expertise = 1;
-  }
-  for (const armor of /\bproficiency with (light|medium|heavy) armor\b/.exec(text) ? [...text.matchAll(/\b(light|medium|heavy) armor\b/g)].map((hit) => hit[1]) : []) {
-    if (!spec.armor.includes(armor)) {
-      spec.armor.push(armor);
-    }
-  }
-  if (/\b(?:armor and shields|proficiency with shields)\b/.test(text)) {
-    spec.armor.push("shields");
-  }
-  const weapons = /\bproficiency with (one|two|three|four) (?:simple or martial )?weapons? of your choice\b/.exec(text);
-  if (weapons) {
-    spec.weapons = count(weapons[1]);
-  }
-  if (/\bproficien(?:cy|t) with improvised weapons\b/.test(text)) {
-    spec.fixedWeapons.push("improvised weapons");
-  }
-  if (/\bproficien(?:cy|t) with firearms\b/.test(text)) {
-    spec.fixedWeapons.push("firearms");
-  }
-  const toolPick = /\bproficiency with (one|two) (?:type of |set of |kind of )?(artisan's tools|musical instruments?|gaming sets?|tools?)(?: of your choice)?\b/.exec(text);
-  if (toolPick) {
-    spec.tools = count(toolPick[1]);
-    spec.toolsFrom =
-      /artisan/.test(toolPick[2]) ? [...ARTISANS_TOOLS]
-      : /instrument/.test(toolPick[2]) ? [...MUSICAL_INSTRUMENTS]
-      : /gaming/.test(toolPick[2]) ? [...GAMING_SETS]
-      : [...KNOWN_TOOLS];
-  }
-  for (const tool of KNOWN_TOOLS) {
-    if (new RegExp(`\\bproficien(?:cy|t) with (?:the )?${tool.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text)) {
-      spec.fixedTools.push(tool);
-    }
-  }
-  return spec;
+// How many picks of a kind the feat allows: its own count, plus whatever
+// of the shared count the other kinds have not used.
+export function pickSlots(spec: FeatGrantSpec, picks: FeatPicks | undefined, kind: PickKind): number {
+  const own = dedicated(spec, kind);
+  return spec.anyKinds.includes(kind) ? own + Math.max(0, spec.any - anyPicksMade(spec, picks, kind)) : own;
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // What the feat still waits for, as the sentence the gate shows, or null.
 export function featPicksOwed(feat: string, spec: FeatGrantSpec, picks: FeatPicks | undefined): string | null {
-  const has = (list: string[] | undefined) => (list ?? []).filter((entry) => entry && entry.trim()).length;
+  const has = (list: string[] | undefined) => named(list).length;
   const owed: string[] = [];
   if (spec.languages > has(picks?.languages)) {
     owed.push(plural(spec.languages - has(picks?.languages), "language"));
@@ -163,6 +80,11 @@ export function featPicksOwed(feat: string, spec: FeatGrantSpec, picks: FeatPick
   }
   if (spec.tools > has(picks?.tools)) {
     owed.push(plural(spec.tools - has(picks?.tools), "tool"));
+  }
+  const shared = spec.any - anyPicksMade(spec, picks);
+  if (shared > 0) {
+    const kinds = spec.anyKinds.map((kind) => (shared === 1 ? SINGULAR[kind] : kind === "armor" ? "armor" : kind));
+    owed.push(`${shared} ${kinds.join(" or ")}`);
   }
   if (spec.damageTypes.length && !(picks?.damageType ?? "").trim()) {
     owed.push("a damage type");
@@ -226,6 +148,18 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
         tools.push(piece);
       }
     }
+    // A skill or language the feat names outright; one already held is
+    // simply held (Surgical Combatant's "if you are already proficient").
+    for (const skill of spec.fixedSkills) {
+      if (!has(skills, skill)) {
+        skills.push(skill);
+      }
+    }
+    for (const language of spec.fixedLanguages) {
+      if (!has(languages, language)) {
+        languages.push(language);
+      }
+    }
     if (input.strict) {
       const owed = featPicksOwed(feat.name, spec, picks);
       if (owed) {
@@ -236,19 +170,19 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
         problems.push(`"${picks.damageType}" is not a damage type ${feat.name} offers; pick one of ${spec.damageTypes.join(", ")}.`);
       }
     }
-    // Languages: new ones, each once.
-    const pickedLanguages = (picks.languages ?? []).filter((entry) => entry.trim()).slice(0, spec.languages);
-    for (const language of pickedLanguages) {
-      if (has(languages, language)) {
-        if (input.strict) {
-          problems.push(`${feat.name}'s languages are new ones; this character already speaks ${language}.`);
-        }
-        continue;
+    // Each kind takes its own count, then what is left of the shared one
+    // ("three skills or tools"), in a fixed order so the budget is one.
+    let shared = spec.any;
+    const allowed = (kind: PickKind, list: string[]): string[] => {
+      const own = dedicated(spec, kind);
+      const extra = spec.anyKinds.includes(kind) ? Math.min(shared, Math.max(0, list.length - own)) : 0;
+      if (spec.anyKinds.includes(kind)) {
+        shared -= extra;
       }
-      languages.push(language.trim());
-    }
+      return list.slice(0, own + extra);
+    };
     // Skills: real ones, not already held.
-    const pickedSkills = (picks.skills ?? []).map(lower).filter(Boolean).slice(0, spec.skills);
+    const pickedSkills = allowed("skills", named(picks.skills).map(lower));
     for (const skill of pickedSkills) {
       if (!ALL_SKILLS.includes(skill as (typeof ALL_SKILLS)[number])) {
         if (input.strict) {
@@ -264,8 +198,19 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
       }
       skills.push(skill);
     }
+    // Languages: new ones, each once.
+    const pickedLanguages = allowed("languages", named(picks.languages));
+    for (const language of pickedLanguages) {
+      if (has(languages, language)) {
+        if (input.strict) {
+          problems.push(`${feat.name}'s languages are new ones; this character already speaks ${language}.`);
+        }
+        continue;
+      }
+      languages.push(language.trim());
+    }
     // Expertise: in a skill held (the feat's own counts), not already doubled.
-    const pickedExpertise = (picks.expertise ?? []).map(lower).filter(Boolean).slice(0, spec.expertise);
+    const pickedExpertise = named(picks.expertise).map(lower).slice(0, spec.expertise);
     for (const skill of pickedExpertise) {
       if (!has(skills, skill)) {
         if (input.strict) {
@@ -281,23 +226,8 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
       }
       expertise.push(skill);
     }
-    // Weapons: from the weapon table, not already trained with by name.
-    const pickedWeapons = (picks.weapons ?? []).filter((entry) => entry.trim()).slice(0, spec.weapons);
-    for (const weapon of pickedWeapons) {
-      const name = weaponName(weapon);
-      if (!name || !WEAPON_NAMES.has(lower(name))) {
-        if (input.strict) {
-          problems.push(`"${weapon}" is not a weapon on the table; ${feat.name}'s weapons are picked from it.`);
-        }
-        continue;
-      }
-      if (has(weapons, name)) {
-        continue;
-      }
-      weapons.push(name);
-    }
     // Tools: from what the feat offers, not already held.
-    const pickedTools = (picks.tools ?? []).map(lower).filter(Boolean).slice(0, spec.tools);
+    const pickedTools = allowed("tools", named(picks.tools).map(lower));
     for (const tool of pickedTools) {
       if (spec.toolsFrom.length && !spec.toolsFrom.includes(tool)) {
         if (input.strict) {
@@ -312,6 +242,45 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
         continue;
       }
       tools.push(tool);
+    }
+    // Weapons: from the weapon table (or the part of it the feat names),
+    // not already trained with by name.
+    const pickedWeapons = allowed("weapons", named(picks.weapons));
+    for (const weapon of pickedWeapons) {
+      const name = weaponName(weapon);
+      if (!name || !WEAPON_NAMES.has(lower(name))) {
+        if (input.strict) {
+          problems.push(`"${weapon}" is not a weapon on the table; ${feat.name}'s weapons are picked from it.`);
+        }
+        continue;
+      }
+      if (spec.weaponsFrom.length && !spec.weaponsFrom.some((offered) => lower(offered) === lower(name))) {
+        if (input.strict) {
+          problems.push(`${name} is not a weapon ${feat.name} offers.`);
+        }
+        continue;
+      }
+      if (has(weapons, name)) {
+        continue;
+      }
+      weapons.push(name);
+    }
+    // Armor: what the feat offers (shields), not already worn.
+    const pickedArmor = allowed("armor", named(picks.armor).map(lower));
+    for (const piece of pickedArmor) {
+      if (!spec.armorFrom.includes(piece)) {
+        if (input.strict) {
+          problems.push(`"${piece}" is not armor ${feat.name} offers.`);
+        }
+        continue;
+      }
+      if (has(armor, piece)) {
+        if (input.strict) {
+          problems.push(`${feat.name} grants new armor training; this character already has ${piece}.`);
+        }
+        continue;
+      }
+      armor.push(piece);
     }
   }
   languages = [...new Set(languages)];
@@ -335,13 +304,13 @@ export function withoutFeatPicks(proficiencies: Proficiencies, choices: FeatChoi
     return proficiencies;
   }
   const picked = Object.values(choices);
-  const drop = (kind: "languages" | "skills" | "expertise" | "weapons" | "tools") =>
-    new Set(picked.flatMap((picks) => (picks[kind] ?? []).map(lower)));
+  const drop = (kind: PickKind | "expertise") => new Set(picked.flatMap((picks) => (picks[kind] ?? []).map(lower)));
   const languages = drop("languages");
   const skills = drop("skills");
   const expertise = drop("expertise");
   const weapons = drop("weapons");
   const tools = drop("tools");
+  const armor = drop("armor");
   return {
     ...proficiencies,
     languages: proficiencies.languages.filter((entry) => !languages.has(lower(entry))),
@@ -349,5 +318,8 @@ export function withoutFeatPicks(proficiencies: Proficiencies, choices: FeatChoi
     expertise: (proficiencies.expertise ?? []).filter((entry) => !expertise.has(lower(entry)) && !skills.has(lower(entry))),
     weapons: proficiencies.weapons.filter((entry) => !weapons.has(lower(entry))),
     tools: proficiencies.tools.filter((entry) => !tools.has(lower(entry))),
+    armor: proficiencies.armor.filter((entry) => !armor.has(lower(entry))),
   };
 }
+
+export { PICK_KINDS };

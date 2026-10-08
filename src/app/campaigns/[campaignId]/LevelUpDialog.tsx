@@ -61,7 +61,7 @@ import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellPool } from "@/components/sheet/useSpellPool";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useFeatDescs } from "@/app/characters/builder/useFeatDescs";
-import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { authoredFeatDesc, featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { featGrantSpec, featOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
@@ -116,8 +116,18 @@ export function LevelUpDialog({
   const [featChoices, setFeatChoices] = useState<FeatChoices>({});
   const featsPicked = asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : []));
   const featDescs = useFeatDescs(featsPicked);
-  const featSpecOf = (name: string) =>
-    featGrantSpec(featDescs[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "");
+  const featDescOf = (name: string) => featDescs[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "";
+  const featSpecOf = (name: string) => featGrantSpec(featDescOf(name));
+  // A half-feat with a choice of score raises the first it offers when the
+  // player left the choice (a content pack feat's text arrives after the
+  // pick; the editor shows that same first score).
+  const settled = (choice: AsiChoice): AsiChoice => {
+    if (choice.mode !== "feat" || choice.ability) {
+      return choice;
+    }
+    const from = featAbilityIncrease(choice.feat, featDescOf(choice.feat))?.from ?? [];
+    return from.length > 1 ? { ...choice, ability: from[0] } : choice;
+  };
   const setFeatPicks = (feat: string, picks: FeatPicks) =>
     setFeatChoices((current) => ({ ...current, [feat.trim().toLowerCase()]: picks }));
   const featPicksSent = Object.fromEntries(
@@ -220,8 +230,8 @@ export function LevelUpDialog({
   // The scores after this level's improvements (and Primal Champion at
   // barbarian 20), as the server applies them before it counts hit points
   // and the spell allowance (U:UB5, UB6).
-  const pickedChoices = asiChoices.filter((choice): choice is AsiChoice => choice !== null);
-  const after = abilitiesAfterLevel(sheet, pickedChoices, { id: classChoice, level: classLevelAfter });
+  const pickedChoices = asiChoices.filter((choice): choice is AsiChoice => choice !== null).map(settled);
+  const after = abilitiesAfterLevel(sheet, pickedChoices, { id: classChoice, level: classLevelAfter }, featDescOf);
   const conMod = abilityMod(after.abilities.con);
 
   // The improvements the class list earns at the new level, less those the
@@ -291,6 +301,7 @@ export function LevelUpDialog({
     subclass: subclassChoice || entrySubclass,
     level: classLevelAfter,
     features: [...sheet.features, ...optionPicks.map((name) => ({ name }))],
+    feats: [...sheet.feats, ...featsPicked],
   });
   const needsOptions = openSlots.some((slot) => slot.remaining > 0);
 
@@ -534,7 +545,7 @@ export function LevelUpDialog({
     setBusy(true);
     setError("");
     try {
-      const choices = asiChoices.filter((choice): choice is AsiChoice => choice !== null);
+      const choices = asiChoices.filter((choice): choice is AsiChoice => choice !== null).map(settled);
       const response = await fetch(`/api/campaigns/${campaignId}/sheet`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -910,9 +921,11 @@ export function LevelUpDialog({
                     choices={asiLevels.map((_, index) => asiChoices[index] ?? null)}
                     onChange={setAsiChoices}
                     featSpecOf={featSpecOf}
+                    featDescOf={featDescOf}
                     featChoices={featChoices}
                     onFeatPicks={setFeatPicks}
                     known={{
+                      armor: sheet.proficiencies.armor,
                       languages: sheet.proficiencies.languages,
                       skills: sheet.proficiencies.skills,
                       expertise: sheet.proficiencies.expertise ?? [],

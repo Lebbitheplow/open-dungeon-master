@@ -6,6 +6,7 @@
 // pc-attack.ts, which decides and rolls the attack these dice belong to.
 // Nothing here refuses the attack.
 
+import { poisonerIgnoresResistance } from "@/lib/srd/feat-combat";
 import type { Advantage, RollResult } from "@/lib/dice";
 import { claimOncePerTurn, type TurnBudget } from "@/lib/dm/action-budget";
 import { ragingMeleeBonus, type AttackProfile } from "@/lib/dm/attack-logic";
@@ -388,7 +389,8 @@ export function applyHitDamage(input: {
     typedRiders: liveTypedRiders(input.typedRiders, plan.droppedRiders),
     magical: strikesAsMagic(plan),
     nonlethal: plan.options.nonlethal,
-    ignoreResistance: plan.elementalAdept,
+    ignoreResistance: plan.elementalAdept || poisonerIgnoresResistance(plan.sheet, plan.profile.damageType),
+    ignoreResistanceBy: plan.elementalAdept ? "Elemental Adept" : "Poisoner",
     concentrationDisadvantage: plan.mageSlayer,
   });
 }
@@ -411,6 +413,8 @@ export function landBlow(input: {
   magical: boolean;
   // Elemental Adept covers this attack spell's type (feat-combat.ts).
   ignoreResistance?: boolean;
+  // The feat that ignores it, for the note (Elemental Adept, Poisoner).
+  ignoreResistanceBy?: string;
   // Mage Slayer's melee hit from within 5 feet (feat-combat.ts).
   concentrationDisadvantage?: boolean;
   nonlethal?: boolean;
@@ -445,7 +449,7 @@ export function landBlow(input: {
       sheets,
       sheetsById,
       profile.damageType,
-      { magical, nonlethal, holdVictory, ...material, ...(input.ignoreResistance ? { ignoreResistance: true } : {}), ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}) },
+      { magical, nonlethal, holdVictory, ...material, ...(input.ignoreResistance ? { ignoreResistance: true, ignoreResistanceBy: input.ignoreResistanceBy } : {}), ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}) },
     );
   } else {
     // Two damage types in one blow: each meets the creature's resistances

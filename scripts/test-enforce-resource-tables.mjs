@@ -267,7 +267,10 @@ await test("every counter id is unique, so no definition hides another", () => {
   // darkness; the tiefling's and the drow's darkness are one counter). And
   // the wizard's two Signature Spells and Overchannel's count of uses
   // (src/lib/dm/caster-features.ts).
-  assert.equal(RESOURCE_DEFS.length, 32 + AUTHORED.length + GENRE.length + 3);
+  // And the feats' five (issue #147): Lucky's points, Inspiring Leader's
+  // uses, and Inner Resilience's, Martial Adept's and Metamagic Adept's
+  // pour-ins to the class counters (src/lib/srd/feat-combat.ts).
+  assert.equal(RESOURCE_DEFS.length, 32 + AUTHORED.length + GENRE.length + 3 + 5);
 });
 
 await test("every authored and genre row is structurally legal", () => {

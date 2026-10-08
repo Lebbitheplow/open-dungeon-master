@@ -247,13 +247,14 @@ export function applyEnemyDamage(
     // Elemental Adept: the creature's resistance to this type does not
     // count (src/lib/srd/feat-combat.ts).
     ignoreResistance?: boolean;
+    ignoreResistanceBy?: string;
     // Mage Slayer: a melee weapon hit from within 5 feet puts the caster's
     // concentration save at disadvantage (src/lib/srd/feat-combat.ts).
     concentrationDisadvantage?: boolean;
   },
 ): Record<string, unknown> {
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
-  const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? "Elemental Adept" : null);
+  const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);
   const adjusted = options?.death
     ? { amount: Math.max(1, enemy.currentHp), note: null }
     : damageAdjust(

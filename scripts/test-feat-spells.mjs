@@ -215,4 +215,53 @@ test("the free cast is a feature and a counter the sheet can read back", () => {
   assert.equal(freeCastSpellOf("free_cast_misty_step"), "misty step");
 });
 
+
+// ---- issue #147: the Level Up and Tome of Heroes wordings ----
+
+test("Level Up's Mystical Talent reads as Magic Initiate: a list, two of its cantrips, a 1st-level spell cast once a day", () => {
+  const talent = featSpellSpec("You've learned to channel the spark of magic in you. Select a spell list and learn 2 of its cantrips. From the same list, select a 1st level spell. Without expending a spell slot, you may cast this spell once per long rest. Additionally, you may cast this spell using spell slots of the same level. The spellcasting ability for these spells is the same as the spellcasting class from which the spells are drawn.");
+  assert.equal(talent.listChoice, true);
+  assert.equal(talent.cantrips, 2);
+  assert.equal(talent.spells, 1);
+  assert.equal(talent.spellLevel, 1);
+  assert.equal(talent.freeCast, true);
+  assert.equal(talent.ability, "list");
+  assert.equal(featSpellsOwed("Mystical Talent", talent, undefined), "Mystical Talent: pick a class list, 2 cantrips, 1 1st-level spell.");
+});
+
+test("Level Up's Power Caster teaches one attack cantrip from any list, and Rite Master fills a ritual book from a chosen list", () => {
+  const power = featSpellSpec("Double the range on any spells you cast requiring an attack roll. Cover does not grant your targets an AC bonus when you make attacks against them with a ranged spell. Select and learn one cantrip requiring an attack roll from any spell list. The spellcasting ability for these spells is the same as the spellcasting class from which the spell is drawn.");
+  assert.equal(power.cantrips, 1);
+  assert.equal(power.attackCantrip, true);
+  assert.deepEqual(power.lists, []);
+  const rite = featSpellSpec("You have delved into ancient mysteries. When you acquire this feat, select from the bard, cleric, druid, herald, sorcerer, warlock, or wizard spell list and choose two 1st level spells with the ritual tag, which are entered into your ritual book. These spells use the same casting attribute as the list from which they were drawn. You may cast any spells in your ritual book as rituals so long as the book is in your possession.");
+  assert.equal(rite.listChoice, true);
+  assert.deepEqual(rite.lists, ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"]);
+  assert.equal(rite.spells, 2);
+  assert.equal(rite.ritualBook, true);
+  assert.equal(rite.freeCast, false);
+  assert.equal(rite.ability, "list");
+});
+
+test("a cantrip or spell a feat names outright is known: Monster Hunter's altered strike, Friend of the Forest's treeheal, two druid cantrips and speak with animals once a day", () => {
+  const hunter = featSpellSpec("You gain an expertise die on checks made to learn information about the Legends and Lore of a creature you can see. You learn the altered strike cantrip. You gain proficiency with the Douse maneuver and do not have to spend exertion to activate it.");
+  assert.deepEqual(hunter.fixedCantrips, ["altered strike"]);
+  assert.equal(featSpellsAnything(hunter), true);
+  const friend = featSpellSpec("* You learn the *treeheal* (see the Magic and Spells chapter) cantrip and two other druid cantrips of your choice. * You also learn the *speak with animals* spell and can cast it once without expending a spell slot. Once you cast it, you must finish a short or long rest before you can cast it in this way again.");
+  assert.deepEqual(friend.fixedCantrips, ["treeheal"]);
+  assert.equal(friend.cantrips, 2);
+  assert.deepEqual(friend.lists, ["druid"]);
+  assert.deepEqual(friend.fixedSpells, ["speak with animals"]);
+  assert.equal(friend.freeCast, true);
+  const grants = featSpellGrants({
+    feats: [{ name: "Monster Hunter", desc: "You learn the altered strike cantrip." }],
+    choices: {},
+    raisedAbility: () => null,
+    spellOf: (name) => (name === "altered strike" ? { name: "Altered Strike", level: 0, classes: ["wizard"] } : null),
+    strict: true,
+  });
+  assert.deepEqual(grants.problems, []);
+  assert.deepEqual(grants.grants[0].cantrips, ["Altered Strike"]);
+});
+
 console.log(`${passed} checks passed`);

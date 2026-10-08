@@ -340,7 +340,8 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
     // Superiority dice ride attacks (riderCards); recoveries belong to a rest.
     // Ki is spent through its techniques, each a card of its own (hand-class.ts
     // Flurry of Blows, and the bonus-action moves in hand.ts).
-    if (!def || def.passive || id === "sub_superiority_dice" || id === "ki" || def.effect.kind === "recover_slots") continue;
+    // A feat's pour-in (Inner Resilience's ki) lives under the class counter's id, never its own card.
+    if (!def || def.passive || def.into || id === "sub_superiority_dice" || id === "ki" || def.effect.kind === "recover_slots") continue;
     const level = resourceLevel(def, sheet);
     const effect = def.effect;
     const left = state.max - state.used;

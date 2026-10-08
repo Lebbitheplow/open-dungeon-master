@@ -5,6 +5,8 @@
 // the attack's profile and options are known. The budget is a copy; nothing
 // is stored until pc-attack.ts stores it.
 
+import { holdsFeat } from "@/lib/srd/feat-effects";
+import { evadesOpportunityAttacksAfterMelee, isPolearm, MOBILE_ATTACKED, ONE_HANDED_ATTACKED, POLEARM_READY } from "@/lib/srd/feat-combat";
 import { attacksLeft, spendAction, spendAttack, type TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { OPEN_HAND_NOT_FLURRY } from "@/lib/dm/attack-choice-rules";
@@ -117,6 +119,21 @@ export function spendAttackEconomy(input: {
     // only for a ranger who can use it).
     if (hasHordeBreaker(sheet) && !budget.oncePerTurn.includes(`${ATTACKED}${enemyId}`)) {
       budget = { ...budget, oncePerTurn: [...budget.oncePerTurn, `${ATTACKED}${enemyId}`] };
+    }
+    // Mobile and Skirmisher: the creature attacked in melee makes no
+    // opportunity attack against them this turn (opportunity.ts).
+    if (!profile.ranged && evadesOpportunityAttacksAfterMelee(sheet) && !budget.oncePerTurn.includes(`${MOBILE_ATTACKED}${enemyId}`)) {
+      budget = { ...budget, oncePerTurn: [...budget.oncePerTurn, `${MOBILE_ATTACKED}${enemyId}`] };
+    }
+    if (usesAttackAction) {
+      // Polearm Master's butt-end strike and Crossbow Expert's hand crossbow
+      // shot follow the Attack action (pc-attack-options.ts).
+      if (holdsFeat(sheet, "Polearm Master") && isPolearm(profile.weapon) && !budget.oncePerTurn.includes(POLEARM_READY)) {
+        budget = { ...budget, oncePerTurn: [...budget.oncePerTurn, POLEARM_READY] };
+      }
+      if (holdsFeat(sheet, "Crossbow Expert") && !profile.twoHanded && !budget.oncePerTurn.includes(ONE_HANDED_ATTACKED)) {
+        budget = { ...budget, oncePerTurn: [...budget.oncePerTurn, ONE_HANDED_ATTACKED] };
+      }
     }
     spendNote = spend.note;
   }

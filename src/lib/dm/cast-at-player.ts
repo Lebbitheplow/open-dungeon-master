@@ -1,9 +1,10 @@
-import { hasDungeonDelver, hasMageSlayer } from "@/lib/srd/feat-combat";
+import { canAct } from "@/lib/dm/can-act";
+import { hasDungeonDelver, shieldMasterSaveBonus, spellSaveAdvantageReach } from "@/lib/srd/feat-combat";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
 import { globeProblemFor } from "@/lib/dm/zone-rules";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, recordEncounterTarget, setEnemyConcentration } from "@/lib/db/encounters";
+import { getActiveEncounter, recordEncounterTarget, saveEncounter, setEnemyConcentration } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { isValidExpression } from "@/lib/dice";
@@ -233,13 +234,15 @@ export function handleCastAtPlayer(
   // within 5 feet. Dungeon Delver: advantage against a trap.
   // Off the battle map the distance is the fiction's; a melee character
   // is read as beside the caster, as the attack engine reads reach.
-  const adjacentCaster =
-    use?.enemy && (use.spell || args.spell) && hasMageSlayer(sheet)
-      ? (tilesBetween(use.enemy.encounterId, sheet.id, use.enemy.id) ?? 1) <= 1
+  // Spellbreaker's magic resistance reaches 30 feet the same way.
+  const reach = spellSaveAdvantageReach(sheet);
+  const nearCaster =
+    use?.enemy && (use.spell || args.spell) && reach
+      ? (tilesBetween(use.enemy.encounterId, sheet.id, use.enemy.id) ?? 1) <= reach.tiles
       : false;
   const trapWard = args.hazard === "trap" && hasDungeonDelver(sheet);
-  const claim = adjacentCaster
-    ? { advantage: "advantage" as const, reason: "Mage Slayer: the caster is within 5 feet" }
+  const claim = nearCaster && reach
+    ? { advantage: "advantage" as const, reason: `${reach.feat}: the caster is within ${reach.tiles * 5} feet` }
     : trapWard
       ? { advantage: "advantage" as const, reason: "Dungeon Delver: a trap" }
       : null;
@@ -258,6 +261,8 @@ export function handleCastAtPlayer(
     }),
     use?.enemy ?? null,
     claim,
+    // A spell cast at them alone: Shield Master's shield on a Dexterity save.
+    true,
   );
   if (claim) {
     base0.featAdvantage = claim.reason;
@@ -284,6 +289,17 @@ export function handleCastAtPlayer(
     // (src/lib/srd/trait-rules.ts).
     const taken = saveDamageTaken({ total: outcome.total, saved, halfOnSave, ability, sheet });
     let dealt = taken.damage;
+    // Shield Master: a successful Dexterity save against an effect aimed at
+    // them alone costs the reaction to take no damage at all.
+    if (saved && dealt > 0 && ability === "dex" && shieldMasterSaveBonus(sheet) > 0) {
+      const live = getActiveEncounter(campaign.id);
+      if (live && !live.reactionsUsed.includes(sheet.id) && canAct({ sheet, encounter: live, kind: "reaction" }).ok) {
+        live.reactionsUsed = [...live.reactionsUsed, sheet.id];
+        saveEncounter(live);
+        dealt = 0;
+        base.shieldMaster = `Shield Master: the reaction turns the successful save into no damage at all; ${sheet.name}'s reaction is used until their next turn.`;
+      }
+    }
     // Dungeon Delver: resistance to the damage dealt by traps.
     if (trapWard && dealt > 0) {
       dealt = Math.floor(dealt / 2);

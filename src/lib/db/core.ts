@@ -2427,7 +2427,7 @@ function backfillSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
       `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json,
-              classes_json
+              classes_json, feats_json
          FROM character_sheets`,
     )
     .all() as Array<{
@@ -2440,6 +2440,7 @@ function backfillSheetResources(db: SqliteDatabase) {
     features_json: string | null;
     resources_json: string | null;
     classes_json: string | null;
+    feats_json: string | null;
   }>;
   if (!sheets.length) {
     return;
@@ -2469,15 +2470,17 @@ function backfillSheetResources(db: SqliteDatabase) {
         ? (JSON.parse(row.classes_json) as Array<{ id: string; subclass: string; level: number }>)
         : [];
       const multiclass = Array.isArray(classes) && classes.length > 1;
+      const rowFeats = row.feats_json ? (JSON.parse(row.feats_json) as string[]) : [];
       const features = multiclass
-        ? populateFeaturesForClasses(existingFeatures, classes, row.race)
-        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level);
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats);
       const resources = populateResources(
         features,
         row.level,
         mods,
         existingResources,
         multiclass ? classes : undefined,
+        rowFeats,
       );
       const nextFeatures = JSON.stringify(features);
       const nextResources = JSON.stringify(resources);

@@ -40,6 +40,9 @@ export type FeatSpellSpec = {
   listChoice: boolean;
   // Spells the feat hands over by name ("misty step").
   fixedSpells: string[];
+  // Cantrips the feat names outright (Level Up's Monster Hunter: "You
+  // learn the altered strike cantrip").
+  fixedCantrips: string[];
   // Every levelled spell (fixed and picked) is castable once per long rest
   // without a slot.
   freeCast: boolean;
@@ -59,7 +62,7 @@ export type FeatSpellPicks = {
 
 const EMPTY: FeatSpellSpec = {
   cantrips: 0, attackCantrip: false, spells: 0, spellLevel: 1, schools: [], lists: [], listChoice: false,
-  fixedSpells: [], freeCast: false, ritualBook: false, ability: "raised",
+  fixedSpells: [], fixedCantrips: [], freeCast: false, ritualBook: false, ability: "raised",
 };
 
 const COUNTS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4 };
@@ -83,7 +86,7 @@ const lower = (value: string) => value.trim().toLowerCase().replace(/[‘’]/g,
 const namesIn = (clause: string, from: string[]) => from.filter((name) => new RegExp(`\\b${name}\\b`).test(clause));
 
 export function featSpellsAnything(spec: FeatSpellSpec): boolean {
-  return spec.cantrips + spec.spells + spec.fixedSpells.length > 0;
+  return spec.cantrips + spec.spells + spec.fixedSpells.length + spec.fixedCantrips.length > 0;
 }
 
 // The spells a feat's text teaches. The clauses ODM's feats and the packs
@@ -94,11 +97,13 @@ export function featSpellsAnything(spec: FeatSpellSpec): boolean {
 // 1st-level ritual spells from a class you choose". Any other wording
 // teaches nothing here.
 export function featSpellSpec(desc: string): FeatSpellSpec {
-  const text = lower(desc ?? "").replace(/\s+/g, " ");
+  // Markdown and bracketed asides out (Tome of Heroes' "*treeheal* (see
+  // the Magic and Spells chapter)").
+  const text = lower(desc ?? "").replace(/\([^)]*\)/g, " ").replace(/[*_]/g, "").replace(/\s+/g, " ").trim();
   if (!text) {
     return EMPTY;
   }
-  const spec: FeatSpellSpec = { ...EMPTY, schools: [], lists: [], fixedSpells: [] };
+  const spec: FeatSpellSpec = { ...EMPTY, schools: [], lists: [], fixedSpells: [], fixedCantrips: [] };
 
   // "You learn misty step and one 1st-level divination or enchantment spell"
   const learnNamed = /\byou learn ([a-z' ]+?) and (one|two|a) (?:(\d)(?:st|nd|rd|th)-level|level (\d)) ([a-z]+)(?: or ([a-z]+))? spell/.exec(text);
@@ -109,17 +114,45 @@ export function featSpellSpec(desc: string): FeatSpellSpec {
     spec.schools = namesIn([learnNamed[5], learnNamed[6] ?? ""].join(" "), SCHOOLS);
   }
 
-  // "choose a class: bard, cleric, ..." / "from a class you choose"
-  const classChoice = /\bchoose a class:? ([a-z, ]+?)\.|\bfrom a class you choose\b|\bfrom the same list\b|\bthat class's spell list\b/.exec(text);
+  // "choose a class: bard, cleric, ..." / "from a class you choose" /
+  // Level Up's "select a spell list", "select from the bard, cleric, ...
+  // spell list"
+  const classChoice = /\bchoose a class:? ([a-z, ]+?)\.|\bselect from the ([a-z, ]+?) spell list\b|\bfrom a class you choose\b|\bfrom the same list\b|\bthat class's spell list\b|\bselect a spell list\b/.exec(text);
   if (classChoice) {
     spec.listChoice = true;
-    if (classChoice[1]) {
-      spec.lists = namesIn(classChoice[1], SPELL_LISTS);
+    const named = classChoice[1] ?? classChoice[2];
+    if (named) {
+      spec.lists = namesIn(named, SPELL_LISTS);
     }
+  }
+  // "You learn the altered strike cantrip", "learn the treeheal cantrip and
+  // two other druid cantrips of your choice"
+  for (const fixed of text.matchAll(/\blearn the ([a-z' ]+?) cantrip\b/g)) {
+    spec.fixedCantrips.push(fixed[1].trim());
+  }
+  // "You also learn the speak with animals spell and can cast it once"
+  for (const fixed of text.matchAll(/\blearn the ([a-z' ]+?) spell\b/g)) {
+    spec.fixedSpells.push(fixed[1].trim());
+  }
+  // Telekinetic: "You learn mage hand and can cast it without components";
+  // Telepathic: "you can cast detect thoughts once per long rest without a
+  // slot". A spell named without its level is sorted by the catalog when
+  // the grant is applied (featSpellGrants).
+  const learnsNamed = /\byou learn ([a-z' ]+?) and can cast it\b/.exec(text);
+  if (learnsNamed && !learnNamed) {
+    spec.fixedCantrips.push(learnsNamed[1].trim());
+  }
+  const castsOnce = /\byou can cast ([a-z' ]+?) once per long rest without a (?:spell )?slot\b/.exec(text);
+  if (castsOnce) {
+    spec.fixedSpells.push(castsOnce[1].trim());
+    spec.freeCast = true;
   }
 
   // "learn two cantrips of your choice from the Cleric, Druid, or Wizard spell list"
   // "learn one attack cantrip from the bard, cleric, druid, sorcerer, warlock or wizard list"
+  // Level Up: "learn 2 of its cantrips", "learn one cantrip requiring an
+  // attack roll from any spell list"; Tome of Heroes: "two other druid
+  // cantrips of your choice"
   const cantrips = /\blearn (one|two|three) (attack )?cantrips?(?: of your choice)? from (?:the )?([a-z,' ]+?) (?:spell )?lists?\b/.exec(text);
   if (cantrips) {
     spec.cantrips = count(cantrips[1]);
@@ -128,11 +161,24 @@ export function featSpellSpec(desc: string): FeatSpellSpec {
     if (lists.length) {
       spec.lists = lists;
     }
+  } else {
+    const its = /\blearn (\d|one|two|three) of its cantrips\b/.exec(text);
+    const attack = /\blearn (one|two|a) cantrips? requiring an attack roll from any spell list\b/.exec(text);
+    const other = /\b(one|two|three) other ([a-z]+) cantrips of your choice\b/.exec(text);
+    if (its) {
+      spec.cantrips = count(its[1]);
+    } else if (attack) {
+      spec.cantrips = count(attack[1]);
+      spec.attackCantrip = true;
+    } else if (other) {
+      spec.cantrips = count(other[1]);
+      spec.lists = namesIn(other[2], SPELL_LISTS);
+    }
   }
 
   // "choose one 1st-level spell from that same list" / "Choose a level 1
   // spell from the same list" / "two 1st-level ritual spells from a class"
-  const picks = /\b(?:choose|learn|holding) (one|two|a) (?:(\d)(?:st|nd|rd|th)-level|level (\d)) (ritual )?spells?\b/.exec(text);
+  const picks = /\b(?:choose|learn|holding|select) (one|two|a) (?:(\d)(?:st|nd|rd|th)[- ]level|level (\d)) (ritual )?spells?\b/.exec(text);
   if (picks && !learnNamed) {
     spec.spells = count(picks[1]);
     spec.spellLevel = Number(picks[2] ?? picks[3] ?? 1);
@@ -149,12 +195,12 @@ export function featSpellSpec(desc: string): FeatSpellSpec {
   }
 
   spec.freeCast =
-    /\bcastable once per long rest without a slot\b|\bcast it once without (?:expending )?a spell slot\b|\bonce without (?:expending )?a spell slot\b|\bmust finish a long rest before you can cast it again\b/.test(text) &&
+    /\bcastable once per long rest without a slot\b|\bcast it once without (?:expending )?a spell slot\b|\bonce without (?:expending )?a spell slot\b|\bmust finish a long rest before you can cast it again\b|\bcast this spell once per long rest\b/.test(text) &&
     spec.spells + spec.fixedSpells.length > 0 && !spec.ritualBook;
 
   if (/\b(?:intelligence|wisdom|charisma)(?:, (?:wisdom|charisma))*,? or (?:wisdom|charisma) is your spellcasting ability\b|\bchoose (?:intelligence|wisdom|charisma)\b.*\bspellcasting ability\b/.test(text)) {
     spec.ability = "choice";
-  } else if (/\bspellcasting ability for these spells depends on the class\b|\bcharisma for bard\b/.test(text)) {
+  } else if (/\bspellcasting ability for these spells depends on the class\b|\bcharisma for bard\b|\bsame (?:casting|spellcasting) (?:attribute|ability) as the (?:list|class)\b|\bsame as the spellcasting class\b/.test(text)) {
     spec.ability = "list";
   } else {
     spec.ability = "raised";
@@ -273,7 +319,13 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
         problems.push(`${known.name} has no ritual tag; ${feat.name}'s book holds rituals only.`);
       }
     }
-    const fixed = spec.fixedSpells.map((name) => input.spellOf?.(name)?.name ?? capital(name));
+    const sorted = (names: string[], cantrip: boolean) =>
+      names.filter((name) => {
+        const known = input.spellOf?.(name);
+        return known ? (known.level === 0) === cantrip : cantrip;
+      });
+    const fixed = [...sorted(spec.fixedSpells, false), ...sorted(spec.fixedCantrips, false)].map((name) => input.spellOf?.(name)?.name ?? capital(name));
+    const fixedCantrips = [...sorted(spec.fixedCantrips, true), ...sorted(spec.fixedSpells, true)].map((name) => input.spellOf?.(name)?.name ?? capital(name));
     const named = [...fixed, ...picked.map((name) => input.spellOf?.(name)?.name ?? name)];
     const ability: CastingAbility | null =
       spec.ability === "choice"
@@ -283,7 +335,7 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
           : (castingAbility(input.raisedAbility(feat.name)) ?? picks.ability ?? null);
     grants.push({
       feat: feat.name,
-      cantrips: cantrips.map((name) => input.spellOf?.(name)?.name ?? name),
+      cantrips: [...fixedCantrips, ...cantrips.map((name) => input.spellOf?.(name)?.name ?? name)],
       spells: spec.ritualBook ? [] : named,
       rituals: spec.ritualBook ? named : [],
       freeCasts: spec.freeCast ? named : [],

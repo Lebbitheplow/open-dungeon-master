@@ -10,7 +10,10 @@
 // "Extra Attack (3)" carries the real mechanic whatever its source says.
 import type { Ability, AbilityScores, SheetFeature } from "@/lib/schemas/sheet";
 import { ALL_CLASSES, SRD_RACES } from "@/lib/srd";
+import { ALL_SKILLS } from "@/lib/content/mechanics";
+import { readsAsRules } from "@/lib/srd/feat-text";
 import { SRD_ARMOR, isArmorProficient } from "@/lib/srd/armor";
+import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { populateResources } from "@/lib/srd/class-resources";
 import {
   chosenFightingStyles,
@@ -196,46 +199,102 @@ export type FeatCandidate = {
   casts: boolean;
   raceId: string;
   raceName: string;
+  // Known where the caller has them; a prerequisite that asks about one
+  // the caller left out is not checked.
+  skills?: string[];
+  tools?: string[];
+  weapons?: string[];
+  level?: number;
 };
 
 const ABILITY_BY_NAME = Object.fromEntries(
   Object.entries(ABILITY_NAMES).map(([id, name]) => [name.toLowerCase(), id as Ability]),
 );
 
-// What a feat's prerequisite asks that this character does not meet, or
-// null. The five kinds ODM's feats use; any other wording is left to the
-// table.
-export function unmetPrerequisite(prerequisite: string, who: FeatCandidate): string | null {
-  const text = prerequisite.replace(/^\s*prerequisite:?\s*/i, "").trim();
-  if (!text) {
-    return null;
+// A prerequisite as the packs write it, down to its requirements: "*Wisdom
+// 13 or higher*" (Tome of Heroes' emphasis), "Requires Dexterity 13 or
+// higher", "Prerequisite: Proficiency with Survival, 8th level or higher",
+// "N/A". A field holding the feat's rules instead (see feat-text.ts) asks
+// nothing.
+function prerequisiteText(raw: string): string {
+  const text = raw
+    .replace(/[*_]/g, "")
+    .replace(/^\s*(?:prerequisites?:?|requires|requirements?:?)\s*/i, "")
+    .replace(/[.\s]+$/, "")
+    .trim();
+  if (/^(?:n\/a|none|-)$/i.test(text) || readsAsRules(text)) {
+    return "";
   }
-  const scores = /^(\w+)(?: or (\w+))? 13 or higher$/i.exec(text);
+  return text;
+}
+
+const MARTIAL_WEAPONS = SRD_WEAPONS.filter((weapon) => weapon.category === "martial").map((weapon) => weapon.name.toLowerCase());
+const RANGED_WEAPONS = SRD_WEAPONS.filter((weapon) => weapon.kind === "ranged").map((weapon) => weapon.name.toLowerCase());
+
+// Whether one requirement is not met. A requirement of a kind the server
+// cannot check (a prestige rating, a class feature by name) is met.
+function requirementUnmet(requirement: string, who: FeatCandidate): boolean {
+  const part = requirement.toLowerCase().replace(/^(?:the|a|an) /, "").trim();
+  const scores = /^(\w+)(?: or (\w+))? (\d+)(?: or higher)?$/.exec(part);
   if (scores) {
     const abilities = [scores[1], scores[2]]
       .filter(Boolean)
       .map((name) => ABILITY_BY_NAME[name.toLowerCase()])
       .filter(Boolean);
-    if (abilities.length && !abilities.some((ability) => who.abilities[ability] >= 13)) {
-      return text;
-    }
+    return abilities.length > 0 && !abilities.some((ability) => who.abilities[ability] >= Number(scores[3]));
+  }
+  const armor = /^proficiency with (light|medium|heavy) armor$/.exec(part);
+  if (armor) {
+    const sample = { light: "Leather", medium: "Breastplate", heavy: "Plate" }[armor[1] as "light" | "medium" | "heavy"];
+    const piece = SRD_ARMOR.find((entry) => entry.name === sample);
+    return !(piece && isArmorProficient(who.armor, piece));
+  }
+  if (/^(?:ability to cast (?:at least )?one spell|ability to cast spells|spellcasting or pact magic)$/.test(part)) {
+    return !who.casts;
+  }
+  if (/^elf or half-elf$/.test(part)) {
+    return !/elf|drow/i.test(`${who.raceId} ${who.raceName}`);
+  }
+  const level = /^(\d+)(?:st|nd|rd|th) level or higher$/.exec(part);
+  if (level) {
+    return who.level !== undefined && who.level < Number(level[1]);
+  }
+  const trained = /^proficiency (?:in|with) (?:at least )?(?:one of the following skills: )?(.+?)(?: skills?)?$/.exec(part);
+  if (!trained) {
+    return false;
+  }
+  const wanted = trained[1];
+  const skills = ALL_SKILLS.filter((id) => new RegExp(`\\b${id.replace(/_/g, " ")}\\b`).test(wanted));
+  if (skills.length) {
+    return who.skills !== undefined && !skills.some((skill) => who.skills!.some((held) => lower(held) === skill));
+  }
+  if (/\btype of vehicle\b|\bvehicles?\b/.test(wanted)) {
+    return who.tools !== undefined && !who.tools.some((tool) => /vehicle/i.test(tool));
+  }
+  const weapon = /^(?:one |a )?(martial|simple|ranged|melee)(?: (ranged|melee))? weapons?$/.exec(wanted);
+  if (weapon && who.weapons !== undefined) {
+    const held = who.weapons.map(lower);
+    const names = weapon[1] === "martial" ? MARTIAL_WEAPONS : weapon[1] === "ranged" || weapon[2] === "ranged" ? RANGED_WEAPONS : [];
+    const broad = weapon[1] === "simple" ? ["simple", "martial"] : weapon[1] === "martial" ? ["martial"] : ["simple", "martial"];
+    return !(held.some((entry) => broad.includes(entry)) || held.some((entry) => names.includes(entry)));
+  }
+  return false;
+}
+
+// What a feat's prerequisite asks that this character does not meet, or
+// null. Each requirement in turn ("Wisdom 13 or higher and the Ki class
+// feature", "Proficiency with Survival, 8th level or higher"); one the
+// server cannot check is left to the table.
+export function unmetPrerequisite(prerequisite: string, who: FeatCandidate): string | null {
+  const text = prerequisiteText(prerequisite);
+  if (!text) {
     return null;
   }
-  const armor = /^proficiency with (light|medium|heavy) armor$/i.exec(text);
-  if (armor) {
-    const sample = { light: "Leather", medium: "Breastplate", heavy: "Plate" }[
-      armor[1].toLowerCase() as "light" | "medium" | "heavy"
-    ];
-    const piece = SRD_ARMOR.find((entry) => entry.name === sample);
-    return piece && isArmorProficient(who.armor, piece) ? null : text;
-  }
-  if (/^(the ability to cast at least one spell|spellcasting or pact magic)$/i.test(text)) {
-    return who.casts ? null : text;
-  }
-  if (/^elf or half-elf$/i.test(text)) {
-    return /elf|drow/i.test(`${who.raceId} ${who.raceName}`) ? null : text;
-  }
-  return null;
+  const requirements = text
+    .split(/\s+and\s+|,\s*(?=(?:proficien|strength|dexterity|constitution|intelligence|wisdom|charisma|the ability|ability)\b|\d)/i)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return requirements.some((requirement) => requirementUnmet(requirement, who)) ? text : null;
 }
 
 export type FeatVerdict = { problems: string[]; feats: string[]; slotsUsed: number };

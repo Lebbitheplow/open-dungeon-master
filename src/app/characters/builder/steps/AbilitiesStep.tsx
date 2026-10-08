@@ -87,6 +87,7 @@ export function AbilitiesStep({
           choices={activeAsiChoices}
           takenInPlay={asiTakenInPlay}
           featSpecOf={derived.featSpecOf}
+          featDescOf={derived.featDescOf}
           featChoices={state.featChoices}
           onFeatPicks={state.setFeatPicks}
           known={knownTraining(derived)}

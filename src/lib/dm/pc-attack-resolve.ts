@@ -4,11 +4,15 @@
 // Split from pc-attack.ts, which has already refused or paid for everything
 // this rolls; nothing here refuses the attack.
 
-import { GREAT_WEAPON_MASTER_READY } from "@/lib/srd/feat-combat";
+import type { Campaign } from "@/lib/db/campaigns";
+import type { TurnBudget } from "@/lib/dm/action-budget";
+import { publishEncounter } from "@/lib/dm/enemy-damage";
+import { pushTokenAway } from "@/lib/dm/map-tools";
+import { BRUTAL_ATTACK_USED, brawlerUnarmed, brutalAttackApplies, CRUSHER_USED, damageTypeFeat, GREAT_WEAPON_MASTER_READY, PIERCER_USED, SLASHER_USED, TAVERN_GRAPPLE_READY, type DamageTypeFeat } from "@/lib/srd/feat-combat";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { getEnemy, patchEnemyConditions, recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -78,8 +82,14 @@ export function strikeToHit(plan: AttackPlan) {
   if (lucky) {
     context.notes.push("Lucky: a natural 1 on the attack roll is rerolled once");
   }
+  // Lucky's point: one more d20 in the pool, the best kept (the feat lets
+  // them choose among all the dice, disadvantage or not).
+  if (plan.extras.luck) {
+    context.notes.push("Lucky: a luck point buys an extra d20, the best kept");
+  }
   const toHitD20 = d20Expression(profile.toHit, advantage)
     .replace(/^2d20kh1/, elvenAccuracy ? "3d20kh1" : "2d20kh1")
+    .replace(/^(\d+)d20(?:k[hl]\d+)?/, (whole, count) => (plan.extras.luck ? `${Number(count) + 1}d20kh1` : whole))
     .replace(/^(\d+d20(?:k[hl]\d+)?)/, lucky ? "$1r1" : "$1");
   const toHitExpression = `${toHitD20}${toHitRiderSuffix}`;
   const detail = rollAgainst(profile.weapon, enemy.displayName);
@@ -89,7 +99,10 @@ export function strikeToHit(plan: AttackPlan) {
 // Digital path: roll, adjudicate, and apply in one pass.
 export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, unknown> {
   const { campaign, turn, encounter, sheet, enemy, budget, riders, special, context } = plan;
-  const { critExtraDice, onHitSpends } = strike;
+  const { critExtraDice: baseCritDice, onHitSpends } = strike;
+  // Piercer: a piercing critical hit rolls one more of the weapon's dice.
+  const typeFeat = plan.weaponAttack ? damageTypeFeat(sheet, plan.profile.damageType) : null;
+  const critExtraDice = baseCritDice + (typeFeat === "Piercer" ? 1 : 0);
   let profile = plan.profile;
   let maneuver = plan.maneuver;
   const typedRiders = [...plan.typedRiders];
@@ -228,12 +241,40 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     typedRiders.push(...critGear.typed);
     context.notes.push(...critGear.notes);
   }
-  const damageExpression = crit
+  // Stunning Sniper: the critical hit stuns instead of doubling.
+  const stunShot = crit && plan.extras.stunShot === true;
+  const damageExpression = crit && !stunShot
     ? critDamageExpression(profile.damageExpression, critExtraDice, strike.critOptions)
     : profile.damageExpression;
-  const damageOutcome = rollExpression(damageExpression, undefined, {
+  let damageOutcome = rollExpression(damageExpression, undefined, {
     rerollBelow: strike.rerollBelow,
   });
+  if (stunShot) {
+    context.notes.push("Stunning Sniper: the critical hit's damage is not doubled; the target is stunned instead");
+  }
+  // Brutal Attack (Level Up): once a turn, the melee weapon's damage is
+  // rolled again and the better kept.
+  if (brutalAttackApplies(sheet, { weaponAttack: plan.weaponAttack, melee: !profile.ranged && !plan.atRange }, budget?.oncePerTurn ?? null) && budget) {
+    const again = rollExpression(damageExpression, undefined, { rerollBelow: strike.rerollBelow });
+    const kept = again.total > damageOutcome.total ? again : damageOutcome;
+    context.notes.push(`Brutal Attack: the damage rolled twice (${damageOutcome.total} and ${again.total}), the better kept`);
+    damageOutcome = kept;
+    budget.oncePerTurn.push(BRUTAL_ATTACK_USED);
+    storeBudget(encounter, budget);
+  }
+  // Piercer: once a turn, one of the piercing damage dice is rerolled.
+  if (typeFeat === "Piercer" && budget && !budget.oncePerTurn.includes(PIERCER_USED)) {
+    const dice = damageOutcome.terms.find((term) => term.kind === "dice");
+    const lowest = dice && dice.kind === "dice" ? dice.dice.filter((die) => die.kept).sort((a, b) => a.value - b.value)[0] : undefined;
+    if (dice && lowest) {
+      const fresh = rollExpression(`1d${lowest.sides}`).total;
+      context.notes.push(`Piercer: a ${lowest.value} on a d${lowest.sides} is rerolled to ${fresh}`);
+      damageOutcome = { ...damageOutcome, total: damageOutcome.total - lowest.value + fresh };
+      lowest.value = fresh;
+      budget.oncePerTurn.push(PIERCER_USED);
+      storeBudget(encounter, budget);
+    }
+  }
   const damageRoll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
@@ -277,6 +318,20 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     // The budget was stored before the roll; the key goes on the stored copy.
     storeBudget(encounter, budget);
     context.notes.push(`Great Weapon Master: ${crit ? "the critical hit" : "the kill"} opens a bonus-action melee attack this turn (bonusAttack "feature")`);
+  }
+  // Tavern Brawler: a hit with an unarmed strike or an improvised weapon
+  // opens a bonus-action grapple (take_action grapple, action-tools.ts).
+  if ((profile.unarmed || profile.improvised) && !profile.ranged && budget && brawlerUnarmed(sheet) && !budget.oncePerTurn.includes(TAVERN_GRAPPLE_READY)) {
+    budget.oncePerTurn.push(TAVERN_GRAPPLE_READY);
+    storeBudget(encounter, budget);
+    context.notes.push("Tavern Brawler: the hit opens a bonus-action grapple this turn (take_action grapple)");
+  }
+  // What the hit leaves on the target: Stunning Sniper's stun, Slasher's
+  // hamstring and Crusher's shove once a turn, and their critical hits'
+  // marks, each until the start of the attacker's next turn.
+  if (!applied.dead && !applied.encounterOver) {
+    const left = featHitMarks({ campaign, encounter, sheet, enemy, typeFeat, crit, stunShot, budget });
+    context.notes.push(...left);
   }
   const maneuverOutcome: Record<string, unknown> =
     maneuver?.rider && !applied.dead && !applied.encounterOver
@@ -503,4 +558,70 @@ function emitAttackFx(
       secretNumbers: true,
     }),
   );
+}
+
+
+// The conditions a feat's hit leaves on an enemy (src/lib/srd/feat-combat.ts):
+// Stunning Sniper's stun; Slasher's hamstring (speed -10) once a turn and
+// its critical hit's shaken (disadvantage on attacks); Crusher's 5-foot
+// shove once a turn and its critical hit's exposed (attacks against it at
+// advantage). Each lasts until the start of the attacker's next turn.
+function featHitMarks(input: {
+  campaign: Campaign;
+  encounter: Encounter;
+  sheet: CharacterSheet;
+  enemy: EncounterEnemy;
+  typeFeat: DamageTypeFeat | null;
+  crit: boolean;
+  stunShot: boolean;
+  budget: TurnBudget | null;
+}): string[] {
+  const { campaign, encounter, sheet, enemy, typeFeat, crit, stunShot, budget } = input;
+  const notes: string[] = [];
+  const leave = (name: string): boolean => {
+    const fresh = getEnemy(enemy.id);
+    if (!fresh || fresh.status !== "alive" || fresh.conditions.includes(name)) {
+      return false;
+    }
+    patchEnemyConditions(fresh.id, [...fresh.conditions, name], { ...fresh.conditionMeta, [name]: { source: sheet.id, untilTurnOf: sheet.id } });
+    return true;
+  };
+  if (stunShot && leave("stunned")) {
+    notes.push(`Stunning Sniper: ${enemy.displayName} is stunned until the start of ${sheet.name}'s next turn`);
+  }
+  if (!typeFeat || typeFeat === "Piercer") {
+    return notes;
+  }
+  const usedKey = typeFeat === "Slasher" ? SLASHER_USED : CRUSHER_USED;
+  const unused = budget !== null && !budget.oncePerTurn.includes(usedKey);
+  if (typeFeat === "Slasher") {
+    if (unused && leave("hamstrung")) {
+      notes.push(`Slasher: ${enemy.displayName}'s speed is reduced by 10 feet until the start of ${sheet.name}'s next turn`);
+      budget.oncePerTurn.push(usedKey);
+      storeBudget(encounter, budget);
+    }
+    if (crit && leave("shaken")) {
+      notes.push(`Slasher: the critical hit puts ${enemy.displayName}'s attack rolls at disadvantage until the start of ${sheet.name}'s next turn`);
+    }
+  } else {
+    if (unused) {
+      const pushed = pushTokenAway(campaign, encounter.id, sheet.id, enemy.id);
+      notes.push(
+        pushed.moved
+          ? `Crusher: ${enemy.displayName} is moved 5 feet to (${pushed.at.x},${pushed.at.y})`
+          : `Crusher: ${enemy.displayName} could not be moved 5 feet (${pushed.reason})`,
+      );
+      budget.oncePerTurn.push(usedKey);
+      storeBudget(encounter, budget);
+    }
+    if (crit && leave("exposed")) {
+      notes.push(`Crusher: the critical hit leaves ${enemy.displayName} exposed; attacks against it have advantage until the start of ${sheet.name}'s next turn`);
+    }
+  }
+  if (budget) {
+    // The conditions above were seen by the enemy's copy; the encounter's
+    // own list is published by the patch.
+    publishEncounter(campaign.id);
+  }
+  return notes;
 }

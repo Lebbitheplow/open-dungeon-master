@@ -27,15 +27,15 @@ const sheet = (feats, extra = {}) => ({ feats, features: [], ...extra });
 test("the -5/+10 trade belongs to the feat that fits the weapon", () => {
   const melee = { weaponAttack: true, ranged: false, heavy: true, proficient: true };
   const shot = { weaponAttack: true, ranged: true, heavy: false, proficient: true };
-  assert.deepEqual(powerAttackFeat(sheet(["Great Weapon Master"]), melee), { feat: "Great Weapon Master" });
-  assert.deepEqual(powerAttackFeat(sheet(["Sharpshooter"]), shot), { feat: "Sharpshooter" });
-  assert.match(powerAttackFeat(sheet([]), melee).refused, /neither/);
+  assert.equal(powerAttackFeat(sheet(["Great Weapon Master"]), melee).feat, "Great Weapon Master");
+  assert.equal(powerAttackFeat(sheet(["Sharpshooter"]), shot).feat, "Sharpshooter");
+  assert.match(powerAttackFeat(sheet([]), melee).refused, /none of them/);
   assert.match(powerAttackFeat(sheet(["Great Weapon Master"]), shot).refused, /needs Sharpshooter/);
   assert.match(powerAttackFeat(sheet(["Sharpshooter"]), melee).refused, /needs Great Weapon Master/);
   assert.match(powerAttackFeat(sheet(["Great Weapon Master"]), { ...melee, heavy: false }).refused, /heavy melee weapon/);
   assert.match(powerAttackFeat(sheet(["Great Weapon Master"]), { ...melee, weaponAttack: false }).refused, /spell attack/);
   // A feat written as a feature (a DM's tool) counts the same.
-  assert.deepEqual(powerAttackFeat(sheet([], { features: [{ name: "Great Weapon Master" }] }), melee), { feat: "Great Weapon Master" });
+  assert.equal(powerAttackFeat(sheet([], { features: [{ name: "Great Weapon Master" }] }), melee).feat, "Great Weapon Master");
 });
 
 test("cover, long range and a foe at the elbow", () => {
@@ -94,7 +94,9 @@ test("the prompt tags the feats the server applies", () => {
   assert.equal(featEngineTag("Defensive Duelist"), "[use_reaction]");
   assert.equal(featEngineTag("Elemental Adept"), "[server]");
   assert.equal(featEngineTag("Fey Touched"), "[cast tools]");
-  assert.equal(featEngineTag("Actor"), null);
+  // Actor's advantage is the check engine's now (issue #147); Keen Mind stays the DM's.
+  assert.equal(featEngineTag("Actor"), "[server]");
+  assert.equal(featEngineTag("Keen Mind"), null);
 });
 
 console.log(`${passed} checks passed`);

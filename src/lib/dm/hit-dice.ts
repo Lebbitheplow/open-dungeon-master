@@ -11,6 +11,7 @@
 // decides; the server's own choice (spend toward half HP) stands in only for
 // a character with no player at the table.
 
+import { chefRestDie, hitDieHealingFloor } from "@/lib/srd/feat-combat";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -37,6 +38,8 @@ export function spendHitDice(input: {
   sheetId: string;
   requested: number;
   songDie: string | null;
+  // Chef's meal: an extra d8 for every creature that spends a die.
+  chefDie?: string | null;
   reason: string;
   requestedBy: "dm" | "player";
 }): HitDiceOutcome {
@@ -63,7 +66,7 @@ export function spendHitDice(input: {
   // (the same order patchSheet reconciles the spent counter in).
   const expression = `${hitDicePlanExpression(shortRestDicePlan(sheet, count), conMod)}${
     input.songDie ? `+1${input.songDie}` : ""
-  }`;
+  }${input.chefDie ? `+1${input.chefDie}` : ""}`;
   const outcome = rollExpression(expression);
   const roll = insertRoll({
     campaignId: campaign.id,
@@ -72,13 +75,18 @@ export function spendHitDice(input: {
     kind: "custom",
     detail: `short rest: ${count} hit ${count === 1 ? "die" : "dice"}${
       input.songDie ? ` + Song of Rest ${input.songDie}` : ""
-    }`,
+    }${input.chefDie ? ` + Chef ${input.chefDie}` : ""}`,
     result: outcome,
   });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
   // Each die is floored at 0 on its own; the total is not what is floored.
   // Sewer plague: hit dice heal half the normal number (afflictions.ts).
-  const healed = Math.floor(hitDiceHealing(outcome, conMod, Boolean(input.songDie)) * hitDiceHealingFactor(sheet));
+  // Durable floors each die at twice the Constitution modifier; Stalwart
+  // adds it (src/lib/srd/feat-combat.ts).
+  const rolled = hitDiceHealing(outcome, conMod, (input.songDie ? 1 : 0) + (input.chefDie ? 1 : 0));
+  const floored = hitDieHealingFloor(sheet, conMod);
+  const withFeat = floored ? Math.max(rolled, count * floored.floor) + count * floored.extra : rolled;
+  const healed = Math.floor(withFeat * hitDiceHealingFactor(sheet));
   const ceiling = effectiveMaxHp(sheet);
   const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, healed);
   const patch = {
@@ -120,6 +128,22 @@ export function playerChoosesHitDice(campaignId: string, sheet: Pick<CharacterSh
 // The best Song of Rest die anyone conscious in the party brings. Not a
 // limited resource: it applies at every short rest, so there is no counter
 // to spend, and one die goes to each creature that spent a Hit Die.
+// Chef's meal: a cook in the party who is up to cooking (src/lib/srd/
+// feat-combat.ts). The die every creature spending a Hit Die adds.
+export function partyChefDie(sheets: Array<Pick<CharacterSheet, "id">>): string | null {
+  for (const stale of sheets) {
+    const sheet = getSheetById(stale.id);
+    if (!sheet || sheet.currentHp <= 0 || sheet.deathSaves?.dead) {
+      continue;
+    }
+    const die = chefRestDie(sheet);
+    if (die) {
+      return die;
+    }
+  }
+  return null;
+}
+
 export function partySongOfRestDie(sheets: Array<Pick<CharacterSheet, "id">>): string | null {
   let best: string | null = null;
   for (const stale of sheets) {

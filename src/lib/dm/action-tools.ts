@@ -1,3 +1,4 @@
+import { acBreakdownFor } from "@/lib/srd";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -9,6 +10,7 @@ import { spendAction, spendAttack, type SpendResult, type TurnBudget } from "@/l
 import { addSheetCondition } from "@/lib/dm/action-common";
 import { bonusRouteFor, kiSpend, noBonusRoute, type MoveAction } from "@/lib/dm/bonus-actions";
 import { authoredBonusRoute } from "@/lib/srd/authored-economy";
+import { featBonusRoute } from "@/lib/srd/feat-combat";
 import { EXPEDITIOUS_RETREAT, hasFastHands } from "@/lib/dm/bonus-routes";
 import { BONUS_SPELL } from "@/lib/dm/cast-rules";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
@@ -250,7 +252,12 @@ function priceAction(
   if (bonus) {
     // Help and Search as a bonus action are the authored features' (Master
     // of Tactics, Eye for Detail): src/lib/srd/authored-effects.ts.
-    const route = move ? bonusRouteFor(sheet, move) : authoredBonusRoute(sheet, action);
+    // The feats' bonus-action routes: Tavern Brawler's grapple after its
+    // hit, Shield Master's shove after the Attack action with a shield,
+    // Charger's shove after a Dash (src/lib/srd/feat-combat.ts).
+    const route =
+      (move ? bonusRouteFor(sheet, move) : authoredBonusRoute(sheet, action)) ??
+      featBonusRoute(sheet, action, budget, Boolean(acBreakdownFor(sheet).shieldName));
     if (!route) {
       return {
         error: move
