@@ -298,6 +298,7 @@ export function RacialChoicesSection({
                 <FeatChoicesFields
                   key={feat}
                   feat={feat}
+                  desc={featDescOf?.(feat)}
                   spec={featSpecOf(feat)}
                   picks={featChoices?.[feat.trim().toLowerCase()]}
                   known={known}

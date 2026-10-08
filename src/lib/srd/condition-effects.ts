@@ -211,6 +211,31 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     summary: "Longstrider: +10 feet of speed.",
     speedBonus: 10,
   },
+  // What the feats leave on a creature (src/lib/srd/feat-combat.ts).
+  {
+    id: "halted",
+    match: ["halted"],
+    summary: "Halted: speed 0 for the rest of the turn (Sentinel's opportunity attack hit).",
+    speedSet: 0,
+  },
+  {
+    id: "hamstrung",
+    match: ["hamstrung"],
+    summary: "Hamstrung: speed reduced by 10 feet until the start of the attacker's next turn (Slasher).",
+    speedBonus: -10,
+  },
+  {
+    id: "shaken",
+    match: ["shaken"],
+    summary: "Shaken: disadvantage on attack rolls until the start of the attacker's next turn (Slasher's critical hit).",
+    attackDisadvantage: true,
+  },
+  {
+    id: "exposed",
+    match: ["exposed"],
+    summary: "Exposed: attack rolls against them have advantage until the start of the attacker's next turn (Crusher's critical hit).",
+    attacksAgainstAdvantage: true,
+  },
   {
     id: "protected",
     match: ["protected"],

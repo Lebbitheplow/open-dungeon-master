@@ -5,6 +5,9 @@ import { STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { KNOWN_TOOLS, anyPicksMade, pickSlots, type FeatGrantSpec, type FeatPicks, type PickKind } from "@/lib/srd/feat-grants";
+import { featEngineTag } from "@/lib/srd/feat-combat";
+import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import { ABILITY_LABELS } from "./AbilityEditor";
 import { featSpellsAnything, type CastingAbility } from "@/lib/srd/feat-spells";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import ContentPicker from "./ContentPicker";
@@ -55,12 +58,15 @@ export default function FeatChoicesFields({
   picks,
   known,
   onChange,
+  desc,
 }: {
   feat: string;
   spec: FeatGrantSpec;
   picks: FeatPicks | undefined;
   known: KnownTraining;
   onChange: (picks: FeatPicks) => void;
+  // The feat's text, for the ability point it names (what the table applies).
+  desc?: string;
 }) {
   const mine = {
     languages: picks?.languages ?? [],
@@ -115,8 +121,34 @@ export default function FeatChoicesFields({
   ];
   const taught = spec.taught;
   const teaches = featSpellsAnything(taught) && taught.cantrips + taught.spells > 0;
+  // What the table applies of this feat, in a sentence, so a player never
+  // assumes the rest is on the sheet (issue #147): the ability point, the
+  // training and spells read from its text, and the combat rules the
+  // engines run; the DM runs whatever is left from the feat's text.
+  const increase = desc !== undefined ? featAbilityIncrease(feat, desc) : null;
+  const engineTag = featEngineTag(feat);
+  const applied = [
+    ...(increase ? [increase.from.length === 6 ? "+1 to an ability of your choice" : `+1 ${increase.from.map((ability) => ABILITY_LABELS[ability]).join(" or ")}`] : []),
+    ...(spec.languages + spec.fixedLanguages.length ? ["languages"] : []),
+    ...(spec.skills + spec.fixedSkills.length ? ["skills"] : []),
+    ...(spec.expertise ? ["expertise"] : []),
+    ...(spec.armor.length + spec.armorFrom.length ? ["armor training"] : []),
+    ...(spec.weapons + spec.fixedWeapons.length + spec.weaponsFrom.length ? ["weapon training"] : []),
+    ...(spec.tools + spec.fixedTools.length ? ["tool training"] : []),
+    ...(spec.any ? [`${spec.any} picks in any combination`] : []),
+    ...(teaches || taught.fixedSpells.length || taught.fixedCantrips.length ? ["spells"] : []),
+    ...(spec.damageTypes.length ? ["the damage type"] : []),
+    ...(engineTag ? [`its combat rules ${engineTag}`] : []),
+  ];
+  const coverage = applied.length
+    ? `The table applies ${applied.join(", ")}; the DM runs the rest from the feat's text.`
+    : "Nothing of this feat is applied by the table itself; the DM runs it from its text.";
   if (!hasPicks && !teaches && !fixed.length) {
-    return null;
+    return (
+      <p className="mt-1 text-[11px] text-stone-500" data-feat-coverage={feat}>
+        {coverage}
+      </p>
+    );
   }
   // A shared pick ("three skills or tools") names no tool list: every tool
   // the table knows is offered, as the server allows.
@@ -361,6 +393,9 @@ export default function FeatChoicesFields({
           Granted outright: {fixed.map(capital).join(", ")}.
         </p>
       ) : null}
+      <p className="text-[11px] text-stone-500" data-feat-coverage={feat}>
+        {coverage}
+      </p>
     </div>
   );
 }

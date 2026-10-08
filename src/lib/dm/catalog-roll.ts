@@ -74,6 +74,7 @@ export const REQUEST_ROLL_ADJUDICATION: CatalogEntry = {
       damageTypeField("damageType", "Damage type", "For a damage roll: the target's resistances apply."),
       { name: "tool", label: "With a tool", kind: "text", placeholder: "thieves' tools", help: "An ability check made with a tool: proficiency is added when they have it." },
       { name: "useInspiration", label: "Spend their Inspiration", kind: "boolean", help: "Advantage on this roll; refused when they hold none." },
+      { name: "luck", label: "Spend a luck point", kind: "boolean", help: "Lucky: an extra d20 on this roll, the best kept; the point is spent. Ignored without the feat or a point left." },
       { name: "againstEnemyId", label: "Contested by (enemy)", kind: "enemy", help: "A contest: the server rolls the enemy's opposing check (Insight against a lie, Perception against a sneak) as the DC." },
       { name: "againstMonster", label: "Contested by (stat block)", kind: "text", placeholder: "guard", help: "Out of a fight: the creature's stat block by name; its check is rolled as the DC." },
       { name: "contestSkill", label: "Their skill", kind: "text", placeholder: "insight", help: "The creature's skill, when the usual pairing is not the one." },

@@ -140,6 +140,10 @@ export function featGrantSpec(desc: string): FeatGrantSpec {
   const elements = /\bchoose ((?:acid|cold|fire|lightning|thunder)(?:, (?:acid|cold|fire|lightning|thunder))*,? or (?:acid|cold|fire|lightning|thunder))\b/.exec(text);
   if (elements) {
     spec.damageTypes = elements[1].split(/,|\bor\b/).map((entry) => entry.trim()).filter(Boolean);
+  } else if (/\bselect an elemental damage type\b/.test(lowerText(desc ?? ""))) {
+    // Level Up's Primordial Caster names the five in brackets, which the
+    // normalized text drops.
+    spec.damageTypes = ["acid", "cold", "fire", "lightning", "thunder"];
   }
 
   // "any combination of three skills or tools", "three skills, languages,

@@ -11,7 +11,7 @@ import { abilityMod, proficiencyBonus, suite } from "./lib/enforce-harness.mjs";
 import { combatKit, d20Faces, TRAINED } from "./lib/enforce-combat.mjs";
 
 const { test, finish } = suite("test-enforce-feat-combat");
-const world = await openWorld({ campaign: { maxPlayers: 12 } });
+const world = await openWorld({ campaign: { maxPlayers: 20 } });
 const kit = await combatKit(world);
 const encounters = await import("../src/lib/db/encounters.ts");
 
@@ -64,7 +64,38 @@ const slayer = world.addHero({
   equipment: [{ name: "Longsword", qty: 1 }],
   feats: ["Mage Slayer"],
 });
-const heroes = [greatWeapon, plain, sharpshooter, gunner, adept, evoker, duelist, slayer];
+// Issue #147: the other feats the engines apply.
+const powerful = world.addHero({
+  class: "fighter", level: 5, maxHp: 44, abilities: { str: 16, dex: 12 }, proficiencies: TRAINED,
+  equipment: [{ name: "Greatsword", qty: 1 }],
+  feats: ["Powerful Attacker"],
+});
+const deadeye = world.addHero({
+  class: "fighter", level: 5, maxHp: 44, abilities: { str: 10, dex: 16 }, proficiencies: TRAINED,
+  equipment: [{ name: "Longbow", qty: 1 }],
+  feats: ["Deadeye"],
+});
+const polearm = world.addHero({
+  class: "fighter", level: 5, maxHp: 44, abilities: { str: 16, dex: 12 }, proficiencies: TRAINED,
+  equipment: [{ name: "Glaive", qty: 1 }],
+  feats: ["Polearm Master"],
+});
+const lucky = world.addHero({
+  class: "fighter", level: 5, maxHp: 44, abilities: { str: 16, dex: 12 }, proficiencies: TRAINED,
+  equipment: [{ name: "Longsword", qty: 1 }],
+  feats: ["Lucky"],
+});
+const brawler = world.addHero({
+  class: "fighter", level: 5, maxHp: 44, abilities: { str: 16, dex: 12 }, proficiencies: TRAINED,
+  equipment: [],
+  feats: ["Tavern Brawler"],
+});
+const piercer = world.addHero({
+  class: "fighter", level: 5, maxHp: 44, abilities: { str: 10, dex: 16 }, proficiencies: TRAINED,
+  equipment: [{ name: "Rapier", qty: 1 }],
+  feats: ["Piercer"],
+});
+const heroes = [greatWeapon, plain, sharpshooter, gunner, adept, evoker, duelist, slayer, powerful, deadeye, polearm, lucky, brawler, piercer];
 const base = new Map(heroes.map((hero) => [hero.id, world.sheet(hero.id)]));
 
 async function stage(hero, { count = 1, apart = 1 } = {}) {
@@ -102,7 +133,7 @@ await test("Great Weapon Master's -5/+10 rides a heavy melee weapon; a plain fig
   const [other] = await stage(plain);
   const none = await kit.swing(plain.id, other.id, [10, 3, 3], { weapon: "Greatsword", powerAttack: true });
   assert.equal(none.ok, false, "no feat, no trade");
-  assert.match(none.error ?? "", /neither/);
+  assert.match(none.error ?? "", /none of them|neither/);
 });
 
 await test("a melee critical hit opens Great Weapon Master's bonus-action attack; without one it is refused", async () => {
@@ -272,6 +303,82 @@ await test("Dungeon Delver saves against a trap at advantage and takes half its 
   assert.deepEqual(found.result.noticedBy, [world.sheet(delver.id).name]);
   const ambush = await world.invoke("check_notice", { sense: "perception", dc: 13, characterIds: [delver.id], reason: "an archer in the rafters" });
   assert.deepEqual(ambush.result.noticedBy, [], "the feat is about traps and secret doors only");
+});
+
+// ---- issue #147: Level Up's twins and the authored feats that were words only ----
+
+await test("Powerful Attacker trades disadvantage for +10 on a heavy weapon; Deadeye drops the proficiency bonus for twice it on a ranged weapon (issue #147)", async () => {
+  const [enemy] = await stage(powerful);
+  const swing = await kit.swing(powerful.id, enemy.id, [15, 15, 3, 3], { weapon: "Greatsword", powerAttack: true });
+  assert.equal(swing.ok, true, swing.error);
+  assert.equal(d20Faces(swing.toHit).length, 2, "two d20s: the roll at disadvantage");
+  assert.equal(swing.toHit.total, 15 + abilityMod(16) + PB, "no flat penalty");
+  assert.equal(swing.damage.total, 3 + 3 + abilityMod(16) + 10, "damage plus 10");
+  const [far] = await stage(deadeye, { apart: 3 });
+  const shot = await kit.swing(deadeye.id, far.id, [15, 4], { weapon: "Longbow", powerAttack: true });
+  assert.equal(shot.ok, true, shot.error);
+  assert.equal(shot.toHit.total, 15 + abilityMod(16), "the proficiency bonus comes off the roll");
+  assert.equal(shot.damage.total, 4 + abilityMod(16) + 2 * PB, "twice the proficiency bonus on the damage");
+});
+
+await test("Polearm Master's butt-end strike follows an Attack action with the polearm: 1d4 bludgeoning as the bonus action (issue #147)", async () => {
+  const [enemy] = await stage(polearm);
+  const early = await kit.swing(polearm.id, enemy.id, [10, 2], { weapon: "Glaive", bonusAttack: "feature" });
+  assert.equal(early.ok, false, "the butt end before the Attack action");
+  assert.match(early.error ?? "", /Polearm Master/);
+  const first = await kit.swing(polearm.id, enemy.id, [15, 5, 5], { weapon: "Glaive" });
+  assert.equal(first.ok, true, first.error);
+  const butt = await kit.swing(polearm.id, enemy.id, [15, 2], { weapon: "Glaive", bonusAttack: "feature" });
+  assert.equal(butt.ok, true, butt.error);
+  assert.equal(butt.damage.total, 2 + abilityMod(16), "1d4 plus the modifier");
+  assert.equal(butt.result.damageType, "bludgeoning");
+  assert.equal(world.encounter().turnBudget.bonusUsed, true);
+});
+
+await test("Lucky's point buys an extra d20 on the attack roll and is spent; Tavern Brawler's unarmed strike deals 1d4 and its hit opens a bonus-action grapple (issue #147)", async () => {
+  const [enemy] = await stage(lucky);
+  assert.equal(world.sheet(lucky.id).resources.luck_points.max, 3, "three luck points from the feat");
+  const swing = await kit.swing(lucky.id, enemy.id, [4, 17, 5], { weapon: "Longsword", luck: true });
+  assert.equal(swing.ok, true, swing.error);
+  assert.equal(d20Faces(swing.toHit).length, 2, "a straight roll plus the luck die");
+  assert.equal(swing.toHit.total, 17 + abilityMod(16) + PB, "the best die kept");
+  assert.equal(world.sheet(lucky.id).resources.luck_points.used, 1, "the point is spent");
+  const [other] = await stage(brawler);
+  const punch = await kit.swing(brawler.id, other.id, [15, 3], { weapon: "unarmed strike" });
+  assert.equal(punch.ok, true, punch.error);
+  assert.equal(punch.damage.total, 3 + abilityMod(16), "1d4 plus Strength, not 1");
+  assert.ok(world.encounter().turnBudget.oncePerTurn.includes("tavern brawler:hit"), "the hit opens the grapple");
+  const grab = await world.invoke("take_action", { characterId: brawler.id, action: "grapple", targetEnemyId: other.id, bonus: true });
+  assert.equal(grab.ok, true, grab.error);
+  assert.equal(world.encounter().turnBudget.bonusUsed, true, "the grapple took the bonus action");
+});
+
+await test("Piercer: a piercing critical hit rolls one more die, and once a turn the lowest die is rerolled (issue #147)", async () => {
+  const [enemy] = await stage(piercer);
+  const crit = await kit.swing(piercer.id, enemy.id, [20, 1, 8, 8, 6], { weapon: "Rapier" });
+  assert.equal(crit.ok, true, crit.error);
+  assert.equal(crit.result.crit, true);
+  const notes = crit.result.conditionEffects ?? [];
+  assert.ok(notes.some((note) => /Piercer: a 1 on a d8 is rerolled to 6/.test(note)), JSON.stringify(notes));
+  assert.equal(crit.damage.total, 6 + 8 + 8 + abilityMod(16), "three dice on the crit, the 1 rerolled");
+});
+
+await test("the DM prompt carries every feat's rules, and a content pack feat's numbers reach the derived sheet (issue #147)", async () => {
+  const { describeSheet } = await import("../src/lib/dm/prompt.ts");
+  const line = describeSheet(world.sheet(lucky.id), "Tester", false);
+  assert.match(line, /Lucky \[server\]: You have three luck points/);
+  const { getContentDb } = await import("../src/lib/content/db.ts");
+  if (getContentDb()) {
+    const { computeSheetDerived } = await import("../src/lib/srd/index.ts");
+    const quick = world.addHero({ class: "fighter", level: 5, maxHp: 44, abilities: { dex: 12 }, proficiencies: TRAINED, feats: ["Attentive"] });
+    const plainSheet = world.sheet(plain.id);
+    assert.equal(computeSheetDerived(world.sheet(quick.id)).initiative, computeSheetDerived({ ...plainSheet, feats: [] }).initiative + 5, "Attentive: +5 initiative read from the pack's text");
+    const scout = world.addHero({ class: "ranger", level: 5, maxHp: 40, abilities: { dex: 12 }, proficiencies: TRAINED, features: [{ name: "Skirmisher", source: "class" }] });
+    const { speedFor } = await import("../src/lib/srd/index.ts");
+    assert.equal(speedFor(world.sheet(scout.id)), 30, "the Scout's Skirmisher feature is not the feat's +10 feet");
+    const skirmisher = world.addHero({ class: "fighter", level: 5, maxHp: 44, abilities: { dex: 12 }, proficiencies: TRAINED, feats: ["Skirmisher"] });
+    assert.equal(speedFor(world.sheet(skirmisher.id)), 40, "the feat's +10 feet from sheet.feats alone");
+  }
 });
 
 world.close();

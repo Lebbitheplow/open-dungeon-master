@@ -6,6 +6,7 @@ import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
+import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
 
@@ -285,6 +286,9 @@ export function populateFeaturesForClasses(
   existing: SheetFeature[],
   classes: Array<{ id: string; subclass: string; level: number }>,
   raceId: string,
+  // The feats on the sheet: Martial Adept, Eldritch Adept and Metamagic
+  // Adept open choice slots of their own (src/lib/srd/feat-combat.ts).
+  feats?: string[],
 ): SheetFeature[] {
   const granted: SheetFeature[] = [];
   for (const entry of classes) {
@@ -303,7 +307,7 @@ export function populateFeaturesForClasses(
   const grantedNames = new Set(granted.map((feature) => feature.name.toLowerCase()));
   const kept = pruneChoiceFeatures(
     existing.filter(
-      (feature) =>
+      (feature, feats) =>
         (feature.source === "feat" ||
           feature.source === "story" ||
           feature.source === "choice" ||
@@ -339,6 +343,7 @@ function pruneChoiceFeatures(
   features: SheetFeature[],
   classes: Array<{ id: string; subclass: string; level: number }>,
   granted: SheetFeature[],
+  feats?: string[],
 ): SheetFeature[] {
   const styleSlots = fightingStyleSlots(granted);
   const styles = new Set(chosenFightingStyles(features).map((name) => name.toLowerCase()));
@@ -350,10 +355,9 @@ function pruneChoiceFeatures(
     }
     const option = findOptionByFeatureName(feature.name);
     if (option) {
-      const total = classes.reduce(
-        (sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k),
-        0,
-      );
+      const total =
+        classes.reduce((sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k), 0) +
+        featOptionSlots(feats, option.k);
       const taken = perKind.get(option.k) ?? 0;
       if (taken >= total) {
         return false;
@@ -381,6 +385,7 @@ export function populateFeatures(
   subclass: string,
   raceId: string,
   level: number,
+  feats?: string[],
 ): SheetFeature[] {
-  return populateFeaturesForClasses(existing, [{ id: classId, subclass, level }], raceId);
+  return populateFeaturesForClasses(existing, [{ id: classId, subclass, level }], raceId, feats);
 }

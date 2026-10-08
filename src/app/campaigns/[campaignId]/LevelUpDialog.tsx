@@ -301,6 +301,7 @@ export function LevelUpDialog({
     subclass: subclassChoice || entrySubclass,
     level: classLevelAfter,
     features: [...sheet.features, ...optionPicks.map((name) => ({ name }))],
+    feats: [...sheet.feats, ...featsPicked],
   });
   const needsOptions = openSlots.some((slot) => slot.remaining > 0);
 

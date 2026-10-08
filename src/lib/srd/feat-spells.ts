@@ -134,6 +134,19 @@ export function featSpellSpec(desc: string): FeatSpellSpec {
   for (const fixed of text.matchAll(/\blearn the ([a-z' ]+?) spell\b/g)) {
     spec.fixedSpells.push(fixed[1].trim());
   }
+  // Telekinetic: "You learn mage hand and can cast it without components";
+  // Telepathic: "you can cast detect thoughts once per long rest without a
+  // slot". A spell named without its level is sorted by the catalog when
+  // the grant is applied (featSpellGrants).
+  const learnsNamed = /\byou learn ([a-z' ]+?) and can cast it\b/.exec(text);
+  if (learnsNamed && !learnNamed) {
+    spec.fixedCantrips.push(learnsNamed[1].trim());
+  }
+  const castsOnce = /\byou can cast ([a-z' ]+?) once per long rest without a (?:spell )?slot\b/.exec(text);
+  if (castsOnce) {
+    spec.fixedSpells.push(castsOnce[1].trim());
+    spec.freeCast = true;
+  }
 
   // "learn two cantrips of your choice from the Cleric, Druid, or Wizard spell list"
   // "learn one attack cantrip from the bard, cleric, druid, sorcerer, warlock or wizard list"
@@ -306,8 +319,13 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
         problems.push(`${known.name} has no ritual tag; ${feat.name}'s book holds rituals only.`);
       }
     }
-    const fixed = spec.fixedSpells.map((name) => input.spellOf?.(name)?.name ?? capital(name));
-    const fixedCantrips = spec.fixedCantrips.map((name) => input.spellOf?.(name)?.name ?? capital(name));
+    const sorted = (names: string[], cantrip: boolean) =>
+      names.filter((name) => {
+        const known = input.spellOf?.(name);
+        return known ? (known.level === 0) === cantrip : cantrip;
+      });
+    const fixed = [...sorted(spec.fixedSpells, false), ...sorted(spec.fixedCantrips, false)].map((name) => input.spellOf?.(name)?.name ?? capital(name));
+    const fixedCantrips = [...sorted(spec.fixedCantrips, true), ...sorted(spec.fixedSpells, true)].map((name) => input.spellOf?.(name)?.name ?? capital(name));
     const named = [...fixed, ...picked.map((name) => input.spellOf?.(name)?.name ?? name)];
     const ability: CastingAbility | null =
       spec.ability === "choice"

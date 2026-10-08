@@ -199,6 +199,9 @@ export type ResourceDef = {
   // Require the feature name to BE the match term, not merely contain it as
   // a word: "Rage" is barbarian rage, "Road Rage" (road_warrior) is not.
   exact?: boolean;
+  // A feat's counter under the same id as a class's: the two add up
+  // (Inner Resilience's ki on a monk's).
+  stacks?: boolean;
   // The classes whose feature this counter belongs to. A feature of the
   // same name granted by any other class is not this feature: the grifter's
   // Vanish is counted, the ranger's is not.
@@ -309,6 +312,62 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     effect: { kind: "narrative" },
     guidance:
       "Sorcery points buy Metamagic on a spell being cast (spend with amount), or convert to and from spell slots: call use_resource with variant like 'create a 2nd-level slot' (costs 2/3/5/6/7 points for levels 1-5) or 'convert my 3rd-level slot into points' and the server moves the points and slots. Created slots vanish on a long rest. The spell itself still goes through use_spell_slot or cast_at_enemy as normal.",
+  },
+  // ---- the feats' counters (src/lib/srd/feat-combat.ts) ----
+  {
+    id: "luck_points",
+    match: ["lucky", "fortunate"],
+    exact: true,
+    displayName: "Luck Points",
+    maxFor: () => 3,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance:
+      "Lucky (or Level Up's Fortunate): three luck points a long rest. One spent on their own attack roll, ability check or saving throw rolls an extra d20 and keeps the best (pc_attack luck: true, request_roll luck: true; the server spends the point), or on an attack made against them (use_reaction 'lucky' after the hit: the attacker's d20 is rolled again and the lower kept; no reaction is spent).",
+  },
+  {
+    id: "ki",
+    match: ["inner resilience"],
+    exact: true,
+    stacks: true,
+    displayName: "Ki Points",
+    maxFor: () => 3,
+    recharge: "short",
+    effect: { kind: "narrative" },
+    guidance: "Inner Resilience (Tome of Heroes): 3 ki points for Patient Defense or Step of the Wind, 3 more on a monk's own; back after a short rest.",
+  },
+  {
+    id: "superiority_dice",
+    match: ["martial adept"],
+    exact: true,
+    stacks: true,
+    displayName: "Superiority Dice",
+    maxFor: () => 1,
+    recharge: "short",
+    effect: { kind: "narrative" },
+    guidance: "Martial Adept: one superiority die (a d6) for the two maneuvers the feat taught, one more on a Battle Master's own; back after a short rest.",
+  },
+  {
+    id: "sorcery_points",
+    match: ["metamagic adept"],
+    exact: true,
+    stacks: true,
+    displayName: "Sorcery Points",
+    maxFor: () => 2,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: "Metamagic Adept: 2 sorcery points for the two Metamagic options the feat taught, on top of a sorcerer's own; back after a long rest.",
+  },
+  {
+    id: "inspiring_leader",
+    match: ["inspiring leader", "rallying speaker"],
+    exact: true,
+    displayName: "Inspiring Leader",
+    maxFor: () => 6,
+    recharge: "short",
+    effect: { kind: "temp_hp", dice: (level, mods) => `${Math.max(1, level + Math.max(0, mods.cha ?? 0))}` },
+    guidance:
+      "Inspiring Leader (or Level Up's Rallying Speaker): ten minutes of rallying words give up to six friendly creatures within 30 feet who can hear and understand them temporary hit points equal to the speaker's level plus Charisma modifier; one use per creature (targetCharacterId), and a creature cannot benefit again until it finishes a rest.",
   },
   {
     id: "second_wind",
@@ -641,6 +700,23 @@ export const RESOURCE_DEFS: ResourceDef[] = [
 export type ResourceState = { max: number; used: number };
 export type ResourceMap = Record<string, ResourceState>;
 
+// Lucky's counter (src/lib/srd/feat-combat.ts): three points a long rest.
+export const LUCK_POINTS = "luck_points";
+
+export function luckPointsLeft(resources: ResourceMap | undefined): number {
+  const state = resources?.[LUCK_POINTS];
+  return state ? Math.max(0, state.max - state.used) : 0;
+}
+
+// The resources map with one luck point spent, or null when none is left.
+export function spendLuckCounter(resources: ResourceMap | undefined): ResourceMap | null {
+  const state = resources?.[LUCK_POINTS];
+  if (!state || state.used >= state.max) {
+    return null;
+  }
+  return { ...(resources ?? {}), [LUCK_POINTS]: { ...state, used: state.used + 1 } };
+}
+
 export function resourceDef(id: string): ResourceDef | null {
   if (isFreeCastResource(id)) {
     return freeCastDef(id);
@@ -792,10 +868,14 @@ export function populateResources(
   abilityMods: Record<string, number>,
   existing: ResourceMap | undefined,
   classes?: Array<{ id: string; level: number }>,
+  // The feats on the sheet: the ones with a counter of their own (Lucky's
+  // points, Inspiring Leader's uses) are read like features.
+  feats?: string[],
 ): ResourceMap {
   const out: ResourceMap = {};
+  const held_all: Array<{ name: string; classId?: string }> = [...features, ...(feats ?? []).map((name) => ({ name }))];
   for (const def of RESOURCE_DEFS) {
-    const held = features.filter((feature) => featureHolds(def, feature));
+    const held = held_all.filter((feature) => featureHolds(def, feature));
     const matched = held[0];
     if (!matched) {
       continue;
@@ -814,6 +894,9 @@ export function populateResources(
       const row = def.upgrades?.find((upgrade) => plainName(upgrade.match) === plainName(name));
       const stated = def.upgrades ? usesNamed(name) : null;
       max = Math.max(max, row?.uses ?? 0, stated ?? 0);
+    }
+    if (def.stacks && out[def.id]) {
+      max += out[def.id].max;
     }
     const used = Math.min(existing?.[def.id]?.used ?? 0, max);
     out[def.id] = { max, used };

@@ -5,6 +5,7 @@
 // AI claims for a roll. Split from pc-attack-plan.ts, which asks these in its
 // refusal pass and carries the answers to the roll. Nothing here writes.
 
+import { featBonusAttack, featBonusAttackHint } from "@/lib/srd/feat-combat";
 import { GREAT_WEAPON_MASTER_READY } from "@/lib/srd/feat-combat";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import type { Advantage } from "@/lib/dice";
@@ -56,6 +57,9 @@ export function martialArtsApplies(sheet: CharacterSheet): boolean {
 
 export type AttackOptions = {
   bonusAttack: AnyBonusAttack | null;
+  // The feat whose bonus attack this is (Polearm Master, Crossbow Expert,
+  // Charger), for the plan to shape the swing.
+  bonusFeat?: string | null;
   // Stunning Strike declared: the ki DC the target's CON save meets.
   stunningStrike: { dc: number } | null;
   // Reckless Attack declared on this swing (the condition is written when
@@ -129,13 +133,16 @@ export function checkAttackOptions(input: {
       // turn a melee crit or a kill was scored (src/lib/srd/feat-combat.ts).
       const greatWeapon =
         meleeWeapon && holdsFeat(sheet, "Great Weapon Master") && budget.oncePerTurn.includes(GREAT_WEAPON_MASTER_READY);
+      // Polearm Master, Crossbow Expert, Charger (src/lib/srd/feat-combat.ts).
+      const featBonus = greatWeapon ? "Great Weapon Master" : featBonusAttack(sheet, budget, { weaponAttack, melee: meleeWeapon, weapon: profile.weapon });
       // Battle Magic, War Magic, Sudden Strike, Telekinetic Master...
       // (src/lib/srd/authored-effects.ts).
-      const granted = greatWeapon ? { ok: true } : authoredBonusAttackProblem(sheet, budget);
+      const granted = featBonus ? { ok: true } : authoredBonusAttackProblem(sheet, budget);
       if ("refused" in granted || !weaponAttack) {
         const gwmHint = holdsFeat(sheet, "Great Weapon Master") ? " Great Weapon Master's bonus attack follows a melee critical hit or a kill on this turn." : "";
-        return { refused: "refused" in granted ? `${sheet.name}: ${granted.refused}${gwmHint}` : "A feature's bonus-action attack is a weapon attack." };
+        return { refused: "refused" in granted ? `${sheet.name}: ${granted.refused}${gwmHint}${featBonusAttackHint(sheet)}` : "A feature's bonus-action attack is a weapon attack." };
       }
+      options.bonusFeat = featBonus;
     } else {
       if (!hasFeature(sheet, "frenzy")) {
         return { refused: `${sheet.name} has no Frenzy; the bonus-action attack of a frenzy is a Berserker's.` };

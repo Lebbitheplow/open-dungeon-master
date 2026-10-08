@@ -472,9 +472,10 @@ export function useBuilderDerived({
             subclass,
             level: effectiveLevel,
             features: optionPicks.map((optionName) => ({ name: optionName })),
+            feats: featNames,
           })
         : [],
-    [klass, subclass, effectiveLevel, optionPicks],
+    [klass, subclass, effectiveLevel, optionPicks, featNames],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog

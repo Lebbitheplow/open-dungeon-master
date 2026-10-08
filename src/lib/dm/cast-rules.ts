@@ -9,6 +9,7 @@
 // Pure: the sheet, the spell's facts and the turn budget come in as values,
 // so scripts/test-cast-rules.mjs walks every branch without a database.
 
+import { castsWithHandsFull } from "@/lib/srd/feat-combat";
 import { featTwinOf } from "@/lib/srd/feat-effects";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor } from "@/lib/srd";
@@ -177,7 +178,7 @@ export function componentProblem(sheet: Caster, facts: SpellFacts | null): strin
   if (!facts.somatic && !facts.material) {
     return null;
   }
-  if (handsBusy(sheet) < 2 || hasFeat(sheet, "war caster")) {
+  if (handsBusy(sheet) < 2 || castsWithHandsFull(sheet)) {
     return null;
   }
   const classIds = sheet.classes?.length ? sheet.classes.map((entry) => entry.id) : [sheet.class];

@@ -4,6 +4,7 @@
 // module describes. Nothing is spent here and nothing is rolled: every
 // return is either a refusal or a profile.
 
+import { brawlerUnarmed } from "@/lib/srd/feat-combat";
 import { getMounts } from "@/lib/db/mounts";
 import { isValidExpression } from "@/lib/dice";
 import { acBreakdownFor, computeSheetDerived, spellAttackFor, type SheetDerived } from "@/lib/srd";
@@ -275,6 +276,7 @@ export function buildAttackProfile(
     profile = weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
       riders,
       martialArts: martialArtsApplies(sheet),
+      brawler: brawlerUnarmed(sheet),
       twoHanded: hands.twoHanded,
       offHand: args.offHand,
       otherWeaponInHand: otherHandArmed({

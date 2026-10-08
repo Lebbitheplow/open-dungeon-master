@@ -5,6 +5,7 @@
 // the board, the conditions, the effects and the settings are looked at,
 // nothing is written and nothing is refused.
 
+import { liftsSmallHeavyPenalty } from "@/lib/srd/feat-combat";
 import { shootsFreelyInMelee } from "@/lib/srd/feat-combat";
 import type { Campaign } from "@/lib/db/campaigns";
 import { inDirectSunlight } from "@/lib/dm/sunlight";
@@ -250,7 +251,8 @@ export function attackSituation(input: {
   }
   // SRD heavy property: Small creatures swing oversized weapons at
   // disadvantage.
-  const smallWithHeavy = profile.heavy && sizeForRace(sheet.race) === "Small";
+  // Giant Foe lifts the Small character's heavy-weapon disadvantage (feat-combat.ts).
+  const smallWithHeavy = profile.heavy && sizeForRace(sheet.race) === "Small" && !liftsSmallHeavyPenalty(sheet);
   // Sunlight Sensitivity: in direct sunlight, disadvantage (sunlight.ts).
   const sunlit = hasSunlightSensitivity(sheet) && inDirectSunlight(campaign.id);
   if (sunlit) {

@@ -1,3 +1,4 @@
+import { concentrationFeat } from "@/lib/srd/feat-combat";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import {
@@ -282,11 +283,12 @@ export function concentrationDamageHook(
   // It is a saving throw like any other: Bless adds its d4 and Bane takes
   // one away. War Caster gives advantage on exactly this save.
   const riders = conditionRollRiders(fresh.conditions, "save", "con");
-  const warCaster = [...(fresh.feats ?? []), ...fresh.features.map((feature) => feature.name)].some(
-    (entry) => entry.toLowerCase().includes("war caster"),
-  );
+  // War Caster's advantage, or Battle Caster's 1d6 expertise die
+  // (src/lib/srd/feat-combat.ts).
+  const feat = concentrationFeat(fresh);
+  const warCaster = feat?.advantage === true;
   const advantage = mergeAdvantage([...(warCaster ? ["advantage" as const] : []), ...riders.advantageSources]);
-  const outcome = rollExpression(`${d20Expression(saveMod, advantage)}${riders.diceSuffix}`);
+  const outcome = rollExpression(`${d20Expression(saveMod, advantage)}${riders.diceSuffix}${feat?.die ? `+${feat.die}` : ""}`);
   if (riders.spent.length) {
     const cleared = removeConditions(fresh.conditions, fresh.conditionMeta, riders.spent);
     patchSheet(fresh.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
@@ -320,7 +322,7 @@ export function concentrationDamageHook(
       dc,
       rolled: outcome.total,
       held,
-      ...(warCaster ? { warCaster: "advantage on the save" } : {}),
+      ...(feat ? { [feat.advantage ? "warCaster" : "battleCaster"]: feat.advantage ? "advantage on the save" : `+${feat.die} on the save` } : {}),
       ...(riders.notes.length ? { riders: riders.notes } : {}),
     },
   };

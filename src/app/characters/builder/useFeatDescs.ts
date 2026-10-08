@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { contentSlug } from "@/lib/help";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { packFeatText } from "@/lib/srd/feat-text";
+import { registerFeatRules } from "@/lib/srd/feature-effects";
 
 // The text of the feats on the sheet, by lower-case name, for what each
 // grants (src/lib/srd/feat-grants.ts). ODM's own feats are bundled; a
@@ -30,7 +31,13 @@ export function useFeatDescs(names: string[]): Record<string, string> {
           // reads it (src/lib/srd/feat-text.ts). An unknown feat is
           // remembered as empty, so it is asked for once.
           const data = body?.entry?.data;
-          setFetched((current) => ({ ...current, [name]: data ? packFeatText(data).desc : "" }));
+          const desc = data ? packFeatText(data).desc : "";
+          // The builder's own numbers (speed, initiative, passive scores)
+          // read the feat through the same table the server does.
+          if (desc) {
+            registerFeatRules(name, desc);
+          }
+          setFetched((current) => ({ ...current, [name]: desc }));
         })
         .catch(() => {
           if (!cancelled) {

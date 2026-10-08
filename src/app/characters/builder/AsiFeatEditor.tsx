@@ -271,6 +271,7 @@ export default function AsiFeatEditor({
                 {choice?.mode === "feat" && featSpecOf && onFeatPicks && known ? (
                   <FeatChoicesFields
                     feat={choice.feat}
+                    desc={featDescOf?.(choice.feat)}
                     spec={featSpecOf(choice.feat)}
                     picks={featChoices?.[choice.feat.trim().toLowerCase()]}
                     known={known}

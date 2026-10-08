@@ -8,6 +8,7 @@
 //
 // Pure: the caller hands in the tokens, their footprints and their sizes.
 
+import { climbsFreely } from "@/lib/srd/feat-combat";
 import { footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
 import { moveTraitsFrom, tileIndex, type BattleToken, type MoveTraits } from "@/lib/battlemap/types";
 import { sizeForRace } from "@/lib/srd";
@@ -72,7 +73,9 @@ export function pcMoveTraits(input: {
   enemySize: (refId: string) => string | undefined;
 }): MoveTraits {
   const moverSize = sizeForRace(input.sheet.race);
-  const traits = moveTraitsFrom(input.sheet.features);
+  // Athlete: climbing costs no extra movement (src/lib/srd/feat-combat.ts).
+  const base = moveTraitsFrom(input.sheet.features);
+  const traits = typeof base === "object" && base !== null && climbsFreely(input.sheet) ? { ...base, climbs: true } : base;
   return {
     ...(typeof traits === "object" ? traits : { swims: traits }),
     passable: passableTiles({

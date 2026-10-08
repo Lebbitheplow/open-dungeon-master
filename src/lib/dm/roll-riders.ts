@@ -17,6 +17,8 @@ export const INSPIRATION_ID = "inspiration";
 // The token a roll that spent Inspiration hands back in spendInspiration;
 // spendRollCarriers (src/lib/dm/forced-save.ts) marks the counter used.
 export const INSPIRATION_SPEND = "@inspiration";
+// A luck point folded into the roll (Lucky, src/lib/srd/feat-combat.ts).
+export const LUCK_SPEND = "@luck";
 
 export function heldInspiration(sheet: Pick<CharacterSheet, "resources">): boolean {
   const state = sheet.resources?.[INSPIRATION_ID];

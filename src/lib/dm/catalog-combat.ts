@@ -138,7 +138,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       { name: "maneuver", label: "Maneuver", kind: "text", help: "Battle Master only. The Superiority Die is spent on a hit (on the roll for Precision Attack)." },
       { name: "bonusAttack", label: "Bonus-action attack", kind: "select", options: BONUS_ATTACK, help: "Martial Arts' unarmed strike after the Attack action, or a raging Berserker's frenzy. Spends the bonus action." },
       { name: "stunningStrike", label: "Stunning Strike", kind: "boolean", help: "Monk 5+. One ki on a melee hit; the target saves CON or is stunned." },
-      { name: "powerAttack", label: "Power attack (-5 / +10)", kind: "boolean", help: "Great Weapon Master with a heavy melee weapon, or Sharpshooter with a ranged weapon: -5 to hit for +10 damage." },
+      { name: "powerAttack", label: "Power attack", kind: "boolean", help: "Great Weapon Master (heavy melee) or Sharpshooter (ranged): -5 to hit for +10 damage. Powerful Attacker: disadvantage for +10. Deadeye: the proficiency bonus off the roll for twice it on the damage." },
       { name: "reckless", label: "Reckless Attack", kind: "boolean", help: "Barbarian 2+, first attack of the turn. Attacks against them have advantage until their next turn." },
       { name: "nonlethal", label: "Knock out", kind: "boolean", help: "Melee only. A creature dropped to 0 falls unconscious instead of dying." },
       { name: "hordeBreaker", label: "Horde Breaker", kind: "boolean", help: "Hunter ranger, once a turn: an extra attack on a different creature within 5 feet of one already attacked." },
