@@ -23,17 +23,17 @@ import { WorkshopSection } from "@/app/home/WorkshopSection";
 import { pickContinue, type HomeCampaign } from "@/app/home/types";
 import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
 
-// The desktop and Android shells' quick tiles land here with ?new=1 or
-// ?new=solo and expect the wizard already open. Read once, at mount, as the
+// The desktop and Android shells' quick tiles land here with ?new=1,
+// ?new=solo or ?new=starter and expect that wizard already open. Read once, at mount, as the
 // initial dialog state: Home only mounts the dashboard after the session
 // check resolves on the client, so there is no server render to disagree
 // with, and no effect has to set state after the fact.
-function requestedWizard(): "campaign" | "solo" | null {
+function requestedWizard(): "campaign" | "solo" | "starter" | null {
   if (typeof window === "undefined") {
     return null;
   }
   const value = currentQuery().get("new");
-  return value === "solo" ? "solo" : value === "1" ? "campaign" : null;
+  return value === "solo" ? "solo" : value === "starter" ? "starter" : value === "1" ? "campaign" : null;
 }
 
 // The home is a title screen (docs: "ODM World Concepts", round 3a): the
@@ -54,7 +54,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   const [cloningId, setCloningId] = useState("");
   const [createOpen, setCreateOpen] = useState(() => requestedWizard() === "campaign");
   const [soloOpen, setSoloOpen] = useState(() => requestedWizard() === "solo");
-  const [starterOpen, setStarterOpen] = useState(false);
+  const [starterOpen, setStarterOpen] = useState(() => requestedWizard() === "starter");
   const [howToOpen, setHowToOpen] = useState(false);
   const joinInputRef = useRef<HTMLInputElement | null>(null);
   const capabilities = useCapabilities();
