@@ -31,7 +31,11 @@ function stripForSpeech(text: string): string {
     .replace(/\[roll:[^\]]+\]/g, " ")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[*_#>`]/g, "")
-    .replace(/\s+/g, " ")
+    // Line breaks stay: who said a line depends on the paragraph it opens
+    // (src/lib/dm/speech.ts), and the voices must hear it as the
+    // transcript shows it. planSpeech flattens each part it reads.
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ ?\n\s*/g, "\n")
     .trim();
 }
 
@@ -69,13 +73,9 @@ export function castVoices(campaignId: string): CastVoice[] {
   }
 }
 
-function edgeWords(text: string, count: number, from: "start" | "end"): string {
-  const words = text.trim().split(/\s+/);
-  return (from === "start" ? words.slice(0, count) : words.slice(-count)).join(" ");
-}
-
-// Who speaks in this passage without a voice yet, and what the prose right
-// beside their lines says about them ("she says", "the old man growls").
+// Who speaks in this passage without a voice yet, and what the prose that
+// pointed at them says about them ("she says", "Marla tucks her hair
+// back"), never the words about whoever else the sentence names.
 export function unvoicedSpeakers(
   speech: string,
   roster: RosterEntry[],
@@ -95,26 +95,17 @@ export function unvoicedSpeakers(
     speech,
     roster.map((entry) => ({ kind: "npc" as const, id: entry.key, name: entry.name, aliases: entry.aliases })),
   );
-  segments.forEach((segment, index) => {
+  for (const segment of segments) {
     if (segment.kind !== "speech") {
-      return;
+      continue;
     }
     const entry = roster.find((candidate) => candidate.key === segment.speaker.id);
     if (!entry || entry.voice) {
-      return;
+      continue;
     }
     keys.add(entry.key);
-    const before = segments[index - 1];
-    const after = segments[index + 1];
-    near.set(
-      entry.key,
-      [
-        near.get(entry.key) ?? "",
-        before?.kind === "prose" ? edgeWords(before.text, 5, "end") : "",
-        after?.kind === "prose" ? edgeWords(after.text, 5, "start") : "",
-      ].join(" "),
-    );
-  });
+    near.set(entry.key, `${near.get(entry.key) ?? ""} ${segment.cue ?? ""}`);
+  }
   return { keys, hints: new Map([...near].map(([key, text]) => [key, guessGender(text)])) };
 }
 

@@ -73,4 +73,29 @@ test("the story so far says who is a he and who is a she", () => {
   assert.equal(told.get("pike"), "", "the pronouns after the next name are that person's, not his");
 });
 
+test("pronouns count for the person a sentence is about, never the one it mentions or the words of a quote", () => {
+  const table = [
+    { kind: "npc", id: "sella", name: "Sella" },
+    { kind: "pc", id: "liriel", name: "Liriel" },
+    { kind: "npc", id: "brom", name: "Brom" },
+  ];
+  const told = genderFromProse(table, [
+    "Sella folds her arms and turns to Liriel. She waits.",
+    'Brom laughs. "She will never know," he says. "Not her, not anyone."',
+  ]);
+  assert.equal(told.get("sella"), "f");
+  assert.equal(told.get("liriel") ?? "", "", "Liriel was only turned to");
+  assert.equal(told.get("brom"), "m", "the quote's she and her are somebody else");
+});
+
+const { unvoicedSpeakers } = await import("../src/lib/tts.ts");
+
+test("a voice is cast for whoever spoke, from what the prose said about them", () => {
+  const entry = (key, name) => ({ key, kind: "npc", name, aliases: [], portraitUrl: "", ownerUserId: "", gender: "", voice: null });
+  const roster = [entry("npc:marla", "Marla"), entry("npc:pike", "Old Pike")];
+  const { keys, hints } = unvoicedSpeakers('Marla turns to Old Pike, his face grim. "We go," she says.', roster, null);
+  assert.deepEqual([...keys], ["npc:marla"], "Pike was only spoken to");
+  assert.equal(hints.get("npc:marla"), "f", "his face is Pike's; she is Marla");
+});
+
 console.log(`test-tts-cast: ${passed} passed`);
