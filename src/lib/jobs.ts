@@ -1,4 +1,5 @@
 import { purgeDueAccounts } from "@/lib/account-deletion";
+import { syncAssistantRelay } from "@/lib/agents/assistant-relay";
 import {
   getCampaignById,
   listIdleActiveCampaigns,
@@ -129,10 +130,18 @@ function accountPurgeJob(now: number) {
   purgeDueAccounts(now);
 }
 
+// A device world's assistant links follow its shared address to the
+// broker (src/lib/agents/assistant-relay.ts). Async, so it is started here
+// and finishes on its own; it never runs two passes at once.
+function assistantRelayJob(now: number) {
+  void syncAssistantRelay(now).catch((error) => console.error("[jobs] assistant-relay failed", error));
+}
+
 const jobs: Array<[name: string, run: (now: number) => void]> = [
   ["session-reminders", sessionReminderJob],
   ["idle-campaigns", idleCampaignJob],
   ["account-purge", accountPurgeJob],
+  ["assistant-relay", assistantRelayJob],
 ];
 
 // One pass over every job. Exported so the test harness can drive ticks with

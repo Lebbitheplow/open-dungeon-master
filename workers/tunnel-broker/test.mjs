@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import worker, { parseCode, parsePort } from "./src/broker.js";
 import { gate } from "./src/gate.js";
+import { createRelay, parseRelayPath } from "./src/relay.js";
 import { SqlStore, importLegacy } from "./src/store.js";
+import { checkRelayUsage, parseWorldUrl, RELAY_CRON, worldRoute } from "./src/worlds.js";
 
 // The store under test is the real SqlStore over node:sqlite, so every
 // check below runs against the SQL the Durable Object runs. Writes and
@@ -545,6 +547,238 @@ await test("the edge gate refuses on either limiter and passes without them", as
   const damped = await gate(request("GET", "/turn"), { PER_IP: limiter(true), GLOBAL: limiter(false) });
   assert.equal(damped.status, 429);
   assert.equal(await gate(request("GET", "/turn"), {}), null);
+});
+
+// ---------- the world registry and the assistant relay ----------
+
+const WORLD_KEY = "0123456789abcdef0123456789abcdef";
+const WORLD_SECRET = "world-secret-0123456789";
+const TOKEN = "odm_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+const PLAY = "https://play-abcd2345.opendungeonmaster.com";
+
+function worldEnv() {
+  return { ...env, SESSIONS: new TestStore(), AGENTS_ORIGIN: "https://agents.opendungeonmaster.com" };
+}
+
+function putWorld(e, body, secret = WORLD_SECRET, key = WORLD_KEY) {
+  return worker.fetch(request("PUT", `/world/${key}`, { body, headers: { "x-world-secret": secret } }), e);
+}
+
+await test("a world key is claimed once and answers with its assistant link base", async () => {
+  const e = worldEnv();
+  const first = await putWorld(e, { url: PLAY, instanceId: "inst-12345678" });
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), {
+    key: WORLD_KEY,
+    url: PLAY,
+    relayUrl: `https://agents.opendungeonmaster.com/w/${WORLD_KEY}`,
+  });
+  const writes = e.SESSIONS.writes;
+  assert.equal((await putWorld(e, { url: PLAY, instanceId: "inst-12345678" })).status, 200);
+  assert.equal(e.SESSIONS.writes, writes, "the same address again costs no write");
+  assert.equal((await putWorld(e, { url: "https://other-name.trycloudflare.com", instanceId: "inst-12345678" })).status, 200);
+  assert.equal(e.SESSIONS.writes, writes + 1, "a moved address is written");
+  const stolen = await putWorld(e, { url: PLAY, instanceId: "inst-12345678" }, "someone-elses-secret-000");
+  assert.equal(stolen.status, 409);
+  assert.equal((await worldRoute(e, WORLD_KEY)).url, "https://other-name.trycloudflare.com");
+});
+
+await test("a world can only point at a tunnel address, with its instance id", async () => {
+  assert.equal(parseWorldUrl(PLAY + "/path", "opendungeonmaster.com"), PLAY);
+  assert.equal(parseWorldUrl("https://abc-def.trycloudflare.com", "opendungeonmaster.com"), "https://abc-def.trycloudflare.com");
+  for (const bad of [
+    "http://play-abcd2345.opendungeonmaster.com",
+    "https://broker.opendungeonmaster.com",
+    "https://play-x.y.opendungeonmaster.com",
+    "https://play-abcd2345.opendungeonmaster.com:8443",
+    "https://example.com",
+    "https://u:p@abc.trycloudflare.com",
+  ]) {
+    assert.equal(parseWorldUrl(bad, "opendungeonmaster.com"), null, bad);
+  }
+  const e = worldEnv();
+  assert.equal((await putWorld(e, { url: "https://example.com", instanceId: "inst-12345678" })).status, 400);
+  assert.equal((await putWorld(e, { url: PLAY })).status, 400, "instance id required");
+  assert.equal((await putWorld(e, { url: PLAY, instanceId: "inst-12345678" }, "short")).status, 400);
+  assert.equal((await putWorld(e, { url: PLAY, instanceId: "inst-12345678" }, WORLD_SECRET, "XYZ")).status, 400);
+});
+
+await test("dropping a world keeps its claim and a second drop is free", async () => {
+  const e = worldEnv();
+  await putWorld(e, { url: PLAY, instanceId: "inst-12345678" });
+  const drop = () =>
+    worker.fetch(request("DELETE", `/world/${WORLD_KEY}`, { headers: { "x-world-secret": WORLD_SECRET } }), e);
+  assert.equal((await drop()).status, 200);
+  const route = await worldRoute(e, WORLD_KEY);
+  assert.deepEqual(route, { found: true, url: "", instanceId: "inst-12345678", paused: false });
+  const writes = e.SESSIONS.writes;
+  assert.equal((await drop()).status, 200);
+  assert.equal(e.SESSIONS.writes, writes);
+  const wrong = await worker.fetch(
+    request("DELETE", `/world/${WORLD_KEY}`, { headers: { "x-world-secret": "nope-nope-nope-nope" } }),
+    e,
+  );
+  assert.equal(wrong.status, 409);
+  assert.equal((await putWorld(e, { url: PLAY, instanceId: "inst-12345678" }, "a-new-device-secret-00")).status, 409);
+});
+
+// A fake world behind a tunnel: answers the identity probe and the MCP
+// endpoint, and records what reached it.
+function fakeWorld({ instanceId = "inst-12345678", status = 200 } = {}) {
+  const seen = [];
+  const fetchImpl = async (url, init = {}) => {
+    seen.push({ url: String(url), method: init.method || "GET", headers: new Headers(init.headers), body: init.body });
+    if (String(url).endsWith("/api/auth/providers")) {
+      return new Response(JSON.stringify({ instanceId }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response('{"jsonrpc":"2.0","id":1,"result":{}}', {
+      status,
+      headers: { "content-type": "application/json", "mcp-session-id": "s1", "www-authenticate": "Bearer", "set-cookie": "x=1" },
+    });
+  };
+  return { seen, fetchImpl };
+}
+
+function relayCall(path = `/w/${WORLD_KEY}/${TOKEN}`, init = {}) {
+  return new Request(`https://agents.opendungeonmaster.com${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", origin: "https://evil.example", cookie: "odm_session=abc" },
+    body: '{"jsonrpc":"2.0","id":1,"method":"initialize"}',
+    ...init,
+  });
+}
+
+const ONLINE = { found: true, url: PLAY, instanceId: "inst-12345678", paused: false };
+
+await test("an assistant link is forwarded to the world with its token as a bearer header", async () => {
+  const world = fakeWorld();
+  let lookups = 0;
+  const relay = createRelay({ lookup: async () => (lookups++, ONLINE), fetch: world.fetchImpl });
+  const response = await relay(relayCall(), {});
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("mcp-session-id"), "s1");
+  assert.equal(response.headers.get("www-authenticate"), null);
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const mcp = world.seen.find((call) => call.url === `${PLAY}/api/mcp`);
+  assert.equal(mcp.method, "POST");
+  assert.equal(mcp.headers.get("authorization"), `Bearer ${TOKEN}`);
+  assert.equal(mcp.headers.get("origin"), null, "the world refuses browser origins");
+  assert.equal(mcp.headers.get("cookie"), null);
+  assert.equal(mcp.headers.get("accept"), "application/json, text/event-stream");
+  assert.equal(new TextDecoder().decode(mcp.body), '{"jsonrpc":"2.0","id":1,"method":"initialize"}');
+  await relay(relayCall(), {});
+  assert.equal(lookups, 1, "the address is cached between calls");
+  assert.equal(world.seen.filter((call) => call.url.endsWith("/api/auth/providers")).length, 1, "and so is the proof");
+});
+
+await test("a token is never sent to an address that is not that world", async () => {
+  const world = fakeWorld({ instanceId: "somebody-else" });
+  const relay = createRelay({ lookup: async () => ONLINE, fetch: world.fetchImpl });
+  const response = await relay(relayCall(), {});
+  assert.equal(response.status, 503);
+  assert.equal(world.seen.some((call) => call.url.endsWith("/api/mcp")), false);
+});
+
+await test("a stale cached address gets one fresh look before the world is called offline", async () => {
+  let clock = 0;
+  const answers = [ONLINE, { ...ONLINE, url: "https://next-one.trycloudflare.com" }];
+  let lookups = 0;
+  const world = fakeWorld();
+  const fetchImpl = async (url, init) => {
+    if (String(url).startsWith(PLAY) && lookups > 1) throw new Error("tunnel gone");
+    return world.fetchImpl(url, init);
+  };
+  const relay = createRelay({ lookup: async () => answers[Math.min(lookups++, 1)], fetch: fetchImpl, now: () => clock });
+  assert.equal((await relay(relayCall(), {})).status, 200);
+  clock += 11 * 60_000; // the identity proof has lapsed, the address is re-checked
+  assert.equal((await relay(relayCall(), {})).status, 200);
+  assert.ok(world.seen.some((call) => call.url === "https://next-one.trycloudflare.com/api/mcp"));
+});
+
+await test("offline, unknown, paused and dead-tunnel worlds get a clear refusal", async () => {
+  const world = fakeWorld();
+  const offline = createRelay({ lookup: async () => ({ ...ONLINE, url: "" }), fetch: world.fetchImpl });
+  const off = await offline(relayCall(), {});
+  assert.equal(off.status, 503);
+  assert.match((await off.json()).error, /offline/);
+  const unknown = createRelay({ lookup: async () => ({ found: false, paused: false }), fetch: world.fetchImpl });
+  assert.equal((await unknown(relayCall(), {})).status, 404);
+  const paused = createRelay({ lookup: async () => ({ ...ONLINE, paused: true }), fetch: world.fetchImpl });
+  const rest = await paused(relayCall(), {});
+  assert.equal(rest.status, 503);
+  assert.ok(Number(rest.headers.get("retry-after")) >= 60);
+  assert.equal(world.seen.length, 0, "a paused relay forwards nothing");
+  const dead = fakeWorld({ status: 530 });
+  const tunnel = createRelay({ lookup: async () => ONLINE, fetch: dead.fetchImpl });
+  assert.equal((await tunnel(relayCall(), {})).status, 503);
+  const relay = createRelay({ lookup: async () => ONLINE, fetch: world.fetchImpl });
+  assert.equal((await relay(relayCall("/w/not-a-key/odm_x"), {})).status, 404);
+  assert.equal((await relay(relayCall(undefined, { method: "PUT" }), {})).status, 405);
+  assert.equal(parseRelayPath(`/w/${WORLD_KEY}/not_a_token_shape_at_all`), null);
+});
+
+await test("the relay's limiters are keyed per world and for the whole relay", async () => {
+  const seen = [];
+  const limiter = (ok) => ({
+    async limit({ key }) {
+      seen.push(key);
+      return { success: ok };
+    },
+  });
+  const world = fakeWorld();
+  const relay = createRelay({ lookup: async () => ONLINE, fetch: world.fetchImpl });
+  assert.equal((await relay(relayCall(), { RELAY_WORLD: limiter(true), RELAY_ALL: limiter(true) })).status, 200);
+  assert.deepEqual(seen, [WORLD_KEY, "all"]);
+  const busy = await relay(relayCall(), { RELAY_WORLD: limiter(false), RELAY_ALL: limiter(true) });
+  assert.equal(busy.status, 429);
+  assert.equal(busy.headers.get("retry-after"), "60");
+  assert.equal((await relay(relayCall(), { RELAY_WORLD: limiter(true), RELAY_ALL: limiter(false) })).status, 429);
+});
+
+await test("the kill switch trips past the daily cap, once, and lifts under it", async () => {
+  const e = { ...worldEnv(), RELAY_DAILY_REQUEST_CAP: "1000" };
+  const original = globalThis.fetch;
+  let workers = 0;
+  let objects = 0;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        data: { viewer: { accounts: [{ workers: [{ sum: { requests: workers } }, { sum: { requests: 1 } }], objects: [{ sum: { requests: objects } }] }] } },
+      }),
+    );
+  try {
+    workers = 400;
+    objects = 300;
+    assert.equal(await checkRelayUsage(e), 401);
+    assert.equal((await worldRoute(e, WORLD_KEY)).paused, false);
+    objects = 1200;
+    assert.equal(await checkRelayUsage(e), 1200, "whichever counter is higher");
+    assert.equal((await worldRoute(e, WORLD_KEY)).paused, true);
+    const writes = e.SESSIONS.writes;
+    await checkRelayUsage(e);
+    assert.equal(e.SESSIONS.writes, writes, "an unchanged switch costs no write");
+    e.RELAY_DAILY_REQUEST_CAP = "5000";
+    await checkRelayUsage(e);
+    assert.equal((await worldRoute(e, WORLD_KEY)).paused, false);
+    globalThis.fetch = async () => new Response(JSON.stringify({ errors: [{ message: "no scope" }] }));
+    assert.equal(await checkRelayUsage(e), null, "unreadable analytics changes nothing");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+await test("the ten-minute schedule runs the kill switch and skips the hourly chores", async () => {
+  const e = worldEnv();
+  let sweeps = 0;
+  e.SESSIONS.sweep = async () => {
+    sweeps += 1;
+    return 0;
+  };
+  await worker.scheduled({ cron: RELAY_CRON }, e);
+  assert.equal(sweeps, 0);
+  await worker.scheduled({ cron: "17 * * * *" }, e);
+  assert.equal(sweeps, 1);
 });
 
 console.log(`\n${passed} checks passed`);
