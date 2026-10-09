@@ -156,6 +156,9 @@ export async function POST(request: Request) {
         isAdmin: user.isAdmin,
         mustChangePassword: user.mustChangePassword,
       },
+      // The server's first account, which just claimed it: the form takes
+      // it straight to the guided setup (src/app/setup).
+      ...(claimsServer ? { claimedServer: true } : {}),
     },
     { status: 201 },
   );

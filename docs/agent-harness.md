@@ -13,7 +13,9 @@ Neither way ever asks for, reads or stores the program's password or key.
 
 ## The storyteller
 
-Open **Admin > Agent program**. Each program has a card saying whether it
+The guided setup (**Admin > Guided setup**, and the first thing a fresh server
+shows its admin) walks this as its first question, with the same cards and the
+install and sign-in commands to copy. By hand: open **Admin > Agent program**. Each program has a card saying whether it
 is installed on this computer, signed in, and how well it is locked down.
 Pick one, choose a story model and a cheaper bookkeeping model, save, then
 press **Test the table**: one tiny real turn that checks the program starts,
@@ -80,10 +82,11 @@ are packed against; default 128K).
 
 ## Your own agent
 
-Open **Settings > Connected agents**, name the connection, tick what it may
-do (read, play, characters, campaigns, Dungeon Master), optionally limit it
-to one campaign, and copy the setup line for your program. The token is
-shown once.
+Open **Settings > Connected agents** (or the guided setup's last question),
+name the connection, tick what it may do (read, play, characters, campaigns,
+Dungeon Master), optionally limit it to one campaign, pick your program and
+copy its one line. The token is shown once. The panel then watches for the
+agent's first call and says when it arrives, so you know the line worked.
 
 Every tool is a web route called as you, so the agent can do exactly what
 you can do in the browser and nothing more. It can never change backend

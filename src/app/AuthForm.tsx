@@ -8,7 +8,7 @@ import type { SessionUser } from "@/lib/campaign-types";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { currentPathname, currentQuery, replaceAddress } from "@/lib/navigation";
+import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
 
 type AuthMode = "login" | "register";
 
@@ -137,7 +137,13 @@ export default function AuthForm({
   // A fresh server: no accounts yet, and the first one (the admin) takes the
   // one-time setup code from the server log.
   const [needsSetup, setNeedsSetup] = useState(false);
-  const [setupCode, setSetupCode] = useState("");
+  // The link the server prints beside the code (?setup=...) fills it in, so
+  // the operator clicks instead of copying a code out of a terminal.
+  const [urlSetupCode] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return (currentQuery().get("setup") || "").trim().toUpperCase().slice(0, 40);
+  });
+  const [setupCode, setSetupCode] = useState(urlSetupCode);
   const [pendingReset, setPendingReset] = useState<{ user: SessionUser; tempPassword: string } | null>(
     null,
   );
@@ -157,7 +163,8 @@ export default function AuthForm({
         }
       })
       .catch(() => undefined);
-    if (currentQuery().get("error")) {
+    // A consumed error or setup code leaves the address bar (and history).
+    if (currentQuery().get("error") || currentQuery().get("setup")) {
       replaceAddress(currentPathname());
     }
   }, []);
@@ -223,6 +230,11 @@ export default function AuthForm({
       }
       if (data.user?.mustChangePassword) {
         setPendingReset({ user: data.user, tempPassword: password });
+        return;
+      }
+      // The server's first account goes straight on to setting it up.
+      if (data.claimedServer === true && !deviceWorld) {
+        navigateTo("/setup");
         return;
       }
       onAuthed(data.user);
@@ -311,12 +323,13 @@ export default function AuthForm({
                 maxLength={40}
                 placeholder="XXXX-XXXX-XXXX-XXXX"
                 aria-describedby="setup-code-hint"
-                className={cn(FIELD, "font-mono uppercase tracking-wider")}
+                className={cn(FIELD, "font-mono uppercase tracking-wider", urlSetupCode && "text-amber-200")}
               />
             </FieldLabel>
             <span id="setup-code-hint" className="mt-1.5 block text-xs text-stone-500">
-              This server has no accounts yet. The first one becomes its admin and needs the
-              one-time setup code printed in the server log.
+              {urlSetupCode
+                ? "This server has no accounts yet. The first one becomes its admin; the setup code came with the link from the server log."
+                : "This server has no accounts yet. The first one becomes its admin and needs the one-time setup code printed in the server log, or open the link printed beside it."}
             </span>
           </div>
         ) : null}

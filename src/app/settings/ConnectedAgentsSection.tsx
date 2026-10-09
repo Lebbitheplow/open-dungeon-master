@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageSection } from "@/components/PageShell";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
-import { CopyLine } from "@/components/CopyLine";
+import { AgentConnectLines } from "@/components/AgentConnectLines";
 
 type Grant = {
   id: string;
@@ -23,7 +23,7 @@ type Grant = {
 
 type Campaign = { id: string; title: string };
 
-const SCOPES: Array<{ id: string; label: string; hint: string }> = [
+export const AGENT_SCOPE_CHOICES: Array<{ id: string; label: string; hint: string }> = [
   { id: "read", label: "Read", hint: "Your campaigns, characters, quests and lore, as you see them." },
   { id: "play", label: "Play", hint: "Act, speak and roll at a table as your character." },
   { id: "characters", label: "Characters", hint: "Create, edit and delete your library characters." },
@@ -34,27 +34,6 @@ const SCOPES: Array<{ id: string; label: string; hint: string }> = [
 function when(iso: string | null): string {
   if (!iso) return "never";
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
-
-function setupLines(url: string, token: string) {
-  return [
-    {
-      name: "Claude Code",
-      text: `claude mcp add --transport http odm ${url} --header "Authorization: Bearer ${token}"`,
-      block: false,
-    },
-    {
-      name: "Codex (~/.codex/config.toml)",
-      text: `[mcp_servers.odm]\nurl = "${url}"\nhttp_headers = { Authorization = "Bearer ${token}" }`,
-      block: true,
-    },
-    {
-      name: "opencode (opencode.json)",
-      text: `"mcp": { "odm": { "type": "remote", "url": "${url}", "headers": { "Authorization": "Bearer ${token}" }, "oauth": false } }`,
-      block: false,
-    },
-    { name: "Any other MCP client (streamable HTTP)", text: `${url}  ·  Authorization: Bearer ${token}`, block: false },
-  ];
 }
 
 // Connected agents (docs/harness-mcp-plan.md 7): your own Claude Code, Codex
@@ -74,7 +53,7 @@ export function ConnectedAgentsSection() {
   const [campaignId, setCampaignId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [fresh, setFresh] = useState<{ token: string; name: string } | null>(null);
+  const [fresh, setFresh] = useState<{ id: string; token: string; name: string } | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,7 +89,7 @@ export function ConnectedAgentsSection() {
       }
       setGrants((current) => [data.grant, ...(current ?? [])]);
       setMcpUrl(data.mcpUrl ?? mcpUrl);
-      setFresh({ token: data.token, name: data.grant.name });
+      setFresh({ id: data.grant.id, token: data.token, name: data.grant.name });
       setCreating(false);
       setName("");
     } finally {
@@ -141,15 +120,10 @@ export function ConnectedAgentsSection() {
       {fresh ? (
         <div className="hx-token mb-4 space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/20 p-3">
           <p className="text-sm text-amber-100">
-            <strong>{fresh.name}</strong> is connected. This is the only time its token is shown; copy the line for
+            <strong>{fresh.name}</strong> is ready. This is the only time its token is shown; copy the line for
             your agent now.
           </p>
-          {setupLines(mcpUrl, fresh.token).map((line) => (
-            <div key={line.name}>
-              <span className="mb-1 block text-xs text-stone-400">{line.name}</span>
-              <CopyLine text={line.text} label={`${line.name} setup`} block={line.block} />
-            </div>
-          ))}
+          <AgentConnectLines grantId={fresh.id} token={fresh.token} mcpUrl={mcpUrl} />
           <button type="button" className={ui.btnSmall} onClick={() => setFresh(null)}>
             I have copied it
           </button>
@@ -198,7 +172,7 @@ export function ConnectedAgentsSection() {
             </label>
             <div className="space-y-2">
               <span className="block text-xs font-medium text-stone-400">What it may do</span>
-              {SCOPES.map((scope) => {
+              {AGENT_SCOPE_CHOICES.map((scope) => {
                 const on = scopes.includes(scope.id);
                 return (
                   <label key={scope.id} className="flex items-start gap-3 text-sm text-stone-300">
