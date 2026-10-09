@@ -8,6 +8,7 @@
 // none, a wizard prepares from the book, and the counts are the tables'
 // (src/lib/srd/spell-prep.ts spellListProblems).
 import { spellClassFor } from "@/lib/classes";
+import { featSpellNames, withFeatSpells, type FeatSpellGrant } from "@/lib/srd/feat-spells";
 import type { AbilityScores, ClassEntry, Spellcasting } from "@/lib/schemas/sheet";
 import { spellSlotsFor } from "@/lib/srd";
 import { pactSlotsFor, slotTableFor } from "@/lib/srd/multiclass";
@@ -183,6 +184,10 @@ export type SpellcastingInput = {
   // Cantrips the race knows by nature (src/lib/srd/racial-grants.ts): free,
   // and not judged against the class's list.
   innateCantrips?: string[];
+  // The spells the sheet's feats teach (src/lib/srd/feat-spells.ts): free,
+  // on top of the class's counts, from any list. A character with no
+  // Spellcasting of their own gets a block with no slots for them.
+  featSpells?: FeatSpellGrant[];
   // Lists the stored character already holds, on an edit.
   held?: Spellcasting;
   // False for a character whose lists were settled where the server saw
@@ -227,7 +232,13 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
   const [first] = input.classes;
   const level = input.classes.reduce((sum, entry) => sum + entry.level, 0);
   if (!casting.length) {
-    const names = dedupeNames(namesOf(input.sent));
+    // A fighter with Fey Touched or Magic Initiate casts the feat's spells
+    // and nothing else: the block holds them, the feat's ability, no slots.
+    const taught = withFeatSpells(null, input.featSpells ?? []);
+    const allowed = new Set(
+      taught ? [...(taught.cantrips ?? []), ...taught.known, ...(taught.spellbook ?? [])].map(lower) : [],
+    );
+    const names = dedupeNames(namesOf(input.sent)).filter((name) => !allowed.has(lower(name)));
     return {
       problems:
         names.length && input.judgeLists
@@ -235,7 +246,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
               `A ${first.id.replace(/[_-]+/g, " ")} has no Spellcasting feature, so ${names.slice(0, 3).join(", ")} cannot be on the sheet.`,
             ]
           : [],
-      spellcasting: null,
+      spellcasting: taught,
     };
   }
 
@@ -321,9 +332,32 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
     }
   }
 
+  // The feats' spells sit with the first caster's, on top of its own:
+  // cantrips with the cantrips, spells with the known, a ritual book's with
+  // the spellbook.
+  const taught = featSpellNames(input.featSpells ?? []);
+  const rituals = (input.featSpells ?? []).flatMap((grant) => grant.rituals);
+  if (views.length && (taught.cantrips.length || taught.spells.length)) {
+    const holder = views[0];
+    const heldAnywhere = (name: string, pick: (view: CasterView) => string[]) =>
+      views.some((view) => pick(view).some((entry) => lower(entry) === lower(name)));
+    views[0] = {
+      ...holder,
+      cantrips: [...holder.cantrips, ...taught.cantrips.filter((name) => !heldAnywhere(name, (view) => view.cantrips))],
+      known: [
+        ...holder.known,
+        ...taught.spells.filter(
+          (name) => !rituals.some((entry) => lower(entry) === lower(name)) && !heldAnywhere(name, (view) => [...view.known, ...view.prepared]),
+        ),
+      ],
+      spellbook: [...holder.spellbook, ...rituals.filter((name) => !heldAnywhere(name, (view) => view.spellbook))],
+    };
+  }
+  const free = [...innate, ...taught.cantrips, ...taught.spells];
+
   const problems: string[] = [];
   if (input.judgeLists) {
-    const held = new Set([...namesOf(input.held ?? null), ...innate].map(lower));
+    const held = new Set([...namesOf(input.held ?? null), ...free].map(lower));
     for (const view of views) {
       const list = casting.find((entry) => lower(entry.entry.id) === lower(view.classId))?.list ?? "";
       problems.push(
@@ -340,12 +374,12 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
         dedupeNames(names)
           .map((name) => ({ name, school: input.spellOf(name)?.school ?? null, level: input.spellOf(name)?.level ?? 1 }))
           .filter((spell) => spell.level > 0);
-      const heldNames = namesOf(input.held ?? null).filter((name) => !innate.some((entry) => lower(entry) === lower(name)));
+      const heldNames = namesOf(input.held ?? null).filter((name) => !free.some((entry) => lower(entry) === lower(name)));
       const schools = thirdCasterSchoolProblem({
         classId: view.classId,
         subclass: casting.find((entry) => lower(entry.entry.id) === lower(view.classId))?.entry.subclass,
         level: view.level,
-        spells: levelled(view.known.length ? view.known : view.prepared),
+        spells: levelled((view.known.length ? view.known : view.prepared).filter((name) => !taught.spells.some((entry) => lower(entry) === lower(name)))),
         heldOutside: thirdCasterOutside(view.classId, levelled(heldNames)),
       });
       if (schools) {
@@ -360,7 +394,8 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
         { ...sheetLike, spellcasting: written },
         {
           bookAllowance: input.bookAllowance,
-          freeCantrips: [...(racial?.name ? [racial.name] : []), ...innate],
+          freeCantrips: [...(racial?.name ? [racial.name] : []), ...innate, ...taught.cantrips],
+          freeSpells: taught.spells,
         },
       ),
     );

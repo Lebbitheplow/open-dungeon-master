@@ -55,6 +55,7 @@ export type CampaignDraft = {
   multiclassingEnabled: boolean;
   worldSimulation: boolean;
   inventoryApprovals: boolean;
+  vitalsApprovals: boolean;
   midGameJoinOpen: boolean;
   holdSubmissions: boolean;
   narrationGuard: boolean;
@@ -108,6 +109,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   multiclassingEnabled: true,
   worldSimulation: true,
   inventoryApprovals: false,
+  vitalsApprovals: false,
   midGameJoinOpen: false,
   holdSubmissions: false,
   narrationGuard: true,

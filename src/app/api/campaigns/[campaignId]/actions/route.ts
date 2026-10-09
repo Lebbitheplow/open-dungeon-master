@@ -21,6 +21,7 @@ import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { parseMessageIntent } from "@/lib/dm/intent-logic";
+import { spokenLine } from "@/lib/dm/speech";
 import { intentRefusal } from "@/lib/dm/intent-check";
 
 export const runtime = "nodejs";
@@ -147,7 +148,7 @@ export async function POST(
 
   const content =
     kind === "say"
-      ? `"${parsed.data.content}"`
+      ? spokenLine(parsed.data.content)
       : kind === "ooc"
         ? `(ooc) ${parsed.data.content}`
         : parsed.data.content;

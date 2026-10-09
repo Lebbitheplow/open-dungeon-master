@@ -10,7 +10,8 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Slider } from "@/components/ui/Slider";
 import { LoreImageField } from "@/app/workshop/lore/LoreFields";
-import { GlyphChip, KitButton, PanelLoading, panelField, panelRow } from "./PanelKit";
+import { GlyphChip, KitButton, LoadFailed, PanelLoading, panelField, panelRow } from "./PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { FACTION_ATTITUDES, REPUTATION_MAX, REPUTATION_MIN, reputationLabel, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
@@ -49,25 +50,25 @@ export function FactionsPanel({ campaignId, steersStory, refreshKey = 0 }: { cam
   const [draft, setDraft] = useState<Draft>(blank());
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  // A refused list is shown in the server's words, never as "no factions
+  // yet" (issue 140); the rows stay up when a later read fails.
+  const { loaded, loadError, settle } = useLoadStatus();
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/factions`)
-      .then((response) => (response.ok ? response.json() : {}))
-      .then((data: { factions?: FactionView[] }) => {
-        if (!cancelled) {
-          setFactions(data.factions ?? []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFactions([]);
-        }
-      });
+    readLoad<{ factions?: FactionView[] }>(fetch(`/api/campaigns/${campaignId}/factions`), "The factions").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload) {
+        setFactions(outcome.payload.factions ?? []);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, refreshKey, reload]);
+  }, [campaignId, refreshKey, reload, settle]);
 
   function startEdit(faction: FactionView) {
     setDraft({
@@ -120,10 +121,11 @@ export function FactionsPanel({ campaignId, steersStory, refreshKey = 0 }: { cam
   }
 
   if (factions === null) {
-    return <PanelLoading label="Reading the banners..." />;
+    return loadError ? <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} /> : <PanelLoading label="Reading the banners..." />;
   }
   return (
     <div className="space-y-2">
+      {loaded && loadError ? <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} /> : null}
       <SectionHead
         title="Factions"
         glyph="tab-factions"

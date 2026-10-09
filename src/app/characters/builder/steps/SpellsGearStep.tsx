@@ -12,6 +12,7 @@ import { thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import { armorClassLine, purseViewFor } from "../derivedReasons";
+import BackgroundKitSection from "../BackgroundKitSection";
 import EquipmentSection from "../EquipmentSection";
 import KitChoicesSection from "../KitChoicesSection";
 import type { BackgroundOption, ClassOption } from "../useBuilderOptions";
@@ -56,6 +57,7 @@ export function SpellsGearStep({
       {klass && derived.casts ? (
         <SpellsSection state={state} derived={derived} klass={klass} pack={pack} />
       ) : null}
+      <div data-builder-target="gear">
       <EquipmentSection
         equipment={derived.fullEquipment}
         suggestions={derived.equipmentSuggestions}
@@ -65,19 +67,29 @@ export function SpellsGearStep({
         purse={purse}
         inputClass={inputClass}
         kit={
-          klass && derived.classKit && derived.kitChoices ? (
-            <KitChoicesSection
-              kit={derived.classKit}
-              choices={derived.kitChoices}
-              training={derived.kitTraining}
-              className={klass.name.toLowerCase()}
-              armorClass={armorClassLine(derived.acInfo?.ac ?? derived.ac, derived.acInfo?.parts)}
-              onOption={actions.chooseKitOption}
-              onPick={actions.pickKitSlot}
-            />
-          ) : null
+          <>
+            {klass && derived.classKit && derived.kitChoices ? (
+              <KitChoicesSection
+                kit={derived.classKit}
+                choices={derived.kitChoices}
+                training={derived.kitTraining}
+                className={klass.name.toLowerCase()}
+                armorClass={armorClassLine(derived.acInfo?.ac ?? derived.ac, derived.acInfo?.parts)}
+                onOption={actions.chooseKitOption}
+                onPick={actions.pickKitSlot}
+              />
+            ) : null}
+            {background && !state.keepsStoredGear ? (
+              <BackgroundKitSection
+                kit={derived.backgroundKit}
+                backgroundName={background.name}
+                onPick={actions.pickBackgroundGear}
+              />
+            ) : null}
+          </>
         }
       />
+      </div>
     </div>
   );
 }
@@ -108,6 +120,8 @@ function SpellsSection({
     maxSpellLevel,
     starters,
     subclassSpells,
+    racialCantrips,
+    featSpells,
     spellSearchClass,
     spellStyle,
     spellbookAdvice,
@@ -133,6 +147,11 @@ function SpellsSection({
   const lower = (name: string) => name.toLowerCase();
   const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
   const isGranted = (name: string) => has(subclassSpells, name);
+  // Known from the race, on top of the class's count (issue #118).
+  const isRacial = (name: string) => has(racialCantrips, name);
+  // Known from a feat (Fey Touched's misty step, Spell Sniper's cantrip),
+  // on top of the class's count too.
+  const isFeat = (name: string) => has([...featSpells.cantrips, ...featSpells.spells], name);
   const poolByName = new Map(pool.map((row) => [lower(row.name), row]));
   // An Eldritch Knight's or Arcane Trickster's two schools, as the server
   // judges the sheet (src/lib/srd/third-caster.ts). Null when the spell is
@@ -157,7 +176,7 @@ function SpellsSection({
       setCantrips((current) => current.filter((entry) => lower(entry) !== lower(name)));
       return;
     }
-    if (cantripCap !== null && cantrips.length >= cantripCap) {
+    if (cantripCap !== null && chosenCantrips.length >= cantripCap) {
       setLimitNote(
         `You already know ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}. Remove one to choose ${name}.`,
       );
@@ -218,10 +237,10 @@ function SpellsSection({
     if (!starters) {
       return;
     }
-    const cantripRoom = cantripCap === null ? Infinity : cantripCap - cantrips.length;
+    const cantripRoom = cantripCap === null ? Infinity : cantripCap - chosenCantrips.length;
     const newCantrips = starters.cantrips
       .map((entry) => entry.n)
-      .filter((name) => !has(cantrips, name))
+      .filter((name) => !has(cantrips, name) && !isRacial(name))
       .slice(0, Math.max(0, cantripRoom));
     const cap = wizard ? bookCap : spellCap;
     const spellRoom = cap === null ? Infinity : cap - chosenSpells.length;
@@ -245,7 +264,7 @@ function SpellsSection({
   // What a tile that is not chosen says when it cannot be chosen now, so a
   // full list reads as full before anyone taps (issue 66: taps past the cap
   // did nothing a player could see).
-  const cantripsFull = cantripCap !== null && cantrips.length >= cantripCap;
+  const cantripsFull = cantripCap !== null && chosenCantrips.length >= cantripCap;
   const listCap = wizard ? bookCap : spellCap;
   const listFull = listCap !== null && chosenSpells.length >= listCap;
   const preparedFull = spellCap !== null && chosenPrepared.length >= spellCap;
@@ -273,6 +292,9 @@ function SpellsSection({
     ...cantrips,
     ...spells,
     ...subclassSpells,
+    ...racialCantrips,
+    ...featSpells.cantrips,
+    ...featSpells.spells,
     ...(starters?.cantrips ?? []).map((entry) => entry.n),
     ...(starters?.spells ?? []).map((entry) => entry.n),
   ].filter((name, index, all) => all.findIndex((other) => lower(other) === lower(name)) === index);
@@ -284,8 +306,8 @@ function SpellsSection({
     }
     let tileState: SpellTile["state"];
     if (level === 0) {
-      tileState = has(cantrips, name) ? "ready" : "available";
-    } else if (isGranted(name)) {
+      tileState = isRacial(name) || isFeat(name) ? "granted" : has(cantrips, name) ? "ready" : "available";
+    } else if (isGranted(name) || isFeat(name)) {
       tileState = "granted";
     } else if (wizard) {
       if (phase === "prepare" && !has(spells, name)) {
@@ -300,12 +322,14 @@ function SpellsSection({
         name,
         level,
         state: tileState,
-        suggested: suggested.has(lower(name)),
+        suggested: suggested.has(lower(name)) && !(level === 0 && isRacial(name)) && !isFeat(name),
         blocked: blockedFor(name, level, tileState),
         label: displayName(pack, "spells", name),
         data: row?.data,
         slug: row?.slug,
         homebrew: row?.source === "homebrew",
+        ...(level === 0 && isRacial(name) ? { note: "From your race" } : isFeat(name) ? { note: "From your feat" } : {}),
+        ...(row?.document && row.documentSlug !== "wotc-srd" ? { source: row.document } : {}),
       },
     ];
   });
@@ -333,6 +357,7 @@ function SpellsSection({
     <StepPanel
       title="Spells"
       ornate
+      anchor="spells"
       help={
         <>
           <GameTerm id="cantrip">Cantrips</GameTerm> are small spells you know for good and cast as

@@ -1,11 +1,28 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import {
+  BackendRefusal,
+  fetchBackend,
+  forEachStreamLine,
+  MAX_BACKEND_BODY_BYTES,
+  MAX_BACKEND_ERROR_BYTES,
+  readBody,
+} from "@/lib/backend-fetch";
+import {
   describeEndpoint,
   endpointKind,
+  openAiToolRoute,
   profileById,
   resolveSampling,
+  toolRouteFromError,
+  toolsUnsupportedByServer,
   unsupportedParamFromError,
+  type OpenAiToolRoute,
 } from "@/lib/dm/sampling-logic";
+import {
+  customResponsesEndpoint,
+  readResponsesReply,
+  responsesPayload,
+} from "@/lib/openai-responses";
 import {
   buildPropsUrl,
   contextCacheKey,
@@ -13,6 +30,8 @@ import {
   readContextWindow,
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
+import { isPrivateBackendHost } from "@/lib/backend-host";
+import { chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { localModelContextWindow } from "@/lib/text-models";
 import { harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
@@ -67,6 +86,26 @@ export type UpstreamChatMessage = {
 export type UpstreamResult = {
   message?: UpstreamChatMessage;
   error?: Response;
+  // The backend's finish_reason for the first choice, when it sent one:
+  // "stop", "tool_calls", or "length" for a reply cut at the output cap.
+  // Read by the DM turn loop to tell a model that ran out of room from one
+  // that chose to say nothing (issue #120).
+  finishReason?: string;
+  // What the backend said the call cost, for the usage ledger
+  // (src/lib/usage/ledger.ts); absent when it said nothing.
+  usage?: UpstreamUsage;
+};
+
+export type UpstreamUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  backend: "local" | "custom" | "openai" | "openrouter" | "harness";
+  // Sent with a key.
+  keyed: boolean;
+  // Sent with a key to a public host: the host pays per call
+  // (src/lib/shared-host.ts isPrivateBackendHost says which hosts are local).
+  paid: boolean;
 };
 
 export type ChatRequestOptions = {
@@ -190,6 +229,13 @@ export function storyContextTokens(settings: {
 // ship.
 const probedContextWindows = new Map<string, number>();
 
+// What a backend taught us about a model, keyed like the windows above and
+// kept for the process for the same reason: the route its tools run on
+// when its 400 named one (issue #129), and the body fields it refused, so
+// the next call omits them instead of paying the 400 again.
+const learnedToolRoutes = new Map<string, OpenAiToolRoute>();
+const rememberedDrops = new Map<string, Set<string>>();
+
 // llama.cpp and llama-swap expose the real n_ctx the server was launched with
 // (its -c flag) on /props. Nothing else in the OpenAI-compatible ecosystem
 // reports it, so a miss is completely ordinary and falls through quietly.
@@ -282,124 +328,6 @@ function createRequestTimeout(ms: number) {
   };
 }
 
-// Reads an upstream streaming body line by line with an idle timeout that
-// resets on every chunk, so a stalled model server can't hold the turn open
-// forever while a slow-but-alive one is given all the time it needs.
-// SECURITY: a campaign picks its own backend URL, so whatever answers there
-// is not trusted, the same reasoning as src/lib/comfyui.ts. A redirect is
-// followed only to the same host and only when it keeps the request whole
-// (307 or 308, never down to http), so a reverse proxy's https upgrade or a
-// moved path still works while an answer cannot steer the server's request
-// to another address. Every body is read under a ceiling: a reply is
-// kilobytes, a long streamed one a few megabytes.
-const MAX_BACKEND_BODY_BYTES = 16 * 1024 * 1024;
-const MAX_BACKEND_STREAM_BYTES = 64 * 1024 * 1024;
-const MAX_BACKEND_ERROR_BYTES = 64 * 1024;
-const MAX_BACKEND_REDIRECTS = 3;
-
-class BackendRefusal extends Error {}
-
-async function fetchBackend(url: string, init: RequestInit): Promise<Response> {
-  let current = new URL(url);
-  for (let hops = 0; ; hops += 1) {
-    const response = await fetch(current.href, { ...init, redirect: "manual" });
-    if (response.status < 300 || response.status >= 400) {
-      return response;
-    }
-    await response.body?.cancel().catch(() => {});
-    const location = response.headers.get("location");
-    const next = location ? new URL(location, current) : null;
-    // The same host and port, or that host's https on its default port.
-    const sameServer =
-      next !== null &&
-      next.hostname === current.hostname &&
-      ((next.protocol === current.protocol && next.port === current.port) ||
-        (current.protocol === "http:" && next.protocol === "https:" && next.port === ""));
-    const followed =
-      sameServer && hops < MAX_BACKEND_REDIRECTS && (response.status === 307 || response.status === 308);
-    if (!followed) {
-      throw new BackendRefusal(
-        `The backend at ${url} redirected the request elsewhere, which ODM does not follow. Use the address the server itself answers on.`,
-      );
-    }
-    current = next!;
-  }
-}
-
-// Up to `max` bytes of the body as text; `complete` is false when there
-// was more, which is cancelled unread.
-async function readBody(response: Response, max: number): Promise<{ text: string; complete: boolean }> {
-  if (!response.body) {
-    return { text: "", complete: true };
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      return { text: Buffer.concat(chunks).toString("utf8"), complete: true };
-    }
-    total += value.byteLength;
-    if (total > max) {
-      chunks.push(value.subarray(0, value.byteLength - (total - max)));
-      await reader.cancel().catch(() => {});
-      return { text: Buffer.concat(chunks).toString("utf8"), complete: false };
-    }
-    chunks.push(value);
-  }
-}
-
-async function forEachStreamLine(
-  upstream: Response,
-  idleMs: number,
-  onIdleAbort: () => void,
-  onLine: (line: string) => void,
-) {
-  const reader = upstream.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let total = 0;
-  let idleTimer: ReturnType<typeof setTimeout> | undefined;
-  const resetIdle = () => {
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(onIdleAbort, idleMs);
-  };
-
-  resetIdle();
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      resetIdle();
-      total += value.byteLength;
-      if (total > MAX_BACKEND_STREAM_BYTES) {
-        await reader.cancel().catch(() => {});
-        throw new BackendRefusal("The backend streamed far more than any reply, so the stream was cut off.");
-      }
-      buffer += decoder.decode(value, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim();
-        buffer = buffer.slice(newline + 1);
-        if (line) {
-          onLine(line);
-        }
-        newline = buffer.indexOf("\n");
-      }
-    }
-    buffer += decoder.decode();
-    const rest = buffer.trim();
-    if (rest) {
-      onLine(rest);
-    }
-  } finally {
-    clearTimeout(idleTimer);
-  }
-}
-
 type OllamaChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
@@ -482,6 +410,50 @@ export function customChatEndpoint(baseUrl: string): string {
 // per-chat settings; the key is optional (most local servers need none). When
 // the URL is OpenRouter we add its attribution headers and fall back to the
 // OPENROUTER_* env vars; otherwise the fallback is OPENAI_COMPAT_API_KEY.
+// Which key, if any, a request to this base URL goes out with. Per-campaign
+// key wins, then the admin-panel key, then the env vars. Fallback keys
+// belong to the admin-configured backend: attaching them to any other URL
+// would hand the server's key to whatever host a campaign's settings point
+// at. The OpenRouter env key is gated on the host being OpenRouter, and on
+// https: a campaign's http://openrouter.ai would send it in clear text
+// (OpenRouter itself only answers https, so nothing working is lost). The
+// optional utility backend gets the same treatment: its key is host-gated
+// to its own configured URL, so pointing a campaign elsewhere cannot borrow
+// it.
+function resolveCustomKey(
+  trimmedBase: string,
+  apiKey: string,
+  endpoint: string,
+): { isGlobalBackend: boolean; isUtilityBackend: boolean; resolvedKey: string } {
+  const globalText = getGlobalConfig().text;
+  const isOpenRouter = describeEndpoint(trimmedBase).kind === "openrouter";
+  const chatEndpoint = customChatEndpoint(trimmedBase);
+  const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
+  const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === chatEndpoint;
+  const utilityBase = (globalText.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL") || "").trim();
+  const isUtilityBackend = Boolean(utilityBase) && customChatEndpoint(utilityBase) === chatEndpoint;
+  const resolvedKey =
+    (apiKey || "").trim() ||
+    (isGlobalBackend ? globalText.customApiKey : "") ||
+    (isUtilityBackend ? globalText.utilityApiKey : "") ||
+    (isOpenRouter && /^https:\/\//i.test(endpoint) ? serverEnv("OPENROUTER_API_KEY") : "") ||
+    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "") ||
+    (isUtilityBackend ? serverEnv("UTILITY_TEXT_API_KEY") : "");
+  return { isGlobalBackend, isUtilityBackend, resolvedKey };
+}
+
+// Whether a request to this backend would carry a key to a public host:
+// the shared-host policy (src/lib/shared-host.ts) reads it before the call.
+// A keyed server on this machine or the LAN is the host's own; a keyed
+// public one bills the host per call.
+export function customBackendIsPaid(baseUrl: string, apiKey: string): boolean {
+  const trimmedBase = (baseUrl || "").trim();
+  if (!trimmedBase || isPrivateBackendHost(trimmedBase)) {
+    return false;
+  }
+  return resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey !== "";
+}
+
 export async function requestCustomMessage(
   baseUrl: string,
   model: string,
@@ -524,7 +496,6 @@ export async function requestCustomMessage(
   // every self-hosted server already had, so the default llama-server install
   // receives the same payload it always did.
   const caps = describeEndpoint(trimmedBase);
-  const dropped = new Set(options.dropParams ?? []);
   // Whole-host match from the parsed URL, never a substring of it: this flag
   // releases the server's OPENROUTER_API_KEY, and a campaign controls the
   // URL, so https://evil.test/.openrouter.ai must not read as OpenRouter.
@@ -547,81 +518,98 @@ export async function requestCustomMessage(
     };
   }
 
-  const endpoint = customChatEndpoint(trimmedBase);
-  // Per-campaign key wins, then the admin-panel key, then the env vars.
-  // Fallback keys belong to the admin-configured backend: attaching them to
-  // any other URL would hand the server's key to whatever host a campaign's
-  // settings point at. The OpenRouter env key is gated on isOpenRouter above,
-  // and on https: a campaign's http://openrouter.ai would send it in clear
-  // text (OpenRouter itself only answers https, so nothing working is lost).
-  const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
-  const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === endpoint;
-  // The optional utility backend gets the same treatment: its key is host-
-  // gated to its own configured URL, so pointing a campaign elsewhere cannot
-  // borrow it.
-  const utilityBase = (globalText.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL") || "").trim();
-  const isUtilityBackend = Boolean(utilityBase) && customChatEndpoint(utilityBase) === endpoint;
-  const resolvedKey =
-    (apiKey || "").trim() ||
-    (isGlobalBackend ? globalText.customApiKey : "") ||
-    (isUtilityBackend ? globalText.utilityApiKey : "") ||
-    (isOpenRouter && /^https:\/\//i.test(endpoint) ? serverEnv("OPENROUTER_API_KEY") : "") ||
-    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "") ||
-    (isUtilityBackend ? serverEnv("UTILITY_TEXT_API_KEY") : "");
-  const requestPayload: Record<string, unknown> = {
-    model: resolvedModel,
-    messages,
-    // Thinking runs cooler per Qwen guidance; 0.9 there makes the thought
-    // ramble past the point of ever emitting the tool call.
-    // Per-role sampling, resolved from the admin config
-    // (src/lib/dm/sampling-logic.ts). An explicit per-call temperature still
-    // wins, and an unconfigured install resolves to exactly the previous
-    // built-in defaults.
-    ...resolveSampling({
-      role: isUtilityBackend ? "utility" : "story",
-      configured: {
-        ...(isUtilityBackend ? globalSampling.utility : globalSampling.story),
-        ...(temperature !== undefined ? { temperature } : {}),
-      },
-      profile: profileById(globalSampling.profile || "default"),
-      // Local servers ignore fields they do not know; OpenRouter and OpenAI
-      // reject the local-only sampler fields (src/lib/dm/sampling-logic.ts).
-      allowLocalOnly: caps.allowLocalOnlySamplers,
-      thinking: options.thinking,
-    }),
-    // Explicit 0 so a server-side sampler preset cannot override it: a
-    // positive presence penalty over the long DM prompt suppresses the
-    // tool-call token sequence (measured 2/5 vs 4/5 request_roll rate on
-    // llama-server with the qwen preset's 1.5). Deliberately NOT exposed as a
-    // sampling option, and written after the spread so nothing can reinstate
-    // it from config. Skipped on backends with no preset to override, where
-    // 0 is already the default and reasoning models reject the field.
-    ...(caps.sendZeroPresencePenalty ? { presence_penalty: 0 } : {}),
-    ...(caps.allowTemplateKwargs && options.thinking
-      ? { chat_template_kwargs: { enable_thinking: true } }
-      : {}),
-    ...(onDelta ? { stream: true } : {}),
-  };
+  // How this model runs its tools: what its name says on OpenAI's own host,
+  // overridden by what its first refusal taught (issue #129). The Responses
+  // route is a different endpoint on the same base.
+  const routeKey = contextCacheKey(trimmedBase, resolvedModel);
+  const route: OpenAiToolRoute =
+    learnedToolRoutes.get(routeKey) ??
+    (caps.kind === "openai" ? openAiToolRoute(resolvedModel) : "chat");
+  const viaResponses = route === "responses";
+  const dropped = new Set([
+    ...(rememberedDrops.get(routeKey) ?? []),
+    ...(options.dropParams ?? []),
+  ]);
+  const chatEndpoint = customChatEndpoint(trimmedBase);
+  const endpoint = viaResponses ? customResponsesEndpoint(trimmedBase) : chatEndpoint;
+  const { isUtilityBackend, resolvedKey } = resolveCustomKey(trimmedBase, apiKey, endpoint);
+  // Thinking runs cooler per Qwen guidance; 0.9 there makes the thought
+  // ramble past the point of ever emitting the tool call.
+  // Per-role sampling, resolved from the admin config
+  // (src/lib/dm/sampling-logic.ts). An explicit per-call temperature still
+  // wins, and an unconfigured install resolves to exactly the previous
+  // built-in defaults.
+  const sampling = resolveSampling({
+    role: isUtilityBackend ? "utility" : "story",
+    configured: {
+      ...(isUtilityBackend ? globalSampling.utility : globalSampling.story),
+      ...(temperature !== undefined ? { temperature } : {}),
+    },
+    profile: profileById(globalSampling.profile || "default"),
+    // Local servers ignore fields they do not know; OpenRouter and OpenAI
+    // reject the local-only sampler fields (src/lib/dm/sampling-logic.ts).
+    allowLocalOnly: caps.allowLocalOnlySamplers,
+    thinking: options.thinking,
+  });
+  const requestPayload: Record<string, unknown> = viaResponses
+    ? responsesPayload({
+        model: resolvedModel,
+        messages,
+        sampling,
+        maxOutputTokens: configuredMaxOutputTokens(),
+        stream: Boolean(onDelta),
+        tools,
+        toolChoice,
+      })
+    : {
+        model: resolvedModel,
+        messages,
+        ...sampling,
+        // Explicit 0 so a server-side sampler preset cannot override it: a
+        // positive presence penalty over the long DM prompt suppresses the
+        // tool-call token sequence (measured 2/5 vs 4/5 request_roll rate on
+        // llama-server with the qwen preset's 1.5). Deliberately NOT exposed as a
+        // sampling option, and written after the spread so nothing can reinstate
+        // it from config. Skipped on backends with no preset to override, where
+        // 0 is already the default and reasoning models reject the field.
+        ...(caps.sendZeroPresencePenalty ? { presence_penalty: 0 } : {}),
+        ...(caps.allowTemplateKwargs && options.thinking
+          ? { chat_template_kwargs: { enable_thinking: true } }
+          : {}),
+        // The last chunk of a stream carries the token counts only when
+        // asked (OpenAI, llama-server, vLLM, LM Studio and OpenRouter all
+        // honour it); a backend that rejects the field names it in its 400
+        // and the retry drops it (DROPPABLE_PARAMS).
+        ...(onDelta ? { stream: true, stream_options: { include_usage: true } } : {}),
+      };
 
-  // The output cap, under whichever name this backend takes. Dropping
-  // max_tokens promotes the request to max_completion_tokens rather than
-  // uncapping it, because that rename is why OpenAI's reasoning models
-  // reject the older field.
-  const maxTokensField =
-    caps.maxTokensField === "max_completion_tokens" || dropped.has("max_tokens")
-      ? "max_completion_tokens"
-      : "max_tokens";
-  if (!dropped.has(maxTokensField)) {
-    requestPayload[maxTokensField] = configuredMaxOutputTokens();
+  if (!viaResponses) {
+    // The output cap, under whichever name this backend takes. Dropping
+    // max_tokens promotes the request to max_completion_tokens rather than
+    // uncapping it, because that rename is why OpenAI's reasoning models
+    // reject the older field.
+    const maxTokensField =
+      caps.maxTokensField === "max_completion_tokens" || dropped.has("max_tokens")
+        ? "max_completion_tokens"
+        : "max_tokens";
+    if (!dropped.has(maxTokensField)) {
+      requestPayload[maxTokensField] = configuredMaxOutputTokens();
+    }
+    if (tools?.length) {
+      requestPayload.tools = tools;
+      requestPayload.tool_choice = toolChoice ?? "auto";
+      // GPT-6 Sol and Luna reason by default, and Chat Completions cannot
+      // carry function tools alongside reasoning; "none" is what lets their
+      // tools run there (issue #129). Off this route the field is never
+      // sent: gpt-4.1 and the like 400 on it.
+      if (route === "chat-no-reasoning") {
+        requestPayload.reasoning_effort = "none";
+      }
+    }
   }
 
   for (const field of dropped) {
     delete requestPayload[field];
-  }
-
-  if (tools?.length) {
-    requestPayload.tools = tools;
-    requestPayload.tool_choice = toolChoice ?? "auto";
   }
 
   const timeoutMs = resolveTextTimeoutMs(
@@ -690,6 +678,22 @@ export async function requestCustomMessage(
       );
     }
 
+    // OpenAI's GPT-6 line refuses function tools on Chat Completions and
+    // says what to do instead (issue #129): reasoning_effort "none", or the
+    // Responses API. Take the route it names, remembered for the model, and
+    // retry the same call there. Checked first because the retry without
+    // tools at the bottom would otherwise match "Function tools ... not
+    // supported" and hand the table a narrator with no request_roll and no
+    // engines, in silence.
+    const askedRoute = toolRouteFromError(text);
+    if (tools?.length && askedRoute && askedRoute !== route) {
+      console.warn(
+        `[model] ${endpoint} refused tools for ${resolvedModel}; switching to the "${askedRoute}" route`,
+      );
+      learnedToolRoutes.set(routeKey, askedRoute);
+      return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, options);
+    }
+
     // A strict backend rejected one named body field. Drop that field and
     // retry, so a model family ODM has never heard of still runs instead of
     // costing the table its turn. Checked BEFORE the tool retry below,
@@ -700,11 +704,16 @@ export async function requestCustomMessage(
     // Bounded three ways: only fields on the droppable list in
     // sampling-logic.ts, never the same field twice, and at most three drops
     // per request. Unreachable on a healthy local server, which answers 200.
+    // The field stays dropped for this model for the life of the process,
+    // so one 400 is paid once rather than on every turn.
     const offending = unsupportedParamFromError(text);
     if (offending && !dropped.has(offending) && dropped.size < 3) {
       console.warn(
         `[model] ${endpoint} rejected "${offending}"; retrying without it`,
       );
+      const remembered = rememberedDrops.get(routeKey) ?? new Set<string>();
+      remembered.add(offending);
+      rememberedDrops.set(routeKey, remembered);
       return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, {
         ...options,
         dropParams: [...dropped, offending],
@@ -712,7 +721,10 @@ export async function requestCustomMessage(
     }
 
     // Some servers don't implement function tools; retry without them.
-    if (tools?.length && /tool|function|not support/i.test(text)) {
+    // Never on OpenAI, and never for a refusal that names reasoning or the
+    // Responses API: those fail loudly below (src/lib/dm/sampling-logic.ts).
+    if (tools?.length && toolsUnsupportedByServer(caps.kind, text)) {
+      console.warn(`[model] ${endpoint} refused tools; retrying without them`);
       return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, {
         ...options,
         tools: undefined,
@@ -731,12 +743,72 @@ export async function requestCustomMessage(
     };
   }
 
+  // Transport trouble while reading the reply, worded the same on both
+  // routes: a backend that refused its own reply, a stream that stalled, or
+  // one that was cut.
+  const readFailure = (error: unknown): UpstreamResult => {
+    if (error instanceof BackendRefusal) {
+      return { error: Response.json({ error: error.message }, { status: 502 }) };
+    }
+    return {
+      error: Response.json(
+        {
+          error: requestTimeout.timedOut()
+            ? `${isOpenRouter ? "OpenRouter" : "Backend"} stream stalled for ${formatTimeout(timeoutMs)}. Retry, or lower that backend's context/output settings.`
+            : `The ${isOpenRouter ? "OpenRouter" : "backend"} stream was interrupted. Check the server and retry.`,
+        },
+        { status: requestTimeout.timedOut() ? 504 : 502 },
+      ),
+    };
+  };
+
+  // The ledger's view of this call, once the backend has said what it cost.
+  const tagged = (usage: TokenUsage | null): { usage?: UpstreamUsage } =>
+    usage
+      ? {
+          usage: {
+            ...usage,
+            model: resolvedModel,
+            backend: isOpenRouter ? "openrouter" : caps.kind === "openai" ? "openai" : "custom",
+            keyed: resolvedKey !== "",
+            paid: resolvedKey !== "" && !isPrivateBackendHost(trimmedBase),
+          },
+        }
+      : {};
+
+  if (viaResponses) {
+    try {
+      const reply = await readResponsesReply(upstream, {
+        onDelta,
+        idleMs: timeoutMs,
+        onIdleAbort: requestTimeout.abortNow,
+      });
+      if ("failure" in reply) {
+        return {
+          error: Response.json(
+            { error: "Backend request failed.", detail: reply.failure.slice(0, 300) },
+            { status: 502 },
+          ),
+        };
+      }
+      return {
+        message: reply.message,
+        ...(reply.finishReason ? { finishReason: reply.finishReason } : {}),
+        ...tagged(reply.usage ?? null),
+      };
+    } catch (error) {
+      return readFailure(error);
+    }
+  }
+
   if (onDelta && upstream.body) {
     // OpenAI-compatible SSE: "data: {...}" lines carrying content and
     // tool-call fragments, terminated by "data: [DONE]".
+    let streamUsage = null as TokenUsage | null;
     const contentParts: string[] = [];
     const toolCalls: Array<StreamedToolCall | undefined> = [];
     let upstreamError = "";
+    let finishReason = "";
 
     try {
       await forEachStreamLine(upstream, timeoutMs, requestTimeout.abortNow, (line) => {
@@ -754,7 +826,7 @@ export async function requestCustomMessage(
           return;
         }
         const record = parsed as {
-          choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown } }>;
+          choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown }; finish_reason?: unknown }>;
           error?: { message?: string } | string;
         };
         if (record.error) {
@@ -764,6 +836,11 @@ export async function requestCustomMessage(
               : record.error.message || "The backend reported a stream error.";
           return;
         }
+        const reason = record.choices?.[0]?.finish_reason;
+        if (typeof reason === "string" && reason) {
+          finishReason = reason;
+        }
+        streamUsage = chatUsage(record) ?? streamUsage;
         const delta = record.choices?.[0]?.delta;
         if (typeof delta?.content === "string" && delta.content) {
           contentParts.push(delta.content);
@@ -794,19 +871,7 @@ export async function requestCustomMessage(
         }
       });
     } catch (error) {
-      if (error instanceof BackendRefusal) {
-        return { error: Response.json({ error: error.message }, { status: 502 }) };
-      }
-      return {
-        error: Response.json(
-          {
-            error: requestTimeout.timedOut()
-              ? `${isOpenRouter ? "OpenRouter" : "Backend"} stream stalled for ${formatTimeout(timeoutMs)}. Retry, or lower that backend's context/output settings.`
-              : `The ${isOpenRouter ? "OpenRouter" : "backend"} stream was interrupted. Check the server and retry.`,
-          },
-          { status: requestTimeout.timedOut() ? 504 : 502 },
-        ),
-      };
+      return readFailure(error);
     }
 
     if (upstreamError) {
@@ -827,10 +892,12 @@ export async function requestCustomMessage(
         content: contentParts.join(""),
         ...(completedToolCalls.length ? { tool_calls: completedToolCalls } : {}),
       },
+      ...(finishReason ? { finishReason } : {}),
+      ...tagged(streamUsage),
     };
   }
 
-  let data: { choices?: Array<{ message?: UpstreamChatMessage }> };
+  let data: { choices?: Array<{ message?: UpstreamChatMessage; finish_reason?: unknown }> };
   try {
     const body = await readBody(upstream, MAX_BACKEND_BODY_BYTES);
     if (!body.complete) {
@@ -846,7 +913,12 @@ export async function requestCustomMessage(
     };
   }
 
-  return { message: data?.choices?.[0]?.message };
+  const finishReason = data?.choices?.[0]?.finish_reason;
+  return {
+    message: data?.choices?.[0]?.message,
+    ...(typeof finishReason === "string" && finishReason ? { finishReason } : {}),
+    ...tagged(chatUsage(data)),
+  };
 }
 
 export async function requestLocalMessage(
@@ -948,6 +1020,7 @@ export async function requestLocalMessage(
   if (onDelta && upstream.body) {
     // Ollama streams NDJSON: one JSON object per line with message.content
     // fragments; tool calls arrive whole on whichever line carries them.
+    let localUsage = null as TokenUsage | null;
     const contentParts: string[] = [];
     const toolCalls: unknown[] = [];
     let upstreamError = "";
@@ -975,6 +1048,7 @@ export async function requestLocalMessage(
         if (Array.isArray(record.message?.tool_calls)) {
           toolCalls.push(...record.message.tool_calls);
         }
+        localUsage = ollamaUsage(record) ?? localUsage;
       });
     } catch {
       return {
@@ -1006,6 +1080,7 @@ export async function requestLocalMessage(
         content: contentParts.join(""),
         ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
       },
+      ...(localUsage ? { usage: { ...localUsage, model, backend: "local" as const, keyed: false, paid: false } } : {}),
     };
   }
 
@@ -1020,5 +1095,6 @@ export async function requestLocalMessage(
       ),
     };
   }
-  return { message: data?.message };
+  const usage = ollamaUsage(data);
+  return { message: data?.message, ...(usage ? { usage: { ...usage, model, backend: "local" as const, keyed: false, paid: false } } : {}) };
 }

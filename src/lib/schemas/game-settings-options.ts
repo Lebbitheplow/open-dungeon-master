@@ -21,17 +21,19 @@ export type DicePolicy = (typeof DICE_POLICIES)[number];
 
 // Who narrates. Mirrors DmMode in src/lib/dm/viewer.ts, which holds the pure
 // rules about what each seat may see and do; this is the stored setting.
-export const DM_MODES = ["ai", "human", "assisted"] as const;
+export const DM_MODES = ["ai", "steered", "human", "assisted"] as const;
 export type DmModeSetting = (typeof DM_MODES)[number];
 
 export const DM_MODE_LABELS: Record<DmModeSetting, string> = {
   ai: "AI Dungeon Master",
+  steered: "AI narrates, I steer",
   human: "I run the game",
   assisted: "I run the game, with AI help",
 };
 
 export const DM_MODE_HINTS: Record<DmModeSetting, string> = {
   ai: "The AI narrates, adjudicates and runs the world. The party lead steers it.",
+  steered: "The AI narrates every turn. You sit behind the screen with the arc, the console and the last word, and play no character.",
   human: "You narrate. The server still enforces every rule and rolls every die.",
   assisted: "You own the story; hand the AI the monsters, the prose, or a stretch of turns.",
 };

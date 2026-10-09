@@ -14,6 +14,7 @@
 //     the map is resolved here as one attack with the reaction.
 // Split from action-tools.ts, which re-exports the handler.
 
+import { defensiveDuelist, lucky, mageSlayer, reservesRecovery, sentinel } from "@/lib/dm/feat-reactions";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
@@ -468,6 +469,25 @@ export function handleUseReaction(
   }
   if (/slow fall/.test(lowered)) {
     return slowFall(ctx);
+  }
+  // The feats with a reaction (src/lib/dm/feat-reactions.ts).
+  if (/defensive duelist/.test(lowered)) {
+    return defensiveDuelist(ctx);
+  }
+  if (/mage slayer/.test(lowered)) {
+    return mageSlayer(ctx);
+  }
+  if (/sentinel|guarded warrior/.test(lowered)) {
+    return sentinel(ctx);
+  }
+  if (/^(?:lucky|fortunate|luck point)$/.test(lowered)) {
+    return lucky(ctx);
+  }
+  if (/boundless reserves/.test(lowered)) {
+    return reservesRecovery(ctx, "ki");
+  }
+  if (/sorcerous vigor/.test(lowered)) {
+    return reservesRecovery(ctx, "sorcery_points");
   }
   // Any other reaction must be one the sheet holds; the reaction is spent
   // and the effect is the feature's own text.

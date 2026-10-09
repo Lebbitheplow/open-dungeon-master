@@ -13,7 +13,9 @@ Neither way ever asks for, reads or stores the program's password or key.
 
 ## The storyteller
 
-Open **Admin > Agent program**. Each program has a card saying whether it
+The guided setup (**Admin > Guided setup**, and the first thing a fresh server
+shows its admin) walks this as its first question, with the same cards and the
+install and sign-in commands to copy. By hand: open **Admin > Agent program**. Each program has a card saying whether it
 is installed on this computer, signed in, and how well it is locked down.
 Pick one, choose a story model and a cheaper bookkeeping model, save, then
 press **Test the table**: one tiny real turn that checks the program starts,
@@ -45,17 +47,37 @@ on your machine.
 ### Pictures
 
 A program's own image tool (Codex, Grok Build) is offered to the tables
-only after **Paint a test picture** makes one real image here. Otherwise
-pictures come from your image backend (ComfyUI, an OpenAI key) as before,
-and with none the tables use their painted placeholders. Claude Code and
-opencode cannot paint.
+only after **Paint a test picture** makes one real image here. The test
+paints the way a table does: a landscape location map, through the same
+picture door and queue a campaign uses, then checks the saved file. It
+also reports the campaigns: which already paint with the program, which
+keep a working backend of their own, and which are stuck on one that
+cannot paint (a ComfyUI that is not running, usually because the campaign
+was made before pictures were set up). **Paint the tables' pictures with
+it** then switches the program on, makes it the default for new
+campaigns, and moves the stuck ones onto it, with their area maps back
+on. A campaign on a backend that works is never moved. The same rescue
+runs whenever the admin panel saves a change to pictures.
+
+Without the program's pictures, pictures come from your image backend
+(ComfyUI, an OpenAI key) as before, and with none the tables use their
+painted placeholders. A picture that fails says why under its
+placeholder, in the program's own words when it answered without one.
+Claude Code and opencode cannot paint.
 
 ### Where it runs
 
 - **A server started with npm or systemd:** yes. The program is found even
   when the server does not have your shell's `PATH`; set **Path to the
   program** if it lives somewhere unusual.
-- **The Docker image:** no. A container cannot start programs on its host.
+- **The Docker image:** only with the program installed inside the
+  container; a container cannot start programs on its host. Build the image
+  with `AGENT_PROGRAMS=@openai/codex` in `.env` (`docker compose up -d
+  --build`; `@anthropic-ai/claude-code` and `opencode-ai` work the same way),
+  then sign in once with `docker compose exec open-dungeon-master codex login
+  --device-auth`. The sign-in lives in the `odm-home` volume and survives
+  updates. The image carries the system CA store for this: Codex is a native
+  binary and cannot use Node's bundled roots.
 - **The desktop app:** yes, from **Story AI > An agent you already have**,
   except the Flatpak build, whose sandbox cannot start other programs.
 - **The Android app:** no.
@@ -73,10 +95,11 @@ are packed against; default 128K).
 
 ## Your own agent
 
-Open **Settings > Connected agents**, name the connection, tick what it may
-do (read, play, characters, campaigns, Dungeon Master), optionally limit it
-to one campaign, and copy the setup line for your program. The token is
-shown once.
+Open **Settings > Connected agents** (or the guided setup's last question),
+name the connection, tick what it may do (read, play, characters, campaigns,
+Dungeon Master), optionally limit it to one campaign, pick your program and
+copy its one line. The token is shown once. The panel then watches for the
+agent's first call and says when it arrives, so you know the line worked.
 
 Every tool is a web route called as you, so the agent can do exactly what
 you can do in the browser and nothing more. It can never change backend

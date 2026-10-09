@@ -289,7 +289,9 @@ export function MapPanel({
               <p className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-stone-950/90 to-transparent px-2 pb-1.5 pt-4 text-xs text-stone-300">
                 <GameIcon icon={{ kind: "glyph", key: "system-maps" }} size="size-5" className="shrink-0" />
                 {mediaStatus[shown.id]?.state === "failed"
-                  ? "Map render failed"
+                  ? mediaStatus[shown.id]?.reason
+                    ? `Map render failed: ${mediaStatus[shown.id]?.reason}`
+                    : "Map render failed"
                   : !canPaint && steersStory
                     ? "Not yet mapped. Upload one above."
                     : "Not yet mapped"}

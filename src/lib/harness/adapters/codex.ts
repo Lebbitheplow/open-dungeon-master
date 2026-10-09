@@ -1,9 +1,10 @@
 // Codex, driven through `codex app-server` (JSON-RPC over stdio), the same
 // protocol T3 Code uses.
 //
-// NOT YET RUN on a real install (Codex is not installed on the machine this
-// was written on), so the admin page marks its lockdown unproven until the
-// probe's test turn passes.
+// Run for real on 2026-10-07 against Codex 0.159.2 with a ChatGPT sign-in
+// (scripts/smoke-harness.mjs, HARNESS=codex): every test stage and two
+// narrated turns. The admin page still marks the lockdown unproven on each
+// install until its own test turn passes.
 //
 // Lockdown, "contained": Codex has no switch that removes its apply_patch
 // tool (openai/codex#8161 was closed as not planned). What it gets instead:
@@ -66,6 +67,13 @@ export function codexArgs(options: {
     overrides.push(["mcp_servers.odm.bearer_token_env_var", TOKEN_ENV]);
     overrides.push(["mcp_servers.odm.tool_timeout_sec", 600]);
     overrides.push(["mcp_servers.odm.startup_timeout_sec", 30]);
+    // Current Codex asks for approval before every MCP tool call, and with
+    // approval_policy "never" that question is answered no: "MCP tool call
+    // requires approval, but approval policy is never" (issue #131, seen on
+    // 0.159.2). Pre-approving ODM's own server is the narrow fix: its tools
+    // are the table's and nothing else, while commands and file changes keep
+    // being refused, which the lockdown stage still proves.
+    overrides.push(["mcp_servers.odm.default_tools_approval_mode", "approve"]);
   }
   const args = ["app-server"];
   for (const [key, value] of overrides) {

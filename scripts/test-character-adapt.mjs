@@ -254,4 +254,38 @@ test("a level 4 wizard joining a level 1 table gives back the spells it has not 
   assert.equal(adaptSheetToLevel(wizard, 4, 4).spellcasting.prepared.length, 7);
 });
 
+// ---- Primal Champion (barbarian 20) ----
+
+const barbarian = (level, features = []) =>
+  sheet({
+    class: "barbarian",
+    subclass: "Path of the Berserker",
+    abilities: { str: 22, dex: 14, con: 20, int: 10, wis: 12, cha: 8 },
+    hitDice: { total: level, spent: 0 },
+    features,
+  });
+const champion = [{ name: "Primal Champion", source: "class", classId: "barbarian" }];
+
+test("a barbarian 20 joining below 20 gives back Primal Champion's +4 Strength and Constitution", () => {
+  const adapted = adaptSheetToLevel(barbarian(20, champion), 20, 10);
+  assert.equal(adapted.abilities.str, 18);
+  assert.equal(adapted.abilities.con, 16);
+  assert.equal(adapted.abilities.dex, 14);
+});
+
+test("a barbarian 19 joining a level 20 table gains Primal Champion's +4, as the level-up there would", () => {
+  const nineteen = barbarian(19);
+  nineteen.abilities = { ...nineteen.abilities, str: 18, con: 16 };
+  const adapted = adaptSheetToLevel(nineteen, 19, 20);
+  assert.equal(adapted.abilities.str, 22);
+  assert.equal(adapted.abilities.con, 20);
+});
+
+test("a barbarian 20 at a level 20 table, or one that already holds Primal Champion, gains nothing twice", () => {
+  assert.deepEqual(adaptSheetToLevel(barbarian(20, champion), 20, 20).abilities, barbarian(20).abilities);
+  // Stored at 19 with the feature already on it (a hand-made sheet): the
+  // feature says the points are in.
+  assert.deepEqual(adaptSheetToLevel(barbarian(19, champion), 19, 20).abilities, barbarian(19).abilities);
+});
+
 console.log(`character adapt: ${passed} assertions passed.`);

@@ -37,6 +37,7 @@ const hasPack = contentPackInstalled();
 const { builderMaxHp } = await import("../src/app/characters/builder/abilityDice.ts");
 const { defaultArmor, suggestArmor } = await import("../src/lib/srd/armor.ts");
 const { classKitFor, startingKitFor } = await import("../src/lib/srd/starting-kit.ts");
+const { resolveBackgroundGear } = await import("../src/lib/srd/adventuring-gear.ts");
 
 // SRD 5.1 (Acolyte) and the 2014 Player's Handbook: skills, how many tools,
 // how many languages of choice, the purse in gold pieces, the feature.
@@ -152,8 +153,10 @@ await test("the stored sheet carries the background: skills, tools, languages, k
     // A wizard and a dragonborn bring no tools; Common and Draconic are the race's.
     assert.deepEqual(profs.tools, namedTools(background.tools), `${background.id} tools`);
     assert.equal(profs.languages.length, 2 + background.languages, `${background.id} languages`);
+    // The kit arrives as catalog items, the way the class kit does: a pack
+    // opened, "common clothes" as "Clothes, Common" (issue #113).
     const kit = sheet.equipment.map((item) => item.name);
-    for (const item of background.equipment.filter((entry) => !/ gp$/.test(entry))) {
+    for (const item of resolveBackgroundGear(background.equipment).filter((entry) => !/ gp$/.test(entry))) {
       assert.ok(kit.includes(item), `${background.id} kit lacks ${item}`);
     }
     // The server grants the feature itself, once.
@@ -163,6 +166,97 @@ await test("the stored sheet carries the background: skills, tools, languages, k
     assert.deepEqual(sheet.abilities, { str: 10, dex: 14, con: 13, int: 15, wis: 12, cha: 11 }, background.id);
     assert.deepEqual(sheet.feats, [], background.id);
   }
+});
+
+await test("a background kit's 'of your choice' line follows the tool the player picked, and an either-or line follows the gear pick, at the builder and at the table (issue #127)", async () => {
+  if (!hasPack) {
+    return;
+  }
+  const { mergedBackgroundOptions } = await import("../src/lib/characters/options.ts");
+  const rows = mergedBackgroundOptions(listBackgrounds({ limit: 200 }));
+  const withRow = (row, fields) => {
+    // A background's own skill picks (Guildmember: "two of your choice") must
+    // not be the class's, so each side picks around the other.
+    const backgroundSkills = row.skillChoice ? row.skillChoice.from.filter((skill) => !row.skills.includes(skill)).slice(0, row.skillChoice.count) : [];
+    const classSkills = ["acrobatics", "history", "insight", "perception", "survival"]
+      .filter((skill) => !row.skills.includes(skill) && !backgroundSkills.includes(skill))
+      .slice(0, 2);
+    return builder.build({
+      race: "human",
+      class: "fighter",
+      background: row,
+      chosenSkills: classSkills,
+      stylePicks: ["defense"],
+      bonusLanguages: ["Elvish", "Dwarvish", "Giant"].slice(0, 1 + (row.languages ?? 0)),
+      backgroundSkills,
+      ...fields,
+    });
+  };
+  // Court Servant: "A set of artisan's tools of your choice" is the tool
+  // proficiency the class step asked for.
+  const courtServant = rows.find((row) => row.name === "Court Servant");
+  assert.ok(courtServant, "the pack's Court Servant");
+  const servant = withRow(courtServant, { toolPicks: ["calligrapher's supplies"] });
+  assert.equal(servant.blocker, null, servant.blocker?.message);
+  const servantKit = servant.sheet.equipment.map((item) => item.name);
+  assert.ok(servantKit.includes("Calligrapher's Supplies"), `kit: ${servantKit}`);
+  assert.ok(!servantKit.some((name) => /of your choice/i.test(name)), `kit still carries the line: ${servantKit}`);
+  const servantAt = await atTable(servant.sheet);
+  assert.equal(servantAt.status, 201, servantAt.error);
+  assert.ok(servantAt.sheet.equipment.some((item) => item.name === "Calligrapher's Supplies"));
+  // The kit is free: the purse is the background's 20 gp, untouched.
+  assert.equal(servantAt.sheet.gold, 20, "the filled tool was charged for");
+  // Innkeeper: two either-or lines, the book's first until picked.
+  const innkeeper = rows.find((row) => row.name === "Innkeeper");
+  assert.ok(innkeeper, "the pack's Innkeeper");
+  const first = withRow(innkeeper, {});
+  assert.equal(first.blocker, null, first.blocker?.message);
+  const firstKit = first.sheet.equipment.map((item) => item.name);
+  assert.ok(firstKit.includes("Brewer's Supplies") && firstKit.includes("Dagger"), `kit: ${firstKit}`);
+  assert.deepEqual(first.sheet.backgroundChoices.gear, ["Brewer's supplies", "Dagger"]);
+  const picked = withRow(innkeeper, { backgroundGearPicks: ["Cook's utensils", "Light hammer"] });
+  const pickedKit = picked.sheet.equipment.map((item) => item.name);
+  assert.ok(pickedKit.includes("Cook's Utensils") && pickedKit.includes("Light Hammer"), `kit: ${pickedKit}`);
+  assert.ok(!pickedKit.includes("Brewer's Supplies") && !pickedKit.some((name) => /\bor\b/.test(name)), `kit: ${pickedKit}`);
+  assert.deepEqual(picked.sheet.backgroundChoices.gear, ["Cook's utensils", "Light hammer"]);
+  const pickedAt = await atTable(picked.sheet);
+  assert.equal(pickedAt.status, 201, pickedAt.error);
+  assert.ok(pickedAt.sheet.equipment.some((item) => item.name === "Light Hammer"));
+  assert.equal(pickedAt.sheet.gold, 20, "the picked alternative was charged for");
+  // The table copy keeps the gear, not the builder's picks: those live on
+  // the library copy, where an edit reopens with them.
+  // A pick the line does not offer is refused at the table.
+  const wrong = { ...picked.sheet, backgroundChoices: { ...picked.sheet.backgroundChoices, gear: ["Greatsword", "Light hammer"] } };
+  const wrongAt = await atTable(wrong);
+  assert.equal(wrongAt.status, 400, "an alternative the kit does not offer");
+  assert.match(wrongAt.error, /brewer's supplies or cook's utensils/);
+  // Guildmember (a5e): "One set of artisan's tools or one instrument", a
+  // choice between two KINDS of tool with no tool proficiency to fill it
+  // from (Smoebo's follow-up on #127). The kind's first until named, the
+  // named tool when named, and a tool of neither kind refused.
+  const guildmember = rows.find((row) => row.name === "Guildmember");
+  assert.ok(guildmember, "the pack's Guildmember");
+  const guild = withRow(guildmember, {});
+  assert.equal(guild.blocker, null, guild.blocker?.message);
+  const guildKit = guild.sheet.equipment.map((item) => item.name);
+  assert.ok(guildKit.includes("Alchemist's Supplies"), `kit: ${guildKit}`);
+  assert.ok(!guildKit.some((name) => /\bor\b/.test(name)), `kit still carries the line: ${guildKit}`);
+  assert.deepEqual(guild.sheet.backgroundChoices.gear, ["Alchemist's Supplies"]);
+  const drummer = withRow(guildmember, { backgroundGearPicks: ["Drum"] });
+  const drummerKit = drummer.sheet.equipment.map((item) => item.name);
+  assert.ok(drummerKit.includes("Drum") && !drummerKit.includes("Alchemist's Supplies"), `kit: ${drummerKit}`);
+  assert.deepEqual(drummer.sheet.backgroundChoices.gear, ["Drum"]);
+  const guildAt = await atTable(guild.sheet);
+  assert.equal(guildAt.status, 201, guildAt.error);
+  const drummerAt = await atTable(drummer.sheet);
+  assert.equal(drummerAt.status, 201, drummerAt.error);
+  assert.ok(drummerAt.sheet.equipment.some((item) => item.name === "Drum"));
+  // The kit is free whichever tool is named: the same purse either way.
+  assert.equal(drummerAt.sheet.gold, guildAt.sheet.gold, "the named instrument was charged for");
+  const wrongTool = { ...drummer.sheet, backgroundChoices: { ...drummer.sheet.backgroundChoices, gear: ["Thieves' Tools"] } };
+  const wrongToolAt = await atTable(wrongTool);
+  assert.equal(wrongToolAt.status, 400, "a tool of neither kind");
+  assert.match(wrongToolAt.error, /artisan's tools or instrument/);
 });
 
 await test("a background's feature is the server's grant: a request cannot swap it or stack another", async () => {
@@ -231,10 +325,12 @@ await test("A new character starts with its class's SRD 5.1 starting equipment, 
   assert.deepEqual(names.slice(0, 3), ["Quarterstaff", "Component Pouch", "Backpack"]);
   assert.ok(names.includes("Spellbook"), names.join(", "));
   assert.equal(sheet.equipment.find((item) => item.name === "Parchment (one sheet)")?.qty, 10);
-  for (const item of ACOLYTE_KIT) {
+  // The acolyte's kit under its catalog names (issue #113): "holy symbol"
+  // is the Holy Symbol, "common clothes" is Clothes, Common.
+  for (const item of resolveBackgroundGear(ACOLYTE_KIT)) {
     assert.ok(names.includes(item), `${item} is missing: ${names.join(", ")}`);
   }
-  assert.ok(names.indexOf("Spellbook") < names.indexOf("holy symbol"));
+  assert.ok(names.indexOf("Spellbook") < names.indexOf("Holy Symbol"));
   // Nobody starts in plate (1,500 gp) or with anything magical, whatever
   // the choices.
   for (const klass of srd.SRD_CLASSES) {

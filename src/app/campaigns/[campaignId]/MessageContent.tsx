@@ -46,8 +46,12 @@ export function MediaPlaceholder({
 
   if (failed) {
     return (
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-stone-600">
-        <ImageOff className="size-3.5" /> Illustration failed; the story carries on.
+      <p className="live-in mt-3 flex items-start gap-1.5 text-xs text-stone-600">
+        <ImageOff className="mt-0.5 size-3.5 shrink-0" />
+        <span>
+          Illustration failed; the story carries on.
+          {status?.reason ? <span className="block text-stone-500">{status.reason}</span> : null}
+        </span>
       </p>
     );
   }

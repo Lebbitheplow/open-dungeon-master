@@ -4,6 +4,7 @@
 // leads.
 
 import { getUserById } from "@/lib/db/users";
+import { paidAiAllowedForLead } from "@/lib/shared-host";
 import { ADAPTERS, harnessConfig } from "./status.ts";
 import { harnessImagesReady } from "./images.ts";
 import { isHarnessId } from "./types.ts";
@@ -24,7 +25,11 @@ export function harnessOfferFor(campaign: { leadUserId: string }): HarnessOffer 
     return { offered: false, pictures: false, label: "", model: "", reason: "This server has no agent program set up." };
   }
   const label = ADAPTERS[config.id].label;
-  if (config.campaigns === "admins" && !getUserById(campaign.leadUserId)?.isAdmin) {
+  const lead = getUserById(campaign.leadUserId);
+  // Two settings say the same thing from different panels: the agent's own
+  // "only campaigns an administrator leads", and the shared-host rule that
+  // keeps every paid backend for them (src/lib/shared-host.ts).
+  if ((config.campaigns === "admins" || !paidAiAllowedForLead(lead)) && !lead?.isAdmin) {
     return {
       offered: false,
       pictures: false,

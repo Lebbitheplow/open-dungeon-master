@@ -42,7 +42,7 @@ import {
   thirdCasterOutside,
   thirdCasterSchoolProblem,
 } from "@/lib/srd/third-caster";
-import { PRIMAL_CHAMPION_CAP, featureHitPoints, holdsFeature } from "@/lib/srd/trait-rules";
+import { featureHitPoints, holdsFeature, withPrimalChampion } from "@/lib/srd/trait-rules";
 
 type ClassRow = { id: string; subclass: string; level: number };
 
@@ -54,6 +54,8 @@ export function abilitiesAfterLevel(
   sheet: Pick<CharacterSheet, "abilities" | "features">,
   choices: AsiChoice[],
   leveled: { id: string; level: number },
+  // The text of a feat where known, for a content pack half-feat's score.
+  descOf?: (feat: string) => string,
 ): { abilities: AbilityScores; feats: string[]; primalChampion: boolean } {
   let abilities = applyChoices(sheet.abilities, choices);
   const feats: string[] = [];
@@ -62,7 +64,7 @@ export function abilitiesAfterLevel(
       continue;
     }
     feats.push(choice.feat);
-    const raised = applyFeatIncrease(abilities, choice.feat, choice.ability ?? null);
+    const raised = applyFeatIncrease(abilities, choice.feat, choice.ability ?? null, descOf?.(choice.feat));
     if (!("error" in raised)) {
       abilities = raised.abilities;
     }
@@ -70,11 +72,7 @@ export function abilitiesAfterLevel(
   const primalChampion =
     lower(leveled.id) === "barbarian" && leveled.level === 20 && !holdsFeature(sheet, "primal champion");
   if (primalChampion) {
-    abilities = {
-      ...abilities,
-      str: Math.min(PRIMAL_CHAMPION_CAP, abilities.str + 4),
-      con: Math.min(PRIMAL_CHAMPION_CAP, abilities.con + 4),
-    };
+    abilities = withPrimalChampion(abilities);
   }
   return { abilities, feats, primalChampion };
 }

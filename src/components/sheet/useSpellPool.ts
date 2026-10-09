@@ -13,6 +13,10 @@ export type PoolSpell = {
   level: number;
   slug?: string;
   source?: "open5e" | "homebrew";
+  // The pack document the row is from and its title ("Deep Magic 5e"), so
+  // a tile can say which book a spell comes from (issue #116).
+  documentSlug?: string;
+  document?: string;
   data?: Record<string, unknown>;
 };
 
@@ -116,7 +120,15 @@ function lookUp(name: string): Promise<void> {
       lookups.set(
         key,
         row
-          ? { name: row.name, level: Number(row.level ?? 0), slug: row.slug, source: row.source, data: row.data }
+          ? {
+              name: row.name,
+              level: Number(row.level ?? 0),
+              slug: row.slug,
+              source: row.source,
+              documentSlug: row.documentSlug,
+              document: row.document,
+              data: row.data,
+            }
           : null,
       );
     } catch {
@@ -174,6 +186,8 @@ export function useSpellPool(
               level: Number(row.level ?? 0),
               slug: row.slug,
               source: row.source,
+              documentSlug: row.documentSlug,
+              document: row.document,
               data: row.data,
             })),
           );

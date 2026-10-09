@@ -153,7 +153,11 @@ test("'Any' ability increases become the builder's asiChoice pickers", () => {
 });
 
 test("only wotc-srd and odm-expanded rows defer to the bundled race; a srd-2024 species is not offered unless a stored character names it", () => {
-  const drow = race("drow");
+  // Tome of Heroes' drow shares the bundled drow's slug, so its id carries
+  // its document and no SRD reader mistakes it (issue #115).
+  assert.equal(raceOptions.some((entry) => entry.id === "drow"), false);
+  const drow = race("toh-drow");
+  assert.equal(drow.slug, "drow");
   assert.deepEqual(drow.asi, { int: 2 });
   assert.equal(drow.speed, 25);
   assert.equal(drow.weapons, undefined);
@@ -211,7 +215,7 @@ test("Lightfoot finds its bundled traits; parents that require a subrace are not
   }
   for (const kept of [
     "hill-dwarf", "high-elf", "lightfoot", "rock-gnome", "human-chassis", "humanhalf-elf-heritage", "acid-cap",
-    "catfolk", "malkin", "minotaur", "bhain-kwai", "derro", "mutated", "drow", "delver", "human",
+    "catfolk", "malkin", "minotaur", "bhain-kwai", "derro", "mutated", "toh-drow", "delver", "human",
   ]) {
     assert.ok(ids.has(kept), kept);
   }
@@ -220,8 +224,11 @@ test("Lightfoot finds its bundled traits; parents that require a subrace are not
 test("backgroundChoices is optional and bounded", () => {
   const field = createSheetSchema.shape.backgroundChoices;
   assert.equal(field.parse(undefined), undefined);
-  assert.deepEqual(field.parse({}), { skills: [] });
-  assert.deepEqual(field.parse({ skills: ["insight"] }), { skills: ["insight"] });
+  assert.deepEqual(field.parse({}), { skills: [], gear: [] });
+  assert.deepEqual(field.parse({ skills: ["insight"] }), { skills: ["insight"], gear: [] });
+  // The either-or lines of the kit, by the alternative's words (issue #127).
+  assert.deepEqual(field.parse({ gear: ["Light hammer"] }).gear, ["Light hammer"]);
+  assert.equal(field.safeParse({ gear: Array.from({ length: 9 }, () => "Dagger") }).success, false);
   assert.equal(field.safeParse({ skills: ["a", "b", "c", "d", "e"] }).success, false);
   assert.equal(field.safeParse({ skills: ["x".repeat(41)] }).success, false);
 });
@@ -260,7 +267,7 @@ test("a pack-only race saves its trait names, and a level-up regrant keeps them"
   });
   const raceFeatures = result.sheet.features.filter((feature) => feature.source === "race");
   assert.deepEqual(raceFeatures.map((feature) => feature.name), ["Cat's Claws", "Hunter's Senses"]);
-  assert.deepEqual(result.sheet.backgroundChoices, { skills: ["insight"] });
+  assert.deepEqual(result.sheet.backgroundChoices, { skills: ["insight"], gear: [] });
 
   const regranted = populateFeaturesForClasses(result.sheet.features, [{ id: "fighter", subclass: "", level: 2 }], "catfolk");
   assert.deepEqual(

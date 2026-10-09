@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
 import { normalizeStamp } from "@/lib/battlemap/stamp";
 import { normalizeShape } from "@/lib/battlemap/tools";
@@ -88,7 +88,7 @@ export async function PATCH(
   { params }: { params: Promise<{ campaignId: string; mapId: string }> },
 ) {
   const { campaignId, mapId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -187,7 +187,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string; mapId: string }> },
 ) {
   const { campaignId, mapId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -209,7 +209,7 @@ export async function DELETE(
   { params }: { params: Promise<{ campaignId: string; mapId: string }> },
 ) {
   const { campaignId, mapId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

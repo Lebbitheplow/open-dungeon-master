@@ -56,6 +56,9 @@ export function AdminSettingsPanel() {
   const [discordSecret, setDiscordSecret] = useState(SECRET_KEPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Campaigns the save moved off a picture backend that could not paint
+  // (src/lib/image-backend-rescue.ts), named once so the admin knows.
+  const [rescued, setRescued] = useState<Array<{ title: string }>>([]);
   const [error, setError] = useState("");
   // Server-computed, because the announced-address fallback chain ends at the
   // bind address, which never reaches this panel. Reflects the SAVED config.
@@ -105,7 +108,9 @@ export function AdminSettingsPanel() {
                 signupMode: config.signupMode,
                 serverName: config.serverName,
                 accountDeletionGraceDays: config.accountDeletionGraceDays,
+                abilityRerollBelow: config.abilityRerollBelow,
                 publicUrl: config.publicUrl,
+                sharedHost: config.sharedHost,
                 voiceChat: config.voiceChat,
                 discord: {
                   clientId: config.discord.clientId,
@@ -155,6 +160,7 @@ export function AdminSettingsPanel() {
       setOpenaiImageKey(SECRET_KEPT);
       setTtsApiKey(SECRET_KEPT);
       setDiscordSecret(SECRET_KEPT);
+      setRescued(Array.isArray(data.rescued) ? data.rescued : []);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -230,6 +236,31 @@ export function AdminSettingsPanel() {
             keep their access.
           </p>
           {config.signupMode === "invite" ? <AdminInvitesSection /> : null}
+          {/* Sharing the server with friends who run their own tables
+              (issues #137, #138): who may start one, and whose tables may
+              spend the paid backends. Usage per account and campaign is on
+              the Usage tab. */}
+          <div className="mt-4 space-y-3">
+            <SelectField
+              label="Who may start campaigns and workshops"
+              value={config.sharedHost.campaignCreation || "everyone"}
+              onChange={(campaignCreation) => setConfig({ ...config, sharedHost: { ...config.sharedHost, campaignCreation } })}
+              options={[
+                { value: "everyone", label: "Everyone with an account" },
+                { value: "admins", label: "Administrators only: others join by room code" },
+              ]}
+            />
+            <SelectField
+              label="Paid AI backends"
+              hint="Paid means a text, picture or speech backend on a public host that takes this server's key (OpenAI, OpenRouter, a hosted model), and the agent program. Backends on this machine or your network (llama-server, Ollama, ComfyUI, Kokoro, Whisper) stay open to every table, keyed or not. A table that may not spend the paid ones can bring its own key in the client app."
+              value={config.sharedHost.paidAi || "everyone"}
+              onChange={(paidAi) => setConfig({ ...config, sharedHost: { ...config.sharedHost, paidAi } })}
+              options={[
+                { value: "everyone", label: "Every campaign may use them" },
+                { value: "admins", label: "Only campaigns an administrator leads" },
+              ]}
+            />
+          </div>
           <div className="mt-4">
             <Field
               group
@@ -248,6 +279,26 @@ export function AdminSettingsPanel() {
                   setConfig({
                     ...config,
                     accountDeletionGraceDays: Number.isFinite(days) ? Math.min(90, Math.max(0, days)) : 0,
+                  });
+                }}
+              />
+            </Field>
+            <Field
+              label="Reroll the 4d6 ability dice under a total of"
+              hint="The server throws and keeps a player's six 4d6 totals; they may throw again only while the six add up to less than this. 0 allows no reroll; 108 lets anything be rethrown. The book names no rule; 70 is the default."
+            >
+              <NumberStepper
+                label="Reroll the 4d6 ability dice under a total of"
+                min={0}
+                max={108}
+                step={1}
+                suffix={config.abilityRerollBelow === 0 ? "no rerolls" : "total"}
+                value={config.abilityRerollBelow}
+                onChange={(next) => {
+                  const below = Math.round(Number(next));
+                  setConfig({
+                    ...config,
+                    abilityRerollBelow: Number.isFinite(below) ? Math.min(108, Math.max(0, below)) : 70,
                   });
                 }}
               />
@@ -336,7 +387,7 @@ export function AdminSettingsPanel() {
       </PageSection>
 
       {phoneWorld ? null : (
-        <AdminHarnessSection textProvider={config.text.provider} onConfig={setConfig} />
+        <AdminHarnessSection textProvider={config.text.provider} imagesBackend={config.images.defaultBackend} onConfig={setConfig} />
       )}
 
       <PageSection id="admin-utility" heading="Utility model (optional)" glyph="tab-log">
@@ -446,6 +497,13 @@ export function AdminSettingsPanel() {
         {saved ? (
           <span role="status" className="live-in inline-flex items-center gap-1 text-sm text-emerald-400">
             <Check className="size-4" /> Saved
+          </span>
+        ) : null}
+        {rescued.length ? (
+          <span role="status" className="live-in basis-full text-xs text-stone-400">
+            {rescued.length === 1 ? "1 campaign" : `${rescued.length} campaigns`} could not paint on {rescued.length === 1 ? "its" : "their"} old picture backend and now use{rescued.length === 1 ? "s" : ""} the new default:{" "}
+            {rescued.slice(0, 4).map((row) => row.title).join(", ")}
+            {rescued.length > 4 ? ` and ${rescued.length - 4} more` : ""}.
           </span>
         ) : null}
         {error ? <span role="alert" className="motion-shake inline-block text-sm text-red-400">{error}</span> : null}

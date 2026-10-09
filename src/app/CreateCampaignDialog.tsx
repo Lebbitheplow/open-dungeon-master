@@ -131,12 +131,15 @@ export function CreateCampaignDialog({
         }
         setCapabilities(data);
         // Defaults follow reality: a table should not discover on turn one
-        // that the AI seat was never fillable.
+        // that the AI seat was never fillable. Maps are the exception: they
+        // wait for a picture backend instead of being switched off for good,
+        // since a server set up in the usual order (storyteller first,
+        // pictures later) would otherwise make every early campaign map-less
+        // and keep it so after pictures arrive (src/lib/image-backend-rescue.ts).
         setDraft((current) => ({
           ...current,
           dmMode: !data.story.configured || !data.story.reachable ? "human" : current.dmMode,
           ttsEnabled: data.tts?.configured ? current.ttsEnabled : false,
-          mapsEnabled: data.images?.configured ? current.mapsEnabled : false,
         }));
       })
       .catch(() => {
@@ -205,6 +208,7 @@ export function CreateCampaignDialog({
       romance,
       worldSimulation,
       inventoryApprovals,
+      vitalsApprovals,
       variantRules,
       companions,
       hpMethod,
@@ -259,6 +263,7 @@ export function CreateCampaignDialog({
             romance: relationships === "off" ? "off" : romance,
             worldSimulation: aiNarrates && worldSimulation,
             inventoryApprovals,
+            vitalsApprovals,
             variantRules,
             companions: aiNarrates ? companions : "off",
             hpMethod,

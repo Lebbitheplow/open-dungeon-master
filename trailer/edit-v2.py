@@ -1,17 +1,17 @@
-"""Gameplay montage. Every picture comes from continuous dark-theme recordings.
+"""Gameplay montage with original animated graphics explaining ways to play.
 
 Static reframing and speed changes only. No stills, zoompan, or music.
-Run: python trailer/edit-v2.py [--v3 | --v4]
+Run: python trailer/edit-v2.py [--v3 | --v4 | --v5 | --v6 | --v7 | --v8]
 """
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-import json, subprocess, os, sys
+import json, subprocess, os, sys, shutil
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 from scipy.io.wavfile import write
 
 ROOT=Path(__file__).resolve().parent
-VERSION='v4' if '--v4' in sys.argv else 'v3' if '--v3' in sys.argv else 'v2'
+VERSION='v8' if '--v8' in sys.argv else 'v7' if '--v7' in sys.argv else 'v6' if '--v6' in sys.argv else 'v5' if '--v5' in sys.argv else 'v4' if '--v4' in sys.argv else 'v3' if '--v3' in sys.argv else 'v2'
 RAW=ROOT/'captures/v2';ASSETS=ROOT/'assets'/VERSION;OUT=ROOT/'output'/VERSION;SHOTS=OUT/'shots'
 for p in (ASSETS,OUT,SHOTS):p.mkdir(parents=True,exist_ok=True)
 T=json.loads((ROOT/f'timeline-{VERSION}.json').read_text());FPS=30;W,H=1920,1080
@@ -37,6 +37,10 @@ def plate(i,s):
 
 def render(item):
     i,s=item;sec=round(s['duration']*FPS)/FPS;speed=s.get('speed',1);src=RAW/(s['source']+'.webm');dst=SHOTS/f'{i:02}.mp4'
+    if s.get('encoded'):
+        shutil.copy2(ROOT/s['encoded'],dst)
+        print(f'{i+1}/{len(T)} {s["source"]} (retained)',flush=True)
+        return dst
     crop=s.get('crop',[1600,900,0,0]);cw,ch,cx,cy=crop
     vf=f'crop={cw}:{ch}:{cx}:{cy},setpts=(PTS-STARTPTS)/{speed},fps={FPS},scale={W}:{H}:flags=lanczos,setsar=1'
     args=[FF,'-hide_banner','-loglevel','error','-y','-ss',str(s['start']),'-i',str(src)]
@@ -73,7 +77,7 @@ def tumble(at,span=2.2):
 starts=[];cursor=0
 for s in T:starts.append(cursor);cursor+=round(s['duration']*FPS)/FPS
 # Each cue is timed to the visible interaction in the new edit.
-if VERSION in ('v3','v4'):
+if VERSION in ('v3','v4','v5','v6','v7','v8'):
     packs={'rpg':RPG,'ui':UI,'hit':HIT}
     for at,s in zip(starts,T):
         for cue in s.get('sounds',[]):
@@ -107,5 +111,5 @@ write(str(ASSETS/'effects.wav'),RATE,(np.clip(mix[:end],-1,1)*32767).astype(np.i
 with ThreadPoolExecutor(max_workers=3) as pool:files=list(pool.map(render,enumerate(T)))
 concat=SHOTS/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in files))
 run([FF,'-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(concat),'-i',str(ASSETS/'effects.wav'),'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac','-b:a','256k','-af','loudnorm=I=-18:TP=-2:LRA=12','-ar',str(RATE),'-t',str(TOTAL),'-metadata','title=Open Dungeon Master — Gameplay Montage','-movflags','+faststart',str(OUT/f'open-dungeon-master-trailer-{VERSION}.mp4')])
-(OUT/'chapters.json').write_text(json.dumps([dict(at=at,**s) for at,s in zip(starts,T)],indent=2))
+(OUT/'chapters.json').write_text(json.dumps([dict(s,at=at) for at,s in zip(starts,T)],indent=2))
 print(f'FINISHED {TOTAL:.3f}s {OUT/f"open-dungeon-master-trailer-{VERSION}.mp4"}',flush=True)

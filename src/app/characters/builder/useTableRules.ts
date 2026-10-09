@@ -21,9 +21,40 @@ export type WealthRoll = {
 
 type ServerThrow = { dice: number[]; dropIndex: number; total: number };
 
+export type AbilityPoolAnswer = {
+  pool: PoolEntry[];
+  // Already on record and handed back, not thrown now (issue #128), with
+  // when it was thrown.
+  kept: boolean;
+  createdAt: string | null;
+  // The server's reroll rule: a fresh six only under this total.
+  rerollBelow: number;
+};
+
+function shapePool(data: { throws?: ServerThrow[]; kept?: boolean; createdAt?: string | null; rerollBelow?: number } | null | undefined): AbilityPoolAnswer | null {
+  const throws = data?.throws;
+  if (!Array.isArray(throws) || throws.length !== 6) {
+    return null;
+  }
+  return {
+    pool: throws.map((entry) => ({
+      total: entry.total,
+      roll: {
+        dice: [entry.dice[0], entry.dice[1], entry.dice[2], entry.dice[3]],
+        dropIndex: entry.dropIndex,
+        total: entry.total,
+        rest: restOffsets(),
+      },
+    })),
+    kept: data?.kept === true,
+    createdAt: typeof data?.createdAt === "string" ? data.createdAt : null,
+    rerollBelow: typeof data?.rerollBelow === "number" ? data.rerollBelow : 70,
+  };
+}
+
 // Six throws of 4d6 from the server, shaped for the dice tray. Where each
 // die comes to rest is decoration, so that part is made up here.
-export async function requestAbilityPool(): Promise<{ pool: PoolEntry[] } | { error: string }> {
+export async function requestAbilityPool(): Promise<AbilityPoolAnswer | { error: string }> {
   try {
     const response = await fetch("/api/characters/rolls", {
       method: "POST",
@@ -31,23 +62,29 @@ export async function requestAbilityPool(): Promise<{ pool: PoolEntry[] } | { er
       body: JSON.stringify({ kind: "abilities" }),
     });
     const data = await response.json().catch(() => ({}));
-    const throws: ServerThrow[] | undefined = data?.abilities?.throws;
-    if (!response.ok || !Array.isArray(throws) || throws.length !== 6) {
-      return { error: data?.error || "The server could not roll the dice. Try again." };
-    }
-    return {
-      pool: throws.map((entry) => ({
-        total: entry.total,
-        roll: {
-          dice: [entry.dice[0], entry.dice[1], entry.dice[2], entry.dice[3]],
-          dropIndex: entry.dropIndex,
-          total: entry.total,
-          rest: restOffsets(),
-        },
-      })),
-    };
+    const answer = response.ok ? shapePool(data?.abilities) : null;
+    return answer ?? { error: data?.error || "The server could not roll the dice. Try again." };
   } catch {
     return { error: "Could not reach the server to roll the dice." };
+  }
+}
+
+// The six already on record for this player, if any, without throwing: what
+// a new builder shows as kept instead of as dice in the air (issue #128).
+// The server's reroll rule comes with it either way.
+export async function fetchOpenAbilityPool(): Promise<{ open: AbilityPoolAnswer | null; rerollBelow: number } | null> {
+  try {
+    const response = await fetch("/api/characters/rolls");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return null;
+    }
+    return {
+      open: shapePool(data?.abilities),
+      rerollBelow: typeof data?.rerollBelow === "number" ? data.rerollBelow : 70,
+    };
+  } catch {
+    return null;
   }
 }
 

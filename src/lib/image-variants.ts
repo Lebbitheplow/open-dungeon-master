@@ -283,6 +283,15 @@ export function scheduleImageVariants(source: string): void {
   });
 }
 
+// Resolves once every job scheduled so far has finished, so a test can
+// delete the folder its pictures were saved in without a job still reading.
+export async function imageVariantsSettled(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+  while (pending.size > 0) {
+    await chain;
+  }
+}
+
 // The segments a serve route should stream for a ?w= request: the variant's
 // when it exists (waiting briefly for one that is being written right now,
 // as happens when a client asks the moment the picture lands), else the

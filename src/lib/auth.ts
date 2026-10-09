@@ -1,4 +1,5 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { enterUsageScope } from "@/lib/usage/scope";
 import { cookies, headers } from "next/headers";
 import {
   deleteSession,
@@ -108,7 +109,13 @@ export async function currentUser(): Promise<User | null> {
   if (!token) {
     return null;
   }
-  return getSessionUser(hashToken(token));
+  const user = getSessionUser(hashToken(token));
+  if (user) {
+    // Work this request does outside any campaign (a library portrait,
+    // dictation) is the account's in the usage ledger.
+    enterUsageScope({ userId: user.id });
+  }
+  return user;
 }
 
 export function unauthorized() {

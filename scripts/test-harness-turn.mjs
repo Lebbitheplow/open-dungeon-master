@@ -360,4 +360,38 @@ await test("signing a player out everywhere disconnects their agents", async () 
 
 server.close();
 removeTempDir(dir);
+// ---- a program inside a container (issue #132) ------------------------------
+// The Docker image cannot start programs on its host, but one installed
+// inside the container (npm install -g @openai/codex) is local to it. The
+// container verdict therefore stands only when nothing is found inside.
+{
+  const { probeHarness, forgetHarnessStatus } = await import("../src/lib/harness/status.ts");
+  process.env.ODM_IN_CONTAINER = "1";
+  try {
+    forgetHarnessStatus();
+    // HARNESS_FAKE resolves the binary to this node, i.e. "found inside".
+    const found = await probeHarness("codex", { refresh: true });
+    assert.equal(found.availability, "ok", found.message);
+    assert.equal(found.installed, true);
+    passed += 1;
+
+    // Nothing inside: the container message, worded so the admin knows a
+    // program installed inside would be used.
+    process.env.HARNESS_FAKE = "0";
+    saveGlobalConfig({ harness: { id: "codex", binaryPath: path.join(dir, "no-such-program") } });
+    forgetHarnessStatus();
+    const missing = await probeHarness("codex", { refresh: true });
+    assert.equal(missing.availability, "container");
+    assert.equal(missing.installed, false);
+    assert.match(missing.message, /installed inside the container is found/);
+    passed += 1;
+    console.log("ok: a program installed inside a container counts as available; none inside keeps the container verdict");
+  } finally {
+    process.env.HARNESS_FAKE = "1";
+    delete process.env.ODM_IN_CONTAINER;
+    saveGlobalConfig({ harness: { id: "claude", binaryPath: "" } });
+    forgetHarnessStatus();
+  }
+}
+
 console.log(`harness turn: ${passed} checks passed`);

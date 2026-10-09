@@ -1,17 +1,12 @@
 "use client";
 
 import { Camera, UserRound } from "lucide-react";
-import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
-import type { Ability, CreateSheetInput } from "@/lib/schemas/sheet";
+import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { formatModifier, proficiencyBonus } from "@/lib/srd";
-import { featAbilityIncrease } from "@/lib/srd/feat-effects";
-import { srdRaceId } from "@/lib/srd/race-id";
-import { ABILITY_LABELS } from "../AbilityEditor";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import { ui } from "@/lib/ui";
-import CatalogBrowser from "../CatalogBrowser";
-import ContentPicker from "../ContentPicker";
 import { HpExplainerButton } from "../AbilityExplainers";
 import { armorClassLine, hitPointsLine, purseViewFor } from "../derivedReasons";
 import type { BackgroundOption, ClassOption, RaceOption } from "../useBuilderOptions";
@@ -78,13 +73,10 @@ export function FinishStep({
     table,
   });
   // Feats come with Ability Score Improvements (picked on the Abilities
-  // step). The one race that hands out a feat of its own is the variant
-  // human; anyone else's extra feat is refused by the server.
-  const racialFeat = race ? srdRaceId(race.id) === "variant_human" : false;
-  const featRoom = racialFeat ? Math.max(0, 1 - state.feats.length) : 0;
-  // A half-feat that offers a choice of score (Resilient, Athlete) asks
-  // which one it raises; the server adds the point when the sheet is saved.
-  const featScores = racialFeat ? (featAbilityIncrease(state.feats[0] ?? "")?.from ?? []) : [];
+  // step) or, for a variant human, with the race (picked on the Ancestry
+  // step, issue #124). What is left here is what the character already
+  // holds from play, shown so an edit does not lose it unseen.
+  const racialFeat = race ? racialFeatCount(race.id) > 0 : false;
   return (
     <div className="space-y-4">
       <StepPanel title="Portrait (optional)" ornate>
@@ -161,44 +153,11 @@ export function FinishStep({
         />
       </StepPanel>
 
-      {racialFeat || state.feats.length ? (
+      {!racialFeat && state.feats.length ? (
         <StepPanel
-          title={racialFeat ? "Your feat" : "Feats"}
-          help={
-            racialFeat
-              ? "A variant human starts with one feat of their choice."
-              : "Feats this character already holds. New feats come with an ability score improvement."
-          }
+          title="Feats"
+          help="Feats this character already holds. New feats come with an ability score improvement."
         >
-          {featRoom ? (
-            <>
-              <ContentPicker
-                kind="feats"
-                placeholder="Search feats (e.g. alert, tough)"
-                onPick={(entry) =>
-                  state.setFeats((current) =>
-                    current.includes(entry.name) || current.length >= 1 ? current : [...current, entry.name],
-                  )
-                }
-              />
-              {/* Feats are the pick a new player is least able to name, so the
-                  whole list is one tap away with a ⓘ on every row. */}
-              <CatalogBrowser
-                kind="feats"
-                buttonLabel="Browse every feat"
-                selectedNames={state.feats}
-                onPick={(entry) =>
-                  state.setFeats((current) =>
-                    current.includes(entry.name) || current.length >= 1 ? current : [...current, entry.name],
-                  )
-                }
-                onUnpick={(featName) =>
-                  state.setFeats((current) => current.filter((entry) => entry !== featName))
-                }
-                sections={[{ key: "feats:all", label: "All feats" }]}
-              />
-            </>
-          ) : null}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {state.feats.map((feat) => (
               <Chip
@@ -209,18 +168,6 @@ export function FinishStep({
               />
             ))}
           </div>
-          {featScores.length > 1 ? (
-            <label className="mt-2 block sm:w-64">
-              <span className="mb-1 block text-xs text-stone-500">{state.feats[0]} raises by 1</span>
-              <Select<Ability>
-                value={featScores.includes(state.racialFeatAbility as Ability) ? (state.racialFeatAbility as Ability) : featScores[0]}
-                onChange={(ability) => state.setRacialFeatAbility(ability)}
-                label={`${state.feats[0]} raises`}
-                className="w-full"
-                options={featScores.map((ability) => ({ value: ability, label: ABILITY_LABELS[ability] }))}
-              />
-            </label>
-          ) : null}
         </StepPanel>
       ) : null}
 

@@ -8,7 +8,8 @@ import { ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { Listed, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { formatRoster, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
@@ -61,9 +62,13 @@ export function DmEncounterPrepPanel({
   campaignId,
   layout = "list",
   targetParty,
+  cue = false,
 }: {
   campaignId: string;
   layout?: "list" | "rows";
+  // The lead's desk at an AI-narrated table (#154): Deploy becomes a cue the
+  // storyteller runs when the scene reaches the fight, and can be taken back.
+  cue?: boolean;
   // Read only in rows mode: the party the CR budget bar is drawn against. A
   // workshop declares one; a real campaign has no need of it because the
   // console never shows the bar.
@@ -82,19 +87,20 @@ export function DmEncounterPrepPanel({
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
   // effect linter, which is what it is.
+  // A refused or failed list is settled, not dropped (issue 140), so the
+  // list says "nothing prepared" only once the server has said so.
+  const { loaded, loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
-      fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { templates: PreparedEncounter[] } | null) => {
-          if (payload) {
-            setTemplates(payload.templates);
+      readLoad<{ templates: PreparedEncounter[] }>(fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`), "The prepared fights").then(
+        (outcome) => {
+          if (outcome.payload) {
+            setTemplates(outcome.payload.templates);
           }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+          settle(outcome);
+        },
+      ),
+    [campaignId, settle],
   );
 
   // The map drawer, for the "On which map" link. Same load-once shape as the
@@ -233,21 +239,35 @@ export function DmEncounterPrepPanel({
     await load();
   }
 
-  async function deploy(id: string) {
+  async function deploy(id: string, cueIt = true) {
     setBusy(true);
     setError("");
     setNote("");
     try {
       const response = await fetch(
         `/api/campaigns/${campaignId}/dm/encounter-templates/${id}/deploy`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cue ? { cue: cueIt } : {}),
+        },
       );
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
         mapError?: string | null;
+        cued?: boolean;
       };
       if (!response.ok) {
         setError(payload.error ?? "That could not be deployed.");
+        return;
+      }
+      if (payload.cued !== undefined) {
+        setNote(
+          payload.cued
+            ? "Cued. The storyteller runs it, map and plan included, as soon as the scene allows. The players are not told."
+            : "Cue taken back.",
+        );
+        await load();
         return;
       }
       setNote(
@@ -273,16 +293,18 @@ export function DmEncounterPrepPanel({
     return (
       <div className="space-y-3">
         <DmWorkbenchPanel campaignId={campaignId} collapsible />
-        <EncounterRows
-          encounters={templates}
-          maps={maps}
-          thresholds={thresholds}
-          busy={busy}
-          onOpen={openEditor}
-          onDeploy={(template) => void deploy(template.id)}
-          onDuplicate={(template) => void duplicate(template)}
-          onDelete={(template) => void remove(template)}
-        />
+        <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the fights...">
+          <EncounterRows
+            encounters={templates}
+            maps={maps}
+            thresholds={thresholds}
+            busy={busy}
+            onOpen={openEditor}
+            onDeploy={(template) => void deploy(template.id)}
+            onDuplicate={(template) => void duplicate(template)}
+            onDelete={(template) => void remove(template)}
+          />
+        </Listed>
         {feedback}
         <Sheet
           open={editorOpen}
@@ -314,13 +336,21 @@ export function DmEncounterPrepPanel({
           glyph="system-encounters"
           aside={templates.length ? <span key={templates.length} className="count-pop">{templates.length}</span> : undefined}
         />
+        <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the fights...">
         {templates.length ? (
           <ul className="stagger space-y-1.5">
             {templates.map((template) => {
               // Deploy stays the row's one visible button; the two that were
               // icons keep the names they announced, in the row's menu.
+              const deployLabel = cue ? (template.cued ? "Take back the cue" : "Cue the storyteller") : "Deploy";
               const items: ContextMenuItem[] = [
-                { id: "deploy", label: "Deploy", glyph: "tab-battle", disabled: busy, onSelect: () => void deploy(template.id) },
+                {
+                  id: "deploy",
+                  label: deployLabel,
+                  glyph: "tab-battle",
+                  disabled: busy,
+                  onSelect: () => void deploy(template.id, !template.cued),
+                },
                 { id: "duplicate", label: `Duplicate ${template.name}`, glyph: "system-homebrew", disabled: busy, onSelect: () => void duplicate(template) },
                 { id: "delete", label: `Delete ${template.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(template) },
               ];
@@ -329,7 +359,14 @@ export function DmEncounterPrepPanel({
                   <div className="flex items-start gap-2">
                     <GameIcon icon={{ kind: "glyph", key: "system-encounters" }} size="size-7" className="mt-0.5 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-stone-100">{template.name}</p>
+                      <p className="text-sm text-stone-100">
+                        {template.name}
+                        {cue && template.cued ? (
+                          <span className="live-in ml-1.5 rounded-sm border border-amber-500/40 px-1 text-[10px] text-amber-300">
+                            cued
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="truncate text-xs text-stone-400">
                         {formatRoster(template.enemies).replace(/\n/g, ", ")}
                         {template.battlefield ? ` on ${template.battlefield}` : ""}
@@ -346,10 +383,10 @@ export function DmEncounterPrepPanel({
                         type="button"
                         disabled={busy}
                         aria-busy={busy}
-                        onClick={() => void deploy(template.id)}
-                        className={cn(ui.btnPrimary, "h-9 px-3 text-[11px]")}
+                        onClick={() => void deploy(template.id, !template.cued)}
+                        className={cn(cue && template.cued ? ui.btnSecondary : ui.btnPrimary, "h-9 px-3 text-[11px]")}
                       >
-                        Deploy
+                        {cue ? (template.cued ? "Take back" : "Cue") : "Deploy"}
                       </button>
                       <RowMenu items={items} label={template.name} />
                     </div>
@@ -361,6 +398,7 @@ export function DmEncounterPrepPanel({
         ) : (
           <EmptyState size="sm" art="map" title="Nothing prepared. Write a roster below and it is one button at the table." />
         )}
+        </Listed>
       </section>
 
       <EncounterForm

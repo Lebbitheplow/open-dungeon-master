@@ -6,11 +6,12 @@ import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/sch
 import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { applyAsiChoices, asiLevelsFor, asiSlotsTakenInPlay } from "@/lib/srd/asi";
 import { derivedMaxHp, hpBonusPerLevelFor, hpRange, type HpMethod } from "@/lib/srd/hit-points";
-import { featureHitPoints } from "@/lib/srd/trait-rules";
-import { hpBonusPerLevel, srdRaceId } from "@/lib/srd/race-id";
-import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
+import { featureHitPoints, reachesPrimalChampion, withPrimalChampion } from "@/lib/srd/trait-rules";
+import { hpBonusPerLevel, racialFeatCount } from "@/lib/srd/race-id";
+import { innateCantripsFor } from "@/lib/srd/racial-grants";
+import { halfFeatPicks, scoresWithHalfFeats, settledHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
-  bundledPrices,
+  layeredPrice,
   judgeStartingGear,
   type StartingWealthMethod,
 } from "@/lib/srd/starting-wealth";
@@ -29,7 +30,13 @@ import {
   type KitTraining,
 } from "@/lib/srd/starting-kit";
 import { suggestWeapons } from "@/lib/srd/weapons";
+import { abilityGains } from "./abilityGains";
 import { builderCasting, builderSpellAdvice } from "./casting";
+import { grantedSkillSources } from "./reconcile";
+import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
+import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
+import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
@@ -76,6 +83,7 @@ export function useBuilderDerived({
   background,
   fixedLevel,
   rules,
+  featDescs,
 }: {
   state: BuilderState;
   race: RaceOption | undefined;
@@ -83,10 +91,14 @@ export function useBuilderDerived({
   background: BackgroundOption | undefined;
   fixedLevel?: number;
   rules?: TableRules;
+  // The text of content-pack feats the builder has fetched, by lower-case
+  // name (useFeatDescs); ODM's own feats are bundled. What a feat grants is
+  // read from its text (src/lib/srd/feat-grants.ts).
+  featDescs?: Record<string, string>;
 }) {
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
-    racialSkills, racialTool, backgroundSkills, hpOverride, acOverride, equipment, removedAutoNames,
+    racialSkills, racialTool, backgroundSkills, backgroundGearPicks, hpOverride, acOverride, equipment, removedAutoNames,
     toolPicks, repeatSkills,
     subclass, optionPicks, spells, cantrips, bookPrepared, keepsStoredGear, asiRecorded, asiReachedLevel,
   } = state;
@@ -109,52 +121,125 @@ export function useBuilderDerived({
     [asiSlotLevels, asiRecorded, asiReachedLevel],
   );
 
-  // Base scores after racial bonuses, before level ASIs; what the ASI cards
-  // build on.
+  // The race's bumps by ability: the fixed ones and those of the player's
+  // choice (half-elf).
+  const racialBonus = useMemo(() => {
+    const bonus: Partial<Record<Ability, number>> = { ...(race?.asi ?? {}) };
+    if (race?.asiChoice) {
+      for (const ability of racialAsi) {
+        if (ability) {
+          bonus[ability] = (bonus[ability] ?? 0) + race.asiChoice.amount;
+        }
+      }
+    }
+    return bonus;
+  }, [race, racialAsi]);
+
+  // Base scores after racial bonuses, before level ASIs.
   const baseAbilities = useMemo<AbilityScores | null>(() => {
     if (!race || Object.values(scores).some((value) => value === null)) {
       return null;
     }
     const final = { ...(scores as Record<Ability, number>) };
-    for (const [ability, bonus] of Object.entries(race.asi)) {
+    for (const [ability, bonus] of Object.entries(racialBonus)) {
       final[ability as Ability] += bonus ?? 0;
     }
-    // Races that grant ability bumps of the player's choice (half-elf).
-    if (race.asiChoice) {
-      for (const ability of racialAsi) {
-        if (ability) {
-          final[ability] += race.asiChoice.amount;
-        }
-      }
-    }
     return final as AbilityScores;
-  }, [scores, race, racialAsi]);
+  }, [scores, race, racialBonus]);
 
-  // The scores the builder SENDS: the improvements in, the half-feats' points
-  // not (the server adds those, src/lib/srd/legality/half-feats.ts).
-  const abilities = useMemo<AbilityScores | null>(
+  // The scores with the improvements in, before the half-feats' points and
+  // Primal Champion's.
+  const improved = useMemo<AbilityScores | null>(
     () => (baseAbilities ? applyAsiChoices(baseAbilities, activeAsiChoices) : null),
     [baseAbilities, activeAsiChoices],
+  );
+  // Primal Champion's +4 Strength and Constitution, at barbarian 20. The
+  // server adds it after the half-feats (src/lib/srd/sheet-legality.ts).
+  const primalChampion = useMemo(
+    () => (klass ? reachesPrimalChampion({ class: klass.id, level: effectiveLevel }) : false),
+    [klass, effectiveLevel],
+  );
+  // The scores the builder SENDS: the improvements in, the half-feats' points
+  // not (the server adds those, src/lib/srd/legality/half-feats.ts). An edit
+  // of a barbarian whose stored scores carried Primal Champion's +4 sends
+  // them with it, as they were stored (useBuilderState took it off to count
+  // the improvements beneath it); a new one leaves it to the server.
+  const { primalChampionHeld } = state;
+  const abilities = useMemo<AbilityScores | null>(
+    () => (improved && primalChampion && primalChampionHeld ? withPrimalChampion(improved) : improved),
+    [improved, primalChampion, primalChampionHeld],
+  );
+  // The text of a feat on the sheet, where known: ODM's own, or a content
+  // pack's as fetched (useFeatDescs). What its grants and its ability
+  // point are read from.
+  const featDescOf = useMemo(
+    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
+    [featDescs],
   );
   // The scores the server will STORE, with those points in, and the saving
   // throw Resilient adds: what every number on screen is worked out from.
   const raceId = race?.id;
   const { feats: racialFeatNames, racialFeatAbility } = state;
-  const halfFeats = useMemo(() => {
-    if (!abilities) {
-      return null;
-    }
-    const picks = halfFeatPicks(
+  // The half-feats in the server's order: the improvements' first, then the
+  // race's own feat (a variant human's).
+  const halfFeatList = useMemo(() => {
+    const asiChoicesMade = activeAsiChoices.filter((choice): choice is AsiChoice => choice !== null);
+    const all = halfFeatPicks(
       {
-        asiChoices: activeAsiChoices.filter((choice): choice is AsiChoice => choice !== null),
+        asiChoices: asiChoicesMade,
         feats: racialFeatNames,
         racialChoices: { featAbility: racialFeatAbility },
       },
-      raceId && srdRaceId(raceId) === "variant_human" ? 1 : 0,
+      raceId ? racialFeatCount(raceId) : 0,
+      featDescOf,
     );
-    return scoresWithHalfFeats(abilities, picks);
-  }, [abilities, activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
+    const fromImprovements = halfFeatPicks({ asiChoices: asiChoicesMade }, 0, featDescOf).length;
+    return { all, racial: all.slice(fromImprovements) };
+  }, [activeAsiChoices, racialFeatNames, racialFeatAbility, raceId, featDescOf]);
+  const halfFeats = useMemo(() => {
+    if (!improved) {
+      return null;
+    }
+    const out = scoresWithHalfFeats(improved, halfFeatList.all);
+    return primalChampion ? { ...out, abilities: withPrimalChampion(out.abilities) } : out;
+  }, [improved, halfFeatList, primalChampion]);
   const shownAbilities = halfFeats?.abilities ?? null;
+  // What the improvement cards build on: the base scores with the race's
+  // feat point in, since it is taken at 1st level.
+  const asiBaseAbilities = useMemo(
+    () => (baseAbilities ? scoresWithHalfFeats(baseAbilities, halfFeatList.racial).abilities : null),
+    [baseAbilities, halfFeatList],
+  );
+  // Each score's gains past its racial bonus, for the Abilities step's rows
+  // and summary (issue #149). Its finals are shownAbilities once all six
+  // are assigned.
+  const gains = useMemo(
+    () =>
+      abilityGains({
+        start: Object.fromEntries(
+          (Object.keys(scores) as Ability[]).map((ability) => {
+            const assigned = scores[ability];
+            return [ability, assigned === null ? null : assigned + (racialBonus[ability] ?? 0)];
+          }),
+        ) as Record<Ability, number | null>,
+        slotLevels: asiSlotLevels,
+        choices: activeAsiChoices,
+        halfFeats: settledHalfFeats(halfFeatList.all),
+        primalChampion,
+      }),
+    [scores, racialBonus, asiSlotLevels, activeAsiChoices, halfFeatList, primalChampion],
+  );
+
+  // Every feat on the sheet, racial and ASI, with its text where known.
+  const featNames = useMemo(
+    () => [
+      ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
+      ...racialFeatNames,
+    ],
+    [activeAsiChoices, racialFeatNames],
+  );
+  const featSpecOf = useMemo(() => (name: string): FeatGrantSpec => featGrantSpec(featDescOf(name)), [featDescOf]);
+  const { featChoices } = state;
 
   // Skills come from five places, not two: the class picks, the
   // background's fixed grants and its picks, the race's fixed grants (high
@@ -180,14 +265,38 @@ export function useBuilderDerived({
     () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks),
     [klass, background, toolPicks],
   );
+  // Every tool the character is trained with, the list the sheet carries;
+  // the background's kit fills its "of your choice" lines from it.
+  const trainedTools = useMemo(
+    () => [
+      ...new Set(
+        [...toolGrants.fixed, ...(race?.tools ?? []), racialTool, ...toolGrants.chosen].filter(Boolean),
+      ),
+    ],
+    [toolGrants, race, racialTool],
+  );
+  // The background's kit with its choice lines answered (issue #127): a
+  // tool line from the training above, an either-or line from the pick
+  // made on the gear step, the book's first until then.
+  const backgroundKit = useMemo(
+    () =>
+      expandBackgroundGear(background?.equipment, {
+        tools: trainedTools,
+        backgroundTools: background?.tools ?? [],
+        picks: backgroundGearPicks,
+      }),
+    [background, trainedTools, backgroundGearPicks],
+  );
 
-  const preview = useMemo(() => {
-    if (!shownAbilities || !race || !klass || !background) {
-      return null;
-    }
+  // The training as it stands, known before any ability score is (the feat
+  // pickers on the ancestry step read it): the class's, the race's and the
+  // background's grants, every skill and language picked, and what the
+  // feats grant beyond their point (issue #125), the picks as made so far
+  // and the fixed grants always, the way the server applies them.
+  const training = useMemo(() => {
     const skills = proficientSkills;
     const proficiencies = {
-      saves: klass.saves,
+      saves: klass?.saves ?? [],
       skills,
       // Expertise picks only count while still proficient in the skill.
       expertise: expertisePicks.filter((skillId) => skills.includes(skillId)),
@@ -196,27 +305,31 @@ export function useBuilderDerived({
       // though the feature says they do.
       languages: [
         ...new Set([
-          ...race.languages,
-          ...(background.knownLanguages ?? []),
+          ...(race?.languages ?? []),
+          ...(background?.knownLanguages ?? []),
           ...bonusLanguages.filter(Boolean),
-          ...(klass.languages ?? []),
+          ...(klass?.languages ?? []),
         ]),
       ],
-      tools: [
-        ...new Set(
-          [
-            ...toolGrants.fixed,
-            ...(race.tools ?? []),
-            racialTool,
-            ...toolGrants.chosen,
-          ].filter(Boolean),
-        ),
-      ],
+      tools: trainedTools,
       // Races can teach combat training too: mountain dwarf armor, drow
       // and wood elf weapons.
-      armor: [...new Set([...klass.armor, ...(race.armor ?? [])])],
-      weapons: [...new Set([...klass.weapons, ...(race.weapons ?? [])])],
+      armor: [...new Set([...(klass?.armor ?? []), ...(race?.armor ?? [])])],
+      weapons: [...new Set([...(klass?.weapons ?? []), ...(race?.weapons ?? [])])],
     };
+    return applyFeatGrants({
+      proficiencies,
+      feats: featNames.map((name) => ({ name, desc: featDescOf(name) })),
+      choices: featChoices,
+      strict: false,
+    }).proficiencies;
+  }, [proficientSkills, klass, race, background, expertisePicks, bonusLanguages, trainedTools, featNames, featDescOf, featChoices]);
+
+  const preview = useMemo(() => {
+    if (!shownAbilities || !race || !klass || !background) {
+      return null;
+    }
+    const trained = training;
     // A third caster's Intelligence counts as a spellcasting ability too.
     const castingAbility = builderCasting(klass, subclass, effectiveLevel).ability;
     // Resilient's save counts in what is shown; the server writes it itself,
@@ -233,7 +346,7 @@ export function useBuilderDerived({
         ...state.feats,
         ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
       ],
-      proficiencies: { ...proficiencies, saves },
+      proficiencies: { ...trained, saves },
       spellcasting: castingAbility
         ? { ability: castingAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
@@ -257,8 +370,8 @@ export function useBuilderDerived({
     const method = rules?.hpMethod ?? "average";
     const maxHp =
       hpOverride ?? derivedMaxHp(method === "max" ? "max" : "average", hpInput);
-    return { proficiencies, derived, maxHp, hpMethod: method, hpRange: hpRange(hpInput) };
-  }, [shownAbilities, halfFeats, race, klass, subclass, background, proficientSkills, expertisePicks, bonusLanguages, racialTool, toolGrants, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
+    return { proficiencies: trained, derived, maxHp, hpMethod: method, hpRange: hpRange(hpInput) };
+  }, [shownAbilities, halfFeats, race, klass, subclass, background, training, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
 
   // The class's starting equipment rides along automatically (removable
   // chips): the book's list with the either-or choices the player made on
@@ -305,7 +418,7 @@ export function useBuilderDerived({
     }
     return [
       ...suggestWeapons(klass.weapons).map((weapon) => ({ name: weapon.name, note: weapon.damage })),
-      ...suggestArmor(klass.armor).map((armor) => ({
+      ...suggestArmor(klass.armor, klass.genres).map((armor) => ({
         name: armor.name,
         note: armor.category === "shield" ? `+${armor.baseAc} AC` : `AC ${armor.baseAc}`,
       })),
@@ -319,7 +432,7 @@ export function useBuilderDerived({
       .filter((item) => !removedAutoNames.includes(item.name))
       .map((item) => ({ name: item.name, qty: item.qty }));
     // Backgrounds hand over a starting kit too, not just skills.
-    const backgroundGear = (background?.equipment ?? [])
+    const backgroundGear = backgroundKit.names
       .filter((itemName) => !removedAutoNames.includes(itemName))
       .map((itemName) => ({ name: itemName, qty: 1 }));
     // One row per name: a dagger bought beside the rogue's two is a third.
@@ -333,7 +446,7 @@ export function useBuilderDerived({
       }
     }
     return rows;
-  }, [equipment, autoLoadout, removedAutoNames, background, keepsStoredGear]);
+  }, [equipment, autoLoadout, removedAutoNames, backgroundKit, keepsStoredGear]);
 
   // What the pack costs. Under "equipment" the class's gear and the
   // background's kit are free and the background's coin is the purse; under
@@ -341,17 +454,25 @@ export function useBuilderDerived({
   // stored character's pack was earned, so an edit charges only what it adds.
   const wealthMethod = rules?.startingWealth ?? "equipment";
   const purse = useMemo(() => {
+    // The pack's price rode in on the pick (EquipmentSection); it is layered
+    // under the bundled table exactly as the server layers its catalog, so
+    // the purse here and the purse the server works agree (issue #136).
     const priceOf = (itemName: string) => {
       const picked = equipment.find((item) => item.name === itemName);
-      return picked?.priceCp !== undefined
-        ? { copper: picked.priceCp, magic: false }
-        : bundledPrices(itemName);
+      return layeredPrice(
+        itemName,
+        picked?.magic
+          ? { copper: null, magic: true }
+          : picked?.priceCp !== undefined
+            ? { copper: picked.priceCp, magic: false }
+            : undefined,
+      );
     };
     const freeKit = keepsStoredGear
       ? equipment.flatMap((item) => Array.from({ length: item.qty }, () => item.name))
       : wealthMethod === "rolled"
         ? []
-        : [...kitNames(autoLoadout), ...(background?.equipment ?? [])];
+        : [...kitNames(autoLoadout), ...backgroundKit.names];
     const coinCopper = keepsStoredGear
       ? state.gold * 100
       : Math.round(
@@ -366,13 +487,13 @@ export function useBuilderDerived({
       // The kit's choices matter where the kit is free; under rolled wealth
       // they only say what is pre-added to buy.
       problems: [
-        ...(keepsStoredGear || wealthMethod === "rolled" ? [] : (startingKit?.problems ?? [])),
+        ...(keepsStoredGear || wealthMethod === "rolled" ? [] : [...(startingKit?.problems ?? []), ...backgroundKit.problems]),
         ...verdict.problems,
       ],
       gold: Math.floor(left / 100),
       copper: left % 100,
     };
-  }, [equipment, fullEquipment, autoLoadout, startingKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
+  }, [equipment, fullEquipment, autoLoadout, startingKit, backgroundKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
 
   // AC is derived from the gear above, never typed: equipping a breastplate
   // moves the number here and on the sheet. Pinning an armor class is a
@@ -414,9 +535,10 @@ export function useBuilderDerived({
             subclass,
             level: effectiveLevel,
             features: optionPicks.map((optionName) => ({ name: optionName })),
+            feats: featNames,
           })
         : [],
-    [klass, subclass, effectiveLevel, optionPicks],
+    [klass, subclass, effectiveLevel, optionPicks, featNames],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog
@@ -468,7 +590,43 @@ export function useBuilderDerived({
   // allowance except the subclass's always-prepared ones, which are free. For
   // a wizard `chosenSpells` is the book and `chosenPrepared` what is
   // prepared from it; for everyone else the two are the same list.
-  const chosenCantrips = cantrips;
+  // Cantrips the race gives (a tiefling's Thaumaturgy, a forest gnome's
+  // Minor Illusion, the high elf's pick on the ancestry step) are known on
+  // top of the class's, so the spell step shows them granted and the class
+  // count leaves them out, as the sheet and a level-up already did (issue
+  // #118: a tiefling cleric filled with Thaumaturgy left play two cantrips
+  // down).
+  const racialCantripPick = state.racialCantrip;
+  const racialCantrips = useMemo(() => {
+    const own = race ? innateCantripsFor(race.id, effectiveLevel) : [];
+    const seen = new Set<string>();
+    return [...(racialCantripPick ? [racialCantripPick] : []), ...own].filter((name) => {
+      const key = name.trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [race, effectiveLevel, racialCantripPick]);
+  // The spells the feats teach (src/lib/srd/feat-spells.ts) are known the
+  // same way: shown granted, left out of the class's counts.
+  const featSpells = useMemo(
+    () =>
+      featSpellNames(
+        featSpellGrants({
+          feats: featNames.map((name) => ({ name, desc: featDescOf(name) })),
+          choices: featChoices,
+          raisedAbility: () => null,
+          strict: false,
+        }).grants,
+      ),
+    [featNames, featDescOf, featChoices],
+  );
+  const chosenCantrips = useMemo(() => {
+    const free = new Set([...racialCantrips, ...featSpells.cantrips].map((name) => name.trim().toLowerCase()));
+    return cantrips.filter((name) => !free.has(name.trim().toLowerCase()));
+  }, [cantrips, racialCantrips, featSpells]);
   const chosenSpells = useMemo(() => {
     const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
     return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
@@ -487,15 +645,24 @@ export function useBuilderDerived({
     activeAsiChoices,
     asiTakenInPlay,
     baseAbilities,
+    asiBaseAbilities,
+    racialBonus,
+    abilityGains: gains.gains,
+    primalChampion,
     abilities,
     shownAbilities,
     proficientSkills,
     toolGrants,
+    featNames,
+    featDescOf,
+    featSpecOf,
+    training,
     preview,
     equipmentSuggestions,
     classKit,
     kitChoices,
     kitTraining,
+    backgroundKit,
     fullEquipment,
     purse,
     acInfo,
@@ -509,6 +676,8 @@ export function useBuilderDerived({
     cantripAdvice,
     starters,
     subclassSpells,
+    racialCantrips,
+    featSpells,
     castingLabel,
     chosenCantrips,
     chosenSpells,
@@ -529,9 +698,15 @@ export function builderActions(
   race?: RaceOption,
   background?: BackgroundOption,
 ) {
-  // A skill the background or race grants outright is not a class pick;
-  // taking it again would spend a slot on nothing.
-  const granted = new Set([...(background?.skills ?? []), ...state.backgroundSkills, ...(race?.skills ?? [])]);
+  // A skill the background or race grants outright, or one picked for
+  // either, is not a class pick; taking it again would spend a slot on
+  // nothing. The same map greys the pill and labels it (CallingStep).
+  const granted = grantedSkillSources({
+    race,
+    background,
+    racialSkills: state.racialSkills,
+    backgroundSkills: state.backgroundSkills,
+  });
   return {
     addEquipmentItem(entry: {
       name: string;
@@ -540,6 +715,7 @@ export function builderActions(
       gear?: EquipmentItem["gear"];
       weight?: number;
       priceCp?: number;
+      magic?: boolean;
     }) {
       state.setEquipment((current) => {
         const existing = current.find((item) => item.name === entry.name);
@@ -559,6 +735,7 @@ export function builderActions(
             ...(entry.gear ? { gear: entry.gear } : {}),
             ...(entry.weight !== undefined ? { weight: entry.weight } : {}),
             ...(entry.priceCp !== undefined ? { priceCp: entry.priceCp } : {}),
+            ...(entry.magic ? { magic: true } : {}),
           },
         ];
       });
@@ -597,8 +774,20 @@ export function builderActions(
         state.setRemovedAutoNames([]);
       }
     },
+    // One either-or line of the background's kit answered, by the words of
+    // the alternative taken.
+    pickBackgroundGear(index: number, label: string) {
+      state.setBackgroundGearPicks((current) => {
+        const next = current.slice();
+        while (next.length < index) {
+          next.push("");
+        }
+        next[index] = label;
+        return next;
+      });
+    },
     toggleSkill(skillId: string) {
-      if (!klass || granted.has(skillId)) {
+      if (!klass || granted.has(skillId.trim().toLowerCase())) {
         return;
       }
       state.setChosenSkills((current) =>

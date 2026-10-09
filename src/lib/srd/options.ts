@@ -11,6 +11,7 @@
 //
 // Pure data and pure functions, client-importable like the rest of srd/.
 
+import { featOptionSlots } from "@/lib/srd/feat-combat";
 import optionsJson from "@/lib/srd/options.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
 import { subclassNamed } from "@/lib/srd/subclass-name";
@@ -209,10 +210,13 @@ export function openOptionSlots(input: {
   subclass: string;
   level: number;
   features: Array<{ name: string }>;
+  // The feats on the sheet: Martial Adept, Eldritch Adept and Metamagic
+  // Adept open picks of their own (src/lib/srd/feat-combat.ts).
+  feats?: string[];
 }): OptionSlot[] {
   const slots: OptionSlot[] = [];
   for (const kind of Object.keys(KINDS) as OptionKind[]) {
-    const total = optionSlotsFor(input.classId, input.subclass, input.level, kind);
+    const total = optionSlotsFor(input.classId, input.subclass, input.level, kind) + featOptionSlots(input.feats, kind);
     if (total <= 0) {
       continue;
     }

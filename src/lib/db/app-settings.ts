@@ -59,6 +59,7 @@ export type GlobalConfigPatch = {
   signupMode?: GlobalConfig["signupMode"];
   serverName?: string;
   accountDeletionGraceDays?: number;
+  abilityRerollBelow?: number;
   publicUrl?: string;
   worldRegistryUrl?: string;
   sampling?: Partial<GlobalConfig["sampling"]>;
@@ -68,6 +69,7 @@ export type GlobalConfigPatch = {
   voiceChat?: Partial<GlobalConfig["voiceChat"]>;
   discord?: Partial<GlobalConfig["discord"]>;
   harness?: Partial<GlobalConfig["harness"]>;
+  sharedHost?: Partial<GlobalConfig["sharedHost"]>;
 };
 
 // Merges a partial update over the stored config. Secret fields follow the
@@ -89,6 +91,7 @@ export function saveGlobalConfig(patch: GlobalConfigPatch): GlobalConfig {
     serverName: patch.serverName ?? current.serverName,
     accountDeletionGraceDays:
       patch.accountDeletionGraceDays ?? current.accountDeletionGraceDays,
+    abilityRerollBelow: patch.abilityRerollBelow ?? current.abilityRerollBelow,
     publicUrl: patch.publicUrl ?? current.publicUrl,
     worldRegistryUrl: patch.worldRegistryUrl ?? current.worldRegistryUrl,
     sampling: { ...current.sampling, ...patch.sampling },
@@ -96,6 +99,7 @@ export function saveGlobalConfig(patch: GlobalConfigPatch): GlobalConfig {
     images: { ...current.images, ...patch.images },
     speech: { ...current.speech, ...patch.speech },
     voiceChat: { ...current.voiceChat, ...patch.voiceChat },
+    sharedHost: { ...current.sharedHost, ...patch.sharedHost },
     discord: { ...current.discord, ...patch.discord },
     harness: { ...current.harness, ...patch.harness },
   };

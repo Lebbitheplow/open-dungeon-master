@@ -1,8 +1,25 @@
 # Open Dungeon Master trailer
 
-The current version is **[output/v4/open-dungeon-master-trailer-v4.mp4](output/v4/open-dungeon-master-trailer-v4.mp4)**: 51.5 seconds of dark-theme gameplay with readable feature captions and longer sequences. Combat appears once, in the opening; the trailer then moves through character creation, maps, the workshop, and campaign creation. The title closes over campaign creation footage. Shot durations and action timing retain the slower pacing from v3, with sound effects and no music.
+The current version is **[output/v8/open-dungeon-master-trailer-v8.mp4](output/v8/open-dungeon-master-trailer-v8.mp4)**: 65 seconds. The opener and closer use animated brand/title layouts, with a rotating d20 and a clear website call to action. The server/client card uses animated hardware and desktop/Android device illustrations. Together with the v7 CLI/model diagrams, all setup/title cards now use purpose-built graphics, with no game previews. The twelve gameplay shots and two connection cards are retained exactly from the preceding version.
 
-Rebuild with `python trailer/edit-v2.py --v4`, then verify with `python trailer/review.py --v4`. `timeline-v4.json` specifies source segments, fixed crops, captions, and sound cue timing. [SOURCES-v2.md](SOURCES-v2.md) documents the shared recordings and sound assets. Open **[index.html](index.html)** for the current preview and chapter shortcuts.
+Rebuild the three new cards and export with:
+
+```bash
+python trailer/bookends-v8.py --proof
+python trailer/bookends-v8.py
+python trailer/edit-v2.py --v8
+python trailer/review.py --v8
+```
+
+`timeline-v8.json` retains prior encoded shots where unchanged. To recreate them first, run `python trailer/stage-v6.py` and `python trailer/connections-v7.py`. [SOURCES-v8.md](SOURCES-v8.md) documents these graphic replacements. Open **[index.html](index.html)** for the current preview and chapter shortcuts.
+
+The previous 65-second cut is retained at `output/v7/open-dungeon-master-trailer-v7.mp4`. Rebuild its new connection cards with `python trailer/connections-v7.py` and export with `python trailer/edit-v2.py --v7`.
+
+The previous 65-second version is retained at `output/v6/open-dungeon-master-trailer-v6.mp4`. Rebuild with `python trailer/stage-v6.py` and `python trailer/edit-v2.py --v6`.
+
+The previous 67-second cut is retained at `output/v5/open-dungeon-master-trailer-v5.mp4`; rebuild it with `python trailer/methods-motion.py` and `python trailer/edit-v2.py --v5`.
+
+The previous 51.5-second cut is retained at `output/v4/open-dungeon-master-trailer-v4.mp4`; rebuild it with `python trailer/edit-v2.py --v4`.
 
 The previous 59-second cut is retained at `output/v3/open-dungeon-master-trailer-v3.mp4`; rebuild it with `python trailer/edit-v2.py --v3`.
 

@@ -23,6 +23,12 @@ services:
       args:
         EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
         EMBEDDING_DTYPE: ${EMBEDDING_DTYPE:-}
+        # Agent programs to install into the image, by npm package name
+        # ("@openai/codex"). The server finds and runs a program installed
+        # inside its container; sign in once with
+        #   docker compose exec open-dungeon-master codex login --device-auth
+        # and the sign-in stays in the odm-home volume. See docs/agent-harness.md.
+        AGENT_PROGRAMS: ${AGENT_PROGRAMS:-}
     container_name: open-dungeon-master
     restart: unless-stopped
     ports:
@@ -97,9 +103,18 @@ services:
       - odm-uploads:/app/public/uploads
       - odm-generated:/app/public/generated
       - odm-audio:/app/public/generated-audio
+      # The built-in speech recognition model the admin downloads, which an
+      # update would otherwise throw away. Only this folder: models/embeddings
+      # is baked into the image and must not be hidden by a mount.
+      - odm-speech:/app/models/speech
+      # The agent program's sign-in (~/.codex, ~/.claude, ...), when one is
+      # installed into the image with AGENT_PROGRAMS.
+      - odm-home:/home/node
 
 volumes:
   odm-data:
   odm-uploads:
   odm-generated:
   odm-audio:
+  odm-speech:
+  odm-home:

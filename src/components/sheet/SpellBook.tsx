@@ -38,6 +38,9 @@ export type SpellTile = {
   data?: Record<string, unknown>;
   slug?: string;
   homebrew?: boolean;
+  // The book the spell is from, when it is not the SRD ("Deep Magic 5e"):
+  // leads the state line, the way "homebrew" does (issue #116).
+  source?: string;
   // Replaces the state line under the name ("New" for a level-up pick).
   note?: string;
   // Why this spell cannot be chosen right now ("Full", a third caster's
@@ -263,7 +266,8 @@ export function SpellBook({
         <ul className="grid grid-cols-2 gap-1.5 @lg:grid-cols-3 @3xl:grid-cols-4">
           {ordered.map((tile) => {
             const clickable = toggles(tile) && !busy;
-            const summary = tile.data ? spellSummary(tile.data) : undefined;
+            const facts = tile.data ? spellSummary(tile.data) : undefined;
+            const summary = tile.source ? [facts, tile.source].filter(Boolean).join(" · ") : facts;
             return (
               <li
                 key={tile.name}
@@ -300,8 +304,8 @@ export function SpellBook({
                         <Star className="ml-1 inline size-3 fill-amber-300 text-amber-300" aria-label="suggested" />
                       ) : null}
                     </span>
-                    <span className="spell-tile-state block text-[10px]">
-                      {tile.homebrew ? "homebrew · " : ""}
+                    <span className="spell-tile-state block truncate text-[10px]">
+                      {tile.homebrew ? "homebrew · " : tile.source ? `${tile.source} · ` : ""}
                       {tile.blocked ?? tile.note ?? STATE_TEXT[tile.state]}
                     </span>
                   </span>

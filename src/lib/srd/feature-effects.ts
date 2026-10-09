@@ -202,8 +202,12 @@ export function songOfRestDie(level: number): string {
 // so they resolve through the same table. defenseRiders and the derived
 // stats read features AND feats together.
 export const FEATURE_EFFECTS: FeatureDef[] = [
+  // A Level Up feat with the same rules as one of ODM's answers to both
+  // names (feat-effects.ts FEAT_TWINS): Attentive is Alert, Intuitive is
+  // Observant. (Level Up's Skirmisher is Mobile too, but the Scout
+  // ranger's 3rd-level feature is named Skirmisher, so it is not listed.)
   {
-    match: ["alert"],
+    match: ["alert", "attentive"],
     effects: [{ kind: "initiative_bonus", amount: 5 }],
     guidance: "Alert: +5 to initiative, and they cannot be surprised while conscious.",
   },
@@ -214,7 +218,7 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     guidance: "Mobile: +10 feet of speed; a Dash ignores difficult terrain; a creature they attack in melee cannot make opportunity attacks against them that turn.",
   },
   {
-    match: ["observant"],
+    match: ["observant", "intuitive"],
     effects: [{ kind: "passive_bonus", amount: 5 }],
     guidance: "Observant: +5 to passive Perception and passive Investigation.",
   },
@@ -488,6 +492,34 @@ export function parseFeatureEffects(desc: string): FeatureEffect[] {
   if (/counts? as magical/i.test(desc)) {
     out.push({ kind: "magical_attacks" });
   }
+  // The flat numbers a feat's text names (issue #147: a content pack's
+  // feats reach the engines through the same table as ODM's): "Your speed
+  // increases by 10 feet", "Any form of movement you possess is increased
+  // by 10 feet", "+5 to initiative", "When rolling initiative you gain a +5
+  // bonus", "+5 bonus to your passive Perception and passive
+  // Investigation", "Increase your passive perception and investigation
+  // scores by +5".
+  const speed =
+    /\b(?:your )?(?:walking )?speed (?:increases|is increased) by (\d+) feet\b/i.exec(desc) ??
+    /\bany form of movement you possess is increased by (\d+) feet\b/i.exec(desc) ??
+    /\b\+(\d+) feet (?:of|to) (?:your )?(?:walking )?speed\b/i.exec(desc);
+  if (speed && !/\bwhile\b|\bwhen you\b|\buntil\b/i.test(speed[0])) {
+    const amount = Number(speed[1]);
+    out.push({ kind: "speed_bonus", amount: () => amount });
+  }
+  const initiative =
+    /\b(?:add|gain(?:s)?|get(?:s)?) (?:a )?\+?(\d+) (?:bonus )?to (?:every |your )?initiative\b/i.exec(desc) ??
+    /\brolling initiative,? you gain a \+(\d+) bonus\b/i.exec(desc) ??
+    /\b\+(\d+) (?:bonus )?to initiative\b/i.exec(desc);
+  if (initiative) {
+    out.push({ kind: "initiative_bonus", amount: Number(initiative[1]) });
+  }
+  const passive =
+    /\b\+(\d+) (?:bonus )?to (?:your )?passive (?:wisdom \()?perception\)?(?: and (?:your )?passive (?:intelligence \()?investigation\)?)?/i.exec(desc) ??
+    /\bpassive (?:wisdom \()?perception\)? and (?:passive )?(?:intelligence \()?investigation\)? scores? by \+?(\d+)/i.exec(desc);
+  if (passive) {
+    out.push({ kind: "passive_bonus", amount: Number(passive[1]) });
+  }
   return out;
 }
 
@@ -570,6 +602,59 @@ const AUTHORED_PARSED = new Map<string, { effects: FeatureEffect[]; guidance: st
 function normalize(name: string) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
+
+// The names of every class and subclass feature ODM knows: a content pack
+// feat that shares one (Level Up's Skirmisher and the Scout ranger's) is
+// not read through this table, which reads features and feats alike.
+const CLASS_FEATURE_NAMES = new Set<string>();
+{
+  const classes = (subclassesJson as unknown as {
+    classes: Record<string, Array<{ levels: Record<string, AuthoredFeatureRow[]> }>>;
+  }).classes;
+  for (const entries of Object.values(classes)) {
+    for (const entry of entries) {
+      for (const features of Object.values(entry.levels)) {
+        for (const feature of features) {
+          CLASS_FEATURE_NAMES.add(normalize(feature.n));
+        }
+      }
+    }
+  }
+}
+
+export function clashesWithClassFeature(name: string): boolean {
+  return CLASS_FEATURE_NAMES.has(normalize(name));
+}
+
+const REGISTERED_FEATS = new Set<string>();
+
+// A content pack feat's rules, read into this table the way ODM's own feats
+// are (issue #147): its flat speed, initiative and passive bonuses, its
+// resistances, and its text as the guidance the prompt shows. Called when
+// the pack is opened (src/lib/content/db.ts) and by the builder as it
+// fetches a feat's text. A name this table already answers, or one a class
+// feature shares, is left alone. Returns whether anything was registered.
+export function registerFeatRules(name: string, desc: string): boolean {
+  const key = normalize(name);
+  if (!key || REGISTERED_FEATS.has(key)) {
+    return false;
+  }
+  REGISTERED_FEATS.add(key);
+  if (clashesWithClassFeature(key) || FEATURE_EFFECTS.some((def) => def.match.includes(key))) {
+    return false;
+  }
+  const effects = parseFeatureEffects(desc);
+  if (!effects.length) {
+    return false;
+  }
+  FEATURE_EFFECTS.push({ match: [key], effects, guidance: desc });
+  return true;
+}
+
+// The flat speed a feat grants when its name is one a class feature shares
+// (Level Up's Skirmisher is Mobile's +10 feet; the Scout's Skirmisher is a
+// reaction). Read from sheet.feats alone by speedFor.
+export const FEAT_ONLY_SPEED: Record<string, number> = { skirmisher: 10 };
 
 // Every effect a character's feature list grants, in table order. The
 // longest matching entry wins per feature so "Extra Attack (2)" never also

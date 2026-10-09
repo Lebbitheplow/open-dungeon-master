@@ -1,12 +1,13 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { Pin, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
-import { KitButton, RowMenu, panelRow } from "./PanelKit";
+import { KitButton, LoadFailed, panelRow, RowMenu } from "./PanelKit";
 import { PIN_TOKEN_CAP, pinTokens, totalPinTokens } from "@/lib/dm/pin-logic";
 
 // Pinned memories: excerpts that ride in every prompt, unconditionally.
@@ -74,22 +75,27 @@ function PinItem({ pin, onUnpin }: { pin: PinRow; onUnpin: (id: string) => void 
 
 export function PinsPanel({ campaignId, version }: { campaignId: string; version: number }) {
   const [pins, setPins] = useState<PinRow[]>([]);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(`/api/campaigns/${campaignId}/pins`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!cancelled && data) {
-          setPins(data.pins ?? []);
-        }
-      })
-      .catch(() => {});
+    void readLoad<{ pins?: PinRow[] }>(fetch(`/api/campaigns/${campaignId}/pins`), "The pins").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload) {
+        setPins(outcome.payload.pins ?? []);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, reload, version]);
+  }, [campaignId, reload, version, settle]);
 
   const unpin = useCallback(
     async (pinId: string) => {
@@ -143,7 +149,7 @@ export function PinsPanel({ campaignId, version }: { campaignId: string; version
           ))}
         </ul>
       ) : (
-        <EmptyState size="sm" art="board" title="Nothing pinned. Select text in one of the DM's messages and press the pin icon to put it in front of the DM every turn, whether or not it looks relevant." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} /> : loaded ? <EmptyState size="sm" art="board" title="Nothing pinned. Select text in one of the DM's messages and press the pin icon to put it in front of the DM every turn, whether or not it looks relevant." /> : null)
       )}
     </div>
   );

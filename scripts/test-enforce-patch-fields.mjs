@@ -325,6 +325,17 @@ const ROWS = {
       assert.equal(after().level, 1);
     },
   },
+  featChoices: {
+    rule: "A feat's own picks (Linguist's three languages) come with the feat, which an improvement level grants; at a level with none they change nothing.",
+    severity: "high",
+    note: "",
+    attempt: async () => {
+      const { send, after, before } = await earned();
+      const early = await send({ featChoices: { linguist: { languages: ["Dwarvish", "Giant", "Orc"] } } });
+      assert.equal(early.status, 200, JSON.stringify(early.json));
+      assert.deepEqual(after().proficiencies.languages, before.proficiencies.languages);
+    },
+  },
   hpChoice: {
     rule: "Hit points follow the table's method: at a table that takes the fixed value, asking to roll changes nothing.",
     severity: "medium",

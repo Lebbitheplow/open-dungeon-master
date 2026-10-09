@@ -28,6 +28,9 @@ export type SrdArmor = {
   // (src/lib/srd/encumbrance.ts) falls back here when the content pack has
   // nothing to say.
   weightLb: number;
+  // Set on the setting armor only: the genres whose classes it is offered
+  // to. An SRD class is never suggested a kevlar vest (issue #112).
+  genres?: string[];
 };
 
 export const SRD_ARMOR: SrdArmor[] = [
@@ -46,27 +49,32 @@ export const SRD_ARMOR: SrdArmor[] = [
   { name: "Shield", category: "shield", baseAc: 2, weightLb: 6 },
   // Setting-specific equivalents for the custom genre classes, so a
   // cyberpunk runner in a armorweave vest gets real AC instead of nothing.
-  { name: "Armorweave Vest", category: "light", baseAc: 12, weightLb: 6 },
-  { name: "Kevlar Vest", category: "medium", baseAc: 13, dexCap: 2, weightLb: 15 },
-  { name: "Riot Plating", category: "heavy", baseAc: 17, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 50 },
-  { name: "Brass Carapace", category: "medium", baseAc: 14, dexCap: 2, weightLb: 25 },
-  { name: "Scrap Plate", category: "heavy", baseAc: 16, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 50 },
-  { name: "Ballistic Shield", category: "shield", baseAc: 2, weightLb: 8 },
+  { name: "Armorweave Vest", category: "light", baseAc: 12, weightLb: 6, genres: ["cyberpunk"] },
+  { name: "Kevlar Vest", category: "medium", baseAc: 13, dexCap: 2, weightLb: 15, genres: ["cyberpunk", "post_apocalyptic"] },
+  { name: "Riot Plating", category: "heavy", baseAc: 17, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 50, genres: ["cyberpunk", "post_apocalyptic"] },
+  { name: "Brass Carapace", category: "medium", baseAc: 14, dexCap: 2, weightLb: 25, genres: ["steampunk"] },
+  { name: "Scrap Plate", category: "heavy", baseAc: 16, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 50, genres: ["post_apocalyptic"] },
+  { name: "Ballistic Shield", category: "shield", baseAc: 2, weightLb: 8, genres: ["cyberpunk", "post_apocalyptic"] },
 ];
 
 const byName = new Map(SRD_ARMOR.map((armor) => [normalize(armor.name), armor]));
 
 // "+1 Plate", "Plate Armor", "Chain Mail, +2" -> a lookup key. The magic
-// bonus, punctuation, and the noise word "armor" go; a trailing plural too.
-function normalize(term: string) {
+// bonus, punctuation, and the noise word "armor" go; a trailing plural too
+// ("Shields" is a shield). `written` keeps the plural, for the tail rule
+// below: "work leathers" is clothing, not Leather (issue #113).
+function written(term: string) {
   return term
     .toLowerCase()
     .replace(/[+-]\d+/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\b(armor|armour)\b/g, " ")
     .trim()
-    .replace(/\s+/g, " ")
-    .replace(/s$/, "");
+    .replace(/\s+/g, " ");
+}
+
+function normalize(term: string) {
+  return written(term).replace(/s$/, "");
 }
 
 // The bonus a magic item's name declares: "+1 Longsword", "Plate +2",
@@ -92,7 +100,10 @@ export function matchArmor(term: string): SrdArmor | null {
   if (exact) {
     return exact;
   }
-  const candidates = SRD_ARMOR.filter((armor) => wanted.endsWith(` ${normalize(armor.name)}`));
+  // The tail must be the armor's name as written, singular: a "+1 Studded
+  // Leather" is one, a Guild Engineer's "work leathers" is not.
+  const tail = written(term);
+  const candidates = SRD_ARMOR.filter((armor) => tail.endsWith(` ${normalize(armor.name)}`));
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
 }
@@ -217,11 +228,13 @@ export function isWorn(
 // How much of the Dexterity modifier a suit lets through. Heavy armor takes
 // none of it, in either direction: a clumsy wearer is not penalized (SRD 5.1,
 // Armor). Medium armor caps the bonus and passes a penalty on whole.
-function dexThrough(armor: SrdArmor, dexMod: number): number {
+function dexThrough(armor: SrdArmor, dexMod: number, mediumArmorMaster = false): number {
   if (armor.category === "heavy") {
     return 0;
   }
-  return Math.min(dexMod, armor.dexCap ?? dexMod);
+  // Medium Armor Master: medium armor takes 3 of the modifier, not 2.
+  const cap = armor.dexCap !== undefined && mediumArmorMaster && armor.category === "medium" ? Math.max(armor.dexCap, 3) : armor.dexCap;
+  return Math.min(dexMod, cap ?? dexMod);
 }
 
 // Whether the character wears armor or carries a shield they were never
@@ -342,6 +355,9 @@ export function computeArmorClass(input: {
   bonus?: number;
   // The wearer's race, for the one race heavy armor does not slow.
   race?: string;
+  // Medium Armor Master: 3 of the Dexterity modifier through medium armor,
+  // and no Stealth disadvantage from it (src/lib/srd/feat-combat.ts).
+  mediumArmorMaster?: boolean;
 }): AcBreakdown {
   const worn = input.equipment.filter((item) => isWorn(item, input.equipment));
 
@@ -360,9 +376,9 @@ export function computeArmorClass(input: {
       }
       continue;
     }
-    const score = armor.baseAc + resolved.bonus + dexThrough(armor, input.dexMod);
+    const score = armor.baseAc + resolved.bonus + dexThrough(armor, input.dexMod, input.mediumArmorMaster);
     const bestScore = armorItem
-      ? armorItem.armor.baseAc + armorItem.bonus + dexThrough(armorItem.armor, input.dexMod)
+      ? armorItem.armor.baseAc + armorItem.bonus + dexThrough(armorItem.armor, input.dexMod, input.mediumArmorMaster)
       : -Infinity;
     if (score > bestScore) {
       armorItem = { item, ...resolved };
@@ -378,14 +394,14 @@ export function computeArmorClass(input: {
   if (armorItem) {
     const { armor, item } = armorItem;
     const magic = armorItem.bonus;
-    const dex = dexThrough(armor, input.dexMod);
+    const dex = dexThrough(armor, input.dexMod, input.mediumArmorMaster);
     ac = armor.baseAc + magic + dex;
     parts.push(`${item.name} ${armor.baseAc + magic}`);
     if (dex !== 0) {
       parts.push(`DEX ${dex >= 0 ? "+" : ""}${dex}`);
     }
     unproficient = !armorItem.proficientAnyway && !isArmorProficient(input.armorProfs, armor);
-    stealthDisadvantage = Boolean(armor.stealthDisadvantage);
+    stealthDisadvantage = Boolean(armor.stealthDisadvantage) && !(input.mediumArmorMaster && armor.category === "medium");
     if (
       armor.strengthRequirement &&
       input.strength < armor.strengthRequirement &&
@@ -482,10 +498,17 @@ export function defaultArmor(armorProfs: string[]): SrdArmor[] {
 }
 
 // Proficient armor worth offering as one-click adds in the builder.
-export function suggestArmor(armorProfs: string[]): SrdArmor[] {
+// The armor a class's training suggests. The setting armor (a kevlar vest,
+// brass carapace) is offered only to a class of its genre: `genres` is the
+// class's own list, absent for an SRD or content-pack class, which sees
+// the SRD table alone (issue #112).
+export function suggestArmor(armorProfs: string[], genres?: readonly string[]): SrdArmor[] {
   const noMetal = wearsNoMetal(armorProfs);
   return SRD_ARMOR.filter(
-    (armor) => isArmorProficient(armorProfs, armor) && !(noMetal && isMetalArmor(armor)),
+    (armor) =>
+      isArmorProficient(armorProfs, armor) &&
+      !(noMetal && isMetalArmor(armor)) &&
+      (!armor.genres || armor.genres.some((genre) => genres?.includes(genre))),
   );
 }
 

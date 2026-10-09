@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
 import { insertEncounterTemplate, listEncounterTemplates } from "@/lib/db/encounter-templates";
 import {
   checkRoster,
@@ -51,7 +51,7 @@ export async function GET(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -65,7 +65,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/campaigns";
 import { normalizeTargetParty, type TargetParty } from "@/lib/workshop/kind";
 import type { CampaignSummary } from "@/lib/campaign-types";
+import type { GameSettings } from "@/lib/schemas/game-settings";
 
 // The DB rim for workshops. Thin on purpose: a workshop is a campaigns row
 // (docs/workshop-plan.md section 1), so everything a workshop CONTAINS is
@@ -16,7 +17,22 @@ import type { CampaignSummary } from "@/lib/campaign-types";
 // A workshop seats its creator as the DM and never narrates on its own.
 // dmMode "human" is what gives the owner dm caps in src/lib/dm/viewer.ts:
 // the secrets, real enemy numbers, an unfogged map and the adjudication
-// console, which is exactly the view a person doing prep needs.
+// console, which is exactly the view a person doing prep needs. Without it
+// the owner is a mere member, every /dm route answers 403, and the workshop
+// panels (storyboard, maps, encounters, cast, places, tables) draw empty
+// under a header that still counts the rows (issue #121).
+//
+// Every path that creates a workshop row spreads this in, so the bundle
+// importer cannot drift from the button again.
+export const WORKSHOP_GAME_SETTINGS = {
+  dmMode: "human",
+  // Nothing here should reach for a model on its own. Every generator in
+  // the workshop is invoked by a button, never by a cadence.
+  aiStorySetup: false,
+  worldSimulation: false,
+  holdSubmissions: false,
+} as const satisfies Partial<GameSettings>;
+
 export function createWorkshop(
   ownerUserId: string,
   input: { title: string; description?: string; targetParty?: Partial<TargetParty> },
@@ -32,15 +48,7 @@ export function createWorkshop(
     startingLevel: targetParty.level,
     difficulty: "normal",
     kind: "workshop",
-    gameSettings: {
-      dmMode: "human",
-      // Nothing here should reach for a model on its own. Every generator in
-      // the workshop is invoked by a button, never by a cadence.
-      aiStorySetup: false,
-      worldSimulation: false,
-      holdSubmissions: false,
-      targetParty,
-    },
+    gameSettings: { ...WORKSHOP_GAME_SETTINGS, targetParty },
   });
 }
 

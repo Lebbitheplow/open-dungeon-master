@@ -1,8 +1,9 @@
 "use client";
 
 import { Dices } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
+import { CountPop } from "@/components/ui/Reveal";
 import { cn } from "@/lib/cn";
 import { abilityMod, formatModifier } from "@/lib/srd";
 import { POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, pointBuyRemaining } from "@/lib/srd/point-buy";
@@ -22,10 +23,11 @@ import {
   type PoolEntry,
   type PoolSlots,
 } from "./abilityDice";
+import { gainLabel, type AbilityGain } from "./abilityGains";
 import { HelpDot, MethodInfoDialog, type HpExplainerInput } from "./AbilityExplainers";
 import { AbilitySummary } from "./AbilitySummary";
 import { DiceDefs, DiceRow } from "./Dice";
-import { requestAbilityPool } from "./useTableRules";
+import { fetchOpenAbilityPool, requestAbilityPool, type AbilityPoolAnswer } from "./useTableRules";
 
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 export type AbilityMethod = "standard" | "pointbuy" | "roll";
@@ -43,6 +45,14 @@ const ABILITY_KEYS = Object.keys(ABILITY_LABELS) as Ability[];
 
 // What each way of getting six numbers actually costs you, for the player who
 // has never been asked this question before.
+// The 4d6 method's reroll rule in words, for the server's threshold (an
+// admin setting, issue #128).
+function rerollRule(below: number): string {
+  return below <= 0
+    ? "The six are yours to keep: this server allows no second throw."
+    : `The six are yours to keep: you may throw again only if they add up to less than ${below}.`;
+}
+
 const METHODS: Array<{ id: AbilityMethod; label: string; info: string }> = [
   {
     id: "standard",
@@ -61,7 +71,7 @@ const METHODS: Array<{ id: AbilityMethod; label: string; info: string }> = [
     id: "roll",
     label: "Roll 4d6",
     info:
-      `Roll four six-sided dice six times, dropping the lowest each time, then place the six totals on the abilities you choose. It can hand you a hero far above the standard array, or well below it. The six are yours to keep: you may throw again only if they add up to less than ${REROLL_BELOW}. Some tables love the swing; ask yours before choosing it.`,
+      `Roll four six-sided dice six times, dropping the lowest each time, then place the six totals on the abilities you choose. It can hand you a hero far above the standard array, or well below it. ${rerollRule(REROLL_BELOW)} Some tables love the swing; ask yours before choosing it.`,
   },
 ];
 
@@ -74,8 +84,9 @@ const DRAG_TYPE = "application/x-odm-pool";
 // Method-aware ability score editor: standard array slots, 27-point buy
 // steppers, or 4d6-drop-lowest, where all six throws land in a tray at once
 // and are then placed on the abilities by tap or drag. There is no rolling a
-// single ability and no typing a score in. Racial bonuses are displayed but
-// applied by the parent.
+// single ability and no typing a score in. Racial bonuses and the later
+// gains (improvements, half-feats, Primal Champion) are displayed but applied
+// by the parent.
 export default function AbilityEditor({
   method,
   onMethodChange,
@@ -86,6 +97,7 @@ export default function AbilityEditor({
   slots,
   onSlotsChange,
   racialBonus,
+  gains = {},
   asiCount = 0,
   who = "",
   hp = null,
@@ -100,6 +112,9 @@ export default function AbilityEditor({
   slots: PoolSlots<Ability>;
   onSlotsChange: (slots: PoolSlots<Ability>) => void;
   racialBonus: Partial<Record<Ability, number>>;
+  // What each score gains after the race's bonus, in the server's order and
+  // already capped (abilityGains.ts): "+1 Linguist", "+2 at level 4".
+  gains?: Partial<Record<Ability, AbilityGain[]>>;
   // Ability score improvements the chosen level has earned; > 0 adds a hint
   // that base scores are level-1 rules and the bonuses are picked below.
   asiCount?: number;
@@ -122,6 +137,55 @@ export default function AbilityEditor({
   const [asking, setAsking] = useState(false);
   const [rollError, setRollError] = useState("");
   const timers = useRef<number[]>([]);
+  // A six already on record for this player (issue #128): shown as kept,
+  // with when it was thrown, never as dice in the air. `openPool` is what
+  // the server had when the builder opened; `keptAt` says the tray's six
+  // are that kept roll (null when thrown before the server kept dates).
+  const [openPool, setOpenPool] = useState<AbilityPoolAnswer | null>(null);
+  const [keptAt, setKeptAt] = useState<string | null | undefined>(undefined);
+  // The server's reroll rule; the bundled default until it has answered.
+  const [rerollBelow, setRerollBelow] = useState(REROLL_BELOW);
+  function learnRule(answer: { rerollBelow: number }) {
+    setRerollBelow(answer.rerollBelow);
+  }
+  function adoptOpen(answer: { open: AbilityPoolAnswer | null; rerollBelow: number }) {
+    learnRule(answer);
+    setOpenPool(answer.open);
+  }
+  // The kept six into the tray, settled, no toss.
+  function showKept(answer: AbilityPoolAnswer) {
+    for (const id of timers.current) window.clearTimeout(id);
+    timers.current = [];
+    setHeld(null);
+    setTossId((id) => id + 1);
+    setPhases(answer.pool.map(() => "settled" as const));
+    setKeptAt(answer.createdAt);
+    onPoolChange(answer.pool);
+    onSlotsChange(EMPTY_SLOTS);
+    onScoresChange(scoresFromSlots(EMPTY_SLOTS, answer.pool));
+  }
+
+  // Once, when the builder opens. A new character with a kept roll on
+  // record and the 4d6 method already chosen sees it at once, as kept,
+  // instead of a Roll button that would "throw" the same six again;
+  // switching to the method later does the same (switchMethod).
+  const openedWith = useRef({ method, pool });
+  useEffect(() => {
+    let cancelled = false;
+    fetchOpenAbilityPool().then((answer) => {
+      if (cancelled || !answer) {
+        return;
+      }
+      adoptOpen(answer);
+      if (answer.open && openedWith.current.method === "roll" && openedWith.current.pool === null) {
+        showKept(answer.open);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const pending = timers.current;
@@ -136,12 +200,18 @@ export default function AbilityEditor({
   const placedCount = ABILITY_KEYS.filter((key) => slots[key] !== null).length;
   const complete = ABILITY_KEYS.every((key) => scores[key] !== null);
   const total = pool ? poolSum(pool) : 0;
-  const rerollOpen = canRerollPool(pool);
+  const rerollOpen = canRerollPool(pool, rerollBelow);
+  const keptDate =
+    keptAt ? new Date(keptAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
   const ownerOf = (index: number) => ABILITY_KEYS.find((key) => slots[key] === index) ?? null;
 
   function switchMethod(next: AbilityMethod) {
     setHeld(null);
     onMethodChange(next);
+    if (next === "roll" && pool === null && openPool) {
+      showKept(openPool);
+      return;
+    }
     onScoresChange(
       next === "pointbuy"
         ? { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }
@@ -163,6 +233,14 @@ export default function AbilityEditor({
       setRollError(answer.error);
       return;
     }
+    learnRule(answer);
+    setOpenPool(answer);
+    if (answer.kept) {
+      // Already on record: shown as kept, not thrown again (issue #128).
+      showKept(answer);
+      return;
+    }
+    setKeptAt(undefined);
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const thrown = answer.pool;
     for (const id of timers.current) window.clearTimeout(id);
@@ -291,8 +369,10 @@ export default function AbilityEditor({
                 aria-busy={asking}
                 title={
                   rerollOpen
-                    ? `These add up to less than ${REROLL_BELOW}, so you may throw again`
-                    : `A reroll opens only when the six add up to less than ${REROLL_BELOW}`
+                    ? `These add up to less than ${rerollBelow}, so you may throw again`
+                    : rerollBelow <= 0
+                      ? "This server allows no second throw"
+                      : `A reroll opens only when the six add up to less than ${rerollBelow}`
                 }
                 className={cn(ui.btnSmall, "ml-auto px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40")}
               >
@@ -302,13 +382,21 @@ export default function AbilityEditor({
           </>
         ) : null}
       </div>
+      {method !== "roll" && openPool ? (
+        // The roll on record is not lost by choosing another method; it
+        // waits for a character that uses it (issue #128).
+        <p className="mb-3 text-xs text-stone-500" aria-live="polite">
+          Your rolled six ({openPool.pool.map((entry) => entry.total).join(", ")}) stay on record until a
+          character uses them. Choose Roll 4d6 to see them.
+        </p>
+      ) : null}
       {asiCount > 0 ? (
         <p className="mb-3 text-xs text-stone-500">
           These are your base scores, the same at every level. Your level has earned{" "}
           <span className="text-amber-200">
             {asiCount} ability score {asiCount === 1 ? "improvement" : "improvements"}
           </span>{" "}
-          on top of them; pick those in the section below.
+          on top of them; pick those in the section below, and each Final here counts them.
         </p>
       ) : null}
 
@@ -374,11 +462,21 @@ export default function AbilityEditor({
                   "The dice are in the air…"
                 ) : (
                   <>
+                    {keptAt !== undefined ? (
+                      <>
+                        <span className="text-amber-200">Your kept roll{keptDate ? ` from ${keptDate}` : ""}.</span>
+                        <span className="text-stone-600"> · </span>
+                      </>
+                    ) : null}
                     <span className="font-mono text-amber-200">Total {total}</span>
                     <span className="text-stone-600"> · </span>
                     {rerollOpen
-                      ? `Under ${REROLL_BELOW}: you may throw all six again.`
-                      : `A reroll opens only under ${REROLL_BELOW}. These six are yours.`}
+                      ? `Under ${rerollBelow}: you may throw all six again.`
+                      : rerollBelow <= 0
+                        ? "This server allows no second throw. These six are yours."
+                        : keptAt !== undefined
+                          ? `It stays until a character uses it; a reroll opens only under ${rerollBelow}.`
+                          : `A reroll opens only under ${rerollBelow}. These six are yours.`}
                     <span className="block text-stone-500">
                       {held !== null
                         ? "Now tap the ability that should get it."
@@ -421,8 +519,36 @@ export default function AbilityEditor({
       <div className="flex flex-col gap-1.5">
         {ABILITY_KEYS.map((ability) => {
           const bonus = racialBonus[ability] ?? 0;
+          const extra = gains[ability] ?? [];
           const assigned = scores[ability];
-          const finalScore = assigned !== null ? assigned + bonus : null;
+          const finalScore =
+            assigned !== null ? assigned + bonus + extra.reduce((sum, gain) => sum + gain.amount, 0) : null;
+          // Racial bonus, then every later gain by name, then the final. A
+          // gain the player just made or changed lands (reveal-pop, keyed by
+          // its words so the others stay put) and the final pops when it
+          // moves.
+          const notes: Array<{ key: string; tone: string; motion?: string; body: ReactNode }> = [
+            ...(bonus ? [{ key: "racial", tone: "text-amber-300", body: `+${bonus} racial` }] : []),
+            ...extra.map((gain) => ({
+              key: `gain-${gainLabel(gain)}`,
+              tone: "text-amber-200",
+              motion: "reveal-pop",
+              body: gainLabel(gain),
+            })),
+            ...(finalScore !== null
+              ? [
+                  {
+                    key: "final",
+                    tone: "",
+                    body: (
+                      <>
+                        Final <CountPop value={finalScore}>{finalScore}</CountPop> ({formatModifier(abilityMod(finalScore))})
+                      </>
+                    ),
+                  },
+                ]
+              : []),
+          ];
           const label = ABILITY_LABELS[ability];
           const slot = method === "roll" ? slots[ability] : null;
           const armed = method === "roll" && held !== null && !anyRolling;
@@ -439,18 +565,21 @@ export default function AbilityEditor({
               <span className="dice-abbr" aria-hidden="true">
                 {ability.toUpperCase()}
               </span>
-              {/* The racial bonus and the final score ride under the name, so
-                  the dice, the total, the typed field and the Roll button
-                  all fit one line in the builder's column. */}
+              {/* The bonuses and the final score ride under the name, so the
+                  controls keep one line in the builder's column; with feats
+                  and improvements the notes wrap between whole pieces. */}
               <span className="flex min-w-0 flex-[1_1_104px] flex-col gap-px">
                 <span className="truncate font-display text-[13.5px] font-semibold text-stone-100">
                   <GameTerm id={ability}>{label}</GameTerm>
                 </span>
-                {bonus || finalScore !== null ? (
-                  <span className="truncate font-mono text-[10px] text-stone-400">
-                    {bonus ? <span className="text-amber-300">+{bonus} racial</span> : null}
-                    {bonus && finalScore !== null ? " · " : null}
-                    {finalScore !== null ? `Final ${finalScore} (${formatModifier(abilityMod(finalScore))})` : null}
+                {notes.length ? (
+                  <span className="flex flex-wrap gap-x-1 font-mono text-[10px] leading-snug text-stone-400" data-ability-notes={ability}>
+                    {notes.map((note, index) => (
+                      <span key={note.key} className={cn("whitespace-nowrap", note.motion)}>
+                        {index ? <span className="text-stone-600">· </span> : null}
+                        <span className={note.tone || undefined}>{note.body}</span>
+                      </span>
+                    ))}
                   </span>
                 ) : null}
               </span>
@@ -554,11 +683,19 @@ export default function AbilityEditor({
             label: ABILITY_LABELS[ability],
             base: scores[ability] ?? 0,
             bonus: racialBonus[ability] ?? 0,
+            added: (gains[ability] ?? []).reduce((sum, gain) => sum + gain.amount, 0),
           }))}
         />
       ) : null}
 
-      <MethodInfoDialog open={methodInfoOpen} onOpenChange={setMethodInfoOpen} methods={METHODS} current={method} />
+      <MethodInfoDialog
+        open={methodInfoOpen}
+        onOpenChange={setMethodInfoOpen}
+        methods={METHODS.map((entry) =>
+          entry.id === "roll" ? { ...entry, info: entry.info.replace(rerollRule(REROLL_BELOW), rerollRule(rerollBelow)) } : entry,
+        )}
+        current={method}
+      />
     </section>
   );
 }

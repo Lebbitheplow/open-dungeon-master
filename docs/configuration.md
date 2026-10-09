@@ -108,6 +108,15 @@ server refuses to start without `DB_ENCRYPTION_KEY` in `.env.server`.
   `public/generated-audio/<campaignId>/`; a passage starts playing as soon
   as its first clip is rendered.
 
+## Sharing a server with other people
+
+A server one person runs for friends has two questions the admin panel answers under Accounts (issues #137 and #138):
+
+- **Who may start campaigns and workshops.** "Everyone with an account" is how every server behaved before. "Administrators only" keeps the New campaign door for admins; everyone else joins by room code, and the import, clone and workshop routes refuse the same way. A campaign that cannot be started cannot spend anything, which is the plainest way to keep a paid key for the host's own tables.
+- **Paid AI backends.** "Paid" means a text, picture or speech backend on a public host that takes this server's key (OpenAI, OpenRouter, a hosted vLLM) and the agent program, which runs on the admin's plan. "Only campaigns an administrator leads" refuses them, with a plain message at the table, for any campaign whose party lead is not an admin. A backend on this machine or the local network (loopback, 10/8, 172.16/12, 192.168/16, link-local, `.local` and `.lan` names, a bare hostname) is the host's own, keyed or not: llama-server behind a key, Ollama, ComfyUI, the FLUX workers, Kokoro and the local Whisper stay open to every table. A player who wants a paid model at their own table brings their own key in the client app, which is what the apps are for. The agent panel's own "only campaigns an administrator leads" says the same thing for the agent alone.
+
+The **Usage** tab shows, per account and per campaign, what has been spent: text and agent tokens in and out, split into paid and local; pictures painted; speech characters rendered; dictation clips; agent turns; plus campaigns owned, led and joined, characters, DM turns, active days, last activity and the bytes on disk the campaign's or the account's own pictures take. Everything is counted from what each backend reports; no prompt, transcript or picture is kept for it, and an erased account's rows lose their name. Costs are not estimated, since they depend on the model: read the tokens and apply the prices of the backend you pay for. Streaming replies carry their counts only when the backend honours `stream_options.include_usage` (OpenAI, llama-server, vLLM, LM Studio and OpenRouter do); a backend that rejects the field is retried without it and its calls are counted with no tokens.
+
 ## Playing from your phone
 
 Run the app on all interfaces:

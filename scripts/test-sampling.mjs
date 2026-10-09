@@ -12,8 +12,11 @@ import {
   endpointKind,
   filterForProvider,
   isDefaultOnly,
+  openAiToolRoute,
   profileById,
   resolveSampling,
+  toolRouteFromError,
+  toolsUnsupportedByServer,
   unsupportedParamFromError,
 } from "../src/lib/dm/sampling-logic.ts";
 
@@ -279,6 +282,74 @@ check("junk bodies yield nothing to drop", () => {
   assert.equal(unsupportedParamFromError(""), null);
   assert.equal(unsupportedParamFromError("<html>502 Bad Gateway</html>"), null);
   assert.equal(unsupportedParamFromError("rate limit exceeded"), null);
+});
+
+// --- GPT-6 tool routes (issue #129) -----------------------------------------
+
+// The error OpenAI answers gpt-6.1-sol with when tools ride on Chat
+// Completions, as quoted in the issue.
+const GPT6_REFUSAL = JSON.stringify({
+  error: {
+    message:
+      "Function tools with reasoning_effort are not supported for gpt-6.1-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+    type: "invalid_request_error",
+    param: null,
+    code: null,
+  },
+});
+
+check("the GPT-6 line routes by name, everything else stays on Chat Completions", () => {
+  assert.equal(openAiToolRoute("gpt-6.1-sol"), "responses");
+  assert.equal(openAiToolRoute("gpt-6-astra"), "responses");
+  assert.equal(openAiToolRoute("GPT-6.1-Sol-2026-09-01"), "responses", "dated snapshots and case");
+  assert.equal(openAiToolRoute("gpt-6-sol"), "chat-no-reasoning");
+  assert.equal(openAiToolRoute("gpt-6-luna"), "chat-no-reasoning");
+  assert.equal(openAiToolRoute("ft:gpt-6-sol:acme::abc"), "chat-no-reasoning", "fine-tunes");
+  for (const model of ["gpt-4.1", "gpt-4o-mini", "gpt-5.5", "o4-mini", "", "qwen3.6-35b"]) {
+    assert.equal(openAiToolRoute(model), "chat", model);
+  }
+});
+
+check("the 400 names the route to take, Responses first", () => {
+  assert.equal(toolRouteFromError(GPT6_REFUSAL), "responses");
+  assert.equal(
+    toolRouteFromError('{"error":{"message":"Function tools need reasoning off here. Set reasoning_effort to \'none\'."}}'),
+    "chat-no-reasoning",
+  );
+  assert.equal(toolRouteFromError('{"error":{"message":"Tool calling requires the Responses API."}}'), "responses");
+  assert.equal(toolRouteFromError('{"error":{"message":"tools are not supported"}}'), null);
+  assert.equal(toolRouteFromError(""), null);
+  assert.equal(toolRouteFromError("rate limit exceeded"), null);
+});
+
+check("the GPT-6 refusal never turns into a retry without tools", () => {
+  // The silent failure the issue warned of: "Function tools ... not
+  // supported" matches the old /tool|function|not support/ arm.
+  assert.equal(toolsUnsupportedByServer("openai", GPT6_REFUSAL), false);
+  assert.equal(toolsUnsupportedByServer("local", GPT6_REFUSAL), false, "a proxy relaying it");
+  assert.equal(
+    toolsUnsupportedByServer("local", '{"error":{"message":"Unsupported value: \'none\' for reasoning_effort"}}'),
+    false,
+  );
+  // OpenAI has tools on every chat model, so nothing it says means "no tools here".
+  assert.equal(toolsUnsupportedByServer("openai", '{"error":{"message":"tools are not supported"}}'), false);
+  // A local server without a tool template still gets the old fallback.
+  assert.equal(toolsUnsupportedByServer("local", '{"error":{"message":"tools are not supported"}}'), true);
+  assert.equal(toolsUnsupportedByServer("local", "This model does not support function calling"), true);
+  assert.equal(toolsUnsupportedByServer("openrouter", "No endpoints found that support tool use"), true);
+  assert.equal(toolsUnsupportedByServer("local", "rate limit exceeded"), false);
+});
+
+check("reasoning_effort and max_output_tokens are droppable when a model refuses them", () => {
+  const body = JSON.stringify({
+    error: {
+      message: "Unsupported value: 'none' is not supported with the 'gpt-6.1-sol' model.",
+      param: "reasoning_effort",
+      code: "unsupported_value",
+    },
+  });
+  assert.equal(unsupportedParamFromError(body), "reasoning_effort");
+  assert.equal(unsupportedParamFromError('{"error":{"param":"max_output_tokens"}}'), "max_output_tokens");
 });
 
 console.log(`sampling: ${passed} tests passed`);

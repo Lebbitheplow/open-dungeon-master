@@ -7,6 +7,8 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { FieldLabel, quietRow } from "@/app/campaigns/[campaignId]/DmConsoleParts";
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import {
@@ -14,8 +16,10 @@ import {
   BEAT_KINDS,
   BEAT_LABELS,
   TITLE_MAX,
+  routeOf,
   type Beat,
   type BeatKind,
+  type BeatLinks,
   type Board,
   type BoardInventory,
   type Suggestion,
@@ -25,7 +29,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { KIND_TONE } from "@/app/workshop/storyboard/beat-fields";
 import { BeatBoard } from "@/app/workshop/storyboard/BeatBoard";
 import { BeatEditor } from "@/app/workshop/storyboard/BeatEditor";
-import { CompileCard, SuggestionsCard } from "@/app/workshop/storyboard/BoardAsides";
+import { CompileCard, SharedWorkshopCard, SuggestionsCard } from "@/app/workshop/storyboard/BoardAsides";
 
 // The storyboard: cards for the things that are going to happen, and arrows
 // between them.
@@ -55,8 +59,17 @@ const KIND_GLYPH: Record<BeatKind, string> = {
 type Payload = {
   board: Board;
   inventory: BoardInventory;
+  // Links that no longer resolve, by card.
+  broken: Record<string, Array<keyof BeatLinks>>;
   suggestions: Suggestion[];
   compiled: CompiledBoard & { summary: CompileSummary };
+  // The shared workshop a workshop draws on, and what it could draw on
+  // (#159). Null for a campaign's own board.
+  shared: {
+    common: { id: string; title: string } | null;
+    choices: Array<{ id: string; title: string }>;
+    chapters: Array<{ id: string; title: string }>;
+  } | null;
 };
 
 export function DmStoryboardPanel({
@@ -75,19 +88,19 @@ export function DmStoryboardPanel({
   const [error, setError] = useState("");
   const board = layout === "board";
 
+  // A refused or failed load is settled, not dropped (issue 140): the
+  // skeleton below gives way to the server's sentence instead of staying up
+  // for good.
+  const { loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
-      fetch(`/api/campaigns/${campaignId}/dm/storyboard`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: Payload | null) => {
-          if (payload) {
-            setData(payload);
-          }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+      readLoad<Payload>(fetch(`/api/campaigns/${campaignId}/dm/storyboard`), "The storyboard").then((outcome) => {
+        if (outcome.payload) {
+          setData(outcome.payload);
+        }
+        settle(outcome);
+      }),
+    [campaignId, settle],
   );
 
   useEffect(() => {
@@ -153,7 +166,11 @@ export function DmStoryboardPanel({
   }
 
   if (!data) {
-    return <div className="skeleton-block h-24 rounded-xl" aria-busy="true" aria-label="Loading the storyboard" />;
+    return loadError ? (
+      <LoadFailed error={loadError} onRetry={() => void load()} />
+    ) : (
+      <div className="skeleton-block h-24 rounded-xl" aria-busy="true" aria-label="Loading the storyboard" />
+    );
   }
 
   const nodes = data.board.nodes;
@@ -163,6 +180,8 @@ export function DmStoryboardPanel({
   // it differs.
   const addRow = (
     <>
+      {/* A reload that failed after the board was up: the board stays, the reason shows. */}
+      {loadError ? <LoadFailed error={loadError} onRetry={() => void load()} /> : null}
       <div className="flex flex-wrap items-end gap-2">
         <div className="w-full sm:w-52">
           <FieldLabel>Card</FieldLabel>
@@ -211,6 +230,7 @@ export function DmStoryboardPanel({
       edit={beat}
       onChange={setEdit}
       inventory={data.inventory}
+      broken={data.broken?.[beat.id] ?? []}
       others={nodes.filter((other) => other.id !== beat.id)}
       busy={busy}
       onSave={() => void save(beat)}
@@ -230,6 +250,7 @@ export function DmStoryboardPanel({
             <BeatBoard
               board={data.board}
               inventory={data.inventory}
+              broken={data.broken}
               onOpen={(node) => {
                 setOpenId(node.id);
                 setEdit(node);
@@ -244,6 +265,13 @@ export function DmStoryboardPanel({
             onAdd={(kind, title) => void add(kind, title)}
           />
           {nodes.length ? <CompileCard summary={data.compiled.summary} /> : null}
+          {data.shared ? (
+            <SharedWorkshopCard
+              workshopId={campaignId}
+              shared={data.shared}
+              onChanged={() => void load()}
+            />
+          ) : null}
         </div>
 
         <Sheet
@@ -332,7 +360,20 @@ export function DmStoryboardPanel({
                   <span className="text-sm text-stone-100">{node.title}</span>
                   {node.out.length ? (
                     <span className="basis-full text-[10px] text-stone-500">
-                      leads to {node.out.map(nameOf).filter(Boolean).join(", ")}
+                      leads to{" "}
+                      {node.out
+                        .map((target) => {
+                          const name = nameOf(target);
+                          const route = routeOf(node, target);
+                          return name ? `${name}${route === "choice" ? " (one route)" : route === "optional" ? " (only if)" : ""}` : "";
+                        })
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  ) : null}
+                  {data.broken?.[node.id]?.length ? (
+                    <span className="basis-full text-[10px] text-amber-300/80">
+                      {data.broken[node.id].length} pick{data.broken[node.id].length === 1 ? " is" : "s are"} missing
                     </span>
                   ) : null}
                 </button>

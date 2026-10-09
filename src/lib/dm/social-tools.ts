@@ -252,7 +252,8 @@ export function handleNpcReaction(
     return { error: "Invalid arguments: npc_reaction needs a name." };
   }
   const modifier = args.modifier ?? 0;
-  const outcome = rollExpression(modifier ? `2d6+${modifier}` : "2d6");
+  // A penalty is written as 2d6-3, never 2d6+-3, which no dice parser reads.
+  const outcome = rollExpression(modifier ? `2d6${modifier < 0 ? "-" : "+"}${Math.abs(modifier)}` : "2d6");
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: null,

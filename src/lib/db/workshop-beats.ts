@@ -3,9 +3,11 @@ import {
   MAX_BEATS,
   normalizeBeatKind,
   normalizeLinks,
+  normalizeRoutes,
   type Beat,
   type BeatKind,
   type BeatLinks,
+  type EdgeRoute,
 } from "@/lib/workshop/board";
 import type { ImportIdMap } from "@/lib/db/content-import";
 
@@ -24,6 +26,7 @@ type BeatRow = {
   body: string;
   links_json: string;
   edges_json: string;
+  routes_json: string | null;
   x: number;
   y: number;
   created_at: string;
@@ -31,13 +34,15 @@ type BeatRow = {
 };
 
 function mapBeat(row: BeatRow): Beat {
+  const edges = parseJson<string[]>(row.edges_json, []);
   return {
     id: row.id,
     kind: normalizeBeatKind(row.kind),
     title: row.title,
     body: row.body ?? "",
     links: normalizeLinks(parseJson<BeatLinks>(row.links_json, {})),
-    edges: parseJson<string[]>(row.edges_json, []),
+    edges,
+    routes: normalizeRoutes(parseJson<unknown>(row.routes_json ?? "{}", {}), edges),
     x: row.x,
     y: row.y,
   };
@@ -87,8 +92,8 @@ export function insertBeat(
   getDatabase()
     .prepare(
       `INSERT INTO workshop_beats
-         (id, campaign_id, kind, title, body, links_json, edges_json, x, y, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, campaign_id, kind, title, body, links_json, edges_json, routes_json, x, y, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -98,6 +103,7 @@ export function insertBeat(
       beat.body,
       JSON.stringify(beat.links),
       JSON.stringify(beat.edges),
+      JSON.stringify(beat.routes ?? {}),
       beat.x,
       beat.y,
       now,
@@ -117,7 +123,7 @@ export function updateBeat(
   getDatabase()
     .prepare(
       `UPDATE workshop_beats SET kind = ?, title = ?, body = ?, links_json = ?,
-         edges_json = ?, x = ?, y = ?, updated_at = ? WHERE id = ?`,
+         edges_json = ?, routes_json = ?, x = ?, y = ?, updated_at = ? WHERE id = ?`,
     )
     .run(
       beat.kind,
@@ -125,6 +131,7 @@ export function updateBeat(
       beat.body,
       JSON.stringify(beat.links),
       JSON.stringify(beat.edges),
+      JSON.stringify(beat.routes ?? {}),
       beat.x,
       beat.y,
       nowIso(),
@@ -133,10 +140,11 @@ export function updateBeat(
   return getBeat(beatId);
 }
 
-// Deleting a card also removes every arrow pointing at it. The graph would
-// survive without this (boardGraph drops edges to missing cards), but leaving
-// them would mean the brokenEdges count grew every time a DM changed their
-// mind, and a warning that fires constantly is a warning nobody reads.
+// Deleting a card also removes every arrow pointing at it, and the route
+// that arrow carried. The graph would survive without this (boardGraph drops
+// edges to missing cards), but leaving them would mean the brokenEdges count
+// grew every time a DM changed their mind, and a warning that fires
+// constantly is a warning nobody reads.
 export function deleteBeat(campaignId: string, beatId: string): boolean {
   const db = getDatabase();
   return db.transaction(() => {
@@ -147,12 +155,14 @@ export function deleteBeat(campaignId: string, beatId: string): boolean {
       return false;
     }
     for (const row of db
-      .prepare(`SELECT id, edges_json FROM workshop_beats WHERE campaign_id = ?`)
-      .all(campaignId) as Array<{ id: string; edges_json: string }>) {
+      .prepare(`SELECT id, edges_json, routes_json FROM workshop_beats WHERE campaign_id = ?`)
+      .all(campaignId) as Array<{ id: string; edges_json: string; routes_json: string | null }>) {
       const edges = parseJson<string[]>(row.edges_json, []);
       if (edges.includes(beatId)) {
-        db.prepare(`UPDATE workshop_beats SET edges_json = ?, updated_at = ? WHERE id = ?`).run(
-          JSON.stringify(edges.filter((edge) => edge !== beatId)),
+        const kept = edges.filter((edge) => edge !== beatId);
+        db.prepare(`UPDATE workshop_beats SET edges_json = ?, routes_json = ?, updated_at = ? WHERE id = ?`).run(
+          JSON.stringify(kept),
+          JSON.stringify(normalizeRoutes(parseJson<unknown>(row.routes_json ?? "{}", {}), kept)),
           nowIso(),
           row.id,
         );
@@ -168,11 +178,13 @@ export function deleteBeat(campaignId: string, beatId: string): boolean {
 // into lore and quests rather than copying cards; compiling is right when
 // the board reaches a table and wrong when it reaches another workshop.
 //
-// Both kinds of pointer are rewritten through the copy: arrows through the
-// new card ids, and links through the id map the content import returned. A
-// link whose target did not travel is dropped rather than left pointing at
-// the original workshop's row, which the board would render as a card
-// attached to somebody else's NPC.
+// Both kinds of pointer are rewritten through the copy: arrows (and what
+// each arrow means) through the new card ids, and links through the id map
+// the content import returned. A link whose target did not travel is dropped
+// rather than left pointing at the original workshop's row, which the board
+// would render as a card attached to somebody else's NPC. The one exception
+// is a link into the shared workshop both boards draw on (#159), which
+// `keepLink` vouches for: that row is the same row from either board.
 const BEAT_LINK_KINDS = {
   npcId: "npcs",
   mapId: "maps",
@@ -184,6 +196,7 @@ export function copyBeats(
   sourceId: string,
   targetId: string,
   idMap: ImportIdMap,
+  keepLink: (kind: string, id: string) => boolean = () => false,
 ): number {
   const beats = listBeats(sourceId).slice(0, MAX_BEATS);
   if (!beats.length) {
@@ -196,17 +209,26 @@ export function copyBeats(
   const newIds = new Map(beats.map((beat) => [beat.id, crypto.randomUUID()]));
   const insert = db.prepare(
     `INSERT INTO workshop_beats
-       (id, campaign_id, kind, title, body, links_json, edges_json, x, y, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, campaign_id, kind, title, body, links_json, edges_json, routes_json, x, y, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   db.transaction(() => {
     for (const beat of beats) {
       const links: BeatLinks = {};
       for (const [field, kind] of Object.entries(BEAT_LINK_KINDS)) {
         const original = beat.links[field as keyof BeatLinks];
-        const copy = original ? idMap.get(`${kind}:${original}`) : undefined;
+        const copy = original
+          ? idMap.get(`${kind}:${original}`) ?? (keepLink(kind, original) ? original : undefined)
+          : undefined;
         if (copy) {
           links[field as keyof BeatLinks] = copy;
+        }
+      }
+      const routes: Record<string, EdgeRoute> = {};
+      for (const [edge, route] of Object.entries(beat.routes ?? {})) {
+        const copy = newIds.get(edge);
+        if (copy) {
+          routes[copy] = route;
         }
       }
       insert.run(
@@ -217,6 +239,7 @@ export function copyBeats(
         beat.body,
         JSON.stringify(links),
         JSON.stringify(beat.edges.map((edge) => newIds.get(edge)).filter(Boolean)),
+        JSON.stringify(routes),
         beat.x,
         beat.y,
         now,

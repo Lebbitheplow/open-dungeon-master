@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { Loader2, Plug, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ui } from "@/lib/ui";
@@ -7,7 +9,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageSection } from "@/components/PageShell";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
-import { CopyLine } from "@/components/CopyLine";
+import { AgentConnectLines } from "@/components/AgentConnectLines";
+import { AssistantLink } from "@/components/AssistantLink";
 
 type Grant = {
   id: string;
@@ -21,7 +24,7 @@ type Grant = {
 
 type Campaign = { id: string; title: string };
 
-const SCOPES: Array<{ id: string; label: string; hint: string }> = [
+export const AGENT_SCOPE_CHOICES: Array<{ id: string; label: string; hint: string }> = [
   { id: "read", label: "Read", hint: "Your campaigns, characters, quests and lore, as you see them." },
   { id: "play", label: "Play", hint: "Act, speak and roll at a table as your character." },
   { id: "characters", label: "Characters", hint: "Create, edit and delete your library characters." },
@@ -34,33 +37,17 @@ function when(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function setupLines(url: string, token: string) {
-  return [
-    {
-      name: "Claude Code",
-      text: `claude mcp add --transport http odm ${url} --header "Authorization: Bearer ${token}"`,
-      block: false,
-    },
-    {
-      name: "Codex (~/.codex/config.toml)",
-      text: `[mcp_servers.odm]\nurl = "${url}"\nhttp_headers = { Authorization = "Bearer ${token}" }`,
-      block: true,
-    },
-    {
-      name: "opencode (opencode.json)",
-      text: `"mcp": { "odm": { "type": "remote", "url": "${url}", "headers": { "Authorization": "Bearer ${token}" }, "oauth": false } }`,
-      block: false,
-    },
-    { name: "Any other MCP client (streamable HTTP)", text: `${url}  ·  Authorization: Bearer ${token}`, block: false },
-  ];
-}
-
 // Connected agents (docs/harness-mcp-plan.md 7): your own Claude Code, Codex
 // or other MCP client acting as you on this server, with exactly what your
 // account can do in the browser and nothing more. The token is shown once.
 export function ConnectedAgentsSection() {
   const [grants, setGrants] = useState<Grant[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+  const [reloads, setReloads] = useState(0);
   const [mcpUrl, setMcpUrl] = useState("");
+  const [assistantUrl, setAssistantUrl] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -68,16 +55,18 @@ export function ConnectedAgentsSection() {
   const [campaignId, setCampaignId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [fresh, setFresh] = useState<{ token: string; name: string } | null>(null);
+  const [fresh, setFresh] = useState<{ id: string; token: string; name: string } | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/profile/agents")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        setGrants(data?.grants ?? []);
-        setMcpUrl(data?.mcpUrl ?? "");
-      });
+    readLoad<{ grants?: Grant[]; mcpUrl?: string; assistantUrl?: string }>(fetch("/api/profile/agents"), "The connected agents").then((outcome) => {
+      settle(outcome);
+      if (outcome.payload) {
+        setGrants(outcome.payload.grants ?? []);
+        setMcpUrl(outcome.payload.mcpUrl ?? "");
+        setAssistantUrl(outcome.payload.assistantUrl ?? "");
+      }
+    });
     fetch("/api/campaigns")
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
@@ -85,7 +74,7 @@ export function ConnectedAgentsSection() {
         setCampaigns(list.map((campaign) => ({ id: campaign.id, title: campaign.title })));
       })
       .catch(() => undefined);
-  }, []);
+  }, [reloads, settle]);
 
   async function create() {
     setBusy(true);
@@ -103,7 +92,8 @@ export function ConnectedAgentsSection() {
       }
       setGrants((current) => [data.grant, ...(current ?? [])]);
       setMcpUrl(data.mcpUrl ?? mcpUrl);
-      setFresh({ token: data.token, name: data.grant.name });
+      setAssistantUrl(data.assistantUrl ?? assistantUrl);
+      setFresh({ id: data.grant.id, token: data.token, name: data.grant.name });
       setCreating(false);
       setName("");
     } finally {
@@ -129,20 +119,16 @@ export function ConnectedAgentsSection() {
     <PageSection
       heading="Connected agents"
       glyph="system-share"
-      intro="Let your own Claude Code, Codex or other MCP client act as you here: read your campaigns, play your character, or run a table where you are the Dungeon Master. It gets exactly the access your account has, only the parts you tick, and never your password or the server's settings."
+      intro={`Let your own Claude Code, Codex or other MCP client act as you here: read your campaigns, play your character, or run a table where you are the Dungeon Master.${assistantUrl ? " ChatGPT, Claude, Grok and Meta Muse can too, through the link shown when you connect." : ""} It gets exactly the access your account has, only the parts you tick, and never your password or the server's settings.`}
     >
       {fresh ? (
         <div className="hx-token mb-4 space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/20 p-3">
           <p className="text-sm text-amber-100">
-            <strong>{fresh.name}</strong> is connected. This is the only time its token is shown; copy the line for
+            <strong>{fresh.name}</strong> is ready. This is the only time its token is shown; copy the line for
             your agent now.
           </p>
-          {setupLines(mcpUrl, fresh.token).map((line) => (
-            <div key={line.name}>
-              <span className="mb-1 block text-xs text-stone-400">{line.name}</span>
-              <CopyLine text={line.text} label={`${line.name} setup`} block={line.block} />
-            </div>
-          ))}
+          <AssistantLink base={assistantUrl} token={fresh.token} />
+          <AgentConnectLines grantId={fresh.id} token={fresh.token} mcpUrl={mcpUrl} />
           <button type="button" className={ui.btnSmall} onClick={() => setFresh(null)}>
             I have copied it
           </button>
@@ -152,7 +138,7 @@ export function ConnectedAgentsSection() {
       {grants === null ? (
         <div className="skeleton-block h-12 rounded-xl" aria-label="Loading connected agents" />
       ) : grants.length === 0 && !creating ? (
-        <EmptyState art="board" size="sm" title="No agents connected." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} /> : loaded ? <EmptyState art="board" size="sm" title="No agents connected." /> : null)
       ) : (
         <ul className="stagger space-y-2">
           {grants.map((grant) => (
@@ -191,7 +177,7 @@ export function ConnectedAgentsSection() {
             </label>
             <div className="space-y-2">
               <span className="block text-xs font-medium text-stone-400">What it may do</span>
-              {SCOPES.map((scope) => {
+              {AGENT_SCOPE_CHOICES.map((scope) => {
                 const on = scopes.includes(scope.id);
                 return (
                   <label key={scope.id} className="flex items-start gap-3 text-sm text-stone-300">

@@ -23,3 +23,9 @@ export function srdRaceId(raceId: string): string {
 export function hpBonusPerLevel(raceId: string): number {
   return srdRaceId(raceId) === "hill_dwarf" ? 1 : 0;
 }
+
+// Only the variant human is handed a feat by its race, under every spelling
+// of its id. The server's feat check and the builder's step gate both ask.
+export function racialFeatCount(raceId: string): number {
+  return srdRaceId(raceId) === "variant_human" ? 1 : 0;
+}

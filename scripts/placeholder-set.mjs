@@ -387,6 +387,12 @@ const MISC_TILES = [
 // no longer falls through to the genre lead.
 export const CLASS_GENDER_IDS = ["masculine", "feminine", "neutral"];
 
+// Content-pack classes from other 5e books, keyed by the pack's class slug.
+const PACK_CLASSES = [
+  { id: "marshal", name: "marshal", traits: "a plumed open-faced helm, a tabard over half plate, a raised signal banner on a short staff and a longsword at the hip" },
+  { id: "mechanist", name: "mechanist", traits: "a leather work apron over travelling clothes, brass goggles pushed up on the brow, a heavy toolbelt and a small clockwork construct perched on one shoulder" },
+];
+
 const GENRE_CLASSES = [
   { palette: "cyberpunk", id: "netrunner", name: "netrunner", traits: "a visor over the eyes, a bundle of jacked-in cables trailing from the skull and a deck held at the hip" },
   { palette: "cyberpunk", id: "street_samurai", name: "street samurai", traits: "chromed segmented arms, a swept-back armoured collar and a long thin blade held low" },
@@ -583,6 +589,15 @@ export function placeholderJobs() {
       genderId,
       `${GENDERS[genderId].build} adventurer in a hooded travelling cloak with a pack and a sheathed sword`,
     );
+  }
+
+  // Classes the content pack brings from other books (Level Up's Marshal,
+  // Black Flag's Mechanist): the two cards that fell to the hooded stranger
+  // (issue #116). Same treatment as the genre classes.
+  for (const klass of PACK_CLASSES) {
+    for (const genderId of CLASS_GENDER_IDS) {
+      portrait("character-class", `${klass.id}-${genderId}`, classSubject(klass, genderId));
+    }
   }
 
   // Genre classes share the character-class group: the ids never collide with

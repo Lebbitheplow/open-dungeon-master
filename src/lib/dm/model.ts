@@ -1,4 +1,5 @@
 import {
+  customBackendIsPaid,
   requestCustomMessage,
   requestLocalMessage,
   type ChatMessage,
@@ -6,7 +7,39 @@ import {
   type UpstreamResult,
 } from "@/lib/model-client";
 import { requestHarnessMessage } from "@/lib/harness/bridge";
+import { paidAiAllowedNow, paidAiRefusalResponse } from "@/lib/shared-host";
+import { recordUsage } from "@/lib/usage/ledger";
 import type { StorySettings } from "@/lib/types";
+
+// Every DM-side model call passes through here, which makes it the one
+// place for two pieces of shared-host bookkeeping (src/lib/shared-host.ts):
+// the usage ledger, written from what the backend reported, and the paid
+// AI policy, which refuses a keyed backend for a table that may not spend
+// the host's key before the request goes out.
+async function metered(
+  role: "story" | "utility",
+  call: () => Promise<UpstreamResult>,
+): Promise<UpstreamResult> {
+  const started = Date.now();
+  const result = await call();
+  if (result.usage) {
+    recordUsage({
+      kind: result.usage.backend === "harness" ? "agent" : "text",
+      role,
+      backend: result.usage.backend,
+      model: result.usage.model,
+      paid: result.usage.paid,
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      durationMs: Date.now() - started,
+    });
+  }
+  return result;
+}
+
+function paidAndRefused(baseUrl: string, apiKey: string): boolean {
+  return customBackendIsPaid(baseUrl, apiKey) && !paidAiAllowedNow();
+}
 
 // Routes a DM-side model call through the campaign's configured provider.
 export function requestDmMessage(
@@ -15,22 +48,31 @@ export function requestDmMessage(
   options: ChatRequestOptions,
 ): Promise<UpstreamResult> {
   if (settings.textProvider === "harness") {
-    return requestHarnessMessage(messages, options, {
-      role: "story",
-      campaignId: options.harness?.campaignId,
-      catalogue: options.harness?.catalogue,
-      turn: options.harness?.turn,
-    });
+    // The agent policy (src/lib/harness/policy.ts) answers for the agent
+    // program, inside the bridge.
+    return metered("story", () =>
+      requestHarnessMessage(messages, options, {
+        role: "story",
+        campaignId: options.harness?.campaignId,
+        catalogue: options.harness?.catalogue,
+        turn: options.harness?.turn,
+      }),
+    );
   }
   if (settings.textProvider === "local") {
-    return requestLocalMessage(settings.localTextModel, messages, options);
+    return metered("story", () => requestLocalMessage(settings.localTextModel, messages, options));
   }
-  return requestCustomMessage(
-    settings.customBaseUrl,
-    settings.customModel,
-    settings.customApiKey,
-    messages,
-    options,
+  if (paidAndRefused(settings.customBaseUrl, settings.customApiKey)) {
+    return Promise.resolve({ error: paidAiRefusalResponse("story") });
+  }
+  return metered("story", () =>
+    requestCustomMessage(
+      settings.customBaseUrl,
+      settings.customModel,
+      settings.customApiKey,
+      messages,
+      options,
+    ),
   );
 }
 
@@ -56,7 +98,7 @@ export async function requestUtilityMessage(
     settings.utilityProvider === "harness" ||
     (settings.textProvider === "harness" && !model)
   ) {
-    return requestHarnessMessage(messages, options, { role: "utility" });
+    return metered("utility", () => requestHarnessMessage(messages, options, { role: "utility" }));
   }
   if (!model) {
     return requestDmMessage(settings, messages, options);
@@ -64,14 +106,18 @@ export async function requestUtilityMessage(
 
   const result =
     settings.utilityProvider === "local"
-      ? await requestLocalMessage(model, messages, options)
-      : await requestCustomMessage(
-          settings.utilityBaseUrl,
-          model,
-          settings.utilityApiKey,
-          messages,
-          options,
-        );
+      ? await metered("utility", () => requestLocalMessage(model, messages, options))
+      : paidAndRefused(settings.utilityBaseUrl, settings.utilityApiKey)
+        ? { error: paidAiRefusalResponse("utility") }
+        : await metered("utility", () =>
+            requestCustomMessage(
+              settings.utilityBaseUrl,
+              model,
+              settings.utilityApiKey,
+              messages,
+              options,
+            ),
+          );
   if (!result.error) {
     return result;
   }

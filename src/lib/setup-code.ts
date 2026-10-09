@@ -100,6 +100,7 @@ export function announceSetupCode(log: (line: string) => void = console.log) {
     return;
   }
   const code = currentSetupCode();
+  const chosen = Boolean(serverEnv("ODM_SETUP_CODE").trim());
   const bar = "=".repeat(64);
   log(
     [
@@ -107,10 +108,23 @@ export function announceSetupCode(log: (line: string) => void = console.log) {
       " This server has no accounts yet. Create the first one, which",
       " becomes the admin, with this one-time setup code:",
       "",
-      `     ${serverEnv("ODM_SETUP_CODE").trim() ? "(the code set in ODM_SETUP_CODE)" : code}`,
+      `     ${chosen ? "(the code set in ODM_SETUP_CODE)" : code}`,
       "",
+      // The link fills the code in and leads on to the guided setup. An
+      // operator's own code is never echoed, so its link is the bare address.
+      " Or open this link in a browser on this computer:",
+      "",
+      `     ${setupLink(chosen ? "" : code)}`,
+      "",
+      " (From another computer, use this server's address in its place.)",
       " It is shown here at every start until the first account exists.",
       bar,
     ].join("\n"),
   );
+}
+
+// The address that claims the server: this machine, the port it listens on
+// (Next sets PORT once it is listening; the Docker image sets it outright).
+export function setupLink(code: string, port = process.env.PORT || "3000"): string {
+  return `http://localhost:${port}/${code ? `?setup=${encodeURIComponent(code)}` : ""}`;
 }

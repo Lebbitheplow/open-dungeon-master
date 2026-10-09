@@ -12,6 +12,7 @@ export type MaskedConfig = {
   signupMode: "open" | "invite" | "closed";
   serverName: string;
   accountDeletionGraceDays: number;
+  abilityRerollBelow: number;
   publicUrl: string;
   text: {
     provider: "" | "local" | "custom" | "none" | "harness";
@@ -51,6 +52,7 @@ export type MaskedConfig = {
   };
   discord: { clientId: string; hasClientSecret: boolean };
   harness: HarnessConfig;
+  sharedHost: { campaignCreation: "" | "everyone" | "admins"; paidAi: "" | "everyone" | "admins" };
 };
 
 export type EnvDefaults = {

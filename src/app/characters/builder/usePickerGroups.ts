@@ -6,7 +6,7 @@ import { GENRE_PRESETS } from "@/lib/genres";
 import { describeRace } from "@/lib/help";
 import type { Genre } from "@/lib/schemas/game-settings";
 import { SRD_SKILLS } from "@/lib/srd";
-import { subclassBlurb, subclassLevelFor, subclassNamesFor } from "@/lib/srd/features";
+import { subclassBlurb, subclassGate, subclassNamesFor } from "@/lib/srd/features";
 import { packRecommends, type Reskinned } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import type { PickerGroup, PickerOption } from "./OptionPicker";
@@ -84,31 +84,69 @@ function canonicalName(options: Array<{ id: string; name: string }>, id: string)
   return options.find((entry) => entry.id === id)?.name ?? id;
 }
 
-// Splits a flat option list into the standard (SRD/content-pack) entries and
-// the other settings' catalog entries, grouped by each entry's primary genre.
-// Only catalog rows carry `genres`, so "no genres" IS the standard bucket.
-// Used when no genre steers the picker (high fantasy, custom, or the library
-// builder) so a new player can tell a Netrunner is not a high-fantasy class;
-// everything stays selectable either way.
-function groupBySourceSetting<T extends { id: string; genres?: Genre[] }>(
+// The pack documents the bundled SRD tables describe; everything else in the
+// pack is another book, named on its rows (issue #116).
+const CORE_DOCUMENTS = new Set(["wotc-srd", "odm-expanded"]);
+const isCoreDocument = (documentSlug?: string) => !documentSlug || CORE_DOCUMENTS.has(documentSlug);
+
+// Splits a flat option list into the standard entries (the SRD's, and the
+// content pack's copies of them), the other books the pack carries (Tome of
+// Heroes, Level Up's Adventurer's Guide) and the other settings' catalog
+// entries, grouped by each entry's primary genre. Only catalog rows carry
+// `genres`; only pack rows carry a `documentSlug`. Used when no genre steers
+// the picker (high fantasy, custom, or the library builder) so a new player
+// can tell a Netrunner is not a high-fantasy class and a Marshal is not a
+// 5e Core Rules one; everything stays selectable either way.
+function groupBySourceSetting<T extends { id: string; genres?: Genre[]; documentSlug?: string; source?: string }>(
   options: T[],
-): { standard: T[]; packs: Array<{ genre: Genre; label: string; options: T[] }> } {
+): {
+  standard: T[];
+  books: Array<{ label: string; options: T[] }>;
+  packs: Array<{ genre: Genre; label: string; options: T[] }>;
+} {
   const standard: T[] = [];
+  const byBook = new Map<string, T[]>();
   const byGenre = new Map<Genre, T[]>();
   for (const option of options) {
-    const source = option.genres?.[0];
-    if (!source) {
-      standard.push(option);
+    const genre = option.genres?.[0];
+    if (genre) {
+      byGenre.set(genre, [...(byGenre.get(genre) ?? []), option]);
       continue;
     }
-    byGenre.set(source, [...(byGenre.get(source) ?? []), option]);
+    if (!isCoreDocument(option.documentSlug)) {
+      const book = option.source ?? option.documentSlug ?? "Other books";
+      byBook.set(book, [...(byBook.get(book) ?? []), option]);
+      continue;
+    }
+    standard.push(option);
   }
+  const books = [...byBook.entries()].map(([label, entries]) => ({ label, options: entries }));
   const packs = GENRE_PRESETS.filter((preset) => byGenre.has(preset.id)).map((preset) => ({
     genre: preset.id,
     label: preset.name,
     options: byGenre.get(preset.id) ?? [],
   }));
-  return { standard, packs };
+  return { standard, books, packs };
+}
+
+// Races by the book they come from, in the order the pack lists the books
+// (the SRD first): the one grid of seventy-two had no headings at all, and
+// two rows named Drow could not be told apart (issue #116).
+function groupByBook<T extends { id: string; source?: string; documentSlug?: string }>(
+  options: T[],
+): Array<{ label: string; options: T[] }> {
+  const byBook = new Map<string, T[]>();
+  for (const option of options) {
+    const book = option.source ?? option.documentSlug ?? "";
+    byBook.set(book, [...(byBook.get(book) ?? []), option]);
+  }
+  const rank = (entries: T[]) => {
+    const slug = entries[0]?.documentSlug ?? "";
+    return slug === "wotc-srd" ? 0 : slug === "odm-expanded" ? 1 : 2;
+  };
+  return [...byBook.entries()]
+    .sort(([, a], [, b]) => rank(a) - rank(b))
+    .map(([label, entries]) => ({ label, options: entries }));
 }
 
 // Splits a list into the entries the setting recommends and the rest. A world
@@ -235,33 +273,42 @@ export function usePickerGroups({
   }, [pack]);
 
   const raceGroups = useMemo<PickerGroup[]>(() => {
-    const toOption = (entry: Reskinned<RaceOption>): PickerOption => ({
+    // `showSource` names the book on the row where the group heading does
+    // not: a pack's recommended tier mixes books.
+    const toOption = (entry: Reskinned<RaceOption>, showSource: boolean): PickerOption => ({
       id: entry.id,
       name: entry.name,
       // Under a reskin the canonical name goes in the meta column, so a
       // player always knows which SRD race they are actually taking.
       meta: entry.packName ? canonicalName(rawRaces, entry.id) : undefined,
+      ...(showSource && entry.source ? { source: entry.source } : {}),
       // A pack-only lineage has no bundled lines; leaving the text empty
       // lets the dialog fetch the row's full trait write-up instead of
       // showing the card's clipped summary.
       infoText: entry.packBlurb || describeRace(entry.id) || undefined,
-      reference: { kind: "races", slug: entry.id, name: entry.name },
+      // The pack row behind the option, which is not always the id
+      // (src/lib/content/race-options.ts optionIdFor).
+      reference: { kind: "races", slug: entry.slug ?? entry.id, name: entry.name },
     });
     if (raceTier.recommended.length) {
       return [
         {
           label: packGroupLabel(pack, "Peoples of"),
           recommended: true,
-          options: raceTier.recommended.map(toOption),
+          options: raceTier.recommended.map((entry) => toOption(entry, true)),
         },
-        { label: "All races", options: raceTier.other.map(toOption) },
+        { label: "All races", options: raceTier.other.map((entry) => toOption(entry, true)) },
       ];
     }
-    return [{ label: null, options: races.map(toOption) }];
+    const books = groupByBook(races);
+    if (books.length > 1) {
+      return books.map((book) => ({ label: book.label, options: book.options.map((entry) => toOption(entry, false)) }));
+    }
+    return [{ label: null, options: races.map((entry) => toOption(entry, false)) }];
   }, [races, rawRaces, raceTier, pack]);
 
   const classGroups = useMemo<PickerGroup[]>(() => {
-    const toOption = (entry: Reskinned<ClassOption>): PickerOption => ({
+    const toOption = (entry: Reskinned<ClassOption>, showSource: boolean): PickerOption => ({
       id: entry.id,
       name: entry.name,
       meta: entry.packName
@@ -269,6 +316,7 @@ export function usePickerGroups({
         : entry.spellAbility
           ? `d${entry.hitDie} · caster`
           : `d${entry.hitDie}`,
+      ...(showSource && entry.source && !isCoreDocument(entry.documentSlug) ? { source: entry.source } : {}),
       infoText: classInfoText(entry),
       reference: { kind: "classes", slug: entry.id, name: entry.name },
     });
@@ -277,43 +325,56 @@ export function usePickerGroups({
         {
           label: pack ? packGroupLabel(pack, "Callings of") : "Recommended for this setting",
           recommended: true,
-          options: classTier.recommended.map(toOption),
+          options: classTier.recommended.map((entry) => toOption(entry, true)),
         },
-        { label: "All classes", options: classTier.other.map(toOption) },
+        { label: "All classes", options: classTier.other.map((entry) => toOption(entry, true)) },
       ];
     }
-    // With no recommended tier, the other settings' entries separate out
-    // under their source setting instead of blending in unlabeled.
+    // With no recommended tier, the other books' and the other settings'
+    // entries separate out under their source instead of blending in
+    // unlabeled (a Marshal is Level Up's, not the Core Rules').
     const bySource = groupBySourceSetting(classTier.other);
-    if (bySource.packs.length) {
+    if (bySource.packs.length || bySource.books.length) {
       return [
-        { label: "Standard classes (high fantasy)", options: bySource.standard.map(toOption) },
+        { label: "Standard classes (5e Core Rules)", options: bySource.standard.map((entry) => toOption(entry, false)) },
+        ...bySource.books.map((book) => ({
+          label: `From ${book.label}`,
+          options: book.options.map((entry) => toOption(entry, false)),
+        })),
         ...bySource.packs.map((source) => ({
           label: `From the ${source.label} setting`,
-          options: source.options.map(toOption),
+          options: source.options.map((entry) => toOption(entry, false)),
         })),
       ];
     }
-    return [{ label: null, options: classTier.other.map(toOption) }];
+    return [{ label: null, options: classTier.other.map((entry) => toOption(entry, false)) }];
   }, [classTier, rawClasses, pack]);
 
   // The subclasses we have real feature tables for, offered once the chosen
   // level reaches the class's subclass level. Content-pack archetypes are
   // listed after them: those are prose only, so a player picking one gets no
   // features, and these should be the obvious choice.
-  const builtInSubclasses = useMemo(() => {
-    if (!klass) {
-      return [];
-    }
-    const pickLevel = subclassLevelFor(klass.id);
-    return pickLevel !== null && effectiveLevel >= pickLevel ? subclassNamesFor(klass.id) : [];
-  }, [klass, effectiveLevel]);
+  // Below the class's subclass level nothing is offered, the pack's
+  // archetypes included: reconcile drops a subclass picked early, so a menu
+  // that listed them took a pick and showed "None yet" (issue #109). The
+  // step says when the choice comes instead (subclassLockedAt).
+  const gate = useMemo(
+    () => (klass ? subclassGate(klass.id, effectiveLevel) : { pickLevel: null, locked: false }),
+    [klass, effectiveLevel],
+  );
+  const builtInSubclasses = useMemo(
+    () => (klass && !gate.locked ? subclassNamesFor(klass.id) : []),
+    [klass, gate.locked],
+  );
 
   // Pack archetypes we already have a table for would otherwise appear twice.
   const packOnlyArchetypes = useMemo(() => {
+    if (gate.locked) {
+      return [];
+    }
     const known = new Set(builtInSubclasses.map((entry) => entry.toLowerCase()));
     return archetypes.filter((entry) => !known.has(entry.name.toLowerCase()));
-  }, [archetypes, builtInSubclasses]);
+  }, [archetypes, builtInSubclasses, gate.locked]);
 
   // The pack row behind the chosen subclass, which carries its write-up.
   const chosenArchetype = useMemo(
@@ -360,12 +421,13 @@ export function usePickerGroups({
   }, [builtInSubclasses, packOnlyArchetypes, archetypes, klass]);
 
   const backgroundGroups = useMemo<PickerGroup[]>(() => {
-    const toOption = (entry: Reskinned<BackgroundOption>): PickerOption => ({
+    const toOption = (entry: Reskinned<BackgroundOption>, showSource: boolean): PickerOption => ({
       id: entry.id,
       name: entry.name,
       meta: entry.skills
         .map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId)
         .join(", "),
+      ...(showSource && entry.source && !isCoreDocument(entry.documentSlug) ? { source: entry.source } : {}),
       infoText: backgroundInfoText(entry),
       reference: { kind: "backgrounds", slug: entry.id, name: entry.name },
     });
@@ -374,25 +436,29 @@ export function usePickerGroups({
         {
           label: pack ? packGroupLabel(pack, "Lives in") : "Recommended for this setting",
           recommended: true,
-          options: backgroundTier.recommended.map(toOption),
+          options: backgroundTier.recommended.map((entry) => toOption(entry, true)),
         },
-        { label: "All backgrounds", options: backgroundTier.other.map(toOption) },
+        { label: "All backgrounds", options: backgroundTier.other.map((entry) => toOption(entry, true)) },
       ];
     }
     const bySource = groupBySourceSetting(backgroundTier.other);
-    if (bySource.packs.length) {
+    if (bySource.packs.length || bySource.books.length) {
       return [
         {
-          label: "Standard backgrounds (high fantasy)",
-          options: bySource.standard.map(toOption),
+          label: "Standard backgrounds (5e Core Rules)",
+          options: bySource.standard.map((entry) => toOption(entry, false)),
         },
+        ...bySource.books.map((book) => ({
+          label: `From ${book.label}`,
+          options: book.options.map((entry) => toOption(entry, false)),
+        })),
         ...bySource.packs.map((source) => ({
           label: `From the ${source.label} setting`,
-          options: source.options.map(toOption),
+          options: source.options.map((entry) => toOption(entry, false)),
         })),
       ];
     }
-    return [{ label: null, options: backgroundTier.other.map(toOption) }];
+    return [{ label: null, options: backgroundTier.other.map((entry) => toOption(entry, false)) }];
   }, [backgroundTier, pack]);
 
   return {
@@ -404,6 +470,9 @@ export function usePickerGroups({
     backgroundGroups,
     // Whether the subclass picker has anything to offer at this level.
     offersSubclass: builtInSubclasses.length > 0 || packOnlyArchetypes.length > 0,
+    // The level the class picks its subclass at, while this level is below
+    // it; null once the pick is open (or for a class with no pick level).
+    subclassLockedAt: gate.locked ? gate.pickLevel : null,
     chosenArchetype,
   };
 }

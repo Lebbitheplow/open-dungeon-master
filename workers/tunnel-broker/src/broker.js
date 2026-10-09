@@ -27,11 +27,12 @@
 // creation (stored hashed). Codes use the invite alphabet, so a hostname
 // never collides with meaningful subdomains.
 
+import { API, json, rateLimited, sha256Hex } from "./util.js";
+import { checkRelayUsage, dropWorld, putWorld, RELAY_CRON } from "./worlds.js";
+
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const CREATES_PER_DAY = 20;
-const API = "https://api.cloudflare.com/client/v4";
 
 function randomCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
@@ -49,18 +50,6 @@ export function parseCode(raw) {
   if (typeof raw !== "string") return null;
   const code = raw.trim().toUpperCase();
   return new RegExp(`^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`).test(code) ? code : null;
-}
-
-async function sha256Hex(text) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
 }
 
 async function cfApi(env, method, path, body) {
@@ -90,19 +79,6 @@ async function zoneId(env) {
   if (!id) throw new Error(`Zone ${env.ZONE_NAME} is not visible to the API token.`);
   await env.SESSIONS.put("zone-id", id);
   return id;
-}
-
-// The per-address counters are keyed by a salted SHA-256 of the address, so
-// the store never holds a caller's IP. RATE_LIMIT_SALT is a Worker secret
-// (wrangler secret put RATE_LIMIT_SALT); the counters still work without it,
-// unsalted, which is the only fallback that keeps abuse limits on.
-async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
-  const subject = await sha256Hex(`${env.RATE_LIMIT_SALT || ""}:${ip}`);
-  const key = `${kind}:${subject.slice(0, 32)}:${new Date().toISOString().slice(0, 10)}`;
-  const used = Number((await env.SESSIONS.get(key)) || "0");
-  if (used >= cap) return true;
-  await env.SESSIONS.put(key, String(used + 1), { expirationTtl: 86_400 });
-  return false;
 }
 
 // ---------- the table registry ----------
@@ -479,6 +455,11 @@ const worker = {
         if (request.method === "GET") return await getTable(env, table[1]);
         if (request.method === "DELETE") return await dropTable(env, request, table[1]);
       }
+      const world = url.pathname.match(/^\/world\/([^/]+)$/);
+      if (world) {
+        if (request.method === "PUT") return await putWorld(env, request, world[1]);
+        if (request.method === "DELETE") return await dropWorld(env, request, world[1]);
+      }
     } catch (err) {
       console.error(err);
       return json({ error: "The broker hit a Cloudflare API error. Try again." }, 502);
@@ -486,7 +467,11 @@ const worker = {
     return json({ error: "Not found." }, 404);
   },
 
-  async scheduled(_event, env) {
+  // Two schedules: every ten minutes the assistant relay's kill switch
+  // looks at the day's request count (src/worlds.js), and hourly the rest.
+  async scheduled(event, env) {
+    await checkRelayUsage(env);
+    if (event?.cron === RELAY_CRON) return;
     await purgeExpired(env);
     await checkTurnUsage(env);
     if (typeof env.SESSIONS.sweep === "function") await env.SESSIONS.sweep();

@@ -5,6 +5,7 @@ import { isDeviceWorld, serverEnv } from "@/lib/server-env";
 import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
 import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
 import { forgetHarnessStatus } from "@/lib/harness/status";
+import { rescueStrandedCampaigns, type RescueMove } from "@/lib/image-backend-rescue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ function maskedConfig(config: GlobalConfig) {
     signupModeForced: isDeviceWorld(),
     serverName: config.serverName,
     accountDeletionGraceDays: config.accountDeletionGraceDays,
+    abilityRerollBelow: config.abilityRerollBelow,
     publicUrl: config.publicUrl,
     worldRegistryUrl: config.worldRegistryUrl,
     text: {
@@ -59,6 +61,7 @@ function maskedConfig(config: GlobalConfig) {
     },
     // No secrets in here: the agent program uses its own sign-in.
     harness: config.harness,
+    sharedHost: config.sharedHost,
   };
 }
 
@@ -124,6 +127,7 @@ const patchSchema = z.object({
   signupMode: z.enum(["open", "invite", "closed"]).optional(),
   serverName: z.string().trim().max(100).optional(),
   accountDeletionGraceDays: z.number().int().min(0).max(90).optional(),
+  abilityRerollBelow: z.number().int().min(0).max(108).optional(),
   publicUrl: z.string().trim().max(500).optional(),
   worldRegistryUrl: z.string().trim().max(500).optional(),
   text: z
@@ -178,6 +182,12 @@ const patchSchema = z.object({
       clientSecret: z.string().trim().max(200).optional(),
     })
     .optional(),
+  sharedHost: z
+    .object({
+      campaignCreation: z.enum(["", "everyone", "admins"]).optional(),
+      paidAi: z.enum(["", "everyone", "admins"]).optional(),
+    })
+    .optional(),
   // imagesVerifiedAt is deliberately absent: only a real test picture
   // (POST /api/admin/harness) may set it.
   harness: z
@@ -223,10 +233,16 @@ export async function PATCH(request: Request) {
   if (moved) {
     forgetHarnessStatus();
   }
+  // A save that changes where pictures come from moves the campaigns stuck
+  // on a backend that cannot paint onto the new default, when it can
+  // (src/lib/image-backend-rescue.ts). A device world's shell owns its own.
+  const rescued: RescueMove[] =
+    (parsed.data.images || parsed.data.harness) && !deviceWorld() ? await rescueStrandedCampaigns() : [];
   return Response.json({
     config: maskedConfig(saved),
     envDefaults: envDefaults(),
     voiceAnnounceUnroutable: voiceAnnounceUnroutable(),
     deviceWorld: deviceWorld(),
+    rescued,
   });
 }

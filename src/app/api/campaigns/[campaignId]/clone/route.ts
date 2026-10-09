@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { cloneCampaign } from "@/lib/db/campaign-clone";
 import { publicCampaign } from "@/lib/db/campaigns";
@@ -26,6 +27,9 @@ export async function POST(
   }
   if (user.mustChangePassword) {
     return Response.json({ error: "Set a new password to continue." }, { status: 403 });
+  }
+  if (!canCreateCampaigns(user)) {
+    return campaignCreationRefusal();
   }
   const { campaignId } = await params;
   const parsed = cloneSchema.safeParse(await request.json().catch(() => ({})));

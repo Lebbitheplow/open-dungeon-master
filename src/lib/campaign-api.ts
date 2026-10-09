@@ -3,6 +3,7 @@ import { capsFor as capsForCampaign, getCampaignForUser, type Campaign } from "@
 import type { ViewerCaps } from "@/lib/dm/viewer";
 import type { User } from "@/lib/db/users";
 import { isMemberMuted } from "@/lib/db/moderation";
+import { enterUsageScope } from "@/lib/usage/scope";
 
 export type MemberContext = { user: User; campaign: Campaign };
 
@@ -24,6 +25,9 @@ export async function requireMember(
   if (!campaign) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });
   }
+  // Everything this request goes on to ask of a model, a painter or a
+  // speech server is this campaign's in the usage ledger.
+  enterUsageScope({ campaignId: campaign.id, userId: user.id });
   return { user, campaign };
 }
 
@@ -91,6 +95,31 @@ export async function requireDm(campaignId: string): Promise<MemberContext | Res
   }
   if (!isDm(context)) {
     return Response.json({ error: "Only the Dungeon Master can do that." }, { status: 403 });
+  }
+  return context;
+}
+
+// Prep authority (#154): the prepared fights and the map library. The DM
+// seat at a table a person runs, and the party lead of an AI-narrated
+// campaign, who steers the story there and is the only person who could
+// bring the prep in (/api/campaigns/[id]/import follows the same rule). A
+// lead at a human-DM table is a player and stays out, as does every other
+// player: prepared fights are the story's secrets.
+export async function requirePrepAuthority(campaignId: string): Promise<MemberContext | Response> {
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  const caps = capsFor(context);
+  if (caps.role !== "dm" && !caps.steersStory) {
+    return Response.json(
+      {
+        error: context.campaign.dmUserId
+          ? "Only the Dungeon Master can do that."
+          : "Only the party lead can do that.",
+      },
+      { status: 403 },
+    );
   }
   return context;
 }

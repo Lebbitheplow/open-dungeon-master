@@ -11,7 +11,11 @@ compatibility_date = "2026-08-01"
 workers_dev = true
 routes = [
   { pattern = "broker.opendungeonmaster.com", custom_domain = true },
+  { pattern = "agents.opendungeonmaster.com", custom_domain = true },
 ]
+# agents.opendungeonmaster.com serves assistant links only (src/relay.js):
+# the address ChatGPT, Claude, Grok or Muse saves for a world, which keeps
+# working when the world is shared again at a new tunnel hostname.
 
 # Secrets, set with `wrangler secret put`:
 #   ACCOUNT_ID       required. The Cloudflare account id (kept out of the
@@ -58,6 +62,19 @@ name = "GLOBAL"
 namespace_id = "1002"
 simple = { limit = 300, period = 60 }
 
+# The assistant relay's own limiters, in place of the two above (agents
+# call from their vendors' shared addresses, so per-address would throttle
+# every ChatGPT user at once): per world, and for the relay as a whole.
+[[ratelimits]]
+name = "RELAY_WORLD"
+namespace_id = "1003"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "RELAY_ALL"
+namespace_id = "1004"
+simple = { limit = 600, period = 60 }
+
 # The KV namespace the broker lived on until 2026-09-26. Read once by the
 # Durable Object to carry the table claims and live sessions over. Safe to
 # remove (binding and namespace) after every row in it has expired, which
@@ -66,8 +83,14 @@ simple = { limit = 300, period = 60 }
 binding = "LEGACY_KV"
 id = "47fe1069128549d199527670da4b7dd5"
 
+# Hourly: session purge, TURN egress, sweep. Every ten minutes: the
+# assistant relay's kill switch (src/worlds.js, RELAY_CRON).
 [triggers]
-crons = ["17 * * * *"]
+crons = ["17 * * * *", "*/10 * * * *"]
 
 [vars]
 ZONE_NAME = "opendungeonmaster.com"
+AGENTS_ORIGIN = "https://agents.opendungeonmaster.com"
+# Account-wide requests in a UTC day past which assistant links stop
+# forwarding until midnight (default 50000, half the free plan).
+RELAY_DAILY_REQUEST_CAP = "50000"

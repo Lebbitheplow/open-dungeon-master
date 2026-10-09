@@ -43,7 +43,7 @@ globalThis.__odmEmbedderPromise = Promise.resolve((texts) =>
 
 const reopening = process.argv[2] === "--reopen";
 
-const { getDatabase, nowIso } = await import("../src/lib/db/core.ts");
+const { getDatabase, nowIso, repairWorkshopDmSeats } = await import("../src/lib/db/core.ts");
 const db = getDatabase();
 
 // ---- child mode: the upgrade path ----
@@ -127,6 +127,7 @@ const { exportWorkshopBundle, importWorkshopBundle } = await import(
 const { readBundle } = await import("../src/lib/workshop/bundle.ts");
 const { createHomebrew, listHomebrew } = await import("../src/lib/db/homebrew.ts");
 const { runsAiTurns } = await import("../src/lib/workshop/kind.ts");
+const { isDmSeat } = await import("../src/lib/dm/viewer.ts");
 const deleteBeatModule = await import("../src/lib/db/workshop-beats.ts");
 const updateBeatModule = deleteBeatModule;
 
@@ -520,13 +521,30 @@ test("maps come across on an import and the workshop keeps its own", () => {
   assert.equal(listPreparedMaps(workshop.id).length, before, "the import moved rather than copied");
 });
 
-test("importing the same maps twice numbers them instead of failing", () => {
+test("importing the same maps again keeps the copies the campaign already has", () => {
+  // A second import of the same workshop brings what is new, not a numbered
+  // duplicate of everything (#157, #159).
+  const before = listPreparedMaps(campaign.id).length;
+  const plan = planContentImport(workshop.id, campaign.id, ["maps"]);
+  assert.equal(plan.kept, before);
+  assert.ok(plan.notes.some((note) => /came in from here before/.test(note.message)));
+  runContentImport({
+    sourceId: workshop.id,
+    campaignId: campaign.id,
+    selection: ["maps"],
+    houseRulesMode: "replace",
+  });
+  assert.equal(listPreparedMaps(campaign.id).length, before);
+});
+
+test("asked for second copies, the same maps are numbered instead of failing", () => {
   const before = listPreparedMaps(campaign.id).length;
   runContentImport({
     sourceId: workshop.id,
     campaignId: campaign.id,
     selection: ["maps"],
     houseRulesMode: "replace",
+    again: "copy",
   });
   const after = listPreparedMaps(campaign.id);
   assert.equal(after.length, before * 2);
@@ -933,9 +951,25 @@ test("an arc the table has been playing is never written over", () => {
   assert.deepEqual(after.beats, before.beats, "the arc was overwritten");
 });
 
-test("a second import numbers its copies rather than failing on the collision", () => {
-  // The lore titles collided on the second run above; nothing threw and both
-  // sets are present.
+test("a second import of the same board keeps what the first one compiled", () => {
+  // The run above brought nothing twice: the board's lore, fight and note
+  // are remembered by the card they came from, and the quest log does not
+  // repeat a quest (#157).
+  const titles = listLoreEntries(boardTarget.id).map((entry) => entry.title);
+  assert.ok(titles.includes("The mill"));
+  assert.ok(!titles.includes("The mill (2)"));
+  assert.equal(listEncounterTemplates(boardTarget.id).length, 1);
+  assert.deepEqual(getCampaignById(boardTarget.id).questLog, ["A missing daughter"]);
+});
+
+test("asked for second copies, a board's collisions are numbered rather than failing", () => {
+  runContentImport({
+    sourceId: workshop.id,
+    campaignId: boardTarget.id,
+    selection: ["storyboard"],
+    houseRulesMode: "replace",
+    again: "copy",
+  });
   const titles = listLoreEntries(boardTarget.id).map((entry) => entry.title);
   assert.ok(titles.includes("The mill"));
   assert.ok(titles.includes("The mill (2)"));
@@ -1128,6 +1162,67 @@ test("importing a bundle creates a new workshop that runs no AI turns", () => {
   assert.equal(imported.kind, "workshop");
   assert.notEqual(imported.id, workshop.id, "it wrote into the source workshop");
   assert.equal(runsAiTurns(imported), false);
+});
+
+// Issue #121: the importer used to leave the campaign defaults in place (an
+// AI narrator, no human seat), so the importer owned a workshop they had no
+// DM caps in and every DM-only panel drew empty under a header that still
+// counted the rows.
+test("an imported workshop seats its importer as the DM, like one made by the button", () => {
+  assert.equal(imported.gameSettings.dmMode, "human");
+  assert.equal(imported.dmUserId, userId);
+  assert.equal(imported.gameSettings.aiStorySetup, false);
+  assert.equal(imported.gameSettings.worldSimulation, false);
+  assert.equal(imported.gameSettings.holdSubmissions, false);
+  // The bundle's own settings still arrive alongside the seat.
+  assert.equal(imported.gameSettings.genre, exported.genre);
+  assert.deepEqual(imported.gameSettings.targetParty, exported.targetParty);
+  assert.ok(
+    isDmSeat(
+      { dmMode: imported.gameSettings.dmMode, humanDmUserId: imported.dmUserId, assistantDmUserId: null },
+      userId,
+    ),
+    "the importer does not hold the DM seat",
+  );
+});
+
+test("workshops imported before the fix are reseated on boot, and only those", () => {
+  // Break a fresh import the way the old importer wrote it.
+  const result = importWorkshopBundle(userId, exported);
+  assert.ok(!("error" in result), result.error);
+  const broken = getCampaignById(result.workshopId);
+  const settings = { ...broken.gameSettings, dmMode: "ai", aiStorySetup: true, worldSimulation: true };
+  db.prepare(`UPDATE campaigns SET human_dm_user_id = NULL, game_settings_json = ? WHERE id = ?`).run(
+    JSON.stringify(settings),
+    broken.id,
+  );
+  assert.equal(getCampaignById(broken.id).dmUserId, null);
+  // A real AI-narrated campaign has no human seat either; the repair must
+  // not touch it.
+  const table = createCampaign(userId, {
+    title: "An AI table",
+    description: "",
+    theme: "",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+    gameSettings: { dmMode: "ai" },
+  });
+
+  assert.equal(repairWorkshopDmSeats(db), 1);
+  const repaired = getCampaignById(broken.id);
+  assert.equal(repaired.dmUserId, userId);
+  assert.equal(repaired.gameSettings.dmMode, "human");
+  assert.equal(repaired.gameSettings.aiStorySetup, false);
+  assert.equal(repaired.gameSettings.worldSimulation, false);
+  assert.equal(repaired.gameSettings.holdSubmissions, false);
+  assert.equal(repaired.gameSettings.genre, exported.genre, "the repair clobbered the bundle's settings");
+  assert.deepEqual(repaired.gameSettings.targetParty, exported.targetParty);
+  const untouched = getCampaignById(table.id);
+  assert.equal(untouched.dmUserId, null);
+  assert.equal(untouched.gameSettings.dmMode, "ai");
+  // Idempotent: a second boot finds nothing to do.
+  assert.equal(repairWorkshopDmSeats(db), 0);
 });
 
 test("the imported workshop holds the same content under new ids", () => {

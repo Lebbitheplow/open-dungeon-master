@@ -14,9 +14,24 @@ import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASSES } from "@/lib/classes";
 import type { Genre } from "@/lib/schemas/game-settings-options";
 import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
+import { resolveBackgroundGear } from "@/lib/srd/adventuring-gear";
 
-export type RaceOption = { id: string; name: string; note: string } & RaceMechanics;
+// `source` is the book an entry comes from, by title ("Tome of Heroes"), and
+// `documentSlug` its pack document; both absent on bundled rows. The pickers
+// group and label by them (issue #116).
+export type RaceOption = {
+  id: string;
+  name: string;
+  note: string;
+  // The pack row behind a content-pack race, when its id is not the slug
+  // (src/lib/content/race-options.ts optionIdFor).
+  slug?: string;
+  documentSlug?: string;
+  source?: string;
+} & RaceMechanics;
 export type ClassOption = { id: string; name: string } & ClassMechanics & {
+    documentSlug?: string;
+    source?: string;
     // Catalog-only extras; absent on SRD and Open5e rows.
     genres?: Genre[];
     blurb?: string;
@@ -52,6 +67,8 @@ export type BackgroundOption = {
   featureDesc?: string;
   // The content pack's write-up, shown under the background select.
   desc?: string;
+  documentSlug?: string;
+  source?: string;
 };
 
 export type ContentRow = {
@@ -59,6 +76,8 @@ export type ContentRow = {
   name: string;
   source: string;
   documentSlug: string;
+  // The document's title, as the content API serves it.
+  document?: string;
   data: Record<string, unknown>;
 };
 
@@ -85,7 +104,11 @@ export function splitPurse(kit: string[] | undefined): { equipment: string[]; pu
     }
     equipment.push(line);
   }
-  return { equipment, purse };
+  // The kit as catalog items, the way a class kit arrives: a pack opened
+  // into its contents, counts as quantities, the book's names ("Clothes,
+  // Common"); a line the catalog does not know stays as written
+  // (src/lib/srd/adventuring-gear.ts, issue #113).
+  return { equipment: resolveBackgroundGear(equipment), purse };
 }
 
 export function srdRaceOptions(): RaceOption[] {
@@ -173,6 +196,8 @@ export function packClassOptions(rows: ContentRow[]): ClassOption[] {
       desc: String(row.data?.desc ?? ""),
       blurb: bundled?.blurb,
       languages: bundled?.languages,
+      documentSlug: row.documentSlug,
+      source: row.document ?? row.documentSlug,
     };
   });
   const packIds = new Set(packOptions.map((option) => option.id));
@@ -234,6 +259,8 @@ export function mergedBackgroundOptions(rows: ContentRow[]): BackgroundOption[] 
         desc: String(row.data?.desc ?? ""),
         ...(feature ? { feature } : {}),
         ...(featureDesc ? { featureDesc } : {}),
+        documentSlug: row.documentSlug,
+        source: row.document ?? row.documentSlug,
       };
     });
   const srdCount = SRD_BACKGROUNDS.length;

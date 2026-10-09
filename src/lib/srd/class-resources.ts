@@ -9,6 +9,7 @@ import { COMBAT_RESOURCE_DEFS } from "@/lib/srd/combat-rows";
 import customResourcesJson from "@/lib/classes/resources.json";
 import authoredResourcesJson from "@/lib/srd/authored-resources.json";
 import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
+import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } from "@/lib/srd/feat-spells";
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
 
@@ -198,6 +199,10 @@ export type ResourceDef = {
   // Require the feature name to BE the match term, not merely contain it as
   // a word: "Rage" is barbarian rage, "Road Rage" (road_warrior) is not.
   exact?: boolean;
+  // A feat's counter that pours into a class's (Inner Resilience's ki into
+  // "ki"): the sheet carries one counter under that id, the two maxima
+  // added, and the class's definition answers for it.
+  into?: string;
   // The classes whose feature this counter belongs to. A feature of the
   // same name granted by any other class is not this feature: the grifter's
   // Vanish is counted, the ranger's is not.
@@ -308,6 +313,62 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     effect: { kind: "narrative" },
     guidance:
       "Sorcery points buy Metamagic on a spell being cast (spend with amount), or convert to and from spell slots: call use_resource with variant like 'create a 2nd-level slot' (costs 2/3/5/6/7 points for levels 1-5) or 'convert my 3rd-level slot into points' and the server moves the points and slots. Created slots vanish on a long rest. The spell itself still goes through use_spell_slot or cast_at_enemy as normal.",
+  },
+  // ---- the feats' counters (src/lib/srd/feat-combat.ts) ----
+  {
+    id: "luck_points",
+    match: ["lucky", "fortunate"],
+    exact: true,
+    displayName: "Luck Points",
+    maxFor: () => 3,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance:
+      "Lucky (or Level Up's Fortunate): three luck points a long rest. One spent on their own attack roll, ability check or saving throw rolls an extra d20 and keeps the best (pc_attack luck: true, request_roll luck: true; the server spends the point), or on an attack made against them (use_reaction 'lucky' after the hit: the attacker's d20 is rolled again and the lower kept; no reaction is spent).",
+  },
+  {
+    id: "ki_inner_resilience",
+    into: "ki",
+    match: ["inner resilience"],
+    exact: true,
+    displayName: "Ki Points (Inner Resilience)",
+    maxFor: () => 3,
+    recharge: "short",
+    effect: { kind: "narrative" },
+    guidance: "Inner Resilience (Tome of Heroes): 3 ki points for Patient Defense or Step of the Wind, 3 more on a monk's own; back after a short rest.",
+  },
+  {
+    id: "superiority_dice_martial_adept",
+    into: "sub_superiority_dice",
+    match: ["martial adept"],
+    exact: true,
+    displayName: "Superiority Dice (Martial Adept)",
+    maxFor: () => 1,
+    recharge: "short",
+    effect: { kind: "narrative" },
+    guidance: "Martial Adept: one superiority die (a d6) for the two maneuvers the feat taught, one more on a Battle Master's own; back after a short rest.",
+  },
+  {
+    id: "sorcery_points_metamagic_adept",
+    into: "sorcery_points",
+    match: ["metamagic adept"],
+    exact: true,
+    displayName: "Sorcery Points (Metamagic Adept)",
+    maxFor: () => 2,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: "Metamagic Adept: 2 sorcery points for the two Metamagic options the feat taught, on top of a sorcerer's own; back after a long rest.",
+  },
+  {
+    id: "inspiring_leader",
+    match: ["inspiring leader", "rallying speaker"],
+    exact: true,
+    displayName: "Inspiring Leader",
+    maxFor: () => 6,
+    recharge: "short",
+    effect: { kind: "temp_hp", dice: (level, mods) => `${Math.max(1, level + Math.max(0, mods.cha ?? 0))}` },
+    guidance:
+      "Inspiring Leader (or Level Up's Rallying Speaker): ten minutes of rallying words give up to six friendly creatures within 30 feet who can hear and understand them temporary hit points equal to the speaker's level plus Charisma modifier; one use per creature (targetCharacterId), and a creature cannot benefit again until it finishes a rest.",
   },
   {
     id: "second_wind",
@@ -640,8 +701,43 @@ export const RESOURCE_DEFS: ResourceDef[] = [
 export type ResourceState = { max: number; used: number };
 export type ResourceMap = Record<string, ResourceState>;
 
+// Lucky's counter (src/lib/srd/feat-combat.ts): three points a long rest.
+export const LUCK_POINTS = "luck_points";
+
+export function luckPointsLeft(resources: ResourceMap | undefined): number {
+  const state = resources?.[LUCK_POINTS];
+  return state ? Math.max(0, state.max - state.used) : 0;
+}
+
+// The resources map with one luck point spent, or null when none is left.
+export function spendLuckCounter(resources: ResourceMap | undefined): ResourceMap | null {
+  const state = resources?.[LUCK_POINTS];
+  if (!state || state.used >= state.max) {
+    return null;
+  }
+  return { ...(resources ?? {}), [LUCK_POINTS]: { ...state, used: state.used + 1 } };
+}
+
 export function resourceDef(id: string): ResourceDef | null {
+  if (isFreeCastResource(id)) {
+    return freeCastDef(id);
+  }
   return RESOURCE_DEFS.find((def) => def.id === id) ?? null;
+}
+
+// The counter behind a feat's free cast, made from its id: the spell is in
+// the id, the rule is the same for every one of them.
+function freeCastDef(id: string): ResourceDef {
+  const spell = freeCastSpellOf(id).replace(/(^|\s)([a-z])/g, (_, before, letter) => `${before}${letter.toUpperCase()}`);
+  return {
+    id,
+    match: [],
+    displayName: `${spell} (free cast)`,
+    maxFor: () => 1,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: `${spell} once without a spell slot, at its own level, and again after a long rest; the cast tool spends this use itself when the spell is cast, so use_resource is not needed. With a slot of its level or higher it can also be cast as usual.`,
+  };
 }
 
 // Whole-word containment: the fragment must appear as its own word(s), so
@@ -773,10 +869,14 @@ export function populateResources(
   abilityMods: Record<string, number>,
   existing: ResourceMap | undefined,
   classes?: Array<{ id: string; level: number }>,
+  // The feats on the sheet: the ones with a counter of their own (Lucky's
+  // points, Inspiring Leader's uses) are read like features.
+  feats?: string[],
 ): ResourceMap {
   const out: ResourceMap = {};
+  const held_all: Array<{ name: string; classId?: string }> = [...features, ...(feats ?? []).map((name) => ({ name }))];
   for (const def of RESOURCE_DEFS) {
-    const held = features.filter((feature) => featureHolds(def, feature));
+    const held = held_all.filter((feature) => featureHolds(def, feature));
     const matched = held[0];
     if (!matched) {
       continue;
@@ -796,8 +896,22 @@ export function populateResources(
       const stated = def.upgrades ? usesNamed(name) : null;
       max = Math.max(max, row?.uses ?? 0, stated ?? 0);
     }
-    const used = Math.min(existing?.[def.id]?.used ?? 0, max);
-    out[def.id] = { max, used };
+    const key = def.into ?? def.id;
+    if (def.into && out[key]) {
+      max += out[key].max;
+    }
+    const used = Math.min(existing?.[key]?.used ?? 0, max);
+    out[key] = { max, used };
+  }
+  // A spell a feat lets the character cast once without a slot ("Free
+  // cast: Misty Step (Fey Touched)", src/lib/srd/feat-spells.ts): one use,
+  // back after a long rest, spent by the cast guard in place of a slot.
+  for (const feature of features) {
+    const free = freeCastOf(feature.name);
+    if (free) {
+      const id = freeCastResourceId(free.spell);
+      out[id] = { max: 1, used: Math.min(existing?.[id]?.used ?? 0, 1) };
+    }
   }
   // Inspiration belongs to no feature: the DM awarded it, and it stays until
   // it is spent.

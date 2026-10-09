@@ -23,6 +23,8 @@ export type EncounterTemplate = {
   // Where each enemy starts, who is hidden, overrides and rewards
   // (src/lib/dm/encounter-template-logic.ts). Old rows read as empty.
   extras: TemplateExtras;
+  // Cued by the lead of an AI-narrated table for the storyteller to run.
+  cued: boolean;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -37,6 +39,7 @@ type TemplateRow = {
   map_json: string;
   notes: string;
   extras_json: string | null;
+  cued: number | null;
   created_by_user_id: string;
   created_at: string;
   updated_at: string;
@@ -52,6 +55,7 @@ function mapTemplate(row: TemplateRow): EncounterTemplate {
     map: { ...EMPTY_TEMPLATE_MAP, ...parseJson<Partial<TemplateMap>>(row.map_json, {}) },
     notes: row.notes ?? "",
     extras: normalizeTemplateExtras(parseJson<unknown>(row.extras_json ?? "{}", {})),
+    cued: row.cued === 1,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -134,6 +138,10 @@ export function updateEncounterTemplate(
       id,
     );
   return getEncounterTemplate(id);
+}
+
+export function setTemplateCued(id: string, cued: boolean) {
+  getDatabase().prepare(`UPDATE encounter_templates SET cued = ? WHERE id = ?`).run(cued ? 1 : 0, id);
 }
 
 export function deleteEncounterTemplate(id: string) {

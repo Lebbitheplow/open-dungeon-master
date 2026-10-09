@@ -81,7 +81,7 @@ export function purseViewFor(input: {
     gold: purse.gold,
     copper: purse.copper,
     source,
-    problem: purse.problems[0] ?? null,
+    problems: [...new Set(purse.problems)],
     wealth: rolledTable
       ? {
           dice,

@@ -46,26 +46,38 @@ export function planSpeech(
     const own = byName.get(name.toLowerCase()) ?? byName.get(baseCreatureName(name).toLowerCase());
     return own?.voiceId ? { voice: own.voiceId, speed: own.speed } : narrator;
   };
+  // The text keeps its line breaks for reading who said what; the speech
+  // server hears each part as one flowing run.
+  const flat = (part: string) => part.replace(/\s+/g, " ").trim();
   // Spoken outright as one person: the whole message in their voice.
   if (options.speaker && options.speaker.kind !== "narrator") {
     const chosen = voiceFor(options.speaker.name);
-    return text.trim() ? [{ text: text.trim(), ...chosen, speaker: options.speaker.name }] : [];
+    return flat(text) ? [{ text: flat(text), ...chosen, speaker: options.speaker.name }] : [];
   }
-  // Only someone with a voice of their own is worth a cut in the audio.
-  const speakers: Speaker[] = options.cast
-    .filter((entry) => entry.voiceId)
-    .map((entry) => ({ kind: "npc", id: "", name: entry.name, aliases: entry.aliases }));
+  // Lines are read with the whole cast, as the transcript reads them, so a
+  // voiceless speaker's line is never handed to the voiced name beside it;
+  // only someone with a voice of their own is worth a cut in the audio.
+  const speakers: Speaker[] = options.cast.map((entry) => ({ kind: "npc", id: "", name: entry.name, aliases: entry.aliases }));
   const plan: SpeechPlan = [];
+  // The narrator's current run as written, quote marks and all.
+  let run = "";
+  let cursor = 0;
   for (const segment of attributeSpeech(text, speakers)) {
-    if (segment.kind === "speech") {
-      plan.push({ text: segment.text.trim(), ...voiceFor(segment.speaker.name), speaker: segment.speaker.name });
+    const at = text.indexOf(segment.text, cursor);
+    const written = segment.kind === "speech" && at > 0 ? text.slice(at - 1, at + segment.text.length + 1) : segment.text;
+    cursor = at === -1 ? cursor : at + segment.text.length;
+    const chosen = segment.kind === "speech" ? voiceFor(segment.speaker.name) : narrator;
+    if (segment.kind === "speech" && chosen !== narrator) {
+      plan.push({ text: flat(segment.text), ...chosen, speaker: segment.speaker.name });
+      run = "";
     } else {
       // Adjacent prose runs merge so the narrator is not cut into crumbs.
       const previous = plan[plan.length - 1];
+      run = previous && previous.speaker === null ? run + written : written;
       if (previous && previous.speaker === null) {
-        previous.text = `${previous.text} ${segment.text.trim()}`.trim();
-      } else if (segment.text.trim()) {
-        plan.push({ text: segment.text.trim(), ...narrator, speaker: null });
+        previous.text = flat(run);
+      } else if (flat(run)) {
+        plan.push({ text: flat(run), ...narrator, speaker: null });
       }
     }
   }

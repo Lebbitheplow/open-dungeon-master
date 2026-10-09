@@ -30,7 +30,7 @@ import {
 } from "@/lib/dm/condition-logic";
 import { wakeStable } from "@/lib/dm/death";
 import { breakConcentration, LETHARGY, lethargyRounds, spellEndPatch } from "@/lib/dm/concentration";
-import { endSpentConcentration } from "@/lib/dm/concentration-upkeep";
+import { endConcentrationOnFadedSummons, endSpentConcentration } from "@/lib/dm/concentration-upkeep";
 import { STABLE_SOURCE, STABLE_WAKE_HOURS_MAX, UNCONSCIOUS } from "@/lib/dm/vitals-logic";
 import { holdsFeature, traitSaveAdvantages } from "@/lib/srd/trait-rules";
 import { tickEffectRound } from "@/lib/db/active-effects";
@@ -111,8 +111,13 @@ export function tickClockConditions(campaign: Campaign, minutes: number) {
   if (lines.length) {
     endSpentConcentration(campaign, lines);
   }
-  // Creatures whose spell ran out on the clock go (src/lib/dm/summon-store.ts).
-  lines.push(...sweepSummons(campaign));
+  // Creatures whose spell ran out on the clock go (src/lib/dm/summon-store.ts),
+  // and with the last of them the concentration that held them.
+  const faded = sweepSummons(campaign);
+  lines.push(...faded);
+  if (faded.length) {
+    endConcentrationOnFadedSummons(campaign, lines);
+  }
   if (lines.length) {
     noteAtTable(campaign.id, lines);
   }

@@ -34,7 +34,10 @@ test("armor falls back to the SRD table the content pack lacks", () => {
 
 test("an unweighable item reads as unknown, never as zero", () => {
   assert.equal(lineWeightLb({ name: "A Strange Idol", qty: 1 }), null);
-  assert.equal(lineWeightLb({ name: "Torch", qty: 1, weight: 0 }), null);
+  assert.equal(lineWeightLb({ name: "A Strange Idol", qty: 1, weight: 0 }), null);
+  // A stamped 0 is "the source did not say", so the SRD gear table answers
+  // where it can (src/lib/srd/adventuring-gear.ts).
+  assert.equal(lineWeightLb({ name: "Torch", qty: 1, weight: 0 }), 1);
 });
 
 test("ammunition is weighed per round however the line is written", () => {

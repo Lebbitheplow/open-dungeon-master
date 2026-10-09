@@ -22,17 +22,17 @@ import {
 } from "@/lib/characters/options";
 import { openAbilityPool, openWealthRoll } from "@/lib/db/creation-rolls";
 import { defaultRng } from "@/lib/dice";
-import { costToCopper } from "@/lib/dm/shop-logic";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { bundledSubclassName } from "@/lib/srd/features";
-import { srdRaceId } from "@/lib/srd/race-id";
+import { packFeatText } from "@/lib/srd/feat-text";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import { checklistSpell } from "@/lib/srd/spell-lists";
 import { bundledSpellSchool } from "@/lib/srd/spell-facts";
 import {
-  bundledPriceCopper,
-  looksMagical,
+  layeredPrice,
+  packRowPrice,
   type ItemPrice,
   type PriceLookup,
 } from "@/lib/srd/starting-wealth";
@@ -49,11 +49,6 @@ import type {
 const lower = (value: string) => value.trim().toLowerCase();
 const AUTHORED_FEATS = (authoredFeatsJson as { feats: FeatFacts[] }).feats;
 
-// Only the variant human is handed a feat by its race.
-function racialFeats(raceId: string): number {
-  return srdRaceId(raceId) === "variant_human" ? 1 : 0;
-}
-
 // ---- classes, races, backgrounds ----
 
 export function classGrantsFor(classId: string): ClassGrants | null {
@@ -68,11 +63,12 @@ export function classGrantsFor(classId: string): ClassGrants | null {
   return packClassOptions(rows).find((option) => lower(option.id) === id) ?? null;
 }
 
-// Every row a race id may mean, the likeliest first. A content pack can
-// carry a third-party race under the slug a bundled one uses (Tome of
-// Heroes' drow beside the SRD family's), and a sheet built from the bundled
-// list holds the bundled id, so both readings are offered and the sheet is
-// judged against the one it fits.
+// Every row a race id may mean, the likeliest first. A sheet built from the
+// bundled list holds the bundled id ("drow") while the pack offers the same
+// race as "odm-drow", so both readings are offered and the sheet is judged
+// against the one it fits. (A third-party race under a bundled slug, Tome
+// of Heroes' drow, carries its document in its id since issue #115 and
+// matches only its own row.)
 export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): RaceGrants[] {
   const id = raceId.trim();
   if (!id) {
@@ -86,18 +82,19 @@ export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): Rac
           slug: row.slug,
           name: row.name,
           documentSlug: row.documentSlug,
+          document: row.document,
           data: row.data,
         })),
         [id],
       ).find((option) => option.id === id)
     : undefined;
   if (packed) {
-    found.push({ ...packed, feats: racialFeats(packed.id) });
+    found.push({ ...packed, feats: racialFeatCount(packed.id) });
   }
   const bundled = srdRaceFor(id);
   const option = bundled ? srdRaceOptions().find((entry) => entry.id === bundled.id) : undefined;
   if (option) {
-    found.push({ ...option, id, feats: racialFeats(option.id) });
+    found.push({ ...option, id, feats: racialFeatCount(option.id) });
   }
   return found;
 }
@@ -155,8 +152,7 @@ function packPrices(): Map<string, ItemPrice> {
       if (!key) {
         continue;
       }
-      const magic = row.kind === "magic_item";
-      const copper = magic ? null : costToCopper(row.cost ?? "");
+      const { copper, magic } = packRowPrice({ kind: row.kind, cost: row.cost ?? "" });
       const held = index.get(key);
       if (!held || (held.magic && !magic) || (held.copper === null && copper !== null && !magic)) {
         index.set(key, { copper, magic });
@@ -167,17 +163,9 @@ function packPrices(): Map<string, ItemPrice> {
   return index;
 }
 
-export const catalogPrices: PriceLookup = (name) => {
-  const bundled = bundledPriceCopper(name);
-  if (bundled !== null && !looksMagical(name)) {
-    return { copper: bundled, magic: false };
-  }
-  const packed = packPrices().get(priceKey(name));
-  if (packed) {
-    return packed;
-  }
-  return { copper: bundled, magic: looksMagical(name) };
-};
+// The bundled table, then the pack: the same layering the builder's purse
+// applies to the price a pick carried (issue #136).
+export const catalogPrices: PriceLookup = (name) => layeredPrice(name, packPrices().get(priceKey(name)));
 
 // ---- spells, feats, subclasses ----
 
@@ -198,6 +186,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
       level: published?.level ?? listed!.level,
       classes: [...new Set([...(published?.classes ?? []), ...(listed?.classes ?? [])].map(lower))],
       school: published?.school ? lower(published.school) : bundledSpellSchool(published?.name ?? listed!.name),
+      ...(published ? { ritual: published.ritual } : {}),
     };
   }
   if (!homebrewOwnerId) {
@@ -207,7 +196,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
     (entry) => entry.source === "homebrew" && spellNameMatches(entry, wanted),
   );
   return brewed
-    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower), school: brewed.school ? lower(brewed.school) : null }
+    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower), school: brewed.school ? lower(brewed.school) : null, ritual: brewed.ritual }
     : null;
 }
 
@@ -218,14 +207,23 @@ export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts 
   }
   const authored = AUTHORED_FEATS.find((feat) => lower(feat.name) === wanted);
   if (authored) {
-    return { name: authored.name, prerequisite: authored.prerequisite ?? "" };
+    return { name: authored.name, prerequisite: authored.prerequisite ?? "", desc: authored.desc ?? "" };
   }
   const found = searchFeats({ q: name.trim(), limit: 50, userId: homebrewOwnerId }).find(
     (entry) => lower(entry.name) === wanted,
   );
-  return found
-    ? { name: found.name, prerequisite: String(found.data.prerequisite ?? "") }
-    : null;
+  if (!found) {
+    return null;
+  }
+  const text = packFeatText(found.data);
+  return { name: found.name, prerequisite: text.prerequisite, desc: text.desc };
+}
+
+// A feat's text as one string, wherever the pack keeps it (src/lib/srd/
+// feat-text.ts), so the grants in it (feat-grants.ts, feat-spells.ts) are
+// found.
+export function packFeatDesc(data: Record<string, unknown>): string {
+  return packFeatText(data).desc;
 }
 
 export function subclassIsOffered(

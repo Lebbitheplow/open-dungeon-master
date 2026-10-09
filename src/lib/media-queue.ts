@@ -1,3 +1,4 @@
+import { bindUsageScope } from "@/lib/usage/scope";
 // Serial queues for background media jobs, one job at a time PER LANE.
 //
 // "gpu" (the default) covers ComfyUI work — scene images, location maps,
@@ -27,7 +28,9 @@ export function enqueueMediaJob(
 ) {
   const lanes = (globalThis.__odmMediaQueues ??= {});
   const tail = lanes[lane] ?? Promise.resolve();
-  const next = tail.then(job).catch((error) => {
+  // Whoever queued the picture or the passage is who it is counted for
+  // once it runs (src/lib/usage/scope.ts).
+  const next = tail.then(bindUsageScope(job)).catch((error) => {
     console.error(`[media:${lane}] job "${label}" failed:`, error);
   });
   lanes[lane] = next;

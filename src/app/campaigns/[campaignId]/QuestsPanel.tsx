@@ -1,5 +1,6 @@
 "use client";
 
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { Check, EyeOff, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -10,7 +11,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import type { Quest, QuestStatus } from "@/lib/dm/quest-logic";
-import { GlyphChip, KitButton, PanelLoading, Tick, TickMark, panelField, panelRow } from "./PanelKit";
+import { GlyphChip, KitButton, LoadFailed, panelField, PanelLoading, panelRow, Tick, TickMark } from "./PanelKit";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
 
@@ -28,6 +29,10 @@ const STATUS_OPTIONS = (Object.keys(STATUS_LABEL) as QuestStatus[]).map((status)
 
 export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignId: string; steersStory: boolean; refreshKey: number }) {
   const [quests, setQuests] = useState<Quest[] | null>(null);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [lines, setLines] = useState("");
@@ -38,22 +43,19 @@ export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignI
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/campaigns/${campaignId}/quests`)
-      .then((response) => (response.ok ? response.json() : {}))
-      .then((data: { quests?: Quest[] }) => {
-        if (!cancelled) {
-          setQuests(data.quests ?? []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setQuests([]);
-        }
-      });
+    readLoad<{ quests?: Quest[] }>(fetch(`/api/campaigns/${campaignId}/quests`), "The quest log").then((outcome) => {
+      if (cancelled) {
+        return;
+      }
+      settle(outcome);
+      if (outcome.payload) {
+        setQuests(outcome.payload.quests ?? []);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, refreshKey, reload]);
+  }, [campaignId, refreshKey, reload, settle]);
 
   async function patch(questId: string, body: Record<string, unknown>) {
     const response = await fetch(`/api/campaigns/${campaignId}/quests/${questId}`, {
@@ -96,6 +98,12 @@ export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignI
     }
     await fetch(`/api/campaigns/${campaignId}/quests/${quest.id}`, { method: "DELETE" });
     setQuests((current) => (current ?? []).filter((entry) => entry.id !== quest.id));
+  }
+
+  if (quests === null && loadError) {
+
+    return <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} />;
+
   }
 
   if (quests === null) {
@@ -148,7 +156,7 @@ export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignI
           </div>
         </div>
       ) : null}
-      {!quests.length ? <EmptyState size="sm" art="scrolls" title="Nothing on the log yet." /> : null}
+      {!quests.length ? (loadError ? <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} /> : loaded ? <EmptyState size="sm" art="scrolls" title="Nothing on the log yet." /> : null) : null}
       <ul className="stagger space-y-1.5">
         {[...active, ...settled].map((quest) => (
           <QuestRow key={quest.id} quest={quest} steersStory={steersStory} onPatch={(body) => void patch(quest.id, body)} onRemove={() => void remove(quest)} />

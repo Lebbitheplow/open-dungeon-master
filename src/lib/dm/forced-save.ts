@@ -8,6 +8,9 @@
 // request_roll (src/lib/dm/invoke-roll.ts), group_check and aoe_damage call
 // in here; cast_at_player and cast_at_enemy are meant to.
 
+import { diehardSaveAdvantage, shieldMasterSaveBonus } from "@/lib/srd/feat-combat";
+import { LUCK_SPEND } from "@/lib/dm/roll-riders";
+import { spendLuckCounter } from "@/lib/srd/class-resources";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
@@ -82,9 +85,12 @@ export function spendRollCarriers(campaignId: string, sheetId: string, spent: st
     spent.split("|"),
   );
   // Inspiration is a counter, not a condition (src/lib/dm/roll-riders.ts).
-  const resources = spent.split("|").includes(INSPIRATION_SPEND)
-    ? spendInspirationCounter(sheet.resources)
-    : undefined;
+  const carriers = spent.split("|");
+  let resources = carriers.includes(INSPIRATION_SPEND) ? spendInspirationCounter(sheet.resources) : undefined;
+  // A luck point is a counter too (Lucky).
+  if (carriers.includes(LUCK_SPEND)) {
+    resources = spendLuckCounter(resources ?? sheet.resources) ?? resources;
+  }
   const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta, ...(resources ? { resources } : {}) });
   if (updated) {
     publishPersisted(campaignId, "sheet_updated", { sheet: updated });
@@ -112,10 +118,26 @@ export function rollCharacterSave(
   // The creature forcing the save, for the features that answer it
   // (Supernatural Defense against the Monster Slayer's prey).
   from?: EncounterEnemy | null,
+  // Advantage or disadvantage the engine itself has established (Mage
+  // Slayer against an adjacent caster, Dungeon Delver against a trap).
+  claim?: { advantage: "advantage" | "disadvantage"; reason: string } | null,
+  // The effect targets this character alone (a spell cast at them, not an
+  // area): Shield Master adds the shield's AC bonus to the Dexterity save.
+  single?: boolean,
 ): ForcedSave {
   const sheet = getSheetById(stale.id) ?? stale;
+  const shieldSave = single && ability === "dex" ? shieldMasterSaveBonus(sheet) : 0;
+  // Diehard: advantage against what would exhaust them.
+  const diehard = diehardSaveAdvantage(sheet, `${detail} ${against ?? ""}`);
+  const claimed = claim ?? (diehard ? { advantage: "advantage" as const, reason: "Diehard: advantage against exhaustion" } : null);
   const resolved = resolveRollExpression(
-    { kind: "saving_throw", ability, dc, ...(against ? { against } : {}) } as RollArgs,
+    {
+      kind: "saving_throw",
+      ability,
+      dc,
+      ...(against ? { against } : {}),
+      ...(claimed ? { advantage: claimed.advantage, advantageReason: claimed.reason } : {}),
+    } as RollArgs,
     sheet,
     rollExtrasFor(campaign, sheet, "saving_throw"),
   );
@@ -128,7 +150,7 @@ export function rollCharacterSave(
   const mote = moteOf(sheet, resolved.spendInspiration);
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   const versus = authoredSaveDieVs(sheet, sheet.id, from ? { conditions: from.conditions, meta: from.conditionMeta as Record<string, { source?: string }> } : null);
-  const outcome = rollExpression(`${resolved.expression}${versus ? `+${versus.die}` : ""}`);
+  const outcome = rollExpression(`${resolved.expression}${versus ? `+${versus.die}` : ""}${shieldSave ? `+${shieldSave}` : ""}`);
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
@@ -151,6 +173,7 @@ export function rollCharacterSave(
     notes: [
       ...(resolved.conditionNotes ?? []),
       ...(versus ? [`${versus.feature}: +${versus.die} against its prey`] : []),
+      ...(shieldSave ? [`Shield Master: +${shieldSave} (the shield) on a Dexterity save against an effect that targets only them`] : []),
       ...(moteLine ? [moteLine] : []),
     ],
   };

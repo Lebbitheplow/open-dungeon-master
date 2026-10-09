@@ -29,7 +29,7 @@ import { patchSheet } from "@/lib/db/sheets";
 import { advanceClock } from "@/lib/db/clock";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { materialPatch } from "@/lib/dm/cast-material";
-import { signatureCounter, spendSignature } from "@/lib/dm/caster-features";
+import { freeCastCounter, signatureCounter, spendSignature } from "@/lib/dm/caster-features";
 import { spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
 import { castShares } from "@/lib/srd/spell-mechanics";
 import { describeCastingTime, type SpellFacts } from "@/lib/srd/spell-facts";
@@ -340,12 +340,18 @@ export function castSpell(
   // Signature Spells (wizard 20): the chosen 3rd level spells, once each per
   // short rest at 3rd level, spend their counter instead of a slot.
   const signature = input.ritual ? null : signatureCounter(sheet, facts, input.level);
+  // A feat's free cast (Fey Touched's misty step, Magic Initiate's spell)
+  // spends its once-a-day counter instead of a slot while one is left
+  // (src/lib/srd/feat-spells.ts); with the counter spent, a slot pays.
+  const freeCast = input.ritual || signature ? null : freeCastCounter(sheet, spell, facts, input.level);
   const slot: SlotPlan | { error: string } = input.ritual
     ? { kind: "none", note: `${name} cast as a ritual: no slot spent.` }
     : signature
       ? { kind: "none", note: `${name} is a Signature Spell: cast at 3rd level with no slot, once until a short rest.` }
-      : // A slot the player marked spent by hand for this cast pays for it.
-        paidByManualTick(sheet, slotPlan(sheet, spell, facts, input.level), input.level ?? facts?.level, facts?.level, Boolean(input.dryRun));
+      : freeCast
+        ? { kind: "none", note: `${name} is cast without a slot (a feat's free cast): once until a long rest.` }
+        : // A slot the player marked spent by hand for this cast pays for it.
+          paidByManualTick(sheet, slotPlan(sheet, spell, facts, input.level), input.level ?? facts?.level, facts?.level, Boolean(input.dryRun));
   if ("error" in slot) {
     return slot;
   }
@@ -368,6 +374,9 @@ export function castSpell(
   if (signature) {
     patch.resources = spendSignature(sheet.resources, signature);
   }
+  if (freeCast) {
+    patch.resources = spendSignature(sheet.resources, freeCast);
+  }
   if (Object.keys(patch).length) {
     patchSheet(sheet.id, patch);
     hooks.record(
@@ -376,6 +385,7 @@ export function castSpell(
         ...(slot.kind !== "none" ? { level: slot.level, used: slot.state.used, max: slot.state.max } : {}),
         ...(input.ritual ? { ritual: true } : {}),
         ...(signature ? { signature, level: 3 } : {}),
+        ...(freeCast ? { freeCast } : {}),
       },
       patch,
     );

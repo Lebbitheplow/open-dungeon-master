@@ -37,9 +37,13 @@ function statusTone(status: HarnessStatus): { tone: "ready" | "warn" | "off" | "
 // its own, so choosing a program never rides along with an unrelated edit.
 export function AdminHarnessSection({
   textProvider,
+  imagesBackend = "",
   onConfig,
 }: {
   textProvider: string;
+  // The server's default picture backend, to say whether the tables already
+  // paint with the agent.
+  imagesBackend?: string;
   onConfig: (config: MaskedConfig) => void;
 }) {
   const [data, setData] = useState<Payload | null>(null);
@@ -92,7 +96,14 @@ export function AdminHarnessSection({
   }
 
   const chosen = data.statuses.find((status) => status.id === draft.id) ?? null;
-  const dirty = JSON.stringify(draft) !== JSON.stringify(data.config) || useAsDefault !== (textProvider === "harness");
+  // imagesVerifiedAt is the server's own mark (a test picture sets it), never
+  // an edit: comparing it made a passing picture test read as unsaved
+  // changes and grey out "Test the table".
+  const comparable = ({ imagesVerifiedAt: _verified, ...rest }: HarnessConfig) => {
+    void _verified;
+    return JSON.stringify(rest);
+  };
+  const dirty = comparable(draft) !== comparable(data.config) || useAsDefault !== (textProvider === "harness");
   const savedChoice = Boolean(data.config.id) && data.config.id === draft.id && !dirty;
   const everywhereUnavailable = data.statuses.every((status) => status.availability !== "ok");
 
@@ -140,6 +151,21 @@ export function AdminHarnessSection({
     } finally {
       setSaving(false);
     }
+  }
+
+  // The test's "Paint the tables' pictures with it" changed the saved
+  // settings on the server: both this section's draft and the panel's copy
+  // take them up, or the next save here or there would switch it back off.
+  async function adopted() {
+    const settings = await fetch("/api/admin/settings")
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null);
+    if (settings?.config) {
+      onConfig(settings.config as MaskedConfig);
+      setDraft(settings.config.harness as HarnessConfig);
+      setData((current) => (current ? { ...current, config: settings.config.harness } : current));
+    }
+    void load(true);
   }
 
   const models = chosen?.models ?? [];
@@ -357,7 +383,9 @@ export function AdminHarnessSection({
           saved={savedChoice}
           paints={chosen.nativeImages !== "no"}
           picturesVerified={Boolean(data.config.imagesVerifiedAt)}
+          picturesForTables={data.config.images === "native" && imagesBackend === "harness"}
           onVerified={() => void load(true)}
+          onAdopted={() => void adopted()}
         />
       ) : null}
 

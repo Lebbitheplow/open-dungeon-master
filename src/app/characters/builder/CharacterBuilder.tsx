@@ -1,20 +1,23 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
-import { Wizard, type WizardStep } from "@/components/ui/Wizard";
+import { Wizard, type WizardNotice, type WizardStep } from "@/components/ui/Wizard";
 import { cn } from "@/lib/cn";
 import type { Genre } from "@/lib/schemas/game-settings";
-import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import type { Ability, CreateSheetInput } from "@/lib/schemas/sheet";
+import { SRD_SKILLS } from "@/lib/srd";
+import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { applyClassReskins, applyIdReskins } from "@/lib/worlds/reskin-logic";
+import { ABILITY_LABELS } from "./AbilityEditor";
+import type { DroppedPick } from "./reconcile";
 import { AbilitiesStep } from "./steps/AbilitiesStep";
 import { AncestryStep } from "./steps/AncestryStep";
 import { CallingStep } from "./steps/CallingStep";
 import { FinishStep } from "./steps/FinishStep";
 import { IdentityStep, type BuilderRole } from "./steps/IdentityStep";
-import { StepBlocker } from "./steps/shared";
 import { SpellsGearStep } from "./steps/SpellsGearStep";
 import {
   abilitiesBlocker,
@@ -25,15 +28,82 @@ import {
   identityBlocker,
   spellsBlocker,
   validateBuilder,
+  type BlockerTarget,
   type BuilderResult,
+  type StepBlock,
 } from "./submit";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
-import { findRace, useBuilderState } from "./useBuilderState";
+import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState";
+import { useFeatDescs } from "./useFeatDescs";
 import { usePickerGroups } from "./usePickerGroups";
 import { useTableRules } from "./useTableRules";
 
 export type { BuilderResult } from "./submit";
+
+// The step each pick is made on, by the block that collects it, so a notice
+// about a dropped pick can take the player to where it is made again.
+const STEP_OF_TARGET: Record<BlockerTarget, string> = {
+  name: "identity",
+  backgroundSkills: "identity",
+  race: "ancestry",
+  languages: "ancestry",
+  racialAsi: "ancestry",
+  racialSkills: "ancestry",
+  racialTool: "ancestry",
+  racialCantrip: "ancestry",
+  racialFeat: "ancestry",
+  ancestry: "ancestry",
+  repeatSkills: "ancestry",
+  class: "calling",
+  classSkills: "calling",
+  tools: "calling",
+  subclass: "calling",
+  styles: "calling",
+  expertise: "calling",
+  options: "calling",
+  scores: "abilities",
+  asi: "abilities",
+  spells: "spells-gear",
+  gear: "spells-gear",
+};
+
+// A dropped pick as the player knows it: skill and style ids by name, an
+// ability by its word, everything else as it was picked.
+function droppedName(drop: DroppedPick): string {
+  switch (drop.target) {
+    case "classSkills":
+    case "racialSkills":
+    case "backgroundSkills":
+    case "expertise":
+      return SRD_SKILLS.find((skill) => skill.id === drop.value)?.name ?? drop.value;
+    case "styles":
+      return FIGHTING_STYLES.find((style) => style.id === drop.value)?.name ?? drop.value;
+    case "racialAsi":
+      return ABILITY_LABELS[drop.value as Ability] ?? drop.value;
+    default:
+      return drop.value;
+  }
+}
+
+// "Changing the race set aside bonus language Dwarvish and bonus language
+// Giant: they no longer fit. Anything still owed is asked for on the
+// Ancestry step." The notice says what went, never that it must be picked
+// again: a language dropped because the new race has fewer slots is not
+// owed, and the step's own gate knows which picks are.
+function droppedMessage({ because, drops }: DroppedNotice, stepLabel: string | undefined): string {
+  const list = drops.map((drop) => `${drop.label} ${droppedName(drop)}`);
+  const named =
+    list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  const where = stepLabel ? ` Anything still owed is asked for on the ${stepLabel} step.` : "";
+  if (because === "stored character") {
+    return `${list.length === 1 ? "A stored pick is" : "Stored picks are"} no longer on offer: ${named}.${where}`;
+  }
+  if (because === "content pack") {
+    return `The content pack's rows set aside ${named}.${where}`;
+  }
+  return `Changing the ${because} set aside ${named}: ${list.length === 1 ? "it no longer fits" : "they no longer fit"}.${where}`;
+}
 
 // Full character creation flow as a six-step wizard: identity, ancestry,
 // calling, abilities, spells and gear, finishing touches, paced by the diamond
@@ -102,7 +172,13 @@ export default function CharacterBuilder({
     [rawBackgrounds, pack],
   );
 
-  const state = useBuilderState({ initial, initialLevel, fixedLevel, races, classes, backgrounds });
+  // The text of a stored character's feats, fetched before its scores are
+  // read back (a content pack half-feat's point comes off them).
+  const initialFeatDescs = useFeatDescs([
+    ...(initial?.feats ?? []),
+    ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
+  ]);
+  const state = useBuilderState({ initial, initialFeatDescs, initialLevel, fixedLevel, races, classes, backgrounds });
   const race = findRace(races, state.raceId) ?? races[0];
   const klass = classes.find((entry) => entry.id === state.classId) ?? classes[0];
   const background =
@@ -110,7 +186,13 @@ export default function CharacterBuilder({
   const archetypes = useArchetypes(klass?.id ?? "");
 
   const table = useTableRules(campaignId, klass?.id);
-  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules });
+  // The text of every feat picked, for what each grants (issue #125); a
+  // content pack's is fetched once.
+  const featDescs = useFeatDescs([
+    ...state.feats,
+    ...state.asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
+  ]);
+  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs });
   const actions = builderActions(state, klass, race, background);
   const pickers = usePickerGroups({
     races,
@@ -128,6 +210,40 @@ export default function CharacterBuilder({
 
   const paintsPortraits = offersImages(useCapabilities());
   const [cropping, setCropping] = useState(false);
+  // This builder's own root, so the footer's "Show me" looks inside it and
+  // not in another builder on the page.
+  const rootId = useId();
+
+  // Takes the player to the block that holds the missing pick: scrolls the
+  // active step to it, lights it for a moment and puts focus on its first
+  // control (issue #117).
+  function locate(target: BlockerTarget) {
+    const found = document.querySelector<HTMLElement>(
+      `[data-builder-root="${rootId}"] [data-active] [data-builder-target="${target}"]`,
+    );
+    if (!found) {
+      return;
+    }
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    found.scrollIntoView({ block: "start", inline: "nearest", behavior: still ? "auto" : "smooth" });
+    found.removeAttribute("data-flash");
+    void found.offsetWidth;
+    found.setAttribute("data-flash", "");
+    window.setTimeout(() => found.removeAttribute("data-flash"), 1600);
+    // The first control that takes the pick: a field or a select before any
+    // card, and never a block's own "what is this" button.
+    const control =
+      found.querySelector<HTMLElement>('input:not([type="hidden"]), select, textarea, button[aria-haspopup]') ??
+      found.querySelector<HTMLElement>(
+        'button:not(.creator-help):not([aria-label^="Details"]):not([aria-label^="What is"]), [tabindex="0"]',
+      );
+    control?.focus({ preventScroll: true });
+  }
+  const gate = (blocked: StepBlock | null) => ({
+    canContinue: !blocked,
+    blocker: blocked?.message ?? null,
+    onBlocked: blocked ? () => locate(blocked.target) : undefined,
+  });
 
   function submit() {
     const input = { state, derived, race, klass, background, initial };
@@ -155,7 +271,7 @@ export default function CharacterBuilder({
   // about a missing pick on the step where they can fix it.
   const blockers = {
     identity: identityBlocker(state, background),
-    ancestry: ancestryBlocker(state, race, background),
+    ancestry: ancestryBlocker(state, race, background, derived),
     calling: callingBlocker(klass, state, derived),
     abilities: abilitiesBlocker(derived, state),
     spells: spellsBlocker(state, derived, klass) ?? gearBlocker(derived),
@@ -167,7 +283,7 @@ export default function CharacterBuilder({
       key: "identity",
       label: "Identity",
       title: "Who is this?",
-      canContinue: !blockers.identity,
+      ...gate(blockers.identity),
       content: (
         <>
           <IdentityStep
@@ -181,7 +297,6 @@ export default function CharacterBuilder({
             backgroundGroups={pickers.backgroundGroups}
             background={background}
           />
-          <StepBlocker message={blockers.identity} />
         </>
       ),
     },
@@ -190,18 +305,18 @@ export default function CharacterBuilder({
       label: "Ancestry",
       title: "Ancestry",
       blurb: "Where are they from, and what does that grant?",
-      canContinue: !blockers.ancestry,
+      ...gate(blockers.ancestry),
       continueLabel: race ? `Continue as ${race.name}` : undefined,
       content: (
         <>
           <AncestryStep
             state={state}
+            derived={derived}
             race={race}
             background={background}
             races={races}
             raceGroups={pickers.raceGroups}
           />
-          <StepBlocker message={blockers.ancestry} />
         </>
       ),
     },
@@ -210,7 +325,7 @@ export default function CharacterBuilder({
       label: "Calling",
       title: "Calling",
       blurb: "The class decides how this character plays.",
-      canContinue: !blockers.calling,
+      ...gate(blockers.calling),
       content: (
         <>
           <CallingStep
@@ -218,15 +333,16 @@ export default function CharacterBuilder({
             derived={derived}
             actions={actions}
             klass={klass}
+            race={race}
             background={background}
             pack={pack}
             classes={classes}
             classGroups={pickers.classGroups}
             subclassGroups={pickers.subclassGroups}
             offersSubclass={pickers.offersSubclass}
+            subclassLockedAt={pickers.subclassLockedAt}
             chosenArchetype={pickers.chosenArchetype}
           />
-          <StepBlocker message={blockers.calling} />
         </>
       ),
     },
@@ -235,11 +351,10 @@ export default function CharacterBuilder({
       label: "Ability scores",
       title: "Ability scores",
       blurb: "How do you roll?",
-      canContinue: !blockers.abilities,
+      ...gate(blockers.abilities),
       content: (
         <>
           <AbilitiesStep state={state} derived={derived} race={race} klass={klass} />
-          <StepBlocker message={blockers.abilities} />
         </>
       ),
     },
@@ -248,7 +363,7 @@ export default function CharacterBuilder({
       label: casts ? "Spells and gear" : "Gear",
       title: casts ? "Spells and gear" : "Gear",
       blurb: casts ? "Pick what they can cast, then arm your hero." : "Arm your hero.",
-      canContinue: !blockers.spells,
+      ...gate(blockers.spells),
       content: (
         <>
           <SpellsGearStep
@@ -260,7 +375,6 @@ export default function CharacterBuilder({
             table={table}
             pack={pack}
           />
-          <StepBlocker message={blockers.spells} />
         </>
       ),
     },
@@ -287,15 +401,29 @@ export default function CharacterBuilder({
     },
   ];
 
+  // What the last change set aside, said above the steps with a way to the
+  // step it belongs to (issue #124: the list was computed and thrown away).
+  const dropped = state.dropped;
+  const droppedStep = dropped ? steps.findIndex((entry) => entry.key === STEP_OF_TARGET[dropped.drops[0].target]) : -1;
+  const notice: WizardNotice | undefined = dropped
+    ? {
+        message: droppedMessage(dropped, droppedStep >= 0 ? steps[droppedStep].label : undefined),
+        step: droppedStep >= 0 ? droppedStep : undefined,
+        onShow: () => locate(dropped.drops[0].target),
+        onDismiss: state.dismissDropped,
+      }
+    : undefined;
+
   return (
     // A bounded height so each step scrolls on its own and the Continue
     // button stays put; the fallback keeps a usable pane on a short phone.
-    <div className={cn("flex h-[max(30rem,calc(100dvh-14rem))] flex-col text-sm", className)}>
+    <div data-builder-root={rootId} className={cn("flex h-[max(30rem,calc(100dvh-14rem))] flex-col text-sm", className)}>
       <Wizard
         title={state.name.trim() || "New character"}
         variant="diamonds"
         wipe
         goldTitles
+        notice={notice}
         aside={
           race && klass
             ? `${race.name} ${klass.name} · level ${derived.effectiveLevel} · d${klass.hitDie}`

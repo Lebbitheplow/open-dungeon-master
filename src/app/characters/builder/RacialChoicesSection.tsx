@@ -10,7 +10,12 @@ import { ALL_SKILLS } from "@/lib/content/mechanics";
 import { contentSlug, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
+import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import type { FeatChoices, FeatGrantSpec, FeatPicks } from "@/lib/srd/feat-grants";
+import FeatChoicesFields, { type KnownTraining } from "./FeatChoicesFields";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
+import { Chip } from "./steps/shared";
 
 const ABILITY_NAMES: Record<Ability, string> = {
   str: "Strength",
@@ -26,9 +31,9 @@ function skillName(skillId: string) {
 }
 
 // The picks a race offers instead of fixing: half-elf's two +1 ability
-// bumps and two skills, high elf's wizard cantrip, hill dwarf's tool. Until
-// these existed the grants were silently dropped, leaving those characters
-// weaker than the rules allow.
+// bumps and two skills, high elf's wizard cantrip, hill dwarf's tool, the
+// variant human's feat. Until these existed the grants were silently
+// dropped, leaving those characters weaker than the rules allow.
 export function RacialChoicesSection({
   race,
   grantedSkills,
@@ -45,6 +50,15 @@ export function RacialChoicesSection({
   repeated = [],
   repeatSkills = [],
   onRepeatChange,
+  feats = [],
+  onFeatsChange,
+  featAbility = "",
+  onFeatAbilityChange,
+  featSpecOf,
+  featDescOf,
+  featChoices,
+  onFeatPicks,
+  known,
 }: {
   race: RaceOption;
   // Skills already granted by class and background, so they are not offered
@@ -66,12 +80,36 @@ export function RacialChoicesSection({
   repeated?: string[];
   repeatSkills?: string[];
   onRepeatChange?: (index: number, skill: string) => void;
+  // The variant human's feat, picked here with the race's other choices
+  // (issue #124: it sat four steps away and no gate asked for it), and the
+  // score a half-feat raises where it offers one (Resilient, Athlete).
+  feats?: string[];
+  onFeatsChange?: (feats: string[]) => void;
+  featAbility?: Ability | "";
+  onFeatAbilityChange?: (ability: Ability | "") => void;
+  // What the feat grants beyond its point and the picks it leaves open
+  // (src/lib/srd/feat-grants.ts), picked right under the feat.
+  featSpecOf?: (name: string) => FeatGrantSpec;
+  // The feat's text where known, for a content pack half-feat's score.
+  featDescOf?: (name: string) => string;
+  featChoices?: FeatChoices;
+  onFeatPicks?: (feat: string, picks: FeatPicks) => void;
+  known?: KnownTraining;
   inputClass: string;
 }) {
   const draconic = takesDraconicAncestry(race.id);
+  const racialFeats = onFeatsChange ? racialFeatCount(race.id) : 0;
   const hasChoices = Boolean(
-    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || repeated.length,
+    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || repeated.length || racialFeats,
   );
+  // The half-feat's choice of score, offered once the feat is picked.
+  const featScores = racialFeats ? (featAbilityIncrease(feats[0] ?? "", featDescOf?.(feats[0] ?? ""))?.from ?? []) : [];
+  const pickFeat = (name: string) => {
+    if (!onFeatsChange || feats.includes(name) || feats.length >= racialFeats) {
+      return;
+    }
+    onFeatsChange([...feats, name]);
+  };
   if (!hasChoices) {
     return null;
   }
@@ -87,7 +125,7 @@ export function RacialChoicesSection({
       <p className="text-xs text-amber-200/90">{race.name} choices</p>
 
       {race.asiChoice ? (
-        <div>
+        <div data-builder-target="racialAsi">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             <GameTerm id="ability_score">Ability</GameTerm> increases (+{race.asiChoice.amount} to{" "}
             {asiFrom
@@ -127,7 +165,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {race.skillChoice ? (
-        <div>
+        <div data-builder-target="racialSkills">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             <GameTerm id="skill">Skill</GameTerm> proficiencies ({race.skillChoice.count} of your
             choice)
@@ -161,7 +199,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {draconic && onAncestryChange ? (
-        <label className="block">
+        <label className="block" data-builder-target="ancestry">
           <span className="mb-1 block text-stone-400">
             Draconic ancestry: your breath weapon&apos;s damage and save, and the damage you resist
           </span>
@@ -183,7 +221,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {repeated.length && onRepeatChange ? (
-        <div>
+        <div data-builder-target="repeatSkills">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             Your race and background both give {repeated.map(skillName).join(" and ")}; choose
             {repeated.length === 1 ? " another skill" : ` ${repeated.length} other skills`} in its place
@@ -215,8 +253,76 @@ export function RacialChoicesSection({
         </div>
       ) : null}
 
+      {racialFeats > 0 && onFeatsChange ? (
+        <div data-builder-target="racialFeat">
+          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
+            Feat ({racialFeats === 1 ? "one" : racialFeats} of your choice)
+          </span>
+          <p className="mb-1.5 text-xs text-stone-500">
+            {`A feat is a talent other characters only earn with an ability score improvement; ${race.name} starts with one. `}
+            Browse the list (tap ⓘ to read what each does), or search by name if you already have
+            one in mind.
+          </p>
+          {feats.length ? (
+            <div className="mb-1.5 flex flex-wrap gap-1.5">
+              {feats.map((feat) => (
+                <Chip
+                  key={feat}
+                  label={feat}
+                  info={{ reference: { kind: "feats", slug: contentSlug(feat), name: feat } }}
+                  onRemove={() => onFeatsChange(feats.filter((entry) => entry !== feat))}
+                />
+              ))}
+            </div>
+          ) : null}
+          {feats.length < racialFeats ? (
+            <>
+              <CatalogBrowser
+                kind="feats"
+                buttonLabel="Browse every feat"
+                selectedNames={feats}
+                onPick={(entry) => pickFeat(entry.name)}
+                onUnpick={(featName) => onFeatsChange(feats.filter((entry) => entry !== featName))}
+                sections={[{ key: "feats:all", label: "All feats" }]}
+              />
+              <p className="mt-2 mb-1 text-xs text-stone-500">Or search by name:</p>
+              <ContentPicker
+                kind="feats"
+                placeholder="Search feats (e.g. alert, tough)"
+                onPick={(entry) => pickFeat(entry.name)}
+              />
+            </>
+          ) : null}
+          {featSpecOf && onFeatPicks && known
+            ? feats.slice(0, racialFeats).map((feat) => (
+                <FeatChoicesFields
+                  key={feat}
+                  feat={feat}
+                  desc={featDescOf?.(feat)}
+                  spec={featSpecOf(feat)}
+                  picks={featChoices?.[feat.trim().toLowerCase()]}
+                  known={known}
+                  onChange={(picks) => onFeatPicks(feat, picks)}
+                />
+              ))
+            : null}
+          {featScores.length > 1 && onFeatAbilityChange ? (
+            <label className="mt-2 block sm:w-64">
+              <span className="mb-1 block text-xs text-stone-500">{feats[0]} raises by 1</span>
+              <Select<Ability>
+                value={featScores.includes(featAbility as Ability) ? (featAbility as Ability) : featScores[0]}
+                onChange={(ability) => onFeatAbilityChange(ability)}
+                label={`${feats[0]} raises`}
+                className="w-full"
+                options={featScores.map((ability) => ({ value: ability, label: ABILITY_NAMES[ability] }))}
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
       {race.toolChoice ? (
-        <label className="block">
+        <label className="block" data-builder-target="racialTool">
           <span className="mb-1 block text-stone-400">Tool proficiency</span>
           <Select<string>
             value={tool}
@@ -230,7 +336,7 @@ export function RacialChoicesSection({
       ) : null}
 
       {race.cantripChoice ? (
-        <div>
+        <div data-builder-target="racialCantrip">
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             Bonus <GameTerm id="cantrip">cantrip</GameTerm> (one {race.cantripChoice.list}{" "}
             cantrip)

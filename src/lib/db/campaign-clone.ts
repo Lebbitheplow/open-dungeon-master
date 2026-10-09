@@ -5,6 +5,7 @@ import { getImportSourceForUser } from "@/lib/db/import-sources";
 import { runContentImport } from "@/lib/db/content-import";
 import { copyBeats } from "@/lib/db/workshop-beats";
 import { copyPackDraft } from "@/lib/db/world-pack-drafts";
+import { getCommonWorkshop, setCommonWorkshop } from "@/lib/db/workshop-common";
 import { dedupeName, IMPORT_KINDS, type ImportKind } from "@/lib/workshop/import";
 
 // Cloning a whole campaign or workshop.
@@ -98,12 +99,27 @@ export function cloneCampaign(
     return { error: result.error };
   }
 
+  // A chapter's copy draws on the same shared workshop the chapter did, so
+  // its cards' links into that workshop stay the same live rows (#159).
+  const common = source.kind === "workshop" ? getCommonWorkshop(source) : null;
+  if (common) {
+    setCommonWorkshop(created, common.id);
+  }
+  const inCommon = (kind: string, id: string) => {
+    const table = { npcs: "npcs", maps: "prepared_maps", encounters: "encounter_templates", locations: "locations" }[kind];
+    return Boolean(
+      common &&
+        table &&
+        getDatabase().prepare(`SELECT 1 FROM ${table} WHERE id = ? AND campaign_id = ?`).get(id, common.id),
+    );
+  };
+
   // The board and the world pack draft are the two things a workshop holds
   // that are not importable kinds, so the clone carries them itself.
   const copied =
     result.copied +
     (source.kind === "workshop"
-      ? copyBeats(source.id, created.id, result.idMap) +
+      ? copyBeats(source.id, created.id, result.idMap, inCommon) +
         (copyPackDraft(source.id, created.id) ? 1 : 0)
       : 0);
 

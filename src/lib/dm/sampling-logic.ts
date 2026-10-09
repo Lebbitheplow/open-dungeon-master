@@ -16,7 +16,10 @@
 // rolling while the prompt still looks fine, so the pin stays and this module
 // does not offer it at any profile.
 //
-// Dependency-free so scripts/test-sampling.mjs can import it directly.
+// Dependency-free so scripts/test-sampling.mjs can import it directly; the
+// one import is the tool-route table the backend probe shares.
+
+import { openAiToolRoute, toolRouteFromError } from "../../../scripts/lib/openai-tool-route.mjs";
 
 export type SamplingRole = "story" | "utility";
 
@@ -113,6 +116,28 @@ export function describeEndpoint(baseUrl: string): EndpointCaps {
   };
 }
 
+// How OpenAI runs function tools for a model: on Chat Completions as ever,
+// on Chat Completions with reasoning_effort "none" (GPT-6 Sol and Luna), or
+// on the Responses API alone (GPT-6.1 Sol and GPT-6 Astra). The table lives
+// in scripts/lib/openai-tool-route.mjs so the backend probe reads the same
+// one; see issue #129.
+export type OpenAiToolRoute = "chat" | "chat-no-reasoning" | "responses";
+export { openAiToolRoute, toolRouteFromError };
+
+// Whether a 4xx with tools attached means "this server has no function
+// calling", the one case the retry without tools in model-client.ts is for.
+// OpenAI implements tools on every chat model, so a tool error there is
+// never that; and any body naming reasoning_effort or /v1/responses is the
+// GPT-6 refusal (issue #129), which a retry without tools would turn into a
+// narrator running with no request_roll and no engines, in silence. Such a
+// turn fails loudly instead.
+export function toolsUnsupportedByServer(kind: EndpointKind, body: string): boolean {
+  const text = (body || "").slice(0, 4000);
+  if (kind === "openai") return false;
+  if (toolRouteFromError(text) || /reasoning_effort/i.test(text)) return false;
+  return /tool|function|not support/i.test(text);
+}
+
 // Body fields the unsupported-parameter retry may drop. Deliberately excludes
 // tools and tool_choice: a backend that cannot do function calling is already
 // handled by the retry-without-tools path, and dropping tool_choice alone
@@ -127,8 +152,12 @@ const DROPPABLE_PARAMS = new Set([
   "frequency_penalty",
   "max_tokens",
   "max_completion_tokens",
+  "max_output_tokens",
   "chat_template_kwargs",
   "stream_options",
+  // Sent as "none" on the GPT-6 models whose tools need it; a model the
+  // table is wrong about names it in its 400 and loses it here.
+  "reasoning_effort",
 ]);
 
 // Pulls the offending field name out of a 4xx body so the caller can drop it

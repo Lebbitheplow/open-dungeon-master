@@ -119,9 +119,11 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
     <section className={ui.card + " p-4"}>
       <SectionHead title="Share this workshop" glyph="system-share" level="h2" />
       <p className="mb-4 text-sm text-stone-400">
-        A bundle is everything you prepared here as one file: lore, places, NPCs, fights, tables,
-        map geometry, the board and your hand-built monsters. Pictures travel with it too, NPC
-        faces and map backdrops alike, within the size caps. Nothing from any campaign does.
+        A bundle is everything you prepared here as one file: lore, places, NPCs, fights with
+        their maps and plans, tables, maps with their doors, labels and props, the region map,
+        the board with what each card picks, and your hand-built monsters. Pictures travel with
+        it too, within the size caps. A chapter carries the records its cards pick from its
+        shared workshop. Nothing from any campaign does.
       </p>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2" data-tour="share-manifest">

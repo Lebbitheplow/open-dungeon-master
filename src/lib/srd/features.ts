@@ -6,6 +6,7 @@ import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
+import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
 
@@ -138,6 +139,17 @@ function clampLevel(level: number) {
 // outside the SRD table (custom/homebrew classes).
 export function subclassLevelFor(classId: string): number | null {
   return CLASS_FEATURES[classId]?.subclassLevel ?? null;
+}
+
+// Whether a class may pick its subclass at this level: `locked` with the
+// level it unlocks at while it may not. The builder's picker, the pack-only
+// archetypes included, waits on this: a pick made early is one the sheet
+// rules drop (sheet-legality subclassesOf), so offering it was a menu whose
+// choices vanished (issue #109). A class outside the tables (homebrew) has
+// no pick level and is never locked.
+export function subclassGate(classId: string, level: number): { pickLevel: number | null; locked: boolean } {
+  const pickLevel = subclassLevelFor(classId);
+  return { pickLevel, locked: pickLevel !== null && level < pickLevel };
 }
 
 // SRD expertise grants: levels at which a class doubles proficiency in two
@@ -274,6 +286,9 @@ export function populateFeaturesForClasses(
   existing: SheetFeature[],
   classes: Array<{ id: string; subclass: string; level: number }>,
   raceId: string,
+  // The feats on the sheet: Martial Adept, Eldritch Adept and Metamagic
+  // Adept open choice slots of their own (src/lib/srd/feat-combat.ts).
+  feats?: string[],
 ): SheetFeature[] {
   const granted: SheetFeature[] = [];
   for (const entry of classes) {
@@ -292,7 +307,7 @@ export function populateFeaturesForClasses(
   const grantedNames = new Set(granted.map((feature) => feature.name.toLowerCase()));
   const kept = pruneChoiceFeatures(
     existing.filter(
-      (feature) =>
+      (feature, feats) =>
         (feature.source === "feat" ||
           feature.source === "story" ||
           feature.source === "choice" ||
@@ -328,6 +343,7 @@ function pruneChoiceFeatures(
   features: SheetFeature[],
   classes: Array<{ id: string; subclass: string; level: number }>,
   granted: SheetFeature[],
+  feats?: string[],
 ): SheetFeature[] {
   const styleSlots = fightingStyleSlots(granted);
   const styles = new Set(chosenFightingStyles(features).map((name) => name.toLowerCase()));
@@ -339,10 +355,9 @@ function pruneChoiceFeatures(
     }
     const option = findOptionByFeatureName(feature.name);
     if (option) {
-      const total = classes.reduce(
-        (sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k),
-        0,
-      );
+      const total =
+        classes.reduce((sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k), 0) +
+        featOptionSlots(feats, option.k);
       const taken = perKind.get(option.k) ?? 0;
       if (taken >= total) {
         return false;
@@ -370,6 +385,7 @@ export function populateFeatures(
   subclass: string,
   raceId: string,
   level: number,
+  feats?: string[],
 ): SheetFeature[] {
-  return populateFeaturesForClasses(existing, [{ id: classId, subclass, level }], raceId);
+  return populateFeaturesForClasses(existing, [{ id: classId, subclass, level }], raceId, feats);
 }

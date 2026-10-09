@@ -20,6 +20,7 @@ export function featuresOn(draft: CampaignDraft, gates: WizardGates): number {
     draft.multiclassingEnabled,
     aiNarrates && draft.worldSimulation,
     draft.inventoryApprovals,
+    draft.vitalsApprovals,
     bonds,
     bonds && draft.romance !== "off",
     aiNarrates && draft.narrationGuard,
@@ -46,6 +47,7 @@ export type SheetRowKey =
   | "holdSubmissions"
   | "multiclassingEnabled"
   | "inventoryApprovals"
+  | "vitalsApprovals"
   | "boardDrawing"
   | "enemyIntent";
 
@@ -97,6 +99,7 @@ const ROWS: RowSpec[] = [
   { key: "holdSubmissions", group: "people", counted: true, tableOnly: true },
   { key: "multiclassingEnabled", group: "rules", counted: true },
   { key: "inventoryApprovals", group: "rules", counted: true },
+  { key: "vitalsApprovals", group: "rules", counted: true },
   { key: "boardDrawing", group: "rules", counted: false },
   { key: "enemyIntent", group: "rules", counted: false },
 ];
@@ -134,7 +137,7 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
     case "mapsEnabled":
       return {
         label: "Maps",
-        hint: gates.mapsAvailable ? "AI-drawn area maps" : "No image service on this server",
+        hint: gates.mapsAvailable ? "AI-drawn area maps" : "Drawn once this server can paint pictures",
       };
     case "ambienceEnabled":
       return { label: "Ambience", hint: "Room tone, music and stings" };
@@ -167,6 +170,8 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
       return { label: "Multiclassing", hint: "Second classes at level-up" };
     case "inventoryApprovals":
       return { label: "Item offers", hint: "Players confirm DM loot and gold changes" };
+    case "vitalsApprovals":
+      return { label: "Vitals confirmed", hint: "Players confirm DM damage, healing and conditions" };
     case "boardDrawing":
       return {
         label: "Players draw on the board",
@@ -209,9 +214,7 @@ export function tableSheet(draft: CampaignDraft, gates: WizardGates): SheetGroup
         counted: spec.counted,
         // One server switch away rather than a feature this install can
         // never have, so the row stays visible and says why it is off.
-        disabled:
-          (spec.key === "ttsEnabled" && !gates.ttsAvailable) ||
-          (spec.key === "mapsEnabled" && !gates.mapsAvailable),
+        disabled: spec.key === "ttsEnabled" && !gates.ttsAvailable,
         dependent: Boolean(spec.needs),
         info: spec.info ?? null,
       };

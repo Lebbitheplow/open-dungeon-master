@@ -890,6 +890,27 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_item_proposals
       ON item_proposals(campaign_id, status);
 
+    -- Disputed rulings (src/lib/dm/dispute-logic.ts): a player's objection
+    -- to a passage the AI narrated, and how whoever steers the story (or
+    -- the table, by vote) settled it.
+    CREATE TABLE IF NOT EXISTS ruling_disputes (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      message_id TEXT NOT NULL,
+      raised_by_user_id TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open','voting','upheld','overruled','withdrawn')),
+      votes_json TEXT NOT NULL DEFAULT '{}',
+      voters_json TEXT NOT NULL DEFAULT '[]',
+      decided_by_user_id TEXT,
+      decided_at TEXT,
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ruling_disputes
+      ON ruling_disputes(campaign_id, status);
+
     -- Procedural region map: seeded terrain grid (one char per tile), known
     -- locations anchored at tile coordinates, and lead-placed pins
     -- (src/lib/overworld/generate.ts). One per campaign, lazily created.
@@ -1766,6 +1787,18 @@ function ensureSchema(db: SqliteDatabase) {
   // Where each enemy starts, who is hidden, hit point and name overrides,
   // and what the fight is worth (src/lib/dm/encounter-template-logic.ts).
   addColumns("encounter_templates", [["extras_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+  // The party lead of an AI-narrated table cued this fight for the
+  // storyteller to run when the scene reaches it (src/lib/dm/prepared-
+  // encounter-tool.ts, #154). Play state: a copy never carries it.
+  addColumns("encounter_templates", [["cued", `INTEGER NOT NULL DEFAULT 0`]]);
+  // What an arrow on the storyboard means, keyed by the card it points at:
+  // one route of several, or a scene that only happens if something holds
+  // (src/lib/workshop/board.ts). An arrow with no entry is the plain "then
+  // this", which is every arrow drawn before routes existed (#157).
+  addColumns("workshop_beats", [["routes_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+  // The shared workshop a chapter workshop draws its recurring cast, places,
+  // maps and fights from (src/lib/db/workshop-common.ts, #159). '' for none.
+  addColumns("campaigns", [["common_workshop_id", `TEXT NOT NULL DEFAULT ''`]]);
 
   addColumns("encounter_enemies", [
     // Server-tracked enemy conditions (prone, poisoned, ...), applied via
@@ -2070,6 +2103,12 @@ function ensureSchema(db: SqliteDatabase) {
     ).run("sheet_portrait_backfill_done", "true", new Date().toISOString());
   }
 
+  // Workshops imported from a bundle before 0.24.9 were written with the
+  // campaign defaults (an AI narrator, no human seat), so their owner had no
+  // DM caps and the DM-only panels came up blank (issue #121). Seat every
+  // such owner as the DM. Idempotent: a repaired row no longer matches.
+  repairWorkshopDmSeats(db);
+
   // Connected agents (docs/harness-mcp-plan.md 7): a player's own agent
   // session (Claude Code, Codex, any MCP client) acting as that player over
   // /api/mcp. Only the token's hash is kept, the same rule as sessions.
@@ -2104,6 +2143,48 @@ function ensureSchema(db: SqliteDatabase) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_agent_activity_grant ON agent_activity(grant_id, id);
+
+    -- The usage ledger (src/lib/usage/ledger.ts, issue #137): one row per
+    -- AI call, counted from what the backend reported. No prompt or
+    -- transcript is kept. campaign_id and user_id are plain columns, not
+    -- foreign keys: a campaign's history outlives the campaign, and an
+    -- erased account's rows are unlinked rather than dropped.
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      campaign_id TEXT,
+      user_id TEXT,
+      kind TEXT NOT NULL CHECK (kind IN ('text','image','tts','stt','agent')),
+      role TEXT NOT NULL DEFAULT '',
+      backend TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      paid INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      units REAL NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_events_campaign ON usage_events(campaign_id, at);
+    CREATE INDEX IF NOT EXISTS idx_usage_events_user ON usage_events(user_id, at);
+
+    -- Where a row of prep came from (src/lib/db/content-origins.ts): the
+    -- campaign or workshop it was copied out of and the row it was copied
+    -- from, or 'bundle' and the portable key it arrived under. It is what
+    -- lets a second import reuse what the first one brought instead of
+    -- numbering a duplicate, and a chapter's links find the shared cast a
+    -- campaign already holds (#157, #159). kind is the import kind of the
+    -- copy (npcs, locations, maps, encounters, lore, tables, notes).
+    CREATE TABLE IF NOT EXISTS content_origins (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      row_id TEXT NOT NULL,
+      origin_id TEXT NOT NULL,
+      origin_row_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, kind, row_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_origins_origin
+      ON content_origins(campaign_id, origin_id, origin_row_id);
   `);
 }
 
@@ -2220,6 +2301,44 @@ function rebuildCharacterSheets(db: SqliteDatabase) {
 
 // Copy each library character's portrait onto linked campaign sheets that
 // have none; sheets with their own portrait are left alone.
+// A workshop is its owner's prep space and the owner is always its DM
+// (src/lib/db/workshops.ts WORKSHOP_GAME_SETTINGS). Rows that say otherwise
+// were written by the bundle importer before it shared that constant; this
+// rewrites the seat and the four settings that keep a workshop silent, and
+// leaves every other setting (genre, target party, variant rules) alone.
+// Exported so scripts/test-workshop-integration.mjs can drive it against a
+// row it has broken on purpose.
+export function repairWorkshopDmSeats(db: SqliteDatabase): number {
+  const rows = db
+    .prepare(
+      `SELECT id, owner_user_id, game_settings_json FROM campaigns
+       WHERE kind = 'workshop' AND human_dm_user_id IS NULL`,
+    )
+    .all() as Array<{ id: string; owner_user_id: string; game_settings_json: string | null }>;
+  const update = db.prepare(
+    `UPDATE campaigns SET human_dm_user_id = owner_user_id, game_settings_json = ? WHERE id = ?`,
+  );
+  let repaired = 0;
+  for (const row of rows) {
+    let settings: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(row.game_settings_json ?? "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        settings = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Unreadable settings are replaced by the workshop defaults alone.
+    }
+    settings.dmMode = "human";
+    settings.aiStorySetup = false;
+    settings.worldSimulation = false;
+    settings.holdSubmissions = false;
+    update.run(JSON.stringify(settings), row.id);
+    repaired += 1;
+  }
+  return repaired;
+}
+
 function backfillSheetPortraits(db: SqliteDatabase) {
   const rows = db
     .prepare(
@@ -2383,7 +2502,7 @@ function backfillSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
       `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json,
-              classes_json
+              classes_json, feats_json
          FROM character_sheets`,
     )
     .all() as Array<{
@@ -2396,6 +2515,7 @@ function backfillSheetResources(db: SqliteDatabase) {
     features_json: string | null;
     resources_json: string | null;
     classes_json: string | null;
+    feats_json: string | null;
   }>;
   if (!sheets.length) {
     return;
@@ -2425,15 +2545,17 @@ function backfillSheetResources(db: SqliteDatabase) {
         ? (JSON.parse(row.classes_json) as Array<{ id: string; subclass: string; level: number }>)
         : [];
       const multiclass = Array.isArray(classes) && classes.length > 1;
+      const rowFeats = row.feats_json ? (JSON.parse(row.feats_json) as string[]) : [];
       const features = multiclass
-        ? populateFeaturesForClasses(existingFeatures, classes, row.race)
-        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level);
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats);
       const resources = populateResources(
         features,
         row.level,
         mods,
         existingResources,
         multiclass ? classes : undefined,
+        rowFeats,
       );
       const nextFeatures = JSON.stringify(features);
       const nextResources = JSON.stringify(resources);

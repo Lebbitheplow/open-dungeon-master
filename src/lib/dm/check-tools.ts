@@ -1,3 +1,4 @@
+import { dungeonDelverNotices } from "@/lib/srd/feat-combat";
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
@@ -460,7 +461,12 @@ export function handleCheckNotice(
     if (veiled) {
       shifts.push(`${sheet.name}: ${veiled}`);
     }
-    const passive = passiveScore(campaign, fresh, sense) + weather.passiveMod + sight.shift - (veiled ? 5 : 0);
+    // Dungeon Delver: advantage (+5 passive) to notice a trap or a secret door.
+    const delver = sense !== "insight" && dungeonDelverNotices(fresh, typeof args.reason === "string" ? args.reason : undefined) ? 5 : 0;
+    if (delver) {
+      shifts.push(`${sheet.name}: Dungeon Delver, +5`);
+    }
+    const passive = passiveScore(campaign, fresh, sense) + weather.passiveMod + sight.shift - (veiled ? 5 : 0) + delver;
     if (passive >= dc.dc) {
       noticedBy.push(sheet.name);
     } else {

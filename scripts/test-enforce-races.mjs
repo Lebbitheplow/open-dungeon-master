@@ -91,6 +91,8 @@ function buildRace(raceId, fields = {}) {
     // soldier's skills chooses another in its place.
     racialAncestry: raceId === "dragonborn" ? "red" : "",
     repeatSkills: (race.skills ?? []).filter((skill) => ["athletics", "intimidation"].includes(skill)).map((_, index) => ["religion", "investigation"][index]),
+    // The variant human's feat, a racial choice like the rest (issue #124).
+    feats: raceId === "variant_human" ? ["Alert"] : [],
     ...fields,
   });
 }
@@ -262,6 +264,35 @@ await test("the builder asks for every choice the race offers", () => {
   assert.equal(buildRace("high_elf", { racialCantrip: "" }).blocker?.kind, "error");
   assert.equal(buildRace("variant_human", { racialSkills: [] }).blocker?.kind, "error");
   assert.equal(buildRace("human", { bonusLanguages: [] }).blocker?.kind, "error");
+});
+
+await test("a variant human leaves the builder with its feat, and the table refuses one without (issue #124)", async () => {
+  const noFeat = buildRace("variant_human", { feats: [] });
+  assert.equal(noFeat.blocker?.kind, "error");
+  assert.match(noFeat.blocker.message, /feat/i);
+  // The server holds the same rule for a character made at the table.
+  const sent = { ...buildRace("variant_human").sheet, feats: [] };
+  const refused = await atTable(sent);
+  assert.equal(refused.status, 400, "a variant human with no feat was seated");
+  assert.match(refused.error, /starts with a feat/);
+  // With the feat, both doors open and the feat is on the sheet.
+  const made = buildRace("variant_human");
+  assert.equal(made.blocker, null, made.blocker?.message);
+  assert.deepEqual(made.sheet.feats, ["Alert"]);
+  const seated = await atTable(made.sheet);
+  assert.equal(seated.status, 201, seated.error);
+  assert.deepEqual(seated.sheet.feats, ["Alert"]);
+});
+
+await test("a racial skill also taken as a class skill is asked for again, not lost (issue #124)", () => {
+  // Perception as the variant human's skill and as a fighter skill: the
+  // sheet would carry four skills where the race gave five.
+  const overlap = buildRace("variant_human", { racialSkills: ["perception"], chosenSkills: ["perception", "survival"] });
+  assert.equal(overlap.blocker?.kind, "error");
+  assert.match(overlap.blocker.message, /skill/i);
+  const apart = buildRace("variant_human", { racialSkills: ["arcana"], chosenSkills: ["perception", "survival"] });
+  assert.equal(apart.blocker, null, apart.blocker?.message);
+  assert.equal(apart.sheet.proficiencies.skills.length, 5);
 });
 
 await test("with the content pack, the SRD's races come through its rows unchanged", () => {

@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/Switch";
 import { KitButton, PanelError } from "./PanelKit";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { LeadFloorControl } from "@/app/campaigns/[campaignId]/LeadFloorControl";
+import { DmEncounterPrepPanel } from "@/app/campaigns/[campaignId]/DmEncounterPrepPanel";
+import { DmMapLibraryPanel } from "@/app/campaigns/[campaignId]/DmMapLibraryPanel";
 import {
   DirectorArmedBanner,
   DirectorPresets,
@@ -38,6 +40,12 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // directions to the AI. In an AI campaign the lead holds both; at a human-DM
 // table the lead keeps the first set and the DM has the second, and this tab
 // simply shows fewer cards.
+//
+// The prep the lead brought in from a workshop lives here too at an
+// AI-narrated table (#154): the prepared fights and the map library, the
+// same panels the DM console shows, behind the same prep authority
+// (src/lib/campaign-api.ts requirePrepAuthority). A fight is cued rather
+// than deployed, because the storyteller runs the fights there.
 
 export type LeadCampaign = Parameters<typeof EditCampaignDialog>[0]["campaign"] & {
   dmUserId?: string | null;
@@ -283,12 +291,14 @@ export function LeadPanel({
   directorArm?: Parameters<typeof DirectorArmedBanner>[0]["armed"];
 }) {
   const [editing, setEditing] = useState(false);
+  const [prepOpen, setPrepOpen] = useState(false);
   const pending = pendingCampaignNotes(notes);
   // The director route accepts any story authority, but Direct only exists
   // in the composer for a lead steering an AI narrator: a human DM has
   // replaced the thing a direction would steer, so the card follows the
   // composer rather than the route.
-  const directsAi = steersStory && (campaign.gameSettings?.dmMode ?? "ai") === "ai";
+  const mode = campaign.gameSettings?.dmMode ?? "ai";
+  const directsAi = steersStory && (mode === "ai" || mode === "steered");
   const dmUserIds = [campaign.dmUserId, campaign.assistantDmUserId].filter(
     (id): id is string => typeof id === "string" && id.length > 0,
   );
@@ -349,6 +359,31 @@ export function LeadPanel({
           <div className="flex flex-wrap gap-1.5">
             <DirectorPresets campaignId={campaignId} />
           </div>
+        </Card>
+      ) : null}
+
+      {steersStory && mode === "ai" ? (
+        <Card glyph="system-encounters" title="Prepared fights and maps">
+          <p className="text-xs text-stone-500">
+            What came in from a workshop, yours to finish: rosters, maps, rewards. Cue a fight and
+            the storyteller runs it, map and plan included, when the scene reaches it. The players
+            never see this.
+          </p>
+          {/* In the body, not the header: the panel is narrow and the title
+              long, and an aside there was pushed past the card's edge. */}
+          <KitButton
+            onClick={() => setPrepOpen((open) => !open)}
+            title="The fights and maps this table was given"
+            className="mt-2"
+          >
+            {prepOpen ? "Close the prep" : "Open the prep"}
+          </KitButton>
+          {prepOpen ? (
+            <div className="reveal mt-3 space-y-4">
+              <DmEncounterPrepPanel campaignId={campaignId} cue />
+              <DmMapLibraryPanel campaignId={campaignId} />
+            </div>
+          ) : null}
         </Card>
       ) : null}
 

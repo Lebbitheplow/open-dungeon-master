@@ -87,7 +87,7 @@ import {
   markPlayerWhispersAnswered,
 } from "@/lib/db/dm-whispers";
 import { listChapters } from "@/lib/db/chapters";
-import { listPublicCampaignNotes } from "@/lib/db/notes";
+import { listDmPrepNotes, listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
@@ -101,6 +101,7 @@ import { handleRecallStory } from "@/lib/dm/recall";
 import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
 import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
 import { buildTurnRetrieval } from "@/lib/dm/context-retrieval";
+import { estimateTokens, promptWindowTokens } from "@/lib/dm/context-budget";
 import { maybeProposeItemChange } from "@/lib/dm/proposal-intercept";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
 import {
@@ -161,6 +162,7 @@ import { betweenLinesBySheet } from "@/lib/dm/between-lines";
 import { BINDER_TOOL_NAMES, binderTools } from "@/lib/dm/binder-tools";
 import { FACTION_TOOL_NAMES, factionTools } from "@/lib/dm/faction-tools";
 import { SHOP_TOOL_NAMES, shopTools, shopsBlock } from "@/lib/dm/shop-tools";
+import { preparedEncounterTools, preparedFightsBlock } from "@/lib/dm/prepared-encounter-tool";
 import { SETTLEMENT_TOOL_NAMES, settlementTools } from "@/lib/dm/settlement-tools";
 import { placeIsWritten, populateSettlement } from "@/lib/dm/settlement";
 import { listFactions } from "@/lib/db/factions";
@@ -394,8 +396,12 @@ export async function startDmTurn(campaignId: string) {
   // Optional stages (src/lib/dm/stages.ts): all default on, so this changes
   // nothing until an operator opts out.
   const stages = campaign.gameSettings.stages;
+  // The tool definitions ride on every call of this turn and were never
+  // budgeted (issue #120), so they come off the window before any block is
+  // packed, here and in the retrieval budget.
+  const toolTokens = dmTurnToolTokens(campaign);
   const retrieval = isStageEnabled(stages, "retrieval")
-    ? await buildTurnRetrieval(campaign, history)
+    ? await buildTurnRetrieval(campaign, history, toolTokens)
     : { variantRulesBlock: renderVariantRules(campaign.gameSettings.variantRules), houseRulesBlock: "", loreBlock: "" };
   // Taken (read and deleted in one statement) rather than read-then-clear, so
   // two turns racing cannot both fire the same directive. It is consumed here,
@@ -416,13 +422,16 @@ export async function startDmTurn(campaignId: string) {
       campaign,
       // The window the prompt is actually being built against; without this
       // every budget silently fell back to the default rather than the
-      // campaign's configured model.
-      contextLimitTokens: storyContextTokens(campaign.settings),
+      // campaign's configured model. Less the tool definitions and the reply
+      // reserve (promptWindowTokens), which the packer cannot see.
+      contextLimitTokens: promptWindowTokens(storyContextTokens(campaign.settings), toolTokens),
+      toolTokens,
       variantRulesBlock: retrieval.variantRulesBlock,
       houseRulesBlock: retrieval.houseRulesBlock,
       loreBlock: retrieval.loreBlock,
       factionsBlock: renderFactionsForPrompt(listFactions(campaign.id), getParty(campaign.id).reputation, true),
       shopsBlock: shopsBlock(campaign),
+      preparedFightsBlock: preparedFightsBlock(campaign),
       members: listMembers(campaignId),
       sheets: context.sheets,
       encounter: buildEncounterState(campaignId, context.sheets),
@@ -469,6 +478,7 @@ export async function startDmTurn(campaignId: string) {
         title: note.title,
         body: note.body,
       })),
+      dmPrepNotes: listDmPrepNotes(campaignId, 8).map((note) => ({ title: note.title, body: note.body })),
       facts: listActiveFacts(campaignId).map((fact) => ({
         category: fact.category,
         subject: fact.subject,
@@ -654,12 +664,28 @@ function dmTurnTools(
     ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
     ...(inEncounter ? [] : mountTools),
     ...encounterTools(inEncounter),
+    // The table's prepared fights, by name, when it has any (#154).
+    ...(inEncounter ? [] : preparedEncounterTools(campaign)),
     castBuffTool,
     ...(inEncounter ? [] : restTools),
     ...companionTools(campaign),
     ...(leanTools ? [] : mutationTools),
     ...(imageEnabled ? [generateImageTool] : []),
     ];
+}
+
+// What the tool definitions cost on a call, by the same chars/4 proxy as
+// every other block (the local tokenizer measures the JSON at ~4.3 chars a
+// token, so the proxy errs slightly high). A fight can start mid-turn and
+// swap the set offered, so the larger of the two sets is charged: the prompt
+// is packed once, before the first call, and has to leave room for either.
+export function dmTurnToolTokens(campaign: Campaign): number {
+  const imageEnabled = campaign.settings.imageGenerationEnabled && campaign.settings.autoImages;
+  const leanTools = process.env.DM_LEAN_TOOLS === "1";
+  return Math.max(
+    estimateTokens(JSON.stringify(dmTurnTools(campaign, false, imageEnabled, leanTools))),
+    estimateTokens(JSON.stringify(dmTurnTools(campaign, true, imageEnabled, leanTools))),
+  );
 }
 
 // Every tool a turn could offer at any point, in or out of a fight. An agent
@@ -734,7 +760,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       narrationShown(campaignId, turn.id);
       publishEphemeral(campaignId, "dm_delta", { text });
     });
-    const { message, error } = await requestDmMessage(campaign.settings, turn.conversation, {
+    const { message, error, finishReason } = await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
         campaignId,
@@ -777,6 +803,18 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // empty last call is caught after the loop instead.
     lastReplyEmpty =
       !extractReplyText(message?.content).trim() && !extractToolCalls(message?.tool_calls).length;
+    // An empty reply that stopped at the output cap is the window running
+    // out, not the model declining to speak (issue #120: the prompt filled
+    // the window and a thinking model hit the cap mid-thought). Named in the
+    // log so an operator finds it without recording the requests.
+    if (lastReplyEmpty && finishReason === "length") {
+      const trace = turn.contextTrace;
+      console.warn(
+        `[dm-turn] call ${turn.callIndex}: the model hit its output cap before any text or tool call (finish_reason=length)` +
+          (trace ? `; the prompt was packed at ~${trace.promptTokens} of ${trace.limitTokens} tokens` : "") +
+          ". The context window is likely too small for the prompt plus a reply: raise it (OPENAI_COMPAT_CONTEXT) or set DM_LEAN_TOOLS=1.",
+      );
+    }
     if (lastReplyEmpty && !finalCall && !emptyRetried) {
       emptyRetried = true;
       continue;

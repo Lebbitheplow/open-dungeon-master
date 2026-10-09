@@ -29,9 +29,13 @@ export type SpellFacts = {
   // The school of magic ("evocation"), where known: the third casters learn
   // from two schools (src/lib/srd/third-caster.ts).
   school?: string | null;
+  // Whether it carries the ritual tag, where the source knows.
+  ritual?: boolean;
 };
 
-export type FeatFacts = { name: string; prerequisite: string };
+// The feat's text rides along: what it grants beyond its ability point is
+// read from it (src/lib/srd/feat-grants.ts).
+export type FeatFacts = { name: string; prerequisite: string; desc: string };
 
 export type LegalityContext = {
   door: Door;

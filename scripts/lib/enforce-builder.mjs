@@ -80,6 +80,7 @@ export async function openBuilder() {
       repeatSkills: [],
       racialCantrip: "",
       backgroundSkills: [],
+      backgroundGearPicks: [],
       bonusLanguages: [],
       asiChoices: [],
       asiRecorded: 0,
@@ -97,6 +98,7 @@ export async function openBuilder() {
       removedAutoNames: [],
       keepsStoredGear: false,
       feats: [],
+      featChoices: {},
       gold: 0,
       hpOverride: null,
       acOverride: null,
@@ -108,7 +110,9 @@ export async function openBuilder() {
   // `background` are ids from the bundled lists, or whole option rows (a
   // content-pack race). Returns the blocker the final check raised (null when
   // the sheet may be submitted), the derived numbers, and the payload.
-  function build({ race, class: classId, background, ...fields }) {
+  // `featDescs` is the text of content pack feats by lower-case name, as
+  // the wizard fetches it (useFeatDescs); ODM's own feats need none.
+  function build({ race, class: classId, background, featDescs, ...fields }) {
     const raceRow = typeof race === "string" ? races.find((entry) => entry.id === race) : race;
     const klass = typeof classId === "string" ? classes.find((entry) => entry.id === classId) : classId;
     const backgroundRow =
@@ -129,7 +133,7 @@ export async function openBuilder() {
         : {};
     const state = stateOf({ ...thrown, ...picked, ...fields });
     const derived = withoutReact(() =>
-      useBuilderDerived({ state, race: raceRow, klass, background: backgroundRow }),
+      useBuilderDerived({ state, race: raceRow, klass, background: backgroundRow, featDescs }),
     );
     const input = { state, derived, race: raceRow, klass, background: backgroundRow };
     const blocker = submit.validateBuilder(input);

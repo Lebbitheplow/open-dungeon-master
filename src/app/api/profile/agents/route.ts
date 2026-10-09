@@ -7,6 +7,7 @@ import {
   type ConnectionGrant,
 } from "@/lib/agents/grants";
 import { recentAgentActivity } from "@/lib/agents/activity";
+import { assistantRelayUrl } from "@/lib/agents/assistant-relay";
 import { getCampaignForUser } from "@/lib/db/campaigns";
 import { publicOrigin } from "@/lib/discord-oauth";
 
@@ -37,6 +38,9 @@ export async function GET(request: Request) {
   return Response.json({
     grants: listConnectionGrants(user.id).map(view),
     mcpUrl: `${publicOrigin(request)}/api/mcp`,
+    // A device world's assistant link base ("" elsewhere): the token goes on
+    // the end, and ChatGPT, Claude, Grok or Muse save the whole URL.
+    assistantUrl: assistantRelayUrl(),
     recent: recentAgentActivity({ userId: user.id, limit: 20 }),
   });
 }
@@ -79,5 +83,6 @@ export async function POST(request: Request) {
     grant: view(created.grant),
     token: created.token,
     mcpUrl: `${publicOrigin(request)}/api/mcp`,
+    assistantUrl: assistantRelayUrl(),
   });
 }

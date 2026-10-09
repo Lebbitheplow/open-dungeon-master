@@ -63,6 +63,8 @@ export const rollArgsSchema = z.object({
   // Spend the character's Inspiration (awarded by the DM) for advantage on
   // this roll. Refused when they hold none.
   useInspiration: z.preprocess((value) => (value === "false" ? false : value), z.coerce.boolean()).optional(),
+  // Spend a luck point (Lucky): an extra d20 on this roll, the best kept.
+  luck: z.preprocess((value) => (value === "false" ? false : value), z.coerce.boolean()).optional(),
   // A check contested by a creature (SRD 5.1, Contests): the server rolls
   // the creature's own check from its stat block and the character must
   // beat it (src/lib/dm/roll-gates.ts). An enemy in the fight by id, or a

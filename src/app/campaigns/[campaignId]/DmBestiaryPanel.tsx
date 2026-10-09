@@ -7,7 +7,8 @@ import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { RowMenu } from "@/app/campaigns/[campaignId]/PanelKit";
+import { Listed, RowMenu } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { DisclosureHead, quietRow } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
 import { Sheet } from "@/components/ui/Sheet";
@@ -61,25 +62,23 @@ export function DmBestiaryPanel({
   const [error, setError] = useState("");
   const rows = layout === "rows";
 
+  // A refused or failed list is settled, not dropped (issue 140), so the
+  // list says "nothing built yet" only once the server has said so.
+  const { loaded, loadError, settle } = useLoadStatus();
   const load = useCallback(
     (search?: string) =>
-      fetch(
-        `/api/campaigns/${campaignId}/dm/bestiary${
-          search ? `?q=${encodeURIComponent(search)}` : ""
-        }`,
-      )
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { monsters: Monster[]; found: Found[]; genre?: string } | null) => {
-          if (payload) {
-            setMonsters(payload.monsters);
-            setFound(payload.found);
-            setGenre(payload.genre ?? "");
-          }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        }),
-    [campaignId],
+      readLoad<{ monsters: Monster[]; found: Found[]; genre?: string }>(
+        fetch(`/api/campaigns/${campaignId}/dm/bestiary${search ? `?q=${encodeURIComponent(search)}` : ""}`),
+        "The bestiary",
+      ).then((outcome) => {
+        if (outcome.payload) {
+          setMonsters(outcome.payload.monsters);
+          setFound(outcome.payload.found);
+          setGenre(outcome.payload.genre ?? "");
+        }
+        settle(outcome);
+      }),
+    [campaignId, settle],
   );
 
   useEffect(() => {
@@ -238,14 +237,16 @@ export function DmBestiaryPanel({
         </section>
 
         <div data-tour="bestiary-list">
-          <MonsterRows
-            monsters={monsters}
-            busy={busy}
-            genre={genre}
-            onOpen={open}
-            onDuplicate={(monster) => void duplicate(monster)}
-            onDelete={(monster) => void remove(monster)}
-          />
+          <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the bestiary...">
+            <MonsterRows
+              monsters={monsters}
+              busy={busy}
+              genre={genre}
+              onOpen={open}
+              onDuplicate={(monster) => void duplicate(monster)}
+              onDelete={(monster) => void remove(monster)}
+            />
+          </Listed>
         </div>
 
         <Sheet
@@ -279,9 +280,11 @@ export function DmBestiaryPanel({
           glyph="system-bestiary"
           aside={monsters.length ? <span key={monsters.length} className="count-pop">{monsters.length}</span> : undefined}
         />
-        {monsters.length === 0 ? (
-          <EmptyState size="sm" art="chest" title="Nothing built yet. A monster made here answers to its name wherever a fight starts." />
-        ) : null}
+        <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the bestiary...">
+          {monsters.length === 0 ? (
+            <EmptyState size="sm" art="chest" title="Nothing built yet. A monster made here answers to its name wherever a fight starts." />
+          ) : null}
+        </Listed>
         {monsters.map((monster) => {
           const isOpen = openId === monster.id;
           const toggle = () => (isOpen ? setOpenId(null) : open(monster));

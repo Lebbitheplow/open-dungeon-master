@@ -9,6 +9,8 @@
 // Pure: the sheet, the spell's facts and the turn budget come in as values,
 // so scripts/test-cast-rules.mjs walks every branch without a database.
 
+import { castsWithHandsFull } from "@/lib/srd/feat-combat";
+import { featTwinOf } from "@/lib/srd/feat-effects";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
@@ -54,9 +56,11 @@ function namesOf(spell: string, facts: SpellFacts | null): Set<string> {
 const hasName = (list: string[] | undefined, names: Set<string>) =>
   (list ?? []).some((entry) => names.has(spellKeyOf(entry)));
 
+// A content pack twin of the feat (Level Up's Rite Master is Ritual
+// Caster) counts as the feat (src/lib/srd/feat-effects.ts).
 const hasFeat = (sheet: Pick<Caster, "feats" | "features">, feat: string) =>
-  [...(sheet.feats ?? []), ...(sheet.features ?? []).map((feature) => feature.name)].some((entry) =>
-    entry.toLowerCase().includes(feat),
+  [...(sheet.feats ?? []), ...(sheet.features ?? []).map((feature) => feature.name)].some(
+    (entry) => entry.toLowerCase().includes(feat) || featTwinOf(entry).includes(feat),
   );
 
 // ---- who holds the spell ----
@@ -101,6 +105,11 @@ export function spellHeldProblem(
     options.ritual &&
     views.some((view) => view.style === "spellbook" && hasName(spellbookOf(view), names))
   ) {
+    return null;
+  }
+  // Ritual Caster's book (src/lib/srd/feat-spells.ts): its rituals are read
+  // from the sheet's spellbook whatever the class, as rituals only.
+  if (options.ritual && hasFeat(sheet, "ritual caster") && hasName(casting.spellbook, names)) {
     return null;
   }
   const ready = [...new Set(lists.flatMap((entry) => [...(entry.cantrips ?? []), ...entry.known, ...entry.prepared]))];
@@ -169,7 +178,7 @@ export function componentProblem(sheet: Caster, facts: SpellFacts | null): strin
   if (!facts.somatic && !facts.material) {
     return null;
   }
-  if (handsBusy(sheet) < 2 || hasFeat(sheet, "war caster")) {
+  if (handsBusy(sheet) < 2 || castsWithHandsFull(sheet)) {
     return null;
   }
   const classIds = sheet.classes?.length ? sheet.classes.map((entry) => entry.id) : [sheet.class];

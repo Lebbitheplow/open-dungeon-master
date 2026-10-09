@@ -6,9 +6,32 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import { gearFromHomebrewData, type HomebrewGear } from "@/lib/homebrew/gear";
+import { packRowPrice } from "@/lib/srd/starting-wealth";
 import CatalogBrowser from "./CatalogBrowser";
-import ContentPicker from "./ContentPicker";
+import ContentPicker, { type PickerEntry } from "./ContentPicker";
 import { Chip } from "./steps/shared";
+
+// What a catalog row brings into the pack beside its name: a homebrew row
+// its mechanics (so the live AC and attack lines read it before it is
+// saved), a pack row its listed price, so the purse can charge for gear the
+// bundled table never priced. An arrow, a sled or a smith's tools picked
+// here used to be refused as "no listed price" while the server, pricing
+// from the same pack, would have sold it (issue #136). A magic row carries
+// no price: those are found in play.
+function pickedGear(entry: PickerEntry) {
+  if (entry.source === "homebrew") {
+    return { name: entry.name, slug: entry.slug, gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined };
+  }
+  // The server's own answer rides with the row (the items API); the row's
+  // kind and cost stand in for a client built before it did.
+  const price = entry.price ?? packRowPrice({ kind: entry.kind ?? "gear", cost: entry.cost ?? "" });
+  return {
+    name: entry.name,
+    slug: entry.slug,
+    ...(price.copper !== null ? { priceCp: price.copper } : {}),
+    ...(price.magic ? { magic: true } : {}),
+  };
+}
 
 const STARTER_PACK: Array<{ name: string; qty: number }> = [
   { name: "Backpack", qty: 1 },
@@ -30,8 +53,9 @@ export type PurseView = {
   gold: number;
   copper: number;
   source: string;
-  // The first thing the purse cannot pay for, in the rules' words.
-  problem: string | null;
+  // Everything the purse cannot pay for, in the rules' words; empty when
+  // the pack is fine.
+  problems: string[];
   // A table that rolls starting wealth: the server's roll, or the button
   // that asks for it.
   wealth: {
@@ -68,8 +92,11 @@ export default function EquipmentSection({
   purse: PurseView;
   inputClass: string;
 }) {
-  const have = new Set(equipment.map((item) => item.name));
-  const openSuggestions = suggestions.filter((entry) => !have.has(entry.name));
+  const have = new Set(equipment.map((item) => item.name.trim().toLowerCase()));
+  const openSuggestions = suggestions.filter((entry) => !have.has(entry.name.trim().toLowerCase()));
+  // Only what the kit does not already carry: most class kits come with a
+  // pack, and a second backpack on top was what blocked the step (issue #111).
+  const starterMissing = STARTER_PACK.filter((entry) => !have.has(entry.name.trim().toLowerCase()));
 
   return (
     <section className="panel rounded-xl p-4">
@@ -101,28 +128,37 @@ export default function EquipmentSection({
           </div>
         </div>
       ) : null}
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => onAddMany(STARTER_PACK)}
-          className="rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-300 hover:bg-stone-900"
+          onClick={() => onAddMany(starterMissing)}
+          disabled={!starterMissing.length}
+          title={
+            starterMissing.length
+              ? `Adds ${starterMissing.map((entry) => (entry.qty > 1 ? `${entry.name} x${entry.qty}` : entry.name)).join(", ")}.`
+              : "Your kit already carries the basics: a backpack, bedroll, rations, rope, torches and a waterskin."
+          }
+          className="rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:cursor-not-allowed disabled:opacity-50 motion-press"
         >
-          Add adventurer&apos;s starter pack
+          {starterMissing.length
+            ? `Add adventurer's starter pack (${starterMissing.length} ${starterMissing.length === 1 ? "item" : "items"} the kit lacks)`
+            : "Starter pack already in the kit"}
         </button>
         <span className="text-xs text-stone-500">plus search armor, weapons, and gear:</span>
       </div>
+      {/* What stops Continue, where the items are added: the purse's line
+          sat under the whole inventory and out of view (issue #111). */}
+      {purse.problems.length ? (
+        <ul role="alert" className="reveal mb-2 space-y-1 rounded-lg border border-amber-500/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+          {purse.problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      ) : null}
       <ContentPicker
         kind="items"
         placeholder="Search items (e.g. longsword, chain mail, rope)"
-        onPick={(entry) =>
-          onAdd({
-            name: entry.name,
-            slug: entry.slug,
-            ...(entry.source === "homebrew"
-              ? { gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined }
-              : {}),
-          })
-        }
+        onPick={(entry) => onAdd(pickedGear(entry))}
         renderMeta={(entry) => entry.rarity || entry.kind || ""}
       />
       {/* Searching only finds what you can already name. The catalog itself
@@ -132,15 +168,7 @@ export default function EquipmentSection({
         kind="items"
         buttonLabel="Browse every weapon, armor and item"
         selectedNames={equipment.map((item) => item.name)}
-        onPick={(entry) =>
-          onAdd({
-            name: entry.name,
-            slug: entry.slug,
-            ...(entry.source === "homebrew"
-              ? { gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined }
-              : {}),
-          })
-        }
+        onPick={(entry) => onAdd(pickedGear(entry))}
         onUnpick={onRemove}
         recommended={
           suggestions.length
@@ -228,9 +256,10 @@ export default function EquipmentSection({
             {purse.wealth.error}
           </p>
         ) : null}
-        {purse.problem ? (
-          <p role="alert" className={cn("reveal text-[11px] text-amber-300")}>
-            {purse.problem}
+        {purse.problems.length ? (
+          <p className={cn("reveal text-[11px] text-amber-300")}>
+            {purse.problems.length === 1 ? "One item above" : `${purse.problems.length} items above`} cannot be paid for; the
+            Continue button waits on that.
           </p>
         ) : null}
       </div>

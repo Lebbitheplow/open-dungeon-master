@@ -1,3 +1,5 @@
+import { evadesOpportunityAttacksAfterMelee, MOBILE_ATTACKED, polearmReachOpportunity } from "@/lib/srd/feat-combat";
+import { budgetFor } from "@/lib/dm/turn-budget";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getActiveEncounter, listEnemies, saveEncounter } from "@/lib/db/encounters";
@@ -80,6 +82,22 @@ export type OpportunityOutcome = {
 // The square a walker stood on when they left this reach, or null when the
 // walk never leaves it. `steps` is every square of the walk in order, the
 // starting one first.
+// The square a walk enters a reactor's reach at, or null when it never
+// does: Polearm Master's opportunity attack on a creature coming in.
+export function entersReachAt(steps: XY[], reactor: XY, reach: number): XY | null {
+  for (let index = 0; index + 1 < steps.length; index += 1) {
+    const here = steps[index];
+    const next = steps[index + 1];
+    if (
+      chebyshev(reactor.x, reactor.y, here.x, here.y) > reach &&
+      chebyshev(reactor.x, reactor.y, next.x, next.y) <= reach
+    ) {
+      return next;
+    }
+  }
+  return null;
+}
+
 export function leavesReachAt(steps: XY[], reactor: XY, reach: number): XY | null {
   for (let index = 0; index + 1 < steps.length; index += 1) {
     const here = steps[index];
@@ -171,6 +189,13 @@ export function resolveOpportunityAttacks(
       break;
     }
     if (cannotBeSeen(sheet.conditions)) {
+      continue;
+    }
+    // Mobile (and Skirmisher): a creature they attacked in melee this turn
+    // makes no opportunity attack against them (pc-attack-spend.ts marks it).
+    const moverBudget = budgetFor(encounter, characterId, 1);
+    if (moverBudget?.oncePerTurn.includes(`${MOBILE_ATTACKED}${enemy.id}`)) {
+      notes.push(`${enemy.displayName} gets no opportunity attack on ${sheet.name}: ${evadesOpportunityAttacksAfterMelee(sheet) ?? "Mobile"} (attacked in melee this turn).`);
       continue;
     }
     // Only a creature it can see provokes it: in the dark, with no
@@ -384,7 +409,9 @@ export function resolvePcOpportunityAttacks(
     if (profile.ranged) {
       continue;
     }
-    if (!leavesReachAt(steps, token, profile.reachTiles)) {
+    // Polearm Master: a creature entering the polearm's reach provokes too.
+    const entering = polearmReachOpportunity(sheet, resolved.displayName) ? entersReachAt(steps, token, profile.reachTiles) : null;
+    if (!leavesReachAt(steps, token, profile.reachTiles) && !entering) {
       continue;
     }
 

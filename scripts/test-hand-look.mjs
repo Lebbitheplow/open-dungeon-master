@@ -164,7 +164,7 @@ test("every feature the Hand deals by name has its own painting, not its class's
   const spellNames = new Set((Array.isArray(manifest) ? manifest : manifest.spells ?? Object.values(manifest)).map((spell) => spell.n.toLowerCase()));
   const names = new Set(["Flurry of Blows", "Uncanny Dodge", "Deflect Missiles", "Slow Fall", "Cutting Words", "Protection"]);
   for (const def of RESOURCE_DEFS) {
-    if (def.passive || def.id === "ki" || def.id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
+    if (def.passive || def.into || def.id === "ki" || def.id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
     if (!spellNames.has(def.displayName.toLowerCase())) names.add(def.displayName);
   }
   for (const entry of Object.values(AUTHORED_TABLE)) {

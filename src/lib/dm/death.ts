@@ -1,3 +1,4 @@
+import { deathSaveFeat } from "@/lib/srd/feat-combat";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -263,14 +264,17 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
   const tired = exhaustionRollState(sheet.exhaustion ?? 0, "saving_throw");
   // Beacon of Hope: death saves with advantage (condition-effects.ts).
   const hope = conditionDeathSaveAdvantage(sheet.conditions);
-  const advantage = mergeAdvantage([tired.advantage, hope ? "advantage" : "none"]);
+  // Diehard: advantage on death saves; Survivor: on the first of a fall
+  // (src/lib/srd/feat-combat.ts).
+  const feat = deathSaveFeat(sheet, track);
+  const advantage = mergeAdvantage([tired.advantage, hope ? "advantage" : "none", feat ? "advantage" : "none"]);
   const outcome = rollExpression(d20Expression(0, advantage));
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "saving_throw",
-    detail: `death save${tired.note ? ` (${tired.note})` : ""}${hope ? ` (${hope}: advantage)` : ""}`,
+    detail: `death save${tired.note ? ` (${tired.note})` : ""}${hope ? ` (${hope}: advantage)` : ""}${feat ? ` (${feat}: advantage)` : ""}`,
     dc: 10,
     ...(advantage === "none" ? {} : { advantage }),
     result: outcome,

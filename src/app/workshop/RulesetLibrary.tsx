@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
 import { BookmarkPlus, Check, ChevronDown, Loader2 } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
@@ -77,6 +79,10 @@ export function RulesetLibrary({
 }) {
   const [rulesets, setRulesets] = useState<Ruleset[]>([]);
   const [loading, setLoading] = useState(true);
+  // A refused or failed read is shown in the server's words with a way to
+  // ask again, never as "nothing here yet" (issue 140).
+  const { loaded, loadError, settle } = useLoadStatus();
+
   const head = useListHead(rulesets, readRuleset);
   const [openId, setOpenId] = useState<string | null>(null);
   const [changes, setChanges] = useState<RulesetChange[]>([]);
@@ -91,18 +97,14 @@ export function RulesetLibrary({
 
   const load = useCallback(
     () =>
-      fetch("/api/rulesets")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data) => {
-          if (data) {
-            setRulesets(data.rulesets ?? []);
-          }
-        })
-        .catch(() => {
-          // transient; the next action reloads
-        })
-        .finally(() => setLoading(false)),
-    [],
+      readLoad<{ rulesets?: Ruleset[] }>(fetch("/api/rulesets"), "Your rulesets").then((outcome) => {
+        settle(outcome);
+        if (outcome.payload) {
+          setRulesets(outcome.payload.rulesets ?? []);
+        }
+        setLoading(false);
+      }),
+    [settle],
   );
 
   useEffect(() => {
@@ -335,7 +337,7 @@ export function RulesetLibrary({
         </ul>
         </>
       ) : (
-        <EmptyState size="md" art="scrolls" title="No saved rulesets yet. Set the rules below the way your table plays, then save them." />
+        (loadError ? <LoadFailed error={loadError} onRetry={() => void load()} /> : loaded ? <EmptyState size="md" art="scrolls" title="No saved rulesets yet. Set the rules below the way your table plays, then save them." /> : null)
       )}
 
       <div className="flex flex-wrap items-center gap-2 text-sm" data-tour="rules-save-as">

@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { ChevronLeft, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { DiamondStepper } from "@/components/ui/DiamondStepper";
 import { GoldTitle } from "@/components/ui/GoldTitle";
 import { StepWipe, useStepWipe } from "@/components/ui/StepWipe";
@@ -42,6 +42,22 @@ export type WizardStep = {
   label?: string;
   // Replaces "Continue" on this step ("Continue as Half-Orc").
   continueLabel?: ReactNode;
+  // Why Continue is held, shown beside it and read out as its description,
+  // so the reason is never screens away from the button. With `onBlocked`
+  // a tap on the held button (or on the message) goes to the missing pick.
+  blocker?: string | null;
+  onBlocked?: () => void;
+};
+
+// Something the wizard should say above the steps until the player has seen
+// it: a change on one step that set picks aside on another. "Show me" goes
+// to `step` (when given), runs `onShow` once that step is the active one,
+// and dismisses the notice; the X dismisses it unseen.
+export type WizardNotice = {
+  message: ReactNode;
+  step?: number;
+  onShow?: () => void;
+  onDismiss: () => void;
 };
 
 export function Wizard({
@@ -57,6 +73,7 @@ export function Wizard({
   wipe = false,
   goldTitles = false,
   aside,
+  notice,
 }: {
   steps: WizardStep[];
   title: ReactNode;
@@ -71,6 +88,7 @@ export function Wizard({
   goldTitles?: boolean;
   // A quiet line at the right of the header (the character so far).
   aside?: ReactNode;
+  notice?: WizardNotice;
 }) {
   const [internalStep, setInternalStep] = useState(0);
   const controlled = controlledStep !== undefined;
@@ -83,6 +101,8 @@ export function Wizard({
   const last = step >= total - 1;
   const current = steps[step];
   const canContinue = current?.canContinue !== false;
+  const blocker = !canContinue && current?.blocker ? current.blocker : null;
+  const blockerId = useId();
   const { wiping, run } = useStepWipe(wipe);
 
   const labelOf = (s: WizardStep, index: number) =>
@@ -100,9 +120,41 @@ export function Wizard({
     else go(step - 1);
   };
   const forward = () => {
-    if (!canContinue) return;
+    if (!canContinue) {
+      current?.onBlocked?.();
+      return;
+    }
     if (last) onDone();
     else go(step + 1);
+  };
+
+  // The notice's "Show me" may have to change step first; what it then
+  // does waits until that step has rendered as the active one, so a scroll
+  // to a block on it finds the block. A ref, not state: nothing re-renders
+  // for it, the step change already does.
+  const afterStep = useRef<{ step: number; run: () => void } | null>(null);
+  useEffect(() => {
+    const pending = afterStep.current;
+    if (pending && pending.step === step) {
+      afterStep.current = null;
+      pending.run();
+    }
+  }, [step]);
+  const showNotice = () => {
+    if (!notice) {
+      return;
+    }
+    const target = Math.min(Math.max(notice.step ?? step, 0), Math.max(steps.length - 1, 0));
+    const run = () => {
+      notice.onShow?.();
+      notice.onDismiss();
+    };
+    if (target === step) {
+      run();
+      return;
+    }
+    afterStep.current = { step: target, run };
+    go(target);
   };
 
   return (
@@ -157,6 +209,31 @@ export function Wizard({
             />
           </div>
         )}
+        {notice ? (
+          <div
+            role="status"
+            className="wizard-notice reveal mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100"
+          >
+            <span className="min-w-0 flex-1">{notice.message}</span>
+            {notice.onShow || notice.step !== undefined ? (
+              <button
+                type="button"
+                onClick={showNotice}
+                className="shrink-0 whitespace-nowrap font-mono text-[10px] text-amber-300 underline-offset-2 hover:text-amber-200 hover:underline"
+              >
+                Show me
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={notice.onDismiss}
+              aria-label="Dismiss"
+              className="-mr-1 shrink-0 rounded p-0.5 text-stone-500 transition-colors hover:text-stone-300"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {/* The track holds every step side by side and translates as a whole,
@@ -196,12 +273,42 @@ export function Wizard({
       </div>
 
       <footer className="mt-4 flex shrink-0 items-center justify-end gap-2">
+        {blocker ? (
+          // The reason Continue is held, right next to it. A button when the
+          // step can take the player to the pick, a plain line otherwise.
+          current?.onBlocked ? (
+            <button
+              type="button"
+              id={blockerId}
+              onClick={current.onBlocked}
+              className="wizard-blocker reveal min-w-0 flex-1 text-left text-xs text-amber-300/90 underline-offset-2 hover:text-amber-200 hover:underline"
+            >
+              <span role="status">{blocker}</span>
+              <span className="ml-1 whitespace-nowrap font-mono text-[10px] text-stone-500">Show me</span>
+            </button>
+          ) : (
+            <p id={blockerId} role="status" className="wizard-blocker reveal min-w-0 flex-1 text-xs text-amber-300/90">
+              {blocker}
+            </p>
+          )
+        ) : null}
         {step > 0 ? (
           <button type="button" onClick={back} className={ui.btnSecondary}>
             Back
           </button>
         ) : null}
-        <button type="button" onClick={forward} disabled={!canContinue} className={cn(ui.btnPrimary, "wizard-continue")}>
+        {/* Held with aria-disabled rather than disabled when there is a
+            reason to show: a disabled button swallows the tap and cannot be
+            described, so nothing told the player why (issue #117). */}
+        <button
+          type="button"
+          onClick={forward}
+          disabled={!canContinue && !blocker}
+          aria-disabled={!canContinue || undefined}
+          aria-describedby={blocker ? blockerId : undefined}
+          title={blocker ?? undefined}
+          className={cn(ui.btnPrimary, "wizard-continue", blocker && "wizard-continue-held")}
+        >
           {last ? doneLabel : (current?.continueLabel ?? "Continue")}
         </button>
       </footer>

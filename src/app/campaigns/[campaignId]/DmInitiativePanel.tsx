@@ -155,7 +155,8 @@ export function DmInitiativePanel({
             ))}
           </p>
           <p className="text-[11px] text-stone-400">
-            Play them from the console, then hand on the turn. The players wait until you do.
+            Play them with the cards above the message box (or from the console), then hand on the
+            turn. The players wait until you do.
           </p>
           <div className="flex flex-wrap gap-1">
             <button
