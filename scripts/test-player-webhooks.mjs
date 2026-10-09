@@ -163,6 +163,25 @@ try {
       assert.equal((await workbenchCall(grant, "odm_take_action", { ...args, subscriptionId: undefined })).isError, true);
     } finally { globalThis.fetch = originalFetch; }
   });
+  await test("a refused guarded submission frees the opportunity for a corrected one", async () => {
+    narration(); const o = playerWebhookState(grant, sub.id).opportunities[0];
+    const originalFetch = globalThis.fetch; const bodies = [];
+    try {
+      globalThis.fetch = async (_url, init) => {
+        bodies.push(JSON.parse(init.body).content);
+        return bodies.length === 1 ? Response.json({ error: "It is Brannoc's turn in the initiative order." }, { status: 409 }) : Response.json({ messageId: "m" }, { status: 202 });
+      };
+      const args = { campaignId: campaign.id, subscriptionId: sub.id, opportunityId: o.opportunityId };
+      const refused = await workbenchCall(grant, "odm_take_action", { ...args, content: "I swing at the ogre." });
+      assert.equal(refused.isError, true); assert.match(refused.text, /HTTP 409/);
+      const corrected = await workbenchCall(grant, "odm_take_action", { ...args, content: "I wait and watch the door." });
+      assert.equal(corrected.isError, false);
+      assert.deepEqual(bodies, ["I swing at the ogre.", "I wait and watch the door."]);
+      // The accepted one is now the saved answer: a different third try is refused.
+      assert.equal((await workbenchCall(grant, "odm_take_action", { ...args, content: "Something else" })).isError, true);
+      assert.equal(bodies.length, 2);
+    } finally { globalThis.fetch = originalFetch; }
+  });
   await test("transport uncertainty blocks retries even after restarting the worker", async () => {
     narration(); const o = playerWebhookState(grant, sub.id).opportunities[0];
     const originalFetch = globalThis.fetch; let calls = 0;
@@ -316,6 +335,8 @@ try {
     assert.ok(!override.includes("odm_unsubscribe_player_webhook"));
     assert.ok(!override.includes("odm_dm_invoke"));
     assert.ok(override.includes("odm_get_player_webhook_opportunities"));
+    assert.ok(override.includes("odm_get_sheet") && override.includes("odm_get_messages"));
+    assert.ok(!override.includes("odm_get_character"), "the library copy is not the table's sheet");
   });
   await test("Codex failed or timed-out turns are stopped and never reported complete", async () => {
     let killed = 0;

@@ -212,6 +212,20 @@ try {
     assert.ok(isReadTool("odm_get_messages") && isReadTool("odm_get_sheet"));
   });
 
+  await test("webhook tools and guard fields stay hidden while webhooks are off", () => {
+    delete process.env.ODM_PLAYER_WEBHOOK_ORIGINS;
+    const tools = workbenchTools(grant);
+    assert.ok(!tools.some((tool) => tool.name.includes("webhook")));
+    const act = tools.find((tool) => tool.name === "odm_take_action");
+    assert.equal(act.inputSchema.properties.subscriptionId, undefined);
+    assert.equal(act.inputSchema.properties.opportunityId, undefined);
+    process.env.ODM_PLAYER_WEBHOOK_ORIGINS = "https://receiver.example";
+    const on = workbenchTools(grant);
+    assert.ok(on.some((tool) => tool.name === "odm_subscribe_player_webhook"));
+    assert.ok(on.find((tool) => tool.name === "odm_take_action").inputSchema.properties.subscriptionId);
+    delete process.env.ODM_PLAYER_WEBHOOK_ORIGINS;
+  });
+
   await test("a generic long JSON result is shrunk as JSON and says what it cut", () => {
     const entries = Array.from({ length: 400 }, (_, index) => ({ id: `lore-${index}`, text: "Old songs of the deep road. ".repeat(20) }));
     const text = JSON.stringify({ entries, total: 400 });

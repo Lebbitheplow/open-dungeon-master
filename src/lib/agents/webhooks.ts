@@ -30,6 +30,12 @@ export type PlayerWebhookEvent = {
   seq: number; occurredAt: string; pendingRollId?: string; phase?: "act" | "finish";
 };
 
+// Delivery is on only where the operator allowed at least one receiver
+// origin; with none, no subscription could be made or reached.
+export function playerWebhooksEnabled(): boolean {
+  return Boolean(process.env.ODM_PLAYER_WEBHOOK_ORIGINS?.trim());
+}
+
 // The operator explicitly approves receiver origins. No browser/agent may
 // turn an arbitrary URL into a request to the server's internal services.
 // Tailscale origins work here too; the operator owns their DNS and TLS.
@@ -122,6 +128,13 @@ export function reserveWebhookWrite(grant: ConnectionGrant, input: { subscriptio
 export function finishWebhookWrite(subscriptionId: string, opportunityId: string, tool: string, result: { text: string; isError: boolean; campaignId?: string }) {
   getDatabase().prepare(`UPDATE player_webhook_writes SET result = ? WHERE subscription_id = ? AND opportunity_id = ? AND tool = ?`)
     .run(JSON.stringify(result), subscriptionId, opportunityId, tool);
+}
+
+// Frees a reservation whose route refused it outright (a 4xx changes nothing
+// at the table), so the same opportunity can take a corrected submission.
+export function releaseWebhookWrite(subscriptionId: string, opportunityId: string, tool: string) {
+  getDatabase().prepare(`DELETE FROM player_webhook_writes WHERE subscription_id = ? AND opportunity_id = ? AND tool = ? AND result IS NULL`)
+    .run(subscriptionId, opportunityId, tool);
 }
 
 function liveGrant(sub: Subscription): ConnectionGrant | null {
@@ -267,7 +280,7 @@ export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch
 
 declare global { var __odmPlayerWebhookRunner: ReturnType<typeof setInterval> | undefined; }
 export function startPlayerWebhookRunner() {
-  if (globalThis.__odmPlayerWebhookRunner || !process.env.ODM_PLAYER_WEBHOOK_ORIGINS?.trim()) return;
+  if (globalThis.__odmPlayerWebhookRunner || !playerWebhooksEnabled()) return;
   let running = false;
   const tick = async () => {
     if (running) return;

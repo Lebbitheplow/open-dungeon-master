@@ -28,9 +28,10 @@ adapter using their client's supported API.
    Approve only origins controlled by trusted receiver operators. Allowing
    an origin authorizes outgoing requests to that host, including a private
    network host. Receiver DNS and TLS are the operator's responsibility.
-3. Restart the server. Without this setting, delivery is disabled and no
-   receiver origin can be registered. Removing an origin stops delivery to
-   it, even for an existing subscription.
+3. Restart the server. Without this setting, delivery is disabled, no
+   receiver origin can be registered, and connected agents are not shown
+   the webhook tools or the guard fields on the play tools. Removing an
+   origin stops delivery to it, even for an existing subscription.
 
 The server reconciles current player opportunities once a second. It puts
 decisions in a SQLite outbox, independently of ephemeral event callbacks,
@@ -217,12 +218,21 @@ deduplication across server restarts. The server stores each signing secret
 because it must sign outgoing requests. Protect the database and backups;
 use the existing database encryption option where supported.
 
+The agent reads the table with `odm_get_campaign`, `odm_get_sheet` (the
+table's copy of its character, not the library copy) and
+`odm_get_messages`. Every tool result stays under the agent's result cap
+as valid JSON. `odm_get_campaign` puts the safety pause, DM status, floor,
+caps, pending rolls and encounter first, then the newest messages that
+fit; `history.olderBefore` pages further back through `odm_get_messages`.
+
 For an automatic play submission, send `subscriptionId` and the matching
 current `opportunityId` with `odm_take_action`, `odm_answer_roll` or
 `odm_end_turn`. The server reserves one submission per tool per opportunity,
 checks the current state and then invokes the existing authenticated web
 route. Identical retries return its saved result. A changed submission or
-an unresolved receipt is refused. A transport failure leaves an uncertain
+an unresolved receipt is refused. A refusal from the game itself (HTTP
+4xx: not this character's turn, dice out of range) changes nothing at the
+table, so it frees the opportunity for a corrected submission. A transport failure leaves an uncertain
 receipt instead of trying again. The ordinary web-route permission and
 rules checks still apply. Interactive callers may omit these guards.
 

@@ -15,8 +15,9 @@ import { harnessMcpUrl } from "@/lib/harness/bridge";
 import { grantSessionToken, grantUser, type AgentScope, type ConnectionGrant } from "@/lib/agents/grants";
 import type { McpToolDefinition } from "@/lib/harness/types";
 import { createHash } from "node:crypto";
-import { createPlayerWebhook, deletePlayerWebhook, listPlayerWebhooks, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } from "./webhooks";
 import { boundResultText, campaignForAgent, historyForAgent } from "@/lib/agents/agent-results";
+import { finishWebhookWrite, playerWebhooksEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
+import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -41,10 +42,6 @@ type WorkbenchTool = {
 };
 
 const campaignIdProp = { campaignId: { type: "string", description: "The campaign's id (from odm_list_campaigns)." } };
-const webhookGuardProps = {
-  subscriptionId: { type: "string", description: "For webhook-driven play: your subscription id. Supply together with opportunityId to prevent duplicate/stale submissions." },
-  opportunityId: { type: "string", description: "The current opportunity from odm_get_player_webhook_opportunities. At most one submission per tool per opportunity; identical retries return the saved result." },
-};
 
 function pick(args: Args, keys: string[]): Args {
   const out: Args = {};
@@ -179,7 +176,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Dungeon Master answers in the campaign.",
     properties: {
       ...campaignIdProp,
-      ...webhookGuardProps,
+      ...WEBHOOK_GUARD_PROPS,
       content: { type: "string", maxLength: 2000 },
       kind: { type: "string", enum: ["do", "say", "ooc"] },
     },
@@ -209,7 +206,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Enter the dice you rolled at the table for a roll the Dungeon Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'.",
     properties: {
       ...campaignIdProp,
-      ...webhookGuardProps,
+      ...WEBHOOK_GUARD_PROPS,
       pendingRollId: { type: "string" },
       dice: { type: "array", items: { type: "integer", minimum: 1, maximum: 100 } },
       fallback: { type: "string", enum: ["digital"] },
@@ -223,7 +220,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     name: "odm_end_turn",
     scope: "play",
     description: "End your character's turn in combat.",
-    properties: { ...campaignIdProp, ...webhookGuardProps },
+    properties: { ...campaignIdProp, ...WEBHOOK_GUARD_PROPS },
     required: ["campaignId"],
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/encounter/end-turn`,
@@ -338,36 +335,18 @@ const WHOAMI: McpToolDefinition = {
   inputSchema: { type: "object", properties: {} },
 };
 
-const WEBHOOK_TOOLS: McpToolDefinition[] = [
-  {
-    name: "odm_get_player_webhook_opportunities", description: "Read the current legal opportunities and lifecycle for one of your webhooks. Check this and the campaign before each webhook-driven write. Old deliveries can be stale.",
-    inputSchema: { type: "object", properties: { subscriptionId: { type: "string" } }, required: ["subscriptionId"], additionalProperties: false },
-  },
-  {
-    name: "odm_subscribe_player_webhook",
-    description: "Send signed decision notifications for your active character to an operator-approved HTTPS receiver. Requires read and play. Returns a signingSecret once; save it privately in the receiver, never in chat. A receiver adapter must wake your agent; MCP alone does not. Read current campaign state before acting.",
-    inputSchema: { type: "object", properties: { ...campaignIdProp, characterId: { type: "string", description: "The active campaign sheet id, not the library id." }, url: { type: "string" } }, required: ["campaignId", "characterId", "url"], additionalProperties: false },
-  },
-  {
-    name: "odm_list_player_webhooks", description: "List this connection's webhook subscriptions and pending/failed delivery counts. Signing secrets are never listed.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
-  },
-  {
-    name: "odm_unsubscribe_player_webhook", description: "Remove one of this connection's webhooks and its delivery history. Play also stops when the connection is revoked, expires, or its active character changes.",
-    inputSchema: { type: "object", properties: { subscriptionId: { type: "string" } }, required: ["subscriptionId"], additionalProperties: false },
-  },
-];
-
 export function workbenchTools(grant: ConnectionGrant): McpToolDefinition[] {
+  // The webhook guard fields only mean something where webhooks can exist.
+  const guards = playerWebhooksEnabled();
   return [
     WHOAMI,
-    ...(grant.scopes.includes("read") && grant.scopes.includes("play") ? WEBHOOK_TOOLS : []),
+    ...webhookTools(grant),
     ...WORKBENCH_TOOLS.filter((tool) => grant.scopes.includes(tool.scope)).map((tool) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: {
         type: "object" as const,
-        properties: tool.properties,
+        properties: guards ? tool.properties : without(tool.properties, Object.keys(WEBHOOK_GUARD_PROPS)),
         ...(tool.required ? { required: tool.required } : {}),
         ...(tool.open ? {} : { additionalProperties: false }),
       },
@@ -387,18 +366,8 @@ function seatedAt(userId: string, campaignId: string, characterId: string): bool
 export type WorkbenchOutcome ={ text: string; isError: boolean; campaignId?: string };
 
 export async function workbenchCall(grant: ConnectionGrant, name: string, args: Args): Promise<WorkbenchOutcome> {
-  if (WEBHOOK_TOOLS.some((tool) => tool.name === name)) {
-    if (!grant.scopes.includes("read") || !grant.scopes.includes("play")) return { text: "Webhooks need read and play scopes.", isError: true };
-    try {
-      if (name === "odm_subscribe_player_webhook") {
-        if (typeof args.campaignId !== "string" || typeof args.characterId !== "string" || typeof args.url !== "string") throw new Error("Supply campaignId, characterId and url.");
-        return { text: JSON.stringify(createPlayerWebhook(grant, { campaignId: args.campaignId, characterId: args.characterId, url: args.url })), isError: false, campaignId: args.campaignId };
-      }
-      if (name === "odm_list_player_webhooks") return { text: JSON.stringify({ subscriptions: listPlayerWebhooks(grant.id) }), isError: false };
-      if (typeof args.subscriptionId !== "string") throw new Error("Supply subscriptionId.");
-      if (name === "odm_get_player_webhook_opportunities") return { text: JSON.stringify(playerWebhookState(grant, args.subscriptionId)), isError: false };
-      return { text: JSON.stringify({ removed: deletePlayerWebhook(grant.id, args.subscriptionId) }), isError: false };
-    } catch (error) { return { text: error instanceof Error ? error.message : "Webhook request failed.", isError: true }; }
+  if (isWebhookTool(name)) {
+    return webhookToolCall(grant, name, args);
   }
   if (name === "odm_whoami") {
     const user = grantUser(grant);
@@ -512,6 +481,17 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   const result = !response.ok
     ? { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId }
     : { text: text || "{}", isError: false, campaignId };
-  if (guarded) finishWebhookWrite(args.subscriptionId as string, args.opportunityId as string, name, result);
+  if (guarded) {
+    const subscriptionId = args.subscriptionId as string;
+    const opportunityId = args.opportunityId as string;
+    // A refusal (4xx) is answered before the route changes anything, so the
+    // opportunity is freed for a corrected submission ("not your turn yet",
+    // dice out of range). Anything else is the saved answer for a retry.
+    if (response.status >= 400 && response.status < 500) {
+      releaseWebhookWrite(subscriptionId, opportunityId, name);
+    } else {
+      finishWebhookWrite(subscriptionId, opportunityId, name, result);
+    }
+  }
   return result;
 }
