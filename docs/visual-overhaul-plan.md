@@ -308,6 +308,7 @@ vendor `public/` from git HEAD:
 | `public/assets/tiles/` | 9 MB | 182 materials × 3 variants at 256 px WebP, quality 82, about 14 KB each |
 | `public/assets/props/` | 6 MB | about 160 objects at 256 px alpha WebP plus 40 decals |
 | `public/fx/` | 8 MB | raised from the parity plan's 1.5 MB for the flipbooks in 8b.3 |
+| `public/assets/placeholders/` | 9 MB total; 48 KB per plate, 128 KB per campaign, map or misc scene | raised from 3.5 MB for the 76 painted 704x400 scenes (WebP quality 85, about 70 KB each) and the painted race and class portraits; about 7.8 MB with both |
 | `public/assets/icons/` | 12 MB | 2,008 icons at 128 px alpha WebP, measured 4.7 KB each |
 | `public/assets/ui/` | 3 MB | the scroll, the book, plates and frames |
 | `public/assets/tiles/` and `props/` with the genre sets | 9 MB becomes 30 MB, 6 MB becomes 12 MB | five more genres (8b.1); the desktop installer carries it all, Android fetches at runtime from the host and caches |

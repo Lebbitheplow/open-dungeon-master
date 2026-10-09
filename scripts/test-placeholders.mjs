@@ -28,9 +28,21 @@ const SET_DIR = path.join(PUBLIC, "assets", "placeholders");
 
 // The whole set rides inside the desktop app and the Android APK. These are
 // ceilings, not targets: generate-placeholders.mjs encodes at 256px squares
-// and 704px landscapes at quality 70, which lands well under both.
-const BUDGET_TOTAL_BYTES = 3.5 * 1024 * 1024;
+// and 704px landscapes at quality 70, which lands well under both. The
+// campaign, map and misc scenes are painted art supplied as finished 704x400
+// WebP at quality 85 rather than rendered by that script.
+// Raised from 3.5 MB for the full-colour painted campaign, map and misc scene
+// art (704x400 WebP at quality 85, no visible loss), which replaces the amber
+// silhouettes: 76 scenes at about 70 KB each, 5.1 MB of the 6.7 MB set. The
+// cap is one total across every placeholder, so it also leaves room for the
+// painted race and class portraits (PR #174, about +1.1 MB) landing alongside:
+// both together ship about 7.8 MB.
+const BUDGET_TOTAL_BYTES = 9 * 1024 * 1024;
 const BUDGET_FILE_BYTES = 48 * 1024;
+// The painted scenes get their own per-file ceiling (largest is about 104 KB);
+// every other plate keeps the 48 KB one.
+const SCENE_GROUPS = new Set(["campaign", "map", "misc"]);
+const BUDGET_SCENE_FILE_BYTES = 128 * 1024;
 
 const failures = [];
 const reached = new Set();
@@ -210,8 +222,9 @@ let totalBytes = 0;
 for (const url of shipped) {
   const size = statSync(path.join(PUBLIC, url.replace(/^\//, ""))).size;
   totalBytes += size;
-  if (size > BUDGET_FILE_BYTES) {
-    failures.push(`${url} is ${(size / 1024).toFixed(0)} KB, over the ${BUDGET_FILE_BYTES / 1024} KB ceiling`);
+  const ceiling = SCENE_GROUPS.has(url.split("/")[3]) ? BUDGET_SCENE_FILE_BYTES : BUDGET_FILE_BYTES;
+  if (size > ceiling) {
+    failures.push(`${url} is ${(size / 1024).toFixed(0)} KB, over the ${ceiling / 1024} KB ceiling`);
   }
 }
 // The effect assets a feature ships under public/fx (stings, glyph sprites;
