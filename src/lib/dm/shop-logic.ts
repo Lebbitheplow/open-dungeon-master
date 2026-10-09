@@ -4,6 +4,11 @@ import { COPPER_PER_GOLD, formatCopper, parseCoins } from "@/lib/srd/currency";
 // stocking. Prices come from the content pack's cost strings, marked up by
 // the settlement's size; a haggle moves the markup one step; the keeper
 // buys at half. Stock is a list of lines the DM or a preset writes.
+//
+// A shelf a person wrote by hand is kept apart from the stock it starts
+// (#171): the stock is what is on the shelf now, after the table's
+// purchases and sales; the prepared shelf is what a restock refills it to.
+// A shop stocked from the pack has no prepared shelf and rerolls instead.
 
 export const SHOP_SIZES = ["hamlet", "village", "town", "city"] as const;
 export type ShopSize = (typeof SHOP_SIZES)[number];
@@ -12,6 +17,11 @@ export const SHOP_KINDS = ["general", "smith", "apothecary", "outfitter", "curio
 export type ShopKind = (typeof SHOP_KINDS)[number];
 
 export type StockLine = { itemName: string; qty: number; priceCp: number; note: string };
+
+// The dearest a shelf line may be priced, in copper (a million gold): high
+// enough for any legendary item, low enough that a typed slip cannot put a
+// number on the shelf no purse could ever be compared against.
+export const MAX_STOCK_PRICE_CP = 100_000_000;
 
 export type Shop = {
   id: string;
@@ -23,6 +33,8 @@ export type Shop = {
   kind: ShopKind;
   size: ShopSize;
   stock: StockLine[];
+  // The shelf as its author wrote it, or null for a shop the pack stocks.
+  preparedStock: StockLine[] | null;
   // A multiplier on the pack's cost: 1.0 is list price. Clamped to the ladder.
   markup: number;
   buys: boolean;
@@ -161,6 +173,19 @@ export function stockFromPool(
     picked.push({ itemName: item.name, qty, priceCp: item.cp, note: "" });
   }
   return picked.sort((a, b) => a.itemName.localeCompare(b.itemName));
+}
+
+// A restock of a prepared shelf: every prepared line back up to its
+// prepared count at its prepared price, in the author's order, and anything
+// the keeper bought from the party since still on the shelf after them.
+export function refillStock(stock: StockLine[], prepared: StockLine[]): StockLine[] {
+  const now = new Map(stock.map((line) => [line.itemName.toLowerCase(), line]));
+  const refilled = prepared.map((line) => {
+    const current = now.get(line.itemName.toLowerCase());
+    return { ...line, qty: Math.max(line.qty, current?.qty ?? 0) };
+  });
+  const authored = new Set(prepared.map((line) => line.itemName.toLowerCase()));
+  return [...refilled, ...stock.filter((line) => !authored.has(line.itemName.toLowerCase()))];
 }
 
 // The item kinds each shop kind stocks, for the pool the tool draws from.

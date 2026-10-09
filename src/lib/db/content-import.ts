@@ -21,6 +21,7 @@ import {
   type RowKind,
 } from "@/lib/db/content-copy";
 import { getCommonWorkshop } from "@/lib/db/workshop-common";
+import { normalizeStock } from "@/lib/db/shops";
 import {
   IMPORT_KINDS,
   LINK_KINDS,
@@ -108,6 +109,19 @@ export function readImportSource(sourceId: string): ImportSource {
     `SELECT id, name FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
     sourceId,
   ) as ImportSource["maps"];
+  // A shop's place and keeper ride along so the planner can say which
+  // shops would arrive unplaced or unkept, and its shelf's size for the
+  // preview (#171). The shelf counted is the one a copy starts with.
+  source.shops = allRows(
+    `SELECT id, name, location_id, keeper_npc_id, stock_json, prepared_stock_json FROM shops WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    sourceId,
+  ).map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    ...(row.location_id ? { placeId: String(row.location_id) } : {}),
+    ...(row.keeper_npc_id ? { keeperId: String(row.keeper_npc_id) } : {}),
+    lines: normalizeStock(parseJson(String(row.prepared_stock_json || row.stock_json || "[]"), [])).length,
+  }));
 
   const beats = allRows(
     `SELECT COUNT(*) AS n FROM workshop_beats WHERE campaign_id = ?`,
@@ -142,6 +156,7 @@ export function readTargetExisting(campaignId: string): ImportExisting {
   existing.tables = names(`SELECT name FROM roll_tables WHERE campaign_id = ?`);
   existing.npcs = names(`SELECT name FROM npcs WHERE campaign_id = ?`);
   existing.maps = names(`SELECT name FROM prepared_maps WHERE campaign_id = ?`);
+  existing.shops = names(`SELECT name FROM shops WHERE campaign_id = ?`);
   // A board is compiled rather than copied, so there is no name to collide
   // on. What matters at the target is whether an arc already exists, which
   // planImport is told separately.
@@ -156,7 +171,7 @@ export function readTargetExisting(campaignId: string): ImportExisting {
   return existing;
 }
 
-const ROW_KIND_SET = new Set<string>(["maps", "locations", "lore", "tables", "encounters", "npcs"]);
+const ROW_KIND_SET = new Set<string>(["maps", "locations", "lore", "tables", "encounters", "npcs", "shops"]);
 
 // Live copies at the target of the source's rows, per import kind, for the
 // planner's "already here" (src/lib/db/content-origins.ts).
@@ -315,7 +330,7 @@ export function runContentImport(input: {
   const taken = new Map<RowKind, Set<string>>();
   const takenFor = (kind: RowKind) => {
     const label = kind === "lore" ? "title" : "name";
-    const table = { maps: "prepared_maps", locations: "locations", lore: "lore_entries", tables: "roll_tables", encounters: "encounter_templates", npcs: "npcs" }[kind];
+    const table = { maps: "prepared_maps", locations: "locations", lore: "lore_entries", tables: "roll_tables", encounters: "encounter_templates", npcs: "npcs", shops: "shops" }[kind];
     let set = taken.get(kind);
     if (!set) {
       set = new Set(allRows(`SELECT ${label} AS name FROM ${table} WHERE campaign_id = ?`, campaignId).map((row) => String(row.name).trim().toLowerCase()));
@@ -392,6 +407,11 @@ export function runContentImport(input: {
       // section 6), renumbered, with each member's link remapped.
       copyFactions(main);
       copyKind(main, "npcs");
+    }
+    // After the places and the cast, so a shop finds its place and keeper
+    // when they travel with it (#171).
+    if (selected.has("shops")) {
+      copyKind(main, "shops");
     }
     // The storyboard is the one kind that is COMPILED rather than copied:
     // one board becomes lore entries, quests, prepared encounters, DM-only

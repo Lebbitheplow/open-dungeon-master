@@ -14,6 +14,8 @@ export const IMPORT_KINDS = [
   "encounters",
   "tables",
   "npcs",
+  // Shops with their place, keeper, policy and shelf (#171).
+  "shops",
   "maps",
   "storyboard",
   "houseRules",
@@ -27,6 +29,7 @@ export const IMPORT_KIND_LABELS: Record<ImportKind, string> = {
   encounters: "Prepared encounters",
   tables: "Roll tables",
   npcs: "NPCs",
+  shops: "Market",
   maps: "Battle maps",
   storyboard: "The storyboard",
   houseRules: "House rules and variant rules",
@@ -54,7 +57,19 @@ export const SINGULAR_KINDS: ReadonlySet<ImportKind> = new Set([
 // Encounters and places carry `mapId`, the prepared map they are bound to,
 // so the planner can say before the button which of them will arrive
 // without it (#153).
-export type NamedRow = { id: string; name: string; monsters?: string[]; mapId?: string };
+//
+// Shops carry the place they stand at, their keeper and how many lines
+// their shelf holds, so the planner can say which shops arrive unplaced or
+// unkept and what stock comes with them (#171).
+export type NamedRow = {
+  id: string;
+  name: string;
+  monsters?: string[];
+  mapId?: string;
+  placeId?: string;
+  keeperId?: string;
+  lines?: number;
+};
 
 // What a storyboard card can point at, as the import kinds those rows are.
 export const LINK_KINDS = ["npcs", "maps", "encounters", "locations"] as const;

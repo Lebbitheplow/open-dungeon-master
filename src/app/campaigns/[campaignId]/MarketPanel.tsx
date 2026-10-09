@@ -2,7 +2,7 @@
 
 import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -12,13 +12,17 @@ import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { formatCopper } from "@/lib/srd/currency";
-import { KitButton, LoadFailed, panelField, PanelLoading } from "./PanelKit";
+import { KitButton, LoadFailed, panelField, PanelLoading, SettingToggle } from "./PanelKit";
+import { MarketShopEditor, type Named } from "./MarketShopEditor";
+import type { StockLine } from "@/lib/dm/shop-logic";
 
 // The market (docs/vtt-parity-implementation-plan.md 11.1): the shops at
 // the party's place, stock as tiles with a price chip in coin, a Buy on
 // each, the pack laid out to sell, a haggle button, and a coin arc into
-// the purse when money moves. Whoever steers the story opens shops here
-// or in the workshop and sees every shop in the world.
+// the purse when money moves. Whoever steers the story sees every shop in
+// the world; whoever holds the prep (the DM seat, the lead of an
+// AI-narrated table, the workshop's author: the server says which, #171)
+// opens shops here or in the workshop and writes their shelves.
 
 type StockView = { itemName: string; qty: number; priceCp: number; askingCp: number; note: string };
 type ShopView = {
@@ -26,6 +30,10 @@ type ShopView = {
   name: string;
   kind: string;
   size: string;
+  locationId: string;
+  keeperNpcId: string;
+  restockDays: number;
+  preparedStock: StockLine[] | null;
   locationName: string;
   keeperName: string;
   keeperPortrait: string;
@@ -56,8 +64,8 @@ export function MarketPanel({
   campaignId: string;
   // Story authority sees every shop and where it stands.
   steersStory: boolean;
-  // Holds the DM seat: opening and closing shops are DM-only routes, so an
-  // AI campaign's lead browses the market without them.
+  // Holds the DM seat. The server's word (`canPrep`) decides once the
+  // market has loaded; this only covers the first paint.
   isDm?: boolean;
   mySheet: CharacterSheet | null;
   refreshKey?: number;
@@ -65,6 +73,10 @@ export function MarketPanel({
 }) {
   const [shops, setShops] = useState<ShopView[] | null>(null);
   const [here, setHere] = useState<{ id: string; name: string } | null>(null);
+  const [places, setPlaces] = useState<Named[]>([]);
+  const [keepers, setKeepers] = useState<Named[]>([]);
+  const [canPrep, setCanPrep] = useState(isDm);
+  const [editing, setEditing] = useState("");
   // A refused or failed read is shown in the server's words with a way to
   // ask again, never as "nothing here yet" (issue 140).
   const { loaded, loadError, settle } = useLoadStatus();
@@ -72,12 +84,15 @@ export function MarketPanel({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [opening, setOpening] = useState(false);
-  const [draft, setDraft] = useState({ name: "", kind: "general", size: "village" });
+  const [draft, setDraft] = useState({ name: "", kind: "general", size: "village", locationId: "", keeperNpcId: "", stockFromPack: true });
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    readLoad<{ shops?: ShopView[]; here?: { id: string; name: string } | null }>(fetch(`/api/campaigns/${campaignId}/shops`), "The market").then((outcome) => {
+    readLoad<{ shops?: ShopView[]; here?: { id: string; name: string } | null; places?: Named[]; keepers?: Named[]; canPrep?: boolean }>(
+      fetch(`/api/campaigns/${campaignId}/shops`),
+      "The market",
+    ).then((outcome) => {
       if (cancelled) {
         return;
       }
@@ -85,12 +100,15 @@ export function MarketPanel({
       if (outcome.payload) {
         setShops(outcome.payload.shops ?? []);
         setHere(outcome.payload.here ?? null);
+        setPlaces(outcome.payload.places ?? []);
+        setKeepers(outcome.payload.keepers ?? []);
+        setCanPrep(outcome.payload.canPrep ?? isDm);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [campaignId, refreshKey, reload, settle]);
+  }, [campaignId, refreshKey, reload, settle, isDm]);
 
   async function counter(shop: ShopView, action: "buy" | "sell" | "haggle", item = "") {
     setBusy(`${shop.id}:${action}:${item}`);
@@ -118,10 +136,24 @@ export function MarketPanel({
       return;
     }
     setBusy("open");
+    setError("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/shops`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+      const response = await fetch(`/api/campaigns/${campaignId}/shops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...draft, locationId: draft.locationId || here?.id || "" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(String(data.error ?? "The shop could not be opened."));
+        return;
+      }
       setOpening(false);
-      setDraft({ name: "", kind: "general", size: "village" });
+      setDraft({ name: "", kind: "general", size: "village", locationId: "", keeperNpcId: "", stockFromPack: true });
+      // A shop started bare opens straight into its shelf.
+      if (!draft.stockFromPack && data.shop?.id) {
+        setEditing(String(data.shop.id));
+      }
       setReload((current) => current + 1);
     } finally {
       setBusy("");
@@ -164,14 +196,38 @@ export function MarketPanel({
       />
       {here ? <p className="-mt-1 text-xs text-stone-500">at {here.name}</p> : null}
       {error ? <p role="status" className="live-in text-xs text-amber-300/90">{error}</p> : null}
-      {isDm ? (
+      {canPrep ? (
         opening ? (
           <div className="panel reveal flex flex-wrap items-center gap-1.5 rounded-lg p-2.5">
             <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="Marla's Sundries" aria-label="Shop name" className={cn(panelField, "min-w-[9rem] flex-1")} />
             <Select size="sm" label="Kind of shop" value={draft.kind} options={KIND_OPTIONS} onChange={(kind) => setDraft({ ...draft, kind })} className="pk-w-28" />
             <Select size="sm" label="Size of the place" value={draft.size} options={SIZE_OPTIONS} onChange={(size) => setDraft({ ...draft, size })} className="pk-w-24" />
+            {places.length ? (
+              <Select
+                size="sm"
+                label="Where it stands"
+                value={draft.locationId || here?.id || ""}
+                options={[{ value: "", label: "No place yet" }, ...places.map((place) => ({ value: place.id, label: place.name, icon: { kind: "glyph" as const, key: "tab-map" } }))]}
+                onChange={(locationId) => setDraft({ ...draft, locationId })}
+                className="min-w-[9rem] flex-1"
+              />
+            ) : null}
+            {keepers.length ? (
+              <Select
+                size="sm"
+                label="Who keeps it"
+                value={draft.keeperNpcId}
+                options={[{ value: "", label: "Nobody named" }, ...keepers.map((npc) => ({ value: npc.id, label: npc.name, icon: { kind: "glyph" as const, key: "system-cast" } }))]}
+                onChange={(keeperNpcId) => setDraft({ ...draft, keeperNpcId })}
+                className="min-w-[9rem] flex-1"
+              />
+            ) : null}
+            <SettingToggle on={draft.stockFromPack} onToggle={() => setDraft({ ...draft, stockFromPack: !draft.stockFromPack })}>
+              Stock the shelves from the content pack
+            </SettingToggle>
+            {draft.stockFromPack ? null : <span className="live-in basis-full text-[11px] text-stone-500">It opens bare, straight into its shelf, for you to write line by line.</span>}
             <KitButton tone="primary" disabled={busy === "open" || !draft.name.trim()} busy={busy === "open"} onClick={() => void open()}>
-              Open here
+              Open it
             </KitButton>
             <KitButton onClick={() => setOpening(false)}>Cancel</KitButton>
           </div>
@@ -181,15 +237,38 @@ export function MarketPanel({
           </KitButton>
         )
       ) : null}
-      {!shops.length ? (loadError ? <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} /> : loaded ? <EmptyState size="sm" art="chest" title={here ? `No shops at ${here.name}.` : "The party is nowhere with a market yet."} /> : null) : null}
+      {!shops.length ? (
+        loadError ? (
+          <LoadFailed error={loadError} onRetry={() => setReload((current) => current + 1)} />
+        ) : loaded ? (
+          <EmptyState size="sm" art="chest" title={here ? `No shops at ${here.name}.` : canPrep ? "No shops yet. Open one and give it a shelf." : "The party is nowhere with a market yet."} />
+        ) : null
+      ) : null}
       {shops.map((shop) => {
         const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
         const shopItems: ContextMenuItem[] = [
           ...(canHaggle ? [{ id: "haggle", label: "Haggle", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") }] : []),
-          ...(isDm ? [{ id: "close", label: `Close ${shop.name}`, glyph: "quest-failed", tone: "danger" as const, separated: canHaggle, onSelect: () => void close(shop) }] : []),
+          ...(canPrep ? [{ id: "edit", label: "Edit the shop and its shelf", glyph: "tab-shop", separated: canHaggle, onSelect: () => setEditing(shop.id) }] : []),
+          ...(canPrep ? [{ id: "close", label: `Close ${shop.name}`, glyph: "quest-failed", tone: "danger" as const, onSelect: () => void close(shop) }] : []),
         ];
+        if (editing === shop.id) {
+          return (
+            <MarketShopEditor
+              key={shop.id}
+              campaignId={campaignId}
+              shop={shop}
+              places={places}
+              keepers={keepers}
+              onSaved={() => {
+                setEditing("");
+                setReload((current) => current + 1);
+              }}
+              onCancel={() => setEditing("")}
+            />
+          );
+        }
         return (
-          <section key={shop.id} className="panel space-y-2 rounded-lg p-2.5">
+          <section key={shop.id} className="panel @container space-y-2 rounded-lg p-2.5">
             <ContextMenu items={shopItems} label={shop.name} className="group flex items-center gap-2">
               {shop.keeperPortrait ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -205,7 +284,7 @@ export function MarketPanel({
                   {shop.kind}
                   {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
                   {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}
-                  {shop.markup !== 1 ? ` (prices ${Math.round((shop.markup - 1) * 100)}%)` : ""}
+                  {shop.markup !== 1 ? ` (prices ${shop.markup > 1 ? "+" : ""}${Math.round((shop.markup - 1) * 100)}%)` : ""}
                 </p>
               </div>
               {canHaggle ? (
@@ -213,13 +292,21 @@ export function MarketPanel({
                   Haggle
                 </KitButton>
               ) : null}
-              {isDm ? (
-                <KitButton tone="iconDanger" always aria-label={`Close ${shop.name}`} onClick={() => void close(shop)}>
-                  <Trash2 className="size-3.5" />
-                </KitButton>
+              {canPrep ? (
+                <>
+                  <KitButton tone="icon" always aria-label={`Edit ${shop.name}`} onClick={() => setEditing(shop.id)}>
+                    <Pencil className="size-3.5" />
+                  </KitButton>
+                  <KitButton tone="iconDanger" always aria-label={`Close ${shop.name}`} onClick={() => void close(shop)}>
+                    <Trash2 className="size-3.5" />
+                  </KitButton>
+                </>
               ) : null}
             </ContextMenu>
-            <ul className="stagger-up grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {/* Columns follow the panel, not the window: the side panel is
+                narrow on the widest screen, and three columns there left
+                no room for a price. */}
+            <ul className="stagger-up grid grid-cols-2 gap-1.5 @lg:grid-cols-3">
               {shop.stock.map((line) => {
                 const buying = busy === `${shop.id}:buy:${line.itemName}`;
                 const cannotBuy = Boolean(busy) || purse < line.askingCp;
@@ -235,8 +322,8 @@ export function MarketPanel({
                       <GameIcon icon={{ kind: "item", key: line.itemName, family: "item-gear" }} size="size-7" />
                       <span className="truncate">{line.itemName}</span>
                     </span>
-                    <span className="mt-1.5 flex items-center justify-between gap-1">
-                      <span className="pk-chip text-amber-200">
+                    <span className="mt-1.5 flex flex-wrap items-center justify-between gap-1">
+                      <span className="pk-chip max-w-full whitespace-normal text-amber-200">
                         <GameIcon icon={{ kind: "glyph", key: coinGlyph(line.askingCp) }} size="size-4" />
                         {formatCopper(line.askingCp)}
                       </span>

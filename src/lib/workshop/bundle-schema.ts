@@ -49,6 +49,7 @@ export const BUNDLE_LIMITS = {
   monsters: 200,
   homebrew: 400,
   pregens: 12,
+  shops: 200,
 } as const;
 
 export const BUNDLE_KINDS = Object.keys(BUNDLE_LIMITS) as Array<keyof typeof BUNDLE_LIMITS>;
@@ -252,6 +253,35 @@ const overworldSchema = z.object({
   backdrop: bundleImageSchema,
 });
 
+// A shelf line as the Market writes it. Lines are held to the same 60 per
+// shelf the editor allows; an empty one (no name, or none in stock) is
+// accepted here and left out on import, and the preview says how many.
+const stockLineSchema = z.object({
+  itemName: z.string().trim().max(80),
+  qty: z.number().int().min(0).max(999),
+  priceCp: z.number().int().min(1).max(100_000_000),
+  note: z.string().max(120).default(""),
+});
+
+// A Market shop (#171): its place and keeper as indexes into `locations`
+// and `npcs`, the place's name for when the place does not come along, its
+// policy, the shelf it starts with and the shelf it restocks to (null for a
+// shop the pack stocks). What was haggled and when it last restocked are the
+// source table's play and stay behind.
+const shopSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  kind: z.string().trim().max(20).default("general"),
+  size: z.string().trim().max(20).default("village"),
+  location: indexSchema,
+  locationName: z.string().trim().max(120).default(""),
+  keeper: indexSchema,
+  stock: z.array(stockLineSchema).max(60).default([]),
+  preparedStock: z.array(stockLineSchema).max(60).nullable().default(null),
+  markup: z.number().min(0.5).max(3).default(1),
+  buys: z.boolean().default(true),
+  restockDays: z.number().int().min(0).max(365).default(7),
+});
+
 const monsterSchema = z.object({
   name: z.string().trim().min(1).max(120),
   desc: z.string().max(8_000).default(""),
@@ -305,6 +335,8 @@ export const workshopBundleSchema = z.object({
   monsters: z.array(monsterSchema).max(BUNDLE_LIMITS.monsters).default([]),
   homebrew: z.array(homebrewSchema).max(BUNDLE_LIMITS.homebrew).default([]),
   pregens: z.array(pregenSchema).max(BUNDLE_LIMITS.pregens).default([]),
+  // The Market (#171). Absent in bundles from builds before it travelled.
+  shops: z.array(shopSchema).max(BUNDLE_LIMITS.shops).default([]),
   // The world pack the workshop is writing (src/lib/worlds/draft.ts), art
   // inline, so a shared workshop arrives with its plugin half-built rather
   // than as a folder of lore somebody has to re-key. Null in bundles from

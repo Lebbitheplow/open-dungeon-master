@@ -1640,6 +1640,9 @@ function ensureSchema(db: SqliteDatabase) {
     );
     CREATE INDEX IF NOT EXISTS idx_shops_campaign ON shops(campaign_id);
   `);
+  // The shelf a person wrote by hand (#171), which a restock refills rather
+  // than rerolling from the pack. '' is a shop stocked from the pack.
+  addColumns("shops", [["prepared_stock_json", `TEXT NOT NULL DEFAULT ''`]]);
 
   // Transcript lines (docs/vtt-parity-implementation-plan.md 13.3): what
   // was said at a transcribed table, by whom, on both clocks. Never fed to

@@ -88,12 +88,12 @@ const copyOf = (campaignId, kind, originRowId) =>
     );
     return values;
   };
-  const ids = { map: crypto.randomUUID(), location: crypto.randomUUID(), faction: crypto.randomUUID() };
+  const ids = { map: crypto.randomUUID(), location: crypto.randomUUID(), faction: crypto.randomUUID(), npc: crypto.randomUUID() };
   const filled = {
     prepared_maps: fill("prepared_maps", { id: ids.map, campaign_id: source.id, ambient: "dim", width: 4, height: 4 }),
     locations: fill("locations", { id: ids.location, campaign_id: source.id, prepared_map_id: ids.map }),
     factions: fill("factions", { id: ids.faction, campaign_id: source.id }),
-    npcs: fill("npcs", { id: crypto.randomUUID(), campaign_id: source.id, attitude: "friendly", faction_id: ids.faction }),
+    npcs: fill("npcs", { id: ids.npc, campaign_id: source.id, attitude: "friendly", faction_id: ids.faction }),
     lore_entries: fill("lore_entries", { id: crypto.randomUUID(), campaign_id: source.id, category: "magic" }),
     roll_tables: fill("roll_tables", { id: crypto.randomUUID(), campaign_id: source.id, created_by_user_id: userId }),
     encounter_templates: fill("encounter_templates", {
@@ -106,14 +106,16 @@ const copyOf = (campaignId, kind, originRowId) =>
       campaign_id: source.id,
       anchors_json: JSON.stringify({ [ids.location]: { x: 1, y: 1 } }),
     }),
+    // The Market (#171): a shop at the place, kept by the NPC.
+    shops: fill("shops", { id: crypto.randomUUID(), campaign_id: source.id, location_id: ids.location, keeper_npc_id: ids.npc, haggled_json: '["somebody"]' }),
   };
   runContentImport({
     sourceId: source.id,
     campaignId: target.id,
-    selection: ["maps", "locations", "npcs", "lore", "tables", "encounters", "overworld"],
+    selection: ["maps", "locations", "npcs", "lore", "tables", "encounters", "overworld", "shops"],
     houseRulesMode: "replace",
   });
-  const kindOf = { prepared_maps: "maps", locations: "locations", factions: "factions", npcs: "npcs", lore_entries: "lore", roll_tables: "tables", encounter_templates: "encounters" };
+  const kindOf = { prepared_maps: "maps", locations: "locations", factions: "factions", npcs: "npcs", lore_entries: "lore", roll_tables: "tables", encounter_templates: "encounters", shops: "shops" };
 
   test("every column of every copied table travels, or is a named override", () => {
     for (const [tableName, source_] of Object.entries(filled)) {
@@ -147,6 +149,12 @@ const copyOf = (campaignId, kind, originRowId) =>
     assert.equal(one(`SELECT embedding FROM lore_entries WHERE campaign_id = ?`, target.id).embedding, null);
     const region = one(`SELECT * FROM overworld_maps WHERE campaign_id = ?`, target.id);
     assert.deepEqual(JSON.parse(region.anchors_json), { [place.id]: { x: 1, y: 1 } });
+    const shop = one(`SELECT * FROM shops WHERE campaign_id = ?`, target.id);
+    assert.equal(shop.location_id, place.id, "a shop lost its place");
+    assert.equal(shop.location_name, place.name);
+    assert.equal(shop.keeper_npc_id, npc.id, "a shop lost its keeper");
+    assert.equal(shop.haggled_json, "[]", "who haggled at the source came along");
+    assert.equal(shop.stock_json, filled.shops.prepared_stock_json, "a shop did not start from its prepared shelf");
   });
 }
 
