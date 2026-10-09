@@ -30,7 +30,7 @@ export const SHELF_TOUR: TourStep[] = [
   {
     id: "import",
     title: "Import a bundle",
-    body: "A bundle is a whole workshop as one file, exported from the Share tool here or on another server. Importing makes a new workshop of your own; nothing is written into a campaign.",
+    body: "A bundle is a whole workshop as one file, exported from the Share tool here or on another server. A world exported from WorldForge opens the same way: its characters become the Cast, its places, factions, history and secrets the workshop's own. Importing makes a new workshop of your own; nothing is written into a campaign.",
     anchors: ["shelf-import"],
   },
   {

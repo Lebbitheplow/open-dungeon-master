@@ -9,6 +9,7 @@ import {
   workshopBundleSchema,
   type WorkshopBundle,
 } from "@/lib/workshop/bundle-schema";
+import { isWorldForgeExport, worldForgeToBundle } from "@/lib/workshop/worldforge";
 
 export * from "@/lib/workshop/bundle-schema";
 
@@ -312,12 +313,17 @@ export function readBundle(text: string): BundleRead {
   } catch {
     return { error: "That file is not JSON." };
   }
+  // A world from WorldForge arrives as its own export; it becomes a bundle
+  // here and is checked as one (src/lib/workshop/worldforge.ts).
+  if (isWorldForgeExport(parsed)) {
+    parsed = worldForgeToBundle(parsed);
+  }
   const record = (parsed ?? {}) as Record<string, unknown>;
   // Two specific misses get their own sentence, because "invalid bundle" is
   // useless when the real answer is "that is a world pack, not a workshop"
   // or "that came out of a newer build".
   if (record.kind !== WORKSHOP_BUNDLE_KIND) {
-    return { error: "That file is not a workshop bundle." };
+    return { error: "That file is not a workshop bundle or a WorldForge export." };
   }
   if (record.version !== WORKSHOP_BUNDLE_VERSION) {
     return {

@@ -11,7 +11,8 @@ import { Select } from "@/components/ui/Select";
 import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES, type BundleDependency } from "@/lib/workshop/bundle";
 import { navigateTo } from "@/lib/navigation";
 
-// Opening somebody else's workshop.
+// Opening somebody else's workshop, or a world from WorldForge: its JSON
+// export opens the same way (src/lib/workshop/worldforge.ts).
 //
 // Two steps on purpose. The preview reads the file and validates it without
 // writing anything, so what a DM agrees to is a named thing with counts and
@@ -149,6 +150,7 @@ export function ImportBundleButton({
         onClick={() => input.current?.click()}
         disabled={busy}
         className={className}
+        title="A workshop bundle, or a world exported from WorldForge"
       >
         {busy && !preview ? (
           <Loader2 className="size-4 animate-spin" />
