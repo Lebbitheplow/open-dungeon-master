@@ -51,6 +51,8 @@ test("a fresh server needs setup and mints one code, kept across calls", () => {
 
 test("the startup banner shows the code to the operator", () => {
   assert.ok(banner().includes(code));
+  // The link beside it fills the code in on the sign-up form.
+  assert.ok(banner().includes(`/?setup=${code}`));
 });
 
 test("the code is matched loosely in form, never in content", () => {

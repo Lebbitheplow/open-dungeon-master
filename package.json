@@ -18,6 +18,7 @@
     "coverage": "vitest run --coverage",
     "resources:generate": "node scripts/generate-class-resources.mjs",
     "test:dice": "node scripts/test-dice.mjs",
+    "setup": "node scripts/setup.mjs",
     "fetch-model": "node scripts/fetch-embedding-model.mjs",
     "fetch-ambience": "node scripts/fetch-ambience.mjs",
     "postinstall": "node scripts/copy-dice-assets.mjs"

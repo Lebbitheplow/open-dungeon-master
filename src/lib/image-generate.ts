@@ -42,8 +42,12 @@ export async function generateStoryImage(
     hasReferences?: boolean;
     // What the picture must leave out, from the table's boundary.
     negative?: string;
+    // The admin's test picture (src/lib/harness/picture-test.ts): the agent
+    // may paint before its pictures are switched on for the tables.
+    verifying?: boolean;
   },
 ): Promise<GeneratedImage> {
+  const { verifying, ...request } = options;
   // OpenAI pictures run on the host's key and the agent program on the
   // admin's plan: the shared-host policy answers for both before anything
   // is painted (src/lib/shared-host.ts). ComfyUI is the host's own GPU.
@@ -54,19 +58,19 @@ export async function generateStoryImage(
   }
   const started = Date.now();
   const image = await (settings.imageBackend === "openai"
-    ? generateOpenAiImage(options, settings)
+    ? generateOpenAiImage(request, settings)
     : settings.imageBackend === "harness"
-      ? generateHarnessImage(options)
+      ? generateHarnessImage({ ...request, force: Boolean(verifying) })
       : // Everything else lands on ComfyUI, which was the previous behavior
         // for every producer-side call regardless of the selected backend.
         generateComfyImage({
           url: settings.comfyUrl || undefined,
           checkpoint: settings.comfyCheckpoint || undefined,
-          ...options,
+          ...request,
         }));
   recordUsage({
     kind: "image",
-    role: options.mode,
+    role: request.mode,
     backend: settings.imageBackend === "openai" || settings.imageBackend === "harness" ? settings.imageBackend : "comfyui",
     model: settings.imageBackend === "comfyui" ? settings.comfyCheckpoint : "",
     paid,

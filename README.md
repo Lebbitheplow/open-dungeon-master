@@ -306,7 +306,41 @@ and clamped by code.
 ```bash
 git clone <this repo> && cd open-dungeon-master
 npm install
+npm run setup        # database key, content pack, memory model, production build
+npm run start:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
+```
 
+When it starts, the server prints a link with a one-time setup code. Open it in a
+browser on the same computer, create the admin account, and the **guided setup**
+takes it from there, one question at a time:
+
+- **The storyteller.** It looks at what is already running on the computer
+  (llama.cpp, Ollama, LM Studio, vLLM, KoboldCpp, TabbyAPI, Jan) and offers each
+  server with its models, the documented default preselected. Or paste an API key
+  (OpenAI, OpenRouter, any OpenAI-compatible provider) and pick from the models it
+  can reach. Or pick an agent program you already pay for (Claude Code, Codex,
+  opencode, Grok Build): it shows whether each is installed and signed in, and the
+  exact command to fix it when not. Or choose a person at the table. Each choice is
+  tested the way a campaign uses it before you move on.
+- **Pictures and voice.** ComfyUI, Kokoro and Whisper are found the same way, with
+  ComfyUI's checkpoints and Kokoro's voices listed to pick from. One OpenAI key
+  covers pictures, narration and dictation too.
+- **Players.** The addresses to send your friends, and whether accounts take an
+  invite code.
+- **Your own agent.** Connect Claude Code, Codex or opencode to the server over
+  MCP as you: it shows the one line for your program and lights up when the agent's
+  first call arrives.
+
+Everything it saves is an ordinary admin setting, so the admin panel shows what was
+chosen; run it again any time from **Admin > Guided setup**. An admin whose server
+has no working storyteller is offered it on the home screen too.
+
+`npm run setup` is safe to run again: it keeps an existing key, content pack and
+model, and it refuses to make a new key for a database that already exists (a new
+key cannot open it). With `npm run setup -- --no-build` it skips the build, for
+`npm run dev:lan` instead of `start:lan`. By hand, the same steps are:
+
+```bash
 # The database is encrypted at rest; generate a key once and keep it safe.
 echo "DB_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env.server
 
@@ -319,8 +353,7 @@ node scripts/import-open5e.mjs
 # so an offline machine has it ready.
 npm run fetch-model
 
-npm run dev        # http://localhost:3000, or:
-npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
+npm run build
 ```
 
 The **embedding model** (used for semantic story recall and lore search) is no
@@ -346,8 +379,9 @@ exact command and settings.
 
 **The first account registered becomes the server admin, and creating it takes a
 one-time setup code.** While the server has no accounts it prints the code in its log
-at every start; enter it in the sign-up form's **Setup code** field. This stops whoever
-reaches a fresh server first from claiming it. To pick the code yourself (for scripted
+at every start, with a link that fills it in; open the link, or enter the code in the
+sign-up form's **Setup code** field. This stops whoever reaches a fresh server first
+from claiming it. To pick the code yourself (for scripted
 installs), set `ODM_SETUP_CODE`. The first account cannot be made with Discord; create
 it with a password and link Discord afterwards in settings. To promote someone on an
 existing install: `node scripts/make-admin.mjs <username>`.
@@ -367,7 +401,8 @@ it is third-party open-licensed content (OGL, ORC and CC-BY documents) rebuildab
 from the script in one command. See [docs/content.md](docs/content.md) and
 [docs/LICENSES.md](docs/LICENSES.md).
 
-For real sessions build and run the production server:
+For real sessions run the production server (`npm run setup` already built it;
+after pulling a newer version, build again):
 
 ```bash
 npm run build
@@ -431,11 +466,17 @@ recovery path without it. If you would rather manage it yourself, put
 start; an explicit key always wins over the stored one.
 
 The same log shows the one-time **setup code** that creating the first (admin) account
-needs, in a banner that repeats at every start until that account exists:
+needs, and a link that fills it in, in a banner that repeats at every start until that
+account exists:
 
 ```
-docker compose logs | grep -A6 "no accounts yet"
+docker compose logs | grep -A12 "no accounts yet"
 ```
+
+Open the link and the guided setup follows the first account, as in the
+[Quick start](#quick-start). From inside the container it looks for your AI services on
+the host as `host.docker.internal`, so a model server on the host must listen on
+`0.0.0.0`, not only `127.0.0.1`.
 
 ### Pointing at your AI services
 
@@ -639,6 +680,9 @@ or the admin panel, never in code or `.env.local`.
 
 Log in as an admin and open `/admin` (linked from the account menu):
 
+- **Guided setup**: the storyteller, pictures, voice, sign-ups and your own agent,
+  one question at a time, with what runs on the computer found and filled in (see
+  [Quick start](#quick-start)).
 - **Server settings**: default text model backend / URL / API key, ComfyUI and
   image-worker URLs and checkpoint, TTS / STT URLs, Discord sign-in credentials, and
   the sign-up toggle (close registration once your party is in).

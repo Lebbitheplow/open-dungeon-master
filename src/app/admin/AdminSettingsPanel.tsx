@@ -56,6 +56,9 @@ export function AdminSettingsPanel() {
   const [discordSecret, setDiscordSecret] = useState(SECRET_KEPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Campaigns the save moved off a picture backend that could not paint
+  // (src/lib/image-backend-rescue.ts), named once so the admin knows.
+  const [rescued, setRescued] = useState<Array<{ title: string }>>([]);
   const [error, setError] = useState("");
   // Server-computed, because the announced-address fallback chain ends at the
   // bind address, which never reaches this panel. Reflects the SAVED config.
@@ -157,6 +160,7 @@ export function AdminSettingsPanel() {
       setOpenaiImageKey(SECRET_KEPT);
       setTtsApiKey(SECRET_KEPT);
       setDiscordSecret(SECRET_KEPT);
+      setRescued(Array.isArray(data.rescued) ? data.rescued : []);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } finally {
@@ -383,7 +387,7 @@ export function AdminSettingsPanel() {
       </PageSection>
 
       {phoneWorld ? null : (
-        <AdminHarnessSection textProvider={config.text.provider} onConfig={setConfig} />
+        <AdminHarnessSection textProvider={config.text.provider} imagesBackend={config.images.defaultBackend} onConfig={setConfig} />
       )}
 
       <PageSection id="admin-utility" heading="Utility model (optional)" glyph="tab-log">
@@ -493,6 +497,13 @@ export function AdminSettingsPanel() {
         {saved ? (
           <span role="status" className="live-in inline-flex items-center gap-1 text-sm text-emerald-400">
             <Check className="size-4" /> Saved
+          </span>
+        ) : null}
+        {rescued.length ? (
+          <span role="status" className="live-in basis-full text-xs text-stone-400">
+            {rescued.length === 1 ? "1 campaign" : `${rescued.length} campaigns`} could not paint on {rescued.length === 1 ? "its" : "their"} old picture backend and now use{rescued.length === 1 ? "s" : ""} the new default:{" "}
+            {rescued.slice(0, 4).map((row) => row.title).join(", ")}
+            {rescued.length > 4 ? ` and ${rescued.length - 4} more` : ""}.
           </span>
         ) : null}
         {error ? <span role="alert" className="motion-shake inline-block text-sm text-red-400">{error}</span> : null}

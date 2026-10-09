@@ -3,7 +3,8 @@ import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { saveGlobalConfig } from "@/lib/db/app-settings";
 import { recentAgentActivity } from "@/lib/agents/activity";
 import { activeBridgeSessions, harnessMcpUrl, harnessRateLimit } from "@/lib/harness/bridge";
-import { generateHarnessImage } from "@/lib/harness/images";
+import { testHarnessPictures } from "@/lib/harness/picture-test";
+import { rescueStrandedCampaigns } from "@/lib/image-backend-rescue";
 import { forgetHarnessStatus, harnessConfig, probeAllHarnesses, probeHarness } from "@/lib/harness/status";
 import { testHarness } from "@/lib/harness/test-run";
 import { isHarnessId } from "@/lib/harness/types";
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
 }
 
 const actionSchema = z.object({
-  action: z.enum(["test", "picture", "refresh"]),
+  action: z.enum(["test", "picture", "adopt", "refresh"]),
   id: z.enum(["claude", "codex", "opencode", "grok"]).optional(),
 });
 
@@ -65,22 +66,25 @@ export async function POST(request: Request) {
     }
     return Response.json(await testHarness(isHarnessId(config.id) ? config.id : undefined));
   }
-  // A real picture, made before tables are allowed to ask for one. Only a
-  // success here switches the option on.
-  try {
-    const image = await generateHarnessImage({
-      prompt: "a lantern-lit tavern doorway at dusk, painted in a warm fantasy style",
-      mode: "fast",
-      aspect: "square",
-      force: true,
-    });
-    saveGlobalConfig({ harness: { imagesVerifiedAt: new Date().toISOString() } });
+  if (action === "adopt") {
+    // One step from a passing test to painting tables: on, the default for
+    // new campaigns, and the campaigns stranded on a backend that cannot
+    // paint moved onto it. Only after a real picture came back here.
+    if (!harnessConfig().imagesVerifiedAt) {
+      return Response.json({ error: "Paint a test picture first." }, { status: 409 });
+    }
+    saveGlobalConfig({ harness: { images: "native" }, images: { defaultBackend: "harness" } });
     forgetHarnessStatus();
-    return Response.json({ image });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "The picture could not be made." },
-      { status: 502 },
-    );
+    return Response.json({ moved: await rescueStrandedCampaigns() });
   }
+  // A real picture, painted the way the tables paint one, before they are
+  // allowed to ask for it (src/lib/harness/picture-test.ts). Only a success
+  // here clears the option.
+  const result = await testHarnessPictures();
+  if (!result.image) {
+    return Response.json({ ...result, error: result.error ?? "The picture could not be made." }, { status: 502 });
+  }
+  saveGlobalConfig({ harness: { imagesVerifiedAt: new Date().toISOString() } });
+  forgetHarnessStatus();
+  return Response.json(result);
 }

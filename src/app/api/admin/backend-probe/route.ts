@@ -4,6 +4,7 @@ import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
 import { endpointKind } from "@/lib/dm/sampling-logic";
 import { serverEnv } from "@/lib/server-env";
+import { keyForListing } from "@/lib/setup/discovery-logic";
 import { DEFAULT_LOCAL_TEXT_MODEL } from "@/lib/text-models";
 // The same three-stage probe the CLI runs (scripts/probe-openai-backend.mjs):
 // streamed text, a real structured tool call, and a continuation after the
@@ -55,15 +56,12 @@ export async function POST(request: Request) {
   const local = provider === "local";
   const ollamaBaseUrl = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
 
-  const resolvedBaseUrl =
-    baseUrl ||
-    (local
-      ? ollamaBaseUrl
-      : which === "utility"
-        ? config.text.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL")
-        : config.text.customBaseUrl ||
-          serverEnv("OPENAI_COMPAT_BASE_URL") ||
-          DEFAULT_STORY_SETTINGS.customBaseUrl);
+  const savedBaseUrl = local
+    ? ollamaBaseUrl
+    : which === "utility"
+      ? config.text.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL")
+      : config.text.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || DEFAULT_STORY_SETTINGS.customBaseUrl;
+  const resolvedBaseUrl = baseUrl || savedBaseUrl;
   const resolvedModel =
     model ||
     (which === "utility"
@@ -77,11 +75,23 @@ export async function POST(request: Request) {
           (endpointKind(resolvedBaseUrl) === "openrouter"
             ? serverEnv("OPENROUTER_MODEL", "google/gemini-3.5-flash")
             : DEFAULT_STORY_SETTINGS.customModel));
+  // A saved key is tried only against the host it was saved for: probing a
+  // newly typed address must not hand it the key of the old one (the guided
+  // setup probes a local server while an OpenAI key is still saved).
+  const savedPairs: Array<[string, string]> =
+    which === "utility"
+      ? [
+          [savedBaseUrl, config.text.utilityApiKey],
+          [config.text.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || DEFAULT_STORY_SETTINGS.customBaseUrl, config.text.customApiKey],
+        ]
+      : [[savedBaseUrl, config.text.customApiKey]];
+  const savedKey =
+    savedPairs
+      .map(([savedBase, key]) => keyForListing({ typed: "", savedKey: key, savedBaseUrl: savedBase, baseUrl: resolvedBaseUrl }))
+      .find(Boolean) ?? "";
   const resolvedKey =
     apiKey ||
-    (which === "utility"
-      ? config.text.utilityApiKey || config.text.customApiKey
-      : config.text.customApiKey) ||
+    savedKey ||
     serverEnv("OPENAI_COMPAT_API_KEY") ||
     serverEnv("OPENROUTER_API_KEY");
   if (!resolvedModel) {

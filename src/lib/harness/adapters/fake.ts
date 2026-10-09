@@ -10,8 +10,11 @@
 //   { "expectError": true }                 the previous call must have failed
 //   { "fail": "signed-out" }                report an error and stop
 //   { "wait": 500 }                         pause, holding the session open
+//   { "paint": [1536, 1024] }               paint a picture that size (a real
+//                                           PNG), when its image tool is on
 
 import { readFileSync } from "node:fs";
+import { crc32, deflateSync } from "node:zlib";
 import type { HarnessAdapter, HarnessErrorKind, HarnessStartOptions } from "../types.ts";
 
 type Step =
@@ -19,7 +22,33 @@ type Step =
   | { call: string; args?: Record<string, unknown> }
   | { parallel: Array<{ call: string; args?: Record<string, unknown> }> }
   | { fail: HarnessErrorKind; message?: string }
-  | { wait: number };
+  | { wait: number }
+  | { paint: [number, number] };
+
+// A real, decodable PNG of one flat colour: what a picture run hands back.
+export function fakePng(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // truecolour
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x7a)]);
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 declare global {
   // What the fake saw, for the tests to assert on.
@@ -119,6 +148,13 @@ async function start(options: HarnessStartOptions) {
       if ("fail" in step) {
         options.onEvent({ type: "error", kind: step.fail, message: step.message ?? `fake ${step.fail}` });
         return;
+      }
+      if ("paint" in step) {
+        log("paint", step.paint);
+        if (options.images) {
+          options.onEvent({ type: "image", bytes: fakePng(step.paint[0], step.paint[1]), mime: "image/png" });
+        }
+        continue;
       }
       if ("text" in step) {
         narration += step.text;

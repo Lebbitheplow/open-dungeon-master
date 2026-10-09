@@ -1,9 +1,9 @@
 "use client";
 
-import { Flag, Gauge, Globe2, Settings2, Users } from "lucide-react";
+import { Flag, Gauge, Globe2, Settings2, Users, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PIXEL_ICONS } from "@/lib/ui";
+import { PIXEL_ICONS, ui } from "@/lib/ui";
 import { PageLoading, PageNotice, PageShell } from "@/components/PageShell";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 import { AdminReportsPanel } from "@/app/admin/AdminReportsPanel";
@@ -35,12 +35,19 @@ export default function AdminPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("settings");
+  // A world one of the apps hosts sets itself up on the app's Story AI
+  // screen, so the guided setup is not offered there.
+  const [deviceWorld, setDeviceWorld] = useState(true);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => setMe(data?.user ?? null))
       .finally(() => setLoading(false));
+    fetch("/api/auth/providers")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setDeviceWorld(data?.deviceWorld === true))
+      .catch(() => undefined);
   }, []);
 
   if (loading) {
@@ -67,6 +74,22 @@ export default function AdminPage() {
       blurb={`Signed in as ${me.username}`}
     >
       {/* Five long labels do not fit 360 px: the row scrolls rather than clipping the last mode. */}
+      {/* The same settings, asked one question at a time, with what runs on
+          this computer found and filled in (src/app/setup). */}
+      {deviceWorld ? null : (
+      <div className="panel reveal flex flex-wrap items-center gap-3 rounded-xl px-4 py-3">
+        <span className="min-w-0 flex-1 text-sm text-stone-300">
+          <span className="block text-stone-100">Guided setup</span>
+          <span className="block text-xs text-stone-500">
+            Storyteller, pictures, voice, players and your own agent, one question at a time.
+          </span>
+        </span>
+        <Link href="/setup" className={ui.btnSecondary}>
+          <Wand2 className="size-4" /> Run it
+        </Link>
+      </div>
+      )}
+
       <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
         <SegmentedControl
           options={TABS}

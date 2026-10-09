@@ -19,6 +19,7 @@ import { ContinueHero, EmptyHero, FailedHero, LoadingHero, RecapPanel, ScreenBac
 import { HomeFooter } from "@/app/home/HomeFooter";
 import { JoinCard } from "@/app/home/JoinCard";
 import { HomeMenu } from "@/app/home/QuickTiles";
+import { SetupNudge } from "@/app/home/SetupNudge";
 import { WorkshopSection } from "@/app/home/WorkshopSection";
 import { pickContinue, type HomeCampaign } from "@/app/home/types";
 import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
@@ -211,6 +212,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
           </div>
         </header>
         {user.deletionDueAt ? <DeletionBanner dueAt={user.deletionDueAt} className="ts-deletion" /> : null}
+        {user.isAdmin ? <SetupNudge className="ts-deletion" /> : null}
 
         <section className="ts-stage" aria-label="Title screen">
           <div className="ts-stage-left">

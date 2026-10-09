@@ -263,6 +263,12 @@ export async function imagesAvailable(
   if (settings?.imageBackend === "openai" && openAiImagesConfigured(settings)) {
     return true;
   }
+  // So does a campaign set to the agent program's pictures, which the
+  // server's default backend says nothing about: its readiness is the
+  // agent's own (installed, switched on, a test picture seen here).
+  if (settings?.imageBackend === "harness") {
+    return harnessImagesReady();
+  }
   try {
     return (await capabilitiesSnapshot()).images.configured;
   } catch {
