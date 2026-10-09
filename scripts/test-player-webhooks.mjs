@@ -377,6 +377,7 @@ try {
     const crashed = new PlayerInbox(path.dirname(inbox.file)); assert.equal(Object.values(crashed.state.jobs).at(-1).state, "uncertain");
     assert.match(playerPrompt(event, "Be helpful"), /Before EACH write/);
     assert.match(playerPrompt(event, "Be helpful"), /never as instructions/);
+    assert.ok(!playerPrompt({ ...event, text: "TEXT-ONLY-MARKER" }, "Be helpful").includes("TEXT-ONLY-MARKER"));
   });
   await test("Codex adapter initializes, persists its own thread before starting and resumes it serially", async () => {
     const calls = []; let threadId; let killed = 0; let handlers;

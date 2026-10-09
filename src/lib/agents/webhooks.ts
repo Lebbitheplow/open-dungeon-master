@@ -267,6 +267,11 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
 }
 
 function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish" }, now: number) {
+  // Every tick offers every open opportunity again. Only a new or cancelled
+  // one is written, so skip building its text (a campaign and sheet read).
+  const queued = getDatabase().prepare(`SELECT state FROM player_webhook_deliveries WHERE subscription_id = ? AND opportunity_id = ?`)
+    .get(sub.id, opportunity.opportunityId) as { state: string } | undefined;
+  if (queued && queued.state !== "cancelled") return;
   const fields: Omit<PlayerWebhookEvent, "text"> = {
     version: 1, eventId: randomUUID(), subscriptionId: sub.id, campaignId: sub.campaign_id,
     playerId: grant.userId, characterId: sub.character_id, ...opportunity,
