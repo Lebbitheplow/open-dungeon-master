@@ -216,7 +216,8 @@ export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts 
     return null;
   }
   const text = packFeatText(found.data);
-  return { name: found.name, prerequisite: text.prerequisite, desc: text.desc };
+  const runsAs = found.source === "homebrew" && typeof found.data.runsAs === "string" ? found.data.runsAs : "";
+  return { name: found.name, prerequisite: text.prerequisite, desc: text.desc, ...(runsAs ? { runsAs } : {}) };
 }
 
 // A feat's text as one string, wherever the pack keeps it (src/lib/srd/

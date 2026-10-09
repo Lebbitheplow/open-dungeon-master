@@ -12,6 +12,7 @@ import { hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { registerSpeciesReader } from "@/lib/srd/race-id";
+import { featsAsRun } from "@/lib/srd/feat-effects";
 import { serverSpeciesRules } from "@/lib/characters/species-rules";
 import type {
   CharacterSheet,
@@ -266,7 +267,7 @@ export function createSheet(
     withBackgroundFeature(input.features ?? [], input.background),
     classList,
     input.race,
-    input.feats,
+    featsAsRun(input.feats, campaignId),
     // A workshop or pack subclass's features, read from the table's tables.
     subclassExtrasForTable(campaignId, userId),
   );
@@ -285,6 +286,7 @@ export function createSheet(
     undefined,
     classList.length > 1 ? classList : undefined,
     input.feats,
+    campaignId,
   );
   // Unless the AC is pinned, it comes from the gear they are actually
   // carrying rather than the builder's suggestion. An absent flag means a
@@ -620,6 +622,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
             existing.resources,
             classes.length ? classes : undefined,
             patch.feats ?? existing.feats,
+            existing.campaignId,
           )
         : existing.resources),
     equipment: patch.equipment ?? existing.equipment,
@@ -688,6 +691,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       patch.resources ?? existing.resources,
       next.classes.length ? next.classes : undefined,
       next.feats,
+      existing.campaignId,
     );
   }
 

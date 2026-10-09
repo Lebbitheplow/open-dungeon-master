@@ -134,6 +134,8 @@ export type AcSource = {
   race?: string;
   alignment?: string;
   spellcasting?: unknown;
+  // The table, for its workshop feats (feat-effects.ts tableFeat).
+  campaignId?: string;
 };
 
 // The character's armor class and how it was arrived at. The single place
@@ -145,6 +147,7 @@ export function acBreakdownFor(source: AcSource): AcBreakdown {
     level: source.level ?? 1,
     features: source.features,
     classes: source.classes,
+    campaignId: source.campaignId,
   });
   // Ability-setting magic items (a Belt of Giant Strength) change the DEX
   // and CON that feed the AC, so the effective scores are used throughout.
@@ -290,6 +293,7 @@ export function speedFor(
     level: source.level ?? 1,
     features,
     classes: source.classes,
+    campaignId: source.campaignId,
   });
   const breakdown = acBreakdownFor({ ...source, features, equipment });
   const worn = breakdown.armor ?? (breakdown.armorName ? matchArmor(breakdown.armorName) : null);
@@ -387,6 +391,8 @@ export function computeSheetDerived(
     feats?: string[];
     equipment?: Array<{ name: string; equipped?: boolean; attuned?: boolean }>;
     wildShape?: CharacterSheet["wildShape"];
+    // The table, for its workshop feats.
+    campaignId?: string;
   },
 ): SheetDerived {
   const pb = proficiencyBonus(sheet.level);
@@ -414,7 +420,7 @@ export function computeSheetDerived(
   ];
   const defense =
     sheet.class && (sheet.features || sheet.feats)
-      ? defenseRiders({ class: sheet.class, level: sheet.level, features: riderFeatures }, abilityMods)
+      ? defenseRiders({ class: sheet.class, level: sheet.level, features: riderFeatures, campaignId: sheet.campaignId }, abilityMods)
       : { saveBonus: 0, initiativeBonus: 0, passiveBonus: 0, halfProficiency: null };
 
   // Saves a feature trains on top of the class table's (Diamond Soul,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { contentSlug } from "@/lib/help";
-import { authoredFeatDesc } from "@/lib/srd/feat-effects";
+import { authoredFeatDesc, registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 import { packFeatText } from "@/lib/srd/feat-text";
 import { registerFeatRules } from "@/lib/srd/feature-effects";
 
@@ -23,7 +23,7 @@ export function useFeatDescs(names: string[]): Record<string, string> {
     for (const name of key.split("|")) {
       fetch(`/api/content/feats/${encodeURIComponent(contentSlug(name))}`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((body: { entry?: { data?: Record<string, unknown> } } | null) => {
+        .then((body: { entry?: { source?: string; data?: Record<string, unknown> } } | null) => {
           if (cancelled) {
             return;
           }
@@ -34,7 +34,12 @@ export function useFeatDescs(names: string[]): Record<string, string> {
           const desc = data ? packFeatText(data).desc : "";
           // The builder's own numbers (speed, initiative, passive scores)
           // read the feat through the same table the server does.
-          if (desc) {
+          if (body?.entry?.source === "homebrew") {
+            // A workshop feat: what it runs as and its text, read the way
+            // the table reads it (feat-effects.ts tableFeat).
+            const runsAs = typeof data?.runsAs === "string" ? data.runsAs : undefined;
+            registerBrowserTableFeats({ [name]: { ...(runsAs ? { runsAs } : {}), desc } });
+          } else if (desc) {
             registerFeatRules(name, desc);
           }
           setFetched((current) => ({ ...current, [name]: desc }));

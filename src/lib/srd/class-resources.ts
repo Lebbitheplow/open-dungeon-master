@@ -12,6 +12,7 @@ import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
 import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } from "@/lib/srd/feat-spells";
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
+import { tableFeat } from "@/lib/srd/feat-effects";
 
 export { isUnlimited, UNLIMITED_USES } from "@/lib/srd/resource-limits";
 
@@ -872,9 +873,14 @@ export function populateResources(
   // The feats on the sheet: the ones with a counter of their own (Lucky's
   // points, Inspiring Leader's uses) are read like features.
   feats?: string[],
+  // The table, for a workshop feat that runs as one with a counter.
+  campaignId?: string,
 ): ResourceMap {
   const out: ResourceMap = {};
-  const held_all: Array<{ name: string; classId?: string }> = [...features, ...(feats ?? []).map((name) => ({ name }))];
+  const held_all: Array<{ name: string; classId?: string }> = [
+    ...features,
+    ...(feats ?? []).map((name) => ({ name: tableFeat(name, campaignId)?.runsAs ?? name })),
+  ];
   for (const def of RESOURCE_DEFS) {
     const held = held_all.filter((feature) => featureHolds(def, feature));
     const matched = held[0];

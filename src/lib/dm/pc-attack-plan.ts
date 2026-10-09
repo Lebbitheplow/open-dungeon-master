@@ -292,6 +292,7 @@ export function planPcAttack(input: {
       inFight: true,
       equipment: sheet.equipment,
       feats: sheet.feats,
+      campaignId: sheet.campaignId,
       shieldName: acBreakdownFor(sheet).shieldName,
     });
     if (problem) {

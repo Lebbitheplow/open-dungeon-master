@@ -17,7 +17,14 @@ const { spellMechanicsFor } = await import("../src/lib/content/index.ts");
 const { MECH_OVERRIDES } = await import("../src/lib/srd/spell-mechanics.ts");
 const { normalizeHomebrewData, normalizeSpellMech } = await import("../src/lib/homebrew/gear.ts");
 const { draftFromCatalog } = await import("../src/app/workshop/homebrew/draft.ts");
-const { withMechanics, itemMechanicsOf, archetypeMechanicsOf, raceMechanicsOf } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const { withMechanics, itemMechanicsOf, archetypeMechanicsOf, raceMechanicsOf, featMechanicsOf } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const featFx = await import("../src/lib/srd/feat-effects.ts");
+const { backgroundMechanicsOf, bundledBackgroundRows } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const { mergedBackgroundOptions } = await import("../src/lib/characters/options.ts");
+const { listBackgrounds } = await import("../src/lib/content/index.ts");
+const { effectsFor, FEAT_ONLY_SPEED } = await import("../src/lib/srd/feature-effects.ts");
+const { packFeatText } = await import("../src/lib/srd/feat-text.ts");
+const { featGrantSpec } = await import("../src/lib/srd/feat-grant-text.ts");
 const { listRaces } = await import("../src/lib/content/index.ts");
 const { packRaceOptions } = await import("../src/lib/content/race-options.ts");
 const { sizeForRace } = await import("../src/lib/srd/index.ts");
@@ -442,6 +449,102 @@ test("the SRD's species keep the rules the engines key by their id when copied",
       assert.deepEqual(seen[key], value, `${slug} copy: ${key}`);
     }
   }
+});
+
+// ---- feats ----
+
+const authoredFeatRows = JSON.parse(fs.readFileSync(new URL("../src/lib/srd/authored-feats.json", import.meta.url), "utf8")).feats.map((feat) => ({
+  name: feat.name,
+  data: { desc: feat.desc, prerequisite: feat.prerequisite ?? "" },
+}));
+const packFeatRows = db ? db.prepare("SELECT name, data_json FROM feats").all().map((row) => ({ name: row.name, data: JSON.parse(row.data_json) })) : [];
+
+// What the engines do with a feat, at 10th level: what it is known as and
+// each effect it adds, read the way the riders read them. A feat whose name
+// a class feature shares moves speed from sheet.feats alone (Level Up's
+// Skirmisher, FEAT_ONLY_SPEED); that counts as the same effect.
+const featView = (name, campaignId) => {
+  const effects = effectsFor({ class: "fighter", features: [{ name }], campaignId }).map(({ effect }) =>
+    JSON.stringify(Object.fromEntries(Object.entries(effect).map(([key, value]) => [key, typeof value === "function" ? value(10) : value]))),
+  );
+  const bySpeed = FEAT_ONLY_SPEED[name.trim().toLowerCase()];
+  return { known: featFx.featTwinOf(name, campaignId), effects: bySpeed ? [...effects, JSON.stringify({ kind: "speed_bonus", amount: bySpeed })] : effects };
+};
+
+test("every published feat copied into the workshop and renamed reads, grants and runs the same at its table", () => {
+  const changed = [];
+  let copied = 0;
+  for (const row of [...authoredFeatRows, ...packFeatRows]) {
+    const table = featMechanicsOf({ name: row.name, source: "open5e", data: row.data });
+    const draft = draftFromCatalog("feat", { name: row.name, data: row.data, table });
+    const stored = normalizeHomebrewData("feat", JSON.parse(JSON.stringify(draft.data)), "Copy").data;
+    copied += 1;
+    const text = packFeatText(row.data);
+    if (stored.desc !== text.desc) changed.push(`${row.name}: text`);
+    if ((stored.prerequisite ?? "") !== (text.prerequisite ?? "")) changed.push(`${row.name}: prerequisite`);
+    // The copy, held at a table whose author wrote it.
+    featFx.registerTableFeatReader(() => new Map([["workshop copy", { ...(stored.runsAs ? { runsAs: stored.runsAs } : {}), desc: stored.desc }]]));
+    const original = featView(row.name, null);
+    const copy = featView("Workshop Copy", "fidelity-table");
+    // A feat the engines know by name runs as itself; one they read only by
+    // its text (a pack feat) is known as its own name, which the copy's is not.
+    const known = stored.runsAs ? copy.known === original.known : copy.known === "workshop copy";
+    if (!known) changed.push(`${row.name}: known as ${copy.known}, the original as ${original.known}`);
+    if (JSON.stringify(copy.effects) !== JSON.stringify(original.effects)) changed.push(`${row.name}: effects ${original.effects.join(" ")} -> ${copy.effects.join(" ")}`);
+    if (JSON.stringify(featGrantSpec(stored.desc)) !== JSON.stringify(featGrantSpec(text.desc))) changed.push(`${row.name}: grants`);
+    if (JSON.stringify(featFx.featAbilityIncrease("Workshop Copy", stored.desc)) !== JSON.stringify(featFx.featAbilityIncrease(row.name, text.desc))) {
+      changed.push(`${row.name}: ability increase`);
+    }
+  }
+  featFx.registerTableFeatReader(() => new Map());
+  assert.ok(copied >= 50, `only ${copied} feats copied`);
+  assert.deepEqual(changed, [], `${changed.length} copies differ:\n${changed.slice(0, 15).join("\n")}`);
+});
+
+// ---- backgrounds ----
+
+// What the builder offers and the creation check holds a character to, less
+// what names the option and its display text.
+const BACKGROUND_LABELS = ["id", "name", "note", "source", "slug", "documentSlug", "document", "desc", "blurb", "genres"];
+const backgroundView = (option) =>
+  sorted(
+    Object.fromEntries(
+      Object.entries(option)
+        .filter(([key]) => !BACKGROUND_LABELS.includes(key))
+        .map(([key, value]) => [key, Array.isArray(value) && !value.length ? undefined : value])
+        .filter(([, value]) => value !== undefined),
+    ),
+  );
+
+test("every background the builder offers, copied into the workshop, grants the same skills, tools, languages, kit, coin and feature", () => {
+  const rows = listBackgrounds({ limit: 500 }).map((row) => ({ slug: row.slug, name: row.name, source: row.source, documentSlug: row.documentSlug, document: row.document, data: row.data }));
+  const published = mergedBackgroundOptions(rows);
+  // The pack's rows, and the builder's own backgrounds no row carries.
+  const sources = [...withMechanics("backgrounds", rows), ...bundledBackgroundRows("", rows)];
+  const changed = [];
+  let copied = 0;
+  for (const option of published) {
+    const row =
+      sources.find((entry) => entry.slug === option.id) ??
+      sources.find((entry) => entry.slug.replace(/-/g, "_") === option.id && ["wotc-srd", "odm-expanded", "odm"].includes(entry.documentSlug)) ??
+      sources.find((entry) => entry.slug.replace(/-/g, "_") === option.id);
+    if (!row?.table) {
+      changed.push(`${option.name}: nothing to start from`);
+      continue;
+    }
+    const draft = draftFromCatalog("background", row);
+    const stored = normalizeHomebrewData("background", JSON.parse(JSON.stringify(draft.data)), "Copy").data;
+    const [copy] = mergedBackgroundOptions([{ slug: "homebrew:copy", name: "Copy", source: "homebrew", documentSlug: "homebrew", data: stored }]).filter((entry) => entry.id === "homebrew:copy");
+    copied += 1;
+    const want = backgroundView(option);
+    const got = backgroundView(copy);
+    for (const key of new Set([...Object.keys(want), ...Object.keys(got)])) {
+      if (JSON.stringify(want[key]) !== JSON.stringify(got[key])) changed.push(`${option.name} ${key}: ${JSON.stringify(want[key])?.slice(0, 60)} -> ${JSON.stringify(got[key])?.slice(0, 60)}`);
+    }
+  }
+  assert.ok(copied >= 40, `only ${copied} backgrounds copied`);
+  assert.deepEqual(changed, [], `${changed.length} copies differ:\n${changed.slice(0, 12).join("\n")}`);
+  assert.equal(typeof backgroundMechanicsOf, "function");
 });
 
 console.log(`test-workshop-fidelity: ${passed} passed${db ? "" : " (fixture rows, no content pack)"}`);

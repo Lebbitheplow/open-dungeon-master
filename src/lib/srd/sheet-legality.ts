@@ -404,7 +404,11 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     die: context.classOf(entry.id)?.hitDie ?? 8,
     level: entry.level,
   }));
-  const perLevelBonus = hpBonusPerLevelFor(hpBonusPerLevel(race.id) > 0, feats.feats);
+  // A workshop feat counts as the published feat it runs as (Tough's hit points).
+  const perLevelBonus = hpBonusPerLevelFor(
+    hpBonusPerLevel(race.id) > 0,
+    feats.feats.map((feat) => context.featOf(feat)?.runsAs ?? feat),
+  );
   // Draconic Resilience's hit point per sorcerer level (trait-rules.ts).
   const extraHp = featureHitPoints({ class: input.class, subclass: input.subclass, level, classes, features: input.features });
   const hpInput = { classes: hpClasses, con: abilities.con, perLevelBonus, extraHp };

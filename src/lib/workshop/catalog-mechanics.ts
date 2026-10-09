@@ -9,6 +9,9 @@ import { matchWeapon, SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { subclassFeatureDescription, subclassLevelFor, subclassTableFor } from "@/lib/srd/features";
 import { subclassLevelsFromProse, type SubclassFeatureRow } from "@/lib/srd/subclass-tables";
+import { engineFeatNamed } from "@/lib/srd/feat-effects";
+import { packFeatText } from "@/lib/srd/feat-text";
+import { mergedBackgroundOptions, srdBackgroundOptions } from "@/lib/characters/options";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -209,7 +212,94 @@ export function raceMechanicsOf(
   };
 }
 
+// A published background as the workshop copies it: the option the builder
+// offers for it (the bundled table's for an SRD background, the pack's
+// parsed prose otherwise) as structured grants, with its feature.
+export function backgroundMechanicsOf(row: Row & { slug?: string; documentSlug?: string }): Record<string, unknown> | null {
+  if (row.source === "homebrew" || !row.slug) {
+    return null;
+  }
+  const options = mergedBackgroundOptions([
+    { slug: row.slug, name: row.name, source: row.source, documentSlug: row.documentSlug ?? "", data: row.data },
+  ]);
+  const id = row.slug.toLowerCase().replace(/-/g, "_");
+  const option = options.find((entry) => entry.id === row.slug) ?? options.find((entry) => entry.id === id);
+  if (!option) {
+    return null;
+  }
+  return {
+    grants: {
+      skills: option.skills,
+      ...(option.skillChoice ? { skillChoice: option.skillChoice } : {}),
+      tools: option.tools ?? [],
+      languages: option.languages ?? 0,
+      knownLanguages: option.knownLanguages ?? [],
+      equipment: option.equipment ?? [],
+      purse: option.purse ?? 0,
+    },
+    feature: option.feature ?? String(row.data.feature ?? ""),
+    feature_desc: option.featureDesc ?? String(row.data.feature_desc ?? ""),
+  };
+}
+
+// The bundled backgrounds no content row carries, as catalog rows with
+// their grants, for "start from": those whose name holds `q`, less any a
+// row in `results` already stands for.
+export function bundledBackgroundRows(q: string, results: Array<{ slug: string }>): Array<Record<string, unknown>> {
+  const wanted = q.trim().toLowerCase();
+  const held = new Set(results.map((row) => row.slug.toLowerCase().replace(/-/g, "_")));
+  return srdBackgroundOptions()
+    .filter((option) => !held.has(option.id) && (!wanted || option.name.toLowerCase().includes(wanted)))
+    .slice(0, 120)
+    .map((option) => ({
+      slug: option.id,
+      name: option.name,
+      source: "bundled",
+      documentSlug: "odm",
+      document: "Open Dungeon Master",
+      data: { desc: option.blurb ?? "", feature: option.feature ?? "", feature_desc: option.featureDesc ?? "" },
+      table: {
+        grants: {
+          skills: option.skills,
+          ...(option.skillChoice ? { skillChoice: option.skillChoice } : {}),
+          tools: option.tools ?? [],
+          languages: option.languages ?? 0,
+          knownLanguages: option.knownLanguages ?? [],
+          equipment: option.equipment ?? [],
+          purse: option.purse ?? 0,
+        },
+        feature: option.feature ?? "",
+        feature_desc: option.featureDesc ?? "",
+      },
+    }));
+}
+
+// A published feat as the workshop copies it: its whole text, wherever the
+// pack keeps it (a Level Up feat's benefits list, not only its summary),
+// and the feat the engines run it as, so a renamed copy of Sharpshooter
+// still ignores long range at the table.
+export function featMechanicsOf(row: Row): Record<string, unknown> | null {
+  if (row.source === "homebrew") {
+    return null;
+  }
+  const text = packFeatText(row.data);
+  const runsAs = engineFeatNamed(row.name);
+  return { desc: text.desc, prerequisite: text.prerequisite, ...(runsAs ? { runsAs } : {}) };
+}
+
 export function withMechanics(kind: string, results: unknown[], params: { classSlug?: string } = {}): unknown[] {
+  if (kind === "backgrounds") {
+    return results.map((row) => {
+      const table = backgroundMechanicsOf(row as Row & { slug?: string; documentSlug?: string });
+      return table ? { ...(row as Row), table } : row;
+    });
+  }
+  if (kind === "feats") {
+    return results.map((row) => {
+      const table = featMechanicsOf(row as Row);
+      return table ? { ...(row as Row), table } : row;
+    });
+  }
   if (kind === "races") {
     return results.map((row) => {
       const table = raceMechanicsOf(row as Row & { slug?: string; documentSlug?: string });

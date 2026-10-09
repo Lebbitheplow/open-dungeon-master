@@ -3,6 +3,7 @@ import { deleteHomebrew, getHomebrew, updateHomebrew } from "@/lib/db/homebrew";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { patchHomebrewSchema } from "@/lib/schemas/homebrew";
 import { forgetSpeciesRules } from "@/lib/characters/species-rules";
+import { forgetTableFeats } from "@/lib/db/table-feats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,7 @@ export async function PATCH(
   }
   const entry = updateHomebrew(user.id, id, { name: parsed.data.name, data });
   forgetSpeciesRules(`homebrew:${id}`);
+  forgetTableFeats();
   if (!entry) {
     return Response.json({ error: "Not found." }, { status: 404 });
   }
@@ -68,5 +70,7 @@ export async function DELETE(
   if (!deleteHomebrew(user.id, id)) {
     return Response.json({ error: "Not found." }, { status: 404 });
   }
+  forgetSpeciesRules(`homebrew:${id}`);
+  forgetTableFeats();
   return Response.json({ ok: true });
 }

@@ -645,6 +645,19 @@ function backgroundEquipment(text: string): string[] {
 // What a content-pack background grants, read from its text: the builder
 // offers it the way it offers a bundled background's.
 export function backgroundMechanics(data: Record<string, unknown>): BackgroundMechanics {
+  // A workshop background's picks, written out (src/lib/homebrew/
+  // background-data.ts), are read as they are.
+  const grants = data.grants as Partial<BackgroundMechanics> | undefined;
+  if (grants && typeof grants === "object" && Array.isArray(grants.skills)) {
+    return {
+      skills: grants.skills,
+      ...(grants.skillChoice && grants.skillChoice.count > 0 ? { skillChoice: grants.skillChoice } : {}),
+      tools: grants.tools ?? [],
+      languages: Number(grants.languages) || 0,
+      knownLanguages: grants.knownLanguages ?? [],
+      equipment: grants.equipment ?? [],
+    };
+  }
   // "No additional languages" names none and counts none, as it should.
   const grant = parseRaceLanguages(backgroundField(data, "languages"));
   return {

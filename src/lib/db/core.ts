@@ -6,9 +6,21 @@ import { populateFeatures, populateFeaturesForClasses } from "@/lib/srd/features
 import { packSubclassExtras } from "@/lib/content/archetype-tables";
 import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { populateResources } from "@/lib/srd/class-resources";
+import { featsAsRun, registerTableFeatReader } from "@/lib/srd/feat-effects";
+import { tableFeatsFrom } from "@/lib/db/table-feats";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
+
+// A table's workshop feats, for the rules that read a feat wherever a sheet
+// is (src/lib/srd/feat-effects.ts tableFeat). The boot resync reads them off
+// the database it is still opening (resyncingDb), before getDatabase hands
+// that database out.
+let resyncingDb: SqliteDatabase | null = null;
+registerTableFeatReader((campaignId) => {
+  const db = resyncingDb ?? globalThis.__localRoleplayDb ?? null;
+  return db ? tableFeatsFrom(db, campaignId) : new Map();
+});
 
 declare global {
   var __localRoleplayDb: SqliteDatabase | undefined;
@@ -2538,6 +2550,15 @@ function bootSubclassExtras(db: SqliteDatabase, campaignId: string, cache: Map<s
 }
 
 function backfillSheetResources(db: SqliteDatabase) {
+  resyncingDb = db;
+  try {
+    resyncSheetResources(db);
+  } finally {
+    resyncingDb = null;
+  }
+}
+
+function resyncSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
       `SELECT id, campaign_id, class, subclass, race, level, abilities_json, features_json, resources_json,
@@ -2589,8 +2610,8 @@ function backfillSheetResources(db: SqliteDatabase) {
       const rowFeats = row.feats_json ? (JSON.parse(row.feats_json) as string[]) : [];
       const extras = bootSubclassExtras(db, row.campaign_id, extrasByCampaign);
       const features = multiclass
-        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats, extras)
-        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats, extras);
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race, featsAsRun(rowFeats, row.campaign_id), extras)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, featsAsRun(rowFeats, row.campaign_id), extras);
       const resources = populateResources(
         features,
         row.level,
@@ -2598,6 +2619,7 @@ function backfillSheetResources(db: SqliteDatabase) {
         existingResources,
         multiclass ? classes : undefined,
         rowFeats,
+        row.campaign_id,
       );
       const nextFeatures = JSON.stringify(features);
       const nextResources = JSON.stringify(resources);

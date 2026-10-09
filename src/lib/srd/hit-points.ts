@@ -1,3 +1,4 @@
+import { featTwinOf } from "@/lib/srd/feat-effects";
 // Hit points as the table's HP method gives them. Pure and import-free, so
 // the legality check, the level-up, the library adaptation and the builder
 // all show and store the same number.
@@ -112,7 +113,9 @@ export function retroactiveHp(
 // Flat hit points per level from race and feats. Level Up's Hardy
 // Adventurer is Tough under another name (feat-effects.ts FEAT_TWINS);
 // named here too, since this module stays import-free.
-export function hpBonusPerLevelFor(raceHillDwarf: boolean, feats: string[]): number {
-  const tough = feats.some((feat) => ["tough", "hardy adventurer"].includes(feat.trim().toLowerCase()));
+export function hpBonusPerLevelFor(raceHillDwarf: boolean, feats: string[], campaignId?: string | null): number {
+  // Tough under its own name, its twin's, or a table's workshop feat that
+  // runs as it.
+  const tough = feats.some((feat) => featTwinOf(feat, campaignId) === "tough");
   return (raceHillDwarf ? 1 : 0) + (tough ? 2 : 0);
 }

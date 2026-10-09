@@ -103,8 +103,8 @@ export function levelUpHpPreview(input: {
 }): HpPreview {
   const { sheet, hitDie, abilitiesAfter } = input;
   const dwarf = hpBonusPerLevel(sheet.race) > 0;
-  const bonusBefore = hpBonusPerLevelFor(dwarf, sheet.feats);
-  const bonusAfter = hpBonusPerLevelFor(dwarf, [...sheet.feats, ...input.featsAfter]);
+  const bonusBefore = hpBonusPerLevelFor(dwarf, sheet.feats, sheet.campaignId);
+  const bonusAfter = hpBonusPerLevelFor(dwarf, [...sheet.feats, ...input.featsAfter], sheet.campaignId);
   const hpClasses = classListFor(sheet).map((entry) => ({
     die: findClass(entry.id)?.hitDie ?? Number(sheet.hitDice.die.slice(1)),
     level: entry.level,

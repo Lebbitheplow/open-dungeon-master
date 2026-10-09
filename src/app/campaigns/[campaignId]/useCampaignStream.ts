@@ -38,6 +38,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
+import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 
 export type DmStatus =
   | "idle"
@@ -1115,6 +1116,7 @@ export function useCampaignStream(campaignId: string) {
       const data = await response.json();
       const lastSeq = data.latestSeq ?? 0;
       registerBrowserSpecies(data.species);
+      registerBrowserTableFeats(data.feats);
       dispatch({
         type: "snapshot",
         payload: {

@@ -35,7 +35,8 @@ export type SpellFacts = {
 
 // The feat's text rides along: what it grants beyond its ability point is
 // read from it (src/lib/srd/feat-grants.ts).
-export type FeatFacts = { name: string; prerequisite: string; desc: string };
+// `runsAs`: the published feat a table's workshop feat runs as.
+export type FeatFacts = { name: string; prerequisite: string; desc: string; runsAs?: string };
 
 export type LegalityContext = {
   door: Door;

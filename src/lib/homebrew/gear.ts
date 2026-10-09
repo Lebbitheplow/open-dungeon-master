@@ -4,8 +4,10 @@ import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
 import { clamp, num, text, type Raw } from "@/lib/homebrew/coerce";
 import { normalizeRaceData } from "@/lib/homebrew/race-data";
+import { normalizeBackgroundData } from "@/lib/homebrew/background-data";
 import { GEAR_LIMITS, normalizeItemData, type HomebrewData, type Outcome } from "@/lib/homebrew/item-data";
 import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
+import { engineFeatNamed } from "@/lib/srd/feat-effects";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 
 // What a homebrew entry means to the engine.
@@ -84,18 +86,15 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
   const source = (raw ?? {}) as Raw;
   const data: HomebrewData = { desc: text(source.desc, GEAR_LIMITS.descMax) };
   switch (kind) {
-    case "feat":
+    case "feat": {
       data.prerequisite = text(source.prerequisite, 200);
+      // The published feat it runs as, by the name the engines know it by.
+      const runsAs = engineFeatNamed(text(source.runsAs, 80));
+      if (runsAs) data.runsAs = runsAs;
       break;
+    }
     case "background":
-      // The Open5e field names, because that is what the builder reads
-      // (skillsInText over skill_proficiencies).
-      data.skill_proficiencies = text(source.skill_proficiencies, 200);
-      data.tool_proficiencies = text(source.tool_proficiencies, 200);
-      data.languages = text(source.languages, 200);
-      data.equipment = text(source.equipment, 500);
-      data.feature = text(source.feature, 80);
-      data.feature_desc = text(source.feature_desc, 2_000);
+      normalizeBackgroundData(source, data);
       break;
     case "race":
       normalizeRaceData(source, data);

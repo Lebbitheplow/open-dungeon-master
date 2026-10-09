@@ -427,7 +427,7 @@ export function describeSheet(
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
     `  Languages (complete list; they cannot speak, read, or understand any other language): ${sheet.proficiencies.languages.join(", ") || "Common only"} | Tool proficiencies: ${sheet.proficiencies.tools.join(", ") || "none"} | Armor training: ${sheet.proficiencies.armor.join(", ") || "none"} | Weapon training: ${sheet.proficiencies.weapons.join(", ") || "none"}`,
-    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats (each with its rules; the server applies what its tag names, the rest is yours to run): ${sheet.feats.map((feat) => featPromptLine(feat, options.ownerUserId)).join("; ")}` : ""}`,
+    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats (each with its rules; the server applies what its tag names, the rest is yours to run): ${sheet.feats.map((feat) => featPromptLine(feat, options.ownerUserId, sheet.campaignId)).join("; ")}` : ""}`,
   ];
   if (loadLine) {
     lines.push(loadLine);
@@ -1423,9 +1423,9 @@ export function buildDmMessages(
 // its rules text (ODM's own words, or the pack's) cut at a sentence near
 // 360 characters. The model used to see the name alone, and a Level Up or
 // Tome of Heroes feat meant nothing to it (issue #147).
-function featPromptLine(feat: string, ownerUserId: string | undefined): string {
-  const tag = featEngineTag(feat);
-  const twin = featTwinOf(feat);
+function featPromptLine(feat: string, ownerUserId: string | undefined, campaignId?: string): string {
+  const tag = featEngineTag(feat, campaignId);
+  const twin = featTwinOf(feat, campaignId);
   const known = twin !== feat.trim().toLowerCase() ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";
   const text = (featFactsFor(feat, ownerUserId)?.desc ?? "").replace(/\s+/g, " ").trim();
   const cut = text.length <= 360 ? text : `${text.slice(0, 360).replace(/\s+\S*$/, "")}...`;

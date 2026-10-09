@@ -59,9 +59,9 @@ const hasName = (list: string[] | undefined, names: Set<string>) =>
 
 // A content pack twin of the feat (Level Up's Rite Master is Ritual
 // Caster) counts as the feat (src/lib/srd/feat-effects.ts).
-const hasFeat = (sheet: Pick<Caster, "feats" | "features">, feat: string) =>
+const hasFeat = (sheet: Pick<Caster, "feats" | "features"> & { campaignId?: string }, feat: string) =>
   [...(sheet.feats ?? []), ...(sheet.features ?? []).map((feature) => feature.name)].some(
-    (entry) => entry.toLowerCase().includes(feat) || featTwinOf(entry).includes(feat),
+    (entry) => entry.toLowerCase().includes(feat) || featTwinOf(entry, sheet.campaignId).includes(feat),
   );
 
 // ---- who holds the spell ----

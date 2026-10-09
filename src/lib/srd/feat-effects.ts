@@ -71,22 +71,84 @@ export const FEAT_TWINS: Record<string, string> = {
   skillful: "skilled",
 };
 
-// The feat the engines know a name as: its twin's, or its own, lower case.
-export function featTwinOf(name: string): string {
+// ---- a table's workshop feats ----
+
+// A feat written in the workshop is its author's, so what one does is read
+// per table: the feat it runs as (a renamed copy of Sharpshooter, "Deadeye",
+// runs as Sharpshooter) and its own text, whose effects the engines parse
+// the way they parse a content pack's (feature-effects.ts). The server reads
+// the table's authors' feats (src/lib/db/table-feats.ts, registered by
+// src/lib/db/sheets.ts); the browser is handed the same (the campaign
+// snapshot's `feats`, the builder's fetch). A name the engines already know
+// is that feat, whoever wrote one called the same.
+export type TableFeat = { runsAs?: string; desc: string };
+
+let tableFeatReader: ((campaignId: string) => ReadonlyMap<string, TableFeat>) | null = null;
+const browserFeats = new Map<string, TableFeat>();
+
+export function registerTableFeatReader(reader: (campaignId: string) => ReadonlyMap<string, TableFeat>): void {
+  tableFeatReader = reader;
+}
+
+export function registerBrowserTableFeats(feats: Record<string, TableFeat> | null | undefined): void {
+  if (typeof window === "undefined" || !feats) {
+    return;
+  }
+  for (const [name, feat] of Object.entries(feats)) {
+    browserFeats.set(key(name), feat);
+  }
+}
+
+const KNOWN_FEATS = new Set(FEATS.map((feat) => key(feat.name)));
+
+export function engineFeatNames(): string[] {
+  return FEATS.map((feat) => feat.name);
+}
+
+// The canonical name of one of ODM's feats ("sharpshooter" -> "Sharpshooter"),
+// or null for a name the engines do not run.
+export function engineFeatNamed(name: string): string | null {
+  return featRow(featTwinOf(name))?.name ?? null;
+}
+
+export function tableFeat(name: string, campaignId?: string | null): TableFeat | null {
   const own = key(name);
+  if (!own || KNOWN_FEATS.has(own) || FEAT_TWINS[own]) {
+    return null;
+  }
+  const fromTable = campaignId && tableFeatReader ? tableFeatReader(campaignId).get(own) : undefined;
+  return fromTable ?? browserFeats.get(own) ?? null;
+}
+
+// The feats on a sheet as the engines run them: a table's workshop feat as
+// the published feat it runs as (Martial Adept's maneuver slots, read by
+// name where the regrant prunes choices).
+export function featsAsRun(feats: string[] | undefined, campaignId?: string | null): string[] | undefined {
+  return feats?.map((feat) => tableFeat(feat, campaignId)?.runsAs ?? feat);
+}
+
+// The feat the engines know a name as: the published feat a table's
+// workshop feat runs as, its twin's, or its own, lower case.
+export function featTwinOf(name: string, campaignId?: string | null): string {
+  const own = key(name);
+  const runsAs = tableFeat(name, campaignId)?.runsAs;
+  if (runsAs && key(runsAs) !== own) {
+    return featTwinOf(runsAs);
+  }
   return FEAT_TWINS[own] ?? own;
 }
 
 // A sheet holds a feat when it is in sheet.feats, or (for sheets written by
-// the DM's tools) among its features by the same name, or holds its twin.
+// the DM's tools) among its features by the same name, or holds its twin or
+// a workshop feat of its table that runs as it.
 export function holdsFeat(
-  sheet: { feats?: string[]; features?: Array<{ name: string }> },
+  sheet: { feats?: string[]; features?: Array<{ name: string }>; campaignId?: string },
   name: string,
 ): boolean {
   const wanted = key(name);
   return (
-    (sheet.feats ?? []).some((feat) => featTwinOf(feat) === wanted) ||
-    (sheet.features ?? []).some((feature) => featTwinOf(feature.name) === wanted)
+    (sheet.feats ?? []).some((feat) => featTwinOf(feat, sheet.campaignId) === wanted) ||
+    (sheet.features ?? []).some((feature) => featTwinOf(feature.name, sheet.campaignId) === wanted)
   );
 }
 

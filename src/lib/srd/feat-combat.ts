@@ -357,8 +357,8 @@ export function helpReachTiles(sheet: FeatHolder): number {
 // The pick-list slots a feat opens (src/lib/srd/options.ts): Martial
 // Adept's two maneuvers, Eldritch Adept's invocation, Metamagic Adept's two
 // Metamagic options.
-export function featOptionSlots(feats: string[] | undefined, kind: string): number {
-  const held = (name: string) => (feats ?? []).some((feat) => featTwinOf(feat) === name);
+export function featOptionSlots(feats: string[] | undefined, kind: string, campaignId?: string): number {
+  const held = (name: string) => (feats ?? []).some((feat) => featTwinOf(feat, campaignId) === name);
   if (kind === "maneuver" && held("martial adept")) return 2;
   if (kind === "invocation" && held("eldritch adept")) return 1;
   if (kind === "metamagic" && held("metamagic adept")) return 2;
@@ -555,8 +555,8 @@ export function defensiveDuelistBonus(
 
 // The one-word tag the DM prompt hangs on a feat the server applies, so
 // the model routes it through the right tool instead of narrating it.
-export function featEngineTag(feat: string): string | null {
-  const name = featTwinOf(feat);
+export function featEngineTag(feat: string, campaignId?: string): string | null {
+  const name = featTwinOf(feat, campaignId);
   if (["great weapon master", "sharpshooter", "powerful attacker", "deadeye"].includes(name)) return "[pc_attack powerAttack]";
   if (["defensive duelist", "mage slayer", "sentinel"].includes(name)) return "[use_reaction]";
   if (["polearm master", "crossbow expert", "charger"].includes(name)) return "[pc_attack bonusAttack feature]";

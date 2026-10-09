@@ -168,8 +168,19 @@ export function draftFromCatalog(
           ...(entry.gear ?? {}),
         },
       };
-    case "feat":
-      return { kind, name: entry.name, data: { desc: String(data.desc ?? ""), prerequisite: String(data.prerequisite ?? "") } };
+    case "feat": {
+      // The whole text and the feat it runs as, when the catalog sent them.
+      const table = (entry.table ?? {}) as Record<string, unknown>;
+      return {
+        kind,
+        name: entry.name,
+        data: {
+          desc: String(table.desc ?? data.desc ?? ""),
+          prerequisite: String(table.prerequisite ?? data.prerequisite ?? ""),
+          ...(typeof table.runsAs === "string" ? { runsAs: table.runsAs } : {}),
+        },
+      };
+    }
     case "background":
       return {
         kind,
@@ -182,6 +193,8 @@ export function draftFromCatalog(
           equipment: String(data.equipment ?? ""),
           feature: String(data.feature ?? ""),
           feature_desc: String(data.feature_desc ?? ""),
+          // The published option's grants and feature, when the catalog sent them.
+          ...(entry.table ?? {}),
         },
       };
     case "race":

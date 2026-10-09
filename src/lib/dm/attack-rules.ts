@@ -14,9 +14,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 type Carried = { name: string; qty?: number; equipped?: boolean };
 type XY = { x: number; y: number };
 
-// A content pack twin (Level Up's Dual-Wielding Expert) counts as the feat.
-const hasFeat = (feats: string[] | undefined, name: string) =>
-  (feats ?? []).some((feat) => featTwinOf(feat).startsWith(name));
+// A content pack twin (Level Up's Dual-Wielding Expert) counts as the feat,
+// and so does a table's workshop feat that runs as it.
+const hasFeat = (feats: string[] | undefined, name: string, campaignId?: string) =>
+  (feats ?? []).some((feat) => featTwinOf(feat, campaignId).startsWith(name));
 
 const isLightMelee = (profile: Pick<AttackProfile, "properties" | "ranged">) =>
   !profile.ranged && (profile.properties ?? []).includes("light");
@@ -79,9 +80,10 @@ export function offHandProblem(input: {
   inFight: boolean;
   equipment: Carried[];
   feats?: string[];
+  campaignId?: string;
   shieldName: string | null;
 }): string | null {
-  const dualWielder = hasFeat(input.feats, "dual wielder");
+  const dualWielder = hasFeat(input.feats, "dual wielder", input.campaignId);
   if (input.profile.ranged || (!isLightMelee(input.profile) && !dualWielder)) {
     return `The off-hand attack of two-weapon fighting is made with a light melee weapon, and ${input.profile.weapon} is not one. ${input.who} can make it with a dagger, shortsword, handaxe or another light weapon.`;
   }
@@ -141,11 +143,12 @@ export function loadingProblem(input: {
   profile: Pick<AttackProfile, "weapon" | "properties">;
   budget: TurnBudget | null;
   feats?: string[];
+  campaignId?: string;
 }): string | null {
   if (!(input.profile.properties ?? []).includes("loading") || !input.budget) {
     return null;
   }
-  if (hasFeat(input.feats, "crossbow expert") || hasFeat(input.feats, "gunner")) {
+  if (hasFeat(input.feats, "crossbow expert", input.campaignId) || hasFeat(input.feats, "gunner", input.campaignId)) {
     return null;
   }
   const fired = (input.budget.loadingFired ?? []).includes(input.profile.weapon.toLowerCase());

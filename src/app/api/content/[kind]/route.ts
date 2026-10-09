@@ -1,7 +1,7 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { catalogPrices } from "@/lib/characters/catalog";
 import { contentPackInstalled } from "@/lib/content/db";
-import { withMechanics } from "@/lib/workshop/catalog-mechanics";
+import { bundledBackgroundRows, withMechanics } from "@/lib/workshop/catalog-mechanics";
 import {
   listArchetypes,
   listBackgrounds,
@@ -112,6 +112,11 @@ export async function GET(
   // The workshop's "start from" asks for what the engine runs, too.
   if (url.searchParams.get("mechanics") === "1") {
     results = withMechanics(kind, results, { classSlug: url.searchParams.get("class") ?? undefined });
+    // The builder's own backgrounds no content row carries (the Guild
+    // Artisan, a setting's Corpo Dropout) can be started from too.
+    if (kind === "backgrounds") {
+      results = [...results, ...bundledBackgroundRows(q, results as Array<{ slug: string }>)];
+    }
   }
   return Response.json({ results, packInstalled: contentPackInstalled() });
 }
