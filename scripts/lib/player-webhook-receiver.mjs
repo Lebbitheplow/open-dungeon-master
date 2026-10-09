@@ -5,7 +5,7 @@ import path from "node:path";
 
 const TYPES = new Set(["turn_started", "roll_requested", "response_requested", "campaign_paused", "campaign_resumed", "campaign_ended"]);
 const ID = /^[A-Za-z0-9:_-]{1,240}$/;
-const KEYS = new Set(["version", "eventId", "subscriptionId", "campaignId", "playerId", "characterId", "opportunityId", "type", "seq", "occurredAt", "pendingRollId", "phase"]);
+const KEYS = new Set(["version", "eventId", "subscriptionId", "campaignId", "playerId", "characterId", "opportunityId", "type", "seq", "occurredAt", "pendingRollId", "phase", "text"]);
 
 export function verifySignature(secret, timestamp, signature, body, now = Date.now()) {
   if (!/^\d{10}$/.test(timestamp ?? "") || Math.abs(now / 1000 - Number(timestamp)) > 300 || !/^v1=[a-f0-9]{64}$/.test(signature ?? "")) return false;
@@ -19,6 +19,7 @@ export function validateEvent(event, config) {
   for (const key of ["eventId", "subscriptionId", "campaignId", "playerId", "characterId", "opportunityId"]) if (!ID.test(event[key] ?? "")) return false;
   if (event.type === "roll_requested" && !ID.test(event.pendingRollId ?? "")) return false;
   if (event.phase !== undefined && !["act", "finish"].includes(event.phase)) return false;
+  if (event.text !== undefined && (typeof event.text !== "string" || event.text.length > 4000)) return false;
   return event.subscriptionId === config.id && event.campaignId === config.campaignId && event.characterId === config.characterId;
 }
 
