@@ -32,6 +32,8 @@ const { subscribe } = await import("../src/lib/events.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { upsertNpc, listNpcs } = await import("../src/lib/db/npcs.ts");
+const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
+const { personLines } = await import("../src/lib/dm/speech-lines.ts");
 
 let passed = 0;
 async function test(name, fn) {
@@ -73,6 +75,8 @@ const unsubscribe = subscribe(CAMP, (chunk) => {
 });
 const saved = (messageId) => fs.readFileSync(narrationAudioPath(CAMP, messageId), "utf8");
 const entry = (name) => voiceRoster(CAMP).find((candidate) => candidate.name === name);
+// The lines the server stores for a person's passage (src/lib/dm/speech-lines.ts).
+const lines = (text) => personLines(getCampaignById(CAMP), text);
 
 await test("the roster is the cast, and nobody has a voice until one is chosen", () => {
   const roster = voiceRoster(CAMP);
@@ -94,7 +98,7 @@ await test("a voice's gender is the person's field, in any language, never their
 });
 
 await test("without a chosen voice the narrator reads everything, as before", async () => {
-  await enqueueNarrationAudio(CAMP, "m-plain", '"Hold the gate," says Marla.', { ttsVoice: "af_heart" });
+  await enqueueNarrationAudio(CAMP, "m-plain", '"Hold the gate," says Marla.', lines('"Hold the gate," says Marla.'), { ttsVoice: "af_heart" });
   assert.equal(saved("m-plain"), '[af_heart@1:"Hold the gate," says Marla.]');
 });
 
@@ -102,7 +106,7 @@ await test("a chosen voice reads its speaker's lines, found by a short name", as
   assert.ok(setRosterVoice(CAMP, entry("Captain Marla Venn"), { voiceId: "bf_emma", speed: 1.1 }));
   assert.equal(listNpcs(CAMP).find((npc) => npc.name === "Captain Marla Venn").voice.voiceId, "bf_emma", "an NPC's voice stays on the NPC");
   events.length = 0;
-  await enqueueNarrationAudio(CAMP, "m-voiced", 'The gate shudders. "Hold the gate," says Marla, "or we all die here." Pike spits.', {
+  await enqueueNarrationAudio(CAMP, "m-voiced", 'The gate shudders. "Hold the gate," says Marla, "or we all die here." Pike spits.', lines('The gate shudders. "Hold the gate," says Marla, "or we all die here." Pike spits.'), {
     ttsVoice: "af_heart",
     ttsSpeed: 0.9,
   });
@@ -122,13 +126,13 @@ await test("the table is offered the passage before it is finished, at the addre
 });
 
 await test("with casting on, a speaker without a voice is given one that suits and keeps it", async () => {
-  await enqueueNarrationAudio(CAMP, "m-cast", '"Not my fight," Pike mutters. He drinks.', { ttsVoice: "af_heart", ttsAutoCast: true });
+  await enqueueNarrationAudio(CAMP, "m-cast", '"Not my fight," Pike mutters. He drinks.', lines('"Not my fight," Pike mutters. He drinks.'), { ttsVoice: "af_heart", ttsAutoCast: true });
   const pike = entry("Old Pike").voice;
   assert.ok(pike, "Pike was cast");
   assert.equal(voiceGender(pike.voiceId), "m");
   assert.notEqual(pike.voiceId, "af_heart", "never the narrator's own voice");
   assert.ok(saved("m-cast").startsWith(`[${pike.voiceId}@1:Not my fight,]`));
-  await enqueueNarrationAudio(CAMP, "m-cast-2", '"Still not my fight," says Pike.', { ttsVoice: "af_heart", ttsAutoCast: true });
+  await enqueueNarrationAudio(CAMP, "m-cast-2", '"Still not my fight," says Pike.', lines('"Still not my fight," says Pike.'), { ttsVoice: "af_heart", ttsAutoCast: true });
   assert.equal(entry("Old Pike").voice.voiceId, pike.voiceId, "and is the same voice next time");
 });
 
@@ -136,7 +140,7 @@ await test("a monster is voiced by what it is, and a passage spoken as it is all
   assert.ok(setRosterVoice(CAMP, { key: "monster:goblin", name: "Goblin" }, { voiceId: "am_fenrir", speed: 1.3 }));
   assert.deepEqual(listCampaignVoices(CAMP).map((voice) => voice.key), ["monster:goblin"]);
   assert.equal(entry("Goblin").kind, "monster", "a monster with a voice stays on the roster after its fight");
-  await enqueueNarrationAudio(CAMP, "m-goblin", "Shinies. Give.", { ttsVoice: "af_heart" }, { kind: "monster", id: "e2", name: "Goblin 2" });
+  await enqueueNarrationAudio(CAMP, "m-goblin", "Shinies. Give.", lines("Shinies. Give."), { ttsVoice: "af_heart" }, { kind: "monster", id: "e2", name: "Goblin 2" });
   assert.equal(saved("m-goblin"), "[am_fenrir@1.3:Shinies. Give.]");
   setRosterVoice(CAMP, { key: "monster:goblin", name: "Goblin" }, null);
   assert.equal(entry("Goblin"), undefined);
@@ -157,7 +161,7 @@ await test("casting the whole table gives everyone left a different voice", asyn
 await test("a long passage asks for a short first clip and loses nothing", async () => {
   asked.length = 0;
   const long = "The rain comes down on the slate roofs of the lower town and does not stop. ".repeat(30).trim();
-  await enqueueNarrationAudio(CAMP, "m-long", long, { ttsVoice: "af_heart" });
+  await enqueueNarrationAudio(CAMP, "m-long", long, lines(long), { ttsVoice: "af_heart" });
   assert.ok(asked.length >= 3);
   assert.ok(asked.some((request) => request.input.length <= 320));
   assert.equal(saved("m-long").replace(/\]\[af_heart@1:/g, " ").replace(/^\[af_heart@1:|\]$/g, ""), long, "in order, nothing lost");

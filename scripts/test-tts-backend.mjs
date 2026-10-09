@@ -240,7 +240,7 @@ const unsubscribe = subscribe(CAMP, (chunk) => {
 
 await test("a passage that renders is saved and announced", async () => {
   mode = "ok";
-  await enqueueNarrationAudio(CAMP, "msg-ok", "The door opens.", "narrator_one");
+  await enqueueNarrationAudio(CAMP, "msg-ok", "The door opens.", [], "narrator_one");
   assert.ok(fs.existsSync(narrationAudioPath(CAMP, "msg-ok")));
   assert.equal(takeNarrationFailure("msg-ok"), null);
   assert.ok(events.some((event) => event.type === "tts_ready" && event.payload.messageId === "msg-ok"));
@@ -249,7 +249,7 @@ await test("a passage that renders is saved and announced", async () => {
 await test("a passage the server refuses is published as failed, with the reason", async () => {
   mode = "refuse";
   events.length = 0;
-  await enqueueNarrationAudio(CAMP, "msg-bad", "The door stays shut.", "narrator_one");
+  await enqueueNarrationAudio(CAMP, "msg-bad", "The door stays shut.", [], "narrator_one");
   assert.ok(!fs.existsSync(narrationAudioPath(CAMP, "msg-bad")));
   const failed = events.find((event) => event.type === "media_status" && event.payload.state === "failed")?.payload;
   assert.ok(failed, "a failed media_status was published");
@@ -262,7 +262,7 @@ await test("a passage the server refuses is published as failed, with the reason
 
 await test("an empty answer is a failure too, not a silent empty file", async () => {
   mode = "empty";
-  await enqueueNarrationAudio(CAMP, "msg-empty", "Silence.", "narrator_one");
+  await enqueueNarrationAudio(CAMP, "msg-empty", "Silence.", [], "narrator_one");
   assert.ok(!fs.existsSync(narrationAudioPath(CAMP, "msg-empty")));
   assert.match(takeNarrationFailure("msg-empty") ?? "", /without any audio/);
 });
@@ -270,7 +270,7 @@ await test("an empty answer is a failure too, not a silent empty file", async ()
 await test("a server that is not there says where it was looked for", async () => {
   mode = "ok";
   saveGlobalConfig({ speech: { ttsProvider: "kokoro", kokoroUrl: "http://127.0.0.1:9", ttsModel: "", ttsApiKey: "", ttsVoice: "" } });
-  await enqueueNarrationAudio(CAMP, "msg-gone", "Nobody home.", "af_heart");
+  await enqueueNarrationAudio(CAMP, "msg-gone", "Nobody home.", [], "af_heart");
   assert.equal(takeNarrationFailure("msg-gone"), "The Kokoro speech server could not be reached at 127.0.0.1:9.");
 });
 
@@ -278,7 +278,7 @@ await test("narration switched off asks for nothing and announces nothing", asyn
   saveGlobalConfig({ speech: { ttsProvider: "off" } });
   events.length = 0;
   const before = seen.length;
-  await enqueueNarrationAudio(CAMP, "msg-off", "Not a word.", "af_heart");
+  await enqueueNarrationAudio(CAMP, "msg-off", "Not a word.", [], "af_heart");
   assert.equal(seen.length, before);
   assert.equal(events.length, 0);
 });

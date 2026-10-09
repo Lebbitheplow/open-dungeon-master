@@ -56,11 +56,12 @@ test("a pick suits the speaker, is stable, and avoids voices already taken", () 
 
 const { unvoicedSpeakers } = await import("../src/lib/tts.ts");
 
-test("a voice is cast for whoever spoke, not for whoever they spoke to", () => {
+test("a voice is cast for whoever the stored lines say spoke, or the one the passage is spoken as", () => {
   const entry = (key, name) => ({ key, kind: "npc", name, aliases: [], portraitUrl: "", ownerUserId: "", gender: "", voice: null });
-  const roster = [entry("npc:marla", "Marla"), entry("npc:pike", "Old Pike")];
-  const keys = unvoicedSpeakers('Marla turns to Old Pike, his face grim. "We go," she says.', roster, null);
-  assert.deepEqual([...keys], ["npc:marla"], "Pike was only spoken to");
+  const roster = [entry("npc:marla", "Marla"), entry("npc:pike", "Old Pike"), entry("monster:goblin", "Goblin")];
+  const lines = [{ line: "We go,", speaker: { kind: "npc", id: "marla", name: "Marla" } }];
+  assert.deepEqual([...unvoicedSpeakers(lines, roster, null)], ["npc:marla"], "Pike, only spoken to, has no line");
+  assert.deepEqual([...unvoicedSpeakers([], roster, { kind: "monster", id: "e2", name: "Goblin 2" })], ["monster:goblin"]);
 });
 
 console.log(`test-tts-cast: ${passed} passed`);

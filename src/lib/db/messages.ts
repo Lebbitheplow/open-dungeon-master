@@ -1,4 +1,4 @@
-import { normalizeSpeaker, type Speaker } from "@/lib/dm/speech";
+import { normalizeSpeaker, normalizeSpokenLines, type Speaker, type SpokenLine } from "@/lib/dm/speech";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
 import type { GeneratedImage, ImageRequest } from "@/lib/types";
@@ -38,6 +38,9 @@ export type CampaignMessage = {
   // A system line's icon, stored by its writer. Absent on other messages and
   // on lines written before it, which draw the neutral bell.
   glyph?: SystemGlyph;
+  // Who speaks each quoted line of a DM message, stored by its writer
+  // (src/lib/dm/speech.ts). Empty where nobody speaks or before it existed.
+  speech: SpokenLine[];
   createdAt: string;
 };
 
@@ -58,6 +61,7 @@ type MessageRow = {
   speaker_json: string | null;
   intent_json?: string | null;
   glyph?: string | null;
+  speech_json?: string | null;
   created_at: string;
 };
 
@@ -79,6 +83,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     speaker: normalizeSpeaker(parseJson<unknown>(row.speaker_json ?? "null", null)) ?? undefined,
     intent: parseMessageIntent(parseJson<unknown>(row.intent_json ?? "null", null)) ?? undefined,
     glyph: isSystemGlyph(row.glyph) ? row.glyph : undefined,
+    speech: normalizeSpokenLines(parseJson<unknown>(row.speech_json ?? "null", null)),
     createdAt: row.created_at,
   };
 }
@@ -95,8 +100,13 @@ export function insertCampaignMessage(
     dmTurnId?: string;
     speaker?: Speaker | null;
     intent?: MessageIntent | null;
-    // A system line always says what it is (src/lib/system-glyphs.ts).
-  } & ({ authorType: "player" | "dm"; glyph?: never } | { authorType: "system"; glyph: SystemGlyph }),
+    // A system line always carries its icon (src/lib/system-glyphs.ts), and a
+    // DM message who speaks its quoted lines (src/lib/dm/speech.ts).
+  } & (
+    | { authorType: "player"; glyph?: never; speech?: never }
+    | { authorType: "dm"; glyph?: never; speech: readonly SpokenLine[] }
+    | { authorType: "system"; glyph: SystemGlyph; speech?: never }
+  ),
 ): CampaignMessage {
   const id = crypto.randomUUID();
   getDatabase()
@@ -104,9 +114,9 @@ export function insertCampaignMessage(
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, glyph, created_at
+          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, glyph, speech_json, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -123,6 +133,7 @@ export function insertCampaignMessage(
       input.speaker && input.speaker.kind !== "narrator" ? JSON.stringify(input.speaker) : null,
       input.intent ? JSON.stringify(input.intent) : null,
       input.glyph ?? null,
+      input.speech?.length ? JSON.stringify(input.speech) : null,
       nowIso(),
     );
   touchCampaign(input.campaignId);
@@ -260,16 +271,17 @@ export function findMessageForDmTurn(dmTurnId: string): CampaignMessage | null {
 }
 
 // Lore-check accept: replaces a message's text in place (the lead applying
-// an approved consistency rewrite). The caller publishes message_updated.
-export function updateMessageContent(messageId: string, content: string): CampaignMessage | null {
+// an approved consistency rewrite), with who speaks its lines. The caller
+// publishes message_updated.
+export function updateMessageContent(messageId: string, content: string, speech: readonly SpokenLine[]): CampaignMessage | null {
   const result = getDatabase()
     .prepare(
       // Clearing the reroll takes keeps content === variants[variant_index]:
       // an accepted rewrite supersedes every take, and browsing back to one
       // afterwards would silently undo the fix.
-      `UPDATE campaign_messages SET content = ?, variants_json = NULL, variant_index = NULL WHERE id = ?`,
+      `UPDATE campaign_messages SET content = ?, speech_json = ?, variants_json = NULL, variant_index = NULL WHERE id = ?`,
     )
-    .run(content, messageId);
+    .run(content, speech.length ? JSON.stringify(speech) : null, messageId);
   return result.changes > 0 ? getCampaignMessage(messageId) : null;
 }
 
@@ -286,11 +298,13 @@ export function getLatestDmMessage(campaignId: string): CampaignMessage | null {
 
 // Narration reroll: stores the variant set and which one stands, keeping
 // content in sync with the selection in one statement so no reader can see
-// a message whose text disagrees with its own variant index.
+// a message whose text disagrees with its own variant index. `speech` holds
+// who speaks the lines of every take (src/lib/dm/speech.ts mergeLines).
 export function setMessageVariants(
   messageId: string,
   variants: string[],
   index: number,
+  speech: readonly SpokenLine[],
 ): CampaignMessage | null {
   const selected = variants[index];
   if (selected === undefined) {
@@ -298,8 +312,8 @@ export function setMessageVariants(
   }
   const result = getDatabase()
     .prepare(
-      `UPDATE campaign_messages SET variants_json = ?, variant_index = ?, content = ? WHERE id = ?`,
+      `UPDATE campaign_messages SET variants_json = ?, variant_index = ?, content = ?, speech_json = ? WHERE id = ?`,
     )
-    .run(JSON.stringify(variants), index, selected, messageId);
+    .run(JSON.stringify(variants), index, selected, speech.length ? JSON.stringify(speech) : null, messageId);
   return result.changes > 0 ? getCampaignMessage(messageId) : null;
 }

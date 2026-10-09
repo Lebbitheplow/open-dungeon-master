@@ -427,7 +427,7 @@ export const MessageItem = memo(function MessageItem({
               }}
             />
           ) : (
-            <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} cast={cast} speaker={message.speaker} />
+            <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} cast={cast} lines={message.speech} speaker={message.speaker} />
           )}
           {message.generatedImage ? (
             <ImageLightbox

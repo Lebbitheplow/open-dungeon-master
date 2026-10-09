@@ -9,7 +9,8 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { getNpcById } from "@/lib/db/npcs";
 import type { Speaker } from "@/lib/dm/speech";
-import { agentNarrationProblem, closeAgentTurn, isAgentRequest } from "@/lib/dm/agent-turn";
+import { closeAgentTurn, isAgentRequest, readAgentNarration } from "@/lib/dm/agent-turn";
+import { narratedLines } from "@/lib/dm/speech-lines";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,9 +69,9 @@ export async function POST(
   // A connected agent program's prose is checked like the storyteller's,
   // and a contradiction comes back to it as the rewrite prompt.
   const agent = isAgentRequest(request);
-  const problem = agent ? await agentNarrationProblem(campaign, parsed.data.content) : null;
-  if (problem) {
-    return Response.json({ error: problem }, { status: 409 });
+  const read = agent ? await readAgentNarration(campaign, parsed.data.content) : null;
+  if (read?.problem) {
+    return Response.json({ error: read.problem }, { status: 409 });
   }
   if (agent) {
     closeAgentTurn(campaignId);
@@ -88,6 +89,7 @@ export async function POST(
     userId: user.id,
     content: parsed.data.content,
     speaker,
+    speech: narratedLines(campaign, parsed.data.content, { speaker, agentLines: read?.lines ?? null }),
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
 
@@ -107,6 +109,7 @@ export async function POST(
       campaignId,
       message.id,
       parsed.data.content,
+      message.speech,
       campaign.gameSettings,
       speaker,
     );

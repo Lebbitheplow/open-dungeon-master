@@ -37,7 +37,7 @@ export async function resumeAfterXCard(
   const latest = getLatestDmMessage(campaignId);
   let outcome: { ok: true } | { error: string } = { ok: true };
   if (action === "rewind" && latest) {
-    const withdrawn = updateMessageContent(latest.id, WITHDRAWN_TEXT);
+    const withdrawn = updateMessageContent(latest.id, WITHDRAWN_TEXT, []);
     if (withdrawn) {
       publishPersisted(campaignId, "message_updated", { message: withdrawn });
     }

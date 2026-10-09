@@ -560,6 +560,7 @@ await test("The prose-spell check knows every leveled spell in the spell data, a
       leveledSpells: leveledSpellNames(),
       normalizeSpell: normalizeSpellName,
       skills: new Set(),
+      speakers: new Map(),
     });
   assert.deepEqual(kinds(casts("Guiding Bolt"), []), ["spell"]);
   assert.deepEqual(kinds(casts("Fireball"), []), ["spell"]);

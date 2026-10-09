@@ -11,6 +11,8 @@ import { requestDmMessage } from "@/lib/dm/model";
 import { setDmStatus } from "@/lib/dm/status";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueNarrationAudio } from "@/lib/tts";
+import { mergeLines } from "@/lib/dm/speech";
+import { modelLines } from "@/lib/dm/speech-lines";
 import { extractStoryText } from "@/lib/story-prompt";
 import {
   assembleVariantContent,
@@ -43,6 +45,7 @@ function refreshNarrationAudio(campaign: Campaign, message: CampaignMessage) {
     campaign.id,
     message.id,
     message.content,
+    message.speech,
     campaign.gameSettings,
     message.speaker ?? null,
   );
@@ -113,6 +116,7 @@ export async function runContinueScene(input: {
   if (!continuation) {
     return { error: "The DM returned nothing; try again.", status: 502 };
   }
+  const spoken = await modelLines(campaign, continuation, `continue ${input.messageId}`);
 
   // Re-read after the model call: the message may have moved on while the
   // model was working (a reroll, a lore-check rewrite, a double-tapped
@@ -137,6 +141,7 @@ export async function runContinueScene(input: {
     input.messageId,
     replaceSelectedVariant(variants, index, content),
     index,
+    mergeLines(current.speech, spoken),
   );
   if (!updated) {
     return { error: "Could not store the continuation.", status: 500 };

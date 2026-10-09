@@ -1589,6 +1589,10 @@ function ensureSchema(db: SqliteDatabase) {
     // worked in English. Null on other messages and on lines written before
     // it, which draw the neutral bell.
     ["glyph", `TEXT`],
+    // Who speaks each quoted line of a DM message ([{ line, speaker }],
+    // src/lib/dm/speech.ts SpokenLine), decided when the message is written.
+    // Null on messages written before it, whose lines stay the narrator's.
+    ["speech_json", `TEXT`],
   ]);
 
   addColumns("dm_turns", [

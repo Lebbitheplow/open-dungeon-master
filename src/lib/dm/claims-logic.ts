@@ -9,8 +9,10 @@
 
 import { z } from "zod";
 import { replyJsonObject } from "../reply-json-logic.ts";
+import type { Speaker } from "./speech.ts";
+import { QUOTE, quotedText, speakerMatchers } from "./speech-prose.ts";
 
-export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask"] as const;
+export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "speaker"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
 
 export const ROLL_ASK_CHECKS = ["skill", "ability", "save", "initiative"] as const;
@@ -20,7 +22,8 @@ export type Ability = (typeof ABILITIES)[number];
 // What survives the checks. Targets are the engine's creature keys
 // (engine-boundary.ts normalizeCreatureName); a cast names its caster as the
 // party writes them and its spell normalized as the guard compares it; a
-// roll ask names a character id or "all".
+// roll ask names a character id or "all"; a speaker claim holds the quoted
+// line's own words and who speaks it (src/lib/dm/speech.ts SpokenLine).
 export type NarrationClaim =
   | { kind: "hit" | "miss" | "dies" | "downed"; target: string; quote: string }
   | { kind: "amount"; value: number; of: "damage" | "healing"; quote: string }
@@ -34,7 +37,8 @@ export type NarrationClaim =
       ability?: Ability;
       dc?: number;
       quote: string;
-    };
+    }
+  | { kind: "speaker"; line: string; speaker: Speaker };
 
 // Which claims a piece of narration could contradict or trigger, from
 // engine state alone. A kind the turn gives no ground truth for is never
@@ -57,6 +61,9 @@ export type ReaderGate = {
   // No fight runs, and the one correction for a fight announced in prose
   // is unspent.
   fightStart: boolean;
+  // The passage holds a quoted line, so who speaks it can be stored with
+  // the message.
+  speech: boolean;
   // The turn rolled no damage yet, and the one correction for a blow landed
   // in prose is unspent.
   unrolled: boolean;
@@ -86,6 +93,9 @@ export function claimKindsFor(gate: ReaderGate): ClaimKind[] {
   if (gate.rollAsk && gate.party) {
     kinds.push("roll_ask");
   }
+  if (gate.speech) {
+    kinds.push("speaker");
+  }
   return kinds;
 }
 
@@ -100,17 +110,28 @@ const KIND_LINES: Record<ClaimKind, string> = {
     '{"kind":"fight_start","quote":Q}: the narration announces to the players that a fight begins now: a call to roll initiative, or a stat-block style enemy roster (enemy counts with challenge ratings, a surprise field).',
   roll_ask:
     '{"kind":"roll_ask","character":PARTY_REF|"all","check":"skill"|"ability"|"save"|"initiative","skill":SKILL,"ability":"str"|"dex"|"con"|"int"|"wis"|"cha","dc":N,"quote":Q}: the narration asks a party character to roll now. skill only for a skill check; ability for a save or a bare ability check; dc only when stated.',
+  speaker:
+    '{"kind":"speaker","ref":SPEAKER_REF,"quote":Q}: the one claim about quoted dialogue, saying only who speaks a line of it; quote is copied from inside that line\'s quotation marks. Only when the words around the line tie it to one listed person: a tag that names them or one of their other names, the person the narration is about just before or after it, or a word like "she" that points back to them. Leave the line out when its tag names nobody listed ("a guard calls", "you say"), when it answers the line before with no tag of its own, or when you would be guessing: a line left out stays the narrator\'s, and a line given to the wrong person is a mistake. One claim per quoted line.',
 };
 
-// The reader's instructions. Every claim kind is listed so the system prompt
-// is the same on every call; the request says which kinds to use.
-export function readerSystem(skillIds: readonly string[]): string {
+// The reader's instructions. Every claim kind about the game is listed so the
+// system prompt is the same on every call; the request says which kinds to
+// use. Who speaks a line is listed only on a read that asks it: offered on
+// every read, it made the other kinds' reads worse (measured on the reader's
+// test cases, three runs with it and three without).
+// A read that asks who speaks beside the other kinds is told to answer for
+// every line: among the other kinds, a small local model let the rule
+// against quoted dialogue win and named nobody (recorded narration, five
+// languages). A read asking only who speaks is not: told the same, it
+// guessed.
+export function readerSystem(skillIds: readonly string[], speakers: boolean, alongside = false): string {
+  const kinds = CLAIM_KINDS.filter((kind) => speakers || kind !== "speaker");
   return `You read one passage of a tabletop RPG game master's narration and list what it states as happening now, as claims. You do not judge whether a claim is true: the game engine does that. The narration may be in any language; spell names in claims are the English SRD names (the narration may use its own language's name).
 
 Answer with exactly one JSON object and nothing else: {"claims":[ ... ]}. Use only the claim kinds the message lists under "Ask"; with nothing to report, answer {"claims":[]}.
 
 Claim kinds:
-${CLAIM_KINDS.map((kind) => `- ${KIND_LINES[kind]}`).join("\n")}
+${kinds.map((kind) => `- ${KIND_LINES[kind]}`).join("\n")}
 SKILL is one of: ${skillIds.join(", ")}.
 
 Rules:
@@ -121,21 +142,31 @@ Rules:
   - attempts ("swings at", "strikes toward");
   - events in the past ("yesterday's fireball");
   - a spell cast by anyone outside the party.
-- target, caster and character are a ref copied exactly as the message lists it in quotes ("goblin", never "Goblin 1" or "goblin (Goblin 1)"). If the narration doesn't say which listed creature it means, leave the claim out.
+- target, caster${speakers ? ", character and ref are" : " and character are"} a ref copied exactly as the message lists it in quotes ("goblin", never "Goblin 1" or "goblin (Goblin 1)"). If the narration doesn't say which listed creature it means, leave the claim out.
 - quote: copy the words from the narration exactly, a short span that contains the claim.
-- A roll ask that names nobody: "all" when it addresses everyone; the only character when the party has one; otherwise leave it out.`;
+- A roll ask that names nobody: "all" when it addresses everyone; the only character when the party has one; otherwise leave it out.${
+    speakers && alongside
+      ? `
+- speaker is the one kind that reads quoted dialogue: give a speaker claim for every quoted line the words around it tie to a listed person, however many lines the passage has. Someone the narration describes who has no speaker ref (a sentry, a passer-by, "the cook") speaks their own lines: leave those out, even when a listed person is close by.`
+      : ""
+  }`;
 }
 
 export type ReaderRefs = {
   // Creature keys with the name the engine prints.
   creatures: Array<{ ref: string; display: string }>;
   party: Array<{ ref: string; name: string }>;
+  // Everyone who may speak a line, by ref, when speakers are asked.
+  speakers: Array<{ ref: string; name: string; aliases?: readonly string[] }>;
 };
 
 export function renderReaderInput(kinds: readonly ClaimKind[], refs: ReaderRefs, text: string): string {
   const creatures = refs.creatures.map((entry) => `"${entry.ref}" for ${entry.display}`).join(", ") || "(none)";
   const party = refs.party.map((entry) => `"${entry.ref}" for ${entry.name}`).join(", ") || "(none)";
-  return `Ask: ${kinds.join(", ")}\nCreature refs: ${creatures}\nParty refs: ${party}\n\nNarration:\n<<<\n${text}\n>>>`;
+  const speakers = kinds.includes("speaker")
+    ? `\nSpeaker refs: ${refs.speakers.map((entry) => `"${entry.ref}" for ${entry.name}${entry.aliases?.length ? ` (also: ${entry.aliases.join(", ")})` : ""}`).join(", ") || "(none)"}`
+    : "";
+  return `Ask: ${kinds.join(", ")}\nCreature refs: ${creatures}\nParty refs: ${party}${speakers}\n\nNarration:\n<<<\n${text}\n>>>`;
 }
 
 // The reply, read once at the boundary: a claim that is not shaped as its
@@ -155,6 +186,7 @@ const claimSchema = z.discriminatedUnion("kind", [
     dc: z.number().int().min(1).max(40).optional(),
     quote: quoteField,
   }),
+  z.object({ kind: z.literal("speaker"), ref: z.string().min(1).max(120), quote: quoteField }),
 ]);
 const replySchema = z.object({ claims: z.array(z.unknown()).max(40) });
 
@@ -191,7 +223,34 @@ export type ClaimContext = {
   leveledSpells: ReadonlySet<string>;
   normalizeSpell: (name: string) => string;
   skills: ReadonlySet<string>;
+  // Speaker ref to who it is: the people the passage names (namedSpeakers).
+  speakers: ReadonlyMap<string, Speaker>;
 };
+
+// The people a passage names outside its quoted lines: the only ones the
+// reader may say a line belongs to, so it never names someone the prose
+// hides ("the hooded figure" stays nobody's), and the only ones its request
+// lists. A word of a longer name counts only written as a name: "the pike"
+// is a weapon, not Old Pike.
+export function namedSpeakers(text: string, speakers: ReadonlyMap<string, Speaker>): Map<string, Speaker> {
+  const prose = text.replace(QUOTE, " ");
+  return new Map(
+    [...speakers].filter(([, speaker]) => {
+      const [{ pattern, short }] = speakerMatchers([speaker]);
+      return [...prose.matchAll(pattern)].some((found) => !short.has(found[0].toLowerCase()) || /^\p{Lu}/u.test(found[0]));
+    }),
+  );
+}
+
+// The quoted line a speaker claim's quote comes from, when exactly one line
+// of the passage holds it. A quote copied with the line's own quotation
+// marks («…», as small local models do) stands for the words inside them.
+function speakerLine(text: string, quote: string): string | null {
+  const [marked] = quote.trim().matchAll(QUOTE);
+  const words = marked?.[0] === quote.trim() ? quotedText(marked) : quote;
+  const lines = [...text.matchAll(QUOTE)].map(quotedText).filter((line) => squash(line).includes(squash(words)));
+  return lines.length === 1 ? lines[0] : null;
+}
 
 // The claims that may act: shaped as their kind, asked for, quoting the
 // narration word for word, and naming only refs, spells, skills and
@@ -246,6 +305,14 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
           break;
         }
         kept.push(claim);
+        break;
+      }
+      case "speaker": {
+        const speaker = context.speakers.get(claim.ref);
+        const line = speaker ? speakerLine(context.text, claim.quote) : null;
+        if (speaker && line) {
+          kept.push({ kind: "speaker", line, speaker });
+        }
         break;
       }
     }

@@ -53,12 +53,13 @@ import {
   collectExchanges,
   FAKE_ENCOUNTER_PROMPT,
   fightAnnounced,
-  guardOutcomes,
   unrolledFigure,
   unrolledDamagePrompt,
 } from "@/lib/dm/engine-boundary";
-import { claimKindsFor, type PartRead } from "@/lib/dm/claims-logic";
-import { guardGate, liveStateFor, readClaims } from "@/lib/dm/claims";
+import type { PartRead } from "@/lib/dm/claims-logic";
+import { readReply, registeringNames } from "@/lib/dm/claims";
+import { modelTextLines } from "@/lib/dm/speech-lines";
+import type { SpokenLine } from "@/lib/dm/speech";
 import { markToolError } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
@@ -606,25 +607,6 @@ export async function reenterDmTurn(campaign: Campaign, turn: DmTurn) {
   await advance(loadContext(campaign), turn);
 }
 
-// One read of a reply's prose (src/lib/dm/claims.ts), asking only what this
-// moment of the turn could act on.
-async function readReply(
-  context: TurnContext,
-  turn: DmTurn,
-  text: string,
-  state: { inEncounter: boolean; encounterNudged: boolean; damageNudged: boolean },
-): Promise<PartRead> {
-  const { campaign, sheets } = context;
-  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
-  const kinds = claimKindsFor({
-    ...guardGate(campaign, outcomes, sheets),
-    rollAsk: true,
-    fightStart: !state.inEncounter && !state.encounterNudged,
-    unrolled: !state.damageNudged && !outcomes.damageNumbers.length,
-  });
-  return { kinds, claims: await readClaims(campaign, { label: `turn ${turn.id}`, text, kinds, outcomes, sheets }) };
-}
-
 // A throwing tool handler used to leave dm_turns stuck at 'running' until
 // failStaleRunningTurns reaped it ten minutes later, with the table watching
 // a DM that never speaks. Any unexpected throw now finalizes the turn at
@@ -635,7 +617,7 @@ async function advance(context: TurnContext, turn: DmTurn) {
   } catch (error) {
     console.error("[dm-turn] advance failed", error);
     if (turn.status === "running") {
-      finalize(context, turn, "The Dungeon Master hit an internal error and had to stop this turn.");
+      finalize(context, turn, "The Dungeon Master hit an internal error and had to stop this turn.", []);
     } else {
       setDmStatus(context.campaign.id, "idle");
     }
@@ -872,11 +854,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const jsonSalvage = salvageJsonToolCalls(xmlSalvage.text, tools);
     const salvage = salvageTextualToolCalls(extractStoryText(jsonSalvage.text));
     // The reply's prose, read once by the claims reader (src/lib/dm/claims.ts)
-    // for the rolls it asks in words, a fight it announces, a blow it lands
-    // and, with the guard on, what it claims. Not read on the forced final
-    // call, where nothing found could run; nor when the reply already rolls
-    // (no double dice); nor beside an attack, whose text is dropped below.
-    // Kept prose left unread is read by the guard at the end of the turn.
+    // for the rolls it asks in words, a fight it announces, a blow it lands,
+    // who speaks its quoted lines and, with the guard on, what it claims.
+    // Not read on the forced final call, where nothing found could run; nor
+    // when the reply already rolls (no double dice); nor beside an attack,
+    // whose text is dropped below. Kept prose left unread is read by the
+    // guard at the end of the turn.
     const structuredCalls = [
       ...extractToolCalls(message?.tool_calls),
       ...xmlSalvage.calls,
@@ -888,7 +871,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       Boolean(salvage.text.trim()) &&
       !structuredCalls.some((toolCall) => toolCall.name === "request_roll" || resolvesOutcome(toolCall));
     const read = replyRead
-      ? await readReply(context, turn, salvage.text, { inEncounter, encounterNudged, damageNudged })
+      ? await readReply(campaign, sheets, turn, salvage.text, {
+          inEncounter,
+          encounterNudged,
+          damageNudged,
+          registering: registeringNames(structuredCalls),
+        })
       : null;
     const claims = read?.claims ?? [];
     const proseRolls = rollAsksFromClaims(salvage.text, claims, sheets);
@@ -1376,16 +1364,17 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   ) {
     await narrateAfterToolLeak(context, turn);
   }
+  let spoken: SpokenLine[] = [];
   if (!failed) {
     await ensureWhisperReplies(context, turn);
     // Last stop before the narration is persisted: cross-check the prose
     // against the outcomes this turn's tools actually resolved and against
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
-    // disagree.
-    await enforceEngineBoundary(campaign, turn, sheets, partReads);
+    // disagree. Its reads also say who speaks the narration's lines.
+    spoken = await enforceEngineBoundary(campaign, turn, sheets, partReads);
   }
-  finalize(context, turn, failed);
+  finalize(context, turn, failed, spoken);
   if (!failed) {
     await maybeCloseChapter(campaignId, { beatCompleted, beatGated, beatClaimed });
     if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
@@ -1729,7 +1718,6 @@ export function handleLocationCall(
   } catch {
     return { error: "Invalid arguments." };
   }
-  // The kind of place, from the ambience beds (src/lib/ambience/catalog.ts).
   const beds = sceneIds();
   if (args.scene !== undefined && !beds.includes(String(args.scene))) {
     return { error: `Unknown scene "${String(args.scene)}"; use one of: ${beds.join(", ")}.` };
@@ -1901,7 +1889,7 @@ function emptyTurnPlayer(context: TurnContext): EmptyTurnPlayer | null {
   };
 }
 
-function finalize(context: TurnContext, turn: DmTurn, failed: string) {
+function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: readonly SpokenLine[]) {
   const campaignId = context.campaign.id;
   // The place a player's reply made this narration take, if one arrived
   // while it was on screen (src/lib/dm/narration-slot.ts). The message sits
@@ -1997,6 +1985,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
     // can reroll its prose (src/lib/dm/renarrate.ts) without re-running the
     // turn's tools.
     dmTurnId: turn.id,
+    speech: modelTextLines(context.campaign, content, spoken),
   });
   publishWithSeq(campaignId, claimed === null ? seq : allocateSeq(campaignId), "message_added", { message });
   setDmStatus(campaignId, "idle");
@@ -2027,6 +2016,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
       campaignId,
       message.id,
       content,
+      message.speech,
       context.campaign.gameSettings,
     );
   }

@@ -14,7 +14,7 @@ import { READER_PROMPT_START } from "./lib/claims-reader.mjs";
 const { test, finish } = suite("test-claims");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
 
-const { checkClaims, claimKindsFor, parseReaderReply, readerSystem, renderReaderInput } = await import(
+const { checkClaims, claimKindsFor, namedSpeakers, parseReaderReply, readerSystem, renderReaderInput } = await import(
   "../src/lib/dm/claims-logic.ts"
 );
 const { leveledSpellNames, readClaims } = await import("../src/lib/dm/claims.ts");
@@ -32,6 +32,7 @@ const GATE = {
   rollAsk: false,
   fightStart: false,
   unrolled: false,
+  speech: false,
 };
 
 // ---- the gate ----
@@ -47,21 +48,40 @@ await test("Only the kinds engine state can rule on are asked, and nothing is as
     [],
   );
   assert.deepEqual(claimKindsFor({ ...GATE, guard: false, unrolled: true, fightStart: true }), ["amount", "fight_start"]);
+  // Who speaks a quoted line is asked whether or not the guard is on.
+  assert.deepEqual(claimKindsFor({ ...GATE, guard: false, speech: true }), ["speaker"]);
 });
 
 await test("The request lists the kinds, the refs and the narration; the instructions name every skill id.", () => {
   const input = renderReaderInput(
     ["hit", "roll_ask"],
-    { creatures: [{ ref: "goblin", display: "Goblin 1" }], party: [{ ref: "c1", name: "Kara" }] },
+    { creatures: [{ ref: "goblin", display: "Goblin 1" }], party: [{ ref: "c1", name: "Kara" }], speakers: [{ ref: "n1", name: "Marla" }] },
     "Kara colpisce il goblin.",
+  );
+  assert.doesNotMatch(input, /Speaker refs/, "speakers are listed only when asked");
+  assert.match(
+    renderReaderInput(["speaker"], { creatures: [], party: [], speakers: [{ ref: "n1", name: "Marla Venn", aliases: ["il Capitano"] }, { ref: "c1", name: "Kara" }] }, "«Basta», dice il Capitano."),
+    /^Speaker refs: "n1" for Marla Venn \(also: il Capitano\), "c1" for Kara$/m,
+    "each speaker's other names are listed, so a line tagged by one finds them",
   );
   assert.match(input, /^Ask: hit, roll_ask$/m);
   assert.match(input, /"goblin" for Goblin 1/);
   assert.match(input, /"c1" for Kara/);
   assert.match(input, /<<<\nKara colpisce il goblin\.\n>>>/);
-  assert.match(readerSystem(["perception", "sleight_of_hand"]), /SKILL is one of: perception, sleight_of_hand\./);
+  assert.match(readerSystem(["perception", "sleight_of_hand"], false), /SKILL is one of: perception, sleight_of_hand\./);
+  // Who speaks is in the instructions only when it is asked, so every other
+  // read sends what it did before.
+  assert.doesNotMatch(readerSystem([], false), /speaker|SPEAKER_REF/);
+  assert.match(readerSystem([], true), /"kind":"speaker"/);
+  assert.match(readerSystem([], true), /target, caster, character and ref are a ref/);
+  // Asked beside the other kinds, the reader is told to answer for every
+  // line; asked alone, it is not.
+  assert.match(readerSystem([], true, true), /a speaker claim for every quoted line/);
+  assert.equal(readerSystem([], true, false), readerSystem([], true));
+  assert.doesNotMatch(readerSystem([], false, true), /speaker/);
   // The fake models answer the reader by how its instructions open.
-  assert.ok(readerSystem([]).startsWith(READER_PROMPT_START));
+  assert.ok(readerSystem([], false).startsWith(READER_PROMPT_START));
+  assert.ok(readerSystem([], true).startsWith(READER_PROMPT_START));
 });
 
 // ---- the checks ----
@@ -75,8 +95,16 @@ const context = (text, kinds) => ({
   leveledSpells: leveledSpellNames(),
   normalizeSpell: normalizeSpellName,
   skills: new Set(["perception", "stealth"]),
+  speakers: namedSpeakers(
+    text,
+    new Map([
+      ["n1", { kind: "npc", id: "n1", name: "Marla Venn" }],
+      ["n2", { kind: "npc", id: "n2", name: "Old Pike" }],
+      [mira.id, { kind: "pc", id: mira.id, name: "Mira" }],
+    ]),
+  ),
 });
-const ALL = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask"];
+const ALL = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "speaker"];
 
 await test("A claim quoting words the narration does not hold never acts; a quote with other quote marks or spacing does.", () => {
   const text = "La lama di Mira colpisce il goblin. «Morirai», sibila.";
@@ -112,6 +140,35 @@ await test("A cantrip cast, an unknown skill or a save with no ability is droppe
     ctx,
   );
   assert.deepEqual(kept, [{ kind: "roll_ask", character: "all", check: "skill", skill: "perception", quote: "roll Perception" }]);
+});
+
+await test("A speaker claim acts only on a quoted line, a known ref, and a person the prose itself names.", () => {
+  const text = "Marla alza lo sguardo. «Sei tornato», dice. Una figura incappucciata sussurra: «Non fidarti di lei.»";
+  const ctx = context(text, ALL);
+  assert.deepEqual(checkClaims([{ kind: "speaker", ref: "n1", quote: "Sei tornato" }], ctx), [
+    { kind: "speaker", line: "Sei tornato", speaker: { kind: "npc", id: "n1", name: "Marla Venn" } },
+  ], "a single word of the name, written as a name, names her; the line is stored whole");
+  assert.deepEqual(checkClaims([{ kind: "speaker", ref: "n1", quote: "«Sei tornato»" }], ctx), [
+    { kind: "speaker", line: "Sei tornato", speaker: { kind: "npc", id: "n1", name: "Marla Venn" } },
+  ], "a quote copied with the line's own marks is that line");
+  assert.deepEqual(
+    checkClaims([{ kind: "speaker", ref: "n1", quote: "«Sei tornato», dice. Una figura incappucciata sussurra: «Non fidarti di lei.»" }], ctx),
+    [],
+    "a quote spanning two lines is neither",
+  );
+  assert.deepEqual(checkClaims([{ kind: "speaker", ref: "n1", quote: "Marla alza lo sguardo" }], ctx), [], "not a quoted line");
+  assert.deepEqual(checkClaims([{ kind: "speaker", ref: "n9", quote: "Sei tornato" }], ctx), [], "an unknown ref");
+  assert.deepEqual(checkClaims([{ kind: "speaker", ref: "n2", quote: "Non fidarti di lei." }], ctx), [], "the hooded figure is not named Pike anywhere");
+  assert.deepEqual(
+    checkClaims([{ kind: "speaker", ref: "n2", quote: "Fermi!" }], context("Pike grida «Fermi!» e la pike cade.", ALL)).length,
+    1,
+  );
+  assert.deepEqual(
+    checkClaims([{ kind: "speaker", ref: "n2", quote: "Fermi!" }], context("La pike cade. «Fermi!»", ALL)),
+    [],
+    "a word of a name only names someone written as a name",
+  );
+  assert.deepEqual(checkClaims([{ kind: "speaker", ref: "n1", quote: "Sei tornato" }], context(text, ["hit"])), [], "not asked");
 });
 
 await test("A reply is read once at the boundary: fences and stray prose are tolerated, anything else is unreadable.", () => {
@@ -178,6 +235,39 @@ await test("A reader that fails or answers nonsense counts as claiming nothing, 
   assert.deepEqual(failed.result, []);
   assert.ok(failed.lines.some((line) => line.includes("[claims] turn test") && line.includes("failed")), failed.lines.join("\n"));
   assert.ok(!failed.lines.some((line) => line.includes("Lich Queen")), "the narration reached the log");
+});
+
+await test("Who speaks is read from the public cast, the party and an NPC the reply itself registers.", async () => {
+  const model = await fakeModel();
+  model.pointAt(world);
+  const npcs = await import("../src/lib/db/npcs.ts");
+  const marla = npcs.upsertNpc({ campaignId: world.campaignId, name: "Marla Venn" });
+  model.claims([
+    [
+      { kind: "speaker", ref: marla.id, quote: "Sei tornato" },
+      { kind: "speaker", ref: "new:Bruno", quote: "Benvenuti" },
+    ],
+  ]);
+  const claims = await readClaims(world.campaign(), {
+    label: "turn test",
+    text: "Marla alza lo sguardo: «Sei tornato.» Bruno apre la porta: «Benvenuti.»",
+    kinds: ["speaker"],
+    outcomes,
+    sheets: world.sheets(),
+    registering: ["Bruno"],
+  });
+  assert.deepEqual(claims.map((claim) => [claim.line, claim.speaker.name, claim.speaker.id]), [
+    ["Sei tornato.", "Marla Venn", marla.id],
+    ["Benvenuti.", "Bruno", ""],
+  ]);
+  assert.match(model.readerRequests[0].messages[1].content, new RegExp(`^Speaker refs: "${marla.id}" for Marla Venn, "new:Bruno" for Bruno$`, "m"), "only the people the passage names are listed");
+  model.claims([]);
+  assert.deepEqual(
+    await readClaims(world.campaign(), { label: "turn test", text: "Una voce nel buio: «Chi va là?»", kinds: ["speaker"], outcomes, sheets: world.sheets() }),
+    [],
+  );
+  assert.equal(model.readerRequests.length, 0, "a passage naming nobody is not read for its speakers");
+  model.close();
 });
 
 world.close();

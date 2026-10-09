@@ -44,6 +44,7 @@ export async function POST(
     campaignId,
     message.id,
     message.content,
+    message.speech,
     context.campaign.gameSettings,
     // A passage spoken as someone is read as them again, not as the narrator.
     message.speaker ?? null,

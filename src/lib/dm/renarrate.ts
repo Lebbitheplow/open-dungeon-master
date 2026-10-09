@@ -10,6 +10,8 @@ import { requestDmMessage } from "@/lib/dm/model";
 import { setDmStatus } from "@/lib/dm/status";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueNarrationAudio } from "@/lib/tts";
+import { mergeLines } from "@/lib/dm/speech";
+import { modelLines } from "@/lib/dm/speech-lines";
 import { extractStoryText } from "@/lib/story-prompt";
 import {
   appendVariant,
@@ -46,6 +48,7 @@ function refreshNarrationAudio(campaign: Campaign, message: CampaignMessage) {
     campaign.id,
     message.id,
     message.content,
+    message.speech,
     campaign.gameSettings,
     message.speaker ?? null,
   );
@@ -132,6 +135,7 @@ export async function runRenarrate(input: {
   }
 
   const content = assembleVariantContent(turn.narrationParts, turn.rollIds, narration);
+  const spoken = await modelLines(campaign, narration, `renarrate ${input.messageId}`);
   // Re-read after the model call: the message may have moved on while the
   // model was working (a lore-check rewrite, or a double-tapped reroll).
   const current = getCampaignMessage(input.messageId);
@@ -142,7 +146,7 @@ export async function runRenarrate(input: {
   if (appended.capped) {
     return { error: `That is all ${MAX_VARIANTS} takes; pick one.`, status: 409 };
   }
-  const updated = setMessageVariants(input.messageId, appended.variants, appended.index);
+  const updated = setMessageVariants(input.messageId, appended.variants, appended.index, mergeLines(current.speech, spoken));
   if (!updated) {
     return { error: "Could not store the new take.", status: 500 };
   }
@@ -170,7 +174,7 @@ export function selectRenarrateVariant(input: {
   if (index < 0) {
     return { error: "No such take.", status: 400 };
   }
-  const updated = setMessageVariants(input.messageId, variants, index);
+  const updated = setMessageVariants(input.messageId, variants, index, message.speech);
   if (!updated) {
     return { error: "Could not select that take.", status: 500 };
   }

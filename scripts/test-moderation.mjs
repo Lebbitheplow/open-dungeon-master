@@ -100,7 +100,7 @@ try {
   assert.equal(playerReport.reportedUsername, "other");
 
   // A later edit does not rewrite what was reported.
-  updateMessageContent(dmMessage.id, "Something tamer.");
+  updateMessageContent(dmMessage.id, "Something tamer.", []);
   assert.equal(listReports("open").find((entry) => entry.id === report.id).excerpt, dmMessage.content);
   assert.equal(countOpenReports(), 2);
 

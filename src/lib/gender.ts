@@ -15,6 +15,8 @@ export function storedGender(raw: unknown): Gender {
 
 // The gender as "she" or "he" would stand for it: what picks a voice, and
 // what the English pronouns of a speech line are matched against.
-export function genderMark(gender: Gender | undefined): "f" | "m" | "" {
+export type GenderMark = "f" | "m" | "";
+
+export function genderMark(gender: Gender | undefined): GenderMark {
   return gender === "Female" ? "f" : gender === "Male" ? "m" : "";
 }

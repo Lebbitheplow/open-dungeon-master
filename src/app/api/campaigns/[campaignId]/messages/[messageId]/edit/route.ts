@@ -8,6 +8,8 @@ import {
 import { publishPersisted } from "@/lib/events";
 import { MAX_EDITED_LENGTH, checkEdit, replaceSelectedTake } from "@/lib/dm/message-edit-logic";
 import { resolveVariantIndex, seedVariants } from "@/lib/dm/renarrate-logic";
+import { mergeLines } from "@/lib/dm/speech";
+import { personLines } from "@/lib/dm/speech-lines";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,10 +56,13 @@ export async function POST(
   // others, so browsing still works after an edit.
   const variants = seedVariants(message.variants ?? [], message.content);
   const index = resolveVariantIndex(variants, message.variantIndex ?? 0);
+  // The lines the edit left alone keep their speakers; new ones are read
+  // from the person's words (src/lib/dm/speech-lines.ts).
+  const speech = mergeLines(message.speech, personLines(context.campaign, check.content));
   const updated =
     index >= 0 && variants.length > 1
-      ? setMessageVariants(messageId, replaceSelectedTake(variants, index, check.content), index)
-      : updateMessageContent(messageId, check.content);
+      ? setMessageVariants(messageId, replaceSelectedTake(variants, index, check.content), index, speech)
+      : updateMessageContent(messageId, check.content, speech);
 
   if (!updated) {
     return Response.json({ error: "Could not save the edit." }, { status: 500 });

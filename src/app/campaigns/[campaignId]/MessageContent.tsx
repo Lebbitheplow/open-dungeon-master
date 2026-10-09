@@ -3,7 +3,7 @@
 import { ImageOff, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { stripToolText } from "@/lib/dm/tool-text";
-import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
+import { segmentsOf, type Speaker, type SpokenLine } from "@/lib/dm/speech";
 import type { CastMember } from "@/lib/dm/cast";
 import { SpeechLine } from "@/app/campaigns/[campaignId]/SpeechLine";
 import { Prose } from "@/app/campaigns/[campaignId]/Prose";
@@ -70,13 +70,15 @@ export function MediaPlaceholder({
 
 const ROLL_MARKER = /\[roll:([0-9a-f-]{36})\]/g;
 
-export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }: {
+export function DmContent({ content, rollsById, sheetsById, cast = [], lines, speaker }: {
   content: string;
   rollsById: Map<string, StoredRoll>;
   sheetsById: Map<string, CharacterSheet>;
-  // The cast, so a quoted line near a known name gets that face
+  // The cast, for the faces of the people who speak
   // (docs/vtt-parity-implementation-plan.md 8.1).
   cast?: CastMember[];
+  // Who speaks each quoted line, stored with the message (src/lib/dm/speech.ts).
+  lines: readonly SpokenLine[];
   // The whole passage spoken as one person.
   speaker?: Speaker;
 }) {
@@ -99,15 +101,9 @@ export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }
     parts.push({ kind: "text", text: cleaned.slice(lastIndex) });
   }
 
-  // Anyone the prose may quote: the cast, and the characters at the table
-  // (an AI companion talks as much as any NPC), each under every name they
-  // answer to.
-  const speakers: Speaker[] = [
-    ...cast.map((member) => ({ kind: "npc" as const, id: member.id, name: member.name, aliases: member.aliases })),
-    ...[...sheetsById.values()]
-      .filter((sheet) => !sheet.summon && !cast.some((member) => member.name.toLowerCase() === sheet.name.toLowerCase()))
-      .map((sheet) => ({ kind: "pc" as const, id: sheet.id, name: sheet.name })),
-  ];
+  // A creature's line is voiced but stays in the narration here: the
+  // transcript gives a face only to the cast and the characters.
+  const faced = lines.filter((entry) => entry.speaker.kind !== "monster");
   const faceOf = (who: Speaker) => (who.kind === "pc" ? sheetsById.get(who.id)?.portrait?.url : undefined);
   if (speaker) {
     return (
@@ -129,7 +125,7 @@ export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }
       {parts.map((part, index) =>
         part.kind === "text" ? (
           <div key={index} className="space-y-2">
-            {attributeSpeech(part.text.trim(), speakers).map((segment, at) =>
+            {segmentsOf(part.text.trim(), faced).map((segment, at) =>
               segment.kind === "speech" ? (
                 <SpeechLine key={at} speaker={segment.speaker} cast={cast} face={faceOf(segment.speaker)}>
                   <Prose text={segment.text} />

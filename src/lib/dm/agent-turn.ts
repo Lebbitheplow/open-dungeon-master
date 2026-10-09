@@ -18,6 +18,8 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { guardOutcomes, ruleClaims } from "@/lib/dm/engine-boundary";
 import { liveStateFor, readClaims } from "@/lib/dm/claims";
 import { guardKinds } from "@/lib/dm/narration-guard";
+import { hasQuotedLine, type SpokenLine } from "@/lib/dm/speech";
+import { modelTextLines } from "@/lib/dm/speech-lines";
 
 // Every request an agent program sends carries this header
 // (src/lib/agents/workbench.ts workbenchCall).
@@ -74,32 +76,41 @@ export function recordAgentCall(
 }
 
 // What in the agent's narration contradicts the engine, as one sentence for
-// the refusal, or null. With the guard switched off at the table, nothing.
-// The narration is read by the same claims reader as the storyteller's
-// (src/lib/dm/claims.ts), in the table's language.
-export async function agentNarrationProblem(campaign: Campaign, narration: string): Promise<string | null> {
+// the refusal, or null (nothing, with the guard switched off at the table),
+// and who speaks its quoted lines. The narration is read by the same claims
+// reader as the storyteller's (src/lib/dm/claims.ts), in the table's
+// language.
+export async function readAgentNarration(
+  campaign: Campaign,
+  narration: string,
+): Promise<{ problem: string | null; lines: SpokenLine[] }> {
   const turn = findAgentTurn(campaign.id);
   const sheets = listSheets(campaign.id);
   const outcomes = guardOutcomes(turn?.conversation ?? [], liveStateFor(campaign.id));
-  const kinds = guardKinds(campaign, outcomes, sheets);
-  if (!kinds.length) {
-    return null;
-  }
+  const guarded = guardKinds(campaign, outcomes, sheets);
   const claims = await readClaims(campaign, {
     label: `agent turn ${turn?.id ?? "(none yet)"}`,
     text: narration,
-    kinds,
+    kinds: hasQuotedLine(narration) ? [...guarded, "speaker"] : guarded,
     outcomes,
     sheets,
   });
+  const lines = modelTextLines(
+    campaign,
+    narration,
+    claims.flatMap((claim) => (claim.kind === "speaker" ? [{ line: claim.line, speaker: claim.speaker }] : [])),
+  );
   const found = ruleClaims(claims, outcomes);
   if (!found.length) {
-    return null;
+    return { problem: null, lines };
   }
-  return `The narration contradicts what the engine resolved: ${found
-    .slice(0, 4)
-    .map((entry) => `${entry.detail} ("${entry.clause}")`)
-    .join("; ")}. Rewrite it to match the results, or resolve the action with its tool first.`;
+  return {
+    problem: `The narration contradicts what the engine resolved: ${found
+      .slice(0, 4)
+      .map((entry) => `${entry.detail} ("${entry.clause}")`)
+      .join("; ")}. Rewrite it to match the results, or resolve the action with its tool first.`,
+    lines,
+  };
 }
 
 // Narration posted: the agent's stretch of play is over.

@@ -1,13 +1,29 @@
 // Reading the prose around a line of dialogue (src/lib/dm/speech.ts):
 // where its sentences end, who each one is about, and what it calls them.
 // Pure, like the attribution it serves.
+//
+// It reads structure, the same way in every table language: quote pairs,
+// sentence ends, known names and where they stand. The one exception is
+// English, whose pronouns ("she", "he", "her") are followed back to the
+// person they mean (Reading.pronouns): languages that drop the subject
+// pronoun (Italian, Spanish, Portuguese) or have no gendered one (Finnish,
+// Hungarian, Indonesian) give that reading nothing to hold on to.
 
 import type { Speaker } from "@/lib/dm/speech";
+import type { GenderMark } from "@/lib/gender";
 
-// A quoted line. Never across a line break, so one unclosed quote cannot
-// swallow the paragraph after it.
-export const QUOTE = /[“"]([^“”"\n]{2,600})[”"]/g;
-export const QUOTE_OPEN = /[“"]/;
+// A quoted line, in any pair prose uses: “…”, "…", «…», „…“, »…«. Only a
+// matched pair is a line, so an apostrophe or a lone guillemet opens
+// nothing; never across a line break, so one unclosed quote cannot swallow
+// the paragraph after it.
+export const QUOTE = /[“"]([^“”"\n]{2,600})[”"]|«([^«»\n]{2,600})»|„([^„“”\n]{2,600})[“”]|»([^»«\n]{2,600})«/g;
+export const QUOTE_OPEN = /[“"«„»]/;
+
+// The words inside a QUOTE match, without its marks or the spaces French
+// sets inside them (« Tenez »).
+export function quotedText(match: RegExpMatchArray): string {
+  return (match[1] ?? match[2] ?? match[3] ?? match[4] ?? "").trim();
+}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -17,16 +33,6 @@ export function wordCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
-// Words of a name that are not the person: "Old Pike" is Pike, "Captain
-// Marla Venn" is Marla or Venn, never "Old" or "Captain".
-const NAME_NOISE = new Set([
-  "the", "old", "young", "big", "little", "mad", "red", "black", "white", "grey", "gray",
-  "captain", "sir", "lady", "lord", "dame", "king", "queen", "prince", "princess", "duke", "duchess",
-  "baron", "baroness", "count", "countess", "brother", "sister", "father", "mother", "master", "mistress",
-  "elder", "doctor", "professor", "sergeant", "commander", "general", "chief", "mayor", "guard", "priest",
-  "priestess", "uncle", "aunt", "miss", "madam", "von", "van", "del", "and", "for",
-]);
-
 function nameWords(name: string): string[] {
   return name
     .split(/[\s,]+/)
@@ -35,14 +41,14 @@ function nameWords(name: string): string[] {
 }
 
 // `short` holds the single words of a longer name, lower-cased: they only
-// count where the prose writes them as a name, with a capital.
+// count where the prose writes them as a name (`named`).
 export type Matcher = { speaker: Speaker; pattern: RegExp; short: Set<string> };
 
 // Every name a speaker may go by in the prose: their name, their aliases,
-// and any one word of a longer name ("Marla" or "Venn" for "Captain Marla
-// Venn") when it is a real name and nobody else at the table shares it.
-// Built once per message, longest spelling first so "Marla Venn" is never
-// read as "Marla" with a word left over.
+// and any one word of a longer name ("Marla" or "Venn" for "Marla Venn")
+// that nobody else at the table shares. Built once per message, longest
+// spelling first so "Marla Venn" is never read as "Marla" with a word left
+// over.
 export function speakerMatchers(speakers: Speaker[]): Matcher[] {
   const claimed = new Map<string, number>();
   const full = new Set<string>();
@@ -67,7 +73,7 @@ export function speakerMatchers(speakers: Speaker[]): Matcher[] {
     if (words.length > 1) {
       for (const word of words) {
         const key = word.toLowerCase();
-        if (word.length >= 3 && /^\p{Lu}/u.test(word) && !NAME_NOISE.has(key) && claimed.get(key) === 1 && !full.has(key)) {
+        if (word.length >= 3 && /^\p{Lu}/u.test(word) && claimed.get(key) === 1 && !full.has(key)) {
           names.add(word);
           short.add(key);
         }
@@ -84,24 +90,59 @@ export function speakerMatchers(speakers: Speaker[]): Matcher[] {
   return matchers;
 }
 
-// "Hill" is Tom Hill; "the hill" is a hill.
-export function written(found: RegExpExecArray, short: Set<string>): boolean {
-  return !short.has(found[0].toLowerCase()) || /^\p{Lu}/u.test(found[0]);
+// The words a story writes in lower case somewhere: common words ("old",
+// "captain", "hill"), not names, wherever a capital only marks a sentence
+// start. What replaces a hand-written list of titles in every language.
+export function commonWords(texts: readonly string[]): Set<string> {
+  const common = new Set<string>();
+  for (const text of texts) {
+    for (const word of text.match(/[\p{L}\p{N}]+/gu) ?? []) {
+      if (/^\p{Ll}/u.test(word)) {
+        common.add(word);
+      }
+    }
+  }
+  return common;
+}
+
+export type Reading = {
+  matchers: Matcher[];
+  // commonWords over the recent story and this passage.
+  common: ReadonlySet<string>;
+  // English only: follow "she" and "he" back to the person they mean.
+  pronouns: boolean;
+};
+
+// Whether nothing but punctuation stands before a word in its sentence.
+export function opensSentence(before: string): boolean {
+  return /^[\s"“”'‘’«»„*_(\[—–,:;-]*$/u.test(before);
+}
+
+// "Hill" is Tom Hill; "the hill" is a hill. At a sentence start, where every
+// word has a capital, a word of a longer name counts only if the story never
+// writes it in lower case: "Marla frowns." is Marla, "Old habits die hard"
+// is not Old Pike.
+export function written(found: RegExpExecArray, short: Set<string>, reading: Reading, atStart: boolean): boolean {
+  const key = found[0].toLowerCase();
+  if (!short.has(key)) {
+    return true;
+  }
+  return /^\p{Lu}/u.test(found[0]) && !(atStart && reading.common.has(key));
 }
 
 export type Found = { speaker: Speaker; end: number };
 
-// The known person a stretch of prose opens with, past a title or two:
+// The known person a stretch of prose opens with, past a common word or two:
 // "Old Pike", "Captain Venn", "the Captain".
-export function nameAt(text: string, matchers: Matcher[]): Found | null {
+export function nameAt(text: string, reading: Reading, atStart: boolean): Found | null {
   let offset = 0;
   for (let skipped = 0; skipped <= 2; skipped += 1) {
     const rest = text.slice(offset);
     let best: Found | null = null;
-    for (const { speaker, pattern, short } of matchers) {
+    for (const { speaker, pattern, short } of reading.matchers) {
       pattern.lastIndex = 0;
       const found = pattern.exec(rest);
-      if (found && found.index === 0 && written(found, short) && (!best || offset + found[0].length > best.end)) {
+      if (found && found.index === 0 && written(found, short, reading, atStart && offset === 0) && (!best || offset + found[0].length > best.end)) {
         best = { speaker, end: offset + found[0].length };
       }
     }
@@ -109,7 +150,7 @@ export function nameAt(text: string, matchers: Matcher[]): Found | null {
       return best;
     }
     const word = /^([\p{L}'’-]+)\s+/u.exec(rest);
-    if (!word || !NAME_NOISE.has(word[1].toLowerCase())) {
+    if (!word || !reading.common.has(word[1].toLowerCase())) {
       return null;
     }
     offset += word[0].length;
@@ -119,17 +160,23 @@ export function nameAt(text: string, matchers: Matcher[]): Found | null {
 
 // Words that carry on about someone already named: "She smiles", "His
 // voice drops". "It" is left out: "It is cold" is about nobody.
-export const PRONOUN = /^(she|he|they|her|his|their|hers|him|them)\b/i;
+const PRONOUN = /^(she|he|they|her|his|their|hers|him|them)\b/i;
 // What a stretch about one person calls them: "she" or "he" where a
 // clause opens ("She sighs, and he shrugs" is two people), and the "her"
 // and "his" that are theirs. "Him" after a verb is somebody else.
 const OWN = /(?:^|[,;:]\s+|\b(?:and|but|then|while)\s+)(she|he)\b|\b(her|hers|herself|his|himself)\b/gi;
 
-export type Gender = "f" | "m" | "";
+// The pronoun a stretch of prose opens with, when the table reads pronouns.
+export function pronounAt(text: string, reading: Reading): RegExpExecArray | null {
+  return reading.pronouns ? PRONOUN.exec(text) : null;
+}
 
-function pronounCounts(text: string): { f: number; m: number } {
+function pronounCounts(text: string, reading: Reading): { f: number; m: number } {
   let f = 0;
   let m = 0;
+  if (!reading.pronouns) {
+    return { f, m };
+  }
   for (const match of text.matchAll(OWN)) {
     if (/^(?:she|her|hers|herself)$/i.test(match[1] ?? match[2])) {
       f += 1;
@@ -141,28 +188,22 @@ function pronounCounts(text: string): { f: number; m: number } {
 }
 
 // What a stretch of prose about one person calls them, when it is clear.
-export function genderOf(text: string): Gender {
-  const { f, m } = pronounCounts(text);
+export function genderOf(text: string, reading: Reading): GenderMark {
+  const { f, m } = pronounCounts(text, reading);
   return f > 0 && f >= 2 * m ? "f" : m > 0 && m >= 2 * f ? "m" : "";
 }
 
 // Every way a stretch calls the people it is about.
-export function gendersIn(text: string): Gender[] {
-  const { f, m } = pronounCounts(text);
+export function gendersIn(text: string, reading: Reading): GenderMark[] {
+  const { f, m } = pronounCounts(text, reading);
   return [...(f ? ["f" as const] : []), ...(m ? ["m" as const] : [])];
 }
-
-// Verbs of speech, for telling a tag ("Marla calls out") from an action
-// ("Marla frowns") and for a sentence that hands the floor to a line
-// ("Pike watches as Marla says:").
-export const SPEECH_VERB =
-  /^(?:(?:say|ask|call|shout|whisper|mutter|murmur|mumble|snarl|growl|hiss|demand|add|answer|yell|bark|insist|boom|warn|exclaim|declare|announce|command|order|plead|sigh|laugh|grunt|rasp|croak|intone|drawl|scoff|sneer|retort|interject|admit|agree|observe|explain|promise|tell|speak|offer|counter|protest|groan|gasp|stammer|stutter|whimper|purr|roar|bellow|howl|scream|repeat|remind|confirm|concede|greet|recite|chant|rumble|squeak|shriek|wheeze|quip|urge|assure|muse|wonder|continue|breathe|note|chuckle|venture|whine|hum|sing)(?:s|es|ed|d)?|said|told|spoke|sang|began|begins?|cr(?:y|ies|ied)|repl(?:y|ies|ied)|snap(?:s|ped)?|beg(?:s|ged)?)$/i;
 
 export type Sentence = { text: string; start: number };
 
 // A sentence ends at . ! ? or … before a capital, a quote or the end of the
 // text, and at every line break; "It's... consumption" stays one sentence.
-const SENTENCE_END = /[.!?…]+["'”’)\]*_]*(?=\s+[\p{Lu}"“‘'*_(\[]|\s*$)|\n+/gu;
+const SENTENCE_END = /[.!?…]+["'”’»«)\]*_]*(?=\s+[\p{Lu}"“‘'«»„*_(\[]|\s*$)|\n+/gu;
 
 export function sentencesOf(text: string): Sentence[] {
   const out: Sentence[] = [];
@@ -182,12 +223,7 @@ export function sentencesOf(text: string): Sentence[] {
 
 // What a sentence may open with before its first word: a stray quote,
 // emphasis, a dash, the comma of a tag written outside its quote.
-export const LEAD = /^[\s"“”'‘’*_(\[—–,:;-]+/u;
-
-// A short phrase before the subject: "With a sigh, Marla stands",
-// "Without looking up, he says".
-const OPENER =
-  /^(?:\p{L}{3,}(?:ing|ly|ed)|with|without|after|before|at|for|in|on|then|now|still|once|as|despite|behind|beside|across|from|under|over|again)\b/iu;
+export const LEAD = /^[\s"“”'‘’«»„*_(\[—–,:;-]+/u;
 
 export type Subject =
   | { kind: "name"; speaker: Speaker; text: string; end: number }
@@ -200,27 +236,29 @@ export type Named = Extract<Subject, { kind: "name" }>;
 
 // Who a sentence is about: the known person or the pronoun it opens with
 // ("Marla looks up", "She smiles"), "other" when it opens with anybody or
-// anything else ("Sella nods", "The fire pops", "says Marla").
-export function subjectOf(sentence: string, matchers: Matcher[]): Subject {
+// anything else ("Sella nods", "The fire pops", "says Marla"). A short
+// phrase may come first ("With a sigh, Marla stands"): a few words before a
+// comma, none of them written with a capital.
+export function subjectOf(sentence: string, reading: Reading, atStart = true): Subject {
   const text = sentence.replace(LEAD, "").trimEnd();
   if (!text) {
     return { kind: "none" };
   }
-  const at = (body: string): Pointer | null => {
-    const named = nameAt(body, matchers);
-    if (named) {
-      return { kind: "name", speaker: named.speaker, text: body, end: named.end };
+  const at = (body: string, start: boolean): Pointer | null => {
+    const found = nameAt(body, reading, start);
+    if (found) {
+      return { kind: "name", speaker: found.speaker, text: body, end: found.end };
     }
-    const pronoun = PRONOUN.exec(body);
+    const pronoun = pronounAt(body, reading);
     return pronoun ? { kind: "pronoun", text: body, end: pronoun[0].length } : null;
   };
-  const direct = at(text);
+  const direct = at(text, atStart);
   if (direct) {
     return direct;
   }
   const opening = /^([^,;:]{1,60}),\s+/u.exec(text);
-  if (opening && OPENER.test(opening[1]) && !/\s\p{Lu}/u.test(opening[1])) {
-    const after = at(text.slice(opening[0].length));
+  if (opening && wordCount(opening[1]) <= 4 && !/\s\p{Lu}/u.test(opening[1])) {
+    const after = at(text.slice(opening[0].length), false);
     if (after) {
       return after;
     }
@@ -235,37 +273,6 @@ export function aboutSubject(subject: Pointer): { text: string; whole: boolean; 
   return other === -1
     ? { text: subject.text.trim(), whole: true, rest: "" }
     : { text: subject.text.slice(0, subject.end + other).trim(), whole: false, rest: subject.text.slice(subject.end + other) };
-}
-
-export type Run = { speaker: Speaker; text: string; open: boolean };
-
-export function runsOf(text: string, matchers: Matcher[]): Run[] {
-  const runs: Run[] = [];
-  let current: Run | null = null;
-  for (const sentence of sentencesOf(text.replace(QUOTE, " "))) {
-    const subject = subjectOf(sentence.text, matchers);
-    if (subject.kind === "name") {
-      const about = aboutSubject(subject);
-      current = { speaker: subject.speaker, text: about.text, open: about.whole };
-      runs.push(current);
-    } else if (subject.kind === "pronoun" && current?.open) {
-      const about = aboutSubject(subject);
-      current.text = `${current.text} ${about.text}`;
-      current.open = about.whole;
-    } else if (subject.kind !== "none") {
-      current = null;
-    }
-  }
-  return runs;
-}
-
-// Every stretch of prose about one known person, quotes left out: a
-// sentence they open, cut where somebody else is named, and the sentences
-// after it that carry on about "her" or "him" while nobody else has been
-// named whom the pronoun could mean. What src/lib/tts-cast.ts reads a
-// speaker's pronouns from.
-export function subjectRuns(text: string, speakers: Speaker[]): Array<{ speaker: Speaker; text: string }> {
-  return runsOf(text, speakerMatchers(speakers)).map(({ speaker, text: about }) => ({ speaker, text: about }));
 }
 
 export function keyOf(speaker: Speaker): string {
