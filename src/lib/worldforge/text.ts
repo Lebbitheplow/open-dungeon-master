@@ -68,7 +68,7 @@ function atSentenceStart(text: string, index: number): boolean {
   for (let j = index - 1; j >= 0; j -= 1) {
     const c = text[j];
     if (c === "\n") return true;
-    if (/["'“‘(\[—\s]/.test(c)) continue;
+    if (/["'\u201C\u2018(\[\u2014\s]/.test(c)) continue;
     return /[.!?:]/.test(c);
   }
   return true;
