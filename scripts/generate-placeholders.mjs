@@ -57,10 +57,11 @@ const RENDER = {
 // light from bleeding at the edge. scripts/test-placeholders.mjs holds the
 // set to a byte budget so nobody re-encodes it back up by accident.
 //
-// The campaign, map and misc groups now ship full-colour painted scenes
-// (704x400 WebP at quality 85) made outside this pipeline, in place of the
-// amber silhouettes it renders. --force or --reencode on those groups would
-// overwrite them with the old look, so leave them out (use --only).
+// The campaign, map, misc and workshop groups now ship full-colour painted
+// scenes (704x400 WebP at quality 85) made outside this pipeline, in place of
+// the amber silhouettes it renders. --force or --reencode on those groups
+// would overwrite them with the old look, workshop tiles included, so leave
+// them out (use --only).
 const SHIP = {
   square: { width: 256, height: 256 },
   landscape: { width: 704, height: 400 },

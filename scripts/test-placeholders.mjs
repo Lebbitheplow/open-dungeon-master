@@ -29,19 +29,20 @@ const SET_DIR = path.join(PUBLIC, "assets", "placeholders");
 // The whole set rides inside the desktop app and the Android APK. These are
 // ceilings, not targets: generate-placeholders.mjs encodes at 256px squares
 // and 704px landscapes at quality 70, which lands well under both. The
-// campaign, map and misc scenes are painted art supplied as finished 704x400
-// WebP at quality 85 rather than rendered by that script.
-// Raised from 3.5 MB for the full-colour painted campaign, map and misc scene
-// art (704x400 WebP at quality 85, no visible loss), which replaces the amber
-// silhouettes: 76 scenes at about 70 KB each, 5.1 MB of the 6.7 MB set. The
-// cap is one total across every placeholder, so it also leaves room for the
-// painted race and class portraits (PR #174, about +1.1 MB) landing alongside:
-// both together ship about 7.8 MB.
-const BUDGET_TOTAL_BYTES = 9 * 1024 * 1024;
+// campaign, map, misc and workshop scenes are painted art supplied as finished
+// 704x400 WebP at quality 85 rather than rendered by that script.
+// Raised from 3.5 MB for the full-colour painted scene art (704x400 WebP at
+// quality 85, no visible loss), which replaces the amber silhouettes: 85 scenes
+// at about 75 KB each, 6.1 MB of the 7.5 MB set. The cap is one total across
+// every placeholder, so it also leaves room for the painted race and class
+// portraits (PR #174, about +1.1 MB) landing alongside: both together ship
+// about 8.65 MB. The NPC, monster, avatar and genre character plates are still
+// to be painted and will need another raise when they land.
+const BUDGET_TOTAL_BYTES = 10 * 1024 * 1024;
 const BUDGET_FILE_BYTES = 48 * 1024;
-// The painted scenes get their own per-file ceiling (largest is about 104 KB);
+// The painted scenes get their own per-file ceiling (largest is about 117 KB);
 // every other plate keeps the 48 KB one.
-const SCENE_GROUPS = new Set(["campaign", "map", "misc"]);
+const SCENE_GROUPS = new Set(["campaign", "map", "misc", "workshop"]);
 const BUDGET_SCENE_FILE_BYTES = 128 * 1024;
 
 const failures = [];
