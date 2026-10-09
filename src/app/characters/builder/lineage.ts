@@ -82,10 +82,10 @@ function stableBit(value: string): number {
   return acc & 1;
 }
 
-// The plate a class card shows. The setting classes were painted in two
-// genders only, and a card is a picture of the class rather than of this
-// character, so an unstated gender borrows one of the two instead of falling
-// through to the hooded stranger.
+// The plate a class card shows. Every painted class has a neutral plate now;
+// for a class that has only gendered plates, a card is a picture of the class
+// rather than of this character, so an unstated gender borrows one of the two
+// instead of falling through to the hooded stranger.
 export function classArt(classId: string, gender?: string | null): string {
   const own = characterPlaceholder({ class: classId, gender });
   if (own.includes("/character-class/") || normalizeGender(gender) !== "neutral") {

@@ -29,7 +29,10 @@ const SET_DIR = path.join(PUBLIC, "assets", "placeholders");
 // The whole set rides inside the desktop app and the Android APK. These are
 // ceilings, not targets: generate-placeholders.mjs encodes at 256px squares
 // and 704px landscapes at quality 70, which lands well under both.
-const BUDGET_TOTAL_BYTES = 3.5 * 1024 * 1024;
+// Raised from 3.5 MB for the painted race and class portraits, which replace
+// the flat silhouettes at the same 256px / q70 encode and add a neutral plate
+// for each of the 36 genre classes (about 2 MB for those 213 plates).
+const BUDGET_TOTAL_BYTES = 4.5 * 1024 * 1024;
 const BUDGET_FILE_BYTES = 48 * 1024;
 
 const failures = [];
