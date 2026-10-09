@@ -29,24 +29,14 @@ function hash(value: string): number {
 
 // ---- gender ----
 
-// The sheet stores gender as free text (src/lib/schemas/sheet.ts), so this is
-// a best effort over what people actually type, and "neutral" is a real
-// answer rather than a failure: it is what an empty field, a nonbinary
-// identity, and an unparseable one all correctly land on.
+// The sheet's gender is one of the builder's choices (src/lib/gender.ts),
+// compared as written rather than read as words, so it means the same at
+// every table. "neutral" is a real answer rather than a failure: it is what
+// an unspecified gender and a nonbinary one both correctly land on.
 export type PlaceholderGender = "masculine" | "feminine" | "neutral";
 
-const MASCULINE = /^(m|male|man|boy|masc(uline)?|he|him|he\/him|guy|gentleman|lad)$/;
-const FEMININE = /^(f|female|woman|girl|fem(inine)?|she|her|she\/her|lady|gal)$/;
-
-export function normalizeGender(raw: string | null | undefined): PlaceholderGender {
-  const word = String(raw ?? "").trim().toLowerCase();
-  if (MASCULINE.test(word)) {
-    return "masculine";
-  }
-  if (FEMININE.test(word)) {
-    return "feminine";
-  }
-  return "neutral";
+export function normalizeGender(gender: string | null | undefined): PlaceholderGender {
+  return gender === "Male" ? "masculine" : gender === "Female" ? "feminine" : "neutral";
 }
 
 // ---- races ----
@@ -370,7 +360,7 @@ export function campaignPlaceholder(genre: string | null | undefined, seed = "")
 
 // ---- maps ----
 
-// A place's kind of scene (one of the ambience beds, src/lib/ambience/catalog.ts)
+// A place's kind of scene (an ambience bed, src/lib/ambience/catalog.ts)
 // picks its plate, whatever language the place was named in. A kind with
 // several plates draws one by hash, so every plate stays reachable. A place
 // with no kind, or a kind no plate shows, draws one of a reskinned genre's

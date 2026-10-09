@@ -14,8 +14,8 @@ import type { BackgroundOption } from "../useBuilderOptions";
 import type { BuilderState } from "../useBuilderState";
 import { splitToolGrants } from "@/lib/srd/tool-choices";
 import { Field, StepPanel, inputClass } from "./shared";
+import { GENDERS, type Gender } from "@/lib/gender";
 
-const GENDERS = ["Female", "Male", "Nonbinary"];
 // How many tools a background's open grant leaves to the player, in words.
 const COUNT_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three" };
 
@@ -122,12 +122,12 @@ export function IdentityStep({
       <StepPanel title="Details">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Gender">
-            <Select<string>
+            <Select<Gender>
               value={state.gender}
               onChange={state.setGender}
               label="Gender"
               className="w-full"
-              options={[{ value: "", label: "Unspecified" }, ...GENDERS.map((value) => ({ value: value as string, label: value as string }))]}
+              options={[{ value: "", label: "Unspecified" }, ...GENDERS.map((value) => ({ value, label: value }))]}
             />
           </Field>
           <Field label="Level">

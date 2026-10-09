@@ -23,8 +23,8 @@
 // which are one-sided, and which point at somebody who does not exist.
 //
 // Pure by design: no DB and no I/O, so scripts/test-npc-forge.mjs drives it
-// directly. Its one import is npc-logic.ts, which is itself pure; the impure
-// rim is src/lib/db/npcs.ts.
+// directly. Its imports, npc-logic.ts and gender.ts, are themselves pure;
+// the impure rim is src/lib/db/npcs.ts.
 
 import {
   PERSONALITY_AXES,
@@ -33,6 +33,7 @@ import {
   type NpcPersonality,
   type NpcRelation,
 } from "@/lib/dm/npc-logic";
+import { storedGender, type Gender } from "@/lib/gender";
 
 export const ATTITUDES = ["hostile", "indifferent", "friendly"] as const;
 export type Attitude = (typeof ATTITUDES)[number];
@@ -246,6 +247,8 @@ export type NpcDraft = {
   // What they do: a role id from the picker ("merchant", "mystery-inspector")
   // or free text. Chooses the placeholder face (src/lib/placeholders.ts).
   role: string;
+  // src/lib/gender.ts; "" for unspecified.
+  gender: Gender;
   personality: NpcPersonality | null;
   goals: NpcGoals;
   relations: NpcRelation[];
@@ -265,6 +268,7 @@ export function blankDraft(): NpcDraft {
     trait: "",
     location: "",
     role: "",
+    gender: "",
     personality: null,
     goals: {},
     relations: [],
@@ -285,6 +289,7 @@ export function draftFrom(npc: {
   location: string;
   // Optional so rows stored before the column existed still open.
   role?: string;
+  gender?: Gender;
   voice?: NpcVoice | null;
   factionId?: string;
   statBlock?: string;
@@ -302,6 +307,7 @@ export function draftFrom(npc: {
     trait: npc.trait,
     location: npc.location,
     role: npc.role ?? "",
+    gender: npc.gender ?? "",
     personality: npc.agency.personality ? { ...npc.agency.personality } : null,
     goals: structuredClone(npc.agency.goals),
     relations: npc.agency.relations.map((relation) => ({ ...relation })),
@@ -394,6 +400,7 @@ export function normalizeNpcDraft(input: unknown): DraftOutcome {
       trait: String(raw.trait ?? "").trim().slice(0, 200),
       location: String(raw.location ?? "").trim().slice(0, 120),
       role: String(raw.role ?? "").trim().slice(0, 40),
+      gender: storedGender(raw.gender),
       personality: normalizePersonality(raw.personality),
       goals,
       relations,

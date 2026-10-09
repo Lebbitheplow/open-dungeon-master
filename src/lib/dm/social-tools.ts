@@ -28,6 +28,7 @@ import {
 } from "@/lib/dm/relationship-logic";
 import { publishRelationshipsUpdated } from "@/lib/dm/relationship-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
+import { GENDERS } from "@/lib/gender";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import {
@@ -82,6 +83,11 @@ export const socialTools: ToolDef[] = [
             description: "A short note on their personality, bond, or goal, for your own recall.",
           },
           location: { type: "string", description: "Where they are usually found." },
+          gender: {
+            type: "string",
+            enum: [...GENDERS],
+            description: "Their gender, once the story shows it.",
+          },
           goal: {
             type: "string",
             description:
@@ -205,6 +211,7 @@ const setNpcSchema = z.object({
   attitude: z.enum(["hostile", "indifferent", "friendly"]).optional(),
   trait: z.string().max(300).optional(),
   location: z.string().max(120).optional(),
+  gender: z.enum(GENDERS).optional(),
   goal: z.string().max(300).optional(),
   ambition: z.string().max(300).optional(),
 });
@@ -224,6 +231,7 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): Record<s
       attitude: args.attitude,
       trait: args.trait,
       location: args.location,
+      gender: args.gender,
     }),
     { goal: args.goal, ambition: args.ambition },
   );

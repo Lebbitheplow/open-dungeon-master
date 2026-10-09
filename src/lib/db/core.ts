@@ -2058,6 +2058,9 @@ function ensureSchema(db: SqliteDatabase) {
     // portrait exists (src/lib/placeholders.ts) and is shown on the cast
     // list; no rule reads it.
     ["role", `TEXT NOT NULL DEFAULT ''`],
+    // One of the builder's genders or '' (src/lib/gender.ts): what the voice
+    // cast and the speech reader's pronouns read, never their prose.
+    ["gender", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   addColumns("library_characters", [

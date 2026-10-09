@@ -49,7 +49,8 @@ function check(url, label) {
   }
 }
 
-const GENDER_INPUTS = ["", "male", "female", "nonbinary", "she/her", "he/him", "Agender", "?"];
+// The sheet's choices (src/lib/gender.ts), plus free text an old sheet may hold.
+const GENDER_INPUTS = ["", "Female", "Male", "Nonbinary", "she/her", "?"];
 const GENRES = [
   "high_fantasy", "dark_fantasy", "mystery", "horror",
   "cyberpunk", "steampunk", "post_apocalyptic", "custom", "",

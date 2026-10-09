@@ -10,7 +10,6 @@ import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { describeSpeechFailure, synthesizeSpeech, ttsBackend, type TtsBackend } from "@/lib/tts-backend";
 import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
-import { guessGender, type VoiceGender } from "@/lib/tts-cast";
 import { closeLiveNarration, openLiveNarration, pushLiveNarration, renderSpeech } from "@/lib/tts-render";
 import { castUnvoiced, voiceRoster, type RosterEntry } from "@/lib/tts-roster";
 import { baseCreatureName, planSpeech, speechRequests, type CastVoice } from "@/lib/tts-segments";
@@ -73,23 +72,20 @@ export function castVoices(campaignId: string): CastVoice[] {
   }
 }
 
-// Who speaks in this passage without a voice yet, and what the prose that
-// pointed at them says about them ("she says", "Marla tucks her hair
-// back"), never the words about whoever else the sentence names.
+// Who speaks in this passage without a voice yet.
 export function unvoicedSpeakers(
   speech: string,
   roster: RosterEntry[],
   speaker: Speaker | null,
-): { keys: Set<string>; hints: Map<string, VoiceGender> } {
+): Set<string> {
   const keys = new Set<string>();
-  const near = new Map<string, string>();
   if (speaker && speaker.kind !== "narrator") {
     const wanted = [speaker.name.toLowerCase(), baseCreatureName(speaker.name).toLowerCase()];
     const entry = roster.find((candidate) => wanted.includes(candidate.name.toLowerCase()));
     if (entry && !entry.voice) {
       keys.add(entry.key);
     }
-    return { keys, hints: new Map() };
+    return keys;
   }
   const segments = attributeSpeech(
     speech,
@@ -104,9 +100,8 @@ export function unvoicedSpeakers(
       continue;
     }
     keys.add(entry.key);
-    near.set(entry.key, `${near.get(entry.key) ?? ""} ${segment.cue ?? ""}`);
   }
-  return { keys, hints: new Map([...near].map(([key, text]) => [key, guessGender(text)])) };
+  return keys;
 }
 
 export function enqueueNarrationAudio(
@@ -146,9 +141,9 @@ export function enqueueNarrationAudio(
           // No readable roster: the narrator reads it all.
         }
         if (settings.ttsAutoCast && roster.length) {
-          const { keys, hints } = unvoicedSpeakers(speech, roster, speaker);
+          const keys = unvoicedSpeakers(speech, roster, speaker);
           if (keys.size) {
-            await castUnvoiced(campaignId, roster, settings.ttsVoice, { only: keys, hints, backend });
+            await castUnvoiced(campaignId, roster, settings.ttsVoice, { only: keys, backend });
           }
         }
         // OpenAI speech runs on the host's key; the shared-host policy

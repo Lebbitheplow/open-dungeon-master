@@ -2,6 +2,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { matchEntity, mergeAliases, normalizeName, type EntityMatch } from "@/lib/dm/entity-logic";
 import { normalizeNpcVoice, type NpcDraft, type NpcVoice } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
+import { storedGender, type Gender } from "@/lib/gender";
 import {
   parseBonds,
   parseGoals,
@@ -44,6 +45,8 @@ export type Npc = {
   role: string;
   // The stat block they fight with (a monster reference), or "".
   statBlock: string;
+  // src/lib/gender.ts; "" for unspecified.
+  gender: Gender;
   // Kept out of the Active NPCs prompt block; restored on a name mention.
   archived: boolean;
   createdAt: string;
@@ -67,6 +70,7 @@ type NpcRow = {
   arc_cast_id: string;
   portrait_url: string | null;
   role: string | null;
+  gender: string | null;
   voice_json: string | null;
   faction_id: string | null;
   stat_block?: string | null;
@@ -84,6 +88,7 @@ function mapNpc(row: NpcRow): Npc {
     trait: row.trait,
     location: row.location,
     role: row.role ?? "",
+    gender: storedGender(row.gender),
     lastShiftTurn: row.last_shift_turn,
     aliases: parseJson<string[]>(row.aliases_json, []),
     agency: {
@@ -184,6 +189,7 @@ export function upsertNpc(input: {
   attitude?: Attitude;
   trait?: string;
   location?: string;
+  gender?: Gender;
 }): Npc {
   const db = getDatabase();
   const now = nowIso();
@@ -198,12 +204,13 @@ export function upsertNpc(input: {
         : mergeAliases(existing.aliases, input.name);
     db.prepare(
       `UPDATE npcs
-       SET attitude = ?, trait = ?, location = ?, aliases_json = ?, updated_at = ?
+       SET attitude = ?, trait = ?, location = ?, gender = ?, aliases_json = ?, updated_at = ?
        WHERE id = ?`,
     ).run(
       input.attitude ?? existing.attitude,
       input.trait ?? existing.trait,
       input.location ?? existing.location,
+      input.gender ?? existing.gender,
       JSON.stringify(aliases),
       now,
       existing.id,
@@ -212,8 +219,8 @@ export function upsertNpc(input: {
   }
   const id = crypto.randomUUID();
   db.prepare(
-    `INSERT INTO npcs (id, campaign_id, name, attitude, trait, location, last_shift_turn, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)`,
+    `INSERT INTO npcs (id, campaign_id, name, attitude, trait, location, gender, last_shift_turn, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)`,
   ).run(
     id,
     input.campaignId,
@@ -221,6 +228,7 @@ export function upsertNpc(input: {
     input.attitude ?? "indifferent",
     input.trait ?? "",
     input.location ?? "",
+    input.gender ?? "",
     now,
     now,
   );
@@ -243,10 +251,10 @@ export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
   const id = crypto.randomUUID();
   db.prepare(
     `INSERT INTO npcs
-       (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
+       (id, campaign_id, name, attitude, trait, location, role, gender, last_shift_turn,
         aliases_json, personality_json, goals_json, relations_json,
         bonds_json, pressure_json, arc_cast_id, portrait_url, voice_json, faction_id, stat_block, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', ?, ?, ?, 0, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', ?, ?, ?, 0, ?, ?)`,
   ).run(
     id,
     campaignId,
@@ -255,6 +263,7 @@ export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
     draft.trait,
     draft.location,
     draft.role,
+    draft.gender,
     JSON.stringify(draft.aliases),
     draft.personality ? JSON.stringify(draft.personality) : "",
     JSON.stringify(draft.goals),
@@ -282,7 +291,7 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
   }
   db.prepare(
     `UPDATE npcs
-     SET name = ?, attitude = ?, trait = ?, location = ?, role = ?, aliases_json = ?,
+     SET name = ?, attitude = ?, trait = ?, location = ?, role = ?, gender = ?, aliases_json = ?,
          personality_json = ?, goals_json = ?, relations_json = ?, voice_json = ?, faction_id = ?, stat_block = ?, updated_at = ?
      WHERE id = ?`,
   ).run(
@@ -291,6 +300,7 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
     draft.trait,
     draft.location,
     draft.role,
+    draft.gender,
     JSON.stringify(draft.aliases),
     draft.personality ? JSON.stringify(draft.personality) : "",
     JSON.stringify(draft.goals),

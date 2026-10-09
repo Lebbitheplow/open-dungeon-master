@@ -5,6 +5,7 @@
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { UPDATE_SHEET_FIELDS } from "@/lib/dm/update-sheet-args";
 import { DRACONIC_ANCESTRIES } from "@/lib/srd/racial-grants";
+import { GENDERS } from "@/lib/gender";
 import {
   ABILITY_OPTIONS as ABILITIES,
   AREA_PLACEMENT_FIELDS,
@@ -457,6 +458,12 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "name", label: "Name", kind: "text", required: true },
       { name: "class", label: "Class", kind: "text", required: true },
       { name: "race", label: "Race", kind: "text" },
+      {
+        name: "gender",
+        label: "Gender",
+        kind: "select",
+        options: GENDERS.map((gender) => ({ value: gender, label: gender })),
+      },
       {
         name: "ancestry",
         label: "Draconic ancestry",

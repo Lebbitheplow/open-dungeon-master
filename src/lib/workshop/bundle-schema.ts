@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { createSheetSchema } from "@/lib/schemas/sheet";
+import { storedSheetSchema } from "@/lib/schemas/sheet";
+import { GENDERS } from "@/lib/gender";
 import { GENRES } from "@/lib/schemas/game-settings";
 import { BEAT_KINDS, ROUTE_KINDS, ROUTE_LABEL_MAX } from "@/lib/workshop/board";
 import { worldPackDraftSchema } from "@/lib/worlds/draft";
@@ -115,6 +116,8 @@ const npcSchema = z.object({
   location: z.string().max(120).default(""),
   // A role id or free text; bundles written before the field have none.
   role: z.string().trim().max(40).default(""),
+  // src/lib/gender.ts; bundles written before the field have none.
+  gender: z.enum(["", ...GENDERS]).default(""),
   aliases: z.array(z.string().trim().max(80)).max(20).default([]),
   personality: z.string().max(4_000).default(""),
   goals: z.string().max(4_000).default(""),
@@ -314,7 +317,7 @@ const pregenSchema = z.object({
   name: z.string().trim().min(1).max(80),
   level: z.number().int().min(1).max(20),
   role: z.enum(["pc", "companion"]).default("pc"),
-  sheet: createSheetSchema,
+  sheet: storedSheetSchema,
 });
 
 export const workshopBundleSchema = z.object({

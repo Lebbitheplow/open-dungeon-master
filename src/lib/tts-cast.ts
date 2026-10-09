@@ -1,4 +1,3 @@
-import { subjectRuns, type Speaker } from "@/lib/dm/speech";
 import { TTS_VOICES } from "@/lib/tts-voices";
 
 // Casting voices (issue 97): which of the server's voices suits a speaker
@@ -31,48 +30,6 @@ export function voiceGender(voiceId: string): VoiceGender {
     return kokoro[2] as VoiceGender;
   }
   return OPENAI_GENDER[voiceId] ?? "";
-}
-
-const FEMALE = /\b(she|her|hers|herself|woman|female|girl|lady|queen|princess|mother|sister|daughter|wife|aunt|priestess|matron|duchess|baroness|countess|widow|maid|witch|crone|f)\b/gi;
-const MALE = /\b(he|him|his|himself|man|male|boy|lord|king|prince|father|brother|son|husband|uncle|priest|duke|baron|count|widower|wizard|m)\b/gi;
-
-// What a description says about someone: a sheet's "she/her", a trait's
-// "a tired old man", the "he growls" after a line. Says nothing when the
-// words do not, or when they point both ways.
-export function guessGender(text: string): VoiceGender {
-  const female = text.match(FEMALE)?.length ?? 0;
-  const male = text.match(MALE)?.length ?? 0;
-  if (female === male) {
-    return "";
-  }
-  return female > male ? "f" : "m";
-}
-
-const SHE = /\b(she|her|hers|herself)\b/gi;
-const HE = /\b(he|him|his|himself)\b/gi;
-
-// What the story so far says about each speaker: the pronouns in the
-// sentences they are the subject of ("Brom plants his feet") and the ones
-// after that carry on about them, never what a sentence about somebody
-// else calls the person it mentions ("Sella turns to Liriel, her eyes
-// hard" says nothing about Liriel), and never the words inside a quote.
-// One stray pronoun is not enough to go on: a side has to outnumber the
-// other two to one.
-export function genderFromProse(speakers: Speaker[], texts: string[]): Map<string, VoiceGender> {
-  const counts = new Map<string, { f: number; m: number }>();
-  for (const text of texts) {
-    for (const run of subjectRuns(text, speakers)) {
-      const count = counts.get(run.speaker.id) ?? { f: 0, m: 0 };
-      count.f += run.text.match(SHE)?.length ?? 0;
-      count.m += run.text.match(HE)?.length ?? 0;
-      counts.set(run.speaker.id, count);
-    }
-  }
-  const guesses = new Map<string, VoiceGender>();
-  for (const [id, { f, m }] of counts) {
-    guesses.set(id, f >= 2 * m && f > 0 ? "f" : m >= 2 * f && m > 0 ? "m" : "");
-  }
-  return guesses;
 }
 
 const ENGLISH = new Set(["a", "b"]);

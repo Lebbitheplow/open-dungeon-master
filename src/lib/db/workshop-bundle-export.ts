@@ -11,7 +11,8 @@ import { getCommonWorkshop } from "@/lib/db/workshop-common";
 import { worldForBundle } from "@/lib/db/world-forge-bundle";
 import { normalizeStock } from "@/lib/db/shops";
 import { clampMarkup } from "@/lib/dm/shop-logic";
-import { createSheetSchema } from "@/lib/schemas/sheet";
+import { storedSheetSchema } from "@/lib/schemas/sheet";
+import { storedGender } from "@/lib/gender";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { normalizeMapSkin } from "@/lib/battlemap/skins";
 import { normalizeRoutes } from "@/lib/workshop/board";
@@ -124,7 +125,7 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
     left: { ...IDENTITY, visited: "play", is_current: "play", map_image_json: "a legacy column nothing reads" },
   },
   npcs: {
-    carried: ["name", "attitude", "trait", "location", "role", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
+    carried: ["name", "attitude", "trait", "location", "role", "gender", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
     left: {
       ...IDENTITY,
       last_shift_turn: "the source table's clock",
@@ -253,7 +254,7 @@ export function exportWorkshopBundle(
     workshopId,
     campaign.ownerUserId,
   ).flatMap((row) => {
-    const sheet = createSheetSchema.safeParse(parseJson<unknown>(str(row.sheet_json, "{}"), {}));
+    const sheet = storedSheetSchema.safeParse(parseJson<unknown>(str(row.sheet_json, "{}"), {}));
     return sheet.success
       ? [{ name: str(row.name), level: Math.min(20, Math.max(1, Number(row.level) || 1)), role: str(row.role) === "companion" ? ("companion" as const) : ("pc" as const), sheet: sheet.data }]
       : [];
@@ -324,6 +325,7 @@ export function exportWorkshopBundle(
       trait: str(row.trait),
       location: str(row.location),
       role: str(row.role),
+      gender: storedGender(row.gender),
       aliases: parseJson<string[]>(str(row.aliases_json, "[]"), []),
       personality: str(row.personality_json),
       goals: str(row.goals_json),

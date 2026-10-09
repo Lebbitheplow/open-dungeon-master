@@ -7,6 +7,7 @@ import { XP_THRESHOLDS, levelForXp } from "@/lib/srd";
 import { subclassExtrasFor } from "@/lib/db/subclass-extras";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
+import { storedGender } from "@/lib/gender";
 import { dedupeName } from "@/lib/workshop/import";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type { CampaignStatus } from "@/lib/campaign-types";
@@ -75,6 +76,10 @@ function withSplitCantrips(sheet: CreateSheetInput): CreateSheetInput {
     : sheet;
 }
 
+function withStoredGender(sheet: CreateSheetInput): CreateSheetInput {
+  return { ...sheet, gender: storedGender(sheet.gender) };
+}
+
 function mapCharacter(row: LibraryRow): LibraryCharacter {
   return {
     id: row.id,
@@ -87,7 +92,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     background: row.background,
     level: row.level,
     xp: row.xp,
-    sheet: withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput)),
+    sheet: withStoredGender(withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput))),
     workshopId: row.workshop_id ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,

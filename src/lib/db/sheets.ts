@@ -10,6 +10,7 @@ import { settleAttunement, type Wearer } from "@/lib/srd/magic-items";
 import { itemWeightByName } from "@/lib/content";
 import { hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
+import { storedGender } from "@/lib/gender";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { registerSpeciesReader } from "@/lib/srd/race-id";
 import { featsAsRun } from "@/lib/srd/feat-effects";
@@ -105,7 +106,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     subclass: row.subclass ?? "",
     background: row.background,
     alignment: row.alignment,
-    gender: row.gender ?? "",
+    gender: storedGender(row.gender),
     level: row.level,
     xp: row.xp,
     abilities: parseJson(row.abilities_json, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }),

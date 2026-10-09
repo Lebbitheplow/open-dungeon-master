@@ -4,6 +4,7 @@
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
+import { GENDERS } from "@/lib/gender";
 import {
   ABILITY_OPTIONS as ABILITIES,
   DIFFICULTY_OPTIONS as DIFFICULTIES,
@@ -370,6 +371,12 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "trait", label: "Trait", kind: "text" },
       { name: "location", label: "Found at", kind: "text" },
+      {
+        name: "gender",
+        label: "Gender",
+        kind: "select",
+        options: GENDERS.map((gender) => ({ value: gender, label: gender })),
+      },
       { name: "goal", label: "Wants", kind: "text" },
       { name: "ambition", label: "Long game", kind: "text" },
     ],
