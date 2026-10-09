@@ -29,7 +29,11 @@ const SET_DIR = path.join(PUBLIC, "assets", "placeholders");
 // The whole set rides inside the desktop app and the Android APK. These are
 // ceilings, not targets: generate-placeholders.mjs encodes at 256px squares
 // and 704px landscapes at quality 70, which lands well under both.
-const BUDGET_TOTAL_BYTES = 3.5 * 1024 * 1024;
+// Raised from 3.5 MB for the painted NPC, monster, avatar and genre character
+// plates: 83 full-colour 256px squares (q85, each under 30 KB) replace the amber
+// silhouettes and add about 1 MB, for about 4.04 MB shipped on main. Companion
+// PRs #174 (portraits) and #175 (scenes) raise this line too.
+const BUDGET_TOTAL_BYTES = 4.25 * 1024 * 1024;
 const BUDGET_FILE_BYTES = 48 * 1024;
 
 const failures = [];
