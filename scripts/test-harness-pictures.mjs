@@ -43,6 +43,7 @@ const { upsertCurrentLocation, getLocation } = await import("../src/lib/db/locat
 const { enqueueLocationMap } = await import("../src/lib/dm/maps.ts");
 const { generateStoryImage } = await import("../src/lib/image-generate.ts");
 const { imagesAvailable } = await import("../src/lib/capabilities.ts");
+const { imageVariantsSettled } = await import("../src/lib/image-variants.ts");
 
 let passed = 0;
 async function test(name, fn) {
@@ -187,6 +188,9 @@ try {
 
   console.log(`\n${passed} agent picture checks passed`);
 } finally {
+  // Every painted picture queued its resized copies; on a slow runner they
+  // are still being written here, and would log a missing file after the run.
+  await imageVariantsSettled();
   process.chdir(home);
   removeTempDir(dir);
 }
