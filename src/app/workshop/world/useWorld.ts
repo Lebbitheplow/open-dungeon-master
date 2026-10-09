@@ -131,7 +131,18 @@ export function useWorld(campaignId: string) {
     [base, send, refresh],
   );
 
-  return { world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, clearError: () => setError("") };
+  // WorldForge's AI tools (src/lib/dm/world-ai.ts): forge, ask, draft,
+  // paint, and apply for a forge preview's ticked rows.
+  const ai = useCallback(
+    async (tool: "forge" | "ask" | "draft" | "paint" | "apply", body: Record<string, unknown>) => {
+      const payload = await send(`${base}/ai`, { method: "POST", body: JSON.stringify({ tool, ...body }) });
+      if (payload && tool === "apply") refresh();
+      return payload;
+    },
+    [base, send, refresh],
+  );
+
+  return { world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;

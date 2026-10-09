@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowLeft, ExternalLink, EyeOff, Lock, Pencil, Plus, Theater, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowLeft, Brush, ExternalLink, EyeOff, Lock, Pencil, Plus, Theater, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { KitButton } from "@/app/campaigns/[campaignId]/PanelKit";
@@ -49,6 +49,8 @@ export function EntityPage({
   onFocus,
   onBack,
   onOpenSystem,
+  canWrite,
+  canPaint,
 }: {
   api: WorldApi;
   world: WorldState;
@@ -56,9 +58,23 @@ export function EntityPage({
   onFocus: (ref: string) => void;
   onBack: () => void;
   onOpenSystem: (system: string) => void;
+  canWrite: boolean;
+  canPaint: boolean;
 }) {
   const { doc, entities } = world;
   const [editing, setEditing] = useState(false);
+  // The picture this entry had when Paint was pressed; while set, the world
+  // is read again every few seconds until a new one lands (a render takes a
+  // while, and the media queue may be busy), for three minutes at most.
+  const [painting, setPainting] = useState<{ from: string; until: number } | null>(null);
+  // Still waiting: the picture on show is the one Paint was pressed over.
+  const isPainting = painting !== null && entity.portrait === painting.from;
+  const { refresh } = api;
+  useEffect(() => {
+    if (!isPainting || !painting) return;
+    const timer = window.setInterval(() => (Date.now() > painting.until ? setPainting(null) : refresh()), 5_000);
+    return () => window.clearInterval(timer);
+  }, [isPainting, painting, refresh]);
   const [linking, setLinking] = useState<WorldLink | "new" | null>(null);
   const type = typeOf(doc, entity);
   const byRef = useMemo(() => new Map(entities.map((entry) => [entry.ref, entry])), [entities]);
@@ -95,6 +111,10 @@ export function EntityPage({
         entity={entity}
         saving={api.saving}
         error={api.error}
+        onDraft={canWrite ? async (hint) => {
+          const payload = await api.ai("draft", { ref: entity.ref, hint });
+          return typeof payload?.text === "string" ? payload.text : null;
+        } : null}
         onCancel={() => {
           api.clearError();
           setEditing(false);
@@ -155,7 +175,9 @@ export function EntityPage({
         <button type="button" onClick={onBack} className="md:hidden" aria-label="Back to the list">
           <ArrowLeft className="size-5 text-stone-400" />
         </button>
-        <EntityAvatar entity={entity} type={type} size="size-12 sm:size-16" />
+        <span key={entity.portrait} className="motion-pop">
+          <EntityAvatar entity={entity} type={type} size="size-12 sm:size-16" />
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="gold-title font-display text-xl tracking-wide">{entity.name}</h3>
@@ -170,6 +192,19 @@ export function EntityPage({
           <KitButton tone="small" onClick={() => setEditing(true)} data-tour="world-edit">
             <Pencil className="size-3.5" /> Edit
           </KitButton>
+          {canPaint ? (
+            <KitButton
+              tone="small"
+              busy={isPainting}
+              disabled={isPainting}
+              title="Paint a picture for this entry: a portrait, a vista, a sigil or an illustration by its type"
+              onClick={async () => {
+                if (await api.ai("paint", { ref: entity.ref })) setPainting({ from: entity.portrait, until: Date.now() + 180_000 });
+              }}
+            >
+              {isPainting ? null : <Brush className="size-3.5" />} {isPainting ? "Painting" : "Paint"}
+            </KitButton>
+          ) : null}
           <KitButton tone="small" onClick={() => onOpenSystem(home.system)} title={`Open ${entity.name}'s own tool`}>
             <ExternalLink className="size-3.5" /> {home.label}
           </KitButton>

@@ -22,6 +22,22 @@ export const WORLD_TOUR_STEPS: TourStep[] = [
     lazy: true,
   },
   {
+    id: "forge",
+    title: "The forge",
+    body: "Paste notes and the model lists what in them deserves an entry and how those things stand with each other. Nothing is written until you tick what to keep, and a name the world already has is never rewritten. Offered when the server has a text model.",
+    anchors: ["world-forge"],
+    prepare: "world-view-forge",
+    lazy: true,
+  },
+  {
+    id: "ask",
+    title: "Ask the world",
+    body: "A question answered from this world only, hidden truths included, with every entry the answer names linked. When the world does not say, the answer says so.",
+    anchors: ["world-ask"],
+    prepare: "world-view-ask",
+    lazy: true,
+  },
+  {
     id: "web",
     title: "The web",
     body: "Every link drawn as a web, a family tree read off the family words, and a chain of command read off the chain words. Switch to what people believe to see the world as the players will hear it.",

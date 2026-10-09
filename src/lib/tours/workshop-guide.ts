@@ -32,6 +32,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Every entry is the same row the Cast, Region, Factions and Lore tools edit: change it in either place.",
       "The AI DM is told each NPC's hidden truth, ties and secrets, and the secrets the party has not learned, never to state them outright.",
       "Choose What people believe in the web to see the world as the players will hear it.",
+      "With a text model, Forge turns notes into entries and links, Ask answers from the world, and Draft writes an entry's text; with an image backend, Paint makes its picture. Without them those tools are simply not offered.",
     ],
   },
   {

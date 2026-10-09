@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenText, Download, Hourglass, Lock, Map as MapIcon, Network, PenLine, Shapes, Upload } from "lucide-react";
+import { BookOpenText, Download, Hourglass, Lock, Map as MapIcon, MessageCircleQuestion, Network, PenLine, Shapes, Sparkles, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { IconRail, type IconRailItem } from "@/components/ui/IconRail";
 import { KitButton, Listed, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
@@ -13,6 +13,9 @@ import { AtlasView } from "./AtlasView";
 import { SecretsView } from "./SecretsView";
 import { StubsView } from "./StubsView";
 import { TypesView } from "./TypesView";
+import { ForgeView } from "./ForgeView";
+import { AskView } from "./AskView";
+import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 
 // WorldForge in the workshop. WorldForge is Smoebo's world-building app,
 // built in with their blessing: a wiki of typed entries, the web of links
@@ -22,10 +25,15 @@ import { TypesView } from "./TypesView";
 // what is written here is what the Cast, the Region, Factions and Lore hold
 // and what the AI DM is told.
 
-type View = "wiki" | "web" | "timeline" | "atlas" | "secrets" | "stubs" | "types";
+type View = "wiki" | "web" | "timeline" | "atlas" | "secrets" | "stubs" | "types" | "forge" | "ask";
 
+// Forge and Ask need a text model; the rail leaves them out on a server
+// that has none, and everything else works the same.
+const AI_VIEWS: ReadonlySet<View> = new Set(["forge", "ask"]);
 const VIEWS: Array<{ value: View; label: string; icon: IconRailItem["icon"] }> = [
   { value: "wiki", label: "Wiki", icon: BookOpenText },
+  { value: "forge", label: "Forge", icon: Sparkles },
+  { value: "ask", label: "Ask", icon: MessageCircleQuestion },
   { value: "web", label: "Web", icon: Network },
   { value: "timeline", label: "Timeline", icon: Hourglass },
   { value: "atlas", label: "Atlas", icon: MapIcon },
@@ -38,7 +46,11 @@ type ImportReport = { created: number; updated: number; links: number; events: n
 
 export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: string; onOpenSystem: (system: string) => void }) {
   const api = useWorld(campaignId);
-  const [view, setView] = useState<View>("wiki");
+  const capabilities = useCapabilities();
+  const canWrite = offersStoryModel(capabilities);
+  const canPaint = offersImages(capabilities);
+  const [chosenView, setView] = useState<View>("wiki");
+  const view: View = !canWrite && AI_VIEWS.has(chosenView) ? "wiki" : chosenView;
   const [focus, setFocus] = useState<string | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [reading, setReading] = useState(false);
@@ -50,6 +62,7 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
   useTourPrepare((name) => {
     if (name === "open-world-entry") setView("wiki");
     const asked = name.startsWith("world-view-") ? (name.slice("world-view-".length) as View) : null;
+    // A tour step for a view this server does not offer has nothing to show.
     if (asked && VIEWS.some((entry) => entry.value === asked)) setView(asked);
   });
 
@@ -106,9 +119,18 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
         </div>
       ) : null}
       {api.error && !world ? <PanelError>{api.error}</PanelError> : null}
+      {!canWrite || !canPaint ? (
+        <p className="text-[11px] text-stone-500" data-tour="world-ai-note">
+          {!canWrite && !canPaint
+            ? "Forge, Ask, Draft and Paint need AI (a text model, an image backend), which this server does not have set up. Everything else here works without it, and pictures can still be uploaded."
+            : !canWrite
+              ? "Forge, Ask and Draft need a text model, which this server does not have set up. Everything else here works without it."
+              : "Paint needs an image backend, which this server does not have set up. Pictures can still be uploaded."}
+        </p>
+      ) : null}
 
       <IconRail
-        items={VIEWS.map((entry) => ({ ...entry, badge: counts[entry.value] || undefined, tour: `world-view-${entry.value}` }))}
+        items={VIEWS.filter((entry) => canWrite || !AI_VIEWS.has(entry.value)).map((entry) => ({ ...entry, badge: counts[entry.value] || undefined, tour: `world-view-${entry.value}` }))}
         value={view}
         onChange={setView}
         orientation="horizontal"
@@ -119,14 +141,16 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
         {world ? (
           // Keyed by view so the incoming one rises in instead of cutting.
           <div key={view} className="motion-tab">
-            {view === "wiki" ? <WikiView api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} /> : null}
+            {view === "wiki" ? <WikiView api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} canWrite={canWrite} canPaint={canPaint} /> : null}
+            {view === "forge" ? <ForgeView api={api} world={world} onOpen={open} /> : null}
+            {view === "ask" ? <AskView api={api} world={world} onOpen={open} /> : null}
             {view === "web" ? <WebView world={world} focus={focus} onOpen={open} /> : null}
             {view === "timeline" ? <TimelineView api={api} world={world} onOpen={open} /> : null}
             {view === "atlas" ? <AtlasView api={api} world={world} onOpen={open} /> : null}
             {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} /> : null}
             {view === "stubs" ? <StubsView api={api} world={world} onOpen={open} /> : null}
             {view === "types" ? <TypesView api={api} world={world} /> : null}
-            {api.error && view !== "wiki" ? <PanelError className="mt-2">{api.error}</PanelError> : null}
+            {api.error && !["wiki", "forge", "ask"].includes(view) ? <PanelError className="mt-2">{api.error}</PanelError> : null}
           </div>
         ) : null}
       </Listed>

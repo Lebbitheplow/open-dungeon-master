@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Lock, X } from "lucide-react";
+import { Check, Lock, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -43,6 +43,7 @@ export function EntityEditor({
   error,
   onSave,
   onCancel,
+  onDraft,
 }: {
   doc: WorldDoc;
   entity: WorldEntity;
@@ -50,7 +51,12 @@ export function EntityEditor({
   error: string;
   onSave: (input: EntryInput) => void;
   onCancel: () => void;
+  // The model's draft of the entry's text, or null when there is no text
+  // model (the button is then not offered at all).
+  onDraft: ((hint: string) => Promise<string | null>) | null;
 }) {
+  const [drafting, setDrafting] = useState(false);
+  const [draftHint, setDraftHint] = useState("");
   const type = typeOf(doc, entity);
   const [draft, setDraft] = useState({
     name: entity.name,
@@ -79,6 +85,18 @@ export function EntityEditor({
       else fields[def.id] = value;
       return { ...current, fields };
     });
+
+  // The draft lands in the field the entry's text lives in, unsaved, for
+  // the DM to keep, cut or throw away.
+  async function draftIt() {
+    if (!onDraft) return;
+    setDrafting(true);
+    const text = await onDraft(draftHint);
+    setDrafting(false);
+    if (!text) return;
+    if (shortRow) set("article", text);
+    else set("text", text.slice(0, TEXT_LIMIT[entity.shelf as "location" | "lore"]));
+  }
 
   function save() {
     onSave({
@@ -157,8 +175,18 @@ export function EntityEditor({
           )
         : null}
 
+      {onDraft ? (
+        <div className="flex flex-wrap items-center gap-2 motion-pop">
+          <KitButton tone="small" busy={drafting} disabled={drafting} onClick={draftIt} data-tour="world-draft">
+            {drafting ? null : <Sparkles className="size-3.5" />} {drafting ? "Drafting" : "Draft it"}
+          </KitButton>
+          <input className={cn(ui.input, "max-w-sm flex-1 py-1 text-xs")} placeholder="Steer the draft (optional)" aria-label="Steer the draft" maxLength={300} value={draftHint} onChange={(event) => setDraftHint(event.target.value)} />
+          <span className="text-[11px] text-stone-500">Fills the text above; nothing is kept until Save.</span>
+        </div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
-        {field("Also called", <input className={ui.input} placeholder="the Tidewarden, Old Ivo" value={draft.aliases} onChange={(event) => set("aliases", event.target.value)} />, "Separated by commas.")}
+        {field("Also called", <input className={ui.input} placeholder="another name, a title" value={draft.aliases} onChange={(event) => set("aliases", event.target.value)} />, "Separated by commas.")}
         {field("Tags", <input className={ui.input} placeholder="harbour, smugglers" value={draft.tags} onChange={(event) => set("tags", event.target.value)} />, "Separated by commas.")}
       </div>
 

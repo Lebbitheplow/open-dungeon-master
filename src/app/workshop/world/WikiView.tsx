@@ -23,12 +23,18 @@ export function WikiView({
   focus,
   onFocus,
   onOpenSystem,
+  canWrite,
+  canPaint,
 }: {
   api: WorldApi;
   world: WorldState;
   focus: string | null;
   onFocus: (ref: string | null) => void;
   onOpenSystem: (system: string) => void;
+  // Whether there is a text model to draft with and an image backend to
+  // paint with (src/lib/use-capabilities.ts).
+  canWrite: boolean;
+  canPaint: boolean;
 }) {
   const { doc, entities } = world;
   const [query, setQuery] = useState("");
@@ -188,7 +194,7 @@ export function WikiView({
 
       <div className={cn("min-w-0", !open && "hidden md:block")}>
         {open ? (
-          <EntityPage key={open.ref} api={api} world={world} entity={open} onFocus={onFocus} onBack={() => onFocus(null)} onOpenSystem={onOpenSystem} />
+          <EntityPage key={open.ref} api={api} world={world} entity={open} onFocus={onFocus} onBack={() => onFocus(null)} onOpenSystem={onOpenSystem} canWrite={canWrite} canPaint={canPaint} />
         ) : (
           <div className="panel flex min-h-48 flex-col items-center justify-center gap-2 rounded-xl p-6 text-center animate-fade-up">
             <p className="font-display text-lg text-amber-100">The world, entry by entry</p>
