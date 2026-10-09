@@ -4,13 +4,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { BEAT_LABELS, type Board, type BoardInventory, type BoardNode } from "@/lib/workshop/board";
+import { BEAT_LABELS, routeOf, type BeatLinks, type Board, type BoardInventory, type BoardNode } from "@/lib/workshop/board";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { KIND_CHIP, KIND_GLYPH, LINK_FIELDS, LINK_GLYPH } from "@/app/workshop/storyboard/beat-fields";
 
 // The workshop's storyboard: every card as a card. Kind chip, title, the
-// first line of what happens, a chip per thing it points at, and how many
-// cards it leads to. Tapping one hands it to the caller, which opens the
+// first line of what happens, a chip per thing it points at (marked when it
+// lives in the shared workshop, flagged when it is gone), and how many cards
+// it leads to and how. Tapping one hands it to the caller, which opens the
 // editor.
 //
 // One column on a phone, because the board reads top to bottom there; two
@@ -27,10 +28,12 @@ function excerpt(body: string): string {
 export function BeatBoard({
   board,
   inventory,
+  broken = {},
   onOpen,
 }: {
   board: Board;
   inventory: BoardInventory;
+  broken?: Record<string, Array<keyof BeatLinks>>;
   onOpen: (node: BoardNode) => void;
 }) {
   if (board.nodes.length === 0) {
@@ -48,9 +51,19 @@ export function BeatBoard({
         const line = excerpt(node.body);
         const links = LINK_FIELDS.flatMap(([field, bucket, , short]) => {
           const linked = node.links[field];
-          const name = linked ? inventory[bucket].find((entry) => entry.id === linked)?.name : "";
-          return name ? [{ field, short, name }] : [];
+          if (!linked) {
+            return [];
+          }
+          const entry = inventory[bucket].find((row) => row.id === linked);
+          if (entry) {
+            return [{ field, short, name: entry.name, from: entry.from ?? "", missing: false }];
+          }
+          return (broken[node.id] ?? []).includes(field)
+            ? [{ field, short, name: "missing", from: "", missing: true }]
+            : [];
         });
+        const choices = node.out.filter((target) => routeOf(node, target) === "choice").length;
+        const optional = node.out.filter((target) => routeOf(node, target) === "optional").length;
         return (
           <li key={node.id}>
             <button
@@ -80,11 +93,16 @@ export function BeatBoard({
                   {links.map((link) => (
                     <span
                       key={link.field}
-                      className="inline-flex items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[11px] text-stone-400"
+                      title={link.from ? `From ${link.from}` : undefined}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px]",
+                        link.missing ? "border-amber-500/50 text-amber-300" : "border-stone-700 text-stone-400",
+                      )}
                     >
                       <GameIcon icon={{ kind: "glyph", key: LINK_GLYPH[link.field] }} size="size-4" />
                       <span className="text-stone-500">{link.short} </span>
                       {link.name}
+                      {link.from ? <span className="text-sky-300/70"> (shared)</span> : null}
                     </span>
                   ))}
                 </span>
@@ -92,6 +110,8 @@ export function BeatBoard({
               <span className="mt-auto flex items-center gap-1 text-[11px] text-stone-500">
                 <ArrowRight className="size-3" aria-hidden="true" />
                 leads to {node.out.length}
+                {choices ? <span className="text-amber-300/70"> · {choices} route{choices === 1 ? "" : "s"} to choose</span> : null}
+                {optional ? <span className="text-sky-300/70"> · {optional} only if</span> : null}
               </span>
             </button>
           </li>

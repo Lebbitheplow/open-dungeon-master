@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { isErrorResponse, requireDm, requirePrepAuthority } from "@/lib/campaign-api";
 import { createNpcFromDraft, listNpcs } from "@/lib/db/npcs";
 import { publishCast } from "@/lib/dm/cast";
 import { describePersonality, normalizeNpcDraft, relationGraph } from "@/lib/npcs/forge";
@@ -33,7 +33,9 @@ export async function GET(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireDm(campaignId);
+  // Read by the map library as well as the forge, so it follows prep
+  // authority (#154); writing NPCs stays the DM's.
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

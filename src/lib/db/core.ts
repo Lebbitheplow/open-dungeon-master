@@ -1787,6 +1787,18 @@ function ensureSchema(db: SqliteDatabase) {
   // Where each enemy starts, who is hidden, hit point and name overrides,
   // and what the fight is worth (src/lib/dm/encounter-template-logic.ts).
   addColumns("encounter_templates", [["extras_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+  // The party lead of an AI-narrated table cued this fight for the
+  // storyteller to run when the scene reaches it (src/lib/dm/prepared-
+  // encounter-tool.ts, #154). Play state: a copy never carries it.
+  addColumns("encounter_templates", [["cued", `INTEGER NOT NULL DEFAULT 0`]]);
+  // What an arrow on the storyboard means, keyed by the card it points at:
+  // one route of several, or a scene that only happens if something holds
+  // (src/lib/workshop/board.ts). An arrow with no entry is the plain "then
+  // this", which is every arrow drawn before routes existed (#157).
+  addColumns("workshop_beats", [["routes_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+  // The shared workshop a chapter workshop draws its recurring cast, places,
+  // maps and fights from (src/lib/db/workshop-common.ts, #159). '' for none.
+  addColumns("campaigns", [["common_workshop_id", `TEXT NOT NULL DEFAULT ''`]]);
 
   addColumns("encounter_enemies", [
     // Server-tracked enemy conditions (prone, poisoned, ...), applied via
@@ -2154,6 +2166,25 @@ function ensureSchema(db: SqliteDatabase) {
     );
     CREATE INDEX IF NOT EXISTS idx_usage_events_campaign ON usage_events(campaign_id, at);
     CREATE INDEX IF NOT EXISTS idx_usage_events_user ON usage_events(user_id, at);
+
+    -- Where a row of prep came from (src/lib/db/content-origins.ts): the
+    -- campaign or workshop it was copied out of and the row it was copied
+    -- from, or 'bundle' and the portable key it arrived under. It is what
+    -- lets a second import reuse what the first one brought instead of
+    -- numbering a duplicate, and a chapter's links find the shared cast a
+    -- campaign already holds (#157, #159). kind is the import kind of the
+    -- copy (npcs, locations, maps, encounters, lore, tables, notes).
+    CREATE TABLE IF NOT EXISTS content_origins (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      row_id TEXT NOT NULL,
+      origin_id TEXT NOT NULL,
+      origin_row_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, kind, row_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_origins_origin
+      ON content_origins(campaign_id, origin_id, origin_row_id);
   `);
 }
 

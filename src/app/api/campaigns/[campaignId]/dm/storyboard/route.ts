@@ -1,7 +1,7 @@
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
-import { getDatabase } from "@/lib/db/core";
 import { insertBeat, listBeats } from "@/lib/db/workshop-beats";
-import { boardGraph, checkBeat, suggestTopics, type BoardInventory } from "@/lib/workshop/board";
+import { chaptersOf, commonChoices, storyboardInventory } from "@/lib/db/workshop-common";
+import { boardGraph, brokenLinks, checkBeat, linksWithin, suggestTopics } from "@/lib/workshop/board";
 import { compileBoard, summarizeCompile } from "@/lib/workshop/board-compile";
 
 export const runtime = "nodejs";
@@ -15,25 +15,11 @@ export const dynamic = "force-dynamic";
 // whole point: "you have written four factions and no reason for the party to
 // care about any of them" is something a DM can check, and something they can
 // disagree with.
-
-// Everything else in this workshop the board could be pointing at. Read here
-// rather than in the pure module, which is what keeps the suggestion rules
-// testable without a database.
-function inventoryFor(campaignId: string): BoardInventory {
-  const db = getDatabase();
-  const rows = (sql: string) =>
-    db.prepare(sql).all(campaignId) as Array<{ id: string; name: string }>;
-  return {
-    npcs: rows(
-      `SELECT id, name FROM npcs WHERE campaign_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE`,
-    ),
-    maps: rows(`SELECT id, name FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`),
-    encounters: rows(
-      `SELECT id, name FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-    ),
-    locations: rows(`SELECT id, name FROM locations WHERE campaign_id = ? ORDER BY created_at`),
-  };
-}
+//
+// What a card may point at is this workshop's rows plus, for a chapter, its
+// shared workshop's (src/lib/db/workshop-common.ts, #159), read here rather
+// than in the pure module, which is what keeps the suggestion rules testable
+// without a database.
 
 export async function GET(
   _request: Request,
@@ -45,15 +31,32 @@ export async function GET(
     return context;
   }
   const beats = listBeats(campaignId);
-  const inventory = inventoryFor(campaignId);
+  const { inventory, common } = storyboardInventory(context.campaign);
   const compiled = compileBoard(beats);
+  // Links a card holds that no longer resolve, by card, so the board can
+  // say "missing" instead of drawing a card with nothing picked.
+  const broken = Object.fromEntries(
+    beats
+      .map((beat) => [beat.id, brokenLinks(beat, inventory)] as const)
+      .filter(([, fields]) => fields.length),
+  );
   return Response.json({
     board: boardGraph(beats),
     inventory,
+    broken,
     suggestions: suggestTopics(beats, inventory),
     // What this board would become, computed against a campaign with no arc
     // of its own. The import screen recomputes it against the real target.
     compiled: { ...compiled, summary: summarizeCompile(compiled, false) },
+    // Only a workshop draws on a shared one.
+    shared:
+      context.campaign.kind === "workshop"
+        ? {
+            common: common ? { id: common.id, title: common.title } : null,
+            choices: commonChoices(context.campaign),
+            chapters: chaptersOf(context.campaign),
+          }
+        : null,
   });
 }
 
@@ -70,7 +73,11 @@ export async function POST(
   if ("error" in checked) {
     return Response.json({ error: checked.error }, { status: 400 });
   }
-  const created = insertBeat(campaignId, checked.beat);
+  const { inventory } = storyboardInventory(context.campaign);
+  const created = insertBeat(campaignId, {
+    ...checked.beat,
+    links: linksWithin(checked.beat.links, inventory),
+  });
   if ("error" in created) {
     return Response.json({ error: created.error }, { status: 409 });
   }

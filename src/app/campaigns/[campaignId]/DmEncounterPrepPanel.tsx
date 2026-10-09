@@ -62,9 +62,13 @@ export function DmEncounterPrepPanel({
   campaignId,
   layout = "list",
   targetParty,
+  cue = false,
 }: {
   campaignId: string;
   layout?: "list" | "rows";
+  // The lead's desk at an AI-narrated table (#154): Deploy becomes a cue the
+  // storyteller runs when the scene reaches the fight, and can be taken back.
+  cue?: boolean;
   // Read only in rows mode: the party the CR budget bar is drawn against. A
   // workshop declares one; a real campaign has no need of it because the
   // console never shows the bar.
@@ -235,21 +239,35 @@ export function DmEncounterPrepPanel({
     await load();
   }
 
-  async function deploy(id: string) {
+  async function deploy(id: string, cueIt = true) {
     setBusy(true);
     setError("");
     setNote("");
     try {
       const response = await fetch(
         `/api/campaigns/${campaignId}/dm/encounter-templates/${id}/deploy`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cue ? { cue: cueIt } : {}),
+        },
       );
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
         mapError?: string | null;
+        cued?: boolean;
       };
       if (!response.ok) {
         setError(payload.error ?? "That could not be deployed.");
+        return;
+      }
+      if (payload.cued !== undefined) {
+        setNote(
+          payload.cued
+            ? "Cued. The storyteller runs it, map and plan included, as soon as the scene allows. The players are not told."
+            : "Cue taken back.",
+        );
+        await load();
         return;
       }
       setNote(
@@ -324,8 +342,15 @@ export function DmEncounterPrepPanel({
             {templates.map((template) => {
               // Deploy stays the row's one visible button; the two that were
               // icons keep the names they announced, in the row's menu.
+              const deployLabel = cue ? (template.cued ? "Take back the cue" : "Cue the storyteller") : "Deploy";
               const items: ContextMenuItem[] = [
-                { id: "deploy", label: "Deploy", glyph: "tab-battle", disabled: busy, onSelect: () => void deploy(template.id) },
+                {
+                  id: "deploy",
+                  label: deployLabel,
+                  glyph: "tab-battle",
+                  disabled: busy,
+                  onSelect: () => void deploy(template.id, !template.cued),
+                },
                 { id: "duplicate", label: `Duplicate ${template.name}`, glyph: "system-homebrew", disabled: busy, onSelect: () => void duplicate(template) },
                 { id: "delete", label: `Delete ${template.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(template) },
               ];
@@ -334,7 +359,14 @@ export function DmEncounterPrepPanel({
                   <div className="flex items-start gap-2">
                     <GameIcon icon={{ kind: "glyph", key: "system-encounters" }} size="size-7" className="mt-0.5 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-stone-100">{template.name}</p>
+                      <p className="text-sm text-stone-100">
+                        {template.name}
+                        {cue && template.cued ? (
+                          <span className="live-in ml-1.5 rounded-sm border border-amber-500/40 px-1 text-[10px] text-amber-300">
+                            cued
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="truncate text-xs text-stone-400">
                         {formatRoster(template.enemies).replace(/\n/g, ", ")}
                         {template.battlefield ? ` on ${template.battlefield}` : ""}
@@ -351,10 +383,10 @@ export function DmEncounterPrepPanel({
                         type="button"
                         disabled={busy}
                         aria-busy={busy}
-                        onClick={() => void deploy(template.id)}
-                        className={cn(ui.btnPrimary, "h-9 px-3 text-[11px]")}
+                        onClick={() => void deploy(template.id, !template.cued)}
+                        className={cn(cue && template.cued ? ui.btnSecondary : ui.btnPrimary, "h-9 px-3 text-[11px]")}
                       >
-                        Deploy
+                        {cue ? (template.cued ? "Take back" : "Cue") : "Deploy"}
                       </button>
                       <RowMenu items={items} label={template.name} />
                     </div>

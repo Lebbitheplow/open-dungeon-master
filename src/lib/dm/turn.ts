@@ -87,7 +87,7 @@ import {
   markPlayerWhispersAnswered,
 } from "@/lib/db/dm-whispers";
 import { listChapters } from "@/lib/db/chapters";
-import { listPublicCampaignNotes } from "@/lib/db/notes";
+import { listDmPrepNotes, listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
@@ -162,6 +162,7 @@ import { betweenLinesBySheet } from "@/lib/dm/between-lines";
 import { BINDER_TOOL_NAMES, binderTools } from "@/lib/dm/binder-tools";
 import { FACTION_TOOL_NAMES, factionTools } from "@/lib/dm/faction-tools";
 import { SHOP_TOOL_NAMES, shopTools, shopsBlock } from "@/lib/dm/shop-tools";
+import { preparedEncounterTools, preparedFightsBlock } from "@/lib/dm/prepared-encounter-tool";
 import { SETTLEMENT_TOOL_NAMES, settlementTools } from "@/lib/dm/settlement-tools";
 import { placeIsWritten, populateSettlement } from "@/lib/dm/settlement";
 import { listFactions } from "@/lib/db/factions";
@@ -430,6 +431,7 @@ export async function startDmTurn(campaignId: string) {
       loreBlock: retrieval.loreBlock,
       factionsBlock: renderFactionsForPrompt(listFactions(campaign.id), getParty(campaign.id).reputation, true),
       shopsBlock: shopsBlock(campaign),
+      preparedFightsBlock: preparedFightsBlock(campaign),
       members: listMembers(campaignId),
       sheets: context.sheets,
       encounter: buildEncounterState(campaignId, context.sheets),
@@ -476,6 +478,7 @@ export async function startDmTurn(campaignId: string) {
         title: note.title,
         body: note.body,
       })),
+      dmPrepNotes: listDmPrepNotes(campaignId, 8).map((note) => ({ title: note.title, body: note.body })),
       facts: listActiveFacts(campaignId).map((fact) => ({
         category: fact.category,
         subject: fact.subject,
@@ -661,6 +664,8 @@ function dmTurnTools(
     ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
     ...(inEncounter ? [] : mountTools),
     ...encounterTools(inEncounter),
+    // The table's prepared fights, by name, when it has any (#154).
+    ...(inEncounter ? [] : preparedEncounterTools(campaign)),
     castBuffTool,
     ...(inEncounter ? [] : restTools),
     ...companionTools(campaign),

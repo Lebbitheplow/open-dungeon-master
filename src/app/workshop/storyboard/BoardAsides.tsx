@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { Select } from "@/components/ui/Select";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
@@ -81,6 +82,87 @@ export function SuggestionsCard({
           </button>
         </div>
       ))}
+    </AsideCard>
+  );
+}
+
+// The shared workshop a chapter draws on (#159). Picking one puts its cast,
+// places, maps and fights in every picker on this board, live; a workshop
+// other chapters already draw on says so instead, because it cannot draw on
+// another itself.
+export function SharedWorkshopCard({
+  workshopId,
+  shared,
+  onChanged,
+}: {
+  workshopId: string;
+  shared: {
+    common: { id: string; title: string } | null;
+    choices: Array<{ id: string; title: string }>;
+    chapters: Array<{ id: string; title: string }>;
+  };
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function choose(commonWorkshopId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/workshops/${workshopId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commonWorkshopId }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "That could not be changed.");
+        return;
+      }
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AsideCard
+      title="Shared workshop"
+      icon={<GameIcon icon={{ kind: "glyph", key: "system-cast" }} size="size-7" />}
+      tour="storyboard-shared"
+    >
+      {shared.chapters.length ? (
+        <p className="text-xs text-stone-400">
+          {shared.chapters.length === 1 ? "One chapter draws" : `${shared.chapters.length} chapters draw`} on
+          this workshop: {shared.chapters.map((chapter) => chapter.title).join(", ")}. Its cast,
+          places, maps and fights show in their pickers.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-stone-400">
+            Write the recurring cast, places, maps and fights once in one workshop, and let each
+            chapter&apos;s cards pick from it. Picks follow the shared rows as they change. A
+            campaign that imports this chapter brings what its cards pick, once, and later
+            chapters reuse it.
+          </p>
+          <Select
+            label="Draws on"
+            value={shared.common?.id ?? ""}
+            disabled={busy}
+            onChange={(id) => void choose(id)}
+            options={[
+              { value: "", label: "Nothing shared" },
+              ...shared.choices.map((choice) => ({
+                value: choice.id,
+                label: choice.title,
+                icon: { kind: "glyph" as const, key: "system-storyboard" },
+              })),
+            ]}
+          />
+        </>
+      )}
+      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
     </AsideCard>
   );
 }

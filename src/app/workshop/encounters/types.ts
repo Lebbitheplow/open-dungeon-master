@@ -31,6 +31,8 @@ export type PreparedEncounter = {
   map: { mapId: string | null };
   extras: TemplateExtras;
   readout: TemplateReadout;
+  // Cued for the storyteller by the lead of an AI-narrated table (#154).
+  cued?: boolean;
 };
 
 // A prepared map as the picker sees it. The drawer route hands back whole

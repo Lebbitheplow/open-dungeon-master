@@ -1,8 +1,16 @@
-import { z } from "zod";
-import { createSheetSchema } from "@/lib/schemas/sheet";
-import { GENRES } from "@/lib/schemas/game-settings";
-import { BEAT_KINDS } from "@/lib/workshop/board";
-import { worldPackDraftSchema } from "@/lib/worlds/draft";
+import {
+  IMAGE_DATA_URL,
+  MAX_BUNDLE_BYTES,
+  MAX_BUNDLE_IMAGE_BYTES,
+  BUNDLE_KINDS,
+  BUNDLE_LIMITS,
+  WORKSHOP_BUNDLE_KIND,
+  WORKSHOP_BUNDLE_VERSION,
+  workshopBundleSchema,
+  type WorkshopBundle,
+} from "@/lib/workshop/bundle-schema";
+
+export * from "@/lib/workshop/bundle-schema";
 
 // A workshop as a file: what travels between two people, and what does not.
 //
@@ -22,6 +30,15 @@ import { worldPackDraftSchema } from "@/lib/worlds/draft";
 //   - Anything from play. A workshop has no transcript, no party and no
 //     characters, which is exactly why it is the thing worth sharing.
 //
+// Relationships travel as INDEXES into the bundle's own arrays, never as
+// ids: a storyboard card's Who, Where, map and fight (#155), a prepared
+// fight's map and a place's map (#153's cousins), the region map's anchors.
+// An index that lands nowhere is dropped on import and counted, never
+// trusted. Each linkable row also carries a `ref`, an opaque key stable
+// across exports of the same row, which is how a chapter bundle finds the
+// shared workshop it was written against on the other side (#159) without
+// anybody matching names.
+//
 // Images DO travel (since format v1 grew the optional fields): a map's
 // backdrop and an NPC's portrait ride along as size-capped data URLs, because
 // a map without its art is half a map. The licensing weight that the old
@@ -29,39 +46,13 @@ import { worldPackDraftSchema } from "@/lib/worlds/draft";
 // explicit warning whenever art is aboard: the person exporting vouches for
 // what they share, the person importing is told what they received. An older
 // build importing a newer bundle strips the image fields and lands geometry
-// only, which is why the version number did not move.
+// only, which is why the version number did not move. Every field added
+// since is optional with a default for the same reason: a bundle written
+// before it reads exactly as it always did, and one written after it reads
+// on an older build minus the new parts.
 //
 // Pure: no "@/" imports with I/O, so scripts/test-workshop-bundle.mjs drives
 // the whole format without a database. The rim is src/lib/db/workshop-bundle.ts.
-
-export const WORKSHOP_BUNDLE_KIND = "odm.workshop";
-export const WORKSHOP_BUNDLE_VERSION = 1;
-
-// Sixty-four megabytes: still one in-memory JSON parse, but with room for a
-// workshop's art. Prose alone never gets near this (four megabytes is
-// roughly a novel); the budget exists for base64-encoded backdrops and
-// portraits, each individually capped below at the same 8 MB the upload
-// route enforces.
-export const MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
-
-// Per-image binary cap, matching /api/upload's MAX_FILE_SIZE so nothing can
-// arrive by bundle that could not have been uploaded by hand.
-export const MAX_BUNDLE_IMAGE_BYTES = 8 * 1024 * 1024;
-
-// A little over MAX_BUNDLE_IMAGE_BYTES * 4/3: base64 overhead plus header.
-const MAX_IMAGE_DATA_URL_CHARS = 11_300_000;
-
-const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
-
-// "" means "no image": absent art is an empty string rather than a missing
-// key so a bundle diff shows the field either way.
-const bundleImageSchema = z
-  .string()
-  .max(MAX_IMAGE_DATA_URL_CHARS)
-  .refine((value) => value === "" || IMAGE_DATA_URL.test(value), {
-    message: "Images must be PNG, JPEG or WebP data URLs.",
-  })
-  .default("");
 
 export type BundleImage = { mime: string; ext: "png" | "jpg" | "webp"; bytes: Buffer };
 
@@ -106,191 +97,7 @@ export function encodeBundleImage(filePath: string, bytes: Buffer): string {
 
 // Per-kind ceilings. These are not really about memory, they are about a
 // bundle staying something a person can read before they trust it.
-export const BUNDLE_LIMITS = {
-  lore: 500,
-  locations: 300,
-  npcs: 300,
-  encounters: 200,
-  tables: 200,
-  maps: 100,
-  storyboard: 200,
-  monsters: 200,
-  homebrew: 400,
-  pregens: 12,
-} as const;
 
-export const BUNDLE_KINDS = Object.keys(BUNDLE_LIMITS) as Array<keyof typeof BUNDLE_LIMITS>;
-
-// The licensing half, lifted from worldPackSchema so the two cannot drift.
-export const bundleManifestSchema = z.object({
-  name: z.string().trim().min(1).max(70),
-  blurb: z.string().trim().min(1).max(200),
-  version: z.string().trim().max(20).default("1.0.0"),
-  author: z.string().trim().max(80).default(""),
-  homepage: z.string().trim().max(300).default(""),
-  // What this is a homage to. Required for the same reason a pack requires
-  // it: a reader deserves to know before they install.
-  inspiredBy: z.string().trim().min(1).max(200),
-  // Who owns what it is built on. Empty means an original work, which gets
-  // the milder community-content notice instead of a non-affiliation
-  // disclaimer it does not need. See UnofficialPackNotice.
-  rightsHolder: z.string().trim().max(120).default(""),
-});
-
-export type BundleManifest = z.infer<typeof bundleManifestSchema>;
-
-const loreSchema = z.object({
-  category: z.string().trim().max(40),
-  title: z.string().trim().min(1).max(200),
-  body: z.string().max(20_000).default(""),
-  tags: z.array(z.string().trim().max(40)).max(20).default([]),
-  // A secret stays a secret on the other side; a handout keeps its picture.
-  visibility: z.enum(["party", "dm"]).default("party"),
-  style: z.enum(["plain", "parchment", "notice"]).default("plain"),
-  image: bundleImageSchema,
-});
-
-const locationSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  layoutDescription: z.string().max(8_000).default(""),
-  connections: z.array(z.string().trim().max(120)).max(40).default([]),
-});
-
-const npcSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  attitude: z.enum(["hostile", "indifferent", "friendly"]).default("indifferent"),
-  trait: z.string().max(500).default(""),
-  location: z.string().max(120).default(""),
-  // A role id or free text; bundles written before the field have none.
-  role: z.string().trim().max(40).default(""),
-  aliases: z.array(z.string().trim().max(80)).max(20).default([]),
-  personality: z.string().max(4_000).default(""),
-  goals: z.string().max(4_000).default(""),
-  // Relations are keyed by NAME, not by id, which is why a cast bundled
-  // together arrives with its feuds intact. Same property the workshop
-  // import relies on (src/lib/db/content-import.ts).
-  relations: z.string().max(8_000).default(""),
-  portrait: bundleImageSchema,
-});
-
-// Factions (docs/vtt-parity-implementation-plan.md section 6). Members are
-// matched back by NPC name on import, the way relations are.
-const factionSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  blurb: z.string().max(400).default(""),
-  goal: z.string().max(400).default(""),
-  attitude: z.enum(["hostile", "wary", "neutral", "friendly", "allied"]).default("neutral"),
-  power: z.number().int().min(0).max(5).default(1),
-  tags: z.array(z.string().trim().max(40)).max(8).default([]),
-  members: z.array(z.string().trim().max(120)).max(40).default([]),
-  portrait: bundleImageSchema,
-});
-
-const encounterSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  enemies: z.array(z.unknown()).max(40).default([]),
-  battlefield: z.string().max(2_000).default(""),
-  notes: z.string().max(8_000).default(""),
-});
-
-const tableSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  entries: z.array(z.unknown()).max(200).default([]),
-});
-
-const mapSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  notes: z.string().max(4_000).default(""),
-  tags: z.array(z.string().trim().max(40)).max(20).default([]),
-  width: z.number().int().min(1).max(200),
-  height: z.number().int().min(1).max(200),
-  terrain: z.string().max(200_000).default(""),
-  ambient: z.string().max(40).default("day"),
-  theme: z.string().max(40).default("field"),
-  lights: z.array(z.unknown()).max(200).default([]),
-  seed: z.number().int().default(0),
-  backdrop: bundleImageSchema,
-  // How the backdrop sits on the grid (scale and offset). Meaningless
-  // without the art, so it travels and lands only alongside it.
-  backdropTransform: z.record(z.string(), z.unknown()).default({}),
-  // What the map is painted with (src/lib/battlemap/skins.ts). Optional, so
-  // a bundle written before skins existed still reads; normalised on import.
-  skin: z.record(z.string(), z.unknown()).default({}),
-});
-
-const beatSchema = z.object({
-  kind: z.enum(BEAT_KINDS),
-  title: z.string().trim().min(1).max(200),
-  body: z.string().max(4_000).default(""),
-  // Arrows travel as INDEXES into this array rather than as ids, because
-  // ids do not survive a bundle and an arrow that pointed at a stranger's
-  // row would land nowhere.
-  edges: z.array(z.number().int().min(0)).max(8).default([]),
-  x: z.number().default(0),
-  y: z.number().default(0),
-});
-
-const monsterSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  desc: z.string().max(8_000).default(""),
-  stats: z.unknown(),
-  extraDamagePerRound: z.number().min(0).max(1_000).default(0),
-});
-
-// Items, spells and character options travel as the same loose blob the
-// homebrew table stores, and are normalized per kind on the way in
-// (src/lib/homebrew/gear.ts), so a bundle written by an older build cannot
-// hand the engine a weapon it cannot roll.
-const homebrewSchema = z.object({
-  kind: z.enum(["spell", "feat", "item", "race", "background", "archetype"]),
-  name: z.string().trim().min(1).max(80),
-  data: z.record(z.string(), z.unknown()).default({}),
-});
-
-// A pregenerated character: a whole sheet, checked by the same schema the
-// character builder submits through, so a bundle cannot hand the dice
-// engine a sheet it would not have accepted from a player.
-const pregenSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  level: z.number().int().min(1).max(20),
-  role: z.enum(["pc", "companion"]).default("pc"),
-  sheet: createSheetSchema,
-});
-
-export const workshopBundleSchema = z.object({
-  kind: z.literal(WORKSHOP_BUNDLE_KIND),
-  version: z.literal(WORKSHOP_BUNDLE_VERSION),
-  manifest: bundleManifestSchema,
-  genre: z.enum(GENRES).default("high_fantasy"),
-  theme: z.string().max(120).default(""),
-  premise: z.string().max(500).default(""),
-  targetParty: z
-    .object({ size: z.number().int().min(1).max(10), level: z.number().int().min(1).max(20) })
-    .default({ size: 4, level: 3 }),
-  houseRulesText: z.string().max(20_000).default(""),
-  // Variant toggles travel as a loose record and are normalized by the
-  // engine's own normalizeGameSettings on the way in, so a bundle written by
-  // an older build cannot set a flag this one does not have.
-  variantRules: z.record(z.string(), z.unknown()).default({}),
-  lore: z.array(loreSchema).max(BUNDLE_LIMITS.lore).default([]),
-  locations: z.array(locationSchema).max(BUNDLE_LIMITS.locations).default([]),
-  npcs: z.array(npcSchema).max(BUNDLE_LIMITS.npcs).default([]),
-  factions: z.array(factionSchema).max(60).default([]),
-  encounters: z.array(encounterSchema).max(BUNDLE_LIMITS.encounters).default([]),
-  tables: z.array(tableSchema).max(BUNDLE_LIMITS.tables).default([]),
-  maps: z.array(mapSchema).max(BUNDLE_LIMITS.maps).default([]),
-  storyboard: z.array(beatSchema).max(BUNDLE_LIMITS.storyboard).default([]),
-  monsters: z.array(monsterSchema).max(BUNDLE_LIMITS.monsters).default([]),
-  homebrew: z.array(homebrewSchema).max(BUNDLE_LIMITS.homebrew).default([]),
-  pregens: z.array(pregenSchema).max(BUNDLE_LIMITS.pregens).default([]),
-  // The world pack the workshop is writing (src/lib/worlds/draft.ts), art
-  // inline, so a shared workshop arrives with its plugin half-built rather
-  // than as a folder of lore somebody has to re-key. Null in bundles from
-  // builds before the creator existed.
-  plugin: worldPackDraftSchema.nullable().default(null),
-});
-
-export type WorkshopBundle = z.infer<typeof workshopBundleSchema>;
 
 // The bundle with only the kinds asked for, the rest emptied. What a DM
 // picks in the import preview; an unknown kind is ignored and an empty
@@ -310,10 +117,75 @@ export function pickBundleKinds(bundle: WorkshopBundle, kinds: string[]): Worksh
   if (!wanted.has("rules")) {
     picked.houseRulesText = "";
   }
+  if (!wanted.has("rules")) {
+    // The variant flags are the same decision as the prose, as they are in
+    // a campaign import (src/lib/db/content-import.ts).
+    picked.variantRules = {};
+  }
   if (!wanted.has("plugin")) {
     picked.plugin = null;
   }
+  if (!wanted.has("overworld")) {
+    picked.overworld = null;
+  }
   return picked;
+}
+
+// What leans on what inside a bundle, as counts of links from one kind to
+// another (#158). The preview shows these against the kinds being taken,
+// because a card whose NPC was left unticked looks like a card that never
+// had one.
+export type BundleDependency = { from: string; to: string; count: number };
+
+export function bundleDependencies(bundle: WorkshopBundle): BundleDependency[] {
+  const tally = new Map<string, number>();
+  const add = (from: string, to: string, index: number | null | undefined, list: unknown[]) => {
+    if (index === null || index === undefined || index >= list.length) {
+      return;
+    }
+    tally.set(`${from}>${to}`, (tally.get(`${from}>${to}`) ?? 0) + 1);
+  };
+  for (const beat of bundle.storyboard) {
+    add("storyboard", "npcs", beat.links.npc, bundle.npcs);
+    add("storyboard", "maps", beat.links.map, bundle.maps);
+    add("storyboard", "encounters", beat.links.encounter, bundle.encounters);
+    add("storyboard", "locations", beat.links.location, bundle.locations);
+  }
+  for (const encounter of bundle.encounters) {
+    add("encounters", "maps", encounter.map.map, bundle.maps);
+  }
+  for (const location of bundle.locations) {
+    add("locations", "maps", location.map, bundle.maps);
+  }
+  for (const anchor of bundle.overworld?.anchors ?? []) {
+    add("overworld", "locations", anchor.location, bundle.locations);
+  }
+  return [...tally.entries()].map(([key, count]) => {
+    const [from, to] = key.split(">");
+    return { from, to, count };
+  });
+}
+
+// Links that pointed outside their array in the bundle as written: dropped
+// on import whatever is ticked, and counted so the preview can say so.
+export function bundleDanglingLinks(bundle: WorkshopBundle): number {
+  const out = (index: number | null | undefined, list: unknown[]) =>
+    index !== null && index !== undefined && index >= list.length ? 1 : 0;
+  let count = 0;
+  for (const beat of bundle.storyboard) {
+    count +=
+      out(beat.links.npc, bundle.npcs) +
+      out(beat.links.map, bundle.maps) +
+      out(beat.links.encounter, bundle.encounters) +
+      out(beat.links.location, bundle.locations);
+  }
+  for (const encounter of bundle.encounters) {
+    count += out(encounter.map.map, bundle.maps);
+  }
+  for (const location of bundle.locations) {
+    count += out(location.map, bundle.maps);
+  }
+  return count;
 }
 
 export const BUNDLE_KIND_LABELS: Record<string, string> = {
@@ -329,6 +201,7 @@ export const BUNDLE_KIND_LABELS: Record<string, string> = {
   pregens: "Pregenerated characters",
   rules: "House rules",
   plugin: "World pack draft",
+  overworld: "Region map",
 };
 
 export type BundleCounts = Record<keyof typeof BUNDLE_LIMITS, number>;
@@ -355,7 +228,9 @@ export function bundleTotal(bundle: WorkshopBundle): number {
 export function bundleImageCount(bundle: WorkshopBundle): number {
   return (
     bundle.maps.filter((map) => map.backdrop !== "").length +
-    bundle.npcs.filter((npc) => npc.portrait !== "").length
+    bundle.maps.filter((map) => map.overlay !== "").length +
+    bundle.npcs.filter((npc) => npc.portrait !== "").length +
+    (bundle.overworld?.backdrop ? 1 : 0)
   );
 }
 
@@ -382,6 +257,22 @@ export function bundleWarnings(bundle: WorkshopBundle): string[] {
   if (bundle.houseRulesText.trim()) {
     warnings.push(
       "This bundle carries house rules. They land on the new workshop, not on any campaign, until you import them yourself.",
+    );
+  }
+  if (bundle.dependsOn) {
+    const shared =
+      bundle.npcs.filter((row) => row.shared).length +
+      bundle.locations.filter((row) => row.shared).length +
+      bundle.maps.filter((row) => row.shared).length +
+      bundle.encounters.filter((row) => row.shared).length;
+    warnings.push(
+      `Written as a chapter of the shared workshop "${bundle.dependsOn.name}". The ${shared} record${shared === 1 ? "" : "s"} its cards pick from there ride along, so it stands on its own.`,
+    );
+  }
+  const dangling = bundleDanglingLinks(bundle);
+  if (dangling) {
+    warnings.push(
+      `${dangling} link${dangling === 1 ? " points" : "s point"} at something the bundle does not hold and ${dangling === 1 ? "is" : "are"} dropped.`,
     );
   }
   if (bundle.plugin) {

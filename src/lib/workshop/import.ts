@@ -11,94 +11,25 @@
 // without a database. The rim that actually writes rows is
 // src/lib/db/content-import.ts.
 
-// The kinds a workshop can hand to a campaign. Each one already has a
-// campaign-side table to become, which is the test for whether a kind
-// belongs here at all.
-export const IMPORT_KINDS = [
-  "lore",
-  "locations",
-  "overworld",
-  "encounters",
-  "tables",
-  "npcs",
-  "maps",
-  "storyboard",
-  "houseRules",
-] as const;
-export type ImportKind = (typeof IMPORT_KINDS)[number];
+import {
+  IMPORT_KINDS,
+  IMPORT_KIND_LABELS,
+  SINGULAR_KINDS,
+  type AgainMode,
+  type ArcMode,
+  type BoardFacts,
+  type ImportExisting,
+  type ImportKind,
+  type ImportPlan,
+  type ImportPlanItem,
+  type ImportSource,
+  type ImportWarning,
+  type LinkKind,
+  type TargetArc,
+} from "./import-kinds.ts";
+import { planBoard } from "./import-board.ts";
 
-export const IMPORT_KIND_LABELS: Record<ImportKind, string> = {
-  lore: "World lore",
-  locations: "Places",
-  overworld: "Region map",
-  encounters: "Prepared encounters",
-  tables: "Roll tables",
-  npcs: "NPCs",
-  maps: "Battle maps",
-  storyboard: "The storyboard",
-  houseRules: "House rules and variant rules",
-};
-
-// Kinds that are one-per-campaign rather than a list. Importing one of these
-// does not add, it replaces, and that is worth saying before the button is
-// pressed rather than after.
-export const SINGULAR_KINDS: ReadonlySet<ImportKind> = new Set([
-  "overworld",
-  "houseRules",
-  // The storyboard is not copied, it is COMPILED: one board becomes lore,
-  // quests, prepared encounters, DM notes and an arc
-  // (src/lib/workshop/board-compile.ts). One row in, many rows out, which
-  // makes it singular for planning purposes even though it creates plenty.
-  "storyboard",
-]);
-
-// Only encounter rows carry `monsters`: the roster's monster references, so
-// the planner can warn when one is a homebrew slug (`homebrew:<id>`), which
-// is user-scoped and does not travel with an import. A homebrew referenced by
-// its typed display name is indistinguishable from any unknown name at plan
-// time; the warning covers the slug form the pickers write.
-export type NamedRow = { id: string; name: string; monsters?: string[] };
-
-// What the workshop holds, per kind. The singular kinds carry a single
-// row-or-nothing, expressed as a list of length 0 or 1 so the planner has
-// one shape to walk.
-export type ImportSource = Record<ImportKind, NamedRow[]>;
-
-// The names already present at the target, per kind, lowercased by the
-// caller or not: the planner compares case-insensitively either way, because
-// the locations constraint is COLLATE NOCASE.
-export type ImportExisting = Record<ImportKind, string[]>;
-
-export type ImportPlanItem = {
-  kind: ImportKind;
-  sourceId: string;
-  name: string;
-  // What it will be called at the target, after collisions are resolved.
-  finalName: string;
-  renamed: boolean;
-};
-
-export type ImportWarning = { kind: ImportKind; message: string };
-
-export type ImportPlan = {
-  items: ImportPlanItem[];
-  counts: Record<ImportKind, number>;
-  warnings: ImportWarning[];
-  // Nothing selected, or everything selected was empty.
-  empty: boolean;
-};
-
-export function emptySource(): ImportSource {
-  return Object.fromEntries(
-    IMPORT_KINDS.map((kind) => [kind, [] as NamedRow[]]),
-  ) as ImportSource;
-}
-
-export function emptyExisting(): ImportExisting {
-  return Object.fromEntries(
-    IMPORT_KINDS.map((kind) => [kind, [] as string[]]),
-  ) as ImportExisting;
-}
+export * from "./import-kinds.ts";
 
 // "Rusted Anchor Inn" against a target that already has one becomes
 // "Rusted Anchor Inn (2)". Suffixing rather than refusing keeps an import
@@ -128,7 +59,7 @@ export function dedupeName(name: string, taken: Set<string>): string {
   return fallback;
 }
 
-export function planImport(input: {
+export type PlanInput = {
   selection: readonly ImportKind[];
   source: ImportSource;
   existing: ImportExisting;
@@ -136,17 +67,41 @@ export function planImport(input: {
   // houseRules kind, which has no name to collide on.
   targetHasHouseRules?: boolean;
   // Whether the target already has a story arc. Only consulted for the
-  // storyboard kind, and only to warn: an arc the table has been playing is
-  // never written over.
+  // storyboard kind: an arc the table has been playing is never written
+  // over, only added to as a new act when the DM asks for that. `targetArc`
+  // carries the detail; `targetHasArc` alone is the older, coarser input.
   targetHasArc?: boolean;
-}): ImportPlan {
+  targetArc?: TargetArc | null;
+  arcMode?: ArcMode;
+  // Source rows an earlier import already brought into the target, per
+  // kind (src/lib/db/content-origins.ts), and what to do with them.
+  alreadyHere?: Partial<Record<ImportKind, string[]>>;
+  again?: AgainMode;
+  // The shared-workshop rows the target already holds a copy of.
+  commonHere?: Partial<Record<LinkKind, string[]>>;
+  // The board, when the source has one.
+  board?: BoardFacts | null;
+};
+
+export function planImport(input: PlanInput): ImportPlan {
   const selected = new Set(input.selection);
   const items: ImportPlanItem[] = [];
   const warnings: ImportWarning[] = [];
+  const notes: ImportWarning[] = [];
   const counts = Object.fromEntries(IMPORT_KINDS.map((kind) => [kind, 0])) as Record<
     ImportKind,
     number
   >;
+  const again = input.again ?? "skip";
+  const here = (kind: ImportKind, id: string | undefined) =>
+    Boolean(id) && (input.alreadyHere?.[kind] ?? []).includes(id as string);
+  // Whether a source row will exist at the target once this import is done:
+  // travelling now, or brought by an earlier import.
+  const arrives = (kind: ImportKind, id: string | undefined) =>
+    Boolean(id) &&
+    ((selected.has(kind) && (input.source[kind] ?? []).some((row) => row.id === id)) || here(kind, id));
+  let kept = 0;
+  let boardPlan: ImportPlan["board"] = null;
 
   for (const kind of IMPORT_KINDS) {
     if (!selected.has(kind)) {
@@ -177,7 +132,9 @@ export function planImport(input: {
     }
 
     if (kind === "storyboard") {
-      if (input.targetHasArc) {
+      if (input.board) {
+        boardPlan = planBoard(input, input.board, arrives, warnings, notes);
+      } else if (input.targetHasArc || input.targetArc) {
         warnings.push({
           kind,
           message:
@@ -213,7 +170,15 @@ export function planImport(input: {
 
     const taken = new Set((input.existing[kind] ?? []).map((name) => name.trim().toLowerCase()));
     let renamedCount = 0;
+    let keptCount = 0;
     for (const row of rows) {
+      // A row an earlier import brought is kept as the campaign has it, edits
+      // and all, rather than arriving again as "(2)" (#157, #159).
+      if (again === "skip" && here(kind, row.id)) {
+        keptCount += 1;
+        items.push({ kind, sourceId: row.id, name: row.name, finalName: row.name, renamed: false, kept: true });
+        continue;
+      }
       const finalName = dedupeName(row.name, taken);
       const renamed = finalName !== (row.name.trim() || "Untitled");
       if (renamed) {
@@ -226,6 +191,35 @@ export function planImport(input: {
         kind,
         message: `${renamedCount} ${IMPORT_KIND_LABELS[kind].toLowerCase()} entr${renamedCount === 1 ? "y" : "ies"} already exist here by name and will be numbered.`,
       });
+    }
+    if (keptCount) {
+      kept += keptCount;
+      notes.push({
+        kind,
+        message: `${keptCount} ${IMPORT_KIND_LABELS[kind].toLowerCase()} entr${keptCount === 1 ? "y" : "ies"} came in from here before and stay${keptCount === 1 ? "s" : ""} as this campaign has ${keptCount === 1 ? "it" : "them"}.`,
+      });
+    } else if (again === "copy" && rows.some((row) => here(kind, row.id))) {
+      notes.push({
+        kind,
+        message: `${IMPORT_KIND_LABELS[kind]} that came in from here before arrive again as second copies.`,
+      });
+    }
+
+    // A fight or a place bound to a battle map that will not be here: the
+    // copy is unbound rather than left pointing at the source's map (#153).
+    if (kind === "encounters" || kind === "locations") {
+      const unbound = rows.filter(
+        (row) => row.mapId && !(again === "skip" && here(kind, row.id)) && !arrives("maps", row.mapId),
+      ).length;
+      if (unbound) {
+        warnings.push({
+          kind,
+          message:
+            kind === "encounters"
+              ? `${unbound} prepared encounter${unbound === 1 ? " is" : "s are"} drawn on a battle map that is not coming along. ${unbound === 1 ? "It arrives" : "They arrive"} without it and deploy${unbound === 1 ? "s" : ""} on a map made from ${unbound === 1 ? "its" : "their"} own settings; tick Battle maps to keep ${unbound === 1 ? "it" : "them"} bound.`
+              : `${unbound} place${unbound === 1 ? " stands" : "s stand"} on a battle map that is not coming along, and arrive${unbound === 1 ? "s" : ""} without it; tick Battle maps to keep ${unbound === 1 ? "it" : "them"}.`,
+        });
+      }
     }
 
     if (kind === "encounters") {
@@ -244,7 +238,12 @@ export function planImport(input: {
   // The region map anchors places by id. Bringing the map without the places
   // it points at would land a map whose markers reference nothing, so the
   // anchors are dropped and the map re-places them as the party travels.
-  if (selected.has("overworld") && !selected.has("locations") && input.source.locations.length) {
+  // Places an earlier import brought still count as here.
+  if (
+    selected.has("overworld") &&
+    !selected.has("locations") &&
+    input.source.locations.some((location) => !here("locations", location.id))
+  ) {
     warnings.push({
       kind: "overworld",
       message:
@@ -256,7 +255,10 @@ export function planImport(input: {
     items,
     counts,
     warnings,
-    empty: items.length === 0,
+    notes,
+    kept,
+    board: boardPlan,
+    empty: items.every((item) => item.kept),
   };
 }
 

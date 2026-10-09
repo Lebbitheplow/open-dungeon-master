@@ -2,9 +2,11 @@ import { z } from "zod";
 import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { importWorkshopBundle } from "@/lib/db/workshop-bundle";
+import { sharedHomesFor } from "@/lib/db/workshop-bundle-parts";
 import { uploadRefusalResponse } from "@/lib/upload-budget";
 import {
   bundleCounts,
+  bundleDependencies,
   bundleWarnings,
   MAX_BUNDLE_BYTES,
   pickBundleKinds,
@@ -39,6 +41,9 @@ const bodySchema = z.object({
   preview: z.boolean().default(false),
   // The kinds to take. Absent or empty means the whole bundle.
   kinds: z.array(z.string().max(40)).max(20).default([]),
+  // For a chapter bundle: the importer's workshop its shared rows link to
+  // (#159). Checked against ownership where it is used.
+  sharedWorkshopId: z.string().trim().max(80).default(""),
 });
 
 export async function POST(request: Request) {
@@ -66,12 +71,25 @@ export async function POST(request: Request) {
       manifest: bundle.manifest,
       counts: bundleCounts(bundle),
       houseRules: bundle.houseRulesText.trim().length > 0,
+      // The two single things a bundle can carry besides its lists, offered
+      // as ticks like the rest (the plugin draft was never offered, so it
+      // was dropped from every import that ticked anything).
+      plugin: Boolean(bundle.plugin),
+      overworld: Boolean(bundle.overworld),
+      // What leans on what, so the ticks can say which links an untick
+      // drops (#158).
+      dependencies: bundleDependencies(bundle),
+      // For a chapter bundle: the shared workshop it was written against,
+      // and the importer's workshops that hold its shared rows.
+      dependsOn: bundle.dependsOn,
+      sharedHomes: sharedHomesFor(user.id, bundle),
       warnings: bundleWarnings(bundle),
     });
   }
 
   const result = importWorkshopBundle(user.id, pickBundleKinds(bundle, parsed.data.kinds), {
     isAdmin: user.isAdmin,
+    sharedWorkshopId: parsed.data.sharedWorkshopId,
   });
   if ("error" in result) {
     return result.refusal

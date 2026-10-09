@@ -686,7 +686,11 @@ Compare, Calculators and Ask.
 
 ### Phase 9: sharing. BUILT.
 
-A workshop leaves as one JSON file and comes back as a new workshop.
+A workshop leaves as one JSON file and comes back as a new workshop. What
+survives each step from workshop to bundle to campaign, relationships
+included, and what the storyteller can reach at the end, is
+`docs/workshop-portability.md` (written for #158; some of what follows has
+since changed, images among it).
 
 - **The bundle format** (`src/lib/workshop/bundle.ts`) reuses the world pack
   manifest's licensing fields verbatim rather than inventing a second set, so

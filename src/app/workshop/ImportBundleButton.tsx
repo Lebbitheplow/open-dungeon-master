@@ -7,7 +7,8 @@ import { chip, chipOn, chipRow } from "@/app/workshop/kit";
 import { useRef, useState } from "react";
 import { ui } from "@/lib/ui";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
-import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES } from "@/lib/workshop/bundle";
+import { Select } from "@/components/ui/Select";
+import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES, type BundleDependency } from "@/lib/workshop/bundle";
 import { navigateTo } from "@/lib/navigation";
 
 // Opening somebody else's workshop.
@@ -16,21 +17,50 @@ import { navigateTo } from "@/lib/navigation";
 // writing anything, so what a DM agrees to is a named thing with counts and
 // a licensing notice rather than a filename. The second press is what
 // creates the workshop.
+//
+// The ticks say what an untick costs: a card that picks an NPC loses that
+// pick when the NPCs stay behind, and the preview says so for whatever is
+// ticked right now (#158). A chapter bundle offers to link its shared
+// records to the importer's own copy of the shared workshop (#159).
+
+type SharedHome = { id: string; title: string; found: number; total: number };
 
 type Preview = {
   manifest: { name: string; blurb: string; author: string; inspiredBy: string; rightsHolder: string };
   counts: Record<string, number>;
   houseRules?: boolean;
+  plugin?: boolean;
+  overworld?: boolean;
+  dependencies?: BundleDependency[];
+  dependsOn?: { name: string } | null;
+  sharedHomes?: SharedHome[];
   warnings: string[];
 };
 
 // The kinds a preview offers, in the order the counts came: every kind with
-// something in it, and the house rules when the bundle carries any.
+// something in it, then the house rules, the region map and the world pack
+// draft when the bundle carries them.
 function kindsOf(preview: Preview): string[] {
   const kinds = Object.entries(preview.counts)
     .filter(([, count]) => count > 0)
     .map(([kind]) => kind);
-  return preview.houseRules ? [...kinds, "rules"] : kinds;
+  return [
+    ...kinds,
+    ...(preview.houseRules ? ["rules"] : []),
+    ...(preview.overworld ? ["overworld"] : []),
+    ...(preview.plugin ? ["plugin"] : []),
+  ];
+}
+
+// What the current ticks drop: every link from a ticked kind into an
+// unticked one.
+function droppedLinks(preview: Preview, kinds: string[]): string[] {
+  return (preview.dependencies ?? [])
+    .filter((dependency) => kinds.includes(dependency.from) && !kinds.includes(dependency.to))
+    .map(
+      (dependency) =>
+        `${dependency.count} link${dependency.count === 1 ? "" : "s"} from ${BUNDLE_KIND_LABELS[dependency.from] ?? dependency.from} to ${BUNDLE_KIND_LABELS[dependency.to] ?? dependency.to} ${dependency.count === 1 ? "is" : "are"} dropped while those stay behind.`,
+    );
 }
 
 // `label` and `className` let the hub header show the same control as a
@@ -47,6 +77,9 @@ export function ImportBundleButton({
   const [preview, setPreview] = useState<Preview | null>(null);
   // Which kinds to take. Everything the bundle offers, until unticked.
   const [kinds, setKinds] = useState<string[]>([]);
+  // The importer's workshop a chapter's shared records link to, or "" to
+  // bring them in as this workshop's own.
+  const [sharedWorkshopId, setSharedWorkshopId] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -82,6 +115,7 @@ export function ImportBundleButton({
       setText(contents);
       setPreview(data);
       setKinds(kindsOf(data));
+      setSharedWorkshopId((data as Preview).sharedHomes?.[0]?.id ?? "");
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be read.");
     } finally {
@@ -93,7 +127,7 @@ export function ImportBundleButton({
     setBusy(true);
     setError("");
     try {
-      const data = await post({ text, kinds });
+      const data = await post({ text, kinds, sharedWorkshopId });
       navigateTo(`/workshop/${data.workshopId}`);
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be imported.");
@@ -152,13 +186,53 @@ export function ImportBundleButton({
                     className={cn(ui.btnSmall, chip, "rounded-full normal-case", ticked ? chipOn : "text-stone-500")}
                   >
                     <Check className={cn("size-3.5", ticked ? "text-amber-300" : "opacity-20")} aria-hidden="true" />
-                    {kind === "rules" ? "" : `${preview.counts[kind]} `}
+                    {preview.counts[kind] === undefined ? "" : `${preview.counts[kind]} `}
                     {BUNDLE_KIND_LABELS[kind] ?? kind}
                   </button>
                 </li>
               );
             })}
           </ul>
+
+          {droppedLinks(preview, kinds).length ? (
+            <ul className="stagger mt-2 space-y-1">
+              {droppedLinks(preview, kinds).map((line) => (
+                <li key={line} className="reveal text-xs text-amber-300/90">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {preview.dependsOn ? (
+            <div className="reveal mt-3">
+              {preview.sharedHomes?.length ? (
+                <>
+                  <p className="mb-1 text-xs text-stone-400">
+                    The records its cards pick from &quot;{preview.dependsOn.name}&quot;:
+                  </p>
+                  <Select
+                    label="Shared records"
+                    value={sharedWorkshopId}
+                    onChange={setSharedWorkshopId}
+                    options={[
+                      ...preview.sharedHomes.map((home) => ({
+                        value: home.id,
+                        label: `Link to my "${home.title}"`,
+                        hint: `${home.found} of ${home.total} found there; the rest land here.`,
+                      })),
+                      { value: "", label: "Bring them in as this workshop's own" },
+                    ]}
+                  />
+                </>
+              ) : (
+                <p className="text-xs text-stone-400">
+                  Its records from &quot;{preview.dependsOn.name}&quot; land as this workshop&apos;s
+                  own. Import that workshop&apos;s bundle first to link them to it instead.
+                </p>
+              )}
+            </div>
+          ) : null}
 
           <UnofficialPackNotice
             rightsHolder={preview.manifest.rightsHolder}

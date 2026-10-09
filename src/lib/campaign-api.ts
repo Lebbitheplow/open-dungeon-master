@@ -99,6 +99,31 @@ export async function requireDm(campaignId: string): Promise<MemberContext | Res
   return context;
 }
 
+// Prep authority (#154): the prepared fights and the map library. The DM
+// seat at a table a person runs, and the party lead of an AI-narrated
+// campaign, who steers the story there and is the only person who could
+// bring the prep in (/api/campaigns/[id]/import follows the same rule). A
+// lead at a human-DM table is a player and stays out, as does every other
+// player: prepared fights are the story's secrets.
+export async function requirePrepAuthority(campaignId: string): Promise<MemberContext | Response> {
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  const caps = capsFor(context);
+  if (caps.role !== "dm" && !caps.steersStory) {
+    return Response.json(
+      {
+        error: context.campaign.dmUserId
+          ? "Only the Dungeon Master can do that."
+          : "Only the party lead can do that.",
+      },
+      { status: 403 },
+    );
+  }
+  return context;
+}
+
 // Story authority: floor control, lead directions, the secret arc, the
 // context trace, force-ending an encounter. In an AI campaign this is the
 // party lead, exactly as before. Once a person runs the game it is the DM,
