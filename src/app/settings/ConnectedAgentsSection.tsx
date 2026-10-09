@@ -10,6 +10,7 @@ import { PageSection } from "@/components/PageShell";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { CopyLine } from "@/components/CopyLine";
+import { AssistantLink } from "@/components/AssistantLink";
 
 type Grant = {
   id: string;
@@ -67,6 +68,7 @@ export function ConnectedAgentsSection() {
   const { loaded, loadError, settle } = useLoadStatus();
   const [reloads, setReloads] = useState(0);
   const [mcpUrl, setMcpUrl] = useState("");
+  const [assistantUrl, setAssistantUrl] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -78,11 +80,12 @@ export function ConnectedAgentsSection() {
   const [leaving, setLeaving] = useState<string | null>(null);
 
   useEffect(() => {
-    readLoad<{ grants?: Grant[]; mcpUrl?: string }>(fetch("/api/profile/agents"), "The connected agents").then((outcome) => {
+    readLoad<{ grants?: Grant[]; mcpUrl?: string; assistantUrl?: string }>(fetch("/api/profile/agents"), "The connected agents").then((outcome) => {
       settle(outcome);
       if (outcome.payload) {
         setGrants(outcome.payload.grants ?? []);
         setMcpUrl(outcome.payload.mcpUrl ?? "");
+        setAssistantUrl(outcome.payload.assistantUrl ?? "");
       }
     });
     fetch("/api/campaigns")
@@ -110,6 +113,7 @@ export function ConnectedAgentsSection() {
       }
       setGrants((current) => [data.grant, ...(current ?? [])]);
       setMcpUrl(data.mcpUrl ?? mcpUrl);
+      setAssistantUrl(data.assistantUrl ?? assistantUrl);
       setFresh({ token: data.token, name: data.grant.name });
       setCreating(false);
       setName("");
@@ -136,7 +140,7 @@ export function ConnectedAgentsSection() {
     <PageSection
       heading="Connected agents"
       glyph="system-share"
-      intro="Let your own Claude Code, Codex or other MCP client act as you here: read your campaigns, play your character, or run a table where you are the Dungeon Master. It gets exactly the access your account has, only the parts you tick, and never your password or the server's settings."
+      intro={`Let your own Claude Code, Codex or other MCP client act as you here: read your campaigns, play your character, or run a table where you are the Dungeon Master.${assistantUrl ? " ChatGPT, Claude, Grok and Meta Muse can too, through the link shown when you connect." : ""} It gets exactly the access your account has, only the parts you tick, and never your password or the server's settings.`}
     >
       {fresh ? (
         <div className="hx-token mb-4 space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/20 p-3">
@@ -144,6 +148,7 @@ export function ConnectedAgentsSection() {
             <strong>{fresh.name}</strong> is connected. This is the only time its token is shown; copy the line for
             your agent now.
           </p>
+          <AssistantLink base={assistantUrl} token={fresh.token} />
           {setupLines(mcpUrl, fresh.token).map((line) => (
             <div key={line.name}>
               <span className="mb-1 block text-xs text-stone-400">{line.name}</span>
