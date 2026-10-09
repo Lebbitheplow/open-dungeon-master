@@ -15,7 +15,8 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { dmQueuePaused, enqueueDmJob, pauseDmQueue, resumeDmQueue } = await import("../src/lib/dm/queue.ts");
-const { buildLinePrompt, boundaryNegativeTerms, lineViolations, normalizeSafety, renderSafetyBlock } = await import("../src/lib/dm/safety-logic.ts");
+const { buildLinePrompt, boundaryNegativeTerms, normalizeSafety, renderSafetyBlock } = await import("../src/lib/dm/safety-logic.ts");
+const { lineViolations } = await import("../src/lib/dm/safety-lines-logic.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { raiseXCard, resumeAfterXCard, xCardRaised } = await import("../src/lib/dm/safety.ts");

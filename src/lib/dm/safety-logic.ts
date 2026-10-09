@@ -5,10 +5,6 @@
 // ladder and reaction rolls; tone becomes adjectives and a bed bias. The
 // routes, the prompt and the guard call this; the test loads it directly.
 
-import type { TableLanguage } from "../schemas/game-settings-options.ts";
-import { stems } from "../language/language.ts";
-import { hasWord } from "../language/text-logic.ts";
-
 export const BOUNDARIES = ["family", "standard", "mature"] as const;
 export type Boundaries = (typeof BOUNDARIES)[number];
 
@@ -71,24 +67,6 @@ export function renderSafetyBlock(safety: SafetySettings): string {
   }
   parts.push("- If a player's action would cross a line, the world simply does not go there: narrate around it without comment.");
   return parts.join("\n");
-}
-
-// The line a narration crossed, if any. A line is matched as a whole
-// phrase or by any of its words, compared as Snowball stems in the table's
-// language (src/lib/language), so "spiders" catches "spider" and "ragni"
-// catches "ragno", while "rat" never fires inside "pirate".
-export function lineViolations(text: string, lines: string[], language: TableLanguage): string[] {
-  const narration = new Set(stems(text, language));
-  const out: string[] = [];
-  for (const line of lines) {
-    if (!line.trim()) {
-      continue;
-    }
-    if (hasWord(text, line) || stems(line, language).some((stem) => narration.has(stem))) {
-      out.push(line);
-    }
-  }
-  return out;
 }
 
 export function buildLinePrompt(violations: string[]): string {

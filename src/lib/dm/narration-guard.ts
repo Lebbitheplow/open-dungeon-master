@@ -1,4 +1,5 @@
-import { buildLinePrompt, lineViolations } from "@/lib/dm/safety-logic";
+import { buildLinePrompt } from "@/lib/dm/safety-logic";
+import { lineViolations } from "@/lib/dm/safety-lines-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";

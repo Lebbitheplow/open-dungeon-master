@@ -7,7 +7,6 @@ import {
   agencyFragment,
   clampAxis,
   derivePersonality,
-  detectGoalCollisions,
   driftPersonality,
   parseBonds,
   parseGoals,
@@ -18,6 +17,7 @@ import {
   shiftRelation,
   tickPressure,
 } from "../src/lib/dm/npc-logic.ts";
+import { detectGoalCollisions } from "../src/lib/dm/npc-goal-logic.ts";
 
 let passed = 0;
 function test(name, fn) {

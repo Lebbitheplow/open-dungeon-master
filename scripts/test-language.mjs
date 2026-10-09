@@ -2,6 +2,9 @@
 // words, Snowball stop lists and stemmers per table language, and the name
 // comparisons that SQLite's ASCII-only NOCASE and \b got wrong.
 import assert from "node:assert/strict";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const { words, foldName, hasWord } = await import("../src/lib/language/text-logic.ts");
 const { stems, stopWordsFor, stemWord } = await import("../src/lib/language/language.ts");
@@ -75,6 +78,47 @@ test("a name is found as a whole word, never inside a longer one", () => {
   assert.ok(hasWord("O'Brien laughs", "O'Brien"));
   assert.ok(!hasWord("always", "Al"));
   assert.ok(hasWord("Niccolo\u0300 arrives", "niccolò"));
+});
+
+// The stemmer is server-only: its browser build fetches and starts a 370 KB
+// WebAssembly module as soon as it is imported. No "use client" module may
+// reach it through an import a bundle keeps (type-only ones are erased).
+test("no browser module imports the stemmer", () => {
+  const src = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
+  const stemmer = path.join(src, "lib", "language", "language.ts");
+  const resolve = (from, spec) => {
+    const base = spec.startsWith("@/") ? path.join(src, spec.slice(2)) : spec.startsWith(".") ? path.resolve(path.dirname(from), spec) : null;
+    if (!base) {
+      return null;
+    }
+    const stripped = base.replace(/\.tsx?$/, "");
+    return [`${stripped}.ts`, `${stripped}.tsx`, path.join(stripped, "index.ts"), path.join(stripped, "index.tsx")].find((file) => existsSync(file)) ?? null;
+  };
+  const IMPORT = /^\s*(?:import|export)\s+(type\s+)?(?:[^;'"]*?\sfrom\s+)?["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/gm;
+  const files = readdirSync(src, { recursive: true })
+    .map((file) => path.join(src, String(file)))
+    .filter((file) => /\.tsx?$/.test(file));
+  for (const entry of files.filter((file) => /^\s*["']use client["']/.test(readFileSync(file, "utf8")))) {
+    const seen = new Map([[entry, null]]);
+    const queue = [entry];
+    while (queue.length) {
+      const file = queue.shift();
+      for (const match of readFileSync(file, "utf8").matchAll(IMPORT)) {
+        const next = match[1] ? null : resolve(file, match[2] ?? match[3]);
+        if (next && !seen.has(next)) {
+          seen.set(next, file);
+          queue.push(next);
+        }
+      }
+    }
+    if (seen.has(stemmer)) {
+      const chain = [];
+      for (let at = stemmer; at; at = seen.get(at)) {
+        chain.unshift(path.relative(src, at));
+      }
+      assert.fail(`a browser module reaches the stemmer: ${chain.join(" -> ")}`);
+    }
+  }
 });
 
 console.log(`\n${passed} language tests passed`);

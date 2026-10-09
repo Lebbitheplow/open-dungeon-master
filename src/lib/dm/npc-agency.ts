@@ -6,10 +6,10 @@ import { publishEphemeral } from "@/lib/events";
 import { rollExpression } from "@/lib/dice";
 import {
   advanceSessionGoal,
-  detectGoalCollisions,
   shiftRelation,
   tickPressure,
 } from "@/lib/dm/npc-logic";
+import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 
 // The background goal engine: once per chapter close, every tracked NPC's
