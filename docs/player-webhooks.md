@@ -42,8 +42,8 @@ load, not a real-time latency guarantee. Slow receivers can delay a pass.
 
 ## Set up the Codex receiver on the player's computer
 
-Requirements: this repository, Node 22.18 or newer, Codex CLI installed and
-signed in, a reachable HTTPS tunnel, and a player connection grant with
+Requirements: this repository, Node 22.18 or newer, Codex CLI 0.159.2 or newer,
+a reachable HTTPS tunnel, and a player connection grant with
 **read** and **play** scopes. Limit the grant to one campaign. Use a player
 grant, not a storyteller turn token. You must have an active character at
 that table.
@@ -86,8 +86,19 @@ that table.
    executable path when your shell's PATH is incomplete. On macOS/Linux,
    replace this command with your own credential helper and use the path
    to your Codex binary. An optional `model` chooses a model available to
-   your Codex sign-in; omitting it keeps your configured default.
-4. From the repository directory, register the webhook:
+   your Codex sign-in; omitting it uses Codex's default in the receiver profile.
+4. From the repository directory, sign in to the receiver's isolated Codex
+   profile once. Complete the device sign-in in your browser, outside chat:
+
+   ```powershell
+   node scripts/player-webhook-receiver.mjs --login C:/private/receiver.json
+   ```
+
+   Codex manages its own sign-in under
+   `player-webhook-state/codex-home`. The receiver never reads or copies
+   authentication files from your normal Codex profile. Do not add other
+   MCP servers, apps or plugins to this isolated profile.
+5. Register the webhook:
 
    ```powershell
    node scripts/player-webhook-receiver.mjs --subscribe C:/private/receiver.json
@@ -98,21 +109,23 @@ that table.
    `player-webhook-state/subscription.json`. It never prints either secret.
    The signing secret is different from the bearer token. The bearer token
    is never saved by the receiver.
-5. Start the receiver and keep it running:
+6. Start the receiver and keep it running:
 
    ```powershell
    node scripts/player-webhook-receiver.mjs --listen C:/private/receiver.json
    ```
 
-6. Point your HTTPS tunnel's `/odm-player` path at
+7. Point your HTTPS tunnel's `/odm-player` path at
    `http://127.0.0.1:8787/odm-player`. The receiver listens only on loopback.
    Keep the tunnel running too. Synchronize the computers' clocks, since
    signatures expire after five minutes.
 
 The receiver disables Codex's shell, web, apps, image tools and subagents,
-uses a read-only sandbox with approvals refused, and replaces its MCP
-configuration with only this player connection. Only read and guarded
-play tools are enabled. It starts or resumes its own thread and calls
+uses a read-only sandbox with command/file approvals refused, and configures
+only this player connection in its isolated profile. Only read and guarded
+play tools are enabled and preapproved on that server. Codex can merge
+inline configuration with existing MCP settings, which is why this profile
+must stay separate from your usual one. It starts or resumes its own thread and calls
 `turn/start`, then waits for `turn/completed` before handling another
 decision. These model turns use the player's Codex sign-in and plan.
 

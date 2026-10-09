@@ -1,5 +1,20 @@
 // The receiver owns this app-server thread. It never writes into a desktop
 // chat another process may already be driving.
+import path from "node:path";
+
+export function playerCodexEnvironment(directory, inherited = process.env) {
+  const env = { ...inherited, CODEX_HOME: path.join(directory, "codex-home") };
+  // The device-auth profile supplies the player's subscription sign-in.
+  // An unrelated API key in the parent shell must not select paid API auth.
+  delete env.OPENAI_API_KEY;
+  return env;
+}
+
+export function playerMcpOverride(url, helper) {
+  const tools = ["odm_whoami", "odm_get_campaign", "odm_get_character", "odm_list_characters", "odm_get_player_webhook_opportunities", "odm_take_action", "odm_answer_roll", "odm_end_turn"];
+  return `mcp_servers={odm_player={url=${JSON.stringify(url)},http_headers_helper=${JSON.stringify(helper)},enabled_tools=${JSON.stringify(tools)},default_tools_approval_mode="approve",tool_timeout_sec=120,startup_timeout_sec=30}}`;
+}
+
 export async function runCodexPlayerTurn(createPeer, args, options) {
   let resolveTurn, rejectTurn;
   const completed = new Promise((resolve, reject) => { resolveTurn = resolve; rejectTurn = reject; });

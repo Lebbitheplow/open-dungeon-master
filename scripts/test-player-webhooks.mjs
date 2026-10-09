@@ -24,7 +24,7 @@ const { playerOpportunities } = await import("../src/lib/agents/webhook-opportun
 const { createPlayerWebhook, runPlayerWebhooksOnce, listPlayerWebhooks, deletePlayerWebhook, webhookUrl, webhookSignature, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
 const { PlayerInbox, receiverServer, verifySignature, validateEvent, playerPrompt } = await import("./lib/player-webhook-receiver.mjs");
-const { runCodexPlayerTurn } = await import("./lib/player-webhook-codex.mjs");
+const { runCodexPlayerTurn, playerCodexEnvironment, playerMcpOverride } = await import("./lib/player-webhook-codex.mjs");
 
 let passed = 0;
 async function test(name, fn) { await fn(); passed += 1; console.log(`ok - ${name}`); }
@@ -303,6 +303,19 @@ try {
     calls.length = 0;
     await runCodexPlayerTurn(factory, ["app-server"], { ...options, threadId });
     assert.equal(calls[2].method, "thread/resume"); assert.equal(calls[2].params.threadId, threadId); assert.equal(killed, 2);
+  });
+  await test("receiver isolates its Codex home, ignores ambient API auth and approves only selected player tools", () => {
+    const inherited = { PATH: "tools", CODEX_HOME: "normal-profile", OPENAI_API_KEY: "synthetic-api-key" };
+    const env = playerCodexEnvironment(directory, inherited);
+    assert.equal(env.CODEX_HOME, path.join(directory, "codex-home"));
+    assert.equal(env.PATH, "tools"); assert.equal(env.OPENAI_API_KEY, undefined);
+    assert.equal(inherited.CODEX_HOME, "normal-profile"); assert.equal(inherited.OPENAI_API_KEY, "synthetic-api-key");
+    const override = playerMcpOverride("https://odm.example/api/mcp", "private-helper");
+    assert.match(override, /default_tools_approval_mode="approve"/);
+    assert.ok(!override.includes("odm_subscribe_player_webhook"));
+    assert.ok(!override.includes("odm_unsubscribe_player_webhook"));
+    assert.ok(!override.includes("odm_dm_invoke"));
+    assert.ok(override.includes("odm_get_player_webhook_opportunities"));
   });
   await test("Codex failed or timed-out turns are stopped and never reported complete", async () => {
     let killed = 0;

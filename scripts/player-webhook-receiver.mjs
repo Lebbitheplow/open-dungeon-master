@@ -1,5 +1,5 @@
 // Run this on the player's computer, never on ODM's server account.
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { readFileSync, mkdirSync, existsSync, openSync, closeSync, writeFileSync, unlinkSync } from "node:fs";
 import { register } from "node:module";
 import path from "node:path";
@@ -7,18 +7,19 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { PlayerInbox, atomicJson, playerPrompt, receiverServer } from "./lib/player-webhook-receiver.mjs";
 
-import { runCodexPlayerTurn } from "./lib/player-webhook-codex.mjs";
+import { runCodexPlayerTurn, playerCodexEnvironment, playerMcpOverride } from "./lib/player-webhook-codex.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 const [mode, configArg] = process.argv.slice(2);
-if (!["--subscribe", "--listen", "--headers", "--unsubscribe"].includes(mode) || !configArg) {
-  console.error("Usage: node scripts/player-webhook-receiver.mjs --subscribe|--listen|--unsubscribe <private-config.json>");
+if (!["--login", "--subscribe", "--listen", "--headers", "--unsubscribe"].includes(mode) || !configArg) {
+  console.error("Usage: node scripts/player-webhook-receiver.mjs --login|--subscribe|--listen|--unsubscribe <private-config.json>");
   process.exit(1);
 }
 const configPath = path.resolve(configArg);
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 const directory = path.resolve(path.dirname(configPath), config.stateDirectory ?? "player-webhook-state");
 const subscriptionFile = path.join(directory, "subscription.json");
+const receiverCodexHome = path.join(directory, "codex-home");
 
 async function headers() {
   if (!Array.isArray(config.authCommand) || !config.authCommand.length || config.authCommand.some((s) => typeof s !== "string")) throw new Error("Configure authCommand as an executable and argument list.");
@@ -57,7 +58,21 @@ function quoteCommand(value) {
 }
 
 try {
-  if (mode === "--headers") {
+  if (mode === "--login") {
+    mkdirSync(receiverCodexHome, { recursive: true, mode: 0o700 });
+    const { resolveWindowsShim } = await import("../src/lib/harness/discover.ts");
+    const { command, prefix } = resolveWindowsShim(config.codexBinary ?? "codex");
+    // Codex handles its own device sign-in in the user's terminal. No
+    // credentials are read, copied from their normal profile, or logged here.
+    const exitCode = await new Promise((resolve, reject) => {
+      const child = spawn(command, [...prefix, "login", "--device-auth"], {
+        env: playerCodexEnvironment(directory), stdio: "inherit", windowsHide: true,
+      });
+      child.on("error", reject);
+      child.on("exit", resolve);
+    });
+    if (exitCode !== 0) throw new Error("Codex sign-in did not finish.");
+  } else if (mode === "--headers") {
     process.stdout.write(JSON.stringify(await headers()));
   } else {
     const url = new URL(config.mcpUrl);
@@ -86,15 +101,15 @@ try {
       const inbox = new PlayerInbox(directory);
       const { startJsonRpc } = await import("../src/lib/harness/jsonrpc-stdio.ts");
       const { codexArgs } = await import("../src/lib/harness/adapters/codex.ts");
+      mkdirSync(receiverCodexHome, { recursive: true, mode: 0o700 });
       const helper = [process.execPath, fileURLToPath(import.meta.url), "--headers", configPath].map(quoteCommand).join(" ");
-      const tools = ["odm_whoami", "odm_get_campaign", "odm_get_character", "odm_list_characters", "odm_get_player_webhook_opportunities", "odm_take_action", "odm_answer_roll", "odm_end_turn"];
       const args = [...codexArgs({ mcpUrl: null, images: false, disableServers: [] }), "-c",
-        `mcp_servers={odm_player={url=${JSON.stringify(config.mcpUrl)},http_headers_helper=${JSON.stringify(helper)},enabled_tools=${JSON.stringify(tools)}}`];
+        playerMcpOverride(config.mcpUrl, helper)];
       const scratch = path.join(directory, "scratch");
       mkdirSync(scratch, { recursive: true, mode: 0o700 });
       let activePeer;
       const wake = (event) => runCodexPlayerTurn(startJsonRpc, args, {
-        binary: config.codexBinary ?? "codex", cwd: scratch, env: { ...process.env },
+        binary: config.codexBinary ?? "codex", cwd: scratch, env: playerCodexEnvironment(directory),
         threadId: inbox.state.threadId, model: config.model, effort: config.effort,
         prompt: playerPrompt(event, config.playerInstructions ?? "Play only your assigned character, helpfully and concisely."),
         onThreadId(threadId) { inbox.state.threadId = threadId; inbox.save(); },
