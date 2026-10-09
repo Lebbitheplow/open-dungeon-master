@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Hammer, Loader2 } from "lucide-react";
+import { AlertTriangle, Hammer, Info, Loader2 } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { FieldLabel } from "@/app/workshop/kit";
@@ -32,12 +32,20 @@ export type ImportSelection = {
   sourceId: string;
   select: ImportKind[];
   houseRules: "replace" | "append";
+  // What an earlier import from the same source brought: kept as this
+  // campaign has it, or copied again under a number.
+  again?: "skip" | "copy";
+  // A board meeting the arc the table is playing: left alone, or added as
+  // the next act (#157).
+  arc?: "leave" | "append";
 };
 
 export const EMPTY_SELECTION: ImportSelection = {
   sourceId: "",
   select: [],
   houseRules: "replace",
+  again: "skip",
+  arc: "leave",
 };
 
 export function ContentImportPicker({
@@ -102,7 +110,11 @@ export function ContentImportPicker({
     if (!campaignId || !selection.sourceId || !selection.select.length) {
       return Promise.resolve().then(() => setPlan(null));
     }
-    const params = new URLSearchParams({ sourceId: selection.sourceId });
+    const params = new URLSearchParams({
+      sourceId: selection.sourceId,
+      again: selection.again ?? "skip",
+      arc: selection.arc ?? "leave",
+    });
     for (const kind of selection.select) {
       params.append("select", kind);
     }
@@ -112,7 +124,7 @@ export function ContentImportPicker({
       .catch(() => {
         // transient; the next change reloads
       });
-  }, [campaignId, selection.sourceId, selection.select]);
+  }, [campaignId, selection.sourceId, selection.select, selection.again, selection.arc]);
 
   useEffect(() => {
     void refreshPlan();
@@ -158,10 +170,20 @@ export function ContentImportPicker({
         setNote(data.error || "Could not import.");
         return;
       }
-      setNote(`Brought ${data.copied} item${data.copied === 1 ? "" : "s"} across.`);
+      setNote(
+        [
+          `Brought ${data.copied} item${data.copied === 1 ? "" : "s"} across.`,
+          data.kept ? `Kept ${data.kept} already here.` : "",
+          data.beatsAdded ? `${data.beatsAdded} beat${data.beatsAdded === 1 ? "" : "s"} joined the arc.` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+      // Clearing the ticks re-runs the plan effect, which clears the plan.
+      // Refetching here as well raced it with the old ticks and left the
+      // last import's warnings and notes on screen.
       onChange({ ...selection, select: [] });
       onImported?.(data.copied ?? 0);
-      await refreshPlan();
     } finally {
       setBusy(false);
     }
@@ -236,6 +258,44 @@ export function ContentImportPicker({
               </div>
             ) : null}
 
+            {selection.select.includes("storyboard") && plan?.board?.targetHasArc ? (
+              <div className="reveal block">
+                <FieldLabel className="mb-1 block">The board&apos;s beats</FieldLabel>
+                <Select<"leave" | "append">
+                  label="The board's beats"
+                  value={selection.arc ?? "leave"}
+                  onChange={(arc) => onChange({ ...selection, arc })}
+                  options={[
+                    {
+                      value: "leave",
+                      label: "Leave this campaign's arc alone",
+                      hint: "Places, quests, fights and notes still land.",
+                    },
+                    {
+                      value: "append",
+                      label: `Add them as act ${plan.board.act}`,
+                      hint: "After the beats already played. Nothing played is changed.",
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
+
+            {plan?.kept || selection.again === "copy" ? (
+              <div className="reveal block">
+                <FieldLabel className="mb-1 block">Already brought in before</FieldLabel>
+                <Select<"skip" | "copy">
+                  label="Already brought in before"
+                  value={selection.again ?? "skip"}
+                  onChange={(again) => onChange({ ...selection, again })}
+                  options={[
+                    { value: "skip", label: "Keep them as this campaign has them" },
+                    { value: "copy", label: "Bring second copies, numbered" },
+                  ]}
+                />
+              </div>
+            ) : null}
+
             {plan?.warnings.length ? (
               <ul className="stagger space-y-1">
                 {plan.warnings.map((warning, index) => (
@@ -250,12 +310,23 @@ export function ContentImportPicker({
               </ul>
             ) : null}
 
+            {plan?.notes?.length ? (
+              <ul className="stagger space-y-1">
+                {plan.notes.map((note, index) => (
+                  <li key={index} className="flex items-start gap-1.5 text-xs text-stone-400">
+                    <Info className="mt-0.5 size-3.5 shrink-0 text-sky-300/70" />
+                    <span>{note.message}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
             {campaignId ? (
               <div className="reveal flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={importNow}
-                  disabled={busy || !selection.select.length}
+                  disabled={busy || !selection.select.length || Boolean(plan?.empty)}
                   className={ui.btnSmall}
                 >
                   {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Hammer className="size-3.5" />}

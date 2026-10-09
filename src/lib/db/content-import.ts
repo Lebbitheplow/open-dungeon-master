@@ -1,24 +1,40 @@
-import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { getCampaignById, updateGameSettings } from "@/lib/db/campaigns";
+import { getDatabase, parseJson } from "@/lib/db/core";
+import { getCampaignById, updateGameSettings, type Campaign } from "@/lib/db/campaigns";
 import { embedPendingLore } from "@/lib/db/lore";
 import { listBeats } from "@/lib/db/workshop-beats";
-import { compileBoard } from "@/lib/workshop/board-compile";
+import { compileBoard, summarizeCompile, type CompiledBoard } from "@/lib/workshop/board-compile";
 import {
   writeStoryboardColumns,
   writeStoryboardRows,
+  type BoardResolver,
 } from "@/lib/db/workshop-storyboard";
 import { getHouseRulesText, setHouseRules } from "@/lib/db/rules";
 import { mergeHouseRules } from "@/lib/rulesets/logic";
+import { arcRoom } from "@/lib/dm/arc-logic";
+import { copiesFrom, recordOrigin, type OriginKind } from "@/lib/db/content-origins";
+import {
+  copyFactions,
+  copyKind,
+  copyOneRow,
+  copyOverworld,
+  type CopyContext,
+  type RowKind,
+} from "@/lib/db/content-copy";
+import { getCommonWorkshop } from "@/lib/db/workshop-common";
 import {
   IMPORT_KINDS,
+  LINK_KINDS,
   emptyExisting,
   emptySource,
-  keepsOverworldAnchors,
   planImport,
+  type AgainMode,
+  type ArcMode,
+  type BoardFacts,
   type ImportExisting,
   type ImportKind,
   type ImportPlan,
   type ImportSource,
+  type LinkKind,
 } from "@/lib/workshop/import";
 
 // Executing a content import. The decisions are all in
@@ -33,6 +49,11 @@ import {
 // of last year's game into this year's is the same walk over the same rows.
 // Who is allowed to copy out of what is decided in
 // src/lib/db/import-sources.ts, never here.
+//
+// The row copies themselves are src/lib/db/content-copy.ts (every column,
+// references remapped), and every copy records where it came from
+// (src/lib/db/content-origins.ts), which is what lets a second import keep
+// what the first one brought rather than numbering a duplicate.
 
 type Row = Record<string, unknown>;
 
@@ -48,22 +69,33 @@ export function readImportSource(sourceId: string): ImportSource {
     `SELECT id, title AS name FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
     sourceId,
   ) as ImportSource["lore"];
+  // The map a place stands on rides along, so the planner can say which
+  // places would arrive without it.
   source.locations = allRows(
-    `SELECT id, name FROM locations WHERE campaign_id = ? ORDER BY created_at`,
-    sourceId,
-  ) as ImportSource["locations"];
-  // The roster refs ride along so the planner can warn about homebrew slugs,
-  // which are user-scoped and do not travel (src/lib/workshop/import.ts).
-  source.encounters = allRows(
-    `SELECT id, name, enemies_json FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    `SELECT id, name, prepared_map_id FROM locations WHERE campaign_id = ? ORDER BY created_at`,
     sourceId,
   ).map((row) => ({
     id: String(row.id),
     name: String(row.name),
-    monsters: (parseJson(String(row.enemies_json ?? ""), []) as Array<{ monster?: unknown }>).map(
-      (entry) => String(entry?.monster ?? ""),
-    ),
-  })) as ImportSource["encounters"];
+    ...(row.prepared_map_id ? { mapId: String(row.prepared_map_id) } : {}),
+  }));
+  // The roster refs ride along so the planner can warn about homebrew slugs,
+  // which are user-scoped and do not travel (src/lib/workshop/import.ts),
+  // and the map the fight is drawn on, for the same reason as a place's.
+  source.encounters = allRows(
+    `SELECT id, name, enemies_json, map_json FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    sourceId,
+  ).map((row) => {
+    const mapId = parseJson<{ mapId?: unknown }>(String(row.map_json ?? ""), {}).mapId;
+    return {
+      id: String(row.id),
+      name: String(row.name),
+      monsters: (parseJson(String(row.enemies_json ?? ""), []) as Array<{ monster?: unknown }>).map(
+        (entry) => String(entry?.monster ?? ""),
+      ),
+      ...(typeof mapId === "string" && mapId ? { mapId } : {}),
+    };
+  });
   source.tables = allRows(
     `SELECT id, name FROM roll_tables WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
     sourceId,
@@ -124,27 +156,119 @@ export function readTargetExisting(campaignId: string): ImportExisting {
   return existing;
 }
 
+const ROW_KIND_SET = new Set<string>(["maps", "locations", "lore", "tables", "encounters", "npcs"]);
+
+// Live copies at the target of the source's rows, per import kind, for the
+// planner's "already here" (src/lib/db/content-origins.ts).
+function alreadyHereBy(copies: Map<string, string>): Partial<Record<ImportKind, string[]>> {
+  const here: Partial<Record<ImportKind, string[]>> = {};
+  for (const key of copies.keys()) {
+    const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+    if (ROW_KIND_SET.has(kind)) {
+      (here[kind as ImportKind] ??= []).push(id);
+    }
+  }
+  return here;
+}
+
+const LINK_TABLES: Record<LinkKind, string> = {
+  npcs: "npcs",
+  maps: "prepared_maps",
+  encounters: "encounter_templates",
+  locations: "locations",
+};
+
+// The links the compile will actually use, by kind. A link on a hook or a
+// secret, or a map on a scene that is not a fight or a place, has nowhere
+// to land in a campaign and is counted separately for the preview.
+function usedLinks(compiled: CompiledBoard): Record<LinkKind, string[]> {
+  const used: Record<LinkKind, string[]> = { npcs: [], maps: [], encounters: [], locations: [] };
+  for (const entry of compiled.lore) {
+    if (entry.links.locationId) used.locations.push(entry.links.locationId);
+    if (entry.links.locationId && entry.links.mapId) used.maps.push(entry.links.mapId);
+  }
+  for (const entry of compiled.encounters) {
+    if (entry.encounterId) used.encounters.push(entry.encounterId);
+    if (entry.mapId) used.maps.push(entry.mapId);
+  }
+  for (const card of [...compiled.arcPlan, ...compiled.moments]) {
+    if (card.links.npcId) used.npcs.push(card.links.npcId);
+    if (card.links.locationId) used.locations.push(card.links.locationId);
+    if (card.links.encounterId) used.encounters.push(card.links.encounterId);
+  }
+  return used;
+}
+
+function boardFactsFor(source: Campaign, compiled: CompiledBoard, common: Campaign | null): BoardFacts {
+  const links = usedLinks(compiled);
+  const inCommon = (kind: LinkKind) =>
+    common
+      ? [...new Set(links[kind])].filter((id) =>
+          Boolean(
+            getDatabase()
+              .prepare(`SELECT 1 FROM ${LINK_TABLES[kind]} WHERE id = ? AND campaign_id = ?`)
+              .get(id, common.id),
+          ),
+        )
+      : [];
+  return {
+    links,
+    common: common
+      ? {
+          title: common.title,
+          links: Object.fromEntries(LINK_KINDS.map((kind) => [kind, inCommon(kind)])) as Record<LinkKind, string[]>,
+        }
+      : null,
+    beats: compiled.arcBeats,
+    moments: compiled.moments.length,
+    arcProblem: summarizeCompile(compiled, false).arcRefusal,
+  };
+}
+
+export type ImportOptions = { again?: AgainMode; arcMode?: ArcMode };
+
 export function planContentImport(
   sourceId: string,
   campaignId: string,
   selection: readonly ImportKind[],
+  options: ImportOptions = {},
 ): ImportPlan {
+  const source = getCampaignById(sourceId);
+  const target = getCampaignById(campaignId);
+  const hasBoard = selection.includes("storyboard") && source;
+  const common = source && source.kind === "workshop" ? getCommonWorkshop(source) : null;
+  const commonHere = common ? alreadyHereBy(copiesFrom(campaignId, common.id)) : {};
+  const arc = target?.storyArc ?? null;
   return planImport({
     selection,
     source: readImportSource(sourceId),
     existing: readTargetExisting(campaignId),
     targetHasHouseRules: Boolean(getHouseRulesText(campaignId).trim()),
-    targetHasArc: Boolean(getCampaignById(campaignId)?.storyArc),
+    targetArc: arc ? { beats: arc.beats.map((beat) => beat.text), acts: arc.acts, ...arcRoom(arc) } : null,
+    arcMode: options.arcMode,
+    alreadyHere: alreadyHereBy(copiesFrom(campaignId, sourceId)),
+    again: options.again,
+    commonHere,
+    board: hasBoard ? boardFactsFor(source, compileBoard(listBeats(sourceId)), common) : null,
   });
 }
 
-// Every row that travelled, as `kind:oldId` -> newId. The region map needs
-// it here to rewrite its anchors; a workshop clone needs it to rewire the
-// storyboard cards that point at NPCs, maps, fights and places
-// (src/lib/db/campaign-clone.ts).
+// Every row that travelled, as `kind:oldId` -> newId. Storyboard links, the
+// region map's anchors and a workshop clone's cards are all rewritten
+// through it (src/lib/db/campaign-clone.ts).
 export type ImportIdMap = Map<string, string>;
 
-export type ImportOutcome = { plan: ImportPlan; copied: number; idMap: ImportIdMap };
+export type ImportOutcome = {
+  plan: ImportPlan;
+  copied: number;
+  idMap: ImportIdMap;
+  // Rows an earlier import brought, kept rather than copied again.
+  kept: number;
+  // References that had nothing to land on and were cleared (#153).
+  unbound: number;
+  // Beats the board added to the campaign's arc.
+  beatsAdded: number;
+};
 
 // Copies the planned rows. One transaction, so a constraint the planner
 // somehow failed to anticipate rolls the whole import back rather than
@@ -158,8 +282,11 @@ export function runContentImport(input: {
   campaignId: string;
   selection: readonly ImportKind[];
   houseRulesMode: "replace" | "append";
+  again?: AgainMode;
+  arcMode?: ArcMode;
 }): ImportOutcome | { error: string } {
   const { sourceId, campaignId, selection, houseRulesMode } = input;
+  const again = input.again ?? "skip";
   const source = getCampaignById(sourceId);
   const campaign = getCampaignById(campaignId);
   if (!source || !campaign) {
@@ -169,290 +296,128 @@ export function runContentImport(input: {
     return { error: "Nothing can import into itself." };
   }
 
-  const plan = planContentImport(sourceId, campaignId, selection);
+  const plan = planContentImport(sourceId, campaignId, selection, { again, arcMode: input.arcMode });
   if (plan.empty) {
-    return { plan, copied: 0, idMap: new Map() };
+    return { plan, copied: 0, idMap: new Map(), kept: plan.kept, unbound: 0, beatsAdded: 0 };
   }
 
   const db = getDatabase();
-  const now = nowIso();
+  const now = new Date().toISOString();
   // Ids change on copy, so anything that points at a row by id has to be
   // rewritten through this map rather than carried across verbatim.
   const idMap: ImportIdMap = new Map();
-  const trackId = (kind: ImportKind, sourceRowId: unknown) => {
-    const id = crypto.randomUUID();
-    idMap.set(`${kind}:${String(sourceRowId)}`, id);
-    return id;
-  };
+  const counts = { copied: 0, kept: 0, unbound: 0 };
   const finalNames = new Map<string, string>(
     plan.items.map((item) => [`${item.kind}:${item.sourceId}`, item.finalName]),
   );
-  const nameFor = (kind: ImportKind, id: string, fallback: string) =>
-    finalNames.get(`${kind}:${id}`) ?? fallback;
+  // Names taken at the target per kind, read when a row the planner did not
+  // name (a linked fight, a shared record) first needs one.
+  const taken = new Map<RowKind, Set<string>>();
+  const takenFor = (kind: RowKind) => {
+    const label = kind === "lore" ? "title" : "name";
+    const table = { maps: "prepared_maps", locations: "locations", lore: "lore_entries", tables: "roll_tables", encounters: "encounter_templates", npcs: "npcs" }[kind];
+    let set = taken.get(kind);
+    if (!set) {
+      set = new Set(allRows(`SELECT ${label} AS name FROM ${table} WHERE campaign_id = ?`, campaignId).map((row) => String(row.name).trim().toLowerCase()));
+      taken.set(kind, set);
+    }
+    return set;
+  };
+
+  // One context per place rows come from: the source, and the source's
+  // shared workshop when a card picks something there (#159).
+  const contextFor = (originId: string, earlier: Map<string, string>, keep: boolean): CopyContext => ({
+    sourceId: originId,
+    campaignId,
+    now,
+    nameFor: (kind, id, fallback) => finalNames.get(`${kind}:${id}`) ?? fallback,
+    track: (kind: OriginKind, sourceRowId: string) => {
+      const id = crypto.randomUUID();
+      idMap.set(`${kind}:${sourceRowId}`, id);
+      recordOrigin(campaignId, kind, id, originId, sourceRowId);
+      return id;
+    },
+    resolve: (kind, sourceRowId) => idMap.get(`${kind}:${sourceRowId}`) ?? earlier.get(`${kind}:${sourceRowId}`) ?? null,
+    kept: (kind, sourceRowId) => keep && earlier.has(`${kind}:${sourceRowId}`),
+    counts,
+  });
+  const earlier = copiesFrom(campaignId, sourceId);
+  const main = contextFor(sourceId, earlier, again === "skip");
+  const common = source.kind === "workshop" ? getCommonWorkshop(source) : null;
+  // A shared record is always reused once the campaign has it: bringing the
+  // same recurring NPC in with every chapter is exactly what the shared
+  // workshop exists to prevent.
+  const shared = common ? contextFor(common.id, copiesFrom(campaignId, common.id), true) : null;
+  if (shared) {
+    shared.bring = (kind, id) =>
+      ROW_KIND_SET.has(kind) ? copyOneRow(shared, kind as RowKind, id, takenFor(kind as RowKind)) : null;
+  }
   const selected = new Set(selection);
-  let copied = 0;
   // Compiled before the transaction opens, because it is a read of the
-  // SOURCE, which this import never writes to. The rows it produces
-  // are written inside; the quest log and the story arc are single columns
-  // on campaigns rather than rows, so they go after, alongside the house
-  // rules, for the same reason: one write each, not a loop.
-  const storyboard = selected.has("storyboard")
-    ? compileBoard(listBeats(sourceId))
-    : null;
+  // SOURCE, which this import never writes to.
+  const storyboard = selected.has("storyboard") ? compileBoard(listBeats(sourceId)) : null;
+  const resolver: BoardResolver = {
+    link: (kind, id) =>
+      main.resolve(kind, id) ??
+      // A fight card keeps the fight its author picked even when the
+      // encounters were not ticked (#156); copyOneRow is scoped to the
+      // source, so an id that is not one of its fights copies nothing.
+      (kind === "encounters" ? copyOneRow(main, "encounters", id, takenFor("encounters")) : null) ??
+      (shared ? shared.resolve(kind, id) ?? copyOneRow(shared, kind, id, takenFor(kind)) : null),
+    compiled: (kind, cardId) => (again === "skip" ? earlier.get(`${kind}:${cardId}`) ?? null : null),
+    record: (kind, rowId, cardId) => recordOrigin(campaignId, kind, rowId, sourceId, cardId),
+  };
+  let fights: ReturnType<typeof writeStoryboardRows>["fights"] = new Map();
 
   db.transaction(() => {
+    // Maps first: places and fights bind to them by id, and the binding is
+    // rewritten through the copy only if the copy already exists.
+    if (selected.has("maps")) {
+      copyKind(main, "maps");
+    }
     if (selected.has("locations")) {
-      for (const row of allRows(
-        `SELECT * FROM locations WHERE campaign_id = ? ORDER BY created_at`,
-        sourceId,
-      )) {
-        const id = trackId("locations", row.id);
-        db.prepare(
-          `INSERT INTO locations
-             (id, campaign_id, name, layout_description, connections_json, visited,
-              is_current, map_image_json, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`,
-        ).run(
-          id,
-          campaignId,
-          nameFor("locations", String(row.id), String(row.name)),
-          row.layout_description ?? "",
-          row.connections_json ?? "[]",
-          // A prepared place has not been visited and is nobody's current
-          // location: the party has not been there yet. Copying `visited`
-          // or `is_current` across would tell the campaign it has already
-          // travelled, and two current locations is a state the engine has
-          // no meaning for.
-          row.map_image_json ?? null,
-          now,
-          now,
-        );
-        copied += 1;
-      }
+      copyKind(main, "locations");
     }
-
     if (selected.has("lore")) {
-      for (const row of allRows(
-        `SELECT * FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
-        sourceId,
-      )) {
-        db.prepare(
-          `INSERT INTO lore_entries
-             (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, attachment_path, style, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-          trackId("lore", row.id),
-          campaignId,
-          row.category,
-          nameFor("lore", String(row.id), String(row.title)),
-          row.body,
-          row.tags_json ?? "[]",
-          row.pinned ?? 0,
-          row.visibility ?? "party",
-          // The picture is a file both campaigns can read, the same way a
-          // prepared map's backdrop travels; so is an attached PDF. The
-          // audience is this campaign's people and does not travel.
-          row.image_path ?? "",
-          row.attachment_path ?? "",
-          row.style ?? "plain",
-          now,
-          now,
-        );
-        copied += 1;
-      }
+      copyKind(main, "lore");
     }
-
     if (selected.has("tables")) {
-      for (const row of allRows(
-        `SELECT * FROM roll_tables WHERE campaign_id = ?`,
-        sourceId,
-      )) {
-        db.prepare(
-          `INSERT INTO roll_tables
-             (id, campaign_id, name, entries_json, created_by_user_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-          trackId("tables", row.id),
-          campaignId,
-          nameFor("tables", String(row.id), String(row.name)),
-          row.entries_json ?? "[]",
-          row.created_by_user_id,
-          now,
-          now,
-        );
-        copied += 1;
-      }
+      copyKind(main, "tables");
     }
-
     if (selected.has("encounters")) {
-      for (const row of allRows(
-        `SELECT * FROM encounter_templates WHERE campaign_id = ?`,
-        sourceId,
-      )) {
-        db.prepare(
-          `INSERT INTO encounter_templates
-             (id, campaign_id, name, enemies_json, battlefield, map_json, notes,
-              created_by_user_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-          trackId("encounters", row.id),
-          campaignId,
-          nameFor("encounters", String(row.id), String(row.name)),
-          row.enemies_json ?? "[]",
-          row.battlefield ?? "",
-          row.map_json ?? "{}",
-          row.notes ?? "",
-          row.created_by_user_id,
-          now,
-          now,
-        );
-        copied += 1;
-      }
+      copyKind(main, "encounters");
     }
-
     if (selected.has("npcs")) {
       // Factions ride with the cast (docs/vtt-parity-implementation-plan.md
       // section 6), renumbered, with each member's link remapped.
-      const factionIds = new Map<string, string>();
-      for (const row of allRows(`SELECT * FROM factions WHERE campaign_id = ?`, sourceId)) {
-        const id = crypto.randomUUID();
-        factionIds.set(String(row.id), id);
-        db.prepare(
-          `INSERT INTO factions (id, campaign_id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(id, campaignId, row.name, row.blurb ?? "", row.goal ?? "", row.attitude_to_party ?? "neutral", row.power ?? 1, row.tags_json ?? "[]", row.portrait_path ?? "", now, now);
-      }
-      for (const row of allRows(`SELECT * FROM npcs WHERE campaign_id = ?`, sourceId)) {
-        db.prepare(
-          `INSERT INTO npcs
-             (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
-              aliases_json, personality_json, goals_json, relations_json, bonds_json,
-              pressure_json, arc_cast_id, portrait_url, faction_id, archived, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, '', ?, ?, 0, ?, ?)`,
-        ).run(
-          trackId("npcs", row.id),
-          campaignId,
-          nameFor("npcs", String(row.id), String(row.name)),
-          row.attitude ?? "indifferent",
-          row.trait ?? "",
-          row.location ?? "",
-          row.role ?? "",
-          row.aliases_json ?? "[]",
-          // These three default to '' rather than '{}' on the column, and
-          // src/lib/dm/npc-logic.ts reads '' as untracked; matching the
-          // column keeps a copied NPC identical to a fresh one.
-          row.personality_json ?? "",
-          row.goals_json ?? "",
-          // NPC-to-NPC relations are keyed by NAME, not by id
-          // (src/lib/dm/npc-logic.ts), so a cast imported together arrives
-          // with its feuds intact and a relation naming somebody left behind
-          // simply reads as a link to an NPC nobody has written yet, which
-          // the forge shows as such. Phase 3 dropped these along with the
-          // bonds; that was wrong, and this is the fix.
-          row.relations_json ?? "[]",
-          // Bonds ARE keyed by character id, and those ids do not exist at
-          // the target, so they start empty. The arc cast link goes for the
-          // same reason.
-          "[]",
-          row.pressure_json ?? "",
-          // The face travels as a path, like a prepared map's backdrop: it
-          // points at a file in public/uploads both campaigns can read.
-          row.portrait_url ?? "",
-          factionIds.get(String(row.faction_id ?? "")) ?? "",
-          now,
-          now,
-        );
-        copied += 1;
-      }
+      copyFactions(main);
+      copyKind(main, "npcs");
     }
-
-    if (selected.has("maps")) {
-      // Prepared maps carry no tokens and no fog, so a copy is the row and
-      // nothing else. The backdrop path travels as-is: it points at a file
-      // in public/uploads that both campaigns can read, and duplicating the
-      // image would cost megabytes to show the same picture.
-      for (const row of allRows(`SELECT * FROM prepared_maps WHERE campaign_id = ?`, sourceId)) {
-        db.prepare(
-          `INSERT INTO prepared_maps
-             (id, campaign_id, name, notes, tags_json, width, height, terrain, ambient,
-              theme, lights_json, seed, backdrop_path, backdrop_transform_json,
-              created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-          trackId("maps", row.id),
-          campaignId,
-          nameFor("maps", String(row.id), String(row.name)),
-          row.notes ?? "",
-          row.tags_json ?? "[]",
-          row.width,
-          row.height,
-          row.terrain,
-          row.ambient ?? "bright",
-          row.theme ?? "field",
-          row.lights_json ?? "[]",
-          row.seed ?? 0,
-          row.backdrop_path ?? "",
-          row.backdrop_transform_json ?? "{}",
-          now,
-          now,
-        );
-        copied += 1;
-      }
-    }
-
     // The storyboard is the one kind that is COMPILED rather than copied:
     // one board becomes lore entries, quests, prepared encounters, DM-only
-    // notes and a story arc (src/lib/workshop/board-compile.ts). Nothing new
-    // is built at the campaign end to receive it, which is the test of
-    // whether the node kinds were chosen correctly.
+    // notes and a story arc (src/lib/workshop/board-compile.ts).
     if (storyboard) {
-      copied += writeStoryboardRows(campaignId, campaign.ownerUserId, storyboard, now);
+      const rows = writeStoryboardRows(campaignId, campaign.ownerUserId, storyboard, now, resolver);
+      counts.copied += rows.written;
+      fights = rows.fights;
     }
-
     if (selected.has("overworld")) {
-      const [map] = allRows(
-        `SELECT * FROM overworld_maps WHERE campaign_id = ?`,
-        sourceId,
-      );
-      if (map) {
-        const anchors = keepsOverworldAnchors(selection)
-          ? remapAnchors(String(map.anchors_json ?? "{}"), idMap)
-          : "{}";
-        db.prepare(
-          `INSERT INTO overworld_maps
-             (campaign_id, seed, width, height, terrain, anchors_json, pins_json,
-              party_xy_json, params_json, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)
-           ON CONFLICT(campaign_id) DO UPDATE SET
-             seed = excluded.seed, width = excluded.width, height = excluded.height,
-             terrain = excluded.terrain, anchors_json = excluded.anchors_json,
-             pins_json = excluded.pins_json, party_xy_json = '',
-             params_json = excluded.params_json, notes = excluded.notes,
-             updated_at = excluded.updated_at`,
-        ).run(
-          campaignId,
-          map.seed,
-          map.width,
-          map.height,
-          map.terrain,
-          anchors,
-          map.pins_json ?? "[]",
-          // The party marker is where the DM stood them at the source,
-          // which says nothing about a campaign that has not started.
-          map.params_json ?? "",
-          map.notes ?? "",
-          now,
-          now,
-        );
-        copied += 1;
-      }
+      copyOverworld(main, true);
     }
   })();
 
   // ---- after the transaction ----
 
+  let beatsAdded = 0;
   if (storyboard) {
-    copied += writeStoryboardColumns(campaign, storyboard, now);
+    const columns = writeStoryboardColumns(getCampaignById(campaignId) ?? campaign, storyboard, now, {
+      resolver,
+      fights,
+      arcMode: input.arcMode ?? "leave",
+      title: source.title,
+    });
+    counts.copied += columns.written;
+    beatsAdded = columns.beatsAdded;
   }
   if (selected.has("houseRules")) {
     const incoming = getHouseRulesText(sourceId);
@@ -461,39 +426,19 @@ export function runContentImport(input: {
         campaignId,
         mergeHouseRules(incoming, getHouseRulesText(campaignId), houseRulesMode),
       );
-      copied += 1;
+      counts.copied += 1;
     }
     // The variant flags travel with the prose: they are the same decision.
     updateGameSettings(campaignId, { variantRules: source.gameSettings.variantRules });
   }
 
-  if (selected.has("lore")) {
+  if (selected.has("lore") || storyboard) {
     void embedPendingLore(campaignId).catch(() => {
       // A missing vector only means keyword fallback for that entry.
     });
   }
 
-  return { plan, copied, idMap };
-}
-
-// Anchors are {locationId: {x, y}}. Ids that did not travel are dropped
-// rather than kept pointing at a place the campaign has never heard of;
-// src/lib/db/overworld.ts re-places any location without an anchor lazily.
-function remapAnchors(anchorsJson: string, idMap: ImportIdMap): string {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(anchorsJson) as Record<string, unknown>;
-  } catch {
-    return "{}";
-  }
-  const remapped: Record<string, unknown> = {};
-  for (const [oldId, xy] of Object.entries(parsed ?? {})) {
-    const newId = idMap.get(`locations:${oldId}`);
-    if (newId) {
-      remapped[newId] = xy;
-    }
-  }
-  return JSON.stringify(remapped);
+  return { plan, copied: counts.copied, idMap, kept: counts.kept, unbound: counts.unbound, beatsAdded };
 }
 
 export { IMPORT_KINDS };

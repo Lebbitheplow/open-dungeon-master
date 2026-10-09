@@ -164,6 +164,8 @@ export type DmGameState = {
   }>;
   // Public party notes (lead-curated canon), pinned first.
   publicNotes?: Array<{ pinned: boolean; title: string; body: string }>;
+  // The DM's private prep notes (src/lib/db/notes.ts listDmPrepNotes).
+  dmPrepNotes?: Array<{ title: string; body: string }>;
   // Server-tracked world facts (the divergence register), newest first.
   facts?: FactLike[];
   // Sparks from the world-simulation tick, consumed into this turn.
@@ -191,6 +193,9 @@ export type DmGameState = {
   // rules, retrieved house-rule chunks, and retrieved world lore. Built
   // before the prompt so this module stays synchronous.
   variantRulesBlock?: string;
+  // The prepared fights the storyteller can start by name
+  // (src/lib/dm/prepared-encounter-tool.ts).
+  preparedFightsBlock?: string;
   houseRulesBlock?: string;
   loreBlock?: string;
   // The factions block (docs/vtt-parity-implementation-plan.md section 6).
@@ -799,6 +804,13 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
+  if (state.dmPrepNotes?.length) {
+    sections.push(
+      `DM prep notes (secret; the table's own preparation for you: let them shape what happens, never read them out or hint that they exist):\n${state.dmPrepNotes
+        .map((note) => `- ${note.title ? `${note.title}: ` : ""}${note.body.slice(0, 300)}`)
+        .join("\n")}`,
+    );
+  }
   if (state.facts?.length) {
     const rendered = renderFactsForPrompt(state.facts);
     if (rendered.party) {
@@ -825,6 +837,10 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.shopsBlock) {
     sections.push(state.shopsBlock);
+  }
+  // The table's prepared fights, out of combat only (#154).
+  if (state.preparedFightsBlock) {
+    sections.push(state.preparedFightsBlock);
   }
   if (state.factionsBlock) {
     sections.push(state.factionsBlock);

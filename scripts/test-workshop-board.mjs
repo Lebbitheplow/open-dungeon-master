@@ -263,15 +263,26 @@ test("every kind lands somewhere, which is the test of the kind list", () => {
   assert.equal(compiled.quests.length, 1);
   assert.equal(compiled.encounters.length, 1);
   assert.equal(compiled.notes.length, 1);
-  // event and npc_moment both become arc beats.
-  assert.equal(compiled.arcBeats.length, 2);
-  const landed =
-    compiled.lore.length +
-    compiled.quests.length +
-    compiled.encounters.length +
-    compiled.notes.length +
-    compiled.arcBeats.length;
-  assert.equal(landed, board.length, "a card compiled into nothing");
+  // event and npc_moment both become arc beats, and so does the fight the
+  // event's arrow runs into: a planned fight is a step in the story (#156).
+  assert.equal(compiled.arcBeats.length, 3);
+  assert.ok(compiled.arcBeats.some((beat) => beat.startsWith("Wolves in the yard")));
+  const landed = new Set([
+    ...compiled.lore.map((entry) => entry.cardId),
+    ...compiled.questCards,
+    ...compiled.encounters.map((entry) => entry.cardId),
+    ...compiled.notes.map((entry) => entry.cardId),
+    ...compiled.arcPlan.map((entry) => entry.cardId),
+    ...compiled.moments.map((entry) => entry.cardId),
+  ]);
+  assert.deepEqual([...landed].sort(), board.map((entry) => entry.id).sort(), "a card compiled into nothing");
+});
+
+test("a fight card on its own is prep, not a step the arc waits on", () => {
+  const compiled = compileBoard([card("encounter", "Bandits", { id: "lone" }), card("event", "A", { id: "a" })]);
+  assert.equal(compiled.encounters.length, 1);
+  assert.equal(compiled.encounters[0].inArc, false);
+  assert.ok(!compiled.arcBeats.some((beat) => beat.startsWith("Bandits")));
 });
 
 test("history and places keep the right lore category", () => {
@@ -330,7 +341,7 @@ test("the summary lists what will be created", () => {
   const summary = summarizeCompile(compileBoard(board), false);
   assert.ok(summary.lines.some((line) => /lore entries/.test(line)));
   assert.ok(summary.lines.some((line) => /prepared encounter/.test(line)));
-  assert.ok(summary.lines.some((line) => /story arc of 2 beats/.test(line)));
+  assert.ok(summary.lines.some((line) => /story arc of 3 beats/.test(line)));
   assert.equal(summary.arcRefusal, "");
 });
 

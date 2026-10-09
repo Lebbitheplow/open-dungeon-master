@@ -197,6 +197,26 @@ export function listNotesVisibleTo(campaignId: string, userId: string, lead: boo
   return rows.map(mapNote);
 }
 
+// The DM's own prep notes for the storyteller: what a storyboard's secret
+// cards compiled into and the plan a prepared fight laid down (its worth,
+// its phases). Private, campaign-scoped, written as the DM. Before these
+// reached the prompt, an AI-narrated table imported secrets and rewards
+// its narrator could never read.
+export function listDmPrepNotes(campaignId: string, limit = 8): Note[] {
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT * FROM campaign_notes
+        WHERE campaign_id = ? AND character_id IS NULL AND author_kind = 'dm'
+          AND visibility = 'private' AND status = 'active'
+        ORDER BY pinned DESC, seq DESC
+        LIMIT ?
+      `,
+    )
+    .all(campaignId, limit) as NoteRow[];
+  return rows.map(mapNote);
+}
+
 // Public active campaign-scope notes for the DM prompt, pinned first.
 export function listPublicCampaignNotes(campaignId: string, limit = 20): Note[] {
   const rows = getDatabase()

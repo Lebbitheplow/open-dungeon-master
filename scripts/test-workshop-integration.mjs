@@ -521,13 +521,30 @@ test("maps come across on an import and the workshop keeps its own", () => {
   assert.equal(listPreparedMaps(workshop.id).length, before, "the import moved rather than copied");
 });
 
-test("importing the same maps twice numbers them instead of failing", () => {
+test("importing the same maps again keeps the copies the campaign already has", () => {
+  // A second import of the same workshop brings what is new, not a numbered
+  // duplicate of everything (#157, #159).
+  const before = listPreparedMaps(campaign.id).length;
+  const plan = planContentImport(workshop.id, campaign.id, ["maps"]);
+  assert.equal(plan.kept, before);
+  assert.ok(plan.notes.some((note) => /came in from here before/.test(note.message)));
+  runContentImport({
+    sourceId: workshop.id,
+    campaignId: campaign.id,
+    selection: ["maps"],
+    houseRulesMode: "replace",
+  });
+  assert.equal(listPreparedMaps(campaign.id).length, before);
+});
+
+test("asked for second copies, the same maps are numbered instead of failing", () => {
   const before = listPreparedMaps(campaign.id).length;
   runContentImport({
     sourceId: workshop.id,
     campaignId: campaign.id,
     selection: ["maps"],
     houseRulesMode: "replace",
+    again: "copy",
   });
   const after = listPreparedMaps(campaign.id);
   assert.equal(after.length, before * 2);
@@ -934,9 +951,25 @@ test("an arc the table has been playing is never written over", () => {
   assert.deepEqual(after.beats, before.beats, "the arc was overwritten");
 });
 
-test("a second import numbers its copies rather than failing on the collision", () => {
-  // The lore titles collided on the second run above; nothing threw and both
-  // sets are present.
+test("a second import of the same board keeps what the first one compiled", () => {
+  // The run above brought nothing twice: the board's lore, fight and note
+  // are remembered by the card they came from, and the quest log does not
+  // repeat a quest (#157).
+  const titles = listLoreEntries(boardTarget.id).map((entry) => entry.title);
+  assert.ok(titles.includes("The mill"));
+  assert.ok(!titles.includes("The mill (2)"));
+  assert.equal(listEncounterTemplates(boardTarget.id).length, 1);
+  assert.deepEqual(getCampaignById(boardTarget.id).questLog, ["A missing daughter"]);
+});
+
+test("asked for second copies, a board's collisions are numbered rather than failing", () => {
+  runContentImport({
+    sourceId: workshop.id,
+    campaignId: boardTarget.id,
+    selection: ["storyboard"],
+    houseRulesMode: "replace",
+    again: "copy",
+  });
   const titles = listLoreEntries(boardTarget.id).map((entry) => entry.title);
   assert.ok(titles.includes("The mill"));
   assert.ok(titles.includes("The mill (2)"));

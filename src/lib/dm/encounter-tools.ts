@@ -103,6 +103,7 @@ import { startTurnConditions, tickEncounterConditions } from "@/lib/dm/condition
 import { endTurns } from "@/lib/dm/turn-end";
 import { turnStartEffects } from "@/lib/dm/turn-start-effects";
 import { damageEnemyTool, endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
+import { RUN_PREPARED_ENCOUNTER, runPreparedEncounter } from "@/lib/dm/prepared-encounter-tool";
 import { rollDeathSave } from "@/lib/dm/death";
 import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
 import { initLegendaryPools } from "@/lib/dm/legendary-tools";
@@ -123,6 +124,9 @@ import { dmRoll } from "@/lib/dm/roll-card";
 
 export const ENCOUNTER_TOOL_NAMES = [
   "start_encounter",
+  // A prepared fight started by name (src/lib/dm/prepared-encounter-tool.ts),
+  // offered by the turn only when the table has one ready (#154).
+  RUN_PREPARED_ENCOUNTER,
   "pc_attack",
   "cast_at_enemy",
   "cast_at_player",
@@ -1017,6 +1021,14 @@ export function applyEncounterCall(
       const stress = "error" in started ? [] : afflictionsAtCombatStart(campaign, turn.id);
       return { result: stress.length ? { ...started, afflictions: stress } : started };
     }
+    case RUN_PREPARED_ENCOUNTER:
+      // The same start_encounter as above, with the roster, map and plan a
+      // person prepared.
+      return {
+        result: runPreparedEncounter(campaign, rawArguments, (startArguments) =>
+          applyEncounterCall(campaign, turn, "start_encounter", startArguments, sheets, sheetsById, callContext).result,
+        ),
+      };
     case "pc_attack": {
       const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
       if (unasked) {

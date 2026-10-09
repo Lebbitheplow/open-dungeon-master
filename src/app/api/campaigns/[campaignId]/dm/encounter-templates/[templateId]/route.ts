@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
 import {
   deleteEncounterTemplate,
   getEncounterTemplate,
@@ -37,7 +37,7 @@ export async function PATCH(
   { params }: { params: Promise<{ campaignId: string; templateId: string }> },
 ) {
   const { campaignId, templateId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -103,7 +103,7 @@ export async function DELETE(
   { params }: { params: Promise<{ campaignId: string; templateId: string }> },
 ) {
   const { campaignId, templateId } = await params;
-  const context = await requireDm(campaignId);
+  const context = await requirePrepAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

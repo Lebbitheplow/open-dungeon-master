@@ -1,292 +1,63 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { createCampaign, getCampaignById } from "@/lib/db/campaigns";
-import { WORKSHOP_GAME_SETTINGS } from "@/lib/db/workshops";
-import { getHouseRulesText, setHouseRules } from "@/lib/db/rules";
-import { createHomebrewMonster, listHomebrewMonsters } from "@/lib/bestiary/homebrew-monsters";
-import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
-import { createCharacter } from "@/lib/db/characters";
-import { getPackDraft, hasPackDraft, savePackDraft } from "@/lib/db/world-pack-drafts";
-import { createSheetSchema } from "@/lib/schemas/sheet";
-import { normalizeHomebrewData } from "@/lib/homebrew/gear";
-import { draftFromData } from "@/lib/bestiary/monster-draft";
-import { isUploadedImagePath } from "@/lib/uploads";
-import { normalizeMapSkin } from "@/lib/battlemap/skins";
+import { getDatabase, nowIso } from "@/lib/db/core";
+import { createCampaign } from "@/lib/db/campaigns";
+import { WORKSHOP_GAME_SETTINGS, getWorkshopForUser } from "@/lib/db/workshops";
+import { setHouseRules } from "@/lib/db/rules";
+import { BUNDLE_ORIGIN, recordOrigin, type OriginKind } from "@/lib/db/content-origins";
+import { setCommonWorkshop } from "@/lib/db/workshop-common";
 import {
-  bundleManifestSchema,
+  insertBundleMap,
+  insertBundleOverworld,
+  refIndex,
+  writeBundleShelf,
+  type SharedKind,
+} from "@/lib/db/workshop-bundle-parts";
+import { normalizeAmbience } from "@/lib/battlemap/scene";
+import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { normalizeNpcVoice } from "@/lib/npcs/forge";
+import {
+  EXTRAS_LIMITS,
+  normalizeTemplateExtras,
+  normalizeTemplateMap,
+} from "@/lib/dm/encounter-template-logic";
+import {
   decodeBundleImage,
-  encodeBundleImage,
   type BundleImage,
-  MAX_BUNDLE_BYTES,
   resolveEdges,
-  WORKSHOP_BUNDLE_KIND,
-  WORKSHOP_BUNDLE_VERSION,
-  type BundleManifest,
   type WorkshopBundle,
 } from "@/lib/workshop/bundle";
-import { isWorkshop, normalizeTargetParty } from "@/lib/workshop/kind";
 import { removeUnreferencedFiles } from "@/lib/image-files";
 import { admitUpload, type UploadRefusal } from "@/lib/upload-budget";
 
-// Reading a workshop out to a bundle, and writing a stranger's bundle back
-// in as a new workshop.
+export { exportWorkshopBundle, type ExportResult } from "@/lib/db/workshop-bundle-export";
+
+// Writing a stranger's bundle back in as a new workshop. The export half is
+// src/lib/db/workshop-bundle-export.ts, re-exported from here.
 //
-// The shape of this file follows src/lib/db/content-import.ts: raw SQL in
-// both directions rather than the per-kind modules, because a bundle needs
-// EVERY column a row has rather than the subset each module's public input
-// exposes, and because the write has to happen in one transaction so a
-// bundle that fails halfway leaves no half-workshop behind.
+// The shape of this file follows src/lib/db/content-import.ts: raw SQL
+// rather than the per-kind modules, because a bundle needs EVERY column a
+// row has rather than the subset each module's public input exposes, and
+// because the write has to happen in one transaction so a bundle that fails
+// halfway leaves no half-workshop behind.
 //
 // Import always CREATES. It never merges into an existing workshop, which
 // removes the entire collision-naming problem the campaign import had to
 // solve: a fresh workshop has nothing to collide with. A DM who wants a
 // stranger's places in their own workshop gets there in two steps, and both
 // of them are steps they can see.
-
-type Row = Record<string, unknown>;
-
-function allRows(sql: string, ...args: unknown[]): Row[] {
-  return getDatabase().prepare(sql).all(...args) as Row[];
-}
-
-function str(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-// ---- export ----
-
-// Images share the bundle's byte budget with everything else; the reserve
-// keeps a fully-illustrated workshop from squeezing its own prose out.
-const IMAGE_BUDGET_CHARS = MAX_BUNDLE_BYTES - 8 * 1024 * 1024;
-
-type ImageBudget = { remaining: number; skipped: number };
-
-// A stored path becomes a data URL, or "" plus a skip when it cannot travel:
-// path not one of ours, file gone, single image over cap, or bundle budget
-// spent. The export never fails over art; it just says what stayed behind.
-function loadImage(relPath: unknown, budget: ImageBudget): string {
-  if (!isUploadedImagePath(relPath)) {
-    return "";
-  }
-  let encoded = "";
-  try {
-    encoded = encodeBundleImage(relPath, readFileSync(path.join(process.cwd(), "public", relPath)));
-  } catch {
-    // Dangling path; fall through to the skip below.
-  }
-  if (!encoded || encoded.length > budget.remaining) {
-    budget.skipped += 1;
-    return "";
-  }
-  budget.remaining -= encoded.length;
-  return encoded;
-}
-
-export type ExportResult =
-  | { bundle: WorkshopBundle; skippedImages: number }
-  | { error: string };
-
-export function exportWorkshopBundle(
-  workshopId: string,
-  manifestInput: unknown,
-): ExportResult {
-  const campaign = getCampaignById(workshopId);
-  if (!campaign) {
-    return { error: "That workshop does not exist." };
-  }
-  // Campaigns are refused outright. A campaign holds a transcript, a party
-  // and characters, and none of that is anybody else's to receive; a
-  // workshop is the thing that was built to be shared.
-  if (!isWorkshop(campaign)) {
-    return { error: "Only a workshop can be shared. A campaign holds a table's own play." };
-  }
-  const parsed = bundleManifestSchema.safeParse(manifestInput);
-  if (!parsed.success) {
-    return { error: "Fill in a name, a one-line blurb and what this is inspired by." };
-  }
-  const manifest: BundleManifest = parsed.data;
-  const budget: ImageBudget = { remaining: IMAGE_BUDGET_CHARS, skipped: 0 };
-
-  const bundle: WorkshopBundle = {
-    kind: WORKSHOP_BUNDLE_KIND,
-    version: WORKSHOP_BUNDLE_VERSION,
-    manifest,
-    genre: campaign.gameSettings.genre,
-    theme: campaign.theme ?? "",
-    premise: campaign.description ?? "",
-    targetParty: normalizeTargetParty(campaign.gameSettings.targetParty),
-    houseRulesText: getHouseRulesText(workshopId),
-    variantRules: { ...campaign.gameSettings.variantRules },
-    lore: allRows(
-      `SELECT category, title, body, tags_json, visibility, image_path, style FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
-      workshopId,
-    ).map((row) => ({
-      category: str(row.category, "other"),
-      title: str(row.title),
-      body: str(row.body),
-      tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
-      visibility: str(row.visibility) === "dm" ? ("dm" as const) : ("party" as const),
-      image: loadImage(row.image_path, budget),
-      // How it is dressed (docs/vtt-parity-implementation-plan.md 5.6).
-      style: (str(row.style) === "parchment" || str(row.style) === "notice" ? str(row.style) : "plain") as "plain" | "parchment" | "notice",
-    })),
-    locations: allRows(
-      `SELECT name, layout_description, connections_json FROM locations WHERE campaign_id = ? ORDER BY created_at`,
-      workshopId,
-    ).map((row) => ({
-      name: str(row.name),
-      layoutDescription: str(row.layout_description),
-      connections: parseJson<string[]>(str(row.connections_json, "[]"), []),
-    })),
-    npcs: allRows(
-      `SELECT name, attitude, trait, location, role, aliases_json, personality_json, goals_json, relations_json, portrait_url
-         FROM npcs WHERE campaign_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE`,
-      workshopId,
-    ).map((row) => ({
-      name: str(row.name),
-      attitude: (["hostile", "indifferent", "friendly"] as const).includes(
-        str(row.attitude) as "hostile",
-      )
-        ? (str(row.attitude) as "hostile" | "indifferent" | "friendly")
-        : "indifferent",
-      trait: str(row.trait),
-      location: str(row.location),
-      role: str(row.role),
-      aliases: parseJson<string[]>(str(row.aliases_json, "[]"), []),
-      personality: str(row.personality_json),
-      goals: str(row.goals_json),
-      relations: str(row.relations_json),
-      portrait: loadImage(row.portrait_url, budget),
-    })),
-    factions: allRows(
-      `SELECT id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-      workshopId,
-    ).map((row) => ({
-      name: str(row.name),
-      blurb: str(row.blurb),
-      goal: str(row.goal),
-      attitude: (["hostile", "wary", "neutral", "friendly", "allied"] as const).includes(str(row.attitude_to_party) as "neutral")
-        ? (str(row.attitude_to_party) as "hostile" | "wary" | "neutral" | "friendly" | "allied")
-        : "neutral",
-      power: Math.max(0, Math.min(5, Number(row.power) || 0)),
-      tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
-      members: allRows(`SELECT name FROM npcs WHERE campaign_id = ? AND faction_id = ?`, workshopId, String(row.id)).map((npc) => str(npc.name)),
-      portrait: loadImage(row.portrait_path, budget),
-    })),
-    encounters: allRows(
-      `SELECT name, enemies_json, battlefield, notes FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-      workshopId,
-    ).map((row) => ({
-      name: str(row.name),
-      enemies: parseJson<unknown[]>(str(row.enemies_json, "[]"), []),
-      battlefield: str(row.battlefield),
-      notes: str(row.notes),
-    })),
-    tables: allRows(
-      `SELECT name, entries_json FROM roll_tables WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-      workshopId,
-    ).map((row) => ({
-      name: str(row.name),
-      entries: parseJson<unknown[]>(str(row.entries_json, "[]"), []),
-    })),
-    maps: allRows(
-      `SELECT name, notes, tags_json, width, height, terrain, ambient, theme, lights_json, seed,
-              backdrop_path, backdrop_transform_json, skin_json
-         FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-      workshopId,
-    ).map((row) => {
-      const backdrop = loadImage(row.backdrop_path, budget);
-      return {
-        name: str(row.name),
-        notes: str(row.notes),
-        tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
-        width: Number(row.width) || 1,
-        height: Number(row.height) || 1,
-        terrain: str(row.terrain),
-        ambient: str(row.ambient, "day"),
-        theme: str(row.theme, "field"),
-        lights: parseJson<unknown[]>(str(row.lights_json, "[]"), []),
-        seed: Number(row.seed) || 0,
-        backdrop,
-        // The transform is meaningless without its art, so it only travels
-        // alongside it.
-        backdropTransform: backdrop
-          ? parseJson<Record<string, unknown>>(str(row.backdrop_transform_json, "{}"), {})
-          : {},
-        skin: { ...normalizeMapSkin(parseJson<unknown>(str(row.skin_json, "{}"), {})) },
-      };
-    }),
-    storyboard: [],
-    monsters: listHomebrewMonsters(campaign.ownerUserId).map((entry) => ({
-      name: entry.draft.name,
-      desc: entry.desc,
-      stats: entry.draft.stats,
-      extraDamagePerRound: entry.draft.extraDamagePerRound,
-    })),
-    // The rest of the homebrew shelf, same reasoning as the monsters: a
-    // prepared encounter or a pregen that names a hand-built item should
-    // find it on the other side.
-    homebrew: listHomebrew(campaign.ownerUserId)
-      .filter((entry) => entry.kind !== "monster")
-      .map((entry) => ({
-        kind: entry.kind as Exclude<typeof entry.kind, "monster">,
-        name: entry.name,
-        data: entry.data,
-      })),
-    // The owner's library characters filed under this workshop. Each sheet
-    // is checked against the builder's schema on the way OUT as well, so
-    // one old sheet the schema no longer accepts drops out of the bundle
-    // rather than making the whole bundle unreadable on the other side.
-    pregens: allRows(
-      `SELECT name, level, role, sheet_json FROM library_characters
-       WHERE workshop_id = ? AND user_id = ? ORDER BY name COLLATE NOCASE`,
-      workshopId,
-      campaign.ownerUserId,
-    ).flatMap((row) => {
-      const sheet = createSheetSchema.safeParse(parseJson<unknown>(str(row.sheet_json, "{}"), {}));
-      if (!sheet.success) {
-        return [];
-      }
-      return [
-        {
-          name: str(row.name),
-          level: Math.min(20, Math.max(1, Number(row.level) || 1)),
-          role: str(row.role) === "companion" ? ("companion" as const) : ("pc" as const),
-          sheet: sheet.data,
-        },
-      ];
-    }),
-    // The world pack draft travels whole, art and all; it is the one thing
-    // in a workshop that was built to be handed on.
-    plugin: hasPackDraft(workshopId) ? getPackDraft(workshopId).draft : null,
-  };
-
-  // The board last, because its arrows have to become indexes into the
-  // array that is being built, and that array has to exist first.
-  const beats = allRows(
-    `SELECT id, kind, title, body, edges_json, x, y FROM workshop_beats WHERE campaign_id = ? ORDER BY created_at`,
-    workshopId,
-  );
-  const indexById = new Map(beats.map((row, index) => [str(row.id), index]));
-  bundle.storyboard = beats.map((row) => ({
-    kind: str(row.kind, "event") as WorkshopBundle["storyboard"][number]["kind"],
-    title: str(row.title),
-    body: str(row.body),
-    edges: parseJson<string[]>(str(row.edges_json, "[]"), [])
-      .map((edge) => indexById.get(edge))
-      .filter((index): index is number => index !== undefined),
-    x: Number(row.x) || 0,
-    y: Number(row.y) || 0,
-  }));
-
-  return { bundle, skippedImages: budget.skipped };
-}
+//
+// Every relationship arrives as an index into the bundle's own arrays and
+// becomes the id of the row that index wrote (src/lib/workshop/bundle.ts):
+// a card's picks, a fight's map, a place's map, the region map's anchors. An
+// index that lands nowhere is dropped. A chapter's shared rows either link
+// to a workshop of the importer's that holds the same refs (#159), or land
+// as the chapter's own.
 
 // ---- import ----
 
 export type BundleImportResult =
-  | { workshopId: string; copied: number }
+  | { workshopId: string; copied: number; linkedShared: number; droppedLinks: number }
   | { error: string; refusal?: UploadRefusal };
 
 // Writes a decoded image to /uploads under a fresh uuid name, exactly the
@@ -307,17 +78,27 @@ function saveBundleImage(image: BundleImage | null, uploadDir: string, written: 
 type BundleArtPaths = {
   npcPortraits: string[];
   mapBackdrops: string[];
+  mapOverlays: string[];
   loreImages: string[];
   factionPortraits: string[];
+  regionBackdrop: string;
 };
 
-// `isAdmin` lifts the importer's upload budget (src/lib/upload-budget.ts):
-// the registry install is an admin's, and the workshop route passes the
-// signed-in user's flag.
+export type BundleImportOptions = {
+  // Lifts the importer's upload budget (src/lib/upload-budget.ts): the
+  // registry install is an admin's, and the workshop route passes the
+  // signed-in user's flag.
+  isAdmin?: boolean;
+  // A workshop of the importer's that holds the chapter's shared rows: they
+  // link to it, and the new workshop draws on it (#159). Without it the
+  // shared rows land as the chapter's own.
+  sharedWorkshopId?: string;
+};
+
 export function importWorkshopBundle(
   userId: string,
   bundle: WorkshopBundle,
-  options: { isAdmin?: boolean } = {},
+  options: BundleImportOptions = {},
 ): BundleImportResult {
   // Every picture is decoded first and the lot weighed against the
   // importer's upload budget (src/lib/upload-budget.ts), so an import that
@@ -325,8 +106,10 @@ export function importWorkshopBundle(
   const art = {
     npcs: bundle.npcs.map((npc) => decodeBundleImage(npc.portrait)),
     maps: bundle.maps.map((map) => decodeBundleImage(map.backdrop)),
+    overlays: bundle.maps.map((map) => decodeBundleImage(map.overlay)),
     lore: bundle.lore.map((entry) => decodeBundleImage(entry.image)),
     factions: bundle.factions.map((faction) => decodeBundleImage(faction.portrait)),
+    region: [bundle.overworld ? decodeBundleImage(bundle.overworld.backdrop) : null],
   };
   const images = Object.values(art)
     .flat()
@@ -351,20 +134,25 @@ export function importWorkshopBundle(
     const paths: BundleArtPaths = {
       npcPortraits: art.npcs.map((image) => saveBundleImage(image, uploadDir, written)),
       mapBackdrops: art.maps.map((image) => saveBundleImage(image, uploadDir, written)),
+      mapOverlays: art.overlays.map((image) => saveBundleImage(image, uploadDir, written)),
       loreImages: art.lore.map((image) => saveBundleImage(image, uploadDir, written)),
       factionPortraits: art.factions.map((image) => saveBundleImage(image, uploadDir, written)),
+      regionBackdrop: saveBundleImage(art.region[0], uploadDir, written),
     };
-    return writeBundleRows(userId, bundle, paths);
+    return writeBundleRows(userId, bundle, paths, options.sharedWorkshopId ?? "");
   } catch (error) {
     removeUnreferencedFiles(written);
     throw error;
   }
 }
 
+const AMBIENTS = ["bright", "dim", "dark"];
+
 function writeBundleRows(
   userId: string,
   bundle: WorkshopBundle,
-  { npcPortraits, mapBackdrops, loreImages, factionPortraits }: BundleArtPaths,
+  { npcPortraits, mapBackdrops, mapOverlays, loreImages, factionPortraits, regionBackdrop }: BundleArtPaths,
+  sharedWorkshopId: string,
 ): BundleImportResult {
   const workshop = createCampaign(userId, {
     title: bundle.manifest.name,
@@ -391,12 +179,51 @@ function writeBundleRows(
   const db = getDatabase();
   const now = nowIso();
   let copied = 0;
+  let droppedLinks = 0;
+  let linkedShared = 0;
+
+  // The workshop of the importer's that a chapter's shared rows link to,
+  // when they chose one and it is theirs. A shared row whose ref that
+  // workshop does not hold lands as the chapter's own, so nothing a card
+  // picked is lost to a partial match.
+  const sharedHome = sharedWorkshopId && bundle.dependsOn ? getWorkshopForUser(sharedWorkshopId, userId) : null;
+  const sharedIndex = new Map<SharedKind, Map<string, string>>();
+  const sharedRow = (kind: SharedKind, row: { ref: string; shared: boolean }): string | null => {
+    if (!sharedHome || !row.shared || !row.ref) {
+      return null;
+    }
+    let index = sharedIndex.get(kind);
+    if (!index) {
+      index = refIndex(sharedHome.id, kind);
+      sharedIndex.set(kind, index);
+    }
+    return index.get(row.ref) ?? null;
+  };
+  // Records the key a linkable row arrived under, so this workshop's next
+  // export keeps the author's keys and a later chapter can find it.
+  const keyed = (kind: OriginKind, id: string, ref: string) => {
+    if (ref) {
+      recordOrigin(workshop.id, kind, id, BUNDLE_ORIGIN, ref);
+    }
+  };
+  // Index -> the id that index became, per kind.
+  const ids = { maps: [] as string[], locations: [] as string[], npcs: [] as string[], encounters: [] as string[] };
+  const idAt = (list: string[], index: number | null | undefined): string | null => {
+    if (index === null || index === undefined) {
+      return null;
+    }
+    const id = list[index];
+    if (!id) {
+      droppedLinks += 1;
+    }
+    return id ?? null;
+  };
 
   db.transaction(() => {
     bundle.lore.forEach((entry, index) => {
       db.prepare(
         `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, style, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -404,6 +231,7 @@ function writeBundleRows(
         entry.title,
         entry.body,
         JSON.stringify(entry.tags),
+        entry.pinned ? 1 : 0,
         entry.visibility,
         loreImages[index],
         entry.style ?? "plain",
@@ -413,44 +241,95 @@ function writeBundleRows(
       copied += 1;
     });
 
+    // Maps first: places and fights are bound to them by index. Map names
+    // are UNIQUE per workshop, and a chapter's shared maps can share a name
+    // with its own, so a repeat is numbered as places and NPCs are below.
+    const usedMapNames = new Set<string>();
+    for (const [index, map] of bundle.maps.entries()) {
+      const linked = sharedRow("maps", map);
+      if (linked) {
+        ids.maps.push(linked);
+        linkedShared += 1;
+        continue;
+      }
+      let name = map.name;
+      for (let suffix = 2; usedMapNames.has(name.toLowerCase()); suffix += 1) {
+        name = `${map.name} (${suffix})`;
+      }
+      usedMapNames.add(name.toLowerCase());
+      const id = crypto.randomUUID();
+      insertBundleMap(id, workshop.id, { ...map, name }, { backdrop: mapBackdrops[index], overlay: mapOverlays[index] }, now);
+      keyed("maps", id, map.ref);
+      ids.maps.push(id);
+      copied += 1;
+    }
+
     // Locations carry a UNIQUE (campaign_id, name COLLATE NOCASE), and a
     // bundle written by hand can hold two rows with the same name. A fresh
     // workshop cannot collide with anything already there, but it can still
     // collide with ITSELF, so duplicates inside one bundle are numbered.
     const usedLocationNames = new Set<string>();
     for (const location of bundle.locations) {
+      const linked = sharedRow("locations", location);
+      if (linked) {
+        ids.locations.push(linked);
+        linkedShared += 1;
+        continue;
+      }
       let name = location.name;
       for (let suffix = 2; usedLocationNames.has(name.toLowerCase()); suffix += 1) {
         name = `${location.name} (${suffix})`;
       }
       usedLocationNames.add(name.toLowerCase());
+      const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO locations
-           (id, campaign_id, name, layout_description, connections_json, visited, is_current, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)`,
+           (id, campaign_id, name, layout_description, connections_json, visited, is_current,
+            prepared_map_id, ambience_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        id,
         workshop.id,
         name,
         location.layoutDescription,
         JSON.stringify(location.connections),
+        idAt(ids.maps, location.map),
+        location.ambience ? JSON.stringify(normalizeAmbience(location.ambience)) : null,
         now,
         now,
       );
+      keyed("locations", id, location.ref);
+      ids.locations.push(id);
       copied += 1;
     }
 
+    const usedNpcNames = new Set<string>();
     for (const [index, npc] of bundle.npcs.entries()) {
+      const linked = sharedRow("npcs", npc);
+      if (linked) {
+        ids.npcs.push(linked);
+        linkedShared += 1;
+        continue;
+      }
+      // npcs carries UNIQUE (campaign_id, name): a shared NPC landing as the
+      // chapter's own can share a name with one of the chapter's.
+      let name = npc.name;
+      for (let suffix = 2; usedNpcNames.has(name.toLowerCase()); suffix += 1) {
+        name = `${npc.name} (${suffix})`;
+      }
+      usedNpcNames.add(name.toLowerCase());
+      const id = crypto.randomUUID();
+      const voice = npc.voice ? normalizeNpcVoice(npc.voice) : null;
       db.prepare(
         `INSERT INTO npcs
            (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
             aliases_json, personality_json, goals_json, relations_json, bonds_json,
-            pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, 0, ?, ?)`,
+            pressure_json, arc_cast_id, portrait_url, voice_json, archived, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, ?, 0, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        id,
         workshop.id,
-        npc.name,
+        name,
         npc.attitude,
         npc.trait,
         npc.location,
@@ -464,9 +343,12 @@ function writeBundleRows(
         // existed on this machine.
         npc.relations || "[]",
         npcPortraits[index],
+        voice ? JSON.stringify(voice) : null,
         now,
         now,
       );
+      keyed("npcs", id, npc.ref);
+      ids.npcs.push(id);
       copied += 1;
     }
 
@@ -484,65 +366,57 @@ function writeBundleRows(
     }
 
     for (const encounter of bundle.encounters) {
+      const linked = sharedRow("encounters", encounter);
+      if (linked) {
+        ids.encounters.push(linked);
+        linkedShared += 1;
+        continue;
+      }
+      // The map settings and the rest of the plan, each through the
+      // normaliser the encounter routes use, the extras against the roster
+      // they belong to.
+      const map = normalizeTemplateMap(
+        { ...encounter.map, mapId: idAt(ids.maps, encounter.map.map) },
+        { themes: MAP_THEMES, ambients: AMBIENTS },
+      );
+      const slots = (encounter.enemies as Array<{ monster?: unknown; count?: unknown }>)
+        .filter((row) => typeof row?.monster === "string" && row.monster)
+        .reduce((sum, row) => sum + Math.min(99, Math.max(1, Math.round(Number(row.count) || 1))), 0);
+      const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO encounter_templates
-           (id, campaign_id, name, enemies_json, battlefield, map_json, notes,
+           (id, campaign_id, name, enemies_json, battlefield, map_json, notes, extras_json,
             created_by_user_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        id,
         workshop.id,
         encounter.name,
         JSON.stringify(encounter.enemies),
         encounter.battlefield,
+        JSON.stringify(map),
         encounter.notes,
+        JSON.stringify(normalizeTemplateExtras(encounter.extras, Math.min(slots, EXTRAS_LIMITS.slots))),
         userId,
         now,
         now,
       );
+      keyed("encounters", id, encounter.ref);
+      ids.encounters.push(id);
       copied += 1;
     }
 
     for (const table of bundle.tables) {
       db.prepare(
-        `INSERT INTO roll_tables (id, campaign_id, name, entries_json, created_by_user_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO roll_tables (id, campaign_id, name, entries_json, no_replacement, created_by_user_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
         table.name,
         JSON.stringify(table.entries),
+        table.noReplacement ? 1 : 0,
         userId,
-        now,
-        now,
-      );
-      copied += 1;
-    }
-
-    for (const [index, map] of bundle.maps.entries()) {
-      const backdropPath = mapBackdrops[index];
-      db.prepare(
-        `INSERT INTO prepared_maps
-           (id, campaign_id, name, notes, tags_json, width, height, terrain, ambient,
-            theme, lights_json, seed, backdrop_path, backdrop_transform_json, skin_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        crypto.randomUUID(),
-        workshop.id,
-        map.name,
-        map.notes,
-        JSON.stringify(map.tags),
-        map.width,
-        map.height,
-        map.terrain,
-        map.ambient,
-        map.theme,
-        JSON.stringify(map.lights),
-        map.seed,
-        backdropPath,
-        // The transform only means something over its art.
-        backdropPath ? JSON.stringify(map.backdropTransform) : "{}",
-        JSON.stringify(normalizeMapSkin(map.skin)),
         now,
         now,
       );
@@ -550,29 +424,53 @@ function writeBundleRows(
     }
 
     // The board in two passes: every card first, so an arrow drawn from the
-    // first card to the last has something to point at.
+    // first card to the last has something to point at. What each card
+    // picked lands on the row its index became (#155).
     const beatIds = bundle.storyboard.map(() => crypto.randomUUID());
     for (const [index, beat] of bundle.storyboard.entries()) {
+      const links = Object.fromEntries(
+        (
+          [
+            ["npcId", idAt(ids.npcs, beat.links.npc)],
+            ["mapId", idAt(ids.maps, beat.links.map)],
+            ["encounterId", idAt(ids.encounters, beat.links.encounter)],
+            ["locationId", idAt(ids.locations, beat.links.location)],
+          ] as const
+        ).filter(([, id]) => id),
+      );
       db.prepare(
         `INSERT INTO workshop_beats
            (id, campaign_id, kind, title, body, links_json, edges_json, x, y, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, '{}', '[]', ?, ?, ?, ?)`,
-      ).run(beatIds[index], workshop.id, beat.kind, beat.title, beat.body, beat.x, beat.y, now, now);
+         VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?)`,
+      ).run(beatIds[index], workshop.id, beat.kind, beat.title, beat.body, JSON.stringify(links), beat.x, beat.y, now, now);
       copied += 1;
     }
     for (const [index, beat] of bundle.storyboard.entries()) {
-      const edges = resolveEdges(beat.edges, beatIds.length)
-        .filter((edge) => edge !== index)
-        .map((edge) => beatIds[edge]);
+      const edges = resolveEdges(beat.edges, beatIds.length).filter((edge) => edge !== index);
       if (edges.length) {
-        db.prepare(`UPDATE workshop_beats SET edges_json = ? WHERE id = ?`).run(
-          JSON.stringify(edges),
+        const routes = Object.fromEntries(
+          beat.routes
+            .filter((route) => edges.includes(route.to))
+            .map((route) => [beatIds[route.to], { kind: route.kind, label: route.label }]),
+        );
+        db.prepare(`UPDATE workshop_beats SET edges_json = ?, routes_json = ? WHERE id = ?`).run(
+          JSON.stringify(edges.map((edge) => beatIds[edge])),
+          JSON.stringify(routes),
           beatIds[index],
         );
       }
     }
 
+    if (bundle.overworld && insertBundleOverworld(workshop.id, bundle.overworld, ids.locations, regionBackdrop, now)) {
+      copied += 1;
+    }
   })();
+
+  // A chapter whose shared rows found their workshop draws on it from now
+  // on, so its pickers list that workshop's cast beside its own.
+  if (sharedHome && linkedShared) {
+    setCommonWorkshop(workshop, sharedHome.id);
+  }
 
   // House rules land outside the transaction because setHouseRules chunks the
   // prose and queues an embedding, which is the same reason runContentImport
@@ -582,66 +480,7 @@ function writeBundleRows(
     copied += 1;
   }
 
-  // Hand-built monsters are USER-scoped, not campaign-scoped, so they are
-  // written outside the transaction above through the module that owns their
-  // uniqueness rule rather than by raw insert. A name already in the
-  // importer's bestiary is skipped: their own monster wins, because it is
-  // the one their existing prepared encounters resolve by name.
-  const existing = new Set(
-    listHomebrewMonsters(userId).map((entry) => entry.draft.name.toLowerCase()),
-  );
-  for (const monster of bundle.monsters) {
-    if (existing.has(monster.name.toLowerCase())) {
-      continue;
-    }
-    const draft = draftFromData(monster.name, {
-      desc: monster.desc,
-      stats: monster.stats,
-      extraDamagePerRound: monster.extraDamagePerRound,
-    });
-    createHomebrewMonster(userId, draft, monster.desc);
-    existing.add(monster.name.toLowerCase());
-    copied += 1;
-  }
+  copied += writeBundleShelf(userId, workshop.id, bundle);
 
-  // Items, spells and options, by the same rule: the importer's own entry
-  // of that kind and name wins, and each arrival is normalized by the
-  // module that decides what a legal entry is, so a bundle cannot smuggle a
-  // weapon the dice engine would throw on.
-  const owned = new Set(
-    listHomebrew(userId).map((entry) => `${entry.kind}:${entry.name.toLowerCase()}`),
-  );
-  for (const entry of bundle.homebrew) {
-    const key = `${entry.kind}:${entry.name.toLowerCase()}`;
-    if (owned.has(key)) {
-      continue;
-    }
-    const normalized = normalizeHomebrewData(entry.kind, entry.data, entry.name);
-    if ("error" in normalized) {
-      continue;
-    }
-    createHomebrew(userId, { kind: entry.kind, name: entry.name, data: normalized.data });
-    owned.add(key);
-    copied += 1;
-  }
-
-  if (bundle.plugin) {
-    savePackDraft(workshop.id, bundle.plugin);
-    copied += 1;
-  }
-
-  // Pregens land in the importer's library, filed under the new workshop,
-  // through the module that populates a sheet's features on creation.
-  for (const pregen of bundle.pregens) {
-    createCharacter(
-      userId,
-      pregen.level,
-      { ...pregen.sheet, name: pregen.name },
-      pregen.role,
-      workshop.id,
-    );
-    copied += 1;
-  }
-
-  return { workshopId: workshop.id, copied };
+  return { workshopId: workshop.id, copied, linkedShared, droppedLinks };
 }

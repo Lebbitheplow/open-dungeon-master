@@ -8,6 +8,7 @@ import {
   setWorkshopTargetParty,
 } from "@/lib/db/workshops";
 import { readImportSource } from "@/lib/db/content-import";
+import { setCommonWorkshop } from "@/lib/db/workshop-common";
 import { IMPORT_KINDS, type ImportKind } from "@/lib/workshop/import";
 
 export const runtime = "nodejs";
@@ -28,6 +29,8 @@ const patchSchema = z.object({
     })
     .partial()
     .optional(),
+  // The shared workshop this one draws on (#159); "" detaches it.
+  commonWorkshopId: z.string().trim().max(80).optional(),
 });
 
 async function resolve(workshopId: string) {
@@ -78,7 +81,13 @@ export async function PATCH(
     return Response.json({ error: "Invalid change." }, { status: 400 });
   }
   const { workshop } = resolved;
-  const { title, description, targetParty } = parsed.data;
+  const { title, description, targetParty, commonWorkshopId } = parsed.data;
+  if (commonWorkshopId !== undefined) {
+    const linked = setCommonWorkshop(workshop, commonWorkshopId);
+    if ("error" in linked) {
+      return Response.json({ error: linked.error }, { status: 400 });
+    }
+  }
 
   if (title !== undefined || description !== undefined) {
     renameWorkshop(

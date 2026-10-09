@@ -9,20 +9,30 @@ import { Field, chip, chipOn, chipRow } from "@/app/workshop/kit";
 import {
   BEAT_KINDS,
   BEAT_LABELS,
+  ROUTE_KINDS,
+  ROUTE_LABELS,
+  ROUTE_LABEL_MAX,
   TITLE_MAX,
   type Beat,
   type BeatKind,
+  type BeatLinks,
   type BoardInventory,
   type BoardNode,
+  type RouteKind,
 } from "@/lib/workshop/board";
 import { KIND_GLYPH, LINK_FIELDS, LINK_GLYPH } from "@/app/workshop/storyboard/beat-fields";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
 
 // One card, open for editing: its kind and title, what happens, who and
-// where it involves, and which cards it leads to. Split out of
+// where it involves, and which cards it leads to and how. Split out of
 // DmStoryboardPanel so the workshop board can show the same editor in a
 // sheet; the list still renders it inline under the card, unchanged.
+//
+// The pickers list this workshop's rows first and its shared workshop's
+// after them under that workshop's name (#159). A link whose row has gone
+// (deleted, or the shared workshop detached) says so in the picker rather
+// than reading as "nobody in particular".
 //
 // The edits live with the caller, which is also where the save request is,
 // so this is fields over a value and nothing else. Delete is only offered
@@ -36,10 +46,13 @@ export function BeatEditor({
   busy,
   onSave,
   onDelete,
+  broken = [],
 }: {
   edit: Beat;
   onChange: (beat: Beat) => void;
   inventory: BoardInventory;
+  // Links this card holds that no longer resolve.
+  broken?: Array<keyof BeatLinks>;
   // Every other card on the board, as candidates for "leads to".
   others: BoardNode[];
   busy: boolean;
@@ -105,19 +118,33 @@ export function BeatEditor({
               }
               options={[
                 { value: "", label: "nobody in particular" },
+                ...(broken.includes(field) && edit.links[field]
+                  ? [{ value: edit.links[field] as string, label: "Missing: no longer in this workshop or its shared one", disabled: true }]
+                  : []),
                 ...inventory[bucket].map((entry) => ({
                   value: entry.id,
                   label: entry.name,
                   icon: { kind: "glyph" as const, key: LINK_GLYPH[field] },
+                  ...(entry.from ? { group: `From ${entry.from}` } : {}),
                 })),
               ]}
             />
+            {broken.includes(field) ? (
+              <p className="reveal mt-1 text-[11px] text-amber-300/80">
+                What this card picked is gone. Pick again, or clear it.
+              </p>
+            ) : null}
           </Field>
         ))}
       </div>
 
       <div className="flex flex-col gap-1">
         <SectionHead title="Leads to" glyph="pace-normal" className="mb-1 pt-1" />
+        <p className="text-[11px] leading-snug text-stone-500">
+          An arrow is &quot;then&quot; unless you say otherwise. Mark the routes the party chooses
+          between, or a scene that only happens if something holds; those arrive in a campaign
+          as moments the storyteller can run or drop, not as beats it waits on.
+        </p>
         <div className={cn("stagger-pop", chipRow)}>
           {others.map((other) => {
             const on = edit.edges.includes(other.id);
@@ -126,14 +153,17 @@ export function BeatEditor({
                 key={other.id}
                 type="button"
                 aria-pressed={on}
-                onClick={() =>
+                onClick={() => {
+                  const routes = { ...(edit.routes ?? {}) };
+                  delete routes[other.id];
                   onChange({
                     ...edit,
                     edges: on
                       ? edit.edges.filter((edge) => edge !== other.id)
                       : [...edit.edges, other.id],
-                  })
-                }
+                    routes,
+                  });
+                }}
                 className={cn(ui.btnSmall, chip, "normal-case", on && chipOn)}
               >
                 {other.title}
@@ -141,6 +171,51 @@ export function BeatEditor({
             );
           })}
         </div>
+        {edit.edges.length ? (
+          <ul className="stagger-up mt-1 flex flex-col gap-1.5">
+            {edit.edges.map((edge) => {
+              const target = others.find((other) => other.id === edge);
+              if (!target) {
+                return null;
+              }
+              const route = edit.routes?.[edge];
+              const setRoute = (kind: "then" | RouteKind, label = route?.label ?? "") => {
+                const routes = { ...(edit.routes ?? {}) };
+                if (kind === "then") {
+                  delete routes[edge];
+                } else {
+                  routes[edge] = { kind, label: label.slice(0, ROUTE_LABEL_MAX) };
+                }
+                onChange({ ...edit, routes });
+              };
+              return (
+                <li key={edge} className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="min-w-28 flex-1 truncate text-stone-300">{target.title}</span>
+                  <span className="w-full sm:w-48">
+                    <Select<"then" | RouteKind>
+                      label={`How "${target.title}" follows`}
+                      value={route?.kind ?? "then"}
+                      onChange={(kind) => setRoute(kind)}
+                      options={(["then", ...ROUTE_KINDS] as const).map((kind) => ({
+                        value: kind,
+                        label: ROUTE_LABELS[kind],
+                      }))}
+                    />
+                  </span>
+                  {route ? (
+                    <input
+                      value={route.label}
+                      onChange={(event) => setRoute(route.kind, event.target.value)}
+                      placeholder={route.kind === "choice" ? "if they side with the guild" : "if they search the cellar"}
+                      aria-label={`When the party takes the route to "${target.title}"`}
+                      className={cn(ui.input, "reveal min-w-40 flex-1 py-1 text-xs")}
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
       </div>
 
       {onDelete ? (

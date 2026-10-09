@@ -40,7 +40,8 @@ export const BEAT_HINTS: Record<BeatKind, string> = {
   setting: "Somewhere the party can stand. Becomes a lore entry.",
   backstory: "What is already true when the campaign opens. Becomes a lore entry.",
   event: "A thing that happens, whether or not the party is there. Becomes an arc beat.",
-  encounter: "A fight worth preparing. Becomes a prepared encounter.",
+  encounter:
+    "A fight worth preparing. Becomes a prepared encounter, or the one it picks, and a beat when the arrows run through it.",
   hook: "Why the party would walk toward any of this. Becomes a quest.",
   secret: "What the party is not told. Becomes a DM-only note.",
   npc_moment: "The scene somebody has been waiting for. Becomes an arc beat.",
@@ -61,6 +62,26 @@ export type BeatLinks = {
   locationId?: string;
 };
 
+// What an arrow means (#157). An arrow with no route is "then this": the
+// story goes on to that card. A "choice" arrow is one route of several out
+// of its card, and the cards behind the other choices are the routes not
+// taken; an "optional" arrow is a scene that only happens if its condition
+// holds, which covers a side scene, a bypass and a retreat alike. The label
+// is the condition in the DM's words ("if they side with the guild").
+//
+// The compile never guesses a choice from the order arrows were drawn in:
+// only a route the author set changes what an arrow means.
+export const ROUTE_KINDS = ["choice", "optional"] as const;
+export type RouteKind = (typeof ROUTE_KINDS)[number];
+export type EdgeRoute = { kind: RouteKind; label: string };
+export const ROUTE_LABEL_MAX = 80;
+
+export const ROUTE_LABELS: Record<"then" | RouteKind, string> = {
+  then: "Then",
+  choice: "One route of several",
+  optional: "Only if...",
+};
+
 export type Beat = {
   id: string;
   kind: BeatKind;
@@ -70,6 +91,9 @@ export type Beat = {
   // Beats this one leads to. Direction matters: it is what makes a hook with
   // no payoff detectable.
   edges: string[];
+  // What each arrow means, keyed by the card it points at. Missing on cards
+  // written before routes existed, which read as all "then".
+  routes?: Record<string, EdgeRoute>;
   x: number;
   y: number;
 };
@@ -101,6 +125,25 @@ export function normalizeLinks(raw: unknown): BeatLinks {
   return links;
 }
 
+// Only arrows the card actually has can carry a route, and a route needs a
+// kind this build knows. Anything else reads as a plain arrow.
+export function normalizeRoutes(raw: unknown, edges: string[]): Record<string, EdgeRoute> {
+  const source = (raw ?? {}) as Record<string, unknown>;
+  const routes: Record<string, EdgeRoute> = {};
+  for (const edge of edges) {
+    const entry = (source[edge] ?? null) as { kind?: unknown; label?: unknown } | null;
+    if (!entry || !(ROUTE_KINDS as readonly unknown[]).includes(entry.kind)) {
+      continue;
+    }
+    routes[edge] = { kind: entry.kind as RouteKind, label: text(entry.label, ROUTE_LABEL_MAX) };
+  }
+  return routes;
+}
+
+export function routeOf(beat: Pick<Beat, "routes">, target: string): RouteKind | "then" {
+  return beat.routes?.[target]?.kind ?? "then";
+}
+
 export type BeatCheck = { beat: Omit<Beat, "id"> } | { error: string };
 
 // A beat needs a title. Everything else is optional, because the board is
@@ -120,13 +163,15 @@ export function checkBeat(raw: unknown): BeatCheck {
     const number = Math.round(Number(value));
     return Number.isFinite(number) ? Math.min(4_000, Math.max(0, number)) : 0;
   };
+  const unique = [...new Set(edges)];
   return {
     beat: {
       kind: normalizeBeatKind(source.kind),
       title,
       body: text(source.body, BODY_MAX),
       links: normalizeLinks(source.links),
-      edges: [...new Set(edges)],
+      edges: unique,
+      routes: normalizeRoutes(source.routes, unique),
       x: coordinate(source.x),
       y: coordinate(source.y),
     },
@@ -204,16 +249,50 @@ export function boardGraph(beats: Beat[]): Board {
 // ---- suggestions ----
 
 // What the workshop already holds, so the board can notice something written
-// that nothing on the board uses.
+// that nothing on the board uses. `from` names the shared workshop a row
+// lives in when it is not this one (#159); a card links to it the same way.
+export type InventoryEntry = { id: string; name: string; from?: string };
+
 export type BoardInventory = {
-  npcs: Array<{ id: string; name: string }>;
-  maps: Array<{ id: string; name: string }>;
-  encounters: Array<{ id: string; name: string }>;
-  locations: Array<{ id: string; name: string }>;
+  npcs: InventoryEntry[];
+  maps: InventoryEntry[];
+  encounters: InventoryEntry[];
+  locations: InventoryEntry[];
 };
 
 export function emptyInventory(): BoardInventory {
   return { npcs: [], maps: [], encounters: [], locations: [] };
+}
+
+// A card's links, kept only where they point at something in the
+// inventory: this workshop's rows or its shared workshop's. The write
+// routes run every card through this, so a link can never name a row in
+// somebody else's campaign (it used to be stored as sent).
+export function linksWithin(links: BeatLinks, inventory: BoardInventory): BeatLinks {
+  const kept: BeatLinks = {};
+  const buckets: Array<[keyof BeatLinks, keyof BoardInventory]> = [
+    ["npcId", "npcs"],
+    ["mapId", "maps"],
+    ["encounterId", "encounters"],
+    ["locationId", "locations"],
+  ];
+  for (const [field, bucket] of buckets) {
+    const id = links[field];
+    if (id && inventory[bucket].some((entry) => entry.id === id)) {
+      kept[field] = id;
+    }
+  }
+  return kept;
+}
+
+// Links a card holds that no longer resolve: the row was deleted, or the
+// shared workshop it lived in was detached. The board shows them as missing
+// rather than quietly showing a card with nothing picked.
+export function brokenLinks(beat: Pick<Beat, "links">, inventory: BoardInventory): Array<keyof BeatLinks> {
+  const within = linksWithin(beat.links, inventory);
+  return (Object.keys(beat.links) as Array<keyof BeatLinks>).filter(
+    (field) => beat.links[field] && !within[field],
+  );
 }
 
 export type Suggestion = {
@@ -312,6 +391,20 @@ export function suggestTopics(beats: Beat[], inventory: BoardInventory): Suggest
         weight: 3,
       });
     }
+    // "One route of several" with only one route is a choice with nothing to
+    // choose between, which the compile would read as a detour.
+    const choices = node.out.filter((target) => routeOf(node, target) === "choice");
+    if (choices.length === 1) {
+      const only = board.nodes.find((entry) => entry.id === choices[0]);
+      add({
+        id: `choice:${node.id}`,
+        kind: "event",
+        title: `The other way out of "${node.title}"`,
+        reason: `"${node.title}" offers one route of several, and "${only?.title ?? "it"}" is the only one drawn.`,
+        aboutBeatId: node.id,
+        weight: 4,
+      });
+    }
     // A character moment floating on its own.
     if (node.kind === "npc_moment" && node.in.length === 0 && node.out.length === 0) {
       add({
@@ -337,7 +430,9 @@ export function suggestTopics(beats: Beat[], inventory: BoardInventory): Suggest
   ];
   for (const [field, bucket, kind, why] of unused) {
     const used = linked(field);
-    for (const entry of inventory[bucket]) {
+    // A chapter does not owe the shared workshop a card for every member of
+    // the cast it shares, so only this workshop's own rows are counted.
+    for (const entry of inventory[bucket].filter((row) => !row.from)) {
       if (!used.has(entry.id)) {
         add({
           id: `unused:${bucket}:${entry.id}`,

@@ -1644,6 +1644,74 @@ export function applyArcExtension(arc: StoryArc, extension: ArcExtension): Story
   return next;
 }
 
+// How much more an arc can take: beats under the arc's cap, and whether one
+// more act fits. A storyboard joining an arc as its next act is planned
+// against this (src/lib/workshop/import.ts).
+export function arcRoom(arc: StoryArc): { room: number; actRoom: boolean } {
+  return {
+    room: Math.max(0, MAX_BEATS - arc.beats.length),
+    actRoom: arc.acts < MAX_ACTS,
+  };
+}
+
+// A chapter prepared on a storyboard, joining an arc the table is already
+// playing as its next act (#157). The counterpart to applyArcExtension for
+// beats a person wrote rather than a model: no per-act beat cap (the board
+// is the author's act, however long), but the arc's own caps hold.
+//
+// Nothing already in the arc is touched: played and skipped beats, their
+// detail, the acts recapped so far. A beat whose text the arc already has is
+// not added twice, which is what makes importing the same chapter again
+// harmless. When the saga had sketched the act this becomes, the sketch is
+// marked detailed so the engine does not later write its own act into the
+// same place.
+export function appendBoardAct(
+  arc: StoryArc,
+  beats: Array<{ text: string; waypoints?: Waypoint[] }>,
+  events: Array<Omit<ArcEvent, "id" | "status">>,
+  title = "",
+): { arc: StoryArc; added: number } {
+  const known = new Set(arc.beats.map((beat) => beat.text.trim().toLowerCase()));
+  const fresh = beats
+    .map((beat) => ({ ...beat, text: str(beat.text, BEAT_CAP) }))
+    .filter((beat) => beat.text && !known.has(beat.text.toLowerCase()));
+  const { room, actRoom } = arcRoom(arc);
+  if (!fresh.length || !actRoom || !room) {
+    return { arc, added: 0 };
+  }
+  const next = cloneArc(arc);
+  const act = next.acts + 1;
+  for (const beat of fresh.slice(0, room)) {
+    const waypoints = normalizeWaypoints(beat.waypoints ?? []);
+    next.beats.push({ text: beat.text, status: "pending", act, ...(waypoints.length ? { waypoints } : {}) });
+  }
+  next.acts = act;
+  if (next.saga) {
+    for (const entry of next.saga.sketches) {
+      if (entry.act < act && entry.status === "detailed") {
+        entry.status = "done";
+      }
+    }
+    const sketch = next.saga.sketches.find((entry) => entry.act === act && entry.status === "sketch");
+    if (sketch) {
+      sketch.status = "detailed";
+      if (title) {
+        sketch.title = str(title, ACT_TITLE_CAP);
+      }
+    }
+    if (next.saga.plannedActs < act) {
+      next.saga.plannedActs = act;
+    }
+  }
+  appendEvents(next, events.map((event) => ({ ...event, actHint: event.actHint ?? act })));
+  // The beat the table is on stays the beat the table is on; only an arc
+  // that had run out of beats moves on to the new act's first.
+  const playing = arc.beats.findIndex((beat) => beat.status === "active");
+  reseatActiveBeat(next.beats, playing >= 0 ? playing + 1 : null);
+  next.updatedAt = new Date().toISOString();
+  return { arc: next, added: Math.min(fresh.length, room) };
+}
+
 // The first act still waiting as a sketch beyond the acts already written,
 // tolerant of numbering gaps a model may have left.
 export function nextSketchAct(arc: StoryArc): ActSketch | null {

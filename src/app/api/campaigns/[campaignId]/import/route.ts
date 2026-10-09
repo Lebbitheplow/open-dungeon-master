@@ -22,9 +22,15 @@ const importSchema = z.object({
   sourceId: z.string().trim().min(1).max(80),
   select: z.array(z.enum(IMPORT_KINDS)).min(1),
   houseRules: z.enum(["replace", "append"]).default("replace"),
+  // What an earlier import from the same source already brought: kept as
+  // the campaign has it, or copied again under a number.
+  again: z.enum(["skip", "copy"]).default("skip"),
+  // A board meeting an arc the table is playing: leave the arc alone, or
+  // add the board's beats as its next act (#157).
+  arc: z.enum(["leave", "append"]).default("leave"),
 });
 
-const previewSchema = importSchema.partial({ select: true, houseRules: true });
+const previewSchema = importSchema.partial({ select: true, houseRules: true, again: true, arc: true });
 
 export async function GET(
   request: Request,
@@ -39,6 +45,8 @@ export async function GET(
   const parsed = previewSchema.safeParse({
     sourceId: url.searchParams.get("sourceId") ?? "",
     select: url.searchParams.getAll("select"),
+    again: url.searchParams.get("again") ?? undefined,
+    arc: url.searchParams.get("arc") ?? undefined,
   });
   if (!parsed.success) {
     return Response.json({ error: "Invalid preview." }, { status: 400 });
@@ -51,7 +59,12 @@ export async function GET(
     return Response.json({ error: "Source not found." }, { status: 404 });
   }
   const selection = parsed.data.select?.length ? parsed.data.select : IMPORT_KINDS;
-  return Response.json({ plan: planContentImport(source.id, campaignId, selection) });
+  return Response.json({
+    plan: planContentImport(source.id, campaignId, selection, {
+      again: parsed.data.again,
+      arcMode: parsed.data.arc,
+    }),
+  });
 }
 
 export async function POST(
@@ -86,9 +99,17 @@ export async function POST(
     campaignId,
     selection: parsed.data.select,
     houseRulesMode: parsed.data.houseRules,
+    again: parsed.data.again,
+    arcMode: parsed.data.arc,
   });
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: 400 });
   }
-  return Response.json({ plan: result.plan, copied: result.copied });
+  return Response.json({
+    plan: result.plan,
+    copied: result.copied,
+    kept: result.kept,
+    unbound: result.unbound,
+    beatsAdded: result.beatsAdded,
+  });
 }
