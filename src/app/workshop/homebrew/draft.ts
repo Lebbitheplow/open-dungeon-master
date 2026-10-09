@@ -5,6 +5,7 @@ import {
   type ItemKind,
 } from "@/lib/homebrew/gear";
 import { validateDraft, type Finding } from "@/lib/rulesets/validate";
+import { backgroundFindings, featFindings, hazardFindings, speciesFindings, subclassFindings } from "@/lib/rulesets/validate-options";
 import type { VariantRules } from "@/lib/rulesets/logic";
 import type { SrdArmor } from "@/lib/srd/armor";
 import type { SrdWeapon } from "@/lib/srd/weapons";
@@ -110,6 +111,13 @@ export function draftFindings(draft: HomebrewDraft, variantRules: Partial<Varian
       },
     });
   }
+  // Character options and hazards, measured against the SRD's own norms
+  // (src/lib/rulesets/validate-options.ts).
+  if (draft.kind === "feat") return featFindings(draft.name, draft.data);
+  if (draft.kind === "background") return backgroundFindings(draft.data);
+  if (draft.kind === "race") return speciesFindings(draft.data);
+  if (draft.kind === "archetype") return subclassFindings(draft.data);
+  if (draft.kind === "hazard") return hazardFindings(draft.data);
   return [];
 }
 
