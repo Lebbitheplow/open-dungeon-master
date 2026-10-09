@@ -5,6 +5,7 @@
 // (docs/visual-overhaul-plan.md 7.3 and 7.5).
 
 import { characterPlaceholder, normalizeGender, raceFamily } from "@/lib/placeholders";
+import { illustratedPortrait } from "@/lib/illustrated-portraits";
 import type { Ability } from "@/lib/schemas/sheet";
 import { canonicalRaceId, srdRaceFor } from "@/lib/content/race-options";
 
@@ -71,7 +72,8 @@ export function lineageArt(raceId: string, name = "", gender?: string | null): s
   if (!family) {
     return characterPlaceholder({ gender });
   }
-  return `${BASE}/character-race/${family}-${normalizeGender(gender)}.webp`;
+  return illustratedPortrait("race", family, gender)
+    ?? `${BASE}/character-race/${family}-${normalizeGender(gender)}.webp`;
 }
 
 function stableBit(value: string): number {
@@ -82,11 +84,11 @@ function stableBit(value: string): number {
   return acc & 1;
 }
 
-// The plate a class card shows. The setting classes were painted in two
-// genders only, and a card is a picture of the class rather than of this
-// character, so an unstated gender borrows one of the two instead of falling
-// through to the hooded stranger.
+// Curated class examples have three independent presentation variants.
+// Preserve the existing fallback for any class outside that catalog.
 export function classArt(classId: string, gender?: string | null): string {
+  const illustrated = illustratedPortrait("class", classId, gender);
+  if (illustrated) return illustrated;
   const own = characterPlaceholder({ class: classId, gender });
   if (own.includes("/character-class/") || normalizeGender(gender) !== "neutral") {
     return own;
