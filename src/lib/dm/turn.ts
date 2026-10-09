@@ -146,6 +146,7 @@ import { hazardTools, HAZARD_TOOL_NAMES } from "@/lib/dm/hazard-tools";
 import { splitDamageTool, SPLIT_DAMAGE_TOOL_NAMES } from "@/lib/dm/split-damage";
 import { petTools, PET_TOOL_NAMES } from "@/lib/dm/pet-tools";
 import { socialTools, SOCIAL_TOOL_NAMES, handleSetNpc, npcRosterForPrompt } from "@/lib/dm/social-tools";
+import { worldForPrompt } from "@/lib/dm/world-prompt";
 import {
   relationshipTools,
   RELATIONSHIP_TOOL_NAMES,
@@ -418,6 +419,8 @@ export async function startDmTurn(campaignId: string) {
       absoluteCommand: "",
     });
   }
+  // The table's WorldForge: hidden truths, ties and secrets, DM-only.
+  const world = worldForPrompt(campaignId);
   const promptState: DmGameState = {
       campaign,
       // The window the prompt is actually being built against; without this
@@ -430,6 +433,7 @@ export async function startDmTurn(campaignId: string) {
       houseRulesBlock: retrieval.houseRulesBlock,
       loreBlock: retrieval.loreBlock,
       factionsBlock: renderFactionsForPrompt(listFactions(campaign.id), getParty(campaign.id).reputation, true),
+      worldBlock: world.block,
       shopsBlock: shopsBlock(campaign),
       preparedFightsBlock: preparedFightsBlock(campaign),
       members: listMembers(campaignId),
@@ -488,7 +492,7 @@ export async function startDmTurn(campaignId: string) {
       })),
       directorNotes: consumePendingSparks(campaignId).map((spark) => spark.text),
       directorBlock,
-      npcs: npcRosterForPrompt(campaignId),
+      npcs: npcRosterForPrompt(campaignId).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
       relationships:
         campaign.gameSettings.relationships === "off"
           ? []

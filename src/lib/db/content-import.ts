@@ -21,6 +21,8 @@ import {
   type RowKind,
 } from "@/lib/db/content-copy";
 import { getCommonWorkshop } from "@/lib/db/workshop-common";
+import { hasWorldDoc } from "@/lib/db/world-forge";
+import { copyWorldDoc } from "@/lib/db/world-forge-io";
 import {
   IMPORT_KINDS,
   LINK_KINDS,
@@ -128,6 +130,8 @@ export function readImportSource(sourceId: string): ImportSource {
   const houseRules = getHouseRulesText(sourceId);
   source.houseRules = houseRules.trim() ? [{ id: sourceId, name: "House rules" }] : [];
 
+  source.world = hasWorldDoc(sourceId) ? [{ id: sourceId, name: "WorldForge" }] : [];
+
   return source;
 }
 
@@ -153,6 +157,7 @@ export function readTargetExisting(campaignId: string): ImportExisting {
     ? ["Region map"]
     : [];
   existing.houseRules = getHouseRulesText(campaignId).trim() ? ["House rules"] : [];
+  existing.world = hasWorldDoc(campaignId) ? ["WorldForge"] : [];
   return existing;
 }
 
@@ -430,6 +435,13 @@ export function runContentImport(input: {
     }
     // The variant flags travel with the prose: they are the same decision.
     updateGameSettings(campaignId, { variantRules: source.gameSettings.variantRules });
+  }
+
+  if (selected.has("world") && hasWorldDoc(sourceId)) {
+    // After the records, so every ref can be rewritten to the copy that
+    // travelled (or an earlier import brought).
+    const kinds = { npc: "npcs", location: "locations", faction: "factions", lore: "lore" } as const;
+    counts.copied += copyWorldDoc(sourceId, campaignId, (shelf, id) => main.resolve(kinds[shelf], id));
   }
 
   if (selected.has("lore") || storyboard) {

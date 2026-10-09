@@ -183,6 +183,8 @@ export type DmGameState = {
     aliases?: string[];
     witnessNote?: string;
     statBlock?: string;
+    // From the table's WorldForge: hidden truth, ties, secrets kept.
+    world?: string;
   }>;
   // Server-tracked standing between each character and each NPC/companion,
   // one bounded line each (src/lib/dm/relationship-logic.ts).
@@ -203,6 +205,8 @@ export type DmGameState = {
   loreBlock?: string;
   // The factions block (docs/vtt-parity-implementation-plan.md section 6).
   factionsBlock?: string;
+  // The table's WorldForge, DM-only (src/lib/dm/world-prompt.ts).
+  worldBlock?: string;
   shopsBlock?: string;
   // Written while the state block is built, so the trace can cost the sky
   // line and the quest log on their own (docs/vtt-parity-implementation-plan.md
@@ -835,7 +839,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         .slice(0, 20)
         .map(
           (npc) =>
-            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}`,
+            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
         )
         .join("\n")}`,
     );
@@ -849,6 +853,9 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.factionsBlock) {
     sections.push(state.factionsBlock);
+  }
+  if (state.worldBlock) {
+    sections.push(state.worldBlock);
   }
   if (state.relationships?.length) {
     sections.push(

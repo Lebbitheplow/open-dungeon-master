@@ -9,7 +9,7 @@ import {
   workshopBundleSchema,
   type WorkshopBundle,
 } from "@/lib/workshop/bundle-schema";
-import { isWorldForgeExport, worldForgeToBundle } from "@/lib/workshop/worldforge";
+import { isWorldForgeExport, readWorldForge, type WorldImport } from "@/lib/worldforge/format";
 
 export * from "@/lib/workshop/bundle-schema";
 
@@ -285,7 +285,9 @@ export function bundleWarnings(bundle: WorkshopBundle): string[] {
   return warnings;
 }
 
-export type BundleRead = { bundle: WorkshopBundle } | { error: string };
+// A WorldForge export reads as a bundle carrying only the new workshop's
+// name, with the world itself beside it for WorldForge's importer.
+export type BundleRead = { bundle: WorkshopBundle; worldForge?: WorldImport } | { error: string };
 
 // The one door a stranger's file comes through.
 //
@@ -313,10 +315,18 @@ export function readBundle(text: string): BundleRead {
   } catch {
     return { error: "That file is not JSON." };
   }
-  // A world from WorldForge arrives as its own export; it becomes a bundle
-  // here and is checked as one (src/lib/workshop/worldforge.ts).
+  // A world from WorldForge arrives as its own export. The bundle is only
+  // the new workshop's name and premise; the world itself goes in through
+  // WorldForge's own importer once the workshop exists
+  // (src/lib/db/world-forge-io.ts), so nothing of it is flattened.
+  let worldForge: WorldImport | undefined;
   if (isWorldForgeExport(parsed)) {
-    parsed = worldForgeToBundle(parsed);
+    const world = readWorldForge(parsed);
+    if ("error" in world) {
+      return world;
+    }
+    worldForge = world;
+    parsed = worldForgeShell(world);
   }
   const record = (parsed ?? {}) as Record<string, unknown>;
   // Two specific misses get their own sentence, because "invalid bundle" is
@@ -339,7 +349,26 @@ export function readBundle(text: string): BundleRead {
         : "That bundle is malformed.",
     };
   }
-  return { bundle: result.data };
+  return worldForge ? { bundle: result.data, worldForge } : { bundle: result.data };
+}
+
+function worldForgeShell(world: WorldImport): Record<string, unknown> {
+  const count = (shelf: string) => world.records.filter((record) => record.shelf === shelf).length;
+  const counts = `${count("npc")} characters, ${count("location")} places, ${count("faction")} factions, ${count("lore")} more entries`;
+  return {
+    kind: WORKSHOP_BUNDLE_KIND,
+    version: WORKSHOP_BUNDLE_VERSION,
+    manifest: {
+      name: world.worldName,
+      blurb: (world.premise || `A world from WorldForge: ${counts}.`).slice(0, 200),
+      version: "1.0.0",
+      author: "",
+      homepage: "",
+      inspiredBy: `A world written in WorldForge (${counts})`.slice(0, 200),
+      rightsHolder: "",
+    },
+    premise: world.premise,
+  };
 }
 
 // Arrows are stored as indexes, so an edge past the end of the board is

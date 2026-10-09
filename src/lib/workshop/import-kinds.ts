@@ -16,6 +16,10 @@ export const IMPORT_KINDS = [
   "npcs",
   "maps",
   "storyboard",
+  // The workshop's WorldForge (src/lib/worldforge/model.ts): the links,
+  // calendars, timeline, secrets, folders and atlas laid over the records
+  // above. One document, so singular.
+  "world",
   "houseRules",
 ] as const;
 export type ImportKind = (typeof IMPORT_KINDS)[number];
@@ -29,6 +33,7 @@ export const IMPORT_KIND_LABELS: Record<ImportKind, string> = {
   npcs: "NPCs",
   maps: "Battle maps",
   storyboard: "The storyboard",
+  world: "WorldForge: links, timeline, secrets and atlas",
   houseRules: "House rules and variant rules",
 };
 
@@ -43,6 +48,7 @@ export const SINGULAR_KINDS: ReadonlySet<ImportKind> = new Set([
   // (src/lib/workshop/board-compile.ts). One row in, many rows out, which
   // makes it singular for planning purposes even though it creates plenty.
   "storyboard",
+  "world",
 ]);
 
 // Only encounter rows carry `monsters`: the roster's monster references, so

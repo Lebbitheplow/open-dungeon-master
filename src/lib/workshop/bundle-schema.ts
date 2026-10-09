@@ -314,6 +314,16 @@ export const workshopBundleSchema = z.object({
   // than as a folder of lore somebody has to re-key. Null in bundles from
   // builds before the creator existed.
   plugin: worldPackDraftSchema.nullable().default(null),
+  // The workshop's WorldForge (src/lib/db/world-forge-bundle.ts): its
+  // document with refs as row positions, read through the model's floors on
+  // import, and the atlas's pictures. Null in bundles from earlier builds.
+  world: z
+    .object({
+      doc: z.record(z.string(), z.unknown()),
+      images: z.record(z.string().max(80), bundleImageSchema).refine((images) => Object.keys(images).length <= 100).default({}),
+    })
+    .nullable()
+    .default(null),
   overworld: overworldSchema.nullable().default(null),
   // A chapter's shared workshop, by name, when the chapter draws on one
   // (#159). The rows its cards pick from it ride along marked `shared`, so

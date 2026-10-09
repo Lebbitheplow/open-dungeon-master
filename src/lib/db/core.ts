@@ -650,6 +650,17 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_workshop_beats_campaign
       ON workshop_beats(campaign_id, created_at);
 
+    -- WorldForge's half of a world (src/lib/worldforge/model.ts): types and
+    -- their fields, links, calendars, events, secrets, folders, the atlas,
+    -- and what each Cast member, place, faction and lore entry carries that
+    -- its own row has no column for. One document per workshop; the records
+    -- themselves stay in their own tables. Copied into a campaign with them.
+    CREATE TABLE IF NOT EXISTS world_forge (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id) ON DELETE CASCADE,
+      doc_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL
+    );
+
     -- The world pack a workshop is writing (src/lib/worlds/draft.ts), one
     -- per workshop, as the draft JSON with its art inline the way a manifest
     -- carries it. Cascades with the workshop.

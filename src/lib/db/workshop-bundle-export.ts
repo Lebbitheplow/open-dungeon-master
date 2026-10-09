@@ -9,6 +9,7 @@ import { listHomebrew } from "@/lib/db/homebrew";
 import { getPackDraft, hasPackDraft } from "@/lib/db/world-pack-drafts";
 import { bundleRefOf, type OriginKind } from "@/lib/db/content-origins";
 import { getCommonWorkshop } from "@/lib/db/workshop-common";
+import { worldForBundle } from "@/lib/db/world-forge-bundle";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { normalizeMapSkin } from "@/lib/battlemap/skins";
@@ -115,6 +116,10 @@ function linkable(sql: string, own: string, sharedIds: string[], common: string 
 // this makes somebody decide.
 const IDENTITY = { id: "a fresh id on import", campaign_id: "the new workshop", created_at: "now", updated_at: "now" };
 export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<string, string> }> = {
+  world_forge: {
+    carried: ["doc_json"],
+    left: { campaign_id: "the new workshop", updated_at: "now" },
+  },
   prepared_maps: {
     carried: ["name", "notes", "tags_json", "width", "height", "terrain", "ambient", "theme", "lights_json", "seed", "backdrop_path", "backdrop_transform_json", "outdoors", "drawings_json", "skin_json", "labels_json", "props_json", "doors_json", "zones_json", "overlay_path", "ambience_json"],
     left: { ...IDENTITY },
@@ -243,6 +248,16 @@ export function exportWorkshopBundle(
   const at = (index: Map<string, number>, id: unknown) =>
     typeof id === "string" ? index.get(id) ?? null : null;
 
+  const loreRows = allRows(
+    `SELECT id, category, title, body, tags_json, pinned, visibility, image_path, style FROM lore_entries WHERE campaign_id = ? ORDER BY created_at, rowid`,
+    workshopId,
+  );
+  const factionRows = allRows(
+    `SELECT id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    workshopId,
+  );
+  const ownIds = (rows: Array<Row & { home?: string }>) => rows.map((row) => (row.home === undefined || row.home === workshopId ? str(row.id) : ""));
+
   const bundle: WorkshopBundle = {
     kind: WORKSHOP_BUNDLE_KIND,
     version: WORKSHOP_BUNDLE_VERSION,
@@ -253,10 +268,7 @@ export function exportWorkshopBundle(
     targetParty: normalizeTargetParty(campaign.gameSettings.targetParty),
     houseRulesText: getHouseRulesText(workshopId),
     variantRules: { ...campaign.gameSettings.variantRules },
-    lore: allRows(
-      `SELECT category, title, body, tags_json, pinned, visibility, image_path, style FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
-      workshopId,
-    ).map((row) => ({
+    lore: loreRows.map((row) => ({
       category: str(row.category, "other"),
       title: str(row.title),
       body: str(row.body),
@@ -296,10 +308,7 @@ export function exportWorkshopBundle(
       ref: refFor(row.home, "npcs", str(row.id)),
       shared: row.home !== workshopId,
     })),
-    factions: allRows(
-      `SELECT id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-      workshopId,
-    ).map((row) => ({
+    factions: factionRows.map((row) => ({
       name: str(row.name),
       blurb: str(row.blurb),
       goal: str(row.goal),
@@ -415,6 +424,11 @@ export function exportWorkshopBundle(
     // The world pack draft travels whole, art and all; it is the one thing
     // in a workshop that was built to be handed on.
     plugin: hasPackDraft(workshopId) ? getPackDraft(workshopId).draft : null,
+    world: worldForBundle(
+      workshopId,
+      { npc: ownIds(npcRows), location: ownIds(locationRows), faction: ownIds(factionRows), lore: ownIds(loreRows) },
+      (image) => loadImage(image, budget),
+    ),
     overworld: null,
     dependsOn: common ? { name: common.title.slice(0, 80) } : null,
   };

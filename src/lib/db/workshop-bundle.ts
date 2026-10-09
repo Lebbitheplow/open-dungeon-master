@@ -28,6 +28,7 @@ import {
   type WorkshopBundle,
 } from "@/lib/workshop/bundle";
 import { removeUnreferencedFiles } from "@/lib/image-files";
+import { worldFromBundle } from "@/lib/db/world-forge-bundle";
 import { admitUpload, type UploadRefusal } from "@/lib/upload-budget";
 
 export { exportWorkshopBundle, type ExportResult } from "@/lib/db/workshop-bundle-export";
@@ -110,6 +111,7 @@ export function importWorkshopBundle(
     lore: bundle.lore.map((entry) => decodeBundleImage(entry.image)),
     factions: bundle.factions.map((faction) => decodeBundleImage(faction.portrait)),
     region: [bundle.overworld ? decodeBundleImage(bundle.overworld.backdrop) : null],
+    world: Object.values(bundle.world?.images ?? {}).map((image) => decodeBundleImage(image)),
   };
   const images = Object.values(art)
     .flat()
@@ -207,7 +209,7 @@ function writeBundleRows(
     }
   };
   // Index -> the id that index became, per kind.
-  const ids = { maps: [] as string[], locations: [] as string[], npcs: [] as string[], encounters: [] as string[] };
+  const ids = { maps: [] as string[], locations: [] as string[], npcs: [] as string[], encounters: [] as string[], lore: [] as string[], factions: [] as string[] };
   const idAt = (list: string[], index: number | null | undefined): string | null => {
     if (index === null || index === undefined) {
       return null;
@@ -221,11 +223,12 @@ function writeBundleRows(
 
   db.transaction(() => {
     bundle.lore.forEach((entry, index) => {
+      ids.lore.push(crypto.randomUUID());
       db.prepare(
         `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, style, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        ids.lore[index],
         workshop.id,
         entry.category,
         entry.title,
@@ -360,6 +363,7 @@ function writeBundleRows(
         `INSERT INTO factions (id, campaign_id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(factionId, workshop.id, faction.name, faction.blurb, faction.goal, faction.attitude, faction.power, JSON.stringify(faction.tags), factionPortraits[index], now, now);
+      ids.factions.push(factionId);
       for (const member of faction.members) {
         db.prepare(`UPDATE npcs SET faction_id = ? WHERE campaign_id = ? AND name = ? COLLATE NOCASE`).run(factionId, workshop.id, member);
       }
@@ -482,6 +486,9 @@ function writeBundleRows(
   }
 
   copied += writeBundleShelf(userId, workshop.id, bundle);
+  if (bundle.world) {
+    copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore });
+  }
 
   return { workshopId: workshop.id, copied, linkedShared, droppedLinks };
 }

@@ -12,7 +12,8 @@ import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES, type BundleDependency } from "@/l
 import { navigateTo } from "@/lib/navigation";
 
 // Opening somebody else's workshop, or a world from WorldForge: its JSON
-// export opens the same way (src/lib/workshop/worldforge.ts).
+// export opens the same way, its world landing in the new workshop's
+// WorldForge (src/lib/db/world-forge-io.ts).
 //
 // Two steps on purpose. The preview reads the file and validates it without
 // writing anything, so what a DM agrees to is a named thing with counts and

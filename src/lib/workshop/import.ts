@@ -151,6 +151,21 @@ export function planImport(input: PlanInput): ImportPlan {
       continue;
     }
 
+    if (kind === "world") {
+      // WorldForge describes the records; a link, a secret or a pin whose
+      // record stays behind is dropped rather than left pointing at the
+      // workshop's row.
+      const records = (["npcs", "locations", "lore"] as const).filter((other) => !selected.has(other) && (input.source[other] ?? []).length);
+      if (records.length) {
+        notes.push({
+          kind,
+          message: `WorldForge's links, secrets and pins for ${records.map((other) => IMPORT_KIND_LABELS[other].toLowerCase()).join(" and ")} stay behind with them.`,
+        });
+      }
+      items.push({ kind, sourceId: rows[0].id, name: rows[0].name, finalName: rows[0].name, renamed: false });
+      continue;
+    }
+
     if (kind === "overworld") {
       if (input.existing.overworld.length) {
         warnings.push({
