@@ -14,6 +14,8 @@ import { listAssignmentsForCharacter } from "@/lib/db/characters";
 import { harnessMcpUrl } from "@/lib/harness/bridge";
 import { grantSessionToken, grantUser, type AgentScope, type ConnectionGrant } from "@/lib/agents/grants";
 import type { McpToolDefinition } from "@/lib/harness/types";
+import { createHash } from "node:crypto";
+import { createPlayerWebhook, deletePlayerWebhook, listPlayerWebhooks, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } from "./webhooks";
 
 // Claude Code drops tool results over roughly 25K tokens; staying well under
 // it keeps a big campaign snapshot readable rather than silently lost.
@@ -38,6 +40,10 @@ type WorkbenchTool = {
 };
 
 const campaignIdProp = { campaignId: { type: "string", description: "The campaign's id (from odm_list_campaigns)." } };
+const webhookGuardProps = {
+  subscriptionId: { type: "string", description: "For webhook-driven play: your subscription id. Supply together with opportunityId to prevent duplicate/stale submissions." },
+  opportunityId: { type: "string", description: "The current opportunity from odm_get_player_webhook_opportunities. At most one submission per tool per opportunity; identical retries return the saved result." },
+};
 
 function pick(args: Args, keys: string[]): Args {
   const out: Args = {};
@@ -137,6 +143,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Dungeon Master answers in the campaign.",
     properties: {
       ...campaignIdProp,
+      ...webhookGuardProps,
       content: { type: "string", maxLength: 2000 },
       kind: { type: "string", enum: ["do", "say", "ooc"] },
     },
@@ -166,6 +173,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Enter the dice you rolled at the table for a roll the Dungeon Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'.",
     properties: {
       ...campaignIdProp,
+      ...webhookGuardProps,
       pendingRollId: { type: "string" },
       dice: { type: "array", items: { type: "integer", minimum: 1, maximum: 100 } },
       fallback: { type: "string", enum: ["digital"] },
@@ -179,7 +187,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     name: "odm_end_turn",
     scope: "play",
     description: "End your character's turn in combat.",
-    properties: campaignIdProp,
+    properties: { ...campaignIdProp, ...webhookGuardProps },
     required: ["campaignId"],
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/encounter/end-turn`,
@@ -294,9 +302,30 @@ const WHOAMI: McpToolDefinition = {
   inputSchema: { type: "object", properties: {} },
 };
 
+const WEBHOOK_TOOLS: McpToolDefinition[] = [
+  {
+    name: "odm_get_player_webhook_opportunities", description: "Read the current legal opportunities and lifecycle for one of your webhooks. Check this and the campaign before each webhook-driven write. Old deliveries can be stale.",
+    inputSchema: { type: "object", properties: { subscriptionId: { type: "string" } }, required: ["subscriptionId"], additionalProperties: false },
+  },
+  {
+    name: "odm_subscribe_player_webhook",
+    description: "Send signed decision notifications for your active character to an operator-approved HTTPS receiver. Requires read and play. Returns a signingSecret once; save it privately in the receiver, never in chat. A receiver adapter must wake your agent; MCP alone does not. Read current campaign state before acting.",
+    inputSchema: { type: "object", properties: { ...campaignIdProp, characterId: { type: "string", description: "The active campaign sheet id, not the library id." }, url: { type: "string" } }, required: ["campaignId", "characterId", "url"], additionalProperties: false },
+  },
+  {
+    name: "odm_list_player_webhooks", description: "List this connection's webhook subscriptions and pending/failed delivery counts. Signing secrets are never listed.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "odm_unsubscribe_player_webhook", description: "Remove one of this connection's webhooks and its delivery history. Play also stops when the connection is revoked, expires, or its active character changes.",
+    inputSchema: { type: "object", properties: { subscriptionId: { type: "string" } }, required: ["subscriptionId"], additionalProperties: false },
+  },
+];
+
 export function workbenchTools(grant: ConnectionGrant): McpToolDefinition[] {
   return [
     WHOAMI,
+    ...(grant.scopes.includes("read") && grant.scopes.includes("play") ? WEBHOOK_TOOLS : []),
     ...WORKBENCH_TOOLS.filter((tool) => grant.scopes.includes(tool.scope)).map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -322,6 +351,19 @@ function seatedAt(userId: string, campaignId: string, characterId: string): bool
 export type WorkbenchOutcome ={ text: string; isError: boolean; campaignId?: string };
 
 export async function workbenchCall(grant: ConnectionGrant, name: string, args: Args): Promise<WorkbenchOutcome> {
+  if (WEBHOOK_TOOLS.some((tool) => tool.name === name)) {
+    if (!grant.scopes.includes("read") || !grant.scopes.includes("play")) return { text: "Webhooks need read and play scopes.", isError: true };
+    try {
+      if (name === "odm_subscribe_player_webhook") {
+        if (typeof args.campaignId !== "string" || typeof args.characterId !== "string" || typeof args.url !== "string") throw new Error("Supply campaignId, characterId and url.");
+        return { text: JSON.stringify(createPlayerWebhook(grant, { campaignId: args.campaignId, characterId: args.characterId, url: args.url })), isError: false, campaignId: args.campaignId };
+      }
+      if (name === "odm_list_player_webhooks") return { text: JSON.stringify({ subscriptions: listPlayerWebhooks(grant.id) }), isError: false };
+      if (typeof args.subscriptionId !== "string") throw new Error("Supply subscriptionId.");
+      if (name === "odm_get_player_webhook_opportunities") return { text: JSON.stringify(playerWebhookState(grant, args.subscriptionId)), isError: false };
+      return { text: JSON.stringify({ removed: deletePlayerWebhook(grant.id, args.subscriptionId) }), isError: false };
+    } catch (error) { return { text: error instanceof Error ? error.message : "Webhook request failed.", isError: true }; }
+  }
   if (name === "odm_whoami") {
     const user = grantUser(grant);
     return {
@@ -374,6 +416,17 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
     return { text: error instanceof Error ? error.message : "Bad arguments.", isError: true, campaignId };
   }
   const body = tool.body?.(args);
+  let guarded = false;
+  if (["odm_take_action", "odm_answer_roll", "odm_end_turn"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
+    try {
+      if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
+      const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,
+        campaignId, tool: name, pendingRollId: typeof args.pendingRollId === "string" ? args.pendingRollId : undefined,
+        fingerprint: createHash("sha256").update(JSON.stringify([path, body])).digest("hex") });
+      if (cached) return cached;
+      guarded = true;
+    } catch (error) { return { text: error instanceof Error ? error.message : "Submission refused.", isError: true, campaignId }; }
+  }
   let response: Response;
   try {
     response = await fetch(`${serverOrigin()}${path}`, {
@@ -420,8 +473,9 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   if (text.length > MAX_RESULT_CHARS) {
     text = `${text.slice(0, MAX_RESULT_CHARS)}\n[truncated: ${text.length - MAX_RESULT_CHARS} more characters]`;
   }
-  if (!response.ok) {
-    return { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId };
-  }
-  return { text: text || "{}", isError: false, campaignId };
+  const result = !response.ok
+    ? { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId }
+    : { text: text || "{}", isError: false, campaignId };
+  if (guarded) finishWebhookWrite(args.subscriptionId as string, args.opportunityId as string, name, result);
+  return result;
 }

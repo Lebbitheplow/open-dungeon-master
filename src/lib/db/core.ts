@@ -2128,6 +2128,38 @@ function ensureSchema(db: SqliteDatabase) {
     );
     CREATE INDEX IF NOT EXISTS idx_agent_grants_user ON agent_grants(user_id);
 
+    CREATE TABLE IF NOT EXISTS player_webhooks (
+      id TEXT PRIMARY KEY,
+      grant_id TEXT NOT NULL REFERENCES agent_grants(id) ON DELETE CASCADE,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL,
+      url TEXT NOT NULL,
+      secret TEXT NOT NULL,
+      lifecycle TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE (campaign_id, character_id)
+    );
+    CREATE TABLE IF NOT EXISTS player_webhook_deliveries (
+      id TEXT PRIMARY KEY,
+      subscription_id TEXT NOT NULL REFERENCES player_webhooks(id) ON DELETE CASCADE,
+      opportunity_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'delivered', 'failed', 'cancelled')),
+      attempts INTEGER NOT NULL,
+      available_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (subscription_id, opportunity_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_player_webhook_due ON player_webhook_deliveries(state, available_at);
+    CREATE TABLE IF NOT EXISTS player_webhook_writes (
+      subscription_id TEXT NOT NULL REFERENCES player_webhooks(id) ON DELETE CASCADE,
+      opportunity_id TEXT NOT NULL,
+      tool TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      result TEXT,
+      PRIMARY KEY (subscription_id, opportunity_id, tool)
+    );
+
     -- Every call an agent made, from either door: a program narrating a turn
     -- (grant_kind 'turn') or a player's connected session ('connection').
     -- Pruned to the newest 5000 rows.
