@@ -168,6 +168,21 @@ export function listRecentMessages(campaignId: string, limit = 100): CampaignMes
   return rows.map(mapMessage);
 }
 
+// A page of transcript ending just before `beforeSeq` (the newest page when
+// null), ascending, and whether anything older is left to page to.
+export function listMessagesBefore(
+  campaignId: string,
+  beforeSeq: number | null,
+  limit: number,
+): { messages: CampaignMessage[]; hasOlder: boolean } {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT * FROM campaign_messages WHERE campaign_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?`,
+    )
+    .all(campaignId, beforeSeq ?? Number.MAX_SAFE_INTEGER, limit + 1) as MessageRow[];
+  return { messages: rows.slice(0, limit).reverse().map(mapMessage), hasOlder: rows.length > limit };
+}
+
 export function listAllMessages(campaignId: string): CampaignMessage[] {
   const rows = getDatabase()
     .prepare(`SELECT * FROM campaign_messages WHERE campaign_id = ? ORDER BY seq ASC`)
