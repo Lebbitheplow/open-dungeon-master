@@ -27,6 +27,7 @@ import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -140,7 +141,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
       continue;
     }
     seen.add(tag);
-    const resolved = spellMechanicsFor({ spell: entry.spell });
+    const resolved = spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) });
     const hurt = resolved?.mech.condition?.turnStart;
     const caster = getSheetById(entry.source);
     if (!hurt || !resolved?.mech.save || !caster) {
@@ -185,7 +186,7 @@ function heroism(campaign: Campaign, sheet: CharacterSheet) {
   let best = 0;
   for (const condition of sheet.conditions) {
     const entry = meta[condition];
-    const resolved = entry?.spell ? spellMechanicsFor({ spell: entry.spell }) : null;
+    const resolved = entry?.spell ? spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) }) : null;
     if (!resolved?.mech.buff?.tempHpEachTurn || !entry?.source) {
       continue;
     }
@@ -263,7 +264,7 @@ function regenerate(campaign: Campaign, sheet: CharacterSheet) {
   if (!sheet.conditions.includes("regenerating") || !entry?.spell || sheet.currentHp <= 0) {
     return;
   }
-  const each = spellMechanicsFor({ spell: entry.spell })?.mech.regainEachTurn ?? 0;
+  const each = spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) })?.mech.regainEachTurn ?? 0;
   const currentHp = Math.min(effectiveMaxHp(sheet), sheet.currentHp + each);
   if (currentHp > sheet.currentHp) {
     const updated = patchSheet(sheet.id, { currentHp });

@@ -108,7 +108,18 @@ export function draftFindings(draft: HomebrewDraft, variantRules: Partial<Varian
 // builder reads too; nothing is renamed on the way in.
 export function draftFromCatalog(
   kind: EditorKind,
-  entry: { name: string; data: Data; level?: number; school?: string; rarity?: string; cost?: string; kind?: string },
+  entry: {
+    name: string;
+    data: Data;
+    level?: number;
+    school?: string;
+    rarity?: string;
+    cost?: string;
+    kind?: string;
+    // What the engine runs for the published row (catalog-mechanics.ts).
+    mech?: Data;
+    gear?: Data;
+  },
   extra: { classSlug?: string } = {},
 ): HomebrewDraft {
   const data = entry.data;
@@ -131,6 +142,9 @@ export function draftFromCatalog(
           range: String(data.range ?? "60 feet"),
           components: String(data.components ?? "V, S"),
           duration: String(data.duration ?? "Instantaneous"),
+          // The block the engine casts the published spell with, so the copy
+          // resolves the same way until the DM changes it.
+          ...(entry.mech ? { mech: entry.mech } : data.mech ? { mech: data.mech } : {}),
         },
       };
     case "item":

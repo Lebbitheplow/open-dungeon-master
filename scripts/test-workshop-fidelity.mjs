@@ -13,6 +13,11 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { getContentDb } = await import("../src/lib/content/db.ts");
 const { parseMonster } = await import("../src/lib/bestiary/statblock.ts");
 const { draftFromData, draftFromStats, draftToData } = await import("../src/lib/bestiary/monster-draft.ts");
+const { spellMechanicsFor } = await import("../src/lib/content/index.ts");
+const { MECH_OVERRIDES } = await import("../src/lib/srd/spell-mechanics.ts");
+const { normalizeHomebrewData, normalizeSpellMech } = await import("../src/lib/homebrew/gear.ts");
+const { draftFromCatalog } = await import("../src/app/workshop/homebrew/draft.ts");
+const { withMechanics } = await import("../src/lib/workshop/catalog-mechanics.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -119,6 +124,50 @@ test("an attack's bonus is the one its line prints, where the pack's field mispr
       assert.equal(bonus(name, attack), want, `${name} ${attack}`);
     }
   }
+});
+
+// ---- spells ----
+
+// The SRD's spells as the "start from" picker hands them over: the row and,
+// with mechanics=1, the block the engine casts the published spell with.
+function spellRows() {
+  if (db) {
+    return db
+      .prepare("SELECT name, level, school, data_json FROM spells WHERE document_slug = 'wotc-srd'")
+      .all()
+      .map((row) => ({ name: row.name, level: row.level, school: row.school, source: "open5e", data: JSON.parse(row.data_json) }));
+  }
+  // No pack: the spells the overrides answer for, with only a description.
+  return Object.keys(MECH_OVERRIDES).map((key) => ({
+    name: key.replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    level: 1,
+    school: "evocation",
+    source: "open5e",
+    data: { desc: `The ${key} spell.` },
+  }));
+}
+
+test("every SRD spell copied into the workshop casts with the block the published spell casts with", () => {
+  const changed = [];
+  let blocks = 0;
+  for (const row of withMechanics("spells", spellRows())) {
+    const published = spellMechanicsFor({ spell: row.name })?.mech ?? null;
+    const draft = draftFromCatalog("spell", row);
+    const stored = normalizeHomebrewData("spell", JSON.parse(JSON.stringify(draft.data)), `${row.name} (copy)`);
+    if ("error" in stored) {
+      changed.push(`${row.name}: refused, ${stored.error}`);
+      continue;
+    }
+    const kept = normalizeSpellMech(stored.data.mech);
+    if (published) {
+      blocks += 1;
+      if (comparable(kept) !== comparable(published)) {
+        changed.push(row.name);
+      }
+    }
+  }
+  assert.ok(blocks >= (db ? 200 : 20), `only ${blocks} spells had a block`);
+  assert.deepEqual(changed, [], `a copy does not cast like the published spell: ${changed.join(", ")}`);
 });
 
 console.log(`test-workshop-fidelity: ${passed} passed${db ? "" : " (fixture rows, no content pack)"}`);

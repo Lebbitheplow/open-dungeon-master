@@ -3,6 +3,7 @@ import type { SrdArmor } from "@/lib/srd/armor";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
+import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 
 // What a homebrew entry means to the engine.
@@ -321,47 +322,15 @@ export function gearFromHomebrewData(name: string, data: unknown): HomebrewGear 
 
 // ---- spells ----
 
-const RESOLUTIONS = ["attack", "save", "auto", "heal", "buff", "summon", "utility"] as const;
-
+// The whole block (src/lib/homebrew/spell-mech-schema.ts), or null when
+// there is none or it does not hold together. Stored rows were checked when
+// they were written, so a read only ever drops a row nothing could run.
 export function normalizeSpellMech(raw: unknown): SpellMech | null {
-  const source = (raw ?? {}) as Raw;
-  if (!RESOLUTIONS.includes(source.resolution as (typeof RESOLUTIONS)[number])) {
+  if (!raw || typeof raw !== "object") {
     return null;
   }
-  const mech: SpellMech = { resolution: source.resolution as SpellMech["resolution"] };
-  if (ABILITIES.includes(source.save as (typeof ABILITIES)[number])) {
-    mech.save = source.save as SpellMech["save"];
-  }
-  if (source.halfOnSave === true) {
-    mech.halfOnSave = true;
-  }
-  const damageType = text(source.damageType, 30).toLowerCase();
-  if (damageType) {
-    mech.damageType = damageType;
-  }
-  const condition = source.condition as Raw | undefined;
-  const conditionName = text(condition?.name, 40);
-  if (conditionName) {
-    mech.condition = {
-      name: conditionName.toLowerCase(),
-      ...(num(condition?.rounds) !== null ? { rounds: clamp(condition?.rounds, 1, 6000, 10) } : {}),
-      ...(condition?.saveEnds === true ? { saveEnds: true } : {}),
-    };
-  }
-  const buff = source.buff as Raw | undefined;
-  const buffName = text(buff?.condition, 40);
-  if (buffName) {
-    mech.buff = {
-      condition: buffName.toLowerCase(),
-      target: oneOf(buff?.target, ["self", "ally", "allies"] as const, "self"),
-      rounds: clamp(buff?.rounds, 1, 6000, 10),
-    };
-  }
-  const note = text(source.note, 200);
-  if (note) {
-    mech.note = note;
-  }
-  return mech;
+  const checked = checkSpellMech(raw);
+  return "mech" in checked ? checked.mech : null;
 }
 
 export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
@@ -384,12 +353,16 @@ export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
   if (!data.desc) {
     return { error: "A spell needs a description; the engine reads its damage and save out of it." };
   }
-  const mech = normalizeSpellMech(source.mech);
-  if (mech) {
-    if (mech.resolution === "save" && !mech.save) {
+  const block = source.mech as Raw | undefined;
+  if (block && typeof block === "object" && block.resolution) {
+    const checked = checkSpellMech(block);
+    if ("error" in checked) {
+      return checked;
+    }
+    if (checked.mech.resolution === "save" && !checked.mech.save) {
       return { error: "A spell that calls for a save has to say which ability saves." };
     }
-    data.mech = mech;
+    data.mech = checked.mech;
   }
   return { data };
 }

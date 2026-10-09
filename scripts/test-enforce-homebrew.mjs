@@ -129,10 +129,11 @@ await test("a homebrew spell is of level 0 to 9 and says how it resolves", async
     mech: { resolution: "save", save: "dex", halfOnSave: true, condition: { name: "Slowed", rounds: 999999 } },
   });
   assert.equal(kept.status, 201, JSON.stringify(kept.json));
-  // Keys the normalizer does not know are dropped, and a duration is bounded.
+  // Keys the normalizer does not know are dropped, and a duration is
+  // bounded: ten days of rounds, past the SRD's longest timed effect.
   assert.equal(kept.json.entry.data.damage, undefined);
   assert.equal(kept.json.entry.data.slots, undefined);
-  assert.equal(kept.json.entry.data.mech.condition.rounds, 6000);
+  assert.equal(kept.json.entry.data.mech.condition.rounds, 144000);
 });
 
 await test("a player's homebrew cannot rewrite a published spell's level", async () => {

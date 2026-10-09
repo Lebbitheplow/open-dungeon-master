@@ -1,6 +1,7 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { catalogPrices } from "@/lib/characters/catalog";
 import { contentPackInstalled } from "@/lib/content/db";
+import { withMechanics } from "@/lib/workshop/catalog-mechanics";
 import {
   listArchetypes,
   listBackgrounds,
@@ -108,5 +109,9 @@ export async function GET(
       return Response.json({ error: "Unknown content kind." }, { status: 404 });
   }
 
+  // The workshop's "start from" asks for what the engine runs, too.
+  if (url.searchParams.get("mechanics") === "1") {
+    results = withMechanics(kind, results);
+  }
   return Response.json({ results, packInstalled: contentPackInstalled() });
 }

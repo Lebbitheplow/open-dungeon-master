@@ -37,7 +37,9 @@ export function CatalogStart({
   scope?: Record<string, string>;
 }) {
   const [classSlug, setClassSlug] = useState<string>("fighter");
-  const extra: Record<string, string> = kind === "archetype" ? { class: classSlug } : { ...scope };
+  // mechanics=1: the row comes with what the engine runs for it, so the copy
+  // starts with that and not only the words (catalog-mechanics.ts).
+  const extra: Record<string, string> = kind === "archetype" ? { class: classSlug, mechanics: "1" } : { ...scope, mechanics: "1" };
   const { query, setQuery, results, open, setOpen, loading, unavailable } = useContentSearch(
     CONTENT_KIND[kind],
     extra,

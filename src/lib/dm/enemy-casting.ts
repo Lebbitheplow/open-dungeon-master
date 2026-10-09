@@ -3,6 +3,7 @@ import { getActiveEncounter, saveEncounter, type Encounter, type EncounterEnemy 
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
 import { spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { canEnemyAct } from "@/lib/dm/can-act";
 import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { castingHold } from "@/lib/dm/spell-planes";
@@ -125,8 +126,9 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | { 
         error: `${enemy.displayName} cannot cast ${spellName}: it is not on its stat block.${describe(enemy)} Use one of those, or its attacks.`,
       };
     }
-    const resolved = spellMechanicsFor({ spell: spellName });
-    const facts = spellFactsFor(spellName);
+    const authors = spellAuthorsFor(campaign);
+    const resolved = spellMechanicsFor({ spell: spellName, userIds: authors });
+    const facts = spellFactsFor(spellName, authors);
     const level = listed?.level ?? resolved?.spellLevel ?? facts?.level ?? 0;
     use.name = resolved?.name ?? facts?.name ?? spellName;
     use.magical = true;
@@ -171,6 +173,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | { 
     }
     const dice = spellDamageFor({
       spell: spellName,
+      userIds: authors,
       casterLevel: casting?.casterLevel ?? Math.max(1, Math.ceil(enemy.cr)),
       ...(slot ? { slotLevel: slot } : {}),
     });

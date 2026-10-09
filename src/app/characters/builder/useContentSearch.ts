@@ -17,6 +17,11 @@ export type PickerEntry = {
   // by the server's own catalog so a pick and its purchase check agree
   // even where the pack files the name twice (src/lib/characters/catalog.ts).
   price?: { copper: number | null; magic: boolean };
+  // What the engine runs for the row, when the search asked for it with
+  // mechanics=1 (src/lib/workshop/catalog-mechanics.ts): a spell's block,
+  // an item's gear.
+  mech?: Record<string, unknown>;
+  gear?: Record<string, unknown>;
 };
 
 
