@@ -131,7 +131,7 @@ for (const genre of GENRES) {
   }
 }
 
-for (const room of ["workshop", "maps", "cast", "bestiary", "encounters", "lore", "storyboard", "tables", "rulesets", "", "nope"]) {
+for (const room of ["workshop", "maps", "cast", "bestiary", "encounters", "lore", "storyboard", "tables", "rulesets", "region", "party", "factions", "homebrew", "plugin", "share", "", "nope"]) {
   check(R.workshopPlaceholder(room), `workshop ${room}`);
 }
 

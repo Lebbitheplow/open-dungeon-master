@@ -3,11 +3,12 @@
 // times. The id is hashed into the plates the workshop's own systems already
 // use (src/app/workshop/[workshopId]/SystemCards.tsx), so nothing new ships
 // and the same workshop always draws the same plate. Pure, so
-// scripts/test-workshop-plates.mjs drives it.
+// scripts/test-palette-fuzzy.mjs drives it.
 
 const BASE = "/assets/placeholders";
 
-// The nine workshop rooms and the four misc tiles the hub's cards borrow.
+// The workshop cover and the fourteen hub systems' plates (rules wears
+// rulesets), all fifteen painted for the workshop.
 export const WORKSHOP_PLATES: readonly string[] = [
   `${BASE}/workshop/workshop.webp`,
   `${BASE}/workshop/maps.webp`,
@@ -18,10 +19,12 @@ export const WORKSHOP_PLATES: readonly string[] = [
   `${BASE}/workshop/storyboard.webp`,
   `${BASE}/workshop/tables.webp`,
   `${BASE}/workshop/rulesets.webp`,
-  `${BASE}/misc/journey.webp`,
-  `${BASE}/misc/treasure.webp`,
-  `${BASE}/misc/party.webp`,
-  `${BASE}/misc/faction.webp`,
+  `${BASE}/workshop/region.webp`,
+  `${BASE}/workshop/party.webp`,
+  `${BASE}/workshop/factions.webp`,
+  `${BASE}/workshop/homebrew.webp`,
+  `${BASE}/workshop/plugin.webp`,
+  `${BASE}/workshop/share.webp`,
 ];
 
 // FNV-1a over the id: small, stable across servers and apps, and spreads

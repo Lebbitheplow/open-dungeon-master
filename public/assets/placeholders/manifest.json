@@ -377,7 +377,13 @@
       "lore",
       "storyboard",
       "tables",
-      "rulesets"
+      "rulesets",
+      "region",
+      "party",
+      "factions",
+      "homebrew",
+      "plugin",
+      "share"
     ],
     "misc": [
       "party",

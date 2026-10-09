@@ -3,7 +3,7 @@
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { miscPlaceholder, workshopPlaceholder } from "@/lib/placeholders";
+import { workshopPlaceholder } from "@/lib/placeholders";
 import { Ribbon } from "@/components/ui/Ribbon";
 import {
   WORKSHOP_SYSTEMS,
@@ -17,22 +17,9 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // a glance what is built and what is still empty. Tapping one opens that
 // system.
 
-// Each card's picture. Nine systems have a workshop plate of their own; the
-// region is a journey, the share room is a chest of everything packed, and
-// the plugin is the world's banner.
+// Each card's picture. Every system has a workshop plate of its own; the
+// rules card wears the rulesets plate.
 function systemPlate(id: SystemId): string {
-  if (id === "region") {
-    return miscPlaceholder("journey");
-  }
-  if (id === "share") {
-    return miscPlaceholder("treasure");
-  }
-  if (id === "party") {
-    return miscPlaceholder("party");
-  }
-  if (id === "plugin") {
-    return miscPlaceholder("faction");
-  }
   return workshopPlaceholder(id === "rules" ? "rulesets" : id);
 }
 
