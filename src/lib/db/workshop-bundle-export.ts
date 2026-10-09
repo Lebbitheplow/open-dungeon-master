@@ -24,6 +24,17 @@ import {
 } from "@/lib/workshop/bundle";
 import { isWorkshop, normalizeTargetParty } from "@/lib/workshop/kind";
 
+// A Cast member's stat block as another machine can read it: a published
+// slug as it is, one of the DM's own monsters by its name (resolveMonster
+// finds a table's own monster by name last).
+function portableStatBlock(ref: string): string {
+  if (!ref.startsWith("homebrew:")) {
+    return ref;
+  }
+  const row = getDatabase().prepare(`SELECT name FROM homebrew_entries WHERE id = ?`).get(ref.slice("homebrew:".length)) as { name: string } | undefined;
+  return row?.name ?? "";
+}
+
 // Reading a workshop out to a bundle. Split from src/lib/db/workshop-bundle.ts
 // (the import half, which re-exports this) to keep both under the project's
 // 500-line cap.
@@ -117,7 +128,7 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
     left: { ...IDENTITY, visited: "play", is_current: "play", map_image_json: "a legacy column nothing reads" },
   },
   npcs: {
-    carried: ["name", "attitude", "trait", "location", "role", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id"],
+    carried: ["name", "attitude", "trait", "location", "role", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
     left: {
       ...IDENTITY,
       last_shift_turn: "the source table's clock",
@@ -281,6 +292,7 @@ export function exportWorkshopBundle(
       relations: str(row.relations_json),
       portrait: loadImage(row.portrait_url, budget),
       voice: row.voice_json ? parseJson<Record<string, unknown> | null>(str(row.voice_json), null) : null,
+      statBlock: portableStatBlock(str(row.stat_block)),
       ref: refFor(row.home, "npcs", str(row.id)),
       shared: row.home !== workshopId,
     })),

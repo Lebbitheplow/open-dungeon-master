@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
+import { X } from "lucide-react";
+import { ContentPick } from "@/components/ui/ContentPick";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -172,6 +174,33 @@ export function NpcEditorFields({
             ]}
           />
         ) : null}
+
+        {/* The stat block they fight with: start_encounter with their name
+            brings them in as it, under their own name. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <GameIcon icon={{ kind: "glyph", key: "system-bestiary" }} size="size-7" />
+          <span className="text-xs text-stone-400">Fights as</span>
+          {draft.statBlock ? (
+            <span className="pop-in inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-stone-900/60 py-0.5 pl-2.5 pr-1 text-xs text-stone-200">
+              {draft.statBlock.startsWith("homebrew:") ? "your own stat block" : draft.statBlock.replace(/-/g, " ")}
+              <button
+                type="button"
+                aria-label="Clear the stat block"
+                onClick={() => onChange({ ...draft, statBlock: "" })}
+                className={cn(ui.iconAction, "rounded-full p-1 opacity-100 hover:text-red-300")}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ) : null}
+          <ContentPick
+            kind="monsters"
+            label="Pick the stat block they fight with"
+            placeholder={draft.statBlock ? "Another stat block..." : "Veteran, Bandit Captain, Priest..."}
+            className="min-w-48 flex-1"
+            onPick={(entry) => onChange({ ...draft, statBlock: entry.slug ?? entry.name })}
+          />
+        </div>
 
         {/* Their own read-aloud voice (docs/vtt-parity-implementation-plan.md
             8.2): a voice from the server's speech backend and a pace, previewed here, heard on every

@@ -1985,6 +1985,9 @@ function ensureSchema(db: SqliteDatabase) {
     // The faction they belong to (docs/vtt-parity-implementation-plan.md
     // section 6); '' for none.
     ["faction_id", `TEXT NOT NULL DEFAULT ''`],
+    // The stat block they fight with: a monster reference start_encounter
+    // resolves ("veteran", "homebrew:<id>"); '' for none.
+    ["stat_block", `TEXT NOT NULL DEFAULT ''`],
     // Other spellings this NPC has been called, e.g. ["Marla", "Captain
     // Marla"] on the row named "Marla Venn" (src/lib/dm/entity-logic.ts).
     // Merging records the variant here instead of rewriting campaign_messages:

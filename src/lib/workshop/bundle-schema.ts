@@ -120,6 +120,10 @@ const npcSchema = z.object({
   portrait: bundleImageSchema,
   // Their read-aloud voice, normalised on import (src/lib/npcs/forge.ts).
   voice: z.record(z.string(), z.unknown()).nullable().default(null),
+  // The stat block they fight with: a published monster's slug, or the name
+  // of one of the bundle's own monsters (a "homebrew:" id means nothing on
+  // another machine, so the export writes the name).
+  statBlock: z.string().trim().max(80).default(""),
   ref: refSchema,
   shared: sharedSchema,
 });

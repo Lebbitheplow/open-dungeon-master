@@ -11,6 +11,7 @@ import {
 import { getBattleMapForEncounter, insertToken, listTokens, renameTokenByRef } from "@/lib/db/battle-maps";
 import { d20Expression } from "@/lib/dice";
 import { resolveMonster } from "@/lib/bestiary";
+import { listNpcs } from "@/lib/db/npcs";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { nameArrivals, spliceIntoOrder } from "@/lib/dm/encounter-logic";
@@ -52,11 +53,22 @@ export function resolveEnemyRequests(
   setting: SettingRef,
   requests: EnemyRequest[],
   ownerUserId?: string,
+  // The table, for its Cast: an NPC named here with a stat block fights as
+  // that block, under their own name (src/lib/npcs/forge.ts statBlock).
+  campaignId?: string,
 ): { resolved: ResolvedEnemyRequest[] } | { unknownMonster: string } {
   const resolved: ResolvedEnemyRequest[] = [];
+  const cast = campaignId ? listNpcs(campaignId).filter((npc) => npc.statBlock) : [];
   for (const request of requests) {
     const count = request.count ?? 1;
-    const match = resolveMonster(request.monster, setting, { userId: ownerUserId });
+    const wanted = request.monster.trim().toLowerCase();
+    const npc = cast.find((entry) => entry.name.toLowerCase() === wanted || entry.aliases.some((alias) => alias.toLowerCase() === wanted));
+    const match = npc
+      ? (() => {
+          const block = resolveMonster(npc.statBlock, setting, { userId: ownerUserId });
+          return block ? { ...block, reskinName: npc.name } : null;
+        })()
+      : resolveMonster(request.monster, setting, { userId: ownerUserId });
     if (!match && request.cr === undefined) {
       return { unknownMonster: request.monster };
     }
@@ -162,7 +174,7 @@ export function handleAddEnemies(
       error: 'Invalid add_enemies arguments. Send {"enemies":[{"monster":"goblin","count":2}]}.',
     };
   }
-  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId, campaign.id);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy.`,

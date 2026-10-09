@@ -324,8 +324,8 @@ function writeBundleRows(
         `INSERT INTO npcs
            (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
             aliases_json, personality_json, goals_json, relations_json, bonds_json,
-            pressure_json, arc_cast_id, portrait_url, voice_json, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, ?, 0, ?, ?)`,
+            pressure_json, arc_cast_id, portrait_url, voice_json, stat_block, archived, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, ?, ?, 0, ?, ?)`,
       ).run(
         id,
         workshop.id,
@@ -344,6 +344,7 @@ function writeBundleRows(
         npc.relations || "[]",
         npcPortraits[index],
         voice ? JSON.stringify(voice) : null,
+        npc.statBlock ?? "",
         now,
         now,
       );

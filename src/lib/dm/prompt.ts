@@ -182,6 +182,7 @@ export type DmGameState = {
     agency?: string;
     aliases?: string[];
     witnessNote?: string;
+    statBlock?: string;
   }>;
   // Server-tracked standing between each character and each NPC/companion,
   // one bounded line each (src/lib/dm/relationship-logic.ts).
@@ -834,7 +835,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         .slice(0, 20)
         .map(
           (npc) =>
-            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}`,
+            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}`,
         )
         .join("\n")}`,
     );

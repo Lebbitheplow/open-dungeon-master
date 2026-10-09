@@ -254,7 +254,7 @@ function handleStartEncounter(
   }
 
   // Resolve every requested enemy before creating anything.
-  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId, campaign.id);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,
