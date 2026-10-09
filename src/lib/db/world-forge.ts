@@ -276,10 +276,20 @@ export function createWorldEntity(campaignId: string, input: { typeId?: unknown;
   const type = doc.types.find((entry) => entry.id === input.typeId) ?? doc.types[0];
   const made = createRecord(campaignId, type, input);
   if ("error" in made) return made;
-  const { name: _name, tagline: _tagline, text: _text, ...rest } = input;
-  const failed = writeRecord(campaignId, made.ref, { aliases: rest.aliases, tags: rest.tags, portrait: rest.portrait });
+  const failed = writeRecord(campaignId, made.ref, { aliases: input.aliases, tags: input.tags, portrait: input.portrait });
   if (failed) return failed;
-  doc.entries[made.ref] = nextEntry(doc, made.ref, { ...rest, typeId: type.id });
+  doc.entries[made.ref] = nextEntry(doc, made.ref, {
+    typeId: type.id,
+    folderId: input.folderId,
+    canon: input.canon,
+    article: input.article,
+    hiddenTruth: input.hiddenTruth,
+    notes: input.notes,
+    fields: input.fields,
+    aliases: input.aliases,
+    tags: input.tags,
+    portrait: input.portrait,
+  });
   saveWorldDoc(campaignId, doc);
   return entityOf(campaignId, doc, made.ref);
 }

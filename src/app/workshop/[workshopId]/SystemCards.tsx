@@ -8,8 +8,10 @@ import { Ribbon } from "@/components/ui/Ribbon";
 import {
   WORKSHOP_SYSTEMS,
   systemCount,
+  systemGlyph,
   totalPieces,
   type SystemId,
+  type WorldCount,
 } from "@/app/workshop/[workshopId]/systems";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
@@ -18,8 +20,8 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // system.
 
 // Each card's picture. Nine systems have a workshop plate of their own; the
-// region is a journey, the share room is a chest of everything packed, and
-// the plugin is the world's banner.
+// region is a journey, the share room is a chest of everything packed, the
+// plugin is the world's banner, and WorldForge is the craftsman's bench.
 function systemPlate(id: SystemId): string {
   if (id === "region") {
     return miscPlaceholder("journey");
@@ -33,6 +35,9 @@ function systemPlate(id: SystemId): string {
   if (id === "plugin") {
     return miscPlaceholder("faction");
   }
+  if (id === "world") {
+    return workshopPlaceholder("workshop");
+  }
   return workshopPlaceholder(id === "rules" ? "rulesets" : id);
 }
 
@@ -42,6 +47,7 @@ export function SystemCards({
   homebrew,
   pregens = null,
   plugin = null,
+  world = null,
   onOpen,
 }: {
   workshop: WorkshopSummary;
@@ -49,9 +55,10 @@ export function SystemCards({
   homebrew: number | null;
   pregens?: number | null;
   plugin?: number | null;
+  world?: WorldCount | null;
   onOpen: (system: SystemId) => void;
 }) {
-  const total = totalPieces(workshop, bestiary, homebrew, pregens, plugin);
+  const total = totalPieces(workshop, bestiary, homebrew, pregens, plugin, world);
   return (
     <section className="mt-5">
       <div className="mb-3 flex items-center gap-3">
@@ -62,7 +69,7 @@ export function SystemCards({
       </div>
       <ul className="stagger-up grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="hub-systems">
         {WORKSHOP_SYSTEMS.map((system) => {
-          const count = systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin);
+          const count = systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin, world);
           const empty = count.figure === "0" || count.figure === "none";
           return (
             <li key={system.id}>
@@ -76,7 +83,7 @@ export function SystemCards({
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <GameIcon icon={{ kind: "glyph", key: `system-${system.id}` }} size="size-10" />
+                  <GameIcon icon={systemGlyph(system.id)} size="size-10" />
                   {count.figure !== null ? (
                     <span
                       className={cn(

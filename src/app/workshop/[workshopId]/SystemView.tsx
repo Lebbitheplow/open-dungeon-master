@@ -22,10 +22,14 @@ import { RulesetLibrary } from "@/app/workshop/RulesetLibrary";
 import { HomebrewPanel } from "@/app/workshop/homebrew/HomebrewPanel";
 import { PartyPanel } from "@/app/workshop/party/PartyPanel";
 import { PluginPanel } from "@/app/workshop/plugin/PluginPanel";
+import { WorldForgePanel } from "@/app/workshop/world/WorldForgePanel";
 import {
   WORKSHOP_SYSTEMS,
+  isSystemId,
   systemCount,
+  systemGlyph,
   type SystemId,
+  type WorldCount,
 } from "@/app/workshop/[workshopId]/systems";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
@@ -37,7 +41,7 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // to any of them because a workshop IS a campaigns row and its owner holds
 // the DM seat (docs/workshop-plan.md section 1). Cast and Battle maps opt
 // into their workshop layouts; the other eight render as they always have.
-// Party, Homebrew and Plugin are the workshop's own.
+// Party, Homebrew, Plugin and WorldForge are the workshop's own.
 
 export function SystemView({
   workshop,
@@ -46,6 +50,7 @@ export function SystemView({
   homebrew,
   pregens,
   plugin,
+  world = null,
   onChange,
   onBack,
   onHelp,
@@ -60,6 +65,7 @@ export function SystemView({
   homebrew: number | null;
   pregens: number | null;
   plugin: number | null;
+  world?: WorldCount | null;
   onChange: (system: SystemId) => void;
   onBack: () => void;
   // The guide for this tool and its tour.
@@ -70,9 +76,9 @@ export function SystemView({
   onPluginChanged: (count: number) => void;
 }) {
   const current = WORKSHOP_SYSTEMS.find((entry) => entry.id === system) ?? WORKSHOP_SYSTEMS[0];
-  const count = systemCount(current.id, workshop, bestiary, homebrew, pregens, plugin);
+  const count = systemCount(current.id, workshop, bestiary, homebrew, pregens, plugin, world);
   const items: IconRailItem<SystemId>[] = WORKSHOP_SYSTEMS.map((entry) => {
-    const entryCount = systemCount(entry.id, workshop, bestiary, homebrew, pregens, plugin);
+    const entryCount = systemCount(entry.id, workshop, bestiary, homebrew, pregens, plugin, world);
     return {
       value: entry.id,
       label: entry.label,
@@ -92,7 +98,7 @@ export function SystemView({
         <ArrowLeft className="size-4" /> {workshop.title}
       </button>
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <GameIcon icon={{ kind: "glyph", key: `system-${current.id}` }} size="size-9" />
+        <GameIcon icon={systemGlyph(current.id)} size="size-9" />
         <h2 className="gold-title font-display text-xl tracking-wide">{current.label}</h2>
         <span className="text-sm text-stone-500">{count.phrase}</span>
         <button
@@ -118,6 +124,9 @@ export function SystemView({
 
       {/* Keyed by system so the incoming tool rises in instead of cutting. */}
       <div key={system} className="motion-tab">
+        {system === "world" ? (
+          <WorldForgePanel campaignId={workshop.id} onOpenSystem={(next) => isSystemId(next) && onChange(next)} />
+        ) : null}
         {system === "storyboard" ? (
           <DmStoryboardPanel campaignId={workshop.id} layout="board" />
         ) : null}

@@ -1,5 +1,5 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { patchWorldDoc, worldView } from "@/lib/db/world-forge";
+import { patchWorldDoc, worldCounts, worldView } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -7,11 +7,15 @@ export const dynamic = "force-dynamic";
 
 // The workshop's WorldForge (src/lib/worldforge/model.ts): its document and
 // the records it describes. The DM's alone, hidden truths and all.
-export async function GET(_request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
+// ?counts=1 answers with the hub card's numbers only.
+export async function GET(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
   const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  if (new URL(request.url).searchParams.get("counts")) {
+    return Response.json({ counts: worldCounts(campaignId) });
   }
   return Response.json(worldView(campaignId));
 }

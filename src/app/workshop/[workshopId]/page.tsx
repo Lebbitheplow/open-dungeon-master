@@ -14,6 +14,7 @@ import {
   isSystemId,
   systemCount,
   type SystemId,
+  type WorldCount,
 } from "@/app/workshop/[workshopId]/systems";
 import { workshopCommands } from "@/app/workshop/[workshopId]/palette-commands";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -47,6 +48,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
   const [homebrew, setHomebrew] = useState<number | null>(null);
   const [pregens, setPregens] = useState<number | null>(null);
   const [plugin, setPlugin] = useState<number | null>(null);
+  const [world, setWorld] = useState<WorldCount | null>(null);
   const [loading, setLoading] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   // The tour on screen: the hub's, or a tool's, by id.
@@ -138,6 +140,23 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
     [workshopId],
   );
 
+  // WorldForge counts what it lays over the records: links, events,
+  // secrets and maps, from its own route.
+  const loadWorld = useCallback(
+    () =>
+      fetch(`/api/campaigns/${workshopId}/world?counts=1`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { counts?: WorldCount } | null) => {
+          if (data?.counts) {
+            setWorld(data.counts);
+          }
+        })
+        .catch(() => {
+          // the card simply shows no figure until the next reload
+        }),
+    [workshopId],
+  );
+
   // Refetched whenever the view changes, so a person added inside Cast is
   // counted on the card the moment the DM steps back to the hub.
   useEffect(() => {
@@ -146,7 +165,8 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
     void loadHomebrew();
     void loadPregens();
     void loadPlugin();
-  }, [load, loadBestiary, loadHomebrew, loadPregens, loadPlugin, system]);
+    void loadWorld();
+  }, [load, loadBestiary, loadHomebrew, loadPregens, loadPlugin, loadWorld, system]);
 
   // The once-only tours: the hub's when the workshop first loads, a tool's
   // the first time that tool is opened, after the panel has had a moment to
@@ -274,7 +294,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
               placeholder="Jump to, or create"
               commands={workshopCommands({
                 current: system,
-                phrase: (id) => systemCount(id, workshop, bestiary, homebrew, pregens, plugin).phrase,
+                phrase: (id) => systemCount(id, workshop, bestiary, homebrew, pregens, plugin, world).phrase,
                 onJump: openSystem,
                 onCreate: createIn,
                 onHub: () => router.push(pathname),
@@ -292,6 +312,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
           homebrew={homebrew}
           pregens={pregens}
           plugin={plugin}
+          world={world}
           onChange={openSystem}
           onBack={() => router.push(pathname)}
           onHelp={() => setHelpOpen(true)}
@@ -307,6 +328,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
           homebrew={homebrew}
           pregens={pregens}
           plugin={plugin}
+          world={world}
           onOpen={openSystem}
         />
       )}

@@ -8,8 +8,8 @@ import { admitUpload, type UploadAccount, type UploadRefusal } from "@/lib/uploa
 import { decodeBundleImage, encodeBundleImage, type BundleImage } from "@/lib/workshop/bundle";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { createRecord, getWorldDoc, nextEntry, saveWorldDoc, worldEntities, worldView, writeRecord } from "@/lib/db/world-forge";
-import { readWorldForge, writeWorldForge, type ExportRecord, type WorldImport } from "@/lib/worldforge/format";
-import { LIMITS, newId, parseRef, refOf, remapDoc, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
+import { firstSentence, readWorldForge, writeWorldForge, type ExportRecord, type WorldImport } from "@/lib/worldforge/format";
+import { LIMITS, LINK_LABELS, newId, parseRef, refOf, remapDoc, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
 
 // A WorldForge file into a workshop, and a workshop out as one. Importing
 // into a workshop that already has a world adds to it: a type, a field, a
@@ -178,8 +178,7 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
           beats += 1;
         }
         ids.slice(0, -1).forEach((id, at) => {
-          const { id: _id, ...card } = getBeat(id)!;
-          updateBeat(campaignId, id, { ...card, edges: [ids[at + 1]] });
+          updateBeat(campaignId, id, { ...getBeat(id)!, edges: [ids[at + 1]] });
         });
       }
       return { created, updated, links: newLinks.length, events: mapped.events.length, secrets: mapped.secrets.length, maps: mapped.maps.length, beats, skipped };
@@ -263,4 +262,63 @@ export function copyWorldDoc(sourceId: string, targetId: string, resolve: (shelf
   }
   saveWorldDoc(targetId, target);
   return Object.keys(mapped.entries).length + mapped.links.length + mapped.events.length + mapped.secrets.length;
+}
+
+// What the DM ticked in a forge preview (src/lib/worldforge/forge.ts),
+// written: each new entry made on its type's shelf, the links between the
+// new and the old, and the unticked names kept to write later when asked.
+// Add-only, like WorldForge's forge: nothing that exists is rewritten.
+export function applyForge(
+  campaignId: string,
+  input: { entities: unknown; links: unknown; stubs: unknown },
+): { created: number; links: number; stubs: number; skipped: string[] } {
+  const doc = getWorldDoc(campaignId);
+  const live = new Set(worldEntities(campaignId, doc).map((entity) => entity.ref));
+  const refs = new Map<string, string>();
+  const skipped: string[] = [];
+  const text = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+  for (const raw of (Array.isArray(input.entities) ? input.entities : []).slice(0, 60)) {
+    const row = (raw ?? {}) as Record<string, unknown>;
+    const name = text(row.name, 80);
+    const type = doc.types.find((entry) => entry.id === row.typeId) ?? doc.types[0];
+    const summary = text(row.summary, 2_000);
+    const short = type.shelf === "npc" || type.shelf === "faction";
+    const made = createRecord(campaignId, type, { name, tagline: short ? firstSentence(summary, type.shelf === "npc" ? 200 : 400) : "", text: short ? "" : summary });
+    if ("error" in made) {
+      skipped.push(`${name || "A nameless entry"}: ${made.error}`);
+      continue;
+    }
+    const aliases = Array.isArray(row.aliases) ? row.aliases.map((alias) => text(alias, 80)).filter(Boolean) : [];
+    writeRecord(campaignId, made.ref, { aliases });
+    doc.entries[made.ref] = nextEntry(doc, made.ref, { typeId: type.id, article: short ? summary : "", hiddenTruth: text(row.hiddenTruth, 1_000), aliases });
+    refs.set(text(row.key, 20), made.ref);
+    live.add(made.ref);
+  }
+  const resolve = (value: unknown) => {
+    const key = text(value, 120);
+    return refs.get(key) ?? (live.has(key) ? key : "");
+  };
+  const known = new Set(doc.links.map((link) => `${link.from}|${link.to}|${link.label}`));
+  let linked = 0;
+  for (const raw of (Array.isArray(input.links) ? input.links : []).slice(0, 120)) {
+    const row = (raw ?? {}) as Record<string, unknown>;
+    const from = resolve(row.from);
+    const to = resolve(row.to);
+    const label = (LINK_LABELS as readonly string[]).find((entry) => entry === text(row.label, 40).toLowerCase());
+    if (!from || !to || from === to || !label || known.has(`${from}|${to}|${label}`) || doc.links.length >= LIMITS.links) continue;
+    known.add(`${from}|${to}|${label}`);
+    doc.links.push({ id: newId("l"), from, to, label, veracity: "known", oneway: false, rank: "" });
+    linked += 1;
+  }
+  const names = new Set(doc.stubs.map((stub) => stub.name.toLowerCase()));
+  let stubs = 0;
+  for (const raw of (Array.isArray(input.stubs) ? input.stubs : []).slice(0, 60)) {
+    const name = text(raw, 120);
+    if (!name || names.has(name.toLowerCase()) || doc.stubs.length >= LIMITS.stubs) continue;
+    names.add(name.toLowerCase());
+    doc.stubs.push({ id: newId("stub"), name, note: "", source: "scan", status: "open" });
+    stubs += 1;
+  }
+  saveWorldDoc(campaignId, doc);
+  return { created: refs.size, links: linked, stubs, skipped };
 }

@@ -12,6 +12,7 @@ import { WORKSHOP_SYSTEMS, type SystemId } from "@/app/workshop/[workshopId]/sys
 // button does not.
 
 const GLYPH: Record<SystemId, string> = {
+  world: "system-world",
   storyboard: "system-storyboard",
   party: "system-party",
   maps: "system-maps",
@@ -29,6 +30,7 @@ const GLYPH: Record<SystemId, string> = {
 };
 
 export const SYSTEM_CREATE: Partial<Record<SystemId, { label: string; prepare: string; keywords: string[] }>> = {
+  world: { label: "New world entry", prepare: "open-world-entry", keywords: ["create", "add", "worldforge", "wiki", "entry"] },
   maps: { label: "New battle map", prepare: "open-map-create", keywords: ["create", "add", "map", "room"] },
   encounters: { label: "New encounter", prepare: "open-encounter-editor", keywords: ["create", "add", "fight"] },
   cast: { label: "New NPC", prepare: "open-npc-editor", keywords: ["create", "add", "person", "character"] },
