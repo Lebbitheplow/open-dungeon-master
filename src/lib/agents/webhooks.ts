@@ -17,7 +17,7 @@ const MAX_AGE_MS = 24 * 60 * 60_000;
 
 type Subscription = {
   id: string; grant_id: string; campaign_id: string; character_id: string;
-  url: string; secret: string; lifecycle: string | null;
+  url: string; secret: string; authorization_header: string | null; extra_headers: string | null; lifecycle: string | null;
 };
 type Delivery = {
   id: string; subscription_id: string; opportunity_id: string; body: string;
@@ -28,6 +28,10 @@ export type PlayerWebhookEvent = {
   playerId: string; characterId: string; opportunityId: string;
   type: PlayerOpportunity["type"] | "campaign_paused" | "campaign_resumed" | "campaign_ended";
   seq: number; occurredAt: string; pendingRollId?: string; phase?: "act" | "finish";
+  // A plain-language summary with the IDs a guarded write needs. Hosted
+  // receivers that pass on only a text field (a Claude Code routine reads
+  // just `text`) still tell their agent what woke it.
+  text: string;
 };
 
 // Delivery is on only where the operator allowed at least one receiver
@@ -50,6 +54,61 @@ export function webhookUrl(value: unknown, allowed = process.env.ODM_PLAYER_WEBH
   return url.href;
 }
 
+// Hosted receivers (an agent platform's webhook endpoint) may require their
+// own credential. Only the Authorization header is supported, so a caller
+// cannot set Host, Content-Length or ODM's own headers. Printable ASCII
+// without surrounding spaces is sent exactly as given; CR/LF never are.
+// The value is a secret like the signing secret: stored, sent, never listed
+// back and never included in an error.
+export function webhookAuthorization(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || value.length < 1 || value.length > 1024 ||
+    !/^[\x21-\x7e](?:[\x20-\x7e]*[\x21-\x7e])?$/.test(value)) {
+    throw new Error("authorizationHeader must be 1-1024 printable ASCII characters, without line breaks or surrounding spaces.");
+  }
+  return value;
+}
+
+// Header names a hosted receiver may need besides Authorization, such as
+// Claude's anthropic-version. Never one that changes how the request is
+// framed or routed, a cookie, or ODM's own X-ODM-* headers.
+const MAX_EXTRA_HEADERS = 4;
+const HEADER_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+const RESERVED_HEADERS = new Set([
+  "authorization", "host", "content-length", "content-type", "content-encoding", "transfer-encoding",
+  "connection", "keep-alive", "upgrade", "te", "trailer", "expect", "cookie", "proxy-authorization",
+]);
+const HEADER_VALUE_ERROR = "Each header value must be 1-1024 printable ASCII characters, without line breaks or surrounding spaces.";
+
+// Values are treated like the Authorization value: stored, sent, never
+// listed back and never included in an error.
+export function webhookHeaders(value: unknown): Record<string, string> | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("headers must be an object of header names to values.");
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (!entries.length) return null;
+  if (entries.length > MAX_EXTRA_HEADERS) throw new Error(`At most ${MAX_EXTRA_HEADERS} extra headers.`);
+  const seen = new Set<string>();
+  const out: Record<string, string> = {};
+  for (const [name, raw] of entries) {
+    const lower = name.toLowerCase();
+    if (!HEADER_NAME.test(name) || RESERVED_HEADERS.has(lower) || lower.startsWith("proxy-") || lower.startsWith("x-odm-") || seen.has(lower)) {
+      throw new Error("A header name is not allowed. Use authorizationHeader for Authorization; framing, cookie, proxy and X-ODM-* headers cannot be set.");
+    }
+    seen.add(lower);
+    let checked: string | null;
+    try { checked = webhookAuthorization(raw); } catch { throw new Error(HEADER_VALUE_ERROR); }
+    if (checked === null) throw new Error(HEADER_VALUE_ERROR);
+    out[name] = checked;
+  }
+  return out;
+}
+
+function parseHeaders(json: string | null): Record<string, string> {
+  if (!json) return {};
+  try { return JSON.parse(json) as Record<string, string>; } catch { return {}; }
+}
+
 function maySubscribe(grant: ConnectionGrant, campaignId: string, characterId: string): boolean {
   return grant.scopes.includes("read") && grant.scopes.includes("play") &&
     (!grant.campaignId || grant.campaignId === campaignId) &&
@@ -57,9 +116,11 @@ function maySubscribe(grant: ConnectionGrant, campaignId: string, characterId: s
     getSheetForUser(campaignId, grant.userId)?.id === characterId;
 }
 
-export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId: string; characterId: string; url: string }) {
+export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId: string; characterId: string; url: string; authorizationHeader?: string; headers?: unknown }) {
   if (!maySubscribe(grant, input.campaignId, input.characterId)) throw new Error("Connect with read and play scopes for your active character at this table.");
   const url = webhookUrl(input.url);
+  const authorization = webhookAuthorization(input.authorizationHeader);
+  const extra = webhookHeaders(input.headers);
   const db = getDatabase();
   const existing = db.prepare(`SELECT * FROM player_webhooks WHERE campaign_id = ? AND character_id = ?`)
     .get(input.campaignId, input.characterId) as Subscription | undefined;
@@ -71,17 +132,22 @@ export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId:
   if (count.n >= MAX_SUBSCRIPTIONS) throw new Error("Remove an existing webhook first (maximum five per connection).");
   const id = randomUUID();
   const signingSecret = randomBytes(32).toString("base64url");
-  db.prepare(`INSERT INTO player_webhooks (id, grant_id, campaign_id, character_id, url, secret, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, grant.id, input.campaignId, input.characterId, url, signingSecret, nowIso());
-  return { id, campaignId: input.campaignId, characterId: input.characterId, url, signingSecret };
+  db.prepare(`INSERT INTO player_webhooks (id, grant_id, campaign_id, character_id, url, secret, authorization_header, extra_headers, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, grant.id, input.campaignId, input.characterId, url, signingSecret, authorization, extra ? JSON.stringify(extra) : null, nowIso());
+  // The caller supplied the header values; only their names are echoed back.
+  return { id, campaignId: input.campaignId, characterId: input.characterId, url, signingSecret, hasAuthorizationHeader: authorization !== null, headerNames: Object.keys(extra ?? {}) };
 }
 
 export function listPlayerWebhooks(grantId: string) {
   return getDatabase().prepare(`SELECT w.id, w.campaign_id AS campaignId, w.character_id AS characterId,
-    w.url, w.created_at AS createdAt,
+    w.url, w.authorization_header IS NOT NULL AS hasAuthorizationHeader, w.extra_headers AS extraHeaders, w.created_at AS createdAt,
     (SELECT COUNT(*) FROM player_webhook_deliveries d WHERE d.subscription_id = w.id AND d.state = 'pending') AS pending,
     (SELECT COUNT(*) FROM player_webhook_deliveries d WHERE d.subscription_id = w.id AND d.state = 'failed') AS failed
-    FROM player_webhooks w WHERE w.grant_id = ?`).all(grantId);
+    FROM player_webhooks w WHERE w.grant_id = ?`).all(grantId)
+    .map((row) => {
+      const { extraHeaders, ...rest } = row as Record<string, unknown> & { extraHeaders: string | null };
+      return { ...rest, hasAuthorizationHeader: Boolean(rest.hasAuthorizationHeader), headerNames: Object.keys(parseHeaders(extraHeaders)) };
+    });
 }
 
 export function deletePlayerWebhook(grantId: string, id: string): boolean {
@@ -201,17 +267,33 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
 }
 
 function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish" }, now: number) {
-  const event: PlayerWebhookEvent = {
+  const fields: Omit<PlayerWebhookEvent, "text"> = {
     version: 1, eventId: randomUUID(), subscriptionId: sub.id, campaignId: sub.campaign_id,
     playerId: grant.userId, characterId: sub.character_id, ...opportunity,
     seq: latestSeq(sub.campaign_id), occurredAt: new Date(now).toISOString(),
   };
+  const event: PlayerWebhookEvent = { ...fields, text: eventText(sub, grant, fields) };
   getDatabase().prepare(`INSERT OR IGNORE INTO player_webhook_deliveries
     (id, subscription_id, opportunity_id, body, state, attempts, available_at, created_at)
     VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)
     ON CONFLICT(subscription_id, opportunity_id) DO UPDATE SET id = excluded.id, body = excluded.body,
       state = 'pending', attempts = 0, available_at = excluded.available_at, created_at = excluded.created_at
       WHERE player_webhook_deliveries.state = 'cancelled'`).run(event.eventId, sub.id, event.opportunityId, JSON.stringify(event), now, now);
+}
+
+// Names and IDs only: no prose, dice or notes, the same as the event itself.
+function eventText(sub: Subscription, grant: ConnectionGrant, event: Omit<PlayerWebhookEvent, "text">): string {
+  const title = (getCampaignForUser(sub.campaign_id, grant.userId)?.title ?? "your campaign").slice(0, 200);
+  const sheet = getSheetForUser(sub.campaign_id, grant.userId);
+  const who = sheet?.id === sub.character_id ? sheet.name.slice(0, 100) : "Your character";
+  const at = `"${title}"`;
+  const what = event.type === "roll_requested" ? `a roll is waiting for you in ${at}.`
+    : event.type === "turn_started" ? (event.phase === "finish" ? `your combat turn in ${at} is ready to end.` : `it is your turn in combat in ${at}.`)
+    : event.type === "response_requested" ? `the table in ${at} may want your response.`
+    : event.type === "campaign_paused" ? `${at} is paused.`
+    : event.type === "campaign_resumed" ? `${at} has resumed.`
+    : `${at} has ended.`;
+  return `${who}: ${what} Read the table with your ODM tools before acting. Event: ${JSON.stringify(event)}`;
 }
 
 export function webhookSignature(secret: string, timestamp: string, body: string): string {
@@ -221,7 +303,8 @@ export function webhookSignature(secret: string, timestamp: string, body: string
 // State reconciliation is deliberately independent of ephemeral callbacks:
 // a crash after a game mutation and before publishing, or a parked turn
 // restored after restart, still reaches the outbox. It never sends prose,
-// enemy statistics, dice results, notes or a bearer token.
+// enemy statistics, dice results, notes or an ODM bearer token. A receiver's
+// own Authorization value goes only in that header, to that receiver.
 export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch = fetch) {
   const db = getDatabase();
   const subs = db.prepare(`SELECT * FROM player_webhooks`).all() as Subscription[];
@@ -266,7 +349,9 @@ export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch
         const response = await send(sub.url, {
           method: "POST", redirect: "error", signal: AbortSignal.timeout(5_000), body: delivery.body,
           headers: { "Content-Type": "application/json", "X-ODM-Event-Id": event.eventId,
-            "X-ODM-Timestamp": timestamp, "X-ODM-Signature": webhookSignature(sub.secret, timestamp, delivery.body) },
+            "X-ODM-Timestamp": timestamp, "X-ODM-Signature": webhookSignature(sub.secret, timestamp, delivery.body),
+            ...parseHeaders(sub.extra_headers),
+            ...(sub.authorization_header ? { Authorization: sub.authorization_header } : {}) },
         });
         ok = response.ok;
         await response.body?.cancel();
