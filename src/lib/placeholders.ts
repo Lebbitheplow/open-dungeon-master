@@ -114,7 +114,7 @@ const SRD_CLASS_IDS = new Set([
   "wizard",
 ]);
 
-// Two-gender plates like the genre classes': the content pack's classes from
+// Three-gender plates like the genre classes': the content pack's classes from
 // other books (Level Up's Marshal, Black Flag's Mechanist), painted so their
 // cards no longer fall to the hooded stranger (issue #116).
 const GENRE_CLASS_IDS = new Set([
