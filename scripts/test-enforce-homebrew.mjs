@@ -7,8 +7,8 @@
 //   homebrew is its author's: nobody else lists, reads, edits or deletes it;
 //   a homebrew spell is of level 0 to 9 and says how it resolves;
 //   whatever was stored, the monster that reaches a fight is inside the
-//   bounds of src/lib/bestiary/monster-draft.ts (armor class 30, 1,000 hit
-//   points, +20 to hit, three attacks a turn, dice the table can roll), and
+//   bounds of src/lib/bestiary/monster-draft.ts (armor class 30, 2,000 hit
+//   points, +20 to hit, ten attacks a turn, dice the table can roll), and
 //   its experience is its rating's, never the author's;
 //   a table fights its OWNER's monsters, and a published monster answers to
 //   its name before a hand-built one does (bestiary/index.ts resolveMonster);
@@ -194,13 +194,13 @@ await test("whatever was stored, the monster that reaches a fight is inside the 
   assert.equal(made.status, 201, JSON.stringify(made.json));
   const { started, enemy } = await spawn(`homebrew:${made.json.entry.id}`);
   assert.equal(started.ok, true, started.error);
-  assert.equal(enemy.maxHp, 1000);
-  assert.equal(enemy.currentHp, 1000);
+  assert.equal(enemy.maxHp, 2000);
+  assert.equal(enemy.currentHp, 2000);
   assert.equal(enemy.ac, 30);
-  assert.equal(enemy.stats.attacksPerTurn, 3);
+  assert.equal(enemy.stats.attacksPerTurn, 10);
   assert.equal(enemy.stats.attacks[0].toHit, 20);
   assert.equal(enemy.stats.dexMod, 10);
-  assert.deepEqual(Object.values(enemy.stats.saveMods), [15, 15, 15, 15, 15, 15]);
+  assert.deepEqual(Object.values(enemy.stats.saveMods), [20, 20, 20, 20, 20, 20]);
   // Experience is the rating's: a CR 0 creature is worth 10 XP.
   assert.equal(enemy.stats.xp, 10);
 });

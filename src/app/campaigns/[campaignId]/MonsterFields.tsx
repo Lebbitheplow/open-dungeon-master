@@ -1,7 +1,7 @@
 "use client";
 
-import { useId } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useId, useState } from "react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Select } from "@/components/ui/Select";
@@ -18,6 +18,8 @@ import { CONDITIONS, DAMAGE_TYPES } from "@/lib/bestiary/kit";
 import { CREATURE_TYPES, creatureTypeOf } from "@/lib/bestiary/statblock";
 import { SpeedPicker, TermPicker } from "@/app/campaigns/[campaignId]/MonsterKitFields";
 import { crLabel, type CrPart } from "@/lib/bestiary/derive-cr";
+import { Reveal } from "@/components/ui/Reveal";
+import { AttackDetails } from "@/app/workshop/bestiary/AttackDetails";
 
 // The parts of a stat block that are more than one number in a box, split
 // out of DmBestiaryPanel the way NpcFields was split out of the NPC forge:
@@ -66,6 +68,15 @@ export function AttackEditor({
 }) {
   // One list per mounted editor: a fixed id collided when two were open.
   const damageListId = useId();
+  // Which rows show their reach, range, riders and on-hit effect.
+  const [opened, setOpened] = useState<Set<number>>(() => new Set());
+  const toggle = (index: number) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
   const attacks = draft.stats.attacks;
   const setAttacks = (next: typeof attacks) =>
     onChange({ ...draft, stats: { ...draft.stats, attacks: next } });
@@ -78,7 +89,8 @@ export function AttackEditor({
         ))}
       </datalist>
       {attacks.map((attack, index) => (
-        <div key={index} className="flex flex-wrap items-center gap-1.5">
+        <div key={index} className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={attack.name}
             onChange={(event) =>
@@ -132,12 +144,33 @@ export function AttackEditor({
           />
           <button
             type="button"
-            onClick={() => setAttacks(attacks.filter((_, at) => at !== index))}
+            aria-expanded={opened.has(index)}
+            onClick={() => toggle(index)}
+            className="inline-flex items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-100"
+          >
+            {attackExtras(attack)}
+            <ChevronDown className={cn("size-3 transition-transform duration-200", opened.has(index) && "rotate-180")} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAttacks(attacks.filter((_, at) => at !== index));
+              setOpened(new Set());
+            }}
             className="text-stone-600 hover:text-red-300"
             aria-label={`Remove ${attack.name || "attack"}`}
           >
             <Trash2 className="size-3.5" />
           </button>
+        </div>
+        <Reveal open={opened.has(index)}>
+          {opened.has(index) ? (
+            <AttackDetails
+              attack={attack}
+              onChange={(next) => setAttacks(attacks.map((row, at) => (at === index ? next : row)))}
+            />
+          ) : null}
+        </Reveal>
         </div>
       ))}
       {attacks.length < MAX_ATTACKS ? (
@@ -152,11 +185,22 @@ export function AttackEditor({
         </button>
       ) : null}
       <p className="text-[10px] text-stone-600">
-        The engine picks one attack and swings it as many times as the multiattack allows, capped
-        at three. Damage has to be something the dice roller can read.
+        The engine swings the Multiattack routine when the block has one, otherwise its best attack
+        as many times as Swings says. Damage has to be something the dice roller can read.
       </p>
     </div>
   );
+}
+
+// The word on an attack's details button: what it carries beyond its dice,
+// or "Details" when it carries nothing yet.
+function attackExtras(attack: MonsterDraft["stats"]["attacks"][number]): string {
+  const bits = [
+    attack.range ? `${attack.range.normal}/${attack.range.long} ft` : attack.reach && attack.reach > 5 ? `reach ${attack.reach}` : "",
+    attack.riders?.length ? `+${attack.riders.map((rider) => rider.type).join(", ")}` : "",
+    attack.onHit?.condition ?? (attack.onHit?.damage ? "on hit" : ""),
+  ].filter(Boolean);
+  return bits.length ? bits.join(" · ") : "Details";
 }
 
 export function SaveEditor({
@@ -177,7 +221,7 @@ export function SaveEditor({
           <span className="text-[10px] uppercase text-stone-500">{ability}</span>
           <NumberStepper
             min={-5}
-            max={15}
+            max={20}
             value={saves[ability]}
             onChange={(next) =>
               onChange({

@@ -136,7 +136,7 @@ export function AbilityScores({ draft, onChange }: { draft: MonsterDraft; onChan
             <OptionalStepper
               label={`${ability.toUpperCase()} score`}
               min={1}
-              max={30}
+              max={50}
               fallback={10}
               value={scores[ability]}
               onChange={(next) => setScore(ability, next)}
@@ -287,6 +287,8 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           />
         </Field>
       </div>
+      {/* With a Spellcasting block the list is the block's own (SpellcastingFields). */}
+      {stats.spellcasting ? null : (
       <div className="flex flex-col gap-1">
         <FieldLabel>Spells known (by name, comma separated)</FieldLabel>
         <input
@@ -317,6 +319,7 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           The DM running it sees the list. Put a round of casting into extra damage so the rating counts it.
         </span>
       </div>
+      )}
       <div className="space-y-1">
         <FieldLabel>Found in</FieldLabel>
         <div className={cn("stagger-pop", chipRow)}>
