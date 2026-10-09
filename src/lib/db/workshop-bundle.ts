@@ -58,7 +58,9 @@ export { exportWorkshopBundle, type ExportResult } from "@/lib/db/workshop-bundl
 // ---- import ----
 
 export type BundleImportResult =
-  | { workshopId: string; copied: number; linkedShared: number; droppedLinks: number }
+  // `shelf`: arrivals that were the importer's own entry already, and those
+  // kept beside it under the bundle's name (workshop-bundle-shelf.ts).
+  | { workshopId: string; copied: number; linkedShared: number; droppedLinks: number; shelf: { reused: string[]; renamed: string[] } }
   | { error: string; refusal?: UploadRefusal };
 
 // Writes a decoded image to /uploads under a fresh uuid name, exactly the
@@ -485,10 +487,11 @@ function writeBundleRows(
     copied += 1;
   }
 
-  copied += writeBundleShelf(userId, workshop.id, bundle);
+  const shelf = writeBundleShelf(userId, workshop.id, bundle);
+  copied += shelf.copied;
   if (bundle.world) {
     copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore });
   }
 
-  return { workshopId: workshop.id, copied, linkedShared, droppedLinks };
+  return { workshopId: workshop.id, copied, linkedShared, droppedLinks, shelf: { reused: shelf.reused, renamed: shelf.renamed } };
 }

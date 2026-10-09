@@ -1,5 +1,6 @@
 "use client";
 
+import { PrintedBlockView } from "@/app/workshop/bestiary/PrintedBlockView";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -199,6 +200,7 @@ export function MonsterEditor({
             <AbilitiesEditor draft={draft} onChange={onDraft} />
             <SpellcastingEditor draft={draft} onChange={onDraft} />
             <SectionedTraitEditor draft={draft} onChange={onDraft} />
+            <PrintedBlockView draft={draft} />
           </div>
           <div className="flex flex-col gap-3">
             <SectionHead title="Catalogue and defences" glyph="rest-ac" className="mb-0" />
@@ -231,6 +233,7 @@ export function MonsterEditor({
       <AbilitiesEditor draft={draft} onChange={onDraft} />
       <SpellcastingEditor draft={draft} onChange={onDraft} />
       <SectionedTraitEditor draft={draft} onChange={onDraft} />
+      <PrintedBlockView draft={draft} />
       <SizeAndDefences draft={draft} onChange={onDraft} />
       <RegenerationEditor draft={draft} onChange={onDraft} />
       <SkillsAndSenses draft={draft} onChange={onDraft} />

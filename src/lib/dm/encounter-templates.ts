@@ -1,4 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { partyLevelsFor } from "@/lib/dm/party-budget";
 import { resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
@@ -35,7 +36,7 @@ export function templateDifficulty(
   const outcome = resolveEnemyRequests(
     campaign.gameSettings,
     enemies.map((row) => ({ monster: row.monster, count: row.count })),
-    campaign.ownerUserId,
+    spellAuthorsFor(campaign),
   );
   if ("unknownMonster" in outcome) {
     return {

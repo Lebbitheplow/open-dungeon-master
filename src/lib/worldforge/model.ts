@@ -85,7 +85,27 @@ export const VERACITY_LABELS: Record<Veracity, string> = {
   believed: "False belief: the world thinks so, but it is not true",
 };
 
-export type WorldLink = { id: string; from: string; to: string; label: string; veracity: Veracity; oneway: boolean; rank: string };
+export type WorldLink = {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+  veracity: Veracity;
+  oneway: boolean;
+  rank: string;
+  // A link an import brought: which source link it is ("<source>:<id>"),
+  // and how that link read when it was last imported (linkFingerprint), so a
+  // second import of the same world updates what nobody changed here and
+  // reports what both sides did (src/lib/db/world-link-merge.ts).
+  importedFrom?: string;
+  importedAs?: string;
+};
+
+// What a link says, as one string: its ends, its label, whether it is true,
+// one-way, and its rank.
+export function linkFingerprint(link: Pick<WorldLink, "from" | "to" | "label" | "veracity" | "oneway" | "rank">): string {
+  return [link.from, link.to, link.label.toLowerCase(), link.veracity, link.oneway ? "1" : "0", link.rank].join("|");
+}
 export type Folder = { id: string; name: string; parentId: string };
 export type Calendar = { id: string; name: string; abbrev: string; epochOffset: number; notes: string };
 export type WorldEvent = { id: string; title: string; body: string; era: string; when: YearValue; refs: string[]; canon: Canon };
@@ -300,6 +320,8 @@ export function readLink(value: unknown): WorldLink | null {
     veracity: oneOf(raw.veracity, VERACITIES, "known"),
     oneway: raw.oneway === true,
     rank: label === "member of" ? str(raw.rank, 60) : "",
+    ...(str(raw.importedFrom, 160) ? { importedFrom: str(raw.importedFrom, 160) } : {}),
+    ...(str(raw.importedAs, 600) ? { importedAs: str(raw.importedAs, 600) } : {}),
   };
 }
 

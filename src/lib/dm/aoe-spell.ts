@@ -39,6 +39,9 @@ const FEET_PER_TILE = 5;
 export type AoeSpellPlan = {
   caster: CharacterSheet;
   spell: string;
+  // The published spell a table's workshop copy runs as (its area, Prismatic
+  // Spray's rays); absent for a published spell.
+  runsAs?: string;
   mech: SpellMech | null;
   // Null when the spell deals no damage (Entangle, Hypnotic Pattern).
   damage: string | null;
@@ -264,9 +267,11 @@ export function planAoeSpell(
     corrections.push(payOverchannel(campaign, turn, caster.id, spellLevel));
   }
   const condition = mech?.condition ?? null;
+  const runsAs = resolved?.runsAs ?? facts?.runsAs;
   return {
     caster,
     spell: name,
+    ...(runsAs ? { runsAs } : {}),
     mech,
     damage,
     flat: riders.flat,

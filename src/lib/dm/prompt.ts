@@ -10,6 +10,7 @@ import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { resourceDef } from "@/lib/srd/class-resources";
 import { featEngineTag } from "@/lib/srd/feat-combat";
 import { featFactsFor } from "@/lib/characters/catalog";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { featTwinOf } from "@/lib/srd/feat-effects";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
@@ -347,7 +348,7 @@ export function describeSheet(
   // the load penalty in it and a carried-weight line is added, so the model
   // never has to work the pounds out itself.
   // The table owner's id, for the feats they brewed themselves.
-  options: { encumbrance?: boolean; ownerUserId?: string } = {},
+  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[] } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   // A workshop or pack subclass's features carry their own text.
@@ -433,7 +434,7 @@ export function describeSheet(
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
     `  Languages (complete list; they cannot speak, read, or understand any other language): ${sheet.proficiencies.languages.join(", ") || "Common only"} | Tool proficiencies: ${sheet.proficiencies.tools.join(", ") || "none"} | Armor training: ${sheet.proficiencies.armor.join(", ") || "none"} | Weapon training: ${sheet.proficiencies.weapons.join(", ") || "none"}`,
-    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats (each with its rules; the server applies what its tag names, the rest is yours to run): ${sheet.feats.map((feat) => featPromptLine(feat, options.ownerUserId, sheet.campaignId)).join("; ")}` : ""}`,
+    `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats (each with its rules; the server applies what its tag names, the rest is yours to run): ${sheet.feats.map((feat) => featPromptLine(feat, options.authors ?? options.ownerUserId, sheet.campaignId)).join("; ")}` : ""}`,
   ];
   if (loadLine) {
     lines.push(loadLine);
@@ -888,7 +889,7 @@ export function buildGameStateBlock(state: DmGameState): string {
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
-          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId },
+          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign) },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         const between = state.betweenBySheet?.get(sheet.id);
@@ -1457,7 +1458,7 @@ export function buildDmMessages(
 // its rules text (ODM's own words, or the pack's) cut at a sentence near
 // 360 characters. The model used to see the name alone, and a Level Up or
 // Tome of Heroes feat meant nothing to it (issue #147).
-function featPromptLine(feat: string, ownerUserId: string | undefined, campaignId?: string): string {
+function featPromptLine(feat: string, ownerUserId: string | string[] | undefined, campaignId?: string): string {
   const tag = featEngineTag(feat, campaignId);
   const twin = featTwinOf(feat, campaignId);
   const known = twin !== feat.trim().toLowerCase() ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";

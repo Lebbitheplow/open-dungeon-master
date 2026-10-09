@@ -1,5 +1,6 @@
 "use client";
 
+import { ContentScopeProvider } from "@/lib/content-scope";
 import { Loader2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
@@ -113,7 +114,18 @@ function droppedMessage({ because, drops }: DroppedNotice, stepLabel: string | u
 // /characters/new, the campaign join/edit/replace page and the companion
 // dialog. The fields, validation and submitted sheet are unchanged from the
 // single-page form this replaced; only the pacing is new.
-export default function CharacterBuilder({
+// At a table, every content request the builder makes is that table's
+// (src/lib/content-scope.tsx): its DMs' workshop species, feats, spells and
+// subclasses are offered, the same ones the server admits.
+export default function CharacterBuilder(props: Parameters<typeof CharacterBuilderForm>[0]) {
+  return (
+    <ContentScopeProvider campaignId={props.campaignId}>
+      <CharacterBuilderForm {...props} />
+    </ContentScopeProvider>
+  );
+}
+
+function CharacterBuilderForm({
   campaignId,
   fixedLevel,
   genre,

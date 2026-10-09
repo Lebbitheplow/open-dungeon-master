@@ -39,5 +39,6 @@ export async function POST(
     counts: bundleCounts(result.bundle),
     total: bundleTotal(result.bundle),
     warnings,
+    shelf: result.shelf,
   });
 }

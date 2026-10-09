@@ -33,7 +33,7 @@ export default function MultiContentPicker({
   onAdd: (entries: MultiPick[]) => void;
   renderMeta?: (entry: PickerEntry) => string;
 }) {
-  const { query, setQuery, results, setResults, open, setOpen, loading, unavailable } =
+  const { query, setQuery, results, setResults, open, setOpen, loading, unavailable, unadmitted } =
     useContentSearch(kind, extraParams);
   const [pending, setPending] = useState<MultiPick[]>([]);
   const container = useRef<HTMLDivElement>(null);
@@ -162,6 +162,11 @@ export default function MultiContentPicker({
           {unavailable ? (
             <li className="px-3 py-1.5 text-xs text-stone-500">
               Content pack not installed; add entries by name instead.
+            </li>
+          ) : null}
+          {unadmitted.length ? (
+            <li className="px-3 py-1.5 text-[11px] text-stone-500">
+              Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it keeps a copy to admit one.
             </li>
           ) : null}
         </ul>

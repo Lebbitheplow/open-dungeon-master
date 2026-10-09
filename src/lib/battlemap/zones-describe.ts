@@ -4,7 +4,7 @@
 import type { SpellZone } from "@/lib/battlemap/zones";
 import { zoneRowFor } from "@/lib/battlemap/zones-spells";
 
-const rowOf = (zone: SpellZone) => zoneRowFor(zone.spell);
+const rowOf = (zone: SpellZone) => zoneRowFor(zone);
 
 function span(zone: SpellZone, width: number): string {
   if (!zone.cells.length) {

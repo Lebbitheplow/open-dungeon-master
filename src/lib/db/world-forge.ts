@@ -6,6 +6,7 @@ import { deleteLoreEntry, getLoreEntry, insertLoreEntry, listLoreEntries, update
 import { draftFrom, normalizeNpcDraft } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { LORE_BODY_MAX } from "@/lib/dm/world-lore-logic";
+import { applyRowOps, type DocOps } from "@/lib/worldforge/ops";
 import {
   SLICES,
   emptyDoc,
@@ -67,11 +68,21 @@ export function saveWorldDoc(campaignId: string, doc: WorldDoc) {
     .run(campaignId, JSON.stringify(doc), nowIso());
 }
 
-// Replaces the slices given, each read through its floor. Entries are not a
+// Changes the slices given, each read through its floor. Entries are not a
 // slice a client may send whole: they change one record at a time through
-// updateWorldEntity. `moveFolder` re-homes the entries of a deleted folder.
-export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>): WorldDoc {
-  const doc = getWorldDoc(campaignId);
+// updateWorldEntity. `ops` is the editor's way: row operations against what
+// it last saw (src/lib/worldforge/ops.ts), so concurrent editors keep each
+// other's work and a row changed under them is named in `conflicts`. A
+// whole slice is still taken (an older client, a script), and replaces the
+// stored one. `moveFolder` re-homes the entries of a deleted folder.
+export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>): { doc: WorldDoc; conflicts: string[] } {
+  let doc = getWorldDoc(campaignId);
+  let conflicts: string[] = [];
+  if (patch.ops && typeof patch.ops === "object" && !Array.isArray(patch.ops)) {
+    const applied = applyRowOps(doc, patch.ops as DocOps);
+    doc = applied.doc;
+    conflicts = applied.conflicts;
+  }
   for (const slice of SLICES) {
     if (slice !== "entries" && patch[slice] !== undefined) {
       (doc as Record<Slice, unknown>)[slice] = readSlice(slice, patch[slice]);
@@ -83,7 +94,7 @@ export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>
     for (const entry of Object.values(doc.entries)) if (entry.folderId === move.from) entry.folderId = to;
   }
   saveWorldDoc(campaignId, doc);
-  return doc;
+  return { doc, conflicts };
 }
 
 // ---- the records, as entries ----

@@ -21,6 +21,10 @@ import { summonRecord } from "@/lib/dm/summon-rules";
 export type SummonCastArgs = {
   caster: CharacterSheet;
   spell: SummonSpell;
+  // The name it is cast under: a table's workshop copy's own ("Call the
+  // Wild" running as Conjure Animals), the spell's otherwise. What the slot
+  // is spent on, concentration holds, and the creatures answer to.
+  castAs?: string;
   level?: number;
   variant?: string;
   count?: number;
@@ -73,6 +77,7 @@ export function castSummon(
   cast: (input: Record<string, unknown>) => Record<string, unknown>,
 ): Record<string, unknown> {
   const { caster, spell } = args;
+  const castAs = args.castAs?.trim() || spell.name;
   const slotLevel = Math.max(spell.level, args.level ?? spell.level);
   const plan = summonPlan(spell, slotLevel, args.variant ?? "", args.count);
   if ("error" in plan) {
@@ -82,14 +87,14 @@ export function castSummon(
 
   // Cast again while it still holds, the spell's first casting ends, and
   // the creatures it made with it.
-  const recast = spell.concentration && (caster.concentratingOn ?? "").trim().toLowerCase() === spell.name.toLowerCase();
+  const recast = spell.concentration && (caster.concentratingOn ?? "").trim().toLowerCase() === castAs.toLowerCase();
 
   // The spend, through the one cast guard: the list, the slot, the turn, the
   // material, concentration (a second concentration spell ends the first,
   // and the creatures that spell made with it).
   const spent = cast({
     characterId: caster.id,
-    spell: spell.name,
+    spell: castAs,
     level: slotLevel,
     via: "buff",
     reason: (args.reason ?? "").slice(0, 200),
@@ -102,7 +107,7 @@ export function castSummon(
   // Find Steed: one steed at a time; the new casting's steed replaces it.
   const replaced: string[] = [];
   if (spell.single || recast) {
-    for (const old of summonsOf(campaign.id, caster.id, spell.name)) {
+    for (const old of summonsOf(campaign.id, caster.id, castAs)) {
       removeSummon(campaign, old);
       replaced.push(old.name);
     }
@@ -113,7 +118,7 @@ export function castSummon(
   const durableHp = authoredSummonTempHp(fresh, spell.school);
   const durable = durableHp > 0;
   const record = summonRecord(form, {
-    spell: spell.name,
+    spell: castAs,
     casterId: caster.id,
     casterName: caster.name,
     concentration: spell.concentration,
@@ -139,7 +144,8 @@ export function castSummon(
     : "none: it cannot attack";
   return {
     ok: true,
-    spell: spell.name,
+    spell: castAs,
+    ...(castAs !== spell.name ? { runsAs: spell.name } : {}),
     summoned: created.map((sheet) => ({ characterId: sheet.id, name: sheet.name, hp: `${sheet.currentHp}/${sheet.maxHp}`, ac: sheet.ac })),
     creature: `${form.name} (${form.type}, CR ${form.cr}): ${form.hp} HP, AC ${form.ac}, speed ${spell.speed ?? form.speed} ft. Attacks: ${attacks}${(form.attacksPerTurn ?? 1) > 1 ? ` (${form.attacksPerTurn} per Attack action)` : ""}.`,
     ...(form.traits ? { traits: form.traits } : {}),
@@ -148,7 +154,7 @@ export function castSummon(
     ...(spent.slot ? { slot: spent.slot } : {}),
     ...(spent.cost ? { cost: spent.cost } : {}),
     ...(spent.droppedConcentration ? { droppedConcentration: spent.droppedConcentration } : {}),
-    ...(spell.concentration ? { concentration: `${caster.name} is concentrating on ${spell.name}; the creatures vanish when it ends${spell.hostileOnBreak ? " (if it breaks, the creature turns hostile instead)" : ""}.` } : {}),
+    ...(spell.concentration ? { concentration: `${caster.name} is concentrating on ${castAs}; the creatures vanish when it ends${spell.hostileOnBreak ? " (if it breaks, the creature turns hostile instead)" : ""}.` } : {}),
     spellNote: spell.note,
     note: `They are allies on the board and in the initiative order${spell.beforeCaster ? ", acting right before " + caster.name : spell.initiative === "caster" ? ", acting right after " + caster.name : ""}. Each attacks with pc_attack (its own characterId) on its turn; the server rolls its stat block's numbers. At 0 hit points one disappears. Narrate exactly this.`,
   };

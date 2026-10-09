@@ -424,6 +424,52 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
           <ItemSpellsBlock data={data} set={set} />
           <ChecksBlock data={data} set={set} />
           <AttunementBlock data={data} set={set} />
+          <SentienceBlock data={data} set={set} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// A sentient item's mind (SRD 5.1, Sentient Magic Items): an NPC the DM
+// runs, carried onto the holder's sheet and shown to the DM with the rule
+// for a conflict (src/lib/homebrew/sentience.ts).
+function SentienceBlock({ data, set }: { data: Data; set: (patch: Data) => void }) {
+  const mind = (data.sentience ?? null) as Record<string, unknown> | null;
+  const put = (patch: Record<string, unknown>) => set({ sentience: { ...(mind ?? {}), ...patch } });
+  return (
+    <div className="space-y-2">
+      <CheckField
+        label="It is sentient"
+        checked={Boolean(mind)}
+        onChange={(on) => set({ sentience: on ? { int: 10, wis: 10, cha: 10, communication: "emotion", senses: "hearing and normal vision out to 30 feet" } : undefined })}
+      />
+      {mind ? (
+        <div className="reveal grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(["int", "wis", "cha"] as const).map((ability) => (
+            <NumberField
+              key={ability}
+              label={ability === "int" ? "Intelligence" : ability === "wis" ? "Wisdom" : "Charisma"}
+              value={typeof mind[ability] === "number" ? (mind[ability] as number) : 10}
+              min={1}
+              max={30}
+              onChange={(value) => put({ [ability]: value === "" ? 10 : value })}
+            />
+          ))}
+          <SelectField
+            label="Communicates by"
+            value={String(mind.communication ?? "emotion")}
+            options={[
+              { value: "emotion", label: "emotion" },
+              { value: "speech", label: "speech" },
+              { value: "telepathy", label: "telepathy" },
+            ]}
+            onChange={(communication) => put({ communication })}
+          />
+          <TextField label="Alignment" value={String(mind.alignment ?? "")} onChange={(alignment) => put({ alignment })} maxLength={40} />
+          <TextField label="Senses" value={String(mind.senses ?? "")} onChange={(senses) => put({ senses })} maxLength={120} className="sm:col-span-3" />
+          <TextField label="Special purpose" value={String(mind.purpose ?? "")} onChange={(purpose) => put({ purpose })} maxLength={200} className="col-span-2 sm:col-span-4" placeholder="Slay every dragon it meets" />
+          <TextField label="Personality" value={String(mind.personality ?? "")} onChange={(personality) => put({ personality })} maxLength={400} className="col-span-2 sm:col-span-4" />
         </div>
       ) : null}
     </div>

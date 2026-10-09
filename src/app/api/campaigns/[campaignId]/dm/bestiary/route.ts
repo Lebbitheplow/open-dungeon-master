@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
-import { getEntryDetail, searchMonsters } from "@/lib/content";
+import { documentTitle, getEntryDetail, searchMonsters } from "@/lib/content";
+import { rulebookPageIdFor } from "@/lib/rulebook/catalog-rows";
 import { reskinFor } from "@/lib/bestiary";
 import { normalizeCreatureType, parseMonster } from "@/lib/bestiary/statblock";
 import {
@@ -124,7 +125,14 @@ export async function POST(
       );
     }
     const cr = typeof entry.data.cr === "number" ? entry.data.cr : 0;
-    const draft = draftFromStats(body.name ?? entry.name, parseMonster(entry.data, cr));
+    const stats = parseMonster(entry.data, cr);
+    // The copy remembers the entry it came from and, for the SRD's own, the
+    // bundled rulebook page it is printed on (PrintedBlockView reads it).
+    const page = entry.documentSlug === "wotc-srd" ? rulebookPageIdFor("monster", entry.name) : null;
+    if (stats.printed) {
+      stats.printed.source = { name: entry.name, document: documentTitle(entry.documentSlug), ...(page ? { rulebook: page } : {}) };
+    }
+    const draft = draftFromStats(body.name ?? entry.name, stats);
     return Response.json(
       { monster: createHomebrewMonster(context.user.id, draft, "") },
       { status: 201 },

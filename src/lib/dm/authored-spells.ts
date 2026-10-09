@@ -16,7 +16,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Grasping Tentacles: the temporary hit points of casting the guarded spell.
 // They do not stack with ones the caster already holds; the higher stands.
-export function castTempHp(campaign: Campaign, stale: CharacterSheet, spell: string): string | null {
+// `spell` is the published spell the cast runs as (a workshop copy's
+// `runsAs`); `named` the name it was cast under.
+export function castTempHp(campaign: Campaign, stale: CharacterSheet, spell: string, named: string = spell): string | null {
   const sheet = getSheetById(stale.id) ?? stale;
   const guard = authoredConcentrationGuard(sheet, spell, computeSheetDerived(sheet).abilityMods);
   if (!guard || guard.tempHp <= 0) {
@@ -28,5 +30,5 @@ export function castTempHp(campaign: Campaign, stale: CharacterSheet, spell: str
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
     }
   }
-  return `${guard.feature}: ${Math.max(guard.tempHp, sheet.tempHp)} temporary hit points, and damage cannot break the concentration on ${spell}.`;
+  return `${guard.feature}: ${Math.max(guard.tempHp, sheet.tempHp)} temporary hit points, and damage cannot break the concentration on ${named}.`;
 }

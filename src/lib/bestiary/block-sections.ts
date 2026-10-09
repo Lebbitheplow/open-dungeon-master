@@ -1,3 +1,4 @@
+import { unrunPrintedAbilities } from "@/lib/bestiary/statblock";
 import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 
 // A stat block's sections, and the lines the block prints that the attack
@@ -133,9 +134,22 @@ export function abilityLine(stats: Pick<EnemyStats, "abilities">): string {
 // What the DM's prompt gets to see beyond the attack list: the lines the
 // attack list cannot carry, each only when the block says something.
 export function extraBlockLines(
-  stats: Pick<EnemyStats, "abilities" | "skills" | "senses" | "languages" | "alignment" | "spells">,
+  stats: Pick<EnemyStats, "abilities" | "skills" | "senses" | "languages" | "alignment" | "spells" | "traits" | "printed">,
 ): string[] {
   const lines: string[] = [];
+  // What the printed block holds beyond the compact lines and the engine
+  // does not run (a vampire's weaknesses, a golem's absorption): named with
+  // their first words, so the DM runs them rather than forgetting them.
+  const unrun = unrunPrintedAbilities(stats);
+  if (unrun.length) {
+    const cut = (text: string) => (text.length <= 120 ? text : `${text.slice(0, 117).trimEnd()}...`);
+    lines.push(
+      `Also on its block, yours to run: ${unrun
+        .slice(0, 4)
+        .map((ability) => `${ability.name}: ${cut(ability.desc)}`)
+        .join("; ")}${unrun.length > 4 ? `; and ${unrun.slice(4).map((ability) => ability.name).join(", ")}` : ""}`,
+    );
+  }
   const abilities = abilityLine(stats);
   if (abilities) {
     lines.push(abilities);

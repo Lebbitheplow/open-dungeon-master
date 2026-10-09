@@ -15,7 +15,7 @@
 //
 // Pure: the Hand, the board and the console's form all import it.
 import { layZone, type ZoneLayout, type ZoneMap } from "@/lib/battlemap/zones";
-import { zoneRowFor, type ZoneShape, type ZoneTone } from "@/lib/battlemap/zones-spells";
+import { zoneRowFor, type ZoneNamed, type ZoneShape, type ZoneTone } from "@/lib/battlemap/zones-spells";
 import type { XY } from "@/lib/battlemap/types";
 
 // What the caster picks: a point (a burst's centre), a wall (its first
@@ -25,6 +25,8 @@ export type AreaPickKind = "point" | "wall" | "direction" | "none";
 
 export type HandArea = {
   spell: string;
+  // A table's workshop copy: the published spell whose area it lays.
+  runsAs?: string;
   slotLevel: number | null;
   pick: AreaPickKind;
   shape: ZoneShape;
@@ -37,13 +39,15 @@ export type AreaPick = { at?: XY; toward?: XY };
 
 export type AreaArgs = { atX?: number; atY?: number; towardX?: number; towardY?: number };
 
-export function areaFor(spell: string, slotLevel: number | null = null): HandArea | null {
-  const row = zoneRowFor(spell);
+export function areaFor(named: ZoneNamed, slotLevel: number | null = null): HandArea | null {
+  const row = zoneRowFor(named);
   // A light spell lights the caster's token; there is nothing to aim.
   if (!row) return null;
+  const spell = typeof named === "string" ? named : named.spell;
+  const runsAs = typeof named === "string" ? undefined : named.runsAs;
   const pick: AreaPickKind =
     row.shape === "aura" || row.self ? "none" : row.shape === "line" ? "direction" : row.shape === "wall" ? "wall" : "point";
-  return { spell, slotLevel, pick, shape: row.shape, tone: row.tone, summary: row.summary };
+  return { spell, ...(runsAs ? { runsAs } : {}), slotLevel, pick, shape: row.shape, tone: row.tone, summary: row.summary };
 }
 
 const same = (a: XY | undefined, b: XY | undefined) => Boolean(a && b && a.x === b.x && a.y === b.y);
@@ -92,7 +96,7 @@ export function hoverPick(area: HandArea, pick: AreaPick, hover: XY | null): Are
 // The squares the engine lays for this pick, or null when the pick does not
 // fix them yet (a burst with no centre, a line with no direction).
 export function areaCells(area: HandArea, pick: AreaPick, map: ZoneMap, caster: XY | null): ZoneLayout | null {
-  const row = zoneRowFor(area.spell);
+  const row = zoneRowFor(area);
   if (!row) return null;
   let origin: XY | null;
   let toward: XY | null = null;

@@ -19,7 +19,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getActiveBoard } from "@/lib/db/encounters";
 import type { SpellZone } from "@/lib/battlemap/zones";
-import { zoneKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
+import { zoneKey, zoneOwnKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { parseSectionName, sectionCells, sectionOf } from "@/lib/battlemap/zones-walls";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 
@@ -36,14 +36,15 @@ export type WallSection = {
 // a sectioned wall named without a standing section, or null for any other
 // object.
 export function wallSectionFor(campaignId: string, name: string): WallSection | { error: string } | null {
-  const named = parseSectionName(name);
+  const encounter = getActiveBoard(campaignId);
+  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+  const standingWalls = map ? liveZones(map, encounter).filter((zone) => zoneRowFor(zone)?.sections) : [];
+  const named = parseSectionName(name, standingWalls);
   if (!named) {
     return null;
   }
-  const encounter = getActiveBoard(campaignId);
-  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
-  const row = zoneRowFor(named.spell);
-  const walls = map && row?.sections ? liveZones(map, encounter).filter((zone) => zoneKey(zone.spell) === zoneKey(named.spell)) : [];
+  const row = zoneRowFor(named);
+  const walls = map && row?.sections ? standingWalls.filter((zone) => zoneOwnKey(zone) === zoneKey(named.spell)) : [];
   if (!map || !row?.sections || !walls.length) {
     return null;
   }
@@ -82,7 +83,7 @@ export function breakWallSection(campaign: Campaign, target: WallSection): strin
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   const zones = map ? liveZones(map, encounter) : [];
   const wall = zones.find((zone) => zone.id === target.zoneId);
-  const row = wall ? zoneRowFor(wall.spell) : null;
+  const row = wall ? zoneRowFor(wall) : null;
   if (!map || !encounter || !wall || !row?.sections) {
     return `${target.spell} section ${target.section} breaks.`;
   }
@@ -98,6 +99,8 @@ export function breakWallSection(campaign: Campaign, target: WallSection): strin
     origin: { x: first % map.width, y: Math.floor(first / map.width) },
     cells,
     concentration: wall.concentration,
+    // It holds while the wall's caster holds the wall, by the wall's name.
+    heldBy: wall.spell,
     castRound: encounter.round,
     untilRound: wall.untilRound,
     slotLevel: wall.slotLevel,

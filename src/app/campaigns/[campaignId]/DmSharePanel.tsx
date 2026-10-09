@@ -1,5 +1,6 @@
 "use client";
 
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Download, Loader2, Package } from "lucide-react";
 import { useState } from "react";
 import { ui } from "@/lib/ui";
@@ -52,6 +53,10 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
   const [counts, setCounts] = useState<Counts | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [refusals, setRefusals] = useState<Array<{ field: string; reason: string }>>([]);
+  // Your shelf (hand-built monsters, homebrew items, spells and options):
+  // all of it, or only what this workshop uses; and what the export said.
+  const [shelfScope, setShelfScope] = useState<"all" | "used">("all");
+  const [shelf, setShelf] = useState<{ included: string[]; unused: string[]; missing: string[] } | null>(null);
 
   const manifest = {
     name: name.trim(),
@@ -61,6 +66,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
     homepage: homepage.trim(),
     inspiredBy: inspiredBy.trim(),
     rightsHolder: rightsHolder.trim(),
+    shelf: shelfScope,
   };
   const ready = Boolean(manifest.name && manifest.blurb && manifest.inspiredBy);
 
@@ -85,6 +91,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
       const data = await post("");
       setCounts(data.counts);
       setWarnings(data.warnings ?? []);
+      setShelf(data.shelf ?? null);
       download(`${fileStem(manifest.name)}.odm-workshop.json`, data.bundle);
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That could not be built.");
@@ -200,6 +207,24 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
         </label>
       </div>
 
+      <fieldset className="mb-4 space-y-1">
+        <legend className="mb-1 text-xs text-stone-400">Your homebrew shelf in the bundle</legend>
+        <SegmentedControl
+          options={[
+            { value: "all", label: "All of it" },
+            { value: "used", label: "What this workshop uses" },
+          ]}
+          value={shelfScope}
+          onChange={(value) => setShelfScope(value as "all" | "used")}
+          size="sm"
+          label="Your homebrew shelf in the bundle"
+        />
+        <span className="block text-xs text-stone-500">
+          Used means the monsters its Cast and fights name, what its pregens carry, and anything its prepared text mentions by name. Whoever
+          imports it keeps their own entries of the same name; a different one arrives beside theirs under this bundle&apos;s name.
+        </span>
+      </fieldset>
+
       <UnofficialPackNotice
         rightsHolder={rightsHolder}
         inspiredBy={inspiredBy.trim() || undefined}
@@ -256,6 +281,26 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
               </li>
             ))}
         </ul>
+      ) : null}
+
+      {shelf ? (
+        <div className="reveal mt-3 space-y-1 border-t border-stone-800 pt-3 text-xs text-stone-400" data-testid="bundle-shelf">
+          <p>
+            <span className="text-stone-300">From your shelf: </span>
+            {shelf.included.length ? shelf.included.join(", ") : "nothing"}.
+          </p>
+          {shelf.unused.length ? (
+            <p>
+              <span className="text-stone-300">{shelfScope === "used" ? "Left out (this workshop does not use them): " : "Taken though this workshop does not use them: "}</span>
+              {shelf.unused.join(", ")}.
+            </p>
+          ) : null}
+          {shelf.missing.length ? (
+            <p className="text-amber-300">
+              Named by its Cast or fights but found nowhere, here or in the books: {shelf.missing.join(", ")}. The importer&apos;s table will not find them either.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {refusals.length ? (

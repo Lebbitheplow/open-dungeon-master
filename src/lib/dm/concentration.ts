@@ -9,7 +9,8 @@ import {
 } from "@/lib/db/encounters";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertRoll } from "@/lib/db/rolls";
-import { findSpellByName, spellMechanicsFor } from "@/lib/content";
+import { findSpellByName, spellEngineName, spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { allySaveAura } from "@/lib/dm/aura";
 import { computeSheetDerived } from "@/lib/srd";
 import { conditionConcentrationFloor, conditionRollRiders } from "@/lib/srd/condition-effects";
@@ -150,7 +151,8 @@ export function clearSpellConditionsByName(
   if (casterId) {
     endSpellSummons(campaign, spell, casterId);
   }
-  const resolved = spellMechanicsFor({ spell, userId });
+  // The table's spells, whoever's sheet the caster is (spell-authors.ts).
+  const resolved = spellMechanicsFor({ spell, userIds: [...spellAuthorsFor(campaign), ...(userId ? [userId] : [])] });
   if (!resolved) {
     return;
   }
@@ -272,7 +274,7 @@ export function concentrationDamageHook(
   }
   // Grasping Tentacles: damage cannot break the concentration on Evard's
   // Black Tentacles (src/lib/srd/authored-effects-more.ts).
-  const guarded = authoredConcentrationGuard(fresh, spell);
+  const guarded = authoredConcentrationGuard(fresh, spellEngineName(spell, spellAuthorsFor(campaign)));
   if (guarded) {
     return { concentration: { spell, held: true, guarded: `${guarded.feature}: damage cannot break it` } };
   }

@@ -20,9 +20,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ camp
   return Response.json(worldView(campaignId));
 }
 
-// Replaces whole slices (types, links, folders, calendars, events, secrets,
-// stubs, maps, pins), each read through its floor; entries change one at a
-// time through /world/entities.
+// Changes slices (types, links, folders, calendars, events, secrets, stubs,
+// maps, pins) by row operations, or replaces whole ones, each read through
+// its floor (src/lib/db/world-forge.ts patchWorldDoc); entries change one at
+// a time through /world/entities. Rows changed by someone else since the
+// editor saw them come back in `conflicts`, untouched.
 export async function PATCH(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
   const context = await requireStoryAuthority(campaignId);
@@ -33,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return Response.json({ error: "Expected the slices to change." }, { status: 400 });
   }
-  patchWorldDoc(campaignId, raw as Record<string, unknown>);
+  const { conflicts } = patchWorldDoc(campaignId, raw as Record<string, unknown>);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
-  return Response.json(worldView(campaignId));
+  return Response.json({ ...worldView(campaignId), ...(conflicts.length ? { conflicts } : {}) });
 }

@@ -16,6 +16,7 @@
 // exact when it is not.
 import { gearWeightLb } from "@/lib/srd/adventuring-gear";
 import { matchArmor } from "@/lib/srd/armor";
+import { matchWeapon, SRD_WEAPON_WEIGHT_LB } from "@/lib/srd/weapons";
 import { ammoCount, ammoKindForItem, AMMO_WEIGHT_LB } from "@/lib/srd/ammunition";
 import { magicItemRiders, type Wearer, type WornMagicItem } from "@/lib/srd/magic-items";
 
@@ -96,6 +97,11 @@ export function lineWeightLb(item: CarriedItem): number | null {
   const gear = gearWeightLb(item.name);
   if (gear !== null) {
     return round2(gear * qty);
+  }
+  // Then a weapon by the SRD's table (a +1 longsword weighs a longsword's 3 lb).
+  const weapon = matchWeapon(item.name);
+  if (weapon && SRD_WEAPON_WEIGHT_LB[weapon.name] !== undefined) {
+    return round2(SRD_WEAPON_WEIGHT_LB[weapon.name] * qty);
   }
   return null;
 }

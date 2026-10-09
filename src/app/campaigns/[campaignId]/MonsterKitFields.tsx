@@ -1,5 +1,6 @@
 "use client";
 
+import { applyHalfDragon, DRAGON_COLORS, type DragonColor } from "@/lib/bestiary/half-dragon";
 import { Plus, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -197,6 +198,8 @@ export function MonsterKitPanel({
   const [shield, setShield] = useState(false);
   const [weaponName, setWeaponName] = useState("");
   const [weaponMod, setWeaponMod] = useState(3);
+  const [dragon, setDragon] = useState<DragonColor | "">("");
+  const [templateNote, setTemplateNote] = useState("");
 
   const subclasses = subclassOptionsFor(classId);
   const features = classFeatureLines(classId, subclass, level);
@@ -301,6 +304,33 @@ export function MonsterKitPanel({
           </div>
         </div>
       ) : null}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <Select
+          label="Half-dragon template"
+          value={dragon}
+          onChange={(value) => setDragon(value as DragonColor | "")}
+          options={[{ value: "", label: "Dragon half" }, ...DRAGON_COLORS.map((color) => ({ value: color as string, label: color }))]}
+        />
+        <button
+          type="button"
+          disabled={!dragon}
+          onClick={() => {
+            if (!dragon) return;
+            const made = applyHalfDragon(draft, dragon);
+            if ("error" in made) {
+              setTemplateNote(made.error);
+              return;
+            }
+            setTemplateNote(made.note);
+            onChange(made.draft);
+          }}
+          className="rounded-md border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:text-amber-100 disabled:opacity-40"
+        >
+          Make it a half-dragon
+        </button>
+        {templateNote ? <span className="live-in basis-full text-[10px] text-stone-500">{templateNote}</span> : null}
+      </div>
 
       <div className="flex flex-wrap items-end gap-2">
         <Select

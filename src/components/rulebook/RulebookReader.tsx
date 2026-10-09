@@ -406,7 +406,7 @@ export function RulebookReader({
               </div>
             ) : shown ? (
               <div key={shown.data.page.id} className="rb-page-in" data-no-motion>
-                <RulebookPage data={shown.data} terms={shown.terms} at={shown.at} xrefs={xrefs} onOpen={openFromPage} />
+                <RulebookPage data={shown.data} terms={shown.terms} at={shown.at} xrefs={xrefs} onOpen={openFromPage} canStart={!embedded} />
               </div>
             ) : (
               <Frontispiece onBegin={() => void open("racial-traits")} />
@@ -423,7 +423,7 @@ export function RulebookReader({
             {leaf ? (
               <div className="rb-leaf-scroll">
                 <div style={{ transform: `translateY(${-leaf.scroll}px)` }}>
-                  <RulebookPage data={leaf.shown.data} terms={leaf.shown.terms} at={leaf.shown.at} xrefs={xrefs} onOpen={openFromPage} />
+                  <RulebookPage data={leaf.shown.data} terms={leaf.shown.terms} at={leaf.shown.at} xrefs={xrefs} onOpen={openFromPage} canStart={!embedded} />
                 </div>
               </div>
             ) : null}

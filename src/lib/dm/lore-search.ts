@@ -3,6 +3,8 @@ import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { embed, similarityOf } from "@/lib/embeddings";
 import { searchScenes } from "@/lib/dm/memory-index";
 import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
+import { hasWorldDoc, worldView } from "@/lib/db/world-forge";
+import { typeFor } from "@/lib/worldforge/model";
 
 // search_lore: the DM's world-knowledge search. One query runs against
 // every canon source at once: the lead's world lore entries, the
@@ -126,6 +128,16 @@ export async function handleSearchLore(
     }
   }
 
+  // The table's WorldForge (src/lib/worldforge/model.ts): each entry's
+  // article, fields and hidden truth, and the dated events of its history.
+  // The DM is the caller, so the hidden truths come too, marked as such; a
+  // retired entry is history the world no longer holds to.
+  if (category === "any" || ["npc", "location", "factions", "history", "geography", "culture", "religion", "magic"].includes(category)) {
+    for (const candidate of worldForgeCandidates(campaignId, category)) {
+      candidates.push(candidate);
+    }
+  }
+
   // Server-tracked facts (DM-only facts included; the DM is the caller).
   const factCategories = category === "any" ? null : (FACT_CATEGORY_MAP[category] ?? null);
   const factRows = db
@@ -224,4 +236,60 @@ export async function handleSearchLore(
     results,
     note: "These are established canon; stay strictly consistent with them.",
   };
+}
+
+const SHELF_CATEGORY: Record<string, string[]> = {
+  npc: ["npc"],
+  location: ["location", "geography"],
+  faction: ["factions"],
+  lore: ["history", "magic", "culture", "religion", "geography"],
+};
+
+function worldForgeCandidates(campaignId: string, category: string): LoreCandidate[] {
+  if (!hasWorldDoc(campaignId)) {
+    return [];
+  }
+  const { doc, entities } = worldView(campaignId);
+  const out: LoreCandidate[] = [];
+  for (const entity of entities) {
+    if (entity.entry.canon === "retired" || (category !== "any" && !(SHELF_CATEGORY[entity.shelf] ?? []).includes(category))) {
+      continue;
+    }
+    const type = typeFor(doc, entity.shelf, entity.entry.typeId);
+    const fields = type.fields
+      .filter((def) => !def.authorOnly && entity.entry.fields[def.id] !== undefined)
+      .map((def) => {
+        const value = entity.entry.fields[def.id];
+        return `${def.name}: ${typeof value === "object" && value ? value.year : String(value)}`;
+      })
+      .join("; ");
+    const article = entity.entry.article || entity.text;
+    const body = [article, fields, entity.entry.hiddenTruth ? `(secretly: ${entity.entry.hiddenTruth})` : ""].filter(Boolean).join(" ");
+    if (!body.trim()) {
+      continue;
+    }
+    out.push({
+      id: `world:${entity.ref}`,
+      source: entity.entry.canon === "canon" ? "worldforge" : `worldforge (${entity.entry.canon})`,
+      ref: `${type.name}: ${entity.name}`,
+      text: body.slice(0, TEXT_CLIP),
+      haystack: `${entity.name} ${entity.aliases.join(" ")} ${entity.entry.aliases.join(" ")} ${entity.tags.join(" ")} ${body}`,
+      embedding: null,
+    });
+  }
+  if (category === "any" || category === "history") {
+    const nameOf = new Map(entities.map((entity) => [entity.ref, entity.name]));
+    for (const event of doc.events.filter((entry) => entry.canon !== "retired")) {
+      const names = event.refs.map((ref) => nameOf.get(ref)).filter(Boolean).join(", ");
+      out.push({
+        id: `world-event:${event.id}`,
+        source: "worldforge timeline",
+        ref: `${event.when.year ? `${event.when.year}: ` : ""}${event.title}`,
+        text: `${event.body}${names ? ` (involves ${names})` : ""}`.slice(0, TEXT_CLIP),
+        haystack: `${event.title} ${event.era} ${event.body} ${names}`,
+        embedding: null,
+      });
+    }
+  }
+  return out;
 }

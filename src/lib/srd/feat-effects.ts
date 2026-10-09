@@ -84,19 +84,47 @@ export const FEAT_TWINS: Record<string, string> = {
 export type TableFeat = { runsAs?: string; desc: string };
 
 let tableFeatReader: ((campaignId: string) => ReadonlyMap<string, TableFeat>) | null = null;
-const browserFeats = new Map<string, TableFeat>();
+
+// The browser's, one map per table: two campaigns may each have a "Deadeye"
+// that runs as something different, and what one table's DM forgot must
+// stop there. A campaign's snapshot replaces its table's map whole; the
+// builder adds the feats it reads one at a time to the table it builds for,
+// or to the library's outside a campaign.
+const LIBRARY = "library";
+const browserFeats = new Map<string, Map<string, TableFeat>>();
 
 export function registerTableFeatReader(reader: (campaignId: string) => ReadonlyMap<string, TableFeat>): void {
   tableFeatReader = reader;
 }
 
-export function registerBrowserTableFeats(feats: Record<string, TableFeat> | null | undefined): void {
-  if (typeof window === "undefined" || !feats) {
+// `campaignId`: the table the feats are for (null for the library).
+// `replace`: the snapshot is the table's whole list, so anything it does not
+// name is gone. A feat given as null is removed (one the builder found
+// forgotten or deleted).
+export function registerBrowserTableFeats(
+  feats: Record<string, TableFeat | null> | null | undefined,
+  campaignId: string | null = null,
+  options: { replace?: boolean } = {},
+): void {
+  if (typeof window === "undefined") {
     return;
   }
-  for (const [name, feat] of Object.entries(feats)) {
-    browserFeats.set(key(name), feat);
+  const scope = campaignId || LIBRARY;
+  const held = options.replace ? new Map<string, TableFeat>() : (browserFeats.get(scope) ?? new Map<string, TableFeat>());
+  for (const [name, feat] of Object.entries(feats ?? {})) {
+    if (feat) {
+      held.set(key(name), feat);
+    } else {
+      held.delete(key(name));
+    }
   }
+  browserFeats.set(scope, held);
+}
+
+// Everything the browser was told, gone (a sign-out: the next account's
+// tables and library are its own).
+export function forgetBrowserTableFeats(): void {
+  browserFeats.clear();
 }
 
 const KNOWN_FEATS = new Set(FEATS.map((feat) => key(feat.name)));
@@ -117,7 +145,7 @@ export function tableFeat(name: string, campaignId?: string | null): TableFeat |
     return null;
   }
   const fromTable = campaignId && tableFeatReader ? tableFeatReader(campaignId).get(own) : undefined;
-  return fromTable ?? browserFeats.get(own) ?? null;
+  return fromTable ?? browserFeats.get(campaignId || LIBRARY)?.get(own) ?? null;
 }
 
 // The feats on a sheet as the engines run them: a table's workshop feat as

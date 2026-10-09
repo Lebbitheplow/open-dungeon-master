@@ -10,6 +10,7 @@ import { isUploadedImagePath } from "@/lib/uploads";
 import { createRecord, getWorldDoc, nextEntry, saveWorldDoc, worldEntities, worldView, writeRecord } from "@/lib/db/world-forge";
 import { firstSentence, readWorldForge, writeWorldForge, type ExportRecord, type WorldImport } from "@/lib/worldforge/format";
 import { LIMITS, LINK_LABELS, newId, parseRef, refOf, remapDoc, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
+import { mergeImportedLinks } from "@/lib/db/world-link-merge";
 
 // A WorldForge file into a workshop, and a workshop out as one. Importing
 // into a workshop that already has a world adds to it: a type, a field, a
@@ -17,7 +18,21 @@ import { LIMITS, LINK_LABELS, newId, parseRef, refOf, remapDoc, type WorldDoc, t
 // earlier import of the same file left) is updated, not doubled.
 
 export type WorldImportResult =
-  | { created: number; updated: number; links: number; events: number; secrets: number; maps: number; beats: number; skipped: string[] }
+  | {
+      created: number;
+      updated: number;
+      links: number;
+      // What a second import of the same world did to the links it brought
+      // before (src/lib/db/world-link-merge.ts).
+      linksUpdated: number;
+      linksRemoved: number;
+      conflicts: string[];
+      events: number;
+      secrets: number;
+      maps: number;
+      beats: number;
+      skipped: string[];
+    }
   | { error: string; refusal?: UploadRefusal };
 
 function saveImage(image: BundleImage | null, written: string[]): string {
@@ -126,10 +141,9 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
       });
 
       const mapped = remapDoc(parsed.doc, (ref) => refMap.get(ref) ?? null);
-      const linkKey = (link: { from: string; to: string; label: string }) => `${link.from}|${link.to}|${link.label.toLowerCase()}`;
-      const knownLinks = new Set(doc.links.map(linkKey));
-      const newLinks = mapped.links.filter((link) => !knownLinks.has(linkKey(link)) && knownLinks.add(linkKey(link)));
-      doc.links = [...doc.links, ...newLinks].slice(0, LIMITS.links);
+      const names = new Map(worldEntities(campaignId, doc).map((entity) => [entity.ref, entity.name]));
+      const merged = mergeImportedLinks(doc.links, mapped.links, `wf:${parsed.worldName}`, (ref) => names.get(ref) ?? "someone");
+      doc.links = merged.links;
       doc.events = mergeRows(doc.events, mapped.events, LIMITS.events);
       doc.secrets = mergeRows(doc.secrets, mapped.secrets, LIMITS.secrets);
       const stubNames = new Set(doc.stubs.map((stub) => stub.name.toLowerCase()));
@@ -181,7 +195,19 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
           updateBeat(campaignId, id, { ...getBeat(id)!, edges: [ids[at + 1]] });
         });
       }
-      return { created, updated, links: newLinks.length, events: mapped.events.length, secrets: mapped.secrets.length, maps: mapped.maps.length, beats, skipped };
+      return {
+        created,
+        updated,
+        links: merged.added,
+        linksUpdated: merged.updated,
+        linksRemoved: merged.removed,
+        conflicts: merged.conflicts,
+        events: mapped.events.length,
+        secrets: mapped.secrets.length,
+        maps: mapped.maps.length,
+        beats,
+        skipped,
+      };
     })();
   } catch (error) {
     // Files no committed row names are taken away again.
@@ -243,8 +269,14 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
 // The WorldForge of one campaign copied into another, its refs rewritten to
 // the copies of the records that travelled; a ref whose record did not
 // travel is dropped with whatever only it held up. Types, calendars and the
-// rest merge by id, so a second import of the same workshop updates.
-export function copyWorldDoc(sourceId: string, targetId: string, resolve: (shelf: "npc" | "location" | "faction" | "lore", id: string) => string | null): number {
+// rest merge by id, so a second import of the same workshop updates; links
+// merge by the source link they came from (world-link-merge.ts), and what
+// both sides changed comes back in `conflicts`.
+export function copyWorldDoc(
+  sourceId: string,
+  targetId: string,
+  resolve: (shelf: "npc" | "location" | "faction" | "lore", id: string) => string | null,
+): { count: number; conflicts: string[] } {
   const source = getWorldDoc(sourceId);
   const mapped = remapDoc(source, (ref) => {
     const parsed = parseRef(ref);
@@ -254,14 +286,17 @@ export function copyWorldDoc(sourceId: string, targetId: string, resolve: (shelf
   const target = getWorldDoc(targetId);
   target.types = mergeRows(target.types, mapped.types, LIMITS.types);
   target.entries = { ...target.entries, ...mapped.entries };
-  const key = (link: { from: string; to: string; label: string }) => `${link.from}|${link.to}|${link.label.toLowerCase()}`;
-  const known = new Set(target.links.map(key));
-  target.links = [...target.links, ...mapped.links.filter((link) => !known.has(key(link)))].slice(0, LIMITS.links);
+  const names = new Map(worldEntities(targetId, target).map((entity) => [entity.ref, entity.name]));
+  const merged = mergeImportedLinks(target.links, mapped.links, `campaign:${sourceId}`, (ref) => names.get(ref) ?? "someone");
+  target.links = merged.links;
   for (const slice of ["folders", "calendars", "events", "secrets", "stubs", "maps", "pins"] as const) {
     (target as Record<string, unknown>)[slice] = mergeRows(target[slice] as Array<{ id: string }>, mapped[slice] as Array<{ id: string }>, LIMITS[slice]);
   }
   saveWorldDoc(targetId, target);
-  return Object.keys(mapped.entries).length + mapped.links.length + mapped.events.length + mapped.secrets.length;
+  return {
+    count: Object.keys(mapped.entries).length + merged.added + merged.updated + mapped.events.length + mapped.secrets.length,
+    conflicts: merged.conflicts,
+  };
 }
 
 // What the DM ticked in a forge preview (src/lib/worldforge/forge.ts),

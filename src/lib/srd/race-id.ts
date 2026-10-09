@@ -44,6 +44,11 @@ export function registerSpeciesReader(reader: (raceId: string) => SpeciesRules |
 // reader answers.
 const browserSpecies = new Map<string, SpeciesRules>();
 
+// A sign-out forgets what the browser was told.
+export function forgetBrowserSpecies(): void {
+  browserSpecies.clear();
+}
+
 export function registerBrowserSpecies(entries: Record<string, SpeciesRules> | null | undefined): void {
   if (typeof window === "undefined" || !entries) {
     return;

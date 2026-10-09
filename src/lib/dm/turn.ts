@@ -147,6 +147,7 @@ import { splitDamageTool, SPLIT_DAMAGE_TOOL_NAMES } from "@/lib/dm/split-damage"
 import { petTools, PET_TOOL_NAMES } from "@/lib/dm/pet-tools";
 import { socialTools, SOCIAL_TOOL_NAMES, handleSetNpc, npcRosterForPrompt } from "@/lib/dm/social-tools";
 import { worldForPrompt } from "@/lib/dm/world-prompt";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import {
   relationshipTools,
   RELATIONSHIP_TOOL_NAMES,
@@ -419,8 +420,11 @@ export async function startDmTurn(campaignId: string) {
       absoluteCommand: "",
     });
   }
-  // The table's WorldForge: hidden truths, ties and secrets, DM-only.
-  const world = worldForPrompt(campaignId);
+  // The table's WorldForge: what it says of who and what the newest messages
+  // and the scene put in play, then hidden truths, ties and secrets.
+  const world = worldForPrompt(campaignId, {
+    text: [campaign.scene, ...history.slice(-6).map((entry) => entry.content.slice(0, 600))].filter(Boolean).join("\n"),
+  });
   const promptState: DmGameState = {
       campaign,
       // The window the prompt is actually being built against; without this
@@ -1825,7 +1829,7 @@ function emptyTurnPlayer(context: TurnContext): EmptyTurnPlayer | null {
       ? [...allSpellNames(casting), ...(casting.pending ?? []), ...(casting.spellbook ?? [])]
       : [],
     levelOf: (spell) =>
-      spellLevelOf(spell) ?? findSpellByName(spell, sheet?.userId)?.level ?? null,
+      spellLevelOf(spell) ?? findSpellByName(spell, spellAuthorsFor(context.campaign))?.level ?? null,
     notReady: (spell) => notReadyReason(casting, spell),
   };
 }

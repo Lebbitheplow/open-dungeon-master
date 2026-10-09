@@ -67,6 +67,67 @@ test("armour findings follow the SRD's own patterns", () => {
   assert.ok(texts(weightless).includes("weighs"));
 });
 
+// docs/workshop-rulebook-audit-pr169.md F13: no false deviation on the SRD's
+// own rows, and the magic the workshop authors is measured too.
+test("an unchanged SRD suit or shield draws no false finding", () => {
+  const ringMail = validateDraft(plain, {
+    kind: "item",
+    item: { name: "Ring Mail", itemKind: "armor", armor: { name: "Ring Mail", category: "heavy", baseAc: 14, stealthDisadvantage: true, weightLb: 40 } },
+  });
+  assert.ok(!texts(ringMail).includes("Strength"), texts(ringMail));
+  const shieldPlusThree = validateDraft(plain, {
+    kind: "item",
+    item: { name: "Shield, +3", itemKind: "magic_item", armor: { name: "Shield", category: "shield", baseAc: 2, weightLb: 6 }, armorRiders: { bonus: 3 } },
+  });
+  assert.equal(worstLevel(shieldPlusThree), null, texts(shieldPlusThree));
+  const baseFour = validateDraft(plain, {
+    kind: "item",
+    item: { name: "Tower", itemKind: "armor", armor: { name: "Tower", category: "shield", baseAc: 4, weightLb: 15 } },
+  });
+  assert.ok(texts(baseFour).includes("magic bonus"), texts(baseFour));
+  assert.ok(!texts(baseFour).includes("magical ones included"));
+});
+
+test("riders, charges, checks, item spells and curses are measured against the SRD", () => {
+  const brutal = validateDraft(plain, {
+    kind: "item",
+    item: {
+      name: "Brute blade",
+      itemKind: "magic_item",
+      rarity: "uncommon",
+      weaponRiders: { bonus: 5, extra: [{ dice: "4d10", type: "fire" }, { dice: "1d6", type: "shadow" }] },
+      armorRiders: { bonus: 4 },
+      charges: { max: 80 },
+      checks: { bonus: 3, skillBonus: { stealth: 9 } },
+      spells: [{ spell: "Wish", charges: 1, level: 9 }],
+      cursed: true,
+      effects: [{ kind: "resistance", types: ["shadow"] }],
+    },
+  });
+  const said = texts(brutal);
+  for (const expected of ["+5 to hit", "4d10", "\"shadow\" is not one of the 13 damage types", "+4 AC", "80 charges", "never come back", "+3 to every check", "+9 to stealth", "Casts Wish at level 9", "Cursed", "Resistance to shadow"]) {
+    assert.ok(said.includes(expected), `missing "${expected}" in: ${said}`);
+  }
+  const flameTongue = validateDraft(plain, {
+    kind: "item",
+    item: { name: "Flame Tongue", itemKind: "magic_item", rarity: "rare", requiresAttunement: true, weaponRiders: { extra: [{ dice: "2d6", type: "fire" }] } },
+  });
+  assert.equal(worstLevel(flameTongue), null, texts(flameTongue));
+});
+
+test("a spell that lays a condition the engine has no rules for says so", () => {
+  const made = validateDraft(plain, {
+    kind: "spell",
+    spell: { name: "Gloom", level: 2, desc: "The target must succeed on a Wisdom saving throw.", mech: { resolution: "save", save: "wis", condition: { name: "glumly" } } },
+  });
+  assert.ok(texts(made).includes("no rules for \"glumly\""), texts(made));
+  const web = validateDraft(plain, {
+    kind: "spell",
+    spell: { name: "Silkbind", level: 2, desc: "Each creature must make a Dexterity saving throw or be restrained.", mech: { resolution: "save", save: "dex", condition: { name: "restrained" } } },
+  });
+  assert.ok(!texts(web).includes("no rules"), texts(web));
+});
+
 test("magic item effects beyond the books are warnings; stacked effects without attunement a note", () => {
   const strong = validateDraft(plain, {
     kind: "item",

@@ -65,7 +65,14 @@ type SearchOptions = {
   q?: string;
   limit?: number;
   offset?: number;
+  // Whose homebrew a search reads: `userId` one author (their own shelf),
+  // `userIds` a table's (src/lib/db/homebrew.ts tableAuthors), the first
+  // author's entry first where two share a name.
   userId?: string;
+  userIds?: string[];
+  // Forgotten (archived) entries too: play reads them, so whatever already
+  // carries one keeps its rules; every picker leaves them out.
+  includeArchived?: boolean;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -87,21 +94,28 @@ function parseData(raw: string): Record<string, unknown> {
   }
 }
 
-function homebrewEntries(userId: string | undefined, kind: HomebrewKind, q?: string): ContentEntry[] {
-  if (!userId) {
-    return [];
-  }
+function homebrewEntries(options: Pick<SearchOptions, "userId" | "userIds" | "includeArchived">, kind: HomebrewKind, q?: string): ContentEntry[] {
   const needle = (q ?? "").trim().toLowerCase();
-  return listHomebrew(userId, kind)
-    .filter((entry) => !needle || entry.name.toLowerCase().includes(needle))
-    .map((entry) => ({
-      slug: `homebrew:${entry.id}`,
-      name: entry.name,
-      source: "homebrew" as const,
-      documentSlug: "homebrew",
-      document: "Homebrew",
-      data: entry.data,
-    }));
+  const seen = new Set<string>();
+  const out: ContentEntry[] = [];
+  for (const userId of authorsOf(options)) {
+    for (const entry of listHomebrew(userId, kind, { archived: Boolean(options.includeArchived) })) {
+      const key = entry.name.trim().toLowerCase();
+      if ((needle && !key.includes(needle)) || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      out.push({
+        slug: `homebrew:${entry.id}`,
+        name: entry.name,
+        source: "homebrew" as const,
+        documentSlug: "homebrew",
+        document: "Homebrew",
+        data: entry.data,
+      });
+    }
+  }
+  return out;
 }
 
 type SpellRow = {
@@ -164,7 +178,7 @@ function authorsOf(options: SpellAuthors): string[] {
 
 // A name somebody published: in the pack, or on the bundled checklist when
 // there is no pack to ask.
-function isPublishedSpellName(name: string): boolean {
+export function isPublishedSpellName(name: string): boolean {
   const wanted = name.trim().toLowerCase();
   if (!wanted) {
     return false;
@@ -210,8 +224,7 @@ export function searchSpells(
   // A published name is the published spell's: a homebrew row that takes the
   // name of one is not offered in its place, so nobody rewrites Revivify into
   // a 1st level spell by writing their own.
-  const brews = authorsOf(options)
-    .flatMap((userId) => homebrewEntries(userId, "spell", options.q))
+  const brews = homebrewEntries(options, "spell", options.q)
     .filter((entry) => !isPublishedSpellName(entry.name))
     .map((entry) => ({
       ...entry,
@@ -247,11 +260,28 @@ export function findSpellByName(name: string, authors?: string | string[]): Spel
     return null;
   }
   const userIds = Array.isArray(authors) ? authors : authors ? [authors] : [];
+  // A forgotten spell still answers for the lists that already hold it.
   return (
-    searchSpells({ q: trimmed, userIds, limit: MAX_LIMIT }).find((entry) =>
+    searchSpells({ q: trimmed, userIds, limit: MAX_LIMIT, includeArchived: true }).find((entry) =>
       spellNameMatches(entry, trimmed),
     ) ?? null
   );
+}
+
+// The published spell a table's workshop copy runs as, or null for a
+// published spell and a homebrew one that runs as nothing published.
+function runsAsOf(entry: SpellEntry | null): string | null {
+  const runsAs = entry?.source === "homebrew" && typeof entry.data.runsAs === "string" ? entry.data.runsAs.trim() : "";
+  return runsAs || null;
+}
+
+// The name every engine that keys a spell by its name reads: the published
+// spell a workshop copy runs as (a renamed Web, "Silkbind", lays Web's area;
+// a renamed Conjure Animals calls Conjure Animals' beasts), else the spell's
+// own. The copy keeps its own name everywhere a player reads it.
+export function spellEngineName(name: string, authors?: string | string[]): string {
+  const entry = findSpellByName(name, authors);
+  return runsAsOf(entry) ?? entry?.name ?? name;
 }
 
 // What a cast needs to know of a spell (src/lib/srd/spell-facts.ts): from the
@@ -318,6 +348,7 @@ export function searchItems(
         name: row.name,
         source: "open5e" as const,
         documentSlug: row.document_slug,
+        document: documentTitle(row.document_slug),
         kind: row.kind,
         rarity: row.rarity,
         cost: row.cost,
@@ -327,7 +358,7 @@ export function searchItems(
       })),
     );
   }
-  const brews = homebrewEntries(options.userId, "item", options.q).map((entry) => ({
+  const brews = homebrewEntries(options, "item", options.q).map((entry) => ({
     ...entry,
     kind: (entry.data.itemKind as ItemEntry["kind"]) ?? "gear",
     rarity: String(entry.data.rarity ?? ""),
@@ -394,9 +425,15 @@ export function searchFeats(options: SearchOptions = {}): ContentEntry[] {
         .all(likeParam(options.q), ...editions) as Array<{ name: string }> | undefined) ?? [];
   const packNames = packRows.map((row) => row.name);
   return [
-    ...homebrewEntries(options.userId, "feat", options.q),
+    ...homebrewEntries(options, "feat", options.q),
     ...withAuthoredFeats(served, { ...options, packNames }),
   ];
+}
+
+// A table's workshop hazards (traps, poisons, diseases), for "start from"
+// beside the SRD's (src/lib/workshop/hazard-catalog.ts).
+export function searchHomebrewHazards(options: SearchOptions = {}): ContentEntry[] {
+  return homebrewEntries(options, "hazard", options.q);
 }
 
 export function listConditions(options: SearchOptions = {}): ContentEntry[] {
@@ -414,7 +451,7 @@ function givesTwoSkills(entry: ContentEntry): boolean {
 export function listBackgrounds(options: SearchOptions = {}): ContentEntry[] {
   return [
     ...searchSimpleTable("backgrounds", { ...options, limit: options.limit ?? MAX_LIMIT }).filter(givesTwoSkills),
-    ...homebrewEntries(options.userId, "background", options.q),
+    ...homebrewEntries(options, "background", options.q),
   ];
 }
 
@@ -444,7 +481,7 @@ export function listRaces(options: SearchOptions & { includeSubraces?: boolean }
       const parent = parents.get(entry.slug);
       return parent ? { ...entry, data: { ...entry.data, parent_slug: parent } } : entry;
     }),
-    ...homebrewEntries(options.userId, "race", options.q),
+    ...homebrewEntries(options, "race", options.q),
   ];
 }
 
@@ -460,7 +497,7 @@ export function listArchetypes(classSlug: string, options: SearchOptions = {}): 
       extraWhere: "class_slug = ?",
       extraParams: [classSlug],
     }),
-    ...homebrewEntries(options.userId, "archetype", options.q).filter(
+    ...homebrewEntries(options, "archetype", options.q).filter(
       (entry) => !entry.data.classSlug || entry.data.classSlug === classSlug,
     ),
   ];
@@ -492,9 +529,10 @@ export function searchMonsters(
       name: row.name,
       source: "open5e" as const,
       documentSlug: row.document_slug,
+      document: documentTitle(row.document_slug),
       data: parseData(row.data_json),
     })),
-    ...homebrewEntries(options.userId, "monster", options.q),
+    ...homebrewEntries(options, "monster", options.q),
   ];
 }
 
@@ -596,7 +634,12 @@ export function spellDamageFor(input: {
   if (spellLevel === null) {
     return null;
   }
-  const mech = spellMechFor([entry?.name ?? input.spell, ...(entry?.aliases ?? []), input.spell]);
+  // A workshop spell's own block first, then the spell it runs as: the one
+  // order spellMechanicsFor reads them in.
+  const runsAs = runsAsOf(entry);
+  const mech =
+    (entry?.source === "homebrew" ? normalizeSpellMech(entry.data.mech) : null) ??
+    spellMechFor([entry?.name ?? input.spell, ...(entry?.aliases ?? []), input.spell, ...(runsAs ? [runsAs] : [])]);
   // The row first, then the prose, then the baked answers: one rule with the
   // Hand's cards (src/lib/srd/spell-dice.ts).
   const rolled = mechSpellDamage({
@@ -621,6 +664,8 @@ export type ResolvedSpellMech = {
   name: string;
   spellLevel: number;
   concentration: boolean;
+  // The published spell a workshop copy runs as (spellEngineName).
+  runsAs?: string;
 };
 
 export function spellMechanicsFor(input: {
@@ -631,17 +676,19 @@ export function spellMechanicsFor(input: {
   const entry = findSpellByName(input.spell, input.userIds ?? input.userId);
   if (entry) {
     // A homebrew spell may carry its own block (src/lib/homebrew/gear.ts),
-    // which beats parsing its prose; the prose is still parsed for damage.
+    // which beats parsing its prose; then the block of the published spell
+    // it runs as; the prose is still parsed for damage.
+    const runsAs = runsAsOf(entry);
     const mech =
       (entry.source === "homebrew" ? normalizeSpellMech(entry.data.mech) : null) ??
-      spellMechFor([entry.name, ...entry.aliases, input.spell]) ??
+      spellMechFor([entry.name, ...entry.aliases, input.spell, ...(runsAs ? [runsAs] : [])]) ??
       parseSpellMech({
         desc: String(entry.data.desc ?? ""),
         higherLevel: String(entry.data.higher_level ?? ""),
         duration: String(entry.data.duration ?? ""),
       });
     return mech
-      ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration }
+      ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration, ...(runsAs ? { runsAs } : {}) }
       : null;
   }
   // No content database (or an unbundled name): the authored layer and the

@@ -13,6 +13,7 @@
 // lost when the caster's next turn starts (condition-tick.ts ends the
 // readied condition and the concentration that held it).
 
+import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import type { Campaign } from "@/lib/db/campaigns";
 import { saveEncounter, type Encounter } from "@/lib/db/encounters";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -53,7 +54,7 @@ export function readySpell(
   if (!trigger) {
     return { error: "Ready needs the trigger it waits for, e.g. trigger: 'when the goblin steps through the door'. Nothing was spent." };
   }
-  const facts = spellFactsFor(input.spell, [sheet.userId]);
+  const facts = spellFactsFor(input.spell, sheetSpellAuthors(sheet));
   if (facts && facts.castingTime !== "action") {
     return {
       error: `${facts.name} cannot be readied: only a spell with a casting time of one action can be (SRD 5.1, Ready). Nothing was spent.`,
@@ -135,7 +136,7 @@ export function releaseReadied(
   dropReadied(campaign, sheet.id);
   // The concentration was the holding; a spell that is not itself a
   // concentration spell lets go of it now.
-  const facts = spellFactsFor(held.spell, [sheet.userId]);
+  const facts = spellFactsFor(held.spell, sheetSpellAuthors(sheet));
   if (facts && !facts.concentration) {
     breakConcentration(campaign, null, sheet.id, "the readied spell was released");
   }

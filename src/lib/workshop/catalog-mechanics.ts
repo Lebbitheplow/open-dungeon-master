@@ -11,7 +11,10 @@ import { subclassFeatureDescription, subclassLevelFor, subclassTableFor } from "
 import { subclassLevelsFromProse, type SubclassFeatureRow } from "@/lib/srd/subclass-tables";
 import { engineFeatNamed } from "@/lib/srd/feat-effects";
 import { packFeatText } from "@/lib/srd/feat-text";
-import { mergedBackgroundOptions, srdBackgroundOptions } from "@/lib/characters/options";
+import { mergedBackgroundOptions, srdBackgroundOptions, srdRaceOptions, type RaceOption } from "@/lib/characters/options";
+import { subclassNamesFor } from "@/lib/srd/features";
+import { bundledRaceTraitText, rulebookPageIdFor } from "@/lib/rulebook/catalog-rows";
+import type { RulebookPage } from "@/lib/rulebook/types";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -191,6 +194,11 @@ export function raceMechanicsOf(
   }
   const paragraphs = new Map([...traitParagraphs(String(parent?.data.traits ?? "")), ...traitParagraphs(String(row.data.traits ?? ""))]);
   const traits = option.traitNames.map((name) => `**_${name}._** ${paragraphs.get(name) ?? ""}`.trim()).join("\n\n");
+  return raceTableOf(option, traits, String(row.data.vision ?? parent?.data.vision ?? ""));
+}
+
+// What a species's data carries for one of the builder's race options.
+function raceTableOf(option: RaceOption, traits: string, vision: string): Record<string, unknown> {
   return {
     traits,
     size: option.size ?? "Medium",
@@ -200,7 +208,7 @@ export function raceMechanicsOf(
     languages: option.languages,
     ...(option.bonusLanguages ? { bonusLanguages: option.bonusLanguages } : {}),
     ...(option.languageChoice ? { languageChoice: option.languageChoice } : {}),
-    vision: String(row.data.vision ?? parent?.data.vision ?? ""),
+    vision,
     ...(option.asiChoice ? { asiChoice: option.asiChoice } : {}),
     ...(option.skills ? { skills: option.skills } : {}),
     ...(option.skillChoice ? { skillChoice: option.skillChoice } : {}),
@@ -274,6 +282,51 @@ export function bundledBackgroundRows(q: string, results: Array<{ slug: string }
     }));
 }
 
+// With no content pack the builder's own races and subclasses are what a
+// server has; these hand them to "start from" as rows with their grants
+// (`table`), less any a row in `results` already stands for.
+export function bundledRaceRows(q: string, results: Array<{ name: string }>): Array<Record<string, unknown>> {
+  // Every word, in any order: "hill dwarf" finds the builder's "Dwarf (Hill)".
+  const words = q.trim().toLowerCase().split(/[^a-z0-9-]+/).filter(Boolean);
+  const held = new Set(results.map((row) => row.name.trim().toLowerCase()));
+  return srdRaceOptions()
+    .filter((option) => !held.has(option.name.toLowerCase()) && words.every((word) => option.name.toLowerCase().includes(word)))
+    .map((option) => {
+      // The traits in the bundled book's words where it prints them.
+      const words = bundledRaceTraitText(option.name);
+      const traits = option.traitNames
+        .map((name) => `**_${name}._** ${words.get(name) ?? words.get(name.replace(/\s*\(.*\)$/, "")) ?? ""}`.trim())
+        .join("\n\n");
+      return {
+        slug: option.id,
+        name: option.name,
+        source: "bundled",
+        documentSlug: "wotc-srd",
+        document: "SRD 5.1 (bundled)",
+        data: { desc: option.note ?? "", traits },
+        table: raceTableOf(option, traits, ""),
+      };
+    });
+}
+
+export function bundledArchetypeRows(classSlug: string, q: string, results: Array<{ name: string }>): Array<Record<string, unknown>> {
+  const classId = classSlug.trim().toLowerCase();
+  const wanted = q.trim().toLowerCase();
+  const held = new Set(results.map((row) => row.name.trim().toLowerCase()));
+  return subclassNamesFor(classId)
+    .filter((name) => !held.has(name.toLowerCase()) && (!wanted || name.toLowerCase().includes(wanted)))
+    .map((name) => {
+      const row = { name, source: "bundled", data: { desc: "" } };
+      return {
+        slug: `${classId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        ...row,
+        documentSlug: "wotc-srd",
+        document: "SRD 5.1 (bundled)",
+        table: archetypeMechanicsOf(row, classId) ?? { classSlug: classId, levels: {} },
+      };
+    });
+}
+
 // A published feat as the workshop copies it: its whole text, wherever the
 // pack keeps it (a Level Up feat's benefits list, not only its summary),
 // and the feat the engines run it as, so a renamed copy of Sharpshooter
@@ -287,7 +340,26 @@ export function featMechanicsOf(row: Row): Record<string, unknown> | null {
   return { desc: text.desc, prerequisite: text.prerequisite, ...(runsAs ? { runsAs } : {}) };
 }
 
+// The kinds of catalog row the bundled book prints a page for.
+const BOOK_KIND: Record<string, RulebookPage["kind"]> = { spells: "spell", items: "item", races: "race", monsters: "monster" };
+
+// A published SRD row carries the book page it is printed on, so a copy
+// started from it keeps its page (draft.ts copiedFromOf) and the editor can
+// open the book there. Another book's entry of the same name is its own
+// entry, and gets no SRD page.
+function withPage(kind: string, row: unknown): unknown {
+  const bookKind = BOOK_KIND[kind];
+  const entry = row as Row & { documentSlug?: string; rulebook?: string };
+  if (!bookKind || entry.source === "homebrew" || entry.rulebook || (entry.documentSlug && entry.documentSlug !== "wotc-srd")) return row;
+  const page = rulebookPageIdFor(bookKind, entry.name);
+  return page ? { ...entry, rulebook: page } : row;
+}
+
 export function withMechanics(kind: string, results: unknown[], params: { classSlug?: string } = {}): unknown[] {
+  return withMechanicsOnly(kind, results, params).map((row) => withPage(kind, row));
+}
+
+function withMechanicsOnly(kind: string, results: unknown[], params: { classSlug?: string }): unknown[] {
   if (kind === "backgrounds") {
     return results.map((row) => {
       const table = backgroundMechanicsOf(row as Row & { slug?: string; documentSlug?: string });

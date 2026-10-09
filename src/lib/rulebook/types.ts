@@ -77,6 +77,16 @@ export type RulebookPageResponse = {
   chapter: { id: string; numeral: string; title: string };
   prev: PageLink | null;
   next: PageLink | null;
+  // Where the page goes in ODM and how the table runs it
+  // (src/lib/rulebook/crosswalk.ts). Absent from older servers.
+  crosswalk?: {
+    editor: "spell" | "item" | "race" | "archetype" | "monster" | null;
+    catalogName?: string;
+    classId?: string;
+    template?: string;
+    support: "engine" | "structured" | "editable" | "reference";
+    where: string;
+  };
 };
 
 export type SearchHit = {

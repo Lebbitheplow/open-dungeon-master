@@ -1,5 +1,6 @@
 "use client";
 
+import { appNotice } from "@/components/ui/ConfirmDialog";
 import { Check, FileUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -130,6 +131,12 @@ export function ImportBundleButton({
     setError("");
     try {
       const data = await post({ text, kinds, sharedWorkshopId });
+      // Arrivals kept beside the importer's own entries of the same name,
+      // said before the new workshop opens (workshop-bundle-shelf.ts).
+      const renamed = ((data as { shelf?: { renamed?: string[] } }).shelf?.renamed ?? []).filter(Boolean);
+      if (renamed.length) {
+        await appNotice(`${renamed.join(" ")} The new workshop's Cast, fights and pregens use these names; your other workshops are unchanged.`, "Kept beside your own");
+      }
       navigateTo(`/workshop/${data.workshopId}`);
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be imported.");

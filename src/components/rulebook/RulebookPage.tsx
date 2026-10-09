@@ -1,5 +1,6 @@
 "use client";
 
+import { PagePrep } from "./PagePrep";
 import { Fragment, useMemo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { inlineText, parseBook, parseInline, type BookBlock, type InlineNode } from "@/lib/rulebook/markdown";
@@ -226,6 +227,7 @@ export function RulebookPage({
   at,
   xrefs,
   onOpen,
+  canStart = true,
 }: {
   data: RulebookPageResponse;
   terms: string[];
@@ -233,6 +235,9 @@ export function RulebookPage({
   at?: string;
   xrefs: Map<string, string>;
   onOpen: OpenPage;
+  // Whether "start a workshop copy" is offered: not in the book opened over
+  // an editor or the table, where leaving would lose what is open there.
+  canStart?: boolean;
 }) {
   const { page, chapter, prev, next } = data;
   const blocks = useMemo(() => {
@@ -282,6 +287,7 @@ export function RulebookPage({
         ) : null}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/assets/ui/divider-rule.webp" alt="" width={512} height={33} className="rb-divider" />
+        <PagePrep data={data} canStart={canStart} />
       </header>
 
       <div className="rb-text">{page.kind === "monster" ? <div className="rb-statblock">{body}</div> : body}</div>

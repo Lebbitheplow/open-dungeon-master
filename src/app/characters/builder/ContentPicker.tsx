@@ -30,7 +30,7 @@ export default function ContentPicker({
   onPick: (entry: PickerEntry) => void;
   renderMeta?: (entry: PickerEntry) => string;
 }) {
-  const { query, setQuery, results, setResults, open, setOpen, loading, unavailable } =
+  const { query, setQuery, results, setResults, open, setOpen, loading, unavailable, unadmitted } =
     useContentSearch(kind, extraParams);
   const container = useRef<HTMLDivElement>(null);
 
@@ -73,6 +73,12 @@ export default function ContentPicker({
       ) : open && !results.length && query.trim() && !loading ? (
         <p className="mt-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-500">
           Nothing matched &quot;{query.trim()}&quot;. Try fewer letters, or pick from the full list.
+        </p>
+      ) : null}
+      {unadmitted.length ? (
+        <p className="mt-1 text-[11px] text-stone-500">
+          Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it keeps a copy in their
+          workshop to admit one.
         </p>
       ) : null}
       {open && results.length ? (

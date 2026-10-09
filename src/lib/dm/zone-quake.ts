@@ -49,7 +49,7 @@ function withQuakeTurn<T>(campaignId: string, run: (turn: DmTurn) => T): T {
   }
 }
 
-export const isQuake = (zone: SpellZone) => Boolean(zoneRowFor(zone.spell)?.quake);
+export const isQuake = (zone: SpellZone) => Boolean(zoneRowFor(zone)?.quake);
 
 const prone = (conditions: string[]) => conditions.some((entry) => entry.toLowerCase() === "prone");
 

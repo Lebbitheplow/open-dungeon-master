@@ -17,12 +17,12 @@ const xyOf = (cell: number, width: number): XY => ({ x: cell % width, y: Math.fl
 
 // The areas with every gas cloud held back by the Wind Walls among them.
 export function holdGasesBack(zones: SpellZone[], width: number): SpellZone[] {
-  const barrier = new Set(zones.filter((zone) => zoneRowFor(zone.spell)?.keepsGasesOut).flatMap((zone) => zone.cells));
+  const barrier = new Set(zones.filter((zone) => zoneRowFor(zone)?.keepsGasesOut).flatMap((zone) => zone.cells));
   if (!barrier.size) {
     return zones;
   }
   return zones.map((zone) => {
-    if (!zoneRowFor(zone.spell)?.gas) {
+    if (!zoneRowFor(zone)?.gas) {
       return zone;
     }
     const kept = zone.cells.filter((cell) => !lineCells(width, zone.origin, xyOf(cell, width)).some((step) => barrier.has(step)));
@@ -43,13 +43,21 @@ export function sectionCells(zone: Pick<SpellZone, "origin" | "cells">, section:
 
 // "Wall of Ice section 3", "wall of ice, section 3", "Wall of Ice #3":
 // the wall's spell name and the section number, or null for another name.
-export function parseSectionName(name: string): { spell: string; section: number | null } | null {
+//
+// `walls` are the sectioned walls standing on the board, so a workshop copy
+// of Wall of Ice under a name of its own ("Rime Wall section 2") is found by
+// that name.
+export function parseSectionName(
+  name: string,
+  walls: Array<{ spell: string; runsAs?: string }> = [],
+): { spell: string; section: number | null; runsAs?: string } | null {
   const text = name.trim().toLowerCase().replace(/\s+/g, " ");
   const numbered = /^(?:the )?(.*?)[,:]?\s*(?:section|#|no\.?)\s*(\d{1,3})$/.exec(text);
   const spell = numbered ? numbered[1].trim() : text.replace(/^the /, "");
-  const row = zoneRowFor(spell);
+  const copy = walls.find((wall) => wall.runsAs && wall.spell.trim().toLowerCase().replace(/\s+/g, " ") === spell);
+  const row = zoneRowFor(copy ? { spell: copy.spell, runsAs: copy.runsAs } : spell);
   if (!row?.sections) {
     return null;
   }
-  return { spell, section: numbered ? Number(numbered[2]) : null };
+  return { spell, section: numbered ? Number(numbered[2]) : null, ...(copy?.runsAs ? { runsAs: copy.runsAs } : {}) };
 }

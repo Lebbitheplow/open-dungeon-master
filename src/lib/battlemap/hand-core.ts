@@ -1,6 +1,8 @@
 // The Hand's shared vocabulary: what a card is, what a turn is, and the
 // gates that stop a card being played. Split from hand.ts only to keep each
 // file readable; hand.ts re-exports everything a caller needs.
+import type { SpellMech } from "@/lib/srd/spell-mech-types";
+import type { SpellFacts } from "@/lib/srd/spell-facts";
 import {
   spendAction,
   spendAttack,
@@ -200,6 +202,13 @@ export type SpellFact = {
   desc: string;
   higherLevel: string;
   concentration: boolean;
+  // A table's workshop spell: its own block (which the cast tools read before
+  // any published row), the published spell it runs as (its area, its
+  // melee touch), and its casting facts (its material and price), so its
+  // card says what the server will do.
+  mech?: SpellMech;
+  runsAs?: string;
+  facts?: SpellFacts;
 };
 
 export type HandOptions = {

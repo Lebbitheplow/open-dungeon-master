@@ -1116,7 +1116,8 @@ export function useCampaignStream(campaignId: string) {
       const data = await response.json();
       const lastSeq = data.latestSeq ?? 0;
       registerBrowserSpecies(data.species);
-      registerBrowserTableFeats(data.feats);
+      // The table's whole list: a feat its DM forgot leaves with it.
+      registerBrowserTableFeats(data.feats ?? {}, campaignId, { replace: true });
       dispatch({
         type: "snapshot",
         payload: {

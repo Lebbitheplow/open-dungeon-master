@@ -67,6 +67,10 @@ export const bundleManifestSchema = z.object({
   // the milder community-content notice instead of a non-affiliation
   // disclaimer it does not need. See UnofficialPackNotice.
   rightsHolder: z.string().trim().max(120).default(""),
+  // What of the author's shelf (hand-built monsters, homebrew items, spells
+  // and options) rides along: all of it, or only what this workshop uses
+  // (src/lib/db/workshop-bundle-shelf.ts).
+  shelf: z.enum(["all", "used"]).default("all"),
 });
 
 export type BundleManifest = z.infer<typeof bundleManifestSchema>;

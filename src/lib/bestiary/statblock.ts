@@ -1,3 +1,4 @@
+import { printedBlockOf, type PrintedBlock } from "@/lib/bestiary/printed-block";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
 import { parseRoutines, type OnHitRider, type RoutineStep, type TypedDice } from "@/lib/bestiary/attack-text";
@@ -109,7 +110,14 @@ export type EnemyStats = {
   // beast's, and this is everything its own form gives back when the spell
   // ends (src/lib/dm/enemy-polymorph.ts). Absent on every other block.
   polymorphedFrom?: EnemyOwnForm;
+  // The whole printed block, word for word (src/lib/bestiary/printed-block.ts):
+  // the lines above are the compact view the fights read. Blocks made by
+  // hand and old snapshots lack it.
+  printed?: PrintedBlock;
 };
+
+export type { PrintedAbility, PrintedBlock } from "@/lib/bestiary/printed-block";
+export { normalizePrintedBlock, PRINTED_LIMITS, unrunPrintedAbilities } from "@/lib/bestiary/printed-block";
 
 // A polymorphed creature's own form, exactly as the spell found it.
 export type EnemyOwnForm = {
@@ -320,6 +328,8 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   const regenerating = specials.find((entry) => /^regeneration\b/i.test(asString(entry.name)));
   const regeneration = regenerating ? parseRegeneration(asString(regenerating.desc)) : null;
 
+  const printed = printedBlockOf(data, actions, specials);
+
   const dexterity = asNumber(data.dexterity) ?? 10;
   const cr = asNumber(data.cr) ?? crFromRow;
   const type = normalizeCreatureType(data.type);
@@ -370,6 +380,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     ...(type ? { type } : {}),
     ...parseBlockExtras(data, abilityFields),
     ...(spellcasting?.spells.length ? { spells: [...new Set(spellcasting.spells.map((spell) => spell.name))] } : {}),
+    ...(printed ? { printed } : {}),
   };
 }
 

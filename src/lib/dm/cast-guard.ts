@@ -227,11 +227,15 @@ export function castSpell(
   const authors = spellAuthorsFor(campaign);
   const facts = spellFactsFor(spell, authors);
   const name = facts?.name ?? spell;
+  // The published spell a table's workshop copy runs as: what every engine
+  // that keys a spell by name reads (src/lib/content/index.ts
+  // spellEngineName). The copy's own name is what is spent and held.
+  const engine = facts?.runsAs ?? name;
   const encounter = getActiveEncounter(campaign.id);
   const inFight = inRunningFight(encounter);
   const reactionTime = facts?.castingTime === "reaction" || via === "reaction";
   // A summoning spell's creatures come through cast_buff (summon-cast.ts).
-  const summoning = via === "slot" && !input.dryRun ? summonSlotProblem(name) : null;
+  const summoning = via === "slot" && !input.dryRun ? summonSlotProblem(engine) : null;
   if (summoning) {
     return { error: summoning };
   }
@@ -451,12 +455,12 @@ export function castSpell(
     }
   }
   // Contact Other Plane's toll on its caster (spell-self.ts).
-  Object.assign(result, casterCost(campaign, sheet, name));
+  Object.assign(result, casterCost(campaign, sheet, engine, name));
   // An abjurer's Arcane Ward rises or recovers with an abjuration spell (arcane-ward.ts).
   Object.assign(result, wardOnCast(campaign, sheet.id, spellSchoolFor(name, authors), slotLevel ?? (facts?.level || null)));
   // Grasping Tentacles: casting the guarded spell gives temporary hit points
   // (src/lib/dm/authored-spells.ts).
-  const guardedCast = castTempHp(campaign, sheet, name);
+  const guardedCast = castTempHp(campaign, sheet, engine, name);
   if (guardedCast) {
     result.subclassFeature = guardedCast;
   }
@@ -467,6 +471,6 @@ export function castSpell(
     endSanctuaryOnHarm(campaign.id, sheet.id);
   }
   // Its area on the board; aoe_damage and cast_at_enemy lay theirs after the saves.
-  const zone = via === "slot" || via === "buff" ? placeSpellZone(campaign, { spell: name, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel, dc: spellSaveDcFor(sheet, name), at: input.at, toward: input.toward }) : null;
+  const zone = via === "slot" || via === "buff" ? placeSpellZone(campaign, { spell: name, runsAs: facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel, dc: spellSaveDcFor(sheet, name), at: input.at, toward: input.toward }) : null;
   return zone ? { ...result, area: zone } : result;
 }

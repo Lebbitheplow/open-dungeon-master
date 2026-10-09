@@ -42,7 +42,19 @@ const VIEWS: Array<{ value: View; label: string; icon: IconRailItem["icon"] }> =
   { value: "types", label: "Types", icon: Shapes },
 ];
 
-type ImportReport = { created: number; updated: number; links: number; events: number; secrets: number; maps: number; beats: number; skipped: string[] };
+type ImportReport = {
+  created: number;
+  updated: number;
+  links: number;
+  linksUpdated?: number;
+  linksRemoved?: number;
+  conflicts?: string[];
+  events: number;
+  secrets: number;
+  maps: number;
+  beats: number;
+  skipped: string[];
+};
 
 export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: string; onOpenSystem: (system: string) => void }) {
   const api = useWorld(campaignId);
@@ -115,6 +127,14 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
           Brought in {report.created} new {report.created === 1 ? "entry" : "entries"}
           {report.updated ? `, updated ${report.updated}` : ""}, {report.links} links, {report.events} events, {report.secrets} secrets, {report.maps} maps
           {report.beats ? ` and ${report.beats} storyboard cards` : ""}.
+          {report.linksUpdated || report.linksRemoved ? (
+            <span className="block">
+              Links brought in before: {report.linksUpdated ?? 0} updated to match the file, {report.linksRemoved ?? 0} the file no longer has removed.
+            </span>
+          ) : null}
+          {report.conflicts?.length ? (
+            <span className="block text-amber-300">Changed here and in the file, kept as you had them: {report.conflicts.join(" ")}</span>
+          ) : null}
           {report.skipped.length ? <span className="block text-ember-300">Left out: {report.skipped.join("; ")}</span> : null}
         </div>
       ) : null}

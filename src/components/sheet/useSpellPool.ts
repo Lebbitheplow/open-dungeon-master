@@ -1,5 +1,6 @@
 "use client";
 
+import { scopedParams, useContentCampaign } from "@/lib/content-scope";
 import { useEffect, useRef, useState } from "react";
 import spellManifest from "@/lib/srd/manifest/spells.json";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
@@ -51,14 +52,18 @@ function uniqueByName(rows: PoolSpell[]): PoolSpell[] {
 
 // Level and pack row for spells the bundled checklist does not name (a pack
 // or homebrew spell on a sheet), looked up one by one and remembered for
-// the page's life. Names the checklist knows never cost a request.
+// the page's life, per table (src/lib/content/scope.ts): two tables may
+// each have a homebrew spell of one name. Names the checklist knows never
+// cost a request.
 const lookups = new Map<string, PoolSpell | null>();
+const scoped = (campaignId: string | null, name: string) => `${campaignId ?? "library"}|${name.toLowerCase()}`;
 
 export function useSpellLookups(names: string[]): Map<string, PoolSpell> {
+  const campaignId = useContentCampaign();
   const wanted = [...new Set(names.map((name) => name.trim()).filter(Boolean))].filter(
     (name) => spellLevelOf(name) === null,
   );
-  const missing = wanted.filter((name) => !lookups.has(name.toLowerCase()));
+  const missing = wanted.filter((name) => !lookups.has(scoped(campaignId, name)));
   const [, setVersion] = useState(0);
   const missingKey = missing.join("|");
 
@@ -79,17 +84,17 @@ export function useSpellLookups(names: string[]): Map<string, PoolSpell> {
       return;
     }
     for (const name of missingKey.split("|")) {
-      void lookUp(name).then(() => {
+      void lookUp(name, campaignId).then(() => {
         if (mounted.current) {
           setVersion((value) => value + 1);
         }
       });
     }
-  }, [missingKey]);
+  }, [missingKey, campaignId]);
 
   const found = new Map<string, PoolSpell>();
   for (const name of wanted) {
-    const row = lookups.get(name.toLowerCase());
+    const row = lookups.get(scoped(campaignId, name));
     if (row) {
       found.set(name.toLowerCase(), row);
     }
@@ -100,8 +105,9 @@ export function useSpellLookups(names: string[]): Map<string, PoolSpell> {
 // One request per name however many books ask for it at once.
 const inFlight = new Map<string, Promise<void>>();
 
-function lookUp(name: string): Promise<void> {
-  const key = name.toLowerCase();
+function lookUp(name: string, campaignId: string | null): Promise<void> {
+  const key = scoped(campaignId, name);
+  const wantedName = name.toLowerCase();
   if (lookups.has(key)) {
     return Promise.resolve();
   }
@@ -111,12 +117,12 @@ function lookUp(name: string): Promise<void> {
   }
   const request = (async () => {
     try {
-      const params = new URLSearchParams({ q: name, limit: "10" });
+      const params = new URLSearchParams(scopedParams({ q: name, limit: "10" }, campaignId));
       const response = await fetch(`/api/content/spells?${params}`);
       const body = response.ok
         ? ((await response.json()) as { results?: Array<PoolSpell & { slug: string }> })
         : {};
-      const row = (body.results ?? []).find((entry) => entry.name.trim().toLowerCase() === key);
+      const row = (body.results ?? []).find((entry) => entry.name.trim().toLowerCase() === wantedName);
       lookups.set(
         key,
         row
@@ -146,7 +152,8 @@ export function useSpellPool(
   maxLevel: number,
   enabled = true,
 ): { pool: PoolSpell[]; loading: boolean } {
-  const key = `${classSlug.toLowerCase()}:${maxLevel}`;
+  const campaignId = useContentCampaign();
+  const key = `${campaignId ?? "library"}:${classSlug.toLowerCase()}:${maxLevel}`;
   const [loaded, setLoaded] = useState<{ key: string; pool: PoolSpell[] } | null>(() =>
     cache.has(key) ? { key, pool: cache.get(key) ?? [] } : null,
   );
@@ -161,12 +168,9 @@ export function useSpellPool(
       let fallback = false;
       try {
         for (let offset = 0; offset < 2000; offset += PAGE) {
-          const params = new URLSearchParams({
-            class: classSlug,
-            level: String(maxLevel),
-            limit: String(PAGE),
-            offset: String(offset),
-          });
+          const params = new URLSearchParams(
+            scopedParams({ class: classSlug, level: String(maxLevel), limit: String(PAGE), offset: String(offset) }, campaignId),
+          );
           const response = await fetch(`/api/content/spells?${params}`);
           if (!response.ok) {
             fallback = true;
@@ -209,7 +213,7 @@ export function useSpellPool(
     return () => {
       cancelled = true;
     };
-  }, [enabled, classSlug, maxLevel, key]);
+  }, [enabled, classSlug, maxLevel, key, campaignId]);
 
   const pool = loaded?.key === key ? loaded.pool : (cache.get(key) ?? null);
   return { pool: pool ?? [], loading: enabled && Boolean(classSlug) && pool === null };

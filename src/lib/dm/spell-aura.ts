@@ -18,6 +18,7 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, listEnemies, patchEnemyConditions, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
@@ -93,7 +94,7 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
     const meta = caster.conditionMeta as ConditionMetaMap;
     for (const condition of caster.conditions) {
       const spell = meta[condition]?.spell ?? (condition.toLowerCase() === "spirit guardians" ? "Spirit Guardians" : null);
-      const aura = spell ? spellMechanicsFor({ spell, userId: caster.userId }) : null;
+      const aura = spell ? spellMechanicsFor({ spell, userIds: sheetSpellAuthors(caster) }) : null;
       if (!aura?.mech.aura) {
         continue;
       }

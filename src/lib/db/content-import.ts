@@ -1,4 +1,7 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
+import { resolveMonster } from "@/lib/bestiary";
+import { tableAuthors } from "@/lib/db/homebrew";
+import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
 import { getCampaignById, updateGameSettings, type Campaign } from "@/lib/db/campaigns";
 import { embedPendingLore } from "@/lib/db/lore";
 import { listBeats } from "@/lib/db/workshop-beats";
@@ -312,6 +315,8 @@ export function runContentImport(input: {
   // rewritten through this map rather than carried across verbatim.
   const idMap: ImportIdMap = new Map();
   const counts = { copied: 0, kept: 0, unbound: 0 };
+  // Links changed here and in the copied world (world-link-merge.ts).
+  let worldConflicts: string[] = [];
   const finalNames = new Map<string, string>(
     plan.items.map((item) => [`${item.kind}:${item.sourceId}`, item.finalName]),
   );
@@ -441,7 +446,9 @@ export function runContentImport(input: {
     // After the records, so every ref can be rewritten to the copy that
     // travelled (or an earlier import brought).
     const kinds = { npc: "npcs", location: "locations", faction: "factions", lore: "lore" } as const;
-    counts.copied += copyWorldDoc(sourceId, campaignId, (shelf, id) => main.resolve(kinds[shelf], id));
+    const world = copyWorldDoc(sourceId, campaignId, (shelf, id) => main.resolve(kinds[shelf], id));
+    counts.copied += world.count;
+    worldConflicts = world.conflicts;
   }
 
   if (selected.has("lore") || storyboard) {
@@ -450,7 +457,39 @@ export function runContentImport(input: {
     });
   }
 
-  return { plan, copied: counts.copied, idMap, kept: counts.kept, unbound: counts.unbound, beatsAdded };
+  // A Cast member's stat block or a fight's monster that nothing at this
+  // table answers to: the source table's homebrew is its authors', not this
+  // table's (src/lib/content/scope.ts), so name what will not resolve here.
+  const unresolved = unresolvedMonsters(campaignId);
+  return {
+    plan,
+    copied: counts.copied,
+    idMap,
+    kept: counts.kept,
+    unbound: counts.unbound,
+    beatsAdded,
+    ...(worldConflicts.length ? { worldConflicts } : {}),
+    ...(unresolved.length ? { unresolved } : {}),
+  };
 }
 
 export { IMPORT_KINDS };
+
+// The monster names this table's Cast and prepared fights use that resolve
+// to nothing here: not a published creature, not a monster any of the
+// table's authors keeps.
+export function unresolvedMonsters(campaignId: string): string[] {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    return [];
+  }
+  const db = getDatabase();
+  const npcRefs = (db.prepare(`SELECT stat_block FROM npcs WHERE campaign_id = ? AND stat_block <> ''`).all(campaignId) as Array<{ stat_block: string }>).map((row) => row.stat_block);
+  const rosterRefs = (db.prepare(`SELECT enemies_json FROM encounter_templates WHERE campaign_id = ?`).all(campaignId) as Array<{ enemies_json: string }>).flatMap((row) =>
+    rosterMonsters(parseJson<unknown[]>(row.enemies_json, [])),
+  );
+  const authors = tableAuthors(campaignId);
+  return [...new Set([...npcRefs, ...rosterRefs].map((ref) => ref.trim()).filter(Boolean))].filter(
+    (ref) => !resolveMonster(ref, campaign.gameSettings, { userIds: authors }),
+  );
+}

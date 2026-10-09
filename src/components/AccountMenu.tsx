@@ -1,5 +1,7 @@
 "use client";
 
+import { forgetBrowserTableFeats } from "@/lib/srd/feat-effects";
+import { forgetBrowserSpecies } from "@/lib/srd/race-id";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { AppWindow, BookOpen, CircleHelp, Info, LogOut, SlidersHorizontal, UserRound } from "lucide-react";
 import Link from "next/link";
@@ -113,6 +115,9 @@ export function AccountMenu({
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    // The next account's tables and library are its own.
+    forgetBrowserTableFeats();
+    forgetBrowserSpecies();
     if (onLogout) {
       onLogout();
     } else {

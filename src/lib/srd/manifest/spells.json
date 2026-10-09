@@ -129,7 +129,7 @@
    "c": "druid",
    "k": true,
    "v": "VS",
-   "d": "self"
+   "d": "Self (10-foot radius)"
   },
   {
    "n": "Antimagic Field",
@@ -139,7 +139,7 @@
    "c": "cleric,wizard",
    "k": true,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (10-foot radius sphere)"
   },
   {
    "n": "Antipathy/Sympathy",
@@ -469,7 +469,7 @@
    "s": "evocation",
    "c": "sorcerer,wizard",
    "v": "VS",
-   "d": "self"
+   "d": "Self (15-foot cone)"
   },
   {
    "n": "Call Lightning",
@@ -632,7 +632,7 @@
    "s": "illusion",
    "c": "sorcerer,wizard",
    "v": "VSM",
-   "d": "self"
+   "d": "Self (15-foot cone)"
   },
   {
    "n": "Command",
@@ -699,7 +699,7 @@
    "s": "evocation",
    "c": "sorcerer,wizard",
    "v": "VSM",
-   "d": "self"
+   "d": "Self (60-foot cone)"
   },
   {
    "n": "Confusion",
@@ -857,7 +857,7 @@
    "k": true,
    "t": 10,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (5-mile radius)"
   },
   {
    "n": "Control Winds",
@@ -1502,7 +1502,7 @@
    "c": "bard,sorcerer,warlock,wizard",
    "k": true,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (30-foot cone)"
   },
   {
    "n": "Feather Fall",
@@ -1868,7 +1868,7 @@
    "c": "sorcerer,wizard",
    "k": true,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (10-foot radius)"
   },
   {
    "n": "Glyph of Warding",
@@ -2010,7 +2010,7 @@
    "c": "druid,sorcerer,wizard",
    "k": true,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (60-foot line)"
   },
   {
    "n": "Hail of Thorns",
@@ -2395,7 +2395,7 @@
    "c": "bard,cleric,wizard",
    "t": 10,
    "v": "VSM",
-   "g": 50,
+   "g": 450,
    "x": true,
    "d": "self"
   },
@@ -2424,7 +2424,7 @@
    "r": true,
    "t": 1,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (10-foot radius hemisphere)"
   },
   {
    "n": "Lesser Restoration",
@@ -2475,7 +2475,7 @@
    "s": "evocation",
    "c": "sorcerer,wizard",
    "v": "VSM",
-   "d": "self"
+   "d": "Self (100-foot line)"
   },
   {
    "n": "Lightning Lure",
@@ -3192,7 +3192,7 @@
    "s": "evocation",
    "c": "sorcerer,wizard",
    "v": "VS",
-   "d": "self"
+   "d": "Self (60-foot cone)"
   },
   {
    "n": "Prismatic Wall",
@@ -3811,7 +3811,7 @@
    "s": "transmutation",
    "c": "bard,druid,ranger",
    "v": "VS",
-   "d": "self"
+   "d": "Self (30-foot radius)"
   },
   {
    "n": "Spider Climb",
@@ -3841,7 +3841,7 @@
    "c": "cleric",
    "k": true,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (15-foot radius)"
   },
   {
    "n": "Spirit Shroud",
@@ -4052,7 +4052,7 @@
    "c": "druid,sorcerer,wizard",
    "k": true,
    "v": "VSM",
-   "d": "self"
+   "d": "Self (60-foot line)"
   },
   {
    "n": "Sunburst",
@@ -4265,7 +4265,7 @@
    "s": "evocation",
    "c": "bard,druid,sorcerer,wizard",
    "v": "VS",
-   "d": "self"
+   "d": "Self (15-foot cube)"
   },
   {
    "n": "Tidal Wave",

@@ -16,7 +16,7 @@ import { CLASS_IDS, type EditorKind } from "@/app/workshop/homebrew/types";
 // copy into the draft. Pick, do not type: a DM changing one number on an
 // SRD spell should not have to retype the other nine fields.
 
-const CONTENT_KIND: Record<EditorKind, string> = {
+export const CONTENT_KIND: Record<EditorKind, string> = {
   item: "items",
   spell: "spells",
   feat: "feats",
@@ -41,7 +41,7 @@ export function CatalogStart({
   // mechanics=1: the row comes with what the engine runs for it, so the copy
   // starts with that and not only the words (catalog-mechanics.ts).
   const extra: Record<string, string> = kind === "archetype" ? { class: classSlug, mechanics: "1" } : { ...scope, mechanics: "1" };
-  const { query, setQuery, results, open, setOpen, loading, unavailable } = useContentSearch(
+  const { query, setQuery, results, open, setOpen, loading, packMissing, failed } = useContentSearch(
     CONTENT_KIND[kind],
     extra,
   );
@@ -57,10 +57,9 @@ export function CatalogStart({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [setOpen]);
 
-  if (unavailable) {
-    return null;
-  }
-
+  // Never hidden: without the content pack the table's own homebrew, ODM's
+  // own feats and backgrounds and the bundled book's spells, magic items,
+  // races and subclasses still answer (src/app/api/content/[kind]/route.ts).
   return (
     <div ref={container} className="flex flex-wrap items-center gap-1.5">
       {kind === "archetype" ? (
@@ -85,9 +84,19 @@ export function CatalogStart({
         />
         {loading ? <Loader2 className="absolute right-3 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" /> : null}
       </div>
-      {open && !results.length && query.trim() && !loading ? (
+      {failed ? (
+        <p className="live-in basis-full text-xs text-amber-300">
+          The books could not be searched just now. Type again to retry.
+        </p>
+      ) : open && !results.length && query.trim() && !loading ? (
         <p className="live-in basis-full text-xs text-stone-500">
           Nothing in the books matched &quot;{query.trim()}&quot;.
+        </p>
+      ) : null}
+      {packMissing && !failed ? (
+        <p className="basis-full text-[11px] text-stone-500">
+          No content pack on this server: your own homebrew, ODM&apos;s feats and backgrounds, and the bundled SRD&apos;s spells, magic items,
+          species and subclasses are what you can start from.
         </p>
       ) : null}
       {/* In the flow, not absolutely positioned: the editor sits in a sheet
@@ -114,8 +123,12 @@ export function CatalogStart({
                   })()}
                   <span className="truncate">{entry.name}</span>
                 </span>
-                <span className="text-[11px] text-stone-500">
-                  {entry.level !== undefined ? `level ${entry.level}` : entry.rarity || entry.kind || ""}
+                <span className="flex shrink-0 flex-col items-end text-[11px] text-stone-500">
+                  <span>{entry.level !== undefined ? `level ${entry.level}` : entry.rarity || entry.kind || ""}</span>
+                  {/* Where the row is from, so a pack's version and the SRD's are told apart. */}
+                  <span className="text-[10px] text-stone-600">
+                    {entry.source === "homebrew" ? "your homebrew" : entry.document || (entry.source === "srd" || entry.source === "bundled" ? "SRD 5.1" : "")}
+                  </span>
                 </span>
               </button>
               <InfoButton

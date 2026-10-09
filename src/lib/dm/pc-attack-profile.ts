@@ -4,11 +4,12 @@
 // module describes. Nothing is spent here and nothing is rolled: every
 // return is either a refusal or a profile.
 
+import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { brawlerUnarmed } from "@/lib/srd/feat-combat";
 import { getMounts } from "@/lib/db/mounts";
 import { isValidExpression } from "@/lib/dice";
 import { acBreakdownFor, computeSheetDerived, spellAttackFor, type SheetDerived } from "@/lib/srd";
-import { spellDamageFor, spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
+import { spellDamageFor, spellEngineName, spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
 import { spellDamageRiders } from "@/lib/srd/spell-damage-riders";
 import { isMeleeSpellAttack } from "@/lib/dm/spell-attack-riders";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
@@ -119,7 +120,7 @@ export function buildAttackProfile(
     }
     // The content pack knows how a known spell resolves; a save or buff
     // spell aimed through pc_attack is redirected to the right tool.
-    const resolvedMech = spellMechanicsFor({ spell: spellName, userId: sheet.userId });
+    const resolvedMech = spellMechanicsFor({ spell: spellName, userIds: sheetSpellAuthors(sheet) });
     const redirect = castRedirect(resolvedMech, "attack");
     if (redirect) {
       return { error: redirect };
@@ -168,7 +169,7 @@ export function buildAttackProfile(
     // A melee spell attack (a touch) is a melee attack: it reaches only the
     // creature beside the caster, and the rules for ranged attacks do not
     // apply to it.
-    const melee = isMeleeSpellAttack(spellName, spellFactsFor(spellName, sheet.userId)?.range.kind);
+    const melee = isMeleeSpellAttack(spellEngineName(spellName, sheetSpellAuthors(sheet)), spellFactsFor(spellName, sheetSpellAuthors(sheet))?.range.kind);
     profile = melee ? { ...spellProfile, ranged: false, reachTiles: 1, rangeTiles: 1 } : spellProfile;
     kind = "spell";
     // Option riders on named attack spells (Agonizing Blast: +CHA per
@@ -187,8 +188,8 @@ export function buildAttackProfile(
       }
     }
     // Empowered Evocation, Elemental Affinity (src/lib/srd/spell-damage-riders.ts).
-    const facts = spellFactsFor(spellName, sheet.userId);
-    const spellRiders = spellDamageRiders(sheet, { school: spellSchoolFor(spellName, sheet.userId), damageType: mechDamageType || args.damageType, level: facts?.level ?? 0, classes: facts?.classes });
+    const facts = spellFactsFor(spellName, sheetSpellAuthors(sheet));
+    const spellRiders = spellDamageRiders(sheet, { school: spellSchoolFor(spellName, sheetSpellAuthors(sheet)), damageType: mechDamageType || args.damageType, level: facts?.level ?? 0, classes: facts?.classes });
     if (spellRiders.flat > 0 || spellRiders.dice.length) {
       const extra = [...spellRiders.dice, ...(spellRiders.flat > 0 ? [String(spellRiders.flat)] : [])].join("+");
       profile = { ...profile, damageExpression: `${profile.damageExpression}+${extra}`, riderNotes: [...profile.riderNotes, ...spellRiders.notes] };

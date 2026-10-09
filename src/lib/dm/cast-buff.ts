@@ -15,7 +15,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
-import { spellFactsFor, spellMechanicsFor } from "@/lib/content";
+import { findSpellByName, spellEngineName, spellFactsFor, spellMechanicsFor } from "@/lib/content";
 import { findBeastForm, formatCr } from "@/lib/srd/beast-forms";
 import { shapedAbilities, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
@@ -84,23 +84,29 @@ export function handleCastBuff(
   if (!sheet.spellcasting) {
     return { error: `${sheet.name} cannot cast spells.` };
   }
+  const authors = spellAuthorsFor(campaign);
+  // The published spell a table's workshop copy runs as, for every rule
+  // keyed by a spell's name: a renamed Conjure Animals still calls its
+  // beasts, a renamed Polymorph still turns its target. The copy is cast
+  // and held under its own name.
+  const engine = spellEngineName(args.spell, authors);
+  const castAs = findSpellByName(args.spell, authors)?.name ?? args.spell;
   // A spell that makes creatures brings them in with their stat blocks
   // (src/lib/dm/summon-cast.ts); `variant` names the creature.
-  const summoning = summonSpellFor(args.spell);
+  const summoning = summonSpellFor(engine);
   if (summoning) {
     return castSummon(
       campaign,
-      { caster: sheet, spell: summoning, level: args.level, variant: args.variant, count: args.count, reason: args.reason },
+      { caster: sheet, spell: summoning, castAs, level: args.level, variant: args.variant, count: args.count, reason: args.reason },
       (cast) => applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result,
     );
   }
   // Find Familiar binds a pet once the casting is paid (familiar-cast.ts).
-  if (isFindFamiliar(args.spell)) {
-    return castFindFamiliar(campaign, turn, { caster: sheet, variant: args.variant, level: args.level, reason: args.reason, sheets, sheetsById }, (cast) =>
+  if (isFindFamiliar(engine)) {
+    return castFindFamiliar(campaign, turn, { caster: sheet, castAs, variant: args.variant, level: args.level, reason: args.reason, sheets, sheetsById }, (cast) =>
       applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result,
     );
   }
-  const authors = spellAuthorsFor(campaign);
   const resolvedMech = spellMechanicsFor({ spell: args.spell, userIds: authors });
   if (!resolvedMech) {
     return {
@@ -125,7 +131,7 @@ export function handleCastBuff(
   }
   // Polymorph or True Polymorph at a creature of the fight: its WIS save and
   // the beast's block in place of its own (src/lib/dm/enemy-polymorph.ts).
-  if (args.targetEnemyId && enemyShapeSpellFor(resolvedMech.name)) {
+  if (args.targetEnemyId && enemyShapeSpellFor(engine)) {
     const encounter = getActiveEncounter(campaign.id);
     const enemy = encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
     if (!enemy) {
@@ -134,7 +140,7 @@ export function handleCastBuff(
     return castShapeAtEnemy(
       campaign,
       turn,
-      { caster: sheet, enemy, spell: resolvedMech.name, variant: args.variant, level: args.level, reason: args.reason, authors },
+      { caster: sheet, enemy, spell: resolvedMech.name, runsAs: engine, variant: args.variant, level: args.level, reason: args.reason, authors },
       (cast) => applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result,
     );
   }
@@ -226,7 +232,7 @@ export function handleCastBuff(
   // 5e: the new form's CR may not exceed the target's level (Polymorph), 4
   // and Large (Animal Shapes), or the caster's level (Shapechange):
   // src/lib/srd/shape-rules.ts.
-  const shapeRule = shapeRuleFor(resolvedMech.name);
+  const shapeRule = shapeRuleFor(engine);
   if (polymorphForm) {
     for (const target of targetSheets) {
       const problem = shapeProblem(shapeRule, polymorphForm, target, sheet.level);

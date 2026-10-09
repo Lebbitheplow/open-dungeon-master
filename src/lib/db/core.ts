@@ -1443,6 +1443,13 @@ function ensureSchema(db: SqliteDatabase) {
   // find their character suddenly wearing different numbers.
   const sheetsNeedAcOverride = !sheetColumns.some((column) => column.name === "ac_override");
 
+  addColumns("homebrew_entries", [
+    // Set when the author forgets an entry (src/lib/db/homebrew.ts
+    // archiveHomebrew): it leaves the shelf and every picker, and the sheets
+    // and tables that already carry it keep its rules.
+    ["archived_at", "TEXT"],
+  ]);
+
   addColumns("character_sheets", [
     // Death-save track for a character at 0 HP; NULL = not dying. Managed
     // by the server death engine (src/lib/dm/death.ts).

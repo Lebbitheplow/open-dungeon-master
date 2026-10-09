@@ -5,6 +5,7 @@ import { crLabel, deriveCr, expectedFor, type DerivedCr } from "@/lib/bestiary/d
 import {
   creatureTypeOf,
   normalizeCreatureType,
+  normalizePrintedBlock,
   type EnemyAttack,
   type EnemySaveMods,
   type EnemyStats,
@@ -165,6 +166,7 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
   const regeneration = checkRegeneration(source.regeneration);
   const routines = checkRoutines(source.routines, attacks);
 
+  const printed = normalizePrintedBlock(source.printed);
   const cr = Math.min(30, Math.max(0, Number(source.cr) || 0));
   // The pack prints sizes in lower case ("large"); a match that minded the
   // case turned every monster started from it into a Medium one.
@@ -200,6 +202,8 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     ...(spellcasting ? { spellcasting } : {}),
     ...(regeneration ? { regeneration } : {}),
     ...normalizeBlockExtras(source),
+    // The whole printed block a copy keeps beside the compact lines.
+    ...(printed ? { printed } : {}),
   };
 
   return {

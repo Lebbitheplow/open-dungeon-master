@@ -9,6 +9,7 @@ import { normalizeHazardData } from "@/lib/homebrew/hazard-data";
 import { GEAR_LIMITS, normalizeItemData, type HomebrewData, type Outcome } from "@/lib/homebrew/item-data";
 import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
 import { engineFeatNamed } from "@/lib/srd/feat-effects";
+import { engineSpellNamed, truthy } from "@/lib/srd/spell-facts";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 
 // What a homebrew entry means to the engine.
@@ -57,8 +58,8 @@ export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
     classes: Array.isArray(source.classes)
       ? [...new Set(source.classes.map((c) => String(c).trim().toLowerCase()).filter(Boolean))].slice(0, 20)
       : [],
-    ritual: source.ritual === true,
-    concentration: source.concentration === true,
+    ritual: truthy(source.ritual),
+    concentration: truthy(source.concentration),
     casting_time: text(source.casting_time, 60) || "1 action",
     range: text(source.range, 60) || "60 feet",
     components: text(source.components, 120) || "V, S",
@@ -66,6 +67,27 @@ export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
   };
   if (!data.desc) {
     return { error: "A spell needs a description; the engine reads its damage and save out of it." };
+  }
+  // The material and what it costs (src/lib/srd/spell-facts.ts materialOf):
+  // the line a caster has to carry, the price the cast guard asks for, and
+  // whether the casting uses it up. Kept apart from the letters, which is
+  // where the content pack keeps it too.
+  const material = text(source.material, 300);
+  if (material) {
+    data.material = material;
+  }
+  const cost = num(source.materialCostGp);
+  if (cost !== null && cost > 0) {
+    data.materialCostGp = Math.min(1_000_000, Math.round(cost));
+    if (source.materialConsumed === true) {
+      data.materialConsumed = true;
+    }
+  }
+  // The published spell a copy runs as: its area, summons, reaction or
+  // transformation, which the engines key by the published name.
+  const runsAs = engineSpellNamed(text(source.runsAs, 80));
+  if (runsAs) {
+    data.runsAs = runsAs;
   }
   const block = source.mech as Raw | undefined;
   if (block && typeof block === "object" && block.resolution) {
@@ -143,10 +165,43 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
   return data;
 }
 
+// Where a copy came from (src/app/workshop/homebrew/draft.ts copiedFromOf):
+// kept through every save of every kind, so the editor can link the source's
+// page and say what the copy changed. Null when there is none to keep.
+export function normalizeCopiedFrom(raw: unknown): Raw | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const source = raw as Raw;
+  const name = text(source.name, 120);
+  const from = ["published", "bundled", "homebrew"].includes(String(source.source)) ? String(source.source) : "";
+  if (!name || !from) {
+    return null;
+  }
+  const out: Raw = { name, source: from };
+  for (const key of ["document", "slug", "rulebook"] as const) {
+    const value = text(source[key], 120);
+    if (value) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 // Every kind through one door, so the route and the editor agree on what a
 // stored entry looks like. Unknown keys are dropped: the blob used to be
 // loose, and a shape nothing reads is a shape nothing can validate.
 export function normalizeHomebrewData(
+  kind: HomebrewKind,
+  raw: unknown,
+  name: string,
+): Outcome<HomebrewData> {
+  const outcome = normalizeHomebrewKind(kind, raw, name);
+  const copiedFrom = normalizeCopiedFrom(((raw ?? {}) as Raw).copiedFrom);
+  return "data" in outcome && copiedFrom ? { data: { ...outcome.data, copiedFrom } } : outcome;
+}
+
+function normalizeHomebrewKind(
   kind: HomebrewKind,
   raw: unknown,
   name: string,

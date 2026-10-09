@@ -46,7 +46,7 @@ export function barredCells(zones: SpellZone[], mover: ZoneMover | null): Set<nu
   const gaseous = has(mover, "gaseous form") || has(mover, "wind walk");
   const out = new Set<number>();
   for (const zone of zones) {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     if (row?.stopsSmallFlyers && ((small && mover.flying) || gaseous)) {
       for (const cell of zone.cells) {
         out.add(cell);
@@ -82,7 +82,7 @@ export function withEdges(
   mover: ZoneMover | null,
 ): ((from: number, to: number, cost: number) => number) | null {
   const edges = zones.filter((zone) => {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     return Boolean(row?.cage || (row?.barsLiving && zone.casterId !== mover?.ref && barredByShell(mover?.type)));
   });
   if (!edges.length) {

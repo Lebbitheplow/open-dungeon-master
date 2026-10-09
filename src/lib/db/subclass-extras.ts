@@ -10,7 +10,7 @@ import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/sub
 // For these authors: their workshop subclasses first, then the pack's.
 export function subclassExtrasFor(userIds: string[]): SubclassExtras {
   const own: SubclassExtras = {};
-  for (const entry of [...new Set(userIds)].flatMap((userId) => listHomebrew(userId, "archetype"))) {
+  for (const entry of [...new Set(userIds)].flatMap((userId) => listHomebrew(userId, "archetype", { archived: true }))) {
     const classId = String(entry.data.classSlug ?? "").toLowerCase();
     const table = extraSubclassOf({ name: entry.name, source: "homebrew", data: entry.data });
     if (classId && table) {

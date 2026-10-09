@@ -24,6 +24,10 @@ export type ZoneCasterKind = "pc" | "enemy";
 export type SpellZone = {
   id: string;
   spell: string;
+  // runsAs: a copy's published spell, whose row the area reads. heldBy: the
+  // spell concentration holds it by (a renamed Wall of Ice's frigid air).
+  runsAs?: string;
+  heldBy?: string;
   casterId: string;
   casterKind: ZoneCasterKind;
   casterName: string;
@@ -81,9 +85,10 @@ export function normalizeSpellZones(raw: unknown, width: number, height: number)
   for (const entry of raw) {
     const source = (entry ?? {}) as Raw;
     const spell = typeof source.spell === "string" ? source.spell.trim().slice(0, 80) : "";
+    const [runsAs, heldBy] = [source.runsAs, source.heldBy].map((value) => (typeof value === "string" ? value.trim().slice(0, 80) : ""));
     const origin = point(source.origin, width, height);
     const casterId = typeof source.casterId === "string" ? source.casterId.slice(0, 80) : "";
-    if (!spell || !origin || !casterId || !zoneRowFor(spell)) {
+    if (!spell || !origin || !casterId || !zoneRowFor({ spell, runsAs })) {
       continue;
     }
     const toward = point(source.toward, width, height);
@@ -99,6 +104,8 @@ export function normalizeSpellZones(raw: unknown, width: number, height: number)
     out.push({
       id: typeof source.id === "string" && source.id ? source.id.slice(0, 40) : `${spell}-${out.length}`,
       spell,
+      ...(runsAs ? { runsAs } : {}),
+      ...(heldBy ? { heldBy } : {}),
       casterId,
       casterKind: source.casterKind === "enemy" ? "enemy" : "pc",
       casterName: typeof source.casterName === "string" ? source.casterName.slice(0, 80) : "",
@@ -243,7 +250,7 @@ function wallDefault(origin: XY, caster: XY | null): XY {
 // An aura's squares follow its caster's token as it stands now.
 export function withAnchors(zones: SpellZone[], tokens: Array<Pick<BattleToken, "refId" | "x" | "y">>, map: ZoneMap): SpellZone[] {
   return zones.map((zone) => {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     if (row?.shape !== "aura") {
       return zone;
     }
@@ -257,7 +264,7 @@ export function withAnchors(zones: SpellZone[], tokens: Array<Pick<BattleToken, 
 
 // ---- what the squares do ----
 
-const rowOf = (zone: SpellZone) => zoneRowFor(zone.spell);
+const rowOf = (zone: SpellZone) => zoneRowFor(zone);
 
 export function zonesAt(zones: SpellZone[], cell: number): SpellZone[] {
   return zones.filter((zone) => zone.cells.includes(cell));

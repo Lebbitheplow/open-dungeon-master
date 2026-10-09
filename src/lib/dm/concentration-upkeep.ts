@@ -6,7 +6,8 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
-import { spellMechanicsFor } from "@/lib/content";
+import { spellEngineName, spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { breakConcentration } from "@/lib/dm/concentration";
 import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";
@@ -21,7 +22,9 @@ export function endConcentrationOnFadedSummons(campaign: Campaign, lines: string
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
     const spell = sheet.concentratingOn;
-    if (!spell || sheet.deathSaves?.dead || !summonSpellFor(spell)) {
+    // A table's workshop copy of a summoning spell summons as the spell it
+    // runs as, under its own name.
+    if (!spell || sheet.deathSaves?.dead || !summonSpellFor(spellEngineName(spell, spellAuthorsFor(campaign)))) {
       continue;
     }
     if (summonsOf(campaign.id, sheet.id, spell).length) {
@@ -56,7 +59,7 @@ export function endSpentConcentration(campaign: Campaign, lines: string[]) {
   ];
   for (const caster of casters) {
     const spell = caster.concentratingOn ?? "";
-    const resolved = spellMechanicsFor({ spell, userId: caster.userId });
+    const resolved = spellMechanicsFor({ spell, userIds: spellAuthorsFor(campaign) });
     const places = new Set(
       [
         resolved?.mech.buff?.condition,

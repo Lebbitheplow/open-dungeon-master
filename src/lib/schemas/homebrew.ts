@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Sentience } from "@/lib/homebrew/sentience";
 import type { HomebrewGearDef } from "@/lib/homebrew/item-data";
 import type { ItemMagic } from "@/lib/homebrew/item-magic-schema";
 import type { ItemSpell } from "@/lib/srd/item-spells";
@@ -69,6 +70,8 @@ export const gearSnapshotShape = z.object({
   checks: z.custom<NonNullable<ItemMagic["checks"]>>().optional(),
   spells: z.custom<ItemSpell[]>().optional(),
   weight: z.number().min(0).optional(),
+  // A sentient item's mind (src/lib/homebrew/sentience.ts).
+  sentience: z.custom<Sentience>().optional(),
 });
 export type HomebrewGearSnapshot = z.infer<typeof gearSnapshotShape>;
 

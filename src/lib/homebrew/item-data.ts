@@ -1,4 +1,5 @@
 import { isValidExpression } from "@/lib/dice";
+import { normalizeSentience, type Sentience } from "@/lib/homebrew/sentience";
 import type { SrdArmor } from "@/lib/srd/armor";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
@@ -82,6 +83,8 @@ export type HomebrewGear = {
   checks?: ItemMagic["checks"];
   spells?: ItemSpell[];
   weight?: number;
+  // A sentient item's mind (src/lib/homebrew/sentience.ts).
+  sentience?: Sentience;
 };
 
 // What a stored entry's data blob looks like after normalization: whatever
@@ -283,6 +286,10 @@ export function normalizeItemData(raw: unknown, name: string): Outcome<HomebrewD
     return magic;
   }
   Object.assign(data, magic.magic);
+  const sentience = itemKind === "magic_item" ? normalizeSentience(source.sentience) : null;
+  if (sentience) {
+    data.sentience = sentience;
+  }
   return { data };
 }
 
@@ -339,6 +346,10 @@ export function gearFromHomebrewData(name: string, data: unknown): HomebrewGear 
   const weight = num(source.weight);
   if (weight !== null && weight >= 0) {
     gear.weight = weight;
+  }
+  const sentience = normalizeSentience(source.sentience);
+  if (sentience) {
+    gear.sentience = sentience;
   }
   return Object.keys(gear).length ? gear : null;
 }

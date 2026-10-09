@@ -47,6 +47,10 @@ export type SpellFacts = {
   // Other names the spell is printed under, lowercased.
   aliases: string[];
   homebrew: boolean;
+  // A table's workshop copy: the published spell it runs as, whose area,
+  // summons, reaction or transformation the engines lay for it (a renamed
+  // Web, "Silkbind", still webs the board). Absent for everything else.
+  runsAs?: string;
 };
 
 // "1 bonus action", "1 reaction, which you take when...", "10 minutes",
@@ -90,14 +94,23 @@ export function componentLettersFrom(text: unknown): { verbal: boolean; somatic:
   return { verbal: has("V"), somatic: has("S"), material: has("M") };
 }
 
+const COUNT_WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12 };
+
 // The price a material line states ("diamonds worth 300gp", "an agate worth
 // at least 1,000 gp") and whether the spell uses the material up. Several
-// priced materials are added together.
+// priced materials are added together, and a price "each" counts as many
+// times as the line names them (Legend Lore's four ivory strips at 50 gp).
 export function materialCostFrom(text: unknown): { costGp: number | null; consumed: boolean } {
   const line = String(text ?? "");
   let total = 0;
-  for (const match of line.matchAll(/(\d[\d,]*)\s*gp\b/gi)) {
-    total += Number(match[1].replace(/,/g, ""));
+  for (const match of line.matchAll(/(\d[\d,]*)\s*gp\b(\s+each\b)?/gi)) {
+    let price = Number(match[1].replace(/,/g, ""));
+    if (match[2]) {
+      const clause = line.slice(0, match.index).split(/[,;]|\band\b/i).pop() ?? "";
+      const count = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b/i.exec(clause)?.[1] ?? "";
+      price *= Number(count) || COUNT_WORDS[count.toLowerCase()] || 1;
+    }
+    total += price;
   }
   return {
     costGp: total > 0 ? total : null,
@@ -153,7 +166,46 @@ export type SpellRowLike = {
   data: Record<string, unknown>;
 };
 
-const truthy = (value: unknown) => value === true || value === "yes" || value === 1;
+// A flag in any of the shapes the sources write one: a boolean, a 1, or the
+// 2014 rows' "yes" and "no".
+export const truthy = (value: unknown) => value === true || value === 1 || (typeof value === "string" && /^(yes|true)$/i.test(value.trim()));
+
+// Whether a row's spell is a ritual and asks for concentration: the 2014
+// rows' "yes"/"no", the 2024 rows' can_be_cast_as_ritual and
+// requires_concentration, a homebrew row's booleans, and a duration that
+// begins "Concentration".
+export function spellFlagsOf(data: Record<string, unknown>): { ritual: boolean; concentration: boolean } {
+  return {
+    ritual: truthy(data.ritual) || truthy(data.can_be_cast_as_ritual),
+    concentration: truthy(data.concentration) || truthy(data.requires_concentration) || /^concentration\b/i.test(String(data.duration ?? "").trim()),
+  };
+}
+
+// What a row says of its material, in every shape the sources use: the 2014
+// rows' `material` line ("Diamonds worth 300gp, which the spell consumes."),
+// the 2024 rows' `material_specified` with `material_cost` and
+// `material_consumed`, a material named in brackets after the M ("V, S, M
+// (a diamond worth at least 50 gp)"), and a workshop spell's own
+// `materialCostGp` and `materialConsumed`, which win over its words.
+export function materialOf(data: Record<string, unknown>): { text: string; costGp: number | null; consumed: boolean } {
+  const written = String(data.components ?? "");
+  const bracket = /\(([^)]+)\)/.exec(written)?.[1] ?? "";
+  const text =
+    (typeof data.material === "string" ? data.material : "") ||
+    (typeof data.material_specified === "string" ? data.material_specified : "") ||
+    bracket;
+  const read = materialCostFrom(text);
+  const statedCost =
+    typeof data.materialCostGp === "number" ? data.materialCostGp
+    : typeof data.material_cost === "number" && data.material_cost > 0 ? data.material_cost
+    : null;
+  const costGp = statedCost !== null ? (statedCost > 0 ? statedCost : null) : read.costGp;
+  const consumed =
+    typeof data.materialConsumed === "boolean" ? data.materialConsumed
+    : data.material_consumed !== undefined && data.material_consumed !== null && data.material_consumed !== "" ? truthy(data.material_consumed)
+    : read.consumed;
+  return { text: text.trim(), costGp, consumed: Boolean(costGp) && consumed };
+}
 
 export function factsFromRow(row: SpellRowLike): SpellFacts {
   const data = row.data;
@@ -166,27 +218,33 @@ export function factsFromRow(row: SpellRowLike): SpellFacts {
         somatic: truthy(data.somatic) || truthy(data.requires_somatic_components),
         material: truthy(data.material) || truthy(data.requires_material_components),
       };
-  const bracket = /\(([^)]+)\)/.exec(written)?.[1] ?? "";
-  const materialText =
-    (typeof data.material === "string" ? data.material : "") ||
-    (typeof data.material_specified === "string" ? data.material_specified : "") ||
-    bracket;
-  const cost = materialCostFrom(materialText);
+  const material = materialOf(data);
+  const runsAs = row.homebrew && typeof data.runsAs === "string" && data.runsAs.trim() ? data.runsAs.trim() : "";
   return {
     name: row.name,
     level: row.level,
     castingTime: castingTimeFrom(data.casting_time),
     ...letters,
-    materialCostGp: letters.material ? cost.costGp : null,
-    materialConsumed: letters.material && cost.consumed,
-    materialText: letters.material ? materialText : "",
+    materialCostGp: letters.material ? material.costGp : null,
+    materialConsumed: letters.material && material.consumed,
+    materialText: letters.material ? material.text : "",
     ritual: Boolean(row.ritual),
     concentration: Boolean(row.concentration),
     range: rangeFrom(data.range_text ?? data.range),
     classes: (row.classes ?? []).map((entry) => entry.trim().toLowerCase()).filter(Boolean),
     aliases: (row.aliases ?? []).map((entry) => entry.trim().toLowerCase()).filter(Boolean),
     homebrew: Boolean(row.homebrew),
+    ...(runsAs ? { runsAs } : {}),
   };
+}
+
+// The canonical name of a published spell the bundled data knows ("web" ->
+// "Web", "Melf's Acid Arrow" -> "Acid Arrow"), or null. What a workshop
+// copy may run as: every engine that keys a spell by name (areas, summons,
+// reactions, transformations) keys the SRD's and ODM's own, all bundled.
+export function engineSpellNamed(name: string): string | null {
+  const wanted = name.trim();
+  return wanted ? (bundledSpellFacts(wanted)?.name ?? null) : null;
 }
 
 // ---- the bundled data ----
@@ -304,4 +362,11 @@ export function bundledSpellFacts(name: string): SpellFacts | null {
     aliases,
     homebrew: false,
   };
+}
+
+// Every spell name the bundled data knows, sorted: what a workshop copy may
+// run as (engineSpellNamed).
+export function bundledSpellNames(): string[] {
+  const names = new Set<string>([...AUTHORED.map((row) => row.name), ...(spellManifest as unknown as { spells: ManifestSpell[] }).spells.map((spell) => spell.n)]);
+  return [...names].sort((a, b) => a.localeCompare(b));
 }

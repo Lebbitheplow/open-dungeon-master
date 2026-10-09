@@ -1,5 +1,6 @@
 "use client";
 
+import { scopeQuery, useContentCampaign } from "@/lib/content-scope";
 import { Info, Loader2 } from "lucide-react";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -99,6 +100,8 @@ export function renderRules(text: string): ReactNode {
 // Loads a content-pack entry's description on first open, so opening a sheet
 // with forty spells on it costs nothing until one is actually inspected.
 function ContentBody({ reference }: { reference: ContentRef }) {
+  // The table the dialog opened at reads its DMs' homebrew.
+  const campaignId = useContentCampaign();
   const [state, setState] = useState<{ text: string | null; loading: boolean }>({
     text: null,
     loading: true,
@@ -110,7 +113,7 @@ function ContentBody({ reference }: { reference: ContentRef }) {
       try {
         const { describeContentEntry } = await import("@/lib/help");
         const response = await fetch(
-          `/api/content/${reference.kind}/${encodeURIComponent(reference.slug)}`,
+          `/api/content/${reference.kind}/${encodeURIComponent(reference.slug)}${scopeQuery(campaignId)}`,
         );
         if (response.ok) {
           const data = await response.json();
@@ -126,7 +129,7 @@ function ContentBody({ reference }: { reference: ContentRef }) {
         // no text. Search by name and take an exact match.
         const wanted = (reference.name ?? reference.slug).trim().toLowerCase();
         const search = await fetch(
-          `/api/content/${reference.kind}?q=${encodeURIComponent(wanted)}&limit=20`,
+          `/api/content/${reference.kind}?q=${encodeURIComponent(wanted)}&limit=20&mechanics=1${scopeQuery(campaignId, "&")}`,
         );
         const results = search.ok ? ((await search.json()).results ?? []) : [];
         const hit = results.find(
@@ -145,7 +148,7 @@ function ContentBody({ reference }: { reference: ContentRef }) {
     return () => {
       cancelled = true;
     };
-  }, [reference.kind, reference.slug, reference.name]);
+  }, [reference.kind, reference.slug, reference.name, campaignId]);
 
   if (state.loading) {
     return (
@@ -205,6 +208,7 @@ function RuleList({ rows }: { rows: Array<{ label: string; text: string | null }
 // (src/lib/help/item-sheet.ts), so a v1 table row with no prose, a v2 gear
 // row with no stats and a genre item the pack lacks all get a full card.
 function ItemBody({ reference }: { reference: ContentRef }) {
+  const campaignId = useContentCampaign();
   const [state, setState] = useState<{ sheet: ItemSheet | null; loading: boolean }>({
     sheet: null,
     loading: true,
@@ -219,8 +223,8 @@ function ItemBody({ reference }: { reference: ContentRef }) {
       try {
         const [{ buildItemSheet }, direct, search] = await Promise.all([
           import("@/lib/help/item-sheet"),
-          fetch(`/api/content/items/${encodeURIComponent(reference.slug)}`).then(readJson).catch(() => null),
-          fetch(`/api/content/items?q=${encodeURIComponent(wanted)}&limit=20`).then(readJson).catch(() => null),
+          fetch(`/api/content/items/${encodeURIComponent(reference.slug)}${scopeQuery(campaignId)}`).then(readJson).catch(() => null),
+          fetch(`/api/content/items?q=${encodeURIComponent(wanted)}&limit=20${scopeQuery(campaignId, "&")}`).then(readJson).catch(() => null),
         ]);
         const hits = ((search?.results ?? []) as Array<{ name: string; data?: Record<string, unknown> }>)
           .filter((entry) => entry.name.trim().toLowerCase() === wanted)
@@ -239,7 +243,7 @@ function ItemBody({ reference }: { reference: ContentRef }) {
     return () => {
       cancelled = true;
     };
-  }, [reference.slug, reference.name]);
+  }, [reference.slug, reference.name, campaignId]);
 
   if (state.loading) {
     return (

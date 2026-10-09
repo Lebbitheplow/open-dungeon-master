@@ -38,7 +38,7 @@ export function viewZones(
 ): ViewZone[] {
   const out: ViewZone[] = [];
   for (const zone of liveZones(map, encounter)) {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     // Darkness is never "explored": the area is drawn whole where the
     // character knows it (src/lib/battlemap/zone-known.ts).
     const cells = knownZoneCells(zone, explored, map.width, viewer);

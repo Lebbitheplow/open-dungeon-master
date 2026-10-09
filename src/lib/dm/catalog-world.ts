@@ -273,6 +273,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "fragile", label: "Fragile", kind: "boolean" },
       { name: "ac", label: "Its armor class", kind: "number", min: 1, max: 30, help: "Overrides the material's." },
       { name: "hp", label: "Its hit points", kind: "number", min: 1, max: 1000, help: "Overrides the size's." },
+      { name: "threshold", label: "Damage threshold", kind: "number", min: 1, max: 100, help: "A castle wall's or a ship's: a blow below it does nothing." },
       REASON,
     ],
   },

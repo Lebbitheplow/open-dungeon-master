@@ -123,6 +123,7 @@ export const worldTools: ToolDef[] = [
           damage: { type: "string", description: "The damage dealt by something other than a character's weapon, as dice (2d6) or a number." },
           ac: { type: "integer", description: "Override the material's AC if you know it." },
           hp: { type: "integer", description: "Override the size's HP if you know it." },
+          threshold: { type: "integer", description: "Damage threshold (castle walls, ships): a blow below it does nothing." },
           reason: { type: "string", description: "Short note on what is being broken." },
         },
         required: [],

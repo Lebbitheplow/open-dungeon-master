@@ -1,5 +1,6 @@
 "use client";
 
+import { scopedParams, useContentCampaign } from "@/lib/content-scope";
 import { Check, ChevronDown, ChevronRight, Loader2, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
@@ -90,6 +91,8 @@ export default function CatalogBrowser({
   const [loading, setLoading] = useState<string[]>([]);
   const [unavailable, setUnavailable] = useState(false);
   const [filter, setFilter] = useState("");
+  // The table the browse is for (src/lib/content-scope.tsx).
+  const campaignId = useContentCampaign();
   // Sections already fetched must not refetch when the component re-renders
   // with new props (a spell level change rewrites `sections` every keystroke
   // elsewhere in the step).
@@ -111,11 +114,9 @@ export default function CatalogBrowser({
       let truncated = false;
       try {
         for (let offset = 0; offset < MAX_ROWS; offset += PAGE) {
-          const params = new URLSearchParams({
-            limit: String(PAGE),
-            offset: String(offset),
-            ...(section.params ?? {}),
-          });
+          const params = new URLSearchParams(
+            scopedParams({ limit: String(PAGE), offset: String(offset), ...(section.params ?? {}) }, campaignId),
+          );
           const response = await fetch(`/api/content/${kind}?${params}`);
           if (!response.ok) {
             setUnavailable(true);
@@ -151,7 +152,7 @@ export default function CatalogBrowser({
         setLoading((current) => current.filter((key) => key !== section.key));
       }
     },
-    [kind],
+    [kind, campaignId],
   );
 
   // Sections open from the start fetch from the start. `load` remembers what

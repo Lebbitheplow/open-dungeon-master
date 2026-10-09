@@ -23,7 +23,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { chebyshev, type XY } from "@/lib/battlemap/types";
 import { layZone, type SpellZone, type ZoneCasterKind } from "@/lib/battlemap/zones";
-import { LIGHT_SPELLS, zoneKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
+import { LIGHT_SPELLS, zoneKey, zoneOwnKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { holdGasesBack } from "@/lib/battlemap/zones-walls";
 import { quakeShake } from "@/lib/dm/zone-quake";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
@@ -31,6 +31,9 @@ import { casterHolds, liveZones, publishZones, saveZones } from "@/lib/dm/zone-s
 
 export type ZoneCast = {
   spell: string;
+  // A table's workshop copy: the published spell whose area it lays
+  // (src/lib/content/index.ts spellEngineName). The area keeps `spell`.
+  runsAs?: string | null;
   caster: { kind: ZoneCasterKind; id: string; name: string };
   slotLevel?: number | null;
   dc?: number | null;
@@ -63,11 +66,12 @@ function inside(point: XY, width: number, height: number): XY | null {
 // Lays the area, or null when the spell has none or there is no board.
 // Returns the line the tool result carries.
 export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | null {
-  const light = LIGHT_SPELLS[zoneKey(cast.spell)];
+  const spellNamed = { spell: cast.spell, ...(cast.runsAs && zoneKey(cast.runsAs) !== zoneKey(cast.spell) ? { runsAs: cast.runsAs } : {}) };
+  const light = LIGHT_SPELLS[zoneKey(spellNamed)];
   if (light) {
     return lightTheCaster(campaign, cast, light);
   }
-  const row = zoneRowFor(cast.spell);
+  const row = zoneRowFor(spellNamed);
   const encounter = row ? getActiveBoard(campaign.id) : null;
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   if (!row || !encounter || !map) {
@@ -110,7 +114,7 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
   const layout = layZone(row, { origin, toward, caster: casterAt, slotLevel: cast.slotLevel ?? null }, map);
   const probe: SpellZone = {
     id: crypto.randomUUID().slice(0, 12),
-    spell: cast.spell,
+    ...spellNamed,
     casterId: cast.caster.id,
     casterKind: cast.caster.kind,
     casterName: cast.caster.name.slice(0, 80),
@@ -127,17 +131,17 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
   // A concentration spell the server cannot see held (a homebrew caster, a
   // row the checklist lacks) runs for its duration instead of vanishing.
   const zone = row.concentration && !casterHolds(probe) ? { ...probe, concentration: false } : probe;
-  const wanted = zoneKey(cast.spell);
+  const wanted = zoneOwnKey(zone);
   const before = liveZones(map, encounter);
   // The same casting laid again moves; a caster concentrates on one spell.
   const kept = before.filter(
     (other) =>
-      !(other.casterId === zone.casterId && (zoneKey(other.spell) === wanted || (zone.concentration && other.concentration))),
+      !(other.casterId === zone.casterId && (zoneOwnKey(other) === wanted || (zone.concentration && other.concentration))),
   );
   const overlaps = (other: SpellZone) => other.cells.some((cell) => zone.cells.includes(cell));
-  const blown = row.disperses ? kept.filter((other) => row.disperses?.includes(zoneKey(other.spell)) && overlaps(other)) : [];
+  const blown = row.disperses ? kept.filter((other) => row.disperses?.includes(zoneKey(other)) && overlaps(other)) : [];
   const dispelled = row.dispelsDarknessUpTo
-    ? kept.filter((other) => zoneRowFor(other.spell)?.darkness && (other.slotLevel ?? zoneRowFor(other.spell)?.level ?? 9) <= (row.dispelsDarknessUpTo ?? 0) && overlaps(other))
+    ? kept.filter((other) => zoneRowFor(other)?.darkness && (other.slotLevel ?? zoneRowFor(other)?.level ?? 9) <= (row.dispelsDarknessUpTo ?? 0) && overlaps(other))
     : [];
   // A cloud stops at a Wind Wall, laid before or after it (zones-walls.ts).
   saveZones(map.id, holdGasesBack([...kept.filter((other) => !blown.includes(other) && !dispelled.includes(other)), zone], map.width));
@@ -168,7 +172,7 @@ function endCasting(campaign: Campaign, zone: SpellZone) {
     return;
   }
   const enemy = getEnemy(zone.casterId);
-  if (enemy?.concentration && zoneKey(enemy.concentration) === zoneKey(zone.spell)) {
+  if (enemy?.concentration && zoneKey(enemy.concentration) === zoneOwnKey(zone)) {
     setEnemyConcentration(enemy.id, null);
     clearSpellConditionsByName(campaign, zone.spell, undefined, enemy.id);
   }
@@ -188,7 +192,8 @@ export function burnWebUnder(campaign: Campaign, refId: string): string | null {
   }
   const cell = token.y * map.width + token.x;
   const zones = liveZones(map, encounter);
-  const webs = zones.filter((zone) => zoneKey(zone.spell) === "web" && zone.cells.includes(cell));
+  // A web by whatever name it was cast under: a renamed copy burns as Web.
+  const webs = zones.filter((zone) => zoneKey(zone) === "web" && zone.cells.includes(cell));
   if (!webs.length) {
     return null;
   }
@@ -208,17 +213,18 @@ export function burnWebUnder(campaign: Campaign, refId: string): string | null {
     dc: null,
   };
   saveZones(map.id, [...kept, fire]);
-  freeFromWeb(campaign, refId);
+  freeFromWeb(campaign, refId, new Set(["web", ...webs.map(zoneOwnKey)]));
   publishZones(campaign.id);
   return `The web around (${token.x},${token.y}) catches fire and burns away.`;
 }
 
-// The creature a burnt web held is held no more.
-function freeFromWeb(campaign: Campaign, refId: string) {
+// The creature a burnt web held is held no more. `webNames` are the burnt
+// webs' own names, which is what their restraint records.
+function freeFromWeb(campaign: Campaign, refId: string, webNames: Set<string>) {
   const enemy = getEnemy(refId);
   if (enemy) {
     const meta = enemy.conditionMeta as Record<string, { spell?: string } | undefined>;
-    if (enemy.conditions.includes("restrained") && zoneKey(meta.restrained?.spell ?? "") === "web") {
+    if (enemy.conditions.includes("restrained") && webNames.has(zoneKey(meta.restrained?.spell ?? ""))) {
       const rest = { ...meta };
       delete rest.restrained;
       patchEnemyConditions(enemy.id, enemy.conditions.filter((name) => name !== "restrained"), rest as typeof enemy.conditionMeta);
@@ -227,7 +233,7 @@ function freeFromWeb(campaign: Campaign, refId: string) {
   }
   const sheet = getSheetById(refId);
   const meta = (sheet?.conditionMeta ?? {}) as Record<string, { spell?: string } | undefined>;
-  if (sheet && sheet.conditions.includes("restrained") && zoneKey(meta.restrained?.spell ?? "") === "web") {
+  if (sheet && sheet.conditions.includes("restrained") && webNames.has(zoneKey(meta.restrained?.spell ?? ""))) {
     const rest = { ...meta };
     delete rest.restrained;
     const updated = patchSheet(sheet.id, { conditions: sheet.conditions.filter((name) => name !== "restrained"), conditionMeta: rest as typeof sheet.conditionMeta });
