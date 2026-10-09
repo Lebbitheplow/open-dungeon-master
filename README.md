@@ -849,6 +849,9 @@ wherever it appears. Only original works are bundled in this repository.
   [NarrativeEngine-P](https://github.com/Sagesheep/NarrativeEngine-P). No code
   from either is in this repository; what each one shaped is listed in
   [docs/LICENSES.md](docs/LICENSES.md).
+- The workshop's WorldForge tool is ported from WorldForge, Smoebo's
+  world-building app, with their permission. What came from it is listed in
+  [docs/LICENSES.md](docs/LICENSES.md).
 - Game rules data derives from the System Reference Document 5.1 by Wizards of the
   Coast LLC, licensed under CC-BY-4.0. See [docs/LICENSES.md](docs/LICENSES.md).
 - Expanded options (the widely played subclasses, spells, feats and lineages that no
