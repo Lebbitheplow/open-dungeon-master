@@ -9,6 +9,7 @@ import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 
 export type SubclassTable = {
   name: string;
@@ -100,10 +101,20 @@ export function subclassFeatureDescription(
   classId: string,
   subclass: string,
   featureName: string,
+  extras?: SubclassExtras,
 ): string | null {
   const table = CLASS_FEATURES[classId];
   const chosen = table ? findSubclass(table, subclass) : null;
   if (!chosen) {
+    // A workshop or pack subclass carries its features' own text.
+    const extra = extraSubclassNamed(classId, subclass, extras);
+    const wanted = featureName.trim().toLowerCase();
+    for (const rows of Object.values(extra?.levels ?? {})) {
+      const row = rows.find((entry) => entry.n.trim().toLowerCase() === wanted);
+      if (row?.d) {
+        return row.d;
+      }
+    }
     return null;
   }
   return SUBCLASS_FEATURE_TEXT[textKey(classId, chosen.name, featureName)] ?? null;
@@ -192,6 +203,42 @@ const normalizeName = (value: string) => value.trim().toLowerCase().replace(/\s+
 // whole. A string that is merely part of a name matches nothing, so a
 // paladin whose subclass reads "Oath" is granted no oath's features.
 // (The rule is src/lib/srd/subclass-name.ts, shared with options.ts.)
+// The archetypes the builder and the level-up dialog fetched for this
+// person (src/app/characters/builder/useBuilderOptions.ts useArchetypes),
+// read when a caller passes no extras of its own. Set only in the browser,
+// from an effect, where everything fetched is this one person's to see; the
+// server always passes the table's own (src/lib/db/subclass-extras.ts).
+const browserExtras: SubclassExtras = {};
+
+export function registerBrowserSubclassExtras(classId: string, tables: SubclassExtras[string]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  browserExtras[classId] = tables;
+}
+
+function extraSubclassNamed(classId: string, stored: string, extras?: SubclassExtras) {
+  const list = (extras ?? browserExtras)[classId] ?? [];
+  return (
+    list.find((entry) => subclassNamedExactly(stored, entry.name)) ??
+    list.find((entry) => subclassNamedBare(stored, entry.name)) ??
+    null
+  );
+}
+
+// A workshop or pack subclass as the bundled tables' shape: names by level.
+function extraTableNamed(classId: string, stored: string, extras?: SubclassExtras): SubclassTable | null {
+  const found = extraSubclassNamed(classId, stored, extras);
+  if (!found) {
+    return null;
+  }
+  return {
+    name: found.name,
+    levels: Object.fromEntries(Object.entries(found.levels).map(([level, rows]) => [level, rows.map((row) => row.n)])),
+    ...(found.spells ? { spells: found.spells } : {}),
+  };
+}
+
 function findSubclass(table: ClassFeatureTable, stored: string): SubclassTable | null {
   return (
     table.subclasses.find((entry) => subclassNamedExactly(stored, entry.name, entry.aliases)) ??
@@ -221,29 +268,44 @@ export function bundledSubclassName(classId: string, subclass: string): string |
 // Base-class features up to `level`, plus the features of whichever subclass
 // the stored string names. A subclass we have no table for (content-pack
 // prose, homebrew) still gets the base-class features.
-export function classFeaturesFor(classId: string, subclass: string, level: number): SheetFeature[] {
+export function classFeaturesFor(
+  classId: string,
+  subclass: string,
+  level: number,
+  // Subclasses the tables do not carry (src/lib/srd/subclass-tables.ts): the
+  // table's workshop subclasses and the content pack's prose archetypes.
+  extras?: SubclassExtras,
+): SheetFeature[] {
   const table = CLASS_FEATURES[classId];
   if (!table) {
     return [];
   }
   const clamped = clampLevel(level);
   const granted = leveledNames(table.levels, clamped);
-  const chosen = findSubclass(table, subclass);
+  const chosen = findSubclass(table, subclass) ?? extraTableNamed(classId, subclass, extras);
   if (chosen) {
     granted.push(...leveledNames(chosen.levels, clamped));
   }
   return granted.sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
 }
 
+// A bundled subclass's own table, for a workshop copy to start from: its
+// feature names by level and its always-prepared spells. Null for a
+// subclass the tables do not carry.
+export function subclassTableFor(classId: string, stored: string): SubclassTable | null {
+  const table = CLASS_FEATURES[classId];
+  return table ? findSubclass(table, stored) : null;
+}
+
 // The always-prepared spells a subclass has granted by `level`: domain,
 // circle, oath and patron lists. Callers add these to the sheet's prepared
 // list; they are free and never count against the known/prepared ceiling.
-export function subclassSpellsFor(classId: string, subclass: string, level: number): string[] {
+export function subclassSpellsFor(classId: string, subclass: string, level: number, extras?: SubclassExtras): string[] {
   const table = CLASS_FEATURES[classId];
   if (!table) {
     return [];
   }
-  const chosen = findSubclass(table, subclass);
+  const chosen = findSubclass(table, subclass) ?? extraTableNamed(classId, subclass, extras);
   if (!chosen?.spells) {
     return [];
   }
@@ -289,11 +351,12 @@ export function populateFeaturesForClasses(
   // The feats on the sheet: Martial Adept, Eldritch Adept and Metamagic
   // Adept open choice slots of their own (src/lib/srd/feat-combat.ts).
   feats?: string[],
+  extras?: SubclassExtras,
 ): SheetFeature[] {
   const granted: SheetFeature[] = [];
   for (const entry of classes) {
     granted.push(
-      ...classFeaturesFor(entry.id, entry.subclass, entry.level).map((feature) => ({
+      ...classFeaturesFor(entry.id, entry.subclass, entry.level, extras).map((feature) => ({
         ...feature,
         classId: entry.id,
       })),
@@ -386,6 +449,7 @@ export function populateFeatures(
   raceId: string,
   level: number,
   feats?: string[],
+  extras?: SubclassExtras,
 ): SheetFeature[] {
-  return populateFeaturesForClasses(existing, [{ id: classId, subclass, level }], raceId, feats);
+  return populateFeaturesForClasses(existing, [{ id: classId, subclass, level }], raceId, feats, extras);
 }

@@ -17,7 +17,16 @@ const { spellMechanicsFor } = await import("../src/lib/content/index.ts");
 const { MECH_OVERRIDES } = await import("../src/lib/srd/spell-mechanics.ts");
 const { normalizeHomebrewData, normalizeSpellMech } = await import("../src/lib/homebrew/gear.ts");
 const { draftFromCatalog } = await import("../src/app/workshop/homebrew/draft.ts");
-const { withMechanics, itemMechanicsOf } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const { withMechanics, itemMechanicsOf, archetypeMechanicsOf, raceMechanicsOf } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const { listRaces } = await import("../src/lib/content/index.ts");
+const { packRaceOptions } = await import("../src/lib/content/race-options.ts");
+const { sizeForRace } = await import("../src/lib/srd/index.ts");
+const { hpBonusPerLevel } = await import("../src/lib/srd/race-id.ts");
+const { innateSpellsFor, takesDraconicAncestry } = await import("../src/lib/srd/racial-grants.ts");
+const { ignoresHeavyArmorSpeedPenalty } = await import("../src/lib/srd/armor.ts");
+const { classFeaturesFor, subclassNamesFor, subclassSpellsFor } = await import("../src/lib/srd/features.ts");
+const { extraSubclassOf } = await import("../src/lib/srd/subclass-tables.ts");
+const { packSubclassExtras } = await import("../src/lib/content/archetype-tables.ts");
 const { gearFromHomebrewData } = await import("../src/lib/homebrew/item-data.ts");
 const { resolveAttackWeapon, weaponAttackProfile } = await import("../src/lib/dm/attack-logic.ts");
 const { armorOfRow, wornArmorTurnsCrits, SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
@@ -275,6 +284,164 @@ test("every weapon, suit and magic item copied into the workshop works on a shee
   }
   assert.ok(copied > 500, `only ${copied} items copied`);
   assert.deepEqual(changed, [], `${changed.length} copies work differently:\n${changed.slice(0, 12).join("\n")}`);
+});
+
+// ---- subclasses ----
+
+const CLASSES = ["barbarian", "bard", "cleric", "druid", "fighter", "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard"];
+const grantNames = (features) => features.map((feature) => `${feature.level}:${feature.name}`).sort();
+
+// A copy of a published subclass, renamed and stored, as the table's extras.
+function copiedExtras(classId, row) {
+  const table = archetypeMechanicsOf(row, classId);
+  if (!table) return null;
+  const draft = draftFromCatalog("archetype", { ...row, table }, { classSlug: classId });
+  const stored = normalizeHomebrewData("archetype", JSON.parse(JSON.stringify(draft.data)), "Copy");
+  const extra = extraSubclassOf({ name: "Workshop Copy", source: "homebrew", data: stored.data });
+  return extra ? { [classId]: [extra] } : null;
+}
+
+test("every bundled subclass copied into the workshop grants the same features and spells at every level", () => {
+  const changed = [];
+  let copied = 0;
+  for (const classId of CLASSES) {
+    for (const name of subclassNamesFor(classId)) {
+      const extras = copiedExtras(classId, { name, source: "open5e", data: { desc: "" } });
+      if (!extras) {
+        changed.push(`${classId}/${name}: nothing to copy`);
+        continue;
+      }
+      copied += 1;
+      for (const level of [3, 6, 10, 14, 20]) {
+        const want = grantNames(classFeaturesFor(classId, name, level));
+        const got = grantNames(classFeaturesFor(classId, "Workshop Copy", level, extras));
+        if (JSON.stringify(want) !== JSON.stringify(got)) {
+          changed.push(`${classId}/${name} at ${level}`);
+          break;
+        }
+        if (JSON.stringify(subclassSpellsFor(classId, name, level).sort()) !== JSON.stringify(subclassSpellsFor(classId, "Workshop Copy", level, extras).sort())) {
+          changed.push(`${classId}/${name} spells at ${level}`);
+          break;
+        }
+      }
+    }
+  }
+  assert.ok(copied >= 100, `only ${copied} subclasses copied`);
+  assert.deepEqual(changed, [], changed.join("; "));
+});
+
+test("a content-pack subclass written as prose grants its features, and its workshop copy grants the same", () => {
+  if (!db) return;
+  const pack = packSubclassExtras();
+  const prose = db
+    .prepare("SELECT name, class_slug, data_json FROM archetypes WHERE document_slug NOT IN ('wotc-srd', 'odm-expanded')")
+    .all();
+  const changed = [];
+  let granted = 0;
+  let headed = 0;
+  for (const row of prose) {
+    const classId = row.class_slug;
+    if (!CLASSES.includes(classId)) continue;
+    const data = JSON.parse(row.data_json);
+    // A row that prints no feature under a heading has nothing to grant (a
+    // summary row, an empty one).
+    if (!/^\s*#{3,6}/m.test(String(data.desc ?? ""))) continue;
+    headed += 1;
+    const fromPack = classFeaturesFor(classId, row.name, 20, pack);
+    const base = classFeaturesFor(classId, "", 20);
+    if (fromPack.length > base.length) granted += 1;
+    const extras = copiedExtras(classId, { name: row.name, source: "open5e", data });
+    if (!extras) continue;
+    if (JSON.stringify(grantNames(fromPack)) !== JSON.stringify(grantNames(classFeaturesFor(classId, "Workshop Copy", 20, extras)))) {
+      changed.push(`${classId}/${row.name}`);
+    }
+  }
+  assert.equal(granted, headed, `only ${granted} of ${headed} pack subclasses with features grant one`);
+  assert.deepEqual(changed, [], changed.join("; "));
+});
+
+// ---- species ----
+
+const raceFixture = JSON.parse(fs.readFileSync(new URL("./fixtures/srd-race-rows.json", import.meta.url), "utf8"));
+const raceRows = db
+  ? listRaces({ limit: 500 }).map((row) => ({ slug: row.slug, name: row.name, documentSlug: row.documentSlug, document: row.document, data: row.data }))
+  : raceFixture.rows;
+const raceParent = (slug) => raceRows.find((row) => row.slug === slug) ?? null;
+
+// A copy of a published species, renamed and stored, as the builder and the
+// creation check offer it.
+function copiedSpecies(row) {
+  const table = raceMechanicsOf({ ...row, source: "open5e" }, raceParent);
+  if (!table) return null;
+  const draft = draftFromCatalog("race", { ...row, table });
+  const stored = normalizeHomebrewData("race", JSON.parse(JSON.stringify(draft.data)), "Copy");
+  return packRaceOptions([{ slug: "homebrew:copy", name: "Copy", documentSlug: "homebrew", document: "Homebrew", data: stored.data }], ["homebrew:copy"])[0] ?? null;
+}
+
+// What the option says, less what names it; a size the row leaves unstated
+// is Medium at the table either way.
+const OPTION_LABELS = ["id", "name", "slug", "documentSlug", "source", "note", "traitsSummary", "choiceTraitNames"];
+const optionView = (option) => {
+  const view = { ...option, size: option.size ?? "Medium" };
+  for (const key of OPTION_LABELS) delete view[key];
+  return sorted(view);
+};
+
+// The rules the engines key by a bundled race's id, asked of the published
+// row and of its copy (src/lib/srd/race-id.ts speciesRulesFor).
+const engineSpecies = (id, rules) => ({
+  size: sizeForRace(id, rules),
+  toughness: hpBonusPerLevel(id, rules),
+  heavyArmor: ignoresHeavyArmorSpeedPenalty(id, rules),
+  ancestry: takesDraconicAncestry(id, rules),
+  innate: innateSpellsFor(id, 5, rules).map((spell) => `${spell.name}@${spell.gainedAt}`),
+});
+
+test("every published species copied into the workshop grants the same, and the engines read it the same", () => {
+  const published = packRaceOptions(raceRows);
+  const changed = [];
+  let copied = 0;
+  for (const option of published) {
+    const row = raceRows.find((entry) => entry.slug === option.slug);
+    const copy = copiedSpecies(row);
+    if (!copy) {
+      changed.push(`${option.name}: not offered`);
+      continue;
+    }
+    copied += 1;
+    const want = optionView(option);
+    const got = optionView(copy);
+    for (const key of new Set([...Object.keys(want), ...Object.keys(got)])) {
+      if (JSON.stringify(want[key]) !== JSON.stringify(got[key])) {
+        changed.push(`${option.name} ${key}: ${JSON.stringify(want[key])?.slice(0, 80)} -> ${JSON.stringify(got[key])?.slice(0, 80)}`);
+      }
+    }
+    const rules = { size: copy.size, heavyArmorSpeed: copy.heavyArmorSpeed, traitNames: copy.traitNames };
+    const engines = JSON.stringify(engineSpecies("homebrew:copy", rules));
+    const original = JSON.stringify(engineSpecies(option.id, { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames }));
+    if (engines !== original) changed.push(`${option.name} at the table: ${original} -> ${engines}`);
+  }
+  assert.ok(copied >= 9, `only ${copied} species copied`);
+  assert.deepEqual(changed, [], `${changed.length} copies differ:\n${changed.slice(0, 12).join("\n")}`);
+});
+
+test("the SRD's species keep the rules the engines key by their id when copied", () => {
+  const want = {
+    "hill-dwarf": { size: "Medium", toughness: 1, heavyArmor: true },
+    halfling: { size: "Small" },
+    lightfoot: { size: "Small" },
+    "rock-gnome": { size: "Small" },
+    tiefling: { innate: ["Thaumaturgy@1", "Hellish Rebuke@3", "Darkness@5"] },
+    dragonborn: { ancestry: true },
+  };
+  for (const [slug, expected] of Object.entries(want)) {
+    const copy = copiedSpecies(raceRows.find((row) => row.slug === slug && row.documentSlug === "wotc-srd"));
+    assert.ok(copy, `${slug} was not copied`);
+    const seen = engineSpecies("homebrew:copy", { size: copy.size, heavyArmorSpeed: copy.heavyArmorSpeed, traitNames: copy.traitNames });
+    for (const [key, value] of Object.entries(expected)) {
+      assert.deepEqual(seen[key], value, `${slug} copy: ${key}`);
+    }
+  }
 });
 
 console.log(`test-workshop-fidelity: ${passed} passed${db ? "" : " (fixture rows, no content pack)"}`);

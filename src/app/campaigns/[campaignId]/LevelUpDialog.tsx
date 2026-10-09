@@ -286,7 +286,11 @@ export function LevelUpDialog({
     (chosenEntry?.level ?? 0) < subclassLevel &&
     subclassLevel <= classLevelAfter;
   const builtInSubclasses = subclassNamesFor(classChoice);
-  const archetypes = useArchetypes(needsSubclass ? classChoice : "");
+  // Fetched for the class levelled either way: a workshop or pack subclass
+  // the sheet already holds has its features in these rows, and the preview
+  // below grants them from here (src/lib/srd/features.ts browser extras).
+  const fetchedArchetypes = useArchetypes(entrySubclass.trim() || needsSubclass ? classChoice : "");
+  const archetypes = needsSubclass ? fetchedArchetypes : [];
   // The subclasses with real feature tables come first; content-pack
   // archetypes are prose only and fill in behind them.
   const subclassOptions = [...builtInSubclasses];

@@ -1,4 +1,5 @@
-import { spellMechanicsFor } from "@/lib/content";
+import { getEntryDetail, spellMechanicsFor } from "@/lib/content";
+import { packRaceOptions } from "@/lib/content/race-options";
 import { armorInside, magicItemBonus, matchArmor, SRD_ARMOR, type SrdArmor } from "@/lib/srd/armor";
 import { checkRidersOf } from "@/lib/srd/item-check-riders";
 import { itemSpellsOf } from "@/lib/srd/item-spells";
@@ -6,6 +7,8 @@ import { gearBaseName, gearDefFor } from "@/lib/srd/magic-gear";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { matchWeapon, SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
+import { subclassFeatureDescription, subclassLevelFor, subclassTableFor } from "@/lib/srd/features";
+import { subclassLevelsFromProse, type SubclassFeatureRow } from "@/lib/srd/subclass-tables";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -108,7 +111,117 @@ export function itemMechanicsOf(row: Row): Record<string, unknown> | null {
   return out.itemKind === "gear" && !magic ? null : out;
 }
 
-export function withMechanics(kind: string, results: unknown[]): unknown[] {
+// A published subclass as a workshop subclass's data: its features by level,
+// each with its rules text, and its always-prepared spells. The bundled
+// table's names win (they are what the engines key their effects by); the
+// pack row's prose gives the words where the table has none.
+export function archetypeMechanicsOf(row: Row, classId: string): Record<string, unknown> | null {
+  if (row.source === "homebrew" || !classId) {
+    return null;
+  }
+  const prose = subclassLevelsFromProse(String(row.data.desc ?? ""), subclassLevelFor(classId) ?? 3);
+  const words = new Map<string, string>();
+  for (const rows of Object.values(prose)) {
+    for (const entry of rows) {
+      words.set(entry.n.trim().toLowerCase(), entry.d);
+    }
+  }
+  const bundled = subclassTableFor(classId, row.name);
+  if (!bundled) {
+    return Object.keys(prose).length ? { classSlug: classId, levels: prose } : null;
+  }
+  const levels: Record<string, SubclassFeatureRow[]> = {};
+  for (const [level, names] of Object.entries(bundled.levels)) {
+    levels[level] = names.map((name) => ({
+      n: name,
+      d: subclassFeatureDescription(classId, bundled.name, name) ?? words.get(name.trim().toLowerCase()) ?? "",
+    }));
+  }
+  return { classSlug: classId, levels, ...(bundled.spells ? { spells: bundled.spells } : {}) };
+}
+
+// A trait paragraph per name, out of a race's markdown: "**_Keen Senses._**
+// You have proficiency..." and "***Brave.*** You have advantage..." both.
+const TRAIT_LINE = /^(?:\*\*\*|\*\*_)(.+?)(?:\*\*\*|_\*\*)\s*(.*)$/;
+
+function traitParagraphs(markdown: string): Map<string, string> {
+  const out = new Map<string, string>();
+  let current: string | null = null;
+  for (const line of String(markdown ?? "").split("\n")) {
+    const head = TRAIT_LINE.exec(line.trim());
+    if (head) {
+      current = head[1].replace(/\.$/, "").trim();
+      out.set(current, head[2].trim());
+    } else if (current && line.trim()) {
+      out.set(current, `${out.get(current)} ${line.trim()}`.trim());
+    }
+  }
+  return out;
+}
+
+const ABILITY_NAME: Record<string, string> = {
+  str: "Strength", dex: "Dexterity", con: "Constitution", int: "Intelligence", wis: "Wisdom", cha: "Charisma",
+};
+
+// A published race as a workshop species's data: what the builder offers
+// for it, the parent race's traits and scores included for a subrace, and
+// the structured grants the bundled tables give the SRD's (raceMechanics).
+// `parentOf` finds the parent row (the content pack's, unless a test hands
+// it the SRD fixture).
+type RaceRowIn = Row & { slug?: string; documentSlug?: string };
+export function raceMechanicsOf(
+  row: RaceRowIn,
+  parentOf: (slug: string) => RaceRowIn | null = (slug) => getEntryDetail("races", slug) as RaceRowIn | null,
+): Record<string, unknown> | null {
+  if (row.source === "homebrew" || !row.slug) {
+    return null;
+  }
+  const parentSlug = String(row.data.parent_slug ?? "");
+  const parent = parentSlug && parentSlug !== row.slug ? parentOf(parentSlug) : null;
+  const rows = [
+    { slug: row.slug, name: row.name, documentSlug: row.documentSlug ?? "wotc-srd", data: row.data },
+    ...(parent ? [{ slug: parent.slug ?? parentSlug, name: parent.name, documentSlug: parent.documentSlug ?? "wotc-srd", data: parent.data }] : []),
+  ];
+  const option = packRaceOptions(rows, [row.slug]).find((entry) => entry.slug === row.slug);
+  if (!option) {
+    return null;
+  }
+  const paragraphs = new Map([...traitParagraphs(String(parent?.data.traits ?? "")), ...traitParagraphs(String(row.data.traits ?? ""))]);
+  const traits = option.traitNames.map((name) => `**_${name}._** ${paragraphs.get(name) ?? ""}`.trim()).join("\n\n");
+  return {
+    traits,
+    size: option.size ?? "Medium",
+    ...(option.heavyArmorSpeed ? { heavyArmorSpeed: true } : {}),
+    speed: { walk: option.speed },
+    asi: Object.entries(option.asi).map(([ability, value]) => ({ attributes: [ABILITY_NAME[ability] ?? ability], value })),
+    languages: option.languages,
+    ...(option.bonusLanguages ? { bonusLanguages: option.bonusLanguages } : {}),
+    ...(option.languageChoice ? { languageChoice: option.languageChoice } : {}),
+    vision: String(row.data.vision ?? parent?.data.vision ?? ""),
+    ...(option.asiChoice ? { asiChoice: option.asiChoice } : {}),
+    ...(option.skills ? { skills: option.skills } : {}),
+    ...(option.skillChoice ? { skillChoice: option.skillChoice } : {}),
+    ...(option.tools ? { tools: option.tools } : {}),
+    ...(option.toolChoice ? { toolChoice: option.toolChoice } : {}),
+    ...(option.armor ? { armor: option.armor } : {}),
+    ...(option.weapons ? { weapons: option.weapons } : {}),
+    ...(option.cantripChoice ? { cantripChoice: option.cantripChoice } : {}),
+  };
+}
+
+export function withMechanics(kind: string, results: unknown[], params: { classSlug?: string } = {}): unknown[] {
+  if (kind === "races") {
+    return results.map((row) => {
+      const table = raceMechanicsOf(row as Row & { slug?: string; documentSlug?: string });
+      return table ? { ...(row as Row), table } : row;
+    });
+  }
+  if (kind === "archetypes") {
+    return results.map((row) => {
+      const table = archetypeMechanicsOf(row as Row, String(params.classSlug ?? "").toLowerCase());
+      return table ? { ...(row as Row), table } : row;
+    });
+  }
   if (kind === "spells") {
     return results.map((row) => {
       const mech = spellMechanicsOf(row as Row);

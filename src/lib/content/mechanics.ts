@@ -34,7 +34,27 @@ export type RaceMechanics = {
   // Race-taught combat training (mountain dwarf armor, drow weapons).
   armor?: string[];
   weapons?: string[];
+  // The size the row states ("Your size is Small."), undefined when it
+  // leaves it to a subrace or says nothing; and the dwarf's "Your speed is
+  // not reduced by wearing heavy armor."
+  size?: RaceSize;
+  heavyArmorSpeed?: boolean;
 };
+
+export const RACE_SIZES = ["Tiny", "Small", "Medium", "Large"] as const;
+export type RaceSize = (typeof RACE_SIZES)[number];
+
+// "Small" (a workshop species), or the sentence the pack prints in a size
+// paragraph; a paragraph that leaves it to the subrace says nothing.
+export function raceSizeOf(text: unknown): RaceSize | undefined {
+  const raw = String(text ?? "").trim();
+  const exact = RACE_SIZES.find((size) => size.toLowerCase() === raw.toLowerCase());
+  if (exact) {
+    return exact;
+  }
+  const stated = /\byour size is (tiny|small|medium|large)\b/i.exec(raw);
+  return stated ? RACE_SIZES.find((size) => size.toLowerCase() === stated[1].toLowerCase()) : undefined;
+}
 
 // The 5e standard + exotic languages, for language pickers. The four
 // elemental tongues are dialects of Primordial that the expanded pack's kenku
@@ -326,10 +346,16 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
   // Languages: the expanded pack (and a re-imported pack) writes them
   // structurally, the same shape as src/lib/srd/races.json; the Open5e rows
   // carry the trait's prose and are parsed.
+  const listedChoice = data.languageChoice as { count?: unknown; from?: unknown } | undefined;
   const grant: LanguageGrant = Array.isArray(data.languages)
     ? {
         languages: (data.languages as unknown[]).map((entry) => canonicalLanguage(String(entry))).filter((entry) => looksLikeLanguage(entry)),
         bonusLanguages: Number(data.bonusLanguages ?? 0) || 0,
+        // A pick from a short list, written out (a workshop species copied
+        // from one whose prose said "your choice of Common or Undercommon").
+        ...(listedChoice && Array.isArray(listedChoice.from) && listedChoice.from.length
+          ? { languageChoice: { count: Number(listedChoice.count) || 1, from: listedChoice.from.map(String) } }
+          : {}),
       }
     : traitObjects && data.languages === undefined
       ? { languages: ["Common"], bonusLanguages: 2 }
@@ -357,9 +383,15 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
   // pack is generated from races.json and writes the same keys).
   const structured = structuredGrants(data);
 
+  const size = raceSizeOf(data.size);
+  const heavyArmorSpeed =
+    data.heavyArmorSpeed === true || /not reduced by wearing heavy armou?r/i.test(`${String(data.speed_desc ?? "")} ${typeof data.traits === "string" ? data.traits : ""}`);
+
   return {
     speed,
     asi,
+    ...(size ? { size } : {}),
+    ...(heavyArmorSpeed ? { heavyArmorSpeed } : {}),
     // A row that names no language at all (a subrace, which inherits its
     // parent's) is filled in by the caller; Common is the last resort.
     languages: languages.length ? languages : data.languages === undefined ? [] : ["Common"],
@@ -392,9 +424,10 @@ function structuredGrants(data: Record<string, unknown>): StructuredGrants {
   if (skillChoice && Number(skillChoice.count) > 0) {
     out.skillChoice = { count: Number(skillChoice.count) };
   }
-  const asiChoice = data.asiChoice as { count?: unknown; amount?: unknown } | undefined;
+  const asiChoice = data.asiChoice as { count?: unknown; amount?: unknown; from?: unknown } | undefined;
   if (asiChoice && Number(asiChoice.count) > 0) {
-    out.asiChoice = { count: Number(asiChoice.count), amount: Number(asiChoice.amount) || 1 };
+    const from = Array.isArray(asiChoice.from) ? (asiChoice.from.filter((entry) => (ABILITIES as readonly unknown[]).includes(entry)) as Ability[]) : [];
+    out.asiChoice = { count: Number(asiChoice.count), amount: Number(asiChoice.amount) || 1, ...(from.length ? { from } : {}) };
   }
   const cantripChoice = data.cantripChoice as { list?: unknown; count?: unknown } | undefined;
   if (cantripChoice && typeof cantripChoice.list === "string") {

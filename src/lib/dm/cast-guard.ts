@@ -21,6 +21,7 @@
 // module reads the live state and writes the spend. It must not import
 // mutations.ts (which imports it).
 
+import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { endInvisibilityOnCast } from "@/lib/dm/attack-marks";
 import { endSanctuaryOnHarm } from "@/lib/dm/spell-defenses";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -283,7 +284,10 @@ export function castSpell(
   if (!able.ok) {
     return { error: able.error };
   }
-  const held = spellHeldProblem(sheet, spell, facts, { ritual: input.ritual });
+  const held = spellHeldProblem(sheet, spell, facts, {
+    ritual: input.ritual,
+    extras: subclassExtrasForTable(campaign.id, sheet.userId),
+  });
   if (held) {
     return { error: held };
   }

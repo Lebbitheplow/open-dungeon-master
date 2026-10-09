@@ -4,6 +4,7 @@ import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { admitSheet } from "@/lib/characters/admit";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { XP_THRESHOLDS, levelForXp } from "@/lib/srd";
+import { subclassExtrasFor } from "@/lib/db/subclass-extras";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { dedupeName } from "@/lib/workshop/import";
@@ -96,12 +97,13 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
 // SRD class features and racial traits for a stored sheet, granted per class
 // for a multiclassed one exactly as createSheet grants them, so a fighter 3 /
 // wizard 2 is not stored with a fighter 5's features.
-function libraryFeatures(input: CreateSheetInput, level: number) {
+function libraryFeatures(input: CreateSheetInput, level: number, userId: string) {
   const classList =
     (input.classes ?? []).length > 1
       ? input.classes
       : [{ id: input.class, subclass: input.subclass, level }];
-  return populateFeaturesForClasses(input.features ?? [], classList, input.race, input.feats);
+  // A workshop subclass is its owner's: a library character reads its own.
+  return populateFeaturesForClasses(input.features ?? [], classList, input.race, input.feats, subclassExtrasFor([userId]));
 }
 
 export function createCharacter(
@@ -121,7 +123,7 @@ export function createCharacter(
   const startingXp = levelForXp(xp) === level ? xp : floor;
   const stored: CreateSheetInput = {
     ...input,
-    features: libraryFeatures(input, level),
+    features: libraryFeatures(input, level, userId),
   };
   db.prepare(
     `
@@ -219,7 +221,7 @@ export function updateCharacter(
   }
   const stored: CreateSheetInput = {
     ...input,
-    features: libraryFeatures(input, level),
+    features: libraryFeatures(input, level, userId),
   };
   getDatabase()
     .prepare(

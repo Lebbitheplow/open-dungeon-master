@@ -9,12 +9,20 @@ import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { settleAttunement, type Wearer } from "@/lib/srd/magic-items";
 import { itemWeightByName } from "@/lib/content";
 import { hydrateHomebrewGear } from "@/lib/db/homebrew";
+import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
+import { registerSpeciesReader } from "@/lib/srd/race-id";
+import { serverSpeciesRules } from "@/lib/characters/species-rules";
 import type {
   CharacterSheet,
   CreateSheetInput,
   FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
+
+// Every rule that reads a species by id reads a pack or workshop species
+// through this (src/lib/srd/race-id.ts); every sheet the engines touch
+// comes through this module first.
+registerSpeciesReader(serverSpeciesRules);
 
 type SheetRow = {
   id: string;
@@ -259,6 +267,8 @@ export function createSheet(
     classList,
     input.race,
     input.feats,
+    // A workshop or pack subclass's features, read from the table's tables.
+    subclassExtrasForTable(campaignId, userId),
   );
   // Limited-use counters (Rage, Ki, Second Wind...) sized for the features
   // just granted; the resource engine spends and refills them.
@@ -656,6 +666,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
         loneClassBefore: existing.classes.length ? null : existing.class,
       },
       { spellcasting: patch.spellcasting !== undefined, xp: patch.xp !== undefined },
+      subclassExtrasForTable(existing.campaignId, existing.userId),
     );
     next.features = settled.features;
     next.hitDice = settled.hitDice;

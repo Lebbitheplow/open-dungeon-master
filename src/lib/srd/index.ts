@@ -14,7 +14,7 @@ import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
-import { hpBonusPerLevel } from "@/lib/srd/race-id";
+import { hpBonusPerLevel, speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
 import { isThirdCaster, thirdCasterSlots } from "@/lib/srd/third-caster";
 import type {
   Ability,
@@ -57,10 +57,15 @@ export function findBackground(id: string) {
 
 // A character's creature size, derived from their race on demand rather
 // than stored: Small vs Medium is what the rules care about (heavy weapons,
-// grapple limits) and homebrew races default to Medium.
-export function sizeForRace(raceId: string): "Small" | "Medium" {
+// grapple limits). A species the bundled list does not carry is read from
+// its own row (speciesRulesFor), so a pack Kobold or a workshop copy of the
+// Halfling is Small; a species that says nothing is Medium.
+export function sizeForRace(raceId: string, rules?: SpeciesRules | null): "Small" | "Medium" {
   const race = findRace(raceId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"));
-  return race?.size === "Small" ? "Small" : "Medium";
+  if (race) {
+    return race.size === "Small" ? "Small" : "Medium";
+  }
+  return /^(small|tiny)$/i.test(speciesRulesFor(raceId, rules)?.size ?? "") ? "Small" : "Medium";
 }
 
 export function findSkill(id: string) {

@@ -22,6 +22,8 @@ export type PickerEntry = {
   // an item's gear.
   mech?: Record<string, unknown>;
   gear?: Record<string, unknown>;
+  // A subclass's features by level and its always-prepared spells.
+  table?: Record<string, unknown>;
 };
 
 

@@ -3,6 +3,8 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { serverEnv } from "../server-env.ts";
 import { populateFeatures, populateFeaturesForClasses } from "@/lib/srd/features";
+import { packSubclassExtras } from "@/lib/content/archetype-tables";
+import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { populateResources } from "@/lib/srd/class-resources";
 
 const dbPath =
@@ -2498,15 +2500,53 @@ function backfillSheetFeatures(db: SqliteDatabase) {
 // the half-elf "Skill Versatility" trait once substring-matched "ki" and
 // stamped monk Ki onto any half-elf, and paladins predate Channel Divinity
 // landing in the base class table. Writes only rows that actually changed.
+// The workshop subclasses of whoever runs a table, read with the handle the
+// boot already holds (src/lib/db/subclass-extras.ts is the same for every
+// other write), so the resync below regrants a workshop or pack subclass's
+// features rather than dropping them.
+function bootSubclassExtras(db: SqliteDatabase, campaignId: string, cache: Map<string, SubclassExtras>): SubclassExtras {
+  const known = cache.get(campaignId);
+  if (known) {
+    return known;
+  }
+  let authors: string[] = [];
+  try {
+    const row = db
+      .prepare(`SELECT owner_user_id, human_dm_user_id, assistant_dm_user_id FROM campaigns WHERE id = ?`)
+      .get(campaignId) as { owner_user_id: string; human_dm_user_id: string | null; assistant_dm_user_id: string | null } | undefined;
+    authors = row ? [row.owner_user_id, row.human_dm_user_id, row.assistant_dm_user_id].filter((id): id is string => Boolean(id)) : [];
+  } catch {
+    authors = [];
+  }
+  const own: SubclassExtras = {};
+  for (const author of [...new Set(authors)]) {
+    const entries = db
+      .prepare(`SELECT name, data_json FROM homebrew_entries WHERE user_id = ? AND kind = 'archetype'`)
+      .all(author) as Array<{ name: string; data_json: string }>;
+    for (const entry of entries) {
+      const data = JSON.parse(entry.data_json) as Record<string, unknown>;
+      const classId = String(data.classSlug ?? "").toLowerCase();
+      const table = extraSubclassOf({ name: entry.name, source: "homebrew", data });
+      if (classId && table) {
+        (own[classId] ??= []).push(table);
+      }
+    }
+  }
+  const extras = mergeExtras(own, packSubclassExtras());
+  cache.set(campaignId, extras);
+  return extras;
+}
+
 function backfillSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
-      `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json,
+      `SELECT id, campaign_id, class, subclass, race, level, abilities_json, features_json, resources_json,
               classes_json, feats_json
          FROM character_sheets`,
     )
     .all() as Array<{
     id: string;
+    campaign_id: string;
     class: string;
     subclass: string | null;
     race: string;
@@ -2523,6 +2563,7 @@ function backfillSheetResources(db: SqliteDatabase) {
   const update = db.prepare(
     `UPDATE character_sheets SET features_json = ?, resources_json = ? WHERE id = ?`,
   );
+  const extrasByCampaign = new Map<string, SubclassExtras>();
   for (const row of sheets) {
     try {
       const existingFeatures = JSON.parse(row.features_json ?? "[]") as Parameters<
@@ -2546,9 +2587,10 @@ function backfillSheetResources(db: SqliteDatabase) {
         : [];
       const multiclass = Array.isArray(classes) && classes.length > 1;
       const rowFeats = row.feats_json ? (JSON.parse(row.feats_json) as string[]) : [];
+      const extras = bootSubclassExtras(db, row.campaign_id, extrasByCampaign);
       const features = multiclass
-        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats)
-        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats);
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats, extras)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats, extras);
       const resources = populateResources(
         features,
         row.level,

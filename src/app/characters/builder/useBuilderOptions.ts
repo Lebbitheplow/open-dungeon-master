@@ -1,7 +1,10 @@
 "use client";
 
+import { registerBrowserSubclassExtras, subclassLevelFor } from "@/lib/srd/features";
+import { extraSubclassOf } from "@/lib/srd/subclass-tables";
 import { useEffect, useMemo, useState } from "react";
 import { packRaceOptions } from "@/lib/content/race-options";
+import { registerBrowserSpecies } from "@/lib/srd/race-id";
 import {
   mergedBackgroundOptions,
   packClassOptions,
@@ -68,7 +71,13 @@ export function useBuilderOptions(keepRaceId?: string) {
         setPackInstalled(true);
         const raceRows = (racesData.results ?? []) as ContentRow[];
         if (raceRows.length) {
-          setRaces(packRaceOptions(raceRows, keepRaceId ? [keepRaceId] : []));
+          const options = packRaceOptions(raceRows, keepRaceId ? [keepRaceId] : []);
+          // Size, Dwarven Toughness and the rest read a pack or workshop
+          // species by id, here as on the server.
+          registerBrowserSpecies(
+            Object.fromEntries(options.map((option) => [option.id, { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames }])),
+          );
+          setRaces(options);
         }
         const classRows = (classesData.results ?? []) as ContentRow[];
         if (classRows.length) {
@@ -140,8 +149,22 @@ export function useArchetypes(classId: string) {
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!cancelled && data?.results) {
+          const rows = data.results as ContentRow[];
+          // A workshop or pack subclass's features, for the grants the
+          // builder previews (src/lib/srd/subclass-tables.ts).
+          registerBrowserSubclassExtras(
+            classId,
+            rows
+              .map((row) =>
+                extraSubclassOf(
+                  { name: row.name, source: String((row as { source?: string }).source ?? "open5e"), data: (row.data ?? {}) as Record<string, unknown> },
+                  subclassLevelFor(classId) ?? 3,
+                ),
+              )
+              .filter((table): table is NonNullable<typeof table> => table !== null),
+          );
           setArchetypes(
-            (data.results as ContentRow[]).map((row) => ({
+            rows.map((row) => ({
               id: row.slug,
               name: row.name,
               desc: String(row.data?.desc ?? ""),

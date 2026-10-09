@@ -1,4 +1,5 @@
 import { healerKitUse } from "@/lib/dm/stabilize";
+import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
 import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
 import { getDmTurn } from "@/lib/db/dm-turns";
@@ -1394,7 +1395,7 @@ export function applyDmMutation(
         // level it has slots for, and a cantrip only with room in the column
         // (src/lib/dm/learn-rules.ts).
         const facts = spellFactsFor(spell, spellAuthorsFor(campaign));
-        const unlearnable = learnProblem(sheet, spell, facts);
+        const unlearnable = learnProblem(sheet, spell, facts, subclassExtrasForTable(campaign.id, sheet.userId));
         if (unlearnable) {
           return { result: { error: unlearnable } };
         }
@@ -1527,7 +1528,7 @@ export function applyDmMutation(
             );
             const held = spellsAgainstLimit(
               caster.known.length ? caster.known : caster.prepared,
-              subclassSpellsFor(caster.classId, classEntry?.subclass ?? "", level),
+              subclassSpellsFor(caster.classId, classEntry?.subclass ?? "", level, subclassExtrasForTable(campaign.id, sheet.userId)),
             );
             if (!cap || held < cap.count) {
               targetCaster = caster;
@@ -1549,7 +1550,7 @@ export function applyDmMutation(
           );
           const current = spellsAgainstLimit(
             intoKnown ? known : prepared,
-            subclassSpellsFor(sheet.class, sheet.subclass, sheet.level),
+            subclassSpellsFor(sheet.class, sheet.subclass, sheet.level, subclassExtrasForTable(campaign.id, sheet.userId)),
           );
           if (ceiling && current >= ceiling.count) {
             return {

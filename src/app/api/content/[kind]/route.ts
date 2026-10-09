@@ -111,7 +111,7 @@ export async function GET(
 
   // The workshop's "start from" asks for what the engine runs, too.
   if (url.searchParams.get("mechanics") === "1") {
-    results = withMechanics(kind, results);
+    results = withMechanics(kind, results, { classSlug: url.searchParams.get("class") ?? undefined });
   }
   return Response.json({ results, packInstalled: contentPackInstalled() });
 }

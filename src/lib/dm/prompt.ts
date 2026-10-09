@@ -12,6 +12,7 @@ import { featEngineTag } from "@/lib/srd/feat-combat";
 import { featFactsFor } from "@/lib/characters/catalog";
 import { featTwinOf } from "@/lib/srd/feat-effects";
 import { subclassFeatureDescription } from "@/lib/srd/features";
+import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { authoredFeatureTags } from "@/lib/srd/authored-effects";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
@@ -343,6 +344,8 @@ export function describeSheet(
   options: { encumbrance?: boolean; ownerUserId?: string } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
+  // A workshop or pack subclass's features carry their own text.
+  const extras = subclassExtrasForTable(sheet.campaignId, sheet.userId);
   const abilities = (Object.entries(sheet.abilities) as Array<[string, number]>)
     .map(([ability, score]) => `${ability.toUpperCase()} ${score}(${formatModifier(derived.abilityMods[ability as keyof typeof derived.abilityMods])})`)
     .join(" ");
@@ -377,7 +380,7 @@ export function describeSheet(
             sheet.subclass;
           const description =
             classFeatureDescription(owner, feature.name) ??
-            subclassFeatureDescription(owner, ownerSubclass, feature.name);
+            subclassFeatureDescription(owner, ownerSubclass, feature.name, extras);
           const tag = engineTags.get(feature.name);
           const named = description ? `${feature.name} (${description})` : feature.name;
           return tag ? `${named} ${tag}` : named;

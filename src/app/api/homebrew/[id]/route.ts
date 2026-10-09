@@ -2,6 +2,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { deleteHomebrew, getHomebrew, updateHomebrew } from "@/lib/db/homebrew";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { patchHomebrewSchema } from "@/lib/schemas/homebrew";
+import { forgetSpeciesRules } from "@/lib/characters/species-rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export async function PATCH(
     data = normalized.data;
   }
   const entry = updateHomebrew(user.id, id, { name: parsed.data.name, data });
+  forgetSpeciesRules(`homebrew:${id}`);
   if (!entry) {
     return Response.json({ error: "Not found." }, { status: 404 });
   }

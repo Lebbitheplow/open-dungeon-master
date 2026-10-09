@@ -3,6 +3,7 @@ import type { SrdWeapon } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
 import { clamp, num, text, type Raw } from "@/lib/homebrew/coerce";
+import { normalizeRaceData } from "@/lib/homebrew/race-data";
 import { GEAR_LIMITS, normalizeItemData, type HomebrewData, type Outcome } from "@/lib/homebrew/item-data";
 import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
@@ -96,28 +97,9 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
       data.feature = text(source.feature, 80);
       data.feature_desc = text(source.feature_desc, 2_000);
       break;
-    case "race": {
-      data.traits = text(source.traits, 4_000);
-      data.size = text(source.size, 40) || "Medium";
-      data.speed = { walk: clamp((source.speed as Raw | undefined)?.walk, 5, 120, 30) };
-      data.languages = text(source.languages, 300);
-      data.vision = text(source.vision, 120);
-      const asi: Array<{ attributes: string[]; value: number }> = [];
-      if (Array.isArray(source.asi)) {
-        for (const entry of source.asi.slice(0, 6)) {
-          const row = (entry ?? {}) as Raw;
-          const attributes = Array.isArray(row.attributes)
-            ? row.attributes.map((a) => String(a).trim()).filter(Boolean).slice(0, 6)
-            : [];
-          const value = clamp(row.value, -2, 3, 1);
-          if (attributes.length && value !== 0) {
-            asi.push({ attributes, value });
-          }
-        }
-      }
-      data.asi = asi;
+    case "race":
+      normalizeRaceData(source, data);
       break;
-    }
     case "archetype": {
       data.classSlug = text(source.classSlug, 60).toLowerCase();
       const levels: Record<string, Array<{ n: string; d: string }>> = {};
@@ -131,15 +113,28 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
         const rows = features
           .map((feature) => {
             const row = (feature ?? {}) as Raw;
-            return { n: text(row.n, 80), d: text(row.d, 500) };
+            return { n: text(row.n, 80), d: text(row.d, 1_500) };
           })
           .filter((feature) => feature.n)
-          .slice(0, 6);
+          .slice(0, 8);
         if (rows.length) {
           levels[String(at)] = rows;
         }
       }
       data.levels = levels;
+      // Always-prepared spells by class level (a domain's, an oath's), the
+      // same shape the bundled tables give theirs.
+      const spells: Record<string, string[]> = {};
+      for (const [level, names] of Object.entries((source.spells ?? {}) as Raw)) {
+        const at = num(level);
+        const list = Array.isArray(names) ? [...new Set(names.map((name) => text(name, 60)).filter(Boolean))].slice(0, 6) : [];
+        if (at !== null && at >= 1 && at <= 20 && list.length) {
+          spells[String(at)] = list;
+        }
+      }
+      if (Object.keys(spells).length) {
+        data.spells = spells;
+      }
       break;
     }
     default:

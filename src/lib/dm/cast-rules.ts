@@ -9,6 +9,7 @@
 // Pure: the sheet, the spell's facts and the turn budget come in as values,
 // so scripts/test-cast-rules.mjs walks every branch without a database.
 
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { castsWithHandsFull } from "@/lib/srd/feat-combat";
 import { featTwinOf } from "@/lib/srd/feat-effects";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
@@ -86,7 +87,8 @@ export function spellHeldProblem(
   sheet: Caster,
   spell: string,
   facts: SpellFacts | null,
-  options: { ritual?: boolean } = {},
+  // The table's workshop and pack subclasses, for their always-prepared lists.
+  options: { ritual?: boolean; extras?: SubclassExtras } = {},
 ): string | null {
   const casting = sheet.spellcasting;
   if (!casting) {
@@ -98,7 +100,7 @@ export function spellHeldProblem(
     return null;
   }
   const views = casterViewsOf(sheet);
-  if (views.some((view) => hasName(subclassSpellsFor(view.classId, view.subclass, view.level), names))) {
+  if (views.some((view) => hasName(subclassSpellsFor(view.classId, view.subclass, view.level, options.extras), names))) {
     return null;
   }
   if (

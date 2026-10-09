@@ -1,4 +1,5 @@
 import { gearDefFor, gearDefOfRow, gearRidersActive } from "@/lib/srd/magic-gear";
+import { speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
 
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
@@ -273,8 +274,12 @@ export function wearsUntrainedArmor(sheet: {
 }
 
 // SRD 5.1, Dwarf, Speed: "Your speed is not reduced by wearing heavy armor."
-export function ignoresHeavyArmorSpeedPenalty(race: string | undefined | null): boolean {
-  return /dwarf/i.test(race ?? "");
+// A species with a row of its own answers by its text (a workshop copy of
+// the Dwarf does; Tome of Heroes' Dwarf Chassis, which never says so, does
+// not); the bundled dwarves and a race named in free text by the word.
+export function ignoresHeavyArmorSpeedPenalty(race: string | undefined | null, rules?: SpeciesRules | null): boolean {
+  const species = speciesRulesFor(race ?? "", rules);
+  return species ? Boolean(species.heavyArmorSpeed) : /dwarf/i.test(race ?? "");
 }
 
 // An alternative base-AC formula a class feature provides while wearing no

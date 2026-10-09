@@ -119,6 +119,7 @@ export function draftFromCatalog(
     // What the engine runs for the published row (catalog-mechanics.ts).
     mech?: Data;
     gear?: Data;
+    table?: Data;
   },
   extra: { classSlug?: string } = {},
 ): HomebrewDraft {
@@ -195,13 +196,24 @@ export function draftFromCatalog(
           asi: Array.isArray(data.asi) ? data.asi : [],
           languages: String(data.languages ?? ""),
           vision: String(data.vision ?? ""),
+          // What the builder offers for the published race: a subrace's
+          // parent traits and scores, its speed, languages, skills, tools,
+          // training and cantrip (catalog-mechanics.ts raceMechanicsOf).
+          ...(entry.table ?? {}),
         },
       };
     case "archetype":
       return {
         kind,
         name: entry.name,
-        data: { desc: String(data.desc ?? ""), classSlug: extra.classSlug ?? "fighter", levels: {} },
+        data: {
+          desc: String(data.desc ?? "").split(/^#{3,6}\s/m)[0].trim() || String(data.desc ?? ""),
+          classSlug: extra.classSlug ?? "fighter",
+          // The published subclass's features by level, with their words, and
+          // its always-prepared spells (catalog-mechanics.ts).
+          levels: (entry.table?.levels as Data | undefined) ?? {},
+          ...(entry.table?.spells ? { spells: entry.table.spells } : {}),
+        },
       };
   }
 }

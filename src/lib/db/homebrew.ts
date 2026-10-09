@@ -169,7 +169,7 @@ export function isPublishedGearName(name: string): boolean {
 // Whose workshop counts at a table: whoever runs it. The owner made the
 // campaign and the DM seats referee it; a player's own entries are theirs to
 // write and the table's to admit, which a DM does by keeping the entry.
-function tableAuthors(campaignId: string): string[] {
+export function tableAuthors(campaignId: string): string[] {
   const row = getDatabase()
     .prepare(
       `SELECT owner_user_id, human_dm_user_id, assistant_dm_user_id FROM campaigns WHERE id = ?`,
