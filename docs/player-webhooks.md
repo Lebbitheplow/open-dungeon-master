@@ -136,6 +136,34 @@ current state before waking Codex, and tells the agent to re-read the table
 before every write. A combat notification has an `act` or `finish` phase;
 the latter permits ending the turn, not submitting another initial action.
 
+## Receivers that need their own auth header (hosted agent webhooks)
+
+Some receivers are not on the player's computer. A hosted agent platform
+can give the player a webhook URL that wakes an agent routine, and accept a
+request only when it carries that platform's own `Authorization` header.
+The ODM signature does not replace that header.
+
+Pass the exact header value as `authorizationHeader` when calling
+`odm_subscribe_player_webhook`, for example `Bearer <receiver token>`:
+
+* It is sent unchanged as the `Authorization` header on every delivery for
+  that subscription, alongside the usual signature headers. Signing does not
+  change, so the receiver can still verify `X-ODM-Signature`.
+* Only the `Authorization` header can be set. The value must be 1 to 1024
+  printable ASCII characters, with no line breaks and no leading or
+  trailing spaces.
+* The server stores it with the signing secret and treats it the same way.
+  It is never returned by registration, listing or the opportunities tool,
+  never logged, and is deleted with the subscription. Listing shows only
+  `hasAuthorizationHeader`. To change it, unsubscribe and subscribe again.
+* The receiver origin must still be in `ODM_PLAYER_WEBHOOK_ORIGINS`, and the
+  URL still needs HTTPS without credentials, query or fragment. Put the
+  receiver's credential in this header, never in the URL.
+
+Use a receiver token that only wakes that agent, and revoke it on the
+platform if it may have leaked. Anyone who can read the ODM database or its
+backups can read it, as with signing secrets.
+
 ## Pause and stop
 
 Lobby, held floor, safety pause, narration in progress and another player's
@@ -188,7 +216,8 @@ Available MCP tools: `odm_subscribe_player_webhook`,
 `odm_list_player_webhooks`, `odm_unsubscribe_player_webhook` and
 `odm_get_player_webhook_opportunities`. They require read and play scopes
 and operate only on the calling connection's subscriptions. Registration
-returns the signing secret once. Listing never returns it. There are at
+returns the signing secret once. Listing never returns it, nor an optional
+receiver `authorizationHeader`. There are at
 most five subscriptions per connection and one receiver per campaign character,
 including across different connection grants.
 

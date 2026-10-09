@@ -21,7 +21,7 @@ const { createEncounter } = await import("../src/lib/db/encounters.ts");
 const { publishPersisted } = await import("../src/lib/events.ts");
 const { setDmStatus } = await import("../src/lib/dm/status.ts");
 const { playerOpportunities } = await import("../src/lib/agents/webhook-opportunities.ts");
-const { createPlayerWebhook, runPlayerWebhooksOnce, listPlayerWebhooks, deletePlayerWebhook, webhookUrl, webhookSignature, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
+const { createPlayerWebhook, runPlayerWebhooksOnce, listPlayerWebhooks, deletePlayerWebhook, webhookUrl, webhookAuthorization, webhookSignature, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
 const { PlayerInbox, receiverServer, verifySignature, validateEvent, playerPrompt } = await import("./lib/player-webhook-receiver.mjs");
 const { runCodexPlayerTurn, playerCodexEnvironment, playerMcpOverride } = await import("./lib/player-webhook-codex.mjs");
@@ -70,6 +70,10 @@ try {
     assert.ok(!JSON.stringify(event).includes("signingSecret"));
     assert.ok(verifySignature(sub.signingSecret, sent.at(-1).options.headers["X-ODM-Timestamp"], sent.at(-1).options.headers["X-ODM-Signature"], sent.at(-1).options.body));
     const count = sent.length; await tick(); await tick(); assert.equal(sent.length, count);
+  });
+  await test("a subscription without authorizationHeader sends no Authorization header", () => {
+    assert.ok(sent.length > 0 && sent.every((s) => !Object.keys(s.options.headers).some((h) => h.toLowerCase() === "authorization")));
+    assert.equal(listPlayerWebhooks(grant.id)[0].hasAuthorizationHeader, false);
   });
   await test("paused, busy, hold and another player's spotlight do not invite actions", () => {
     for (const changes of [{ active: false }, { paused: true }, { busy: true }, { floor: { mode: "hold", next: { mode: "open" } } }, { floor: { mode: "spotlight", userIds: [other.id], respondedUserIds: [], prompt: "You?" } }]) assert.deepEqual(playerOpportunities(state(changes)), []);
@@ -221,6 +225,39 @@ try {
     revokeConnectionGrant(user.id, grant.id); const count = sent.length; await tick();
     assert.equal(sent.length, count); assert.deepEqual(listPlayerWebhooks(grant.id), []);
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhook_writes`).get().n, 0);
+  });
+  await test("authorizationHeader is validated, sent verbatim on each delivery and never listed back", async () => {
+    for (const bad of ["", "Bearer a\r\nX-Evil: 1", "Bearer a\nb", "Bearer a\rb", "x".repeat(1025), " Bearer a", "Bearer a ", "Bearer \u00e9", "Bearer \u0000", 42]) {
+      assert.throws(() => webhookAuthorization(bad));
+    }
+    assert.equal(webhookAuthorization(undefined), null);
+    assert.equal(webhookAuthorization("x".repeat(1024)).length, 1024);
+    const hosted = createConnectionGrant({ userId: user.id, name: "Hosted agent", scopes: ["read", "play"], campaignId: campaign.id }).grant;
+    const base = { campaignId: campaign.id, characterId: sheetId, url: sub.url };
+    for (const authorizationHeader of ["Bearer a\r\nX-Evil: 1", "x".repeat(1025), 7]) {
+      const refused = await workbenchCall(hosted, "odm_subscribe_player_webhook", { ...base, authorizationHeader });
+      assert.equal(refused.isError, true);
+      assert.ok(!refused.text.includes("X-Evil"));
+    }
+    assert.deepEqual(listPlayerWebhooks(hosted.id), []);
+    const value = "Bearer hosted-receiver-SECRET-TOKEN";
+    const created = await workbenchCall(hosted, "odm_subscribe_player_webhook", { ...base, authorizationHeader: value });
+    assert.equal(created.isError, false);
+    assert.ok(!created.text.includes(value)); assert.equal(JSON.parse(created.text).hasAuthorizationHeader, true);
+    const listed = await workbenchCall(hosted, "odm_list_player_webhooks", {});
+    assert.ok(!listed.text.includes(value)); assert.equal(JSON.parse(listed.text).subscriptions[0].hasAuthorizationHeader, true);
+    const { id, signingSecret } = JSON.parse(created.text);
+    assert.ok(!JSON.stringify(playerWebhookState(hosted, id)).includes(value));
+    narration(); const before = sent.length; await tick();
+    const delivered = sent.slice(before).filter((s) => s.event.subscriptionId === id);
+    assert.ok(delivered.length > 0);
+    for (const { options } of delivered) {
+      assert.equal(options.headers.Authorization, value);
+      assert.ok(verifySignature(signingSecret, options.headers["X-ODM-Timestamp"], options.headers["X-ODM-Signature"], options.body));
+      assert.ok(!options.body.includes(value));
+    }
+    assert.equal(JSON.parse((await workbenchCall(hosted, "odm_unsubscribe_player_webhook", { subscriptionId: id })).text).removed, true);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhooks WHERE authorization_header IS NOT NULL`).get().n, 0);
   });
   await test("signatures reject changed bodies, wrong keys and old/future timestamps", () => {
     const timestamp = String(Math.floor(Date.now() / 1000));

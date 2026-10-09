@@ -17,7 +17,7 @@ const MAX_AGE_MS = 24 * 60 * 60_000;
 
 type Subscription = {
   id: string; grant_id: string; campaign_id: string; character_id: string;
-  url: string; secret: string; lifecycle: string | null;
+  url: string; secret: string; authorization_header: string | null; lifecycle: string | null;
 };
 type Delivery = {
   id: string; subscription_id: string; opportunity_id: string; body: string;
@@ -44,6 +44,21 @@ export function webhookUrl(value: unknown, allowed = process.env.ODM_PLAYER_WEBH
   return url.href;
 }
 
+// Hosted receivers (an agent platform's webhook endpoint) may require their
+// own credential. Only the Authorization header is supported, so a caller
+// cannot set Host, Content-Length or ODM's own headers. Printable ASCII
+// without surrounding spaces is sent exactly as given; CR/LF never are.
+// The value is a secret like the signing secret: stored, sent, never listed
+// back and never included in an error.
+export function webhookAuthorization(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || value.length < 1 || value.length > 1024 ||
+    !/^[\x21-\x7e](?:[\x20-\x7e]*[\x21-\x7e])?$/.test(value)) {
+    throw new Error("authorizationHeader must be 1-1024 printable ASCII characters, without line breaks or surrounding spaces.");
+  }
+  return value;
+}
+
 function maySubscribe(grant: ConnectionGrant, campaignId: string, characterId: string): boolean {
   return grant.scopes.includes("read") && grant.scopes.includes("play") &&
     (!grant.campaignId || grant.campaignId === campaignId) &&
@@ -51,9 +66,10 @@ function maySubscribe(grant: ConnectionGrant, campaignId: string, characterId: s
     getSheetForUser(campaignId, grant.userId)?.id === characterId;
 }
 
-export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId: string; characterId: string; url: string }) {
+export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId: string; characterId: string; url: string; authorizationHeader?: string }) {
   if (!maySubscribe(grant, input.campaignId, input.characterId)) throw new Error("Connect with read and play scopes for your active character at this table.");
   const url = webhookUrl(input.url);
+  const authorization = webhookAuthorization(input.authorizationHeader);
   const db = getDatabase();
   const existing = db.prepare(`SELECT * FROM player_webhooks WHERE campaign_id = ? AND character_id = ?`)
     .get(input.campaignId, input.characterId) as Subscription | undefined;
@@ -65,17 +81,19 @@ export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId:
   if (count.n >= MAX_SUBSCRIPTIONS) throw new Error("Remove an existing webhook first (maximum five per connection).");
   const id = randomUUID();
   const signingSecret = randomBytes(32).toString("base64url");
-  db.prepare(`INSERT INTO player_webhooks (id, grant_id, campaign_id, character_id, url, secret, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, grant.id, input.campaignId, input.characterId, url, signingSecret, nowIso());
-  return { id, campaignId: input.campaignId, characterId: input.characterId, url, signingSecret };
+  db.prepare(`INSERT INTO player_webhooks (id, grant_id, campaign_id, character_id, url, secret, authorization_header, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, grant.id, input.campaignId, input.characterId, url, signingSecret, authorization, nowIso());
+  // The caller supplied the Authorization value; it is not echoed back.
+  return { id, campaignId: input.campaignId, characterId: input.characterId, url, signingSecret, hasAuthorizationHeader: authorization !== null };
 }
 
 export function listPlayerWebhooks(grantId: string) {
   return getDatabase().prepare(`SELECT w.id, w.campaign_id AS campaignId, w.character_id AS characterId,
-    w.url, w.created_at AS createdAt,
+    w.url, w.authorization_header IS NOT NULL AS hasAuthorizationHeader, w.created_at AS createdAt,
     (SELECT COUNT(*) FROM player_webhook_deliveries d WHERE d.subscription_id = w.id AND d.state = 'pending') AS pending,
     (SELECT COUNT(*) FROM player_webhook_deliveries d WHERE d.subscription_id = w.id AND d.state = 'failed') AS failed
-    FROM player_webhooks w WHERE w.grant_id = ?`).all(grantId);
+    FROM player_webhooks w WHERE w.grant_id = ?`).all(grantId)
+    .map((row) => ({ ...(row as Record<string, unknown>), hasAuthorizationHeader: Boolean((row as { hasAuthorizationHeader: number }).hasAuthorizationHeader) }));
 }
 
 export function deletePlayerWebhook(grantId: string, id: string): boolean {
@@ -208,7 +226,8 @@ export function webhookSignature(secret: string, timestamp: string, body: string
 // State reconciliation is deliberately independent of ephemeral callbacks:
 // a crash after a game mutation and before publishing, or a parked turn
 // restored after restart, still reaches the outbox. It never sends prose,
-// enemy statistics, dice results, notes or a bearer token.
+// enemy statistics, dice results, notes or an ODM bearer token. A receiver's
+// own Authorization value goes only in that header, to that receiver.
 export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch = fetch) {
   const db = getDatabase();
   const subs = db.prepare(`SELECT * FROM player_webhooks`).all() as Subscription[];
@@ -253,7 +272,8 @@ export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch
         const response = await send(sub.url, {
           method: "POST", redirect: "error", signal: AbortSignal.timeout(5_000), body: delivery.body,
           headers: { "Content-Type": "application/json", "X-ODM-Event-Id": event.eventId,
-            "X-ODM-Timestamp": timestamp, "X-ODM-Signature": webhookSignature(sub.secret, timestamp, delivery.body) },
+            "X-ODM-Timestamp": timestamp, "X-ODM-Signature": webhookSignature(sub.secret, timestamp, delivery.body),
+            ...(sub.authorization_header ? { Authorization: sub.authorization_header } : {}) },
         });
         ok = response.ok;
         await response.body?.cancel();

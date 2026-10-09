@@ -309,11 +309,11 @@ const WEBHOOK_TOOLS: McpToolDefinition[] = [
   },
   {
     name: "odm_subscribe_player_webhook",
-    description: "Send signed decision notifications for your active character to an operator-approved HTTPS receiver. Requires read and play. Returns a signingSecret once; save it privately in the receiver, never in chat. A receiver adapter must wake your agent; MCP alone does not. Read current campaign state before acting.",
-    inputSchema: { type: "object", properties: { ...campaignIdProp, characterId: { type: "string", description: "The active campaign sheet id, not the library id." }, url: { type: "string" } }, required: ["campaignId", "characterId", "url"], additionalProperties: false },
+    description: "Send signed decision notifications for your active character to an operator-approved HTTPS receiver. Requires read and play. Returns a signingSecret once; save it privately in the receiver, never in chat. If the receiver itself requires an Authorization header (a hosted agent webhook), pass its exact value as authorizationHeader; it is stored like the signing secret, sent on every delivery and never listed back. A receiver adapter must wake your agent; MCP alone does not. Read current campaign state before acting.",
+    inputSchema: { type: "object", properties: { ...campaignIdProp, characterId: { type: "string", description: "The active campaign sheet id, not the library id." }, url: { type: "string" }, authorizationHeader: { type: "string", maxLength: 1024, description: "Optional. Sent verbatim as the Authorization header on every delivery, e.g. 'Bearer <receiver token>'. Printable ASCII, no line breaks." } }, required: ["campaignId", "characterId", "url"], additionalProperties: false },
   },
   {
-    name: "odm_list_player_webhooks", description: "List this connection's webhook subscriptions and pending/failed delivery counts. Signing secrets are never listed.",
+    name: "odm_list_player_webhooks", description: "List this connection's webhook subscriptions and pending/failed delivery counts. Signing secrets and Authorization values are never listed; hasAuthorizationHeader says whether one is set.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -356,7 +356,8 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
     try {
       if (name === "odm_subscribe_player_webhook") {
         if (typeof args.campaignId !== "string" || typeof args.characterId !== "string" || typeof args.url !== "string") throw new Error("Supply campaignId, characterId and url.");
-        return { text: JSON.stringify(createPlayerWebhook(grant, { campaignId: args.campaignId, characterId: args.characterId, url: args.url })), isError: false, campaignId: args.campaignId };
+        if (args.authorizationHeader !== undefined && typeof args.authorizationHeader !== "string") throw new Error("authorizationHeader must be a string.");
+        return { text: JSON.stringify(createPlayerWebhook(grant, { campaignId: args.campaignId, characterId: args.characterId, url: args.url, authorizationHeader: args.authorizationHeader })), isError: false, campaignId: args.campaignId };
       }
       if (name === "odm_list_player_webhooks") return { text: JSON.stringify({ subscriptions: listPlayerWebhooks(grant.id) }), isError: false };
       if (typeof args.subscriptionId !== "string") throw new Error("Supply subscriptionId.");
