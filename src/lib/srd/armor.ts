@@ -1,4 +1,4 @@
-import { gearDefFor, gearRidersActive } from "@/lib/srd/magic-gear";
+import { gearDefFor, gearDefOfRow, gearRidersActive } from "@/lib/srd/magic-gear";
 
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
@@ -112,7 +112,7 @@ export function matchArmor(term: string): SrdArmor | null {
 // first: "Chain Mail of Fire Resistance" holds chain mail. Only used to find
 // the magic armor such a name is (armorOfRow), never as armor on its own, so
 // a "Leather Backpack" stays a backpack.
-function armorInside(term: string): SrdArmor | null {
+export function armorInside(term: string): SrdArmor | null {
   const wanted = ` ${normalize(term)} `;
   const candidates = SRD_ARMOR.filter((armor) => wanted.includes(` ${normalize(armor.name)} `));
   candidates.sort((a, b) => b.name.length - a.name.length);
@@ -133,15 +133,29 @@ export type WornArmor = { armor: SrdArmor; bonus: number; proficientAnyway: bool
 export function armorOfRow(item: WornItem): WornArmor | null {
   const named = magicItemBonus(item.name);
   if (item.gear?.armor) {
-    return { armor: item.gear.armor, bonus: named, proficientAnyway: false };
+    // A workshop suit: its own block, and its own riders when it is magic.
+    const own = gearDefOfRow(item);
+    const riders = own?.base?.kind === "armor" && gearRidersActive(own, item) ? (own.armor ?? {}) : {};
+    return {
+      armor: {
+        ...item.gear.armor,
+        ...(riders.noStrength ? { strengthRequirement: undefined } : {}),
+        ...(riders.noStealthPenalty ? { stealthDisadvantage: false } : {}),
+      },
+      bonus: Math.max(named, riders.bonus ?? 0),
+      proficientAnyway: riders.proficientAnyway === true,
+    };
   }
   const tail = matchArmor(item.name);
   const inside = tail ?? armorInside(item.name);
   const def = gearDefFor(item.name, item.slug, inside?.name ?? null);
-  if (!def || def.base?.kind !== "armor") {
+  // A row with no base of its own whose name ends in a suit (Animated Chain
+  // Mail, a Grasping Shield) is that suit, with its riders.
+  const namesSuit = Boolean(!def?.base && inside && def?.armor && Object.keys(def.armor).length);
+  if (!def || (def.base?.kind !== "armor" && !namesSuit)) {
     return tail ? { armor: tail, bonus: named, proficientAnyway: false } : null;
   }
-  const base = inside ?? byName.get(normalize(def.base.name)) ?? null;
+  const base = inside ?? (def.base ? byName.get(normalize(def.base.name)) : null) ?? null;
   if (!base) {
     return null;
   }
@@ -166,8 +180,9 @@ export function wornArmorTurnsCrits(equipment: WornItem[]): boolean {
     if (!isWorn(item, equipment)) {
       return false;
     }
-    const def = gearDefFor(item.name, item.slug, matchArmor(item.name)?.name ?? null);
-    return def?.base?.kind === "armor" && def.armor?.critProof === true;
+    const def = gearDefOfRow(item, matchArmor(item.name)?.name ?? null);
+    const suit = def?.base?.kind === "armor" || Boolean(!def?.base && (item.gear?.armor || matchArmor(item.name)));
+    return Boolean(def && suit && def.armor?.critProof === true && gearRidersActive(def, item));
   });
 }
 

@@ -15,7 +15,6 @@ import {
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
-import { RECHARGE_TRIGGERS } from "@/lib/workshop/pickers";
 import {
   CheckField,
   Field,
@@ -32,6 +31,14 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { FieldLabel, addChip, rowIcon } from "@/app/workshop/kit";
 import type { Data } from "@/app/workshop/homebrew/draft";
+import {
+  ArmorRidersBlock,
+  AttunementBlock,
+  ChargesBlock,
+  ChecksBlock,
+  ItemSpellsBlock,
+  WeaponRidersBlock,
+} from "@/app/workshop/homebrew/ItemMagicFields";
 import { DAMAGE_TYPE_BLURBS, WEAPON_PROPERTY_BLURBS, glossaryFor } from "@/lib/help/terms";
 
 // "1d8 slashing" as the two things a DM actually decides. A type the list
@@ -355,7 +362,6 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
   const weapon = (data.weapon ?? {}) as Weapon;
   const armor = (data.armor ?? {}) as Armor;
   const effects = Array.isArray(data.effects) ? (data.effects as MagicItemEffect[]) : [];
-  const charges = (data.charges ?? {}) as { max?: number; recharge?: string };
 
   return (
     <div className="space-y-3">
@@ -396,27 +402,6 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
               checked={data.requiresAttunement === true}
               onChange={(requiresAttunement) => set({ requiresAttunement })}
             />
-            <NumberField
-              label="Charges"
-              value={num(charges.max)}
-              min={0}
-              max={GEAR_LIMITS.chargesMax}
-              onChange={(max) =>
-                set({ charges: max === "" || max === 0 ? undefined : { max, recharge: charges.recharge ?? "dawn" } })
-              }
-              className="w-40"
-            />
-            {charges.max ? (
-              <TextField
-                label="Recharge"
-                value={charges.recharge ?? "dawn"}
-                onChange={(recharge) => set({ charges: { ...charges, recharge } })}
-                placeholder="dawn"
-                maxLength={80}
-                className="w-40"
-                suggestions={RECHARGE_TRIGGERS}
-              />
-            ) : null}
           </div>
           <EffectsBlock effects={effects} onChange={(next) => set({ effects: next })} />
           <div className="flex flex-wrap gap-3">
@@ -432,7 +417,13 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
             />
           </div>
           {data.weapon ? <WeaponBlock weapon={weapon} onChange={(next) => set({ weapon: next })} /> : null}
+          {data.weapon ? <WeaponRidersBlock data={data} set={set} /> : null}
           {data.armor ? <ArmorBlock armor={armor} onChange={(next) => set({ armor: next })} /> : null}
+          {data.armor ? <ArmorRidersBlock data={data} set={set} /> : null}
+          <ChargesBlock data={data} set={set} />
+          <ItemSpellsBlock data={data} set={set} />
+          <ChecksBlock data={data} set={set} />
+          <AttunementBlock data={data} set={set} />
         </div>
       ) : null}
     </div>

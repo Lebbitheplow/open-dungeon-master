@@ -17,7 +17,17 @@ const { spellMechanicsFor } = await import("../src/lib/content/index.ts");
 const { MECH_OVERRIDES } = await import("../src/lib/srd/spell-mechanics.ts");
 const { normalizeHomebrewData, normalizeSpellMech } = await import("../src/lib/homebrew/gear.ts");
 const { draftFromCatalog } = await import("../src/app/workshop/homebrew/draft.ts");
-const { withMechanics } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const { withMechanics, itemMechanicsOf } = await import("../src/lib/workshop/catalog-mechanics.ts");
+const { gearFromHomebrewData } = await import("../src/lib/homebrew/item-data.ts");
+const { resolveAttackWeapon, weaponAttackProfile } = await import("../src/lib/dm/attack-logic.ts");
+const { armorOfRow, wornArmorTurnsCrits, SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
+const { SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
+const { magicItemRiders, attunementProblem } = await import("../src/lib/srd/magic-items.ts");
+const { chargeRuleOf } = await import("../src/lib/srd/item-charge-rules.ts");
+const { itemCheckRiders } = await import("../src/lib/srd/item-check-riders.ts");
+const { itemSpellsOfRow } = await import("../src/lib/srd/item-spells.ts");
+const { gearDefOfRow } = await import("../src/lib/srd/magic-gear.ts");
+const magicItemsJson = JSON.parse(fs.readFileSync(new URL("../src/lib/classes/magic-items.json", import.meta.url), "utf8"));
 
 let passed = 0;
 function test(name, fn) {
@@ -168,6 +178,103 @@ test("every SRD spell copied into the workshop casts with the block the publishe
   }
   assert.ok(blocks >= (db ? 200 : 20), `only ${blocks} spells had a block`);
   assert.deepEqual(changed, [], `a copy does not cast like the published spell: ${changed.join(", ")}`);
+});
+
+// ---- items ----
+
+const SKILLS = ["athletics", "acrobatics", "stealth", "perception", "investigation", "sleight_of_hand", "persuasion", "arcana"];
+const FIGHTER = { abilityMods: { str: 3, dex: 2, con: 2, int: 0, wis: 1, cha: 0 }, proficiencyBonus: 3 };
+const WEAPON_PROFS = ["simple", "martial", "firearms"];
+const WEARER = { class: "wizard", spellcasting: { ability: "int" }, race: "human", alignment: "neutral good", conditions: [] };
+
+// What the engines make of one carried line: the swing, the suit, the worn
+// magic, the charges, the checks, the spells a charge casts, the curse.
+function engineView(row) {
+  const equipment = [row];
+  const weapon = resolveAttackWeapon(equipment, WEAPON_PROFS, undefined);
+  const profile = weapon.srd ? weaponAttackProfile(FIGHTER, WEAPON_PROFS, weapon) : null;
+  const armor = armorOfRow(row);
+  const riders = magicItemRiders(equipment, WEARER);
+  return {
+    swing: profile && {
+      toHit: profile.toHit,
+      damage: profile.damageExpression,
+      type: profile.damageType,
+      ranged: profile.ranged,
+      range: profile.rangeTiles,
+      magic: profile.magicBonus,
+      // A "+1" the published name declares is said in the name; a renamed
+      // copy says it as a rider. The numbers are compared above.
+      notes: profile.riderNotes.map((note) => note.replace(row.name, "ITEM")).filter((note) => !/^ITEM: \+\d to hit and damage$/.test(note)),
+      typed: profile.gearTyped ?? null,
+      dice: profile.gearDice ?? null,
+      crit: profile.gearCritDice ?? null,
+      vs: profile.gearBonusVs ?? null,
+    },
+    // The setting a suit belongs to (genres) gates the builder's shop, not
+    // what the suit does on a sheet.
+    armor: armor && { ...armor, armor: { ...armor.armor, name: undefined, genres: undefined } },
+    critProof: wornArmorTurnsCrits(equipment),
+    worn: { ...riders, sources: riders.sources.length },
+    charges: chargeRuleOf(row),
+    checks: SKILLS.map((skill) => {
+      const out = itemCheckRiders(equipment, skill);
+      return [out.bonus, out.advantage];
+    }),
+    spells: itemSpellsOfRow(row),
+    cursed: Boolean(gearDefOfRow(row)?.cursed),
+    attunes: attunementProblem({ ...row, attuned: false }, [], { ...WEARER, class: "fighter", spellcasting: null }) === null,
+  };
+}
+
+// Where two views part, as "path: published -> copy".
+function firstDifference(a, b, path = "") {
+  if (JSON.stringify(a) === JSON.stringify(b)) return null;
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const found = firstDifference(a[key], b[key], `${path}.${key}`);
+      if (found) return found;
+    }
+  }
+  return `${path || "view"}: ${JSON.stringify(a)?.slice(0, 120)} -> ${JSON.stringify(b)?.slice(0, 120)}`;
+}
+
+// Every item the engines know by name: the SRD weapons and armour, and every
+// magic item row (SRD and pack) the magic-gear table carries.
+function itemRows() {
+  const rows = [
+    ...SRD_WEAPONS.map((weapon) => ({ name: weapon.name, kind: "weapon" })),
+    ...SRD_ARMOR.map((armor) => ({ name: armor.name, kind: "armor" })),
+    ...magicItemsJson.items.map((item) => ({ name: item.name, kind: "magic_item" })),
+  ];
+  return rows.map((row) => ({ ...row, source: "open5e", data: { desc: `${row.name}.` } }));
+}
+
+test("every weapon, suit and magic item copied into the workshop works on a sheet as the published one does", () => {
+  const changed = [];
+  let copied = 0;
+  for (const row of itemRows()) {
+    const gear = itemMechanicsOf(row);
+    const draft = draftFromCatalog("item", { ...row, ...(gear ? { gear } : {}) });
+    const copyName = "Workshop Copy";
+    const stored = normalizeHomebrewData("item", JSON.parse(JSON.stringify(draft.data)), copyName);
+    if ("error" in stored) {
+      changed.push(`${row.name}: refused, ${stored.error}`);
+      continue;
+    }
+    copied += 1;
+    const attuned = Boolean(stored.data.requiresAttunement);
+    const published = { name: row.name, qty: 1, equipped: true, attuned };
+    const snapshot = gearFromHomebrewData(copyName, stored.data);
+    const copy = { name: copyName, qty: 1, equipped: true, attuned, ...(snapshot ? { gear: snapshot } : {}) };
+    const want = comparable(engineView(published));
+    const got = comparable(engineView(copy));
+    if (want !== got) {
+      changed.push(`${row.name}: ${firstDifference(JSON.parse(want), JSON.parse(got))}`);
+    }
+  }
+  assert.ok(copied > 500, `only ${copied} items copied`);
+  assert.deepEqual(changed, [], `${changed.length} copies work differently:\n${changed.slice(0, 12).join("\n")}`);
 });
 
 console.log(`test-workshop-fidelity: ${passed} passed${db ? "" : " (fixture rows, no content pack)"}`);

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import type { HomebrewGearDef } from "@/lib/homebrew/item-data";
+import type { ItemMagic } from "@/lib/homebrew/item-magic-schema";
+import type { ItemSpell } from "@/lib/srd/item-spells";
+import type { AttunementRule } from "@/lib/srd/magic-items";
 
 export const HOMEBREW_KINDS = [
   "spell",
@@ -54,8 +58,15 @@ export const gearSnapshotShape = z.object({
     .object({
       requiresAttunement: z.boolean(),
       effects: z.array(magicItemEffectSchema),
+      attunedBy: z.custom<AttunementRule>().optional(),
+      carried: z.boolean().optional(),
     })
     .optional(),
+  // The rest of an SRD magic item's magic, in magic-gear.ts's words
+  // (src/lib/homebrew/item-data.ts HomebrewGearDef): riders, charges, curse.
+  def: z.custom<HomebrewGearDef>().optional(),
+  checks: z.custom<NonNullable<ItemMagic["checks"]>>().optional(),
+  spells: z.custom<ItemSpell[]>().optional(),
   weight: z.number().min(0).optional(),
 });
 export type HomebrewGearSnapshot = z.infer<typeof gearSnapshotShape>;

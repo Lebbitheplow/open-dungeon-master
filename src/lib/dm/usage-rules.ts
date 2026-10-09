@@ -9,7 +9,7 @@
 // Database-free like the other *-logic modules, so the route stays a thin
 // shell and scripts can exercise every branch.
 import { armorOfRow } from "@/lib/srd/armor";
-import { gearDefFor } from "@/lib/srd/magic-gear";
+import { gearDefOfRow } from "@/lib/srd/magic-gear";
 import { attunementProblem } from "@/lib/srd/magic-items";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -101,7 +101,7 @@ export function attunementRefusal(
   // A cursed item's attunement holds until remove curse (SRD 5.1: Berserker
   // Axe, Armor of Vulnerability, Demon Armor, Shield of Missile Attraction).
   const cursed = sheet.equipment.find(
-    (item) => item.attuned && gear[item.name]?.attuned === false && gearDefFor(item.name, item.slug)?.cursed,
+    (item) => item.attuned && gear[item.name]?.attuned === false && gearDefOfRow(item)?.cursed,
   );
   if (cursed) {
     return `${cursed.name} is cursed: ${sheet.name} cannot end the attunement until remove curse or similar magic breaks it.`;

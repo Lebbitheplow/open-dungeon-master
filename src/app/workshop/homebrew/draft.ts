@@ -161,6 +161,10 @@ export function draftFromCatalog(
           ...(entry.kind === "magic_item"
             ? { requiresAttunement: /requires attunement/i.test(String(data.requires_attunement ?? data.desc ?? "")), effects: [] }
             : {}),
+          // What the engine runs for the published item: the weapon or suit
+          // it is built on, its riders, effects, charges, spells and checks
+          // (catalog-mechanics.ts), so the copy works the same way.
+          ...(entry.gear ?? {}),
         },
       };
     case "feat":

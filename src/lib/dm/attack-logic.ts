@@ -131,10 +131,10 @@ export function resolveAttackWeapon(
     // gear.ts) and wins over a name that happens to resemble an SRD one. A
     // carried magic weapon swings as its base weapon (src/lib/dm/
     // gear-attack.ts): a Flame Tongue is a longsword.
-    const magic = carriedItem && !weaponOf(carriedItem) ? magicWeaponOfRow(carriedItem) : null;
+    const magic = carriedItem ? magicWeaponOfRow(carriedItem) : null;
     const srd =
-      weaponOf(carriedItem) ??
       (magic?.gear ? magic.srd : null) ??
+      weaponOf(carriedItem) ??
       matchWeapon(arg) ??
       (carriedItem ? matchWeapon(carriedItem.name) : null);
     return {
@@ -151,8 +151,8 @@ export function resolveAttackWeapon(
   // No name given: best carried weapon, proficient ones first.
   let best: { item: EquipmentItem; srd: SrdWeapon; proficient: boolean; gear: WeaponGear | null } | null = null;
   for (const item of equipment) {
-    const magic = weaponOf(item) ? null : magicWeaponOfRow(item);
-    const srd = weaponOf(item) ?? magic?.srd ?? null;
+    const magic = magicWeaponOfRow(item);
+    const srd = (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? magic.srd ?? null;
     if (!srd) {
       continue;
     }

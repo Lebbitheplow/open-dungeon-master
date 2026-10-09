@@ -8,7 +8,7 @@
 import { searchItems } from "@/lib/content";
 import { chargeMax, chargeRuleOf, chargesLeft } from "@/lib/dm/item-charges";
 import { armorOfRow } from "@/lib/srd/armor";
-import { gearDefFor } from "@/lib/srd/magic-gear";
+import { gearDefOfRow } from "@/lib/srd/magic-gear";
 import { matchMagicItem, type MagicItemEffect } from "@/lib/srd/magic-items";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 
@@ -44,8 +44,10 @@ function packSentence(name: string): string | null {
 // "Flame Tongue: longsword, +2d6 fire; attuned, worn" or null for an
 // ordinary item.
 export function magicItemLine(item: EquipmentItem, equipmentWorn = true): string | null {
-  const def = gearDefFor(item.name, item.slug);
-  const worn = matchMagicItem(item.name, item.slug);
+  // A workshop item's own magic rides on its line (gearDefOfRow); its effects
+  // are the ones magic-items.ts reads off the same line.
+  const def = gearDefOfRow(item);
+  const worn = item.gear?.magic ? { effects: item.gear.magic.effects, requiresAttunement: item.gear.magic.requiresAttunement } : matchMagicItem(item.name, item.slug);
   const bonusByName = /(?:^|[\s,(])\+([123])(?![0-9])/.exec(item.name);
   if (!def && !worn && !bonusByName) {
     const sentence = packSentence(item.name);

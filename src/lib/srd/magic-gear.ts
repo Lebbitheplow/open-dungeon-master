@@ -151,6 +151,23 @@ export function gearBaseName(def: GearDef | null, kind: "weapon" | "armor"): str
   return def?.base?.kind === kind ? def.base.name : null;
 }
 
+// The row a carried equipment line runs as: its own workshop block when it
+// carries one (src/lib/homebrew/item-data.ts snapshots it onto the line),
+// else the table's row for its name. Every engine that asks what a carried
+// item's magic is asks here, so a homebrew Flame Tongue burns like the SRD's.
+type RowGear = { def?: Omit<GearDef, "name" | "match"> };
+
+export function gearDefOfRow(
+  item: { name: string; slug?: string | null; gear?: unknown },
+  baseInName?: string | null,
+): GearDef | null {
+  const own = (item.gear as RowGear | undefined)?.def;
+  if (own && typeof own === "object") {
+    return { ...own, name: item.name, match: `homebrew ${keyOf(item.name)}` };
+  }
+  return gearDefFor(item.name, item.slug, baseInName);
+}
+
 // Every magic item the table knows by name, for callers that list them.
 export function gearDefs(): readonly GearDef[] {
   return ROWS;
