@@ -181,7 +181,7 @@ try {
     });
     assert.deepEqual(patches.picturesPatch({ kind: "openai", apiKey: "" }), { images: { defaultBackend: "openai", openaiBaseUrl: "" } });
     assert.equal(patches.picturesPatch({ kind: "openai", apiKey: "sk-i" }).images.openaiApiKey, "sk-i");
-    assert.deepEqual(patches.picturesPatch({ kind: "agent" }), { images: { defaultBackend: "harness" } });
+    assert.deepEqual(patches.picturesPatch({ kind: "agent" }), { images: { defaultBackend: "harness" }, harness: { images: "native" } });
     assert.deepEqual(patches.picturesPatch({ kind: "none" }), { images: { defaultBackend: "", comfyUrl: "" } });
     assert.deepEqual(patches.narrationPatch({ kind: "kokoro", url: "http://127.0.0.1:8880/", voice: "af_heart" }), {
       speech: { ttsProvider: "kokoro", kokoroUrl: "http://127.0.0.1:8880", ttsVoice: "af_heart" },

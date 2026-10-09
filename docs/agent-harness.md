@@ -47,10 +47,23 @@ on your machine.
 ### Pictures
 
 A program's own image tool (Codex, Grok Build) is offered to the tables
-only after **Paint a test picture** makes one real image here. Otherwise
-pictures come from your image backend (ComfyUI, an OpenAI key) as before,
-and with none the tables use their painted placeholders. Claude Code and
-opencode cannot paint.
+only after **Paint a test picture** makes one real image here. The test
+paints the way a table does: a landscape location map, through the same
+picture door and queue a campaign uses, then checks the saved file. It
+also reports the campaigns: which already paint with the program, which
+keep a working backend of their own, and which are stuck on one that
+cannot paint (a ComfyUI that is not running, usually because the campaign
+was made before pictures were set up). **Paint the tables' pictures with
+it** then switches the program on, makes it the default for new
+campaigns, and moves the stuck ones onto it, with their area maps back
+on. A campaign on a backend that works is never moved. The same rescue
+runs whenever the admin panel saves a change to pictures.
+
+Without the program's pictures, pictures come from your image backend
+(ComfyUI, an OpenAI key) as before, and with none the tables use their
+painted placeholders. A picture that fails says why under its
+placeholder, in the program's own words when it answered without one.
+Claude Code and opencode cannot paint.
 
 ### Where it runs
 

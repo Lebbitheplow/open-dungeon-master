@@ -6,6 +6,7 @@ import { registerOutput, releaseOutput } from "@/lib/audio-devices";
 import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
 import { BuiltinSpeechCard } from "@/app/admin/BuiltinSpeechCard";
+import { HarnessPictureTest } from "@/app/admin/HarnessPictureTest";
 import type { Draft } from "@/app/setup/draft";
 import { ChoiceCard, ChoiceCards, Lamp, host, type ScanResult } from "@/app/setup/SetupParts";
 
@@ -41,6 +42,9 @@ export function PicturesStep({
   scanning,
   storyIsOpenAi,
   agentPaints,
+  agentVerified,
+  agentLabel,
+  onAgentVerified,
   openaiKeySaved,
 }: {
   draft: Draft;
@@ -48,7 +52,12 @@ export function PicturesStep({
   scan: ScanResult | null;
   scanning: boolean;
   storyIsOpenAi: boolean;
+  // The storyteller chosen on the last step has an image tool of its own.
   agentPaints: boolean;
+  // A test picture has come back from it on this server.
+  agentVerified: boolean;
+  agentLabel: string;
+  onAgentVerified: () => void;
   openaiKeySaved: boolean;
 }) {
   const comfy = scan?.comfyui ?? null;
@@ -83,8 +92,13 @@ export function PicturesStep({
             picked={draft.pictures === "agent"}
             onPick={() => pick("agent")}
             glyph="system-share"
-            title="The agent paints"
-            sub="The agent program's own image tool, on its own plan. It painted a test picture here already."
+            title={`${agentLabel} paints`}
+            sub={
+              agentVerified
+                ? `${agentLabel}'s own image tool, on its own plan. It painted a test map here already.`
+                : `${agentLabel}'s own image tool, on its own plan. One test map first, painted the way a table asks for one.`
+            }
+            badge={agentVerified ? { text: "Tested", tone: "ready" } : null}
           />
         ) : null}
         <ChoiceCard
@@ -131,6 +145,16 @@ export function PicturesStep({
             )}
           </div>
           <p className="text-[11px] text-stone-500">Any checkpoint works; the campaign&apos;s genre supplies the art style.</p>
+        </div>
+      ) : draft.pictures === "agent" ? (
+        <div key="agent" className="reveal-height">
+          <HarnessPictureTest
+            saved
+            picturesVerified={agentVerified}
+            picturesForTables={false}
+            offerAdopt={false}
+            onVerified={onAgentVerified}
+          />
         </div>
       ) : draft.pictures === "openai" ? (
         <div key="openai" className="reveal-height space-y-3">

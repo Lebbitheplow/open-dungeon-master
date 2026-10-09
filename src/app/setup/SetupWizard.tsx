@@ -16,6 +16,7 @@ import { WelcomeStep } from "@/app/setup/WelcomeStep";
 import { YourAgentStep, type MadeConnection } from "@/app/setup/YourAgentStep";
 import { storySourceForUrl } from "@/lib/setup/discovery-logic";
 import {
+  PAINTING_AGENTS,
   joiningPatch,
   namePatch,
   narrationPatch,
@@ -108,6 +109,14 @@ export function SetupWizard({ config: initialConfig, info }: { config: MaskedCon
     return source === "local" ? null : source;
   }, [config.text.hasCustomApiKey, config.text.customBaseUrl]);
 
+  // After a test picture: the verified mark lives in the saved settings.
+  async function refreshConfig() {
+    const data = await fetch("/api/admin/settings")
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null);
+    if (data?.config) setConfig(data.config as MaskedConfig);
+  }
+
   async function patch(body: Patch): Promise<boolean> {
     const response = await fetch("/api/admin/settings", {
       method: "PATCH",
@@ -194,8 +203,11 @@ export function SetupWizard({ config: initialConfig, info }: { config: MaskedCon
           : draft.story === "agent" && !draft.agent.id
             ? "Choose a program."
             : null;
+  const agentPaints = draft.story === "agent" && draft.agent.id !== "" && PAINTING_AGENTS.includes(draft.agent.id);
   const picturesBlocker =
-    draft.pictures === "comfyui" && !draft.comfy.url.trim()
+    draft.pictures === "agent" && !config.harness.imagesVerifiedAt
+      ? "Paint a test map first: the tables only get a painter that works."
+      : draft.pictures === "comfyui" && !draft.comfy.url.trim()
       ? "Type where ComfyUI runs, or choose another answer."
       : draft.pictures === "openai" && !storyIsOpenAi && !draft.picturesKey.trim() && !config.images.hasOpenaiApiKey
         ? "Paste an OpenAI key, or choose another answer."
@@ -262,7 +274,10 @@ export function SetupWizard({ config: initialConfig, info }: { config: MaskedCon
           scan={scan}
           scanning={scanning}
           storyIsOpenAi={storyIsOpenAi}
-          agentPaints={draft.story === "agent" && config.harness.images === "native" && Boolean(config.harness.imagesVerifiedAt)}
+          agentPaints={agentPaints}
+          agentVerified={Boolean(config.harness.imagesVerifiedAt)}
+          agentLabel={draft.agent.id === "grok" ? "Grok Build" : "Codex"}
+          onAgentVerified={() => void refreshConfig()}
           openaiKeySaved={config.images.hasOpenaiApiKey}
         />
       ),

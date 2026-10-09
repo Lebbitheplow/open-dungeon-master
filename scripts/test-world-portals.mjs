@@ -216,14 +216,16 @@ test("gating is the old gating", () => {
   assert.ok(!keys({ ...ALL_ON, relationships: "off" }, TABLE).includes("romance"));
 });
 
-test("a missing backend disables its row and says why", () => {
+test("a missing backend disables its row and says why; maps stay choosable and wait for pictures", () => {
   const rows = rowsOf(DRAFT, { ...TABLE, ttsAvailable: false, mapsAvailable: false });
   const tts = rows.find((row) => row.key === "ttsEnabled");
   const maps = rows.find((row) => row.key === "mapsEnabled");
   assert.equal(tts.disabled, true);
   assert.equal(tts.hint, "No speech service on this server");
-  assert.equal(maps.disabled, true);
-  assert.equal(maps.hint, "No image service on this server");
+  // A campaign made before the server had pictures keeps its maps on, so
+  // they draw once a picture backend exists (src/lib/image-backend-rescue.ts).
+  assert.equal(maps.disabled, false);
+  assert.equal(maps.hint, "Drawn once this server can paint pictures");
   assert.ok(rowsOf(DRAFT, TABLE).every((row) => !row.disabled));
 });
 

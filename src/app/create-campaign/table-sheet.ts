@@ -137,7 +137,7 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
     case "mapsEnabled":
       return {
         label: "Maps",
-        hint: gates.mapsAvailable ? "AI-drawn area maps" : "No image service on this server",
+        hint: gates.mapsAvailable ? "AI-drawn area maps" : "Drawn once this server can paint pictures",
       };
     case "ambienceEnabled":
       return { label: "Ambience", hint: "Room tone, music and stings" };
@@ -214,9 +214,7 @@ export function tableSheet(draft: CampaignDraft, gates: WizardGates): SheetGroup
         counted: spec.counted,
         // One server switch away rather than a feature this install can
         // never have, so the row stays visible and says why it is off.
-        disabled:
-          (spec.key === "ttsEnabled" && !gates.ttsAvailable) ||
-          (spec.key === "mapsEnabled" && !gates.mapsAvailable),
+        disabled: spec.key === "ttsEnabled" && !gates.ttsAvailable,
         dependent: Boolean(spec.needs),
         info: spec.info ?? null,
       };

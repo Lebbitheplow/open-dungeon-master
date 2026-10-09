@@ -89,6 +89,16 @@ function newestImageIn(dir: string, since: number): Buffer | null {
   return found ? readFileSync(found.file) : null;
 }
 
+// Pure: the error for a run that ended without a usable picture, in the
+// program's own words when it gave any (its reply is untrusted text, so it is
+// flattened and cut short before it is shown to anyone).
+export function noPictureMessage(label: string, said: string): string {
+  const reply = said.replace(/\s+/g, " ").trim().slice(0, 240);
+  return reply && !/^done\.?$/i.test(reply)
+    ? `${label} answered without a picture: "${reply}"`
+    : `${label} finished without a picture ODM could use.`;
+}
+
 function slug(prompt: string): string {
   return (
     prompt
@@ -123,6 +133,9 @@ export async function generateHarnessImage(options: {
   const env = buildChildEnv(process.env, config.id, await childPath(binary), { HOME: os.homedir() });
   const adapter = adapterFor(config.id);
   let captured: Buffer | null = null;
+  // What the program said instead of painting (a refusal, a limit), so the
+  // table and the admin read its reason rather than "no picture".
+  let said = "";
   try {
     captured = await new Promise<Buffer | null>((resolve, reject) => {
       let settled = false;
@@ -158,7 +171,10 @@ export async function generateHarnessImage(options: {
               if (accepted) {
                 finish(accepted.bytes);
               }
+            } else if (event.type === "delta") {
+              said = (said + event.text).slice(-600);
             } else if (event.type === "turn_end") {
+              said = event.text || said;
               finish(newestImageIn(cwd, started));
             } else if (event.type === "error") {
               finish(null, new Error(event.message));
@@ -190,7 +206,7 @@ export async function generateHarnessImage(options: {
   }
   const accepted = acceptImage(captured);
   if (!accepted) {
-    throw new Error("The agent program finished without a picture ODM could use.");
+    throw new Error(noPictureMessage(ADAPTERS[config.id].label, said));
   }
   const generatedDir = path.join(process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });

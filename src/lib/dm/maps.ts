@@ -2,7 +2,7 @@ import { generateStoryImage } from "@/lib/image-generate";
 import { getLocation, setLocationMap } from "@/lib/db/locations";
 import { presetFor } from "@/lib/worlds/preset";
 import { publishPersisted } from "@/lib/events";
-import { publishMediaStatus } from "@/lib/dm/images";
+import { pictureFailureReason, publishMediaStatus } from "@/lib/dm/images";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import type { Campaign } from "@/lib/db/campaigns";
 
@@ -40,7 +40,7 @@ export function enqueueLocationMap(campaign: Campaign, locationId: string) {
         image,
       });
     } catch (error) {
-      publishMediaStatus(campaign.id, "map", locationId, "failed");
+      publishMediaStatus(campaign.id, "map", locationId, "failed", pictureFailureReason(error));
       throw error;
     }
   });

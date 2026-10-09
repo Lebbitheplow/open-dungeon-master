@@ -6,6 +6,10 @@ import { keyForListing, keyProvider, normalizeBaseUrl, type KeyProviderId } from
 
 export type HarnessChoiceId = "claude" | "codex" | "opencode" | "grok";
 
+// The agent programs with an image tool of their own (src/lib/harness
+// adapters' `paints`), for the wizard, which cannot import the adapters.
+export const PAINTING_AGENTS: readonly HarnessChoiceId[] = ["codex", "grok"];
+
 export type StoryChoice =
   // A model server on this machine or the network.
   | { kind: "local"; baseUrl: string; model: string; apiKey: string }
@@ -82,7 +86,9 @@ export function picturesPatch(choice: PicturesChoice): Patch {
     return { images: { defaultBackend: "openai", openaiBaseUrl: "", ...(apiKey ? { openaiApiKey: apiKey } : {}) } };
   }
   if (choice.kind === "agent") {
-    return { images: { defaultBackend: "harness" } };
+    // Both switches: the default backend alone leaves the agent's pictures
+    // off (harnessImagesReady also wants images "native").
+    return { images: { defaultBackend: "harness" }, harness: { images: "native" } };
   }
   return { images: { defaultBackend: "", comfyUrl: "" } };
 }

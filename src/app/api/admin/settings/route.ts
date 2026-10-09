@@ -5,6 +5,7 @@ import { isDeviceWorld, serverEnv } from "@/lib/server-env";
 import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
 import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
 import { forgetHarnessStatus } from "@/lib/harness/status";
+import { rescueStrandedCampaigns, type RescueMove } from "@/lib/image-backend-rescue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -232,10 +233,16 @@ export async function PATCH(request: Request) {
   if (moved) {
     forgetHarnessStatus();
   }
+  // A save that changes where pictures come from moves the campaigns stuck
+  // on a backend that cannot paint onto the new default, when it can
+  // (src/lib/image-backend-rescue.ts). A device world's shell owns its own.
+  const rescued: RescueMove[] =
+    (parsed.data.images || parsed.data.harness) && !deviceWorld() ? await rescueStrandedCampaigns() : [];
   return Response.json({
     config: maskedConfig(saved),
     envDefaults: envDefaults(),
     voiceAnnounceUnroutable: voiceAnnounceUnroutable(),
     deviceWorld: deviceWorld(),
+    rescued,
   });
 }

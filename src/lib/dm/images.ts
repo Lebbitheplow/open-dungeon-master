@@ -32,6 +32,15 @@ export function publishMediaStatus(
   });
 }
 
+// Why a picture or a map could not be made, in the words the table reads
+// under its placeholder (as narration does, issue 88). The backends' errors
+// are already sentences meant for people; this only bounds them.
+export function pictureFailureReason(error: unknown): string {
+  const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const reason = text.replace(/\s+/g, " ").trim();
+  return reason ? (reason.length > 240 ? `${reason.slice(0, 239)}…` : reason) : "The picture backend did not answer.";
+}
+
 // Fulfill a DM message's image request on the serial media queue. Called
 // fire-and-forget after the DM turn persists, so narration never waits on
 // the GPU. The client already renders message.generatedImage and handles
@@ -64,7 +73,7 @@ export function fulfillMessageImage(
       }
       publishPersisted(campaignId, "image_ready", { messageId, image });
     } catch (error) {
-      publishMediaStatus(campaignId, "image", messageId, "failed");
+      publishMediaStatus(campaignId, "image", messageId, "failed", pictureFailureReason(error));
       throw error;
     }
   });

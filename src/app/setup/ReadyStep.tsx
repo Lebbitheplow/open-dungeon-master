@@ -128,7 +128,6 @@ export function ReadyStep({
   }
 
   const list = rows({ draft, caps, address, agentConnected, steps });
-  const agentPaints = draft.agent.id === "codex" || draft.agent.id === "grok";
 
   return (
     <div className="space-y-4">
@@ -163,7 +162,7 @@ export function ReadyStep({
       ) : draft.story === "agent" && draft.agent.id ? (
         <div className="su-row flex-col items-stretch">
           <span className="text-sm text-stone-200">Try the agent with one tiny real turn</span>
-          <HarnessTestPanel saved paints={agentPaints} picturesVerified={false} onVerified={check} />
+          <HarnessTestPanel saved paints={false} picturesVerified={false} onVerified={check} />
         </div>
       ) : null}
     </div>

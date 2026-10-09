@@ -51,6 +51,8 @@ export type MediaStatus = {
   kind: "image" | "map" | "tts";
   state: "queued" | "generating" | "failed";
   startedAt: string;
+  // Why a picture or map failed, for the line under its placeholder.
+  reason?: string;
 };
 
 // Narration on its way for a message, or why it never arrived. Kept apart
@@ -701,6 +703,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
                 kind: payload.kind as MediaStatus["kind"],
                 state: payload.state as MediaStatus["state"],
                 startedAt: String(payload.startedAt ?? new Date().toISOString()),
+                ...(typeof payload.reason === "string" && payload.reason ? { reason: payload.reason } : {}),
               },
             };
           }
