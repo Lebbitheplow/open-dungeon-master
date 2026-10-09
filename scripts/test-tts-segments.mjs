@@ -85,4 +85,16 @@ test("the first request is short, the rest are whole sentences under the cap", (
   assert.equal(crumbs.length, 1, "punctuation alone is not sent to be read");
 });
 
+test("a line is voiced as the transcript reads it, never by the name it is said to", () => {
+  const table = [{ name: "Liriel Syn'thae", voiceId: "af_bella", speed: 1 }];
+  const shrine = "Sella inclines her head to Liriel, a small acknowledgment rather than a smile.\n\n“Duskleaf’s waystone. I took it.”\n\nShe keeps her hand beside the etched stone.";
+  const plan = planSpeech(shrine, { narratorVoice: "af_heart", cast: table });
+  assert.deepEqual(plan.map((part) => part.voice), ["af_heart"], "the party member's voice never reads the NPC's line");
+  assert.ok(!plan[0].text.includes("\n"), "the speech server hears one flowing run");
+  const neighbours = planSpeech('Wren turns to Marla. "Hush."', { narratorVoice: "af_heart", cast: [...cast, { name: "Wren", voiceId: "", speed: 1 }] });
+  assert.deepEqual(neighbours.map((part) => part.voice), ["af_heart"], "a voiceless speaker's line is not handed to the voiced name beside it");
+  const apart = planSpeech('"There is trouble at the market."\n\nMarla turns to you.', { narratorVoice: "af_heart", cast });
+  assert.deepEqual(apart.map((part) => part.voice), ["af_heart"], "the next paragraph's first name does not read this one's line");
+});
+
 console.log(`test-tts-segments: ${passed} passed`);

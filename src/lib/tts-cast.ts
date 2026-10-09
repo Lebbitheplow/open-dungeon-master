@@ -1,4 +1,4 @@
-import { speakerMatchers, type Speaker } from "@/lib/dm/speech";
+import { subjectRuns, type Speaker } from "@/lib/dm/speech";
 import { TTS_VOICES } from "@/lib/tts-voices";
 
 // Casting voices (issue 97): which of the server's voices suits a speaker
@@ -51,38 +51,22 @@ export function guessGender(text: string): VoiceGender {
 const SHE = /\b(she|her|hers|herself)\b/gi;
 const HE = /\b(he|him|his|himself)\b/gi;
 
-// What the story so far says about each speaker: the pronouns in the dozen
-// words after every mention of their name ("Brom plants his feet"), up to
-// the next person named, whose pronouns those would be instead. One stray
-// pronoun is not enough to go on: a side has to outnumber the other two to
-// one.
+// What the story so far says about each speaker: the pronouns in the
+// sentences they are the subject of ("Brom plants his feet") and the ones
+// after that carry on about them, never what a sentence about somebody
+// else calls the person it mentions ("Sella turns to Liriel, her eyes
+// hard" says nothing about Liriel), and never the words inside a quote.
+// One stray pronoun is not enough to go on: a side has to outnumber the
+// other two to one.
 export function genderFromProse(speakers: Speaker[], texts: string[]): Map<string, VoiceGender> {
   const counts = new Map<string, { f: number; m: number }>();
-  const matchers = speakerMatchers(speakers);
   for (const text of texts) {
-    const mentions: Array<{ id: string; start: number; end: number }> = [];
-    for (const { speaker, pattern, short } of matchers) {
-      pattern.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = pattern.exec(text))) {
-        if (!short.has(match[0].toLowerCase()) || /^\p{Lu}/u.test(match[0])) {
-          mentions.push({ id: speaker.id, start: match.index, end: match.index + match[0].length });
-        }
-      }
+    for (const run of subjectRuns(text, speakers)) {
+      const count = counts.get(run.speaker.id) ?? { f: 0, m: 0 };
+      count.f += run.text.match(SHE)?.length ?? 0;
+      count.m += run.text.match(HE)?.length ?? 0;
+      counts.set(run.speaker.id, count);
     }
-    mentions.sort((a, b) => a.start - b.start);
-    mentions.forEach((mention, index) => {
-      const next = mentions.slice(index + 1).find((other) => other.id !== mention.id);
-      const after = text
-        .slice(mention.end, next?.start)
-        .split(/\s+/)
-        .slice(0, 13)
-        .join(" ");
-      const count = counts.get(mention.id) ?? { f: 0, m: 0 };
-      count.f += after.match(SHE)?.length ?? 0;
-      count.m += after.match(HE)?.length ?? 0;
-      counts.set(mention.id, count);
-    });
   }
   const guesses = new Map<string, VoiceGender>();
   for (const [id, { f, m }] of counts) {
