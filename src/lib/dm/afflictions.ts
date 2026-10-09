@@ -28,6 +28,7 @@ import {
   madnessEntry,
   type Disease,
   type DiseaseId,
+  type DiseaseSpec,
   type MadnessKind,
 } from "@/lib/srd/afflictions";
 import type { Affliction } from "@/lib/dm/between-state";
@@ -125,6 +126,9 @@ function sightRotCondition(penalty: number) {
 // Symptoms show: the condition goes on and, for cackle fever and sewer
 // plague, a level of exhaustion.
 function manifest(campaign: Campaign, turnId: string, sheetId: string, record: Affliction): Affliction {
+  if (record.disease) {
+    return manifestWorkshop(campaign, turnId, sheetId, record, record.disease);
+  }
   const disease = DISEASES[record.id as DiseaseId];
   if (!disease) {
     return record;
@@ -144,6 +148,105 @@ function manifest(campaign: Campaign, turnId: string, sheetId: string, record: A
     ...(disease.id === "cackle_fever" ? { dc: 13, fails: 0 } : {}),
     ...(disease.id === "sight_rot" ? { penalty: 1, doses: 0 } : {}),
   };
+}
+
+// A workshop disease's symptoms: its condition and any standard ones, and
+// its levels of exhaustion.
+function manifestWorkshop(campaign: Campaign, turnId: string, sheetId: string, record: Affliction, held: { name: string; spec: DiseaseSpec }): Affliction {
+  const conditions = [held.spec.condition, ...(held.spec.conditions ?? [])];
+  const kept = conditions.filter((condition) => afflictCondition(campaign, turnId, sheetId, condition, { source: held.name }));
+  if (held.spec.exhaustion > 0) {
+    addExhaustion(campaign.id, sheetId, held.spec.exhaustion);
+  }
+  const sheet = getSheetById(sheetId);
+  tableNote(campaign, `${sheet?.name ?? "A character"} shows the symptoms of ${held.name}.`);
+  const { onsetAt: _onset, ...rest } = record;
+  void _onset;
+  return { ...rest, conditions: kept.length ? kept : [held.spec.condition], successes: 0 };
+}
+
+// A disease from the table's workshop (src/lib/srd/table-hazards.ts): the
+// save against catching it, its incubation and its symptoms, run by the
+// pattern its spec gives; a copy of one of the SRD's three runs as that one.
+export function infectWorkshopDisease(
+  campaign: Campaign,
+  turnId: string,
+  sheet: CharacterSheet,
+  own: { id: string; name: string; disease: DiseaseSpec },
+  input: { save?: boolean; dc?: number; symptomsNow?: boolean },
+): Record<string, unknown> {
+  const spec = own.disease;
+  if (spec.runsAs && DISEASES[spec.runsAs]) {
+    return infectDisease(campaign, turnId, sheet, DISEASES[spec.runsAs], input);
+  }
+  const list = liveAfflictions(campaign.id, sheet);
+  if (list.some((entry) => entry.kind === "disease" && entry.id === own.id)) {
+    return { ok: true, note: `${sheet.name} already has ${own.name}.` };
+  }
+  if (input.save !== false) {
+    const dc = input.dc ?? spec.infect.dc;
+    const save = characterSave(campaign, sheet, { ability: spec.infect.ability, dc, detail: `${sheet.name}: ${spec.infect.ability.toUpperCase()} save vs ${own.name}`, against: "disease", advantage: holds(sheet, "recuperated") });
+    if (save.success) {
+      return { ok: true, resisted: true, note: `${sheet.name} resists ${own.name} (${spec.infect.ability.toUpperCase()} save ${save.total} vs DC ${dc}).` };
+    }
+  }
+  const clock = getClock(campaign.id);
+  const amount = /^\d+$/.test(spec.onset.dice) ? Number(spec.onset.dice) : publicDie(campaign, sheet, spec.onset.dice, `${own.name}: ${spec.onset.unit} until symptoms`);
+  const minutes = amount * (spec.onset.unit === "days" ? MINUTES_PER_DAY : 60);
+  let record: Affliction = { kind: "disease", id: own.id, conditions: [], onsetAt: clock.instant + minutes, disease: { name: own.name, spec } };
+  if (input.symptomsNow || minutes <= 0) {
+    record = manifestWorkshop(campaign, turnId, sheet.id, record, record.disease!);
+  }
+  writeAfflictions(campaign.id, sheet.id, [...list, record]);
+  return {
+    ok: true,
+    infected: own.name,
+    ...(record.onsetAt === undefined ? { symptoms: "now" } : { symptomsIn: `${amount} ${spec.onset.unit}` }),
+    effect: spec.summary,
+    note: record.onsetAt === undefined
+      ? `${sheet.name} has ${own.name}; the server holds its effects.`
+      : `${sheet.name} is infected with ${own.name}; symptoms show in ${amount} ${spec.onset.unit}, when the clock gets there.`,
+  };
+}
+
+// A workshop disease's save after a long rest: a success sheds a level of
+// exhaustion (cured below one) or counts toward its cure, a failure adds a
+// level or does nothing, as its spec says.
+function workshopDiseaseAfterRest(campaign: Campaign, sheet: CharacterSheet, entry: Affliction, held: { name: string; spec: DiseaseSpec }, lines: string[]): Affliction | null {
+  const rest = held.spec.rest;
+  if (!rest) {
+    return entry;
+  }
+  const save = characterSave(campaign, sheet, { ability: rest.ability, dc: rest.dc, detail: `${sheet.name}: ${rest.ability.toUpperCase()} save vs ${held.name} after a long rest`, against: "disease", advantage: holds(sheet, "recuperated") });
+  if (save.success) {
+    if (rest.onSuccess === "improve") {
+      const level = (sheet.exhaustion ?? 0) - 1;
+      patchSheet(sheet.id, exhaustionPatch(sheet, level));
+      publishSheetOf(campaign.id, sheet.id);
+      if (level < 1) {
+        dropConditions(campaign.id, sheet.id, entry.conditions);
+        lines.push(`${sheet.name} recovers from ${held.name}.`);
+        return null;
+      }
+      lines.push(`${sheet.name} holds ${held.name} back: one level of exhaustion less.`);
+      return entry;
+    }
+    const successes = (entry.successes ?? 0) + 1;
+    if (successes >= rest.successes) {
+      dropConditions(campaign.id, sheet.id, entry.conditions);
+      lines.push(`${sheet.name} recovers from ${held.name}.`);
+      return null;
+    }
+    lines.push(`${sheet.name} fights off ${held.name} (${successes} of ${rest.successes} successes).`);
+    return { ...entry, successes };
+  }
+  if (rest.onFail === "worsen") {
+    addExhaustion(campaign.id, sheet.id, 1);
+    lines.push(`${sheet.name} worsens with ${held.name}: a level of exhaustion.`);
+  } else {
+    lines.push(`${sheet.name} fails the save against ${held.name}.`);
+  }
+  return entry;
 }
 
 export function infectDisease(
@@ -313,6 +416,13 @@ export function afflictionsAfterLongRest(campaign: Campaign, turnId: string, res
         continue;
       }
       const recuperated = holds(sheet, "recuperated");
+      if (entry.disease) {
+        const kept = workshopDiseaseAfterRest(campaign, sheet, entry, entry.disease, lines);
+        if (kept) {
+          next.push(kept);
+        }
+        continue;
+      }
       if (entry.id === "cackle_fever") {
         const dc = entry.dc ?? 13;
         const save = characterSave(campaign, sheet, { ability: "con", dc, detail: `${sheet.name}: CON save vs cackle fever after a long rest`, against: "disease", advantage: recuperated });

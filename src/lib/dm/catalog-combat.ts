@@ -8,6 +8,7 @@ import { BOARD_ADJUDICATIONS } from "@/lib/dm/catalog-board";
 import { summonFormNames } from "@/lib/srd/summon-forms";
 import { familiarFormNames } from "@/lib/srd/familiar-forms";
 import { BEAST_FORMS } from "@/lib/srd/beast-forms";
+import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import {
   ABILITY_OPTIONS as ABILITIES,
   AREA_PLACEMENT_FIELDS,
@@ -470,6 +471,14 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterIds", label: "Caught in it", kind: "characters", required: true },
       { name: "feet", label: "Feet fallen", kind: "number", min: 0, max: 1000 },
       { name: "severity", label: "Trap severity", kind: "select", options: TRAP_SEVERITY_OPTIONS, help: "Sets the save DC and the damage for each victim's level." },
+      {
+        name: "trap",
+        label: "A trap by name",
+        kind: "select",
+        options: SAMPLE_TRAPS.map((trap) => ({ value: trap.name, label: trap.name })),
+        other: { label: "One of this table's traps", placeholder: "Scything Blade" },
+        help: "Runs the trap's own numbers instead of the severity table: an SRD sample trap, or a trap from this table's workshop.",
+      },
       { name: "hours", label: "Hours of exposure", kind: "number", min: 1, max: 48, help: "Extreme cold or heat: one CON save an hour, a level of exhaustion for each failure." },
       { name: "damage", label: "Damage", kind: "dice", help: "Only for a hazard of your own." },
       damageTypeField("damageType", "Damage type", "Resistances apply."),

@@ -22,6 +22,10 @@ const featFx = await import("../src/lib/srd/feat-effects.ts");
 const { backgroundMechanicsOf, bundledBackgroundRows } = await import("../src/lib/workshop/catalog-mechanics.ts");
 const { mergedBackgroundOptions } = await import("../src/lib/characters/options.ts");
 const { listBackgrounds } = await import("../src/lib/content/index.ts");
+const { hazardCatalog } = await import("../src/lib/workshop/hazard-catalog.ts");
+const tableHazards = await import("../src/lib/srd/table-hazards.ts");
+const { findPoison, DISEASES } = await import("../src/lib/srd/afflictions.ts");
+const { findSampleTrap } = await import("../src/lib/srd/trap-specs.ts");
 const { effectsFor, FEAT_ONLY_SPEED } = await import("../src/lib/srd/feature-effects.ts");
 const { packFeatText } = await import("../src/lib/srd/feat-text.ts");
 const { featGrantSpec } = await import("../src/lib/srd/feat-grant-text.ts");
@@ -545,6 +549,40 @@ test("every background the builder offers, copied into the workshop, grants the 
   assert.ok(copied >= 40, `only ${copied} backgrounds copied`);
   assert.deepEqual(changed, [], `${changed.length} copies differ:\n${changed.slice(0, 12).join("\n")}`);
   assert.equal(typeof backgroundMechanicsOf, "function");
+});
+
+// ---- hazards ----
+
+test("every SRD trap, poison and disease copied into the workshop runs by its new name exactly as the original", () => {
+  const changed = [];
+  const rows = hazardCatalog();
+  for (const row of rows) {
+    const draft = draftFromCatalog("hazard", row);
+    const stored = normalizeHomebrewData("hazard", JSON.parse(JSON.stringify(draft.data)), "Copy");
+    if ("error" in stored) {
+      changed.push(`${row.name}: ${stored.error}`);
+      continue;
+    }
+    const kind = stored.data.hazardKind;
+    // The copy, held at a table whose author wrote it.
+    tableHazards.registerTableHazardReader(() => new Map([["workshop copy", { id: "homebrew:copy", name: "Workshop Copy", hazardKind: kind, [kind]: stored.data[kind] }]]));
+    if (kind === "poison") {
+      const { id: _id, name: _name, ...original } = findPoison(row.name);
+      const { id: _cid, name: _cname, ...copy } = tableHazards.poisonAt("Workshop Copy", "fidelity-table");
+      if (JSON.stringify(sorted(copy)) !== JSON.stringify(sorted(original))) changed.push(`${row.name}: ${JSON.stringify(original)} -> ${JSON.stringify(copy)}`);
+    } else if (kind === "trap") {
+      const { id: _id, name: _name, ...original } = findSampleTrap(row.name);
+      const copy = tableHazards.trapAt("Workshop Copy", "fidelity-table")?.trap;
+      if (JSON.stringify(sorted(copy)) !== JSON.stringify(sorted(original))) changed.push(`${row.name}: ${JSON.stringify(original)} -> ${JSON.stringify(copy)}`);
+    } else {
+      const copy = tableHazards.diseaseAt("Workshop Copy", "fidelity-table")?.disease;
+      const original = Object.values(DISEASES).find((disease) => disease.name === row.name);
+      if (copy?.runsAs !== original?.id) changed.push(`${row.name}: runs as ${copy?.runsAs}`);
+    }
+  }
+  tableHazards.registerTableHazardReader(() => new Map());
+  assert.ok(rows.length >= 25, `only ${rows.length} SRD hazards to start from`);
+  assert.deepEqual(changed, [], changed.join("\n"));
 });
 
 console.log(`test-workshop-fidelity: ${passed} passed${db ? "" : " (fixture rows, no content pack)"}`);

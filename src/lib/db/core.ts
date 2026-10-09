@@ -8,6 +8,8 @@ import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/sub
 import { populateResources } from "@/lib/srd/class-resources";
 import { featsAsRun, registerTableFeatReader } from "@/lib/srd/feat-effects";
 import { tableFeatsFrom } from "@/lib/db/table-feats";
+import { registerTableHazardReader } from "@/lib/srd/table-hazards";
+import { tableHazardsFrom } from "@/lib/db/table-hazards";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
@@ -20,6 +22,11 @@ let resyncingDb: SqliteDatabase | null = null;
 registerTableFeatReader((campaignId) => {
   const db = resyncingDb ?? globalThis.__localRoleplayDb ?? null;
   return db ? tableFeatsFrom(db, campaignId) : new Map();
+});
+// And its traps, poisons and diseases (src/lib/srd/table-hazards.ts).
+registerTableHazardReader((campaignId) => {
+  const db = globalThis.__localRoleplayDb ?? null;
+  return db ? tableHazardsFrom(db, campaignId) : new Map();
 });
 
 declare global {
@@ -207,7 +214,7 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE TABLE IF NOT EXISTS homebrew_entries (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster')),
+      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster','hazard')),
       slug TEXT NOT NULL,
       name TEXT NOT NULL,
       data_json TEXT NOT NULL,
@@ -2105,6 +2112,10 @@ function ensureSchema(db: SqliteDatabase) {
   // player could never store the second one.
   rebuildCharacterSheets(db);
 
+  // The third: homebrew_entries.kind's CHECK gains 'hazard' (the workshop's
+  // traps, poisons and diseases, src/lib/homebrew/hazard-data.ts).
+  rebuildHomebrewKinds(db);
+
   // Reverse catch-up: library uploads used to skip campaign clones, so
   // sheets copied before their photo existed still have none. Fill-only.
   const sheetPortraitMarker = db
@@ -2210,6 +2221,37 @@ function ensureSchema(db: SqliteDatabase) {
 // battle_tokens, so no cascade is being suppressed here. The pragma is a
 // no-op inside a transaction, which is why the copy is not wrapped in one;
 // the guard above makes a half-finished run safe to repeat instead.
+// Widens homebrew_entries.kind to take 'hazard'. The new table is the
+// stored DDL with the kind list widened, so every column the table has gained
+// arrives as it is; detected from that DDL, so it runs once and is
+// idempotent if interrupted.
+function rebuildHomebrewKinds(db: SqliteDatabase) {
+  const ddl = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'homebrew_entries'`)
+    .get() as { sql: string } | undefined;
+  if (!ddl || ddl.sql.includes("'hazard'")) {
+    return;
+  }
+  const widened = ddl.sql
+    .replace(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?"?homebrew_entries"?/i, "CREATE TABLE homebrew_entries_rebuilt")
+    .replace("'archetype','monster')", "'archetype','monster','hazard')");
+  if (!widened.includes("'hazard'")) {
+    return;
+  }
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.exec(`
+      DROP TABLE IF EXISTS homebrew_entries_rebuilt;
+      ${widened};
+      INSERT INTO homebrew_entries_rebuilt SELECT * FROM homebrew_entries;
+      DROP TABLE homebrew_entries;
+      ALTER TABLE homebrew_entries_rebuilt RENAME TO homebrew_entries;
+    `);
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
+}
+
 function rebuildBattleTokens(db: SqliteDatabase) {
   const ddl = db
     .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'battle_tokens'`)

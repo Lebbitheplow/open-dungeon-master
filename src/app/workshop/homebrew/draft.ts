@@ -54,6 +54,16 @@ export function blankDraft(kind: EditorKind): HomebrewDraft {
       };
     case "archetype":
       return { kind, name: "", data: { desc: "", classSlug: "fighter", levels: {} } };
+    case "hazard":
+      return {
+        kind,
+        name: "",
+        data: {
+          desc: "",
+          hazardKind: "trap",
+          trap: { kind: "mechanical", trigger: "", save: { ability: "dex", dc: 13, halfOnSave: true }, damage: { dice: "2d10", type: "piercing" }, summary: "" },
+        },
+      };
   }
 }
 
@@ -215,6 +225,9 @@ export function draftFromCatalog(
           ...(entry.table ?? {}),
         },
       };
+    case "hazard":
+      // The SRD hazard's whole block (src/lib/workshop/hazard-catalog.ts).
+      return { kind, name: entry.name, data: { desc: String(data.desc ?? ""), ...(entry.table ?? {}) } };
     case "archetype":
       return {
         kind,

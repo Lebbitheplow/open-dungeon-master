@@ -51,7 +51,7 @@ export function OptionFields({
   data,
   onChange,
 }: {
-  kind: Exclude<EditorKind, "item" | "spell">;
+  kind: Exclude<EditorKind, "item" | "spell" | "hazard">;
   data: Data;
   onChange: (next: Data) => void;
 }) {

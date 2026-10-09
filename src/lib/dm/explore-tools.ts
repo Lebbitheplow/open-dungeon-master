@@ -19,9 +19,10 @@ import { sizeForRace } from "@/lib/srd";
 import { LIFESTYLES } from "@/lib/dm/between-state";
 import { tableNote, writeLifestyle } from "@/lib/dm/between-io";
 import { LIFESTYLE_COST_CP, downtimeProblem, spendDowntime, type DowntimeEntry } from "@/lib/dm/lifestyle";
-import { infectDisease, inflictMadness } from "@/lib/dm/afflictions";
+import { infectDisease, infectWorkshopDisease, inflictMadness } from "@/lib/dm/afflictions";
+import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
-import { DISEASES, POISONS, findDisease, findPoison } from "@/lib/srd/afflictions";
+import { DISEASES, POISONS, findDisease } from "@/lib/srd/afflictions";
 import { formatCopper } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -114,7 +115,7 @@ export const exploreTools: ToolDef[] = [
     function: {
       name: "afflict",
       description:
-        `Lay an SRD disease, madness or poison on a character; the server rolls the save and holds the effects from then on. Diseases (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}): a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. Madness (short, long or indefinite): the server rolls the SRD table and its duration and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. Poisons (${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character): the server rolls the CON save, the damage and the conditions. Never narrate a disease, madness or poison taking hold without this call.`,
+        `Lay an SRD disease, madness or poison on a character; the server rolls the save and holds the effects from then on. Diseases (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}): a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. Madness (short, long or indefinite): the server rolls the SRD table and its duration and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. Poisons (${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character): the server rolls the CON save, the damage and the conditions. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -328,10 +329,16 @@ export function handleExploreCall(
     }
     if (args.kind === "disease") {
       const disease = findDisease(args.name);
-      if (!disease) {
-        return { error: `The server knows the SRD diseases ${Object.values(DISEASES).map((entry) => entry.name).join(", ")}; "${args.name}" is not one. A story illness is set_condition with a duration.` };
+      if (disease) {
+        return infectDisease(campaign, turn.id, sheet, disease, { save: args.save, dc: args.dc, symptomsNow: args.symptomsNow });
       }
-      return infectDisease(campaign, turn.id, sheet, disease, { save: args.save, dc: args.dc, symptomsNow: args.symptomsNow });
+      // One of the table's own (the workshop's hazards).
+      const own = diseaseAt(args.name, campaign.id);
+      if (own) {
+        return infectWorkshopDisease(campaign, turn.id, sheet, own, { save: args.save, dc: args.dc, symptomsNow: args.symptomsNow });
+      }
+      const table = hazardNamesAt(campaign.id).disease;
+      return { error: `The server knows the SRD diseases ${Object.values(DISEASES).map((entry) => entry.name).join(", ")}${table.length ? ` and this table's ${table.join(", ")}` : ""}; "${args.name}" is not one. A story illness is set_condition with a duration.` };
     }
     if (args.kind === "madness") {
       const kind = /indef/i.test(args.name) ? "indefinite" : /long/i.test(args.name) ? "long" : /short/i.test(args.name) ? "short" : null;
@@ -340,9 +347,10 @@ export function handleExploreCall(
       }
       return inflictMadness(campaign, turn.id, sheet, kind, { saveDc: args.save === false ? undefined : args.saveDc, saveAbility: args.saveAbility });
     }
-    const poison = findPoison(args.name);
+    const poison = poisonAt(args.name, campaign.id);
     if (!poison) {
-      return { error: `The server knows the SRD poisons ${POISONS.map((entry) => entry.name).join(", ")}; "${args.name}" is not one. Another poison is apply_damage with type poison and set_condition poisoned with a duration.` };
+      const table = hazardNamesAt(campaign.id).poison;
+      return { error: `The server knows the SRD poisons ${POISONS.map((entry) => entry.name).join(", ")}${table.length ? ` and this table's ${table.join(", ")}` : ""}; "${args.name}" is not one. Another poison is apply_damage with type poison and set_condition poisoned with a duration.` };
     }
     return applyPoison(campaign, turn.id, sheet, poison, { save: args.save });
   }

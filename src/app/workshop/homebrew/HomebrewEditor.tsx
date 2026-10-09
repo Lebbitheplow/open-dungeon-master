@@ -14,6 +14,7 @@ import { OptionFields } from "@/app/workshop/homebrew/OptionFields";
 import { SpellFields } from "@/app/workshop/homebrew/SpellFields";
 import { draftFindings, draftFromCatalog, type HomebrewDraft } from "@/app/workshop/homebrew/draft";
 import { KIND_SINGULAR } from "@/app/workshop/homebrew/types";
+import { HazardFields } from "@/app/workshop/homebrew/HazardFields";
 
 // A spell draft that already names its classes searches that class's list
 // first; the catalogue is otherwise the whole book.
@@ -82,7 +83,8 @@ export function HomebrewEditor({
 
       {draft.kind === "item" ? <ItemFields data={draft.data} onChange={setData} /> : null}
       {draft.kind === "spell" ? <SpellFields data={draft.data} onChange={setData} /> : null}
-      {draft.kind !== "item" && draft.kind !== "spell" ? (
+      {draft.kind === "hazard" ? <HazardFields data={draft.data} onChange={setData} /> : null}
+      {draft.kind !== "item" && draft.kind !== "spell" && draft.kind !== "hazard" ? (
         <OptionFields kind={draft.kind} data={draft.data} onChange={setData} />
       ) : null}
 

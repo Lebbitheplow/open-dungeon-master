@@ -2,6 +2,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { forgetTableFeats } from "@/lib/db/table-feats";
+import { forgetTableHazards } from "@/lib/db/table-hazards";
 import { createHomebrewSchema, HOMEBREW_KINDS, type HomebrewKind } from "@/lib/schemas/homebrew";
 
 export const runtime = "nodejs";
@@ -41,5 +42,6 @@ export async function POST(request: Request) {
   }
   const entry = createHomebrew(user.id, { ...parsed.data, data: normalized.data });
   forgetTableFeats();
+  forgetTableHazards();
   return Response.json({ entry }, { status: 201 });
 }

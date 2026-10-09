@@ -5,6 +5,7 @@ import type { SpellMech } from "@/lib/srd/spell-mechanics";
 import { clamp, num, text, type Raw } from "@/lib/homebrew/coerce";
 import { normalizeRaceData } from "@/lib/homebrew/race-data";
 import { normalizeBackgroundData } from "@/lib/homebrew/background-data";
+import { normalizeHazardData } from "@/lib/homebrew/hazard-data";
 import { GEAR_LIMITS, normalizeItemData, type HomebrewData, type Outcome } from "@/lib/homebrew/item-data";
 import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
 import { engineFeatNamed } from "@/lib/srd/feat-effects";
@@ -155,6 +156,11 @@ export function normalizeHomebrewData(
       return normalizeItemData(raw, name);
     case "spell":
       return normalizeSpellData(raw);
+    case "hazard": {
+      const source = (raw ?? {}) as Raw;
+      const data = { desc: text(source.desc, GEAR_LIMITS.descMax) };
+      return normalizeHazardData(source, data);
+    }
     case "monster": {
       // The bestiary owns monsters (src/lib/bestiary/monster-draft.ts).
       const source = (raw ?? {}) as Raw;
@@ -167,6 +173,10 @@ export function normalizeHomebrewData(
 
 // One line for a row in a list: "martial melee, 1d8 slashing, versatile".
 export function describeHomebrew(kind: HomebrewKind, data: Raw): string {
+  if (kind === "hazard") {
+    const block = (data[String(data.hazardKind)] ?? {}) as { summary?: string };
+    return [String(data.hazardKind ?? "hazard"), block.summary ?? ""].filter(Boolean).join(": ").slice(0, 200);
+  }
   if (kind === "item") {
     const weapon = data.weapon as SrdWeapon | undefined;
     const armor = data.armor as SrdArmor | undefined;

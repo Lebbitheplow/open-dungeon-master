@@ -57,6 +57,7 @@ import { describeEquipmentItem } from "@/lib/dm/equipment-line";
 import { summonStateLine } from "@/lib/dm/summon-rules";
 import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/prompt-rules";
 import { rollerName } from "@/lib/roll-labels";
+import { tableHazards } from "@/lib/srd/table-hazards";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -929,8 +930,33 @@ export function buildGameStateBlock(state: DmGameState): string {
   } else if (storySummary) {
     sections.push(`Story so far:\n${storySummary}`);
   }
+  // The table's own traps, poisons and diseases from the workshop, by the
+  // names apply_hazard (trap) and afflict take (src/lib/srd/table-hazards.ts).
+  const hazards = tableHazardLine(campaign.id);
+  if (hazards) {
+    sections.push(hazards);
+  }
   sections.push("=== END GAME STATE ===");
   return sections.join("\n\n");
+}
+
+function tableHazardLine(campaignId: string): string {
+  const own = tableHazards(campaignId);
+  if (!own.length) {
+    return "";
+  }
+  const named = (kind: string, how: string) => {
+    const rows = own.filter((entry) => entry.hazardKind === kind);
+    return rows.length
+      ? `${how}: ${rows.map((entry) => `${entry.name} (${("trap" in entry ? entry.trap.summary : "poison" in entry ? entry.poison.summary : entry.disease.summary).slice(0, 140)})`).join("; ")}`
+      : "";
+  };
+  return [
+    "This table's own hazards (the server runs them by name; never invent their numbers):",
+    named("trap", "- Traps, apply_hazard type trap with trap set to the name"),
+    named("poison", "- Poisons, afflict kind poison"),
+    named("disease", "- Diseases, afflict kind disease"),
+  ].filter(Boolean).join("\n");
 }
 
 // The request_roll tool. characterId must match a party characterId from

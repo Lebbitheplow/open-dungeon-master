@@ -2,6 +2,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { catalogPrices } from "@/lib/characters/catalog";
 import { contentPackInstalled } from "@/lib/content/db";
 import { bundledBackgroundRows, withMechanics } from "@/lib/workshop/catalog-mechanics";
+import { hazardCatalog } from "@/lib/workshop/hazard-catalog";
 import {
   listArchetypes,
   listBackgrounds,
@@ -105,6 +106,9 @@ export async function GET(
       });
       break;
     }
+    case "hazards":
+      // The SRD's traps, poisons and diseases, bundled (hazard-catalog.ts).
+      return Response.json({ results: hazardCatalog(q), packInstalled: true });
     default:
       return Response.json({ error: "Unknown content kind." }, { status: 404 });
   }

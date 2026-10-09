@@ -23,6 +23,7 @@ const CONTENT_KIND: Record<EditorKind, string> = {
   background: "backgrounds",
   race: "races",
   archetype: "archetypes",
+  hazard: "hazards",
 };
 
 export function CatalogStart({
