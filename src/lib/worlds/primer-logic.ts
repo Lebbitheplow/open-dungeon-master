@@ -10,6 +10,7 @@
 //
 // Pure and dependency-free so a plain-node test can render it.
 import type { WorldPack } from "@/lib/worlds/types";
+import { nameRegisterHint } from "../genres.ts";
 
 // The primer is rebuilt into GAME STATE on EVERY turn, so it is budgeted hard.
 // A full-depth pack carries far more than this; the rest is not lost, it just
@@ -87,7 +88,7 @@ export function renderWorldPrimer(pack: WorldPack | null): string {
   }
 
   if (pack.nameHints) {
-    sections.push(`Naming: ${pack.nameHints}`);
+    sections.push(`Naming: ${nameRegisterHint(pack.nameHints)}`);
   }
 
   return sections.join("\n\n");

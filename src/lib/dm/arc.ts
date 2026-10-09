@@ -12,6 +12,7 @@ import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
+import { nameRegisterHint } from "@/lib/genres";
 import {
   activeBeatNumber,
   activeQuestLines,
@@ -91,7 +92,7 @@ function worldContext(campaignId: string): string {
     campaign.description ? `Premise: ${campaign.description}` : "",
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
-      : `Genre: ${preset.name}. ${preset.dmFlavor} ${preset.nameHints}`,
+      : `Genre: ${preset.name}. ${preset.dmFlavor} ${nameRegisterHint(preset.nameHints)}`,
     // The pack's factions and hooks give the saga real named powers to plan
     // against instead of inventing a pantheon the world does not have.
     packWorldHints(campaign.gameSettings),

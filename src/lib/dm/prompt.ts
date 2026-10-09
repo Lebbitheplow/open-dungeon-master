@@ -19,6 +19,7 @@ import { authoredFeatureTags } from "@/lib/srd/authored-effects";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { presetFor, packFor } from "@/lib/worlds/preset";
+import { nameRegisterHint } from "@/lib/genres";
 import { renderWorldPrimer } from "@/lib/worlds/primer-logic";
 import { packIds } from "@/lib/worlds/reskin-logic";
 import { genreClassIds } from "@/lib/classes";
@@ -264,7 +265,7 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
       ? ` Only these classes exist here: ${classIds.join(", ")}; add_companion refuses anything else.`
       : "",
     ` ${preset.raceHint}`,
-    preset.nameHints ? ` Name them in the world's register: ${preset.nameHints}` : "",
+    preset.nameHints ? ` Name them in the world's register: ${nameRegisterHint(preset.nameHints)}` : "",
   ].join("");
   const kinds =
     mode === "full"

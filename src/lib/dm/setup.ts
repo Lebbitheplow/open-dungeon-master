@@ -7,6 +7,7 @@ import {
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
+import { nameRegisterHint } from "@/lib/genres";
 import { publishPersisted } from "@/lib/events";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { requestDmMessage } from "@/lib/dm/model";
@@ -30,7 +31,7 @@ export async function runStorySetup(campaignId: string) {
     campaign.description ? `Table's own premise notes: ${campaign.description}` : "",
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
-      : `Genre: ${preset.name}. ${preset.dmFlavor} ${preset.nameHints}`,
+      : `Genre: ${preset.name}. ${preset.dmFlavor} ${nameRegisterHint(preset.nameHints)}`,
     // A selected world pack brings its own factions, places and hooks, which
     // is exactly the raw material this pass is trying to invent.
     packWorldHints(campaign.gameSettings),
