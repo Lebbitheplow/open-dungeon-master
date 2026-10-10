@@ -3,10 +3,31 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { serverEnv } from "../server-env.ts";
 import { populateFeatures, populateFeaturesForClasses } from "@/lib/srd/features";
+import { packSubclassExtras } from "@/lib/content/archetype-tables";
+import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { populateResources } from "@/lib/srd/class-resources";
+import { featsAsRun, registerTableFeatReader } from "@/lib/srd/feat-effects";
+import { tableFeatsFrom } from "@/lib/db/table-feats";
+import { registerTableHazardReader } from "@/lib/srd/table-hazards";
+import { tableHazardsFrom } from "@/lib/db/table-hazards";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
+
+// A table's workshop feats, for the rules that read a feat wherever a sheet
+// is (src/lib/srd/feat-effects.ts tableFeat). The boot resync reads them off
+// the database it is still opening (resyncingDb), before getDatabase hands
+// that database out.
+let resyncingDb: SqliteDatabase | null = null;
+registerTableFeatReader((campaignId) => {
+  const db = resyncingDb ?? globalThis.__localRoleplayDb ?? null;
+  return db ? tableFeatsFrom(db, campaignId) : new Map();
+});
+// And its traps, poisons and diseases (src/lib/srd/table-hazards.ts).
+registerTableHazardReader((campaignId) => {
+  const db = globalThis.__localRoleplayDb ?? null;
+  return db ? tableHazardsFrom(db, campaignId) : new Map();
+});
 
 declare global {
   var __localRoleplayDb: SqliteDatabase | undefined;
@@ -193,7 +214,7 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE TABLE IF NOT EXISTS homebrew_entries (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster')),
+      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster','hazard')),
       slug TEXT NOT NULL,
       name TEXT NOT NULL,
       data_json TEXT NOT NULL,
@@ -628,6 +649,17 @@ function ensureSchema(db: SqliteDatabase) {
 
     CREATE INDEX IF NOT EXISTS idx_workshop_beats_campaign
       ON workshop_beats(campaign_id, created_at);
+
+    -- WorldForge's half of a world (src/lib/worldforge/model.ts): types and
+    -- their fields, links, calendars, events, secrets, folders, the atlas,
+    -- and what each Cast member, place, faction and lore entry carries that
+    -- its own row has no column for. One document per workshop; the records
+    -- themselves stay in their own tables. Copied into a campaign with them.
+    CREATE TABLE IF NOT EXISTS world_forge (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id) ON DELETE CASCADE,
+      doc_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL
+    );
 
     -- The world pack a workshop is writing (src/lib/worlds/draft.ts), one
     -- per workshop, as the draft JSON with its art inline the way a manifest
@@ -1411,6 +1443,13 @@ function ensureSchema(db: SqliteDatabase) {
   // find their character suddenly wearing different numbers.
   const sheetsNeedAcOverride = !sheetColumns.some((column) => column.name === "ac_override");
 
+  addColumns("homebrew_entries", [
+    // Set when the author forgets an entry (src/lib/db/homebrew.ts
+    // archiveHomebrew): it leaves the shelf and every picker, and the sheets
+    // and tables that already carry it keep its rules.
+    ["archived_at", "TEXT"],
+  ]);
+
   addColumns("character_sheets", [
     // Death-save track for a character at 0 HP; NULL = not dying. Managed
     // by the server death engine (src/lib/dm/death.ts).
@@ -1964,6 +2003,9 @@ function ensureSchema(db: SqliteDatabase) {
     // The faction they belong to (docs/vtt-parity-implementation-plan.md
     // section 6); '' for none.
     ["faction_id", `TEXT NOT NULL DEFAULT ''`],
+    // The stat block they fight with: a monster reference start_encounter
+    // resolves ("veteran", "homebrew:<id>"); '' for none.
+    ["stat_block", `TEXT NOT NULL DEFAULT ''`],
     // Other spellings this NPC has been called, e.g. ["Marla", "Captain
     // Marla"] on the row named "Marla Venn" (src/lib/dm/entity-logic.ts).
     // Merging records the variant here instead of rewriting campaign_messages:
@@ -2090,6 +2132,10 @@ function ensureSchema(db: SqliteDatabase) {
   // (campaign_id, user_id), so a table that allows several characters per
   // player could never store the second one.
   rebuildCharacterSheets(db);
+
+  // The third: homebrew_entries.kind's CHECK gains 'hazard' (the workshop's
+  // traps, poisons and diseases, src/lib/homebrew/hazard-data.ts).
+  rebuildHomebrewKinds(db);
 
   // Reverse catch-up: library uploads used to skip campaign clones, so
   // sheets copied before their photo existed still have none. Fill-only.
@@ -2233,6 +2279,37 @@ function ensureSchema(db: SqliteDatabase) {
 // battle_tokens, so no cascade is being suppressed here. The pragma is a
 // no-op inside a transaction, which is why the copy is not wrapped in one;
 // the guard above makes a half-finished run safe to repeat instead.
+// Widens homebrew_entries.kind to take 'hazard'. The new table is the
+// stored DDL with the kind list widened, so every column the table has gained
+// arrives as it is; detected from that DDL, so it runs once and is
+// idempotent if interrupted.
+function rebuildHomebrewKinds(db: SqliteDatabase) {
+  const ddl = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'homebrew_entries'`)
+    .get() as { sql: string } | undefined;
+  if (!ddl || ddl.sql.includes("'hazard'")) {
+    return;
+  }
+  const widened = ddl.sql
+    .replace(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?"?homebrew_entries"?/i, "CREATE TABLE homebrew_entries_rebuilt")
+    .replace("'archetype','monster')", "'archetype','monster','hazard')");
+  if (!widened.includes("'hazard'")) {
+    return;
+  }
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.exec(`
+      DROP TABLE IF EXISTS homebrew_entries_rebuilt;
+      ${widened};
+      INSERT INTO homebrew_entries_rebuilt SELECT * FROM homebrew_entries;
+      DROP TABLE homebrew_entries;
+      ALTER TABLE homebrew_entries_rebuilt RENAME TO homebrew_entries;
+    `);
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
+}
+
 function rebuildBattleTokens(db: SqliteDatabase) {
   const ddl = db
     .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'battle_tokens'`)
@@ -2535,15 +2612,62 @@ function backfillSheetFeatures(db: SqliteDatabase) {
 // the half-elf "Skill Versatility" trait once substring-matched "ki" and
 // stamped monk Ki onto any half-elf, and paladins predate Channel Divinity
 // landing in the base class table. Writes only rows that actually changed.
+// The workshop subclasses of whoever runs a table, read with the handle the
+// boot already holds (src/lib/db/subclass-extras.ts is the same for every
+// other write), so the resync below regrants a workshop or pack subclass's
+// features rather than dropping them.
+function bootSubclassExtras(db: SqliteDatabase, campaignId: string, cache: Map<string, SubclassExtras>): SubclassExtras {
+  const known = cache.get(campaignId);
+  if (known) {
+    return known;
+  }
+  let authors: string[] = [];
+  try {
+    const row = db
+      .prepare(`SELECT owner_user_id, human_dm_user_id, assistant_dm_user_id FROM campaigns WHERE id = ?`)
+      .get(campaignId) as { owner_user_id: string; human_dm_user_id: string | null; assistant_dm_user_id: string | null } | undefined;
+    authors = row ? [row.owner_user_id, row.human_dm_user_id, row.assistant_dm_user_id].filter((id): id is string => Boolean(id)) : [];
+  } catch {
+    authors = [];
+  }
+  const own: SubclassExtras = {};
+  for (const author of [...new Set(authors)]) {
+    const entries = db
+      .prepare(`SELECT name, data_json FROM homebrew_entries WHERE user_id = ? AND kind = 'archetype'`)
+      .all(author) as Array<{ name: string; data_json: string }>;
+    for (const entry of entries) {
+      const data = JSON.parse(entry.data_json) as Record<string, unknown>;
+      const classId = String(data.classSlug ?? "").toLowerCase();
+      const table = extraSubclassOf({ name: entry.name, source: "homebrew", data });
+      if (classId && table) {
+        (own[classId] ??= []).push(table);
+      }
+    }
+  }
+  const extras = mergeExtras(own, packSubclassExtras());
+  cache.set(campaignId, extras);
+  return extras;
+}
+
 function backfillSheetResources(db: SqliteDatabase) {
+  resyncingDb = db;
+  try {
+    resyncSheetResources(db);
+  } finally {
+    resyncingDb = null;
+  }
+}
+
+function resyncSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
-      `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json,
+      `SELECT id, campaign_id, class, subclass, race, level, abilities_json, features_json, resources_json,
               classes_json, feats_json
          FROM character_sheets`,
     )
     .all() as Array<{
     id: string;
+    campaign_id: string;
     class: string;
     subclass: string | null;
     race: string;
@@ -2560,6 +2684,7 @@ function backfillSheetResources(db: SqliteDatabase) {
   const update = db.prepare(
     `UPDATE character_sheets SET features_json = ?, resources_json = ? WHERE id = ?`,
   );
+  const extrasByCampaign = new Map<string, SubclassExtras>();
   for (const row of sheets) {
     try {
       const existingFeatures = JSON.parse(row.features_json ?? "[]") as Parameters<
@@ -2583,9 +2708,10 @@ function backfillSheetResources(db: SqliteDatabase) {
         : [];
       const multiclass = Array.isArray(classes) && classes.length > 1;
       const rowFeats = row.feats_json ? (JSON.parse(row.feats_json) as string[]) : [];
+      const extras = bootSubclassExtras(db, row.campaign_id, extrasByCampaign);
       const features = multiclass
-        ? populateFeaturesForClasses(existingFeatures, classes, row.race, rowFeats)
-        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, rowFeats);
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race, featsAsRun(rowFeats, row.campaign_id), extras)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level, featsAsRun(rowFeats, row.campaign_id), extras);
       const resources = populateResources(
         features,
         row.level,
@@ -2593,6 +2719,7 @@ function backfillSheetResources(db: SqliteDatabase) {
         existingResources,
         multiclass ? classes : undefined,
         rowFeats,
+        row.campaign_id,
       );
       const nextFeatures = JSON.stringify(features);
       const nextResources = JSON.stringify(resources);

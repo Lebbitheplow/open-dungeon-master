@@ -121,7 +121,7 @@ function strike(
   moment: ZoneMoment,
   times = 1,
 ): string[] {
-  const row = zoneRowFor(zone.spell);
+  const row = zoneRowFor(zone);
   const trigger = row?.trigger;
   if (!row || !trigger) {
     return [];
@@ -284,7 +284,7 @@ function afterFailOnCharacter(campaign: Campaign, turn: DmTurn, map: BattleMap, 
 // The zone's creature filter: hostile-only areas spare the caster's side,
 // and nobody suffers their own aura.
 function touches(zone: SpellZone, trigger: ZoneTrigger, victim: Victim): boolean {
-  if (victim.id === zone.casterId && zoneRowFor(zone.spell)?.shape === "aura") {
+  if (victim.id === zone.casterId && zoneRowFor(zone)?.shape === "aura") {
     return false;
   }
   return trigger.who !== "hostile" || hostileTo(zone, victim.kind);
@@ -294,7 +294,7 @@ function touches(zone: SpellZone, trigger: ZoneTrigger, victim: Victim): boolean
 // a Guardian of Faith that has spent itself gone.
 function settle(campaign: Campaign, map: BattleMap, zones: SpellZone[]) {
   const kept = zones.filter((zone) => {
-    const budget = zoneRowFor(zone.spell)?.budget;
+    const budget = zoneRowFor(zone)?.budget;
     return !budget || (zone.dealt ?? 0) < budget;
   });
   saveZones(map.id, kept);
@@ -318,7 +318,7 @@ export function zonesAfterMove(
     return [];
   }
   const zones = liveZones(map, encounter);
-  const armed = zones.filter((zone) => zoneRowFor(zone.spell)?.trigger?.on.some((moment) => moment === "enter" || moment === "each5"));
+  const armed = zones.filter((zone) => zoneRowFor(zone)?.trigger?.on.some((moment) => moment === "enter" || moment === "each5"));
   if (!armed.length) {
     return [];
   }
@@ -326,7 +326,7 @@ export function zonesAfterMove(
   const key = turnKey(encounter);
   let stopAt: XY | null = null;
   for (const zone of armed) {
-    const trigger = zoneRowFor(zone.spell)?.trigger as ZoneTrigger;
+    const trigger = zoneRowFor(zone)?.trigger as ZoneTrigger;
     if (!touches(zone, trigger, victim)) {
       continue;
     }
@@ -383,7 +383,7 @@ export function zoneTurnStart(campaign: Campaign, encounter: Encounter, combatan
   const tokens = listTokens(map.id);
   const lines: string[] = [];
   for (const zone of zones) {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     const caster = tokens.find((token) => token.refId === zone.casterId);
     if (!row?.drifts || !caster || !combatantIds.includes(zone.casterId)) {
       continue;
@@ -406,7 +406,7 @@ export function zoneTurnStart(campaign: Campaign, encounter: Encounter, combatan
   // each turn it began.
   const key = turnKey(encounter);
   for (const zone of zones) {
-    if (zoneRowFor(zone.spell)?.trigger?.on.includes("end") || isQuake(zone)) {
+    if (zoneRowFor(zone)?.trigger?.on.includes("end") || isQuake(zone)) {
       zone.struck = { ...(zone.struck ?? {}), ...Object.fromEntries(combatantIds.map((id) => [`${id}:begun`, key])) };
     }
   }
@@ -468,7 +468,7 @@ function momentFor(
     }
     const cell = tileIndex(map.width, token.x, token.y);
     for (const zone of zones) {
-      const trigger = zoneRowFor(zone.spell)?.trigger;
+      const trigger = zoneRowFor(zone)?.trigger;
       if (!trigger?.on.includes(moment) || !touches(zone, trigger, victim)) {
         continue;
       }

@@ -82,7 +82,7 @@ export function prepareUseItem(
   const name = carried?.name ?? itemName;
   const asBonus =
     (drinksAsBonusAction(sheet) && /\b(?:potion|elixir|philter)\b/i.test(name)) ||
-    (coatsAsBonusAction(sheet) && isBasicPoison(name));
+    (coatsAsBonusAction(sheet) && isBasicPoison(name, sheet.campaignId));
   const price = asBonus
     ? spendAction(budget, "bonus", `${drinksAsBonusAction(sheet) && /\b(?:potion|elixir|philter)\b/i.test(name) ? "Rapid Drinker" : "Poisoner"} (${USE_AN_OBJECT})`, sheet.name)
     : spendAction(budget, "action", USE_AN_OBJECT, sheet.name);

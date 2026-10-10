@@ -1,12 +1,13 @@
 "use client";
 
+import { PrintedBlockView } from "@/app/workshop/bestiary/PrintedBlockView";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Field } from "@/app/workshop/kit";
-import { MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
+import { MAX_SWINGS, MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import {
   AttackEditor,
@@ -24,6 +25,9 @@ import {
   SkillsAndSenses,
 } from "@/app/workshop/bestiary/StatBlockFields";
 import { CR_CHOICES } from "@/app/workshop/bestiary/types";
+import { AbilitiesEditor, RegenerationEditor, RoutineEditor } from "@/app/workshop/bestiary/BlockActionFields";
+import { SpellcastingEditor } from "@/app/workshop/bestiary/SpellcastingFields";
+import { BorrowParts } from "@/app/workshop/bestiary/BorrowParts";
 
 const CR_OPTIONS = CR_CHOICES.map((cr) => ({ value: String(cr), label: crLabel(cr) }));
 
@@ -96,14 +100,14 @@ export function MonsterEditor({
         label="Hit points"
         value={draft.stats.maxHp}
         min={1}
-        max={1000}
+        max={2000}
         onChange={(maxHp) => setStats({ maxHp })}
       />
       <NumberField
         label="Swings"
         value={draft.stats.attacksPerTurn ?? 1}
         min={1}
-        max={3}
+        max={MAX_SWINGS}
         onChange={(attacksPerTurn) => setStats({ attacksPerTurn })}
       />
       <NumberField
@@ -191,13 +195,19 @@ export function MonsterEditor({
             {coreStats}
             <AbilityScores draft={draft} onChange={onDraft} />
             <AttackEditor draft={draft} onChange={onDraft} />
+            <RoutineEditor draft={draft} onChange={onDraft} />
             <SaveEditor draft={draft} onChange={onDraft} />
+            <AbilitiesEditor draft={draft} onChange={onDraft} />
+            <SpellcastingEditor draft={draft} onChange={onDraft} />
             <SectionedTraitEditor draft={draft} onChange={onDraft} />
+            <PrintedBlockView draft={draft} />
           </div>
           <div className="flex flex-col gap-3">
             <SectionHead title="Catalogue and defences" glyph="rest-ac" className="mb-0" />
             <MonsterKitPanel draft={draft} onChange={onDraft} />
+            <BorrowParts draft={draft} onChange={onDraft} />
             <SizeAndDefences draft={draft} onChange={onDraft} />
+            <RegenerationEditor draft={draft} onChange={onDraft} />
             <SkillsAndSenses draft={draft} onChange={onDraft} />
             <LanguagesAndHabitat draft={draft} onChange={onDraft} />
             {extraDamage}
@@ -216,10 +226,16 @@ export function MonsterEditor({
       {coreStats}
       <AbilityScores draft={draft} onChange={onDraft} />
       <MonsterKitPanel draft={draft} onChange={onDraft} />
+      <BorrowParts draft={draft} onChange={onDraft} />
       <AttackEditor draft={draft} onChange={onDraft} />
+      <RoutineEditor draft={draft} onChange={onDraft} />
       <SaveEditor draft={draft} onChange={onDraft} />
+      <AbilitiesEditor draft={draft} onChange={onDraft} />
+      <SpellcastingEditor draft={draft} onChange={onDraft} />
       <SectionedTraitEditor draft={draft} onChange={onDraft} />
+      <PrintedBlockView draft={draft} />
       <SizeAndDefences draft={draft} onChange={onDraft} />
+      <RegenerationEditor draft={draft} onChange={onDraft} />
       <SkillsAndSenses draft={draft} onChange={onDraft} />
       <LanguagesAndHabitat draft={draft} onChange={onDraft} />
       {extraDamage}

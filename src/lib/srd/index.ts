@@ -14,7 +14,7 @@ import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
-import { hpBonusPerLevel } from "@/lib/srd/race-id";
+import { hpBonusPerLevel, speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
 import { isThirdCaster, thirdCasterSlots } from "@/lib/srd/third-caster";
 import type {
   Ability,
@@ -57,10 +57,15 @@ export function findBackground(id: string) {
 
 // A character's creature size, derived from their race on demand rather
 // than stored: Small vs Medium is what the rules care about (heavy weapons,
-// grapple limits) and homebrew races default to Medium.
-export function sizeForRace(raceId: string): "Small" | "Medium" {
+// grapple limits). A species the bundled list does not carry is read from
+// its own row (speciesRulesFor), so a pack Kobold or a workshop copy of the
+// Halfling is Small; a species that says nothing is Medium.
+export function sizeForRace(raceId: string, rules?: SpeciesRules | null): "Small" | "Medium" {
   const race = findRace(raceId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"));
-  return race?.size === "Small" ? "Small" : "Medium";
+  if (race) {
+    return race.size === "Small" ? "Small" : "Medium";
+  }
+  return /^(small|tiny)$/i.test(speciesRulesFor(raceId, rules)?.size ?? "") ? "Small" : "Medium";
 }
 
 export function findSkill(id: string) {
@@ -129,6 +134,8 @@ export type AcSource = {
   race?: string;
   alignment?: string;
   spellcasting?: unknown;
+  // The table, for its workshop feats (feat-effects.ts tableFeat).
+  campaignId?: string;
 };
 
 // The character's armor class and how it was arrived at. The single place
@@ -140,6 +147,7 @@ export function acBreakdownFor(source: AcSource): AcBreakdown {
     level: source.level ?? 1,
     features: source.features,
     classes: source.classes,
+    campaignId: source.campaignId,
   });
   // Ability-setting magic items (a Belt of Giant Strength) change the DEX
   // and CON that feed the AC, so the effective scores are used throughout.
@@ -285,6 +293,7 @@ export function speedFor(
     level: source.level ?? 1,
     features,
     classes: source.classes,
+    campaignId: source.campaignId,
   });
   const breakdown = acBreakdownFor({ ...source, features, equipment });
   const worn = breakdown.armor ?? (breakdown.armorName ? matchArmor(breakdown.armorName) : null);
@@ -382,6 +391,8 @@ export function computeSheetDerived(
     feats?: string[];
     equipment?: Array<{ name: string; equipped?: boolean; attuned?: boolean }>;
     wildShape?: CharacterSheet["wildShape"];
+    // The table, for its workshop feats.
+    campaignId?: string;
   },
 ): SheetDerived {
   const pb = proficiencyBonus(sheet.level);
@@ -409,7 +420,7 @@ export function computeSheetDerived(
   ];
   const defense =
     sheet.class && (sheet.features || sheet.feats)
-      ? defenseRiders({ class: sheet.class, level: sheet.level, features: riderFeatures }, abilityMods)
+      ? defenseRiders({ class: sheet.class, level: sheet.level, features: riderFeatures, campaignId: sheet.campaignId }, abilityMods)
       : { saveBonus: 0, initiativeBonus: 0, passiveBonus: 0, halfProficiency: null };
 
   // Saves a feature trains on top of the class table's (Diamond Soul,

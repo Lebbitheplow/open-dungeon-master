@@ -9,12 +9,21 @@ import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { settleAttunement, type Wearer } from "@/lib/srd/magic-items";
 import { itemWeightByName } from "@/lib/content";
 import { hydrateHomebrewGear } from "@/lib/db/homebrew";
+import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
+import { registerSpeciesReader } from "@/lib/srd/race-id";
+import { featsAsRun } from "@/lib/srd/feat-effects";
+import { serverSpeciesRules } from "@/lib/characters/species-rules";
 import type {
   CharacterSheet,
   CreateSheetInput,
   FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
+
+// Every rule that reads a species by id reads a pack or workshop species
+// through this (src/lib/srd/race-id.ts); every sheet the engines touch
+// comes through this module first.
+registerSpeciesReader(serverSpeciesRules);
 
 type SheetRow = {
   id: string;
@@ -258,7 +267,9 @@ export function createSheet(
     withBackgroundFeature(input.features ?? [], input.background),
     classList,
     input.race,
-    input.feats,
+    featsAsRun(input.feats, campaignId),
+    // A workshop or pack subclass's features, read from the table's tables.
+    subclassExtrasForTable(campaignId, userId),
   );
   // Limited-use counters (Rage, Ki, Second Wind...) sized for the features
   // just granted; the resource engine spends and refills them.
@@ -275,6 +286,7 @@ export function createSheet(
     undefined,
     classList.length > 1 ? classList : undefined,
     input.feats,
+    campaignId,
   );
   // Unless the AC is pinned, it comes from the gear they are actually
   // carrying rather than the builder's suggestion. An absent flag means a
@@ -610,6 +622,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
             existing.resources,
             classes.length ? classes : undefined,
             patch.feats ?? existing.feats,
+            existing.campaignId,
           )
         : existing.resources),
     equipment: patch.equipment ?? existing.equipment,
@@ -656,6 +669,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
         loneClassBefore: existing.classes.length ? null : existing.class,
       },
       { spellcasting: patch.spellcasting !== undefined, xp: patch.xp !== undefined },
+      subclassExtrasForTable(existing.campaignId, existing.userId),
     );
     next.features = settled.features;
     next.hitDice = settled.hitDice;
@@ -677,6 +691,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       patch.resources ?? existing.resources,
       next.classes.length ? next.classes : undefined,
       next.feats,
+      existing.campaignId,
     );
   }
 

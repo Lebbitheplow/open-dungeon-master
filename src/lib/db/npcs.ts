@@ -42,6 +42,8 @@ export type Npc = {
   // What they do ("merchant", "cyberpunk-fixer", or whatever the DM typed).
   // Picks the placeholder face when portraitUrl is empty; no rule reads it.
   role: string;
+  // The stat block they fight with (a monster reference), or "".
+  statBlock: string;
   // Kept out of the Active NPCs prompt block; restored on a name mention.
   archived: boolean;
   createdAt: string;
@@ -67,6 +69,7 @@ type NpcRow = {
   role: string | null;
   voice_json: string | null;
   faction_id: string | null;
+  stat_block?: string | null;
   archived: number;
   created_at: string;
   updated_at: string;
@@ -96,6 +99,7 @@ function mapNpc(row: NpcRow): Npc {
     portraitUrl: isUploadedImagePath(row.portrait_url) ? row.portrait_url : "",
     voice: normalizeNpcVoice(parseJson<unknown>(row.voice_json ?? "null", null)),
     factionId: row.faction_id ?? "",
+    statBlock: row.stat_block ?? "",
     archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -244,8 +248,8 @@ export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
     `INSERT INTO npcs
        (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
         aliases_json, personality_json, goals_json, relations_json,
-        bonds_json, pressure_json, arc_cast_id, portrait_url, voice_json, faction_id, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', ?, ?, 0, ?, ?)`,
+        bonds_json, pressure_json, arc_cast_id, portrait_url, voice_json, faction_id, stat_block, archived, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', ?, ?, ?, 0, ?, ?)`,
   ).run(
     id,
     campaignId,
@@ -260,6 +264,7 @@ export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
     JSON.stringify(draft.relations),
     draft.voice ? JSON.stringify(draft.voice) : null,
     draft.factionId,
+    draft.statBlock ?? "",
     now,
     now,
   );
@@ -281,7 +286,7 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
   db.prepare(
     `UPDATE npcs
      SET name = ?, attitude = ?, trait = ?, location = ?, role = ?, aliases_json = ?,
-         personality_json = ?, goals_json = ?, relations_json = ?, voice_json = ?, faction_id = ?, updated_at = ?
+         personality_json = ?, goals_json = ?, relations_json = ?, voice_json = ?, faction_id = ?, stat_block = ?, updated_at = ?
      WHERE id = ?`,
   ).run(
     draft.name,
@@ -295,6 +300,7 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
     JSON.stringify(draft.relations),
     draft.voice ? JSON.stringify(draft.voice) : null,
     draft.factionId,
+    draft.statBlock ?? "",
     nowIso(),
     npcId,
   );

@@ -18,16 +18,18 @@ export const isFindFamiliar = (spell: string) => spell.trim().toLowerCase() === 
 export function castFindFamiliar(
   campaign: Campaign,
   turn: DmTurn,
-  input: { caster: CharacterSheet; variant?: string; level?: number; reason?: string; sheets: CharacterSheet[]; sheetsById: Map<string, CharacterSheet> },
+  // `castAs`: the name it is cast under, a table's workshop copy's own.
+  input: { caster: CharacterSheet; castAs?: string; variant?: string; level?: number; reason?: string; sheets: CharacterSheet[]; sheetsById: Map<string, CharacterSheet> },
   cast: (args: Record<string, unknown>) => Record<string, unknown>,
 ): Record<string, unknown> {
   const { caster } = input;
+  const castAs = input.castAs?.trim() || "Find Familiar";
   const form = (input.variant ?? "").trim();
   const built = buildPet(caster, { kind: "familiar", form });
   if ("error" in built) {
     return { error: form ? `${built.error} Nothing was spent.` : `Find Familiar needs the familiar's form in variant (owl, cat, raven, bat, rat, spider, weasel, hawk, frog, snake...). Nothing was spent.` };
   }
-  const spent = cast({ characterId: caster.id, spell: "Find Familiar", ...(input.level ? { level: input.level } : {}), via: "buff", reason: (input.reason ?? "").slice(0, 200) });
+  const spent = cast({ characterId: caster.id, spell: castAs, ...(input.level ? { level: input.level } : {}), via: "buff", reason: (input.reason ?? "").slice(0, 200) });
   if ("error" in spent) {
     return spent;
   }
@@ -37,7 +39,7 @@ export function castFindFamiliar(
   }
   return {
     ...bound,
-    spell: "Find Familiar",
+    spell: castAs,
     ...(spent.slot ? { slot: spent.slot } : {}),
     ...(spent.cost ? { cost: spent.cost } : {}),
     ...(spent.material ? { material: spent.material } : {}),

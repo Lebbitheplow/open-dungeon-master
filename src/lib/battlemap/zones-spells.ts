@@ -355,9 +355,22 @@ const ALIASES: Record<string, string> = {
   "evard's black tentacles": "black tentacles",
 };
 
-export function zoneKey(spell: string): string {
-  const key = spell.trim().toLowerCase().replace(/\s+/g, " ");
+// A spell by its name, or a laid area by the spell it runs as: a table's
+// workshop copy under a name of its own ("Silkbind") lays and reads the row
+// of the published spell it copies (`runsAs`, "Web"), while its own name is
+// what the board shows and what concentration holds.
+export type ZoneNamed = string | { spell: string; runsAs?: string };
+
+export function zoneKey(spell: ZoneNamed): string {
+  const name = typeof spell === "string" ? spell : spell.runsAs || spell.spell;
+  const key = name.trim().toLowerCase().replace(/\s+/g, " ");
   return ALIASES[key] ?? key;
+}
+
+// The spell's own name as a key, never what it runs as: what a caster's
+// concentration and a recast compare against.
+export function zoneOwnKey(zone: { spell: string }): string {
+  return zoneKey(zone.spell);
 }
 
 // Spells that light their caster's token rather than lay an area (SRD 5.1:
@@ -368,6 +381,6 @@ export const LIGHT_SPELLS: Record<string, { radiusTiles: number; minutes: number
   "continual flame": { radiusTiles: 4, minutes: 0 },
 };
 
-export function zoneRowFor(spell: string): ZoneRow | null {
+export function zoneRowFor(spell: ZoneNamed): ZoneRow | null {
   return ZONE_ROWS[zoneKey(spell)] ?? null;
 }

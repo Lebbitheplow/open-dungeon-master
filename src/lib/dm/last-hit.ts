@@ -22,6 +22,7 @@
 // module's own and is created on first use, so the schema file does not
 // have to know about it; old databases simply start without records.
 
+import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { getActiveEncounter, listEnemies, turnKey } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
@@ -168,7 +169,7 @@ function concentrationHeld(
   if (!spell) {
     return null;
   }
-  const resolved = spellMechanicsFor({ spell, userId: sheet.userId });
+  const resolved = spellMechanicsFor({ spell, userIds: sheetSpellAuthors(sheet) });
   const names = [
     resolved?.mech.buff?.condition,
     ...(resolved?.mech.buff?.variants ?? []),

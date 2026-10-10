@@ -108,6 +108,9 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   quests_updated: TABLE,
   lore_updated: TABLE,
   factions_updated: TABLE,
+  // The table's WorldForge changed (src/lib/worldforge/model.ts). The ping
+  // carries nothing, but the document is the DM's, so only DM seats refetch.
+  world_updated: { kind: "dm", right: "secretStory" },
   pins_updated: TABLE,
   npc_updated: TABLE,
   location_updated: TABLE,

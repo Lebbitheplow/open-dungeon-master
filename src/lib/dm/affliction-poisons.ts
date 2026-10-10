@@ -40,6 +40,10 @@ function nextMidnight(campaignId: string, instant: number): number {
   return instant + (24 - hour) * 60 - minute;
 }
 
+// A workshop poison rides on its record as it stood, so the clock can run
+// its daily save after the table's cache has moved on.
+const workshopSnapshot = (poison: Poison) => (POISONS.some((row) => row.id === poison.id) ? {} : { poison });
+
 export function applyPoison(
   campaign: Campaign,
   turnId: string,
@@ -50,7 +54,7 @@ export function applyPoison(
   const clock = getClock(campaign.id);
   if (poison.atMidnight) {
     const at = nextMidnight(campaign.id, clock.instant);
-    writeAfflictions(campaign.id, sheet.id, [...liveAfflictions(campaign.id, sheet), { kind: "poison", id: poison.id, conditions: [], nextAt: at }]);
+    writeAfflictions(campaign.id, sheet.id, [...liveAfflictions(campaign.id, sheet), { kind: "poison", id: poison.id, conditions: [], nextAt: at, ...workshopSnapshot(poison) }]);
     return { ok: true, poison: poison.name, note: `${poison.name} does nothing yet: at the stroke of midnight (in ${Math.round((at - clock.instant) / 60)} h) the server rolls ${sheet.name}'s DC ${poison.dc} CON save, unless it is neutralized first.` };
   }
   const recuperated = sheet.conditions.some((entry) => entry.toLowerCase() === "recuperated");
@@ -100,7 +104,7 @@ export function applyPoison(
     if (lingers) {
       writeAfflictions(campaign.id, sheet.id, [
         ...afflictionsOf(campaign.id, sheet.id),
-        { kind: "poison", id: poison.id, conditions: held, nextAt: clock.instant + MINUTES_PER_DAY, successes: 0 },
+        { kind: "poison", id: poison.id, conditions: held, nextAt: clock.instant + MINUTES_PER_DAY, successes: 0, ...workshopSnapshot(poison) },
       ]);
       lines.push(`Every 24 hours the server rolls the save again (1d6 on a failure) until ${poison.repeat?.successes} successes. Until it ends, the damage this poison deals cannot be healed by any means: do not heal it.`);
     }
@@ -140,7 +144,7 @@ export function poisonClockTick(campaignId: string, to: number) {
     const next: Affliction[] = [];
     let changed = false;
     for (const entry of list) {
-      const poison = entry.kind === "poison" ? POISONS.find((row) => row.id === entry.id) : null;
+      const poison = entry.kind === "poison" ? (entry.poison ?? POISONS.find((row) => row.id === entry.id)) : null;
       if (!poison || entry.nextAt === undefined || entry.nextAt > to) {
         next.push(entry);
         continue;

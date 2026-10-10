@@ -65,7 +65,7 @@ export function addSilenceChips(
   tokenConditions: PlayerMapView["tokenConditions"],
   width: number,
 ) {
-  const silences = spellZones.filter((zone) => zoneRowFor(zone.spell)?.silence);
+  const silences = spellZones.filter((zone) => zoneRowFor(zone)?.silence);
   for (const shown of silences.length ? shownTokens : []) {
     const inside = silences.find((zone) => zone.cells.includes(tileIndex(width, shown.x, shown.y)));
     const rows = tokenConditions[shown.id] ?? [];

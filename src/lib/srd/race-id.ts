@@ -19,9 +19,73 @@ export function srdRaceId(raceId: string): string {
   return ALIASES[id] ?? id;
 }
 
-// Dwarven Toughness: +1 hit point per level, under every Hill Dwarf id.
-export function hpBonusPerLevel(raceId: string): number {
-  return srdRaceId(raceId) === "hill_dwarf" ? 1 : 0;
+// What the engines read off a species the bundled list does not carry (a
+// content-pack Derro, a workshop copy of the Hill Dwarf): its size, whether
+// heavy armor slows it, and the names of its traits, which the rules keyed
+// to a bundled race's id fall back on (Dwarven Toughness, Infernal Legacy's
+// spells, Draconic Ancestry). The server reads the pack and the workshop
+// (src/lib/characters/species-rules.ts, registered by src/lib/db/sheets.ts);
+// the builder passes the option it holds. Without one a species is Medium
+// and none of these apply, which is what every non-bundled species was.
+export type SpeciesRules = {
+  size?: string;
+  heavyArmorSpeed?: boolean;
+  traitNames: string[];
+};
+
+let speciesReader: ((raceId: string) => SpeciesRules | null) | null = null;
+
+export function registerSpeciesReader(reader: (raceId: string) => SpeciesRules | null): void {
+  speciesReader = reader;
+}
+
+// The browser's: the species a page was sent (the campaign snapshot's
+// `species`, the builder's list). Never filled on the server, where the
+// reader answers.
+const browserSpecies = new Map<string, SpeciesRules>();
+
+// A sign-out forgets what the browser was told.
+export function forgetBrowserSpecies(): void {
+  browserSpecies.clear();
+}
+
+export function registerBrowserSpecies(entries: Record<string, SpeciesRules> | null | undefined): void {
+  if (typeof window === "undefined" || !entries) {
+    return;
+  }
+  for (const [raceId, rules] of Object.entries(entries)) {
+    browserSpecies.set(raceId, rules);
+  }
+}
+
+export function speciesRulesFor(raceId: string, given?: SpeciesRules | null): SpeciesRules | null {
+  if (given) {
+    return given;
+  }
+  const id = raceId.trim();
+  if (!id) {
+    return null;
+  }
+  return (speciesReader ? speciesReader(id) : null) ?? browserSpecies.get(id) ?? null;
+}
+
+// Whether the species holds a trait of this name ("Dwarven Toughness" also
+// as the bundled list's "+1 HP per level (Dwarven Toughness)").
+export function speciesHoldsTrait(rules: SpeciesRules | null, name: string): boolean {
+  const wanted = name.toLowerCase();
+  return (rules?.traitNames ?? []).some((trait) => {
+    const held = trait.toLowerCase();
+    return held === wanted || held.startsWith(`${wanted} (`) || held.endsWith(`(${wanted})`);
+  });
+}
+
+// Dwarven Toughness: +1 hit point per level, under every Hill Dwarf id and
+// for any species that carries the trait.
+export function hpBonusPerLevel(raceId: string, rules?: SpeciesRules | null): number {
+  if (srdRaceId(raceId) === "hill_dwarf") {
+    return 1;
+  }
+  return speciesHoldsTrait(speciesRulesFor(raceId, rules), "dwarven toughness") ? 1 : 0;
 }
 
 // Only the variant human is handed a feat by its race, under every spelling

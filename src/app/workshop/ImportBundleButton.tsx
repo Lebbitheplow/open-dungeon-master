@@ -1,5 +1,6 @@
 "use client";
 
+import { appNotice } from "@/components/ui/ConfirmDialog";
 import { Check, FileUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -11,7 +12,9 @@ import { Select } from "@/components/ui/Select";
 import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES, type BundleDependency } from "@/lib/workshop/bundle";
 import { navigateTo } from "@/lib/navigation";
 
-// Opening somebody else's workshop.
+// Opening somebody else's workshop, or a world from WorldForge: its JSON
+// export opens the same way, its world landing in the new workshop's
+// WorldForge (src/lib/db/world-forge-io.ts).
 //
 // Two steps on purpose. The preview reads the file and validates it without
 // writing anything, so what a DM agrees to is a named thing with counts and
@@ -128,6 +131,12 @@ export function ImportBundleButton({
     setError("");
     try {
       const data = await post({ text, kinds, sharedWorkshopId });
+      // Arrivals kept beside the importer's own entries of the same name,
+      // said before the new workshop opens (workshop-bundle-shelf.ts).
+      const renamed = ((data as { shelf?: { renamed?: string[] } }).shelf?.renamed ?? []).filter(Boolean);
+      if (renamed.length) {
+        await appNotice(`${renamed.join(" ")} The new workshop's Cast, fights and pregens use these names; your other workshops are unchanged.`, "Kept beside your own");
+      }
       navigateTo(`/workshop/${data.workshopId}`);
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be imported.");
@@ -149,6 +158,7 @@ export function ImportBundleButton({
         onClick={() => input.current?.click()}
         disabled={busy}
         className={className}
+        title="A workshop bundle, or a world exported from WorldForge"
       >
         {busy && !preview ? (
           <Loader2 className="size-4 animate-spin" />

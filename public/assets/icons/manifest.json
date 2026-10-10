@@ -20658,6 +20658,15 @@
       "seed": 77604148
     },
     {
+      "id": "glyph-system-world",
+      "group": "glyph",
+      "key": "system-world",
+      "label": "WorldForge",
+      "src": "/assets/icons/glyph/system-world.webp",
+      "bytes": 2030,
+      "seed": 2045905513
+    },
+    {
       "id": "glyph-cue-dungeon",
       "group": "glyph",
       "key": "cue-dungeon",

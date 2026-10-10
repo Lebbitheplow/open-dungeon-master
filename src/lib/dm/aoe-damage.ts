@@ -32,6 +32,8 @@ import { curseBurn } from "@/lib/dm/spell-retort";
 import { holdEnemyAreaConcentration, placeSpellZone } from "@/lib/dm/zone-cast";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { zoneRowFor } from "@/lib/battlemap/zones-spells";
+import { spellEngineName } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { globeProblemFor } from "@/lib/dm/zone-rules";
 import { partsTaken, partsTotal, splitDamageExpression, type DamagePart } from "@/lib/dm/aoe-parts";
 import { castingHold, outOfReach } from "@/lib/dm/spell-planes";
@@ -90,6 +92,12 @@ export function handleAoeDamage(
     };
   }
 
+  // The area a player's spell lays is the one of the published spell a
+  // table's workshop copy runs as (src/lib/content/index.ts spellEngineName).
+  const engineSpell = args.spell
+    ? { spell: args.spell, runsAs: args.casterEnemyId ? undefined : spellEngineName(args.spell, spellAuthorsFor(campaign)) }
+    : "";
+
   // Resolve targets: each ref may be an enemy or a character, from the id
   // arrays or the comma-separated fallback.
   const enemyTargets: EncounterEnemy[] = [];
@@ -127,7 +135,7 @@ export function handleAoeDamage(
   if (skippedDead.length) {
     pcTargets.splice(0, pcTargets.length, ...pcTargets.filter((sheet) => !sheet.deathSaves?.dead));
     // A spell that lays its area (a Web over the fallen) is still cast.
-    if (!enemyTargets.length && !pcTargets.length && !(args.spell && zoneRowFor(args.spell))) {
+    if (!enemyTargets.length && !pcTargets.length && !(args.spell && zoneRowFor(engineSpell))) {
       return { error: `${skippedDead.join(", ")} ${skippedDead.length === 1 ? "is" : "are"} dead; the area catches nobody it can harm. Nothing was spent.` };
     }
   }
@@ -170,7 +178,7 @@ export function handleAoeDamage(
   }
   // A spell that only lays its area (an enemy's Darkness, a Web with nobody
   // in it yet) catches nobody (src/lib/dm/zone-cast.ts).
-  const areaOnly = Boolean(args.spell && zoneRowFor(args.spell));
+  const areaOnly = Boolean(args.spell && zoneRowFor(engineSpell));
   if (!enemyTargets.length && !pcTargets.length && !areaOnly) {
     return {
       error:
@@ -214,7 +222,7 @@ export function handleAoeDamage(
     }
     plan = planned;
     // Prismatic Spray rolls a ray for each creature (prismatic.ts).
-    if (isPrismaticSpray(planned.spell)) {
+    if (isPrismaticSpray(planned.runsAs ?? planned.spell)) {
       const results = castPrismaticSpray({ campaign, turn, caster: planned.caster, dc: planned.dc, enemies: enemyTargets, characters: pcTargets.filter((sheet) => !planned.sculpted.includes(sheet.id)), sheets, sheetsById });
       return { ok: true, spell: planned.spell, caster: planned.caster.name, dc: planned.dc, saveAbility: "dex", results, ...(planned.corrections.length ? { corrected: planned.corrections } : {}), ...(skippedDead.length ? { skippedDead } : {}) };
     }
@@ -511,7 +519,7 @@ export function handleAoeDamage(
     (enemyUse && args.spell ? holdEnemyAreaConcentration(campaign, enemyUse.enemy.id, enemyUse.name) : null);
   // The spell's area on the board, where it was cast (src/lib/dm/zone-cast.ts).
   const areaCaster = plan ? { kind: "pc" as const, id: plan.caster.id, name: plan.caster.name } : enemyUse && args.spell ? { kind: "enemy" as const, id: enemyUse.enemy.id, name: enemyUse.enemy.displayName } : null;
-  const area = areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], ...zonePlacement(args) }) : null;
+  const area = areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", runsAs: plan?.runsAs, caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], ...zonePlacement(args) }) : null;
 
   return {
     ok: true,

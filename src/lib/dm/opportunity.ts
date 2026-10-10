@@ -343,7 +343,7 @@ function stokeRage(sheet: NonNullable<ReturnType<typeof getSheetById>>) {
 // Tongue is a longsword, src/lib/dm/gear-attack.ts).
 function meleeWeaponFor(sheet: NonNullable<ReturnType<typeof getSheetById>>) {
   const weaponFor = (item: (typeof sheet.equipment)[number]) =>
-    weaponOf(item) ?? magicWeaponOfRow(item).srd ?? matchWeapon(item.name);
+    magicWeaponOfRow(item).srd ?? weaponOf(item) ?? matchWeapon(item.name);
   const melee = sheet.equipment.filter((item) => {
     const weapon = weaponFor(item);
     return weapon !== null && weapon.kind === "melee";

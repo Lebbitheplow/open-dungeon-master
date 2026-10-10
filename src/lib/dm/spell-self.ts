@@ -22,21 +22,23 @@ import { rollCard } from "@/lib/dm/roll-card";
 export const INSANE = "insane (contact other plane)";
 
 // What the casting costs its caster, as lines for the result ({} for none).
-export function casterCost(campaign: Campaign, sheet: CharacterSheet, spell: string): { casterCost?: string } {
+// `spell` is the published spell it runs as; `named` the name it was cast
+// under, a workshop copy's own.
+export function casterCost(campaign: Campaign, sheet: CharacterSheet, spell: string, named: string = spell): { casterCost?: string } {
   if (spell.trim().toLowerCase() !== "contact other plane") {
     return {};
   }
   const turn = createDmTurn(campaign.id, [], "human_dm");
   try {
-    const save = rollCharacterSave(campaign, turn, sheet, "int", 15, "INT save against Contact Other Plane");
+    const save = rollCharacterSave(campaign, turn, sheet, "int", 15, `INT save against ${named}`);
     if (save.success) {
       return { casterCost: `${sheet.name}'s mind holds against the other plane (INT save ${save.total} against DC 15).` };
     }
-    const amount = rollCard(campaign, turn, sheet.id, "damage", "Contact Other Plane", "6d6", null).total;
-    applyPcDamage(campaign, turn.id, getSheetById(sheet.id) ?? sheet, { amount, type: "psychic", reason: "Contact Other Plane: the mind recoils" });
+    const amount = rollCard(campaign, turn, sheet.id, "damage", named, "6d6", null).total;
+    applyPcDamage(campaign, turn.id, getSheetById(sheet.id) ?? sheet, { amount, type: "psychic", reason: `${named}: the mind recoils` });
     const standing = getSheetById(sheet.id);
     if (standing && !standing.deathSaves?.dead) {
-      handleSetCondition(campaign, turn.id, standing, { condition: INSANE }, "Contact Other Plane", { spellEffect: { spell: "Contact Other Plane", source: sheet.id } });
+      handleSetCondition(campaign, turn.id, standing, { condition: INSANE }, named, { spellEffect: { spell: named, source: sheet.id } });
     }
     return { casterCost: `${sheet.name} fails the INT save (${save.total} against DC 15), takes ${amount} psychic damage and is insane until a long rest: no actions, no understanding, only gibberish.` };
   } finally {

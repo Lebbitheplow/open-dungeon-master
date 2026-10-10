@@ -16,7 +16,11 @@ export const KIND_GLYPHS: Record<EditorKind, string> = {
   background: "tab-journal",
   race: "tab-characters",
   archetype: "rest-level-up",
+  hazard: "cue-dread",
 };
+
+// A hazard by what it is.
+const HAZARD_GLYPHS: Record<string, string> = { trap: "cue-dungeon", poison: "cue-swamp", disease: "rest-exhaustion" };
 
 const ITEM_FAMILIES: Record<string, string> = {
   weapon: "item-weapon",
@@ -35,6 +39,9 @@ export function homebrewIcon(kind: string, name: string, data: Record<string, un
   }
   if (kind === "feat") {
     return { kind: "feat", key: name };
+  }
+  if (kind === "hazard" && HAZARD_GLYPHS[String(data.hazardKind)]) {
+    return { kind: "glyph", key: HAZARD_GLYPHS[String(data.hazardKind)] };
   }
   if (kind === "archetype" && data.classSlug) {
     return { kind: "family", key: `class-${String(data.classSlug)}` };

@@ -1402,6 +1402,62 @@ html[data-theme="light"] .kit-switch .kit-switch-knob { background: #a59877; }
   .motion-tab { animation: none; }
 }
 
+/* WorldForge (src/app/workshop/world). The web's entries pop in one after
+   another and glide when the web is recentred; known links draw themselves,
+   hidden truths and false beliefs run as dashes; timeline events and lists
+   rise in turn; atlas pins drop onto the map and regions fade up under them;
+   a secret the party learns turns over. --i staggers a list. */
+.wf-node { transition: transform var(--dur-beat) var(--ease-settle); }
+.wf-node-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop-in var(--dur-move) var(--ease-spring) both;
+  animation-delay: calc(min(var(--i, 0), 40) * 16ms);
+}
+.wf-node-body:hover .wf-node-ring,
+.wf-node-body:focus-visible .wf-node-ring { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(212, 171, 58, 0.45)); }
+.wf-node-ring { transition: r var(--dur-quick) var(--ease-spring), stroke-width var(--dur-quick) var(--ease-snap); }
+.wf-edge {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: wf-draw var(--dur-beat) var(--ease-settle) forwards;
+  animation-delay: calc(120ms + min(var(--i, 0), 60) * 8ms);
+}
+.wf-edge-dashed {
+  stroke-dasharray: 0.02 0.015;
+  animation: wf-fade var(--dur-beat) var(--ease-settle) both, wf-flow 1.6s linear infinite;
+}
+.wf-edge-label { animation: wf-fade var(--dur-beat) var(--ease-settle) both; animation-delay: 360ms; }
+.wf-rise {
+  animation: fade-up 260ms var(--ease-snap) both;
+  animation-delay: calc(min(var(--i, 0), 30) * 24ms);
+}
+.wf-pin {
+  transform: translate(-50%, -100%);
+  animation: wf-drop var(--dur-move) var(--ease-spring) both;
+  animation-delay: calc(min(var(--i, 0), 30) * 30ms);
+  transition: filter var(--dur-quick) var(--ease-snap);
+}
+.wf-pin:hover { filter: drop-shadow(0 0 6px rgba(244, 224, 166, 0.6)); }
+.wf-region {
+  animation: wf-fade var(--dur-beat) var(--ease-settle) both;
+  animation-delay: calc(min(var(--i, 0), 20) * 40ms);
+  transition: fill-opacity var(--dur-quick) var(--ease-snap), stroke-width var(--dur-quick) var(--ease-snap);
+}
+.wf-flip { transform-origin: top center; animation: wf-flip var(--dur-beat) var(--ease-spring) both; }
+@keyframes wf-draw { to { stroke-dashoffset: 0; } }
+@keyframes wf-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wf-flow { to { stroke-dashoffset: -0.07; } }
+@keyframes wf-drop {
+  from { opacity: 0; transform: translate(-50%, -160%); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+@keyframes wf-flip {
+  from { opacity: 0; transform: perspective(600px) rotateX(-70deg); }
+  to { opacity: 1; transform: perspective(600px) rotateX(0); }
+}
+[data-effects="low"] .wf-edge-dashed { animation: wf-fade var(--dur-beat) var(--ease-settle) both; }
+
 /* IconRail's travelling indicator: a gold bar that slides to the active cell. */
 .rail-mark {
   position: absolute;

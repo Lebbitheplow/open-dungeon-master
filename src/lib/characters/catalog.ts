@@ -21,6 +21,7 @@ import {
   type ContentRow,
 } from "@/lib/characters/options";
 import { openAbilityPool, openWealthRoll } from "@/lib/db/creation-rolls";
+import { tableAuthors } from "@/lib/db/homebrew";
 import { defaultRng } from "@/lib/dice";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
@@ -69,13 +70,19 @@ export function classGrantsFor(classId: string): ClassGrants | null {
 // against the one it fits. (A third-party race under a bundled slug, Tome
 // of Heroes' drow, carries its document in its id since issue #115 and
 // matches only its own row.)
-export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): RaceGrants[] {
+// `authors`: whose homebrew counts (src/lib/content/scope.ts): a table's
+// tableAuthors, or one person's own shelf outside a table. A forgotten entry
+// still answers for a character that already holds it.
+type Authors = string | string[] | undefined;
+const authorIds = (authors: Authors): string[] => (Array.isArray(authors) ? authors : authors ? [authors] : []);
+
+export function raceCandidatesFor(raceId: string, authors?: Authors): RaceGrants[] {
   const id = raceId.trim();
   if (!id) {
     return [];
   }
   const found: RaceGrants[] = [];
-  const rows = listRaces({ limit: 200, userId: homebrewOwnerId });
+  const rows = listRaces({ limit: 200, userIds: authorIds(authors), includeArchived: true });
   const packed = rows.length
     ? packRaceOptions(
         rows.map((row) => ({
@@ -99,19 +106,19 @@ export function raceCandidatesFor(raceId: string, homebrewOwnerId?: string): Rac
   return found;
 }
 
-export function raceGrantsFor(raceId: string, homebrewOwnerId?: string): RaceGrants | null {
-  return raceCandidatesFor(raceId, homebrewOwnerId)[0] ?? null;
+export function raceGrantsFor(raceId: string, authors?: Authors): RaceGrants | null {
+  return raceCandidatesFor(raceId, authors)[0] ?? null;
 }
 
 export function backgroundGrantsFor(
   backgroundId: string,
-  homebrewOwnerId?: string,
+  authors?: Authors,
 ): BackgroundGrants | null {
   const id = backgroundId.trim();
   if (!id) {
     return null;
   }
-  const rows = listBackgrounds({ limit: 200, userId: homebrewOwnerId }) as ContentRow[];
+  const rows = listBackgrounds({ limit: 200, userIds: authorIds(authors), includeArchived: true }) as ContentRow[];
   const options = mergedBackgroundOptions(rows);
   return (
     options.find((option) => option.id === id) ??
@@ -169,7 +176,7 @@ export const catalogPrices: PriceLookup = (name) => layeredPrice(name, packPrice
 
 // ---- spells, feats, subclasses ----
 
-export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFacts | null {
+export function spellFactsFor(name: string, authors?: Authors): SpellFacts | null {
   const wanted = name.trim();
   if (!wanted) {
     return null;
@@ -189,10 +196,10 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
       ...(published ? { ritual: published.ritual } : {}),
     };
   }
-  if (!homebrewOwnerId) {
+  if (!authorIds(authors).length) {
     return null;
   }
-  const brewed = searchSpells({ q: wanted, userId: homebrewOwnerId, limit: 20 }).find(
+  const brewed = searchSpells({ q: wanted, userIds: authorIds(authors), limit: 20, includeArchived: true }).find(
     (entry) => entry.source === "homebrew" && spellNameMatches(entry, wanted),
   );
   return brewed
@@ -200,7 +207,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
     : null;
 }
 
-export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts | null {
+export function featFactsFor(name: string, authors?: Authors): FeatFacts | null {
   const wanted = lower(name);
   if (!wanted) {
     return null;
@@ -209,14 +216,15 @@ export function featFactsFor(name: string, homebrewOwnerId?: string): FeatFacts 
   if (authored) {
     return { name: authored.name, prerequisite: authored.prerequisite ?? "", desc: authored.desc ?? "" };
   }
-  const found = searchFeats({ q: name.trim(), limit: 50, userId: homebrewOwnerId }).find(
+  const found = searchFeats({ q: name.trim(), limit: 50, userIds: authorIds(authors), includeArchived: true }).find(
     (entry) => lower(entry.name) === wanted,
   );
   if (!found) {
     return null;
   }
   const text = packFeatText(found.data);
-  return { name: found.name, prerequisite: text.prerequisite, desc: text.desc };
+  const runsAs = found.source === "homebrew" && typeof found.data.runsAs === "string" ? found.data.runsAs : "";
+  return { name: found.name, prerequisite: text.prerequisite, desc: text.desc, ...(runsAs ? { runsAs } : {}) };
 }
 
 // A feat's text as one string, wherever the pack keeps it (src/lib/srd/
@@ -229,13 +237,13 @@ export function packFeatDesc(data: Record<string, unknown>): string {
 export function subclassIsOffered(
   classId: string,
   name: string,
-  homebrewOwnerId?: string,
+  authors?: Authors,
 ): boolean {
   if (bundledSubclassName(classId, name)) {
     return true;
   }
   const wanted = lower(name);
-  return listArchetypes(classId, { limit: 200, userId: homebrewOwnerId }).some(
+  return listArchetypes(classId, { limit: 200, userIds: authorIds(authors), includeArchived: true }).some(
     (entry) => lower(entry.name) === wanted || lower(entry.slug) === wanted,
   );
 }
@@ -248,19 +256,28 @@ export type ContextInput = {
   sheet: Pick<CreateSheetInput, "class" | "race" | "background">;
   // Whoever is making the character: their open rolls are read.
   userId: string;
-  // The table, when there is one: its settings and its owner's homebrew.
+  // The table, when there is one: its settings, and the homebrew of whoever
+  // runs it (src/lib/db/homebrew.ts tableAuthors). Without one, the maker's
+  // own shelf.
   campaign?: { id: string; ownerUserId: string; gameSettings: GameSettings } | null;
   baseline?: { sheet: CreateSheetInput; level: number } | null;
 };
 
+// Whose homebrew a character is judged against: the same scope the pickers
+// searched (src/lib/content/scope.ts), so what the builder offered is what
+// the server admits.
+export function legalityAuthors(input: Pick<ContextInput, "userId" | "campaign">): string[] {
+  return input.campaign ? tableAuthors(input.campaign.id) : [input.userId];
+}
+
 export function legalityContextsFor(input: ContextInput): LegalityContext[] {
   const base = legalityContextFor(input);
-  const races = raceCandidatesFor(input.sheet.race, input.campaign?.ownerUserId);
+  const races = raceCandidatesFor(input.sheet.race, legalityAuthors(input));
   return races.length ? races.map((race) => ({ ...base, race })) : [base];
 }
 
 export function legalityContextFor(input: ContextInput): LegalityContext {
-  const owner = input.campaign?.ownerUserId;
+  const owner = legalityAuthors(input);
   const settings = input.campaign?.gameSettings;
   const made = input.door === "table" || (input.door === "library" && !input.baseline);
   return {

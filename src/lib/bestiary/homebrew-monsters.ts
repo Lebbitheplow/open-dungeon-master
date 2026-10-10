@@ -1,11 +1,4 @@
-import {
-  createHomebrew,
-  deleteHomebrew,
-  getHomebrew,
-  listHomebrew,
-  updateHomebrew,
-  type HomebrewEntry,
-} from "@/lib/db/homebrew";
+import { createHomebrew, deleteHomebrew, getHomebrew, listHomebrew, updateHomebrew, type HomebrewEntry, archiveHomebrew } from "@/lib/db/homebrew";
 import {
   draftFromData,
   draftToData,
@@ -49,8 +42,10 @@ function hydrate(entry: HomebrewEntry): HomebrewMonster {
   };
 }
 
-export function listHomebrewMonsters(userId: string): HomebrewMonster[] {
-  return listHomebrew(userId, "monster").map(hydrate);
+// `archived`: forgotten monsters too, for play (an NPC's stat block or a
+// prepared encounter that names one still fights with it).
+export function listHomebrewMonsters(userId: string, options: { archived?: boolean } = {}): HomebrewMonster[] {
+  return listHomebrew(userId, "monster", { archived: options.archived ?? false }).map(hydrate);
 }
 
 export function getHomebrewMonster(userId: string, id: string): HomebrewMonster | null {
@@ -89,12 +84,15 @@ export function updateHomebrewMonster(
   return updated ? hydrate(updated) : null;
 }
 
-export function deleteHomebrewMonster(userId: string, id: string): boolean {
+// Forgetting a monster archives it (src/lib/db/homebrew.ts archiveHomebrew):
+// it leaves the bestiary and its pickers, and an NPC or an encounter that
+// already names it still fights with its block.
+export function deleteHomebrewMonster(userId: string, id: string, options: { purge?: boolean } = {}): boolean {
   const existing = getHomebrew(userId, id);
   if (!existing || existing.kind !== "monster") {
     return false;
   }
-  return deleteHomebrew(userId, id);
+  return options.purge ? deleteHomebrew(userId, id) : archiveHomebrew(userId, id);
 }
 
 // The lookup resolveMonster needs: a reference a DM typed, against the
@@ -111,8 +109,21 @@ export function findHomebrewMonster(userId: string, ref: string): HomebrewMonste
   }
   const lowered = trimmed.toLowerCase();
   return (
-    listHomebrewMonsters(userId).find(
+    listHomebrewMonsters(userId, { archived: true }).find(
       (monster) => monster.draft.name.toLowerCase() === lowered,
     ) ?? null
   );
+}
+
+// The same lookup across whoever runs a table (src/lib/db/homebrew.ts
+// tableAuthors), the first author's monster first: what a fight at that
+// table resolves, whichever of its DMs prepared the monster.
+export function findTableMonster(userIds: string[], ref: string): HomebrewMonster | null {
+  for (const userId of [...new Set(userIds.filter(Boolean))]) {
+    const found = findHomebrewMonster(userId, ref);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }

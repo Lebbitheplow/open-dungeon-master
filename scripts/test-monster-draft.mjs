@@ -10,6 +10,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const {
   MAX_ATTACKS,
+  MAX_SWINGS,
   MAX_TRAITS,
   SAVE_ABILITIES,
   SIZES,
@@ -89,9 +90,10 @@ test("numbers are clamped rather than refused", () => {
   // A DM who types 5000 hit points meant a tough monster and should get one.
   const { draft } = checkMonsterDraft({ ...goblin, ac: 99, maxHp: 99999, attacksPerTurn: 40 });
   assert.equal(draft.stats.ac, 30);
-  assert.equal(draft.stats.maxHp, 1000);
-  // Clipped to what the engine will actually swing.
-  assert.equal(draft.stats.attacksPerTurn, 3);
+  assert.equal(draft.stats.maxHp, 2000);
+  // Clipped to what the engine will actually swing (enemy-profile.ts: ten).
+  assert.equal(draft.stats.attacksPerTurn, MAX_SWINGS);
+  assert.equal(MAX_SWINGS, 10);
 });
 
 test("garbage in a number field falls back rather than becoming NaN", () => {

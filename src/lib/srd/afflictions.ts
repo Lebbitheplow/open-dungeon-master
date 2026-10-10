@@ -53,6 +53,25 @@ export const DISEASES: Record<DiseaseId, Disease> = {
   },
 };
 
+// A disease of the DM's own, as the engine runs it (src/lib/dm/
+// afflictions.ts): the save against catching it, how long before symptoms
+// show, what they are (a condition, levels of exhaustion, standard
+// conditions), and the save after each long rest that moves it, the
+// SRD's own pattern (Sewer Plague: a success sheds a level of exhaustion and
+// cures it below one, a failure adds one). A copy of one of the SRD's three
+// keeps that disease's own rules instead (`runsAs`), since cackle fever's
+// falling DC and sight rot's penalty are not this pattern.
+export type DiseaseSpec = {
+  condition: string;
+  infect: { ability: AbilityId; dc: number };
+  onset: { dice: string; unit: "hours" | "days" };
+  exhaustion: number;
+  conditions?: string[];
+  rest?: { ability: AbilityId; dc: number; onSuccess: "improve" | "recover"; onFail: "worsen" | "nothing"; successes: number };
+  runsAs?: DiseaseId;
+  summary: string;
+};
+
 export function findDisease(text: string): Disease | null {
   const key = text.trim().toLowerCase().replace(/[^a-z]+/g, "_").replace(/^_|_$/g, "");
   return (Object.values(DISEASES).find((disease) => disease.id === key || disease.condition.replace(/ /g, "_") === key) ?? null);
@@ -182,14 +201,21 @@ export const POISONS: Poison[] = [
   { id: "wyvern_poison", name: "Wyvern Poison", type: "injury", priceGp: 1200, dc: 15, damage: "7d6", halfOnSave: true, summary: "DC 15 CON: 7d6 poison, half on a success." },
 ];
 
+// A name as a vial's label might say it ("Vial of Serpent Venom", "dose of
+// Malice"), and the book's names read the same way: "Essence of Ether" and
+// "Oil of Taggit" were never found by their own names, because the asked
+// name lost its "of" and the book's kept it.
+const poisonKey = (text: string) =>
+  text.trim().toLowerCase().replace(/\(.*\)/g, "").replace(/[^a-z]+/g, " ").replace(/\b(vial|dose|of)\b/g, " ").replace(/\s+/g, " ").trim();
+
 export function findPoison(text: string): Poison | null {
-  const key = text.trim().toLowerCase().replace(/\(.*\)/g, "").replace(/[^a-z]+/g, " ").replace(/\b(vial|dose|of)\b/g, " ").replace(/\s+/g, " ").trim();
+  const key = poisonKey(text);
   if (!key) {
     return null;
   }
   return (
-    POISONS.find((poison) => poison.name.toLowerCase().replace(/[^a-z]+/g, " ").trim() === key) ??
-    POISONS.find((poison) => key.includes(poison.name.toLowerCase().replace(/[^a-z]+/g, " ").trim())) ??
+    POISONS.find((poison) => poisonKey(poison.name) === key) ??
+    POISONS.find((poison) => key.includes(poisonKey(poison.name))) ??
     null
   );
 }

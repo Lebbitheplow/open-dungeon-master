@@ -176,6 +176,7 @@ const GLYPHS = {
     ["factions", "Factions", "a heraldic flag"], ["bestiary", "Bestiary", "a horned skull over a book"], ["homebrew", "Homebrew", "a bubbling alchemist's flask"],
     ["lore", "Lore", "an open tome with a glowing page"], ["tables", "Tables", "a die over a scroll"], ["rules", "Rules", "balanced scales on a book"],
     ["plugin", "Plugin", "a puzzle piece with a glow"], ["share", "Share", "a sealed bundle with a ribbon"], ["rulesets", "Rulesets", "a stack of rule books"],
+    ["world", "WorldForge", "a small glowing world sphere resting on a blacksmith's anvil, sparks rising from it"],
   ],
 };
 

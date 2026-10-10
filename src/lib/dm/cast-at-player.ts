@@ -9,6 +9,7 @@ import { getSheetById } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { isValidExpression } from "@/lib/dice";
 import { spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
@@ -77,7 +78,7 @@ export function trackEnemyConcentration(
   if (!enemy || enemy.status !== "alive") {
     return null;
   }
-  const resolved = spellMechanicsFor({ spell });
+  const resolved = spellMechanicsFor({ spell, userIds: spellAuthorsFor(campaign) });
   if (!resolved?.concentration) {
     return null;
   }
@@ -309,7 +310,7 @@ export function handleCastAtPlayer(
       base.evasion = taken.evasion;
     }
     // Disintegrate: a character it drops to 0 is dust, not dying.
-    const disintegrates = Boolean((use?.spell ?? args.spell) && spellMechanicsFor({ spell: use?.spell ?? args.spell ?? "" })?.mech.riders?.disintegrates);
+    const disintegrates = Boolean((use?.spell ?? args.spell) && spellMechanicsFor({ spell: use?.spell ?? args.spell ?? "", userIds: spellAuthorsFor(campaign) })?.mech.riders?.disintegrates);
     if (dealt > 0) {
       const reason = `${source} (${ability.toUpperCase()} save ${saved ? "succeeded" : "failed"})`;
       const applied = disintegrates

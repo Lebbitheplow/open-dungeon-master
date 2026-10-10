@@ -2,7 +2,7 @@ import type { HomebrewKind } from "@/lib/schemas/homebrew";
 
 // What the homebrew panel shows of an entry, and the words it uses for the
 // kinds. Monsters are a kind too, but they have the bestiary; this system
-// is the other six.
+// is the other seven.
 
 export type HomebrewEntryView = {
   id: string;
@@ -19,6 +19,7 @@ export const HOMEBREW_EDITOR_KINDS = [
   "background",
   "race",
   "archetype",
+  "hazard",
 ] as const satisfies ReadonlyArray<HomebrewKind>;
 
 export type EditorKind = (typeof HOMEBREW_EDITOR_KINDS)[number];
@@ -30,6 +31,7 @@ export const KIND_LABELS: Record<EditorKind, string> = {
   background: "Backgrounds",
   race: "Species",
   archetype: "Subclasses",
+  hazard: "Hazards",
 };
 
 export const KIND_SINGULAR: Record<EditorKind, string> = {
@@ -39,6 +41,7 @@ export const KIND_SINGULAR: Record<EditorKind, string> = {
   background: "background",
   race: "species",
   archetype: "subclass",
+  hazard: "hazard",
 };
 
 // One sentence per kind for the empty state, saying what the engine does
@@ -50,6 +53,7 @@ export const KIND_BLURB: Record<EditorKind, string> = {
   background: "Backgrounds the builder offers, with the skills it grants.",
   race: "Species the builder offers, with their speed and ability bonuses.",
   archetype: "Subclasses the builder offers under a class, with their features by level.",
+  hazard: "Traps, poisons and diseases the hazard and afflict tools run by name: the save, the damage and what lingers come from the block.",
 };
 
 // The SRD class ids a subclass can sit under, so the picker is a list rather

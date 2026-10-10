@@ -26,7 +26,7 @@ import {
   writeCharges,
 } from "@/lib/dm/item-charges";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
-import { gearDefFor } from "@/lib/srd/magic-gear";
+import { gearDefOfRow } from "@/lib/srd/magic-gear";
 import { conditionExtraActions } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { RollResult } from "@/lib/dice";
@@ -71,7 +71,7 @@ export function chargedItemUse(
   if (!carried || !rule) {
     return null;
   }
-  const cast = spell?.trim() ? itemSpellCast(carried.name, spell, charges) : null;
+  const cast = spell?.trim() ? itemSpellCast(carried, spell, charges) : null;
   if (cast && "error" in cast) {
     return { error: `${cast.error} Nothing was spent.` };
   }
@@ -81,7 +81,7 @@ export function chargedItemUse(
       error: `${sheet.name} is ${sheet.deathSaves?.dead ? "dead" : "unconscious at 0 hit points"} and cannot use ${carried.name}.`,
     };
   }
-  const def = gearDefFor(carried.name, carried.slug);
+  const def = gearDefOfRow(carried);
   if (def?.requiresAttunement && !carried.attuned) {
     return {
       error: `${carried.name} works only for someone attuned to it, and ${sheet.name} is not; attuning takes a short rest with the item. Nothing was spent.`,

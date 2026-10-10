@@ -103,6 +103,46 @@ test("an item entry normalizes by kind and the snapshot only exists when it mean
   assert.ok("error" in refused);
 });
 
+test("a magic weapon's riders, spells, checks and curse ride on the snapshot in the engine's words", () => {
+  const blade = normalizeHomebrewData(
+    "item",
+    {
+      itemKind: "magic_item",
+      requiresAttunement: true,
+      weapon: { category: "martial", kind: "melee", damage: "1d8 slashing", properties: ["versatile"] },
+      weaponRiders: { bonus: 2, extra: [{ dice: "2d6", type: "fire" }] },
+      charges: { max: 7, regain: "1d6+1", lastChargeD20: true },
+      spells: [{ spell: "Fireball", charges: 3, level: 3, dc: 15 }],
+      checks: { skillBonus: { intimidation: 2 } },
+      attunedBy: { text: "a paladin", classes: ["paladin"] },
+      cursed: true,
+    },
+    "Cinderbrand",
+  );
+  assert.ok("data" in blade, JSON.stringify(blade));
+  const gear = gearFromHomebrewData("Cinderbrand", blade.data);
+  assert.deepEqual(gear.def.base, { kind: "weapon", name: "Cinderbrand" });
+  assert.equal(gear.def.weapon.bonus, 2);
+  assert.deepEqual(gear.def.weapon.extra, [{ dice: "2d6", type: "fire" }]);
+  assert.equal(gear.def.charges.regain, "1d6+1");
+  assert.equal(gear.def.cursed, true);
+  assert.equal(gear.spells[0].spell, "Fireball");
+  assert.equal(gear.checks.skillBonus.intimidation, 2);
+  assert.deepEqual(gear.magic.attunedBy.classes, ["paladin"]);
+
+  for (const bad of [
+    { weaponRiders: { extra: [{ dice: "2d6x", type: "fire" }] } },
+    { spells: [{ spell: "", charges: 1, level: 1 }] },
+    { checks: { skillBonus: { juggling: 2 } } },
+    { attunedBy: { text: "a pirate", classes: ["pirate"] } },
+  ]) {
+    assert.ok("error" in normalizeHomebrewData("item", { itemKind: "magic_item", ...bad }, "Bad"), JSON.stringify(bad));
+  }
+  // A bonus past the SRD's +3 is pulled to +3, not refused.
+  const loud = normalizeHomebrewData("item", { itemKind: "magic_item", weaponRiders: { bonus: 9 } }, "Loud");
+  assert.equal(loud.data.weaponRiders.bonus, 3);
+});
+
 test("a magic item carries its effects and attunement into the snapshot", () => {
   const ring = normalizeHomebrewData(
     "item",
@@ -116,10 +156,15 @@ test("a magic item carries its effects and attunement into the snapshot", () => 
     "Ring of the Marsh",
   );
   assert.ok("data" in ring);
-  assert.deepEqual(ring.data.charges, { max: 3, recharge: "dawn" });
+  // The old form's "recharge: dawn" is stored as the engine's own rule: every
+  // charge back at dawn (src/lib/srd/magic-gear.ts ChargeRule).
+  assert.deepEqual(ring.data.charges, { max: 3, regain: "all" });
   const gear = gearFromHomebrewData("Ring of the Marsh", ring.data);
   assert.equal(gear.magic.requiresAttunement, true);
   assert.equal(gear.magic.effects.length, 2);
+  // The charges ride on the sheet's line, where use_item counts them; they
+  // used to be dropped from the snapshot.
+  assert.deepEqual(gear.def.charges, { max: 3, regain: "all" });
   assert.ok(describeHomebrew("item", ring.data).includes("AC +1"));
   assert.ok(describeHomebrew("item", ring.data).includes("attunement"));
 });

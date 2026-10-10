@@ -337,8 +337,8 @@ export function buildLevelUp(
     level: entry.level,
   }));
   const dwarf = hpBonusPerLevel(sheet.race) > 0;
-  const bonusBefore = hpBonusPerLevelFor(dwarf, sheet.feats);
-  const bonusAfter = hpBonusPerLevelFor(dwarf, feats);
+  const bonusBefore = hpBonusPerLevelFor(dwarf, sheet.feats, sheet.campaignId);
+  const bonusAfter = hpBonusPerLevelFor(dwarf, feats, sheet.campaignId);
   const rolls = context.hpMethod === "rolled" && request.hpChoice !== "average";
   const face = rolls
     ? Math.max(1, Math.min(klass.hitDie, context.rollDie(klass.hitDie)))

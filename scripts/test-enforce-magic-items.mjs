@@ -260,7 +260,7 @@ await test("the engines read homebrew armour, weapons and magic as they read SRD
   kit.stand(hero.id, 1);
 });
 
-await test("an entry edited in the workshop reaches the sheet that carries it, and a deleted one takes its mechanics with it", async () => {
+await test("an entry edited in the workshop reaches the sheet that carries it; a forgotten one keeps working there, and one deleted for good takes its mechanics with it", async () => {
   const made = await brew(world.owner, "Glass Buckler", { itemKind: "armor", armor: { category: "shield", baseAc: 1 } });
   keep([{ name: "Glass Buckler", qty: 1 }], { dex: 10 });
   world.patch(keeper.id, {});
@@ -274,7 +274,13 @@ await test("an entry edited in the workshop reaches the sheet that carries it, a
   assert.equal(edited.status, 200);
   world.patch(keeper.id, {});
   assert.equal(world.sheet(keeper.id).ac, 13);
+  // Forgetting archives it (docs/workshop-rulebook-audit-pr169.md F06): the
+  // sheet keeps the buckler as it was, through a reload and a later write.
   await entry.DELETE(new Request("http://test/", { method: "DELETE" }), { params: Promise.resolve({ id: made.body.entry.id }) });
+  world.patch(keeper.id, {});
+  assert.equal(world.sheet(keeper.id).equipment[0].gear?.armor?.baseAc, 3);
+  assert.equal(world.sheet(keeper.id).ac, 13);
+  await entry.DELETE(new Request("http://test/?purge=1", { method: "DELETE" }), { params: Promise.resolve({ id: made.body.entry.id }) });
   world.patch(keeper.id, {});
   assert.equal(world.sheet(keeper.id).equipment[0].gear, undefined);
   assert.equal(world.sheet(keeper.id).ac, 10);
@@ -288,14 +294,17 @@ await test("a magic bonus is read from +1 to +3: a '+20' in a name adds nothing"
   assert.equal(swing.result.damage, 5 + 3);
 });
 
-await test("a dagger is 1d4 piercing at every table: a homebrew entry named after published gear changes nothing on a sheet", async () => {
-  // Within the bounds, so the entry is stored; it is the name that gives it
-  // no hold on a sheet's Dagger. Written by the player and by the owner.
+await test("a dagger is 1d4 piercing at every table: a homebrew entry named after published gear is refused, and one kept from before changes nothing on a sheet", async () => {
+  // The workshop refuses the published name now (F12); an entry saved under
+  // one before that is still in the shelf, and the name gives it no hold on
+  // a sheet's Dagger. Written by the player and by the owner.
+  const { createHomebrew } = await import("../src/lib/db/homebrew.ts");
   for (const author of [player, world.owner]) {
     const made = await brew(author, "Dagger", { itemKind: "weapon", weapon: { category: "simple", kind: "melee", damage: "2d12 piercing", properties: ["finesse", "light", "thrown"], rangeFt: 20 } });
-    assert.equal(made.status, 201, made.body.error);
-    await brew(author, "Plate", { itemKind: "armor", armor: { category: "light", baseAc: 21 } });
-    await brew(author, "Ring of Protection", { itemKind: "magic_item", requiresAttunement: false, effects: [{ kind: "ac_bonus", amount: 3 }] });
+    assert.equal(made.status, 400, "a homebrew Dagger was kept under the published name");
+    createHomebrew(author.id, { kind: "item", name: "Dagger", data: { itemKind: "weapon", weapon: { name: "Dagger", category: "simple", kind: "melee", damage: "2d12 piercing", properties: ["finesse", "light", "thrown"], rangeFt: 20 } } });
+    createHomebrew(author.id, { kind: "item", name: "Plate", data: { itemKind: "armor", armor: { name: "Plate", category: "light", baseAc: 21 } } });
+    createHomebrew(author.id, { kind: "item", name: "Ring of Protection", data: { itemKind: "magic_item", requiresAttunement: false, effects: [{ kind: "ac_bonus", amount: 3 }] } });
   }
   for (const id of [hero.id, keeper.id]) {
     world.patch(id, { equipment: [{ name: "Dagger", qty: 1 }, { name: "Plate", qty: 1 }, { name: "Ring of Protection", qty: 1 }], abilities: scores({ str: 16 }) });

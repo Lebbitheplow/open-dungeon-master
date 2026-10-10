@@ -40,6 +40,9 @@ export type EnemyShapeCast = {
   caster: CharacterSheet;
   enemy: EncounterEnemy;
   spell: string;
+  // The published spell a table's workshop copy runs as (its rule); the
+  // copy is cast, saved against and held under `spell`.
+  runsAs?: string;
   // The beast, by name ("brown bear").
   variant?: string;
   level?: number;
@@ -55,10 +58,12 @@ export function castShapeAtEnemy(
   input: EnemyShapeCast,
   spend: (cast: Record<string, unknown>) => Record<string, unknown>,
 ): Record<string, unknown> {
-  const rule = enemyShapeSpellFor(input.spell);
+  const rule = enemyShapeSpellFor(input.runsAs ?? input.spell);
   if (!rule) {
     return { error: `${input.spell} cannot turn a creature into a beast; only Polymorph and True Polymorph do.` };
   }
+  // The name the casting goes by: a workshop copy's own, the rule's otherwise.
+  const named = input.runsAs && input.runsAs.trim().toLowerCase() !== input.spell.trim().toLowerCase() ? input.spell : rule.spell;
   const { caster } = input;
   const enemy = getEnemy(input.enemy.id) ?? input.enemy;
   const encounter = getActiveEncounter(campaign.id);
@@ -97,12 +102,12 @@ export function castShapeAtEnemy(
     casterName: caster.name,
     targetId: enemy.id,
     targetName: enemy.displayName,
-    facts: spellFactsFor(rule.spell, input.authors),
+    facts: spellFactsFor(named, input.authors),
   });
   if (reach) {
     return { error: reach };
   }
-  const dc = spellSaveDcFor(caster, rule.spell);
+  const dc = spellSaveDcFor(caster, named);
   if (dc === null) {
     return { error: `${caster.name} has no spell save DC. Nothing was spent.` };
   }
@@ -110,7 +115,7 @@ export function castShapeAtEnemy(
   // The cast, through the one guard: slot, turn, components, concentration.
   const cast = spend({
     characterId: caster.id,
-    spell: rule.spell,
+    spell: named,
     ...(input.level ? { level: input.level } : {}),
     via: "enemy",
     reason: (input.reason ?? "").slice(0, 200),
@@ -120,7 +125,8 @@ export function castShapeAtEnemy(
   }
   const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : null;
   const base: Record<string, unknown> = {
-    spell: rule.spell,
+    spell: named,
+    ...(named !== rule.spell ? { runsAs: rule.spell } : {}),
     caster: caster.name,
     target: enemy.displayName,
     ...(cast.cost ? { cost: cast.cost } : {}),
@@ -132,7 +138,7 @@ export function castShapeAtEnemy(
   const live = getEnemy(enemy.id) ?? enemy;
   const save = rollEnemySave(campaign.id, live, "wis", dc, {
     magical: true,
-    record: { turn, detail: `${live.displayName}: WIS save against ${rule.spell}` },
+    record: { turn, detail: `${live.displayName}: WIS save against ${named}` },
   });
   let saved = save.success;
   Object.assign(base, {
@@ -154,10 +160,10 @@ export function castShapeAtEnemy(
   }
 
   // The swap, then the condition that carries the spell and its caster.
-  writeEnemyForm(live.id, beastEnemyStats(form, live.stats, rule.spell, { ac: live.ac, maxHp: live.maxHp, currentHp: live.currentHp }));
+  writeEnemyForm(live.id, beastEnemyStats(form, live.stats, named, { ac: live.ac, maxHp: live.maxHp, currentHp: live.currentHp }));
   const meta = spellConditionMeta(
     { rounds: rule.rounds ?? undefined },
-    { spell: rule.spell, casterId: caster.id, slotLevel },
+    { spell: named, casterId: caster.id, slotLevel },
     null,
   );
   const landed = layOnEnemy(live.id, [[POLYMORPHED, meta]]);

@@ -103,6 +103,29 @@ still find it. Spell aliases live in `src/lib/srd/manifest/spells.json` as
 `{ n: "<canonical>", a: ["<printed name>"] }` and are applied to the pack by
 `scripts/import-open5e.mjs`; `searchSpells` matches on them.
 
+## WorldForge (code used with permission)
+
+The workshop's WorldForge tool is ported from WorldForge, Smoebo's
+world-building app. Its code is here with Smoebo's permission, given to this
+project's maintainer on 2026-10-08, and WorldForge now continues inside Open
+Dungeon Master. Smoebo is credited as a co-author of the commits that brought
+it in.
+
+- `src/lib/worldforge/model.ts`: the world document (types and fields,
+  entries, links, folders, calendars, events, secrets, stubs, maps, pins and
+  regions).
+- `src/lib/worldforge/time.ts`: WorldForge's years and fields modules.
+- `src/lib/worldforge/tree.ts`: its categories and maps modules.
+- `src/lib/worldforge/text.ts`: its mentions and stubs modules.
+- `src/lib/worldforge/web.ts`: its veracity, kinship and hierarchy modules.
+- `src/lib/worldforge/format.ts`: its v4 export format, read and written.
+- `src/lib/worldforge/forge.ts`: its forge, ask and draft prompts.
+- `src/app/workshop/world/`: the wiki, web, timeline, atlas, secrets, stubs,
+  types, forge and ask views follow WorldForge's own.
+
+An export's `settings` (where WorldForge keeps API keys) is never read or
+stored.
+
 ## Ideas borrowed from other MIT projects
 
 No code from these is in this repository. Each is named because its SHAPE

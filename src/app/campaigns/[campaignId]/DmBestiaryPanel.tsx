@@ -3,6 +3,7 @@
 import { EmptyState } from "@/components/EmptyState";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
@@ -84,6 +85,48 @@ export function DmBestiaryPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // "Start a workshop copy of this" from the rulebook (src/components/
+  // rulebook/PagePrep.tsx): ?start=monster:<book page>. The book's monster
+  // is copied from the catalog into the bestiary under a name of its own,
+  // and opens; the parameter is then dropped.
+  const start = useSearchParams().get("start");
+  useEffect(() => {
+    if (!start?.startsWith("monster:")) return;
+    const pageId = start.slice("monster:".length);
+    let live = true;
+    void (async () => {
+      const page = (await fetch(`/api/rulebook/pages/${encodeURIComponent(pageId)}`).then((response) => (response.ok ? response.json() : null))) as
+        | { page?: { title: string }; crosswalk?: { catalogName?: string } }
+        | null;
+      if (!live || !page?.page) return;
+      // The parameter goes once the copy is made: dropping it re-renders
+      // this panel without it, which ends this effect.
+      const done = () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("start");
+        window.history.replaceState(null, "", url.toString());
+      };
+      const wanted = page.crosswalk?.catalogName ?? page.page.title;
+      const body = (await fetch(`/api/content/monsters?${new URLSearchParams({ q: wanted, limit: "20" })}`).then((response) => (response.ok ? response.json() : null))) as
+        | { results?: Array<{ slug: string; name: string; documentSlug?: string; source?: string }> }
+        | null;
+      const rows = (body?.results ?? []).filter((entry) => entry.source !== "homebrew" && entry.name.toLowerCase() === wanted.toLowerCase());
+      const row = rows.find((entry) => entry.documentSlug === "wotc-srd") ?? rows[0];
+      if (!live) return;
+      if (row) {
+        await create({ from: "monster", slug: row.slug, name: `${row.name} Variant`.slice(0, MONSTER_NAME_MAX) });
+      } else {
+        setError(`${page.page.title} is not in the content pack on this server, so there is no block to copy.`);
+      }
+      done();
+    })();
+    return () => {
+      live = false;
+    };
+    // The start parameter is read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start]);
 
   function open(monster: Monster) {
     setOpenId(monster.id);
@@ -175,7 +218,12 @@ export function DmBestiaryPanel({
   // it asks first, and a refusal says why instead of quietly doing nothing.
   async function remove(monster: Monster) {
     const id = monster.id;
-    if (!(await appConfirm(`Delete ${monster.draft.name}? A prepared fight that names it will no longer find it.`, { actionLabel: "Delete" }))) {
+    if (
+      !(await appConfirm(
+        `Forget ${monster.draft.name}? It leaves the bestiary and its pickers. An NPC, a prepared fight or a template that already names it still fights with its stat block as it is now.`,
+        { title: "Forget this monster?", actionLabel: "Forget it" },
+      ))
+    ) {
       return;
     }
     setError("");

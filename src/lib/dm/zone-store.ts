@@ -29,8 +29,9 @@ export function publishZones(campaignId: string) {
 // Whether the caster still holds this area up: concentrating on the spell
 // (a character's sheet, an enemy's row), and standing.
 export function casterHolds(zone: SpellZone): boolean {
-  // A Wall of Ice's frigid air holds while its caster holds the wall.
-  const wanted = zoneKey(zoneRowFor(zone.spell)?.heldBy ?? zone.spell);
+  // A Wall of Ice's frigid air holds while its caster holds the wall (by
+  // the wall's own name, a renamed workshop copy's too).
+  const wanted = zoneKey(zone.heldBy ?? zoneRowFor(zone)?.heldBy ?? zone.spell);
   if (zone.casterKind === "enemy") {
     const enemy = getEnemy(zone.casterId);
     return Boolean(enemy && enemy.status === "alive" && enemy.concentration && zoneKey(enemy.concentration) === wanted);
@@ -41,7 +42,7 @@ export function casterHolds(zone: SpellZone): boolean {
 
 // Whether an area still holds in this round.
 export function zoneHolds(zone: SpellZone, round: number): boolean {
-  const row = zoneRowFor(zone.spell);
+  const row = zoneRowFor(zone);
   if (!row) {
     return false;
   }
@@ -84,7 +85,7 @@ export function endZones(encounterId: string, spell: string, casterId?: string):
   const wanted = zoneKey(spell);
   const ending = map.spellZones.filter(
     (zone) =>
-      (zoneKey(zone.spell) === wanted || zoneKey(zoneRowFor(zone.spell)?.heldBy ?? "") === wanted) &&
+      (zoneKey(zone.spell) === wanted || zoneKey(zone.heldBy ?? zoneRowFor(zone)?.heldBy ?? "") === wanted) &&
       (!casterId || zone.casterId === casterId),
   );
   if (!ending.length) {

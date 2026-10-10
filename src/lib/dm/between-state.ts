@@ -1,3 +1,5 @@
+import type { DiseaseSpec, Poison } from "@/lib/srd/afflictions";
+import { diseaseSpecSchema, poisonSpecSchema } from "@/lib/homebrew/hazard-data";
 // What the campaign clock keeps for life between adventures and for the
 // afflictions that run on it: each character's lifestyle, their downtime
 // progress, and their diseases, madness and lingering poisons. All three
@@ -41,6 +43,10 @@ export type Affliction = {
   doses?: number;
   // An indefinite madness's flaw, for the narrator.
   flaw?: string;
+  // A workshop poison or disease, as it stood when it took hold, so an edit
+  // in the workshop never changes one already running.
+  poison?: Poison;
+  disease?: { name: string; spec: DiseaseSpec };
 };
 
 export type BetweenState = {
@@ -68,10 +74,24 @@ function normalizeAffliction(raw: unknown): Affliction | null {
     : [];
   const optional = (key: keyof Affliction, max: number) =>
     entry[key] === undefined || entry[key] === null ? {} : { [key]: num(entry[key], max) };
+  // A workshop poison or disease rides as it stood (src/lib/srd/
+  // table-hazards.ts), checked by the workshop's own schemas.
+  const poisonSnap = entry.poison && typeof entry.poison === "object" ? poisonSpecSchema.safeParse(entry.poison) : null;
+  const poisonHeld = poisonSnap?.success && typeof (entry.poison as Record<string, unknown>).name === "string"
+    ? { poison: { ...poisonSnap.data, id: text((entry.poison as Record<string, unknown>).id ?? entry.id, 60), name: text((entry.poison as Record<string, unknown>).name, 80) } as Poison }
+    : {};
+  const diseaseRaw = entry.disease as { name?: unknown; spec?: unknown } | undefined;
+  const diseaseSnap = diseaseRaw && typeof diseaseRaw === "object" ? diseaseSpecSchema.safeParse(diseaseRaw.spec) : null;
+  const diseaseHeld = diseaseSnap?.success && typeof diseaseRaw?.name === "string"
+    ? { disease: { name: text(diseaseRaw.name, 80), spec: diseaseSnap.data as DiseaseSpec } }
+    : {};
   return {
     kind,
-    id: text(entry.id, 40),
+    // A workshop hazard's id is "homebrew:" and a uuid.
+    id: text(entry.id, 60),
     conditions,
+    ...poisonHeld,
+    ...diseaseHeld,
     ...optional("onsetAt", INSTANT_MAX),
     ...optional("endsAt", INSTANT_MAX),
     ...optional("nextAt", INSTANT_MAX),

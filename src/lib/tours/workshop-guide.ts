@@ -17,6 +17,25 @@ export interface ToolGuide {
 
 export const WORKSHOP_GUIDES: ToolGuide[] = [
   {
+    id: "world",
+    title: "WorldForge",
+    purpose: "The world itself, after Smoebo's WorldForge: a wiki of typed entries, the web of links between them, calendars and a timeline, an atlas, secrets, and the names still to write.",
+    steps: [
+      "Open a WorldForge file, or make a first entry: pick its type and name it. It lands in the Cast, Places, Factions or Lore, by its type.",
+      "Open the entry to write its article, fill its type's fields, and add the hidden truth only you know.",
+      "Add links: pick the other entry from the list, choose the words, and say whether it is common knowledge, a hidden truth or a false belief.",
+      "Add a calendar and the events of the world's history, naming who and where.",
+      "Write the secrets and who keeps them, and mark each learned when the party finds out.",
+      "Read the world for names still to write, and save it back out as a WorldForge file when you like.",
+    ],
+    tips: [
+      "Every entry is the same row the Cast, Region, Factions and Lore tools edit: change it in either place.",
+      "The AI DM is told each NPC's hidden truth, ties and secrets, and the secrets the party has not learned, never to state them outright.",
+      "Choose What people believe in the web to see the world as the players will hear it.",
+      "With a text model, Forge turns notes into entries and links, Ask answers from the world, and Draft writes an entry's text; with an image backend, Paint makes its picture. Without them those tools are simply not offered.",
+    ],
+  },
+  {
     id: "storyboard",
     title: "Storyboard",
     purpose: "The plan of the adventure as cards: scenes, fights, places, people and payoffs.",

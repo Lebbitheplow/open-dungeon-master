@@ -104,7 +104,7 @@ export const EXPLORE_ADJUDICATIONS: CatalogEntry[] = [
     name: "afflict",
     label: "Disease, madness or poison",
     category: "party",
-    summary: "Lays an SRD disease, madness or poison on a character: the server rolls the save and holds what follows.",
+    summary: "Lays a disease, madness or poison on a character, the SRD's or one from this table's workshop: the server rolls the save and holds what follows.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       {
@@ -130,6 +130,8 @@ export const EXPLORE_ADJUDICATIONS: CatalogEntry[] = [
           { value: "indefinite", label: "Madness: indefinite" },
           ...POISONS.map((poison) => ({ value: poison.name, label: `Poison: ${poison.name} (${poison.type})` })),
         ],
+        // The table's own diseases and poisons from the workshop, by name.
+        other: { label: "One of this table's diseases or poisons", placeholder: "Marsh Fever" },
       },
       { name: "save", label: "Roll the save", kind: "boolean", default: true, help: "Untick when they are already infected or have no save." },
       { name: "dc", label: "Infection DC", kind: "number", min: 1, max: 30, help: "Disease: when the source sets its own DC." },

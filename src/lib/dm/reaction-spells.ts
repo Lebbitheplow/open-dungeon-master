@@ -8,7 +8,8 @@
 
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getActiveEncounter, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
-import { spellFactsFor } from "@/lib/content";
+import { spellEngineName, spellFactsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { enemyActedThisRound } from "@/lib/dm/can-act";
 import { spendEnemyAction } from "@/lib/dm/enemy-approach";
@@ -70,7 +71,9 @@ function spentLine(ctx: Ctx, cast: Record<string, unknown>): string {
 
 export function reactionSpell(ctx: Ctx, spellName: string): Record<string, unknown> {
   const { sheet, campaign } = ctx;
-  const name = spellName.toLowerCase();
+  // Which reaction it is: the published spell a table's workshop copy runs
+  // as ("Iron Ward" running as Shield). The copy is cast under its own name.
+  const name = spellEngineName(spellName, spellAuthorsFor(campaign)).toLowerCase();
 
   // Hellish Rebuke answers the creature that damaged the caster with a DEX
   // save and fire, resolved as cast_at_enemy resolves it (the cast guard

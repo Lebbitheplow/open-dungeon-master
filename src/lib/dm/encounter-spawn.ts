@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { Campaign } from "@/lib/db/campaigns";
 import {
   getActiveEncounter,
@@ -11,6 +12,7 @@ import {
 import { getBattleMapForEncounter, insertToken, listTokens, renameTokenByRef } from "@/lib/db/battle-maps";
 import { d20Expression } from "@/lib/dice";
 import { resolveMonster } from "@/lib/bestiary";
+import { listNpcs } from "@/lib/db/npcs";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { nameArrivals, spliceIntoOrder } from "@/lib/dm/encounter-logic";
@@ -44,19 +46,32 @@ export type ResolvedEnemyRequest = {
 // Resolves every requested enemy before anything is created. Returns the
 // flat per-individual list, or the first unresolvable monster reference.
 //
-// `ownerUserId` is whose hand-built monsters count as resolvable
-// (src/lib/bestiary/homebrew-monsters.ts). It is the campaign's owner rather
-// than whoever pressed the button, because a monster prepared for this table
+// `authors` is whose hand-built monsters count as resolvable
+// (src/lib/bestiary/homebrew-monsters.ts): everyone who runs the table
+// (src/lib/db/homebrew.ts tableAuthors) rather than whoever pressed the
+// button, because a monster prepared for this table by any of its DM seats
 // should answer to its name no matter which seat starts the fight.
 export function resolveEnemyRequests(
   setting: SettingRef,
   requests: EnemyRequest[],
-  ownerUserId?: string,
+  authors?: string | string[],
+  // The table, for its Cast: an NPC named here with a stat block fights as
+  // that block, under their own name (src/lib/npcs/forge.ts statBlock).
+  campaignId?: string,
 ): { resolved: ResolvedEnemyRequest[] } | { unknownMonster: string } {
   const resolved: ResolvedEnemyRequest[] = [];
+  const authorList = Array.isArray(authors) ? authors : authors ? [authors] : [];
+  const cast = campaignId ? listNpcs(campaignId).filter((npc) => npc.statBlock) : [];
   for (const request of requests) {
     const count = request.count ?? 1;
-    const match = resolveMonster(request.monster, setting, { userId: ownerUserId });
+    const wanted = request.monster.trim().toLowerCase();
+    const npc = cast.find((entry) => entry.name.toLowerCase() === wanted || entry.aliases.some((alias) => alias.toLowerCase() === wanted));
+    const match = npc
+      ? (() => {
+          const block = resolveMonster(npc.statBlock, setting, { userIds: authorList });
+          return block ? { ...block, reskinName: npc.name } : null;
+        })()
+      : resolveMonster(request.monster, setting, { userIds: authorList });
     if (!match && request.cr === undefined) {
       return { unknownMonster: request.monster };
     }
@@ -162,7 +177,7 @@ export function handleAddEnemies(
       error: 'Invalid add_enemies arguments. Send {"enemies":[{"monster":"goblin","count":2}]}.',
     };
   }
-  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, spellAuthorsFor(campaign), campaign.id);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy.`,

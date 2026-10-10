@@ -452,6 +452,7 @@ export function npcRosterForPrompt(campaignId: string): Array<{
   agency: string;
   aliases: string[];
   witnessNote: string;
+  statBlock: string;
 }> {
   // Facts are read once for the whole roster; witness notes are per-NPC.
   const facts = listActiveFacts(campaignId).map((fact) => ({
@@ -475,6 +476,8 @@ export function npcRosterForPrompt(campaignId: string): Array<{
     aliases: npc.aliases,
     // What this NPC has no on-screen reason to know (witness-logic.ts).
     witnessNote: renderWitnessNote(npc.name, facts),
+    // The stat block they fight with (start_encounter takes their name).
+    statBlock: npc.statBlock,
   }));
 }
 

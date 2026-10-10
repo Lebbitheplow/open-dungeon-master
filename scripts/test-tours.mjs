@@ -121,9 +121,9 @@ test("a lazy step survives an absent anchor; a plain one does not", () => {
   );
 });
 
-// The thirteen tools of a workshop, as the shell lists them.
+// The tools of a workshop, as the shell lists them.
 const SYSTEMS = [
-  "storyboard", "party", "maps", "region", "encounters", "cast",
+  "world", "storyboard", "party", "maps", "region", "encounters", "cast",
   "bestiary", "homebrew", "lore", "tables", "rules", "plugin", "share",
 ];
 

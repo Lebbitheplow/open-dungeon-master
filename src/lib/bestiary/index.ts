@@ -3,7 +3,7 @@ import { packFor, type SettingRef } from "@/lib/worlds/preset";
 import { packArtKey, packArtUrl } from "@/lib/worlds/art";
 import { getEntryDetail, searchMonsters } from "@/lib/content";
 import { parseMonster, type EnemyStats } from "@/lib/bestiary/statblock";
-import { findHomebrewMonster } from "@/lib/bestiary/homebrew-monsters";
+import { findTableMonster } from "@/lib/bestiary/homebrew-monsters";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { thresholdsForParty, xpForCr } from "@/lib/srd/encounter-math";
 import highFantasyJson from "@/lib/bestiary/high-fantasy.json";
@@ -136,18 +136,23 @@ function fromContent(slug: string): { name: string; stats: EnemyStats } | null {
 // `userId` is whose homebrew to consider: the campaign owner, threaded from
 // the rim. Without it this behaves exactly as it did before homebrew
 // monsters existed.
+// `userIds` is whose hand-built monsters count: at a table, everyone who
+// runs it (src/lib/db/homebrew.ts tableAuthors), so a monster any DM seat
+// prepared answers to its name whichever seat starts the fight. `userId` is
+// one author, for a workshop's own shelf.
 export function resolveMonster(
   ref: string,
   setting: SettingRef,
-  options: { userId?: string } = {},
+  options: { userId?: string; userIds?: string[] } = {},
 ): ResolvedMonster | null {
   const trimmed = ref.trim();
   if (!trimmed) {
     return null;
   }
+  const authors = [...new Set([...(options.userIds ?? []), ...(options.userId ? [options.userId] : [])].filter(Boolean))];
 
-  if (options.userId && trimmed.startsWith("homebrew:")) {
-    const own = findHomebrewMonster(options.userId, trimmed);
+  if (authors.length && trimmed.startsWith("homebrew:")) {
+    const own = findTableMonster(authors, trimmed);
     return own
       ? { slug: own.slug, baseName: own.draft.name, reskinName: null, stats: own.draft.stats }
       : null;
@@ -191,7 +196,7 @@ export function resolveMonster(
     };
   }
 
-  const own = options.userId ? findHomebrewMonster(options.userId, trimmed) : null;
+  const own = authors.length ? findTableMonster(authors, trimmed) : null;
   if (own) {
     return { slug: own.slug, baseName: own.draft.name, reskinName: null, stats: own.draft.stats };
   }

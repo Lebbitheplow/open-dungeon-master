@@ -1,330 +1,47 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
-import { SKILL_NAMES } from "@/lib/bestiary/block-sections";
-import {
-  LANGUAGES,
-  PREREQUISITE_SUGGESTIONS,
-  TOOL_PROFICIENCIES,
-  VISION_SUGGESTIONS,
-  appendTerm,
-} from "@/lib/workshop/pickers";
-import { AddFromList } from "@/components/ui/AddFromList";
-import { ContentPick } from "@/components/ui/ContentPick";
-import {
-  Field,
-  NumberField,
-  SelectField,
-  TextArea,
-  TextField,
-  type FieldGlossary,
-} from "@/app/workshop/homebrew/fields";
-import { describeSkill } from "@/lib/help";
-import type { GlossaryEntry } from "@/lib/help/terms";
-import { CLASS_IDS, type EditorKind } from "@/app/workshop/homebrew/types";
-import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
-import { NumberStepper } from "@/components/ui/NumberStepper";
-import { SectionHead } from "@/components/ui/SectionHead";
-import { Select } from "@/components/ui/Select";
-import { addChip, rowIcon } from "@/app/workshop/kit";
+import { PREREQUISITE_SUGGESTIONS } from "@/lib/workshop/pickers";
+import { SelectField, TextField } from "@/app/workshop/homebrew/fields";
+import type { EditorKind } from "@/app/workshop/homebrew/types";
 import type { Data } from "@/app/workshop/homebrew/draft";
+import { ArchetypeFields } from "@/app/workshop/homebrew/ArchetypeFields";
+import { SpeciesFields } from "@/app/workshop/homebrew/SpeciesFields";
+import { BackgroundFields } from "@/app/workshop/homebrew/BackgroundFields";
+import { engineFeatNames } from "@/lib/srd/feat-effects";
 
 // The character-option forms: feat, background, species, subclass. Each
 // writes the field names the character builder already reads for the
 // content pack's own rows, so a homebrew background shows its skills in
 // the same picker an SRD one does.
 
-const ABILITY_NAMES = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"] as const;
-
-type AsiRow = { attributes: string[]; value: number };
-type FeatureRow = { n: string; d: string };
-
-// The skills as the builder prints them: "Sleight of Hand", "Animal Handling".
-const SKILL_LABELS = SKILL_NAMES.map((skill) =>
-  skill.replace(/\b\w/g, (letter) => letter.toUpperCase()).replace(" Of ", " of "),
-);
-
-// What each skill covers, for the ⓘ beside the list.
-const SKILL_GLOSSARY: GlossaryEntry[] = SKILL_NAMES.flatMap((name, index) => {
-  const blurb = describeSkill(name.toLowerCase().replace(/\s+/g, "_"));
-  return blurb ? [{ name: SKILL_LABELS[index] ?? name, blurb }] : [];
-});
-
-// A comma-separated field with a dropdown of what it usually holds beside
-// it. Picking appends; the text stays editable for anything off the list.
-function ListField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  hint,
-  options,
-  prompt,
-  glossary,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  hint?: string;
-  options: readonly string[];
-  prompt: string;
-  glossary?: FieldGlossary;
-}) {
-  return (
-    <Field label={label} hint={hint} glossary={glossary}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <input
-          value={value}
-          maxLength={200}
-          placeholder={placeholder}
-          aria-label={label}
-          onChange={(event) => onChange(event.target.value)}
-          className={cn(ui.input, "min-w-32 flex-1")}
-        />
-        <AddFromList prompt={prompt} options={options} onPick={(term) => onChange(appendTerm(value, term))} />
-      </div>
-    </Field>
-  );
-}
+// The feats the engines run, for a workshop feat to run as one.
+const RUNS_AS_OPTIONS = [
+  { value: "", label: "its own text" },
+  ...engineFeatNames()
+    .slice()
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({ value: name, label: name })),
+];
 
 function FeatFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
   return (
-    <TextField
-      label="Prerequisite"
-      value={String(data.prerequisite ?? "")}
-      onChange={(prerequisite) => set({ prerequisite })}
-      placeholder="Strength 13 or higher"
-      maxLength={200}
-      hint="Leave empty for none. The builder shows it beside the feat."
-      suggestions={PREREQUISITE_SUGGESTIONS}
-    />
-  );
-}
-
-function BackgroundFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
-  return (
     <div className="grid gap-2 sm:grid-cols-2">
-      <ListField
-        label="Skill proficiencies"
-        value={String(data.skill_proficiencies ?? "")}
-        onChange={(skill_proficiencies) => set({ skill_proficiencies })}
-        placeholder="Insight, Persuasion"
-        hint="The builder grants these by name."
-        options={SKILL_LABELS}
-        prompt="Add a skill"
-        glossary={{ title: "Skills", entries: SKILL_GLOSSARY }}
+      <TextField
+        label="Prerequisite"
+        value={String(data.prerequisite ?? "")}
+        onChange={(prerequisite) => set({ prerequisite })}
+        placeholder="Strength 13 or higher"
+        maxLength={200}
+        hint="Leave empty for none. The builder shows it beside the feat."
+        suggestions={PREREQUISITE_SUGGESTIONS}
       />
-      <ListField
-        label="Tool proficiencies"
-        value={String(data.tool_proficiencies ?? "")}
-        onChange={(tool_proficiencies) => set({ tool_proficiencies })}
-        placeholder="One type of gaming set"
-        hint="A tool you are proficient with adds your proficiency bonus to checks made with it."
-        options={TOOL_PROFICIENCIES}
-        prompt="Add a tool"
-      />
-      <ListField
-        label="Languages"
-        value={String(data.languages ?? "")}
-        onChange={(languages) => set({ languages })}
-        placeholder="Two of your choice"
-        options={LANGUAGES}
-        prompt="Add a language"
-      />
-      <Field label="Equipment" hint="What the character starts with. Pick from the catalogue or type anything.">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <input
-            value={String(data.equipment ?? "")}
-            maxLength={500}
-            placeholder="A set of fine clothes, 15 gp"
-            aria-label="Equipment"
-            onChange={(event) => set({ equipment: event.target.value })}
-            className={cn(ui.input, "min-w-32 flex-1")}
-          />
-          <ContentPick
-            kind="items"
-            label="Add an item"
-            placeholder="Add an item..."
-            onPick={(entry) => set({ equipment: appendTerm(String(data.equipment ?? ""), entry.name) })}
-          />
-        </div>
-      </Field>
-      <TextField label="Feature" value={String(data.feature ?? "")} onChange={(feature) => set({ feature })} placeholder="Salt Lore" maxLength={80} />
-      <TextField label="What the feature does" value={String(data.feature_desc ?? "")} onChange={(feature_desc) => set({ feature_desc })} maxLength={2000} />
-    </div>
-  );
-}
-
-function RaceFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
-  const asi = Array.isArray(data.asi) ? (data.asi as AsiRow[]) : [];
-  const speed = (data.speed as { walk?: number } | undefined)?.walk ?? 30;
-  const updateAsi = (next: AsiRow[]) => set({ asi: next });
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <SelectField
-          label="Size"
-          value={String(data.size ?? "Medium")}
-          options={["Tiny", "Small", "Medium", "Large"].map((value) => ({ value, label: value }))}
-          onChange={(size) => set({ size })}
-        />
-        <NumberField label="Speed (ft)" value={speed} min={5} max={120} step={5} onChange={(walk) => set({ speed: { walk: walk === "" ? 30 : walk } })} />
-        <TextField
-          label="Vision"
-          value={String(data.vision ?? "")}
-          onChange={(vision) => set({ vision })}
-          placeholder="Darkvision 60 ft"
-          maxLength={120}
-          suggestions={VISION_SUGGESTIONS}
-        />
-        <ListField
-          label="Languages"
-          value={String(data.languages ?? "")}
-          onChange={(languages) => set({ languages })}
-          placeholder="Common and Sylvan"
-          options={LANGUAGES}
-          prompt="Add a language"
-        />
-      </div>
-      <div className="space-y-1.5 text-sm">
-        <SectionHead title="Ability score increases" glyph="ability-str" className="mb-1" />
-        {asi.map((row, index) => (
-          <div key={index} className="flex flex-wrap items-center gap-1.5">
-            <span className="w-44">
-              <Select
-                value={row.attributes[0] ?? "Strength"}
-                label="Ability"
-                options={ABILITY_NAMES.map((name) => ({
-                  value: name as string,
-                  label: name,
-                  icon: { kind: "glyph" as const, key: `ability-${name.slice(0, 3).toLowerCase()}` },
-                }))}
-                onChange={(name) => updateAsi(asi.map((entry, at) => (at === index ? { ...entry, attributes: [name] } : entry)))}
-              />
-            </span>
-            <NumberStepper
-              label="Increase"
-              value={row.value}
-              min={-2}
-              max={3}
-              onChange={(value) => updateAsi(asi.map((entry, at) => (at === index ? { ...entry, value } : entry)))}
-            />
-            <button
-              type="button"
-              aria-label="Remove increase"
-              onClick={() => updateAsi(asi.filter((_, at) => at !== index))}
-              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        ))}
-        {asi.length < 6 ? (
-          <button
-            type="button"
-            onClick={() => updateAsi([...asi, { attributes: ["Dexterity"], value: 1 }])}
-            className={cn(ui.btnSmall, addChip)}
-          >
-            <Plus className="size-3" /> Add an increase
-          </button>
-        ) : null}
-      </div>
-      <TextArea
-        label="Traits"
-        value={String(data.traits ?? "")}
-        onChange={(traits) => set({ traits })}
-        placeholder={"**Marsh Stride.** Difficult terrain in wetlands costs you no extra movement.\n**Reed Sight.** You have advantage on Perception checks in tall grass."}
-        rows={5}
-        maxLength={4000}
-        hint="One trait per line. The builder shows the first sentence of each."
-      />
-    </div>
-  );
-}
-
-function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
-  const levels = (data.levels ?? {}) as Record<string, FeatureRow[]>;
-  const rows: Array<{ level: number; index: number; feature: FeatureRow }> = [];
-  for (const [level, features] of Object.entries(levels)) {
-    features.forEach((feature, index) => rows.push({ level: Number(level), index, feature }));
-  }
-  rows.sort((a, b) => a.level - b.level);
-  const write = (next: Array<{ level: number; feature: FeatureRow }>) => {
-    const grouped: Record<string, FeatureRow[]> = {};
-    for (const row of next) {
-      (grouped[String(row.level)] ??= []).push(row.feature);
-    }
-    set({ levels: grouped });
-  };
-  const flat = rows.map((row) => ({ level: row.level, feature: row.feature }));
-
-  return (
-    <div className="space-y-2">
       <SelectField
-        label="Class"
-        value={String(data.classSlug ?? "fighter")}
-        options={CLASS_IDS.map((value) => ({
-          value,
-          label: value.charAt(0).toUpperCase() + value.slice(1),
-        }))}
-        onChange={(classSlug) => set({ classSlug })}
-        className="w-56"
-        hint="The builder offers it under this class."
+        label="Runs at the table as"
+        value={String(data.runsAs ?? "")}
+        options={RUNS_AS_OPTIONS}
+        onChange={(runsAs) => set({ runsAs: runsAs || undefined })}
+        hint="A published feat whose rules the server applies under this feat's name (a renamed Sharpshooter). Its own text is read for what it grants either way."
       />
-      <div className="space-y-1.5 text-sm">
-        <SectionHead title="Features by level" glyph="rest-level-up" className="mb-1" />
-        {flat.map((row, index) => (
-          <div key={index} className="flex flex-wrap items-center gap-1.5">
-            <NumberStepper
-              label="Level"
-              value={row.level}
-              min={1}
-              max={20}
-              onChange={(level) => write(flat.map((entry, at) => (at === index ? { ...entry, level: level || 1 } : entry)))}
-            />
-            <input
-              value={row.feature.n}
-              aria-label="Feature name"
-              placeholder="Reed Walker"
-              maxLength={80}
-              onChange={(event) =>
-                write(flat.map((entry, at) => (at === index ? { ...entry, feature: { ...entry.feature, n: event.target.value } } : entry)))
-              }
-              className={cn(ui.input, "w-full text-sm sm:w-44")}
-            />
-            <input
-              value={row.feature.d}
-              aria-label="What it does"
-              placeholder="Marsh terrain costs no extra movement."
-              maxLength={500}
-              onChange={(event) =>
-                write(flat.map((entry, at) => (at === index ? { ...entry, feature: { ...entry.feature, d: event.target.value } } : entry)))
-              }
-              className={cn(ui.input, "min-w-48 flex-1 text-sm")}
-            />
-            <button
-              type="button"
-              aria-label="Remove feature"
-              onClick={() => write(flat.filter((_, at) => at !== index))}
-              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => write([...flat, { level: flat.length ? Math.min(20, flat[flat.length - 1].level + 3) : 3, feature: { n: "", d: "" } }])}
-          className={cn(ui.btnSmall, addChip)}
-        >
-          <Plus className="size-3" /> Add a feature
-        </button>
-        <p className="text-[11px] text-stone-500">
-          The DM prompt reads each line as rules text. Features are granted by name when a character takes this subclass.
-        </p>
-      </div>
     </div>
   );
 }
@@ -334,7 +51,7 @@ export function OptionFields({
   data,
   onChange,
 }: {
-  kind: Exclude<EditorKind, "item" | "spell">;
+  kind: Exclude<EditorKind, "item" | "spell" | "hazard">;
   data: Data;
   onChange: (next: Data) => void;
 }) {
@@ -345,7 +62,7 @@ export function OptionFields({
     case "background":
       return <BackgroundFields data={data} set={set} />;
     case "race":
-      return <RaceFields data={data} set={set} />;
+      return <SpeciesFields data={data} set={set} />;
     case "archetype":
       return <ArchetypeFields data={data} set={set} />;
   }

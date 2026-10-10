@@ -144,10 +144,11 @@ export function handleCastAtEnemy(
     });
   }
   // Polymorph and True Polymorph: the beast in variant (enemy-polymorph.ts).
-  if (resolvedMech && enemyShapeSpellFor(resolvedMech.name)) {
+  // A table's workshop copy turns its target by the spell it runs as.
+  if (resolvedMech && enemyShapeSpellFor(resolvedMech.runsAs ?? resolvedMech.name)) {
     const spell = resolvedMech.name;
     const spend = (cast: Record<string, unknown>) => applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result;
-    return castShapeAtEnemy(campaign, turn, { caster: sheet, enemy, spell, variant: args.variant, level: args.level, reason: args.reason, authors }, spend);
+    return castShapeAtEnemy(campaign, turn, { caster: sheet, enemy, spell, runsAs: resolvedMech.runsAs, variant: args.variant, level: args.level, reason: args.reason, authors }, spend);
   }
   const redirect = castRedirect(resolvedMech, "save");
   if (redirect) {
@@ -484,6 +485,6 @@ export function handleCastAtEnemy(
   }
   // A spell that stays on the ground is laid around its target (src/lib/dm/zone-cast.ts).
   // A later share of the same casting (a second creature in the web) leaves it where it is.
-  const area = cast.continuing ? null : placeSpellZone(campaign, { spell: spellName, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], ...zonePlacement(args) });
+  const area = cast.continuing ? null : placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], ...zonePlacement(args) });
   return { ok: true, ...base, ...(area ? { area } : {}) };
 }

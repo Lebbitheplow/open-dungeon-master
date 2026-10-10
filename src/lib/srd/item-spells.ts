@@ -112,14 +112,22 @@ export function itemSpellsOf(itemName: string): ItemSpell[] {
   return ROWS.find((row) => row.item.test(name))?.spells ?? [];
 }
 
+// The spells a carried row casts: a workshop item's own list when it carries
+// one (src/lib/homebrew/item-data.ts), else the table's by name.
+export function itemSpellsOfRow(item: { name: string; gear?: unknown }): ItemSpell[] {
+  const own = (item.gear as { spells?: ItemSpell[] } | undefined)?.spells;
+  return Array.isArray(own) && own.length ? own : itemSpellsOf(item.name);
+}
+
 // What casting `spell` from this item costs for `charges` spent (the fewest
 // it takes when none are named), or an error sentence.
 export function itemSpellCast(
-  itemName: string,
+  item: string | { name: string; gear?: unknown },
   spell: string,
   charges: number | undefined,
 ): { spell: string; charges: number; level: number; dc?: number } | { error: string } {
-  const spells = itemSpellsOf(itemName);
+  const itemName = typeof item === "string" ? item : item.name;
+  const spells = typeof item === "string" ? itemSpellsOf(item) : itemSpellsOfRow(item);
   if (!spells.length) {
     return { error: `${itemName} casts no spell the server knows; spend its charges without a spell and resolve what it does with the tool for it.` };
   }

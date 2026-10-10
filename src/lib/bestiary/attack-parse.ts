@@ -52,8 +52,17 @@ function damageFromFields(dice: string, bonus: number, text: AttackText): string
 // (the printed number is the average rounded down).
 const matchesPrinted = (damage: string, printed: number) => Math.abs(Math.floor(averageOf(damage)) - printed) <= 1;
 
+// The bonus the line itself prints ("+6 to hit"), which is the SRD's: the
+// pack's attack_bonus field misprints it on a handful of rows (a vampire
+// spawn's bite at +61, a purple worm's at +9 for +14, a rug of smothering's
+// at 0, which left it no attack at all).
+function printedBonus(desc: string): number | null {
+  const match = /([+-])\s?(\d{1,2}) to hit/i.exec(desc);
+  return match ? Number(match[2]) * (match[1] === "-" ? -1 : 1) : null;
+}
+
 export function parseAttack(action: RawAttackRow): EnemyAttack | null {
-  const toHit = asNumber(action.attack_bonus);
+  const toHit = printedBonus(asString(action.desc)) ?? asNumber(action.attack_bonus);
   const dice = asString(action.damage_dice).replace(/\s+/g, "");
   if (toHit === null || toHit <= 0) {
     return null;

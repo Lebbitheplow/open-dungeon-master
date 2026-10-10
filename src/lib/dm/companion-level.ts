@@ -1,4 +1,5 @@
 import { admitSheet } from "@/lib/characters/admit";
+import { tableAuthors } from "@/lib/db/homebrew";
 import {
   classGrantsFor,
   featFactsFor,
@@ -96,7 +97,7 @@ export function legalCompanionSheet(draft: CompanionDraft): CompanionSheet {
   let spellcasting: Spellcasting = null;
   const [casting] = castingClassesOf(classes, classGrantsFor);
   if (casting) {
-    const spellOf = (name: string) => spellFactsFor(name, campaign.ownerUserId);
+    const spellOf = (name: string) => spellFactsFor(name, tableAuthors(campaign.id));
     const before = emptyView(klass.id, casting.ability, level);
     const picks = companionSpellPicks({
       before,
@@ -151,7 +152,7 @@ export function legalCompanionSheet(draft: CompanionDraft): CompanionSheet {
 }
 
 function contextFor(campaign: Campaign, sheet: CharacterSheet): LevelUpContext {
-  const owner = campaign.ownerUserId;
+  const owner = tableAuthors(campaign.id);
   return {
     hpMethod: campaign.gameSettings.hpMethod ?? "average",
     // A companion keeps to the class it was recruited in.

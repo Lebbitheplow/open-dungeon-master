@@ -10,6 +10,7 @@
 // was. A monster's check uses its stat block: a skill it lists, else the
 // ability's modifier.
 
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { Campaign } from "@/lib/db/campaigns";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
@@ -97,7 +98,7 @@ export function contestOpponent(
     }
     return { name: enemy.displayName, stats: enemy.stats, conditions: enemy.conditions };
   }
-  const monster = resolveMonster(ref.monster ?? "", campaign.gameSettings, { userId: campaign.ownerUserId });
+  const monster = resolveMonster(ref.monster ?? "", campaign.gameSettings, { userIds: spellAuthorsFor(campaign) });
   if (!monster) {
     return { error: `No stat block for "${ref.monster ?? ""}"; name a monster the bestiary knows (an SRD creature, or an NPC stat block such as guard, noble or spy).` };
   }

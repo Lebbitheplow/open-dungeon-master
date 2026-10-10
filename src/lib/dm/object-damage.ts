@@ -40,6 +40,9 @@ const objectSchema = z.object({
   weapon: z.string().max(80).optional(),
   ac: z.coerce.number().int().min(1).max(30).optional(),
   hp: z.coerce.number().int().min(1).max(1000).optional(),
+  // SRD 5.1 (Objects): a big object's damage threshold. A blow below it is
+  // superficial and takes nothing off; one at or above it lands whole.
+  threshold: z.coerce.number().int().min(1).max(100).optional(),
   reason: z.string().optional(),
 });
 
@@ -143,6 +146,10 @@ export function damageObject(
     dealt = 0;
   }
   dealt = section && dealt ? sectionHit(section, dealt, type, notes) : dealt;
+  if (dealt !== null && args.threshold && dealt > 0 && dealt < args.threshold) {
+    notes.push(`${dealt} is under its damage threshold of ${args.threshold}: superficial, nothing comes off`);
+    dealt = 0;
+  }
   const taken = already + (dealt ?? 0);
   const broken = dealt !== null && taken >= hp;
   if (campaign && args.name && dealt !== null) {

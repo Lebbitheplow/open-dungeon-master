@@ -95,6 +95,18 @@ export const SRD_WEAPONS: SrdWeapon[] = WEAPON_ROWS.map((weapon) =>
   LONG_RANGE_FT[weapon.name] ? { ...weapon, longRangeFt: LONG_RANGE_FT[weapon.name] } : weapon,
 );
 
+// SRD 5.1's Weapons table, the weight column, in pounds (the Sling and
+// the genre weapons print none). The encumbrance rule weighs a weapon by it
+// when the content pack stamps no weight, and a workshop copy started from
+// one with no pack installed carries it.
+export const SRD_WEAPON_WEIGHT_LB: Record<string, number> = {
+  Club: 2, Dagger: 1, Greatclub: 10, Handaxe: 2, Javelin: 2, "Light Hammer": 2, Mace: 4, Quarterstaff: 4, Sickle: 2, Spear: 3,
+  "Light Crossbow": 5, Dart: 0.25, Shortbow: 2,
+  Battleaxe: 4, Flail: 2, Glaive: 6, Greataxe: 7, Greatsword: 6, Halberd: 6, Lance: 6, Longsword: 3, Maul: 10, Morningstar: 4,
+  Pike: 18, Rapier: 2, Scimitar: 3, Shortsword: 2, Trident: 4, "War Pick": 2, Warhammer: 2, Whip: 3,
+  Blowgun: 1, "Hand Crossbow": 3, "Heavy Crossbow": 18, Longbow: 2, Net: 3,
+};
+
 // The two SRD weapons whose "special" property is a rule of its own
 // (src/lib/dm/attack-rules.ts reads them by name, so the property list the
 // builder shows stays the mechanical one).

@@ -64,8 +64,10 @@ export async function PATCH(
     : Response.json({ error: "No such monster." }, { status: 404 });
 }
 
+// Forgets a monster: archived, so what already names it still fights with
+// it (src/lib/bestiary/homebrew-monsters.ts). ?purge=1 deletes it for good.
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string; monsterId: string }> },
 ) {
   const { campaignId, monsterId } = await params;
@@ -73,7 +75,8 @@ export async function DELETE(
   if (isErrorResponse(context)) {
     return context;
   }
-  return deleteHomebrewMonster(context.user.id, monsterId)
+  const purge = new URL(request.url).searchParams.get("purge") === "1";
+  return deleteHomebrewMonster(context.user.id, monsterId, { purge })
     ? Response.json({ ok: true })
     : Response.json({ error: "No such monster." }, { status: 404 });
 }

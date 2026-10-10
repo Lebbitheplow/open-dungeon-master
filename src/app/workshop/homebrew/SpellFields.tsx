@@ -1,15 +1,6 @@
 "use client";
 
 import { SectionHead } from "@/components/ui/SectionHead";
-import { CONDITIONS } from "@/lib/bestiary/kit";
-import { normalizeSpellMech } from "@/lib/homebrew/gear";
-import {
-  baseDamageDice,
-  baseHealingDice,
-  damageTypeFor,
-  halfOnSaveFor,
-  saveAbilityFor,
-} from "@/lib/srd/spell-scaling";
 import {
   CheckField,
   NumberField,
@@ -17,58 +8,32 @@ import {
   TextField,
   ToggleChips,
 } from "@/app/workshop/homebrew/fields";
-import { CLASS_IDS, DAMAGE_TYPES, SPELL_SCHOOLS } from "@/app/workshop/homebrew/types";
+import { CLASS_IDS, SPELL_SCHOOLS } from "@/app/workshop/homebrew/types";
 import {
   CASTING_TIMES,
   SPELL_COMPONENTS,
   SPELL_DURATIONS,
   SPELL_RANGES,
 } from "@/lib/workshop/pickers";
-import { CONDITION_BLURBS, SPELL_SCHOOL_BLURBS, glossaryFor } from "@/lib/help/terms";
+import { SPELL_SCHOOL_BLURBS, glossaryFor } from "@/lib/help/terms";
+import { SpellMechFields } from "@/app/workshop/homebrew/SpellMechFields";
 import type { Data } from "@/app/workshop/homebrew/draft";
+import { effectiveSpellPreview } from "@/lib/workshop/spell-preview";
+import { bundledSpellNames, materialCostFrom } from "@/lib/srd/spell-facts";
 
 // The spell form. The description is the part the engine reads its damage
-// out of, the same way it reads the SRD's, so the form shows what it found
-// there rather than asking for the dice a second time. The block underneath
-// is the part prose cannot state: how the spell resolves, which save, what
-// condition or buff it applies.
+// out of, the same way it reads the SRD's, unless the block underneath says
+// otherwise; the preview shows what the table will actually roll and which
+// of the two it came from. The block is the part prose cannot state: how the
+// spell resolves, which save, what condition or buff it applies.
 
-const RESOLUTIONS = [
-  { value: "", label: "Let the engine read the prose" },
-  { value: "attack", label: "Spell attack roll" },
-  { value: "save", label: "Target saves" },
-  { value: "auto", label: "Hits without a roll" },
-  { value: "heal", label: "Restores hit points" },
-  { value: "buff", label: "Grants a condition to allies" },
-  { value: "summon", label: "Conjures creatures" },
-  { value: "utility", label: "Utility, narrated" },
-] as const;
-
-const ABILITY_OPTIONS = [
-  { value: "", label: "none" },
-  ...(["str", "dex", "con", "int", "wis", "cha"] as const).map((value) => ({ value, label: value.toUpperCase() })),
-];
-
-type Mech = Record<string, unknown>;
+const RUNS_AS_OPTIONS = bundledSpellNames().map((name) => ({ value: name, label: name }));
 
 export function SpellFields({ data, onChange }: { data: Data; onChange: (next: Data) => void }) {
   const set = (patch: Data) => onChange({ ...data, ...patch });
-  const mech = (data.mech ?? {}) as Mech;
-  const setMech = (patch: Mech) => {
-    const next = { ...mech, ...patch };
-    set({ mech: next.resolution ? next : undefined });
-  };
-  const desc = String(data.desc ?? "");
-  const read = {
-    dice: baseDamageDice(desc),
-    heal: baseHealingDice(desc),
-    save: saveAbilityFor(desc),
-    half: halfOnSaveFor(desc),
-    type: damageTypeFor(desc),
-  };
-  const block = normalizeSpellMech(mech);
-  const condition = (mech.condition ?? {}) as Mech;
-  const buff = (mech.buff ?? {}) as Mech;
+  const preview = effectiveSpellPreview(data);
+  const hasMaterial = /\bM\b/.test(String(data.components ?? "").split("(")[0].toUpperCase());
+  const cost = typeof data.materialCostGp === "number" ? data.materialCostGp : null;
 
   return (
     <div className="space-y-3">
@@ -127,6 +92,51 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
         </div>
       </div>
 
+      {hasMaterial ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <TextField
+            label="Material"
+            className="col-span-2"
+            value={String(data.material ?? "")}
+            onChange={(material) => {
+              // A price in the words fills the price, as the books print it.
+              const stated = materialCostFrom(material);
+              set({
+                material: material || undefined,
+                ...(stated.costGp && cost === null ? { materialCostGp: stated.costGp, materialConsumed: stated.consumed || undefined } : {}),
+              });
+            }}
+            maxLength={300}
+            placeholder="diamonds worth 300 gp, which the spell consumes"
+            hint="What the caster must hold. A component pouch or a focus stands in for one with no price."
+          />
+          <NumberField
+            label="Costs (gp)"
+            value={cost ?? ""}
+            min={0}
+            max={1_000_000}
+            onChange={(value) => set({ materialCostGp: value === "" || value === 0 ? undefined : value, ...(value === "" || value === 0 ? { materialConsumed: undefined } : {}) })}
+            hint="A priced material must be carried or paid for: the cast guard refuses the spell without it."
+          />
+          <div className="flex items-end pb-1">
+            <CheckField
+              label="The spell consumes it"
+              checked={data.materialConsumed === true}
+              onChange={(materialConsumed) => set({ materialConsumed: materialConsumed && cost ? true : undefined })}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <TextField
+        label="Runs as"
+        value={String(data.runsAs ?? "")}
+        onChange={(runsAs) => set({ runsAs: runsAs.trim() || undefined })}
+        maxLength={80}
+        suggestions={RUNS_AS_OPTIONS}
+        hint="A published spell whose area, summons, reaction or transformation the engines lay for this one under its own name (a renamed Web still webs the board). A copy starts with the spell it was copied from."
+      />
+
       <div className="space-y-1">
         <SectionHead title="Classes that can learn it" glyph="tab-characters" className="mb-1" />
         <ToggleChips
@@ -148,108 +158,18 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
         hint="The engine scales the dice from this sentence when a spell is upcast."
       />
 
-      <p className="panel rounded-lg px-3 py-2 text-xs text-stone-400">
-        <span className="font-display tracking-wide text-amber-200/70">From the description the engine reads: </span>
-        {read.dice ? `${read.dice}${read.type ? ` ${read.type}` : ""} damage` : read.heal ? `heals ${read.heal}` : "no dice"}
-        {read.save ? `, ${read.save.toUpperCase()} save${read.half ? ", half on a success" : ""}` : ""}.
-        {!read.dice && !read.heal ? " Write it as \"takes 3d6 fire damage\" and it will." : ""}
-      </p>
-
-      <div className="panel space-y-2 rounded-xl p-3">
-        <SectionHead title="What the engine does with it" glyph="cue-arcane" className="mb-1" />
-        <SelectField
-          label="How it resolves"
-          value={String(mech.resolution ?? "")}
-          options={RESOLUTIONS}
-          onChange={(resolution) => setMech({ resolution: resolution || undefined })}
-          hint="Set this and the cast tools trust it over the prose."
-        />
-        {block ? (
-          <div className="reveal grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {block.resolution === "save" ? (
-              <>
-                <SelectField
-                  label="Save"
-                  value={String(mech.save ?? "")}
-                  options={ABILITY_OPTIONS}
-                  onChange={(save) => setMech({ save: save || undefined })}
-                />
-                <div className="flex items-end pb-1">
-                  <CheckField label="Half on a success" checked={mech.halfOnSave === true} onChange={(halfOnSave) => setMech({ halfOnSave })} />
-                </div>
-              </>
-            ) : null}
-            {["attack", "save", "auto"].includes(block.resolution) ? (
-              <SelectField
-                label="Damage type"
-                value={String(mech.damageType ?? "")}
-                options={[{ value: "", label: "from the prose" }, ...DAMAGE_TYPES.map((value) => ({ value, label: value }))]}
-                onChange={(damageType) => setMech({ damageType: damageType || undefined })}
-              />
-            ) : null}
-            {["attack", "save", "auto"].includes(block.resolution) ? (
-              <>
-                <TextField
-                  label="Condition on a hit or failed save"
-                  value={String(condition.name ?? "")}
-                  onChange={(name) => setMech({ condition: name ? { ...condition, name } : undefined })}
-                  placeholder="frightened"
-                  maxLength={40}
-                  suggestions={CONDITIONS}
-                  glossary={{ title: "Conditions", entries: glossaryFor(CONDITIONS, CONDITION_BLURBS) }}
-                />
-                {condition.name ? (
-                  <NumberField
-                    label="For rounds"
-                    value={typeof condition.rounds === "number" ? condition.rounds : 10}
-                    min={1}
-                    max={6000}
-                    onChange={(rounds) => setMech({ condition: { ...condition, rounds: rounds === "" ? 10 : rounds } })}
-                    hint="10 rounds is a minute."
-                  />
-                ) : null}
-              </>
-            ) : null}
-            {block.resolution === "buff" ? (
-              <>
-                <TextField
-                  label="Condition granted"
-                  value={String(buff.condition ?? "")}
-                  onChange={(name) => setMech({ buff: { ...buff, condition: name } })}
-                  placeholder="blessed"
-                  maxLength={40}
-                  suggestions={["blessed", "hasted", "shielded", "invisible", "inspired", ...CONDITIONS]}
-                />
-                <SelectField
-                  label="On"
-                  value={String(buff.target ?? "self")}
-                  options={[
-                    { value: "self", label: "the caster" },
-                    { value: "ally", label: "one ally" },
-                    { value: "allies", label: "several allies" },
-                  ]}
-                  onChange={(target) => setMech({ buff: { ...buff, target } })}
-                />
-                <NumberField
-                  label="For rounds"
-                  value={typeof buff.rounds === "number" ? buff.rounds : 10}
-                  min={1}
-                  max={6000}
-                  onChange={(rounds) => setMech({ buff: { ...buff, rounds: rounds === "" ? 10 : rounds } })}
-                />
-              </>
-            ) : null}
-            <TextField
-              label="Note for the DM"
-              value={String(mech.note ?? "")}
-              onChange={(note) => setMech({ note: note || undefined })}
-              placeholder="Up to three targets."
-              maxLength={200}
-              className="col-span-2"
-            />
-          </div>
-        ) : null}
+      <div className="panel space-y-1 rounded-lg px-3 py-2 text-xs text-stone-400">
+        <p>
+          <span className="font-display tracking-wide text-amber-200/70">What the table resolves: </span>
+          {preview.line}.
+          {preview.line.startsWith("no dice") ? " Write it as \"takes 3d6 fire damage\", or give the block below its dice." : ""}
+        </p>
+        {preview.conflicts.map((conflict) => (
+          <p key={conflict} className="text-amber-300">{conflict}</p>
+        ))}
       </div>
+
+      <SpellMechFields data={data} onChange={onChange} />
     </div>
   );
 }

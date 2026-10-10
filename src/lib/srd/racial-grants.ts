@@ -5,7 +5,7 @@
 // Pure and database-free, like the rest of src/lib/srd, so the builder, the
 // server's creation check and the counters can all read the same answer.
 import racesJson from "@/lib/srd/races.json";
-import { srdRaceId } from "@/lib/srd/race-id";
+import { speciesHoldsTrait, speciesRulesFor, srdRaceId, type SpeciesRules } from "@/lib/srd/race-id";
 import type { Ability } from "@/lib/schemas/sheet";
 
 // ---- Draconic Ancestry (SRD 5.1, Dragonborn) ----
@@ -52,8 +52,8 @@ export function findDraconicAncestry(value: string | null | undefined): Draconic
 
 // Whether this race asks for an ancestry (the bundled dragonborn under any of
 // its ids).
-export function takesDraconicAncestry(raceId: string): boolean {
-  return raceRow(raceId)?.ancestryChoice === "draconic";
+export function takesDraconicAncestry(raceId: string, rules?: SpeciesRules | null): boolean {
+  return raceRow(raceId, rules)?.ancestryChoice === "draconic";
 }
 
 // The race feature a chosen ancestry is written as. Its name carries the
@@ -107,9 +107,24 @@ type RaceRow = {
 
 const RACES = (racesJson as unknown as { races: RaceRow[] }).races;
 
-function raceRow(raceId: string): RaceRow | null {
+// The bundled row, or for a species the bundled list does not carry, the
+// rows its traits name: a workshop copy of the Tiefling holds Infernal
+// Legacy and casts its spells, a copy of the Dragonborn picks an ancestry.
+function raceRow(raceId: string, rules?: SpeciesRules | null): RaceRow | null {
   const wanted = srdRaceId(raceId);
-  return RACES.find((entry) => entry.id === wanted) ?? null;
+  const bundled = RACES.find((entry) => entry.id === wanted);
+  if (bundled) {
+    return bundled;
+  }
+  const species = speciesRulesFor(raceId, rules);
+  if (!species) {
+    return null;
+  }
+  const innate = RACES.find((entry) => entry.innateSpells && speciesHoldsTrait(species, entry.innateSpells.trait));
+  const draconic = speciesHoldsTrait(species, "draconic ancestry");
+  return innate || draconic
+    ? { id: raceId, ...(draconic ? { ancestryChoice: "draconic" } : {}), ...(innate ? { innateSpells: innate.innateSpells } : {}) }
+    : null;
 }
 
 export type InnateSpell = {
@@ -128,8 +143,8 @@ const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "_").re
 // thaumaturgy, then hellish rebuke (as a 2nd-level spell) at 3rd and darkness
 // at 5th; Drow Magic's dancing lights, faerie fire and darkness; a forest
 // gnome's minor illusion. Cantrips are known outright and cost nothing.
-export function innateSpellsFor(raceId: string, level: number): InnateSpell[] {
-  const row = raceRow(raceId);
+export function innateSpellsFor(raceId: string, level: number, rules?: SpeciesRules | null): InnateSpell[] {
+  const row = raceRow(raceId, rules);
   return (row?.innateSpells?.spells ?? [])
     .filter((spell) => level >= spell.level)
     .map((spell) => {
@@ -145,13 +160,13 @@ export function innateSpellsFor(raceId: string, level: number): InnateSpell[] {
 
 // The ability the race's spells are cast with (Charisma for the tiefling and
 // the drow, Intelligence for the forest gnome), or null.
-export function innateSpellAbility(raceId: string): Ability | null {
-  return raceRow(raceId)?.innateSpells?.ability ?? null;
+export function innateSpellAbility(raceId: string, rules?: SpeciesRules | null): Ability | null {
+  return raceRow(raceId, rules)?.innateSpells?.ability ?? null;
 }
 
 // The race's cantrips, which ride on top of any class's cantrips known.
-export function innateCantripsFor(raceId: string, level: number): string[] {
-  return innateSpellsFor(raceId, level)
+export function innateCantripsFor(raceId: string, level: number, rules?: SpeciesRules | null): string[] {
+  return innateSpellsFor(raceId, level, rules)
     .filter((spell) => spell.castAt === 0)
     .map((spell) => spell.name);
 }
@@ -162,9 +177,10 @@ export function innateSpellCounters(
   raceId: string,
   level: number,
   existing?: Record<string, { max: number; used: number }>,
+  rules?: SpeciesRules | null,
 ): Record<string, { max: number; used: number }> {
   const out: Record<string, { max: number; used: number }> = {};
-  for (const spell of innateSpellsFor(raceId, level)) {
+  for (const spell of innateSpellsFor(raceId, level, rules)) {
     if (spell.counterId) {
       out[spell.counterId] = { max: 1, used: Math.min(existing?.[spell.counterId]?.used ?? 0, 1) };
     }

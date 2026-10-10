@@ -18,6 +18,7 @@
 import subclassesJson from "@/lib/srd/subclasses.json";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { authoredFeatureDefs } from "@/lib/srd/authored-feature-defs";
+import { tableFeat } from "@/lib/srd/feat-effects";
 
 export type FightingStyleId =
   | "archery"
@@ -659,9 +660,21 @@ export const FEAT_ONLY_SPEED: Record<string, number> = { skirmisher: 10 };
 // Every effect a character's feature list grants, in table order. The
 // longest matching entry wins per feature so "Extra Attack (2)" never also
 // counts as a plain "Extra Attack".
+// A table's workshop feat's own text, read into effects once per text.
+const tableFeatDefs = new Map<string, FeatureDef | null>();
+function tableFeatDef(name: string, desc: string): FeatureDef | null {
+  if (!tableFeatDefs.has(desc)) {
+    const effects = parseFeatureEffects(desc);
+    tableFeatDefs.set(desc, effects.length ? { match: [name], effects, guidance: desc } : null);
+  }
+  return tableFeatDefs.get(desc) ?? null;
+}
+
 export function effectsFor(input: {
   class: string;
   features: Array<{ name: string; classId?: string }>;
+  // The table, for its workshop feats (feat-effects.ts tableFeat).
+  campaignId?: string | null;
 }): Array<{ def: FeatureDef; effect: FeatureEffect; feature: string; featureClassId?: string }> {
   const wantedClass = normalize(input.class);
   const out: Array<{
@@ -671,7 +684,9 @@ export function effectsFor(input: {
     featureClassId?: string;
   }> = [];
   for (const feature of input.features) {
-    const name = normalize(feature.name);
+    // A workshop feat that runs as a published one is read as that feat.
+    const workshop = tableFeat(feature.name, input.campaignId);
+    const name = normalize(workshop?.runsAs ?? feature.name);
     const matches = FEATURE_EFFECTS.filter(
       (def) =>
         (!def.classes || def.classes.includes(wantedClass)) &&
@@ -690,6 +705,10 @@ export function effectsFor(input: {
         best = def;
         bestLength = length;
       }
+    }
+    // A workshop feat of its own is read by its text, as a pack feat is.
+    if (!best && workshop && !workshop.runsAs && workshop.desc) {
+      best = tableFeatDef(name, workshop.desc);
     }
     if (best) {
       for (const effect of best.effects) {
@@ -767,6 +786,8 @@ export function combatRiders(sheet: {
   // rogue dice, not character-level dice). Absent = single-class, where the
   // character level is the class level and nothing changes.
   classes?: Array<{ id: string; level: number }>;
+  // The table, for its workshop feats.
+  campaignId?: string | null;
 }): CombatRiders {
   const level = clampLevel(sheet.level);
   // The level a feature's scaling resolves at: its granting class's when
@@ -959,7 +980,7 @@ export type DefenseRiders = {
 };
 
 export function defenseRiders(
-  sheet: { class: string; level: number; features: Array<{ name: string }> },
+  sheet: { class: string; level: number; features: Array<{ name: string }>; campaignId?: string },
   // Ability modifiers, so a CHA-scaled aura resolves to a real number. When
   // omitted the aura's minimum stands in.
   abilityMods?: Record<string, number>,

@@ -5,19 +5,14 @@
 // the spending and the dawn regain) so the character sheet can show "4/7"
 // with the engine's own count, without importing a module that reaches the
 // database.
-import { gearDefFor, type ChargeRule } from "@/lib/srd/magic-gear";
+import { gearDefOfRow, type ChargeRule } from "@/lib/srd/magic-gear";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 
 // The charge rule of a carried row, or null for an item with no charges.
+// A workshop item's own rule rides on its line (gearDefOfRow); a row with no
+// block of its own is the table's by name.
 export function chargeRuleOf(item: Pick<EquipmentItem, "name" | "slug" | "gear">): ChargeRule | null {
-  const homebrew = (item.gear as { charges?: { max?: number; recharge?: string } } | undefined)?.charges;
-  if (homebrew?.max && homebrew.max > 0) {
-    return {
-      max: homebrew.max,
-      ...(/dawn|day|long rest/i.test(homebrew.recharge ?? "dawn") ? { regain: "all" } : {}),
-    };
-  }
-  return gearDefFor(item.name, item.slug)?.charges ?? null;
+  return gearDefOfRow(item)?.charges ?? null;
 }
 
 // The most an item can hold: its number, or the most its dice can roll (a

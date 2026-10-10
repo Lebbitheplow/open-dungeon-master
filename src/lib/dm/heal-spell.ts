@@ -87,8 +87,9 @@ export function castHealingSpell(
   const mech = resolved?.mech ?? null;
   const name = resolved?.name ?? facts.name;
 
-  // Spare the Dying stabilizes a dying creature and heals nothing.
-  if (name.toLowerCase() === "spare the dying") {
+  // Spare the Dying stabilizes a dying creature and heals nothing (a table's
+  // workshop copy of it too, by the spell it runs as).
+  if ((resolved?.runsAs ?? facts.runsAs ?? name).toLowerCase() === "spare the dying") {
     return { done: handleStabilize(campaign, turnId, target, caster, { method: "spell", reason: input.reason }) };
   }
 

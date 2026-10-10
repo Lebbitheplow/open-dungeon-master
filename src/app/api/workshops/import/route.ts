@@ -4,6 +4,8 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { importWorkshopBundle } from "@/lib/db/workshop-bundle";
 import { sharedHomesFor } from "@/lib/db/workshop-bundle-parts";
 import { uploadRefusalResponse } from "@/lib/upload-budget";
+import { applyWorldImport } from "@/lib/db/world-forge-io";
+import type { WorldImport } from "@/lib/worldforge/format";
 import {
   bundleCounts,
   bundleDependencies,
@@ -69,7 +71,7 @@ export async function POST(request: Request) {
   if (parsed.data.preview) {
     return Response.json({
       manifest: bundle.manifest,
-      counts: bundleCounts(bundle),
+      counts: read.worldForge ? { ...bundleCounts(bundle), ...worldForgeCounts(read.worldForge) } : bundleCounts(bundle),
       houseRules: bundle.houseRulesText.trim().length > 0,
       // The two single things a bundle can carry besides its lists, offered
       // as ticks like the rest (the plugin draft was never offered, so it
@@ -96,5 +98,19 @@ export async function POST(request: Request) {
       ? uploadRefusalResponse(result.refusal)
       : Response.json({ error: result.error }, { status: 400 });
   }
+  if (read.worldForge) {
+    // The workshop exists; now the world goes into its WorldForge whole.
+    const world = applyWorldImport(result.workshopId, { id: user.id, isAdmin: user.isAdmin }, read.worldForge);
+    if ("error" in world) {
+      return world.refusal ? uploadRefusalResponse(world.refusal) : Response.json({ error: world.error }, { status: 400 });
+    }
+    return Response.json({ ...result, copied: result.copied + world.created, world });
+  }
   return Response.json(result);
+}
+
+// What a WorldForge file holds, in the preview's own words.
+function worldForgeCounts(world: WorldImport): Record<string, number> {
+  const count = (shelf: string) => world.records.filter((record) => record.shelf === shelf).length;
+  return { npcs: count("npc"), locations: count("location"), lore: count("lore"), storyboard: world.beats.length };
 }

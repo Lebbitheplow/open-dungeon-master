@@ -154,7 +154,10 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   // card shows when no row exists (its target, its save). With no pack there
   // is no prose, and the engine reads the answers baked from the SRD rows, so
   // the card does too (Shocking Grasp stays a melee spell attack).
-  const row = spellMechFor([name]);
+  // A workshop spell's own block first, then the published row of the name
+  // or of the spell it runs as: the order the cast tools read them in.
+  const engine = fact.runsAs ?? name;
+  const row = fact.mech ?? spellMechFor([name, ...(fact.runsAs ? [fact.runsAs] : [])]);
   const mech: SpellMech =
     row ??
     (fact.desc ? parseSpellMech({ desc: fact.desc, higherLevel: fact.higherLevel }) : bakedSpellMech(name)) ??
@@ -196,7 +199,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const toHit = mech.resolution === "attack" ? spellAttackFor(sheet, name) : null;
   // The engine's own facts (casting time, components, material cost, range)
   // for the engine's own gates below.
-  const facts = bundledSpellFacts(name);
+  const facts = fact.facts ?? bundledSpellFacts(name);
   const dc = mech.resolution === "save" && mech.save ? spellSaveDcFor(sheet, name) : null;
   const save = dc !== null && mech.save ? { ability: SAVE_LABEL[mech.save] ?? mech.save.toUpperCase(), dc } : null;
   const type: HandCardType =
@@ -245,7 +248,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     budget: turn.myTurn ? budgetOf(turn, sheet) : null,
     reactionSpent: turn.reactionUsed,
   });
-  const melee = mech.resolution === "attack" && isMeleeSpellAttack(name, facts?.range.kind);
+  const melee = mech.resolution === "attack" && isMeleeSpellAttack(engine, facts?.range.kind);
   if (melee) notes.unshift("Melee spell attack: a creature beside you.");
   const card: HandCard = {
     id: `spell:${spellKey(name)}`,
@@ -282,7 +285,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const choice = cost === "reaction" ? undefined : spellChoice(mech);
   if (choice) card.choice = choice;
   // Web, Moonbeam, a wall: the square it is laid on is picked on the board.
-  const area = cost === "reaction" ? null : areaFor(name, slot?.level ?? (fact.level || null));
+  const area = cost === "reaction" ? null : areaFor({ spell: name, runsAs: fact.runsAs }, slot?.level ?? (fact.level || null));
   if (area) card.area = area;
   return gated(
     card,

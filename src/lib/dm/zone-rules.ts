@@ -169,13 +169,13 @@ export function obscuredFor(campaignId: string, refId: string): string | null {
   }
   const cell = tileIndex(map.width, token.x, token.y);
   const veil = zonesOf(map).find((zone) => {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     return Boolean(row && (row.obscured || row.darkness) && zone.cells.includes(cell));
   });
   if (!veil) {
     return null;
   }
-  const heavy = zoneRowFor(veil.spell)?.obscured === "heavy";
+  const heavy = zoneRowFor(veil)?.obscured === "heavy";
   return `${heavy ? "heavily" : "lightly"} obscured in ${veil.spell}: disadvantage on Perception by sight`;
 }
 
@@ -194,7 +194,7 @@ export function globeProblem(encounterId: string, casterRef: string, targetRef: 
   const at = tileIndex(map.width, target.x, target.y);
   const from = tileIndex(map.width, caster.x, caster.y);
   const globe = zonesOf(map).find((zone) => {
-    const row = zoneRowFor(zone.spell);
+    const row = zoneRowFor(zone);
     // An Antimagic Field stops every spell from outside, whatever its level.
     const ward = row?.antimagic ? 9 : row?.wardsSpellsUpTo;
     if (!ward || !zone.cells.includes(at) || zone.cells.includes(from)) {
@@ -202,7 +202,7 @@ export function globeProblem(encounterId: string, casterRef: string, targetRef: 
     }
     return spellLevel <= ward + (row?.antimagic ? 0 : Math.max(0, (zone.slotLevel ?? 6) - 6));
   });
-  if (globe && zoneRowFor(globe.spell)?.antimagic) {
+  if (globe && zoneRowFor(globe)?.antimagic) {
     return `${targetName} stands inside ${globe.casterName ? `${globe.casterName}'s ` : ""}Antimagic Field: no spell from outside has any effect there. Nothing was spent; choose another target.`;
   }
   return globe
@@ -233,7 +233,7 @@ export function reachThroughProblem(encounterId: string, attackerRef: string, ta
   }
   const a = tileIndex(map.width, from.x, from.y);
   const b = tileIndex(map.width, to.x, to.y);
-  const shell = zonesOf(map).find((zone) => zoneRowFor(zone.spell)?.barsLiving && zone.casterId !== attackerRef && zone.cells.includes(a) !== zone.cells.includes(b));
+  const shell = zonesOf(map).find((zone) => zoneRowFor(zone)?.barsLiving && zone.casterId !== attackerRef && zone.cells.includes(a) !== zone.cells.includes(b));
   return shell
     ? `${shell.casterName ? `${shell.casterName}'s ` : ""}Antilife Shell stands between them: ${attackerName} cannot reach through it with a melee attack. It may attack at range, cast, or take another action.`
     : null;
@@ -249,7 +249,7 @@ export function antimagicProblem(campaignId: string, casterId: string, casterNam
     return null;
   }
   const cell = tileIndex(map.width, token.x, token.y);
-  const field = zonesOf(map).find((zone) => zoneRowFor(zone.spell)?.antimagic && zone.cells.includes(cell));
+  const field = zonesOf(map).find((zone) => zoneRowFor(zone)?.antimagic && zone.cells.includes(cell));
   return field
     ? `${casterName} stands inside ${field.casterName ? `${field.casterName}'s ` : ""}Antimagic Field, where no spell can be cast. Step out of it first. Nothing was spent.`
     : null;

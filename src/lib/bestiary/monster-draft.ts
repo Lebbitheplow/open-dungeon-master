@@ -5,11 +5,19 @@ import { crLabel, deriveCr, expectedFor, type DerivedCr } from "@/lib/bestiary/d
 import {
   creatureTypeOf,
   normalizeCreatureType,
+  normalizePrintedBlock,
   type EnemyAttack,
   type EnemySaveMods,
   type EnemyStats,
   type SaveAbility,
 } from "@/lib/bestiary/statblock";
+import {
+  checkAttackExtras,
+  checkRegeneration,
+  checkRoutines,
+  checkSpecials,
+  checkSpellcasting,
+} from "@/lib/bestiary/block-check";
 
 // The monster a person writes, and the rules for turning it into the stat
 // block the engine fights with.
@@ -24,7 +32,12 @@ import {
 // src/lib/bestiary/homebrew-monsters.ts.
 
 export const MONSTER_NAME_MAX = 80;
-export const MAX_ATTACKS = 4;
+// The content pack's busiest block prints four attacks; a boss built by hand
+// gets room for a bite, two claws, a tail, a wing and a gaze.
+export const MAX_ATTACKS = 6;
+// The engine swings up to ten a turn (src/lib/dm/enemy-profile.ts); the SRD's
+// marilith makes seven.
+export const MAX_SWINGS = 10;
 // Six was room for a hand-typed monster. A boss assembled out of the
 // catalogue (src/lib/bestiary/kit.ts) spends several on ancestry traits
 // before it has said anything about itself, and still wants its legendary
@@ -35,11 +48,14 @@ export const MAX_ATTACKS = 4;
 // into the DM's turn (src/lib/dm/prompt.ts). It is bounded and it is opt-in:
 // a monster only carries twelve if somebody put twelve on it, and the
 // Open5e side still stops at four (src/lib/bestiary/statblock.ts).
-export const MAX_TRAITS = 12;
-export const TRAIT_MAX = 200;
-export const ATTACK_NAME_MAX = 40;
+export const MAX_TRAITS = 16;
+// The SRD's longest trait lines (a chain devil's, a cultist's) run near two
+// hundred characters and the pack's past three hundred; a line cut short
+// loses the clause the engine reads its numbers from.
+export const TRAIT_MAX = 400;
+export const ATTACK_NAME_MAX = 60;
 export const DAMAGE_TYPE_MAX = 40;
-export const RESIST_MAX = 200;
+export const RESIST_MAX = 400;
 
 export const SIZES = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"] as const;
 
@@ -93,12 +109,20 @@ export function checkAttack(raw: unknown): { attack: EnemyAttack } | { error: st
   if (!isValidExpression(damage)) {
     return { error: `"${damage}" is not a dice expression the table can roll.` };
   }
+  // Reach, range, the dice riding the hit and what a hit does besides
+  // damage: the engine reads every one (src/lib/dm/enemy-profile.ts,
+  // enemy-attack.ts), so a block that had them keeps them.
+  const extras = checkAttackExtras(source as Record<string, unknown>, name);
+  if ("error" in extras) {
+    return extras;
+  }
   return {
     attack: {
       name,
       toHit: clamp(source.toHit, -5, 20, 0),
       damage,
       type: text(source.type, DAMAGE_TYPE_MAX) || "untyped",
+      ...extras.value,
     },
   };
 }
@@ -106,7 +130,7 @@ export function checkAttack(raw: unknown): { attack: EnemyAttack } | { error: st
 function normalizeSaves(raw: unknown): EnemySaveMods {
   const source = (raw ?? {}) as Partial<Record<SaveAbility, unknown>>;
   return Object.fromEntries(
-    SAVE_ABILITIES.map((ability) => [ability, clamp(source[ability], -5, 15, 0)]),
+    SAVE_ABILITIES.map((ability) => [ability, clamp(source[ability], -5, 20, 0)]),
   ) as EnemySaveMods;
 }
 
@@ -134,17 +158,29 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     attacks.push(checked.attack);
   }
 
+  const specials = checkSpecials(source.specials);
+  if ("error" in specials) {
+    return specials;
+  }
+  const spellcasting = checkSpellcasting(source.spellcasting);
+  const regeneration = checkRegeneration(source.regeneration);
+  const routines = checkRoutines(source.routines, attacks);
+
+  const printed = normalizePrintedBlock(source.printed);
   const cr = Math.min(30, Math.max(0, Number(source.cr) || 0));
-  const size = SIZES.find((option) => option === text(source.size, 20)) ?? "Medium";
+  // The pack prints sizes in lower case ("large"); a match that minded the
+  // case turned every monster started from it into a Medium one.
+  const sizeWord = text(source.size, 20).toLowerCase();
+  const size = SIZES.find((option) => option.toLowerCase() === sizeWord) ?? "Medium";
   // Rows stored before the field existed read as monstrosity, the plate
   // that claims the least, until somebody picks.
   const type = normalizeCreatureType(source.type) ?? "monstrosity";
   const stats: EnemyStats = {
     ac: clamp(source.ac, 1, 30, 12),
-    maxHp: clamp(source.maxHp, 1, 1000, 10),
+    maxHp: clamp(source.maxHp, 1, 2000, 10),
     dexMod: clamp(source.dexMod, -5, 10, 0),
     saveMods: normalizeSaves(source.saveMods),
-    speed: text(source.speed, 60) || "30",
+    speed: text(source.speed, 120) || "30",
     attacks,
     traits: (Array.isArray(source.traits) ? source.traits : [])
       .slice(0, MAX_TRAITS)
@@ -158,10 +194,16 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     // Never taken from the client: XP is a function of CR and a row where
     // they disagree would quietly break every encounter budget it appears in.
     xp: xpForCr(cr),
-    attacksPerTurn: clamp(source.attacksPerTurn, 1, 3, 1),
+    attacksPerTurn: clamp(source.attacksPerTurn, 1, MAX_SWINGS, 1),
     size,
     type,
+    ...(routines.length ? { routines } : {}),
+    ...(specials.value.length ? { specials: specials.value } : {}),
+    ...(spellcasting ? { spellcasting } : {}),
+    ...(regeneration ? { regeneration } : {}),
     ...normalizeBlockExtras(source),
+    // The whole printed block a copy keeps beside the compact lines.
+    ...(printed ? { printed } : {}),
   };
 
   return {
@@ -185,7 +227,8 @@ function normalizeBlockExtras(
   for (const ability of SAVE_ABILITIES) {
     const value = rawAbilities[ability];
     if (typeof value === "number" && Number.isFinite(value)) {
-      abilities[ability] = clamp(value, 1, 30, 10);
+      // The SRD stops at 30; the pack's other books do not.
+      abilities[ability] = clamp(value, 1, 50, 10);
     }
   }
   if (Object.keys(abilities).length) {
@@ -227,7 +270,7 @@ function normalizeBlockExtras(
     out.alignment = alignment;
   }
   if (Array.isArray(source.spells)) {
-    const spells = [...new Set(source.spells.map((spell) => text(spell, 60)).filter(Boolean))].slice(0, 30);
+    const spells = [...new Set(source.spells.map((spell) => text(spell, 60)).filter(Boolean))].slice(0, 40);
     if (spells.length) {
       out.spells = spells;
     }

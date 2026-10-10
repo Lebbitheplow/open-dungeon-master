@@ -5,6 +5,7 @@
 // steps point at things inside those editors, which do not exist until the
 // prepare runs. No "@/" imports here: scripts/test-tours.mjs loads this
 // straight from disk.
+import { WORLD_TOUR_STEPS } from "./worldforge-tour.ts";
 import type { TourStep } from "./logic";
 
 export const SHELF_TOUR_ID = "workshop-shelf";
@@ -30,7 +31,7 @@ export const SHELF_TOUR: TourStep[] = [
   {
     id: "import",
     title: "Import a bundle",
-    body: "A bundle is a whole workshop as one file, exported from the Share tool here or on another server. Importing makes a new workshop of your own; nothing is written into a campaign.",
+    body: "A bundle is a whole workshop as one file, exported from the Share tool here or on another server. A world exported from WorldForge opens the same way, whole: its entries become the Cast, places, factions and lore, and the rest lands in the workshop's WorldForge tool. Importing makes a new workshop of your own; nothing is written into a campaign.",
     anchors: ["shelf-import"],
   },
   {
@@ -108,6 +109,7 @@ function tool(steps: TourStep[]): TourStep[] {
 }
 
 export const SYSTEM_TOURS: Record<string, TourStep[]> = {
+  world: tool(WORLD_TOUR_STEPS),
   storyboard: tool([
     {
       id: "add",

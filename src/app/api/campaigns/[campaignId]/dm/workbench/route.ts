@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { resolveMonster } from "@/lib/bestiary";
 import { partyLevelsFor } from "@/lib/dm/party-budget";
@@ -56,7 +57,7 @@ export async function POST(
   const resolved: WorkbenchRosterEntry[] = [];
   for (const row of roster.rows) {
     const match = resolveMonster(row.monster, campaign.gameSettings, {
-      userId: campaign.ownerUserId,
+      userIds: spellAuthorsFor(campaign),
     });
     if (!match) {
       return Response.json(

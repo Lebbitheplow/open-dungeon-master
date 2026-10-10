@@ -67,7 +67,7 @@ export function spendAttackEconomy(input: {
     const usesAttackAction =
       !grantedBonusAction && !args.offHand && !options.bonusAttack && !options.hordeBreaker && kind !== "spell" && !multiattack;
     if (usesAttackAction) {
-      const loading = loadingProblem({ who: sheet.name, profile, budget, feats: sheet.feats });
+      const loading = loadingProblem({ who: sheet.name, profile, budget, feats: sheet.feats, campaignId: sheet.campaignId });
       // A new action (Action Surge, Haste) reloads; only a swing that would
       // ride the action already fired from is refused.
       if (loading && attacksLeft(budget) > 0 && budget.attacksMade > 0) {

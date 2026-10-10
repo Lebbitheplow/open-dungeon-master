@@ -17,9 +17,12 @@ export function afflictionLines(campaignId: string, sheet: Pick<CharacterSheet, 
   const now = getClock(campaignId).instant;
   return liveAfflictions(campaignId, sheet).map((entry) => {
     if (entry.kind === "disease") {
-      const disease = DISEASES[entry.id as DiseaseId];
+      const disease = DISEASES[entry.id as DiseaseId] ?? (entry.disease ? { name: entry.disease.name } : undefined);
       if (entry.onsetAt !== undefined) {
         return `infected with ${disease?.name ?? entry.id}, symptoms in ${hoursUntil(entry.onsetAt, now)} h`;
+      }
+      if (entry.disease?.spec.rest?.onSuccess === "recover") {
+        return `${entry.disease.name} (${entry.successes ?? 0} of ${entry.disease.spec.rest.successes} rest saves toward a cure)`;
       }
       if (entry.id === "cackle_fever") {
         return `Cackle Fever (DC ${entry.dc ?? 13}, ${entry.fails ?? 0} of 3 failed rest saves)`;

@@ -19,6 +19,7 @@ import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy
 import { getSheetById } from "@/lib/db/sheets";
 import { spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -59,7 +60,7 @@ function rearm(enemyId: string, mark: string, meta: ConditionMeta) {
 // creature's turn, while the spell still holds it.
 function saveAtTurnEnd(campaign: Campaign, enemy: EncounterEnemy, meta: ConditionMeta): string | null {
   const encounter = getActiveEncounter(campaign.id);
-  const resolved = meta.spell ? spellMechanicsFor({ spell: meta.spell }) : null;
+  const resolved = meta.spell ? spellMechanicsFor({ spell: meta.spell, userIds: spellAuthorsFor(campaign) }) : null;
   const edge = resolved?.mech.condition?.turnEnd;
   const caster = meta.source ? getSheetById(meta.source) : null;
   if (!encounter || !resolved?.mech.save || !edge || !caster || enemy.status !== "alive") {

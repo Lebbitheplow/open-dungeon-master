@@ -1,0 +1,308 @@
+{
+ "version": 4,
+ "exportedAt": "2026-10-09T12:00:00.000Z",
+ "worldName": "The Saltmarch",
+ "entities": [
+  {
+   "id": "e_ivo",
+   "name": "Ivo Brannock",
+   "type": "Character",
+   "categoryId": "cat_town",
+   "aliases": [
+    "the Tidewarden"
+   ],
+   "summary": "Keeper of the sea wall at Gullhaven, patient as the tide.",
+   "hiddenTruth": "Ivo sold the sluice codes to the smugglers.",
+   "tags": [
+    "warden"
+   ],
+   "canon": "canon",
+   "notes": "",
+   "createdAt": "2026-10-01T00:00:00.000Z",
+   "links": [
+    {
+     "targetId": "e_gull",
+     "label": "lives in"
+    },
+    {
+     "targetId": "e_mira",
+     "label": "mentor of"
+    },
+    {
+     "targetId": "e_saltcoats",
+     "label": "member of"
+    },
+    {
+     "targetId": "e_mira",
+     "label": "fears",
+     "veracity": "hidden",
+     "oneway": true
+    }
+   ],
+   "fields": {
+    "f_born": {
+     "calendarId": "cal_tide",
+     "yearNum": 61
+    },
+    "f_secret": "Hollowmere"
+   }
+  },
+  {
+   "id": "e_mira",
+   "name": "Mira Fenn",
+   "type": "Character",
+   "categoryId": "cat_town",
+   "summary": "A sluice-keeper's apprentice who reads the marsh like a ledger.",
+   "tags": [],
+   "canon": "canon",
+   "notes": "",
+   "links": [
+    {
+     "targetId": "e_ivo",
+     "label": "rival of"
+    }
+   ],
+   "fields": {}
+  },
+  {
+   "id": "e_gull",
+   "name": "Gullhaven",
+   "type": "Location",
+   "summary": "A fishing town behind a sea wall older than its name.",
+   "tags": [
+    "town"
+   ],
+   "canon": "canon",
+   "notes": "Smells of tar and kelp.",
+   "links": [
+    {
+     "targetId": "e_fen",
+     "label": "road to"
+    }
+   ],
+   "fields": {
+    "f_pop": 900
+   }
+  },
+  {
+   "id": "e_fen",
+   "name": "The Drowned Fen",
+   "type": "Location",
+   "summary": "Salt marsh that swallows a road a year.",
+   "tags": [],
+   "canon": "canon",
+   "notes": "",
+   "links": [],
+   "fields": {}
+  },
+  {
+   "id": "e_saltcoats",
+   "name": "The Saltcoats",
+   "type": "Faction",
+   "summary": "The wardens of the sea wall, paid in salt.",
+   "tags": [
+    "guild"
+   ],
+   "canon": "canon",
+   "notes": "",
+   "links": [],
+   "fields": {}
+  },
+  {
+   "id": "e_horn",
+   "name": "The Brine Horn",
+   "type": "Artifact",
+   "summary": "A conch that calls the tide in early.",
+   "tags": [
+    "relic"
+   ],
+   "canon": "canon",
+   "notes": "",
+   "links": [],
+   "fields": {}
+  },
+  {
+   "id": "e_ghost",
+   "name": "The Grey Lantern",
+   "type": "Artifact",
+   "summary": "Maybe a lantern that walks the fen at night.",
+   "tags": [],
+   "canon": "alternate",
+   "notes": "",
+   "links": [],
+   "fields": {}
+  }
+ ],
+ "pins": [
+  {
+   "id": "p1",
+   "mapId": "m1",
+   "x": 0.25,
+   "y": 0.5,
+   "name": "Gullhaven",
+   "type": "Location",
+   "notes": "The only harbour for forty miles",
+   "entityId": "e_gull"
+  },
+  {
+   "id": "p2",
+   "mapId": "m1",
+   "x": 0.75,
+   "y": 0.25,
+   "name": "Fen",
+   "type": "Location",
+   "notes": "",
+   "entityId": "e_fen"
+  }
+ ],
+ "events": [
+  {
+   "id": "ev2",
+   "era": "Second Tide",
+   "title": "The Wall Breaks",
+   "body": "A storm takes the eastern wall.",
+   "year": "",
+   "yearNum": 70,
+   "calendarId": "cal_tide",
+   "entityIds": [
+    "e_gull"
+   ],
+   "canon": "canon"
+  },
+  {
+   "id": "ev1",
+   "era": "First Tide",
+   "title": "The Wall Is Raised",
+   "body": "The first wardens stack the stones.",
+   "year": "",
+   "yearNum": 1,
+   "calendarId": "cal_tide",
+   "entityIds": [],
+   "canon": "canon"
+  }
+ ],
+ "calendars": [
+  {
+   "id": "cal_tide",
+   "name": "Reckoning of Tides",
+   "abbrev": "RT",
+   "epochOffset": 0,
+   "notes": "Counted from the raising of the wall"
+  }
+ ],
+ "types": [
+  {
+   "id": "t_character",
+   "name": "Character",
+   "fields": [
+    {
+     "id": "f_born",
+     "name": "Born",
+     "kind": "year"
+    },
+    {
+     "id": "f_secret",
+     "name": "Real Name",
+     "kind": "text",
+     "authorOnly": true
+    }
+   ]
+  },
+  {
+   "id": "t_location",
+   "name": "Location",
+   "fields": [
+    {
+     "id": "f_pop",
+     "name": "Population",
+     "kind": "number"
+    }
+   ]
+  }
+ ],
+ "maps": [
+  {
+   "id": "m1",
+   "name": "The Saltmarch",
+   "parentPinId": null
+  }
+ ],
+ "stories": [
+  {
+   "id": "st1",
+   "name": "The Low Tide",
+   "summary": "When the sea wall's codes go missing, a warden's apprentice follows the leak into the fen."
+  }
+ ],
+ "scenes": [
+  {
+   "id": "s2",
+   "storyId": "st1",
+   "title": "Into the Fen",
+   "gist": "Mira tracks the smugglers' lanterns.",
+   "order": 1,
+   "povEntityId": "e_mira",
+   "locationEntityId": "e_fen",
+   "castEntityIds": []
+  },
+  {
+   "id": "s1",
+   "storyId": "st1",
+   "title": "The Missing Codes",
+   "gist": "The sluice codes are gone from Ivo's desk.",
+   "order": 0,
+   "povEntityId": "e_ivo",
+   "locationEntityId": "e_gull",
+   "castEntityIds": [
+    "e_mira"
+   ]
+  }
+ ],
+ "secrets": [
+  {
+   "id": "sec1",
+   "title": "Ivo is the leak",
+   "entityId": "e_ivo",
+   "notes": "The warden himself sold the codes.",
+   "knownBy": {
+    "st1": {
+     "e_ivo": "start"
+    }
+   },
+   "audienceReveal": {}
+  }
+ ],
+ "categories": [
+  {
+   "id": "cat_town",
+   "name": "Townsfolk"
+  }
+ ],
+ "sceneBodies": {
+  "s1": "The desk drawer was open."
+ },
+ "writeStats": {
+  "dailyGoal": 500,
+  "days": {}
+ },
+ "settings": {
+  "imageApiKey": "sk-test-never-store-this",
+  "imageBaseUrl": "https://example.invalid",
+  "claudeModel": "x"
+ },
+ "media": {
+  "entityImages": {
+   "e_ivo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/AAAADAQEAGN2NsAAAAABJRU5ErkJggg==",
+   "e_mira": "data:text/html;base64,PHNjcmlwdD4="
+  },
+  "mapBackgrounds": {}
+ },
+ "stubs": [
+  {
+   "id": "stub1",
+   "name": "Who built the wall?",
+   "note": "Decide before the reveal.",
+   "status": "open"
+  }
+ ]
+}

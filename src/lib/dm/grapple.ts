@@ -89,7 +89,7 @@ export function characterEscape(
     : null;
   if (!held) {
     // A spell's hold (Entangle, Web): src/lib/dm/spell-escape.ts.
-    return characterSpellHold(sheet)
+    return characterSpellHold(campaign, sheet)
       ? characterSpellEscape(campaign, turn, sheet, spend)
       : { error: `${sheet.name} is not grappled; there is nothing to escape.` };
   }
@@ -170,7 +170,7 @@ export function enemyEscape(
     ? grappleOf(enemy.conditionMeta)
     : null;
   if (!held) {
-    return enemySpellHold(enemy)
+    return enemySpellHold(campaign, enemy)
       ? enemySpellEscape(campaign, turn, enemy)
       : { error: `${enemy.displayName} is not grappled; there is nothing to escape.` };
   }

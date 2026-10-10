@@ -1,8 +1,15 @@
-import { isValidExpression } from "@/lib/dice";
 import type { SrdArmor } from "@/lib/srd/armor";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
+import { clamp, num, text, type Raw } from "@/lib/homebrew/coerce";
+import { normalizeRaceData } from "@/lib/homebrew/race-data";
+import { normalizeBackgroundData } from "@/lib/homebrew/background-data";
+import { normalizeHazardData } from "@/lib/homebrew/hazard-data";
+import { GEAR_LIMITS, normalizeItemData, type HomebrewData, type Outcome } from "@/lib/homebrew/item-data";
+import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
+import { engineFeatNamed } from "@/lib/srd/feat-effects";
+import { engineSpellNamed, truthy } from "@/lib/srd/spell-facts";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 
 // What a homebrew entry means to the engine.
@@ -24,344 +31,21 @@ import type { HomebrewKind } from "@/lib/schemas/homebrew";
 // item edited in the workshop reaches every sheet that carries it.
 //
 // Pure by design: no DB and no I/O, so scripts/test-homebrew-gear.mjs drives
-// it directly.
+// it directly. Items live in item-data.ts and are re-exported here.
 
-export const ITEM_KINDS = ["weapon", "armor", "gear", "magic_item"] as const;
-export type ItemKind = (typeof ITEM_KINDS)[number];
-
-export const WEAPON_CATEGORIES = ["simple", "martial", "firearm", "exotic"] as const;
-export const WEAPON_PROPERTIES = [
-  "ammunition",
-  "finesse",
-  "heavy",
-  "light",
-  "loading",
-  "reach",
-  "thrown",
-  "two-handed",
-  "versatile",
-] as const;
-export const ARMOR_CATEGORIES = ["light", "medium", "heavy", "shield"] as const;
-export const RARITIES = ["common", "uncommon", "rare", "very rare", "legendary", "artifact"] as const;
-export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
-export const EFFECT_KINDS = ["ac_bonus", "ac_unarmored", "save_bonus", "set_ability", "resistance"] as const;
-
-// The ceilings are the published game's own: no magic bonus in the SRD goes
-// past +3, and no weapon a character swings rolls more than a dozen or two.
-export const GEAR_LIMITS = {
-  descMax: 8_000,
-  effectsMax: 6,
-  bonusMax: 3,
-  // The largest die a weapon rolls, and the most its dice and flat damage
-  // can come to on their best roll (a greatsword's 2d6 is 12).
-  damageDieMax: 12,
-  damageRollMax: 30,
-  acMin: 10,
-  acMax: 21,
-  shieldMax: 5,
-  weightMax: 10_000,
-  chargesMax: 50,
-} as const;
-
-export type HomebrewMagic = { requiresAttunement: boolean; effects: MagicItemEffect[] };
-
-export type HomebrewGear = {
-  weapon?: SrdWeapon;
-  armor?: SrdArmor;
-  magic?: HomebrewMagic;
-  weight?: number;
-};
-
-type Raw = Record<string, unknown>;
-// What a stored entry's data blob looks like after normalization: whatever
-// the kind carries, and always a description.
-export type HomebrewData = Raw & { desc: string };
-
-function text(value: unknown, max: number): string {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
-
-function num(value: unknown): number | null {
-  const number =
-    typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
-  return Number.isFinite(number) ? number : null;
-}
-
-function clamp(value: unknown, min: number, max: number, fallback: number): number {
-  const number = num(value);
-  return number === null ? fallback : Math.min(max, Math.max(min, Math.round(number)));
-}
-
-function oneOf<T extends string>(value: unknown, options: readonly T[], fallback: T): T {
-  return options.includes(value as T) ? (value as T) : fallback;
-}
-
-// ---- items ----
-
-export type Outcome<T> = { data: T } | { error: string };
-
-// Why a damage expression is more than a weapon deals, or null. Every die is
-// a d12 at most and the best possible roll stays within damageRollMax.
-export function damageProblem(dice: string): string | null {
-  let best = 0;
-  for (const term of dice.matchAll(/(\d*)d(\d+)/gi)) {
-    const count = term[1] ? Number(term[1]) : 1;
-    const sides = Number(term[2]);
-    if (sides > GEAR_LIMITS.damageDieMax) {
-      return `a weapon's die is a d${GEAR_LIMITS.damageDieMax} at most, and "${dice}" rolls a d${sides}.`;
-    }
-    best += count * sides;
-  }
-  for (const flat of dice.replace(/\d*d\d+/gi, "").matchAll(/[+-]?\d+/g)) {
-    best += Number(flat[0]);
-  }
-  return best > GEAR_LIMITS.damageRollMax
-    ? `a weapon deals ${GEAR_LIMITS.damageRollMax} at most on its best roll, and "${dice}" can roll ${best}.`
-    : null;
-}
-
-export function normalizeWeapon(raw: unknown, name: string): Outcome<SrdWeapon> {
-  const source = (raw ?? {}) as Raw;
-  const damage = text(source.damage, 40);
-  if (!damage) {
-    return { error: `${name} needs damage, like "1d8 slashing".` };
-  }
-  const [dice] = damage.split(/\s+/);
-  if (!isValidExpression(dice)) {
-    return { error: `"${dice}" is not a dice expression the table can roll.` };
-  }
-  const tooMuch = damageProblem(dice);
-  if (tooMuch) {
-    return { error: `${name}: ${tooMuch}` };
-  }
-  const properties = Array.isArray(source.properties)
-    ? [...new Set(source.properties.map((p) => String(p).trim().toLowerCase()).filter((p) => (WEAPON_PROPERTIES as readonly string[]).includes(p)))]
-    : [];
-  const kind = oneOf(source.kind, ["melee", "ranged"] as const, "melee");
-  const rangeFt = num(source.rangeFt);
-  return {
-    data: {
-      name,
-      category: oneOf(source.category, WEAPON_CATEGORIES, "simple"),
-      kind,
-      damage,
-      ...(properties.length ? { properties } : {}),
-      ...(rangeFt !== null && rangeFt > 0 ? { rangeFt: Math.min(600, Math.round(rangeFt)) } : {}),
-    },
-  };
-}
-
-export function normalizeArmor(raw: unknown, name: string): Outcome<SrdArmor> {
-  const source = (raw ?? {}) as Raw;
-  const category = oneOf(source.category, ARMOR_CATEGORIES, "light");
-  const shield = category === "shield";
-  const baseAc = num(source.baseAc);
-  if (baseAc === null) {
-    return { error: `${name} needs a base armour class.` };
-  }
-  if (shield && (baseAc < 1 || baseAc > GEAR_LIMITS.shieldMax)) {
-    return { error: `A shield adds between 1 and ${GEAR_LIMITS.shieldMax}.` };
-  }
-  if (!shield && (baseAc < GEAR_LIMITS.acMin || baseAc > GEAR_LIMITS.acMax)) {
-    return { error: `Armour class runs from ${GEAR_LIMITS.acMin} to ${GEAR_LIMITS.acMax}.` };
-  }
-  const dexCap = num(source.dexCap);
-  const strengthRequirement = num(source.strengthRequirement);
-  return {
-    data: {
-      name,
-      category,
-      baseAc: Math.round(baseAc),
-      // Heavy armour lets no DEX through; light lets all of it; medium is
-      // the one with a number worth typing.
-      ...(shield
-        ? {}
-        : category === "heavy"
-          ? { dexCap: 0 }
-          : dexCap !== null && category === "medium"
-            ? { dexCap: Math.min(5, Math.max(0, Math.round(dexCap))) }
-            : {}),
-      ...(strengthRequirement !== null && strengthRequirement > 0
-        ? { strengthRequirement: Math.min(30, Math.round(strengthRequirement)) }
-        : {}),
-      ...(source.stealthDisadvantage === true ? { stealthDisadvantage: true } : {}),
-      weightLb: Math.max(0, num(source.weightLb) ?? 0),
-    },
-  };
-}
-
-export function normalizeEffects(raw: unknown): MagicItemEffect[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  const out: MagicItemEffect[] = [];
-  for (const entry of raw) {
-    const source = (entry ?? {}) as Raw;
-    switch (source.kind) {
-      case "ac_bonus":
-      case "ac_unarmored":
-      case "save_bonus": {
-        const amount = clamp(source.amount, -GEAR_LIMITS.bonusMax, GEAR_LIMITS.bonusMax, 0);
-        if (amount !== 0) {
-          out.push({ kind: source.kind, amount });
-        }
-        break;
-      }
-      case "set_ability": {
-        const ability = oneOf(source.ability, ABILITIES, "str");
-        out.push({ kind: "set_ability", ability, score: clamp(source.score, 3, 30, 19) });
-        break;
-      }
-      case "resistance": {
-        const types = Array.isArray(source.types)
-          ? [...new Set(source.types.map((t) => String(t).trim().toLowerCase()).filter(Boolean))].slice(0, 13)
-          : [];
-        if (types.length) {
-          out.push({ kind: "resistance", types });
-        }
-        break;
-      }
-      default:
-        break;
-    }
-    if (out.length >= GEAR_LIMITS.effectsMax) {
-      break;
-    }
-  }
-  return out;
-}
-
-export function normalizeItemData(raw: unknown, name: string): Outcome<HomebrewData> {
-  const source = (raw ?? {}) as Raw;
-  const itemKind = oneOf(source.itemKind, ITEM_KINDS, "gear");
-  const data: HomebrewData = {
-    desc: text(source.desc, GEAR_LIMITS.descMax),
-    itemKind,
-    rarity: text(source.rarity, 40),
-    cost: text(source.cost, 40),
-  };
-  const weight = num(source.weight);
-  if (weight !== null && weight >= 0) {
-    data.weight = Math.min(GEAR_LIMITS.weightMax, Math.round(weight * 100) / 100);
-  }
-  if (itemKind === "weapon") {
-    const weapon = normalizeWeapon(source.weapon, name);
-    if ("error" in weapon) {
-      return weapon;
-    }
-    data.weapon = weapon.data;
-  }
-  if (itemKind === "armor") {
-    const armor = normalizeArmor(source.armor, name);
-    if ("error" in armor) {
-      return armor;
-    }
-    if (data.weight === undefined && armor.data.weightLb) {
-      data.weight = armor.data.weightLb;
-    }
-    data.armor = armor.data;
-  }
-  if (itemKind === "magic_item" || source.effects !== undefined || source.requiresAttunement !== undefined) {
-    data.requiresAttunement = source.requiresAttunement === true;
-    data.effects = normalizeEffects(source.effects);
-    // A magic weapon or armour keeps its weapon or armour block too.
-    if (itemKind === "magic_item" && source.weapon) {
-      const weapon = normalizeWeapon(source.weapon, name);
-      if ("error" in weapon) {
-        return weapon;
-      }
-      data.weapon = weapon.data;
-    }
-    if (itemKind === "magic_item" && source.armor) {
-      const armor = normalizeArmor(source.armor, name);
-      if ("error" in armor) {
-        return armor;
-      }
-      data.armor = armor.data;
-    }
-    const chargesMax = num((source.charges as Raw | undefined)?.max);
-    if (chargesMax !== null && chargesMax > 0) {
-      data.charges = {
-        max: Math.min(GEAR_LIMITS.chargesMax, Math.round(chargesMax)),
-        recharge: text((source.charges as Raw).recharge, 80) || "dawn",
-      };
-    }
-  }
-  return { data };
-}
-
-// The snapshot a sheet's equipment line carries for a homebrew item. Null
-// for an entry with nothing the engine reads (plain gear with a
-// description), so a snapshot is only ever written when it means something.
-export function gearFromHomebrewData(name: string, data: unknown): HomebrewGear | null {
-  const source = (data ?? {}) as Raw;
-  const gear: HomebrewGear = {};
-  if (source.weapon) {
-    const weapon = normalizeWeapon(source.weapon, name);
-    if ("data" in weapon) {
-      gear.weapon = weapon.data;
-    }
-  }
-  if (source.armor) {
-    const armor = normalizeArmor(source.armor, name);
-    if ("data" in armor) {
-      gear.armor = armor.data;
-    }
-  }
-  const effects = normalizeEffects(source.effects);
-  if (effects.length) {
-    gear.magic = { requiresAttunement: source.requiresAttunement === true, effects };
-  }
-  const weight = num(source.weight);
-  if (weight !== null && weight >= 0) {
-    gear.weight = weight;
-  }
-  return Object.keys(gear).length ? gear : null;
-}
+export * from "@/lib/homebrew/item-data";
 
 // ---- spells ----
 
-const RESOLUTIONS = ["attack", "save", "auto", "heal", "buff", "summon", "utility"] as const;
-
+// The whole block (src/lib/homebrew/spell-mech-schema.ts), or null when
+// there is none or it does not hold together. Stored rows were checked when
+// they were written, so a read only ever drops a row nothing could run.
 export function normalizeSpellMech(raw: unknown): SpellMech | null {
-  const source = (raw ?? {}) as Raw;
-  if (!RESOLUTIONS.includes(source.resolution as (typeof RESOLUTIONS)[number])) {
+  if (!raw || typeof raw !== "object") {
     return null;
   }
-  const mech: SpellMech = { resolution: source.resolution as SpellMech["resolution"] };
-  if (ABILITIES.includes(source.save as (typeof ABILITIES)[number])) {
-    mech.save = source.save as SpellMech["save"];
-  }
-  if (source.halfOnSave === true) {
-    mech.halfOnSave = true;
-  }
-  const damageType = text(source.damageType, 30).toLowerCase();
-  if (damageType) {
-    mech.damageType = damageType;
-  }
-  const condition = source.condition as Raw | undefined;
-  const conditionName = text(condition?.name, 40);
-  if (conditionName) {
-    mech.condition = {
-      name: conditionName.toLowerCase(),
-      ...(num(condition?.rounds) !== null ? { rounds: clamp(condition?.rounds, 1, 6000, 10) } : {}),
-      ...(condition?.saveEnds === true ? { saveEnds: true } : {}),
-    };
-  }
-  const buff = source.buff as Raw | undefined;
-  const buffName = text(buff?.condition, 40);
-  if (buffName) {
-    mech.buff = {
-      condition: buffName.toLowerCase(),
-      target: oneOf(buff?.target, ["self", "ally", "allies"] as const, "self"),
-      rounds: clamp(buff?.rounds, 1, 6000, 10),
-    };
-  }
-  const note = text(source.note, 200);
-  if (note) {
-    mech.note = note;
-  }
-  return mech;
+  const checked = checkSpellMech(raw);
+  return "mech" in checked ? checked.mech : null;
 }
 
 export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
@@ -374,8 +58,8 @@ export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
     classes: Array.isArray(source.classes)
       ? [...new Set(source.classes.map((c) => String(c).trim().toLowerCase()).filter(Boolean))].slice(0, 20)
       : [],
-    ritual: source.ritual === true,
-    concentration: source.concentration === true,
+    ritual: truthy(source.ritual),
+    concentration: truthy(source.concentration),
     casting_time: text(source.casting_time, 60) || "1 action",
     range: text(source.range, 60) || "60 feet",
     components: text(source.components, 120) || "V, S",
@@ -384,12 +68,37 @@ export function normalizeSpellData(raw: unknown): Outcome<HomebrewData> {
   if (!data.desc) {
     return { error: "A spell needs a description; the engine reads its damage and save out of it." };
   }
-  const mech = normalizeSpellMech(source.mech);
-  if (mech) {
-    if (mech.resolution === "save" && !mech.save) {
+  // The material and what it costs (src/lib/srd/spell-facts.ts materialOf):
+  // the line a caster has to carry, the price the cast guard asks for, and
+  // whether the casting uses it up. Kept apart from the letters, which is
+  // where the content pack keeps it too.
+  const material = text(source.material, 300);
+  if (material) {
+    data.material = material;
+  }
+  const cost = num(source.materialCostGp);
+  if (cost !== null && cost > 0) {
+    data.materialCostGp = Math.min(1_000_000, Math.round(cost));
+    if (source.materialConsumed === true) {
+      data.materialConsumed = true;
+    }
+  }
+  // The published spell a copy runs as: its area, summons, reaction or
+  // transformation, which the engines key by the published name.
+  const runsAs = engineSpellNamed(text(source.runsAs, 80));
+  if (runsAs) {
+    data.runsAs = runsAs;
+  }
+  const block = source.mech as Raw | undefined;
+  if (block && typeof block === "object" && block.resolution) {
+    const checked = checkSpellMech(block);
+    if ("error" in checked) {
+      return checked;
+    }
+    if (checked.mech.resolution === "save" && !checked.mech.save) {
       return { error: "A spell that calls for a save has to say which ability saves." };
     }
-    data.mech = mech;
+    data.mech = checked.mech;
   }
   return { data };
 }
@@ -400,41 +109,19 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
   const source = (raw ?? {}) as Raw;
   const data: HomebrewData = { desc: text(source.desc, GEAR_LIMITS.descMax) };
   switch (kind) {
-    case "feat":
+    case "feat": {
       data.prerequisite = text(source.prerequisite, 200);
-      break;
-    case "background":
-      // The Open5e field names, because that is what the builder reads
-      // (skillsInText over skill_proficiencies).
-      data.skill_proficiencies = text(source.skill_proficiencies, 200);
-      data.tool_proficiencies = text(source.tool_proficiencies, 200);
-      data.languages = text(source.languages, 200);
-      data.equipment = text(source.equipment, 500);
-      data.feature = text(source.feature, 80);
-      data.feature_desc = text(source.feature_desc, 2_000);
-      break;
-    case "race": {
-      data.traits = text(source.traits, 4_000);
-      data.size = text(source.size, 40) || "Medium";
-      data.speed = { walk: clamp((source.speed as Raw | undefined)?.walk, 5, 120, 30) };
-      data.languages = text(source.languages, 300);
-      data.vision = text(source.vision, 120);
-      const asi: Array<{ attributes: string[]; value: number }> = [];
-      if (Array.isArray(source.asi)) {
-        for (const entry of source.asi.slice(0, 6)) {
-          const row = (entry ?? {}) as Raw;
-          const attributes = Array.isArray(row.attributes)
-            ? row.attributes.map((a) => String(a).trim()).filter(Boolean).slice(0, 6)
-            : [];
-          const value = clamp(row.value, -2, 3, 1);
-          if (attributes.length && value !== 0) {
-            asi.push({ attributes, value });
-          }
-        }
-      }
-      data.asi = asi;
+      // The published feat it runs as, by the name the engines know it by.
+      const runsAs = engineFeatNamed(text(source.runsAs, 80));
+      if (runsAs) data.runsAs = runsAs;
       break;
     }
+    case "background":
+      normalizeBackgroundData(source, data);
+      break;
+    case "race":
+      normalizeRaceData(source, data);
+      break;
     case "archetype": {
       data.classSlug = text(source.classSlug, 60).toLowerCase();
       const levels: Record<string, Array<{ n: string; d: string }>> = {};
@@ -448,21 +135,57 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
         const rows = features
           .map((feature) => {
             const row = (feature ?? {}) as Raw;
-            return { n: text(row.n, 80), d: text(row.d, 500) };
+            return { n: text(row.n, 80), d: text(row.d, 1_500) };
           })
           .filter((feature) => feature.n)
-          .slice(0, 6);
+          .slice(0, 8);
         if (rows.length) {
           levels[String(at)] = rows;
         }
       }
       data.levels = levels;
+      // Always-prepared spells by class level (a domain's, an oath's), the
+      // same shape the bundled tables give theirs.
+      const spells: Record<string, string[]> = {};
+      for (const [level, names] of Object.entries((source.spells ?? {}) as Raw)) {
+        const at = num(level);
+        const list = Array.isArray(names) ? [...new Set(names.map((name) => text(name, 60)).filter(Boolean))].slice(0, 6) : [];
+        if (at !== null && at >= 1 && at <= 20 && list.length) {
+          spells[String(at)] = list;
+        }
+      }
+      if (Object.keys(spells).length) {
+        data.spells = spells;
+      }
       break;
     }
     default:
       break;
   }
   return data;
+}
+
+// Where a copy came from (src/app/workshop/homebrew/draft.ts copiedFromOf):
+// kept through every save of every kind, so the editor can link the source's
+// page and say what the copy changed. Null when there is none to keep.
+export function normalizeCopiedFrom(raw: unknown): Raw | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const source = raw as Raw;
+  const name = text(source.name, 120);
+  const from = ["published", "bundled", "homebrew"].includes(String(source.source)) ? String(source.source) : "";
+  if (!name || !from) {
+    return null;
+  }
+  const out: Raw = { name, source: from };
+  for (const key of ["document", "slug", "rulebook"] as const) {
+    const value = text(source[key], 120);
+    if (value) {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 // Every kind through one door, so the route and the editor agree on what a
@@ -473,11 +196,26 @@ export function normalizeHomebrewData(
   raw: unknown,
   name: string,
 ): Outcome<HomebrewData> {
+  const outcome = normalizeHomebrewKind(kind, raw, name);
+  const copiedFrom = normalizeCopiedFrom(((raw ?? {}) as Raw).copiedFrom);
+  return "data" in outcome && copiedFrom ? { data: { ...outcome.data, copiedFrom } } : outcome;
+}
+
+function normalizeHomebrewKind(
+  kind: HomebrewKind,
+  raw: unknown,
+  name: string,
+): Outcome<HomebrewData> {
   switch (kind) {
     case "item":
       return normalizeItemData(raw, name);
     case "spell":
       return normalizeSpellData(raw);
+    case "hazard": {
+      const source = (raw ?? {}) as Raw;
+      const data = { desc: text(source.desc, GEAR_LIMITS.descMax) };
+      return normalizeHazardData(source, data);
+    }
     case "monster": {
       // The bestiary owns monsters (src/lib/bestiary/monster-draft.ts).
       const source = (raw ?? {}) as Raw;
@@ -490,6 +228,10 @@ export function normalizeHomebrewData(
 
 // One line for a row in a list: "martial melee, 1d8 slashing, versatile".
 export function describeHomebrew(kind: HomebrewKind, data: Raw): string {
+  if (kind === "hazard") {
+    const block = (data[String(data.hazardKind)] ?? {}) as { summary?: string };
+    return [String(data.hazardKind ?? "hazard"), block.summary ?? ""].filter(Boolean).join(": ").slice(0, 200);
+  }
   if (kind === "item") {
     const weapon = data.weapon as SrdWeapon | undefined;
     const armor = data.armor as SrdArmor | undefined;
@@ -503,11 +245,33 @@ export function describeHomebrew(kind: HomebrewKind, data: Raw): string {
         armor.category === "shield" ? `shield +${armor.baseAc}` : `${armor.category} armour, AC ${armor.baseAc}`,
       );
     }
+    const weaponRiders = (data.weaponRiders ?? {}) as { bonus?: number; extra?: Array<{ dice: string; type: string }> };
+    if (weaponRiders.bonus) {
+      parts.push(`+${weaponRiders.bonus} to hit and damage`);
+    }
+    for (const extra of weaponRiders.extra ?? []) {
+      parts.push(`+${extra.dice} ${extra.type === "weapon" ? "damage" : extra.type}`);
+    }
+    const armorBonus = (data.armorRiders as { bonus?: number } | undefined)?.bonus;
+    if (armorBonus) {
+      parts.push(`+${armorBonus} AC`);
+    }
     for (const effect of effects) {
       parts.push(describeEffect(effect));
     }
+    const charges = data.charges as { max?: number | string } | undefined;
+    if (charges?.max) {
+      parts.push(`${charges.max} charges`);
+    }
+    const spells = Array.isArray(data.spells) ? (data.spells as Array<{ spell: string }>) : [];
+    if (spells.length) {
+      parts.push(`casts ${spells.map((entry) => entry.spell).join(", ")}`);
+    }
     if (data.requiresAttunement) {
       parts.push("attunement");
+    }
+    if (data.cursed) {
+      parts.push("cursed");
     }
     if (typeof data.rarity === "string" && data.rarity) {
       parts.push(String(data.rarity));

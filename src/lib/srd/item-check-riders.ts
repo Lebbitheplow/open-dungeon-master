@@ -76,13 +76,64 @@ const ROWS: CheckRiderRow[] = [
 const keyOf = (name: string) =>
   name.trim().toLowerCase().replace(/^\+\d\s+/, "").replace(/\s+/g, " ");
 
+// What a published item adds to checks, in the workshop's words, for a copy
+// to start from (src/lib/workshop/catalog-mechanics.ts).
+export function checkRidersOf(name: string): {
+  bonus?: number;
+  skillBonus?: Record<string, number>;
+  advantage?: string[];
+  requiresAttunement: boolean;
+  carried: boolean;
+} | null {
+  const row = rowFor(name);
+  if (!row) {
+    return null;
+  }
+  return {
+    requiresAttunement: row.requiresAttunement,
+    carried: row.carried === true,
+    ...(row.bonus ? { bonus: row.bonus } : {}),
+    ...(row.skillBonus ? { skillBonus: row.skillBonus } : {}),
+    ...(row.advantage?.length ? { advantage: row.advantage } : {}),
+  };
+}
+
 function rowFor(name: string): CheckRiderRow | null {
   const key = keyOf(name);
   const bare = key.replace(/\s*\([^()]*\)\s*$/, "");
   return ROWS.find((row) => row.names.includes(key) || row.names.includes(bare)) ?? null;
 }
 
-type CarriedItem = { name: string; equipped?: boolean; attuned?: boolean };
+type CarriedItem = { name: string; equipped?: boolean; attuned?: boolean; gear?: unknown };
+
+type RowGear = {
+  checks?: { bonus?: number; skillBonus?: Record<string, number>; advantage?: string[] };
+  magic?: { requiresAttunement?: boolean; carried?: boolean };
+};
+
+// A workshop item's own check riders, as a row of this table: what it adds
+// to checks rides on its line (src/lib/homebrew/item-data.ts).
+function homebrewRow(item: CarriedItem): CheckRiderRow | null {
+  const gear = item.gear as RowGear | undefined;
+  const checks = gear?.checks;
+  if (!checks) {
+    return null;
+  }
+  const bits = [
+    checks.bonus ? `${checks.bonus >= 0 ? "+" : ""}${checks.bonus} to ability checks` : "",
+    ...Object.entries(checks.skillBonus ?? {}).map(([skill, bonus]) => `${bonus >= 0 ? "+" : ""}${bonus} to ${skill.replace(/_/g, " ")} checks`),
+    checks.advantage?.length ? `advantage on ${checks.advantage.map((skill) => skill.replace(/_/g, " ")).join(", ")} checks` : "",
+  ].filter(Boolean);
+  return {
+    names: [keyOf(item.name)],
+    requiresAttunement: gear?.magic?.requiresAttunement === true,
+    ...(gear?.magic?.carried ? { carried: true } : {}),
+    ...(checks.bonus ? { bonus: checks.bonus } : {}),
+    ...(checks.skillBonus ? { skillBonus: checks.skillBonus } : {}),
+    ...(checks.advantage?.length ? { advantage: checks.advantage } : {}),
+    effect: `${item.name}: ${bits.join("; ")}`,
+  };
+}
 
 export type ItemCheckRiders = {
   bonus: number;
@@ -100,8 +151,8 @@ export function itemCheckRiders(
   const out: ItemCheckRiders = { bonus: 0, advantage: false, notes: [] };
   const counted = new Set<CheckRiderRow>();
   for (const item of equipment ?? []) {
-    const row = rowFor(item.name);
-    if (!row || counted.has(row)) {
+    const row = homebrewRow(item) ?? rowFor(item.name);
+    if (!row || counted.has(row) || [...counted].some((seen) => seen.names[0] === row.names[0] && seen.effect === row.effect)) {
       continue;
     }
     if (!row.carried && !isWorn(item, equipment ?? [])) {

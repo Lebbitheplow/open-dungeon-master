@@ -1,7 +1,11 @@
 "use client";
 
+import { registerBrowserSubclassExtras, subclassLevelFor } from "@/lib/srd/features";
+import { extraSubclassOf } from "@/lib/srd/subclass-tables";
 import { useEffect, useMemo, useState } from "react";
+import { scopeQuery, useContentCampaign } from "@/lib/content-scope";
 import { packRaceOptions } from "@/lib/content/race-options";
+import { registerBrowserSpecies } from "@/lib/srd/race-id";
 import {
   mergedBackgroundOptions,
   packClassOptions,
@@ -39,7 +43,12 @@ export type ArchetypeOption = { id: string; name: string; desc: string };
 // bundled SRD data as fallback (and as the shape contract). `keepRaceId` is
 // the race of the character being edited, kept in the list even when the
 // pack no longer offers it on its own (a bare Dwarf).
+//
+// At a table (src/lib/content-scope.tsx) the table's workshop species and
+// backgrounds come with them. Without the content pack those still arrive,
+// beside the bundled SRD options; `packInstalled` says which it was.
 export function useBuilderOptions(keepRaceId?: string) {
+  const campaignId = useContentCampaign();
   const [races, setRaces] = useState<RaceOption[]>(srdRaceOptions);
   const [classes, setClasses] = useState<ClassOption[]>(srdClassOptions);
   const [backgrounds, setBackgrounds] = useState<BackgroundOption[]>(srdBackgroundOptions);
@@ -50,9 +59,9 @@ export function useBuilderOptions(keepRaceId?: string) {
     async function load() {
       try {
         const [racesResponse, classesResponse, backgroundsResponse] = await Promise.all([
-          fetch("/api/content/races?limit=200"),
-          fetch("/api/content/classes?limit=100"),
-          fetch("/api/content/backgrounds?limit=200"),
+          fetch(`/api/content/races?limit=200${scopeQuery(campaignId, "&")}`),
+          fetch(`/api/content/classes?limit=100${scopeQuery(campaignId, "&")}`),
+          fetch(`/api/content/backgrounds?limit=200${scopeQuery(campaignId, "&")}`),
         ]);
         if (!racesResponse.ok || !classesResponse.ok || !backgroundsResponse.ok) {
           return;
@@ -62,16 +71,28 @@ export function useBuilderOptions(keepRaceId?: string) {
           classesResponse.json(),
           backgroundsResponse.json(),
         ]);
-        if (cancelled || !racesData.packInstalled) {
+        if (cancelled) {
           return;
         }
-        setPackInstalled(true);
+        const installed = racesData.packInstalled !== false;
+        setPackInstalled(installed);
         const raceRows = (racesData.results ?? []) as ContentRow[];
         if (raceRows.length) {
-          setRaces(packRaceOptions(raceRows, keepRaceId ? [keepRaceId] : []));
+          const packed = packRaceOptions(raceRows, keepRaceId ? [keepRaceId] : []);
+          // No pack: the rows are the table's workshop species, offered
+          // beside the bundled SRD races rather than in their place.
+          const options = installed
+            ? packed
+            : [...srdRaceOptions().filter((option) => !packed.some((entry) => entry.id === option.id)), ...packed];
+          // Size, Dwarven Toughness and the rest read a pack or workshop
+          // species by id, here as on the server.
+          registerBrowserSpecies(
+            Object.fromEntries(options.map((option) => [option.id, { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames }])),
+          );
+          setRaces(options);
         }
         const classRows = (classesData.results ?? []) as ContentRow[];
-        if (classRows.length) {
+        if (classRows.length && installed) {
           setClasses(packClassOptions(classRows));
         }
         const backgroundRows = (backgroundsData.results ?? []) as ContentRow[];
@@ -86,7 +107,7 @@ export function useBuilderOptions(keepRaceId?: string) {
     return () => {
       cancelled = true;
     };
-  }, [keepRaceId]);
+  }, [keepRaceId, campaignId]);
 
   return useMemo(
     () => ({ races, classes, backgrounds, packInstalled }),
@@ -125,6 +146,7 @@ export function useWorldPack(packId?: string): WorldPack | null {
 }
 
 export function useArchetypes(classId: string) {
+  const campaignId = useContentCampaign();
   const [archetypes, setArchetypes] = useState<ArchetypeOption[]>([]);
   const [prevClassId, setPrevClassId] = useState(classId);
   if (prevClassId !== classId) {
@@ -136,12 +158,26 @@ export function useArchetypes(classId: string) {
     if (!classId) {
       return;
     }
-    fetch(`/api/content/archetypes?class=${encodeURIComponent(classId)}&limit=100`)
+    fetch(`/api/content/archetypes?class=${encodeURIComponent(classId)}&limit=100${scopeQuery(campaignId, "&")}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!cancelled && data?.results) {
+          const rows = data.results as ContentRow[];
+          // A workshop or pack subclass's features, for the grants the
+          // builder previews (src/lib/srd/subclass-tables.ts).
+          registerBrowserSubclassExtras(
+            classId,
+            rows
+              .map((row) =>
+                extraSubclassOf(
+                  { name: row.name, source: String((row as { source?: string }).source ?? "open5e"), data: (row.data ?? {}) as Record<string, unknown> },
+                  subclassLevelFor(classId) ?? 3,
+                ),
+              )
+              .filter((table): table is NonNullable<typeof table> => table !== null),
+          );
           setArchetypes(
-            (data.results as ContentRow[]).map((row) => ({
+            rows.map((row) => ({
               id: row.slug,
               name: row.name,
               desc: String(row.data?.desc ?? ""),
@@ -153,6 +189,6 @@ export function useArchetypes(classId: string) {
     return () => {
       cancelled = true;
     };
-  }, [classId]);
+  }, [classId, campaignId]);
   return archetypes;
 }

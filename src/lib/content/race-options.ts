@@ -112,6 +112,8 @@ function withParent(
     languages: ownLanguages ? sub.languages : parent.languages,
     bonusLanguages: ownLanguages ? sub.bonusLanguages : parent.bonusLanguages,
     traitsSummary: [parent.traitsSummary, sub.traitsSummary].filter(Boolean).join(" · "),
+    ...((sub.size ?? parent.size) ? { size: sub.size ?? parent.size } : {}),
+    ...(sub.heavyArmorSpeed || parent.heavyArmorSpeed ? { heavyArmorSpeed: true } : {}),
     // The subrace is the parent's "choose one of these" already answered.
     traitNames: [
       ...parent.traitNames.filter((name) => !parent.choiceTraitNames.includes(name)),
@@ -152,6 +154,9 @@ function withSrd(parsed: RaceMechanics, srd: SrdRace): RaceMechanics {
     traitsSummary: parsed.traitsSummary || srd.traits.join(" · "),
     traitNames: parsed.traitNames,
     choiceTraitNames: parsed.choiceTraitNames,
+    ...((srd.size ?? parsed.size) ? { size: (srd.size as RaceMechanics["size"]) ?? parsed.size } : {}),
+    // Every bundled dwarf carries the Dwarf's own Speed trait.
+    ...(parsed.heavyArmorSpeed || /dwarf/.test(srd.id) ? { heavyArmorSpeed: true } : {}),
   };
   for (const key of GRANT_KEYS) {
     if (srd[key] !== undefined) {

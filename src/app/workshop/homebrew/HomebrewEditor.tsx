@@ -1,6 +1,8 @@
 "use client";
 
-import { AlertTriangle, Copy, Info, Loader2, OctagonX, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, BookOpen, Copy, Info, Loader2, OctagonX, Trash2 } from "lucide-react";
+import { RulebookDialog } from "@/components/rulebook/RulebookDialog";
 import { ui } from "@/lib/ui";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { KIND_GLYPHS } from "@/app/workshop/homebrew/HomebrewIcon";
@@ -14,6 +16,8 @@ import { OptionFields } from "@/app/workshop/homebrew/OptionFields";
 import { SpellFields } from "@/app/workshop/homebrew/SpellFields";
 import { draftFindings, draftFromCatalog, type HomebrewDraft } from "@/app/workshop/homebrew/draft";
 import { KIND_SINGULAR } from "@/app/workshop/homebrew/types";
+import { HazardFields } from "@/app/workshop/homebrew/HazardFields";
+import { CopySource } from "@/app/workshop/homebrew/CopySource";
 
 // A spell draft that already names its classes searches that class's list
 // first; the catalogue is otherwise the whole book.
@@ -38,6 +42,7 @@ const LEVEL_STYLE: Record<Finding["level"], { icon: typeof Info; className: stri
 export function HomebrewEditor({
   draft,
   isNew,
+  savedName,
   busy,
   error,
   variantRules,
@@ -48,6 +53,8 @@ export function HomebrewEditor({
 }: {
   draft: HomebrewDraft;
   isNew: boolean;
+  // The name it was saved under, for an entry that exists.
+  savedName?: string;
   busy: boolean;
   error: string;
   variantRules: Partial<VariantRules>;
@@ -56,9 +63,11 @@ export function HomebrewEditor({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const findings = draftFindings(draft, variantRules);
+  const findings = draftFindings(draft, variantRules, isNew ? undefined : savedName);
   const refused = findings.some((finding) => finding.level === "error");
   const setData = (data: HomebrewDraft["data"]) => onDraft({ ...draft, data });
+  // The rulebook page a finding measures against, open over the draft.
+  const [reading, setReading] = useState<string | null>(null);
 
   return (
     <div className="space-y-3">
@@ -71,6 +80,8 @@ export function HomebrewEditor({
         />
       </div>
 
+      <CopySource kind={draft.kind} draft={draft} />
+
       <SectionHead title={`The ${KIND_SINGULAR[draft.kind]}`} glyph={KIND_GLYPHS[draft.kind]} className="mb-0" />
       <TextField
         label="Name"
@@ -82,7 +93,8 @@ export function HomebrewEditor({
 
       {draft.kind === "item" ? <ItemFields data={draft.data} onChange={setData} /> : null}
       {draft.kind === "spell" ? <SpellFields data={draft.data} onChange={setData} /> : null}
-      {draft.kind !== "item" && draft.kind !== "spell" ? (
+      {draft.kind === "hazard" ? <HazardFields data={draft.data} onChange={setData} /> : null}
+      {draft.kind !== "item" && draft.kind !== "spell" && draft.kind !== "hazard" ? (
         <OptionFields kind={draft.kind} data={draft.data} onChange={setData} />
       ) : null}
 
@@ -96,7 +108,11 @@ export function HomebrewEditor({
             ? "Each creature in a 15-foot cone must make a Dexterity saving throw, taking 3d6 fire damage on a failed save, or half as much on a successful one."
             : "What it is, in the words the players will read."
         }
-        hint={draft.kind === "spell" ? "The engine reads the damage, the save and the damage type out of this." : undefined}
+        hint={
+          draft.kind === "spell"
+            ? "What players read. The engine reads the damage, the save and the damage type out of it only where the block above leaves them empty; \"What the table resolves\" says which it used."
+            : undefined
+        }
       />
 
       {findings.length ? (
@@ -106,12 +122,24 @@ export function HomebrewEditor({
             return (
               <li key={index} className={cn("flex items-start gap-1.5 text-xs", className)}>
                 <Icon className="mt-0.5 size-3.5 shrink-0" />
-                <span>{finding.text}</span>
+                <span>
+                  {finding.text}
+                  {finding.page ? (
+                    <button
+                      type="button"
+                      onClick={() => setReading(finding.page ?? null)}
+                      className="motion-press ml-1.5 inline-flex items-center gap-0.5 text-stone-500 underline-offset-2 hover:text-amber-200 hover:underline"
+                    >
+                      <BookOpen className="size-3" /> the rule
+                    </button>
+                  ) : null}
+                </span>
               </li>
             );
           })}
         </ul>
       ) : null}
+      {reading ? <RulebookDialog open onOpenChange={(open) => !open && setReading(null)} startAt={reading} /> : null}
 
       {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
 

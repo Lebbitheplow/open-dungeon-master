@@ -30,6 +30,9 @@ import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { speciesAtTable } from "@/lib/characters/species-rules";
+import { tableFeatsFrom } from "@/lib/db/table-feats";
+import { getDatabase } from "@/lib/db/core";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker, narratorIsAi } from "@/lib/dm/viewer";
 import { sheetForViewer } from "@/lib/dm/sheet-view";
@@ -105,6 +108,11 @@ export async function GET(
     // A player's notes are theirs: every other seat but the DM's is sent
     // the sheet without them (src/lib/dm/sheet-view.ts).
     sheets: sheets.map((sheet) => sheetForViewer(sheet, campaignSeats(campaign), user.id)),
+    // The pack and workshop species at the table, read by id in the browser
+    // as on the server (size, Dwarven Toughness; src/lib/srd/race-id.ts).
+    species: speciesAtTable(sheets.map((sheet) => sheet.race)),
+    // The table's workshop feats: what each runs as, and its text.
+    feats: Object.fromEntries(tableFeatsFrom(getDatabase(), campaignId)),
     // The character this user is playing when they have several (11.3).
     activeSheetId: getSheetForUser(campaignId, user.id)?.id ?? "",
     messages: listRecentMessages(campaignId, 100),

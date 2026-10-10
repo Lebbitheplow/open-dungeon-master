@@ -31,6 +31,19 @@ const UTILITY: Record<string, SpellMech> = Object.fromEntries(
 
 export const MECH_OVERRIDES: Record<string, SpellMech> = {
   ...UTILITY,
+  // Attacks that deal no damage: what a hit does is a disease or a journey.
+  contagion: {
+    resolution: "attack",
+    attack: "melee",
+    noDamage: true,
+    note: "On a hit the creature is afflicted with the disease the caster picks (afflict); it deals no damage of its own.",
+  },
+  "plane shift": {
+    resolution: "attack",
+    attack: "melee",
+    noDamage: true,
+    note: "On a hit the creature makes a Charisma save or is sent to the plane the caster names; it deals no damage.",
+  },
   bless: {
     resolution: "buff",
     buff: { condition: "blessed", target: "allies", rounds: MINUTE },

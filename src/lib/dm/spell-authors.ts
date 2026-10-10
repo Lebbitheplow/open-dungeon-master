@@ -11,6 +11,7 @@
 // nobody published resolves to the table's spell or to nothing.
 
 import type { Campaign } from "@/lib/db/campaigns";
+import { tableAuthors } from "@/lib/db/homebrew";
 
 export function spellAuthorsFor(
   campaign: Pick<Campaign, "ownerUserId" | "dmUserId" | "assistantDmUserId">,
@@ -22,4 +23,13 @@ export function spellAuthorsFor(
       ),
     ),
   ];
+}
+
+// The same list for a sheet: its table's when it sits at one, its owner's
+// own when it is a library character outside any campaign. Every play path
+// that reads a spell for a sheet (the attack profile, concentration, auras)
+// reads this, so the spell a cast resolves is the one the attack and the
+// upkeep resolve too.
+export function sheetSpellAuthors(sheet: { campaignId?: string | null; userId: string }): string[] {
+  return sheet.campaignId ? tableAuthors(sheet.campaignId) : [sheet.userId];
 }

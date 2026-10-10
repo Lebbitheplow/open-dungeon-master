@@ -563,6 +563,25 @@
   animation: rb-title-in 620ms var(--ease-settle) 40ms both;
 }
 .rb-subtitle { margin-top: 0.3rem; font-style: italic; color: #6b4e2c; animation: rb-ink-in 520ms var(--ease-settle) 120ms both; }
+/* How the table runs a page (src/lib/rulebook/crosswalk.ts), inked in after
+   the subtitle, with the way to start a workshop copy of it. */
+.rb-prep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  color: #5c4326;
+  animation: rb-ink-in 520ms var(--ease-settle) 220ms both;
+}
+.rb-prep-label { font-family: var(--font-display, serif); letter-spacing: 0.06em; color: #6e1b10; }
+.rb-prep[data-support="reference"] .rb-prep-label,
+.rb-prep[data-support="editable"] .rb-prep-label { color: #6b4e2c; }
+.rb-prep-note { font-style: italic; color: #7a5b35; }
+.rb-prep-start { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.rb-prep-start:hover { translate: 2px 0; }
 .rb-family {
   margin-left: 0.55rem;
   padding: 0.08rem 0.5rem;
@@ -1113,6 +1132,7 @@ html[data-effects="low"] .rb-quill { animation: none; }
   .rb-results-count,
   .rb-title,
   .rb-subtitle,
+  .rb-prep,
   .rb-divider,
   .rb-frontis-title,
   .rb-frontis-text,

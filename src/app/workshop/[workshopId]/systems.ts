@@ -14,10 +14,12 @@ import {
   UserRound,
   Users,
   Flag,
+  Orbit,
 } from "lucide-react";
 import type { WorkshopSummary } from "@/app/workshop/types";
+import type { IconRef } from "@/lib/icons";
 
-// The thirteen systems a workshop is made of, and how each one counts itself.
+// The systems a workshop is made of, and how each one counts itself.
 //
 // Nine of the counts come straight off the workshop's contents map, which
 // /api/workshops/:id already serves per importable kind. The bestiary, the
@@ -25,10 +27,20 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // items, spells, character options and pregens are the builder's, not the
 // workshop's, and the world pack draft is one JSON value rather than rows,
 // so none of them are importable kinds and their counts are fetched from
-// their own routes by the page. Rules is a yes-or-no rather than a number,
-// and Share has nothing to count.
+// their own routes by the page. WorldForge counts what it adds over the
+// records the other cards already count (links, events, secrets, maps), from
+// its own route too. Rules is a yes-or-no rather than a number, and Share has
+// nothing to count.
+
+export type WorldCount = { entries: number; links: number; events: number; secrets: number; maps: number };
+
+// Each system's painted glyph (scripts/icon-set.mjs paints them).
+export function systemGlyph(id: SystemId): IconRef {
+  return { kind: "glyph", key: `system-${id}` };
+}
 
 export const WORKSHOP_SYSTEMS = [
+  { id: "world", label: "WorldForge", blurb: "Build the world", icon: Orbit },
   { id: "storyboard", label: "Storyboard", blurb: "Plan the arc", icon: LayoutGrid },
   { id: "party", label: "Party", blurb: "Who it is built for", icon: UserRound },
   { id: "maps", label: "Battle maps", blurb: "Rooms to fight in", icon: MapIcon },
@@ -72,9 +84,21 @@ export function systemCount(
   homebrew: number | null = null,
   pregens: number | null = null,
   plugin: number | null = null,
+  world: WorldCount | null = null,
 ): SystemCount {
   const contents = workshop.contents;
   switch (id) {
+    case "world": {
+      if (!world) return { figure: null, phrase: "counting", total: 0 };
+      const pieces = world.links + world.events + world.secrets + world.maps;
+      return {
+        figure: String(world.entries),
+        phrase: world.entries
+          ? `${plural(world.entries, "entry", "entries")}, ${plural(world.links, "link", "links")}, ${plural(world.events, "event", "events")}`
+          : "an empty world",
+        total: pieces,
+      };
+    }
     case "plugin":
       return {
         figure: plugin === null ? null : String(plugin),
@@ -171,9 +195,10 @@ export function totalPieces(
   homebrew: number | null = null,
   pregens: number | null = null,
   plugin: number | null = null,
+  world: WorldCount | null = null,
 ): number {
   return WORKSHOP_SYSTEMS.reduce(
-    (sum, system) => sum + systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin).total,
+    (sum, system) => sum + systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin, world).total,
     0,
   );
 }

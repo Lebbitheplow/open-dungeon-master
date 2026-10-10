@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tableAuthors } from "@/lib/db/homebrew";
 import {
   isErrorResponse,
   requireMember,
@@ -480,7 +481,8 @@ export async function PATCH(
         { status: 403 },
       );
     }
-    const owner = context.campaign.ownerUserId;
+    // The table's homebrew, whoever of its DM seats wrote it.
+    const owner = tableAuthors(context.campaign.id);
     const built = buildLevelUp(sheet, parsed.data, {
       hpMethod: context.campaign.gameSettings.hpMethod ?? "average",
       multiclassAllowed: context.campaign.gameSettings.multiclassingEnabled !== false,

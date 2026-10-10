@@ -67,6 +67,10 @@ export const bundleManifestSchema = z.object({
   // the milder community-content notice instead of a non-affiliation
   // disclaimer it does not need. See UnofficialPackNotice.
   rightsHolder: z.string().trim().max(120).default(""),
+  // What of the author's shelf (hand-built monsters, homebrew items, spells
+  // and options) rides along: all of it, or only what this workshop uses
+  // (src/lib/db/workshop-bundle-shelf.ts).
+  shelf: z.enum(["all", "used"]).default("all"),
 });
 
 export type BundleManifest = z.infer<typeof bundleManifestSchema>;
@@ -120,6 +124,10 @@ const npcSchema = z.object({
   portrait: bundleImageSchema,
   // Their read-aloud voice, normalised on import (src/lib/npcs/forge.ts).
   voice: z.record(z.string(), z.unknown()).nullable().default(null),
+  // The stat block they fight with: a published monster's slug, or the name
+  // of one of the bundle's own monsters (a "homebrew:" id means nothing on
+  // another machine, so the export writes the name).
+  statBlock: z.string().trim().max(80).default(""),
   ref: refSchema,
   shared: sharedSchema,
 });
@@ -264,7 +272,7 @@ const monsterSchema = z.object({
 // (src/lib/homebrew/gear.ts), so a bundle written by an older build cannot
 // hand the engine a weapon it cannot roll.
 const homebrewSchema = z.object({
-  kind: z.enum(["spell", "feat", "item", "race", "background", "archetype"]),
+  kind: z.enum(["spell", "feat", "item", "race", "background", "archetype", "hazard"]),
   name: z.string().trim().min(1).max(80),
   data: z.record(z.string(), z.unknown()).default({}),
 });
@@ -310,6 +318,16 @@ export const workshopBundleSchema = z.object({
   // than as a folder of lore somebody has to re-key. Null in bundles from
   // builds before the creator existed.
   plugin: worldPackDraftSchema.nullable().default(null),
+  // The workshop's WorldForge (src/lib/db/world-forge-bundle.ts): its
+  // document with refs as row positions, read through the model's floors on
+  // import, and the atlas's pictures. Null in bundles from earlier builds.
+  world: z
+    .object({
+      doc: z.record(z.string(), z.unknown()),
+      images: z.record(z.string().max(80), bundleImageSchema).refine((images) => Object.keys(images).length <= 100).default({}),
+    })
+    .nullable()
+    .default(null),
   overworld: overworldSchema.nullable().default(null),
   // A chapter's shared workshop, by name, when the chapter draws on one
   // (#159). The rows its cards pick from it ride along marked `shared`, so

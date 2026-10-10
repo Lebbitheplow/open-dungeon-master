@@ -18,6 +18,7 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, listEnemies, patchEnemyConditions, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
@@ -27,6 +28,7 @@ import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -92,7 +94,7 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
     const meta = caster.conditionMeta as ConditionMetaMap;
     for (const condition of caster.conditions) {
       const spell = meta[condition]?.spell ?? (condition.toLowerCase() === "spirit guardians" ? "Spirit Guardians" : null);
-      const aura = spell ? spellMechanicsFor({ spell, userId: caster.userId }) : null;
+      const aura = spell ? spellMechanicsFor({ spell, userIds: sheetSpellAuthors(caster) }) : null;
       if (!aura?.mech.aura) {
         continue;
       }
@@ -140,7 +142,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
       continue;
     }
     seen.add(tag);
-    const resolved = spellMechanicsFor({ spell: entry.spell });
+    const resolved = spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) });
     const hurt = resolved?.mech.condition?.turnStart;
     const caster = getSheetById(entry.source);
     if (!hurt || !resolved?.mech.save || !caster) {
@@ -185,7 +187,7 @@ function heroism(campaign: Campaign, sheet: CharacterSheet) {
   let best = 0;
   for (const condition of sheet.conditions) {
     const entry = meta[condition];
-    const resolved = entry?.spell ? spellMechanicsFor({ spell: entry.spell }) : null;
+    const resolved = entry?.spell ? spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) }) : null;
     if (!resolved?.mech.buff?.tempHpEachTurn || !entry?.source) {
       continue;
     }
@@ -263,7 +265,7 @@ function regenerate(campaign: Campaign, sheet: CharacterSheet) {
   if (!sheet.conditions.includes("regenerating") || !entry?.spell || sheet.currentHp <= 0) {
     return;
   }
-  const each = spellMechanicsFor({ spell: entry.spell })?.mech.regainEachTurn ?? 0;
+  const each = spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) })?.mech.regainEachTurn ?? 0;
   const currentHp = Math.min(effectiveMaxHp(sheet), sheet.currentHp + each);
   if (currentHp > sheet.currentHp) {
     const updated = patchSheet(sheet.id, { currentHp });

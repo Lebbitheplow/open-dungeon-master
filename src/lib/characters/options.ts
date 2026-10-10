@@ -251,11 +251,17 @@ export function mergedBackgroundOptions(rows: ContentRow[]): BackgroundOption[] 
       const feature = String(row.data?.feature ?? "").trim();
       const featureDesc = String(row.data?.feature_desc ?? "").trim();
       const mechanics = backgroundMechanics(row.data);
+      // A workshop background's kit is already catalog items, its coin its own.
+      const grants = row.data?.grants as { purse?: unknown } | undefined;
+      const kit =
+        grants && typeof grants.purse === "number"
+          ? { equipment: mechanics.equipment, purse: grants.purse }
+          : splitPurse(mechanics.equipment);
       return {
         id: row.slug,
         name: row.name,
         ...mechanics,
-        ...splitPurse(mechanics.equipment),
+        ...kit,
         desc: String(row.data?.desc ?? ""),
         ...(feature ? { feature } : {}),
         ...(featureDesc ? { featureDesc } : {}),

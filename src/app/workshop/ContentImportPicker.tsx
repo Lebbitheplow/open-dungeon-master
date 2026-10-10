@@ -175,6 +175,13 @@ export function ContentImportPicker({
           `Brought ${data.copied} item${data.copied === 1 ? "" : "s"} across.`,
           data.kept ? `Kept ${data.kept} already here.` : "",
           data.beatsAdded ? `${data.beatsAdded} beat${data.beatsAdded === 1 ? "" : "s"} joined the arc.` : "",
+          // Names this table's Cast or fights use that nothing here answers
+          // to (a monster on another author's shelf), and links both worlds
+          // changed (src/lib/db/content-import.ts).
+          Array.isArray(data.unresolved) && data.unresolved.length
+            ? `No monster here answers to ${data.unresolved.join(", ")}: add them to your bestiary, or point those NPCs and fights at another.`
+            : "",
+          Array.isArray(data.worldConflicts) && data.worldConflicts.length ? `Kept as you had them: ${data.worldConflicts.join(" ")}` : "",
         ]
           .filter(Boolean)
           .join(" "),

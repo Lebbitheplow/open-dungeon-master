@@ -9,6 +9,7 @@
 //
 // Pure: the sheet and the spell's facts come in as values.
 
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
@@ -20,20 +21,20 @@ const lower = (name: string) => name.trim().toLowerCase();
 
 // The caster views whose class list carries the spell: the class's own list,
 // or the spells its subclass adds to it (a patron's expanded list).
-export function viewsWithSpell(sheet: Learner, facts: SpellFacts): CasterView[] {
+export function viewsWithSpell(sheet: Learner, facts: SpellFacts, extras?: SubclassExtras): CasterView[] {
   return casterViewsOf(sheet).filter(
     (view) =>
       facts.classes.length === 0 ||
       facts.classes.includes(lower(view.classId)) ||
-      subclassSpellsFor(view.classId, view.subclass, view.level).some((name) => lower(name) === lower(facts.name)),
+      subclassSpellsFor(view.classId, view.subclass, view.level, extras).some((name) => lower(name) === lower(facts.name)),
   );
 }
 
-export function learnProblem(sheet: Learner, spell: string, facts: SpellFacts | null): string | null {
+export function learnProblem(sheet: Learner, spell: string, facts: SpellFacts | null, extras?: SubclassExtras): string | null {
   if (!facts) {
     return `"${spell}" is not a spell this table knows (published, or written by whoever runs the table), so it cannot be learned. Check the name.`;
   }
-  const views = viewsWithSpell(sheet, facts);
+  const views = viewsWithSpell(sheet, facts, extras);
   if (!views.length) {
     const classes = casterViewsOf(sheet).map((view) => view.classId).join(" or ") || sheet.class;
     return `${facts.name} is not on the ${classes} spell list, so ${sheet.name} cannot learn it.`;

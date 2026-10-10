@@ -1,4 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { bestiaryFor, resolveMonster, suggestEnemies } from "@/lib/bestiary";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
@@ -171,7 +172,7 @@ export function quickStatblock(
   const ref = (input.ref ?? "").trim();
   if (ref) {
     const resolved = resolveMonster(ref, campaign.gameSettings, {
-      userId: campaign.ownerUserId,
+      userIds: spellAuthorsFor(campaign),
     });
     if (resolved) {
       return {

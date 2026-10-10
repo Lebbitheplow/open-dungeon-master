@@ -13,6 +13,7 @@ import type { TypedRider } from "@/lib/dm/damage-parts";
 import {
   gearBaseName,
   gearDefFor,
+  gearDefOfRow,
   gearRidersActive,
   type GearDef,
   type GearDice,
@@ -32,12 +33,25 @@ export type WeaponGear = {
 // one: the SRD weapon its name names wins ("Flame Tongue Scimitar"), else the
 // base the item's entry gives ("Flame Tongue" is a longsword). A row whose
 // magic item is armor or a wondrous thing is not made a weapon here.
+//
+// A workshop item carries its own weapon block and, when it is magic, its own
+// riders (gearDefOfRow): its block is the base, and nothing is looked up by
+// its name.
 export function magicWeaponOfRow(
   item: EquipmentItem,
 ): { srd: SrdWeapon | null; gear: WeaponGear | null } {
-  const named = matchWeapon(item.name);
-  const def = gearDefFor(item.name, item.slug, named?.name);
-  if (!def || def.base?.kind !== "weapon") {
+  const own = item.gear?.weapon as SrdWeapon | undefined;
+  const hasOwn = Boolean(own && typeof own.damage === "string");
+  if (hasOwn && !item.gear?.def) {
+    return { srd: own!, gear: null };
+  }
+  const named = hasOwn ? own! : matchWeapon(item.name);
+  const def = gearDefOfRow(item, named?.name);
+  // A row with no base of its own is a weapon when its name names one and
+  // its riders are a weapon's (a Constant Dagger's +1, a Dragonslaying
+  // Lance's +3): those riders count too.
+  const namesWeapon = Boolean(named && def?.weapon && Object.keys(def.weapon).length);
+  if (!def || (def.base && def.base.kind !== "weapon") || (!def.base && !hasOwn && !namesWeapon)) {
     return { srd: named, gear: null };
   }
   const base = named ?? matchWeapon(gearBaseName(def, "weapon") ?? "");

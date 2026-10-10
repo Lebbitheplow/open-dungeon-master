@@ -9,6 +9,7 @@ import { use } from "react";
 import { Lobby } from "@/app/campaigns/[campaignId]/Lobby";
 import { SessionView } from "@/app/campaigns/[campaignId]/SessionView";
 import { useCampaignStream } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import { ContentScopeProvider } from "@/lib/content-scope";
 
 export default function CampaignPage({
   params,
@@ -54,10 +55,13 @@ export default function CampaignPage({
     );
   }
 
-  return state.campaign.status === "lobby" ? (
-    <Lobby state={state} refresh={refresh} />
-  ) : (
-    <SessionView
+  // Every content request made at this table is its own (src/lib/content-scope.tsx).
+  return (
+    <ContentScopeProvider campaignId={campaignId}>
+      {state.campaign.status === "lobby" ? (
+        <Lobby state={state} refresh={refresh} />
+      ) : (
+        <SessionView
       state={state}
       refreshNotes={refreshNotes}
       refreshFacts={refreshFacts}
@@ -69,6 +73,8 @@ export default function CampaignPage({
       markCameraDone={markCameraDone}
       markTitleCardShown={markTitleCardShown}
       playSting={playSting}
-    />
+        />
+      )}
+    </ContentScopeProvider>
   );
 }

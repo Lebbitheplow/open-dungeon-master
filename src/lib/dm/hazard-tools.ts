@@ -25,6 +25,9 @@ import { pcResistances } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard } from "@/lib/dm/roll-card";
 import { rollOn } from "@/lib/roll-labels";
+import { springTrapOn } from "@/lib/dm/trap-run";
+import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
+import { hazardNamesAt, trapAt } from "@/lib/srd/table-hazards";
 
 // Traps and environmental hazards used to be pure narration routed through the
 // generic damage_enemy call, so a "dart trap" or a "40-foot fall" dealt
@@ -122,6 +125,10 @@ export const hazardTools: ToolDef[] = [
             description:
               "Optional condition a failed save also inflicts (e.g. poisoned, restrained).",
           },
+          trap: {
+            type: "string",
+            description: `trap only: a trap by name, run by its own numbers (spot and disarm DCs, attack, fall, damage, save, conditions) instead of the severity table: one of the SRD's sample traps (${SAMPLE_TRAPS.map((trap) => trap.name).join(", ")}) or the table's own workshop traps named under GAME STATE.`,
+          },
           reason: { type: "string", description: "Short note on the hazard." },
         },
         required: ["type", "characterIds"],
@@ -152,6 +159,8 @@ const hazardSchema = z.object({
   damageType: z.string().max(30).optional(),
   halfOnSave: z.coerce.boolean().optional(),
   condition: z.string().max(40).optional(),
+  // A trap by name: one of the SRD's sample traps or the table's own.
+  trap: z.string().max(80).optional(),
   reason: z.string().optional(),
 });
 
@@ -333,6 +342,22 @@ export function handleApplyHazard(
       }; each failure is a level of exhaustion, applied by the server. ${
         cold ? "Cold weather gear or" : "Fire"
       } resistance negates it. Narrate the toll.`,
+    };
+  }
+
+  // A named trap runs by its own numbers (src/lib/dm/trap-run.ts).
+  if (args.type === "trap" && args.trap) {
+    const found = trapAt(args.trap, campaign.id);
+    if (!found) {
+      const own = hazardNamesAt(campaign.id).trap;
+      return { error: `No trap is named "${args.trap}". The SRD's sample traps are ${SAMPLE_TRAPS.map((trap) => trap.name).join(", ")}${own.length ? `; this table's are ${own.join(", ")}` : ""}. Leave trap out to use the severity table.` };
+    }
+    return {
+      ok: true,
+      type: "trap",
+      trap: found.name,
+      results: targets.map((sheet) => springTrapOn(campaign, turn, sheet, found.name, found.trap, sheets, sheetsById)),
+      note: `${found.trap.summary} Rolled and applied by the server; narrate the outcome per character.`,
     };
   }
 

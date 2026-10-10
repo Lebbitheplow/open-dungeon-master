@@ -108,6 +108,21 @@ const ROLES_BY_SIZE: Record<SettlementSize, string[]> = {
   city: ["innkeeper", "smith", "priest", "merchant", "guard", "noble", "scholar", "thief"],
 };
 
+// The SRD 5.1 stat block each townsfolk fights with (Appendix B, Nonplayer
+// Characters), so a brawl with the guard is a fight with a Guard.
+const STAT_BLOCKS: Record<string, string> = {
+  innkeeper: "commoner",
+  farmer: "commoner",
+  elder: "commoner",
+  smith: "thug",
+  priest: "priest",
+  merchant: "commoner",
+  guard: "guard",
+  noble: "noble",
+  scholar: "commoner",
+  thief: "spy",
+};
+
 const TRAITS: Record<string, string[]> = {
   innkeeper: ["keeps every rumour and sells the best ones", "waters the ale and knows you know", "remembers every face that ever slept upstairs"],
   smith: ["talks only to the anvil", "owes someone in the capital", "has a scar for every bad customer"],
@@ -203,6 +218,7 @@ export function generateSettlement(input: { name?: string; size?: unknown; terra
     personality: null,
     goals: {},
     relations: [],
+    statBlock: STAT_BLOCKS[role] ?? "commoner",
   }));
   // Two people who share a name is a slip the seed can make; nobody at the
   // table should have to tell them apart.

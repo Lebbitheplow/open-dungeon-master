@@ -15,6 +15,7 @@ import type {
 } from "@/lib/schemas/sheet";
 import { XP_THRESHOLDS, findClass, spellSlotsFor } from "@/lib/srd";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { pactSlotsFor, slotTableFor } from "@/lib/srd/multiclass";
 import { isThirdCaster } from "@/lib/srd/third-caster";
 
@@ -147,9 +148,11 @@ export type Settled = Pick<
 export function settleLevelChange(
   state: LevelState,
   pinned: { spellcasting?: boolean; xp?: boolean } = {},
+  // The table's workshop and pack subclasses (src/lib/srd/subclass-tables.ts).
+  extras?: SubclassExtras,
 ): Settled {
   const classes = classListOf(state);
-  const features = populateFeaturesForClasses(state.features, classes, state.race);
+  const features = populateFeaturesForClasses(state.features, classes, state.race, undefined, extras);
   const hitDicePools = settlePools(state);
   const total = Math.max(1, Math.min(20, state.level));
   const hitDice = hitDicePools
