@@ -27,40 +27,12 @@
     "source": "https://opengameart.org/content/forest-ambience",
     "url": "https://opengameart.org/sites/default/files/Forest_Ambience.mp3"
   },
-  "deep_forest.ogg": {
-    "title": "Hullerweg, Niedertiefenbach, Beselich - night ambience /w aircraft, Oktoberfest and owls",
-    "author": "udo noll",
-    "license": "CC BY-SA (attribution and share-alike required)",
-    "source": "https://archive.org/details/aporee_46901_53269",
-    "url": "https://archive.org/download/aporee_46901_53269/ntbEschenauerWegFestEulen191102.ogg"
-  },
   "swamp.ogg": {
     "title": "Swamp Environment Audio",
     "author": "LokiF",
     "license": "Public domain (CC0 or PD Mark)",
     "source": "https://opengameart.org/content/swamp-environment-audio",
     "url": "https://opengameart.org/sites/default/files/swamp.ogg"
-  },
-  "tundra.mp3": {
-    "title": "Bayelva Observatory, Ny-Ålesund, Svalbard - Bayelva stream flow, distant bird, wind",
-    "author": "radio aporee",
-    "license": "CC BY-SA (attribution and share-alike required)",
-    "source": "https://archive.org/details/aporee_69004_84662",
-    "url": "https://archive.org/download/aporee_69004_84662/bayelvaStation180620260026.mp3"
-  },
-  "river.mp3": {
-    "title": "Sea and river wave sounds",
-    "author": "RandomMind",
-    "license": "Public domain (CC0 or PD Mark)",
-    "source": "https://opengameart.org/content/sea-and-river-wave-sounds",
-    "url": "https://opengameart.org/sites/default/files/VistulaShort_0.mp3"
-  },
-  "market.ogg": {
-    "title": "Idumota Market (Emeka Ogboh).ogg",
-    "author": "Emeka Ogboh",
-    "license": "CC BY-SA (attribution and share-alike required)",
-    "source": "https://commons.wikimedia.org/wiki/File%3AIdumota%20Market%20(Emeka%20Ogboh).ogg",
-    "url": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Idumota_Market_%28Emeka_Ogboh%29.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
   },
   "forge.ogg": {
     "title": "richardplatz: rixdorfer schmiede - the city, the country & me: smithy",
@@ -83,89 +55,12 @@
     "source": "https://opengameart.org/content/rain-gutter-loop",
     "url": "https://opengameart.org/sites/default/files/rain-gutter-loop_0.mp3"
   },
-  "calm.mp3": {
-    "title": "Ascending the Vale",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600064",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ascending%20the%20Vale.mp3"
-  },
-  "wonder.mp3": {
-    "title": "Arcadia",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100326",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Arcadia.mp3"
-  },
-  "mystery.mp3": {
-    "title": "Lost Frontier",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300039",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Lost%20Frontier.mp3"
-  },
-  "tension.mp3": {
-    "title": "Interloper",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100401",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Interloper.mp3"
-  },
   "dread.mp3": {
     "title": "SCP-x4x (Mind Leech)",
     "author": "Kevin MacLeod (incompetech.com)",
     "license": "CC BY 4.0 (attribution required)",
     "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2000010",
     "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/SCP-x4x.mp3"
-  },
-  "battle.mp3": {
-    "title": "Volatile Reaction",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400039",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3"
-  },
-  "boss.mp3": {
-    "title": "Full On",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300005",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Full%20On.mp3"
-  },
-  "chase.mp3": {
-    "title": "Hitman",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300013",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hitman.mp3"
-  },
-  "triumph.mp3": {
-    "title": "Tempting Secrets",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300038",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Tempting%20Secrets.mp3"
-  },
-  "sorrow.mp3": {
-    "title": "Man Down",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700086",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Man%20Down.mp3"
-  },
-  "travel.mp3": {
-    "title": "Galway",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700016",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Galway.mp3"
-  },
-  "festive.mp3": {
-    "title": "Master of the Feast",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400019",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Master%20of%20the%20Feast.mp3"
   },
   "horn.ogg": {
     "title": "Their Coming (generic horn sound)",
@@ -202,103 +97,12 @@
     "source": "https://opengameart.org/content/tree-chop-fall-thud",
     "url": "https://opengameart.org/sites/default/files/chop-tree-fall.ogg"
   },
-  "calm-2.mp3": {
-    "title": "Dreamer",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600043",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dreamer.mp3"
-  },
-  "wonder-2.mp3": {
-    "title": "Frozen Star",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100356",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Frozen%20Star.mp3"
-  },
-  "mystery-2.mp3": {
-    "title": "Not As It Seems",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100762",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Not%20As%20It%20Seems.mp3"
-  },
-  "tension-2.mp3": {
-    "title": "Gagool",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100443",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Gagool.mp3"
-  },
-  "dread-2.mp3": {
-    "title": "This House",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500055",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/This%20House.mp3"
-  },
-  "battle-2.mp3": {
-    "title": "Five Armies",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100875",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Five%20Armies.mp3"
-  },
-  "boss-2.mp3": {
-    "title": "Killers",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600024",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Killers.mp3"
-  },
-  "chase-2.mp3": {
-    "title": "Clenched Teeth",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100705",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clenched%20Teeth.mp3"
-  },
-  "triumph-2.mp3": {
-    "title": "Americana",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200092",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Americana.mp3"
-  },
-  "sorrow-2.mp3": {
-    "title": "Lost Time",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500032",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Lost%20Time.mp3"
-  },
-  "travel-2.mp3": {
-    "title": "Still Pickin",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1900033",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Still%20Pickin.mp3"
-  },
-  "festive-2.mp3": {
-    "title": "Bushwick Tarantella Loop",
-    "author": "Kevin MacLeod (incompetech.com)",
-    "license": "CC BY 4.0 (attribution required)",
-    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300003",
-    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Bushwick%20Tarantella%20Loop.mp3"
-  },
   "ruins.ogg": {
     "title": "Fwimmygoat - 03 - distant ruins.ogg",
     "author": "fwimmygoat",
     "license": "CC BY (attribution required)",
     "source": "https://commons.wikimedia.org/wiki/File%3AFwimmygoat%20-%2003%20-%20distant%20ruins.ogg",
     "url": "https://upload.wikimedia.org/wikipedia/commons/5/52/Fwimmygoat_-_03_-_distant_ruins.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
-  },
-  "underwater.mp3": {
-    "title": "Underwater sound of a river.mp3",
-    "author": "Thomas Bresson",
-    "license": "CC BY (attribution required)",
-    "source": "https://commons.wikimedia.org/wiki/File%3AUnderwater%20sound%20of%20a%20river.mp3",
-    "url": "https://upload.wikimedia.org/wikipedia/commons/2/24/Underwater_sound_of_a_river.mp3?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
   },
   "camp.ogg": {
     "title": "Campfire sound ambience.ogg",
@@ -307,26 +111,12 @@
     "source": "https://commons.wikimedia.org/wiki/File%3ACampfire%20sound%20ambience.ogg",
     "url": "https://upload.wikimedia.org/wikipedia/commons/b/b1/Campfire_sound_ambience.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
   },
-  "storm.mp3": {
-    "title": "Thunder / Lightning Ambience - Field Recording",
-    "author": "Gregor Quendel",
-    "license": "CC BY (attribution required)",
-    "source": "https://opengameart.org/content/thunder-lightning-ambience-field-recording",
-    "url": "https://opengameart.org/sites/default/files/gregor_quendel_-_free_thunder_ambience_-_mp3_0.mp3"
-  },
   "chain.mp3": {
     "title": "SSE Library: CHAINS",
     "author": "Unknown",
     "license": "Public domain (CC0 or PD Mark)",
     "source": "https://archive.org/details/SSE_Library_CHAINS",
     "url": "https://archive.org/download/SSE_Library_CHAINS/MOVEMENT%2FCHAINMvmt_Chains%20moving%20on%20deck%20of%20ship%3B%20waves_CS_USC.mp3"
-  },
-  "spell_fire.mp3": {
-    "title": "SSE Library: FIRE",
-    "author": "Unknown",
-    "license": "Public domain (CC0 or PD Mark)",
-    "source": "https://archive.org/details/SSE_Library_FIRE",
-    "url": "https://archive.org/download/SSE_Library_FIRE/WHOOSH%2FFIREWhsh_Flare%20whoosh_CS_USC.mp3"
   },
   "crypt.mp3": {
     "title": "Forgoten tomb ambience",
@@ -425,5 +215,215 @@
     "license": "Public domain (CC0 or PD Mark)",
     "source": "https://opengameart.org/content/magic-words-healing-sound-effect",
     "url": "https://opengameart.org/sites/default/files/magic_words.wav"
+  },
+  "deep_forest.ogg": {
+    "title": "Hullerweg, Niedertiefenbach, Beselich - night ambience /w aircraft, Oktoberfest and owls (excerpt)",
+    "author": "udo noll",
+    "license": "CC BY-SA (attribution and share-alike required)",
+    "source": "https://archive.org/details/aporee_46901_53269",
+    "url": "https://archive.org/download/aporee_46901_53269/ntbEschenauerWegFestEulen191102.ogg"
+  },
+  "tundra.ogg": {
+    "title": "Bayelva Observatory, Ny-Ålesund, Svalbard - Bayelva stream flow, distant bird, wind (excerpt)",
+    "author": "radio aporee",
+    "license": "CC BY-SA (attribution and share-alike required)",
+    "source": "https://archive.org/details/aporee_69004_84662",
+    "url": "https://archive.org/download/aporee_69004_84662/bayelvaStation180620260026.mp3"
+  },
+  "river.ogg": {
+    "title": "Sea and river wave sounds (excerpt)",
+    "author": "RandomMind",
+    "license": "Public domain (CC0 or PD Mark)",
+    "source": "https://opengameart.org/content/sea-and-river-wave-sounds",
+    "url": "https://opengameart.org/sites/default/files/VistulaShort_0.mp3"
+  },
+  "market.ogg": {
+    "title": "Idumota Market (Emeka Ogboh).ogg (excerpt)",
+    "author": "Emeka Ogboh",
+    "license": "CC BY-SA (attribution and share-alike required)",
+    "source": "https://commons.wikimedia.org/wiki/File%3AIdumota%20Market%20(Emeka%20Ogboh).ogg",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Idumota_Market_%28Emeka_Ogboh%29.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
+  },
+  "calm.ogg": {
+    "title": "Ascending the Vale",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600064",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ascending%20the%20Vale.mp3"
+  },
+  "wonder.ogg": {
+    "title": "Arcadia",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100326",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Arcadia.mp3"
+  },
+  "mystery.ogg": {
+    "title": "Lost Frontier",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300039",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Lost%20Frontier.mp3"
+  },
+  "tension.ogg": {
+    "title": "Interloper",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100401",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Interloper.mp3"
+  },
+  "battle.ogg": {
+    "title": "Volatile Reaction",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400039",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3"
+  },
+  "boss.ogg": {
+    "title": "Full On",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300005",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Full%20On.mp3"
+  },
+  "chase.ogg": {
+    "title": "Hitman",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300013",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hitman.mp3"
+  },
+  "triumph.ogg": {
+    "title": "Tempting Secrets",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300038",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Tempting%20Secrets.mp3"
+  },
+  "sorrow.ogg": {
+    "title": "Man Down",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700086",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Man%20Down.mp3"
+  },
+  "travel.ogg": {
+    "title": "Galway",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700016",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Galway.mp3"
+  },
+  "festive.ogg": {
+    "title": "Master of the Feast",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400019",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Master%20of%20the%20Feast.mp3"
+  },
+  "calm-2.ogg": {
+    "title": "Dreamer",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600043",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dreamer.mp3"
+  },
+  "wonder-2.ogg": {
+    "title": "Frozen Star",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100356",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Frozen%20Star.mp3"
+  },
+  "mystery-2.ogg": {
+    "title": "Not As It Seems",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100762",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Not%20As%20It%20Seems.mp3"
+  },
+  "tension-2.ogg": {
+    "title": "Gagool",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100443",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Gagool.mp3"
+  },
+  "dread-2.ogg": {
+    "title": "This House",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500055",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/This%20House.mp3"
+  },
+  "battle-2.ogg": {
+    "title": "Five Armies",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100875",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Five%20Armies.mp3"
+  },
+  "boss-2.ogg": {
+    "title": "Killers",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600024",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Killers.mp3"
+  },
+  "chase-2.ogg": {
+    "title": "Clenched Teeth",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100705",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clenched%20Teeth.mp3"
+  },
+  "triumph-2.ogg": {
+    "title": "Americana",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200092",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Americana.mp3"
+  },
+  "sorrow-2.ogg": {
+    "title": "Lost Time",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500032",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Lost%20Time.mp3"
+  },
+  "travel-2.ogg": {
+    "title": "Still Pickin",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1900033",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Still%20Pickin.mp3"
+  },
+  "festive-2.ogg": {
+    "title": "Bushwick Tarantella Loop",
+    "author": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 4.0 (attribution required)",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300003",
+    "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Bushwick%20Tarantella%20Loop.mp3"
+  },
+  "underwater.ogg": {
+    "title": "Underwater sound of a river.mp3",
+    "author": "Thomas Bresson",
+    "license": "CC BY (attribution required)",
+    "source": "https://commons.wikimedia.org/wiki/File%3AUnderwater%20sound%20of%20a%20river.mp3",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/2/24/Underwater_sound_of_a_river.mp3?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
+  },
+  "storm.ogg": {
+    "title": "Thunder / Lightning Ambience - Field Recording (excerpt)",
+    "author": "Gregor Quendel",
+    "license": "CC BY (attribution required)",
+    "source": "https://opengameart.org/content/thunder-lightning-ambience-field-recording",
+    "url": "https://opengameart.org/sites/default/files/gregor_quendel_-_free_thunder_ambience_-_mp3_0.mp3"
+  },
+  "spell_fire.ogg": {
+    "title": "SSE Library: FIRE",
+    "author": "Unknown",
+    "license": "Public domain (CC0 or PD Mark)",
+    "source": "https://archive.org/details/SSE_Library_FIRE",
+    "url": "https://archive.org/download/SSE_Library_FIRE/WHOOSH%2FFIREWhsh_Flare%20whoosh_CS_USC.mp3"
   }
 }

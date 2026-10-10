@@ -57,6 +57,7 @@
 //                                                      to src/lib/ambience/sources.json
 //   node scripts/fetch-ambience.mjs --reject city.wav  throw a file out for good
 //                                                      (data/ambience-rejects.json)
+//   node scripts/fetch-ambience.mjs --normalise        re-encode and trim what is here
 //
 // Where a file comes from, in order: the operator's pins
 // (data/ambience-sources.json), the lock (data/ambience-lock.json, what this
@@ -631,20 +632,51 @@ async function download(url, destination) {
   return buffer.length;
 }
 
-// A WAV is ten times the size of the same sound as Ogg and the game-asset
-// site serves plenty of them; the pack and every phone that installs it
-// would rather not. Transcoded when ffmpeg is here, left alone otherwise.
-function compressed(file) {
-  if (path.extname(file).toLowerCase() !== ".wav") {
-    return file;
-  }
-  const target = file.replace(/\.wav$/i, ".ogg");
+// What a file is, from ffprobe: its length and its bit rate.
+function probe(file) {
   try {
-    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", file, "-codec:a", "libvorbis", "-q:a", "5", target], { stdio: "inherit" });
-    unlinkSync(file);
-    return target;
+    const out = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration,bit_rate", "-of", "csv=p=0", file], { encoding: "utf8" });
+    const [duration, bitRate] = out.trim().split(",").map(Number);
+    return { seconds: duration || 0, kbps: (bitRate || 0) / 1000 };
   } catch {
-    return file;
+    return { seconds: 0, kbps: 0 };
+  }
+}
+
+// The size the pack and every phone that installs it can live with. A WAV
+// is ten times the same sound as Ogg; a 320 kbps catalogue mp3 is three
+// times a 128; and a ten-minute field recording of a place loops as well
+// at four. Re-encoded to Ogg Vorbis, and a bed past four minutes cut there
+// with a fade and credited as an excerpt. Nothing happens without ffmpeg.
+const BED_MAX_SECONDS = 240;
+
+function normalise(file, layer) {
+  const { seconds, kbps } = probe(file);
+  const extension = path.extname(file).toLowerCase();
+  const trim = layer === "bed" && seconds > BED_MAX_SECONDS + 15;
+  const reencode = extension === ".wav" || kbps > 200 || extension === ".ogg" && kbps > 200;
+  if (!trim && !reencode) {
+    return { file, excerpt: false };
+  }
+  const target = `${file.replace(/\.[a-z0-9]+$/i, "")}.ogg`;
+  const temp = `${target}.tmp.ogg`;
+  const args = ["-loglevel", "error", "-y", "-i", file];
+  if (trim) {
+    args.push("-t", String(BED_MAX_SECONDS), "-af", `afade=t=out:st=${BED_MAX_SECONDS - 3}:d=3`);
+  }
+  args.push("-codec:a", "libvorbis", "-q:a", "4", temp);
+  try {
+    execFileSync("ffmpeg", args, { stdio: "inherit" });
+    unlinkSync(file);
+    execFileSync("mv", [temp, target]);
+    return { file: target, excerpt: trim };
+  } catch {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // Nothing was written.
+    }
+    return { file, excerpt: false };
   }
 }
 
@@ -727,6 +759,33 @@ if (flag("export-sources")) {
   }
   writeFileSync(SHIPPED, `${JSON.stringify(out, null, 2)}\n`);
   console.log(`[ambience] ${Object.keys(out).length} tracks written to ${path.relative(ROOT, SHIPPED)}.`);
+  process.exit(0);
+}
+
+// The size pass over what is already here, for a library fetched before
+// it existed.
+if (flag("normalise") || flag("normalize")) {
+  let changed = 0;
+  for (const [name, entry] of Object.entries({ ...lock })) {
+    const cue = AMBIENCE_CUES.find((candidate) => candidate.id === parseTrackFile(name)?.cueId);
+    if (!cue || !existsSync(path.join(OUT_DIR, name))) {
+      continue;
+    }
+    const { file, excerpt } = normalise(path.join(OUT_DIR, name), cue.layer);
+    const next = path.basename(file);
+    if (next !== name || excerpt) {
+      delete lock[name];
+      lock[next] = {
+        ...entry,
+        title: excerpt && !/\(excerpt\)$/.test(entry.title ?? "") ? `${entry.title} (excerpt)` : entry.title,
+        seconds: Math.round(probeSeconds(file)),
+      };
+      changed += 1;
+      console.log(`  ${name} -> ${next}${excerpt ? " (excerpt)" : ""}`);
+    }
+  }
+  writeLock(lock);
+  console.log(`[ambience] ${changed} files re-encoded, ${rebuildManifest()} cues playable.`);
   process.exit(0);
 }
 
@@ -821,16 +880,17 @@ for (const cue of cues) {
     const fetched = nextTrackFile(cue.id, AUDIO_EXTENSIONS.includes(extension) ? extension : ".mp3", filesFor(cue.id).filter((name) => !force || existing.includes(name)));
     try {
       const bytes = await download(hit.url, path.join(OUT_DIR, fetched));
-      const target = compressed(path.join(OUT_DIR, fetched));
-      const file = path.basename(target);
-      const seconds = probeSeconds(target);
-      if (!durationOk(cue.layer, seconds)) {
-        unlinkSync(target);
-        console.log(`  ! ${Math.round(seconds)}s is the wrong length for a ${cue.layer}; next`);
+      const measured = probeSeconds(path.join(OUT_DIR, fetched));
+      if (!durationOk(cue.layer, measured)) {
+        unlinkSync(path.join(OUT_DIR, fetched));
+        console.log(`  ! ${Math.round(measured)}s is the wrong length for a ${cue.layer}; next`);
         continue;
       }
+      const { file: target, excerpt } = normalise(path.join(OUT_DIR, fetched), cue.layer);
+      const file = path.basename(target);
+      const seconds = probeSeconds(target);
       lock[file] = {
-        title: hit.title,
+        title: excerpt ? `${hit.title} (excerpt)` : hit.title,
         author: hit.author,
         license: hit.license,
         source: hit.source,
