@@ -55,6 +55,8 @@
 //                                                      (this release's asset by default)
 //   node scripts/fetch-ambience.mjs --export-sources   write the resolved library
 //                                                      to src/lib/ambience/sources.json
+//   node scripts/fetch-ambience.mjs --reject city.wav  throw a file out for good
+//                                                      (data/ambience-rejects.json)
 //
 // Where a file comes from, in order: the operator's pins
 // (data/ambience-sources.json), the lock (data/ambience-lock.json, what this
@@ -66,10 +68,11 @@
 // Curating by hand: drop a file named after the cue into public/ambience and
 // run with --manifest. It is kept, credited as locally supplied, and never
 // overwritten. See docs/configuration.md.
-import { mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { register } from "node:module";
-import { acceptLicense, admit, redistributable } from "./lib/ambience-gate.mjs";
+import { acceptLicense, admit, durationOk, redistributable } from "./lib/ambience-gate.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
@@ -82,6 +85,8 @@ const ROOT = process.cwd();
 const OUT_DIR = libraryRoot();
 const SOURCES = path.join(ROOT, "data", "ambience-sources.json");
 const SHIPPED = path.join(ROOT, "src", "lib", "ambience", "sources.json");
+// Files the operator threw out, by URL, so a search never brings them back.
+const REJECTS = path.join(ROOT, "data", "ambience-rejects.json");
 
 const MIN_BYTES = 20 * 1024;
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -222,13 +227,18 @@ async function fromFreesound(query) {
   return candidates;
 }
 
-async function fromArchive(query) {
+async function fromArchive(query, layer = "music") {
   const url = new URL("https://archive.org/advancedsearch.php");
-  // The spoken-word collections are left out at the search rather than
-  // filtered after, so the 25 rows are not all LibriVox.
+  // The spoken-word and radio-drama collections are left out at the
+  // search rather than filtered after, so the 25 rows are not all
+  // LibriVox. A bed asks the field-recording collection (radio aporee:
+  // places recorded as they sound, each with its licence) before the rest.
+  const exclude = "librivoxaudio OR audio_bookspoetry OR podcasts OR audio_news OR audio_religion OR spokenwordaudio OR oldtimeradio OR radioprograms OR audio_foreign";
   url.searchParams.set(
     "q",
-    `${query} AND mediatype:(audio) AND NOT collection:(librivoxaudio OR audio_bookspoetry OR podcasts OR audio_news OR audio_religion OR spokenwordaudio)`,
+    layer === "bed"
+      ? `${query} AND mediatype:(audio) AND collection:(radio-aporee)`
+      : `${query} AND mediatype:(audio) AND NOT collection:(${exclude})`,
   );
   for (const field of ["identifier", "title", "creator", "licenseurl"]) {
     url.searchParams.append("fl[]", field);
@@ -333,13 +343,15 @@ async function ogaItem(slug) {
   const files = [...html.matchAll(/href="(https:\/\/opengameart\.org\/sites\/default\/files\/[^"]+\.(?:mp3|ogg|wav|opus|m4a))"/gi)]
     .map((m) => m[1])
     .filter((url) => !url.includes("/audio_preview/"));
-  const item = { slug, title, licenses, author: author || "Unknown", files: [...new Set(files)] };
+  const tags = [...html.matchAll(/field_art_tags_tid=([^"&]+)"/g)].map((m) => decodeURIComponent(m[1]).toLowerCase());
+  const type = /field-name-field-art-type[\s\S]*?>(Music|Sound Effect)</.exec(html)?.[1] ?? "";
+  const item = { slug, title, licenses, author: author || "Unknown", files: [...new Set(files)], tags, type };
   ogaItems.set(slug, item);
   await sleep(DELAY_MS);
   return item;
 }
 
-async function fromOpenGameArt(query, layer) {
+async function fromOpenGameArt(query, layer, cue) {
   const slugs = [];
   for (const type of OGA_TYPES[layer] ?? [13]) {
     const url = new URL(`${OGA}/art-search-advanced`);
@@ -356,12 +368,19 @@ async function fromOpenGameArt(query, layer) {
     }
     await sleep(DELAY_MS);
   }
-  // A bed wants room tone, and the site files loops and atmospheres among
-  // the music: titles that say so go first, popularity second.
-  const roomTone = /ambien|atmos|loop|soundscape|background|crowd|room tone|drone|wind|rain|water|birds|night|cave|forest|dungeon/i;
-  const ordered = layer === "bed" ? [...slugs].sort((a, b) => Number(roomTone.test(b)) - Number(roomTone.test(a))) : slugs;
-  const candidates = [];
-  for (const slug of ordered.slice(0, 14)) {
+  // The search matches the term anywhere, popularity first, which put a
+  // racing theme on the coast and a seagull on the critical hit. So each
+  // item is read and scored: the cue's own words in the title or the tags,
+  // room tone for a bed, and nothing from another genre or from a bundle of
+  // assorted sounds. Only a score shows up at all.
+  // "Ambient" and "loopable" are said of plenty of music; room tone calls
+  // itself one of these.
+  const roomTone = /ambience|ambiance|soundscape|room tone|field recording|background (noise|sound)|environment(al)? (audio|sound)|nature sound/i;
+  const offGenre = /sci-?fi|space|futur|cyber|racing|chiptune|8-?bit|retro|techno|electro|synth|dubstep|dance|hip ?hop|trap|lo-?fi|christmas|western|tribal|shaman|surf|\brock\b|punk|metal|jazz|blues|funk|disco|\bpop\b|rap\b/i;
+  const bundle = /\bpack\b|various|collection|\bsfx pack|sounds? (pack|set|bundle)|\d+ sounds/i;
+  const wanted = (cue?.keywords ?? []).concat(cue?.label ? [cue.label] : []).map((word) => word.toLowerCase());
+  const scored = [];
+  for (const [index, slug] of slugs.slice(0, 18).entries()) {
     let item;
     try {
       item = await ogaItem(slug);
@@ -369,24 +388,63 @@ async function fromOpenGameArt(query, layer) {
       console.warn(`  ! opengameart ${slug}: ${error.message}`);
       continue;
     }
-    const license = acceptLicense(item.licenses, "", publicDomainOnly);
-    for (const file of item.files) {
-      candidates.push({
-        title: item.title,
-        author: item.author,
-        license,
-        source: `${OGA}/content/${slug}`,
-        url: file,
-        bytes: 0,
-        seconds: 0,
-        // The site matched the term in the title, the tags or the text;
-        // "Crowded Pub" is a tavern whatever its title says.
-        tagged: true,
-      });
-      break;
+    if (!item.files.length) {
+      continue;
+    }
+    const title = item.title.toLowerCase();
+    const text = `${title} ${item.tags.join(" ")} ${slug.replace(/-/g, " ")}`;
+    // Another genre's word anywhere is the end of it: a surf-rock tune tagged
+    // "coast", "beach" and "ocean" is still surf rock.
+    if (offGenre.test(text)) {
+      continue;
+    }
+    // A bed is where they are, not a tune about it: a piece filed as music
+    // is out unless it calls itself an ambience.
+    if (layer === "bed" && item.type === "Music" && !roomTone.test(text)) {
+      continue;
+    }
+    let score = 0;
+    let matched = 0;
+    for (const word of wanted) {
+      if (title.includes(word)) {
+        matched = Math.max(matched, 3);
+      } else if (item.tags.some((tag) => tag.includes(word)) || slug.replace(/-/g, " ").includes(word)) {
+        matched = Math.max(matched, 2);
+      }
+    }
+    // Room tone with none of the cue's words is somebody else's room.
+    if (!matched) {
+      continue;
+    }
+    score += matched;
+    if (layer === "bed" && roomTone.test(text)) {
+      score += 2;
+    }
+    if (/\bloop/i.test(text) && layer !== "sting") {
+      score += 1;
+    }
+    if (layer === "sting" && (bundle.test(text) || item.files.length > 4)) {
+      score -= 4;
+    }
+    if (score >= 2) {
+      scored.push({ score, index, item, slug });
     }
   }
-  return candidates;
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  return scored.map(({ item, slug }) => ({
+    title: item.title,
+    author: item.author,
+    license: acceptLicense(item.licenses, "", publicDomainOnly),
+    source: `${OGA}/content/${slug}`,
+    // One file per item: the first attached, which is the one the author
+    // led with. The length is measured after download.
+    url: item.files[0],
+    bytes: 0,
+    seconds: 0,
+    // Matched on the site's own tags; "Crowded Pub" is a tavern whatever
+    // its title says.
+    tagged: true,
+  }));
 }
 
 // Kevin MacLeod's catalogue: one JSON of every piece, tagged by mood and
@@ -485,7 +543,10 @@ function queriesFor(cue) {
   return [...cue.search, ...cue.keywords.slice(0, 3)];
 }
 
-async function resolve(cue, exclude = new Set()) {
+// Every acceptable candidate for a cue, in the order the sources and
+// queries rank them, one at a time: the caller pulls the next only when a
+// download failed or measured wrong, so most cues cost one search.
+async function* candidatesFor(cue, exclude = new Set()) {
   let seen = 0;
   const refused = new Map();
   for (const source of sourcesFor(cue.layer)) {
@@ -507,10 +568,10 @@ async function resolve(cue, exclude = new Set()) {
             : source === "freesound"
               ? await fromFreesound(query)
               : source === "opengameart"
-                ? await fromOpenGameArt(query, cue.layer)
+                ? await fromOpenGameArt(query, cue.layer, cue)
                 : source === "incompetech"
                   ? await fromIncompetech(cue)
-                  : await fromArchive(query);
+                  : await fromArchive(query, cue.layer);
       } catch (error) {
         console.warn(`  ! ${source} "${query}": ${error.message}`);
         continue;
@@ -528,12 +589,13 @@ async function resolve(cue, exclude = new Set()) {
           continue;
         }
         if (candidate.url) {
-          return { ...candidate, source_name: source };
+          yield { ...candidate, source_name: source };
+          continue;
         }
         await sleep(DELAY_MS);
         const resolved = await resolveArchiveFile({ ...candidate, query }, cue.layer);
         if (resolved) {
-          return { ...resolved, source_name: source };
+          yield { ...resolved, source_name: source };
         }
       }
       await sleep(DELAY_MS);
@@ -543,7 +605,17 @@ async function resolve(cue, exclude = new Set()) {
     const why = [...refused.entries()].map(([reason, count]) => `${count} ${reason}`).join(", ");
     console.log(`  refused: ${why}`);
   }
-  return null;
+}
+
+// The length of a downloaded file, from ffprobe when it is installed. The
+// sources rarely say, and a 26 s "thunder loop" is not a thunderclap.
+function probeSeconds(file) {
+  try {
+    const out = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file], { encoding: "utf8" });
+    return Number(out.trim()) || 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function download(url, destination) {
@@ -557,6 +629,23 @@ async function download(url, destination) {
   }
   writeFileSync(destination, buffer);
   return buffer.length;
+}
+
+// A WAV is ten times the size of the same sound as Ogg and the game-asset
+// site serves plenty of them; the pack and every phone that installs it
+// would rather not. Transcoded when ffmpeg is here, left alone otherwise.
+function compressed(file) {
+  if (path.extname(file).toLowerCase() !== ".wav") {
+    return file;
+  }
+  const target = file.replace(/\.wav$/i, ".ogg");
+  try {
+    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", file, "-codec:a", "libvorbis", "-q:a", "5", target], { stdio: "inherit" });
+    unlinkSync(file);
+    return target;
+  } catch {
+    return file;
+  }
 }
 
 function filesFor(cueId) {
@@ -594,6 +683,37 @@ if (flag("pack")) {
 const lock = readLock();
 const pinned = readJson(SOURCES, {});
 const shipped = readJson(SHIPPED, {});
+const rejects = new Set(readJson(REJECTS, []));
+
+// A wrong pick goes out by name, its URL and page remembered, and the next
+// run fills the cue with something else.
+const rejectFiles = args.filter((arg, index) => args[index - 1] === "--reject");
+if (rejectFiles.length) {
+  for (const name of rejectFiles) {
+    const entry = lock[name];
+    if (!entry) {
+      console.error(`[ambience] ${name} is not in the lock.`);
+      continue;
+    }
+    for (const key of [entry.url, entry.source]) {
+      if (key) {
+        rejects.add(key);
+      }
+    }
+    delete lock[name];
+    try {
+      unlinkSync(path.join(OUT_DIR, name));
+    } catch {
+      // Already gone.
+    }
+    console.log(`[ambience] rejected ${name}: ${entry.title}`);
+  }
+  writeLock(lock);
+  mkdirSync(path.dirname(REJECTS), { recursive: true });
+  writeFileSync(REJECTS, `${JSON.stringify([...rejects], null, 2)}\n`);
+  console.log(`[ambience] ${rebuildManifest()} cues playable.`);
+  process.exit(0);
+}
 
 // The resolved library, as a file the project commits: every fetched track
 // with a redistributable licence, keyed by file name, so the next install
@@ -624,6 +744,9 @@ console.log(
 let filled = 0;
 let skipped = 0;
 const missing = [];
+// One file serves one cue: the forest and the night forest should not be
+// the same birds, and three fights should not share one march.
+const usedEverywhere = new Set([...rejects, ...Object.values(lock).flatMap((entry) => [entry.url, entry.source].filter(Boolean))]);
 
 // A pin: somebody chose that file deliberately, and the licence they
 // recorded is theirs to stand behind. The operator's pins name a cue; the
@@ -671,17 +794,19 @@ for (const cue of cues) {
       .filter(([name]) => parseTrackFile(name)?.cueId === cue.id && existing.includes(name))
       .flatMap(([, entry]) => [entry.url, entry.source].filter(Boolean)),
   );
+  for (const url of usedEverywhere) {
+    taken.add(url);
+  }
   const queue = pinnedHits(cue).filter((hit) => !taken.has(hit.url));
+  const found = candidatesFor(cue, taken);
   let got = 0;
-  for (let take = 0; take < wanted; take += 1) {
-    const hit = queue.shift() ?? (await resolve(cue, taken));
+  let tried = 0;
+  while (got < wanted && tried < 8) {
+    const hit = queue.shift() ?? (await found.next()).value;
     if (!hit) {
-      if (!got && !existing.length) {
-        console.log("  nothing acceptable found");
-        missing.push(cue.id);
-      }
       break;
     }
+    tried += 1;
     taken.add(hit.url);
     if (hit.source) {
       taken.add(hit.source);
@@ -693,9 +818,17 @@ for (const cue of cues) {
       continue;
     }
     const extension = path.extname(new URL(hit.url).pathname).toLowerCase() || ".mp3";
-    const file = nextTrackFile(cue.id, AUDIO_EXTENSIONS.includes(extension) ? extension : ".mp3", filesFor(cue.id).filter((name) => !force || existing.includes(name)));
+    const fetched = nextTrackFile(cue.id, AUDIO_EXTENSIONS.includes(extension) ? extension : ".mp3", filesFor(cue.id).filter((name) => !force || existing.includes(name)));
     try {
-      const bytes = await download(hit.url, path.join(OUT_DIR, file));
+      const bytes = await download(hit.url, path.join(OUT_DIR, fetched));
+      const target = compressed(path.join(OUT_DIR, fetched));
+      const file = path.basename(target);
+      const seconds = probeSeconds(target);
+      if (!durationOk(cue.layer, seconds)) {
+        unlinkSync(target);
+        console.log(`  ! ${Math.round(seconds)}s is the wrong length for a ${cue.layer}; next`);
+        continue;
+      }
       lock[file] = {
         title: hit.title,
         author: hit.author,
@@ -703,18 +836,22 @@ for (const cue of cues) {
         source: hit.source,
         origin: hit.origin ?? "fetched",
         url: hit.url,
+        ...(seconds ? { seconds: Math.round(seconds) } : {}),
       };
       writeLock(lock);
-      console.log(`  saved ${(bytes / 1024 / 1024).toFixed(1)} MB as ${file}`);
+      usedEverywhere.add(hit.url);
+      usedEverywhere.add(hit.source);
+      console.log(`  saved ${(bytes / 1024 / 1024).toFixed(1)} MB as ${file}${seconds ? ` (${Math.round(seconds)}s)` : ""}`);
       filled += 1;
       got += 1;
     } catch (error) {
       console.warn(`  ! ${error.message}`);
-      if (!got && !existing.length) {
-        missing.push(cue.id);
-      }
     }
     await sleep(DELAY_MS);
+  }
+  if (!got && !existing.length) {
+    console.log("  nothing acceptable found");
+    missing.push(cue.id);
   }
 }
 

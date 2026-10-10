@@ -273,6 +273,12 @@ test("spoken word is caught by category and by byline too", () => {
   const tagged = { title: "Crowded Pub", author: "Bobjt", license: "Public domain (CC0 or PD Mark)", seconds: 0, tagged: true };
   assert.equal(admit(tagged, { layer: "bed", query: "tavern" }).ok, true, "a source that matched on its tags is not asked for the word");
   assert.equal(admit({ ...tagged, tagged: false }, { layer: "bed", query: "tavern" }).why, "off topic");
+  const commons = { title: "Keep the Home Fires Burning.ogg", author: "x", license: "Public domain (CC0 or PD Mark)", seconds: 180 };
+  assert.equal(admit({ ...commons, categories: "1914 songs|Ivor Novello" }, { layer: "bed", query: "keep" }).why, "music, not a sound");
+  assert.equal(admit({ ...commons, title: "Sunshine Coast rower.ogg", categories: "People of Queensland" }, { layer: "bed", query: "coast" }).why, "not filed as a sound");
+  assert.equal(admit({ ...commons, title: "Rain thunder steps.ogg", categories: "Audio files of thunder|Sounds of rain" }, { layer: "bed", query: "rain" }).ok, true);
+  assert.equal(admit({ ...commons, title: "Rain.ogg", categories: "" }, { layer: "bed", query: "rain" }).why, "not filed as a sound", "an uncategorised upload is no evidence");
+  assert.equal(admit({ ...commons, title: "Rain.ogg" }, { layer: "bed", query: "rain" }).ok, true, "a source with no categories is judged on the rest");
 });
 
 await (async () => {

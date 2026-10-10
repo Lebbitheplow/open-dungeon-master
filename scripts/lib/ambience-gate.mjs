@@ -63,6 +63,8 @@ const SPOKEN = [
 // Wikipedia", "Audio files of speeches"), which say more than a title can.
 const SPOKEN_CATEGORY = /spoken|speech|audio versions of wikipedia|audiobook|pronunciation|podcast|lecture|interview|reading|news|debate|sermon|homil|oral history|remarks|address/i;
 
+const SOUND_CATEGORY = /sound effects|sounds of|field recording|nature sounds|ambien|environmental|noise|soundscape|audio files of (rain|thunder|wind|water|waves|the sea|rivers|waterfalls|fire|birds|animals|insects|frogs|wolves|dogs|cats|horses|bells|gongs|horns|doors|crowds|cities|forests|weather|storms|explosions|footsteps|breathing|heartbeats)/i;
+
 export function spokenWord(title, author = "", categories = "") {
   const text = `${title ?? ""} ${author ?? ""}`;
   return SPOKEN.some((pattern) => pattern.test(text)) || /\b(remarks|testimony|hearing|debate|homily|oral history)\b/i.test(text) || SPOKEN_CATEGORY.test(String(categories ?? ""));
@@ -152,6 +154,20 @@ export function admit(candidate, { layer, query }) {
   }
   if (!candidate.tagged && !relevant(query, candidate.title)) {
     return { ok: false, why: "off topic" };
+  }
+  // Commons says what a file is in its categories, and a recording of a
+  // place or a thing is filed as one: "Audio files of thunder", "Sounds of
+  // rain", "Sound effects". For a bed or a sting a Commons file has to be
+  // filed that way; a title with the right word on an interview, a song or
+  // an uncategorised upload is not evidence of anything.
+  if (layer !== "music" && candidate.categories !== undefined) {
+    const categories = String(candidate.categories ?? "");
+    if (/audio files of .*music|\bmusic by\b|\bsongs?\b|\bband\b|orchestra|choir|opera|anthem|hymn|\bjazz\b/i.test(categories)) {
+      return { ok: false, why: "music, not a sound" };
+    }
+    if (!SOUND_CATEGORY.test(categories)) {
+      return { ok: false, why: "not filed as a sound" };
+    }
   }
   if (!durationOk(layer, candidate.seconds)) {
     return { ok: false, why: `${Math.round(candidate.seconds)}s is the wrong length for a ${layer}` };
