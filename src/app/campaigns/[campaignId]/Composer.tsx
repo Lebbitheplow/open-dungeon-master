@@ -52,6 +52,7 @@ function ComposerInner({
   campaignId,
   sheets,
   meUserId,
+  activeSheetId,
   steersStory,
   isDm,
   kind,
@@ -91,6 +92,7 @@ function ComposerInner({
   campaignId: string;
   sheets: CampaignState["sheets"];
   meUserId: string;
+  activeSheetId?: string;
   steersStory: boolean;
   // The DM seat: narrates instead of acting, and never runs a character.
   isDm: boolean;
@@ -199,6 +201,7 @@ function ComposerInner({
         ) : null}
         {!isDm && hand.encounter ? (
           <CombatHand
+            activeSheetId={activeSheetId}
             campaignId={campaignId}
             sheets={sheets}
             meUserId={meUserId}

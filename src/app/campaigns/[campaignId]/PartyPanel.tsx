@@ -247,6 +247,7 @@ export function PartyPanel({
   const [buildingCompanion, setBuildingCompanion] = useState(false);
   const [tradingWithId, setTradingWithId] = useState("");
   const [switching, setSwitching] = useState("");
+  const [switchError, setSwitchError] = useState("");
   const tradingWith = sheets.find((sheet) => sheet.id === tradingWithId);
   const myOwn = sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion);
   const mySheet = myOwn.find((sheet) => sheet.id === activeSheetId) ?? myOwn[0];
@@ -254,7 +255,14 @@ export function PartyPanel({
   async function playAs(sheetId: string) {
     setSwitching(sheetId);
     try {
-      await fetch(`/api/campaigns/${campaignId}/sheet/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ characterId: sheetId }) });
+      setSwitchError("");
+      const response = await fetch(`/api/campaigns/${campaignId}/sheet/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ characterId: sheetId }) });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        setSwitchError(result.error || "Could not select the character.");
+      }
+    } catch {
+      setSwitchError("Could not reach the server.");
     } finally {
       setSwitching("");
     }
@@ -293,7 +301,7 @@ export function PartyPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         sheet.userId === meUserId
-          ? { portrait: { url } }
+          ? { characterId: sheet.id, portrait: { url } }
           : { sheetId: sheet.id, portrait: { url } },
       ),
     });
@@ -309,6 +317,7 @@ export function PartyPanel({
       {embedded ? null : (
         <SectionHead title="Party" glyph="tab-party" level="h2" aside={sheets.length} />
       )}
+      {switchError ? <p role="alert" className="text-sm text-red-300">{switchError}</p> : null}
       {sheets.map((sheet) => {
         const derived = computeSheetDerived(sheet);
         const mine = sheet.userId === meUserId;
@@ -403,7 +412,7 @@ export function PartyPanel({
                   ) : null}
                 </span>
                 <span className="block text-xs text-stone-400">
-                  {sheet.race.replaceAll("_", " ")}{" "}
+                  {sheet.raceLabel ?? sheet.race.replaceAll("_", " ")}{" "}
                   {(sheet.classes?.length ?? 0) > 1
                     ? (sheet.classes ?? []).map((entry) => `${entry.id} ${entry.level}`).join(" / ")
                     : `${sheet.class} ${sheet.level}`}

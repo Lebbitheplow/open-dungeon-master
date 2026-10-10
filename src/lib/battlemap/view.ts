@@ -1,4 +1,5 @@
 import { getCampaignById, getFloor } from "@/lib/db/campaigns";
+import { initiativeCharacter } from "@/lib/player-characters";
 import { getClock } from "@/lib/db/clock";
 import { lightRemaining } from "@/lib/dm/light-timers";
 import { breakDown } from "@/lib/dm/calendar";
@@ -169,7 +170,8 @@ export function buildPlayerMapView(
   if (!map) {
     return null;
   }
-  const sheet = getSheetForUser(campaignId, userId);
+  const currentActor = encounter.kind !== "scene" && encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  const sheet = initiativeCharacter(listSheets(campaignId), userId, currentActor?.kind === "pc" ? currentActor.characterId : undefined) ?? getSheetForUser(campaignId, userId);
   const tokens = listTokens(map.id);
   const tileCount = map.width * map.height;
   const myToken = sheet ? getTokenByRef(map.id, sheet.id) : null;

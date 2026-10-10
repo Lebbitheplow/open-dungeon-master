@@ -402,7 +402,7 @@ await test("a player fields one character at a table that plays one each", async
 });
 
 await test(
-  "With the several-characters setting on, a player may add a second character; the first stays the one in play until they switch.",
+  "With several characters enabled, adding selects the new character and switching keeps the others seated.",
   async () => {
     const campaign = await newTable({ gameSettings: { multiCharacter: "one_active" } });
     const player = world.addUser("player");
@@ -412,7 +412,7 @@ await test(
     const second = await call(sheetRoute, "POST", posted({ name: "Second" }), params);
     assert.equal(second.status, 201);
     assert.equal(listSheetsForUser(campaign.id, player.id).length, 2);
-    assert.equal(getSheetForUser(campaign.id, player.id).name, "First");
+    assert.equal(getSheetForUser(campaign.id, player.id).name, "Second", "adding selects the character the player continued with");
 
     // The library door opens the same way.
     const library = createCharacter(player.id, 1, posted({ name: "Third" }));
@@ -422,7 +422,7 @@ await test(
       listSheetsForUser(campaign.id, player.id).map((sheet) => sheet.name),
       ["First", "Second", "Third"],
     );
-    assert.equal(getSheetForUser(campaign.id, player.id).name, "First");
+    assert.equal(getSheetForUser(campaign.id, player.id).name, "Third");
 
     const switched = await call(switchRoute, "POST", { characterId: second.json.sheet.id }, params);
     assert.equal(switched.status, 200, JSON.stringify(switched.json));

@@ -676,6 +676,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           next.questsVersion = state.questsVersion + 1;
           return next;
         case "roster_updated":
+          next.members = state.members.map((member) => member.userId === payload.userId ? { ...member, activeCharacterId: String(payload.activeSheetId ?? "") } : member);
           if (String(payload.userId ?? "") === state.me?.id) {
             next.activeSheetId = String(payload.activeSheetId ?? "");
           }
@@ -748,12 +749,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "sheet_updated": {
           const sheet = payload.sheet as CharacterSheet;
-          // One sheet per user per campaign: a lobby switch changes the
-          // sheet id, so any other sheet of the same user is stale.
-          const pruned = state.sheets.filter(
-            (entry) => entry.id === sheet.id || entry.userId !== sheet.userId,
-          );
-          next.sheets = upsertBy(pruned, sheet, (entry) => entry.id);
+          // A human can own several sheets. Updating one must not discard
+          // the others; actual replacements publish sheet_deleted first.
+          next.sheets = upsertBy(state.sheets, sheet, (entry) => entry.id);
           // A completed level-up clears its notice.
           next.levelUps = state.levelUps.filter(
             (notice) => !(notice.characterId === sheet.id && sheet.level >= notice.level),

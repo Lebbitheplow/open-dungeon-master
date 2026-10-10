@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { setMemberActiveCharacter } from "@/lib/db/campaigns";
-import { listSheetsForUser } from "@/lib/db/sheets";
+import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { publishEphemeral } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -28,7 +30,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if (!own) {
     return Response.json({ error: "That is not one of your characters." }, { status: 404 });
   }
+  const encounter = getActiveEncounter(campaignId);
+  if (context.campaign.gameSettings.multiCharacter === "one_active" && encounter && encounter.kind !== "scene" && getSheetForUser(campaignId, context.user.id)?.id !== own.id) {
+    return Response.json({ error: "Wait until the fight ends to change your fielded character." }, { status: 409 });
+  }
   setMemberActiveCharacter(campaignId, context.user.id, own.id);
   publishEphemeral(campaignId, "roster_updated", { userId: context.user.id, activeSheetId: own.id, at: Date.now() });
+  publishBattleMapUpdate(campaignId);
   return Response.json({ ok: true, activeSheetId: own.id });
 }
