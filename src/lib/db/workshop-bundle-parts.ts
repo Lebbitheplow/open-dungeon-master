@@ -20,8 +20,6 @@ import { savePackDraft } from "@/lib/db/world-pack-drafts";
 import { landedSheet, writeShelfArrivals, type ShelfArrival } from "@/lib/db/workshop-bundle-shelf";
 import { insertShop } from "@/lib/db/shops";
 import { getClock } from "@/lib/db/clock";
-import { normalizeHomebrewData } from "@/lib/homebrew/gear";
-import { draftFromData } from "@/lib/bestiary/monster-draft";
 
 // The parts of writing a bundle back in that need more than one line each:
 // a prepared map's scene layer, the region map, and finding the shared

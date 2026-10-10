@@ -8,8 +8,6 @@ import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
-import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { spellMechanicsFor } from "@/lib/content";
 import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { breakConcentration } from "@/lib/dm/concentration";
 import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";

@@ -7,17 +7,8 @@ import {
   patchEnemyConditions,
 } from "@/lib/db/encounters";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
-import { insertRoll } from "@/lib/db/rolls";
 import { findSpellByName, spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
-import { allySaveAura } from "@/lib/dm/aura";
-import { computeSheetDerived } from "@/lib/srd";
-import { conditionConcentrationFloor, conditionRollRiders } from "@/lib/srd/condition-effects";
-import { mergeAdvantage, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";
-import { d20Expression, rollExpression } from "@/lib/dice";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { findSpellByName, spellMechanicsFor } from "@/lib/content";
 import { conditionConcentrationFloor } from "@/lib/srd/condition-effects";
 import { removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { heldBySpell, spellDurationRounds, spellKey } from "@/lib/dm/spell-effects";
