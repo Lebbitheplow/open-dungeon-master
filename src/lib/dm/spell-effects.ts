@@ -18,6 +18,7 @@ import { getDatabase, parseJson } from "@/lib/db/core";
 import { getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
 import { addConditionInstance, removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { findSpellByName, spellMechanicsFor } from "@/lib/content";
+import { bakedSpellDuration } from "@/lib/content/baked-spells";
 import { durationRounds } from "@/lib/srd/spell-mechanics";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
 import { conditionEffectsFor, type SaveAbilityId } from "@/lib/srd/condition-effects";
@@ -52,6 +53,12 @@ export function spellDurationRounds(spell: string, authors?: string | string[]):
   const fromRow = row ? durationRounds(String(row.data.duration ?? "")) : null;
   if (fromRow) {
     return fromRow;
+  }
+  // No content pack: the SRD durations baked at build time
+  // (scripts/annotate-spell-manifest.mjs).
+  const baked = row ? null : bakedSpellDuration(spell);
+  if (baked) {
+    return baked;
   }
   const mech = spellMechanicsFor({ spell, ...(typeof authors === "string" ? { userId: authors } : {}) })?.mech;
   return mech?.buff?.rounds ?? mech?.condition?.rounds ?? null;

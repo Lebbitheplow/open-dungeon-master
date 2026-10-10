@@ -7,8 +7,9 @@ import type { SpellMech } from "@/lib/srd/spell-mechanics";
 
 // What the SRD rows' text answers, baked at build time
 // (scripts/annotate-spell-manifest.mjs) for a server with no content pack:
-// the parsed mechanics and the dice by slot level or cantrip tier.
-type BakedSpell = { n: string; a?: string[]; m?: SpellMech; x?: Record<string, string> };
+// the parsed mechanics, the dice by slot level or cantrip tier, and how many
+// rounds the spell lasts.
+type BakedSpell = { n: string; a?: string[]; m?: SpellMech; x?: Record<string, string>; u?: number };
 const BAKED = new Map<string, BakedSpell>(
   (bakedSpellMechJson as unknown as { spells: BakedSpell[] }).spells.flatMap((spell) =>
     [spell.n, ...(spell.a ?? [])].map((name) => [name.trim().toLowerCase().replace(/\s+/g, " "), spell] as const),
@@ -29,6 +30,12 @@ function bakedDice(spell: BakedSpell, spellLevel: number, casterLevel: number, s
     return tier ? (spell.x[`c${tier}`] ?? null) : null;
   }
   return spell.x[String(slotLevel)] ?? null;
+}
+
+// How many rounds a baked spell lasts, or null (instantaneous, until
+// dispelled, or not an SRD spell).
+export function bakedSpellDuration(name: string): number | null {
+  return bakedSpell(name)?.u ?? null;
 }
 
 // A baked spell's parsed mechanics, or null.
