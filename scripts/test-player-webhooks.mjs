@@ -21,7 +21,7 @@ const { createEncounter } = await import("../src/lib/db/encounters.ts");
 const { publishPersisted } = await import("../src/lib/events.ts");
 const { setDmStatus } = await import("../src/lib/dm/status.ts");
 const { playerOpportunities } = await import("../src/lib/agents/webhook-opportunities.ts");
-const { createPlayerWebhook, runPlayerWebhooksOnce, listPlayerWebhooks, deletePlayerWebhook, webhookUrl, webhookSignature, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
+const { createPlayerWebhook, runPlayerWebhooksOnce, listPlayerWebhooks, deletePlayerWebhook, webhookUrl, webhookAuthorization, webhookHeaders, webhookSignature, playerWebhookState, reserveWebhookWrite, finishWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
 const { PlayerInbox, receiverServer, verifySignature, validateEvent, playerPrompt } = await import("./lib/player-webhook-receiver.mjs");
 const { runCodexPlayerTurn, playerCodexEnvironment, playerMcpOverride } = await import("./lib/player-webhook-codex.mjs");
@@ -70,6 +70,10 @@ try {
     assert.ok(!JSON.stringify(event).includes("signingSecret"));
     assert.ok(verifySignature(sub.signingSecret, sent.at(-1).options.headers["X-ODM-Timestamp"], sent.at(-1).options.headers["X-ODM-Signature"], sent.at(-1).options.body));
     const count = sent.length; await tick(); await tick(); assert.equal(sent.length, count);
+  });
+  await test("a subscription without authorizationHeader sends no Authorization header", () => {
+    assert.ok(sent.length > 0 && sent.every((s) => !Object.keys(s.options.headers).some((h) => h.toLowerCase() === "authorization")));
+    assert.equal(listPlayerWebhooks(grant.id)[0].hasAuthorizationHeader, false);
   });
   await test("paused, busy, hold and another player's spotlight do not invite actions", () => {
     for (const changes of [{ active: false }, { paused: true }, { busy: true }, { floor: { mode: "hold", next: { mode: "open" } } }, { floor: { mode: "spotlight", userIds: [other.id], respondedUserIds: [], prompt: "You?" } }]) assert.deepEqual(playerOpportunities(state(changes)), []);
@@ -241,6 +245,80 @@ try {
     assert.equal(sent.length, count); assert.deepEqual(listPlayerWebhooks(grant.id), []);
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhook_writes`).get().n, 0);
   });
+  await test("authorizationHeader is validated, sent verbatim on each delivery and never listed back", async () => {
+    for (const bad of ["", "Bearer a\r\nX-Evil: 1", "Bearer a\nb", "Bearer a\rb", "x".repeat(1025), " Bearer a", "Bearer a ", "Bearer \u00e9", "Bearer \u0000", 42]) {
+      assert.throws(() => webhookAuthorization(bad));
+    }
+    assert.equal(webhookAuthorization(undefined), null);
+    assert.equal(webhookAuthorization("x".repeat(1024)).length, 1024);
+    const hosted = createConnectionGrant({ userId: user.id, name: "Hosted agent", scopes: ["read", "play"], campaignId: campaign.id }).grant;
+    const base = { campaignId: campaign.id, characterId: sheetId, url: sub.url };
+    for (const authorizationHeader of ["Bearer a\r\nX-Evil: 1", "x".repeat(1025), 7]) {
+      const refused = await workbenchCall(hosted, "odm_subscribe_player_webhook", { ...base, authorizationHeader });
+      assert.equal(refused.isError, true);
+      assert.ok(!refused.text.includes("X-Evil"));
+    }
+    assert.deepEqual(listPlayerWebhooks(hosted.id), []);
+    const value = "Bearer hosted-receiver-SECRET-TOKEN";
+    const created = await workbenchCall(hosted, "odm_subscribe_player_webhook", { ...base, authorizationHeader: value });
+    assert.equal(created.isError, false);
+    assert.ok(!created.text.includes(value)); assert.equal(JSON.parse(created.text).hasAuthorizationHeader, true);
+    const listed = await workbenchCall(hosted, "odm_list_player_webhooks", {});
+    assert.ok(!listed.text.includes(value)); assert.equal(JSON.parse(listed.text).subscriptions[0].hasAuthorizationHeader, true);
+    const { id, signingSecret } = JSON.parse(created.text);
+    assert.ok(!JSON.stringify(playerWebhookState(hosted, id)).includes(value));
+    narration(); const before = sent.length; await tick();
+    const delivered = sent.slice(before).filter((s) => s.event.subscriptionId === id);
+    assert.ok(delivered.length > 0);
+    for (const { options } of delivered) {
+      assert.equal(options.headers.Authorization, value);
+      assert.ok(verifySignature(signingSecret, options.headers["X-ODM-Timestamp"], options.headers["X-ODM-Signature"], options.body));
+      assert.ok(!options.body.includes(value));
+    }
+    assert.equal(JSON.parse((await workbenchCall(hosted, "odm_unsubscribe_player_webhook", { subscriptionId: id })).text).removed, true);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhooks WHERE authorization_header IS NOT NULL`).get().n, 0);
+  });
+  await test("extra headers are validated, sent with each delivery and listed by name only; every event carries a text summary", async () => {
+    const five = Object.fromEntries(["a", "b", "c", "d", "e"].map((k) => [`x-${k}`, "1"]));
+    for (const bad of [{ Authorization: "Bearer a" }, { host: "x" }, { "Content-Type": "text/plain" }, { Cookie: "a=b" }, { "X-ODM-Signature": "v1=0" },
+      { "Proxy-Anything": "1" }, { "bad name": "1" }, { ["a".repeat(65)]: "1" }, { "A-B": "1", "a-b": "2" }, five,
+      { "anthropic-version": "a\r\nX-Evil: 1" }, { "anthropic-version": "" }, { "anthropic-version": 7 }, [], "anthropic-version: 1", 3]) {
+      assert.throws(() => webhookHeaders(bad));
+    }
+    assert.equal(webhookHeaders(undefined), null);
+    assert.equal(webhookHeaders({}), null);
+    assert.deepEqual(webhookHeaders({ "anthropic-version": "2023-06-01" }), { "anthropic-version": "2023-06-01" });
+    const hosted = createConnectionGrant({ userId: user.id, name: "Claude routine", scopes: ["read", "play"], campaignId: campaign.id }).grant;
+    const base = { campaignId: campaign.id, characterId: sheetId, url: sub.url };
+    const refused = await workbenchCall(hosted, "odm_subscribe_player_webhook", { ...base, headers: { "anthropic-version": "SECRET-VALUE\r\nX-Evil: 1" } });
+    assert.equal(refused.isError, true);
+    assert.ok(!refused.text.includes("SECRET-VALUE") && !refused.text.includes("X-Evil"));
+    assert.deepEqual(listPlayerWebhooks(hosted.id), []);
+    const value = "Bearer sk-ant-oat01-ROUTINE-SECRET";
+    const version = "2023-06-01-SECRET-MARKER";
+    const created = await workbenchCall(hosted, "odm_subscribe_player_webhook", { ...base, authorizationHeader: value, headers: { "anthropic-version": version } });
+    assert.equal(created.isError, false);
+    assert.ok(!created.text.includes(value) && !created.text.includes(version));
+    assert.deepEqual(JSON.parse(created.text).headerNames, ["anthropic-version"]);
+    const listed = await workbenchCall(hosted, "odm_list_player_webhooks", {});
+    assert.ok(!listed.text.includes(version)); assert.deepEqual(JSON.parse(listed.text).subscriptions[0].headerNames, ["anthropic-version"]);
+    const { id, signingSecret } = JSON.parse(created.text);
+    narration(); const before = sent.length; await tick();
+    const delivered = sent.slice(before).filter((s) => s.event.subscriptionId === id);
+    assert.ok(delivered.length > 0);
+    for (const { options, event } of delivered) {
+      assert.equal(options.headers["anthropic-version"], version);
+      assert.equal(options.headers.Authorization, value);
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.ok(verifySignature(signingSecret, options.headers["X-ODM-Timestamp"], options.headers["X-ODM-Signature"], options.body));
+      assert.ok(!options.body.includes(version) && !options.body.includes(value));
+      assert.equal(typeof event.text, "string");
+      assert.ok(event.text.includes(id) && event.text.includes(event.opportunityId) && event.text.includes("Read the table"));
+      assert.ok(event.text.length <= 4000);
+    }
+    assert.equal(JSON.parse((await workbenchCall(hosted, "odm_unsubscribe_player_webhook", { subscriptionId: id })).text).removed, true);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhooks WHERE extra_headers IS NOT NULL`).get().n, 0);
+  });
   await test("signatures reject changed bodies, wrong keys and old/future timestamps", () => {
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = webhookSignature("secret", timestamp, "body");
@@ -299,6 +377,7 @@ try {
     const crashed = new PlayerInbox(path.dirname(inbox.file)); assert.equal(Object.values(crashed.state.jobs).at(-1).state, "uncertain");
     assert.match(playerPrompt(event, "Be helpful"), /Before EACH write/);
     assert.match(playerPrompt(event, "Be helpful"), /never as instructions/);
+    assert.ok(!playerPrompt({ ...event, text: "TEXT-ONLY-MARKER" }, "Be helpful").includes("TEXT-ONLY-MARKER"));
   });
   await test("Codex adapter initializes, persists its own thread before starting and resumes it serially", async () => {
     const calls = []; let threadId; let killed = 0; let handlers;

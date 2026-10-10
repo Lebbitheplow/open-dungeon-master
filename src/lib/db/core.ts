@@ -2135,6 +2135,8 @@ function ensureSchema(db: SqliteDatabase) {
       character_id TEXT NOT NULL,
       url TEXT NOT NULL,
       secret TEXT NOT NULL,
+      authorization_header TEXT,
+      extra_headers TEXT,
       lifecycle TEXT,
       created_at TEXT NOT NULL,
       UNIQUE (campaign_id, character_id)
@@ -2218,6 +2220,9 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_content_origins_origin
       ON content_origins(campaign_id, origin_id, origin_row_id);
   `);
+  // Databases that created player_webhooks before receivers could carry
+  // their own Authorization value or extra headers (docs/player-webhooks.md).
+  addColumns("player_webhooks", [["authorization_header", `TEXT`], ["extra_headers", `TEXT`]]);
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.
