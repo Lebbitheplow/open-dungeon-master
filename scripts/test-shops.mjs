@@ -33,7 +33,7 @@ const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { createSheet, getSheetById } = await import("../src/lib/db/sheets.ts");
 const { insertShop, getShop, listShops } = await import("../src/lib/db/shops.ts");
-const { handleBuyItem, handleSellItem, handleHaggle } = await import("../src/lib/dm/shop-tools.ts");
+const { handleBuyItem, handleSellItem, handleHaggle, stockPool } = await import("../src/lib/dm/shop-tools.ts");
 const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 const { computeTrade, normalizeTradeOffer, tradeSummary, canResolveTrade } = await import("../src/lib/dm/trade-logic.ts");
 const { applyTrade } = await import("../src/lib/dm/trade.ts");
@@ -91,6 +91,14 @@ test("restock comes due by the clock", () => {
   assert.equal(restockDue({ restockDays: 7, restockedAt: 0 }, 6 * 1440, 1440), false);
   assert.equal(restockDue({ restockDays: 7, restockedAt: 0 }, 7 * 1440, 1440), true);
   assert.equal(restockDue({ restockDays: 0, restockedAt: 0 }, 99999, 1440), false);
+});
+
+test("the pack's pool offers each item once, so a shelf never holds two lines of one name", () => {
+  // Empty on a runner without the content pack, which proves nothing either way.
+  for (const kind of ["general", "smith", "curiosities"]) {
+    const names = stockPool(kind).map((item) => item.name.toLowerCase());
+    assert.equal(new Set(names).size, names.length, `${kind}: ${names.length - new Set(names).size} names twice`);
+  }
 });
 
 const dm = createUser("dm", "x");

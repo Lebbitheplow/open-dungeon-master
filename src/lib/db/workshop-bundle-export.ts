@@ -9,6 +9,8 @@ import { getPackDraft, hasPackDraft } from "@/lib/db/world-pack-drafts";
 import { bundleRefOf, type OriginKind } from "@/lib/db/content-origins";
 import { getCommonWorkshop } from "@/lib/db/workshop-common";
 import { worldForBundle } from "@/lib/db/world-forge-bundle";
+import { normalizeStock } from "@/lib/db/shops";
+import { clampMarkup } from "@/lib/dm/shop-logic";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { normalizeMapSkin } from "@/lib/battlemap/skins";
@@ -156,6 +158,10 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
   overworld_maps: {
     carried: ["seed", "width", "height", "terrain", "anchors_json", "pins_json", "params_json", "notes", "paths_json", "labels_json", "backdrop_path"],
     left: { campaign_id: "the new workshop", created_at: "now", updated_at: "now", party_xy_json: "where the party stood is play" },
+  },
+  shops: {
+    carried: ["name", "kind", "size", "location_id", "location_name", "keeper_npc_id", "stock_json", "prepared_stock_json", "markup", "buys", "restock_days"],
+    left: { ...IDENTITY, restocked_at: "the source's clock; the cycle starts on arrival", haggled_json: "who haggled is the source table's play" },
   },
 };
 
@@ -422,6 +428,23 @@ export function exportWorkshopBundle(
     pregens: pregenRows.map((row) => ({ ...row, sheet: portableSheet(row.sheet, shelfById) })),
     // The world pack draft travels whole, art and all; it is the one thing
     // in a workshop that was built to be handed on.
+    // The Market (#171), the place and keeper as indexes like a card's picks.
+    shops: allRows(`SELECT * FROM shops WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`, workshopId).map((row) => {
+      const prepared = str(row.prepared_stock_json);
+      return {
+        name: str(row.name),
+        kind: str(row.kind, "general"),
+        size: str(row.size, "village"),
+        location: at(locationIndex, row.location_id),
+        locationName: str(row.location_name),
+        keeper: at(npcIndex, row.keeper_npc_id),
+        stock: normalizeStock(parseJson<unknown>(str(row.stock_json, "[]"), [])),
+        preparedStock: prepared ? normalizeStock(parseJson<unknown>(prepared, [])) : null,
+        markup: clampMarkup(Number(row.markup) || 1),
+        buys: Number(row.buys) === 1,
+        restockDays: Math.max(0, Math.min(365, Math.round(Number(row.restock_days) || 0))),
+      };
+    }),
     plugin: hasPackDraft(workshopId) ? getPackDraft(workshopId).draft : null,
     world: worldForBundle(
       workshopId,

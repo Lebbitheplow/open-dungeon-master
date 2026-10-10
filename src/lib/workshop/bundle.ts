@@ -161,6 +161,10 @@ export function bundleDependencies(bundle: WorkshopBundle): BundleDependency[] {
   for (const anchor of bundle.overworld?.anchors ?? []) {
     add("overworld", "locations", anchor.location, bundle.locations);
   }
+  for (const shop of bundle.shops) {
+    add("shops", "locations", shop.location, bundle.locations);
+    add("shops", "npcs", shop.keeper, bundle.npcs);
+  }
   return [...tally.entries()].map(([key, count]) => {
     const [from, to] = key.split(">");
     return { from, to, count };
@@ -186,7 +190,18 @@ export function bundleDanglingLinks(bundle: WorkshopBundle): number {
   for (const location of bundle.locations) {
     count += out(location.map, bundle.maps);
   }
+  for (const shop of bundle.shops) {
+    count += out(shop.location, bundle.locations) + out(shop.keeper, bundle.npcs);
+  }
   return count;
+}
+
+// Shelf lines a hand-edited bundle carries that no shelf can hold (no name,
+// or none in stock): left out on import, and counted for the preview.
+export function bundleEmptyStockLines(bundle: WorkshopBundle): number {
+  const empty = (lines: Array<{ itemName: string; qty: number }>) =>
+    lines.filter((line) => !line.itemName.trim() || line.qty <= 0).length;
+  return bundle.shops.reduce((sum, shop) => sum + empty(shop.stock) + empty(shop.preparedStock ?? []), 0);
 }
 
 export const BUNDLE_KIND_LABELS: Record<string, string> = {
@@ -200,6 +215,7 @@ export const BUNDLE_KIND_LABELS: Record<string, string> = {
   monsters: "Hand-built monsters",
   homebrew: "Homebrew items, spells and options",
   pregens: "Pregenerated characters",
+  shops: "Market shops",
   rules: "House rules",
   plugin: "World pack draft",
   overworld: "Region map",
@@ -219,6 +235,7 @@ export function bundleCounts(bundle: WorkshopBundle): BundleCounts {
     monsters: bundle.monsters.length,
     homebrew: bundle.homebrew.length,
     pregens: bundle.pregens.length,
+    shops: bundle.shops.length,
   };
 }
 
@@ -268,6 +285,12 @@ export function bundleWarnings(bundle: WorkshopBundle): string[] {
       bundle.encounters.filter((row) => row.shared).length;
     warnings.push(
       `Written as a chapter of the shared workshop "${bundle.dependsOn.name}". The ${shared} record${shared === 1 ? "" : "s"} its cards pick from there ride along, so it stands on its own.`,
+    );
+  }
+  const emptyLines = bundleEmptyStockLines(bundle);
+  if (emptyLines) {
+    warnings.push(
+      `${emptyLines} stock line${emptyLines === 1 ? " has" : "s have"} no item or none in stock and ${emptyLines === 1 ? "is" : "are"} left out of the Market.`,
     );
   }
   const dangling = bundleDanglingLinks(bundle);

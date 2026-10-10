@@ -1,4 +1,5 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
+import { getClock } from "@/lib/db/clock";
 import type { OriginKind } from "@/lib/db/content-origins";
 import { dedupeName, type ImportKind } from "@/lib/workshop/import";
 
@@ -47,6 +48,10 @@ export const COPY_OVERRIDES: Record<string, readonly string[]> = {
   lore_entries: ["id", "campaign_id", "title", "created_at", "updated_at", ...NEVER_COPIED.lore_entries],
   roll_tables: ["id", "campaign_id", "name", "drawn_json", "created_at", "updated_at"],
   overworld_maps: ["campaign_id", "anchors_json", "party_xy_json", "created_at", "updated_at"],
+  shops: [
+    "id", "campaign_id", "name", "location_id", "location_name", "keeper_npc_id", "stock_json",
+    "restocked_at", "haggled_json", "created_at", "updated_at",
+  ],
 };
 
 const columnCache = new Map<string, string[]>();
@@ -268,6 +273,35 @@ function copyNpcRow(context: CopyContext, row: Row, name: string): string {
   return id;
 }
 
+// A shop and its shelf (#171). Its place and keeper are remapped to their
+// copies here, or cleared and counted; an unplaced shop keeps the place's
+// name, so it still opens wherever a place of that name stands. It starts
+// with the shelf its author wrote when it has one, because what a played
+// table bought off it is that table's play. Who haggled is the source's
+// people and when it last restocked is the source's clock, so the copy's
+// restock cycle starts on arrival rather than coming due at once.
+function copyShopRow(context: CopyContext, row: Row, name: string): string {
+  const id = context.track("shops", String(row.id));
+  const locationId = remap(context, "locations", row.location_id);
+  const place = locationId
+    ? (getDatabase().prepare(`SELECT name FROM locations WHERE id = ?`).get(locationId) as { name: string } | undefined)
+    : undefined;
+  insertCopy("shops", row, {
+    id,
+    campaign_id: context.campaignId,
+    name,
+    location_id: locationId ?? "",
+    location_name: place?.name ?? String(row.location_name ?? ""),
+    keeper_npc_id: remap(context, "npcs", row.keeper_npc_id) ?? "",
+    stock_json: String(row.prepared_stock_json ?? "") || String(row.stock_json ?? "[]"),
+    restocked_at: getClock(context.campaignId).instant,
+    haggled_json: "[]",
+    created_at: context.now,
+    updated_at: context.now,
+  });
+  return id;
+}
+
 // The import kinds that copy row by row, the table each reads, the column
 // its name is in, and how one row is copied.
 const ROW_KINDS = {
@@ -277,6 +311,7 @@ const ROW_KINDS = {
   tables: { table: "roll_tables", label: "name", copy: copyTableRow },
   encounters: { table: "encounter_templates", label: "name", copy: copyEncounterRow },
   npcs: { table: "npcs", label: "name", copy: copyNpcRow },
+  shops: { table: "shops", label: "name", copy: copyShopRow },
 } as const;
 
 export type RowKind = keyof typeof ROW_KINDS;

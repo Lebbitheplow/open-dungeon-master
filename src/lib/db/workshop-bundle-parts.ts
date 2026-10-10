@@ -18,6 +18,10 @@ import type { WorkshopBundle } from "@/lib/workshop/bundle";
 import { createCharacter } from "@/lib/db/characters";
 import { savePackDraft } from "@/lib/db/world-pack-drafts";
 import { landedSheet, writeShelfArrivals, type ShelfArrival } from "@/lib/db/workshop-bundle-shelf";
+import { insertShop } from "@/lib/db/shops";
+import { getClock } from "@/lib/db/clock";
+import { normalizeHomebrewData } from "@/lib/homebrew/gear";
+import { draftFromData } from "@/lib/bestiary/monster-draft";
 
 // The parts of writing a bundle back in that need more than one line each:
 // a prepared map's scene layer, the region map, and finding the shared
@@ -77,6 +81,50 @@ export function insertBundleMap(
       now,
       now,
     );
+}
+
+// A Market shop (#171), its place and keeper resolved from the indexes the
+// bundle wrote and kept only when they landed in this workshop: a chapter's
+// shared row that linked to another workshop is not this shop's to point
+// at. A place that did not come keeps its name, so the shop still opens
+// wherever a place of that name stands. Every field goes through the shop
+// module's own normalisers. Returns how many of its links were dropped.
+export function insertBundleShop(
+  workshopId: string,
+  shop: WorkshopBundle["shops"][number],
+  locationIds: string[],
+  npcIds: string[],
+): number {
+  const db = getDatabase();
+  let dropped = 0;
+  const own = (table: "locations" | "npcs", ids: string[], index: number | null): string => {
+    if (index === null) {
+      return "";
+    }
+    const id = ids[index];
+    if (id && db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND campaign_id = ?`).get(id, workshopId)) {
+      return id;
+    }
+    dropped += 1;
+    return "";
+  };
+  const locationId = own("locations", locationIds, shop.location);
+  const place = locationId ? (db.prepare(`SELECT name FROM locations WHERE id = ?`).get(locationId) as { name: string }) : null;
+  insertShop(workshopId, {
+    name: shop.name,
+    kind: shop.kind,
+    size: shop.size,
+    locationId,
+    locationName: place?.name ?? shop.locationName,
+    keeperNpcId: own("npcs", npcIds, shop.keeper),
+    stock: shop.stock,
+    preparedStock: shop.preparedStock,
+    markup: shop.markup,
+    buys: shop.buys,
+    restockDays: shop.restockDays,
+    restockedAt: getClock(workshopId).instant,
+  });
+  return dropped;
 }
 
 const OVERWORLD_TILES = /^[wpfhms]*$/;

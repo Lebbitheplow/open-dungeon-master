@@ -9,6 +9,7 @@ import { setCommonWorkshop } from "@/lib/db/workshop-common";
 import {
   insertBundleMap,
   insertBundleOverworld,
+  insertBundleShop,
   refIndex,
   writeBundleShelf,
   type SharedKind,
@@ -369,6 +370,12 @@ function writeBundleRows(
       for (const member of faction.members) {
         db.prepare(`UPDATE npcs SET faction_id = ? WHERE campaign_id = ? AND name = ? COLLATE NOCASE`).run(factionId, workshop.id, member);
       }
+      copied += 1;
+    }
+
+    // The Market after the places and the cast it stands at and is kept by.
+    for (const shop of bundle.shops) {
+      droppedLinks += insertBundleShop(workshop.id, shop, ids.locations, ids.npcs);
       copied += 1;
     }
 

@@ -99,7 +99,8 @@ export async function requireDm(campaignId: string): Promise<MemberContext | Res
   return context;
 }
 
-// Prep authority (#154): the prepared fights and the map library. The DM
+// Prep authority (#154): the prepared fights, the map library and the
+// Market's shops and shelves (#171). The DM
 // seat at a table a person runs, and the party lead of an AI-narrated
 // campaign, who steers the story there and is the only person who could
 // bring the prep in (/api/campaigns/[id]/import follows the same rule). A
@@ -110,8 +111,7 @@ export async function requirePrepAuthority(campaignId: string): Promise<MemberCo
   if (isErrorResponse(context)) {
     return context;
   }
-  const caps = capsFor(context);
-  if (caps.role !== "dm" && !caps.steersStory) {
+  if (!hasPrepAuthority(context)) {
     return Response.json(
       {
         error: context.campaign.dmUserId
@@ -122,6 +122,13 @@ export async function requirePrepAuthority(campaignId: string): Promise<MemberCo
     );
   }
   return context;
+}
+
+// The inline counterpart, for a route that serves every member but shows
+// the prep tools only to whoever holds them (the Market panel, #171).
+export function hasPrepAuthority(context: MemberContext): boolean {
+  const caps = capsFor(context);
+  return caps.role === "dm" || caps.steersStory;
 }
 
 // Story authority: floor control, lead directions, the secret arc, the

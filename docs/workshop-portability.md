@@ -38,6 +38,7 @@ means the words only. **No** means not carried, with the reason.
 | Factions | Yes, with members by name | Yes, with every member's link | Factions panel | Factions block |
 | Prepared fights (roster, battlefield, notes, map settings, extras) | Yes. Extras are placements, entry, hidden enemies, overrides, rewards and phases. | Yes. A cue resets. | Deploy | Listed (up to 8, cued first). Started by name with `run_prepared_encounter`, with map and plan. |
 | Roll tables (entries, without replacement) | Yes | Yes. What was drawn resets. | Tables panel | Through its roll tools |
+| Market shops (kind, size, place, keeper, shelf, prices, notes, markup, buying, restock days) | Yes. New since #171. Who haggled and when it last restocked stay behind. | Yes, as the `Market` tick. It starts from the shelf its author wrote, nobody has haggled, and its restock cycle starts on arrival. | Market tab: open, edit the shelf line by line, restock now | SHOPS HERE at the party's place. `open_shop` reopens a shop that stands there as it is. |
 | Battle maps (terrain, lights, backdrop, skin, doors, labels, props, zones, drawings, overlay, sound) | Yes | Yes, every layer | Map library | Through a prepared fight's or a place's map |
 | Region map (terrain, pins, roads, labels, notes, backdrop, anchors) | Yes. New since #158. | Yes. Replaces the target's, as the preview warns. | Region panel | Travel tools |
 | Storyboard cards | Yes, with picks, arrows and routes | Compiled, see below | | |
@@ -52,6 +53,8 @@ means the words only. **No** means not carried, with the reason.
 | Fight drawn on a map | Index | Link | Link to the map's copy. Unbound, with a warning, when the map is not coming. | Deploy and the storyteller lay it down |
 | Place stands on a map | Index | Link | Same as a fight | One-tap deploy |
 | Region map anchors a place | Index | Link | Link to the place's copy, or the place re-placed | Markers |
+| Shop stands at a place | Index, plus the place's name | Link | Link to the place's copy. Unplaced, with a warning, when the place is not coming; it still opens at a place of that name. | SHOPS HERE |
+| Shop kept by an NPC | Index | Link | Link to the NPC's copy. No keeper, with a warning, when the NPC is not coming. | Named in SHOPS HERE |
 | NPC belongs to a faction | Members by name | Link | Link | Faction standing |
 | NPC relations | By name | By name | By name | Agency model |
 | Card picks Who | Index | Link | Waypoint (npc) on its beat or moment | Ticked when the storyteller meets them |
@@ -120,6 +123,11 @@ workshop's cast, places, maps and fights after the chapter's own, marked
   numbers them instead. The preview counts both.
 - **Boards.** A second import of the same board does not repeat its lore,
   fights, notes or quests.
+- **Shops.** A shop an earlier import brought keeps its played shelf, its
+  prices and its haggles. A later chapter's own shops arrive beside it.
+- **Restocks.** A shop with a written shelf refills that shelf on its restock
+  day, and keeps what the party sold the keeper. A shop stocked from the pack
+  rerolls from the pack, and keeps its shelf on a server without one.
 - **An arc already exists.** The board's beats are left alone by default.
   `Add them as act N` appends them after the beats already played, and skips
   beats the arc already has. Played and skipped beats, their details and the
@@ -130,7 +138,8 @@ workshop's cast, places, maps and fights after the chapter's own, marked
 - **Human DM table.** The DM seat holds the prepared fights and the map
   library. The lead is a player there.
 - **AI-narrated table.** The party lead holds them, from the lead's desk
-  (`Prepared fights and maps`). This uses the same rule that lets the lead
+  (`Prepared fights and maps`), and the Market's shops and shelves from the
+  Market tab (#171). This uses the same rule that lets the lead
   import prep (`requirePrepAuthority`, src/lib/campaign-api.ts).
   - The lead **cues** a fight rather than deploying it. A cue is a private
     flag, not a transcript line, so the players never read the fight's name.

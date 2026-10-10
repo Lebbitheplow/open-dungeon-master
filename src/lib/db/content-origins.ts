@@ -30,6 +30,7 @@ export const ORIGIN_TABLES = {
   encounters: "encounter_templates",
   lore: "lore_entries",
   tables: "roll_tables",
+  shops: "shops",
   "board-lore": "lore_entries",
   "board-fight": "encounter_templates",
   "board-note": "campaign_notes",

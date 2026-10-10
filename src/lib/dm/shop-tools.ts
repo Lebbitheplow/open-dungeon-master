@@ -8,7 +8,7 @@ import { getNpcById, getNpcByName } from "@/lib/db/npcs";
 import { insertRoll } from "@/lib/db/rolls";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { findShopByName, getShop, insertShop, listShopsAt, updateShop } from "@/lib/db/shops";
+import { findShopNear, getShop, insertShop, listShopsAt, updateShop } from "@/lib/db/shops";
 import { searchItems } from "@/lib/content";
 import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
@@ -26,6 +26,7 @@ import {
   normalizeShopKind,
   normalizeShopSize,
   offerPriceCp,
+  refillStock,
   renderShopsForPrompt,
   restockDue,
   SIZE_MARKUP,
@@ -56,7 +57,7 @@ export const shopTools: ToolDef[] = [
     function: {
       name: "open_shop",
       description:
-        "Open (or restock) a shop at the party's current place. Give it a name, a kind (general, smith, apothecary, outfitter, curiosities) and the settlement size; the server stocks its shelves from the content pack at the size's markup. Call once when the party first walks in; the shop and its prices then appear in GAME STATE.",
+        "Open a shop at the party's current place. Give it a name, a kind (general, smith, apothecary, outfitter, curiosities) and the settlement size; the server stocks its shelves from the content pack at the size's markup. Call once when the party first walks in; the shop and its prices then appear in GAME STATE. A shop already standing here (one in SHOPS HERE) is reopened as it is: its shelf, prices and haggles stay, and it restocks only when its restock day has come.",
       parameters: {
         type: "object",
         properties: {
@@ -132,9 +133,10 @@ function resolveSheet(campaign: Campaign, ref: string): CharacterSheet | null {
   return stale ? getSheetById(stale.id) ?? stale : null;
 }
 
+// By id, or by name at the party's place before anywhere else.
 function resolveShop(campaign: Campaign, ref: string): Shop | null {
   const byId = getShop(ref);
-  return byId && byId.campaignId === campaign.id ? byId : findShopByName(campaign.id, ref);
+  return byId && byId.campaignId === campaign.id ? byId : findShopNear(campaign.id, getCurrentLocation(campaign.id), ref);
 }
 
 function publishShops(campaignId: string) {
@@ -149,19 +151,33 @@ function publishSheet(campaign: Campaign, sheetId: string) {
 }
 
 // The pool a shop of this kind stocks from: the pack's items of the right
-// kinds, filtered by the kind's words when it has any.
+// kinds, filtered by the kind's words when it has any. Once per name: the
+// pack files some items under two documents, and a shelf with two "Barrel"
+// lines sells one of them and strands the other.
 export function stockPool(kind: string): Array<{ name: string; cost: string }> {
   const spec = KIND_POOL[normalizeShopKind(kind)];
   const pool: Array<{ name: string; cost: string }> = [];
+  const seen = new Set<string>();
   for (const itemKind of spec.kinds) {
     for (const item of searchItems({ kind: itemKind, limit: 400 })) {
-      if (!item.cost || (spec.match && !spec.match.test(item.name))) {
+      if (!item.cost || (spec.match && !spec.match.test(item.name)) || seen.has(item.name.toLowerCase())) {
         continue;
       }
+      seen.add(item.name.toLowerCase());
       pool.push({ name: item.name, cost: item.cost });
     }
   }
   return pool;
+}
+
+// A restock: a prepared shelf is refilled to what its author wrote; a shop
+// the pack stocks rerolls from the pack, and keeps its shelf when the pack
+// has nothing to give (no pack installed, or no item of its kind). Either
+// way it is a new visit, so everybody may haggle again.
+export function restockShop(shop: Shop, instant: number, random: () => number = Math.random): Shop {
+  const pooled = shop.preparedStock ? [] : stockFromPool(stockPool(shop.kind), shop.size, random);
+  const stock = shop.preparedStock ? refillStock(shop.stock, shop.preparedStock) : pooled.length ? pooled : shop.stock;
+  return updateShop(shop.id, { stock, restockedAt: instant, haggledBy: [] }) ?? shop;
 }
 
 const openSchema = z.object({
@@ -181,30 +197,46 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
   const kind = normalizeShopKind(args.kind);
   const instant = getClock(campaign.id).instant;
   const keeper = args.keeper ? getNpcByName(campaign.id, args.keeper) : null;
-  const existing = findShopByName(campaign.id, args.name);
-  const stock = stockFromPool(stockPool(kind), size, random);
-  const shop =
-    existing && (!location || !existing.locationId || existing.locationId === location.id)
-      ? updateShop(existing.id, { stock: stock.length ? stock : existing.stock, restockedAt: instant, haggledBy: [], keeperNpcId: keeper?.id ?? existing.keeperNpcId })!
-      : insertShop(campaign.id, {
-          name: args.name,
-          kind,
-          size,
-          locationId: location?.id ?? "",
-          locationName: location?.name ?? "",
-          keeperNpcId: keeper?.id ?? "",
-          stock,
-          markup: SIZE_MARKUP[size],
-          restockedAt: instant,
-        });
+  const found = findShopNear(campaign.id, location, args.name);
+  // A shop already standing here, or one with no place yet that is not
+  // remembered as standing somewhere else.
+  const existing =
+    found &&
+    (!location ||
+      found.locationId === location.id ||
+      (!found.locationId && (!found.locationName || found.locationName.toLowerCase() === location.name.toLowerCase())))
+      ? found
+      : null;
+  if (existing) {
+    // Reopened as it stands (#171): a prepared or played shelf, its prices
+    // and who already haggled all stay, and its keeper is only filled in
+    // when it had none. It restocks only when its restock day has come.
+    const due = restockDue(existing, instant, MINUTES_PER_DAY);
+    const placed = updateShop(existing.id, {
+      keeperNpcId: existing.keeperNpcId || keeper?.id || "",
+      ...(location && !existing.locationId ? { locationId: location.id, locationName: location.name } : {}),
+    })!;
+    const shop = due ? restockShop(placed, instant, random) : placed;
+    publishShops(campaign.id);
+    return { ok: true, shop: shop.name, reopened: true, restocked: due, lines: shop.stock.length, shelf: shelfLines(shop) };
+  }
+  const shop = insertShop(campaign.id, {
+    name: args.name,
+    kind,
+    size,
+    locationId: location?.id ?? "",
+    locationName: location?.name ?? "",
+    keeperNpcId: keeper?.id ?? "",
+    stock: stockFromPool(stockPool(kind), size, random),
+    markup: SIZE_MARKUP[size],
+    restockedAt: instant,
+  });
   publishShops(campaign.id);
-  return {
-    ok: true,
-    shop: shop.name,
-    restocked: Boolean(existing),
-    lines: shop.stock.length,
-    shelf: shop.stock.slice(0, 12).map((line) => `${line.itemName} x${line.qty} at ${formatCopper(askingPriceCp(line.priceCp, shop.markup))}`),
-  };
+  return { ok: true, shop: shop.name, reopened: false, restocked: false, lines: shop.stock.length, shelf: shelfLines(shop) };
+}
+
+function shelfLines(shop: Shop): string[] {
+  return shop.stock.slice(0, 12).map((line) => `${line.itemName} x${line.qty} at ${formatCopper(askingPriceCp(line.priceCp, shop.markup))}`);
 }
 
 const buySchema = z.object({
@@ -366,7 +398,7 @@ export function shopsBlock(campaign: Campaign): string {
   const shops = listShopsAt(campaign.id, location.id, location.name).map((shop) => {
     // A shop past its restock day fills its shelves again as the party
     // walks in, at the same prices it opened with.
-    const fresh = restockDue(shop, instant, MINUTES_PER_DAY) ? updateShop(shop.id, { stock: stockFromPool(stockPool(shop.kind), shop.size), restockedAt: instant, haggledBy: [] }) ?? shop : shop;
+    const fresh = restockDue(shop, instant, MINUTES_PER_DAY) ? restockShop(shop, instant) : shop;
     return { ...fresh, keeperName: fresh.keeperNpcId ? getNpcById(fresh.keeperNpcId)?.name ?? "" : "" };
   });
   return renderShopsForPrompt(shops);
