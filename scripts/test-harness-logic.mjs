@@ -21,7 +21,7 @@ const { renderTurn, renderFollowUp, renderCompletion, toMcpTools, toolNames, HAR
 );
 const { buildChildEnv, leaksServerSecret } = await import("../src/lib/harness/child-env.ts");
 const { claudeArgs, CLAUDE_ENV, CLAUDE_MCP_PREFIX } = await import("../src/lib/harness/adapters/claude.ts");
-const { codexArgs, userCodexMcpServers } = await import("../src/lib/harness/adapters/codex.ts");
+const { codexArgs, ignoredCodexSettings, userCodexMcpServers } = await import("../src/lib/harness/adapters/codex.ts");
 const { opencodeConfig, OPENCODE_SESSION_RULES, parseOpencodeModels } = await import(
   "../src/lib/harness/adapters/opencode.ts"
 );
@@ -168,7 +168,12 @@ test("Codex is started with its shell, web, apps and sub-agents off, read-only, 
     "features.apps=false",
     "features.multi_agent=false",
     "features.image_generation=false",
-    "tools.view_image=false",
+    // Checked against Codex itself on 2026-10-09: these two are the keys that
+    // remove the image viewer and the sub-agent tools. `tools.view_image`
+    // was never a Codex key (ignored with a warning) and `features.multi_agent`
+    // leaves the collaboration tools in place on current models.
+    "features.view_image=false",
+    "agents.enabled=false",
     'web_search="disabled"',
     'sandbox_mode="read-only"',
     'approval_policy="never"',
@@ -181,7 +186,16 @@ test("Codex is started with its shell, web, apps and sub-agents off, read-only, 
     assert.ok(overrides.includes(expected), `missing ${expected}`);
   }
   assert.equal(args[0], "app-server");
+  assert.ok(!overrides.includes("tools.view_image=false"), "the key Codex ignores must not come back");
   assert.ok(codexArgs({ mcpUrl: null, images: true, disableServers: [] }).includes("features.image_generation=true"));
+  // Codex's own report of a setting it does not recognise, as the probe sees it.
+  assert.deepEqual(
+    ignoredCodexSettings(
+      "Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n  session-flags: `tools.view_image` is ignored.\n  session-flags: `features.gone` is ignored.",
+    ),
+    ["tools.view_image", "features.gone"],
+  );
+  assert.deepEqual(ignoredCodexSettings("nothing of the kind"), []);
   assert.deepEqual(
     userCodexMcpServers('[mcp_servers.github]\ncommand = "x"\n\n[mcp_servers."linear"]\n[mcp_servers.odm]\n[profiles.fast]'),
     ["github", "linear"],
@@ -250,6 +264,9 @@ test("discovery looks where the installers put programs, not only on PATH", () =
   assert.ok(dirs.includes("/home/dm/.local/bin"));
   assert.ok(dirs.includes("/home/dm/.npm-global/bin"));
   assert.ok(dirs.includes("/home/dm/.opencode/bin"));
+  // Codex's own Windows installer (install.ps1) puts the binary here.
+  const win = knownInstallDirs("C:\\Users\\dm", "win32");
+  assert.ok(win.some((entry) => entry.endsWith("Programs\\OpenAI\\Codex\\bin")), "Codex's Windows install dir");
 });
 
 fs.rmSync(dir, { recursive: true, force: true });

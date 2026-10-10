@@ -1,18 +1,30 @@
 // Codex, driven through `codex app-server` (JSON-RPC over stdio), the same
 // protocol T3 Code uses.
 //
-// Run for real on 2026-10-07 against Codex 0.159.2 with a ChatGPT sign-in
-// (scripts/smoke-harness.mjs, HARNESS=codex): every test stage and two
-// narrated turns. The admin page still marks the lockdown unproven on each
-// install until its own test turn passes.
+// Run for real on 2026-10-07 against Codex 0.159.2 and on 2026-10-09 against
+// 0.162.1 with a ChatGPT sign-in (scripts/smoke-harness.mjs, HARNESS=codex):
+// every test stage and narrated turns. The admin page still marks the
+// lockdown unproven on each install until its own test turn passes.
 //
 // Lockdown, "contained": Codex has no switch that removes its apply_patch
 // tool (openai/codex#8161 was closed as not planned). What it gets instead:
-// the shell, unified exec, web search, image viewing, apps and sub-agents
-// all switched off; a read-only sandbox; approvals set to never, with ODM
-// declining every command or file-change approval that is still requested;
-// an empty scratch folder as its working directory; and the admin's own MCP
-// servers disabled by name so only ODM's is connected.
+// the shell, web search, image viewing, apps and sub-agents all switched
+// off; a read-only sandbox; approvals set to never, with ODM declining every
+// command or file-change approval that is still requested; an empty scratch
+// folder as its working directory; and the admin's own MCP servers disabled
+// by name so only ODM's is connected.
+//
+// The switches were checked on 2026-10-09 by asking Codex itself to name its
+// tools under these flags (0.159.2 and 0.162.1 agree): `features.view_image`
+// and `agents.enabled` are the keys that remove the image viewer and the
+// collaboration tools; `tools.view_image` never existed and
+// `features.multi_agent` does not cover the current models. What stays is
+// Codex's own code-mode runner (`exec`/`wait`, JavaScript over its own
+// tools, no shell), goals, the clock, request_user_input (answered empty)
+// and apply_patch, all inside the read-only sandbox. Codex reports any
+// setting it does not recognise as a `configWarning` notification; the probe
+// listens for it and the admin card shows the key, so the next rename is
+// seen rather than silently ignored.
 
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
@@ -52,7 +64,13 @@ export function codexArgs(options: {
     ["features.apps", false],
     ["features.multi_agent", false],
     ["features.image_generation", options.images],
-    ["tools.view_image", false],
+    // The image viewer is a feature flag, not a `tools` entry: Codex ignores
+    // `tools.view_image` with a warning and keeps the tool.
+    ["features.view_image", false],
+    // The collaboration (sub-agent) tools. On current models they are not
+    // governed by `features.multi_agent`; this is the switch that removes
+    // them, and it is honoured from 0.159.2 on.
+    ["agents.enabled", false],
     ["web_search", "disabled"],
     ["sandbox_mode", "read-only"],
     ["approval_policy", "never"],
@@ -269,14 +287,28 @@ async function start(options: HarnessStartOptions) {
   };
 }
 
+// The config keys named in a Codex `configWarning`, e.g.
+// "  session-flags: `tools.view_image` is ignored." -> ["tools.view_image"].
+export function ignoredCodexSettings(summary: string): string[] {
+  return [...new Set([...summary.matchAll(/`([^`]+)` is ignored/g)].map((match) => match[1]))];
+}
+
 async function probeAppServer(binary: string, env: Record<string, string>) {
   const cwd = os.tmpdir();
   const models: HarnessModel[] = [];
+  const ignored: string[] = [];
   let auth: { state: "ready" | "signed-out" | "unknown"; kind?: "subscription" | "api-key"; plan?: string; account?: string } = {
     state: "unknown",
   };
-  const peer = startJsonRpc(binary, ["app-server"], { cwd, env }, {
-    onNotification: () => undefined,
+  // Started with the table's own lockdown flags, so that a key this version
+  // of Codex no longer recognises is reported here, on the admin card,
+  // rather than discovered when a turn has already run without it.
+  const peer = startJsonRpc(binary, codexArgs({ mcpUrl: null, images: false, disableServers: [] }), { cwd, env }, {
+    onNotification(method, params) {
+      if (method === "configWarning") {
+        ignored.push(...ignoredCodexSettings(asText(params.summary)));
+      }
+    },
     onRequest: () => ({}),
     onExit: () => undefined,
   });
@@ -323,7 +355,7 @@ async function probeAppServer(binary: string, env: Record<string, string>) {
   } finally {
     peer.kill();
   }
-  return { auth, models };
+  return { auth, models, ignored };
 }
 
 export const codexAdapter: HarnessAdapter = {
@@ -340,17 +372,27 @@ export const codexAdapter: HarnessAdapter = {
     if (!installed) {
       return { installed: false, auth: { state: "unknown" }, models: [] };
     }
-    const { auth, models } = await probeAppServer(binary, env).catch(() => ({
+    const { auth, models, ignored } = await probeAppServer(binary, env).catch(() => ({
       auth: { state: "unknown" as const },
       models: [] as HarnessModel[],
+      ignored: [] as string[],
     }));
+    const notes: string[] = [];
+    if (auth.state === "signed-out") {
+      notes.push("Codex is installed but not signed in on this machine.");
+    }
+    if (ignored.length > 0) {
+      notes.push(
+        `This Codex ignores ${ignored.length === 1 ? "a setting" : "settings"} the lockdown relies on (${ignored.map((key) => `\`${key}\``).join(", ")}). Update Open Dungeon Master, or hold Codex at a version it supports.`,
+      );
+    }
     return {
       installed,
       version: version.stdout.trim().split(/\s+/).pop(),
       auth,
       models,
       lockdownProven: false,
-      message: auth.state === "signed-out" ? "Codex is installed but not signed in on this machine." : undefined,
+      message: notes.length > 0 ? notes.join(" ") : undefined,
     };
   },
   start,

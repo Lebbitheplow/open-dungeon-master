@@ -38,7 +38,7 @@ The program never sees the server's database key or any provider key.
 | --- | --- | --- |
 | Claude Code | `claude -p`, stream JSON | removed (`--tools ""`), checked every turn |
 | opencode | `opencode serve`, HTTP | removed (deny-all agent), checked on this machine |
-| Codex | `codex app-server`, JSON-RPC | boxed in: shell off, read-only, approvals refused |
+| Codex | `codex app-server`, JSON-RPC | boxed in: shell, image viewer and sub-agents off, read-only, approvals refused; its patch tool has no switch. A setting the installed Codex no longer recognises is named on the admin card |
 | Grok Build | `grok agent stdio`, ACP | boxed in: dontAsk, only ODM tools allowed |
 
 Codex and Grok Build show **(untested)** until a Test the table run passes
