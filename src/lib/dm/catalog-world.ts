@@ -4,7 +4,7 @@
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
-import { GENDERS } from "@/lib/gender";
+import { TOLD_GENDERS } from "@/lib/gender";
 import {
   ABILITY_OPTIONS as ABILITIES,
   DIFFICULTY_OPTIONS as DIFFICULTIES,
@@ -38,6 +38,13 @@ const SCENE_FIELD = {
   kind: "select",
   options: sceneOptions(),
   help: "Sets the place's sound, battle map and picture. Blank keeps what it was.",
+} as const;
+
+export const GENDER_FIELD = {
+  name: "gender",
+  label: "Gender",
+  kind: "select",
+  options: TOLD_GENDERS.map((gender) => ({ value: gender, label: gender })),
 } as const;
 
 export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
@@ -371,12 +378,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "trait", label: "Trait", kind: "text" },
       { name: "location", label: "Found at", kind: "text" },
-      {
-        name: "gender",
-        label: "Gender",
-        kind: "select",
-        options: GENDERS.map((gender) => ({ value: gender, label: gender })),
-      },
+      GENDER_FIELD,
       { name: "goal", label: "Wants", kind: "text" },
       { name: "ambition", label: "Long game", kind: "text" },
     ],
@@ -391,6 +393,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
       { name: "modifier", label: "Modifier", kind: "number", min: -10, max: 10 },
       { name: "trait", label: "Trait", kind: "text" },
       { name: "location", label: "Found at", kind: "text" },
+      { ...GENDER_FIELD, required: true },
     ],
   },
   {

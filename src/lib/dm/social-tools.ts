@@ -28,7 +28,7 @@ import {
 } from "@/lib/dm/relationship-logic";
 import { publishRelationshipsUpdated } from "@/lib/dm/relationship-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { GENDERS } from "@/lib/gender";
+import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import {
@@ -85,8 +85,8 @@ export const socialTools: ToolDef[] = [
           location: { type: "string", description: "Where they are usually found." },
           gender: {
             type: "string",
-            enum: [...GENDERS],
-            description: "Their gender, once the story shows it.",
+            enum: [...TOLD_GENDERS],
+            description: `${TOLD_GENDER_HELP} Give it when you register someone new; leave it out on later calls.`,
           },
           goal: {
             type: "string",
@@ -121,8 +121,9 @@ export const socialTools: ToolDef[] = [
           },
           trait: { type: "string", description: "Optional short personality note." },
           location: { type: "string", description: "Optional where they are found." },
+          gender: { type: "string", enum: [...TOLD_GENDERS], description: TOLD_GENDER_HELP },
         },
-        required: ["name"],
+        required: ["name", "gender"],
       },
     },
   },
@@ -211,7 +212,7 @@ const setNpcSchema = z.object({
   attitude: z.enum(["hostile", "indifferent", "friendly"]).optional(),
   trait: z.string().max(300).optional(),
   location: z.string().max(120).optional(),
-  gender: z.enum(GENDERS).optional(),
+  gender: z.enum(TOLD_GENDERS).optional(),
   goal: z.string().max(300).optional(),
   ambition: z.string().max(300).optional(),
 });
@@ -223,6 +224,9 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): Record<s
   } catch {
     return { error: "Invalid arguments: set_npc needs at least a name." };
   }
+  // gender is optional so an update need not restate it, which leaves a
+  // registration free to forget it: the result then asks, never refuses.
+  const untold = !args.gender && !getNpcByName(campaign.id, args.name);
   const npc = bootstrapAgency(
     campaign,
     upsertNpc({
@@ -231,7 +235,7 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): Record<s
       attitude: args.attitude,
       trait: args.trait,
       location: args.location,
-      gender: args.gender,
+      gender: toldGender(args.gender),
     }),
     { goal: args.goal, ambition: args.ambition },
   );
@@ -240,7 +244,9 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): Record<s
     npc: npc.name,
     attitude: npc.attitude,
     ...(npc.agency.goals.session ? { goal: npc.agency.goals.session.text } : {}),
-    note: `${npc.name} is tracked as ${npc.attitude}. Their attitude persists until the story or a social_check changes it.`,
+    note: `${npc.name} is tracked as ${npc.attitude}. Their attitude persists until the story or a social_check changes it.${
+      untold ? " Their gender is not recorded: pass gender on a set_npc for them (Unknown if the story has not shown it)." : ""
+    }`,
   };
 }
 
@@ -251,6 +257,7 @@ const reactionSchema = z.object({
   modifier: z.coerce.number().int().min(-10).max(10).optional(),
   trait: z.string().max(300).optional(),
   location: z.string().max(120).optional(),
+  gender: z.enum(TOLD_GENDERS),
 });
 
 export function handleNpcReaction(
@@ -262,7 +269,7 @@ export function handleNpcReaction(
   try {
     args = reactionSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: npc_reaction needs a name." };
+    return { error: "Invalid arguments: npc_reaction needs a name and a gender (Female, Male, Nonbinary or Unknown)." };
   }
   const modifier = args.modifier ?? 0;
   // A penalty is written as 2d6-3, never 2d6+-3, which no dice parser reads.
@@ -288,6 +295,7 @@ export function handleNpcReaction(
       attitude,
       trait: args.trait,
       location: args.location,
+      gender: toldGender(args.gender),
     }),
     {},
   );

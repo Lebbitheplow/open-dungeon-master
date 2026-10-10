@@ -27,6 +27,33 @@ await test("set_npc records a gender, keeps it when a later call leaves it out, 
   assert.equal(npc("Bruno"), undefined);
 });
 
+await test("set_npc asks again, never refuses, when it registers someone with no gender; Unknown clears nothing", async () => {
+  const quiet = await world.invoke("set_npc", { name: "La figura incappucciata" });
+  assert.equal(quiet.ok, true, quiet.error);
+  assert.match(quiet.result.note, /gender is not recorded/);
+  assert.equal(npc("La figura incappucciata").gender, "");
+  const later = await world.invoke("set_npc", { name: "La figura incappucciata", attitude: "hostile" });
+  assert.doesNotMatch(later.result.note, /gender is not recorded/, "an update is not asked");
+  const unknown = await world.invoke("set_npc", { name: "Il pellegrino", gender: "Unknown" });
+  assert.doesNotMatch(unknown.result.note, /gender is not recorded/, "Unknown is an answer");
+  await world.invoke("set_npc", { name: "Nonna Rosa", gender: "Unknown" });
+  assert.equal(npc("Nonna Rosa").gender, "Female");
+});
+
+await test("npc_reaction registers a stranger with a gender, and refuses one without", async () => {
+  const met = await world.invoke("npc_reaction", { name: "Il barcaiolo", gender: "Male" });
+  assert.equal(met.ok, true, met.error);
+  assert.equal(npc("Il barcaiolo").gender, "Male");
+  const refused = await world.invoke("npc_reaction", { name: "La pescivendola" });
+  assert.notEqual(refused.ok === true && !refused.result?.error, true);
+  assert.equal(npc("La pescivendola"), undefined);
+});
+
+await test("add_companion refuses a companion with no gender", async () => {
+  const refused = await world.invoke("add_companion", { name: "Pia", class: "fighter", race: "human", level: 1, personality: "Taciturna.", kind: "guest" });
+  assert.notEqual(refused.ok === true && !refused.result?.error, true);
+});
+
 await test("add_companion gives the companion's sheet its gender", async () => {
   const joined = await world.invoke("add_companion", {
     name: "Lia",

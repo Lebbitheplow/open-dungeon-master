@@ -20,3 +20,15 @@ export type GenderMark = "f" | "m" | "";
 export function genderMark(gender: Gender | undefined): GenderMark {
   return gender === "Female" ? "f" : gender === "Male" ? "m" : "";
 }
+
+// What the AI DM's tools and the console take when they register someone: a
+// choice, or "Unknown" while the story has not shown it, stored as
+// unspecified. "Unknown" never clears a gender already recorded.
+export const TOLD_GENDERS = [...GENDERS, "Unknown"] as const;
+export type ToldGender = (typeof TOLD_GENDERS)[number];
+
+export function toldGender(told: ToldGender | undefined): Exclude<Gender, ""> | undefined {
+  return told === "Unknown" ? undefined : told;
+}
+
+export const TOLD_GENDER_HELP = "Their gender as the story presents them, which picks their voice; Unknown until it shows.";
