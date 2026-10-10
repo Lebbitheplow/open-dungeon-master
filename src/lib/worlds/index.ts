@@ -180,7 +180,7 @@ export function installedPackPath(id: string): string | null {
     return null;
   }
   const target = path.resolve(INSTALLED_DIR, `${id}.json`);
-  const root = path.resolve(INSTALLED_DIR);
+  const root = path.resolve(/*turbopackIgnore: true*/ INSTALLED_DIR);
   if (path.dirname(target) !== root) {
     return null;
   }

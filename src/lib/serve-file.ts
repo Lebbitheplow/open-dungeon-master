@@ -86,7 +86,7 @@ export async function serveGeneratedFile(
   segments: string[],
   request?: Pick<Request, "headers"> | null,
 ): Promise<Response> {
-  const root = path.join(process.cwd(), "public", rootDir);
+  const root = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", rootDir);
   const resolved = path.resolve(root, ...segments);
   if (!resolved.startsWith(root + path.sep)) {
     return Response.json({ error: "Not found." }, { status: 404 });
