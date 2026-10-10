@@ -57,8 +57,9 @@ export const splitDamageTool = {
           type: "integer",
           minimum: 1,
           maximum: 500,
-          description: "The damage rolled, before any share is taken of it.",
+          description: "The damage the server rolled this turn, before any share is taken of it.",
         },
+        dice: { type: "string", description: "Dice the server rolls for the total, e.g. \"8d6\". Instead of amount." },
         type: { type: "string", description: "Damage type, e.g. fire, bludgeoning." },
         targets: {
           type: "array",
@@ -76,7 +77,7 @@ export const splitDamageTool = {
         },
         reason: { type: "string" },
       },
-      required: ["amount", "targets"],
+      required: ["targets"],
     },
   },
 } as const;

@@ -89,7 +89,7 @@ export function summonVulnerabilities(sheet: Pick<CharacterSheet, "summon">): st
 // The record a stat block becomes when a spell makes it.
 export function summonRecord(
   form: SummonForm,
-  made: { spell: string; casterId: string; casterName: string; concentration: boolean; hostileOnBreak?: boolean; castId: string },
+  made: { spell: string; casterId: string; casterName: string; concentration: boolean; hostileOnBreak?: boolean; controlExpires?: boolean; castId: string },
 ): SheetSummon {
   return {
     spell: made.spell,
@@ -108,6 +108,7 @@ export function summonRecord(
     traits: (form.traits ?? "").slice(0, 400),
     concentration: made.concentration,
     ...(made.hostileOnBreak ? { hostileOnBreak: true } : {}),
+    ...(made.controlExpires ? { controlExpires: true } : {}),
     castId: made.castId,
   };
 }

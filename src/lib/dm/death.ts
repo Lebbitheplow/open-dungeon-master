@@ -6,11 +6,13 @@ import { insertCharacterEvent } from "@/lib/db/character-events";
 import { noteDeathMoment } from "@/lib/dm/revival";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { insertRoll } from "@/lib/db/rolls";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet, DeathSaves, FullPatchSheetInput } from "@/lib/schemas/sheet";
-import { effectiveMaxHp, exhaustionRollState, mergeAdvantage } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { conditionDeathSaveAdvantage } from "@/lib/srd/condition-effect-queries";
+import { resolveRollExpression, type RollArgs } from "@/lib/dm/rolls";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import {
   downConditions,
   stableTimer,
@@ -259,22 +261,37 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
   if (!sheet || !track || track.stable || track.dead || sheet.currentHp > 0) {
     return;
   }
-  // A death save is a saving throw, so exhaustion level 3 costs it
-  // disadvantage like any other.
-  const tired = exhaustionRollState(sheet.exhaustion ?? 0, "saving_throw");
+  // A death save is a saving throw tied to no ability: it takes what every
+  // save takes (exhaustion, Bless and Bane, a paladin's aura, a Ring of
+  // Protection, a held inspiration die, a halfling's Lucky) through the one
+  // roll builder every other save uses (src/lib/dm/rolls.ts).
   // Beacon of Hope: death saves with advantage (condition-effects.ts).
   const hope = conditionDeathSaveAdvantage(sheet.conditions);
   // Diehard: advantage on death saves; Survivor: on the first of a fall
   // (src/lib/srd/feat-combat.ts).
   const feat = deathSaveFeat(sheet, track);
-  const advantage = mergeAdvantage([tired.advantage, hope ? "advantage" : "none", feat ? "advantage" : "none"]);
-  const outcome = rollExpression(d20Expression(0, advantage));
+  const claim = hope ?? feat;
+  const resolved = resolveRollExpression(
+    {
+      kind: "saving_throw",
+      ...(claim ? { advantage: "advantage", advantageReason: `${claim}: advantage` } : {}),
+    } as RollArgs,
+    sheet,
+    { ...rollExtrasFor(campaign, sheet, "saving_throw"), death: true },
+  );
+  if ("error" in resolved || "autoFail" in resolved) {
+    return;
+  }
+  spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
+  const outcome = rollExpression(resolved.expression);
+  const advantage = /^2d20kh1/.test(resolved.expression) ? "advantage" : /^2d20kl1/.test(resolved.expression) ? "disadvantage" : "none";
+  const notes = [...(resolved.conditionNotes ?? []), ...(hope ? [`${hope}: advantage`] : []), ...(feat ? [`${feat}: advantage`] : [])];
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "saving_throw",
-    detail: `death save${tired.note ? ` (${tired.note})` : ""}${hope ? ` (${hope}: advantage)` : ""}${feat ? ` (${feat}: advantage)` : ""}`,
+    detail: `death save${notes.length ? ` (${notes.join("; ")})` : ""}`.slice(0, 200),
     dc: 10,
     ...(advantage === "none" ? {} : { advantage }),
     result: outcome,
@@ -283,7 +300,7 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
     roll,
     source: "digital",
   });
-  const applied = applyDeathSaveRoll(track, outcome.total);
+  const applied = applyDeathSaveRoll(track, outcome.natural ?? outcome.total, outcome.total);
   if (applied.outcome === "revive") {
     writeDeathState(campaign, null, sheet, null, "death_state", "natural 20 death save", {
       currentHp: 1,

@@ -44,7 +44,8 @@ await test("Protection from Evil and Good keeps an undead's (or fiend's, fey's..
 
 await test("Each time the creature under Warding Bond takes damage, the caster takes the same amount.", async () => {
   const { world, sheets: [cleric, fighter] } = await table([caster("cleric", "wis", ["Warding Bond"]), FIGHTER]);
-  world.patch(cleric.id, { gold: 200 });
+  // The pair of rings, carried (no buying them mid-fight).
+  world.patch(cleric.id, { equipment: [...world.sheet(cleric.id).equipment, { name: "Platinum ring (50 gp)", qty: 2 }] });
   const cast = await world.invoke("cast_buff", { characterId: cleric.id, spell: "Warding Bond", targetCharacterIds: [fighter.id], level: 2 });
   assert.equal(cast.ok, true, cast.error);
   const before = world.sheet(cleric.id).currentHp;
@@ -67,7 +68,7 @@ await test("A creature within 5 feet that hits the holder of Fire Shield with a 
 
 await test("A fiend or undead that hits a creature under Holy Aura with a melee attack makes a Constitution save or is blinded until the spell ends.", async () => {
   const { world, sheets: [cleric], enemies: [imp] } = await table([caster("cleric", "wis", ["Holy Aura"], [], 15)], 1, { type: "fiend" });
-  world.patch(cleric.id, { gold: 1000 });
+  world.patch(cleric.id, { equipment: [...world.sheet(cleric.id).equipment, { name: "Reliquary (1000 gp)", qty: 1 }] });
   const cast = await world.invoke("cast_buff", { characterId: cleric.id, spell: "Holy Aura", targetCharacterIds: [cleric.id], level: 8 });
   assert.equal(cast.ok, true, cast.error);
   // The swing at disadvantage, its damage, the cleric's concentration save

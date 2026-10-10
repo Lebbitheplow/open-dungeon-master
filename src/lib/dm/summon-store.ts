@@ -342,6 +342,17 @@ export function sweepSummons(campaign: Campaign): string[] {
     if (!sheet.summon || sheet.conditions.some((name) => name.toLowerCase() === SUMMONED)) {
       continue;
     }
+    // Animate Dead, Create Undead: the control ends, not the creature.
+    if (sheet.summon.controlExpires) {
+      const hostile = turnHostile(campaign, sheet);
+      if (hostile) {
+        lines.push(`${sheet.name} slips out of ${sheet.summon.casterName || "its maker"}'s control as ${sheet.summon.spell}'s hold runs out, and turns on the party.`);
+        continue;
+      }
+      removeSummon(campaign, sheet);
+      lines.push(`${sheet.name} slips out of ${sheet.summon.casterName || "its maker"}'s control as ${sheet.summon.spell}'s hold runs out. It still stands, no longer the party's to command; the DM places it.`);
+      continue;
+    }
     removeSummon(campaign, sheet);
     lines.push(`${sheet.name} fades as ${sheet.summon.spell} runs its course.`);
   }

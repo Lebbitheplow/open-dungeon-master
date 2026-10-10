@@ -1,3 +1,4 @@
+import { subclassSpellsFor } from "@/lib/srd/features";
 import { FEAT_ONLY_SPEED } from "@/lib/srd/feature-effects";
 import { hasMediumArmorMaster } from "@/lib/srd/feat-combat";
 import backgroundsJson from "@/lib/srd/backgrounds.json";
@@ -540,18 +541,30 @@ export function computeSheetDerived(
 function casterEntryForSpell(
   spellcasting: NonNullable<CharacterSheet["spellcasting"]>,
   spellName: string,
+  // The sheet's classes, for a subclass's always-prepared spells (a
+  // domain's, an oath's, a circle's), which no list on the sheet names.
+  classes: Array<{ id: string; subclass?: string; level: number }> = [],
 ): NonNullable<NonNullable<CharacterSheet["spellcasting"]>["casters"]>[number] | null {
   const wanted = spellName.trim().toLowerCase();
   if (!wanted || !spellcasting.casters?.length) {
     return null;
   }
-  return (
-    spellcasting.casters.find((caster) =>
-      allSpellNames(caster).some(
-        (entry) => entry.trim().toLowerCase() === wanted,
-      ),
-    ) ?? null
+  const listed = spellcasting.casters.find((caster) =>
+    allSpellNames(caster).some(
+      (entry) => entry.trim().toLowerCase() === wanted,
+    ),
   );
+  if (listed) {
+    return listed;
+  }
+  const granter = classes.find(
+    (entry) => entry.subclass && subclassSpellsFor(entry.id, entry.subclass, entry.level).some((name) => name.trim().toLowerCase() === wanted),
+  );
+  if (granter) {
+    return spellcasting.casters.find((caster) => caster.classId.toLowerCase() === granter.id.toLowerCase()) ?? null;
+  }
+  // A ritual read from a wizard's book, prepared or not, is the wizard's.
+  return spellcasting.casters.find((caster) => (caster.spellbook ?? []).some((entry) => entry.trim().toLowerCase() === wanted)) ?? null;
 }
 
 // The save DC a named spell is cast at: the owning caster class's ability
@@ -571,7 +584,7 @@ export function spellSaveDcFor(
   if (!sheet.spellcasting) {
     return derived.spellSaveDc;
   }
-  const owner = casterEntryForSpell(sheet.spellcasting, spellName);
+  const owner = casterEntryForSpell(sheet.spellcasting, spellName, (sheet as { classes?: Array<{ id: string; subclass?: string; level: number }> }).classes ?? []);
   if (!owner || owner.ability === sheet.spellcasting.ability) {
     return derived.spellSaveDc;
   }
@@ -591,7 +604,7 @@ export function spellAttackFor(
   if (!sheet.spellcasting) {
     return derived.spellAttack;
   }
-  const owner = casterEntryForSpell(sheet.spellcasting, spellName);
+  const owner = casterEntryForSpell(sheet.spellcasting, spellName, (sheet as { classes?: Array<{ id: string; subclass?: string; level: number }> }).classes ?? []);
   if (!owner || owner.ability === sheet.spellcasting.ability) {
     return derived.spellAttack;
   }

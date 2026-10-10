@@ -140,7 +140,7 @@ function quiveringPalm(campaign: Campaign, turnId: string, sheet: CharacterSheet
   const rest = { ...meta };
   delete rest[QUIVERING];
   patchEnemyConditions(enemy.id, cleared, rest as typeof enemy.conditionMeta);
-  const save = rollEnemySave(campaign.id, enemy, "con", dc, { record: { detail: `${enemy.displayName}: CON save against Quivering Palm` } });
+  const save = rollEnemySave(campaign.id, enemy, "con", dc, { resist: true, record: { detail: `${enemy.displayName}: CON save against Quivering Palm` } });
   price.commit();
   const live = listEnemies(encounter.id).find((entry) => entry.id === enemy.id) ?? enemy;
   const amount = save.success ? rollCard(campaign, null, sheet.id, "damage", rollAgainst("Quivering Palm", live.displayName), "10d10", sheetAttacker(sheet)).total : live.currentHp;
@@ -196,7 +196,7 @@ function draconicPresence(campaign: Campaign, turnId: string, sheet: CharacterSh
   const dc = computeSheetDerived(sheet).spellSaveDc ?? 13;
   const lines: string[] = [];
   for (const enemy of targets) {
-    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { magical: true, record: { detail: `${enemy.displayName}: WIS save against Draconic Presence` } });
+    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { magical: true, resist: true, record: { detail: `${enemy.displayName}: WIS save against Draconic Presence` } });
     const immune = String(enemy.stats.conditionImmune ?? "").toLowerCase().includes(condition);
     if (save.success || immune) {
       lines.push(`${enemy.displayName} ${immune ? `cannot be ${condition}` : `resists (WIS ${save.total} vs DC ${dc})`}.`);

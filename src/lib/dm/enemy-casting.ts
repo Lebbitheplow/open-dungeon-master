@@ -43,8 +43,11 @@ export type EnemyUse = {
   halfOnSave?: boolean;
   condition?: string;
   rounds?: number;
-  // The condition ends on a save at the end of each round.
+  // The condition ends on a save at the end of each of the holder's turns.
   saveEnds?: boolean;
+  // The block gives it no count and no save: a long rest or a cure ends it.
+  untilLongRest?: boolean;
+  lasting?: boolean;
   // A spell or a magical ability, which Magic Resistance answers.
   magical: boolean;
   // The numbers are the block's (or the spell's): the caller's are ignored.
@@ -214,6 +217,8 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | { 
         ...(ability.condition ? { condition: ability.condition } : {}),
         ...(ability.rounds ? { rounds: ability.rounds } : {}),
         ...(ability.repeatSave ? { saveEnds: true } : {}),
+        ...(ability.untilLongRest ? { untilLongRest: true } : {}),
+        ...(ability.lasting ? { lasting: true } : {}),
         magical: Boolean(ability.magical),
       });
     }

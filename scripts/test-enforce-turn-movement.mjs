@@ -455,8 +455,11 @@ await test("An ambusher's owed turn closed by a spell, a grapple escape, a spell
     kit2.setEnemy(goblin.id, { conditions: ["restrained"], conditionMeta: { restrained: { spell: "Entangle", source: wren.id } } });
     return second.invoke("take_action", { action: "escape", enemyId: goblin.id });
   });
-  await owedTurnClosedBy("a countered spell", (goblin) =>
-    second.invoke("use_reaction", { characterId: wren.id, feature: "Counterspell", targetEnemyId: goblin.id, spell: "Fireball" }));
+  // A goblin shaman: Counterspell answers only a spell on the block.
+  await owedTurnClosedBy("a countered spell", (goblin) => {
+    kit2.setEnemy(goblin.id, { stats: { spellcasting: { dc: 13, attack: 5, ability: "int", slots: { 3: 1 }, spells: [{ name: "Fireball", level: 3 }] } } });
+    return second.invoke("use_reaction", { characterId: wren.id, feature: "Counterspell", targetEnemyId: goblin.id, spell: "Fireball" });
+  });
 });
 
 await test("A typed move stands a character up for what their features make standing cost: Tipsy Sway's 5 feet, as on the board.", async () => {

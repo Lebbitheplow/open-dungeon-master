@@ -1,5 +1,6 @@
 "use client";
 
+import { expertiseAllowed } from "@/lib/srd/features";
 import { useMemo } from "react";
 import { starterSpellsFor } from "@/lib/help";
 import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
@@ -299,7 +300,7 @@ export function useBuilderDerived({
       saves: klass?.saves ?? [],
       skills,
       // Expertise picks only count while still proficient in the skill.
-      expertise: expertisePicks.filter((skillId) => skills.includes(skillId)),
+      expertise: expertisePicks.filter((skillId) => expertiseAllowed(skillId, skills, klass ? [klass.id] : [])),
       // A class teaches its own secret tongue: Druidic to a druid, Thieves'
       // Cant to a rogue. Without this a druid could never speak Druidic even
       // though the feature says they do.

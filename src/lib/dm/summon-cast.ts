@@ -9,14 +9,14 @@
 
 import { randomUUID } from "node:crypto";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getSheetById } from "@/lib/db/sheets";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { computeSheetDerived, spellAttackFor } from "@/lib/srd";
 import { activeAuthored } from "@/lib/srd/authored-effects";
 import { summonPlan, type SummonSpell } from "@/lib/srd/summon-spells";
 import type { SummonForm } from "@/lib/srd/summon-forms";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { removeSummon, spawnSummons, summonsOf } from "@/lib/dm/summon-store";
-import { summonRecord } from "@/lib/dm/summon-rules";
+import { SUMMONED, summonRecord } from "@/lib/dm/summon-rules";
 
 export type SummonCastArgs = {
   caster: CharacterSheet;
@@ -79,6 +79,11 @@ export function castSummon(
   const { caster, spell } = args;
   const castAs = args.castAs?.trim() || spell.name;
   const slotLevel = Math.max(spell.level, args.level ?? spell.level);
+  // Animate Dead, Create Undead: a casting may reassert control over the
+  // undead it already made, rather than making new ones.
+  if (spell.reassert && /\b(?:reassert|renew|control)\b/i.test(args.variant ?? "")) {
+    return reassertControl(campaign, args, slotLevel, cast);
+  }
   const plan = summonPlan(spell, slotLevel, args.variant ?? "", args.count);
   if ("error" in plan) {
     return plan;
@@ -123,6 +128,7 @@ export function castSummon(
     casterName: caster.name,
     concentration: spell.concentration,
     hostileOnBreak: spell.hostileOnBreak,
+    controlExpires: spell.controlExpires,
     castId: randomUUID().slice(0, 8),
   });
   const created = spawnSummons(campaign, fresh, {
@@ -159,3 +165,38 @@ export function castSummon(
     note: `They are allies on the board and in the initiative order${spell.beforeCaster ? ", acting right before " + caster.name : spell.initiative === "caster" ? ", acting right after " + caster.name : ""}. Each attacks with pc_attack (its own characterId) on its turn; the server rolls its stat block's numbers. At 0 hit points one disappears. Narrate exactly this.`,
   };
 }
+
+// Reasserting control: the slot is spent and up to so many of the caster's
+// undead from this spell are held another full duration.
+function reassertControl(
+  campaign: Campaign,
+  args: SummonCastArgs,
+  slotLevel: number,
+  cast: (input: Record<string, unknown>) => Record<string, unknown>,
+): Record<string, unknown> {
+  const { caster, spell } = args;
+  const held = summonsOf(campaign.id, caster.id, spell.name);
+  if (!held.length) {
+    return { error: `${caster.name} has no creatures of ${spell.name} to reassert control over. Nothing was spent.` };
+  }
+  const most = (spell.reassert ?? 0) + (spell.reassertPerSlot ?? 0) * Math.max(0, slotLevel - spell.level);
+  const spent = cast({ characterId: caster.id, spell: spell.name, level: slotLevel, via: "buff", reason: (args.reason ?? "reasserting control").slice(0, 200) });
+  if ("error" in spent) {
+    return spent;
+  }
+  const renewed = held.slice(0, most).map((sheet) => {
+    const meta = { ...(sheet.conditionMeta ?? {}) } as Record<string, Record<string, unknown>>;
+    const key = Object.keys(meta).find((name) => name.toLowerCase() === SUMMONED) ?? SUMMONED;
+    meta[key] = { ...(meta[key] ?? {}), rounds: spell.rounds ?? undefined };
+    patchSheet(sheet.id, { conditionMeta: meta as typeof sheet.conditionMeta });
+    return sheet.name;
+  });
+  return {
+    ok: true,
+    spell: spell.name,
+    reasserted: renewed,
+    note: `${caster.name} reasserts control over ${renewed.join(", ")} for another ${spell.rounds === DAY_ROUNDS ? "24 hours" : "full duration"}${held.length > most ? `; ${held.length - most} more are beyond this casting's hold` : ""}.`,
+  };
+}
+
+const DAY_ROUNDS = 14400;

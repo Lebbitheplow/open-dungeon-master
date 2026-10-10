@@ -17,11 +17,10 @@ import { insertRoll, landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { planAttackFx, type RollVisibility } from "@/lib/battlemap/fx-plan";
-import { saveModFor } from "@/lib/bestiary/statblock";
 import { attacksLeft } from "@/lib/dm/action-budget";
 import { adjudicateHit } from "@/lib/dm/attack-logic";
-import { rollDerivation } from "@/lib/dm/condition-logic";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { rollEnemySave } from "@/lib/dm/forced-save";
 import { darkOnesBlessing } from "@/lib/dm/feature-hooks";
 import { authoredOnHit } from "@/lib/dm/authored-hooks";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
@@ -472,24 +471,25 @@ function maneuverRiderSave(plan: AttackPlan, maneuver: ManeuverPick): Record<str
     maneuverOutcome.maneuver = `${maneuver.name}: ${barred} The extra damage still lands.`;
     return maneuverOutcome;
   }
-  const saveOutcome = rollExpression(
-    d20Expression(
-      saveModFor(fresh.stats, rider.save),
-      rollDerivation(fresh.conditions, "saving_throw", rider.save).advantage,
-    ),
-  );
-  const saveRoll = insertRoll({
-    campaignId: campaign.id,
-    characterId: null,
-    requestedBy: "dm",
-    kind: "saving_throw",
-    detail: `${fresh.displayName}: ${rider.save.toUpperCase()} save vs ${maneuver.name}`,
-    dc,
-    result: saveOutcome,
-  });
-  turn.rollIds.push(saveRoll.id);
-  publishRoll(campaign.id, saveRoll);
-  if (saveOutcome.total < dc) {
+  // The creature's save as every other is rolled (src/lib/dm/forced-save.ts):
+  // its conditions (a paralyzed creature fails a STR or DEX save outright),
+  // Bane or Bless on it, its exhaustion, lasting effects, authored features.
+  const save = rollEnemySave(campaign.id, fresh, rider.save, dc);
+  if (save.result) {
+    const saveRoll = insertRoll({
+      campaignId: campaign.id,
+      characterId: null,
+      requestedBy: "dm",
+      kind: "saving_throw",
+      detail: `${fresh.displayName}: ${rider.save.toUpperCase()} save vs ${maneuver.name}`,
+      dc,
+      result: save.result,
+    });
+    turn.rollIds.push(saveRoll.id);
+    publishRoll(campaign.id, saveRoll);
+  }
+  const shown = save.total ?? "an automatic failure";
+  if (!save.success) {
     applyRiderCondition(campaign, fresh, rider.condition, {
       // Prone lasts until the creature stands. Menacing Attack's fright and
       // Goading Attack's goad last until the end of the attacker's next turn
@@ -500,9 +500,9 @@ function maneuverRiderSave(plan: AttackPlan, maneuver: ManeuverPick): Record<str
           ? { meta: untilTurnEnd(plan.sheet.id, { source: plan.sheet.id }) }
           : { rounds: 1 }),
     });
-    maneuverOutcome.maneuver = `${maneuver.name}: ${fresh.displayName} fails the ${rider.save.toUpperCase()} save (${saveOutcome.total} vs DC ${dc}) and is ${rider.condition}.`;
+    maneuverOutcome.maneuver = `${maneuver.name}: ${fresh.displayName} fails the ${rider.save.toUpperCase()} save (${shown} vs DC ${dc}) and is ${rider.condition}.`;
   } else {
-    maneuverOutcome.maneuver = `${maneuver.name}: ${fresh.displayName} holds (${saveOutcome.total} vs DC ${dc}); no ${rider.condition}.`;
+    maneuverOutcome.maneuver = `${maneuver.name}: ${fresh.displayName} holds (${shown} vs DC ${dc}); no ${rider.condition}.`;
   }
   return maneuverOutcome;
 }

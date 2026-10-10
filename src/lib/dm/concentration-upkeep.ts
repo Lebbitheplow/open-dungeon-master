@@ -9,6 +9,8 @@ import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { spellMechanicsFor } from "@/lib/content";
+import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { breakConcentration } from "@/lib/dm/concentration";
 import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";
 import { summonsOf } from "@/lib/dm/summon-store";
@@ -75,8 +77,10 @@ export function endSpentConcentration(campaign: Campaign, lines: string[]) {
       continue;
     }
     const spellNames = new Set([spellKey(spell), spellKey(resolved?.name ?? spell)]);
+    // Every instance counts: a target another caster also holds still
+    // carries this caster's own (src/lib/dm/condition-logic.ts instancesOf).
     const stillHeld = held.some(({ conditions, meta }) =>
-      conditions.some((name) => heldBySpell(name, meta[name], spellNames, places, caster.id)),
+      conditions.some((name) => instancesOf(meta[name]).some((instance) => heldBySpell(name, instance, spellNames, places, caster.id))),
     );
     if (stillHeld) {
       continue;

@@ -27,6 +27,7 @@ import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { pcResistances, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
+import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import { freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
 import { rollAgainst } from "@/lib/roll-labels";
 import { READIED } from "@/lib/dm/object-actions";
@@ -392,6 +393,7 @@ function resolve(ctx: Ctx, found: Found): Record<string, unknown> | { error: str
       const dc = saveDc(holder, does.dcAbility);
       const save = rollEnemySave(ctx.campaign.id, enemy, does.save, dc, {
         magical: true,
+        resist: bindsWorthResisting([condition]),
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${reaction.name}` },
       });
       if (save.success) {

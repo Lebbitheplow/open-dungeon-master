@@ -183,6 +183,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "enemyId", label: "Enemy", kind: "enemy", required: true },
       { name: "amount", label: "Damage", kind: "number", min: 1, max: 200, help: "Leave empty for a fall." },
+      { name: "dice", label: "Or dice", kind: "text", help: "4d10: the server rolls them." },
       { name: "fallFeet", label: "Falls (feet)", kind: "number", min: 1, max: 1000, help: "The server rolls 1d6 per 10 feet and lays it prone." },
       damageTypeField("type", "Type"),
       { name: "magical", label: "From a spell or a magic weapon", kind: "boolean", help: "Resistance to nonmagical attacks does not apply to it." },
@@ -313,7 +314,8 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     category: "combat",
     summary: "One rolled total on several creatures, each at full, half, double or none.",
     fields: [
-      { name: "amount", label: "Damage rolled", kind: "number", required: true, min: 1, max: 500 },
+      { name: "amount", label: "Damage rolled", kind: "number", requiredUnless: "dice", min: 1, max: 500 },
+      { name: "dice", label: "Or dice", kind: "text", help: "8d6: the server rolls the total once." },
       damageTypeField("type", "Type"),
       {
         name: "targets",

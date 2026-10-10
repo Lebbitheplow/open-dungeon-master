@@ -17,6 +17,7 @@ import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { healDeathHook } from "@/lib/dm/death";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
+import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import { hurtEnemy } from "@/lib/dm/spell-aura";
 import { withinFeet } from "@/lib/dm/authored-saves";
 import { rerollLastSave, swarmPush } from "@/lib/dm/authored-spend-more";
@@ -235,6 +236,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       }
       const dc = saveDc(ctx, does.dcAbility);
       const save = rollEnemySave(campaign.id, enemy, does.save, dc, {
+        resist: Boolean(does.condition) && bindsWorthResisting([does.condition ?? ""]),
         record: { turn: ctx.turn ?? undefined, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${ctx.spend.name}` },
       });
       const result: Record<string, unknown> = { target: enemy.displayName, save: save.total, dc, saved: save.success };
@@ -397,6 +399,7 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
   );
   for (const enemy of enemies) {
     const save = rollEnemySave(ctx.campaign.id, enemy, spec.save, dc, {
+      resist: Boolean(spec.condition) && bindsWorthResisting([spec.condition ?? ""]),
       record: { turn: ctx.turn ?? undefined, detail: `${enemy.displayName}: ${spec.save.toUpperCase()} save against ${ctx.spend.name}` },
     });
     if (save.success) {

@@ -64,6 +64,9 @@ export type CatalogField = {
   label: string;
   kind: FieldKind;
   required?: boolean;
+  // Required unless this other field is filled (damage, or the dice the
+  // server rolls for it).
+  requiredUnless?: string;
   options?: Array<{ value: string; label: string }>;
   min?: number;
   max?: number;
@@ -165,6 +168,10 @@ export function checkArgs(
       (typeof value === "string" && value.trim() === "") ||
       (Array.isArray(value) && value.length === 0);
     if (field.required && missing) {
+      return `${entry.label} needs ${field.label.toLowerCase()}.`;
+    }
+    const other = field.requiredUnless ? args[field.requiredUnless] : undefined;
+    if (field.requiredUnless && missing && (other === undefined || other === null || (typeof other === "string" && other.trim() === ""))) {
       return `${entry.label} needs ${field.label.toLowerCase()}.`;
     }
     if (missing) {

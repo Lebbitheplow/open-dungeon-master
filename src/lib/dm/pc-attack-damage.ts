@@ -67,6 +67,7 @@ export function foldDamageRiders(input: {
   const marked = input.marked;
   const onHit = conditionOnHitDice(sheet.conditions, {
     weapon: kind === "weapon" || kind === "natural",
+    melee: !profile.ranged,
     ...(marked ? { marked: (condition: string) => marked.has(condition) } : {}),
   });
   if (onHit.suffix) {

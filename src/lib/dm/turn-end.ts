@@ -26,7 +26,9 @@ import { authoredTurnEnd } from "@/lib/dm/authored-turns";
 import { zoneTurnEnd } from "@/lib/dm/zone-triggers";
 import { blinkTurnEnd } from "@/lib/dm/spell-planes";
 import {
-  removeConditions,
+  instancesOf,
+  packInstances,
+  removeConditionInstances,
   type ConditionMeta,
   type ConditionMetaMap,
 } from "@/lib/dm/condition-logic";
@@ -44,13 +46,52 @@ export function beginTurnMarks(
   let changed = false;
   const next: ConditionMetaMap = { ...(meta ?? {}) };
   for (const name of conditions) {
-    const entry = meta?.[name];
-    if (entry?.untilTurnEndOf && !entry.turnBegun && starting.has(entry.untilTurnEndOf)) {
-      next[name] = { ...entry, turnBegun: true };
-      changed = true;
+    if (!meta?.[name]) {
+      continue;
+    }
+    // Every source's instance is marked on its own (condition-logic.ts).
+    const marked = instancesOf(meta[name]).map((entry) => {
+      if (entry.untilTurnEndOf && !entry.turnBegun && starting.has(entry.untilTurnEndOf)) {
+        changed = true;
+        return { ...entry, turnBegun: true };
+      }
+      return entry;
+    });
+    const packed = packInstances(marked);
+    if (packed) {
+      next[name] = packed;
     }
   }
   return changed ? next : null;
+}
+
+// Whether one instance ends because this turn is ending.
+function endsWithTurn(entry: ConditionMeta, ending: Set<string>): boolean {
+  return Boolean(entry.untilTurnEndOf && entry.turnBegun && ending.has(entry.untilTurnEndOf));
+}
+
+// The instances ending with these turns taken off: the names whose last
+// instance went, the instances that went (for their end hooks), and whether
+// anything changed. Another source's instance keeps its condition.
+function withoutTurnEndInstances(
+  conditions: string[],
+  meta: ConditionMetaMap,
+  ending: Set<string>,
+): { conditions: string[]; meta: ConditionMetaMap; gone: Array<[string, ConditionMeta]>; changed: boolean } {
+  let nextConditions = conditions;
+  let nextMeta = meta;
+  const gone: Array<[string, ConditionMeta]> = [];
+  for (const name of conditions) {
+    const leaving = instancesOf(meta[name]).filter((entry) => endsWithTurn(entry, ending));
+    if (!leaving.length) {
+      continue;
+    }
+    const result = removeConditionInstances(nextConditions, nextMeta, name, (entry) => endsWithTurn(entry, ending));
+    nextConditions = result.conditions;
+    nextMeta = result.meta;
+    gone.push(...leaving.map((entry): [string, ConditionMeta] => [name, entry]));
+  }
+  return { conditions: nextConditions, meta: nextMeta, gone, changed: gone.length > 0 };
 }
 
 // The conditions that end because these combatants' turns are ending: the
@@ -61,10 +102,7 @@ export function turnEndConditionsEnding(
   combatantIds: string[],
 ): string[] {
   const ending = new Set(combatantIds);
-  return conditions.filter((name) => {
-    const entry = meta?.[name];
-    return Boolean(entry?.untilTurnEndOf && entry.turnBegun && ending.has(entry.untilTurnEndOf));
-  });
+  return conditions.filter((name) => instancesOf(meta?.[name]).some((entry) => endsWithTurn(entry, ending)));
 }
 
 // The meta a "until the end of <whose> next turn" effect is written with.
@@ -124,19 +162,18 @@ export function endTurns(
   if (!combatantIds.length) {
     return { lines, enemiesChanged };
   }
+  const endingIds = new Set(combatantIds);
   for (const enemy of listEnemies(encounterId)) {
-    const ending = turnEndConditionsEnding(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, combatantIds);
-    if (!ending.length) {
+    const removed = withoutTurnEndInstances(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, endingIds);
+    if (!removed.changed) {
       continue;
     }
-    const meta = enemy.conditionMeta as ConditionMetaMap;
-    const removed = removeConditions(enemy.conditions, meta, ending);
     patchEnemyConditions(enemy.id, removed.conditions, removed.meta);
     enemiesChanged = true;
-    for (const name of ending) {
+    for (const [name, instance] of removed.gone) {
       const hook = endHookFor(name);
       const fresh = hook ? getEnemy(enemy.id) : null;
-      const line = hook && fresh ? hook(campaign, fresh, meta[name] ?? {}) : null;
+      const line = hook && fresh ? hook(campaign, fresh, instance) : null;
       if (line) {
         lines.push(line);
       }
@@ -144,11 +181,10 @@ export function endTurns(
   }
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
-    const ending = turnEndConditionsEnding(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, combatantIds);
-    if (!ending.length) {
+    const removed = withoutTurnEndInstances(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, endingIds);
+    if (!removed.changed) {
       continue;
     }
-    const removed = removeConditions(sheet.conditions, sheet.conditionMeta, ending);
     const updated = patchSheet(sheet.id, { conditions: removed.conditions, conditionMeta: removed.meta });
     if (updated) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });

@@ -55,6 +55,32 @@ export type LegendaryState = {
   // table was told it ran too long to keep waking the DM
   // (src/lib/dm/encounter-tools.ts idledOut).
   idle?: { since: number; told?: boolean };
+  // The enemies the pointer walked past last move: their turns, taken in
+  // the DM turn since, end as the pointer moves again, with the saves their
+  // conditions grant at the end of a turn (src/lib/dm/condition-tick.ts).
+  walked?: string[];
+  // The last save a legendary creature failed, for legendary_resist: what
+  // it laid and what a success would have spared (src/lib/dm/forced-save.ts).
+  failedSave?: FailedSave;
+  // The legendary actions taken, by the turn each followed: one option per
+  // creature at the end of another creature's turn (legendary-tools.ts).
+  opportunities?: { key: string; ids: string[] };
+  // The round whose initiative count 20 the pointer has just passed: the
+  // lair acts then or not at all (lairCountPassed), and the option it took
+  // last, which some blocks forbid two rounds in a row.
+  lairDue?: number;
+  lairLast?: string;
+};
+
+export type FailedSave = {
+  enemyId: string;
+  round: number;
+  detail: string;
+  conditions?: string[];
+  spell?: string;
+  source?: string;
+  refund?: number;
+  resisted?: boolean;
 };
 
 function stringList(raw: unknown): string[] {
@@ -78,6 +104,8 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   const handoff = (record.handoff && typeof record.handoff === "object" ? record.handoff : null) as Record<string, unknown> | null;
   const bonus = (record.bonus && typeof record.bonus === "object" ? record.bonus : null) as Record<string, unknown> | null;
   const idle = (record.idle && typeof record.idle === "object" ? record.idle : null) as Record<string, unknown> | null;
+  const failed = (record.failedSave && typeof record.failedSave === "object" ? record.failedSave : null) as Record<string, unknown> | null;
+  const opportunities = (record.opportunities && typeof record.opportunities === "object" ? record.opportunities : null) as Record<string, unknown> | null;
   return {
     pools,
     lair: record.lair === true,
@@ -99,6 +127,26 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
     ...(bonus ? { bonus: { round: Number(bonus.round) || 0, ids: stringList(bonus.ids) } } : {}),
     ...(stringList(record.due).length ? { due: stringList(record.due) } : {}),
     ...(idle ? { idle: { since: Number(idle.since) || 0, ...(idle.told === true ? { told: true } : {}) } } : {}),
+    ...(stringList(record.walked).length ? { walked: stringList(record.walked) } : {}),
+    ...(failed && typeof failed.enemyId === "string"
+      ? {
+          failedSave: {
+            enemyId: failed.enemyId,
+            round: Number(failed.round) || 0,
+            detail: String(failed.detail ?? ""),
+            ...(stringList(failed.conditions).length ? { conditions: stringList(failed.conditions) } : {}),
+            ...(typeof failed.spell === "string" ? { spell: failed.spell } : {}),
+            ...(typeof failed.source === "string" ? { source: failed.source } : {}),
+            ...(Number(failed.refund) > 0 ? { refund: Number(failed.refund) } : {}),
+            ...(failed.resisted === true ? { resisted: true } : {}),
+          },
+        }
+      : {}),
+    ...(opportunities && typeof opportunities.key === "string"
+      ? { opportunities: { key: opportunities.key, ids: stringList(opportunities.ids) } }
+      : {}),
+    ...(Number(record.lairDue) > 0 ? { lairDue: Number(record.lairDue) } : {}),
+    ...(typeof record.lairLast === "string" ? { lairLast: record.lairLast } : {}),
   };
 }
 
@@ -174,4 +222,97 @@ export function spendLegendaryAction(
 
 export function spendResistance(pool: LegendaryPool): LegendaryPool | null {
   return pool.resistances > 0 ? { ...pool, resistances: pool.resistances - 1 } : null;
+}
+
+// Whether a failed save is worth a Legendary Resistance to the creature
+// that would suffer it, as a DM running it would judge (SRD 5.1: the
+// creature "can choose to succeed instead"): a condition that takes its
+// turn, its movement, its senses or its will, or a spell's lasting hold.
+// A rider that ends with its next turn (Vicious Mockery's disadvantage) or
+// a fall to prone is not; damage alone is left to legendary_resist.
+const WORTH_RESISTING = new Set([
+  "blinded", "charmed", "deafened", "frightened", "incapacitated", "paralyzed", "petrified",
+  "restrained", "stunned", "unconscious", "polymorphed", "banished", "slowed", "confused",
+  "feebleminded", "imprisoned", "mazed", "dominated", "dancing", "turned", "cursed",
+]);
+
+export function bindsWorthResisting(conditions: string[], endsWithTurn = false): boolean {
+  if (endsWithTurn) {
+    return false;
+  }
+  return conditions.some((name) => {
+    const lower = name.trim().toLowerCase();
+    return WORTH_RESISTING.has(lower) || [...WORTH_RESISTING].some((word) => lower.startsWith(`${word} `));
+  });
+}
+
+// Lair actions happen on initiative count 20, losing ties: once every
+// combatant at 20 or above has had its turn, before anyone below. Whether a
+// pointer move from `from` (exclusive; -1 is the top of round 1) to `to`
+// (inclusive) passes that count, and on which side of the round's end:
+// "before" the order wraps (the round that is ending) or "after" (the new
+// one). When every combatant is at 20 or above, the count falls as the round
+// ends.
+export function lairCountPassed(order: Array<{ initiative?: number | null }>, from: number, to: number): "before" | "after" | null {
+  if (!order.length) {
+    return null;
+  }
+  const first = order.findIndex((entry) => (entry.initiative ?? 0) < 20);
+  let wrapped = false;
+  let index = from;
+  for (let steps = 0; steps < order.length; steps += 1) {
+    if (index + 1 >= order.length) {
+      if (first === -1) {
+        return "before";
+      }
+      wrapped = true;
+    }
+    index = (index + 1) % order.length;
+    if (index === first) {
+      return wrapped ? "after" : "before";
+    }
+    if (index === to) {
+      return null;
+    }
+  }
+  return null;
+}
+
+// The printed lair option a DM names: its number in the list, or the line
+// whose words it carries. Null when none fits.
+export function pickLairOption(options: string[], wanted: string): string | null {
+  const text = wanted.trim().toLowerCase();
+  const numbered = /^#?(\d{1,2})$/.exec(text);
+  if (numbered) {
+    return options[Number(numbered[1]) - 1] ?? null;
+  }
+  const words = (line: string) => new Set(line.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+  const asked = words(text);
+  let best: { line: string; shared: number } | null = null;
+  for (const line of options) {
+    const lower = line.toLowerCase();
+    if (lower.includes(text) || text.includes(lower.slice(0, 40))) {
+      return line;
+    }
+    const shared = [...words(line)].filter((word) => asked.has(word)).length;
+    if (shared >= 2 && (!best || shared > best.shared)) {
+      best = { line, shared };
+    }
+  }
+  return best?.line ?? null;
+}
+
+// How a printed lair option resolves through the engine: a save the server
+// rolls for each creature it reaches (aoe_damage), with the DC, the ability
+// and the dice the line prints. Null for an option with no save.
+export function lairResolution(line: string): string | null {
+  const save = /DC\s*(\d+)\s+(str|dex|con|int|wis|cha)[a-z]*\s+sav(?:e|ing throw)/i.exec(line);
+  if (!save) {
+    return null;
+  }
+  const damage = /(\d+d\d+(?:\s*[+-]\s*\d+)?)\)?\s+([a-z]+)\s+damage/i.exec(line);
+  const ability = save[2].slice(0, 3).toLowerCase();
+  return `Resolve it now with aoe_damage: dc ${save[1]}, saveAbility "${ability}"${
+    damage ? `, damage "${damage[1].replace(/\s+/g, "")}", type "${damage[2].toLowerCase()}"` : ""
+  }, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save. Lay what a failure brings as the line says.`;
 }

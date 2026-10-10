@@ -5,17 +5,19 @@
 
 import type { CharacterSheet, EquipmentItem, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { fromCopper, purseCopper } from "@/lib/srd/currency";
-import type { MaterialPlan } from "@/lib/dm/cast-rules";
+import type { MaterialPlan } from "@/lib/dm/cast-materials";
 
 type CastResult = Record<string, unknown>;
 
-// Equipment after a material is taken: one from the row, the row gone at 0.
-function withoutOne(equipment: EquipmentItem[], index: number): EquipmentItem[] {
+// Equipment after the casting takes what it uses up: so many from each
+// row, the row gone at 0.
+function withoutTaken(equipment: EquipmentItem[], taken: Map<number, number>): EquipmentItem[] {
   return equipment.flatMap((item, at) => {
-    if (at !== index) {
+    const take = taken.get(at) ?? 0;
+    if (!take) {
       return [item];
     }
-    const qty = Math.max(1, item.qty ?? 1) - 1;
+    const qty = Math.max(1, item.qty ?? 1) - take;
     return qty > 0 ? [{ ...item, qty }] : [];
   });
 }
@@ -26,24 +28,36 @@ export function materialPatch(
   plan: MaterialPlan,
   result: CastResult,
 ): FullPatchSheetInput {
-  if (plan.kind === "item") {
-    if (!plan.consume) {
-      result.material = `${plan.itemName} is the material component; the spell does not use it up.`;
-      return {};
+  if (plan.kind !== "components") {
+    return {};
+  }
+  const lines: string[] = [];
+  const taken = new Map<number, number>();
+  for (const use of plan.uses) {
+    if (use.consume) {
+      taken.set(use.index, (taken.get(use.index) ?? 0) + use.take);
+      lines.push(`${use.take > 1 ? `${use.take} × ` : ""}${use.itemName} consumed by the spell`);
+    } else {
+      lines.push(`${use.itemName} is the material component; the spell does not use it up`);
     }
-    result.material = `${plan.itemName} is consumed by the spell.`;
-    return { equipment: withoutOne(sheet.equipment, plan.index) };
   }
-  if (plan.kind === "purse") {
-    const left = fromCopper(purseCopper({ gold: sheet.gold ?? 0, copper: sheet.copper ?? 0 }) - plan.copper);
-    result.material = plan.consume
-      ? `${plan.keepAs} was bought for the spell and consumed by it; the coin is gone.`
-      : `${plan.keepAs} was bought for the spell and is kept for the next casting.`;
-    return {
-      gold: left.gold,
-      copper: left.copper,
-      ...(plan.consume ? {} : { equipment: [...sheet.equipment, { name: plan.keepAs, qty: 1 } as EquipmentItem] }),
-    };
+  let equipment = taken.size ? withoutTaken(sheet.equipment, taken) : sheet.equipment;
+  let copper = purseCopper({ gold: sheet.gold ?? 0, copper: sheet.copper ?? 0 });
+  for (const buy of plan.bought) {
+    copper -= buy.copper;
+    if (buy.consume) {
+      lines.push(`${buy.qty > 1 ? `${buy.qty} × ` : ""}${buy.name} bought for the spell and consumed by it`);
+    } else {
+      equipment = [...equipment, { name: buy.name, qty: buy.qty } as EquipmentItem];
+      lines.push(`${buy.qty > 1 ? `${buy.qty} × ` : ""}${buy.name} bought for the spell and kept for the next casting`);
+    }
   }
-  return {};
+  if (lines.length) {
+    result.material = `${lines.join("; ")}.`;
+  }
+  const left = fromCopper(copper);
+  return {
+    ...(equipment !== sheet.equipment ? { equipment } : {}),
+    ...(plan.bought.length ? { gold: left.gold, copper: left.copper } : {}),
+  };
 }

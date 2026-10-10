@@ -38,7 +38,7 @@ export function aoeOnCharacters(input: {
   sheets: CharacterSheet[];
   sheetsById: Map<string, CharacterSheet>;
 }): Array<Record<string, unknown>> {
-  const { campaign, turn, pcTargets, plan, enemyUse, conditionMeta, ability, halfOnSave, blast, total, sheets, sheetsById } = input;
+  const { campaign, turn, pcTargets, plan, enemyUse, conditionMeta, ability, halfOnSave, blast, sheets, sheetsById } = input;
   const results: Array<Record<string, unknown>> = [];
   for (const sheet of pcTargets) {
     // Sculpt Spells: the evoker's chosen allies succeed and take nothing.
@@ -64,39 +64,9 @@ export function aoeOnCharacters(input: {
         .join(" ") || undefined,
       enemyUse?.enemy ?? null,
     );
-    if (save.autoFailed) {
-      const row: Record<string, unknown> = {
-        target: sheet.name,
-        success: false,
-        autoFailed: save.notes.join("; "),
-        damage: total,
-      };
-      for (const part of blast.filter((entry) => entry.amount > 0)) {
-        const applied = applyDmMutation(
-          campaign,
-          turn.id,
-          "apply_damage",
-          JSON.stringify({
-            characterId: sheet.id,
-            amount: part.amount,
-            type: part.type,
-            ...(input.spell ? { spell: input.spell } : {}),
-            reason: (input.reason ?? "area effect").slice(0, 200),
-          }),
-          sheets,
-          sheetsById,
-        ).result;
-        if (typeof applied.hp === "string") {
-          row.hp = applied.hp;
-        }
-        if (applied.dead) {
-          row.dead = true;
-        }
-      }
-      results.push(row);
-      continue;
-    }
-    const success = save.success;
+    // An automatic failure (a paralyzed creature's DEX save) is settled as
+    // any failure: the spell's conditions land and Evasion still halves.
+    const success = save.autoFailed ? false : save.success;
     // A player's spell that binds lays its conditions on a character who
     // fails, recorded with the spell (an ally caught in a Slow).
     if (!success && plan?.conditions.length && conditionMeta) {
@@ -117,7 +87,7 @@ export function aoeOnCharacters(input: {
     const damageTaken = partsTotal(taken);
     const row: Record<string, unknown> = {
       target: sheet.name,
-      save: save.total,
+      ...(save.autoFailed ? { autoFailed: save.notes.join("; ") } : { save: save.total }),
       success,
       damage: damageTaken,
       ...(evasion ? { evasion: success ? "no damage" : "half damage" } : {}),

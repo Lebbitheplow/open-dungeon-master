@@ -361,19 +361,26 @@ await test("Deflect Missiles with the missile caught throws it back for 1 ki", a
   assert.equal(kit.enemy(enemy.id).currentHp, before - 7);
 });
 
+// A goblin shaman: the spells Counterspell answers are on its block.
+const SHAMAN = { dc: 13, attack: 5, ability: "int", slots: { 3: 2, 5: 1 }, spells: [{ name: "Fireball", level: 3 }, { name: "Cone of Cold", level: 5 }, { name: "Misty Step", level: 2 }] };
+
 await test("Counterspell of the slot's level or lower counters the spell, and the enemy's action for the round is spent", async () => {
   const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: { spellcasting: SHAMAN } });
   kit.place(wizard.id, 5, 5);
   const out = await react(wizard, "Counterspell", { targetEnemyId: enemy.id, spell: "Fireball" });
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.countered, true);
   assert.equal(world.sheet(wizard.id).spellcasting.slots["3"].used, 1);
+  // The countered spell is spent all the same: the shaman's 3rd-level slot.
+  assert.deepEqual(world.encounter().legendary.abilities?.[enemy.id]?.slots, { 3: 1 });
   const after = await world.invoke("enemy_attack", { enemyId: enemy.id, targetCharacterId: wizard.id });
   assert.equal(after.ok, false, "the countered enemy acted again in the same round");
 });
 
 await test("Counterspell against a higher spell rolls the caster's ability check against DC 10 + its level", async () => {
   const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: { spellcasting: SHAMAN } });
   kit.place(wizard.id, 5, 5);
   // Cone of Cold is 5th level: DC 15; a 1 + INT 3 fails.
   world.dice(1);
@@ -384,8 +391,31 @@ await test("Counterspell against a higher spell rolls the caster's ability check
   assert.ok(reacted(wizard));
 });
 
+await test("Counterspell answers only a spell on the creature's block, and spends nothing otherwise", async () => {
+  const enemy = await stage();
+  kit.place(wizard.id, 5, 5);
+  const slots = world.sheet(wizard.id).spellcasting.slots["3"].used;
+  const out = await react(wizard, "Counterspell", { targetEnemyId: enemy.id, spell: "Fireball" });
+  assert.equal(out.ok, false, "a goblin with no spells was countered");
+  assert.equal(world.sheet(wizard.id).spellcasting.slots["3"].used, slots);
+  assert.equal(reacted(wizard), false);
+});
+
+await test("Counterspell on a bonus-action spell spends the creature's bonus action, not its action", async () => {
+  const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: { spellcasting: SHAMAN } });
+  kit.place(wizard.id, 5, 5);
+  const out = await react(wizard, "Counterspell", { targetEnemyId: enemy.id, spell: "Misty Step" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.countered, true);
+  assert.ok(world.encounter().legendary.bonus?.ids.includes(enemy.id), "the bonus action was not spent");
+  const after = await world.invoke("enemy_attack", { enemyId: enemy.id, targetCharacterId: wizard.id });
+  assert.equal(after.ok, true, "the countered bonus action took the creature's action too");
+});
+
 await test("Counterspell after the enemy has acted is refused, and spends no slot", async () => {
   const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: { spellcasting: SHAMAN } });
   await enemyHits(enemy, rogue, [2, 1]);
   const slots = world.sheet(wizard.id).spellcasting.slots["3"].used;
   const out = await react(wizard, "Counterspell", { targetEnemyId: enemy.id, spell: "Fireball" });

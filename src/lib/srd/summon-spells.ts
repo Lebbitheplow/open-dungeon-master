@@ -39,6 +39,13 @@ export type SummonSpell = {
   // Animate Objects: a budget of objects, larger ones counting for more.
   objectBudget?: { base: number; perSlotLevel: number; cost: Record<string, number> };
   hostileOnBreak?: boolean;
+  // Animate Dead, Create Undead: the duration is the caster's control, not
+  // the creature's life. When it runs out the undead stays and turns on the
+  // party; a casting may instead reassert control over this many of the
+  // ones already made (and `reassertPerSlot` more a slot level above).
+  controlExpires?: boolean;
+  reassert?: number;
+  reassertPerSlot?: number;
   // "group": one initiative roll for the lot, on its own turns; "caster": it
   // acts right after its maker (Giant Insect: "they act on your turn").
   initiative: "group" | "caster";
@@ -92,11 +99,12 @@ export const SUMMON_SPELLS: SummonSpell[] = [
   },
   {
     name: "Animate Dead", school: "necromancy", level: 3, concentration: false, rounds: DAY, forms: ["Skeleton", "Zombie"],
-    base: 1, perSlotLevel: 2, initiative: "group",
+    base: 1, perSlotLevel: 2, initiative: "group", controlExpires: true, reassert: 4, reassertPerSlot: 2,
     note: "A skeleton or zombie under the caster's command for 24 hours (two more for each slot level above 3rd); a bonus action commands them all.",
   },
   {
     name: "Create Undead", school: "necromancy", level: 6, concentration: false, rounds: DAY, forms: ["Ghoul", "Ghast", "Wight", "Mummy"],
+    controlExpires: true, reassert: 3, reassertPerSlot: 1,
     bySlot: [
       [6, { Ghoul: 3 }],
       [7, { Ghoul: 4 }],

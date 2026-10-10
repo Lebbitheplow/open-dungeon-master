@@ -1,5 +1,6 @@
 "use client";
 
+import { owedChoices } from "@/lib/srd/owed-choices";
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -16,7 +17,7 @@ import {
   sizeForRace,
   type DerivedPart,
 } from "@/lib/srd";
-import { ATTUNEMENT_SLOTS, matchArmor } from "@/lib/srd/armor";
+import { attunementSlotsFor, matchArmor } from "@/lib/srd/armor";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { matchMagicItem, magicItemRiders } from "@/lib/srd/magic-items";
 import { RESOURCE_DEFS } from "@/lib/srd/class-resources";
@@ -494,7 +495,7 @@ export function CharacterSheetDialog({
           ) : null}
 
           {sheet.equipment.length ? (
-            <SheetBlock className="mt-4" title="Equipment" aside={`Attuned ${attunedCount}/${ATTUNEMENT_SLOTS}`}>
+            <SheetBlock className="mt-4" title="Equipment" aside={`Attuned ${attunedCount}/${attunementSlotsFor(sheet)}`}>
               <EquipmentChips
                 equipment={sheet.equipment}
                 extra={(index) => {
@@ -506,7 +507,7 @@ export function CharacterSheetDialog({
                 <div className="reveal mt-2 space-y-1">
                   <p className="text-[11px] text-stone-500">
                     Worn gear sets your AC ({sheet.acOverride ? "pinned by hand" : armor.parts.join(" + ")}
-                    ). Attuned {attunedCount}/{ATTUNEMENT_SLOTS}.
+                    ). Attuned {attunedCount}/{attunementSlotsFor(sheet)}.
                   </p>
                   {magic.sources.length ? (
                     <p className="reveal text-[11px] text-sky-400/80">
@@ -551,6 +552,13 @@ export function CharacterSheetDialog({
             </SheetBlock>
           ) : null}
 
+          {owedChoices(sheet).length ? (
+            <SheetBlock className="mt-4" title="Choices owed">
+              <p className="text-sm text-amber-200/90">
+                Earned and not yet made: {owedChoices(sheet).join("; ")}. The next level-up takes them.
+              </p>
+            </SheetBlock>
+          ) : null}
           {sheet.features.length ? (
             <SheetBlock className="mt-4" title="Features and traits">
               <FeatureChips features={sheet.features} classId={sheet.class} subclass={sheet.subclass} />

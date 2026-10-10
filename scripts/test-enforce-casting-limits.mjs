@@ -218,6 +218,8 @@ await test("an action spell is cast on the caster's own turn", async () => {
 await test("the Shield spell is a reaction: one a round, and it costs a slot", async () => {
   const { world, sheets: [hero] } = await table([wizard(5, { acOverride: false })]);
   const ac = world.sheet(hero.id).ac;
+  // Shield answers a hit the server recorded.
+  await world.hitBy(hero.id);
   const first = await world.invoke("use_reaction", { characterId: hero.id, feature: "Shield" });
   assert.equal(first.ok, true, first.error);
   assert.equal(world.sheet(hero.id).spellcasting.slots["1"].used, 1);
@@ -339,6 +341,71 @@ await test("a spell that targets only its caster lands on the caster, whoever wa
   assert.equal(out.ok, true, out.error);
   assert.deepEqual(world.sheet(hero.id).conditions, ["blurred"]);
   assert.deepEqual(world.sheet(friend.id).conditions, []);
+});
+
+// ---- the turn's spells (docs/dnd-rules-audit-2026-10-09-extent.md, F12) ----
+// SRD 5.1, Casting Time: beside a bonus action spell the turn's only other
+// spell is a cantrip of one action, whatever that other spell is cast with;
+// Quickened Spell (2 sorcery points) casts a one-action spell with the bonus
+// action.
+
+const sorcererOf = (extra = {}) =>
+  wizard(5, {
+    class: "sorcerer",
+    abilities: { cha: 16, con: 14, dex: 14 },
+    ...extra,
+    spellcasting: { ability: "cha", prepared: ["Magic Missile", "Shield", "Hold Person", "Misty Step", "Fireball"], spellbook: [] },
+  });
+const { world: quick, sheets: [sorc], enemies: [mark] } = await table([sorcererOf()]);
+const budgetNow = () => quick.encounter().turnBudget;
+// The sheet is made with its class's features; the Metamagic pick is the player's.
+const QUICKEN = { name: "Metamagic: Quickened Spell", source: "class", description: "" };
+quick.patch(sorc.id, { features: [...quick.sheet(sorc.id).features, QUICKEN] });
+
+await test("Quickened Spell: 2 points, then Hold Person takes the bonus action and the action stays", async () => {
+  await freshTurn(quick);
+  const paid = await quick.invoke("use_resource", { characterId: sorc.id, resource: "Sorcery Points", variant: "Quickened Spell" });
+  assert.equal(paid.ok, true, paid.error);
+  assert.equal(quick.sheet(sorc.id).resources.sorcery_points.used, 2);
+  quick.dice(1);
+  const held = await quick.invoke("cast_at_enemy", { characterId: sorc.id, targetEnemyId: mark.id, spell: "Hold Person", saveAbility: "wis", level: 2 });
+  quick.clearDice();
+  assert.equal(held.ok, true, held.error);
+  assert.equal(budgetNow().bonusUsed, true);
+  assert.equal(budgetNow().actionUsed, false, "the action is still there");
+  // The turn's other spell may only be a cantrip of one action.
+  const second = await quick.invoke("use_spell_slot", { characterId: sorc.id, spell: "Magic Missile", level: 1 });
+  assert.ok(second.error, "a levelled spell beside a quickened one");
+});
+
+await test("Quickened Spell is refused without the option, with too few points, or twice", async () => {
+  await freshTurn(quick);
+  const withoutPick = quick.sheet(sorc.id).features.filter((feature) => feature.name !== QUICKEN.name);
+  quick.patch(sorc.id, { features: withoutPick, resources: { ...quick.sheet(sorc.id).resources, sorcery_points: { max: 5, used: 0 } } });
+  const unknown = await quick.invoke("use_resource", { characterId: sorc.id, resource: "Sorcery Points", variant: "Quickened Spell" });
+  assert.match(String(unknown.error), /has not learned/);
+  quick.patch(sorc.id, { features: [...withoutPick, QUICKEN], resources: { ...quick.sheet(sorc.id).resources, sorcery_points: { max: 5, used: 4 } } });
+  const poor = await quick.invoke("use_resource", { characterId: sorc.id, resource: "Sorcery Points", variant: "Quickened Spell" });
+  assert.match(String(poor.error), /costs 2 sorcery points/);
+  quick.patch(sorc.id, { resources: { ...quick.sheet(sorc.id).resources, sorcery_points: { max: 5, used: 0 } } });
+  assert.equal((await quick.invoke("use_resource", { characterId: sorc.id, resource: "Sorcery Points", variant: "Quickened Spell" })).ok, true);
+  const twice = await quick.invoke("use_resource", { characterId: sorc.id, resource: "Sorcery Points", variant: "Quickened Spell" });
+  assert.match(String(twice.error), /already quickened/);
+  assert.equal(quick.sheet(sorc.id).resources.sorcery_points.used, 2, "the refused second spend cost nothing");
+});
+
+await test("a reaction spell on one's own turn: not after a bonus action spell, and none after it", async () => {
+  quick.patch(sorc.id, { spellcasting: { ...quick.sheet(sorc.id).spellcasting, slots: slotsOf(FULL_CASTER_SLOTS[4]) } });
+  await freshTurn(quick);
+  const step = await quick.invoke("use_spell_slot", { characterId: sorc.id, spell: "Misty Step", level: 2 });
+  assert.equal(step.ok, true, step.error);
+  const shield = await quick.invoke("use_spell_slot", { characterId: sorc.id, spell: "Shield", level: 1 });
+  assert.match(String(shield.error), /bonus action/);
+  await freshTurn(quick);
+  const first = await quick.invoke("use_spell_slot", { characterId: sorc.id, spell: "Shield", level: 1 });
+  assert.equal(first.ok, true, first.error);
+  const after = await quick.invoke("use_spell_slot", { characterId: sorc.id, spell: "Misty Step", level: 2 });
+  assert.ok(after.error, "a bonus action spell after a reaction spell on the same turn");
 });
 
 for (const world of worlds) {

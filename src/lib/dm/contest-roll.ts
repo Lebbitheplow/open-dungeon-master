@@ -32,7 +32,7 @@ export type CharacterCheck = {
 export function rollCharacterCheck(
   campaign: Campaign,
   stale: CharacterSheet,
-  check: { skill?: string; ability?: Ability; advantage?: "advantage" | "disadvantage" },
+  check: { skill?: string; ability?: Ability; advantage?: "advantage" | "disadvantage"; dc?: number },
   detail: string,
 ): CharacterCheck {
   const sheet = getSheetById(stale.id) ?? stale;
@@ -62,6 +62,7 @@ export function rollCharacterCheck(
     requestedBy: "dm",
     kind: check.skill ? "skill_check" : "ability_check",
     detail: `${detail}: ${resolved.detail}`.slice(0, 120),
+    ...(check.dc ? { dc: check.dc } : {}),
     result: outcome,
   });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
@@ -117,4 +118,17 @@ export function rollFeatureSave(
     source: "digital",
   });
   return { success: outcome.total >= dc, total: outcome.total, notes: resolved.conditionNotes ?? [] };
+}
+
+// A character's initiative as request_roll would build it (src/lib/dm/rolls.ts):
+// Alert, Feral Instinct's advantage, exhaustion, a halfling's Lucky, lasting
+// effects on initiative. For the rolls a tool makes itself (a late arrival, a
+// recruited companion). A held die it spends is spent here.
+export function characterInitiativeExpression(campaign: Campaign, sheet: CharacterSheet, fallbackModifier: number): string {
+  const resolved = resolveRollExpression({ kind: "initiative" } as RollArgs, sheet, rollExtrasFor(campaign, sheet, "initiative"));
+  if ("error" in resolved || "autoFail" in resolved) {
+    return d20Expression(fallbackModifier);
+  }
+  spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
+  return resolved.expression;
 }

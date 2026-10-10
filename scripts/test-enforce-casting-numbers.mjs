@@ -118,7 +118,8 @@ await test("Hold Person: a Wisdom save against the caster's DC, paralyzed until 
   // The condition records the spell, its caster and the slot, so the caster's
   // concentration ends this casting and nothing else (spell-effects.ts).
   assert.deepEqual(target.conditionMeta, {
-    paralyzed: { saveEnds: { ability: "wis", dc }, spell: "Hold Person", source: mage.id, slotLevel: 2 },
+    // A save at the end of each of its turns, and never past the spell's minute.
+    paralyzed: { saveEnds: { ability: "wis", dc }, rounds: 10, spell: "Hold Person", source: mage.id, slotLevel: 2 },
   });
   world.dice(20);
   const resisted = await world.invoke("cast_at_enemy", {

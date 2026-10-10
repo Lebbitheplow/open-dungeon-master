@@ -116,6 +116,9 @@ export type EncounterEnemy = {
   // Spell this enemy is concentrating on, or null. Best-effort server
   // tracking (src/lib/dm/enemy-damage.ts breaks it on damage).
   concentration: string | null;
+  // Rounds the concentration has left (src/lib/dm/concentration-clock.ts);
+  // null = no clock.
+  concentrationRounds?: number | null;
   stats: EnemyStats;
   createdAt: string;
   updatedAt: string;
@@ -161,6 +164,7 @@ type EnemyRow = {
   conditions_json: string;
   condition_meta_json: string | null;
   concentration: string | null;
+  concentration_rounds?: number | null;
   stat_json: string;
   created_at: string;
   updated_at: string;
@@ -253,6 +257,7 @@ function mapEnemy(row: EnemyRow): EncounterEnemy {
     conditions: parseJson<string[]>(row.conditions_json, []),
     conditionMeta: parseJson<ConditionMetaMap>(row.condition_meta_json, {}),
     concentration: row.concentration ?? null,
+    concentrationRounds: row.concentration_rounds ?? null,
     stats: parseJson<EnemyStats>(row.stat_json, {
       ac: row.ac,
       maxHp: row.max_hp,
@@ -524,9 +529,19 @@ export function setEnemyInitiative(enemyId: string, initiative: number) {
 export function setEnemyConcentration(
   enemyId: string,
   spell: string | null,
+  // The spell's duration in rounds, counted down as the enemy's turns start
+  // (src/lib/dm/concentration-clock.ts); null for none or no clock.
+  rounds: number | null = null,
 ): EncounterEnemy | null {
   getDatabase()
-    .prepare(`UPDATE encounter_enemies SET concentration = ?, updated_at = ? WHERE id = ?`)
-    .run(spell, nowIso(), enemyId);
+    .prepare(`UPDATE encounter_enemies SET concentration = ?, concentration_rounds = ?, updated_at = ? WHERE id = ?`)
+    .run(spell, spell ? rounds : null, nowIso(), enemyId);
   return getEnemy(enemyId);
+}
+
+// The rounds an enemy's concentration has left, without touching the spell.
+export function setEnemyConcentrationRounds(enemyId: string, rounds: number | null) {
+  getDatabase()
+    .prepare(`UPDATE encounter_enemies SET concentration_rounds = ?, updated_at = ? WHERE id = ?`)
+    .run(rounds, nowIso(), enemyId);
 }

@@ -325,7 +325,7 @@ await test("The per-turn caps apply to the AI's share of an assisted session (sr
     const out = await invokeEngine(
       world.campaign(),
       { kind: "ai", turnId: turn.id },
-      { name: "damage_enemy", args: { enemyId: enemy.id, amount: 1, source: "hazard" } },
+      { name: "damage_enemy", args: { enemyId: enemy.id, dice: "1d4", source: "hazard" } },
     );
     refused += out.ok ? 0 : 1;
   }

@@ -22,7 +22,8 @@ import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { d20Expression, defaultRng } from "@/lib/dice";
+import { defaultRng } from "@/lib/dice";
+import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
 import {
   DRACONIC_ANCESTRY_IDS,
   findDraconicAncestry,
@@ -424,7 +425,7 @@ export function finalizeNewCompanion(
   // exactly like add_enemies does for the other side.
   const encounter = getActiveEncounter(campaign.id);
   if (encounter) {
-    const initiative = rollCard(campaign, null, sheet.id, "initiative", "initiative", d20Expression(abilityMod(sheet.abilities.dex)), null).total;
+    const initiative = rollCard(campaign, null, sheet.id, "initiative", "initiative", characterInitiativeExpression(campaign, sheet, abilityMod(sheet.abilities.dex)), null).total;
     const entry: OrderEntry = {
       kind: "pc",
       characterId: sheet.id,

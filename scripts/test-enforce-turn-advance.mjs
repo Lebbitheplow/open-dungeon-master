@@ -156,7 +156,7 @@ function agree(world, kit, label) {
 }
 
 // A summoned wolf of Kara's, placed in the order as `initiative` says.
-function summonWolf(world, caster, { initiative = "caster", rounds = 10, hostileOnBreak = false, spell = "Conjure Animals" } = {}) {
+function summonWolf(world, caster, { initiative = "caster", rounds = 10, hostileOnBreak = false, spell = "Conjure Animals", wrapClock = false } = {}) {
   const form = findSummonForm("wolf");
   const record = summonSchema.parse({
     spell,
@@ -167,6 +167,15 @@ function summonWolf(world, caster, { initiative = "caster", rounds = 10, hostile
     ...(hostileOnBreak ? { hostileOnBreak: true } : {}),
   });
   const [wolf] = spawnSummons(world.campaign(), world.sheet(caster.id), { form, count: 1, record, rounds, slotLevel: 3, initiative });
+  // A spell's clock counts on its caster's turns (src/lib/dm/condition-tick.ts).
+  // These tests are about the pointer when a creature fades just as its turn
+  // is reached, which a clock with no caster in the order does at the wrap.
+  if (wrapClock) {
+    const { summoned } = world.sheet(wolf.id).conditionMeta;
+    const unanchored = { ...summoned };
+    delete unanchored.source;
+    world.patch(wolf.id, { conditionMeta: { ...world.sheet(wolf.id).conditionMeta, summoned: unanchored } });
+  }
   return wolf;
 }
 
@@ -600,7 +609,7 @@ await test("The DM taking out the hero whose turn it is passes it on, and the fl
 
 await test("A summon whose spell runs out at the wrap, just as the turn reaches it, hands it on", async () => {
   const { world, kit, heroes: [kara] } = await table(["Kara"]);
-  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1 });
+  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1, wrapClock: true });
   const [goblin] = world.enemies();
   // The wolf at the top, the goblin under it: once the wolf goes, the slot
   // it leaves falls to the goblin.
@@ -618,7 +627,7 @@ await test("A summon whose spell runs out at the wrap, just as the turn reaches 
 await test("At a person's table, a pass that goes on past a summon gone as its turn began holds the enemies of both legs", async () => {
   const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"], { goblins: 2 });
   assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId, "a person takes the DM seat");
-  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1 });
+  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1, wrapClock: true });
   const [first, second] = world.enemies();
   const encounter = world.encounter();
   const by = (id) => encounter.order.find((entry) => (entry.characterId ?? entry.enemyId) === id);
@@ -634,7 +643,7 @@ await test("At a person's table, a pass that goes on past a summon gone as its t
 
 await test("A summon ending its own turn as its spell runs out at the wrap is passed once, not twice", async () => {
   const { world, kit, heroes: [kara, brom] } = await table(["Kara", "Brom"]);
-  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1 });
+  const wolf = summonWolf(world, kara, { initiative: "group", rounds: 1, wrapClock: true });
   const encounter = world.encounter();
   const by = (id) => encounter.order.find((entry) => (entry.characterId ?? entry.enemyId) === id);
   const [goblin] = world.enemies();
@@ -738,7 +747,10 @@ await test("A departure inside the AI's turn leaves the enemies its pass reaches
   assert.equal(kit.endTurn(userOf(world, kara.id)), true);
   assert.equal(currentName(world), wolf.name);
   const turn = createDmTurn(world.campaignId, [], "ai");
-  const hit = await invokeEngine(world.campaign(), { kind: "ai", turnId: turn.id }, { name: "apply_damage", args: { characterId: wolf.id, amount: 200 } });
+  // The model's damage is dice the server rolls (src/lib/dm/ai-gate.ts).
+  world.dice(...new Array(10).fill(20));
+  const hit = await invokeEngine(world.campaign(), { kind: "ai", turnId: turn.id }, { name: "apply_damage", args: { characterId: wolf.id, dice: "10d20" } });
+  world.clearDice();
   assert.equal(hit.ok, true, hit.error);
   assert.equal(currentName(world), "Brom");
   assert.equal(enemyTurnRefusal(world.encounter(), goblin, turn), null, "the model may play the goblin in this turn");

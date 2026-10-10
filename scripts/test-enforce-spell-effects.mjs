@@ -218,21 +218,30 @@ await test("Haste: +2 AC, advantage on Dexterity saves, for a minute", async () 
 
 await test("when Haste runs out by its duration the target loses its next turn to lethargy", async () => {
   const { world, sheets: [friend, mage] } = await party(FIGHTER, wizard(5));
-  const [enemy] = await fightDummies(world, 1, { heroFaces: { [friend.id]: 20, [mage.id]: 10 } });
+  await fightDummies(world, 1, { heroFaces: { [friend.id]: 20, [mage.id]: 10 } });
   const cast = await world.invoke("cast_buff", { characterId: mage.id, spell: "Haste", level: 3, targetCharacterIds: [friend.id] });
   assert.equal(cast.ok, true, cast.error);
-  for (let round = 0; round < 10; round += 1) {
+  // The minute is counted on the mage's turns (the caster's), ten of them.
+  // The harness casts with the pointer handed back to the fighter, so the
+  // mage's turn in round 1 is still to come: the tenth is round 10's, and
+  // the fighter (first in the order) has their round-10 turn still hasted.
+  for (let round = 0; round < 9; round += 1) {
     nextRound(world);
   }
+  assert.equal(held(world, friend).includes("hasted"), true, "Haste ended before the mage's turn came round");
+  assert.equal(skipCurrentTurn(world.campaignId), true);
+  assert.equal(world.encounter().order[world.encounter().turnIndex].characterId, mage.id, "the pointer is not on the mage");
   assert.equal(held(world, friend).includes("hasted"), false, "the spell ran out");
-  assert.deepEqual(meta(world, friend).incapacitated, { rounds: 1, source: "haste" }, "no lethargy when Haste ran out");
-  assert.equal(world.encounter().order[world.encounter().turnIndex].characterId, friend.id);
-  world.dice(10, 5);
-  const out = await world.invoke("pc_attack", { characterId: friend.id, enemyId: enemy.id, targetEnemyId: enemy.id, weapon: "Longsword" });
-  world.clearDice();
-  assert.equal(out.ok, false, "the fighter attacked on the turn the lethargy should cost them");
+  // The lethargy waits on the fighter's next turn and ends with it.
+  assert.deepEqual(meta(world, friend).incapacitated, { untilTurnEndOf: friend.id, source: "haste" }, "no lethargy when Haste ran out");
+  // Round 11: the lethargic fighter's turn is passed over, and that turn
+  // was the one the lethargy took.
   nextRound(world);
-  assert.equal(held(world, friend).includes("incapacitated"), false, "the lethargy lasts one turn");
+  assert.equal(world.encounter().order[world.encounter().turnIndex].characterId, mage.id, "the fighter acted through the lethargy");
+  assert.equal(held(world, friend).includes("incapacitated"), false, "the lethargy outlasted the turn it took");
+  // Round 12: the fighter acts again.
+  nextRound(world);
+  assert.equal(world.encounter().order[world.encounter().turnIndex].characterId, friend.id, "the fighter's turn did not come back");
 });
 
 await test("when Haste ends the target loses its next turn to lethargy", async () => {
@@ -272,9 +281,13 @@ await test("when Haste runs out on an enemy by its duration the enemy loses its 
     nextRound(world);
   }
   assert.deepEqual(foe(world, enemy).conditions, ["incapacitated"], "the spell ran out into lethargy");
-  assert.deepEqual(foe(world, enemy).conditionMeta, { incapacitated: { rounds: 1, source: "haste" } });
+  // The lethargy waits on the enemy's next turn and ends with it.
+  assert.deepEqual(foe(world, enemy).conditionMeta, { incapacitated: { untilTurnEndOf: enemy.id, source: "haste" } });
   const lost = await enemySwing(world, enemy, friend);
   assert.equal(lost.ok, false, "the enemy attacked on the turn the lethargy costs it");
+  // An enemy's turn is over when the pointer next moves (src/lib/dm/turn-end.ts):
+  // the lethargy goes with the turn it took, before the enemy's next one.
+  nextRound(world);
   nextRound(world);
   assert.deepEqual(foe(world, enemy).conditions, [], "the lethargy lasts one turn");
   const acts = await enemySwing(world, enemy, friend);
@@ -298,7 +311,7 @@ await test("when the concentration holding Haste on an enemy breaks, the enemy l
   world.clearDice();
   assert.equal(foe(world, casterFoe).concentration, null);
   assert.deepEqual(foe(world, ally).conditions, ["incapacitated"]);
-  assert.deepEqual(foe(world, ally).conditionMeta, { incapacitated: { rounds: 1, source: "haste" } });
+  assert.deepEqual(foe(world, ally).conditionMeta, { incapacitated: { untilTurnEndOf: ally.id, source: "haste" } });
   assert.equal((await enemySwing(world, ally, friend)).ok, false, "the ally attacked through its lethargy");
 
   world.dice(1);
@@ -307,6 +320,8 @@ await test("when the concentration holding Haste on an enemy breaks, the enemy l
   assert.equal(world.sheet(mage.id).concentratingOn ?? null, null);
   assert.deepEqual(foe(world, charmed).conditions, ["incapacitated"]);
   assert.equal((await enemySwing(world, charmed, friend)).ok, false, "the charmed foe attacked through its lethargy");
+  // Each lethargy ends with the enemy's next turn, over as the pointer moves on.
+  nextRound(world);
   nextRound(world);
   assert.deepEqual([foe(world, ally).conditions, foe(world, charmed).conditions], [[], []]);
   assert.equal((await enemySwing(world, ally, friend)).ok, true, "a round later it acts");
@@ -320,6 +335,8 @@ await test("Shield is +5 AC until the start of the caster's next turn", async ()
   const { world, sheets: [friend, mage] } = await party(FIGHTER, wizard(5, { acOverride: false }));
   await fightDummies(world, 1, { heroFaces: { [friend.id]: 20, [mage.id]: 10 } });
   const ac = world.sheet(mage.id).ac;
+  // Shield answers a hit the server recorded (a goblin's swing at AC 12).
+  await world.hitBy(mage.id);
   const raised = await world.invoke("use_reaction", { characterId: mage.id, feature: "Shield" });
   assert.equal(raised.ok, true, raised.error);
   assert.deepEqual(meta(world, mage), { shielded: { untilTurnOf: mage.id } });
@@ -331,6 +348,7 @@ await test("Shield is +5 AC until the start of the caster's next turn", async ()
   assert.deepEqual(world.encounter().reactionsUsed, [], "and the reaction is back");
   // Raised on their own turn, it stands through the round wrap and the
   // fighter's next turn, until their own comes round again.
+  await world.hitBy(mage.id);
   const again = await world.invoke("use_reaction", { characterId: mage.id, feature: "Shield" });
   assert.equal(again.ok, true, again.error);
   nextRound(world);
@@ -362,6 +380,7 @@ await test("Mage Armor and Shield stack: 13 + Dexterity + 5", async () => {
   const { world, sheets: [mage] } = await party(wizard(5, { acOverride: false }));
   await fightDummies(world, 1);
   await world.invoke("cast_buff", { characterId: mage.id, spell: "Mage Armor", level: 1 });
+  await world.hitBy(mage.id);
   await world.invoke("use_reaction", { characterId: mage.id, feature: "Shield" });
   assert.equal(world.sheet(mage.id).ac, 13 + abilityMod(14) + 5);
 });

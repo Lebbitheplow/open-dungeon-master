@@ -359,6 +359,12 @@ function MonsterHandInner({
             ))}
           </div>
 
+          {selected.actions?.manual?.length ? (
+            <p className="mt-1 truncate text-xs text-stone-400" title={selected.actions.manual.join(", ")}>
+              By hand: {selected.actions.manual.join(", ")}
+            </p>
+          ) : null}
+
           {picked ? (
             <div className="hand-aim mt-1 rounded-xl border border-red-500/30 bg-stone-950/80 p-2.5 shadow-elev-1">
               <div className="flex min-w-0 items-center gap-2">

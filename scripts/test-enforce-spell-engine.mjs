@@ -275,8 +275,10 @@ await test("a 5th level warlock's Hold Person with no level named is cast at 3rd
 const DEAD = { successes: 0, failures: 3, stable: false, dead: true };
 
 await test("Revivify through heal brings a dead fighter back at 1 HP for one 3rd level slot and 300 gp of diamonds", async () => {
+  // In a fight the diamonds are carried: there is no buying them mid-battle
+  // (src/lib/dm/cast-materials.ts).
   const { world, sheets: [priest, fighter] } = await table([
-    { ...caster("cleric", "wis", ["Revivify"]), gold: 400 },
+    { ...caster("cleric", "wis", ["Revivify"]), gold: 400, equipment: [{ name: "Diamonds (300 gp)", qty: 1 }] },
     FIGHTER,
   ]);
   world.patch(fighter.id, { currentHp: 0, deathSaves: DEAD });
@@ -286,7 +288,9 @@ await test("Revivify through heal brings a dead fighter back at 1 HP for one 3rd
   assert.equal(now.deathSaves?.dead ?? false, false);
   assert.equal(now.currentHp, 1);
   assert.equal(world.sheet(priest.id).spellcasting.slots["3"].used, 1);
-  assert.equal(world.sheet(priest.id).gold, 100);
+  // The diamonds are consumed; the purse is untouched.
+  assert.equal(world.sheet(priest.id).equipment.some((item) => /diamond/i.test(item.name)), false);
+  assert.equal(world.sheet(priest.id).gold, 400);
 });
 
 await test("Revivify on a creature dead longer than a minute is refused before the slot and the diamond", async () => {

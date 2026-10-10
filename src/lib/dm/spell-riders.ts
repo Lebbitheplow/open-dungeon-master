@@ -20,7 +20,7 @@ import { getDatabase } from "@/lib/db/core";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { damageAdjust, resistsAllDamage, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { addConditionInstance, damageAdjust, resistsAllDamage, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -163,15 +163,20 @@ export function layOnEnemy(enemyId: string, entries: Array<[string, ConditionMet
     return [];
   }
   const immune = (enemy.stats.conditionImmune ?? "").toLowerCase();
-  const landing = entries.filter(([name]) => !immune.includes(name) && !enemy.conditions.includes(name));
+  const landing = entries.filter(([name]) => !immune.includes(name));
   if (!landing.length) {
     return [];
   }
-  const meta: ConditionMetaMap = { ...(enemy.conditionMeta as ConditionMetaMap) };
+  // A condition the creature already holds from another source holds from
+  // this one too, each with its own lifetime (condition-logic.ts).
+  let conditions = enemy.conditions;
+  let meta: ConditionMetaMap = { ...(enemy.conditionMeta as ConditionMetaMap) };
   for (const [name, entry] of landing) {
-    meta[name] = entry;
+    const laid = addConditionInstance(conditions, meta, name, entry);
+    conditions = laid.conditions;
+    meta = laid.meta;
   }
-  patchEnemyConditions(enemy.id, [...enemy.conditions, ...landing.map(([name]) => name)], meta);
+  patchEnemyConditions(enemy.id, conditions, meta);
   return landing.map(([name]) => name);
 }
 

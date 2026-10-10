@@ -12,27 +12,26 @@ import { RAGING } from "@/lib/srd/class-resources";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { insertRoll } from "@/lib/db/rolls";
-import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
-import { rollEnemySave } from "@/lib/dm/forced-save";
-import { allySaveAura } from "@/lib/dm/aura";
+import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
 import {
   ROUNDS_PER_MINUTE,
   effectiveMaxHp,
-  exhaustionRollState,
-  mergeAdvantage,
+  instanceIdentity,
+  instancesOf,
+  removeConditionInstances,
   removeConditions,
   tickConditions,
-  turnBoundConditionsEnding,
+  type ConditionMeta,
   type ConditionMetaMap,
 } from "@/lib/dm/condition-logic";
+import { tickConcentrationClocks } from "@/lib/dm/concentration-clock";
 import { wakeStable } from "@/lib/dm/death";
-import { breakConcentration, LETHARGY, lethargyRounds, spellEndPatch } from "@/lib/dm/concentration";
+import { breakConcentration, LETHARGY, lethargyMeta } from "@/lib/dm/concentration";
 import { endConcentrationOnFadedSummons, endSpentConcentration } from "@/lib/dm/concentration-upkeep";
 import { STABLE_SOURCE, STABLE_WAKE_HOURS_MAX, UNCONSCIOUS } from "@/lib/dm/vitals-logic";
-import { holdsFeature, traitSaveAdvantages } from "@/lib/srd/trait-rules";
+import { holdsFeature } from "@/lib/srd/trait-rules";
 import { tickEffectRound } from "@/lib/db/active-effects";
 import { spellTurnStart } from "@/lib/dm/spell-aura";
 import { zoneTurnStart } from "@/lib/dm/zone-triggers";
@@ -65,8 +64,19 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
     lines.push(`${expired.name} wears off.`);
   }
 
-  tickEnemyConditions(campaign, encounter, 1, lines);
-  tickSheetConditions(campaign, 1, lines, { encounter });
+  // What belongs to a turn is counted there (startTurnConditions, and the
+  // saves at endTurnSaves): an instance whose source is in the order counts
+  // as that source's turn starts, and a holder in the order saves at the end
+  // of its own turn. The wrap counts the rest: an instance with no source in
+  // the fight, a holder the order does not hold.
+  const inOrder = new Set(encounter.order.map((entry) => orderEntryId(entry)));
+  const outside: HolderTick = {
+    counts: (source) => !source || !inOrder.has(source),
+    saves: (holderId) => !inOrder.has(holderId),
+  };
+  tickEnemyConditions(campaign, encounter, 1, lines, outside);
+  tickSheetConditions(campaign, 1, lines, { encounter, ...outside });
+  lines.push(...tickConcentrationClocks(campaign, 1, (casterId) => !inOrder.has(casterId)));
   if (lines.length) {
     endSpentConcentration(campaign, lines);
   }
@@ -94,6 +104,9 @@ export function tickClockConditions(campaign: Campaign, minutes: number) {
   }
   const lines: string[] = [];
   tickSheetConditions(campaign, rounds, lines, { endTurnBound: true });
+  // A concentration spell lasts no longer than its duration on the road
+  // either (src/lib/dm/concentration-clock.ts).
+  lines.push(...tickConcentrationClocks(campaign, rounds, () => true));
   // A creature stabilized before the wait was kept on the sheet has no
   // timer to run out. Four hours in one stretch is the longest 1d4 asks for,
   // so that much time wakes it.
@@ -147,19 +160,20 @@ export function startTurnConditions(
   }
   endTurnRage(campaign, encounter, combatantIds[0], endedTurn);
   startTurnFeatures(campaign, combatantIds);
+  const starting = new Set(combatantIds);
   let enemiesChanged = false;
   for (const enemy of listEnemies(encounter.id)) {
-    const ending = turnBoundConditionsEnding(enemy.conditions, enemy.conditionMeta, combatantIds);
-    if (ending.length) {
-      const removed = removeConditions(enemy.conditions, enemy.conditionMeta, ending);
-      patchEnemyConditions(enemy.id, removed.conditions, removed.meta);
+    const ended = endInstancesBoundTo(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, starting);
+    if (ended.changed) {
+      patchEnemyConditions(enemy.id, ended.conditions, ended.meta);
       enemiesChanged = true;
     }
   }
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
-    const ending = turnBoundConditionsEnding(sheet.conditions, sheet.conditionMeta, combatantIds);
-    if (!ending.length) {
+    const ended = endInstancesBoundTo(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, starting);
+    const ending = ended.ended;
+    if (!ended.changed) {
       continue;
     }
     // A readied spell never released is lost, and the concentration that
@@ -170,14 +184,26 @@ export function startTurnConditions(
     if (lostSpell && castKeyOf(sheet.concentratingOn ?? "") === castKeyOf(lostSpell)) {
       breakConcentration(campaign, null, sheet.id, "the readied spell was never released");
     }
-    const removed = removeConditions(sheet.conditions, sheet.conditionMeta, ending);
     const updated = patchSheet(sheet.id, {
-      conditions: removed.conditions,
-      conditionMeta: removed.meta,
+      conditions: ended.conditions,
+      conditionMeta: ended.meta,
     });
     if (updated) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
     }
+  }
+  // A count that belongs to these turns runs down now: "for 1 minute" from
+  // a caster's (or a monster's) turn ends ten of its turns later, where it
+  // began (SRD 5.1); a concentration spell's clock with them.
+  const counted: string[] = [];
+  const ownTurn: HolderTick = { counts: (source) => Boolean(source && starting.has(source)), saves: () => false };
+  tickEnemyConditions(campaign, encounter, 1, counted, ownTurn);
+  tickSheetConditions(campaign, 1, counted, { encounter, ...ownTurn });
+  counted.push(...tickConcentrationClocks(campaign, 1, (casterId) => starting.has(casterId)));
+  if (counted.length) {
+    endSpentConcentration(campaign, counted);
+    enemiesChanged = true;
+    noteAtTable(campaign.id, counted);
   }
   // Running spells act at the start of a turn: Spirit Guardians around its
   // caster, Phantasmal Killer's dread, Heroism's temporary hit points
@@ -284,12 +310,23 @@ function endTurnRage(
   ]);
 }
 
-function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: number, lines: string[]) {
+// Which instances a tick counts and which holders save in it (tickConditions).
+type HolderTick = {
+  counts?: (source: string | undefined) => boolean;
+  saves?: (holderId: string) => boolean;
+  // Only these holders are looked at.
+  only?: Set<string>;
+};
+
+function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: number, lines: string[], options: HolderTick = {}) {
   for (const enemy of listEnemies(encounter.id)) {
-    if (enemy.status !== "alive" || !enemy.conditions.length) {
+    if (enemy.status !== "alive" || !enemy.conditions.length || (options.only && !options.only.has(enemy.id))) {
       continue;
     }
-    const tick = tickConditions(enemy.conditions, enemy.conditionMeta, by);
+    const tick = tickConditions(enemy.conditions, enemy.conditionMeta, by, {
+      counts: options.counts,
+      saves: options.saves ? options.saves(enemy.id) : true,
+    });
     let conditions = tick.conditions;
     let meta = tick.meta;
     for (const name of tick.expired) {
@@ -302,12 +339,18 @@ function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: numbe
       conditions = [...conditions, LETHARGY];
       meta = {
         ...meta,
-        [LETHARGY]: { rounds: lethargyRounds(encounter, enemy.id, true), source: "haste" },
+        [LETHARGY]: lethargyMeta(enemy.id),
       };
       lines.push(`${enemy.displayName} is overcome by lethargy as Haste ends and loses its next turn.`);
     }
     for (const due of tick.savesDue) {
       if (!conditions.includes(due.name)) {
+        continue;
+      }
+      // Each source's hold asks its own save; this is one of them.
+      const holds = (instance: ConditionMeta) => instanceIdentity(instance) === due.key && instance.saveEnds?.dc === due.dc;
+      const instance = instancesOf((meta as ConditionMetaMap)[due.name]).find(holds);
+      if (!instance) {
         continue;
       }
       // The creature's full save (src/lib/dm/forced-save.ts), as the first
@@ -320,7 +363,10 @@ function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: numbe
         due.ability,
         due.dc,
         {
-          magical: Boolean((meta as ConditionMetaMap)[due.name]?.spell),
+          magical: Boolean(instance.spell),
+          // A creature with Legendary Resistance spends one to end what binds
+          // it, as it would against the first save (src/lib/dm/legendary-tools.ts).
+          resist: true,
           // On the record like every roll, for the DM's eyes (enemy saves are
           // rolled silently at the table).
           record: { detail: `${enemy.displayName}: ${due.ability.toUpperCase()} save to end ${due.name}` },
@@ -328,11 +374,13 @@ function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: numbe
       );
       const shown = outcome.total === null ? "an automatic failure" : String(outcome.total);
       if (outcome.success) {
-        const removed = removeConditions(conditions, meta, [due.name]);
+        const removed = removeConditionInstances(conditions, meta, due.name, holds);
         conditions = removed.conditions;
         meta = removed.meta;
         lines.push(
-          `${enemy.displayName} shakes off ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}).`,
+          removed.ended
+            ? `${enemy.displayName} shakes off ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}).`
+            : `${enemy.displayName} throws off one hold of ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}); another still holds it.`,
         );
       } else {
         lines.push(
@@ -353,16 +401,18 @@ function tickSheetConditions(
   campaign: Campaign,
   by: number,
   lines: string[],
-  // `encounter` is the fight whose round just wrapped; the clock path has none.
-  options?: { endTurnBound?: boolean; encounter?: Encounter },
+  // `encounter` is the fight being ticked; the clock path has none.
+  options?: { endTurnBound?: boolean; encounter?: Encounter } & HolderTick,
 ) {
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
-    if (!sheet.conditions.length || !Object.keys(sheet.conditionMeta).length) {
+    if (!sheet.conditions.length || !Object.keys(sheet.conditionMeta).length || (options?.only && !options.only.has(sheet.id))) {
       continue;
     }
     const tick = tickConditions(sheet.conditions, sheet.conditionMeta, by, {
       endTurnBound: options?.endTurnBound,
+      counts: options?.counts,
+      saves: options?.saves ? options.saves(sheet.id) : true,
     });
     let conditions = tick.conditions;
     let meta = tick.meta;
@@ -376,9 +426,10 @@ function tickSheetConditions(
       ? ((sheet.conditionMeta as ConditionMetaMap)[hastedAs]?.rounds ?? by)
       : 0;
     if (hastedAs && by - hasteLeft < 1 && !conditions.includes(LETHARGY)) {
-      const rounds = options?.encounter ? lethargyRounds(options.encounter, sheet.id, true) : 1;
       conditions = [...conditions, LETHARGY];
-      meta = { ...meta, [LETHARGY]: { rounds, source: "haste" } };
+      // In a fight the lethargy holds through the creature's next turn and
+      // ends with it; on the clock it is the one round of six seconds.
+      meta = { ...meta, [LETHARGY]: options?.encounter ? lethargyMeta(sheet.id) : { rounds: 1, source: "haste" } };
       lines.push(`${sheet.name} is overcome by lethargy as Haste ends and loses their next turn.`);
     }
     // The wait of a stabilized creature ran out: it regains its hit point
@@ -397,44 +448,48 @@ function tickSheetConditions(
       if (!conditions.includes(due.name)) {
         continue;
       }
-      // A nearby paladin's aura rides re-saves too (map-scoped).
-      const aura = allySaveAura(campaign.id, sheet);
-      const saveMod = computeSheetDerived(sheet).saves[due.ability] + (aura?.bonus ?? 0);
-      // The traits keyed to what the save resists (Brave against fear, Fey
-      // Ancestry against charm, Dwarven Resilience against poison).
-      const traits = traitSaveAdvantages(sheet, due.ability, due.name);
-      const brave = traits.length > 0;
-      // Exhaustion level 3 costs every saving throw disadvantage, this one
-      // included; the two cancel to a straight roll when both apply.
-      const tired = exhaustionRollState(sheet.exhaustion ?? 0, "saving_throw");
-      const advantage = mergeAdvantage([brave ? "advantage" : "none", tired.advantage]);
-      const outcome = rollExpression(d20Expression(saveMod, advantage));
-      const roll = insertRoll({
-        campaignId: campaign.id,
-        characterId: sheet.id,
-        requestedBy: "dm",
-        kind: "saving_throw",
-        detail: `${due.ability.toUpperCase()} save to end ${due.name}${
-          brave ? ` (${traits.join("; ")})` : ""
-        }${tired.note ? ` (${tired.note})` : ""}`,
-        dc: due.dc,
-        ...(advantage === "none" ? {} : { advantage }),
-        result: outcome,
-      });
-      publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-        roll,
-        source: "digital",
-      });
-      if (outcome.total >= due.dc) {
-        const removed = removeConditions(conditions, meta, [due.name]);
+      // The save every other save is (src/lib/dm/forced-save.ts): a
+      // paladin's aura, Bless and Bane, exhaustion, lasting effects, a held
+      // die, a halfling's Lucky, and the traits keyed to what it resists
+      // (Brave against fear, Fey Ancestry against charm).
+      const heldBefore = new Set(getSheetById(sheet.id)?.conditions ?? sheet.conditions);
+      const save = rollCharacterSave(
+        campaign,
+        null,
+        getSheetById(sheet.id) ?? sheet,
+        due.ability,
+        due.dc,
+        `${due.ability.toUpperCase()} save to end ${due.name}`,
+        due.name,
+      );
+      // A carrier the save spent (an inspiration die) is gone from the
+      // stored sheet; the conditions this tick writes back must not restore it.
+      const heldAfter = new Set(getSheetById(sheet.id)?.conditions ?? []);
+      const spent = [...heldBefore].filter((name) => !heldAfter.has(name));
+      if (spent.length) {
+        const cleared = removeConditions(conditions, meta, spent);
+        conditions = cleared.conditions;
+        meta = cleared.meta;
+      }
+      const shown = save.total ?? "failed";
+      if (save.success) {
+        // This source's hold goes; another source's keeps the condition.
+        const removed = removeConditionInstances(
+          conditions,
+          meta,
+          due.name,
+          (instance) => instanceIdentity(instance) === due.key && instance.saveEnds?.dc === due.dc,
+        );
         conditions = removed.conditions;
         meta = removed.meta;
         lines.push(
-          `${sheet.name} shakes off ${due.name} (${due.ability.toUpperCase()} save ${outcome.total} vs DC ${due.dc}).`,
+          removed.ended
+            ? `${sheet.name} shakes off ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}).`
+            : `${sheet.name} throws off one hold of ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}); another still holds it.`,
         );
       } else {
         lines.push(
-          `${sheet.name} stays ${due.name} (${due.ability.toUpperCase()} save ${outcome.total} vs DC ${due.dc}).`,
+          `${sheet.name} stays ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}).`,
         );
       }
     }
@@ -455,14 +510,63 @@ function tickSheetConditions(
         conditions,
         conditionMeta: meta,
         ...(polymorphEnded ? { wildShape: null } : {}),
-        // Aid running out takes back the hit points it gave.
-        ...spellEndPatch(sheet, tick.expired),
       });
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
       }
     }
   }
+}
+
+// These combatants' turns have ended: each makes the saves its save-ends
+// conditions grant "at the end of each of its turns" (SRD 5.1, Hold Person),
+// one per source holding it. advancePointer calls this as the pointer moves:
+// for the character whose turn it was, the ones it walked past, and the
+// enemies whose turns the DM turn since the last move has taken.
+export function endTurnSaves(campaign: Campaign, encounter: Encounter, holderIds: string[]) {
+  if (!holderIds.length) {
+    return;
+  }
+  const ending = new Set(holderIds);
+  const lines: string[] = [];
+  const ownSave: HolderTick = { counts: () => false, saves: (holderId) => ending.has(holderId), only: ending };
+  tickEnemyConditions(campaign, encounter, 0, lines, ownSave);
+  tickSheetConditions(campaign, 0, lines, { encounter, ...ownSave });
+  if (lines.length) {
+    endSpentConcentration(campaign, lines);
+    publishPersisted(campaign.id, "encounter_updated", {
+      encounter: activePublicEncounter(campaign.id),
+    });
+    noteAtTable(campaign.id, lines);
+  }
+}
+
+// The instances that end because these combatants' turns are starting
+// (Dodge, Shield, the Protection style: untilTurnOf). A condition another
+// source still holds stays.
+function endInstancesBoundTo(
+  conditions: string[],
+  meta: ConditionMetaMap,
+  starting: Set<string>,
+): { conditions: string[]; meta: ConditionMetaMap; ended: string[]; changed: boolean } {
+  let nextConditions = conditions;
+  let nextMeta = meta;
+  const ended: string[] = [];
+  let changed = false;
+  for (const name of conditions) {
+    const result = removeConditionInstances(nextConditions, nextMeta, name, (instance) =>
+      Boolean(instance.untilTurnOf && starting.has(instance.untilTurnOf)),
+    );
+    if (result.removed) {
+      changed = true;
+      nextConditions = result.conditions;
+      nextMeta = result.meta;
+      if (result.ended) {
+        ended.push(name);
+      }
+    }
+  }
+  return { conditions: nextConditions, meta: nextMeta, ended, changed };
 }
 
 function noteAtTable(campaignId: string, lines: string[]) {

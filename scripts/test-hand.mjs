@@ -82,6 +82,8 @@ const caster = (overrides = {}) =>
       prepared: ["Fire Bolt", "Healing Word", "Hold Person", "Shield", "Detect Magic", "Identify"],
       known: [],
     },
+    // A material with no price is a component pouch's (cast-materials.ts).
+    equipment: [{ name: "Component pouch", qty: 1 }],
     ...overrides,
   });
 

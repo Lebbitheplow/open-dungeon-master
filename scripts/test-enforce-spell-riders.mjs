@@ -75,7 +75,7 @@ await test("Power Word Stun stuns a creature of 150 hit points or fewer with no 
 
 // ---- L5: charms with long durations ----
 
-await test("Animal Friendship charms a beast for a day with no repeat save, and Geas until it is ended", async () => {
+await test("Animal Friendship charms a beast for a day with no repeat save, and Geas for thirty days (a year from 7th level, until ended from 9th)", async () => {
   const { world, sheets: [druid], enemies: [beast] } = await table([caster("druid", "wis", ["Animal Friendship", "Geas"])], 1, { type: "beast" });
   world.dice(1);
   await world.invoke("cast_at_enemy", { characterId: druid.id, targetEnemyId: beast.id, spell: "Animal Friendship", saveAbility: "wis", level: 1 });
@@ -86,7 +86,8 @@ await test("Animal Friendship charms a beast for a day with no repeat save, and 
   // Geas takes a minute to cast, so never in a fight: its row is read.
   const geas = spellMechanicsFor({ spell: "Geas" })?.mech.condition;
   assert.equal(geas?.name, "charmed");
-  assert.equal(geas?.rounds, undefined);
+  assert.equal(geas?.rounds, 30 * 14400);
+  assert.deepEqual(geas?.roundsBySlot, [[7, 365 * 14400], [9, null]]);
   assert.equal(geas?.saveEnds, undefined);
 });
 
@@ -185,7 +186,7 @@ await test("a caster whose own Hold Person held nobody any more stops concentrat
   await world.invoke("cast_at_enemy", { characterId: wizard.id, targetEnemyId: a.id, spell: "Hold Person", saveAbility: "wis", level: 2 });
   world.clearDice();
   // A ghoul's claw holds goblin B; goblin A makes its repeat save at the
-  // round's end.
+  // end of its own turn, which is over as the pointer moves on after it.
   const other = enemyOf(world, b.id);
   encounters.patchEnemyConditions(other.id, ["paralyzed"], { paralyzed: { rounds: 50 } });
   const round = world.encounter().round;
@@ -193,6 +194,7 @@ await test("a caster whose own Hold Person held nobody any more stops concentrat
   for (let step = 0; step < 6 && world.encounter().round === round; step += 1) {
     skipCurrentTurn(world.campaignId);
   }
+  skipCurrentTurn(world.campaignId);
   world.clearDice();
   assert.ok(!enemyOf(world, a.id).conditions.includes("paralyzed"));
   assert.equal(world.sheet(wizard.id).concentratingOn ?? null, null);
@@ -310,12 +312,16 @@ await test("the AI DM cannot hand out a spell's effect with set_condition; cast_
   assert.ok(world.sheet(fighter.id).conditions.includes("blessed"));
 });
 
-await test("the human DM console may still set a spell's effect as a correction, and the AI may still set an SRD condition", async () => {
+await test("the human DM console may still set a spell's effect as a correction, and the AI may still set an SRD condition behind its save", async () => {
   const { world, sheets: [fighter] } = await table([FIGHTER]);
   const human = await world.invoke("set_condition", { characterId: fighter.id, condition: "blessed", rounds: 10 });
   assert.equal(human.ok, true, human.error);
-  const prone = await invokeAsAi(world, "set_condition", { characterId: fighter.id, condition: "prone" });
+  // The server rolls the fighter's save first (src/lib/dm/ai-gate.ts).
+  world.dice(1);
+  const prone = await invokeAsAi(world, "set_condition", { characterId: fighter.id, condition: "prone", saveAbility: "dex", saveDc: 15 });
+  world.clearDice();
   assert.equal(prone.ok, true, prone.error);
+  assert.ok(world.sheet(fighter.id).conditions.includes("prone"));
 });
 
 closeTables();

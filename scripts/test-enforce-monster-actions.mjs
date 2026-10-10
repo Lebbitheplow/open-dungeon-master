@@ -18,6 +18,7 @@ const kit = await combatKit(world);
 const mk = await monsterKit(world, kit);
 const encounters = await import("../src/lib/db/encounters.ts");
 const rolls = await import("../src/lib/db/rolls.ts");
+const conditionTick = await import("../src/lib/dm/condition-tick.ts");
 
 const tank = world.addHero({
   name: "Tank", class: "fighter", level: 5, abilities: { str: 16 }, proficiencies: TRAINED,
@@ -94,6 +95,18 @@ function nextRound(...faces) {
   for (let guard = 0; guard < 10 && world.encounter().round === round; guard += 1) {
     assert.equal(kit.endTurn(kit.current().userId), true);
   }
+  const rolled = world.diceLog();
+  world.clearDice();
+  return rolled;
+}
+
+// The save a creature makes to end a condition as its own turn ends
+// (src/lib/dm/condition-tick.ts endTurnSaves), dice forced.
+function turnEndSave(enemyId, ...faces) {
+  world.clearDice();
+  world.diceLog();
+  world.dice(...faces);
+  conditionTick.endTurnSaves(world.campaign(), world.encounter(), [enemyId]);
   const rolled = world.diceLog();
   world.clearDice();
   return rolled;
@@ -266,14 +279,14 @@ await test("An enemy's save to end a condition is its full save: Bane's d4 comes
     conditions: ["paralyzed", "baned"],
     conditionMeta: { paralyzed: { saveEnds: { ability: "wis", dc: 10 } }, baned: { rounds: 5 } },
   });
-  const rolled = nextRound(12, 4);
+  const rolled = turnEndSave(enemy.id, 12, 4);
   assert.ok(rolled.some((die) => die.sides === 4), "Bane's d4 was not rolled on the re-save");
   assert.ok(kit.enemy(enemy.id).conditions.includes("paralyzed"), "12 - 4 made a DC 10 save");
   kit.setEnemy(enemy.id, {
     conditions: ["restrained"],
     conditionMeta: { restrained: { saveEnds: { ability: "dex", dc: 10 } } },
   });
-  const second = nextRound(15, 2);
+  const second = turnEndSave(enemy.id, 15, 2);
   assert.equal(d20Count(second), 2, "a restrained creature's Dexterity re-save was a straight roll");
   assert.ok(kit.enemy(enemy.id).conditions.includes("restrained"));
 });

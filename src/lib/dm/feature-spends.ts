@@ -255,9 +255,10 @@ function turnUndead(
   const byId = new Map(sheets.map((entry) => [entry.id, entry]));
   const outcomes: string[] = [];
   for (const enemy of undead) {
-    const save = rollEnemySave(campaign.id, enemy, "wis", dc);
+    // Turned: a legendary creature spends a resistance to stand its ground.
+    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { resist: true });
     if (save.success) {
-      outcomes.push(`${enemy.displayName} resists (WIS ${save.total} vs DC ${dc}).`);
+      outcomes.push(`${enemy.displayName} resists (WIS ${save.total ?? "failed outright"} vs DC ${dc})${save.legendaryResistance ? " with Legendary Resistance" : ""}.`);
       continue;
     }
     const cr = Number(enemy.stats.cr ?? enemy.cr ?? 99);

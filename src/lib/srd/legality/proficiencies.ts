@@ -8,7 +8,7 @@
 // so they are checked: every pick needs a grant that offers it.
 import type { Ability, ClassEntry, Proficiencies } from "@/lib/schemas/sheet";
 import { findSkill } from "@/lib/srd";
-import { expertiseSlotsFor } from "@/lib/srd/features";
+import { expertiseAllowed, expertiseSlotsFor } from "@/lib/srd/features";
 import { multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { repeatedGrants } from "@/lib/srd/racial-grants";
 import {
@@ -220,7 +220,8 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
   // ---- expertise ----
   const heldExpertise = new Set((held?.expertise ?? []).map(lower));
   const expertise = uniqueNames([...(held?.expertise ?? []), ...(sent.expertise ?? [])].map(lower));
-  const unproficient = expertise.filter((skill) => !skills.includes(skill));
+  const classIds = input.classes.map((entry) => entry.id);
+  const unproficient = expertise.filter((skill) => !expertiseAllowed(skill, skills, classIds));
   if (unproficient.length) {
     problems.push(
       `Expertise doubles a proficiency the character has; ${unproficient.join(", ")} ${unproficient.length === 1 ? "is" : "are"} not among their skills.`,

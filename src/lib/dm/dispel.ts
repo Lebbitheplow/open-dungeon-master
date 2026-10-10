@@ -9,19 +9,16 @@
 // blessed). Reached through cast_at_enemy and cast_buff. Imports mutations
 // (for the slot spend) and must never be imported by it.
 
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { insertRoll } from "@/lib/db/rolls";
-import { d20Expression, rollExpression } from "@/lib/dice";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { computeSheetDerived } from "@/lib/srd";
+import { publishPersisted } from "@/lib/events";
+import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { spellFactsFor, spellMechanicsFor } from "@/lib/content";
 import { MECH_OVERRIDES } from "@/lib/srd/spell-mechanics";
 import { applyDmMutation } from "@/lib/dm/mutations";
-import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { spellEndPatch } from "@/lib/dm/concentration";
+import { instancesOf, removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { spellKey } from "@/lib/dm/spell-effects";
 import { spellReachProblem } from "@/lib/dm/cast-reach";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -55,22 +52,47 @@ function legacySpellOf(condition: string): string | null {
   return null;
 }
 
-type Held = { spell: string; conditions: string[] };
+type Held = { spell: string; key: string; conditions: string[] };
 
-// The spells on a creature, each with the conditions it holds there.
+// One casting's key on a condition instance: the spell and its caster.
+function castingKey(condition: string, instance: ConditionMeta): string | null {
+  const spell = instance.spell ?? legacySpellOf(condition);
+  return spell ? `${spellKey(spell)}|${instance.source ?? ""}` : null;
+}
+
+// The spells on a creature, each casting with the conditions it holds
+// there. Every source's instance counts on its own: two casters' Hold
+// Person are two spells to dispel (src/lib/dm/condition-logic.ts).
 function spellsOn(conditions: string[], meta: ConditionMetaMap): Held[] {
   const bySpell = new Map<string, Held>();
   for (const condition of conditions) {
-    const spell = meta[condition]?.spell ?? legacySpellOf(condition);
-    if (!spell) {
-      continue;
+    for (const instance of instancesOf(meta[condition])) {
+      const key = castingKey(condition, instance);
+      if (!key) {
+        continue;
+      }
+      const spell = instance.spell ?? legacySpellOf(condition) ?? "";
+      const entry = bySpell.get(key) ?? { spell, key, conditions: [] };
+      entry.conditions.push(condition);
+      bySpell.set(key, entry);
     }
-    const key = `${spellKey(spell)}|${meta[condition]?.source ?? ""}`;
-    const entry = bySpell.get(key) ?? { spell, conditions: [] };
-    entry.conditions.push(condition);
-    bySpell.set(key, entry);
   }
   return [...bySpell.values()];
+}
+
+// Takes the ended castings' instances off, leaving every other source's.
+function withoutCastings(conditions: string[], meta: ConditionMetaMap, keys: Set<string>) {
+  let nextConditions = conditions;
+  let nextMeta = meta;
+  for (const name of conditions) {
+    const result = removeConditionInstances(nextConditions, nextMeta, name, (instance) => {
+      const key = castingKey(name, instance);
+      return key !== null && keys.has(key);
+    });
+    nextConditions = result.conditions;
+    nextMeta = result.meta;
+  }
+  return { conditions: nextConditions, meta: nextMeta };
 }
 
 export function handleDispelMagic(
@@ -141,32 +163,28 @@ export function handleDispelMagic(
   }
   const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : 3;
   const ability = caster.spellcasting?.ability ?? "int";
-  const modifier = computeSheetDerived(caster).abilityMods[ability];
   const ended: string[] = [];
+  const endedKeys = new Set<string>();
   const kept: string[] = [];
   const lines: string[] = [];
   for (const entry of held) {
     const level = spellMechanicsFor({ spell: entry.spell, userIds: authors })?.spellLevel ?? 1;
     if (level <= slotLevel) {
       ended.push(...entry.conditions);
+      endedKeys.add(entry.key);
       lines.push(`${entry.spell} (level ${level}) ends.`);
       continue;
     }
     const dc = 10 + level;
-    const outcome = rollExpression(d20Expression(modifier, "none"));
-    const roll = insertRoll({
-      campaignId: campaign.id,
-      characterId: caster.id,
-      requestedBy: "dm",
-      kind: "ability_check",
-      detail: `${ability.toUpperCase()} check to dispel ${entry.spell}`,
-      dc,
-      result: outcome,
-    });
-    turn.rollIds.push(roll.id);
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
-    if (outcome.total >= dc) {
+    // An ability check like any other (src/lib/dm/contest-roll.ts): Jack of
+    // All Trades, Guidance, exhaustion, a held die and Lucky ride it.
+    const outcome = rollCharacterCheck(campaign, caster, { ability, dc }, `Check to dispel ${entry.spell}`);
+    if (outcome.rollId) {
+      turn.rollIds.push(outcome.rollId);
+    }
+    if (!outcome.autoFailed && outcome.total >= dc) {
       ended.push(...entry.conditions);
+      endedKeys.add(entry.key);
       lines.push(`${entry.spell} (level ${level}) ends: check ${outcome.total} vs DC ${dc}.`);
     } else {
       kept.push(...entry.conditions);
@@ -177,17 +195,16 @@ export function handleDispelMagic(
     if (enemy) {
       const fresh = getEnemy(enemy.id);
       if (fresh) {
-        const cleared = removeConditions(fresh.conditions, fresh.conditionMeta, ended);
+        const cleared = withoutCastings(fresh.conditions, fresh.conditionMeta as ConditionMetaMap, endedKeys);
         patchEnemyConditions(fresh.id, cleared.conditions, cleared.meta);
         publishEncounter(campaign.id);
       }
     } else if (ally) {
       const fresh = getSheetById(ally.id) ?? ally;
-      const cleared = removeConditions(fresh.conditions, fresh.conditionMeta, ended);
+      const cleared = withoutCastings(fresh.conditions, fresh.conditionMeta as ConditionMetaMap, endedKeys);
       const updated = patchSheet(fresh.id, {
         conditions: cleared.conditions,
         conditionMeta: cleared.meta,
-        ...spellEndPatch(fresh, ended),
       });
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });

@@ -1,5 +1,5 @@
 import { easeOrdeal } from "@/lib/dm/ordeal";
-import { effectiveMaxHp, pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, pruneMeta, removeConditionInstances, removeConditions } from "@/lib/dm/condition-logic";
 import type { RollResult } from "@/lib/dice";
 import { RAGING } from "@/lib/srd/class-resources";
 import { TENDED } from "@/lib/dm/stabilize";
@@ -140,6 +140,25 @@ export function longRestPatch(
     ]);
     patch.conditions = cleared.conditions;
     patch.conditionMeta = cleared.meta;
+  }
+  // What lasts "until the target finishes a long rest" ends with it: a
+  // wight's Life Drain, a succubus's kiss (condition-logic.ts untilLongRest).
+  {
+    let restedConditions = patch.conditions ?? sheet.conditions;
+    let restedMeta = patch.conditionMeta ?? sheet.conditionMeta;
+    let changed = false;
+    for (const name of restedConditions) {
+      const result = removeConditionInstances(restedConditions, restedMeta, name, (instance) => instance.untilLongRest === true);
+      if (result.removed) {
+        changed = true;
+        restedConditions = result.conditions;
+        restedMeta = result.meta;
+      }
+    }
+    if (changed) {
+      patch.conditions = restedConditions;
+      patch.conditionMeta = restedMeta;
+    }
   }
   // Coming back from the dead eases by one a night (src/lib/dm/ordeal.ts).
   const eased = easeOrdeal(patch.conditions ?? sheet.conditions);

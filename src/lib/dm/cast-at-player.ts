@@ -12,7 +12,8 @@ import { spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
-import { clearSpellConditionsByName } from "@/lib/dm/concentration";
+import { clearSpellConditionsByName, concentrationRoundsFor } from "@/lib/dm/concentration";
+import { durationArgsFor } from "@/lib/dm/condition-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
@@ -85,7 +86,7 @@ export function trackEnemyConcentration(
   if (enemy.concentration && enemy.concentration.toLowerCase() !== resolved.name.toLowerCase()) {
     clearSpellConditionsByName(campaign, enemy.concentration, undefined, enemy.id);
   }
-  setEnemyConcentration(enemy.id, resolved.name);
+  setEnemyConcentration(enemy.id, resolved.name, concentrationRoundsFor(resolved.name));
   return `${enemy.displayName} is now concentrating on ${resolved.name}; damage to it forces a CON save and a break ends the effect.`;
 }
 
@@ -129,6 +130,16 @@ export function layEnemyCondition(
       ),
     });
   }
+  // The block's own words for how long it lasts (monster-abilities.ts): a
+  // count, a repeat save, a long rest, or a cure. Only a condition the block
+  // gives no word for at all falls back to a save each turn, so it cannot
+  // last forever by omission.
+  const lasting = Boolean(use?.untilLongRest || use?.lasting);
+  if (use?.untilLongRest) {
+    return handleSetCondition(campaign, turn.id, fresh, { condition, sourceEnemyId: use.enemy.id }, reason, {
+      spellEffect: { source: use.enemy.id, untilLongRest: true },
+    });
+  }
   return applyDmMutation(
     campaign,
     turn.id,
@@ -136,8 +147,8 @@ export function layEnemyCondition(
     JSON.stringify({
       characterId: sheet.id,
       condition,
-      ...(timing.rounds ? { rounds: timing.rounds } : {}),
-      ...(timing.saveEnds || !timing.rounds ? { saveAbility: save.ability, saveDc: save.dc } : {}),
+      ...(timing.rounds ? durationArgsFor(timing.rounds) : {}),
+      ...(timing.saveEnds || (!timing.rounds && !lasting) ? { saveAbility: save.ability, saveDc: save.dc } : {}),
       ...(use ? { sourceEnemyId: use.enemy.id } : {}),
       reason,
     }),
@@ -381,8 +392,8 @@ export function handleCastAtPlayer(
     if (!("error" in applied)) {
       base.conditionApplied = condition;
       base.duration = rounds
-        ? `${rounds} round${rounds === 1 ? "" : "s"}${saveEnds ? `, or until a successful ${ability.toUpperCase()} save (DC ${dc}) at the end of a round` : ""}`
-        : `until they succeed on a ${ability.toUpperCase()} save (DC ${dc}) at the end of a round`;
+        ? `${rounds} round${rounds === 1 ? "" : "s"}${saveEnds ? `, or until a successful ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns` : ""}`
+        : `until they succeed on a ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns`;
     }
   }
   if (saved && conditionName) {

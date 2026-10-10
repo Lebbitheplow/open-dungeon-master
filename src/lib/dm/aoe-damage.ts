@@ -2,6 +2,10 @@
 // spell planned by aoe-spell.ts, an enemy's breath or spell by enemy-casting.ts,
 // a trap). Split out of encounter-tools-extra.ts; never imports encounter-tools.
 
+import { magicImmunityProblem } from "@/lib/dm/monster-traits";
+import { abilityAreaShape, areaProblem, spellAreaShape } from "@/lib/dm/aoe-shape";
+import { spellFactsFor } from "@/lib/content";
+import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import { elementalAdeptApplies, floorDamageDice } from "@/lib/srd/feat-combat";
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
@@ -23,7 +27,7 @@ import { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { afterEnemySave, concentrationShaken, layAreaConditions, spellAutoSave, spellSaveOptions } from "@/lib/dm/spell-riders";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { getSheetById } from "@/lib/db/sheets";
-import { rollEnemySave } from "@/lib/dm/forced-save";
+import { rollEnemySave, settleFailedSave } from "@/lib/dm/forced-save";
 import { aoeOnCharacters } from "@/lib/dm/aoe-characters";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -216,6 +220,7 @@ export function handleAoeDamage(
       reason: args.reason,
       enemies: enemyTargets,
       characters: pcTargets,
+      ...zonePlacement(args),
     });
     if ("error" in planned) {
       return planned;
@@ -225,6 +230,14 @@ export function handleAoeDamage(
     if (isPrismaticSpray(planned.runsAs ?? planned.spell)) {
       const results = castPrismaticSpray({ campaign, turn, caster: planned.caster, dc: planned.dc, enemies: enemyTargets, characters: pcTargets.filter((sheet) => !planned.sculpted.includes(sheet.id)), sheets, sheetsById });
       return { ok: true, spell: planned.spell, caster: planned.caster.name, dc: planned.dc, saveAbility: "dex", results, ...(planned.corrections.length ? { corrected: planned.corrections } : {}), ...(skippedDead.length ? { skippedDead } : {}) };
+    }
+    // Limited Magic Immunity (the rakshasa): the area washes over it.
+    const level = args.level ?? spellFactsFor(planned.spell)?.level ?? 0;
+    for (const enemy of [...enemyTargets]) {
+      if (magicImmunityProblem(enemy, planned.spell, level)) {
+        enemyTargets.splice(enemyTargets.indexOf(enemy), 1);
+        corrections.push(`${enemy.displayName} is unaffected: Limited Magic Immunity turns aside spells of its level or lower.`);
+      }
     }
     args.damage = planned.damage ?? undefined;
     args.saveAbility = planned.saveAbility;
@@ -264,6 +277,24 @@ export function handleAoeDamage(
     }
     if (args.damage === undefined && !prepared.condition && !zoneRowFor(prepared.name)) {
       return { error: `${prepared.name} forces no save with damage or a condition on ${prepared.enemy.displayName}'s block; narrate what it does, or use its attacks.` };
+    }
+    // One breath, one cone: everyone caught fits one placement of the shape
+    // the block prints (src/lib/dm/aoe-shape.ts).
+    const area = args.ability ? abilityAreaShape(prepared.enemy.stats, args.ability) : args.spell ? spellAreaShape(args.spell) : null;
+    if (area) {
+      const problem = areaProblem({
+        encounterId: encounter.id,
+        casterId: prepared.enemy.id,
+        casterName: prepared.enemy.displayName,
+        label: prepared.name,
+        area,
+        rangeFeet: args.spell ? (spellFactsFor(args.spell)?.range.kind === "feet" ? (spellFactsFor(args.spell)?.range as { feet: number }).feet : null) : null,
+        creatures: [...enemyTargets.map((enemy) => ({ id: enemy.id, name: enemy.displayName })), ...pcTargets.map((sheet) => ({ id: sheet.id, name: sheet.name }))].filter((entry) => entry.id !== prepared.enemy.id),
+        ...zonePlacement(args),
+      });
+      if (problem) {
+        return { error: problem };
+      }
     }
     prepared.commit();
   }
@@ -363,6 +394,9 @@ export function handleAoeDamage(
       ? null
       : rollEnemySave(campaign.id, enemy, ability, saveDc, {
           magical: Boolean(plan) || Boolean(enemyUse?.magical),
+          // A legendary creature spends a resistance on an area's binding
+          // condition, as it would on one cast at it alone (legendary-logic.ts).
+          resist: Boolean(plan?.conditions.length) && bindsWorthResisting(plan?.conditions ?? [], Boolean(plan?.mech?.condition?.endsWith)),
           ...(plan ? spellSaveOptions(plan.mech, enemy) : {}),
           ...(plan ? { record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${plan.spell}` } } : {}),
         });
@@ -375,8 +409,13 @@ export function handleAoeDamage(
       success,
       damage: damageTaken,
     };
+    if (save?.legendaryResistance) {
+      row.legendaryResistance = `${enemy.displayName} spends a Legendary Resistance: the failed save becomes a success.`;
+    }
+    let laid: string[] = [];
     if (!success && plan?.conditions.length) {
       const landed = layAreaConditions(plan, enemy.id, { ability, dc: saveDc });
+      laid = landed;
       if (landed.length) {
         row.conditionApplied = landed.join(", ");
         publishEncounter(campaign.id);
@@ -414,6 +453,17 @@ export function handleAoeDamage(
           ...(applied.xpAwarded ? { xpAwarded: applied.xpAwarded } : {}),
         };
       }
+    }
+    // What the failure cost, so legendary_resist can settle it as a success
+    // (src/lib/dm/legendary-tools.ts): the conditions and the hit points a
+    // success would have spared.
+    if (save && !success) {
+      const lost = Math.max(0, hpBefore - (getEnemy(enemy.id)?.currentHp ?? hpBefore));
+      settleFailedSave(campaign.id, enemy.id, {
+        conditions: laid,
+        ...(plan ? { spell: plan.spell, source: plan.caster.id } : {}),
+        refund: halfOnSave ? lost - Math.floor(lost / 2) : lost,
+      });
     }
     // Bestow Curse's necrotic on its caster's spell (src/lib/dm/spell-retort.ts).
     const cursed = plan && damageTaken > 0 && !row.dead ? curseBurn(campaign, turn, enemy.id, plan.caster.id, sheets, sheetsById) : null;

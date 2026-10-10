@@ -1,6 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
-import { effectiveMaxHp } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, maxHpRiders, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
 import { XP_THRESHOLDS, deriveAc } from "@/lib/srd";
@@ -65,6 +65,7 @@ type SheetRow = {
   exhaustion: number | null;
   death_saves_json: string | null;
   concentrating_on: string | null;
+  concentration_rounds?: number | null;
   portrait_json: string | null;
   notes: string;
   backstory: string | null;
@@ -144,6 +145,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     exhaustion: row.exhaustion ?? 0,
     deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),
     concentratingOn: row.concentrating_on ?? null,
+    concentrationRounds: row.concentration_rounds ?? null,
     portrait: parseJson<CharacterSheet["portrait"]>(row.portrait_json, null),
     notes: row.notes,
     backstory: row.backstory ?? "",
@@ -164,7 +166,7 @@ const SHEET_COLUMNS = `
   abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed, hit_dice_json,
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
-  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on,
+  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
   portrait_json, notes, backstory, is_companion, companion_kind, personality, created_at, updated_at
 `;
 
@@ -295,7 +297,7 @@ export function createSheet(
   const acOverride = input.acOverride ?? true;
   // Homebrew armour is read with its mechanics, so a sheet created in it
   // stores its armor class at once.
-  const equipment = capAttunement(input.equipment ?? [], input);
+  const equipment = capAttunement(input.equipment ?? [], { ...input, level });
   const ac = acOverride
     ? input.ac
     : deriveAc({
@@ -636,6 +638,13 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     deathSaves: patch.deathSaves !== undefined ? patch.deathSaves : existing.deathSaves,
     concentratingOn:
       patch.concentratingOn !== undefined ? patch.concentratingOn : existing.concentratingOn,
+    // A new spell (or none) starts with no clock unless the patch sets one.
+    concentrationRounds:
+      patch.concentrationRounds !== undefined
+        ? patch.concentrationRounds
+        : patch.concentratingOn !== undefined && patch.concentratingOn !== existing.concentratingOn
+          ? null
+          : (existing.concentrationRounds ?? null),
     feats: patch.feats ?? existing.feats,
     features: patch.features ?? existing.features,
     subclass: usingClasses ? classes[0].subclass : (patch.subclass ?? existing.subclass),
@@ -695,6 +704,25 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     );
   }
 
+  // Maximum hit points that ride conditions (Aid, Heroes' Feast, a Life
+  // Drain): the stored maximum follows them whichever route adds or removes
+  // the condition (a cast, a clear_condition, an expiry, a rest, a lead's
+  // edit), so a recast never stacks and an ending never leaves the bonus
+  // behind (src/lib/dm/condition-logic.ts maxHpRiders). A bonus that lands
+  // raises the current hit points with it (SRD 5.1, Aid).
+  if (patch.conditions !== undefined || patch.conditionMeta !== undefined) {
+    const before = maxHpRiders(existing.conditions, existing.conditionMeta as ConditionMetaMap);
+    const after = maxHpRiders(next.conditions, next.conditionMeta as ConditionMetaMap);
+    const bonusDelta = after.bonus - before.bonus;
+    const drainDelta = after.drain - before.drain;
+    if (bonusDelta || drainDelta) {
+      next.maxHp = Math.max(1, next.maxHp + bonusDelta - drainDelta);
+      if (bonusDelta > 0) {
+        next.currentHp = next.currentHp + bonusDelta;
+      }
+    }
+  }
+
   // The armor engine owns the AC unless a human pinned it: buying a
   // breastplate, equipping a shield, or gaining Unarmored Defense changes
   // the number here rather than waiting for someone to retype it.
@@ -729,7 +757,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           speed = ?, abilities_json = ?, proficiencies_json = ?,
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, ac_override = ?, xp = ?, level = ?,
           gold = ?, copper = ?, conditions_json = ?, condition_meta_json = ?, resources_json = ?, equipment_json = ?, hit_dice_json = ?,
-          spellcasting_json = ?, wild_shape_json = ?, pets_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
+          spellcasting_json = ?, wild_shape_json = ?, pets_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?, concentration_rounds = ?,
           feats_json = ?, features_json = ?, subclass = ?,
           classes_json = ?, hit_dice_pools_json = ?,
           portrait_json = ?, notes = ?, backstory = ?, updated_at = ?
@@ -767,6 +795,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.exhaustion,
       next.deathSaves ? JSON.stringify(next.deathSaves) : null,
       next.concentratingOn,
+      next.concentratingOn ? (next.concentrationRounds ?? null) : null,
       JSON.stringify(next.feats),
       JSON.stringify(next.features),
       next.subclass,

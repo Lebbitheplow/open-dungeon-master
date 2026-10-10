@@ -3,6 +3,8 @@
 // cast for real once the attack can no longer be refused. Split from
 // pc-attack.ts, which decides when each half runs.
 
+import { magicImmunityProblem } from "@/lib/dm/monster-traits";
+import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -54,6 +56,14 @@ export function checkAttackSpell(input: {
       return { refused: check };
     }
     spellSlotLevel = typeof check.slotLevel === "number" ? check.slotLevel : null;
+    // Limited Magic Immunity (the rakshasa): a spell of its level or lower
+    // never touches it (src/lib/dm/monster-traits.ts).
+    const live = getActiveEncounter(campaign.id);
+    const target = live && args.targetEnemyId ? resolveEnemyRef(live.id, args.targetEnemyId) : null;
+    const shrugged = target ? magicImmunityProblem(target, args.spell ?? "the spell", spellSlotLevel ?? 0) : null;
+    if (shrugged) {
+      return { refused: { error: shrugged } };
+    }
   }
   if (kind === "spell") {
     profile = spellAttackReach(campaign, sheet, args.spell ?? "", profile, spellSlotLevel);

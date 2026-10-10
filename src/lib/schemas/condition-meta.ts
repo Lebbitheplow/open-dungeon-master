@@ -4,15 +4,16 @@
 import { z } from "zod";
 import { ABILITIES } from "@/lib/schemas/abilities";
 
-// Duration/save metadata for active conditions, keyed by condition name.
-// Lives NEXT TO the plain `conditions` string list so its consumers never
-// change; the server maintains both together (src/lib/dm/condition-logic.ts).
-export const conditionMetaSchema = z.record(
-  z.string().max(40),
-  z.object({
+// The longest lifetime a count of rounds can hold: a year. Spells that last
+// days (Geas's thirty, Contagion's seven) are counted in rounds like every
+// other duration, ten to the minute; "until dispelled" carries no count.
+export const ROUND_CEILING = 365 * 24 * 60 * 10;
+
+// One instance of a condition: its lifetime, its source, what ends it.
+const conditionInstanceSchema = z.object({
     // Rounds left. A long duration is stored in rounds too (Mage Armor's
-    // eight hours is 4800), so the ceiling is a day's worth.
-    rounds: z.number().int().min(1).max(14400).optional(),
+    // eight hours is 4800, Geas's thirty days 432000).
+    rounds: z.number().int().min(1).max(ROUND_CEILING).optional(),
     // What put the condition there: the spell, feature or hazard by name.
     source: z.string().trim().min(1).max(80).optional(),
     // Set by the engine on a condition it has renewed (a rage kept going).
@@ -60,6 +61,19 @@ export const conditionMetaSchema = z.record(
     // A monster's grapple prints its escape DC, which the escape is rolled
     // against instead of a contest (src/lib/dm/grapple.ts).
     escapeDc: z.number().int().min(1).max(40).optional(),
+    // Ends when the creature finishes a long rest (Life Drain, Draining Kiss).
+    untilLongRest: z.boolean().optional(),
+});
+
+// Duration/save metadata for active conditions, keyed by condition name.
+// Lives NEXT TO the plain `conditions` string list so its consumers never
+// change; the server maintains both together (src/lib/dm/condition-logic.ts).
+// `others` holds further sources of the same condition, each with its own
+// lifetime (two casters' Hold Person): the condition holds while any does.
+export const conditionMetaSchema = z.record(
+  z.string().max(40),
+  conditionInstanceSchema.extend({
+    others: z.array(conditionInstanceSchema).max(12).optional(),
   }),
 );
 export type ConditionMetaMap = z.infer<typeof conditionMetaSchema>;

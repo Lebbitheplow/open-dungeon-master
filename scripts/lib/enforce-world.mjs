@@ -203,6 +203,13 @@ export async function openWorld(options = {}) {
     }
     const rest = Object.fromEntries(Object.entries(overrides).filter(([key]) => key !== "user"));
     const input = heroInput({ name: `Hero ${heroes}`, ...rest });
+    // A caster at the table carries a component pouch, as the class's
+    // starting gear gives one, so a material with no price is to hand
+    // (src/lib/dm/cast-materials.ts focusProblem). A test about the pouch
+    // removes it.
+    if (input.spellcasting && !input.equipment.some((item) => /component pouch/i.test(item.name ?? ""))) {
+      input.equipment = [...input.equipment, { name: "Component pouch", qty: 1 }];
+    }
     return sheets.createSheet(campaignId, user.id, overrides.level ?? 1, input);
   }
 
@@ -297,6 +304,31 @@ export async function openWorld(options = {}) {
         content,
         ...(sheet ? { userId: sheet.userId, characterId: sheet.id } : {}),
       }),
+    // A hit the server has just recorded on a character (last-hit.ts), the
+    // trigger a reaction such as Shield or Absorb Elements answers: one swing
+    // of `total` against `vsAc` that dealt `raw` of `type`.
+    hitBy: async (sheetId, { enemyId = null, name = "Goblin", total = 15, vsAc = 12, raw = 0, type = "slashing", attack = "Scimitar" } = {}) => {
+      const lastHit = await import("../../src/lib/dm/last-hit.ts");
+      const active = encounters.getActiveEncounter(campaignId);
+      const sheet = sheets.getSheetById(sheetId);
+      const at = new Date().toISOString();
+      lastHit.writeLastHit(campaignId, {
+        characterId: sheetId,
+        encounterId: active?.id ?? null,
+        turn: active ? encounters.turnKey(active) : "",
+        attacker: { kind: "enemy", id: enemyId, name },
+        attack,
+        type,
+        ranged: false,
+        source: "attack",
+        swings: [{ total, faces: [total], natural: total, advantage: "none", vsAc, hit: total >= vsAc, crit: false, raw, type }],
+        before: lastHit.snapshotVitals(campaignId, sheet),
+        after: { currentHp: sheet.currentHp, tempHp: sheet.tempHp, beastHp: null },
+        answered: [],
+        startedAt: at,
+        at,
+      });
+    },
     // Sign a user in for a route handler called directly.
     signIn: (user) => {
       globalThis.__odmTestToken = mintSession(user.id).token;

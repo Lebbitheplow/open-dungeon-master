@@ -44,8 +44,14 @@ export type MonsterAbility = {
   damageType?: string;
   halfOnSave?: boolean;
   condition?: string;
-  // "for 1 minute" is 10 rounds; "until the end of its next turn" is 1.
+  // "for 1 minute" is 10 rounds; "until the end of its next turn" is 1;
+  // "for 1 hour" 600, "for 24 hours" a day's 14400.
   rounds?: number;
+  // "until the target finishes a long rest" (a succubus's kiss).
+  untilLongRest?: boolean;
+  // "until it is removed by the lesser restoration spell", "until freed by
+  // greater restoration": no count and no repeat save; a cure ends it.
+  lasting?: boolean;
   // The target repeats the save each round to end the condition.
   repeatSave?: boolean;
   // The ability says it is magic ("against this magic"), which Magic
@@ -94,15 +100,17 @@ export function parseSaveEffect(text: string): Omit<MonsterAbility, "name" | "re
     const word = condition[1].toLowerCase();
     out.condition = word === "knocked prone" ? "prone" : word;
   }
-  if (/for 1 minute/i.test(text)) {
-    out.rounds = 10;
-  } else if (/until the end of (?:its|the [a-z' ]+?'s|your) next turn/i.test(text)) {
+  const span = /for (\d{1,3}) (round|minute|hour|day)s?\b/i.exec(text);
+  if (/until the end of (?:its|the [a-z' ]+?'s|your) next turn/i.test(text)) {
     out.rounds = 1;
-  } else {
-    const rounds = /for (\d{1,2}) rounds?/i.exec(text);
-    if (rounds) {
-      out.rounds = Number(rounds[1]);
-    }
+  } else if (span) {
+    const count = Number(span[1]);
+    const unit = span[2].toLowerCase();
+    out.rounds = unit === "round" ? count : unit === "minute" ? count * 10 : unit === "hour" ? count * 600 : count * 14400;
+  } else if (/until (?:it|the target|the creature)(?:'s)? (?:finishes|completes) a long rest/i.test(text)) {
+    out.untilLongRest = true;
+  } else if (/until (?:it is |the (?:target|creature) is )?(?:removed|cured|freed|ended)\b/i.test(text)) {
+    out.lasting = true;
   }
   if (/repeat the saving throw/i.test(text)) {
     out.repeatSave = true;
@@ -481,4 +489,4 @@ export function hasTrait(stats: { traits?: string[] } | undefined, flag: TraitFl
 
 // Trait names statblock.ts keeps whatever the cap on trait lines, because
 // the engine reads them.
-export const ENGINE_TRAIT_NAMES = /^(magic resistance|pack tactics|nimble escape|sunlight sensitivity|undead fortitude|regeneration|magic weapons|legendary resistance|spellcasting|innate spellcasting|keen (?:sight|hearing|smell|senses))\b/i;
+export const ENGINE_TRAIT_NAMES = /^(magic resistance|pack tactics|nimble escape|sunlight sensitivity|undead fortitude|regeneration|magic weapons|legendary resistance|spellcasting|innate spellcasting|keen (?:sight|hearing|smell|senses)|(?:acid|cold|fire|lightning|thunder) absorption|immutable form|limited magic immunity|martial advantage|surprise attack)\b/i;

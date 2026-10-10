@@ -14,6 +14,7 @@ import { patchSheet } from "@/lib/db/sheets";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import { survivorTended } from "@/lib/srd/feat-combat";
 import { removeConditions } from "@/lib/dm/condition-logic";
+import { stableDeathTrack } from "@/lib/dm/death-logic";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
@@ -243,7 +244,8 @@ export function handleStabilize(
     };
   }
   const wait = rollStableTimer(campaign, sheet);
-  const nextTrack = { ...track, stable: true };
+  // Stable resets both counts (SRD 5.1, Stabilizing a Creature).
+  const nextTrack = stableDeathTrack();
   write(campaign, turnId, sheet, "stabilize", { deathSaves: nextTrack, healer: healer.name }, reason, {
     deathSaves: nextTrack,
     conditions: wait.conditions,

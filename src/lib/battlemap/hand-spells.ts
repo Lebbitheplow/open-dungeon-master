@@ -2,7 +2,7 @@
 // 5.2): what a prepared spell or a limited-use feature costs, rolls and
 // spends, read from the same tables the cast and use_resource tools read.
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { casterStateProblem, componentProblem, materialPlan, slotPlan, turnCharge } from "@/lib/dm/cast-rules";
+import { casterStateProblem, componentProblem, focusProblem, materialPlan, slotPlan, turnCharge } from "@/lib/dm/cast-rules";
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
 import { resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
@@ -237,7 +237,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   // costly material neither carried nor affordable, no slot, and the
   // bonus-action spell rule.
   const problem = (text: string | null, spent = false): Gate => (text ? { reason: text, spent } : null);
-  const material = materialPlan(sheet, facts);
+  const material = materialPlan(sheet, facts, { inFight: true, slotLevel: slot?.level ?? fact.level });
   const slotRefusal = fact.level > 0 && !slot ? slotPlan(sheet, name, facts, fact.level) : null;
   const charge = turnCharge({
     who: sheet.name,
@@ -291,7 +291,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     card,
     standingGate(sheet, turn, cost === "reaction" ? "reaction" : "cast"),
     problem(casterStateProblem(sheet)),
-    problem(componentProblem(sheet, facts)),
+    problem(componentProblem(sheet, facts) ?? focusProblem(sheet, facts)),
     // A reaction spell needs a reaction to spend (slowed takes it away).
     cost === "reaction" ? costGate("reaction", turn, sheet, name) : null,
     "error" in material ? { reason: material.error, spent: false } : null,

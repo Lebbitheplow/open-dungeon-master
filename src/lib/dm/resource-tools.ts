@@ -19,7 +19,7 @@ import { incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { classLevelFor, classListFor } from "@/lib/srd/multiclass";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { consumableEffect, findCarriedItem } from "@/lib/dm/item-logic";
-import { kiTechnique, spendKiTechnique } from "@/lib/dm/bonus-actions";
+import { kiTechnique, spendKiTechnique, spendQuickenedSpell } from "@/lib/dm/bonus-actions";
 import { removeItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { holdsMote } from "@/lib/srd/authored-effects-more";
@@ -287,6 +287,9 @@ export function computeUseResource(
   // "convert my 3rd-level slot into points"); a plain spend (Metamagic)
   // passes no variant and falls through to the generic path below.
   if (def.id === "sorcery_points") {
+    if (/quicken/i.test(variant ?? "")) {
+      return spendQuickenedSpell(campaign, sheet, state);
+    }
     const conversion = parseFontOfMagic(variant);
     if (conversion) {
       return computeFontOfMagic(sheet, def.displayName, state, conversion);

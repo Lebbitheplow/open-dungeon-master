@@ -4,7 +4,7 @@
 //
 //   - Holy Nimbus (Oath of Devotion 20, SRD 5.1): "you have advantage on
 //     saving throws against spells cast by fiends or undead."
-//   - An enemy's repeat save (a save-ends condition at the round wrap, a
+//   - An enemy's repeat save (a save-ends condition at the end of its turn, a
 //     running spell's save as its turn starts) is a roll like any other: it is
 //     kept as a roll row only the DM sees.
 import assert from "node:assert/strict";
@@ -72,14 +72,14 @@ await test("A paladin under Holy Nimbus has advantage on saving throws against s
 
 // ---- an enemy's repeat saves are on the record ----
 
-await test("An enemy's repeat save against a save-ends condition at the round wrap is kept as a roll row only the DM sees, naming the creature and the condition.", async () => {
+await test("An enemy's repeat save against a save-ends condition at the end of its turn is kept as a roll row only the DM sees, naming the creature and the condition.", async () => {
   const [enemy] = await stage(devoted);
   kit.setEnemy(enemy.id, {
     conditions: ["restrained"],
     conditionMeta: { restrained: { saveEnds: { ability: "str", dc: 30 } } },
   });
   const before = new Set(kit.lastRolls(60).map((roll) => roll.id));
-  conditionTick.tickEncounterConditions(world.campaign(), world.encounter());
+  conditionTick.endTurnSaves(world.campaign(), world.encounter(), [enemy.id]);
   const made = kit.lastRolls(60).filter((roll) => !before.has(roll.id));
   const row = made.find((roll) => roll.kind === "saving_throw" && roll.characterId === null);
   assert.ok(row, "no roll row for the enemy's repeat save");

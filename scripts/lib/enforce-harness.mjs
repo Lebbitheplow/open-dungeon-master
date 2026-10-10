@@ -10,8 +10,11 @@
 //   test(name, fn)   The rule is enforced today. A throw fails the suite.
 //
 //   gap(id, meta, fn)   The rule is NOT enforced today, and fn asserts what
-//     enforcing it would look like. A throw is the expected result and is
-//     recorded as a finding; the suite stays green. The moment fn stops
+//     enforcing it would look like. A failed assertion is the expected
+//     result and is recorded as a finding; the suite stays green. Any other
+//     throw (a TypeError, a missing fixture, a refused setup call) is the
+//     test breaking, not the rule, and FAILS the suite: a broken setup must
+//     not pass for an open gap. The moment fn stops
 //     throwing the suite FAILS, naming the gap as closed, so a fix cannot
 //     land without its gap() becoming a test(). That is the ratchet: the
 //     list of gaps in these files is always the true list.
@@ -62,6 +65,10 @@ export function suite(name) {
     try {
       await fn();
     } catch (error) {
+      if (error?.name !== "AssertionError" && error?.code !== "ERR_ASSERTION") {
+        failures.push({ label: `${id} (the gap's setup threw, not its assertion)`, error });
+        return;
+      }
       gaps.push({
         suite: name,
         id,

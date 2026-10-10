@@ -132,7 +132,8 @@ await test("three successes stabilize, and they need not be consecutive", async 
   for (const face of [12, 4, 15, 7, 10]) {
     pass(face);
   }
-  assert.deepEqual(track(), { successes: 3, failures: 2, stable: true, dead: false });
+  // Stable resets both counts (SRD 5.1, Death Saving Throws).
+  assert.deepEqual(track(), { successes: 0, failures: 0, stable: true, dead: false });
   assert.equal(hp(), 0);
 });
 
@@ -233,7 +234,8 @@ await test("stabilize stops the saves and leaves the character at 0", async () =
   assert.equal(out.ok, true, out.error);
   assert.deepEqual(tended.dice, ["d20:10", "d4:3"]);
   assert.equal(world.encounter().turnBudget.actionUsed, true);
-  assert.deepEqual(track(), { successes: 0, failures: 2, stable: true, dead: false });
+  // Stable resets both counts, the failures already taken included.
+  assert.deepEqual(track(), { successes: 0, failures: 0, stable: true, dead: false });
   assert.equal(hp(), 0);
   assert.deepEqual(pass(), []);
   const swing = await kit.swing([17, 4], hero.id, goblin.id);

@@ -220,6 +220,11 @@ export function contentSlug(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// A pack row spells its flags "yes" and "no" (both truthy); a homebrew row
+// keeps booleans.
+const flagged = (value: unknown) =>
+  value === true || value === 1 || (typeof value === "string" && /^(yes|true)$/i.test(value.trim()));
+
 // The one-line summary shown under a spell's name in a picker: level, school
 // and the flags that change how it is cast.
 export function spellSummary(data: Record<string, unknown> | undefined): string {
@@ -234,8 +239,8 @@ export function spellSummary(data: Record<string, unknown> | undefined): string 
     level === 0 ? `${school} cantrip` : `level ${level} ${school}`.trim(),
     String(data.casting_time ?? ""),
     String(data.range ?? ""),
-    data.concentration ? "concentration" : "",
-    data.ritual ? "ritual" : "",
+    flagged(data.concentration) ? "concentration" : "",
+    flagged(data.ritual) ? "ritual" : "",
   ].filter(Boolean);
   return parts.join(" · ");
 }

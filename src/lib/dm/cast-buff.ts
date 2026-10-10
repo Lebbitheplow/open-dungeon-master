@@ -318,7 +318,6 @@ export function handleCastBuff(
     const fresh = getSheetById(target.id) ?? target;
     // Heroes' Feast rolls each diner's 2d10; it rides in the name as Aid's does.
     const feast = resolvedMech.mech.maxHpDice ? rollCard(campaign, turn, target.id, "custom", `${args.spell}: ${target.name}'s hit point maximum`, resolvedMech.mech.maxHpDice, null).total : 0;
-    const gain = maxHpGain || feast;
     const outcome = handleSetCondition(
       campaign,
       turn.id,
@@ -331,15 +330,8 @@ export function handleCastBuff(
       continue;
     }
     applied.push(target.name);
-    if (gain) {
-      const now = getSheetById(target.id);
-      if (now) {
-        const raised = patchSheet(now.id, { maxHp: now.maxHp + gain, currentHp: now.currentHp + gain });
-        if (raised) {
-          publishPersisted(campaign.id, "sheet_updated", { sheet: raised });
-        }
-      }
-    }
+    // The maximum (and the current hit points with it) follows the
+    // condition from here: src/lib/db/sheets.ts patchSheet, maxHpRiders.
     if (polymorphForm) {
       // The whole stat block lands: beast HP pool, every ability score
       // (a polymorphed mind is the beast's), speed, and natural attacks.

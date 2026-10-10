@@ -27,7 +27,9 @@ import { INSPIRATION_SPEND, spendInspirationCounter } from "@/lib/dm/roll-riders
 import { inDirectSunlight } from "@/lib/dm/sunlight";
 import { obscuredFor } from "@/lib/dm/zone-rules";
 import { hasSunlightSensitivity, holdsFeature } from "@/lib/srd/trait-rules";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
+import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { spendResistance } from "@/lib/dm/legendary-logic";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { pcMoveBudget } from "@/lib/battlemap/view";
 import { speedToTiles } from "@/lib/battlemap/movement";
@@ -103,13 +105,78 @@ export type ForcedSave = {
   total: number | null;
   autoFailed: boolean;
   notes: string[];
+  // The kept d20 face, for the callers that read a natural roll.
+  natural?: number;
+  // The dice as rolled, for a caller that shows the save as its own card.
+  result?: ReturnType<typeof rollExpression>;
+  // A creature's Legendary Resistance turned the failure into a success.
+  legendaryResistance?: boolean;
+};
+
+// Spends one of a legendary creature's resistances; false when it has none
+// left (or none at all).
+export function spendLegendaryResistance(campaignId: string, enemyId: string): boolean {
+  const encounter = getActiveEncounter(campaignId);
+  const pool = encounter?.legendary.pools[enemyId];
+  const spent = pool ? spendResistance(pool) : null;
+  if (!encounter || !spent) {
+    return false;
+  }
+  encounter.legendary.pools[enemyId] = spent;
+  saveEncounter(encounter);
+  publishPersisted(campaignId, "encounter_updated", { encounter: activePublicEncounter(campaignId) });
+  return true;
+}
+
+// The last save a legendary creature failed, kept so legendary_resist can
+// turn exactly that failure into a success and undo what it did
+// (src/lib/dm/legendary-tools.ts). The callers that settle the failure add
+// what it cost (settleFailedSave).
+function noteFailedSave(campaignId: string, enemyId: string, detail: string) {
+  const encounter = getActiveEncounter(campaignId);
+  if (!encounter?.legendary.pools[enemyId]) {
+    return;
+  }
+  encounter.legendary.failedSave = { enemyId, round: encounter.round, detail: detail.slice(0, 160) };
+  saveEncounter(encounter);
+}
+
+// What the failed save just noted cost the creature: the conditions it laid
+// (with the spell that laid them) and the hit points a success would have
+// spared it.
+export function settleFailedSave(
+  campaignId: string,
+  enemyId: string,
+  cost: { conditions?: string[]; spell?: string; source?: string; refund?: number },
+) {
+  const encounter = getActiveEncounter(campaignId);
+  const failed = encounter?.legendary.failedSave;
+  if (!encounter || !failed || failed.enemyId !== enemyId || failed.resisted) {
+    return;
+  }
+  encounter.legendary.failedSave = {
+    ...failed,
+    conditions: [...(failed.conditions ?? []), ...(cost.conditions ?? [])],
+    ...(cost.spell ? { spell: cost.spell } : {}),
+    ...(cost.source ? { source: cost.source } : {}),
+    refund: (failed.refund ?? 0) + Math.max(0, cost.refund ?? 0),
+  };
+  saveEncounter(encounter);
+}
+
+// What a few saves add beyond the shared riders: Battle Caster's expertise
+// die on a concentration save, Starry Form's floor under the d20.
+export type SaveExtra = {
+  die?: string;
+  floor?: number;
 };
 
 // A character's forced save, rolled, published as a dice card and recorded
-// on the turn.
+// on the turn (when there is one: a save the clock or a damage hook rolls has
+// none).
 export function rollCharacterSave(
   campaign: Campaign,
-  turn: DmTurn,
+  turn: DmTurn | null,
   stale: CharacterSheet,
   ability: SaveAbility,
   dc: number,
@@ -124,6 +191,7 @@ export function rollCharacterSave(
   // The effect targets this character alone (a spell cast at them, not an
   // area): Shield Master adds the shield's AC bonus to the Dexterity save.
   single?: boolean,
+  extra?: SaveExtra,
 ): ForcedSave {
   const sheet = getSheetById(stale.id) ?? stale;
   const shieldSave = single && ability === "dex" ? shieldMasterSaveBonus(sheet) : 0;
@@ -150,17 +218,23 @@ export function rollCharacterSave(
   const mote = moteOf(sheet, resolved.spendInspiration);
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   const versus = authoredSaveDieVs(sheet, sheet.id, from ? { conditions: from.conditions, meta: from.conditionMeta as Record<string, { source?: string }> } : null);
-  const outcome = rollExpression(`${resolved.expression}${versus ? `+${versus.die}` : ""}${shieldSave ? `+${shieldSave}` : ""}`);
+  const outcome = rollExpression(
+    `${resolved.expression}${versus ? `+${versus.die}` : ""}${shieldSave ? `+${shieldSave}` : ""}${extra?.die ? `+${extra.die}` : ""}`,
+  );
+  // A floor under the d20 (Starry Form's dragon: a 9 or lower counts as 10).
+  if (extra?.floor && outcome.natural !== undefined && outcome.natural < extra.floor) {
+    outcome.total = outcome.total - outcome.natural + extra.floor;
+  }
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "saving_throw",
-    detail,
+    detail: detail.slice(0, 200),
     dc,
     result: outcome,
   });
-  turn.rollIds.push(roll.id);
+  turn?.rollIds.push(roll.id);
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
     roll,
     source: "digital",
@@ -170,6 +244,7 @@ export function rollCharacterSave(
     success: outcome.total >= dc,
     total: outcome.total,
     autoFailed: false,
+    ...(outcome.natural !== undefined ? { natural: outcome.natural } : {}),
     notes: [
       ...(resolved.conditionNotes ?? []),
       ...(versus ? [`${versus.feature}: +${versus.die} against its prey`] : []),
@@ -199,10 +274,21 @@ export function rollEnemySave(
     advantage?: boolean;
     disadvantage?: boolean;
     record?: { turn?: DmTurn; detail: string };
+    // The failed save would bind the creature (a condition that takes its
+    // turn, its movement or its mind): a creature with Legendary Resistance
+    // spends one and succeeds instead, as a DM running it would
+    // (src/lib/dm/legendary-tools.ts). A save that only halves damage is
+    // left to the creature's choice (legendary_resist).
+    resist?: boolean;
   } = {},
 ): ForcedSave {
   const derivation = rollDerivation(enemy.conditions, "saving_throw", ability);
   if (derivation.autoFail) {
+    // Legendary Resistance answers a save failed outright as well.
+    if (options.resist === true && spendLegendaryResistance(campaignId, enemy.id)) {
+      return { success: true, total: null, autoFailed: false, legendaryResistance: true, notes: ["Legendary Resistance: the failed save becomes a success", ...derivation.notes] };
+    }
+    noteFailedSave(campaignId, enemy.id, options.record?.detail ?? `${ability.toUpperCase()} save`);
     return { success: false, total: null, autoFailed: true, notes: derivation.notes };
   }
   const effect = effectOutcome(campaignId, { kind: "enemy", id: enemy.id }, "save");
@@ -241,11 +327,19 @@ export function rollEnemySave(
     });
     options.record.turn?.rollIds.push(roll.id);
   }
+  const made = outcome.total >= dc;
+  const resisted = !made && options.resist === true && spendLegendaryResistance(campaignId, enemy.id);
+  if (!made && !resisted) {
+    noteFailedSave(campaignId, enemy.id, options.record?.detail ?? `${ability.toUpperCase()} save`);
+  }
   return {
-    success: outcome.total >= dc,
+    success: made || resisted,
     total: outcome.total,
     autoFailed: false,
+    result: outcome,
+    ...(resisted ? { legendaryResistance: true } : {}),
     notes: [
+      ...(resisted ? ["Legendary Resistance: the failed save becomes a success"] : []),
       ...derivation.notes,
       ...effect.sources,
       ...(resistsMagic ? ["Magic Resistance: advantage against magic"] : []),

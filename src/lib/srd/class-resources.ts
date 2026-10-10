@@ -313,7 +313,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     recharge: "long",
     effect: { kind: "narrative" },
     guidance:
-      "Sorcery points buy Metamagic on a spell being cast (spend with amount), or convert to and from spell slots: call use_resource with variant like 'create a 2nd-level slot' (costs 2/3/5/6/7 points for levels 1-5) or 'convert my 3rd-level slot into points' and the server moves the points and slots. Created slots vanish on a long rest. The spell itself still goes through use_spell_slot or cast_at_enemy as normal.",
+      "Sorcery points buy Metamagic on a spell being cast (spend with amount), or convert to and from spell slots: call use_resource with variant like 'create a 2nd-level slot' (costs 2/3/5/6/7 points for levels 1-5) or 'convert my 3rd-level slot into points' and the server moves the points and slots. Created slots vanish on a long rest. Quickened Spell: call use_resource with variant 'Quickened Spell' before the cast; the server spends 2 points and the next spell of one action this turn takes the bonus action. The spell itself still goes through use_spell_slot or cast_at_enemy as normal.",
   },
   // ---- the feats' counters (src/lib/srd/feat-combat.ts) ----
   {

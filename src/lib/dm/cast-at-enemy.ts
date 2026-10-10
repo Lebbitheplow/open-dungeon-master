@@ -7,10 +7,12 @@
 // of cast-tools.ts, which re-exports it; this module imports mutations (for
 // the slot spend) and must never be imported by it.
 
+import { magicImmunityProblem } from "@/lib/dm/monster-traits";
+import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { z } from "zod";
 import { placeSpellZone } from "@/lib/dm/zone-cast";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
-import { autoLegendaryResistance } from "@/lib/dm/legendary-tools";
+import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, recordEncounterTarget } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
@@ -31,7 +33,7 @@ import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
-import { rollEnemySave } from "@/lib/dm/forced-save";
+import { rollEnemySave, settleFailedSave } from "@/lib/dm/forced-save";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { spellReachProblem } from "@/lib/dm/cast-reach";
@@ -259,6 +261,12 @@ export function handleCastAtEnemy(
   if (reach) {
     return { error: reach };
   }
+  // Limited Magic Immunity (the rakshasa): a spell of its level or lower
+  // never touches it (src/lib/dm/monster-traits.ts).
+  const shrugged = magicImmunityProblem(enemy, spellName, args.level ?? facts?.level ?? 0);
+  if (shrugged) {
+    return { error: shrugged };
+  }
 
   // The cast itself, through the one guard (src/lib/dm/cast-guard.ts): who
   // may cast, what they hold, the slot of the spell's own level when none is
@@ -273,6 +281,8 @@ export function handleCastAtEnemy(
       ...(args.level ? { level: args.level } : {}),
       // Magic Missile: the darts named, or every dart the casting holds.
       ...(mech?.darts ? { uses: args.darts ?? 20 } : {}),
+      // A material priced per Hit Die of the target (Imprisonment).
+      units: hitDiceOf(enemy),
       via: "enemy",
       reason: (args.reason ?? "").slice(0, 200),
     }),
@@ -340,8 +350,13 @@ export function handleCastAtEnemy(
     saved = true;
     Object.assign(base, { saved: true, dc, note: untouched });
   } else {
+    // A legendary creature spends a resistance on a failure that would bind
+    // it, decided at the save so the damage follows the success too
+    // (src/lib/dm/legendary-logic.ts bindsWorthResisting).
+    const resist = bindsWorthResisting(conditions, Boolean(mechCondition?.endsWith));
     const save = rollEnemySave(campaign.id, enemy, ability, dc, {
       magical: true,
+      resist,
       ...spellSaveOptions(mech, enemy),
       record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${spellName}` },
     });
@@ -350,6 +365,7 @@ export function handleCastAtEnemy(
       ...(save.autoFailed ? { autoFailed: save.notes.join("; ") } : { save: save.total }),
       dc,
       saved,
+      ...(save.legendaryResistance ? { legendaryResistance: "spent: the failed save becomes a success" } : {}),
       ...(save.notes.length && !save.autoFailed ? { saveNotes: save.notes } : {}),
     });
   }
@@ -412,23 +428,17 @@ export function handleCastAtEnemy(
     }
   }
 
-  // A legendary creature shrugs off a failed save that would bind it
-  // (docs/vtt-parity-implementation-plan.md 4.1) while it has resistance
-  // left; the count is the DM's to see on the tracker.
   const binds = conditions.length && !saved && !beyondReach && !base.dead && !base.encounterOver;
   // Heat Metal: the object held or worn (src/lib/dm/spell-riders.ts).
   const grip = autoHit && !base.dead ? heatMetalGrip(campaign, turn, mech, enemy, source, dc, /armou?r|worn|wear/i.test(args.condition ?? "")) : null;
   if (grip) {
     base.grip = grip;
   }
-  if (binds && !noSave) {
-    const liveEncounter = getActiveEncounter(campaign.id);
-    const liveEnemy = liveEncounter ? resolveEnemyRef(liveEncounter.id, enemy.id) : null;
-    if (liveEncounter && liveEnemy && autoLegendaryResistance(campaign, liveEncounter, liveEnemy)) {
-      saved = true;
-      base.saved = true;
-      base.legendaryResistance = "spent: the failed save becomes a success";
-    }
+  // What the failure cost, for a legendary_resist that answers it later:
+  // the hit points a success would have spared it.
+  if (!saved && !noSave && damageDealt > 0) {
+    const spared = mech?.riders?.damageIgnoresSave ? 0 : halfOnSave ? damageDealt - Math.floor(damageDealt / 2) : damageDealt;
+    settleFailedSave(campaign.id, enemy.id, { spell: spellName, source: sheet.id, refund: spared });
   }
   if (binds && !saved) {
     const rounds = mechCondition ? undefined : args.rounds;
@@ -445,6 +455,9 @@ export function handleCastAtEnemy(
     );
     const mark = turnEndMark(mechCondition ?? undefined, source, enemy.id);
     const landed = layOnEnemy(enemy.id, mark ? [...entries, mark] : entries).filter((name) => name !== mark?.[0]);
+    if (!noSave) {
+      settleFailedSave(campaign.id, enemy.id, { conditions: landed, spell: spellName, source: sheet.id });
+    }
     if (landed.length) {
       publishEncounter(campaign.id);
       base.conditionApplied = landed.join(", ");
@@ -453,7 +466,7 @@ export function handleCastAtEnemy(
         base.conditionEffect = summary;
       }
       base.duration = meta.saveEnds
-        ? `until it succeeds on a ${ability.toUpperCase()} save (DC ${dc}) at the end of a round`
+        ? `until it succeeds on a ${ability.toUpperCase()} save (DC ${dc}) at the end of one of its turns${meta.rounds ? `, and at most ${describeConditionDuration(meta.rounds)}` : ""}`
         : meta.rounds
           ? `${meta.rounds} round${meta.rounds === 1 ? "" : "s"}`
           : "until the spell ends";
@@ -487,4 +500,13 @@ export function handleCastAtEnemy(
   // A later share of the same casting (a second creature in the web) leaves it where it is.
   const area = cast.continuing ? null : placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], ...zonePlacement(args) });
   return { ok: true, ...base, ...(area ? { area } : {}) };
+}
+
+// A creature's Hit Dice, as its block is built: hit points over the average
+// of its size's hit die plus its Constitution modifier (SRD 5.1, Monsters).
+const SIZE_DIE: Record<string, number> = { tiny: 2.5, small: 3.5, medium: 4.5, large: 5.5, huge: 6.5, gargantuan: 10.5 };
+function hitDiceOf(enemy: { maxHp: number; stats: { size?: string; abilities?: { con?: number } } }): number {
+  const die = SIZE_DIE[(enemy.stats.size ?? "medium").toLowerCase()] ?? 4.5;
+  const con = Math.floor(((enemy.stats.abilities?.con ?? 10) - 10) / 2);
+  return Math.max(1, Math.round(enemy.maxHp / Math.max(1, die + con)));
 }
