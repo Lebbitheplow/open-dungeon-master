@@ -81,7 +81,7 @@ export function AmbienceLibraryCard() {
       id="admin-ambience"
       heading="Sound library"
       glyph="tab-ambience"
-      intro="The rooms, music and one-shot sounds every table can play: public-domain and Creative Commons recordings, credited on the licenses page. Nothing ships inside the app; install the release's sound pack here, or fetch the library on the server (docs/configuration.md)."
+      intro="The rooms, music and one-shot sounds every table can play: public-domain and Creative Commons recordings, credited on the licenses page. The library ships with the game; a newer sound pack from a release can be installed here, and the server can fetch more (docs/configuration.md)."
     >
       <div className="space-y-4">
         {status ? (
@@ -117,7 +117,7 @@ export function AmbienceLibraryCard() {
             className={ui.btnPrimary}
           >
             {installing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-            {installing ? `Installing ${percent}%` : have && have === total ? "Reinstall the sound pack" : "Install the sound pack"}
+            {installing ? `Installing ${percent}%` : have && have === total ? "Reinstall the sound pack" : "Install a sound pack"}
           </button>
           <button type="button" onClick={() => void request("POST", { action: "rescan" }).then(apply)} disabled={!status || installing} className={ui.btnSecondary}>
             Rescan the folder

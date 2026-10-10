@@ -658,8 +658,9 @@ OpenAI-compatible speech server, the built-in Whisper):
 - **Ambience and music**: a library of public-domain cues (dungeons, forests,
   deserts, rivers, towns, crowds, taverns, wind, plus music and one-shot
   stings) that the AI DM, a human DM, or the engine following the scene can
-  trigger. Volume and mute are per listener. No audio ships with the project;
-  `npm run fetch-ambience` pulls it from public archives. See
+  trigger from the table's sound panel. Volume and mute are per listener. The
+  library ships with the project: public-domain and Creative Commons
+  recordings, each credited on the licenses page. See
   [docs/configuration.md](docs/configuration.md#ambience-and-music).
 
 ## Configuration and settings precedence

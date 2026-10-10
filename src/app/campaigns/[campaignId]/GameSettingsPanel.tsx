@@ -441,8 +441,8 @@ export function GameSettingsPanel({
             // toggle above is currently a promise of silence. Say so where
             // it is being switched on rather than letting the table wonder.
             <span className="text-stone-500">
-              No sound library is installed on this server yet, so this plays silence. The server
-              admin installs it from the admin panel (Sound library), or with npm run fetch-ambience.
+              This server has no sound library on disk, so this plays silence. The library ships with
+              the game; the server admin can restore it from the admin panel (Sound library).
             </span>
           ) : settings.ambienceEnabled && ambienceCounts ? (
             <span className="text-stone-500">

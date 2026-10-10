@@ -347,10 +347,9 @@ export function HelpDialog({
           layer you chose. Sound ducks automatically while narration speaks.
         </p>
         <p>
-          The library itself is public-domain and Creative Commons recordings, installed by the
-          server admin as the sound pack that ships with a release or fetched from the open
-          sources; the licenses page says who made what. If ambience is on but silent, the panel
-          says why.
+          The library itself ships with the game: public-domain and Creative Commons recordings,
+          and the licenses page says who made what. If ambience is on but silent, the panel says
+          why.
         </p>
       </Section>
 

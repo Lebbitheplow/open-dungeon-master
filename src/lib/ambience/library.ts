@@ -5,15 +5,16 @@ import { cueById, cuesForLayer, type AmbienceLayer } from "@/lib/ambience/catalo
 // What is actually on disk. The catalog says what cues EXIST; this says
 // which of them this install can play, and who to credit for each file.
 //
-// public/ambience is not in git. It is filled by scripts/fetch-ambience.mjs
-// (archive downloads), scripts/generate-ambience.mjs (tracks made on this
-// server), the sound pack an admin installs from the panel, or files an
-// operator drops in by hand. A cue may have several files: "battle.mp3",
-// "battle-2.mp3" and "battle-3.ogg" are three takes of the same cue, and the
-// player moves between them so a long fight is not one loop forever.
+// public/ambience ships with the project: the open-licensed library
+// scripts/fetch-ambience.mjs resolved, pinned with its credits in
+// src/lib/ambience/sources.json. An operator can add to it with the same
+// script, with the sound pack from the admin panel, or by dropping files
+// in by hand. A cue may have several files: "battle.mp3", "battle-2.mp3"
+// and "battle-3.ogg" are three takes of the same cue, and the player moves
+// between them so a long fight is not one loop forever.
 //
-// A table that has nothing here hears nothing, and nothing breaks, because
-// every consumer asks here first rather than assuming a file is there.
+// Every consumer asks here first rather than assuming a file is there, so
+// a cue without one is silence, not an error.
 
 export const AUDIO_EXTENSIONS = [".mp3", ".ogg", ".opus", ".m4a", ".wav"];
 
@@ -93,17 +94,35 @@ export function nextTrackFile(cueId: string, extension: string, existing: string
 
 // ---- the lock ----
 
+// The shipped pins: the library the project resolved and committed
+// (src/lib/ambience/sources.json), which is also every shipped file's credit.
+// A fresh clone has the files and no lock, and must still name the authors.
+function shippedCredits(): AmbienceLock {
+  try {
+    const parsed = JSON.parse(readFileSync(path.join(process.cwd(), "src", "lib", "ambience", "sources.json"), "utf8"));
+    const credits: AmbienceLock = {};
+    for (const [file, value] of Object.entries(parsed as Record<string, TrackCredit>)) {
+      if (parseTrackFile(file) && value && typeof value === "object") {
+        credits[file] = { ...value, origin: "fetched" };
+      }
+    }
+    return credits;
+  } catch {
+    return {};
+  }
+}
+
 export function readLock(): AmbienceLock {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(lockPath(), "utf8"));
   } catch {
-    return {};
+    return shippedCredits();
   }
   if (!parsed || typeof parsed !== "object") {
-    return {};
+    return shippedCredits();
   }
-  const lock: AmbienceLock = {};
+  const lock: AmbienceLock = shippedCredits();
   for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
     if (!value || typeof value !== "object") {
       continue;

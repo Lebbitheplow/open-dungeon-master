@@ -60,8 +60,8 @@ next-env.d.ts
 # packaging
 /dist
 public/generated-audio
-# fetched by scripts/fetch-ambience.mjs; never committed
-/public/ambience
+# The sound library ships with the project (public/ambience); only a pack
+# built from it is a build product.
 
 # agent worktrees
 .claude/

@@ -285,28 +285,28 @@ browsers require a secure context for web-app installs.
 ## Ambience and music
 
 The sound library is a set of CUES (a tavern, a cave, a battle, a thunderclap)
-rather than a set of files. `src/lib/ambience/catalog.ts` names them; what is
-actually on disk lives in `public/ambience/` and is never committed. The
-library is public-domain and open-licensed recordings: CC0 and Public Domain
-Mark, and the attribution licences (CC BY, CC BY-SA, OpenGameArt's OGA-BY),
-which the app honours for you by keeping every file's title, author, source
-and licence in the lock and the manifest, on the `/licenses` page and inside
-the sound pack. A cue may have several takes (`battle.mp3`, `battle-2.mp3`);
-the player moves between them so a long fight is not one loop forever, and
-Next in the sound panel skips ahead.
+rather than a set of files. `src/lib/ambience/catalog.ts` names them; the
+files live in `public/ambience/` and ship with the project: public-domain and
+open-licensed recordings (CC0 and Public Domain Mark, and the attribution
+licences CC BY, CC BY-SA and OpenGameArt's OGA-BY), each credited by title,
+author, source and licence in `src/lib/ambience/sources.json`, in
+`public/ambience/manifest.json` and on the `/licenses` page. Nothing has to be
+installed. A cue may have several takes (`battle.mp3`, `battle-2.mp3`); the
+player moves between them so a long fight is not one loop forever, and Next
+in the sound panel skips ahead.
 
-**The sound pack.** Each release attaches `ambience-pack.zip`: the library
-the project resolved from the sources below, with its credits. Install it
-from the admin panel (Sound library: one button, with progress) or on the
-command line:
+**The sound pack.** A release may also attach `ambience-pack.zip`, the same
+library (or a newer one) as one file, for an install that wants to update
+without pulling the repository. Install it from the admin panel (Sound
+library: one button, with progress) or on the command line:
 
 ```bash
 npm run fetch-ambience -- --pack              # this release's pack
 npm run fetch-ambience -- --pack https://...  # another pack
 ```
 
-**Fetch it yourself.** The same script resolves every cue from the open
-sources, trying each in the order that suits the layer:
+**Fetch more.** The script that resolved the library can add takes or refill
+a cue from the open sources, trying each in the order that suits the layer:
 
 - OpenGameArt.org: game music, loops and effects under CC0, CC BY, CC BY-SA
   and OGA-BY, the licence stated on every page. Room tone, stings, loops.

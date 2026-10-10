@@ -243,8 +243,8 @@ listener, Next, and the pickers (every cue painted) with a hold per layer for
 whoever steers the story; cues hold several takes crossfaded at the tail; the
 library is open-licensed recordings resolved from OpenGameArt, Kevin
 MacLeod's catalogue, Commons, Freesound and the Internet Archive, pinned in
-`src/lib/ambience/sources.json` and shipped as a release sound pack installed
-from the admin panel; the fetch is gated against spoken word and the wrong
+`src/lib/ambience/sources.json` and shipped in the repository, so a table
+has sound out of the box; the fetch is gated against spoken word and the wrong
 length, and attribution licences are honoured by keeping every credit in the
 app.
 
@@ -374,9 +374,8 @@ version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
 - One Next.js process owns everything: the SQLite database, the event bus,
   the DM turn queue and the voice rooms. Multi-instance deployment is
   unsupported, and a restart drops live voice calls (players rejoin).
-- The ambience library ships empty until the release's sound pack is
-  installed (admin panel, or `npm run fetch-ambience -- --pack`), or the
-  fetch script resolves it from the open sources on the server.
+- One ambience cue (the dark spell sting) has no recording yet; the open
+  sources had nothing usable for it.
 - Dice-source choices (including Pixels pairings) are per device, and the
   server cannot distinguish a typed physical roll from a typed lie; real-dice
   mode remains a trust feature, as tabletop dice always have been.

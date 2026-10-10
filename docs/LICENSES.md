@@ -37,12 +37,16 @@ its contents page and ends with the SRD's legal notice as its last page.
 
 ## Ambience and music
 
-`src/lib/ambience/catalog.ts` names the cues the app can play; the files live
-in `public/ambience/`, are not in git, and are public-domain and open-licensed
-recordings fetched by `scripts/fetch-ambience.mjs` from OpenGameArt, Kevin
-MacLeod's incompetech catalogue, Wikimedia Commons, Freesound and the
-Internet Archive, or carried in the release's sound pack (`ambience-pack.zip`),
-which holds the same tracks with the same credits.
+`src/lib/ambience/catalog.ts` names the cues the app can play. The files in
+`public/ambience/` ship with the project and are **not under the project's
+licence**: each is a public-domain or open-licensed recording from
+OpenGameArt, Kevin MacLeod's incompetech catalogue, Wikimedia Commons,
+Freesound or the Internet Archive, under the licence recorded beside it in
+`src/lib/ambience/sources.json` and `public/ambience/manifest.json` and shown
+on the `/licenses` page. Where a recording was re-encoded or cut to length
+its title says "excerpt"; those are adaptations made under the same licence,
+with the same credit. The release's sound pack (`ambience-pack.zip`) carries
+the same files and credits.
 
 The script reads the licence each source records for a file and refuses
 anything it cannot positively identify, including a blank licence field. It
