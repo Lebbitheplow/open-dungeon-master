@@ -7,8 +7,17 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { footprintForSize, footprintTiles, footprintIndexes, footprintFits, footprintCentre } =
-  await import("../src/lib/battlemap/footprint.ts");
+const {
+  footprintForSize,
+  footprintTiles,
+  footprintIndexes,
+  footprintFits,
+  footprintCentre,
+  footprintDistance,
+  nearestFootprintTile,
+  footprintSide,
+} = await import("../src/lib/battlemap/footprint.ts");
+
 const { findPath, reachableTiles } = await import("../src/lib/battlemap/movement.ts");
 const { tileIndex } = await import("../src/lib/battlemap/types.ts");
 
@@ -29,7 +38,50 @@ test("size words map to squares per side", () => {
   assert.equal(footprintForSize(""), 1);
 });
 
+test("distance is measured between the nearest squares, not the anchors (issue #186)", () => {
+  const ogre = { x: 5, y: 5 };
+  // Against the ogre's lower-right square (6,6): one square, whatever the anchor says.
+  assert.equal(footprintDistance({ x: 7, y: 6 }, 1, ogre, 2), 1);
+  assert.equal(footprintDistance(ogre, 2, { x: 7, y: 6 }, 1), 1);
+  assert.equal(footprintDistance({ x: 7, y: 7 }, 1, ogre, 2), 1);
+  assert.equal(footprintDistance({ x: 4, y: 4 }, 1, ogre, 2), 1);
+  assert.equal(footprintDistance({ x: 8, y: 6 }, 1, ogre, 2), 2);
+  assert.equal(footprintDistance({ x: 5, y: 8 }, 1, ogre, 2), 2);
+  // Huge (three by three from 5,5 to 7,7) and Gargantuan (four by four to 8,8).
+  assert.equal(footprintDistance({ x: 8, y: 8 }, 1, ogre, 3), 1);
+  assert.equal(footprintDistance({ x: 9, y: 8 }, 1, ogre, 3), 2);
+  assert.equal(footprintDistance({ x: 9, y: 9 }, 1, ogre, 4), 1);
+  assert.equal(footprintDistance({ x: 10, y: 9 }, 1, ogre, 4), 2);
+  // Two large creatures side by side, and one square creatures as before.
+  assert.equal(footprintDistance(ogre, 2, { x: 7, y: 5 }, 2), 1);
+  assert.equal(footprintDistance(ogre, 2, { x: 8, y: 5 }, 2), 2);
+  assert.equal(footprintDistance({ x: 5, y: 5 }, 1, { x: 7, y: 6 }, 1), 2);
+  // Overlapping (a swarm over a token) is zero.
+  assert.equal(footprintDistance({ x: 6, y: 6 }, 1, ogre, 2), 0);
+});
+
+test("the nearest square of a footprint is where a line to it is drawn", () => {
+  const ogre = { x: 5, y: 5 };
+  assert.deepEqual(nearestFootprintTile(ogre, 2, { x: 7, y: 6 }), { x: 6, y: 6 });
+  assert.deepEqual(nearestFootprintTile(ogre, 2, { x: 2, y: 9 }), { x: 5, y: 6 });
+  assert.deepEqual(nearestFootprintTile(ogre, 2, { x: 6, y: 1 }), { x: 6, y: 5 });
+  assert.deepEqual(nearestFootprintTile(ogre, 1, { x: 9, y: 9 }), { x: 5, y: 5 });
+});
+
+test("which side of a space a square lies on, for flanking a large creature", () => {
+  const ogre = { x: 5, y: 5 };
+  assert.deepEqual(footprintSide({ x: 4, y: 5 }, 1, ogre, 2), { x: -1, y: 0 });
+  assert.deepEqual(footprintSide({ x: 7, y: 6 }, 1, ogre, 2), { x: 1, y: 0 });
+  assert.deepEqual(footprintSide({ x: 4, y: 4 }, 1, ogre, 2), { x: -1, y: -1 });
+  assert.deepEqual(footprintSide({ x: 7, y: 7 }, 1, ogre, 2), { x: 1, y: 1 });
+  assert.deepEqual(footprintSide({ x: 6, y: 7 }, 1, ogre, 2), { x: 0, y: 1 });
+  // A Large ally past the ogre's right edge is on its right, read from its whole space.
+  assert.deepEqual(footprintSide({ x: 7, y: 4 }, 2, ogre, 2), { x: 1, y: 0 });
+  assert.deepEqual(footprintSide({ x: 6, y: 6 }, 1, ogre, 2), { x: 0, y: 0 });
+});
+
 test("a footprint covers the square anchored at its top-left", () => {
+
   assert.deepEqual(footprintTiles({ x: 3, y: 4 }, 1), [{ x: 3, y: 4 }]);
   assert.deepEqual(footprintTiles({ x: 3, y: 4 }, 2), [
     { x: 3, y: 4 },

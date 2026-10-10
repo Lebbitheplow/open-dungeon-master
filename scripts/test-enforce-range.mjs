@@ -68,7 +68,72 @@ await test("melee: in reach at 5 feet, diagonals included, refused at 10", async
   }
 });
 
+await test("reach against a Large creature is measured to its nearest square (issue #186)", async () => {
+  // The dummy at (5,5) fills (5,5) to (6,6). A hero at (7,6) stands against
+  // its lower-right square: 5 feet, not the 10 the anchors are apart.
+  const sized = async (size, from) => {
+    const enemy = await stage(from, [5, 5]);
+    kit.setEnemy(enemy.id, { maxHp: 400, stats: { size } });
+    return enemy;
+  };
+  for (const spot of [[7, 6], [7, 7], [6, 7], [4, 4], [4, 7]]) {
+    const enemy = await sized("Large", spot);
+    const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
+    assert.equal(swing.ok, true, `Large ${spot.join()}: ${swing.error}`);
+    assert.equal(swing.result.hit, true, `Large ${spot.join()}`);
+  }
+  for (const spot of [[8, 6], [5, 8], [3, 5]]) {
+    const enemy = await sized("Large", spot);
+    await refused(enemy, { weapon: "Longsword" }, `Large ${spot.join()}`);
+  }
+  // A glaive's 10 feet, from the same edge.
+  let enemy = await sized("Large", [8, 6]);
+  let swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Glaive" });
+  assert.equal(swing.result.hit, true, "Glaive at 10 ft from the edge");
+  enemy = await sized("Large", [9, 6]);
+  await refused(enemy, { weapon: "Glaive" }, "Glaive at 15 ft from the edge");
+  // Huge fills (5,5) to (7,7); Gargantuan (5,5) to (8,8).
+  enemy = await sized("Huge", [8, 8]);
+  swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
+  assert.equal(swing.result.hit, true, "Huge corner");
+  enemy = await sized("Huge", [9, 8]);
+  await refused(enemy, { weapon: "Longsword" }, "Huge, one square off");
+  enemy = await sized("Gargantuan", [9, 9]);
+  swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
+  assert.equal(swing.result.hit, true, "Gargantuan corner");
+  enemy = await sized("Gargantuan", [10, 9]);
+  await refused(enemy, { weapon: "Longsword" }, "Gargantuan, one square off");
+  // A thrown dagger's 20 feet counts from the edge too: (10,6) is four
+  // squares from it (a straight roll), (11,6) five (disadvantage), and its
+  // 60-foot long range runs out past (18,6).
+  enemy = await sized("Large", [10, 6]);
+  swing = await kit.swing(hero.id, enemy.id, [10, 3], { weapon: "Dagger" });
+  assert.equal(swing.ok, true, swing.error);
+  assert.equal(swing.toHit.advantage, "none", "Dagger at 20 ft from the edge");
+  enemy = await sized("Large", [11, 6]);
+  swing = await kit.swing(hero.id, enemy.id, [7, 13, 4], { weapon: "Dagger" });
+  assert.equal(swing.ok, true, swing.error);
+  assert.equal(swing.toHit.advantage, "disadvantage", "Dagger at 25 ft from the edge");
+  enemy = await sized("Large", [18, 6]);
+  swing = await kit.swing(hero.id, enemy.id, [7, 13, 4], { weapon: "Dagger" });
+  assert.equal(swing.ok, true, `Dagger at 60 ft from the edge: ${swing.error}`);
+});
+
+
+await test("a Large enemy strikes from its own edge without walking (issue #186)", async () => {
+  const enemy = await stage([7, 6], [5, 5]);
+  kit.setEnemy(enemy.id, { maxHp: 400, stats: { size: "Large" } });
+  world.dice(15, 3);
+  const out = await world.invoke("enemy_attack", { enemyId: enemy.id, targetCharacterId: hero.id });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  const token = kit.token(enemy.id);
+  assert.deepEqual([token.x, token.y], [5, 5], "it did not need to move");
+  assert.equal(world.sheet(hero.id).currentHp, 30 - 5);
+});
+
 await test("a reach weapon reaches 10 feet and no farther", async () => {
+
   let enemy = await stage([5, 5], [5, 7]);
   const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Glaive" });
   assert.equal(swing.result.hit, true);

@@ -10,8 +10,10 @@ import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/ba
 import { listEnemies, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
-import { chebyshev } from "@/lib/battlemap/types";
+import { footprintTiles } from "@/lib/battlemap/footprint";
+import { nearestSquares, spotOf, tilesApart, tokenFootprint } from "@/lib/dm/board-reach";
 import { isIncapacitated } from "@/lib/dm/condition-logic";
+
 import { hostileWithinFiveFeet, isFlanking } from "@/lib/dm/attack-rules";
 import { zoneCoverBetween, zoneHidesFrom } from "@/lib/dm/zone-rules";
 import { enemySenses } from "@/lib/dm/attack-light";
@@ -36,13 +38,16 @@ function characterThreatens(characterId: string): boolean {
   );
 }
 
-// Tiles between two combatants, or null when either is off the board.
+// Tiles between two combatants, nearest square to nearest square (an ogre
+// fills four, src/lib/dm/board-reach.ts), or null when either is off the
+// board.
 export function tilesBetween(encounterId: string, refA: string, refB: string): number | null {
   const map = getBattleMapForEncounter(encounterId);
   const a = map ? getTokenByRef(map.id, refA) : null;
   const b = map ? getTokenByRef(map.id, refB) : null;
-  return map && a && b ? chebyshev(a.x, a.y, b.x, b.y) : null;
+  return map && a && b ? tilesApart(a, b) : null;
 }
+
 
 // A wall between two combatants on the board. Melee inside its reach never
 // asked this before, so a glaive reached through a wall square.
@@ -53,8 +58,10 @@ export function wallBetween(encounterId: string, refA: string, refB: string): bo
   if (!map || !a || !b) {
     return false;
   }
-  return !hasLineOfSight(map.terrain, map.width, map.height, a.x, a.y, b.x, b.y);
+  const line = nearestSquares(a, b);
+  return !hasLineOfSight(map.terrain, map.width, map.height, line.from.x, line.from.y, line.to.x, line.to.y);
 }
+
 
 // A character shooting with a hostile creature within 5 feet that can see
 // them and can act.
@@ -71,9 +78,11 @@ export function characterShootsInMelee(
   const hostiles = listEnemies(encounterId)
     .filter(enemyThreatens)
     .map((enemy) => getTokenByRef(map.id, enemy.id))
-    .filter((token): token is NonNullable<typeof token> => token !== null);
-  return hostileWithinFiveFeet(attacker, hostiles);
+    .filter((token): token is NonNullable<typeof token> => token !== null)
+    .map(spotOf);
+  return hostileWithinFiveFeet(spotOf(attacker), hostiles);
 }
+
 
 // The same for an enemy with a bow and a character at its elbow.
 export function enemyShootsInMelee(
@@ -89,8 +98,9 @@ export function enemyShootsInMelee(
   const hostiles = listTokens(map.id).filter(
     (token) => token.kind === "pc" && characterThreatens(token.refId),
   );
-  return hostileWithinFiveFeet(attacker, hostiles);
+  return hostileWithinFiveFeet(spotOf(attacker), hostiles.map(spotOf));
 }
+
 
 // The Flanking variant for a character's melee attack: another character
 // who can act stands on the far side of the target.
@@ -109,8 +119,9 @@ export function characterFlanks(
     (token) =>
       token.kind === "pc" && token.refId !== characterId && characterThreatens(token.refId),
   );
-  return isFlanking(attacker, target, allies);
+  return isFlanking(spotOf(attacker), spotOf(target), allies.map(spotOf));
 }
+
 
 // And for an enemy's melee attack on a character.
 export function enemyFlanks(encounterId: string, enemyId: string, characterId: string): boolean {
@@ -123,9 +134,11 @@ export function enemyFlanks(encounterId: string, enemyId: string, characterId: s
   const allies = listEnemies(encounterId)
     .filter((enemy) => enemy.id !== enemyId && enemyThreatens(enemy))
     .map((enemy) => getTokenByRef(map.id, enemy.id))
-    .filter((token): token is NonNullable<typeof token> => token !== null);
-  return isFlanking(attacker, target, allies);
+    .filter((token): token is NonNullable<typeof token> => token !== null)
+    .map(spotOf);
+  return isFlanking(spotOf(attacker), spotOf(target), allies);
 }
+
 
 // Cover a target has against an attacker, as the AC bonus: 0, +2 (half) or
 // +5 (three-quarters). The terrain's (a wall, a low wall), and a creature
@@ -139,15 +152,17 @@ export function coverFor(encounterId: string, attackerRef: string, targetRef: st
   if (!map || !attacker || !target) {
     return 0;
   }
+  const line = nearestSquares(attacker, target);
   const terrain = coverBetween(
     map.terrain,
     map.width,
     map.height,
-    attacker.x,
-    attacker.y,
-    target.x,
-    target.y,
+    line.from.x,
+    line.from.y,
+    line.to.x,
+    line.to.y,
   );
+
   // Blade Barrier gives three-quarters cover to what stands behind it (zone-rules.ts).
   const blades = zoneCoverBetween(encounterId, attackerRef, targetRef);
   return terrain === 5 || blades === 5 ? 5 : creatureCover(encounterId, attackerRef, targetRef) ? 2 : terrain;
@@ -195,17 +210,21 @@ export function creatureCover(encounterId: string, attackerRef: string, targetRe
   const map = getBattleMapForEncounter(encounterId);
   const attacker = map ? getTokenByRef(map.id, attackerRef) : null;
   const target = map ? getTokenByRef(map.id, targetRef) : null;
-  if (!map || !attacker || !target || chebyshev(attacker.x, attacker.y, target.x, target.y) <= 1) {
+  if (!map || !attacker || !target || tilesApart(attacker, target) <= 1) {
     return null;
   }
-  const line = squaresBetween(attacker, target);
+  const ends = nearestSquares(attacker, target);
+  const line = squaresBetween(ends.from, ends.to);
   const blocker = listTokens(map.id).find(
     (token) =>
       token.refId !== attackerRef &&
       token.refId !== targetRef &&
       (token.kind === "pc" || token.kind === "enemy" || token.kind === "npc") &&
-      line.some((square) => square.x === token.x && square.y === token.y),
+      footprintTiles(token, tokenFootprint(token)).some((tile) =>
+        line.some((square) => square.x === tile.x && square.y === tile.y),
+      ),
   );
+
   return blocker ? blocker.name : null;
 }
 
@@ -225,24 +244,26 @@ export function seenClearlyBy(encounterId: string, characterId: string): string 
     if (!token) {
       continue;
     }
+    const line = nearestSquares(token, hider);
     const sighted = hasLineOfSight(
       map.terrain,
       map.width,
       map.height,
-      token.x,
-      token.y,
-      hider.x,
-      hider.y,
+      line.from.x,
+      line.from.y,
+      line.to.x,
+      line.to.y,
     );
     const cover = coverBetween(
       map.terrain,
       map.width,
       map.height,
-      token.x,
-      token.y,
-      hider.x,
-      hider.y,
+      line.from.x,
+      line.from.y,
+      line.to.x,
+      line.to.y,
     );
+
     const dark = map.ambient === "dark" && hider.lightRadius <= 0;
     // A fog cloud or magical darkness between them hides as darkness does.
     if (sighted && cover === 0 && !dark && !zoneHidesFrom(map, token, hider, enemySenses(enemy))) {

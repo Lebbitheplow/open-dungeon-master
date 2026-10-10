@@ -41,6 +41,8 @@ import { cn } from "@/lib/cn";
 import { jumpRulerFor, moveNotesFrom, rulerFor } from "@/lib/battlemap/board-move";
 import { BoardMoveHints, JumpArc, useBoardMoveModes } from "@/app/campaigns/[campaignId]/BoardMoveModes";
 import { TILE_FEET } from "@/lib/battlemap/types";
+import { footprintDistance } from "@/lib/battlemap/footprint";
+
 import { useAreaAim } from "@/app/campaigns/[campaignId]/BoardAreaAim";
 import { BoardMoveNotes, useMoveNotes } from "@/app/campaigns/[campaignId]/BoardMoveNotes";
 import type { FxEvent } from "@/lib/battlemap/fx-plan";
@@ -442,10 +444,13 @@ export function BattleMapPanel({
       .filter((token) => (token.kind === "enemy" || token.kind === "npc") && token.id !== myToken.id)
       .map((token) => ({
         token,
-        feet: Math.max(Math.abs(token.x - myToken.x), Math.abs(token.y - myToken.y)) * TILE_FEET,
+        // To the nearest square of a Large creature, as the engine measures it.
+        feet: footprintDistance(token, view.tokenFootprint[token.id] ?? 1, myToken, view.tokenFootprint[myToken.id] ?? 1) * TILE_FEET,
+
       }))
       .sort((a, b) => a.feet - b.feet);
-  }, [targeting, myToken, view.tokens]);
+  }, [targeting, myToken, view.tokens, view.tokenFootprint]);
+
   const aim = useMemo(() => {
     if (!targeting || !myToken) {
       return null;
@@ -1133,7 +1138,53 @@ export function BattleMapPanel({
     </div>
   );
 
+  // What sits under the board wherever the board is drawn: the move modes,
+  // what the board is waiting for (or why a move is refused), and the aim's
+  // target chips. The enlarged tabletop drew the grid alone, so a player who
+  // enlarged it lost the move picker and every hint (issue #189).
+  const underBoard = (
+    <>
+      <BoardMoveHints
+        moveMode={moveMode}
+        moves={!canDirect && canMove && !areaAim.active ? view.moves : undefined}
+        onMode={setMoveMode}
+        areaHint={areaAim.hint}
+        caught={areaAim.caught}
+      />
+      <p className="text-[11px] leading-4 text-stone-500">
+        {boardHintText({
+          canDirect,
+          tool,
+          teleporting: Boolean(teleporting),
+          held: Boolean(held),
+          liveOrigin: Boolean(liveOrigin),
+          pointing,
+          drawing,
+          targeting: Boolean(targeting),
+          canMove,
+          scene,
+          budgetLeft: view.budgetLeft,
+          hasToken: Boolean(view.myTokenId),
+        })}
+      </p>
+      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {targeting ? (
+        <TargetChips
+          targets={aimTargets.map((entry) => ({
+            token: entry.token,
+            face: faceOfToken(entry.token),
+            health: view.tokenHealth[entry.token.id],
+            feet: entry.feet,
+          }))}
+          onPick={handleToken}
+          onHover={setAimHoverId}
+        />
+      ) : null}
+    </>
+  );
+
   return (
+
     // board-panel: where the panel is given a fixed window (the fight stage,
     // the shared screen, the side panel and the phone) its header and footer
     // stay put and the board takes what is left (world.css, issue 87).
@@ -1276,43 +1327,9 @@ export function BattleMapPanel({
           }}
         />
       ) : null}
-      <BoardMoveHints
-        moveMode={moveMode}
-        moves={!canDirect && canMove && !areaAim.active ? view.moves : undefined}
-        onMode={setMoveMode}
-        areaHint={areaAim.hint}
-        caught={areaAim.caught}
-      />
-      <p className="text-[11px] leading-4 text-stone-500">
-        {boardHintText({
-          canDirect,
-          tool,
-          teleporting: Boolean(teleporting),
-          held: Boolean(held),
-          liveOrigin: Boolean(liveOrigin),
-          pointing,
-          drawing,
-          targeting: Boolean(targeting),
-          canMove,
-          scene,
-          budgetLeft: view.budgetLeft,
-          hasToken: Boolean(view.myTokenId),
-        })}
-      </p>
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
-      {targeting ? (
-        <TargetChips
-          targets={aimTargets.map((entry) => ({
-            token: entry.token,
-            face: faceOfToken(entry.token),
-            health: view.tokenHealth[entry.token.id],
-            feet: entry.feet,
-          }))}
-          onPick={handleToken}
-          onHover={setAimHoverId}
-        />
-      ) : null}
+      {underBoard}
       <BoardOrderStrip encounter={encounter} faceOf={faceOfEntry} />
+
       <PromptDialog
         open={Boolean(prompt && promptToken)}
         title={
@@ -1357,9 +1374,13 @@ export function BattleMapPanel({
             </div>
             <div className="cine-tabletop-body">
               {chronicle}
-              <div className="cine-board-frame">{grid}</div>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="cine-board-frame">{grid}</div>
+                {underBoard}
+              </div>
               {!scene ? <TabletopOrder encounter={encounter} faceOf={faceOfEntry} /> : null}
             </div>
+
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

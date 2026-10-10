@@ -275,11 +275,36 @@ test("flanking is an ally on the mirrored square", () => {
   assert.equal(isFlanking({ x: 5, y: 3 }, target, [{ x: 5, y: 7 }]), false);
 });
 
+test("flanking a Large creature is opposite edges or opposite corners of its space (issue #186)", () => {
+  // The ogre fills (5,5) to (6,6).
+  const ogre = { x: 5, y: 5, footprint: 2 };
+  // Left edge against right edge, on different rows: still opposite sides.
+  assert.equal(isFlanking({ x: 4, y: 5 }, ogre, [{ x: 7, y: 6 }]), true);
+  assert.equal(isFlanking({ x: 6, y: 4 }, ogre, [{ x: 5, y: 7 }]), true);
+  // Opposite corners.
+  assert.equal(isFlanking({ x: 4, y: 4 }, ogre, [{ x: 7, y: 7 }]), true);
+  assert.equal(isFlanking({ x: 7, y: 4 }, ogre, [{ x: 4, y: 7 }]), true);
+  // A corner against an edge, or the same side, is not.
+  assert.equal(isFlanking({ x: 4, y: 4 }, ogre, [{ x: 7, y: 6 }]), false);
+  assert.equal(isFlanking({ x: 4, y: 5 }, ogre, [{ x: 4, y: 6 }]), false);
+  // Neither may stand two squares off, measured from the ogre's edge.
+  assert.equal(isFlanking({ x: 3, y: 5 }, ogre, [{ x: 7, y: 6 }]), false);
+  assert.equal(isFlanking({ x: 4, y: 5 }, ogre, [{ x: 8, y: 6 }]), false);
+  // A Large ally flanks from its whole space.
+  assert.equal(isFlanking({ x: 4, y: 5 }, ogre, [{ x: 7, y: 4, footprint: 2 }]), true);
+});
+
 test("a hostile within 5 feet is one on any of the eight squares around", () => {
   const me = { x: 5, y: 5 };
   assert.equal(hostileWithinFiveFeet(me, [{ x: 6, y: 6 }]), true);
   assert.equal(hostileWithinFiveFeet(me, [{ x: 7, y: 5 }]), false);
   assert.equal(hostileWithinFiveFeet(me, []), false);
+  // An ogre anchored two squares off, whose near square is beside the archer.
+  assert.equal(hostileWithinFiveFeet(me, [{ x: 6, y: 6, footprint: 2 }]), true);
+  assert.equal(hostileWithinFiveFeet(me, [{ x: 7, y: 5, footprint: 2 }]), false);
+  assert.equal(hostileWithinFiveFeet(me, [{ x: 3, y: 3, footprint: 2 }]), true);
+  assert.equal(hostileWithinFiveFeet(me, [{ x: 2, y: 3, footprint: 2 }]), false);
 });
+
 
 console.log(`test-attack-rules: ${passed} passed`);

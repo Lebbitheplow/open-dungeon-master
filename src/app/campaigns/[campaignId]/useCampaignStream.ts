@@ -1421,13 +1421,18 @@ export function useCampaignStream(campaignId: string) {
           // start_encounter lands, before any battle_map_updated ping.
           // floor_changed as well: the reachable tiles and "your turn" on
           // the board follow the floor, and went stale without this.
+          // roster_updated: Play as changes whose token is "mine", whose
+          // reach the board draws and whose turn it shows; the projection
+          // is built per active character on the server (view.ts).
           if (
             eventType === "battle_map_updated" ||
             eventType === "encounter_updated" ||
-            eventType === "floor_changed"
+            eventType === "floor_changed" ||
+            eventType === "roster_updated"
           ) {
             void refreshBattleMap();
           }
+
           if (eventType === "map_ping") {
             const ping = payload as unknown as MapPing;
             if (typeof ping?.x === "number" && typeof ping?.y === "number") {

@@ -108,6 +108,8 @@ import { damageEnemyTool, endEncounterTool, endTurnTool, enemyAttackTool, startE
 import { RUN_PREPARED_ENCOUNTER, runPreparedEncounter } from "@/lib/dm/prepared-encounter-tool";
 import { rollDeathSave } from "@/lib/dm/death";
 import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
+import { tilesApart } from "@/lib/dm/board-reach";
+
 import { initLegendaryPools } from "@/lib/dm/legendary-tools";
 import { lairCountPassed } from "@/lib/dm/legendary-logic";
 import { publishTitleCard } from "@/lib/dm/scene-state";
@@ -1816,8 +1818,9 @@ function companionAutoAct(
       if (!token) {
         continue;
       }
-      const distance = Math.max(Math.abs(token.x - myToken.x), Math.abs(token.y - myToken.y));
+      const distance = tilesApart(token, myToken);
       if (distance < best) {
+
         best = distance;
         target = enemy;
       }

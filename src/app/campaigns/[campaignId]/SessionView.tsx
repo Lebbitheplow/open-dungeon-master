@@ -74,7 +74,8 @@ import {
   useNarrationReplay,
   useNarrationStatus,
 } from "@/app/campaigns/[campaignId]/NarrationFailureBanner";
-import { turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
+import { playingSheet, turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
+
 import { useDocked } from "@/app/campaigns/[campaignId]/SidePanel";
 
 // The level-up dialog carries the class feature and resource tables of the
@@ -311,7 +312,13 @@ export function SessionView({
   // Everything below runs on every dm_delta while the DM narrates, so the
   // values handed to the memoized panels are stabilized with useMemo and
   // useCallback. All hooks must stay above the null guard further down.
-  const mySheet = useMemo(() => sheets.find((sheet) => sheet.userId === me?.id), [sheets, me?.id]);
+  // The character this player runs (Play as), falling back to any sheet of
+  // theirs for a seat that only has companions.
+  const mySheet = useMemo(
+    () => playingSheet(sheets, me?.id ?? "", state.activeSheetId) ?? sheets.find((sheet) => sheet.userId === me?.id),
+    [sheets, me?.id, state.activeSheetId],
+  );
+
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns
   // the level, so the party card offers a Level up button until it is done.
@@ -814,7 +821,9 @@ export function SessionView({
               spotlighted={gate.spotlighted}
               heldSpotlightNames={gate.heldSpotlightNames}
               encounter={state.encounter}
+              activeSheetId={state.activeSheetId}
               onReleaseFloor={releaseFloor}
+
               joinBanner={joinBanner}
               notice={narrationNotice}
               composerRef={composerRef}

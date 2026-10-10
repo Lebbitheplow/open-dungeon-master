@@ -2,12 +2,14 @@ import { evadesOpportunityAttacksAfterMelee, MOBILE_ATTACKED, polearmReachOpport
 import { budgetFor } from "@/lib/dm/turn-budget";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { getActiveEncounter, listEnemies, saveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, listEnemies, saveEncounter } from "@/lib/db/encounters";
+
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
-import { chebyshev } from "@/lib/battlemap/types";
+import { footprintDistance, footprintForSize, type Footprint } from "@/lib/battlemap/footprint";
+
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import {
@@ -83,33 +85,45 @@ export type OpportunityOutcome = {
 // walk never leaves it. `steps` is every square of the walk in order, the
 // starting one first.
 // The square a walk enters a reactor's reach at, or null when it never
-// does: Polearm Master's opportunity attack on a creature coming in.
-export function entersReachAt(steps: XY[], reactor: XY, reach: number): XY | null {
+// does: Polearm Master's opportunity attack on a creature coming in. Reach
+// is measured between the nearest squares of the two, so an ogre's reach
+// starts at its edge and a walking ogre leaves a reach when its last square
+// does (src/lib/battlemap/footprint.ts).
+export function entersReachAt(
+  steps: XY[],
+  reactor: XY,
+  reach: number,
+  reactorFootprint: Footprint = 1,
+  moverFootprint: Footprint = 1,
+): XY | null {
+  const apart = (step: XY) => footprintDistance(reactor, reactorFootprint, step, moverFootprint);
   for (let index = 0; index + 1 < steps.length; index += 1) {
     const here = steps[index];
     const next = steps[index + 1];
-    if (
-      chebyshev(reactor.x, reactor.y, here.x, here.y) > reach &&
-      chebyshev(reactor.x, reactor.y, next.x, next.y) <= reach
-    ) {
+    if (apart(here) > reach && apart(next) <= reach) {
       return next;
     }
   }
   return null;
 }
 
-export function leavesReachAt(steps: XY[], reactor: XY, reach: number): XY | null {
+export function leavesReachAt(
+  steps: XY[],
+  reactor: XY,
+  reach: number,
+  reactorFootprint: Footprint = 1,
+  moverFootprint: Footprint = 1,
+): XY | null {
+  const apart = (step: XY) => footprintDistance(reactor, reactorFootprint, step, moverFootprint);
   for (let index = 0; index + 1 < steps.length; index += 1) {
     const here = steps[index];
     const next = steps[index + 1];
-    if (
-      chebyshev(reactor.x, reactor.y, here.x, here.y) <= reach &&
-      chebyshev(reactor.x, reactor.y, next.x, next.y) > reach
-    ) {
+    if (apart(here) <= reach && apart(next) > reach) {
       return here;
     }
   }
   return null;
+
 }
 
 const lowered = (conditions: string[]) => conditions.map((entry) => entry.toLowerCase());
@@ -179,7 +193,8 @@ export function resolveOpportunityAttacks(
       continue;
     }
     const { attack, reachTiles: reach } = weapon;
-    const leftFrom = leavesReachAt(steps, token, reach);
+    const leftFrom = leavesReachAt(steps, token, reach, footprintForSize(enemy.stats.size));
+
     if (!leftFrom) {
       continue;
     }
@@ -376,8 +391,11 @@ export function resolvePcOpportunityAttacks(
   }
   const steps = [from, ...(path?.length ? path : [to])];
   const notes: string[] = [];
+  // The walker's size: an ogre leaves a reach when its last square does.
+  const moverFootprint = footprintForSize(getEnemy(enemyId)?.stats.size);
 
   for (const stale of listSheets(campaign.id)) {
+
     const sheet = getSheetById(stale.id) ?? stale;
     if (
       !canAct({ sheet, encounter, kind: "reaction" }).ok ||
@@ -410,8 +428,9 @@ export function resolvePcOpportunityAttacks(
       continue;
     }
     // Polearm Master: a creature entering the polearm's reach provokes too.
-    const entering = polearmReachOpportunity(sheet, resolved.displayName) ? entersReachAt(steps, token, profile.reachTiles) : null;
-    if (!leavesReachAt(steps, token, profile.reachTiles) && !entering) {
+    const entering = polearmReachOpportunity(sheet, resolved.displayName) ? entersReachAt(steps, token, profile.reachTiles, 1, moverFootprint) : null;
+    if (!leavesReachAt(steps, token, profile.reachTiles, 1, moverFootprint) && !entering) {
+
       continue;
     }
 

@@ -16,7 +16,8 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { deriveHand, waitingHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 const { previewRows, composeSentence, intentBody } = await import("../src/lib/battlemap/hand-play.ts");
 const { reactionCards, reactionAim } = await import("../src/lib/battlemap/hand-react.ts");
-const { turnFromEncounter, turnPips, turnHudBudget } = await import("../src/lib/battlemap/hand-table.ts");
+const { turnFromEncounter, turnPips, turnHudBudget, playingSheet } = await import("../src/lib/battlemap/hand-table.ts");
+
 const { hudGates } = await import("../src/lib/battlemap/hand-hud.ts");
 const { conditionNote, conditionNoteLine, namesLookup } = await import("../src/lib/battlemap/condition-notes.ts");
 const { characterStageRows, enemyStageRows } = await import("../src/lib/battlemap/view-stage.ts");
@@ -140,7 +141,31 @@ test("a wild-shaped character at 0 hit points cannot act either (the server neve
 
 // ---- U:UA1 / UA6 the turn from the engine ----
 
+test("the Hand is the character the seat plays, not the first one made (issue #185)", () => {
+  const sheets = [
+    { id: "a", userId: "u1", isCompanion: false },
+    { id: "pet", userId: "u1", isCompanion: true },
+    { id: "b", userId: "u1", isCompanion: false },
+    { id: "c", userId: "u2", isCompanion: false },
+  ];
+  assert.equal(playingSheet(sheets, "u1", "b")?.id, "b");
+  assert.equal(playingSheet(sheets, "u1", "a")?.id, "a");
+  // No seat choice, or a stale one: the first owned character.
+  assert.equal(playingSheet(sheets, "u1", "")?.id, "a");
+  assert.equal(playingSheet(sheets, "u1", undefined)?.id, "a");
+  assert.equal(playingSheet(sheets, "u1", "gone")?.id, "a");
+  // Never somebody else's character, never a companion.
+  assert.equal(playingSheet(sheets, "u1", "c")?.id, "a");
+  assert.equal(playingSheet(sheets, "u1", "pet")?.id, "a");
+  assert.equal(playingSheet(sheets, "u3", "a"), null);
+  // The turn follows the switch: B's turn is my turn once I play B.
+  const encounter = { round: 1, orderReady: true, acting: { id: "b", name: "Bea" }, surprised: { acting: [], reacting: [] }, reactionsUsed: [], turn: { ownerId: "b", actionUsed: false, bonusUsed: false, reactionUsed: false, attacksMade: 0 } };
+  assert.equal(turnFromEncounter(encounter, playingSheet(sheets, "u1", "b"), { myTurn: true }).myTurn, true);
+  assert.equal(turnFromEncounter(encounter, playingSheet(sheets, "u1", ""), { myTurn: true }).myTurn, false);
+});
+
 test("the Hand's turn and pips are the engine's count, and a spent reaction comes from reactionsUsed", () => {
+
   const encounter = {
     round: 3, orderReady: true,
     acting: { id: "s1", name: "Kael" },

@@ -23,7 +23,8 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, listTokens } from "@/lib/db/battle-maps";
-import { chebyshev } from "@/lib/battlemap/types";
+import { tilesApart } from "@/lib/dm/board-reach";
+
 import {
   getActiveEncounter,
   getEnemy,
@@ -405,11 +406,12 @@ export function authoredSneakEdge(encounterId: string, sheetId: string, enemyId:
   const tokens = listTokens(map.id);
   const me = tokens.find((token) => token.refId === sheetId);
   const target = tokens.find((token) => token.refId === enemyId);
-  if (!me || !target || chebyshev(me.x, me.y, target.x, target.y) > 1) {
+  if (!me || !target || tilesApart(me, target) > 1) {
     return null;
   }
   const crowded = tokens.some(
-    (token) => token.refId !== sheetId && token.refId !== enemyId && chebyshev(me.x, me.y, token.x, token.y) <= 1,
+    (token) => token.refId !== sheetId && token.refId !== enemyId && tilesApart(me, token) <= 1,
   );
+
   return crowded ? null : duel.held.feature;
 }

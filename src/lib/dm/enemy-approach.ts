@@ -6,7 +6,9 @@ import { hasLineOfSight } from "@/lib/battlemap/los";
 import { bestFiringPosition } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
 import { chebyshev, climbsFrom, swimsFrom, type BattleToken, type MoveTraits } from "@/lib/battlemap/types";
-import { footprintForSize } from "@/lib/battlemap/footprint";
+import { footprintDistance, footprintForSize, nearestFootprintTile } from "@/lib/battlemap/footprint";
+import { tilesApart, tokenFootprint } from "@/lib/dm/board-reach";
+
 import { passableTiles } from "@/lib/battlemap/passage";
 import { getSheetById } from "@/lib/db/sheets";
 import { sizeForRace } from "@/lib/srd";
@@ -127,17 +129,27 @@ export function approachTarget(
   if (!map || !attacker || !target) {
     return { distance: null };
   }
-  const sightFrom = (at: XY) =>
-    hasLineOfSight(map.terrain, map.width, map.height, at.x, at.y, target.x, target.y);
+  // Measured between the nearest squares of the two (src/lib/battlemap/
+  // footprint.ts): an ogre two squares wide reaches a character against
+  // either of them, and is reached from either.
+  const mine = footprintForSize(enemy.stats.size);
+  const theirs = tokenFootprint(target);
+  const apart = (at: XY) => footprintDistance(at, mine, target, theirs);
+  const sightFrom = (at: XY) => {
+    const to = nearestFootprintTile(target, theirs, at);
+    const from = nearestFootprintTile(at, mine, to);
+    return hasLineOfSight(map.terrain, map.width, map.height, from.x, from.y, to.x, to.y);
+  };
   const reachesFrom = (at: XY) => {
-    const distance = chebyshev(at.x, at.y, target.x, target.y);
+    const distance = apart(at);
     if (profile.melee && distance <= profile.reachTiles && (distance <= 1 || sightFrom(at))) {
       return true;
     }
     return profile.ranged && distance <= profile.longRangeTiles && sightFrom(at);
   };
   const origin = { x: attacker.x, y: attacker.y };
-  const startDistance = chebyshev(origin.x, origin.y, target.x, target.y);
+  const startDistance = apart(origin);
+
   if (reachesFrom(origin)) {
     return { distance: startDistance };
   }
@@ -185,8 +197,9 @@ export function approachTarget(
     // The spell areas it walked into (src/lib/dm/zone-triggers.ts).
     provoked.push(...zonesAfterMove(campaign, encounterId, { kind: "enemy", refId: enemy.id }, origin, walked.length ? walked : [landing]));
   }
-  const distance = chebyshev(landing.x, landing.y, target.x, target.y);
+  const distance = apart(landing);
   const moved = landing.x !== origin.x || landing.y !== origin.y;
+
   const base = {
     distance,
     ...(moved ? { movedTo: `(${landing.x},${landing.y})` } : {}),
@@ -225,8 +238,9 @@ export function enemyAllyNear(encounterId: string, enemyId: string, targetRef: s
       return false;
     }
     const token = getTokenByRef(map.id, ally.id);
-    return Boolean(token && chebyshev(token.x, token.y, target.x, target.y) <= 1);
+    return Boolean(token && tilesApart(token, target) <= 1);
   });
+
 }
 
 // An enemy's walking traits on the board: a swimming or climbing speed from
