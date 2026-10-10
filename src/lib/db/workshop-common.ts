@@ -1,4 +1,5 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
+import { byName, compareNames } from "@/lib/language/text-logic";
 import { getWorkshopForUser, listWorkshopsForUser } from "@/lib/db/workshops";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { BoardInventory } from "@/lib/workshop/board";
@@ -47,13 +48,13 @@ export function getCommonWorkshop(workshop: Pick<Campaign, "id" | "ownerUserId">
 
 // The chapters that draw on a workshop.
 export function chaptersOf(workshop: Pick<Campaign, "id" | "ownerUserId">): Array<{ id: string; title: string }> {
-  return getDatabase()
+  const chapters = getDatabase()
     .prepare(
       `SELECT id, title FROM campaigns
-        WHERE common_workshop_id = ? AND owner_user_id = ? AND kind = 'workshop'
-        ORDER BY title COLLATE NOCASE`,
+        WHERE common_workshop_id = ? AND owner_user_id = ? AND kind = 'workshop'`,
     )
     .all(workshop.id, workshop.ownerUserId) as Array<{ id: string; title: string }>;
+  return chapters.sort((a, b) => compareNames(a.title, b.title));
 }
 
 // The workshops this one could draw on: the owner's others, minus any that
@@ -99,13 +100,9 @@ export function boardInventoryFor(campaignId: string, common: Pick<Campaign, "id
         from ? { ...row, from } : row,
       );
     return {
-      npcs: rows(
-        `SELECT id, name FROM npcs WHERE campaign_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE`,
-      ),
-      maps: rows(`SELECT id, name FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`),
-      encounters: rows(
-        `SELECT id, name FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-      ),
+      npcs: rows(`SELECT id, name FROM npcs WHERE campaign_id = ? AND archived = 0`).sort(byName),
+      maps: rows(`SELECT id, name FROM prepared_maps WHERE campaign_id = ?`).sort(byName),
+      encounters: rows(`SELECT id, name FROM encounter_templates WHERE campaign_id = ?`).sort(byName),
       locations: rows(`SELECT id, name FROM locations WHERE campaign_id = ? ORDER BY created_at`),
     };
   };

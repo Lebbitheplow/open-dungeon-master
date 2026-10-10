@@ -1,4 +1,4 @@
-import { foldName } from "@/lib/language/text-logic";
+import { compareNames, foldName } from "@/lib/language/text-logic";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import {
   parseBeatCounts,
@@ -89,11 +89,12 @@ export function listRelationships(campaignId: string): Relationship[] {
   return (
     getDatabase()
       .prepare(
-        `SELECT * FROM relationships WHERE campaign_id = ?
-         ORDER BY ABS(approval) DESC, subject_name COLLATE NOCASE`,
+        `SELECT * FROM relationships WHERE campaign_id = ?`,
       )
       .all(campaignId) as RelationshipRow[]
-  ).map(mapRelationship);
+  )
+    .map(mapRelationship)
+    .sort((a, b) => Math.abs(b.approval) - Math.abs(a.approval) || compareNames(a.subjectName, b.subjectName));
 }
 
 // Subjects are compared in JavaScript, by Unicode case and form

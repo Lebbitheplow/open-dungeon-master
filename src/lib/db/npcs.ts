@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import { matchEntity, mergeAliases, normalizeName, type EntityMatch } from "@/lib/dm/entity-logic";
 import { normalizeNpcVoice, type NpcDraft, type NpcVoice } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -114,9 +115,11 @@ function mapNpc(row: NpcRow): Npc {
 export function listNpcs(campaignId: string): Npc[] {
   return (
     getDatabase()
-      .prepare(`SELECT * FROM npcs WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`)
+      .prepare(`SELECT * FROM npcs WHERE campaign_id = ?`)
       .all(campaignId) as NpcRow[]
-  ).map(mapNpc);
+  )
+    .map(mapNpc)
+    .sort(byName);
 }
 
 // Looks an NPC up by any name they have answered to, by entity resolution

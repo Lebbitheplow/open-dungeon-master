@@ -13,7 +13,7 @@
 import { blockText, parseBook, stripInline, type BookBlock } from "./markdown";
 import type { RulebookKind, RulebookPage, SearchHit } from "./types";
 import { stemWord, stopWordsFor } from "../language/language";
-import { words as textWords } from "../language/text-logic";
+import { compareNames, words as textWords } from "../language/text-logic";
 
 export function stem(word: string): string {
   return stemWord(word.toLowerCase(), "english");
@@ -232,6 +232,6 @@ export function searchRulebook(index: RulebookIndex, query: string, limit = 40):
     pageHits.sort((a, b) => b.score - a.score);
     hits.push(...pageHits.slice(0, 3));
   }
-  hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  hits.sort((a, b) => b.score - a.score || compareNames(a.title, b.title));
   return hits.slice(0, limit);
 }

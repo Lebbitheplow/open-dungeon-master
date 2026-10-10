@@ -38,6 +38,7 @@ import {
   type HandTurn,
   type SpellFact,
 } from "@/lib/battlemap/hand-core";
+import { compareNames } from "@/lib/language/text-logic";
 
 // ---- spells ----
 
@@ -310,7 +311,7 @@ export function spellCards(sheet: CharacterSheet, turn: HandTurn, riders: Combat
   }
   // Attacks first inside a level, so the cantrip that hurts leads the hand.
   const weight = (card: HandCard) => (card.target === "enemy" ? 0 : card.heals ? 1 : 2);
-  rows.sort((a, b) => a.level - b.level || weight(a.card) - weight(b.card) || a.card.name.localeCompare(b.card.name));
+  rows.sort((a, b) => a.level - b.level || weight(a.card) - weight(b.card) || compareNames(a.card.name, b.card.name));
   return rows.map((row) => row.card);
 }
 

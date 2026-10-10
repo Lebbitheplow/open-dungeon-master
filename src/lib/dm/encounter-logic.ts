@@ -1,4 +1,5 @@
 import type { OrderEntry } from "@/lib/db/encounters";
+import { compareNames } from "@/lib/language/text-logic";
 
 // Pure combat bookkeeping, kept database-free like mutation-math.ts so
 // scripts/test-encounter-logic.mjs can exercise every branch.
@@ -48,7 +49,7 @@ export function buildOrder(
     if (a.kind !== b.kind) {
       return a.kind === "pc" ? -1 : 1;
     }
-    return a.name.localeCompare(b.name);
+    return compareNames(a.name, b.name);
   });
 }
 

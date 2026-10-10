@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { compareNames } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   clampMarkup,
@@ -94,7 +95,7 @@ function map(row: Row): Shop {
 }
 
 export function listShops(campaignId: string): Shop[] {
-  return (getDatabase().prepare(`SELECT * FROM shops WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`).all(campaignId) as Row[]).map(map);
+  return (getDatabase().prepare(`SELECT * FROM shops WHERE campaign_id = ?`).all(campaignId) as Row[]).map(map).sort((a, b) => compareNames(a.name, b.name));
 }
 
 // The shops at a place, by id first and by name for a place that was

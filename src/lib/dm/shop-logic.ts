@@ -1,4 +1,5 @@
 import { COPPER_PER_GOLD, formatCopper, parseCoins } from "@/lib/srd/currency";
+import { compareNames } from "@/lib/language/text-logic";
 
 // Shops (docs/vtt-parity-implementation-plan.md 11.1): pure pricing and
 // stocking. Prices come from the content pack's cost strings, marked up by
@@ -172,7 +173,7 @@ export function stockFromPool(
     const qty = item.cp >= 50 * COPPER_PER_GOLD ? 1 : item.cp >= 5 * COPPER_PER_GOLD ? 1 + Math.floor(random() * 3) : 2 + Math.floor(random() * 6);
     picked.push({ itemName: item.name, qty, priceCp: item.cp, note: "" });
   }
-  return picked.sort((a, b) => a.itemName.localeCompare(b.itemName));
+  return picked.sort((a, b) => compareNames(a.itemName, b.itemName));
 }
 
 // A restock of a prepared shelf: every prepared line back up to its

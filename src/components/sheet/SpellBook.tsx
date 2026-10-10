@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
 import { replayAnimation } from "@/lib/motion/replay";
 import { spellSupportFor, spellSupportWord } from "@/lib/srd/spell-support";
+import { compareNames } from "@/lib/language/text-logic";
 
 // The spell book: one tab per spell level (cantrips first), every spell a
 // tile that says at a glance whether it is ready, waiting for a long rest,
@@ -152,7 +153,7 @@ export function SpellBook({
   // that chose it. Re-sorting on every tap sent a chosen spell leaping to
   // the front and the list jumping, and the tap looked lost (issue 66).
   const byRank = (a: SpellTile, b: SpellTile) =>
-    RANK[a.state] - RANK[b.state] || (a.label ?? a.name).localeCompare(b.label ?? b.name);
+    RANK[a.state] - RANK[b.state] || compareNames(a.label ?? a.name, b.label ?? b.name);
   const pageKey = `${needle ? `?${needle}` : active}|${shown
     .map((tile) => tile.name)
     .sort()

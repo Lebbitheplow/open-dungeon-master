@@ -1,4 +1,5 @@
 import type { AtlasMap, Folder, Pin, Region, XY } from "./model.ts";
+import { byName } from "../language/text-logic.ts";
 
 // Folders and nested maps, after WorldForge's categories and maps modules
 // (by Smoebo). Both are trees stored as flat lists with parent pointers, and
@@ -15,7 +16,7 @@ export function folderChildren(folders: Folder[]): Map<string, Folder[]> {
     const parent = folder.parentId && ids.has(folder.parentId) && folder.parentId !== folder.id ? folder.parentId : "";
     kids.set(parent, [...(kids.get(parent) ?? []), folder]);
   }
-  for (const group of kids.values()) group.sort((a, b) => a.name.localeCompare(b.name));
+  for (const group of kids.values()) group.sort(byName);
   return kids;
 }
 
@@ -33,7 +34,7 @@ export function folderTree(folders: Folder[]): Array<{ folder: Folder; depth: nu
     }
   };
   walk("", 0);
-  for (const folder of [...folders].sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const folder of [...folders].sort(byName)) {
     if (!seen.has(folder.id)) {
       seen.add(folder.id);
       out.push({ folder, depth: 0 });

@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { compareNames } from "@/lib/language/text-logic";
 import { contactBlocked } from "@/lib/db/moderation";
 import { getUserByUsername, isCompanionUserId, type UserAvatar } from "@/lib/db/users";
 
@@ -116,11 +117,10 @@ export function listFriends(userId: string): FriendEntry[] {
               u.username, u.avatar_json, f.created_at
        FROM friends f
        JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_user_id ELSE f.user_id END
-       WHERE f.status = 'accepted' AND (f.user_id = ? OR f.friend_user_id = ?)
-       ORDER BY u.username COLLATE NOCASE ASC`,
+       WHERE f.status = 'accepted' AND (f.user_id = ? OR f.friend_user_id = ?)`,
     )
     .all(userId, userId, userId, userId) as EdgeRow[];
-  return rows.map(mapEdge);
+  return rows.map(mapEdge).sort((a, b) => compareNames(a.username, b.username));
 }
 
 export function listPendingIncoming(userId: string): FriendEntry[] {

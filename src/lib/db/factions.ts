@@ -1,4 +1,4 @@
-import { foldName } from "@/lib/language/text-logic";
+import { byName, foldName } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { clampPower, normalizeFactionAttitude, type Faction, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -38,9 +38,11 @@ function map(row: Row): Faction {
 export function listFactions(campaignId: string): Faction[] {
   return (
     getDatabase()
-      .prepare(`SELECT * FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`)
+      .prepare(`SELECT * FROM factions WHERE campaign_id = ?`)
       .all(campaignId) as Row[]
-  ).map(map);
+  )
+    .map(map)
+    .sort(byName);
 }
 
 export function getFaction(factionId: string): Faction | null {

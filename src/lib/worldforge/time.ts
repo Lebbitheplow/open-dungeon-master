@@ -1,4 +1,5 @@
 import type { Calendar, Entry, FieldDef, FieldValue, WorldEvent, WorldType, YearValue } from "./model.ts";
+import { compareNames } from "../language/text-logic.ts";
 
 // Years across a world's calendars, after WorldForge's years and fields
 // modules (by Smoebo). A calendar is a reckoning, "Tide Reckoning, TR", with
@@ -46,7 +47,7 @@ export function sortEvents(events: WorldEvent[], calendars: Calendar[]): WorldEv
     const ya = absoluteYear(a.when, calendars);
     const yb = absoluteYear(b.when, calendars);
     if (ya !== yb) return ya === Infinity ? 1 : yb === Infinity ? -1 : ya - yb;
-    return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
+    return compareNames(a.title, b.title) || a.id.localeCompare(b.id);
   });
 }
 

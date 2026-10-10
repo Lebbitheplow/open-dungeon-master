@@ -20,12 +20,12 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { getLocationByName, listLocations, upsertCurrentLocation } = await import("../src/lib/db/locations.ts");
-const { getNpcByName, nearestNpcName, upsertNpc } = await import("../src/lib/db/npcs.ts");
+const { getNpcByName, listNpcs, nearestNpcName, upsertNpc } = await import("../src/lib/db/npcs.ts");
 const { handleSocialCheck } = await import("../src/lib/dm/social-tools.ts");
 const { handleRelationshipBeat } = await import("../src/lib/dm/relationship-tools.ts");
 const { beatSpec, RELATIONSHIP_BEAT_NAMES } = await import("../src/lib/dm/relationship-logic.ts");
-const { findFactionByName, insertFaction } = await import("../src/lib/db/factions.ts");
-const { ensureRelationship, getRelationship, listRelationshipsForSubject } = await import(
+const { findFactionByName, insertFaction, listFactions } = await import("../src/lib/db/factions.ts");
+const { ensureRelationship, getRelationship, listRelationships, listRelationshipsForSubject } = await import(
   "../src/lib/db/relationships.ts"
 );
 const { deleteEffectsByName, insertEffect, listEffects } = await import("../src/lib/db/active-effects.ts");
@@ -123,6 +123,22 @@ test("an effect is lifted by name whatever the case of its accented letters", ()
   assert.equal(deleteEffectsByName(french.id, target, "BÉNÉDICTION"), 1);
   assert.equal(listEffects(french.id, target).length, 0);
   assert.equal(listEffects(other.id, target).length, 1, "another campaign's effect stays");
+});
+
+test("lists sort by Unicode, so a name starting with an accented letter is not put after Z", () => {
+  const table = newCampaign("italian");
+  for (const name of ["Zed", "Élodie", "dario", "Fabio"]) {
+    upsertNpc({ campaignId: table.id, name });
+    insertFaction(table.id, { name: `${name} Guild` });
+  }
+  assert.deepEqual(listNpcs(table.id).map((npc) => npc.name), ["dario", "Élodie", "Fabio", "Zed"]);
+  assert.deepEqual(listFactions(table.id).map((faction) => faction.name), ["dario Guild", "Élodie Guild", "Fabio Guild", "Zed Guild"]);
+  // Relationships: the strongest first, then by name.
+  for (const [subjectName, approval] of [["Zed", 3], ["Élodie", 1], ["Fabio", -1], ["Dario", 0]]) {
+    const relationship = ensureRelationship({ campaignId: table.id, characterId: "kara", characterName: "Kara", subjectKind: "npc", subjectName });
+    getDatabase().prepare("UPDATE relationships SET approval = ? WHERE id = ?").run(approval, relationship.id);
+  }
+  assert.deepEqual(listRelationships(table.id).map((entry) => entry.subjectName), ["Zed", "Élodie", "Fabio", "Dario"]);
 });
 
 // A name that only nearly matches is never resolved (the lead confirms it),

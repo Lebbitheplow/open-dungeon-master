@@ -15,6 +15,7 @@
 
 import authoredSpellsJson from "@/lib/srd/authored-spells.json";
 import spellManifest from "@/lib/srd/manifest/spells.json";
+import { compareNames } from "@/lib/language/text-logic";
 
 // An action, a bonus action, a reaction, or a number of minutes.
 export type CastingTime = "action" | "bonus" | "reaction" | number;
@@ -368,5 +369,5 @@ export function bundledSpellFacts(name: string): SpellFacts | null {
 // run as (engineSpellNamed).
 export function bundledSpellNames(): string[] {
   const names = new Set<string>([...AUTHORED.map((row) => row.name), ...(spellManifest as unknown as { spells: ManifestSpell[] }).spells.map((spell) => spell.n)]);
-  return [...names].sort((a, b) => a.localeCompare(b));
+  return [...names].sort(compareNames);
 }

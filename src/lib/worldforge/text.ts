@@ -1,5 +1,5 @@
 import type { Stub } from "./model.ts";
-import { commonWords, foldName } from "../language/text-logic.ts";
+import { commonWords, compareNames, foldName } from "../language/text-logic.ts";
 
 // Mentions and the names still to be written, after WorldForge's mentions
 // and stubs modules (by Smoebo). Pure.
@@ -135,7 +135,7 @@ export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<
     if (known.has(low) || handles.some((handle) => wordSubset(handle, low) || wordSubset(low, handle))) continue;
     out.push({ name: seen.name, count: seen.count });
   }
-  return out.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return out.sort((a, b) => b.count - a.count || compareNames(a.name, b.name));
 }
 
 // The entry that now answers to a stub's name, if one does: the stub is

@@ -1,4 +1,5 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import { resolveMonster } from "@/lib/bestiary";
 import { tableAuthors } from "@/lib/db/homebrew";
 import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
@@ -89,7 +90,7 @@ export function readImportSource(sourceId: string): ImportSource {
   // which are user-scoped and do not travel (src/lib/workshop/import.ts),
   // and the map the fight is drawn on, for the same reason as a place's.
   source.encounters = allRows(
-    `SELECT id, name, enemies_json, map_json FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    `SELECT id, name, enemies_json, map_json FROM encounter_templates WHERE campaign_id = ?`,
     sourceId,
   ).map((row) => {
     const mapId = parseJson<{ mapId?: unknown }>(String(row.map_json ?? ""), {}).mapId;
@@ -101,24 +102,15 @@ export function readImportSource(sourceId: string): ImportSource {
       ),
       ...(typeof mapId === "string" && mapId ? { mapId } : {}),
     };
-  });
-  source.tables = allRows(
-    `SELECT id, name FROM roll_tables WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-    sourceId,
-  ) as ImportSource["tables"];
-  source.npcs = allRows(
-    `SELECT id, name FROM npcs WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-    sourceId,
-  ) as ImportSource["npcs"];
-  source.maps = allRows(
-    `SELECT id, name FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
-    sourceId,
-  ) as ImportSource["maps"];
+  }).sort(byName);
+  source.tables = (allRows(`SELECT id, name FROM roll_tables WHERE campaign_id = ?`, sourceId) as ImportSource["tables"]).sort(byName);
+  source.npcs = (allRows(`SELECT id, name FROM npcs WHERE campaign_id = ?`, sourceId) as ImportSource["npcs"]).sort(byName);
+  source.maps = (allRows(`SELECT id, name FROM prepared_maps WHERE campaign_id = ?`, sourceId) as ImportSource["maps"]).sort(byName);
   // A shop's place and keeper ride along so the planner can say which
   // shops would arrive unplaced or unkept, and its shelf's size for the
   // preview (#171). The shelf counted is the one a copy starts with.
   source.shops = allRows(
-    `SELECT id, name, location_id, keeper_npc_id, stock_json, prepared_stock_json FROM shops WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    `SELECT id, name, location_id, keeper_npc_id, stock_json, prepared_stock_json FROM shops WHERE campaign_id = ?`,
     sourceId,
   ).map((row) => ({
     id: String(row.id),
@@ -126,7 +118,7 @@ export function readImportSource(sourceId: string): ImportSource {
     ...(row.location_id ? { placeId: String(row.location_id) } : {}),
     ...(row.keeper_npc_id ? { keeperId: String(row.keeper_npc_id) } : {}),
     lines: normalizeStock(parseJson(String(row.prepared_stock_json || row.stock_json || "[]"), [])).length,
-  }));
+  })).sort(byName);
 
   const beats = allRows(
     `SELECT COUNT(*) AS n FROM workshop_beats WHERE campaign_id = ?`,

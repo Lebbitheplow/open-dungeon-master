@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const { words, foldName, hasWord } = await import("../src/lib/language/text-logic.ts");
+const { compareNames, words, foldName, hasWord } = await import("../src/lib/language/text-logic.ts");
 const { stems, stopWordsFor, stemWord } = await import("../src/lib/language/language.ts");
 const { TABLE_LANGUAGES } = await import("../src/lib/schemas/game-settings-options.ts");
 
@@ -70,6 +70,12 @@ test("names fold by Unicode case and form, not by accent", () => {
   assert.notEqual(foldName("papà"), foldName("papa"));
 });
 
+test("names sort by Unicode, case and accents aside, numbers by value, in one order on every host", () => {
+  const sorted = ["Zed", "élodie", "Олег", "Room 10", "Åsa", "Dario", "Room 9", "Ärger", "fabio"].sort(compareNames);
+  assert.deepEqual(sorted, ["Ärger", "Åsa", "Dario", "élodie", "fabio", "Room 9", "Room 10", "Zed", "Олег"]);
+  assert.equal(compareNames("Élodie", "élodie"), 0);
+});
+
 test("a name is found as a whole word, never inside a longer one", () => {
   assert.ok(hasWord("Then José nods.", "José"));
   assert.ok(!hasWord("Joséphine nods.", "José"));
@@ -118,6 +124,46 @@ test("no browser module imports the stemmer", () => {
       }
       assert.fail(`a browser module reaches the stemmer: ${chain.join(" -> ")}`);
     }
+  }
+});
+
+// Names a person reads sort through compareNames; a bare localeCompare
+// sorts by the server's own locale. The ones left compare timestamps, ids or
+// keys, where no alphabet applies; a new one has to be put on a side.
+const NOT_NAMES = {
+  "app/admin/AdminUsagePanel.tsx": 1, // lastActivityAt
+  "components/rulebook/PagePrep.tsx": 1, // updatedAt
+  "components/ui/ListControls.tsx": 1, // updatedAt, then compareNames
+  "lib/ambience/library.ts": 1, // cue ids
+  "lib/tts-cast.ts": 1, // voice ids
+  "lib/db/overworld.ts": 1, // createdAt
+  "lib/dm/call-tracker-logic.ts": 1, // call ids
+  "lib/dm/chapter-lod.ts": 3, // chapter ids
+  "lib/ops/backup.ts": 1, // createdAt
+  "lib/voice/mesh-logic.ts": 1, // joinedAt
+  "lib/voice/turn-logic.ts": 1, // raisedAt
+  "lib/voice/peers.ts": 1, // joinedAt
+  "lib/voice/transcript.ts": 1, // peer ids
+  "lib/worldforge/time.ts": 1, // event ids, after compareNames on titles
+  "lib/worldforge/web.ts": 1, // entry refs
+  "lib/worldforge/format.ts": 1, // story ids
+};
+
+test("every name a person reads sorts through compareNames, the same on every server", () => {
+  const src = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
+  const found = {};
+  for (const file of readdirSync(src, { recursive: true }).map(String).filter((file) => /\.tsx?$/.test(file))) {
+    const count = readFileSync(path.join(src, file), "utf8").match(/\.localeCompare\(/g)?.length ?? 0;
+    if (count) {
+      found[file.split(path.sep).join("/")] = count;
+    }
+  }
+  for (const [file, count] of Object.entries(found)) {
+    assert.ok(file in NOT_NAMES, `${file} sorts with localeCompare; use compareNames for names, or list why not`);
+    assert.equal(count, NOT_NAMES[file], `${file} has ${count} localeCompare calls; classify the new one`);
+  }
+  for (const file of Object.keys(NOT_NAMES)) {
+    assert.ok(found[file], `${file} is listed but no longer calls localeCompare`);
   }
 });
 

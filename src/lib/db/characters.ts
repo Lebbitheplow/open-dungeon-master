@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { admitSheet } from "@/lib/characters/admit";
@@ -190,10 +191,10 @@ export function listCharactersForUser(
 export function listPregens(userId: string, workshopId: string): LibraryCharacter[] {
   const rows = getDatabase()
     .prepare(
-      `SELECT * FROM library_characters WHERE user_id = ? AND workshop_id = ? ORDER BY name COLLATE NOCASE`,
+      `SELECT * FROM library_characters WHERE user_id = ? AND workshop_id = ?`,
     )
     .all(userId, workshopId) as LibraryRow[];
-  return rows.map(mapCharacter);
+  return rows.map(mapCharacter).sort(byName);
 }
 
 // Files a library character under a workshop as a pregen, or takes it out

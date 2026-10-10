@@ -23,6 +23,7 @@ import {
   spellbookOf,
   type CasterView,
 } from "@/lib/srd/spell-prep";
+import { compareNames } from "@/lib/language/text-logic";
 
 const lower = (name: string) => name.trim().toLowerCase();
 
@@ -115,7 +116,7 @@ function byPreference<T extends { name: string }>(spells: T[]): T[] {
     const index = STAPLES.indexOf(lower(spell.name));
     return index === -1 ? STAPLES.length : index;
   };
-  return [...spells].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  return [...spells].sort((a, b) => rank(a) - rank(b) || compareNames(a.name, b.name));
 }
 
 export type CompanionSpellInput = {

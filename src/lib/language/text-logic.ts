@@ -22,6 +22,19 @@ export function foldName(name: string): string {
   return name.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+// The order names are listed in, the same on every server and at every
+// table: Unicode's collation ("en" is CLDR's root order, which English does
+// not tailor; a bare locale would follow the host's), case and accents set
+// aside, numbers by value ("Room 9" before "Room 10"). SQLite's NOCASE puts
+// every name that starts with a letter outside ASCII after Z.
+const NAME_ORDER = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+
+export function compareNames(a: string, b: string): number {
+  return NAME_ORDER.compare(a, b);
+}
+
+export const byName = (a: { name: string }, b: { name: string }) => compareNames(a.name, b.name);
+
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
 // Where `needle` stands in `haystack` as a whole word or phrase, by Unicode

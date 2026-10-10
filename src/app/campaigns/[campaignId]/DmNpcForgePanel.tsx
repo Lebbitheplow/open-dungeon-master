@@ -32,6 +32,7 @@ import { RelationGraph as RelationGraphView } from "@/app/campaigns/[campaignId]
 import { CastChips, CastRows, type Npc } from "@/app/workshop/cast/CastList";
 import { useTourPrepare } from "@/lib/tours/prepare";
 import { NpcEditorFields } from "@/app/workshop/cast/NpcEditorFields";
+import { compareNames } from "@/lib/language/text-logic";
 
 // The NPC forge.
 //
@@ -141,7 +142,7 @@ export function DmNpcForgePanel({
         .catch(() => [] as string[]),
     ]).then(([fromMap, fromLore]) => {
       if (!cancelled) {
-        setPlaces([...new Set([...fromMap, ...fromLore])].sort((a, b) => a.localeCompare(b)));
+        setPlaces([...new Set([...fromMap, ...fromLore])].sort(compareNames));
       }
     });
     return () => {

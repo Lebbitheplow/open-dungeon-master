@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import {
   EMPTY_TEMPLATE_MAP,
   normalizeTemplateExtras,
@@ -64,9 +65,9 @@ function mapTemplate(row: TemplateRow): EncounterTemplate {
 
 export function listEncounterTemplates(campaignId: string): EncounterTemplate[] {
   const rows = getDatabase()
-    .prepare(`SELECT * FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`)
+    .prepare(`SELECT * FROM encounter_templates WHERE campaign_id = ?`)
     .all(campaignId) as TemplateRow[];
-  return rows.map(mapTemplate);
+  return rows.map(mapTemplate).sort(byName);
 }
 
 export function getEncounterTemplate(id: string): EncounterTemplate | null {

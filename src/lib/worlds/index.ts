@@ -27,6 +27,7 @@ import {
   type WorldPackSummary,
 } from "@/lib/worlds/types";
 import { MAX_PACK_ART_BYTES, PACK_ART_DATA_URL, PACK_ART_KEY } from "@/lib/worlds/art";
+import { byName } from "@/lib/language/text-logic";
 
 // The same process.cwd() + env override pattern the SQLite paths use
 // (src/lib/content/db.ts, src/lib/db/core.ts). The Dockerfile copies /app/src
@@ -140,13 +141,13 @@ export function resetWorldPackCache(): void {
 export function listWorldPacks(): WorldPack[] {
   return [...loadAll().values()]
     .map((entry) => entry.pack)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byName);
 }
 
 export function listWorldPackSummaries(): WorldPackSummary[] {
   return [...loadAll().values()]
     .map((entry) => summarizePack(entry.pack, entry.source))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byName);
 }
 
 export function worldPack(id: string): WorldPack | null {

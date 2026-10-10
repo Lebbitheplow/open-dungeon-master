@@ -1,5 +1,6 @@
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import type { ContentEntry } from "@/lib/content";
+import { byName } from "@/lib/language/text-logic";
 
 // ODM's own feats (src/lib/srd/authored-feats.json) as picker rows, for the
 // feats the content pack does not serve. The importer copies the list into
@@ -40,7 +41,7 @@ export function authoredFeatEntries(q?: string): ContentEntry[] {
   const wanted = (q ?? "").trim().toLowerCase();
   return FEATS.filter((feat) => feat.name.toLowerCase().includes(wanted))
     .map(entryOf)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byName);
 }
 
 // The pack's page with the authored feats it lacks folded in, in name order.
@@ -61,7 +62,7 @@ export function withAuthoredFeats(
   if (!missing.length) {
     return served;
   }
-  return [...served, ...missing].sort((a, b) => a.name.localeCompare(b.name));
+  return [...served, ...missing].sort(byName);
 }
 
 // The authored feat a detail link names, by its slug or its "odm-" slug.

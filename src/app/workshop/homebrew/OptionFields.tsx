@@ -8,6 +8,7 @@ import { ArchetypeFields } from "@/app/workshop/homebrew/ArchetypeFields";
 import { SpeciesFields } from "@/app/workshop/homebrew/SpeciesFields";
 import { BackgroundFields } from "@/app/workshop/homebrew/BackgroundFields";
 import { engineFeatNames } from "@/lib/srd/feat-effects";
+import { compareNames } from "@/lib/language/text-logic";
 
 // The character-option forms: feat, background, species, subclass. Each
 // writes the field names the character builder already reads for the
@@ -19,7 +20,7 @@ const RUNS_AS_OPTIONS = [
   { value: "", label: "its own text" },
   ...engineFeatNames()
     .slice()
-    .sort((a, b) => a.localeCompare(b))
+    .sort(compareNames)
     .map((name) => ({ value: name, label: name })),
 ];
 
