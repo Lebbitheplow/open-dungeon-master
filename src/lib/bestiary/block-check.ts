@@ -1,3 +1,4 @@
+import { ROUND_CEILING } from "@/lib/schemas/condition-meta";
 import { isValidExpression } from "@/lib/dice";
 import type { OnHitRider, RoutineStep, TypedDice } from "@/lib/bestiary/attack-text";
 import type { EnemyAttack, SaveAbility } from "@/lib/bestiary/statblock";
@@ -117,7 +118,7 @@ function checkOnHit(raw: unknown, attack: string): Checked<OnHitRider | null> {
   if (escape !== null) {
     rider.escapeDc = escape;
   }
-  const rounds = clamp(source.rounds, 1, 14_400);
+  const rounds = clamp(source.rounds, 1, ROUND_CEILING);
   if (rounds !== null) {
     rider.rounds = rounds;
   }
@@ -251,7 +252,7 @@ export function checkSpecials(raw: unknown): Checked<MonsterAbility[]> {
     if (condition) {
       ability.condition = condition;
     }
-    const rounds = clamp(source.rounds, 1, 14_400);
+    const rounds = clamp(source.rounds, 1, ROUND_CEILING);
     if (rounds !== null) {
       ability.rounds = rounds;
     }

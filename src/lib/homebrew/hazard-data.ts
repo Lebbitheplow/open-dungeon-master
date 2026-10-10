@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidExpression } from "@/lib/dice";
 import { DISEASES } from "@/lib/srd/afflictions";
+import { ROUND_CEILING } from "@/lib/schemas/condition-meta";
 import type { Raw } from "@/lib/homebrew/coerce";
 
 // A workshop hazard: a trap, a poison or a disease, as the numbers the
@@ -39,7 +40,7 @@ export const trapSpecSchema = z.object({
   damage: part.optional(),
   condition: word().optional(),
   conditionsAlways: z.array(word()).max(4).optional(),
-  rounds: int(1, 14_400).optional(),
+  rounds: int(1, ROUND_CEILING).optional(),
   summary: text(600).default(""),
 });
 

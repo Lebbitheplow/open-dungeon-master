@@ -126,14 +126,15 @@ await test("a homebrew spell is of level 0 to 9 and says how it resolves", async
 
   const kept = await brew(who.player, "spell", "Frost Lance", {
     desc: "A lance of frost.", level: 9, damage: "99d99", slots: 40,
-    mech: { resolution: "save", save: "dex", halfOnSave: true, condition: { name: "Slowed", rounds: 999999 } },
+    mech: { resolution: "save", save: "dex", halfOnSave: true, condition: { name: "Slowed", rounds: 99_999_999 } },
   });
   assert.equal(kept.status, 201, JSON.stringify(kept.json));
   // Keys the normalizer does not know are dropped, and a duration is
-  // bounded: ten days of rounds, past the SRD's longest timed effect.
+  // bounded: a year of rounds, the ceiling every condition carries
+  // (Geas's seventh-level casting runs exactly that long).
   assert.equal(kept.json.entry.data.damage, undefined);
   assert.equal(kept.json.entry.data.slots, undefined);
-  assert.equal(kept.json.entry.data.mech.condition.rounds, 144000);
+  assert.equal(kept.json.entry.data.mech.condition.rounds, 365 * 24 * 60 * 10);
 });
 
 await test("a player's homebrew cannot rewrite a published spell's level", async () => {

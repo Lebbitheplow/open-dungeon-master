@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidExpression } from "@/lib/dice";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
+import { ROUND_CEILING } from "@/lib/schemas/condition-meta";
 
 // The whole of a spell's mechanics block (src/lib/srd/spell-mech-types.ts),
 // checked at the homebrew boundary. A homebrew spell used to keep five
@@ -28,7 +29,8 @@ const int = (min: number, max: number) =>
     (value) => (typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : value),
     z.number().int().min(min).max(max),
   );
-const rounds = int(1, 144_000);
+// A year in rounds, the same ceiling conditions carry (Geas runs thirty days).
+const rounds = int(1, ROUND_CEILING);
 const level = int(0, 9);
 const feet = int(0, 5_280);
 
@@ -43,6 +45,8 @@ const turnDamage = z.object({
 const conditionBase = {
   name: word(),
   rounds: rounds.optional(),
+  // [the slot level it starts at, its rounds or null for "until dispelled"], ascending (Geas).
+  roundsBySlot: z.array(z.tuple([level, rounds.nullable()])).max(9).optional(),
   saveEnds: z.boolean().optional(),
   also: words(4).optional(),
   variants: words(12).optional(),
