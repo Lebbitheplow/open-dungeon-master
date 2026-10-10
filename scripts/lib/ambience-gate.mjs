@@ -162,11 +162,16 @@ export function admit(candidate, { layer, query }) {
   // an uncategorised upload is not evidence of anything.
   if (layer !== "music" && candidate.categories !== undefined) {
     const categories = String(candidate.categories ?? "");
-    if (/audio files of .*music|\bmusic by\b|\bsongs?\b|\bband\b|orchestra|choir|opera|anthem|hymn|\bjazz\b/i.test(categories)) {
+    if (/\bmusic\b|\bsongs?\b|\balbums?\b|\bband\b|orchestra|choir|opera|anthem|hymn|\bjazz\b/i.test(categories)) {
       return { ok: false, why: "music, not a sound" };
     }
     if (!SOUND_CATEGORY.test(categories)) {
       return { ok: false, why: "not filed as a sound" };
+    }
+    // A species recording from xeno-canto is one bird at close range; a
+    // bed wants the whole plain.
+    if (layer === "bed" && /xeno-canto|\(audio\)|bird (calls|songs|vocali)/i.test(categories)) {
+      return { ok: false, why: "a single species, not a place" };
     }
   }
   if (!durationOk(layer, candidate.seconds)) {

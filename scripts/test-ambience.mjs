@@ -276,7 +276,9 @@ test("spoken word is caught by category and by byline too", () => {
   const commons = { title: "Keep the Home Fires Burning.ogg", author: "x", license: "Public domain (CC0 or PD Mark)", seconds: 180 };
   assert.equal(admit({ ...commons, categories: "1914 songs|Ivor Novello" }, { layer: "bed", query: "keep" }).why, "music, not a sound");
   assert.equal(admit({ ...commons, title: "Sunshine Coast rower.ogg", categories: "People of Queensland" }, { layer: "bed", query: "coast" }).why, "not filed as a sound");
+  assert.equal(admit({ ...commons, title: "Monplaisir - 07 - desert.ogg", categories: "Free Music Archive|Ambient music" }, { layer: "bed", query: "desert" }).why, "music, not a sound", "an album filed as ambient music is still music");
   assert.equal(admit({ ...commons, title: "Rain thunder steps.ogg", categories: "Audio files of thunder|Sounds of rain" }, { layer: "bed", query: "rain" }).ok, true);
+  assert.equal(admit({ ...commons, title: "Plain Antvireo XC249644.mp3", categories: "Xeno-canto|Dysithamnus mentalis (audio)|Audio files of birds" }, { layer: "bed", query: "plain" }).why, "a single species, not a place");
   assert.equal(admit({ ...commons, title: "Rain.ogg", categories: "" }, { layer: "bed", query: "rain" }).why, "not filed as a sound", "an uncategorised upload is no evidence");
   assert.equal(admit({ ...commons, title: "Rain.ogg" }, { layer: "bed", query: "rain" }).ok, true, "a source with no categories is judged on the rest");
 });
