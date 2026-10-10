@@ -95,11 +95,9 @@ export function raceFamily(raceId: string | null | undefined): string | null {
 
 // ---- classes ----
 
-// The SRD twelve plus the artificer were rendered for all three genders; the
-// six-per-genre original classes were rendered masculine and feminine only.
-// A neutral character in a genre class therefore has no plate of its own and
-// falls through to the genre lead, which does have one - rather than being
-// quietly shown as masculine, which would be a worse answer than a generic.
+// The SRD twelve plus the artificer and the six-per-genre original classes
+// are all painted in three genders, so a neutral character in a genre class
+// draws its own neutral plate rather than falling through to the genre lead.
 const SRD_CLASS_IDS = new Set([
   "artificer",
   "barbarian",
@@ -116,7 +114,7 @@ const SRD_CLASS_IDS = new Set([
   "wizard",
 ]);
 
-// Two-gender plates like the genre classes': the content pack's classes from
+// Three-gender plates like the genre classes': the content pack's classes from
 // other books (Level Up's Marshal, Black Flag's Mechanist), painted so their
 // cards no longer fall to the hooded stranger (issue #116).
 const GENRE_CLASS_IDS = new Set([
@@ -134,7 +132,7 @@ function classPlate(classId: string, gender: PlaceholderGender): string | null {
   if (SRD_CLASS_IDS.has(id)) {
     return `${id}-${gender}`;
   }
-  if (GENRE_CLASS_IDS.has(id) && gender !== "neutral") {
+  if (GENRE_CLASS_IDS.has(id)) {
     return `${id}-${gender}`;
   }
   return null;

@@ -29,7 +29,11 @@ const SET_DIR = path.join(PUBLIC, "assets", "placeholders");
 // The whole set rides inside the desktop app and the Android APK. These are
 // ceilings, not targets: generate-placeholders.mjs encodes at 256px squares
 // and 704px landscapes at quality 70, which lands well under both.
-const BUDGET_TOTAL_BYTES = 3.5 * 1024 * 1024;
+// Raised from 3.5 MB for the painted race and class portraits, which replace
+// the flat silhouettes at the same 256px / q70 encode and add a neutral plate
+// for each of the 36 genre classes and the two pack classes (about 2 MB for
+// those 219 plates; 4.2 MB shipped in total).
+const BUDGET_TOTAL_BYTES = 4.5 * 1024 * 1024;
 const BUDGET_FILE_BYTES = 48 * 1024;
 
 const failures = [];
@@ -66,7 +70,7 @@ for (const gender of GENDER_INPUTS) {
     check(R.characterPlaceholder({ race: race.id, gender }), `race ${race.id}/${gender}`);
   }
   // The content pack's classes from other books (Marshal, Mechanist) have
-  // two-gender plates like the genre classes (issue #116).
+  // three-gender plates like the genre classes (issue #116).
   for (const klass of [...srdClasses.map((entry) => entry.id), ...genreClasses, "marshal", "mechanist"]) {
     check(R.characterPlaceholder({ class: klass, gender }), `class ${klass}/${gender}`);
   }

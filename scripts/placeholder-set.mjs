@@ -382,9 +382,10 @@ const MISC_TILES = [
 // that falls back to a wizard silhouette looks broken. Keyed by the class id
 // the app already uses, so a lookup needs no translation table.
 //
-// Two variants each rather than the SRD twelve's three. Race portraits carry
-// the gender variety, and a Netrunner reads by its gear, not its build.
-export const CLASS_GENDER_IDS = ["masculine", "feminine"];
+// Three variants each, like the SRD twelve: the painted portraits gave every
+// genre class a neutral plate of its own, so a nonbinary or unstated Netrunner
+// no longer falls through to the genre lead.
+export const CLASS_GENDER_IDS = ["masculine", "feminine", "neutral"];
 
 // Content-pack classes from other 5e books, keyed by the pack's class slug.
 const PACK_CLASSES = [
