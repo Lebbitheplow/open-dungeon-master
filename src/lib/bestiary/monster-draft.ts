@@ -53,6 +53,10 @@ export const MAX_TRAITS = 16;
 // hundred characters and the pack's past three hundred; a line cut short
 // loses the clause the engine reads its numbers from.
 export const TRAIT_MAX = 400;
+// The printed lines kept whole beside the compact traits (statblock.ts
+// fullTraits): the longest SRD line is under 2,000 characters.
+export const MAX_FULL_TRAITS = 40;
+export const FULL_TRAIT_MAX = 4_000;
 export const ATTACK_NAME_MAX = 60;
 export const DAMAGE_TYPE_MAX = 40;
 export const RESIST_MAX = 400;
@@ -186,6 +190,16 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
       .slice(0, MAX_TRAITS)
       .map((trait) => text(trait, TRAIT_MAX))
       .filter(Boolean),
+    // The uncut lines the DM is shown for what the engine leaves by hand;
+    // a copy keeps them so a workshop monster reads like the book's.
+    ...(Array.isArray(source.fullTraits) && source.fullTraits.length
+      ? {
+          fullTraits: source.fullTraits
+            .slice(0, MAX_FULL_TRAITS)
+            .map((trait) => text(trait, FULL_TRAIT_MAX))
+            .filter(Boolean),
+        }
+      : {}),
     resist: text(source.resist, RESIST_MAX),
     immune: text(source.immune, RESIST_MAX),
     vulnerable: text(source.vulnerable, RESIST_MAX),

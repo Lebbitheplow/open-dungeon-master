@@ -129,8 +129,38 @@ function checkOnHit(raw: unknown, attack: string): Checked<OnHitRider | null> {
   if (maxSize) {
     rider.maxSize = maxSize;
   }
+  // The lifetimes and riders the rules audit reads from a hit: an effect
+  // that lasts until a long rest or for good, a drained hit point maximum,
+  // being swallowed, and the clauses left to the DM, kept word for word.
+  if (source.untilLongRest === true) {
+    rider.untilLongRest = true;
+  }
+  if (source.lasting === true) {
+    rider.lasting = true;
+  }
+  if (source.drainMaxHp === "necrotic" || source.drainMaxHp === "all") {
+    rider.drainMaxHp = source.drainMaxHp;
+  }
+  if (source.drainHeals === true) {
+    rider.drainHeals = true;
+  }
+  if (source.swallow === true) {
+    rider.swallow = true;
+  }
+  const manual = (Array.isArray(source.manual) ? source.manual : [])
+    .slice(0, MANUAL_CLAUSES)
+    .map((clause) => text(clause, MANUAL_CLAUSE_MAX))
+    .filter(Boolean);
+  if (manual.length) {
+    rider.manual = manual;
+  }
   return { value: Object.keys(rider).length ? rider : null };
 }
+
+// Clauses an attack or ability leaves to the DM (statblock.ts manual):
+// a disease, a curse, petrification by stages. Sentences from the book.
+const MANUAL_CLAUSES = 12;
+const MANUAL_CLAUSE_MAX = 1_000;
 
 // The printed half of an attack line, kept beside the four fields
 // checkAttack already holds. Reach and range are in feet; a reach is a
@@ -227,6 +257,12 @@ export function checkSpecials(raw: unknown): Checked<MonsterAbility[]> {
     }
     if (source.repeatSave === true) {
       ability.repeatSave = true;
+    }
+    if (source.untilLongRest === true) {
+      ability.untilLongRest = true;
+    }
+    if (source.lasting === true) {
+      ability.lasting = true;
     }
     if (source.magical === true) {
       ability.magical = true;
