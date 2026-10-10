@@ -80,32 +80,34 @@ test("a roster at the cap is allowed", () => {
 });
 
 test("map settings default to nothing rather than to a guess", () => {
-  assert.deepEqual(normalizeTemplateMap(undefined, { themes: ["cave"], ambients: ["dim"] }), {
+  assert.deepEqual(normalizeTemplateMap(undefined, { themes: ["cave"], ambients: ["dim"], scenes: ["crypt"] }), {
     ...EMPTY_TEMPLATE_MAP,
   });
 });
 
 test("map settings keep known values and drop unknown ones", () => {
-  const allowed = { themes: ["cave", "field"], ambients: ["bright", "dim", "dark"] };
+  const allowed = { themes: ["cave", "field"], ambients: ["bright", "dim", "dark"], scenes: ["crypt", "forest"] };
   const kept = normalizeTemplateMap(
-    { seed: 7, theme: "cave", ambient: "dark", width: 20, height: 15 },
+    { scene: "forest", seed: 7, theme: "cave", ambient: "dark", width: 20, height: 15 },
     allowed,
   );
   assert.deepEqual(kept, {
     mapId: null,
+    scene: "forest",
     seed: 7,
     theme: "cave",
     ambient: "dark",
     width: 20,
     height: 15,
   });
-  const dropped = normalizeTemplateMap({ theme: "moon", ambient: "greenish" }, allowed);
+  const dropped = normalizeTemplateMap({ scene: "moon", theme: "moon", ambient: "greenish" }, allowed);
+  assert.equal(dropped.scene, null);
   assert.equal(dropped.theme, null);
   assert.equal(dropped.ambient, null);
 });
 
 test("a linked prepared map survives normalization and the DB read spread", () => {
-  const allowed = { themes: [], ambients: [] };
+  const allowed = { themes: [], ambients: [], scenes: [] };
   const normalized = normalizeTemplateMap({ mapId: "  map-1  " }, allowed);
   assert.equal(normalized.mapId, "map-1");
   // Old rows stored before the field existed read null through the spread
@@ -116,7 +118,7 @@ test("a linked prepared map survives normalization and the DB read spread", () =
 });
 
 test("a mapId that is not a usable string reads as no link", () => {
-  const allowed = { themes: [], ambients: [] };
+  const allowed = { themes: [], ambients: [], scenes: [] };
   assert.equal(normalizeTemplateMap({ mapId: "   " }, allowed).mapId, null);
   assert.equal(normalizeTemplateMap({ mapId: 7 }, allowed).mapId, null);
   assert.equal(normalizeTemplateMap({ mapId: null }, allowed).mapId, null);
@@ -125,7 +127,7 @@ test("a mapId that is not a usable string reads as no link", () => {
 });
 
 test("a seed outside the range is clamped rather than refused", () => {
-  const allowed = { themes: [], ambients: [] };
+  const allowed = { themes: [], ambients: [], scenes: [] };
   assert.equal(normalizeTemplateMap({ seed: -5 }, allowed).seed, 0);
   assert.equal(normalizeTemplateMap({ seed: "not a seed" }, allowed).seed, null);
 });

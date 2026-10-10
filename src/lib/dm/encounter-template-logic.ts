@@ -120,8 +120,13 @@ export function checkRoster(rows: TemplateEnemy[]): { rows: TemplateEnemy[] } | 
 // map, not a reroll of its seed. Old rows read mapId as null through the
 // EMPTY_TEMPLATE_MAP spread in src/lib/db/encounter-templates.ts, so no
 // migration.
+//
+// scene is the kind of ground the fight is on (an ambience bed id), handed
+// to start_encounter when the template deploys; null leaves the board to the
+// current place's own.
 export type TemplateMap = {
   mapId: string | null;
+  scene: string | null;
   seed: number | null;
   theme: string | null;
   ambient: string | null;
@@ -131,6 +136,7 @@ export type TemplateMap = {
 
 export const EMPTY_TEMPLATE_MAP: TemplateMap = {
   mapId: null,
+  scene: null,
   seed: null,
   theme: null,
   ambient: null,
@@ -148,9 +154,10 @@ function optionalInt(value: unknown, min: number, max: number): number | null {
 
 export function normalizeTemplateMap(
   raw: unknown,
-  allowed: { themes: string[]; ambients: string[] },
+  allowed: { themes: string[]; ambients: string[]; scenes: string[] },
 ): TemplateMap {
   const source = (raw ?? {}) as Partial<Record<keyof TemplateMap, unknown>>;
+  const scene = typeof source.scene === "string" ? source.scene : null;
   const theme = typeof source.theme === "string" ? source.theme : null;
   const ambient = typeof source.ambient === "string" ? source.ambient : null;
   // The id is only shape-checked here: this module is pure, so whether the
@@ -161,6 +168,7 @@ export function normalizeTemplateMap(
       : null;
   return {
     mapId,
+    scene: scene && allowed.scenes.includes(scene) ? scene : null,
     seed: optionalInt(source.seed, 0, 0xffffffff),
     theme: theme && allowed.themes.includes(theme) ? theme : null,
     ambient: ambient && allowed.ambients.includes(ambient) ? ambient : null,

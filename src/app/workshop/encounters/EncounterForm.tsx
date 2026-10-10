@@ -6,6 +6,7 @@ import { ui } from "@/lib/ui";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { Field } from "@/app/workshop/kit";
+import { sceneOptions } from "@/lib/ambience/catalog";
 import { TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterPicker";
 import { EncounterExtras } from "@/app/workshop/encounters/EncounterExtras";
@@ -87,6 +88,14 @@ export function EncounterForm({
         aria-label="Battlefield"
         className={field}
       />
+      <Field label="Kind of ground">
+        <Select
+          label="Kind of ground"
+          value={value.scene}
+          onChange={(scene) => set({ scene })}
+          options={[{ value: "", label: "Where the party is" }, ...sceneOptions()]}
+        />
+      </Field>
       <div data-tour="encounters-map">
         <Field label="On which map">
           <Select

@@ -2,6 +2,7 @@
 // descriptions and argument schemas. Split from encounter-tools.ts, which
 // offers them (encounterTools) and handles every call.
 
+import { sceneIds } from "@/lib/ambience/catalog";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 export type ToolDef = {
@@ -56,6 +57,12 @@ export const startEncounterTool: ToolDef = {
           enum: ["none", "enemies", "party"],
           description:
             "A whole side the story has already decided is caught off guard, overriding ambush. Default none.",
+        },
+        scene: {
+          type: "string",
+          enum: sceneIds(),
+          description:
+            "The kind of ground this fight is on, for its battle map, when it is not the current place's own (an ambush on the road outside the town). Omit it and the map follows the place.",
         },
         distanceFeet: {
           type: "integer",

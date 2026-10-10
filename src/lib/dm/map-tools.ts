@@ -91,11 +91,14 @@ export function createBattleMapForEncounter(
   // How far the nearest enemy stands as the fight opens, when the story
   // said (start_encounter's distanceFeet); a tile is five feet.
   distanceFeet?: number,
+  // The ground the fight is on when it is not the place's own
+  // (start_encounter's scene).
+  scene?: string,
 ): BattleMap | null {
   const location = getCurrentLocation(campaign.id);
   const generated = generateBattleMap({
     seed: fnv1a(encounter.id),
-    scene: location?.ambience?.bed ?? null,
+    scene: scene ?? location?.ambience?.bed ?? null,
     pcCount: sheets.length,
     enemyCount: enemies.length,
     enemyDistanceTiles: distanceFeet ? Math.max(1, Math.round(distanceFeet / 5)) : undefined,

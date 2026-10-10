@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/workshop-bundle-parts";
 import { normalizeAmbience } from "@/lib/battlemap/scene";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { sceneIds } from "@/lib/ambience/catalog";
 import { normalizeNpcVoice } from "@/lib/npcs/forge";
 import { foldName } from "@/lib/language/text-logic";
 import {
@@ -400,7 +401,7 @@ function writeBundleRows(
       // they belong to.
       const map = normalizeTemplateMap(
         { ...encounter.map, mapId: idAt(ids.maps, encounter.map.map) },
-        { themes: MAP_THEMES, ambients: AMBIENTS },
+        { themes: MAP_THEMES, ambients: AMBIENTS, scenes: sceneIds() },
       );
       const slots = (encounter.enemies as Array<{ monster?: unknown; count?: unknown }>)
         .filter((row) => typeof row?.monster === "string" && row.monster)

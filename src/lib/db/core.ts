@@ -1128,9 +1128,10 @@ function ensureSchema(db: SqliteDatabase) {
       name TEXT NOT NULL,
       -- [{monster, count}], the parsed form of the DM's shorthand.
       enemies_json TEXT NOT NULL DEFAULT '[]',
-      -- The battlefield hint start_encounter takes, plus the map studio's
-      -- saved seed/theme/ambient/size, or nulls to let the generator read
-      -- the scene as it always has.
+      -- A note on where the fight happens, for whoever runs it. The board
+      -- comes from map_json: the kind of ground the fight is on, and the
+      -- map studio's saved map, seed, theme, ambient and size, or nulls to
+      -- let the generator draw the place the party is in.
       battlefield TEXT NOT NULL DEFAULT '',
       map_json TEXT NOT NULL DEFAULT '{}',
       notes TEXT NOT NULL DEFAULT '',

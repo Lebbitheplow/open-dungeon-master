@@ -14,6 +14,7 @@ import {
 import { templateDifficulty } from "@/lib/dm/encounter-templates";
 import { getPreparedMap } from "@/lib/db/prepared-maps";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { sceneIds } from "@/lib/ambience/catalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,7 +78,7 @@ export async function POST(
   if ("error" in roster) {
     return Response.json({ error: roster.error }, { status: 400 });
   }
-  const map = normalizeTemplateMap(parsed.data.map, { themes: MAP_THEMES, ambients: AMBIENTS });
+  const map = normalizeTemplateMap(parsed.data.map, { themes: MAP_THEMES, ambients: AMBIENTS, scenes: sceneIds() });
   // The pure normalizer only shape-checks the id; whether the map is really
   // in this campaign's drawer is answered here, where the DB is.
   if (map.mapId && !getPreparedMap(campaignId, map.mapId)) {

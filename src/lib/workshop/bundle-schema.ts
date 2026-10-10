@@ -161,13 +161,14 @@ const encounterSchema = z.object({
   map: z
     .object({
       map: indexSchema,
+      scene: z.string().max(40).nullable().default(null),
       seed: z.number().int().nullable().default(null),
       theme: z.string().max(40).nullable().default(null),
       ambient: z.string().max(40).nullable().default(null),
       width: z.number().int().nullable().default(null),
       height: z.number().int().nullable().default(null),
     })
-    .default({ map: null, seed: null, theme: null, ambient: null, width: null, height: null }),
+    .default({ map: null, scene: null, seed: null, theme: null, ambient: null, width: null, height: null }),
   extras: z.record(z.string(), z.unknown()).default({}),
   ref: refSchema,
   shared: sharedSchema,

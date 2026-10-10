@@ -199,15 +199,15 @@ await test("saving a prepared fight from the panel keeps its generated map", asy
   const created = succeeded(
     await call(templatesRoute, "POST", { name: "Ambush", enemies: "goblin x2", map }, { campaignId }),
   ).json.template;
-  // Exactly what DmEncounterPrepPanel sends: the map's id and nothing else.
+  // Exactly what DmEncounterPrepPanel sends: the map's id and its kind of ground.
   const saved = await call(
     templateRoute,
     "PATCH",
-    { name: "Ambush", enemies: "goblin x3", battlefield: "", notes: "", map: { mapId: null }, extras: created.extras },
+    { name: "Ambush", enemies: "goblin x3", battlefield: "", notes: "", map: { mapId: null, scene: "forest" }, extras: created.extras },
     { campaignId, templateId: created.id },
   );
   assert.equal(saved.status, 200, JSON.stringify(saved.json));
-  assert.deepEqual(saved.json.template.map, { mapId: null, ...map });
+  assert.deepEqual(saved.json.template.map, { mapId: null, scene: "forest", ...map });
 
   const cleared = await call(templateRoute, "PATCH", { map: null }, { campaignId, templateId: created.id });
   assert.equal(cleared.json.template.map.seed, null);

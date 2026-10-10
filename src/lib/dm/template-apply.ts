@@ -56,6 +56,7 @@ export function applyTemplateMap(campaign: Campaign, template: EncounterTemplate
     height: settings.height ?? undefined,
     theme: (settings.theme as MapTheme | null) ?? undefined,
     ambient: (settings.ambient as AmbientLight | null) ?? undefined,
+    scene: settings.scene ?? undefined,
   });
   return "error" in applied ? applied.error : null;
 }

@@ -1,6 +1,7 @@
 import type { SystemGlyph } from "@/lib/system-glyphs";
 import { fieldedSheets } from "@/lib/dm/roster";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
+import { sceneIds } from "@/lib/ambience/catalog";
 import { z } from "zod";
 import {
   allocateSeq,
@@ -183,6 +184,7 @@ const startArgsSchema = z.object({
   summary: z.string().optional(),
   surprised: z.enum(["none", "enemies", "party"]).optional(),
   ambush: z.enum(["enemies", "party"]).optional(),
+  scene: z.string().max(40).optional(),
   // Feet between the party and the nearest enemy as the fight opens. A
   // value that is no distance (null, "", 0 from a weak tool caller) is the
   // same as none given, never a reason to refuse the fight.
@@ -239,6 +241,9 @@ function handleStartEncounter(
       error:
         'Invalid start_encounter arguments. Send {"enemies":[{"monster":"goblin","count":3}],"summary":"..."}.',
     };
+  }
+  if (args.scene !== undefined && !sceneIds().includes(args.scene)) {
+    return { error: `Unknown scene "${args.scene}"; use one of: ${sceneIds().join(", ")}.` };
   }
   if (getActiveEncounter(campaign.id)) {
     return {
@@ -319,7 +324,7 @@ function handleStartEncounter(
   // plan.md 4.1), written with the fight so the tracker shows them at once.
   initLegendaryPools(encounter, enemies, args.lair === true);
   saveEncounter(encounter);
-  createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet);
+  createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet, args.scene);
   publishEncounter(campaign.id);
   // The fight's card: the opening line in ember, "Ambush" when the party
   // was caught, with the combat sting (SceneTitle.tsx).

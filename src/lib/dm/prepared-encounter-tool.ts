@@ -144,7 +144,7 @@ export function runPreparedEncounter(
     JSON.stringify({
       enemies: template.enemies,
       summary: template.notes.split("\n")[0]?.slice(0, 200) || template.name,
-      ...(template.battlefield ? { battlefield: template.battlefield.slice(0, 300) } : {}),
+      ...(template.map.scene ? { scene: template.map.scene } : {}),
       ...(args.ambush ? { ambush: args.ambush } : {}),
       ...(args.surprised ? { surprised: args.surprised } : {}),
       ...(typeof args.distanceFeet === "number" ? { distanceFeet: args.distanceFeet } : {}),

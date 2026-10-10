@@ -358,6 +358,7 @@ export function exportWorkshopBundle(
         notes: str(row.notes),
         map: {
           map: at(mapIndex, map.mapId),
+          scene: typeof map.scene === "string" ? map.scene : null,
           seed: number(map.seed),
           theme: typeof map.theme === "string" ? map.theme : null,
           ambient: typeof map.ambient === "string" ? map.ambient : null,

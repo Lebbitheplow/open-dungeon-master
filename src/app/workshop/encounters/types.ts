@@ -28,7 +28,7 @@ export type PreparedEncounter = {
   enemies: TemplateEnemy[];
   battlefield: string;
   notes: string;
-  map: { mapId: string | null };
+  map: { mapId: string | null; scene: string | null };
   extras: TemplateExtras;
   readout: TemplateReadout;
   // Cued for the storyteller by the lead of an AI-narrated table (#154).
@@ -55,6 +55,9 @@ export type EncounterDraft = {
   name: string;
   enemies: string;
   battlefield: string;
+  // The kind of ground the generated board is drawn as, or "" for the
+  // current place's own.
+  scene: string;
   notes: string;
   mapId: string;
   extras: TemplateExtras;
@@ -64,6 +67,7 @@ export const EMPTY_ENCOUNTER_DRAFT: EncounterDraft = {
   name: "",
   enemies: "",
   battlefield: "",
+  scene: "",
   notes: "",
   mapId: "",
   extras: EMPTY_TEMPLATE_EXTRAS,

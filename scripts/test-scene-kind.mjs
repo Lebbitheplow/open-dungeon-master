@@ -55,5 +55,18 @@ await test("A fight in the crypt is drawn underground, in the dark.", async () =
   assert.equal(map?.ambient, "dark");
 });
 
+await test("A fight on other ground than the place's is drawn as that ground.", async () => {
+  const refused = await world.invoke("start_encounter", { enemies: "goblin", scene: "bosco" });
+  const error = refused.ok ? String(refused.result?.error ?? "") : refused.error;
+  assert.match(error, /forest/, error);
+  const ended = await world.invoke("end_encounter", { outcome: "truce" });
+  assert.ok(ended.ok, ended.error);
+  const encounter = await world.beginFight([{ monster: "goblin", count: 1 }], { scene: "forest" });
+  const map = getBattleMapForEncounter(encounter.id);
+  assert.equal(map?.theme, "forest");
+  assert.equal(map?.ambient, "bright");
+  assert.equal(getCurrentLocation(world.campaignId)?.ambience?.bed, "crypt", "the place keeps its own kind");
+});
+
 world.close();
 finish();

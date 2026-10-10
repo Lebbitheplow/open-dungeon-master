@@ -83,7 +83,7 @@ await test("the lead of an AI-narrated table holds the prepared fights", async (
   const made = await call(
     templatesRoute,
     "POST",
-    { name: "Wreckers on the shingle", enemies: "bandit x2\nbandit captain", battlefield: "a storm beach", notes: "At low tide." },
+    { name: "Wreckers on the shingle", enemies: "bandit x2\nbandit captain", battlefield: "a storm beach", map: { scene: "coast" }, notes: "At low tide." },
     { campaignId },
   );
   assert.equal(made.status, 201, JSON.stringify(made.json));
@@ -140,7 +140,9 @@ await test("the storyteller is offered the fight by name, and running it uses th
     sent.enemies.map((row) => row.monster),
     getEncounterTemplate(templateId).enemies.map((row) => row.monster),
   );
-  assert.equal(sent.battlefield, "a storm beach");
+  // The fight's kind of ground goes to start_encounter; the battlefield line is the DM's to read.
+  assert.equal(sent.scene, "coast");
+  assert.equal(sent.battlefield, undefined);
   assert.equal(sent.ambush, "enemies");
   const unknown = runPreparedEncounter(campaign, JSON.stringify({ name: "The Kraken" }), () => ({}));
   assert.match(unknown.error, /Wreckers on the shingle/);
