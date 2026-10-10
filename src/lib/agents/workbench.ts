@@ -84,7 +84,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_campaign",
     scope: "read",
-    description: "Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages.",
+    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -137,7 +137,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_timeline",
     scope: "read",
-    description: "Read a campaign's timeline of chapters and events.",
+    description: "Read a campaign's timeline of chapters and events. A chapter appears only once it closes at a story beat, so the play in progress is not here: read odm_get_campaign or odm_get_messages for the latest.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -146,7 +146,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_lore",
     scope: "read",
-    description: "Read a campaign's lore binder entries you can see.",
+    description: "Read a campaign's lore binder entries you can see: authored background, not what is happening at the table now.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -188,7 +188,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_ask",
     scope: "play",
-    description: "Ask the campaign's records a question (what happened, who someone is). Private to you unless visibility says otherwise.",
+    description: "Ask the campaign's records a question (what happened, who someone is). A model writes the answer from facts, chapter summaries and only the last few messages, so it can be incomplete or wrong, and it is not a view of the table: for what is happening now, read odm_get_campaign. Private to you unless visibility says otherwise.",
     properties: {
       ...campaignIdProp,
       question: { type: "string" },
