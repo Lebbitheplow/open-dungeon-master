@@ -106,5 +106,10 @@ you can do in the browser and nothing more. It can never change backend
 URLs or keys, accounts, passwords, the admin panel, backups or raw sheets.
 Revoke it any time; changing your password disconnects every agent.
 
+For a connected player agent that should wake when its character has a
+decision, see [Player webhooks](player-webhooks.md). This opt-in server
+feature includes a Codex receiver on the player's computer. Other clients
+need their own wake adapter; an MCP connection alone does not start turns.
+
 Live check (spends a little of the plan):
 `HARNESS=claude HARNESS_MODEL=haiku node scripts/smoke-harness.mjs`.

@@ -14,7 +14,10 @@ import { listAssignmentsForCharacter } from "@/lib/db/characters";
 import { harnessMcpUrl } from "@/lib/harness/bridge";
 import { grantSessionToken, grantUser, type AgentScope, type ConnectionGrant } from "@/lib/agents/grants";
 import type { McpToolDefinition } from "@/lib/harness/types";
+import { createHash } from "node:crypto";
 import { boundResultText, campaignForAgent, historyForAgent } from "@/lib/agents/agent-results";
+import { finishWebhookWrite, playerWebhooksEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
+import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -173,6 +176,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Dungeon Master answers in the campaign.",
     properties: {
       ...campaignIdProp,
+      ...WEBHOOK_GUARD_PROPS,
       content: { type: "string", maxLength: 2000 },
       kind: { type: "string", enum: ["do", "say", "ooc"] },
     },
@@ -202,6 +206,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Enter the dice you rolled at the table for a roll the Dungeon Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'.",
     properties: {
       ...campaignIdProp,
+      ...WEBHOOK_GUARD_PROPS,
       pendingRollId: { type: "string" },
       dice: { type: "array", items: { type: "integer", minimum: 1, maximum: 100 } },
       fallback: { type: "string", enum: ["digital"] },
@@ -215,7 +220,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     name: "odm_end_turn",
     scope: "play",
     description: "End your character's turn in combat.",
-    properties: campaignIdProp,
+    properties: { ...campaignIdProp, ...WEBHOOK_GUARD_PROPS },
     required: ["campaignId"],
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/encounter/end-turn`,
@@ -331,14 +336,17 @@ const WHOAMI: McpToolDefinition = {
 };
 
 export function workbenchTools(grant: ConnectionGrant): McpToolDefinition[] {
+  // The webhook guard fields only mean something where webhooks can exist.
+  const guards = playerWebhooksEnabled();
   return [
     WHOAMI,
+    ...webhookTools(grant),
     ...WORKBENCH_TOOLS.filter((tool) => grant.scopes.includes(tool.scope)).map((tool) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: {
         type: "object" as const,
-        properties: tool.properties,
+        properties: guards ? tool.properties : without(tool.properties, Object.keys(WEBHOOK_GUARD_PROPS)),
         ...(tool.required ? { required: tool.required } : {}),
         ...(tool.open ? {} : { additionalProperties: false }),
       },
@@ -358,6 +366,9 @@ function seatedAt(userId: string, campaignId: string, characterId: string): bool
 export type WorkbenchOutcome ={ text: string; isError: boolean; campaignId?: string };
 
 export async function workbenchCall(grant: ConnectionGrant, name: string, args: Args): Promise<WorkbenchOutcome> {
+  if (isWebhookTool(name)) {
+    return webhookToolCall(grant, name, args);
+  }
   if (name === "odm_whoami") {
     const user = grantUser(grant);
     return {
@@ -410,6 +421,17 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
     return { text: error instanceof Error ? error.message : "Bad arguments.", isError: true, campaignId };
   }
   const body = tool.body?.(args);
+  let guarded = false;
+  if (["odm_take_action", "odm_answer_roll", "odm_end_turn"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
+    try {
+      if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
+      const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,
+        campaignId, tool: name, pendingRollId: typeof args.pendingRollId === "string" ? args.pendingRollId : undefined,
+        fingerprint: createHash("sha256").update(JSON.stringify([path, body])).digest("hex") });
+      if (cached) return cached;
+      guarded = true;
+    } catch (error) { return { text: error instanceof Error ? error.message : "Submission refused.", isError: true, campaignId }; }
+  }
   let response: Response;
   try {
     response = await fetch(`${serverOrigin()}${path}`, {
@@ -456,8 +478,20 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   // Held under the agent's result cap as JSON, so a long answer still parses
   // and keeps the fields that matter (src/lib/agents/agent-results.ts).
   text = response.ok && tool.shape ? tool.shape(text) : boundResultText(text);
-  if (!response.ok) {
-    return { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId };
+  const result = !response.ok
+    ? { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId }
+    : { text: text || "{}", isError: false, campaignId };
+  if (guarded) {
+    const subscriptionId = args.subscriptionId as string;
+    const opportunityId = args.opportunityId as string;
+    // A refusal (4xx) is answered before the route changes anything, so the
+    // opportunity is freed for a corrected submission ("not your turn yet",
+    // dice out of range). Anything else is the saved answer for a retry.
+    if (response.status >= 400 && response.status < 500) {
+      releaseWebhookWrite(subscriptionId, opportunityId, name);
+    } else {
+      finishWebhookWrite(subscriptionId, opportunityId, name, result);
+    }
   }
-  return { text: text || "{}", isError: false, campaignId };
+  return result;
 }
