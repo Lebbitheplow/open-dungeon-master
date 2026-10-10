@@ -23,6 +23,8 @@ export function knownInstallDirs(home: string, platform: string = hostPlatform()
     return [
       p.join(appData, "npm"),
       p.join(localAppData, "Programs", "claude"),
+      // Codex's own Windows installer (chatgpt.com/codex/install.ps1).
+      p.join(localAppData, "Programs", "OpenAI", "Codex", "bin"),
       p.join(home, ".local", "bin"),
       p.join(home, ".bun", "bin"),
       p.join(home, ".opencode", "bin"),
