@@ -446,7 +446,11 @@ export function SidePanelRouter({
       {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
       <BattleMapPanel
         campaignId={campaignId}
+        meUserId={meUserId}
+        activeSheetId={activeSheetId}
+        multiCharacter={campaign?.gameSettings?.multiCharacter ?? "off"}
         view={battleMap}
+
         intents={battleMap.intents}
         genre={campaign?.gameSettings?.genre ?? null}
         turnBudget={

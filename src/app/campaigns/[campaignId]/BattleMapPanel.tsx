@@ -69,7 +69,7 @@ import {
   type TurnHudBudget,
 } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { IntentLayer } from "@/app/campaigns/[campaignId]/BoardIntent";
-import { BoardCameraControls, BoardKeyStrip, BoardOrderDialog, BoardOrderStrip, boardHintText } from "@/app/campaigns/[campaignId]/BoardPanelParts";
+import { BoardCameraControls, BoardKeyStrip, BoardOrderDialog, BoardOrderStrip, boardHintText, PlayAsStrip } from "@/app/campaigns/[campaignId]/BoardPanelParts";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
@@ -125,8 +125,18 @@ export function BattleMapPanel({
   turnBudget = null,
   fieldRoll = null,
   visible = true,
+  meUserId = "",
+  activeSheetId = "",
+  multiCharacter = "off",
 }: {
   campaignId: string;
+  // Who is looking, which of their characters they play, and whether the
+  // table lets a player field several: the enlarged tabletop offers the
+  // switch, since it covers the Party panel that usually does.
+  meUserId?: string;
+  activeSheetId?: string;
+  multiCharacter?: string;
+
   // The campaign's setting: it picks the skin the board is painted in and the
   // plates the monsters wear.
   genre?: string | null;
@@ -1183,7 +1193,40 @@ export function BattleMapPanel({
     </>
   );
 
+  // A player's own tools, in the inline header and the enlarged tabletop's
+  // head alike: pointing at a tile and drawing on the board. The DM has the
+  // tool rail instead.
+  const playerTools = canDirect ? null : (
+    <>
+      <button
+        type="button"
+        onClick={() => setPointing((current) => !current)}
+        title="Point at a tile"
+        aria-pressed={pointing}
+        className={`rounded p-1 ${
+          pointing ? "bg-amber-950/60 text-amber-300" : "text-stone-400 hover:bg-stone-900"
+        }`}
+      >
+        <MapPin className="size-4" />
+      </button>
+      {canDraw ? (
+        <button
+          type="button"
+          onClick={() => setDrawing((current) => !current)}
+          title="Draw on the board"
+          aria-pressed={drawing}
+          className={`rounded p-1 ${
+            drawing ? "bg-amber-950/60 text-amber-300" : "text-stone-400 hover:bg-stone-900"
+          }`}
+        >
+          <Pencil className="size-4" />
+        </button>
+      ) : null}
+    </>
+  );
+
   return (
+
 
     // board-panel: where the panel is given a fixed window (the fight stage,
     // the shared screen, the side panel and the phone) its header and footer
@@ -1209,37 +1252,11 @@ export function BattleMapPanel({
           )}
         </h3>
         <div className="flex items-center gap-1">
-          {canDirect ? null : (
-            <>
-              <button
-                type="button"
-                onClick={() => setPointing((current) => !current)}
-                title="Point at a tile"
-                aria-pressed={pointing}
-                className={`rounded p-1 ${
-                  pointing ? "bg-amber-950/60 text-amber-300" : "text-stone-400 hover:bg-stone-900"
-                }`}
-              >
-                <MapPin className="size-4" />
-              </button>
-              {canDraw ? (
-                <button
-                  type="button"
-                  onClick={() => setDrawing((current) => !current)}
-                  title="Draw on the board"
-                  aria-pressed={drawing}
-                  className={`rounded p-1 ${
-                    drawing ? "bg-amber-950/60 text-amber-300" : "text-stone-400 hover:bg-stone-900"
-                  }`}
-                >
-                  <Pencil className="size-4" />
-                </button>
-              ) : null}
-            </>
-          )}
+          {playerTools}
           <button
             type="button"
             onClick={() => setEnlarged(true)}
+
             className="rounded p-1 text-stone-400 hover:bg-stone-900 hover:text-stone-200"
             aria-label="Enlarge battle map"
           >
@@ -1368,10 +1385,23 @@ export function BattleMapPanel({
               <Dialog.Title className="cine-tabletop-title">
                 {scene ? "The ground here" : `Battle map, round ${view.round}`}
               </Dialog.Title>
-              <Dialog.Close className="cine-tabletop-close" aria-label="Close the board">
-                <X className="size-4" />
-              </Dialog.Close>
+              <div className="flex min-w-0 items-center gap-2">
+                {/* The dialog covers the Party panel, so a player fielding
+                    several characters picks who they play here (issue #189). */}
+                <PlayAsStrip
+                  campaignId={campaignId}
+                  sheets={sheets}
+                  meUserId={meUserId}
+                  activeSheetId={activeSheetId}
+                  multiCharacter={multiCharacter}
+                />
+                {playerTools}
+                <Dialog.Close className="cine-tabletop-close" aria-label="Close the board">
+                  <X className="size-4" />
+                </Dialog.Close>
+              </div>
             </div>
+
             <div className="cine-tabletop-body">
               {chronicle}
               <div className="flex min-w-0 flex-1 flex-col gap-2">

@@ -743,7 +743,11 @@ export function SessionView({
                 <div className="cine-fight-board cine-board-frame">
                   <BattleMapPanel
                     campaignId={campaign.id}
+                    meUserId={me.id}
+                    activeSheetId={state.activeSheetId}
+                    multiCharacter={campaign.gameSettings?.multiCharacter ?? "off"}
                     view={state.battleMap}
+
                     intents={state.battleMap.intents}
                     genre={campaign.gameSettings?.genre ?? null}
                     turnBudget={

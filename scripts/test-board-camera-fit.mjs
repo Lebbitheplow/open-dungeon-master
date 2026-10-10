@@ -22,9 +22,13 @@ test("a frame sized by its own board rests on the plain view", () => {
   assert.deepEqual(fitCamera({ width: 401, height: 300 }, { width: 20, height: 15 }), { zoom: 1, x: 0, y: 0 });
 });
 
-test("a frame taller than its board rests on the plain view", () => {
-  assert.deepEqual(fitCamera({ width: 400, height: 900 }, { width: 20, height: 15 }), { zoom: 1, x: 0, y: 0 });
+test("a frame taller than its board rests on the plain view, the board in the middle of it", () => {
+  // The enlarged tabletop: 400 px wide, 900 tall, a 300 px board centred.
+  assert.deepEqual(fitCamera({ width: 400, height: 900 }, { width: 20, height: 15 }), { zoom: 1, x: 0, y: 300 });
+  // A pixel of rounding slack is still the plain view, not half a pixel down.
+  assert.deepEqual(fitCamera({ width: 400, height: 301 }, { width: 20, height: 15 }), { zoom: 1, x: 0, y: 0.5 });
 });
+
 
 test("a short window shrinks the board to show all of it, centred", () => {
   // The fight stage on a 1080p screen: 1188 by 562 for a 4:3 board.
