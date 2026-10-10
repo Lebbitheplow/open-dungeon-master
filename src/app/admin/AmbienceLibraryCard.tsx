@@ -81,7 +81,7 @@ export function AmbienceLibraryCard() {
       id="admin-ambience"
       heading="Sound library"
       glyph="tab-ambience"
-      intro="The rooms, music and one-shot sounds every table can play. Nothing ships inside the app; install the release's sound pack here, or make and fetch tracks on the server (docs/configuration.md)."
+      intro="The rooms, music and one-shot sounds every table can play: public-domain and Creative Commons recordings, credited on the licenses page. Nothing ships inside the app; install the release's sound pack here, or fetch the library on the server (docs/configuration.md)."
     >
       <div className="space-y-4">
         {status ? (
@@ -151,8 +151,8 @@ export function AmbienceLibraryCard() {
         </label>
         <p className="text-xs leading-5 text-stone-500">
           Tracks dropped into public/ambience by hand show up after a rescan (tavern.mp3, or tavern-2.mp3 for a second take).
-          On the server, npm run generate-ambience makes tracks with a local music model and npm run fetch-ambience
-          looks for public-domain recordings.
+          On the server, npm run fetch-ambience resolves the library from OpenGameArt, Kevin MacLeod&apos;s catalogue,
+          Wikimedia Commons, Freesound and the Internet Archive.
         </p>
         {error ? <p className="text-sm text-red-300">{error}</p> : null}
       </div>

@@ -38,31 +38,31 @@ its contents page and ends with the SRD's legal notice as its last page.
 ## Ambience and music
 
 `src/lib/ambience/catalog.ts` names the cues the app can play; the files live
-in `public/ambience/`, are not in git, and arrive in one of four ways, each
-credited in `data/ambience-lock.json`, `public/ambience/manifest.json` and on
-the in-app `/licenses` page under "Sound library".
+in `public/ambience/`, are not in git, and are public-domain and open-licensed
+recordings fetched by `scripts/fetch-ambience.mjs` from OpenGameArt, Kevin
+MacLeod's incompetech catalogue, Wikimedia Commons, Freesound and the
+Internet Archive, or carried in the release's sound pack (`ambience-pack.zip`),
+which holds the same tracks with the same credits.
 
-**The sound pack** (`ambience-pack.zip` on a release) holds tracks made for
-the project with ACE-Step 1.5, which is MIT-licensed and whose output carries
-no third-party claim. Those tracks are the project's and are distributed under
-its licence; `scripts/pack-ambience.mjs` packs only tracks the lock marks as
-generated, never archive downloads.
+The script reads the licence each source records for a file and refuses
+anything it cannot positively identify, including a blank licence field. It
+accepts public-domain dedications (CC0 and the Public Domain Mark), which
+impose no obligation on a downstream user, and the attribution licences
+(CC BY, CC BY-SA and OGA-BY), which oblige you to keep the credit visible,
+which the app does for you: every file's title, author, source URL and
+licence are written into `data/ambience-lock.json` and
+`public/ambience/manifest.json`, listed on the in-app `/licenses` page under
+"Sound library", and travel inside the sound pack as `credits.json`.
+`--public-domain-only` narrows the script to CC0 and the Public Domain Mark.
+NonCommercial and NoDerivatives licences are refused under every setting,
+because whether a given install is a commercial or a derivative use is a
+question about the operator, not about this project, and the script must not
+answer it on their behalf. The shipped pins (`src/lib/ambience/sources.json`)
+list each track's licence beside its URL.
 
-**Archive downloads** (`scripts/fetch-ambience.mjs`) are not redistributed by
-this project. The script reads the licence each archive records for a file
-and refuses anything it cannot positively identify, including a blank licence
-field. By default it accepts only public-domain dedications: CC0 and the
-Public Domain Mark, both of which impose no further obligation on a
-downstream user.
-
-`--allow-attribution` widens it to CC BY and CC BY-SA. Those are usable but
-oblige you to keep the credit visible, which the app does for you: every
-accepted file's title, author, source URL and licence are written into the
-lock and the manifest and listed on the licenses page. NonCommercial and
-NoDerivatives licences are refused under every setting, because whether a
-given install is a commercial or a derivative use is a question about the
-operator, not about this project, and the script must not answer it on their
-behalf.
+Takes made with a music model (`scripts/generate-ambience.mjs`, ACE-Step 1.5,
+MIT) are credited as generated and stay out of the pack unless an operator
+asks for them.
 
 Files an operator supplies by hand (dropped into `public/ambience/`, or pinned
 in `data/ambience-sources.json`) are credited as locally supplied. The licence

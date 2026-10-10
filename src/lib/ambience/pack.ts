@@ -15,10 +15,10 @@ import {
 // for each, so a server that cannot run scripts (the desktop and Android
 // apps bundle one) still gets a library with one tap in the admin panel.
 //
-// What goes in is the operator's choice, made in scripts/pack-ambience.mjs:
-// by default only tracks generated on the packing machine, which this
-// project may redistribute, never the archive downloads, whose licences
-// were accepted for one install and are not this project's to pass on.
+// What goes in is decided by licence (packable() below): public-domain and
+// attribution-licensed recordings travel with their credits; files the
+// operator merely declared stay behind, and generated takes go only when
+// asked for.
 
 export const PACK_FILE = "ambience-pack.zip";
 const CREDITS_FILE = "credits.json";
@@ -121,9 +121,27 @@ export async function installPack(buffer: Buffer, { replace = false } = {}): Pro
   return { installed, kept, playable: rebuildManifest() };
 }
 
-// The tracks on disk the pack builder may take: generated here by default,
-// everything with `all`.
-export function packableEntries({ all = false } = {}): PackEntry[] {
+// Whether a credit may travel in the pack: public domain and the attribution
+// licences (CC BY, CC BY-SA, OGA-BY), with the credit riding along, and
+// nothing the operator merely declared. Generated takes only when asked:
+// the library is meant to be recordings people made.
+export function packable(credit: TrackCredit | undefined, { includeGenerated = false } = {}): boolean {
+  if (!credit) {
+    return false;
+  }
+  if (credit.origin === "generated") {
+    return includeGenerated;
+  }
+  if (credit.origin === "local") {
+    return false;
+  }
+  const license = String(credit.license ?? "").toLowerCase();
+  return license.startsWith("public domain") || license.startsWith("cc by") || license.startsWith("oga-by");
+}
+
+// The tracks on disk the pack builder may take: see packable(); everything
+// with `all`.
+export function packableEntries({ all = false, includeGenerated = false } = {}): PackEntry[] {
   const root = libraryRoot();
   const lock = readLock();
   const entries: PackEntry[] = [];
@@ -135,7 +153,7 @@ export function packableEntries({ all = false } = {}): PackEntry[] {
       continue;
     }
     const credit = lock[name];
-    if (!all && credit?.origin !== "generated") {
+    if (!all && !packable(credit, { includeGenerated })) {
       continue;
     }
     entries.push({

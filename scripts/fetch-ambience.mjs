@@ -13,14 +13,27 @@
 // and shown on the app's /licenses page either way.
 //
 // Sources, tried in the order that suits the layer:
-//   commons    Wikimedia Commons. Best for room tone and one-shot sounds,
-//              and its licence metadata is machine-readable and reliable.
-//   freesound  The best source for this material by a distance, and the
-//              only one that needs a key: set FREESOUND_API_KEY (free, from
-//              freesound.org/apiv2/apply). Fetches the CC0-filtered preview
-//              renders, which are 128kbps mp3 and ample for a bed.
-//   archive    The Internet Archive. Best for music, where "public domain"
-//              usually means an old recording rather than a dedication.
+//   opengameart  OpenGameArt.org: game music, loops and effects under CC0,
+//                CC BY, CC BY-SA and OGA-BY, the licence on every page.
+//                Best for room tone, stings and loops.
+//   incompetech  Kevin MacLeod's catalogue (incompetech.com), CC BY 4.0,
+//                every piece tagged by mood and filed under collections
+//                like Tension, Mystery, Wonder, Horror and Celtic and
+//                Folk. Best for the music cues.
+//   commons      Wikimedia Commons. Public-domain field recordings and
+//                one-shots; its licence metadata is machine-readable.
+//   freesound    CC0 recordings, the only source needing a key: set
+//                FREESOUND_API_KEY (free, from freesound.org/apiv2/apply).
+//   archive      The Internet Archive, for old public-domain recordings.
+//
+// Licences: public domain and the attribution licences (CC BY, CC BY-SA,
+// OGA-BY) are accepted, because the app keeps the credit: every file's
+// title, author, source and licence go into the lock and the manifest and
+// are shown on /licenses, and travel inside the sound pack. The licence is
+// read from each source's own record, never guessed, and anything the
+// script cannot positively identify is refused. --public-domain-only
+// narrows it to CC0 and the Public Domain Mark. NonCommercial and
+// NoDerivatives are refused either way.
 //
 // Every candidate goes through scripts/lib/ambience-gate.mjs: licence,
 // spoken word, relevance and length. The archives are full of correctly
@@ -30,27 +43,33 @@
 // Usage:
 //   node scripts/fetch-ambience.mjs                    fill every empty cue
 //   node scripts/fetch-ambience.mjs --cue tavern       just this one
+//   node scripts/fetch-ambience.mjs --layer music      one layer
+//   node scripts/fetch-ambience.mjs --takes 2          this many files per cue
 //   node scripts/fetch-ambience.mjs --cue cave --skip 1   take the next candidate
-//   node scripts/fetch-ambience.mjs --allow-attribution   accept CC BY / CC BY-SA
+//   node scripts/fetch-ambience.mjs --public-domain-only
 //   node scripts/fetch-ambience.mjs --source commons   force one source
 //   node scripts/fetch-ambience.mjs --force            refetch cues already filled
 //   node scripts/fetch-ambience.mjs --dry-run          resolve and report only
 //   node scripts/fetch-ambience.mjs --manifest         rebuild manifest.json only
 //   node scripts/fetch-ambience.mjs --pack [url]       install the sound pack
 //                                                      (this release's asset by default)
+//   node scripts/fetch-ambience.mjs --export-sources   write the resolved library
+//                                                      to src/lib/ambience/sources.json
 //
-// A cue may hold several takes: tavern.mp3, tavern-2.mp3, tavern-3.ogg. The
-// fetch fills a cue that has none; scripts/generate-ambience.mjs adds takes.
+// Where a file comes from, in order: the operator's pins
+// (data/ambience-sources.json), the lock (data/ambience-lock.json, what this
+// install resolved before), the shipped pins (src/lib/ambience/sources.json,
+// the library the project resolved and committed, so every install gets the
+// same tracks), and only then a search.
+//
+// A cue may hold several takes: tavern.mp3, tavern-2.mp3, tavern-3.ogg.
 // Curating by hand: drop a file named after the cue into public/ambience and
 // run with --manifest. It is kept, credited as locally supplied, and never
-// overwritten. data/ambience-sources.json pins exact URLs for cues the
-// searches cannot fill; data/ambience-lock.json records what each file
-// resolved to, so a second machine fetches the same files rather than
-// whatever the search returns that day. See docs/configuration.md.
+// overwritten. See docs/configuration.md.
 import { mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { register } from "node:module";
-import { acceptLicense, admit } from "./lib/ambience-gate.mjs";
+import { acceptLicense, admit, redistributable } from "./lib/ambience-gate.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
@@ -62,6 +81,7 @@ const { installPack, packAssetUrl } = await import("../src/lib/ambience/pack.ts"
 const ROOT = process.cwd();
 const OUT_DIR = libraryRoot();
 const SOURCES = path.join(ROOT, "data", "ambience-sources.json");
+const SHIPPED = path.join(ROOT, "src", "lib", "ambience", "sources.json");
 
 const MIN_BYTES = 20 * 1024;
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -79,12 +99,14 @@ function option(name, fallback = null) {
 }
 
 const onlyCue = option("cue");
+const onlyLayer = option("layer");
 const onlySource = option("source");
 const skipCount = Number(option("skip", "0")) || 0;
+const takes = Math.max(1, Number(option("takes", "1")) || 1);
 const force = flag("force");
 const dryRun = flag("dry-run");
 const manifestOnly = flag("manifest");
-const allowAttribution = flag("allow-attribution");
+const publicDomainOnly = flag("public-domain-only");
 const freesoundKey = process.env.FREESOUND_API_KEY ?? "";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -151,12 +173,13 @@ async function fromCommons(query) {
       license: acceptLicense(
         strip(meta.LicenseShortName?.value) || strip(meta.License?.value),
         strip(meta.LicenseUrl?.value),
-        allowAttribution,
+        publicDomainOnly,
       ),
       source: `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,
       url: info.url,
       bytes: Number(info.size ?? 0),
       seconds: Number(info.duration ?? 0),
+      categories: strip(meta.Categories?.value),
     });
   }
   return candidates;
@@ -172,9 +195,9 @@ async function fromFreesound(query) {
   // rather than the only one.
   url.searchParams.set(
     "filter",
-    allowAttribution
-      ? '(license:"Creative Commons 0" OR license:"Attribution")'
-      : 'license:"Creative Commons 0"',
+    publicDomainOnly
+      ? 'license:"Creative Commons 0"'
+      : '(license:"Creative Commons 0" OR license:"Attribution")',
   );
   url.searchParams.set("fields", "id,name,username,license,url,previews,filesize,duration");
   url.searchParams.set("page_size", "25");
@@ -189,7 +212,7 @@ async function fromFreesound(query) {
     candidates.push({
       title: String(hit.name ?? `freesound ${hit.id}`),
       author: String(hit.username ?? "Unknown"),
-      license: acceptLicense(hit.license, hit.license, allowAttribution),
+      license: acceptLicense(hit.license, hit.license, publicDomainOnly),
       source: String(hit.url ?? `https://freesound.org/s/${hit.id}/`),
       url: preview,
       bytes: 0,
@@ -220,7 +243,7 @@ async function fromArchive(query) {
       identifier: doc.identifier,
       title: String(doc.title ?? doc.identifier),
       author: Array.isArray(doc.creator) ? doc.creator.join(", ") : String(doc.creator ?? "Unknown"),
-      license: acceptLicense(doc.licenseurl, doc.licenseurl, allowAttribution),
+      license: acceptLicense(doc.licenseurl, doc.licenseurl, publicDomainOnly),
       source: `https://archive.org/details/${doc.identifier}`,
       url: null,
       bytes: 0,
@@ -248,7 +271,7 @@ async function resolveArchiveFile(candidate, layer) {
       (entry) =>
         AUDIO_EXTENSIONS.includes(path.extname(entry.name).toLowerCase()) &&
         sizeOk(entry.size) &&
-        admit({ ...candidate, seconds: entry.seconds }, { layer, query: candidate.query, allowAttribution }).ok,
+        admit({ ...candidate, seconds: entry.seconds }, { layer, query: candidate.query }).ok,
     )
     .sort((a, b) => a.size - b.size)[0];
   if (!file) {
@@ -262,11 +285,196 @@ async function resolveArchiveFile(candidate, layer) {
   };
 }
 
-// Music means old recordings, which the Internet Archive has and Commons
-// mostly does not; room tone and one-shots are the other way round.
+// OpenGameArt: the advanced search as a page (there is no API), then each
+// item's page for its files, licence and author. The site states the licence
+// on every item, which is what makes it usable here at all.
+const OGA = "https://opengameart.org";
+// Music 12, sound effect 13. Room tone is filed under either, so a bed
+// asks both.
+const OGA_TYPES = { music: [12], bed: [13, 12], sting: [13] };
+const ogaItems = new Map();
+
+async function getText(url) {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(url, { headers: { "User-Agent": AGENT } });
+    if (response.ok) {
+      return response.text();
+    }
+    if ((response.status === 429 || response.status >= 500) && attempt < RETRY_MS.length) {
+      await sleep(RETRY_MS[attempt]);
+      continue;
+    }
+    throw new Error(`${new URL(url).hostname} answered ${response.status}`);
+  }
+}
+
+const unescapeHtml = (text) =>
+  String(text ?? "")
+    .replace(/&#0?39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+
+async function ogaItem(slug) {
+  if (ogaItems.has(slug)) {
+    return ogaItems.get(slug);
+  }
+  const html = await getText(`${OGA}/content/${slug}`);
+  const title = unescapeHtml(/<title>([^<|]+)/.exec(html)?.[1] ?? slug);
+  const licenses = [...html.matchAll(/field-name-field-art-licenses[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/g)]
+    .map((m) => strip(m[0]).replace(/License\(s\):/i, "").trim())
+    .join(" ");
+  const author = unescapeHtml(/field-name-author-submitter[\s\S]*?class='username'>\s*<a[^>]*>([^<]+)</.exec(html)?.[1] ?? "");
+  // The attached files, not the site's low-rate previews. One or more; the
+  // smallest within bounds is the pick, the way the archive is handled.
+  const files = [...html.matchAll(/href="(https:\/\/opengameart\.org\/sites\/default\/files\/[^"]+\.(?:mp3|ogg|wav|opus|m4a))"/gi)]
+    .map((m) => m[1])
+    .filter((url) => !url.includes("/audio_preview/"));
+  const item = { slug, title, licenses, author: author || "Unknown", files: [...new Set(files)] };
+  ogaItems.set(slug, item);
+  await sleep(DELAY_MS);
+  return item;
+}
+
+async function fromOpenGameArt(query, layer) {
+  const slugs = [];
+  for (const type of OGA_TYPES[layer] ?? [13]) {
+    const url = new URL(`${OGA}/art-search-advanced`);
+    url.searchParams.set("keys", query);
+    url.searchParams.append("field_art_type_tid[]", String(type));
+    url.searchParams.set("sort_by", "count");
+    url.searchParams.set("sort_order", "DESC");
+    url.searchParams.set("items_per_page", "24");
+    const html = await getText(url);
+    for (const m of html.matchAll(/class="art-preview-title"><a href="\/content\/([^"]+)"/g)) {
+      if (!slugs.includes(m[1])) {
+        slugs.push(m[1]);
+      }
+    }
+    await sleep(DELAY_MS);
+  }
+  // A bed wants room tone, and the site files loops and atmospheres among
+  // the music: titles that say so go first, popularity second.
+  const roomTone = /ambien|atmos|loop|soundscape|background|crowd|room tone|drone|wind|rain|water|birds|night|cave|forest|dungeon/i;
+  const ordered = layer === "bed" ? [...slugs].sort((a, b) => Number(roomTone.test(b)) - Number(roomTone.test(a))) : slugs;
+  const candidates = [];
+  for (const slug of ordered.slice(0, 14)) {
+    let item;
+    try {
+      item = await ogaItem(slug);
+    } catch (error) {
+      console.warn(`  ! opengameart ${slug}: ${error.message}`);
+      continue;
+    }
+    const license = acceptLicense(item.licenses, "", publicDomainOnly);
+    for (const file of item.files) {
+      candidates.push({
+        title: item.title,
+        author: item.author,
+        license,
+        source: `${OGA}/content/${slug}`,
+        url: file,
+        bytes: 0,
+        seconds: 0,
+        // The site matched the term in the title, the tags or the text;
+        // "Crowded Pub" is a tavern whatever its title says.
+        tagged: true,
+      });
+      break;
+    }
+  }
+  return candidates;
+}
+
+// Kevin MacLeod's catalogue: one JSON of every piece, tagged by mood and
+// filed under collections. A music cue names the collections and moods
+// that fit it; a piece scores by those, by orchestral or acoustic
+// instruments, and against the electronic and rock collections, which are
+// not what a fantasy table wants under its scene. Everything is CC BY 4.0.
+const INCOMPETECH = "https://incompetech.com/music/royalty-free";
+const MOODS = {
+  calm: { collections: [27, 20, 17, 16], feels: ["Calming", "Relaxed"] },
+  wonder: { collections: [45, 43, 30], feels: ["Uplifting", "Mystical", "Epic"] },
+  mystery: { collections: [40, 41], feels: ["Mysterious", "Eerie", "Mystical"] },
+  tension: { collections: [44, 35], feels: ["Suspenseful", "Unnerving", "Dark"] },
+  dread: { collections: [37, 38, 6, 5], feels: ["Dark", "Eerie", "Unnerving"] },
+  battle: { collections: [33], feels: ["Action", "Intense", "Aggressive"] },
+  boss: { collections: [33], feels: ["Epic", "Intense", "Aggressive"] },
+  chase: { collections: [33], feels: ["Driving", "Action", "Intense"] },
+  triumph: { collections: [43, 45], feels: ["Epic", "Uplifting", "Bright"] },
+  sorrow: { collections: [36, 28], feels: ["Somber"] },
+  travel: { collections: [3, 50], feels: ["Grooving", "Relaxed", "Bright"] },
+  festive: { collections: [3, 50, 22], feels: ["Bouncy", "Humorous", "Bright"] },
+};
+const ORCHESTRAL = /strings|violin|viola|cello|bass|horn|brass|trumpet|trombone|tuba|choir|voices|timpani|harp|piano|flute|oboe|bassoon|clarinet|lute|recorder|guitar|percussion|drums|celesta|glockenspiel|harpsichord|organ|fiddle|accordion|whistle|bagpipe|dulcimer|mandolin/gi;
+const ELECTRONIC = /synth|electronic|drum machine|808|sampler|sequencer|electric guitar|distort|dubstep|techno|house|trance|hip hop|rap|beat/gi;
+const ELECTRONIC_COLLECTIONS = new Set([12, 18, 29, 7, 24, 25, 26, 11, 14, 23]);
+let incompetechPieces = null;
+
+function lengthSeconds(text) {
+  const parts = String(text ?? "").split(":").map(Number);
+  return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts.length === 2 ? parts[0] * 60 + parts[1] : 0;
+}
+
+async function fromIncompetech(cue) {
+  const mood = MOODS[cue.id];
+  if (!mood || cue.layer !== "music") {
+    return [];
+  }
+  incompetechPieces ??= await getJson(`${INCOMPETECH}/pieces.json`);
+  const scored = [];
+  for (const piece of incompetechPieces) {
+    const collection = Number(piece.collection);
+    const feels = String(piece.feel ?? "").split(",").map((entry) => entry.trim());
+    let score = 0;
+    const slot = mood.collections.indexOf(collection);
+    if (slot >= 0) {
+      score += 6 - slot;
+    }
+    for (const feel of mood.feels) {
+      if (feels.includes(feel)) {
+        score += 2;
+      }
+    }
+    const instruments = String(piece.instruments ?? "");
+    score += Math.min(3, (instruments.match(ORCHESTRAL) ?? []).length);
+    score -= 3 * (instruments.match(ELECTRONIC) ?? []).length;
+    if (ELECTRONIC_COLLECTIONS.has(collection)) {
+      score -= 6;
+    }
+    const seconds = lengthSeconds(piece.length);
+    if (seconds < 60 || seconds > 420) {
+      score -= 4;
+    }
+    if (score >= 6) {
+      scored.push({ piece, score, seconds });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 40).map(({ piece, seconds }) => ({
+    title: String(piece.title),
+    author: "Kevin MacLeod (incompetech.com)",
+    license: "CC BY 4.0 (attribution required)",
+    source: `${INCOMPETECH}/index.html?isrc=${encodeURIComponent(piece.isrc ?? "")}`,
+    url: `${INCOMPETECH}/mp3-royaltyfree/${encodeURIComponent(piece.filename)}`,
+    bytes: 0,
+    seconds,
+    // Matched on the catalogue's own tags, so the title need not carry a
+    // query word ("The Ice Giants" is a fine battle).
+    tagged: true,
+  }));
+}
+
+// Music goes to the catalogues made for it; room tone and one-shots to the
+// game-asset site and the field recordings on Commons.
 function sourcesFor(layer) {
   const order =
-    layer === "music" ? ["archive", "freesound", "commons"] : ["commons", "freesound", "archive"];
+    layer === "music"
+      ? ["incompetech", "opengameart", "archive", "freesound", "commons"]
+      : ["opengameart", "commons", "freesound", "archive"];
   return onlySource ? order.filter((name) => name === onlySource) : order;
 }
 
@@ -277,11 +485,20 @@ function queriesFor(cue) {
   return [...cue.search, ...cue.keywords.slice(0, 3)];
 }
 
-async function resolve(cue) {
+async function resolve(cue, exclude = new Set()) {
   let seen = 0;
   const refused = new Map();
   for (const source of sourcesFor(cue.layer)) {
-    for (const query of queriesFor(cue)) {
+    // The catalogues answer a cue, not a query; one pass each. The game
+    // asset site matches terms, so its plain keywords come first and the
+    // archive phrasings after.
+    const queries =
+      source === "incompetech"
+        ? [cue.label]
+        : source === "opengameart"
+          ? [...cue.keywords.slice(0, 2), ...cue.search]
+          : queriesFor(cue);
+    for (const query of queries) {
       let candidates = [];
       try {
         candidates =
@@ -289,13 +506,20 @@ async function resolve(cue) {
             ? await fromCommons(query)
             : source === "freesound"
               ? await fromFreesound(query)
-              : await fromArchive(query);
+              : source === "opengameart"
+                ? await fromOpenGameArt(query, cue.layer)
+                : source === "incompetech"
+                  ? await fromIncompetech(cue)
+                  : await fromArchive(query);
       } catch (error) {
         console.warn(`  ! ${source} "${query}": ${error.message}`);
         continue;
       }
       for (const candidate of candidates) {
-        const verdict = admit(candidate, { layer: cue.layer, query, allowAttribution });
+        if (exclude.has(candidate.url) || exclude.has(candidate.source)) {
+          continue;
+        }
+        const verdict = admit(candidate, { layer: cue.layer, query });
         if (!verdict.ok) {
           refused.set(verdict.why, (refused.get(verdict.why) ?? 0) + 1);
           continue;
@@ -369,15 +593,31 @@ if (flag("pack")) {
 
 const lock = readLock();
 const pinned = readJson(SOURCES, {});
+const shipped = readJson(SHIPPED, {});
 
-const cues = AMBIENCE_CUES.filter((cue) => !onlyCue || cue.id === onlyCue);
-if (onlyCue && !cues.length) {
-  console.error(`[ambience] no cue called "${onlyCue}".`);
+// The resolved library, as a file the project commits: every fetched track
+// with a redistributable licence, keyed by file name, so the next install
+// resolves the same tracks instead of searching.
+if (flag("export-sources")) {
+  const out = {};
+  for (const [name, entry] of Object.entries(lock)) {
+    if (entry.origin === "fetched" && entry.url && redistributable(entry.license)) {
+      out[name] = { title: entry.title, author: entry.author, license: entry.license, source: entry.source, url: entry.url };
+    }
+  }
+  writeFileSync(SHIPPED, `${JSON.stringify(out, null, 2)}\n`);
+  console.log(`[ambience] ${Object.keys(out).length} tracks written to ${path.relative(ROOT, SHIPPED)}.`);
+  process.exit(0);
+}
+
+const cues = AMBIENCE_CUES.filter((cue) => (!onlyCue || cue.id === onlyCue) && (!onlyLayer || cue.layer === onlyLayer));
+if (!cues.length) {
+  console.error(`[ambience] no cue matches${onlyCue ? ` "${onlyCue}"` : ""}${onlyLayer ? ` in layer "${onlyLayer}"` : ""}.`);
   process.exit(1);
 }
 
 console.log(
-  `[ambience] accepting ${allowAttribution ? "public domain, CC BY and CC BY-SA" : "public domain only"}` +
+  `[ambience] accepting ${publicDomainOnly ? "public domain only" : "public domain, CC BY, CC BY-SA and OGA-BY"}` +
     `${freesoundKey ? "" : " (no FREESOUND_API_KEY: that source is skipped)"}`,
 );
 
@@ -385,65 +625,97 @@ let filled = 0;
 let skipped = 0;
 const missing = [];
 
+// A pin: somebody chose that file deliberately, and the licence they
+// recorded is theirs to stand behind. The operator's pins name a cue; the
+// shipped pins and the lock name a file.
+function pinnedHits(cue) {
+  const hits = [];
+  const pin = pinned[cue.id];
+  if (pin?.url) {
+    hits.push({
+      title: pin.title ?? cue.label,
+      author: pin.author ?? "Unknown",
+      license: pin.license ?? "Declared by the operator",
+      source: pin.source ?? pin.url,
+      url: pin.url,
+      source_name: "pinned",
+      origin: "local",
+    });
+  }
+  for (const [name, entry] of Object.entries(force ? {} : lock)) {
+    if (parseTrackFile(name)?.cueId === cue.id && entry.url && entry.origin === "fetched") {
+      hits.push({ ...entry, source_name: "lock", origin: "fetched" });
+    }
+  }
+  for (const [name, entry] of Object.entries(shipped)) {
+    if (parseTrackFile(name)?.cueId === cue.id && entry.url) {
+      hits.push({ ...entry, source_name: "shipped", origin: "fetched" });
+    }
+  }
+  const seen = new Set();
+  return hits.filter((hit) => !seen.has(hit.url) && seen.add(hit.url));
+}
+
 for (const cue of cues) {
-  const existing = filesFor(cue.id);
-  if (existing.length && !force) {
+  const existing = force ? [] : filesFor(cue.id);
+  const wanted = takes - existing.length;
+  if (wanted <= 0) {
     skipped += 1;
     continue;
   }
   console.log(`[ambience] ${cue.id} (${cue.label})`);
-
-  // A pinned source wins outright: somebody chose that file deliberately,
-  // and the licence they recorded is theirs to stand behind. After that,
-  // what this cue resolved to last time, so a second machine gets the same
-  // file; a search only when neither says anything.
-  const pin = pinned[cue.id];
-  const locked = Object.entries(lock).find(
-    ([name, entry]) => parseTrackFile(name)?.cueId === cue.id && entry.url && entry.origin === "fetched",
+  // Files already here are not fetched twice; pins and the lock come
+  // before a search, and a second take never repeats the first.
+  const taken = new Set(
+    Object.entries(lock)
+      .filter(([name]) => parseTrackFile(name)?.cueId === cue.id && existing.includes(name))
+      .flatMap(([, entry]) => [entry.url, entry.source].filter(Boolean)),
   );
-  const hit = pin?.url
-    ? {
-        title: pin.title ?? cue.label,
-        author: pin.author ?? "Unknown",
-        license: pin.license ?? "Declared by the operator",
-        source: pin.source ?? pin.url,
-        url: pin.url,
-        source_name: "pinned",
+  const queue = pinnedHits(cue).filter((hit) => !taken.has(hit.url));
+  let got = 0;
+  for (let take = 0; take < wanted; take += 1) {
+    const hit = queue.shift() ?? (await resolve(cue, taken));
+    if (!hit) {
+      if (!got && !existing.length) {
+        console.log("  nothing acceptable found");
+        missing.push(cue.id);
       }
-    : locked && !force
-      ? { ...locked[1], source_name: "lock" }
-      : await resolve(cue);
-
-  if (!hit) {
-    console.log("  nothing acceptable found");
-    missing.push(cue.id);
-    continue;
+      break;
+    }
+    taken.add(hit.url);
+    if (hit.source) {
+      taken.add(hit.source);
+    }
+    console.log(`  ${hit.title} — ${hit.author} [${hit.source_name}]`);
+    console.log(`  ${hit.license} · ${hit.source}${hit.seconds ? ` · ${Math.round(hit.seconds)}s` : ""}`);
+    if (dryRun) {
+      got += 1;
+      continue;
+    }
+    const extension = path.extname(new URL(hit.url).pathname).toLowerCase() || ".mp3";
+    const file = nextTrackFile(cue.id, AUDIO_EXTENSIONS.includes(extension) ? extension : ".mp3", filesFor(cue.id).filter((name) => !force || existing.includes(name)));
+    try {
+      const bytes = await download(hit.url, path.join(OUT_DIR, file));
+      lock[file] = {
+        title: hit.title,
+        author: hit.author,
+        license: hit.license,
+        source: hit.source,
+        origin: hit.origin ?? "fetched",
+        url: hit.url,
+      };
+      writeLock(lock);
+      console.log(`  saved ${(bytes / 1024 / 1024).toFixed(1)} MB as ${file}`);
+      filled += 1;
+      got += 1;
+    } catch (error) {
+      console.warn(`  ! ${error.message}`);
+      if (!got && !existing.length) {
+        missing.push(cue.id);
+      }
+    }
+    await sleep(DELAY_MS);
   }
-  console.log(`  ${hit.title} — ${hit.author} [${hit.source_name}]`);
-  console.log(`  ${hit.license} · ${hit.source}${hit.seconds ? ` · ${Math.round(hit.seconds)}s` : ""}`);
-  if (dryRun) {
-    continue;
-  }
-
-  const extension = path.extname(new URL(hit.url).pathname).toLowerCase() || ".mp3";
-  const file = nextTrackFile(cue.id, AUDIO_EXTENSIONS.includes(extension) ? extension : ".mp3", force ? [] : existing);
-  try {
-    const bytes = await download(hit.url, path.join(OUT_DIR, file));
-    lock[file] = {
-      title: hit.title,
-      author: hit.author,
-      license: hit.license,
-      source: hit.source,
-      origin: hit.source_name === "pinned" ? "local" : "fetched",
-      url: hit.url,
-    };
-    console.log(`  saved ${(bytes / 1024 / 1024).toFixed(1)} MB as ${file}`);
-    filled += 1;
-  } catch (error) {
-    console.warn(`  ! ${error.message}`);
-    missing.push(cue.id);
-  }
-  await sleep(DELAY_MS);
 }
 
 if (!dryRun) {
@@ -454,7 +726,6 @@ if (!dryRun) {
 }
 if (missing.length) {
   console.log(`\n[ambience] no file for: ${missing.join(", ")}`);
-  console.log("[ambience] try --allow-attribution, --skip 1, a FREESOUND_API_KEY,");
-  console.log("[ambience] pin a URL in data/ambience-sources.json, or make the track here:");
-  console.log("[ambience] npm run generate-ambience (see docs/configuration.md).");
+  console.log("[ambience] try --skip 1, a FREESOUND_API_KEY, or pin a URL in");
+  console.log("[ambience] data/ambience-sources.json (see docs/configuration.md).");
 }

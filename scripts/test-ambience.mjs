@@ -169,7 +169,8 @@ console.log(`ambience: ${passed} tests passed`);
 const { nextTrackFile, parseManifest, parseTrackFile } = await import("../src/lib/ambience/library.ts");
 const { buildPack, readPack } = await import("../src/lib/ambience/pack.ts");
 const { AmbiencePlayer, CROSSFADE_MS, DUCK } = await import("../src/lib/ambience/player.ts");
-const { acceptLicense, admit, durationOk, relevant, spokenWord } = await import("./lib/ambience-gate.mjs");
+const { acceptLicense, admit, durationOk, redistributable, relevant, spokenWord } = await import("./lib/ambience-gate.mjs");
+const { packable } = await import("../src/lib/ambience/pack.ts");
 
 test("a track file names its cue and its take", () => {
   assert.deepEqual(parseTrackFile("tavern.mp3"), { cueId: "tavern", variant: 1, extension: ".mp3" });
@@ -229,6 +230,7 @@ test("the gate refuses spoken word, the wrong length and the off-topic", () => {
   const licensed = { title: "Cave drips.ogg", author: "x", license: "Public domain (CC0 or PD Mark)", seconds: 120 };
   assert.equal(admit(licensed, { layer: "bed", query: "cave ambience" }).ok, true);
   assert.equal(admit({ ...licensed, license: null }, { layer: "bed", query: "cave ambience" }).why, "licence");
+  assert.equal(admit({ ...licensed, title: "Dark cave", categories: "Audio versions of Wikipedia articles" }, { layer: "bed", query: "cave ambience" }).why, "spoken word");
   assert.equal(
     admit({ ...licensed, title: "LibriVox - The cave.ogg" }, { layer: "bed", query: "cave ambience" }).why,
     "spoken word",
@@ -236,13 +238,41 @@ test("the gate refuses spoken word, the wrong length and the off-topic", () => {
   assert.match(admit({ ...licensed, seconds: 5 }, { layer: "bed", query: "cave ambience" }).why, /wrong length/);
 });
 
-test("the licence gate is conservative", () => {
+test("the licence gate takes free licences and refuses the rest", () => {
   assert.ok(acceptLicense("CC0", ""));
   assert.ok(acceptLicense("", "https://creativecommons.org/publicdomain/mark/1.0/"));
-  assert.equal(acceptLicense("CC BY 4.0", ""), null, "attribution needs the flag");
-  assert.ok(acceptLicense("CC BY 4.0", "", true));
-  assert.equal(acceptLicense("CC BY-NC 4.0", "", true), null, "NC is refused even then");
-  assert.equal(acceptLicense("", "", true), null, "a blank licence is refused");
+  assert.match(acceptLicense("CC BY 4.0", ""), /^CC BY \(/, "attribution is fine: the app keeps the credit");
+  assert.match(acceptLicense("CC-BY-SA 3.0", ""), /BY-SA/);
+  assert.match(acceptLicense("OGA-BY 3.0", ""), /^OGA-BY/);
+  assert.match(acceptLicense("CC0 CC-BY 3.0", ""), /^Public domain/, "the freest of several wins");
+  assert.equal(acceptLicense("CC BY-NC 4.0", ""), null, "NC is refused");
+  assert.equal(acceptLicense("CC BY-ND 4.0", ""), null, "ND is refused");
+  assert.equal(acceptLicense("", ""), null, "a blank licence is refused");
+  assert.equal(acceptLicense("CC BY 4.0", "", true), null, "--public-domain-only narrows it");
+  assert.ok(acceptLicense("CC0", "", true));
+});
+
+test("what may travel in the pack", () => {
+  assert.ok(redistributable("Public domain (CC0 or PD Mark)"));
+  assert.ok(redistributable("CC BY 4.0 (attribution required)"));
+  assert.ok(redistributable("OGA-BY (attribution required)"));
+  assert.ok(!redistributable("Declared by the operator"));
+  assert.ok(packable({ origin: "fetched", license: "CC BY 4.0 (attribution required)" }));
+  assert.ok(packable({ origin: "pack", license: "Public domain (CC0 or PD Mark)" }));
+  assert.ok(!packable({ origin: "local", license: "CC0" }), "the operator's own files stay home");
+  assert.ok(!packable({ origin: "fetched", license: "Test material, not for release" }));
+  assert.ok(!packable({ origin: "generated", license: "Generated locally" }), "takes from a model only when asked");
+  assert.ok(packable({ origin: "generated", license: "Generated locally" }, { includeGenerated: true }));
+  assert.ok(!packable(undefined));
+});
+
+test("spoken word is caught by category and by byline too", () => {
+  assert.ok(spokenWord("Duffy's Tavern (film).ogg", "JohnAnkerBow", "Self-published work|Spoken English Wikipedia"));
+  assert.ok(spokenWord("Remarks by President Reagan at Raleigh Tavern.mp3"));
+  assert.ok(!spokenWord("Crowded Pub", "Bobjt", "CC0|Sound effects"));
+  const tagged = { title: "Crowded Pub", author: "Bobjt", license: "Public domain (CC0 or PD Mark)", seconds: 0, tagged: true };
+  assert.equal(admit(tagged, { layer: "bed", query: "tavern" }).ok, true, "a source that matched on its tags is not asked for the word");
+  assert.equal(admit({ ...tagged, tagged: false }, { layer: "bed", query: "tavern" }).why, "off topic");
 });
 
 await (async () => {

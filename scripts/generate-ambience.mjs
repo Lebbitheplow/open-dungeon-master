@@ -1,12 +1,11 @@
-// Makes the sound library here instead of finding it: one or more takes per
-// cue from a music model, written into public/ambience next to whatever the
-// fetch script found, credited in the lock as generated.
-//
-// The archives turned out to be thin and wrong in equal measure (a Lovecraft
-// reading for the cave, a minuet for the temple), and for a bed or a mood a
-// model does better than a search. Each cue in src/lib/ambience/catalog.ts
-// with a `prompt` is generated; stings are not, because the model's shortest
-// piece is ten seconds and a sting is one.
+// An experiment, not the library: one or more takes per cue from a music
+// model, written into public/ambience next to what the fetch script found,
+// credited in the lock as generated and kept out of the sound pack unless
+// asked for (scripts/pack-ambience.mjs --include-generated). The library
+// proper is the open-licensed recordings scripts/fetch-ambience.mjs
+// resolves. Each cue in src/lib/ambience/catalog.ts with a `prompt` can be
+// generated; stings cannot, because the model's shortest piece is ten
+// seconds and a sting is one.
 //
 // Talks to an ACE-Step 1.5 server through its OpenAI-shaped endpoint
 // (acestep-openrouter, http://127.0.0.1:8002 by default; the model is MIT

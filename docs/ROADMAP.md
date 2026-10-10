@@ -241,9 +241,12 @@ installed track. **Sound panel (2026-10):** the header's speaker opens a panel
 naming the room and the music with the take that is on, a level for each per
 listener, Next, and the pickers (every cue painted) with a hold per layer for
 whoever steers the story; cues hold several takes crossfaded at the tail; the
-library arrives as a release sound pack installed from the admin panel, or
-made on the server with ACE-Step (`npm run generate-ambience`), with the
-archive fetch gated against spoken word and the wrong length.
+library is open-licensed recordings resolved from OpenGameArt, Kevin
+MacLeod's catalogue, Commons, Freesound and the Internet Archive, pinned in
+`src/lib/ambience/sources.json` and shipped as a release sound pack installed
+from the admin panel; the fetch is gated against spoken word and the wrong
+length, and attribution licences are honoured by keeping every credit in the
+app.
 
 **Bluetooth and per-die dice sources (2026-08):** on top of the existing
 real-dice mode, each opted-in player picks per die shape whether that die is
@@ -372,9 +375,8 @@ version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
   the DM turn queue and the voice rooms. Multi-instance deployment is
   unsupported, and a restart drops live voice calls (players rejoin).
 - The ambience library ships empty until the release's sound pack is
-  installed (admin panel, or `npm run fetch-ambience -- --pack`); the free
-  archives fill only a third of the catalog, and only with a `FREESOUND_API_KEY`
-  is the best of them searched.
+  installed (admin panel, or `npm run fetch-ambience -- --pack`), or the
+  fetch script resolves it from the open sources on the server.
 - Dice-source choices (including Pixels pairings) are per device, and the
   server cannot distinguish a typed physical roll from a typed lie; real-dice
   mode remains a trust feature, as tabletop dice always have been.

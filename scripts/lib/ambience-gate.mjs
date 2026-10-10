@@ -24,7 +24,8 @@ export function words(text) {
 }
 
 // The candidate's title has to share a distinguishing word with what was
-// asked for.
+// asked for. A source that matched on its own tags (incompetech's moods)
+// says so with `tagged` and is not asked to match the words as well.
 export function relevant(query, title) {
   const wanted = words(query);
   if (!wanted.length) {
@@ -58,9 +59,13 @@ const SPOKEN = [
   /\(eng\)|\(fra\)|\(deu\)|\(spa\)|\(ita\)|\(por\)|\(nld\)|\(pol\)|\(rus\)/i,
 ];
 
-export function spokenWord(title, author = "") {
+// Commons also files every audio under categories ("Spoken English
+// Wikipedia", "Audio files of speeches"), which say more than a title can.
+const SPOKEN_CATEGORY = /spoken|speech|audio versions of wikipedia|audiobook|pronunciation|podcast|lecture|interview|reading|news|debate|sermon|homil|oral history|remarks|address/i;
+
+export function spokenWord(title, author = "", categories = "") {
   const text = `${title ?? ""} ${author ?? ""}`;
-  return SPOKEN.some((pattern) => pattern.test(text));
+  return SPOKEN.some((pattern) => pattern.test(text)) || /\b(remarks|testimony|hearing|debate|homily|oral history)\b/i.test(text) || SPOKEN_CATEGORY.test(String(categories ?? ""));
 }
 
 // How long a file for this layer may run. A bed loops under a scene and a
@@ -83,11 +88,17 @@ export function durationOk(layer, seconds) {
 
 // Returns a short label when the licence is acceptable, null when it is not.
 // Deliberately conservative: anything this cannot positively identify is
-// refused, including a blank licence field. NC and ND are refused even under
-// allowAttribution: whether an app that plays them is a commercial or
-// derivative use is exactly the question this script must not answer on an
-// operator's behalf.
-export function acceptLicense(shortName, url, allowAttribution = false) {
+// refused, including a blank licence field.
+//
+// Free licences that ask only for credit (CC BY, CC BY-SA, OpenGameArt's
+// OGA-BY) are accepted, because the app keeps the credit for you: every
+// file's title, author, source and licence are written to the lock and the
+// manifest and shown on /licenses. `publicDomainOnly` narrows it to CC0 and
+// the Public Domain Mark. NonCommercial and NoDerivatives are refused
+// either way: whether an app that plays them is a commercial or derivative
+// use is exactly the question this script must not answer on an operator's
+// behalf.
+export function acceptLicense(shortName, url, publicDomainOnly = false) {
   const text = `${shortName ?? ""} ${url ?? ""}`.toLowerCase();
   if (
     text.includes("publicdomain/zero") ||
@@ -98,20 +109,36 @@ export function acceptLicense(shortName, url, allowAttribution = false) {
   ) {
     return "Public domain (CC0 or PD Mark)";
   }
-  if (!allowAttribution) {
+  if (publicDomainOnly) {
     return null;
+  }
+  if (text.includes("by-nc") || text.includes("noncommercial") || text.includes("non-commercial") || text.includes("noderiv") || text.includes("by-nd")) {
+    return null;
+  }
+  if (text.includes("oga-by")) {
+    return "OGA-BY (attribution required)";
   }
   // Order matters: "by-sa" contains "by".
-  if (text.includes("by-sa") || text.includes("attribution-sharealike")) {
+  if (text.includes("by-sa") || text.includes("attribution-sharealike") || text.includes("sharealike")) {
     return "CC BY-SA (attribution and share-alike required)";
   }
-  if (text.includes("by-nc") || text.includes("noncommercial") || text.includes("noderiv")) {
-    return null;
-  }
-  if (text.includes("cc by") || text.includes("cc-by") || text.includes("licenses/by/")) {
+  if (text.includes("cc by") || text.includes("cc-by") || text.includes("licenses/by/") || text.includes("attribution")) {
     return "CC BY (attribution required)";
   }
   return null;
+}
+
+// Whether a track under this licence label may travel in the sound pack the
+// project ships: public domain and the attribution licences, with the
+// credit riding along in the pack. Anything the operator declared
+// themselves stays on their server.
+export function redistributable(license) {
+  const text = String(license ?? "").toLowerCase();
+  return (
+    text.startsWith("public domain") ||
+    text.startsWith("cc by") ||
+    text.startsWith("oga-by")
+  );
 }
 
 // Everything above in one answer, with the reason a candidate was refused,
@@ -120,10 +147,10 @@ export function admit(candidate, { layer, query }) {
   if (!candidate.license) {
     return { ok: false, why: "licence" };
   }
-  if (spokenWord(candidate.title, candidate.author)) {
+  if (spokenWord(candidate.title, candidate.author, candidate.categories)) {
     return { ok: false, why: "spoken word" };
   }
-  if (!relevant(query, candidate.title)) {
+  if (!candidate.tagged && !relevant(query, candidate.title)) {
     return { ok: false, why: "off topic" };
   }
   if (!durationOk(layer, candidate.seconds)) {

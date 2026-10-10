@@ -286,78 +286,67 @@ browsers require a secure context for web-app installs.
 
 The sound library is a set of CUES (a tavern, a cave, a battle, a thunderclap)
 rather than a set of files. `src/lib/ambience/catalog.ts` names them; what is
-actually on disk lives in `public/ambience/`, is never committed, and arrives
-one of four ways. A cue may have several takes (`battle.mp3`, `battle-2.mp3`,
-`battle-3.ogg`); the player moves between them so a long fight is not one loop
-forever, and Next in the sound panel skips ahead.
+actually on disk lives in `public/ambience/` and is never committed. The
+library is public-domain and open-licensed recordings: CC0 and Public Domain
+Mark, and the attribution licences (CC BY, CC BY-SA, OpenGameArt's OGA-BY),
+which the app honours for you by keeping every file's title, author, source
+and licence in the lock and the manifest, on the `/licenses` page and inside
+the sound pack. A cue may have several takes (`battle.mp3`, `battle-2.mp3`);
+the player moves between them so a long fight is not one loop forever, and
+Next in the sound panel skips ahead.
 
-**The sound pack.** Each release attaches `ambience-pack.zip`, the tracks made
-with a music model for the project. Install it from the admin panel (Sound
-library: one button, with progress) or on the command line:
+**The sound pack.** Each release attaches `ambience-pack.zip`: the library
+the project resolved from the sources below, with its credits. Install it
+from the admin panel (Sound library: one button, with progress) or on the
+command line:
 
 ```bash
 npm run fetch-ambience -- --pack              # this release's pack
 npm run fetch-ambience -- --pack https://...  # another pack
 ```
 
-**Make tracks here.** With an ACE-Step 1.5 server running (its
-`acestep-openrouter` endpoint, `http://127.0.0.1:8002` by default, or
-`ACESTEP_URL`), every room and music cue has a prompt in the catalog:
+**Fetch it yourself.** The same script resolves every cue from the open
+sources, trying each in the order that suits the layer:
+
+- OpenGameArt.org: game music, loops and effects under CC0, CC BY, CC BY-SA
+  and OGA-BY, the licence stated on every page. Room tone, stings, loops.
+- Kevin MacLeod's catalogue (incompetech.com), CC BY 4.0: every piece tagged
+  by mood and filed under collections such as Tension, Mystery, Wonder,
+  Horror and Celtic and Folk, which is where the music cues come from.
+- Wikimedia Commons: public-domain field recordings and one-shots.
+- Freesound: CC0 recordings, the one source that needs a key
+  (`FREESOUND_API_KEY`, free from freesound.org/apiv2/apply).
+- The Internet Archive: old public-domain recordings.
 
 ```bash
-npm run generate-ambience                  # one take for every cue that has none
-npm run generate-ambience -- --layer music # one layer
-npm run generate-ambience -- --cue battle --takes 3
-npm run pack-ambience                      # zip the generated tracks for a release
+npm run fetch-ambience                       # fill every cue that has no file yet
+npm run fetch-ambience -- --layer music --takes 2   # a second take of every mood
+npm run fetch-ambience -- --dry-run          # resolve and report, download nothing
+npm run fetch-ambience -- --cue tavern --skip 1     # try the next candidate
+npm run fetch-ambience -- --public-domain-only      # CC0 and PD Mark alone
+npm run fetch-ambience -- --manifest         # rebuild the manifest only
 ```
 
-Stings are not generated: the model's shortest piece is ten seconds and a
-sting is one beat. ACE-Step is MIT-licensed and its output carries no
-third-party claim, which is what lets the pack ship with the project.
-
-**Fetch recordings.** Public-domain audio from the archives, for the stings
-and for anyone who would rather not run a model:
-
-```bash
-npm run fetch-ambience              # fill every cue that has no file yet
-npm run fetch-ambience -- --dry-run # resolve and report, download nothing
-npm run fetch-ambience -- --cue tavern --skip 1   # try the next candidate
-npm run fetch-ambience -- --manifest             # rebuild the manifest only
-```
-
-The script reads each archive's own licence metadata and refuses anything it
-cannot positively identify. By default it accepts only public-domain
-dedications (CC0 and the Public Domain Mark). `--allow-attribution` widens
-that to CC BY and CC BY-SA, which you may use but must keep credited;
-NonCommercial and NoDerivatives are refused either way, because whether your
-install is a commercial or derivative use is not a question this script may
-answer for you. Every candidate also passes a spoken-word gate (the archives
-are full of correctly licensed audiobooks and pronunciation clips), a
-relevance gate and a length gate per layer (a bed or a music cue has to run
-at least half a minute, a sting at most twenty seconds). Every accepted
-file's credit is written into `data/ambience-lock.json`, from which
-`public/ambience/manifest.json` is rebuilt, and shown on the app's
-`/licenses` page.
-
-Three sources are tried, in the order that suits the layer. Room tone and
-one-shot sounds go to Wikimedia Commons first, music to the Internet Archive,
-and both fall through to [Freesound](https://freesound.org/apiv2/apply), which
-is much the best source for this material and the only one needing a key:
-
-```bash
-FREESOUND_API_KEY=... npm run fetch-ambience
-```
-
-Be warned that the free archives are thin for this material: a dry run on
-this catalog filled a third of the cues, and the gates exist because the
-first version filled the cave with a Lovecraft reading.
+Where a file comes from, in order: your own pins (`data/ambience-sources.json`),
+the lock (`data/ambience-lock.json`, what this install resolved before), the
+shipped pins (`src/lib/ambience/sources.json`, the library the project
+resolved and committed, so every install gets the same tracks), and only
+then a search. The licence is read from each source's own record and never
+guessed; anything the script cannot positively identify is refused, and
+NonCommercial and NoDerivatives are refused under every setting. Every
+candidate also passes a spoken-word gate (the archives are full of correctly
+licensed audiobooks, pronunciation clips and articles read aloud, and Commons
+files them under categories that say so), a relevance gate and a length gate
+per layer (a bed or a music cue has to run at least half a minute, a sting at
+most twenty seconds).
 
 **Curating by hand.** Drop a file named after the cue into `public/ambience/`
 (`tavern.mp3`, `cave.ogg`, or `tavern-2.mp3` for a second take; `.mp3`,
 `.ogg`, `.opus`, `.m4a` and `.wav` all work) and rescan from the admin panel
-or run `npm run fetch-ambience -- --manifest`. It is never overwritten, and it
-is credited as locally supplied: the licence is then yours to stand behind.
-Or pin exact URLs in `data/ambience-sources.json`, which wins over any search:
+or run `npm run fetch-ambience -- --manifest`. It is never overwritten, it is
+credited as locally supplied, and it stays out of the pack: the licence is
+then yours to stand behind. Or pin exact URLs in `data/ambience-sources.json`,
+which win over everything:
 
   ```json
   {
@@ -371,9 +360,16 @@ Or pin exact URLs in `data/ambience-sources.json`, which wins over any search:
   }
   ```
 
-`data/ambience-lock.json` records what each file resolved to, so a second
-machine fetches the same files rather than whatever the search returns that
-day. Both live under `data/` and are not committed.
+**Making the pack.** `npm run pack-ambience` zips every public-domain or
+attribution-licensed track on disk with its credits (`--all` takes every
+file, `--include-generated` the takes below). `npm run fetch-ambience --
+--export-sources` writes the resolved library to the shipped pins file.
+
+**Optional: a music model.** `npm run generate-ambience` makes takes with an
+ACE-Step 1.5 server (`ACESTEP_URL`, `http://127.0.0.1:8002` by default) from
+the prompt each room and music cue carries. It is an experiment, not the
+library: generated takes are credited as such, stay out of the pack unless
+asked for, and are no substitute for a recording somebody made.
 
 **At the table.** Ambience is a per-campaign setting (Setup → Ambience), on by
 default. "Follows the scene" lets the engine pick a room from each new place

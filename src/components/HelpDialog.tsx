@@ -347,9 +347,10 @@ export function HelpDialog({
           layer you chose. Sound ducks automatically while narration speaks.
         </p>
         <p>
-          The library itself is installed by the server admin: the sound pack that ships with a
-          release, tracks made on the server, or public-domain recordings; see the licenses page
-          for who made what. If ambience is on but silent, the panel says why.
+          The library itself is public-domain and Creative Commons recordings, installed by the
+          server admin as the sound pack that ships with a release or fetched from the open
+          sources; the licenses page says who made what. If ambience is on but silent, the panel
+          says why.
         </p>
       </Section>
 
