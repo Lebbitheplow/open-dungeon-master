@@ -25,9 +25,14 @@ const IDENTITY_TTL_MS = 10 * 60_000;
 const PROBE_TIMEOUT_MS = 5_000;
 const MAX_BODY_BYTES = 1_000_000;
 const METHODS = new Set(["POST", "GET", "DELETE"]);
-// What an MCP client sends that the world needs; never Origin (the world
-// refuses browser origins), cookies or Cloudflare's own headers.
-const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "mcp-protocol-version", "mcp-method", "mcp-session-id", "user-agent"];
+// What an MCP client sends that the world needs: these, and every header of
+// MCP's own Mcp- family. The 2026-07-28 revision puts Mcp-Method on every
+// request, Mcp-Name on tool calls and Mcp-Param-<Name> on some, and the
+// world's MCP library refuses a request missing one, so a list of them by
+// name breaks again with the next revision. Never Origin (the world refuses
+// browser origins), cookies or Cloudflare's own headers.
+const FORWARD_HEADERS = new Set(["accept", "content-type", "last-event-id", "user-agent"]);
+const MCP_HEADER_PREFIX = "mcp-";
 // WWW-Authenticate stays behind: on a revoked token it would send the
 // assistant hunting for an OAuth server the relay does not have.
 const RETURN_HEADERS = ["content-type", "mcp-session-id"];
@@ -133,9 +138,8 @@ export function createRelay({ lookup, fetch: fetchImpl = (...args) => fetch(...a
     }
 
     const headers = new Headers();
-    for (const name of FORWARD_HEADERS) {
-      const value = request.headers.get(name);
-      if (value) headers.set(name, value);
+    for (const [name, value] of request.headers) {
+      if (value && (FORWARD_HEADERS.has(name) || name.startsWith(MCP_HEADER_PREFIX))) headers.set(name, value);
     }
     headers.set("authorization", `Bearer ${target.token}`);
     let upstream;

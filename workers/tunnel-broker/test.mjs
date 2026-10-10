@@ -672,6 +672,29 @@ await test("an assistant link is forwarded to the world with its token as a bear
   assert.equal(world.seen.filter((call) => call.url.endsWith("/api/auth/providers")).length, 1, "and so is the proof");
 });
 
+// The 2026-07-28 revision's standard headers: the world's MCP library answers
+// 400 to a modern request without Mcp-Method, and to a tool call without
+// Mcp-Name (or a declared Mcp-Param-<Name>).
+await test("every Mcp- header reaches the world, so a 2026-07-28 client can call tools", async () => {
+  const world = fakeWorld();
+  const relay = createRelay({ lookup: async () => ONLINE, fetch: world.fetchImpl });
+  const mcpHeaders = {
+    "mcp-protocol-version": "2026-07-28",
+    "mcp-method": "tools/call",
+    "mcp-name": "list_campaigns",
+    "mcp-param-region": "north",
+  };
+  const call = relayCall(undefined, {
+    headers: { "content-type": "application/json", ...mcpHeaders, "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "203.0.113.9" },
+    body: '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_campaigns","arguments":{}}}',
+  });
+  assert.equal((await relay(call, {})).status, 200);
+  const mcp = world.seen.find((seen) => seen.url === `${PLAY}/api/mcp`);
+  for (const [name, value] of Object.entries(mcpHeaders)) assert.equal(mcp.headers.get(name), value, name);
+  assert.equal(mcp.headers.get("cf-connecting-ip"), null, "Cloudflare's own headers stay behind");
+  assert.equal(mcp.headers.get("x-forwarded-for"), null);
+});
+
 await test("a token is never sent to an address that is not that world", async () => {
   const world = fakeWorld({ instanceId: "somebody-else" });
   const relay = createRelay({ lookup: async () => ONLINE, fetch: world.fetchImpl });
