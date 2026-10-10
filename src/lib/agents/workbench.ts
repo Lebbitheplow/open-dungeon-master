@@ -18,6 +18,7 @@ import { createHash } from "node:crypto";
 import { boundResultText, campaignForAgent, historyForAgent } from "@/lib/agents/agent-results";
 import { finishWebhookWrite, playerWebhooksEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
 import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
+import { ASK_SCOPES, ASK_VISIBILITIES, QUESTION_MAX_CHARS } from "@/lib/dm/ask-logic";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -84,7 +85,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_campaign",
     scope: "read",
-    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages.",
+    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the DM sent you alone are not here: odm_get_whispers reads them.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -126,6 +127,15 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/sheet`,
   },
   {
+    name: "odm_get_whispers",
+    scope: "read",
+    description: "Read your private line with the Dungeon Master, oldest first: whispers the DM sent you alone (to_player) and your own private messages to the DM (to_dm, answered once a DM turn has read them). The transcript never carries these, so odm_get_campaign does not show them. In the DM seat of a game a person runs, inbox holds the players' private messages.",
+    properties: campaignIdProp,
+    required: ["campaignId"],
+    method: "GET",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/whispers`,
+  },
+  {
     name: "odm_quests",
     scope: "read",
     description: "Read a campaign's quest log.",
@@ -137,7 +147,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_timeline",
     scope: "read",
-    description: "Read a campaign's timeline of chapters and events. A chapter appears only once it closes at a story beat, so the play in progress is not here: read odm_get_campaign or odm_get_messages for the latest.",
+    description: "Read a campaign's timeline of closed chapters, facts and events. A chapter appears only once it closes, and no messages appear at all, so the play in progress is not here: read odm_get_campaign or odm_get_messages for the latest.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -188,17 +198,31 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_ask",
     scope: "play",
-    description: "Ask the campaign's records a question (what happened, who someone is). A model writes the answer from facts, chapter summaries and only the last few messages, so it can be incomplete or wrong, and it is not a view of the table: for what is happening now, read odm_get_campaign. Private to you unless visibility says otherwise.",
+    description: "Ask the campaign's records a question (what happened, who someone is). A model writes the answer, waiting behind any narration in progress, so it can be incomplete or wrong, and it is not a view of the table: story questions read facts, chapter summaries and only the last few messages, clipped; rules and sheet questions read no messages. For what is happening now, read odm_get_campaign. Private to you unless visibility says otherwise.",
     properties: {
       ...campaignIdProp,
-      question: { type: "string" },
-      scope: { type: "string" },
-      visibility: { type: "string" },
+      question: { type: "string", maxLength: QUESTION_MAX_CHARS },
+      scope: {
+        type: "string",
+        enum: ["auto", ...ASK_SCOPES],
+        description: "story: the record; rules: this table's house rules; sheet: your character, hit points and recent dice. auto (the default) picks from the question's words.",
+      },
+      visibility: { type: "string", enum: [...ASK_VISIBILITIES], description: "private (the default), or table to show the question and answer to everyone." },
     },
     required: ["campaignId", "question"],
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/ask`,
     body: (a) => pick(a, ["question", "scope", "visibility"]),
+  },
+  {
+    name: "odm_whisper_dm",
+    scope: "play",
+    description: "Send the Dungeon Master a private message as your character (slipping away, a secret plan, a reply to a whisper). The rest of the table does not see it; the DM answers in a whisper you read with odm_get_whispers. At most two may wait unanswered.",
+    properties: { ...campaignIdProp, message: { type: "string", maxLength: 500 } },
+    required: ["campaignId", "message"],
+    method: "POST",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/whispers`,
+    body: (a) => pick(a, ["message"]),
   },
   {
     name: "odm_answer_roll",

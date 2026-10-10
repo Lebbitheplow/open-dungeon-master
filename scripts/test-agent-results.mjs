@@ -28,6 +28,9 @@ const { pauseDmQueue } = await import("../src/lib/dm/queue.ts");
 const { X_CARD_REASON } = await import("../src/lib/dm/safety.ts");
 const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
+const { connectionInstructions } = await import("../src/lib/agents/mcp-server.ts");
+const { insertWhisper } = await import("../src/lib/db/dm-whispers.ts");
+const { ASK_SCOPES, ASK_VISIBILITIES } = await import("../src/lib/dm/ask-logic.ts");
 const { MAX_RESULT_CHARS, boundResultText, campaignForAgent, historyForAgent } = await import(
   "../src/lib/agents/agent-results.ts"
 );
@@ -36,6 +39,7 @@ const routes = {
   snapshot: await import("../src/app/api/campaigns/[campaignId]/route.ts"),
   messages: await import("../src/app/api/campaigns/[campaignId]/messages/route.ts"),
   sheet: await import("../src/app/api/campaigns/[campaignId]/sheet/route.ts"),
+  whispers: await import("../src/app/api/campaigns/[campaignId]/whispers/route.ts"),
 };
 
 let passed = 0;
@@ -102,11 +106,12 @@ globalThis.fetch = async (url, init = {}) => {
   const target = new URL(url);
   const bearer = new Headers(init.headers).get("authorization") ?? "";
   globalThis.__odmTestToken = bearer.replace(/^Bearer\s+/i, "");
-  const match = /^\/api\/campaigns\/([^/]+)(\/messages|\/sheet)?$/.exec(target.pathname);
+  const match = /^\/api\/campaigns\/([^/]+)(\/messages|\/sheet|\/whispers)?$/.exec(target.pathname);
   assert.ok(match, `unexpected path ${target.pathname}`);
-  const mod = match[2] === "/messages" ? routes.messages : match[2] === "/sheet" ? routes.sheet : routes.snapshot;
+  const mod = match[2] ? routes[match[2].slice(1)] : routes.snapshot;
+  const method = init.method ?? "GET";
   routed += 1;
-  return mod.GET(new Request(target, { method: "GET" }), { params: Promise.resolve({ campaignId: match[1] }) });
+  return mod[method](new Request(target, { method, headers: init.headers, body: init.body }), { params: Promise.resolve({ campaignId: match[1] }) });
 };
 
 try {
@@ -207,9 +212,62 @@ try {
 
   await test("the new reads are listed for a read connection and count as reads", async () => {
     const names = workbenchTools(grant).map((tool) => tool.name);
-    assert.ok(names.includes("odm_get_messages") && names.includes("odm_get_sheet"));
+    assert.ok(names.includes("odm_get_messages") && names.includes("odm_get_sheet") && names.includes("odm_get_whispers"));
     const { isReadTool } = await import("../src/lib/agents/activity.ts");
-    assert.ok(isReadTool("odm_get_messages") && isReadTool("odm_get_sheet"));
+    assert.ok(isReadTool("odm_get_messages") && isReadTool("odm_get_sheet") && isReadTool("odm_get_whispers"));
+    assert.ok(!isReadTool("odm_whisper_dm"), "a whisper to the DM wakes a turn, so it counts as a change");
+  });
+
+  // The DM's send_whisper lands in dm_whispers, never in the transcript, so a
+  // player agent reading only the snapshot never learned what it was told.
+  await test("odm_get_whispers reads what the DM told this player alone, which the snapshot never carries", async () => {
+    const secret = "Only you see the sigil under the altar cloth.";
+    insertWhisper(campaign.id, null, [{ userId: player.id, characterId: playerSheet.id, characterName: "Liriel" }], secret);
+    insertWhisper(campaign.id, null, [{ userId: lead.id, characterId: leadSheet.id, characterName: "Brannoc" }], "Brannoc's own secret.");
+    const snapshot = await workbenchCall(grant, "odm_get_campaign", { campaignId: campaign.id });
+    assert.ok(!snapshot.text.includes(secret));
+    const outcome = await workbenchCall(grant, "odm_get_whispers", { campaignId: campaign.id });
+    assert.equal(outcome.isError, false, outcome.text.slice(0, 300));
+    const { whispers } = JSON.parse(outcome.text);
+    assert.deepEqual(whispers.map((whisper) => [whisper.direction, whisper.content]), [["to_player", secret]]);
+  });
+
+  await test("odm_whisper_dm sends a private message to the DM, outside the transcript", async () => {
+    const sent = await workbenchCall(grant, "odm_whisper_dm", { campaignId: campaign.id, message: "I palm the key while they argue." });
+    assert.equal(sent.isError, false, sent.text);
+    const { whispers } = JSON.parse((await workbenchCall(grant, "odm_get_whispers", { campaignId: campaign.id })).text);
+    assert.deepEqual(whispers.at(-1).direction, "to_dm");
+    assert.equal(whispers.at(-1).content, "I palm the key while they argue.");
+    const { messages } = JSON.parse((await workbenchCall(grant, "odm_get_messages", { campaignId: campaign.id, limit: 5 })).text);
+    assert.ok(!messages.some((message) => message.content.includes("palm the key")), "the table never sees it");
+    const blank = await workbenchCall(grant, "odm_whisper_dm", { campaignId: campaign.id, message: "  " });
+    assert.equal(blank.isError, true);
+    assert.match(blank.text, /HTTP 400/);
+  });
+
+  await test("odm_ask offers exactly the scopes and visibilities the ask route accepts", () => {
+    const ask = workbenchTools(grant).find((tool) => tool.name === "odm_ask");
+    assert.deepEqual(ask.inputSchema.properties.scope.enum, ["auto", ...ASK_SCOPES]);
+    assert.deepEqual(ask.inputSchema.properties.visibility.enum, [...ASK_VISIBILITIES]);
+  });
+
+  await test("every tool a description or the server instructions names is one the agent has", () => {
+    process.env.ODM_PLAYER_WEBHOOK_ORIGINS = "https://receiver.example";
+    const full = { ...grant, scopes: ["read", "play", "characters", "campaigns", "dm"] };
+    const tools = workbenchTools(full);
+    delete process.env.ODM_PLAYER_WEBHOOK_ORIGINS;
+    const names = new Set(tools.map((tool) => tool.name));
+    const texts = [
+      connectionInstructions(full),
+      ...tools.flatMap((tool) => [tool.description, ...Object.values(tool.inputSchema.properties).map((prop) => prop.description ?? "")]),
+    ];
+    const named = new Set(texts.flatMap((text) => text.match(/\bodm_[a-z_]+/g) ?? []));
+    assert.ok(named.has("odm_get_campaign") && named.has("odm_get_whispers"));
+    assert.deepEqual([...named].filter((name) => !names.has(name)), []);
+    const readOnly = connectionInstructions({ ...grant, scopes: ["read"] });
+    assert.match(readOnly, /odm_get_campaign/);
+    assert.ok(!readOnly.includes("odm_ask"), "a read-only connection is not told about a tool it lacks");
+    assert.ok(!connectionInstructions({ ...grant, scopes: ["characters"] }).includes("odm_get_campaign"));
   });
 
   await test("webhook tools and guard fields stay hidden while webhooks are off", () => {
