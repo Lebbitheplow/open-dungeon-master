@@ -14,10 +14,8 @@ import { listAssignmentsForCharacter } from "@/lib/db/characters";
 import { harnessMcpUrl } from "@/lib/harness/bridge";
 import { grantSessionToken, grantUser, type AgentScope, type ConnectionGrant } from "@/lib/agents/grants";
 import type { McpToolDefinition } from "@/lib/harness/types";
+import { boundResultText, campaignForAgent, historyForAgent } from "@/lib/agents/agent-results";
 
-// Claude Code drops tool results over roughly 25K tokens; staying well under
-// it keeps a big campaign snapshot readable rather than silently lost.
-const MAX_RESULT_CHARS = 60_000;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 type Args = Record<string, unknown>;
@@ -35,6 +33,9 @@ type WorkbenchTool = {
   body?: (args: Args) => unknown;
   // Guard evaluated before the call, e.g. an explicit confirm.
   check?: (args: Args) => string | null;
+  // Reshapes a successful answer for an agent, under the result cap
+  // (src/lib/agents/agent-results.ts). Others are only bounded.
+  shape?: (text: string) => string;
 };
 
 const campaignIdProp = { campaignId: { type: "string", description: "The campaign's id (from odm_list_campaigns)." } };
@@ -80,11 +81,46 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_campaign",
     scope: "read",
-    description: "Read one campaign as you see it at the table: scene, recent messages, party, encounter (secrets only if you hold the DM seat or steer the story).",
+    description: "Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}`,
+    shape: campaignForAgent,
+  },
+  {
+    name: "odm_get_messages",
+    scope: "read",
+    description: "Read a campaign's transcript a page at a time, oldest first within the page. Leave out before for the newest page; pass before = olderBefore (from this tool or odm_get_campaign's history) to read further back. olderBefore is null at the start of the campaign.",
+    properties: {
+      ...campaignIdProp,
+      before: { type: "integer", minimum: 1, description: "Read messages older than this seq." },
+      limit: { type: "integer", minimum: 1, maximum: 100, description: "How many messages (default 30)." },
+    },
+    required: ["campaignId"],
+    method: "GET",
+    path: (a) => {
+      const query = new URLSearchParams();
+      for (const key of ["before", "limit"]) {
+        if (a[key] !== undefined) {
+          if (!Number.isSafeInteger(a[key]) || (a[key] as number) < 1) {
+            throw new Error(`${key} must be a whole number above 0.`);
+          }
+          query.set(key, String(a[key]));
+        }
+      }
+      return `/api/campaigns/${seg(a.campaignId)}/messages${query.size ? `?${query}` : ""}`;
+    },
+    shape: historyForAgent,
+  },
+  {
+    name: "odm_get_sheet",
+    scope: "read",
+    description: "Read your active character's sheet at this table as it stands now (HP, conditions, slots, gear). This is the table's copy; odm_get_character reads the library copy, which play does not change until the campaign syncs it.",
+    properties: campaignIdProp,
+    required: ["campaignId"],
+    method: "GET",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/sheet`,
   },
   {
     name: "odm_quests",
@@ -417,9 +453,9 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
       // Leave it as the route answered.
     }
   }
-  if (text.length > MAX_RESULT_CHARS) {
-    text = `${text.slice(0, MAX_RESULT_CHARS)}\n[truncated: ${text.length - MAX_RESULT_CHARS} more characters]`;
-  }
+  // Held under the agent's result cap as JSON, so a long answer still parses
+  // and keeps the fields that matter (src/lib/agents/agent-results.ts).
+  text = response.ok && tool.shape ? tool.shape(text) : boundResultText(text);
   if (!response.ok) {
     return { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId };
   }
