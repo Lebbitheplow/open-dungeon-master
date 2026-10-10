@@ -20739,6 +20739,15 @@
       "seed": 1606150892
     },
     {
+      "id": "glyph-cue-deep-forest",
+      "group": "glyph",
+      "key": "cue-deep-forest",
+      "label": "Night forest",
+      "src": "/assets/icons/glyph/cue-deep-forest.webp",
+      "bytes": 5766,
+      "seed": 1494820003
+    },
+    {
       "id": "glyph-cue-jungle",
       "group": "glyph",
       "key": "cue-jungle",
@@ -21090,6 +21099,24 @@
       "seed": 434523272
     },
     {
+      "id": "glyph-cue-door-slam",
+      "group": "glyph",
+      "key": "cue-door-slam",
+      "label": "Door slams",
+      "src": "/assets/icons/glyph/cue-door-slam.webp",
+      "bytes": 1622,
+      "seed": 1963878392
+    },
+    {
+      "id": "glyph-cue-door-creak",
+      "group": "glyph",
+      "key": "cue-door-creak",
+      "label": "Door creaks open",
+      "src": "/assets/icons/glyph/cue-door-creak.webp",
+      "bytes": 1798,
+      "seed": 464176104
+    },
+    {
       "id": "glyph-cue-roar",
       "group": "glyph",
       "key": "cue-roar",
@@ -21097,6 +21124,15 @@
       "src": "/assets/icons/glyph/cue-roar.webp",
       "bytes": 1580,
       "seed": 1702728035
+    },
+    {
+      "id": "glyph-cue-wolf-howl",
+      "group": "glyph",
+      "key": "cue-wolf-howl",
+      "label": "Wolves",
+      "src": "/assets/icons/glyph/cue-wolf-howl.webp",
+      "bytes": 2806,
+      "seed": 454574119
     },
     {
       "id": "glyph-cue-horn",
@@ -21133,6 +21169,24 @@
       "src": "/assets/icons/glyph/cue-scream.webp",
       "bytes": 1030,
       "seed": 1500551471
+    },
+    {
+      "id": "glyph-cue-sword-clash",
+      "group": "glyph",
+      "key": "cue-sword-clash",
+      "label": "Steel on steel",
+      "src": "/assets/icons/glyph/cue-sword-clash.webp",
+      "bytes": 2880,
+      "seed": 1553667756
+    },
+    {
+      "id": "glyph-cue-magic-cast",
+      "group": "glyph",
+      "key": "cue-magic-cast",
+      "label": "A spell lands",
+      "src": "/assets/icons/glyph/cue-magic-cast.webp",
+      "bytes": 3154,
+      "seed": 1325815219
     },
     {
       "id": "glyph-cue-coin",
@@ -21180,6 +21234,87 @@
       "seed": 1728824473
     },
     {
+      "id": "glyph-cue-hit-melee",
+      "group": "glyph",
+      "key": "cue-hit-melee",
+      "label": "Blade lands",
+      "src": "/assets/icons/glyph/cue-hit-melee.webp",
+      "bytes": 2542,
+      "seed": 1305171507
+    },
+    {
+      "id": "glyph-cue-hit-ranged",
+      "group": "glyph",
+      "key": "cue-hit-ranged",
+      "label": "Arrow strikes",
+      "src": "/assets/icons/glyph/cue-hit-ranged.webp",
+      "bytes": 1736,
+      "seed": 2044557433
+    },
+    {
+      "id": "glyph-cue-hit-crit",
+      "group": "glyph",
+      "key": "cue-hit-crit",
+      "label": "Critical hit",
+      "src": "/assets/icons/glyph/cue-hit-crit.webp",
+      "bytes": 3110,
+      "seed": 156274678
+    },
+    {
+      "id": "glyph-cue-swing-miss",
+      "group": "glyph",
+      "key": "cue-swing-miss",
+      "label": "Swing and a miss",
+      "src": "/assets/icons/glyph/cue-swing-miss.webp",
+      "bytes": 3098,
+      "seed": 1782634232
+    },
+    {
+      "id": "glyph-cue-spell-fire",
+      "group": "glyph",
+      "key": "cue-spell-fire",
+      "label": "Fire spell",
+      "src": "/assets/icons/glyph/cue-spell-fire.webp",
+      "bytes": 1284,
+      "seed": 986178735
+    },
+    {
+      "id": "glyph-cue-spell-cold",
+      "group": "glyph",
+      "key": "cue-spell-cold",
+      "label": "Cold spell",
+      "src": "/assets/icons/glyph/cue-spell-cold.webp",
+      "bytes": 2802,
+      "seed": 1045561061
+    },
+    {
+      "id": "glyph-cue-spell-thunder",
+      "group": "glyph",
+      "key": "cue-spell-thunder",
+      "label": "Lightning spell",
+      "src": "/assets/icons/glyph/cue-spell-thunder.webp",
+      "bytes": 3760,
+      "seed": 1768322100
+    },
+    {
+      "id": "glyph-cue-spell-radiant",
+      "group": "glyph",
+      "key": "cue-spell-radiant",
+      "label": "Radiant spell",
+      "src": "/assets/icons/glyph/cue-spell-radiant.webp",
+      "bytes": 4756,
+      "seed": 570265678
+    },
+    {
+      "id": "glyph-cue-spell-dark",
+      "group": "glyph",
+      "key": "cue-spell-dark",
+      "label": "Dark spell",
+      "src": "/assets/icons/glyph/cue-spell-dark.webp",
+      "bytes": 2630,
+      "seed": 698586948
+    },
+    {
       "id": "glyph-cue-heal",
       "group": "glyph",
       "key": "cue-heal",
@@ -21196,6 +21331,24 @@
       "src": "/assets/icons/glyph/cue-death.webp",
       "bytes": 2480,
       "seed": 299754801
+    },
+    {
+      "id": "glyph-cue-door-locked",
+      "group": "glyph",
+      "key": "cue-door-locked",
+      "label": "Locked door",
+      "src": "/assets/icons/glyph/cue-door-locked.webp",
+      "bytes": 1190,
+      "seed": 2124177095
+    },
+    {
+      "id": "glyph-cue-door-secret",
+      "group": "glyph",
+      "key": "cue-door-secret",
+      "label": "Secret door",
+      "src": "/assets/icons/glyph/cue-door-secret.webp",
+      "bytes": 1420,
+      "seed": 1155340589
     },
     {
       "id": "glyph-cue-thud",

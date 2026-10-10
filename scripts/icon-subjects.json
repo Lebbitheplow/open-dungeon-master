@@ -163,6 +163,11 @@
   "spell-warding-wind": "a figure surrounded by a spinning ring of white wind",
   "spell-water-walk": "bare feet walking on rippling blue water",
   "spell-weird": "a mass of nightmarish purple phantoms swirling around a terrified eye",
-  "spell-witch-bolt": "a crackling beam of blue lightning arcing from a fingertip"
+  "spell-witch-bolt": "a crackling beam of blue lightning arcing from a fingertip",
+  "glyph-cue-hit-crit": "a longsword striking down with a burst of red and gold sparks and a cracked shield",
+  "glyph-cue-spell-cold": "a jagged crystal of blue ice with frost spreading from it and a cold mist",
+  "glyph-cue-sword-clash": "two crossed swords meeting with a bright spark at the point of contact",
+  "glyph-cue-magic-cast": "an open hand with a swirling violet sigil of light above the palm",
+  "glyph-cue-hit-melee": "a heavy axe blade biting into a round wooden shield with splinters flying"
  }
 }
