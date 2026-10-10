@@ -886,7 +886,7 @@ export function setMemberRealDice(campaignId: string, userId: string, useRealDic
 
 // Which of their characters a player is running now
 // (docs/vtt-parity-implementation-plan.md 11.3).
-export function setMemberActiveCharacter(campaignId: string, userId: string, characterId: string) {
+export function setMemberActiveCharacter(campaignId: string, userId: string, characterId: string | null) {
   getDatabase()
     .prepare(`UPDATE campaign_members SET active_character_id = ? WHERE campaign_id = ? AND user_id = ?`)
     .run(characterId, campaignId, userId);

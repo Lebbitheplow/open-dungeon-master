@@ -17,7 +17,7 @@ import { publicCast } from "@/lib/dm/cast";
 import { getAmbience } from "@/lib/db/ambience";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { listRecentCampaignEvents } from "@/lib/db/character-events";
-import { syncProgressToLibrary } from "@/lib/db/characters";
+import { libraryRolesFor, syncProgressToLibrary } from "@/lib/db/characters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { listNotesVisibleTo } from "@/lib/db/notes";
 import { listOpenPendingRolls, publicPendingRoll } from "@/lib/db/dm-turns";
@@ -97,6 +97,10 @@ export async function GET(
   const ownedCharacterIds = sheets
     .filter((sheet) => sheet.userId === user.id)
     .map((sheet) => sheet.id);
+  // The role each seated copy's library row is filed under: a player sheet
+  // whose row says companion came in through the wrong door (issue 192),
+  // and the party panel offers whoever runs the story the repair for it.
+  const libraryRoles = libraryRolesFor(sheets.map((sheet) => sheet.libraryCharacterId ?? ""));
   return Response.json({
     campaign: publicCampaign(campaign),
     me: { id: user.id, username: user.username, avatar: user.avatar },
@@ -107,7 +111,10 @@ export async function GET(
     blockedUserIds: listBlockedUserIds(user.id),
     // A player's notes are theirs: every other seat but the DM's is sent
     // the sheet without them (src/lib/dm/sheet-view.ts).
-    sheets: sheets.map((sheet) => sheetForViewer(sheet, campaignSeats(campaign), user.id)),
+    sheets: sheets.map((sheet) => ({
+      ...sheetForViewer(sheet, campaignSeats(campaign), user.id),
+      libraryRole: sheet.libraryCharacterId ? libraryRoles.get(sheet.libraryCharacterId) : undefined,
+    })),
     // The pack and workshop species at the table, read by id in the browser
     // as on the server (size, Dwarven Toughness; src/lib/srd/race-id.ts).
     species: speciesAtTable(sheets.map((sheet) => sheet.race)),

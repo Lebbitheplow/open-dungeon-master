@@ -16,6 +16,11 @@ import { ui } from "@/lib/ui";
 // belongs to and sends the same request the campaign's own "pick from your
 // library" page sends, so the campaign's multi-character setting and the
 // server's lobby/gameplay rules are the ones that answer.
+// An ally the DM plays goes through the companion door instead (POST
+// /companions/create, the request the party panel's "Build a companion,
+// From your library" sends), so it arrives bot-owned with the DM's turns,
+// and the table's companion setting, cap and story authority answer
+// (issue 192).
 
 type CampaignRow = {
   id: string;
@@ -31,16 +36,20 @@ export function UseInCampaignDialog({
   characterId,
   characterName,
   characterLevel,
+  role = "pc",
   seatedIn,
   onClose,
 }: {
   characterId: string;
   characterName: string;
   characterLevel?: number;
+  // A character somebody plays, or an ally the DM plays.
+  role?: "pc" | "companion";
   // Campaign ids that already hold a copy of this character.
   seatedIn: string[];
   onClose: () => void;
 }) {
+  const companion = role === "companion";
   const [campaigns, setCampaigns] = useState<CampaignRow[] | null>(null);
   // A refused or failed read is shown in the server's words with a way to
   // ask again, never as "nothing here yet" (issue 140).
@@ -70,7 +79,8 @@ export function UseInCampaignDialog({
     setBusyId(campaign.id);
     setError(null);
     try {
-      const response = await fetch(`/api/campaigns/${campaign.id}/sheet`, {
+      const door = companion ? "companions/create" : "sheet";
+      const response = await fetch(`/api/campaigns/${campaign.id}/${door}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ libraryCharacterId: characterId }),
@@ -80,7 +90,9 @@ export function UseInCampaignDialog({
         setError({
           campaignId: campaign.id,
           text: data.error || "Could not bring the character to that table.",
-          taken: response.status === 409,
+          // A seat already taken has a lobby to swap in; a companion refusal
+          // (authority, the table's setting, its cap) has not.
+          taken: !companion && response.status === 409,
         });
         return;
       }
@@ -96,13 +108,14 @@ export function UseInCampaignDialog({
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={`Use ${characterName} in a campaign`}
+      title={companion ? `Bring ${characterName} to a campaign as an ally` : `Use ${characterName} in a campaign`}
       icon={<GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-7" />}
       width="w-[min(92vw,30rem)]"
     >
       <p className="mb-3 text-xs leading-5 text-stone-400">
-        The table gets its own copy of the sheet, adapted to its starting level. Your library keeps
-        this one as it is.
+        {companion
+          ? "The table gets its own copy of the sheet as a party companion the DM plays, at the party's level. Only whoever runs the story can bring one in, and only where the table allows companions. Your library keeps this one as it is."
+          : "The table gets its own copy of the sheet, adapted to its starting level. Your library keeps this one as it is."}
       </p>
       {campaigns === null && loadError ? (
         <LoadFailed error={loadError} onRetry={() => setReloads((current) => current + 1)} />
@@ -151,7 +164,7 @@ export function UseInCampaignDialog({
                   </Link>
                 ) : (
                   <button type="button" disabled={Boolean(busyId)} onClick={() => void seat(campaign)} className={ui.btnSmall}>
-                    {busyId === campaign.id ? <Loader2 className="size-3.5 animate-spin" /> : null} Take a seat
+                    {busyId === campaign.id ? <Loader2 className="size-3.5 animate-spin" /> : null} {companion ? "Join the party" : "Take a seat"}
                   </button>
                 )}
                 {error?.campaignId === campaign.id ? (

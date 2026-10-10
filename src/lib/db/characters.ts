@@ -288,6 +288,11 @@ export function instantiateIntoCampaign(
   if (!character) {
     return { error: "Character not found in your library." };
   }
+  // Every player-character door ends here, so this is where the role holds
+  // whatever a client sends (issue 192).
+  if (character.role === "companion") {
+    return { error: companionRoleRefusal(character) };
+  }
   const campaign = getCampaignById(campaignId);
   // One character each, unless the table allows several: then the new one
   // waits beside the one in play until its player switches to it.
@@ -317,6 +322,30 @@ export function instantiateIntoCampaign(
   return createSheet(campaignId, userId, level, admitted.sheet, characterId, {
     xp: character.level === level ? character.xp : 0,
   });
+}
+
+// An ally the DM plays is not a seat a player takes. The companion door
+// (POST /companions/create: Build a companion, From your library) is the one
+// that gives it a bot owner and the DM's turns; the player-character doors
+// refuse it in these words, so the character's controller never changes
+// quietly (issue 192).
+export function companionRoleRefusal(character: Pick<LibraryCharacter, "name">): string {
+  return `${character.name} is filed as an ally the DM plays, not a player character. Whoever runs the story brings them in from the party panel: Build a companion, then From your library.`;
+}
+
+// The role each of these library rows is filed under, for the snapshot: a
+// player sheet whose row says companion came in through the wrong door
+// before the doors checked (issue 192), and the party panel offers the
+// repair for it. Ids with no row are left out.
+export function libraryRolesFor(ids: string[]): Map<string, CharacterRole> {
+  const wanted = [...new Set(ids.filter(Boolean))];
+  if (!wanted.length) {
+    return new Map();
+  }
+  const rows = getDatabase()
+    .prepare(`SELECT id, role FROM library_characters WHERE id IN (${wanted.map(() => "?").join(", ")})`)
+    .all(...wanted) as Array<{ id: string; role: string | null }>;
+  return new Map(rows.map((row) => [row.id, normalizeCharacterRole(row.role)]));
 }
 
 // What a campaign sheet carries back to its library character when the

@@ -10,6 +10,7 @@ import { JOIN_NOTE_PREFIX } from "@/lib/campaign-types";
 import { admitSheet, refusal } from "@/lib/characters/admit";
 import { allocateSeq, setMemberReady } from "@/lib/db/campaigns";
 import {
+  companionRoleRefusal,
   createCharacter,
   getCharacterForUser,
   instantiateIntoCampaign,
@@ -241,6 +242,11 @@ export async function PUT(
     if (!character) {
       return Response.json({ error: "Character not found in your library." }, { status: 404 });
     }
+    // Held before the old sheet goes: a refused companion must not cost the
+    // player the character they have (issue 192).
+    if (character.role === "companion") {
+      return Response.json({ error: companionRoleRefusal(character) }, { status: 400 });
+    }
     deleteSheetForUser(campaignId, context.user.id);
     const result = instantiateIntoCampaign(
       character.id,
@@ -275,6 +281,11 @@ export async function PUT(
     const character = getCharacterForUser(context.user.id, edit.data.editLibraryCharacterId);
     if (!character) {
       return Response.json({ error: "Character not found in your library." }, { status: 404 });
+    }
+    // Held before the old sheet goes: a refused companion must not cost the
+    // player the character they have (issue 192).
+    if (character.role === "companion") {
+      return Response.json({ error: companionRoleRefusal(character) }, { status: 400 });
     }
     const edited = admitSheet({
       door: "library",

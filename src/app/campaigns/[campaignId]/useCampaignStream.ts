@@ -750,12 +750,12 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "sheet_updated": {
           const sheet = payload.sheet as CharacterSheet;
-          // One sheet per user per campaign: a lobby switch changes the
-          // sheet id, so any other sheet of the same user is stale.
-          const pruned = state.sheets.filter(
-            (entry) => entry.id === sheet.id || entry.userId !== sheet.userId,
-          );
-          next.sheets = upsertBy(pruned, sheet, (entry) => entry.id);
+          // By id and nothing else. A table that allows several characters
+          // each has one player owning two sheets, and an update to one used
+          // to drop the other from this list until the next snapshot (issue
+          // 193). A sheet leaves only on sheet_deleted, which every
+          // replacement path publishes before its sheet_updated.
+          next.sheets = upsertBy(state.sheets, sheet, (entry) => entry.id);
           // A completed level-up clears its notice.
           next.levelUps = state.levelUps.filter(
             (notice) => !(notice.characterId === sheet.id && sheet.level >= notice.level),

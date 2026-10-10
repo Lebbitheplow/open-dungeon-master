@@ -129,4 +129,38 @@ test("E2: the snapshot carries the scene, the active sheet, the handout, the pau
   console.log("ok: a narration failure is kept apart from the picture's status");
 }
 
+// Issue 193: a table that allows several characters each has one player
+// owning two sheets. An update to one used to drop the other from the list
+// until the next snapshot, because the reducer pruned every other sheet of
+// the same owner. A sheet leaves only on sheet_deleted.
+{
+  const a = { id: "sheet-a", userId: "u1", name: "Aria", level: 3, currentHp: 20 };
+  const b = { id: "sheet-b", userId: "u1", name: "Brom", level: 3, currentHp: 18 };
+  const c = { id: "sheet-c", userId: "u2", name: "Cass", level: 3, currentHp: 25 };
+  const seated = campaignReducer(loaded, { type: "snapshot", payload: { lastSeq: 10, sheets: [a, b, c] } });
+  const hit = campaignReducer(seated, event("sheet_updated", { sheet: { ...a, currentHp: 9 } }, 11));
+  assert.deepEqual(hit.sheets.map((sheet) => sheet.id), ["sheet-a", "sheet-b", "sheet-c"]);
+  assert.equal(hit.sheets[0].currentHp, 9);
+  assert.equal(hit.sheets[1], b, "the sibling sheet is untouched");
+  // Another player's update leaves both alone.
+  const other = campaignReducer(hit, event("sheet_updated", { sheet: { ...c, currentHp: 1 } }, 12));
+  assert.deepEqual(other.sheets.map((sheet) => sheet.id), ["sheet-a", "sheet-b", "sheet-c"]);
+  // An explicit deletion still removes exactly its id.
+  const gone = campaignReducer(other, event("sheet_deleted", { sheetId: "sheet-b", userId: "u1" }, 13));
+  assert.deepEqual(gone.sheets.map((sheet) => sheet.id), ["sheet-a", "sheet-c"]);
+  // A lobby replacement publishes sheet_deleted, then sheet_updated under a
+  // new id: the new sheet stands where the old one did and nothing else moves.
+  const dropped = campaignReducer(gone, event("sheet_deleted", { sheetId: "sheet-a", userId: "u1" }, 14));
+  const replaced = campaignReducer(dropped, event("sheet_updated", { sheet: { ...a, id: "sheet-a2" } }, 15));
+  assert.deepEqual(replaced.sheets.map((sheet) => sheet.id), ["sheet-c", "sheet-a2"]);
+  // A sheet changing hands (companions/adopt, issue 192) is still one sheet.
+  const adopted = campaignReducer(replaced, event("sheet_updated", { sheet: { ...c, userId: "comp_x", isCompanion: true } }, 16));
+  assert.deepEqual(adopted.sheets.map((sheet) => [sheet.id, sheet.userId]), [["sheet-c", "comp_x"], ["sheet-a2", "u1"]]);
+  // A reconnect's snapshot is the server's whole list again.
+  const again = campaignReducer(adopted, { type: "snapshot", payload: { lastSeq: 16, sheets: [a, b, c] } });
+  assert.deepEqual(again.sheets.map((sheet) => sheet.id), ["sheet-a", "sheet-b", "sheet-c"]);
+  passed += 1;
+  console.log("ok: issue 193: a sheet update replaces that sheet only; a player's other characters stay");
+}
+
 console.log(`\n${passed} campaign reducer tests passed.`);

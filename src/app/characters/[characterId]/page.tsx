@@ -31,6 +31,8 @@ type CharacterAssignment = {
 type LibraryCharacter = {
   id: string;
   name: string;
+  // A character somebody plays, or an ally the DM plays.
+  role?: "pc" | "companion";
   race: string;
   class: string;
   subclass: string;
@@ -390,7 +392,8 @@ export default function CharacterDetailPage({
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-amber-500/15 pt-3">
           <button type="button" onClick={() => setSeating(true)} className={cn(ui.btnPrimary, "min-w-0 flex-1 sm:flex-none")}>
-            <GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-6" /> Use in a campaign
+            <GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-6" />{" "}
+            {character.role === "companion" ? "Bring to a campaign" : "Use in a campaign"}
           </button>
           <KebabMenu
             items={actions}
@@ -424,6 +427,7 @@ export default function CharacterDetailPage({
           characterId={characterId}
           characterName={character.name}
           characterLevel={character.level}
+          role={character.role}
           seatedIn={(character.campaigns ?? []).map((assignment) => assignment.campaignId)}
           onClose={() => setSeating(false)}
         />

@@ -19,6 +19,9 @@ import { refusalText } from "@/app/characters/builder/refusal";
 type LibraryCharacter = {
   id: string;
   name: string;
+  // A character somebody plays, or an ally the DM plays; only the former
+  // takes a player's seat (issue 192).
+  role?: "pc" | "companion";
   race: string;
   class: string;
   subclass: string;
@@ -46,6 +49,9 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   const [genre, setGenre] = useState<Genre | undefined>(undefined);
   const [worldPackId, setWorldPackId] = useState("");
   const [library, setLibrary] = useState<LibraryCharacter[]>([]);
+  // How many of the library's entries are allies the DM plays: they are not
+  // offered here, and the page says where they go instead.
+  const [companionCount, setCompanionCount] = useState(0);
   const [mode, setMode] = useState<"choose" | "create">(
     flow === "edit" ? "create" : "choose",
   );
@@ -74,8 +80,13 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         setLevel(campaignData?.campaign?.startingLevel ?? 1);
         setGenre(campaignData?.campaign?.gameSettings?.genre ?? undefined);
         setWorldPackId(campaignData?.campaign?.gameSettings?.worldPack ?? "");
-        const characters = charactersData?.characters ?? [];
+        const all: LibraryCharacter[] = charactersData?.characters ?? [];
+        // An ally the DM plays is brought in by whoever runs the story,
+        // through the party panel, never as a player's own character; the
+        // server refuses the id either way (issue 192).
+        const characters = all.filter((character) => character.role !== "companion");
         setLibrary(characters);
+        setCompanionCount(all.length - characters.length);
         setCurrentLibraryId(sheetData?.sheet?.libraryCharacterId ?? null);
         setLibraryLevel(typeof sheetData?.libraryLevel === "number" ? sheetData.libraryLevel : null);
         if (!characters.length) {
@@ -169,6 +180,11 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
       {mode === "choose" ? (
         <section className="reveal space-y-4">
           <SectionHead title="From your library" glyph="tab-characters" level="h2" aside={<span className="text-xs text-stone-400">{library.length}</span>} />
+          {companionCount > 0 ? (
+            <p className="reveal text-xs text-stone-400">
+              {companionCount === 1 ? "One ally the DM plays is" : `${companionCount} allies the DM plays are`} not listed here: whoever runs the story brings them in from the party panel, under Build a companion.
+            </p>
+          ) : null}
           <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
             {library.map((character) => (
               <li key={character.id}>
