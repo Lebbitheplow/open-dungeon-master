@@ -12,8 +12,7 @@ import { getNpcByName } from "@/lib/db/npcs";
 import { listSheets } from "@/lib/db/sheets";
 import { guardOutcomes } from "@/lib/dm/engine-boundary";
 import { liveStateFor, readClaims, speakerRoster } from "@/lib/dm/claims";
-import { commonWords } from "@/lib/dm/speech-prose";
-import { foldName } from "@/lib/language/text-logic";
+import { commonWords, foldName } from "@/lib/language/text-logic";
 import { attributeSpeech, hasQuotedLine, linesOf, mergeLines, storedSpeaker, type Speaker, type SpokenLine } from "@/lib/dm/speech";
 
 // How many of the latest messages commonWords reads: a fixed window, so its

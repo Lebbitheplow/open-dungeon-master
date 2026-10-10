@@ -221,6 +221,16 @@ await test("The AI DM is told the hidden truths, ties and secrets, marked as its
   assert.doesNotMatch(worldForPrompt(world.campaignId).block, /Ivo is the leak/, "a secret the party learned is still offered as a secret");
 });
 
+await test("An entry the newest messages name is in play, found by Unicode letters in any language.", () => {
+  const made = (name, article) => createWorldEntity(world.campaignId, { typeId: "t_other", name, article });
+  made("Éclat", "A shard of the drowned moon.");
+  made("José", "The ferryman's lost son.");
+  const { block } = worldForPrompt(world.campaignId, { text: "Mira solleva l'Éclat. Joséphine ride." });
+  assert.match(block, /shard of the drowned moon/, "a name starting with an accented capital was not found");
+  assert.doesNotMatch(block, /ferryman's lost son/, "José was found inside Joséphine");
+  assert.match(worldForPrompt(world.campaignId, { text: "Chiedono di José." }).block, /ferryman's lost son/);
+});
+
 await test("The export's settings, an image service's API key among them, are never stored.", () => {
   for (const table of ["npcs", "lore_entries", "locations", "factions", "workshop_beats", "campaigns", "world_forge"]) {
     assert.doesNotMatch(JSON.stringify(rows(`SELECT * FROM ${table}`)), /sk-test-never-store-this|example\.invalid/, `${table} stored the export's settings`);

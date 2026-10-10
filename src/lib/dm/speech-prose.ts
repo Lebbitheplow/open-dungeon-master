@@ -90,21 +90,6 @@ export function speakerMatchers(speakers: Speaker[]): Matcher[] {
   return matchers;
 }
 
-// The words a story writes in lower case somewhere: common words ("old",
-// "captain", "hill"), not names, wherever a capital only marks a sentence
-// start. What replaces a hand-written list of titles in every language.
-export function commonWords(texts: readonly string[]): Set<string> {
-  const common = new Set<string>();
-  for (const text of texts) {
-    for (const word of text.match(/[\p{L}\p{N}]+/gu) ?? []) {
-      if (/^\p{Ll}/u.test(word)) {
-        common.add(word);
-      }
-    }
-  }
-  return common;
-}
-
 export type Reading = {
   matchers: Matcher[];
   // commonWords over the recent story and this passage.

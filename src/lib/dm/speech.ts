@@ -21,9 +21,9 @@
 // pronouns as the one exception (src/lib/dm/speech-prose.ts). Pure.
 
 import { genderMark, type Gender, type GenderMark } from "@/lib/gender";
+import { commonWords } from "@/lib/language/text-logic";
 import {
   aboutSubject,
-  commonWords,
   genderOf,
   gendersIn,
   keyOf,

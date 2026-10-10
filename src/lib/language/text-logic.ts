@@ -24,23 +24,41 @@ export function foldName(name: string): string {
 
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
-// Whether `needle` stands in `haystack` as a whole word or phrase, by
-// Unicode letters rather than \b, which only knows ASCII: "José" is found in
-// "José nods" and not in "Joséphine".
-export function hasWord(haystack: string, needle: string): boolean {
+// Where `needle` stands in `haystack` as a whole word or phrase, by Unicode
+// letters rather than \b, which only knows ASCII: "José" is found in "José
+// nods" and not in "Joséphine". Offsets are into the folded haystack.
+export function wordPositions(haystack: string, needle: string): number[] {
   const text = foldName(haystack);
   const target = foldName(needle);
   if (!target) {
-    return false;
+    return [];
   }
-  let index = text.indexOf(target);
-  while (index >= 0) {
+  const found: number[] = [];
+  for (let index = text.indexOf(target); index >= 0; index = text.indexOf(target, index + 1)) {
     const before = index === 0 ? "" : text[index - 1];
     const after = text[index + target.length] ?? "";
     if (!LETTER_OR_DIGIT.test(before) && !LETTER_OR_DIGIT.test(after)) {
-      return true;
+      found.push(index);
     }
-    index = text.indexOf(target, index + 1);
   }
-  return false;
+  return found;
+}
+
+export function hasWord(haystack: string, needle: string): boolean {
+  return wordPositions(haystack, needle).length > 0;
+}
+
+// The words a text writes in lower case somewhere: common words ("old",
+// "captain", "the"), not names, wherever a capital only marks a sentence
+// start. What replaces a hand-written list of titles in every language.
+export function commonWords(texts: readonly string[]): Set<string> {
+  const common = new Set<string>();
+  for (const text of texts) {
+    for (const word of text.match(/[\p{L}\p{N}]+/gu) ?? []) {
+      if (/^\p{Ll}/u.test(word)) {
+        common.add(word);
+      }
+    }
+  }
+  return common;
 }

@@ -1,4 +1,5 @@
 import type { Stub } from "./model.ts";
+import { commonWords, foldName } from "../language/text-logic.ts";
 
 // Mentions and the names still to be written, after WorldForge's mentions
 // and stubs modules (by Smoebo). Pure.
@@ -7,7 +8,9 @@ export type Named = { ref: string; name: string; aliases: string[] };
 
 // ---- mentions ----
 //
-// An entry's text links every other entry it names: exact case, whole words,
+// An entry's text links every other entry it names: exact case, whole words
+// by Unicode letters (so "Élodie" is found and "José" is not inside
+// "Joséphine"),
 // the longest name first (so "Arvendeth Keep" beats "Arvendeth"), names under
 // three letters skipped, the entry itself left out. When two entries share a
 // name the first one wins.
@@ -27,7 +30,7 @@ export function mentionSegments(text: string, named: Named[], selfRef = ""): Seg
   handles.sort((a, b) => b.handle.length - a.handle.length);
   const byHandle = new Map<string, string>();
   for (const { handle, ref } of handles) if (!byHandle.has(handle)) byHandle.set(handle, ref);
-  const pattern = new RegExp(`(?<!\\w)(?:${[...byHandle.keys()].map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?!\\w)`, "g");
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${[...byHandle.keys()].map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\p{L}\\p{N}_])`, "gu");
   const out: Segment[] = [];
   let last = 0;
   for (const match of text.matchAll(pattern)) {
@@ -45,66 +48,89 @@ export function mentionSegments(text: string, named: Named[], selfRef = ""): Seg
 // reads the world's text for runs of capitalised words that name nothing
 // known: a run of two or more words counts at once ("Vale of Sorrows"), a
 // single word needs two sightings, one of them mid-sentence, because a
-// capital at the start of a sentence is how English works, not a name.
-// Nothing is stored until the DM keeps or dismisses a hit, and a dismissed
-// name never comes back.
+// capital at the start of a sentence is how most languages write, not a
+// name. Nothing is stored until the DM keeps or dismisses a hit, and a
+// dismissed name never comes back.
+//
+// It reads structure, the same way in every language: a run's first word
+// at a sentence start ("The", "Puis", "Il") stays only if the world also
+// capitalises it mid-sentence ("in New York"); a single word the world
+// writes in lower case somewhere ("captain", "ponte") is a common word, not
+// a name; and a lower-case word joins two capitalised ones ("of", "della",
+// "von") once the world writes it between two different pairs of them, its
+// own names included.
 
-const CONNECTORS = ["of", "the", "and", "de", "du", "von", "van", "der", "el", "al", "la", "le"];
-const CONNECTOR_SET = new Set(CONNECTORS);
-const RUN = new RegExp(`[A-Z][A-Za-z'\\u2019-]*(?: (?:(?:${CONNECTORS.join("|")}) )?[A-Z][A-Za-z'\\u2019-]*)*`, "g");
-const STOPWORDS = new Set(
-  (
-    "the a an and but or nor for yet so if when while after before then once now here there this that these those he she they it we you i " +
-    "his her their its our your my me him them us what who whom whose which where why how all any each every some no not none one two three " +
-    "first last next many most much more few other another such only own same than too very can will just should would could may might must " +
-    "shall do does did done is are was were be been being have has had in on at by to from with without into onto upon over under about " +
-    "above below between through during against among within beyond across behind beside near far until since though although because " +
-    "unless whether either neither both also even still already again yes oh ah alas dear sir lady lord king queen captain monday tuesday " +
-    "wednesday thursday friday saturday sunday january february march april may june july august september october november december"
-  ).split(" "),
-);
+const CAPITAL = "\\p{Lu}[\\p{L}\\p{M}\\p{N}'\u2019-]*";
+const capital = new RegExp(`(?<![\\p{L}\\p{N}])${CAPITAL}`, "gu");
+const LINKED = new RegExp(`(?<![\\p{L}\\p{N}])(${CAPITAL}) (\\p{Ll}[\\p{L}\\p{M}]*) (?=(${CAPITAL}))`, "gu");
+
+// The lower-case words the world writes between two different pairs of
+// capitalised words.
+function connectorsIn(texts: readonly string[]): Set<string> {
+  const pairs = new Map<string, Set<string>>();
+  for (const text of texts) {
+    for (const [, before, word, after] of text.matchAll(LINKED)) {
+      const seen = pairs.get(word) ?? new Set<string>();
+      seen.add(`${before}\u0000${after}`);
+      pairs.set(word, seen);
+    }
+  }
+  return new Set([...pairs].filter(([, seen]) => seen.size >= 2).map(([word]) => word));
+}
 
 function atSentenceStart(text: string, index: number): boolean {
   for (let j = index - 1; j >= 0; j -= 1) {
     const c = text[j];
     if (c === "\n") return true;
-    if (/["'\u201C\u2018(\[\u2014\s]/.test(c)) continue;
-    return /[.!?:]/.test(c);
+    if (/["'\u201C\u2018\u00AB\u00BB\u201E\u2039\u203A\u00A1\u00BF(\[\u2014\s]/u.test(c)) continue;
+    return /[.!?:\u2026]/u.test(c);
   }
   return true;
 }
 
 const handlesOf = (named: Named[]) =>
-  named.flatMap((entry) => [entry.name, ...entry.aliases]).map((handle) => handle.trim().toLowerCase()).filter(Boolean);
+  named.flatMap((entry) => [entry.name, ...entry.aliases]).map(foldName).filter(Boolean);
 const wordSubset = (container: string, part: string) => ` ${container} `.includes(` ${part} `);
 
 export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<{ name: string; count: number }> {
   const handles = handlesOf(named);
-  const known = new Set([...handles, ...stubs.map((stub) => stub.name.trim().toLowerCase())]);
+  const known = new Set([...handles, ...stubs.map((stub) => foldName(stub.name))]);
+  const common = commonWords(texts);
+  const connectors = connectorsIn([...texts, ...named.flatMap((entry) => [entry.name, ...entry.aliases]), ...stubs.map((stub) => stub.name)]);
+  const joiner = connectors.size ? `(?: (?:${[...connectors].join("|")}))?` : "";
+  const run = new RegExp(`(?<![\\p{L}\\p{N}])${CAPITAL}(?:${joiner} ${CAPITAL})*`, "gu");
+  const midCapitals = new Set(
+    texts.flatMap((text) => [...text.matchAll(capital)].filter((match) => !atSentenceStart(text, match.index)).map((match) => match[0])),
+  );
   const tally = new Map<string, { name: string; count: number; mid: boolean }>();
   for (const text of texts) {
-    for (const match of text.matchAll(RUN)) {
-      const parts = match[0].replace(/['’]s$/, "").replace(/['’-]+$/, "").split(" ");
+    for (const match of text.matchAll(run)) {
+      const parts = match[0].replace(/['\u2019]s$/u, "").replace(/['\u2019-]+$/u, "").split(" ");
+      const atStart = atSentenceStart(text, match.index);
       let stripped = false;
-      while (parts.length > 1 && (STOPWORDS.has(parts[0].toLowerCase()) || CONNECTOR_SET.has(parts[0].toLowerCase()))) {
+      if (parts.length > 1 && atStart && !midCapitals.has(parts[0])) {
+        parts.shift();
+        stripped = true;
+      }
+      while (parts.length > 1 && connectors.has(parts[0])) {
         parts.shift();
         stripped = true;
       }
       const name = parts.join(" ");
       if (!name) continue;
-      const low = name.toLowerCase();
+      const low = foldName(name);
       const seen = tally.get(low) ?? { name, count: 0, mid: false };
       seen.count += 1;
-      if (stripped || !atSentenceStart(text, match.index!)) seen.mid = true;
+      if (stripped || !atStart) seen.mid = true;
       tally.set(low, seen);
     }
   }
   const out: Array<{ name: string; count: number }> = [];
   for (const [low, seen] of tally) {
-    const words = low.split(" ").filter((word) => !CONNECTOR_SET.has(word));
+    const words = low.split(" ").filter((word) => !connectors.has(word));
     if (words.length <= 1) {
       const word = words[0] ?? "";
-      if (word.length < 3 || STOPWORDS.has(word) || seen.count < 2 || !seen.mid) continue;
+      if (word.length < 3 || common.has(word) || seen.count < 2 || !seen.mid) continue;
     }
     if (known.has(low) || handles.some((handle) => wordSubset(handle, low) || wordSubset(low, handle))) continue;
     out.push({ name: seen.name, count: seen.count });
@@ -115,6 +141,6 @@ export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<
 // The entry that now answers to a stub's name, if one does: the stub is
 // done and can be cleared.
 export function stubResolved(stub: Stub, named: Named[]): Named | null {
-  const low = stub.name.trim().toLowerCase();
-  return named.find((entry) => [entry.name, ...entry.aliases].some((handle) => handle.trim().toLowerCase() === low)) ?? null;
+  const low = foldName(stub.name);
+  return named.find((entry) => [entry.name, ...entry.aliases].some((handle) => foldName(handle) === low)) ?? null;
 }
