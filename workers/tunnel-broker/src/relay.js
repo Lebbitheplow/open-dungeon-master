@@ -27,7 +27,7 @@ const MAX_BODY_BYTES = 1_000_000;
 const METHODS = new Set(["POST", "GET", "DELETE"]);
 // What an MCP client sends that the world needs; never Origin (the world
 // refuses browser origins), cookies or Cloudflare's own headers.
-const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "mcp-protocol-version", "mcp-session-id", "user-agent"];
+const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "mcp-protocol-version", "mcp-method", "mcp-session-id", "user-agent"];
 // WWW-Authenticate stays behind: on a revoked token it would send the
 // assistant hunting for an OAuth server the relay does not have.
 const RETURN_HEADERS = ["content-type", "mcp-session-id"];
