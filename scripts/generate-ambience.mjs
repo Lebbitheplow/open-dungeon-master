@@ -170,6 +170,10 @@ for (const cue of cues) {
         origin: "generated",
       };
       writeLock(lock);
+      // The manifest after every take, not at the end: a run of forty
+      // minutes should let the table hear the first take while the rest
+      // are made.
+      rebuildManifest();
       made += 1;
       console.log(`  ${(audio.length / 1024 / 1024).toFixed(1)} MB in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     } catch (error) {
