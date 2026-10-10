@@ -169,6 +169,51 @@ await test("the admin sees the library's state; a player does not", async () => 
   assert.equal((await call(adminRoute, "GET")).status, 403);
 });
 
+await test("the admin installs a pack from a URL and the library grows", async () => {
+  const { buildPack } = await import("../src/lib/ambience/pack.ts");
+  const http = await import("node:http");
+  const zip = await buildPack([
+    { file: "dread.mp3", data: Buffer.from("dread-take"), credit: { title: "Dread (take 1)", author: "Made elsewhere", license: "Generated", origin: "generated" } },
+    { file: "tavern.mp3", data: Buffer.from("pack-tavern"), credit: { title: "Tavern from the pack", origin: "generated" } },
+  ]);
+  const server = http.createServer((request, response) => {
+    if (request.url === "/pack.zip") {
+      response.writeHead(200, { "content-type": "application/zip", "content-length": zip.length });
+      response.end(zip);
+    } else {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  try {
+    as(lead);
+    const started = await call(adminRoute, "POST", { url: `http://127.0.0.1:${port}/pack.zip` });
+    assert.equal(started.status, 200, JSON.stringify(started.json));
+    let status = started.json;
+    for (let i = 0; i < 50 && status.status === "installing"; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      status = (await call(adminRoute, "GET")).json;
+    }
+    assert.equal(status.status, "ready", JSON.stringify(status));
+    assert.deepEqual(status.result, { installed: 1, kept: 1 }, "dread is new, the tavern already here is kept");
+    assert.equal(status.counts.music.installed, 2);
+    assert.equal(fs.readFileSync(path.join(dir, "public", "ambience", "tavern.mp3"), "utf8"), "x", "the operator's own take stands");
+    assert.equal(readLock()["dread.mp3"].origin, "pack");
+    const missing = await call(adminRoute, "POST", { url: `http://127.0.0.1:${port}/nope.zip` });
+    let failed = missing.json;
+    for (let i = 0; i < 50 && failed.status === "installing"; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      failed = (await call(adminRoute, "GET")).json;
+    }
+    assert.equal(failed.status, "error");
+    assert.match(failed.error, /404/);
+  } finally {
+    server.close();
+  }
+});
+
 console.log(`sound panel: ${passed} tests passed`);
 process.chdir(os.tmpdir());
 removeTempDir(dir);
