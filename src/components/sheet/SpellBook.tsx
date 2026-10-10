@@ -7,6 +7,7 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
 import { replayAnimation } from "@/lib/motion/replay";
+import { spellSupportFor, spellSupportWord } from "@/lib/srd/spell-support";
 
 // The spell book: one tab per spell level (cantrips first), every spell a
 // tile that says at a glance whether it is ready, waiting for a long rest,
@@ -268,6 +269,9 @@ export function SpellBook({
             const clickable = toggles(tile) && !busy;
             const facts = tile.data ? spellSummary(tile.data) : undefined;
             const summary = tile.source ? [facts, tile.source].filter(Boolean).join(" · ") : facts;
+            // What the server leaves to the DM, said before the spell is picked.
+            const support = spellSupportFor(tile.name);
+            const described = tile.data ? describeContentEntry(tile.data) : null;
             return (
               <li
                 key={tile.name}
@@ -306,6 +310,7 @@ export function SpellBook({
                     </span>
                     <span className="spell-tile-state block truncate text-[10px]">
                       {tile.homebrew ? "homebrew · " : tile.source ? `${tile.source} · ` : ""}
+                      {support ? `${spellSupportWord(support)} · ` : ""}
                       {tile.blocked ?? tile.note ?? STATE_TEXT[tile.state]}
                     </span>
                   </span>
@@ -313,7 +318,8 @@ export function SpellBook({
                 <InfoButton
                   label={tile.label ?? tile.name}
                   meta={summary}
-                  text={tile.data ? describeContentEntry(tile.data) : undefined}
+                  text={described ?? undefined}
+                  note={support ? `**${support.kind === "partial" ? "Partly by hand" : "Narrated"}.** ${support.manual}` : undefined}
                   reference={
                     tile.homebrew
                       ? undefined

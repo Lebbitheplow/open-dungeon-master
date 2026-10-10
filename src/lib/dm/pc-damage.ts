@@ -108,19 +108,24 @@ export function applyPcDamage(
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is already dead.` };
   }
+  // An abjurer's Arcane Ward takes the blow first, as it lands: the ward has
+  // none of the wizard's own resistances, immunities or vulnerabilities
+  // (Sage Advice Compendium; arcane-ward.ts).
+  const arcaneWard = absorbByWard(campaign, sheet, amount);
+  const overflow = amount - (arcaneWard?.absorbed ?? 0);
   // Racial, feature and condition resistances halve matching damage types
-  // server-side.
+  // server-side, on what comes through the ward.
   // Immunities from features (Purity of Body: poison) take all of it.
   // An ally's aura adds its own (Aura of Warding, Shielding Storm): authored-saves.ts.
   // A summoned creature keeps its stat block's (summon-rules.ts).
   const resisted = [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", ");
   // Inside Silence, thunder does nothing (zone-rules.ts).
-  const resolved = damageAdjust(amount, input.type, resisted, `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}`, summonVulnerabilities(sheet), {
-    magical: input.magical === true,
-  });
-  // An abjurer's Arcane Ward takes the blow first (arcane-ward.ts).
-  const arcaneWard = absorbByWard(campaign, sheet, resolved.amount);
-  const adjusted = arcaneWard ? { ...resolved, amount: resolved.amount - arcaneWard.absorbed } : resolved;
+  const adjusted =
+    overflow > 0
+      ? damageAdjust(overflow, input.type, resisted, `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}`, summonVulnerabilities(sheet), {
+          magical: input.magical === true,
+        })
+      : { amount: 0, note: null };
   if (adjusted.amount <= 0) {
     return {
       ok: true,

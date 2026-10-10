@@ -2,12 +2,10 @@ import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSceneTracker, setSceneTracker } from "@/lib/db/scene-tracker";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { insertRoll } from "@/lib/db/rolls";
-import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { dcForDifficulty, DIFFICULTY_TIERS, type DifficultyTier } from "@/lib/srd/dc";
-import { rollEffectExtras } from "@/lib/dm/effect-tools";
+import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import {
   abandonTracker,
@@ -197,34 +195,21 @@ export function handleSceneCheck(
   // the model asks for something the skill list does not name.
   const skillMod = skill ? derived.skills[skill as keyof typeof derived.skills] : undefined;
   const ability = args.ability ?? "wis";
-  const modifier = typeof skillMod === "number" ? skillMod : derived.abilityMods[ability];
   const dc =
     typeof args.dc === "number" && args.dc > 0
       ? Math.min(30, Math.max(1, Math.round(args.dc)))
       : dcForDifficulty((args.difficulty ?? "moderate") as DifficultyTier);
 
-  // Active effects ride a scene check exactly as they ride any other check.
-  const extras = rollEffectExtras(campaign.id, sheet.id, "skill_check");
-  const outcome = rollExpression(
-    d20Expression(
-      modifier + (extras.effectBonus ?? 0),
-      extras.effectAdvantage ? "advantage" : extras.effectDisadvantage ? "disadvantage" : "none",
-    ),
+  // A scene check is a check like any other (src/lib/dm/contest-roll.ts):
+  // lasting effects, Guidance, Reliable Talent, exhaustion, a held die and
+  // Lucky ride it. A skill the sheet does not know falls back to the ability.
+  const outcome = rollCharacterCheck(
+    campaign,
+    sheet,
+    { ...(typeof skillMod === "number" ? { skill } : { ability }), dc },
+    `${tracker.title}${args.approach ? ` (${args.approach})` : ""}`.slice(0, 80),
   );
-  const success = outcome.total >= dc;
-  const roll = insertRoll({
-    campaignId: campaign.id,
-    characterId: sheet.id,
-    requestedBy: "dm",
-    kind: "skill_check",
-    detail: `${tracker.title}: ${skill || ability}${args.approach ? ` (${args.approach})` : ""}`,
-    dc,
-    result: outcome,
-  });
-  publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-    roll,
-    source: "digital",
-  });
+  const success = !outcome.autoFailed && outcome.total >= dc;
 
   const advanced = recordCheck(tracker, {
     characterId: sheet.id,

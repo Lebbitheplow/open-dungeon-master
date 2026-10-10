@@ -99,6 +99,11 @@ export type ConditionEffectRow = {
   // enlarged +1d4). `type` "" = the attack's own damage type. A leading "-"
   // subtracts (reduced).
   onHitDice?: { dice: string; type: string };
+  // The dice and type ride in the condition's own parentheses, as the cast
+  // set them: "absorbed strike (2d6 fire)" (Absorb Elements by slot).
+  paramOnHitDice?: boolean;
+  // onHitDice rides a melee attack only (Absorb Elements).
+  meleeOnly?: boolean;
   // onHitDice rides weapon attacks only, never a spell attack or a granted
   // one (Divine Favor, Hunter's Mark, Enlarge, the smites).
   weaponOnly?: boolean;

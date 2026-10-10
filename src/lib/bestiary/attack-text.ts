@@ -27,9 +27,22 @@ export type OnHitRider = {
   halfOnSave?: boolean;
   escapeDc?: number;
   rounds?: number;
+  // No count and no repeat save: a long rest ends it, or a cure does.
+  untilLongRest?: boolean;
+  lasting?: boolean;
   repeatSave?: boolean;
   // "If the target is Medium or smaller": the largest size it works on.
   maxSize?: string;
+  // "Its hit point maximum is reduced by an amount equal to the (necrotic)
+  // damage taken" until a long rest (a wight, a wraith, a specter, a
+  // vampire's bite); `drainHeals` when the creature regains that much.
+  drainMaxHp?: "necrotic" | "all";
+  drainHeals?: boolean;
+  // Swallowed whole (a purple worm, a kraken): blinded and restrained.
+  swallow?: boolean;
+  // Clauses no engine models (a disease, a curse, lycanthropy, petrification
+  // by stages, a drained Strength): the DM's to resolve, said so on the hit.
+  manual?: string[];
 };
 
 export type AttackText = {
@@ -156,6 +169,8 @@ function readOnHit(hit: string): OnHitRider | null {
       ...(effect.damage ? { damage: effect.damage, damageType: effect.damageType } : {}),
       ...(effect.halfOnSave ? { halfOnSave: true } : {}),
       ...(effect.rounds ? { rounds: effect.rounds } : {}),
+      ...(effect.untilLongRest ? { untilLongRest: true } : {}),
+      ...(effect.lasting ? { lasting: true } : {}),
     });
     if (/repeat the saving throw/i.test(rest)) {
       rider.repeatSave = true;
@@ -174,11 +189,29 @@ function readOnHit(hit: string): OnHitRider | null {
       rider.alsoCondition = "restrained";
     }
   }
+  const drain = /hit point maximum is reduced by an amount equal to the (necrotic )?damage (?:taken|dealt)/i.exec(hit);
+  if (drain) {
+    rider.drainMaxHp = drain[1] ? "necrotic" : "all";
+    if (/regains hit points equal to that amount/i.test(hit)) {
+      rider.drainHeals = true;
+    }
+  }
+  if (/\bis swallowed\b/i.test(hit)) {
+    rider.swallow = true;
+  }
+  const manual = hit
+    .split(/(?<=\.)\s+/)
+    .filter((sentence) => /\b(?:disease|diseased|cursed|curse|lycanthrop\w*|swallowed|petrif\w*|strength score is reduced|stable but poisoned)\b/i.test(sentence))
+    .map((sentence) => sentence.trim())
+    .slice(0, 3);
+  if (manual.length) {
+    rider.manual = manual;
+  }
   const size = /if the target is (?:a |an )?(tiny|small|medium|large|huge)(?: or smaller)?/i.exec(hit);
-  if (size && (rider.condition || rider.damage)) {
+  if (size && (rider.condition || rider.damage || rider.swallow)) {
     rider.maxSize = size[1].toLowerCase();
   }
-  return rider.condition || rider.damage ? rider : null;
+  return rider.condition || rider.damage || rider.drainMaxHp || rider.swallow || rider.manual ? rider : null;
 }
 
 // ---- Multiattack ----

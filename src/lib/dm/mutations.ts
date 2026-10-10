@@ -134,17 +134,19 @@ function tool(name: string, description: string, extra: Record<string, unknown>,
 }
 
 export const mutationTools: ToolDef[] = [
-  tool("apply_damage", "Deal damage to a character. Temp HP absorbs first; HP floors at 0.", {
+  tool("apply_damage", "Deal damage to a character. Temp HP absorbs first; HP floors at 0. Send dice and the server rolls them; a bare amount must be a damage total the server rolled this turn (request_roll kind damage).", {
     amount: { type: "integer", minimum: 1, maximum: 200 },
+    dice: { type: "string", description: "Dice the server rolls for the damage, e.g. \"2d6\". Instead of amount." },
     type: { type: "string", description: "Damage type, e.g. slashing, fire." },
     magical: {
       type: "boolean",
       description:
         "True when the damage comes from a spell or a magic weapon, so resistance to nonmagical attacks does not apply.",
     },
-  }, ["amount"]),
+  }, []),
   tool("heal", "Restore a character's hit points, capped at their max. Healing a dying character any amount ends their death saves and wakes them. Pass temp:true to grant TEMPORARY hit points instead (they do not stack; the higher value wins). For a HEALING SPELL, pass spell, casterId and the slot level instead of amount: the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card. Do not call use_spell_slot for it as well.", {
-    amount: { type: "integer", minimum: 1, maximum: 200, description: "Flat hit points, for healing that is not a spell." },
+    amount: { type: "integer", minimum: 1, maximum: 200, description: "Hit points the server rolled this turn, for healing that is not a spell." },
+    dice: { type: "string", description: "Dice the server rolls for healing that is not a spell, e.g. \"2d4+2\". Instead of amount." },
     spell: {
       type: "string",
       description:
@@ -259,6 +261,12 @@ export const mutationTools: ToolDef[] = [
       maximum: 24,
       description: "In-world hours until the condition ends.",
     },
+    days: {
+      type: "integer",
+      minimum: 1,
+      maximum: 365,
+      description: "In-world days until the condition ends (Geas's thirty, Contagion's seven).",
+    },
     saveAbility: {
       type: "string",
       enum: ["str", "dex", "con", "int", "wis", "cha"],
@@ -288,6 +296,12 @@ export const mutationTools: ToolDef[] = [
     concentration: {
       type: "boolean",
       description: "Only for homebrew spells the server does not know: true if this spell requires concentration.",
+    },
+    units: {
+      type: "integer",
+      minimum: 1,
+      maximum: 100,
+      description: "For a material priced per creature affected (Astral Projection), per corpse (Create Undead) or per Hit Die of the target (Imprisonment): how many.",
     },
     ...ZONE_ARGS,
   }, ["level", "spell"]),
@@ -390,6 +404,7 @@ const argsSchema = z.object({
   // use_spell_slot, internal: how many of the casting's shares this call
   // resolves (Magic Missile's darts at one target).
   uses: z.coerce.number().int().min(1).max(700).optional(),
+  units: z.coerce.number().int().min(1).max(100).optional(),
   ...zoneArgsSchema,
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
@@ -428,6 +443,7 @@ const argsSchema = z.object({
   rounds: z.coerce.number().int().min(1).max(100).optional(),
   minutes: z.coerce.number().int().min(1).max(1440).optional(),
   hours: z.coerce.number().int().min(1).max(24).optional(),
+  days: z.coerce.number().int().min(1).max(365).optional(),
   saveAbility: z.preprocess(
     normalizeAbility,
     z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
@@ -1358,6 +1374,7 @@ export function applyDmMutation(
             ...(args.via ? { via: args.via } : {}),
             ...(args.dryRun ? { dryRun: true } : {}),
             ...(args.uses ? { uses: args.uses } : {}),
+            ...(args.units ? { units: args.units } : {}),
             ...zonePlacement(args),
           },
           {

@@ -2,7 +2,7 @@ import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
-import { expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
+import { expertiseAllowed, expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { featOwed, type FeatChoices, type FeatGrantSpec } from "@/lib/srd/feat-grants";
@@ -203,7 +203,7 @@ export function callingBlocker(
   // panel draws: a pick in a dropped skill is not a pick.
   const expertiseLeft =
     expertiseSlots -
-    state.expertisePicks.filter((skillId) => derived.proficientSkills.includes(skillId)).length;
+    state.expertisePicks.filter((skillId) => expertiseAllowed(skillId, derived.proficientSkills, [klass.id])).length;
   if (expertiseLeft > 0) {
     return block("expertise", `Pick ${expertiseLeft} more expertise ${expertiseLeft === 1 ? "skill" : "skills"}.`);
   }
@@ -429,7 +429,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const proficiencies = {
     ...preview.proficiencies,
     skills,
-    expertise: picks.expertisePicks.filter((skill) => skills.includes(skill)),
+    expertise: picks.expertisePicks.filter((skill) => expertiseAllowed(skill, skills, [klass.id])),
     languages: [
       ...new Set([
         ...(race.languages ?? []),

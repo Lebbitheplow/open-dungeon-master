@@ -22,7 +22,8 @@ import { resistLineFor } from "@/lib/dm/underwater";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
 import { isDefeated, isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
 import { endConditionsHeldBy } from "@/lib/dm/enemy-conditions";
-import { hasTrait, REGENERATION_STOPPED, regenerationOf } from "@/lib/dm/monster-abilities";
+import { enemyHpCap, hasTrait, REGENERATION_STOPPED, regenerationOf } from "@/lib/dm/monster-abilities";
+import { absorbs } from "@/lib/dm/monster-traits";
 import { fallsRegenerating, regeneratingDown } from "@/lib/dm/regeneration";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { settleFrenzies } from "@/lib/dm/frenzy";
@@ -255,6 +256,21 @@ export function applyEnemyDamage(
 ): Record<string, unknown> {
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
   const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);
+  // Lightning, Fire or Acid Absorption (the golems): the damage heals it
+  // instead (src/lib/dm/monster-traits.ts).
+  if (!options?.death && absorbs(enemy.stats, damageType) && enemy.status === "alive") {
+    const healed = Math.min(enemyHpCap(enemy), enemy.currentHp + Math.max(0, Math.floor(amount)));
+    const updated = patchEnemyHp(enemy.id, healed, "alive") ?? enemy;
+    return {
+      ok: true,
+      name: enemy.displayName,
+      hp: `${updated.currentHp}/${updated.maxHp}`,
+      health: healthState(updated.currentHp, updated.maxHp),
+      damageApplied: 0,
+      absorbed: healed - enemy.currentHp,
+      note: `${enemy.displayName} absorbs the ${damageType}: it takes no damage and regains ${healed - enemy.currentHp} hit points.`,
+    };
+  }
   const adjusted = options?.death
     ? { amount: Math.max(1, enemy.currentHp), note: null }
     : damageAdjust(

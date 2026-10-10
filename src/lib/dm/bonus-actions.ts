@@ -28,6 +28,8 @@ import { spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { DODGING } from "@/lib/dm/condition-logic";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
+import { QUICKENED } from "@/lib/dm/cast-rules";
+import { chosenOptions } from "@/lib/srd/options";
 
 // The pure half (which feature routes what to the bonus action) lives in
 // bonus-routes.ts, so the Hand can ask it too.
@@ -147,6 +149,55 @@ export function spendKiTechnique(
       technique: name,
       cost: budget ? "1 ki and their bonus action" : "1 ki",
       applied,
+    },
+  };
+}
+
+// Quickened Spell (sorcerer Metamagic, SRD 5.1): 2 sorcery points change a
+// spell's casting time of one action to one bonus action for that casting.
+// The points are spent here and the turn is marked; the next spell of one
+// action this turn is charged to the bonus action (cast-rules.ts,
+// turnCharge), with the bonus action spell rule that follows from it.
+export function spendQuickenedSpell(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  state: { max: number; used: number },
+): { patch: FullPatchSheetInput; result: Record<string, unknown> } | { error: string } {
+  const known = chosenOptions(sheet.features, "metamagic").some((name) => name.trim().toLowerCase() === "quickened spell");
+  if (!known) {
+    return { error: `${sheet.name} has not learned the Quickened Spell Metamagic option. Nothing was spent.` };
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  const inFight = encounter !== null && (encounter.kind ?? "fight") === "fight";
+  const budget = inFight
+    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions))
+    : null;
+  if (!budget || !encounter) {
+    return {
+      error: inFight
+        ? `Quickened Spell is used as ${sheet.name} casts on their own turn, and it is not their turn. Nothing was spent.`
+        : `Quickened Spell changes a casting time inside a fight's turn; out of a fight the spell is simply cast. Nothing was spent.`,
+    };
+  }
+  if (budget.oncePerTurn.includes(QUICKENED)) {
+    return { error: `${sheet.name} has already quickened a spell this turn that has not been cast yet. Nothing more was spent.` };
+  }
+  if (budget.bonusUsed) {
+    return { error: `${sheet.name} has already used their bonus action this turn, so a quickened spell has no bonus action to take. Nothing was spent.` };
+  }
+  const left = state.max - state.used;
+  if (left < 2) {
+    return { error: `Quickened Spell costs 2 sorcery points and ${sheet.name} has ${left}. Nothing was spent.` };
+  }
+  storeBudget(encounter, { ...budget, oncePerTurn: [...budget.oncePerTurn, QUICKENED] });
+  return {
+    patch: { resources: { ...sheet.resources, sorcery_points: { max: state.max, used: state.used + 2 } } },
+    result: {
+      ok: true,
+      resource: "Sorcery Points",
+      spent: 2,
+      left: `${left - 2}/${state.max}`,
+      applied: `Quickened Spell: the next spell ${sheet.name} casts this turn with a casting time of one action takes their bonus action instead. Beside it, their only other spell this turn is a cantrip of one action.`,
     },
   };
 }

@@ -19,6 +19,7 @@ import { planConditionFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { breakConcentration } from "@/lib/dm/concentration";
 import {
+  addConditionInstance,
   conditionRoundsFrom,
   describeConditionDuration,
   describeExhaustion,
@@ -56,31 +57,6 @@ export function canonicalCondition(raw: string): string {
     return prefix;
   }
   return known.find((name) => cleaned.includes(name)) ?? cleaned;
-}
-
-// How long one instance of a condition lasts, for comparing two of them. No
-// duration at all is until something ends it; save-ends with no count is
-// until the save is made, which may be never.
-function reach(entry: ConditionMeta | undefined): number {
-  if (!entry || (entry.rounds === undefined && !entry.saveEnds && !entry.untilTurnOf && !entry.untilTurnEndOf)) {
-    return Number.POSITIVE_INFINITY;
-  }
-  if (entry.untilTurnOf || entry.untilTurnEndOf) {
-    return 1;
-  }
-  return entry.rounds ?? Number.MAX_SAFE_INTEGER;
-}
-
-// Two sources of one condition: the creature keeps it until the last one
-// ends (SRD 5.1, Conditions), so the instance that lasts longer is the one
-// the sheet keeps counting.
-export function longerInstance(
-  held: ConditionMeta | undefined,
-  incoming: ConditionMeta | undefined,
-): { entry: ConditionMeta | undefined; replaced: boolean } {
-  return reach(incoming) > reach(held)
-    ? { entry: incoming, replaced: true }
-    : { entry: held, replaced: false };
 }
 
 function audit(
@@ -269,6 +245,7 @@ export type SetConditionArgs = {
   rounds?: number;
   minutes?: number;
   hours?: number;
+  days?: number;
   saveAbility?: SaveAbilityId;
   saveDc?: number;
   sourceEnemyId?: string;
@@ -339,28 +316,27 @@ export function handleSetCondition(
   const already = sheet.conditions.includes(normalized);
 
   if (already) {
-    // A second source: the longer of the two is what the sheet counts.
-    const kept = longerInstance(meta[normalized], incoming);
-    if (!kept.replaced) {
+    // A second source of a condition the sheet holds (SRD 5.1, Conditions):
+    // the effects do not add up, but each source keeps its own lifetime, so
+    // the condition lasts until the last of them ends
+    // (src/lib/dm/condition-logic.ts addConditionInstance).
+    const laid = addConditionInstance(sheet.conditions, meta, normalized, incoming);
+    if (JSON.stringify(laid.meta) === JSON.stringify(meta)) {
       return { ok: true, note: `${sheet.name} is already ${normalized}, for at least as long.` };
     }
-    const nextMeta: ConditionMetaMap = { ...meta };
-    if (kept.entry) {
-      nextMeta[normalized] = kept.entry;
-    } else {
-      delete nextMeta[normalized];
-    }
-    patchSheet(sheet.id, { conditionMeta: nextMeta });
+    patchSheet(sheet.id, { conditionMeta: laid.meta });
     audit(campaign, turnId, sheet, { condition: normalized, extended: true }, reason, {
-      conditionMeta: nextMeta,
+      conditionMeta: laid.meta,
     });
     publishSheet(campaign, sheet.id);
     return {
       ok: true,
       condition: normalized,
-      note: `${sheet.name} was already ${normalized}; the longer duration stands.`,
-      ...(kept.entry?.rounds
-        ? { duration: `${describeConditionDuration(kept.entry.rounds)}, expires automatically` }
+      note: laid.stacked
+        ? `${sheet.name} was already ${normalized}; this source holds it too, for its own duration.`
+        : `${sheet.name} was already ${normalized} from this source; its duration starts again.`,
+      ...(incoming?.rounds
+        ? { duration: `${describeConditionDuration(incoming.rounds)}, expires automatically` }
         : {}),
     };
   }
@@ -413,7 +389,7 @@ export function handleSetCondition(
     ...(rounds ? { duration: `${describeConditionDuration(rounds)}, expires automatically` } : {}),
     ...(saveEnds
       ? {
-          duration: `until they succeed on a ${saveEnds.ability.toUpperCase()} save (DC ${saveEnds.dc}), re-rolled automatically each round in combat and each time the clock moves outside it`,
+          duration: `until they succeed on a ${saveEnds.ability.toUpperCase()} save (DC ${saveEnds.dc}), re-rolled automatically at the end of each of their turns in combat and each time the clock moves outside it${rounds ? `, and at most ${describeConditionDuration(rounds)}` : ""}`,
         }
       : {}),
     ...lost,

@@ -367,6 +367,7 @@ export function InfoButton({
   text,
   reference,
   meta,
+  note,
   className,
   size = "sm",
 }: {
@@ -376,6 +377,9 @@ export function InfoButton({
   // A short line under the title: spell level and school, feature level, and
   // so on.
   meta?: string;
+  // A rules line read before the entry itself, whichever way the entry
+  // loads: how much of a spell the server settles (src/lib/srd/spell-support.ts).
+  note?: string;
   className?: string;
   size?: "sm" | "md";
 }) {
@@ -407,6 +411,7 @@ export function InfoButton({
         onOpenChange={setOpen}
         title={label}
         meta={meta}
+        note={note}
         text={text}
         reference={reference}
       />
@@ -482,6 +487,7 @@ export function InfoDialog({
   onOpenChange,
   title,
   meta,
+  note,
   text,
   reference,
   children,
@@ -490,6 +496,7 @@ export function InfoDialog({
   onOpenChange: (open: boolean) => void;
   title: string;
   meta?: string;
+  note?: string;
   text?: string | null;
   reference?: ContentRef;
   children?: ReactNode;
@@ -500,6 +507,7 @@ export function InfoDialog({
         <p className="reveal mb-3 text-xs uppercase tracking-wide text-amber-200/70">{meta}</p>
       ) : null}
       <div className="space-y-2 text-sm leading-relaxed text-stone-400">
+        {note ? <div className="rounded border border-amber-300/20 bg-amber-300/5 px-2.5 py-1.5 text-stone-300">{renderRules(note)}</div> : null}
         {text?.trim() ? (
           renderRules(text)
         ) : reference?.kind === "items" ? (

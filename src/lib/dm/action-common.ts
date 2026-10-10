@@ -3,6 +3,7 @@
 // block. Split from action-tools.ts so the grapple, object and reaction
 // modules can use them without importing the take_action handler.
 
+import { enemyExhaustion } from "@/lib/dm/monster-abilities";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
@@ -24,7 +25,7 @@ export function addSheetCondition(
   campaign: Campaign,
   sheet: CharacterSheet,
   condition: string,
-  lasts: { rounds: number } | { untilTurnOf: string },
+  lasts: { rounds: number } | { untilTurnOf: string } | { untilTurnEndOf: string },
   source?: string,
 ) {
   if (sheet.conditions.some((entry) => entry.toLowerCase() === condition)) {
@@ -72,7 +73,8 @@ export function rollEnemyContest(
   which: "either" | "athletics",
   detail: string,
 ): number {
-  const advantage = mergeAdvantage([rollDerivation(enemy.conditions, "skill_check", "str").advantage]);
+  const worn = enemyExhaustion(enemy.conditions) >= 1;
+  const advantage = mergeAdvantage([rollDerivation(enemy.conditions, "skill_check", "str").advantage, ...(worn ? ["disadvantage" as const] : [])]);
   const outcome = rollExpression(d20Expression(contestModifier(enemy.stats, which), advantage));
   const roll = insertRoll({
     campaignId: campaign.id,

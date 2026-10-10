@@ -8,8 +8,12 @@ import type { SaveAbilityId } from "@/lib/srd/condition-effects";
 export type SpellCondition = {
   name: string;
   // Rounds it lasts; absent with saveEnds false means until the spell ends
-  // or something else ends it (Geas, a creature knocked prone).
+  // or something else ends it (a creature knocked prone).
   rounds?: number;
+  // A longer lifetime from a higher slot (Geas: a year from 7th level, no
+  // count at all from 9th): [the slot level it starts at, its rounds or null
+  // for "until dispelled"], in ascending order.
+  roundsBySlot?: Array<[number, number | null]>;
   // A repeat save at the end of each round ends it (Hold Person).
   saveEnds?: boolean;
   // Conditions that land with it and end with it: Hypnotic Pattern's

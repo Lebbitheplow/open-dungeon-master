@@ -14,6 +14,7 @@
 // Pure and dependency-light so scripts/test-spell-mechanics.mjs can exercise
 // every branch without the content database.
 
+import { ROUND_CEILING } from "@/lib/schemas/condition-meta";
 import authoredSpellsJson from "@/lib/srd/authored-spells.json";
 import {
   attackKindFor,
@@ -145,7 +146,8 @@ export function durationRounds(duration?: string): number | null {
   const count = Number(match[1]);
   const unit = match[2].toLowerCase();
   const rounds = unit === "round" ? count : unit === "minute" ? count * 10 : unit === "hour" ? count * 600 : count * 14400;
-  return Math.max(1, Math.min(14400, rounds));
+  // Days stay days (Antipathy/Sympathy's ten, Geas's thirty): src/lib/schemas/condition-meta.ts.
+  return Math.max(1, Math.min(ROUND_CEILING, rounds));
 }
 
 // The size of an area a text describes ("a 20-foot-radius sphere", "a

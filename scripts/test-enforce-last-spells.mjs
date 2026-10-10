@@ -80,6 +80,21 @@ await test("An abjurer's first abjuration spell of 1st level or higher raises an
   assert.equal(hp(world, wizard.id), before - 4, "6 left on the ward, 4 come through");
 });
 
+await test("The Arcane Ward takes the blow as it lands, without the wizard's own resistance; the wizard's resistance meets only what comes through.", async () => {
+  // A tiefling abjurer resists fire. Sage Advice Compendium: the ward does not.
+  const { world, sheets: [wizard] } = await board([{ ...ABJURER(6), race: "tiefling" }], [{ x: 3, y: 4 }]);
+  await withWardFeatures(world, wizard.id, 6);
+  await world.invoke("cast_buff", { characterId: wizard.id, spell: "Mage Armor", level: 1 });
+  const before = hp(world, wizard.id);
+  const ward = () => world.sheet(wizard.id).resources.sub_arcane_ward;
+  await world.invoke("apply_damage", { characterId: wizard.id, amount: 10, type: "fire" });
+  assert.equal(ward().max - ward().used, 6, "the ward (16) loses all 10, not a halved 5");
+  assert.equal(hp(world, wizard.id), before);
+  await world.invoke("apply_damage", { characterId: wizard.id, amount: 10, type: "fire" });
+  assert.equal(ward().max - ward().used, 0);
+  assert.equal(hp(world, wizard.id), before - 2, "4 come through the ward and the wizard's resistance halves them to 2");
+});
+
 await test("Each later abjuration spell of 1st level or higher restores twice its level to the Arcane Ward.", async () => {
   const { world, sheets: [wizard] } = await board([ABJURER(6)], [{ x: 3, y: 4 }]);
   await withWardFeatures(world, wizard.id, 6);

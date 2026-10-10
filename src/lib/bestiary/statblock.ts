@@ -61,6 +61,10 @@ export type EnemyStats = {
   // Non-attack actions and special abilities as one-line rules text, e.g.
   // "Fire Breath (Recharge 5-6): DC 12 Dex save, 6d6 fire, half on success".
   traits: string[];
+  // Every special and action line as printed, uncut, for what the engine
+  // does not resolve to be named to the DM (src/lib/dm/monster-traits.ts).
+  // Absent on rows written before it.
+  fullTraits?: string[];
   resist: string;
   immune: string;
   vulnerable: string;
@@ -292,6 +296,14 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   const lines = [...nonAttackActions, ...specials]
     .map(traitLine)
     .filter((line): line is string => line !== null);
+  // Every line, uncut: the engine's cap is for the prompt, not the record.
+  const fullTraits = [...nonAttackActions, ...specials]
+    .map((entry) => {
+      const name = asString(entry.name);
+      const desc = asString(entry.desc).replace(/\s+/g, " ").trim();
+      return name && desc ? `${name}: ${desc}` : null;
+    })
+    .filter((entry): entry is string => entry !== null);
   const traits = [
     ...lines.filter(keptWhateverTheCap),
     ...lines.filter((line) => !keptWhateverTheCap(line)).slice(0, MAX_TRAITS),
@@ -355,6 +367,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     speed: formatSpeed(data.speed),
     attacks,
     traits,
+    ...(fullTraits.length ? { fullTraits } : {}),
     resist: asString(data.damage_resistances),
     immune: asString(data.damage_immunities),
     vulnerable: asString(data.damage_vulnerabilities),

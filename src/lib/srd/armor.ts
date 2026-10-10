@@ -197,6 +197,21 @@ export function isArmorProficient(armorProfs: string[], armor: SrdArmor): boolea
 // database layer; db/sheets.ts enforces it on every write.
 export const ATTUNEMENT_SLOTS = 3;
 
+// How many items this character may be attuned to: three, or the
+// Artificer's four, five and six from Magic Item Adept, Savant and Master
+// (10th, 14th and 18th level).
+export function attunementSlotsFor(holder: { class?: string; level?: number; classes?: Array<{ id: string; level?: number }> | null } | null): number {
+  if (!holder) {
+    return ATTUNEMENT_SLOTS;
+  }
+  const artificer = holder.classes?.length
+    ? (holder.classes.find((entry) => entry.id.trim().toLowerCase() === "artificer")?.level ?? 0)
+    : (holder.class ?? "").trim().toLowerCase() === "artificer"
+      ? (holder.level ?? 0)
+      : 0;
+  return artificer >= 18 ? 6 : artificer >= 14 ? 5 : artificer >= 10 ? 4 : ATTUNEMENT_SLOTS;
+}
+
 // ---- AC derivation ----
 
 // `gear` is a homebrew item's snapshotted mechanics (src/lib/homebrew/

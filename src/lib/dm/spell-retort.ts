@@ -58,7 +58,7 @@ export function layEnfeeblement(
   const conditions = enemy.conditions.includes(rule.condition) ? enemy.conditions : [...enemy.conditions, rule.condition];
   patchEnemyConditions(enemy.id, conditions, meta);
   publishEncounter(campaign.id);
-  return `${enemy.displayName} is enfeebled: its Strength weapon attacks deal half damage until it makes a ${rule.ability.toUpperCase()} save (DC ${dc}) at the end of a round.`;
+  return `${enemy.displayName} is enfeebled: its Strength weapon attacks deal half damage until it makes a ${rule.ability.toUpperCase()} save (DC ${dc}) at the end of one of its turns.`;
 }
 
 // Whether a creature's weapon attack uses Strength: a melee weapon attack
@@ -118,6 +118,7 @@ export function spellRetort(
     if (live?.status === "alive") {
       const save = rollEnemySave(campaign.id, live, "con", dc, {
         magical: true,
+        resist: true,
         record: { turn, detail: `${live.displayName}: CON save against Holy Aura` },
       });
       if (!save.success && !live.conditions.includes("blinded")) {

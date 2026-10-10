@@ -340,17 +340,28 @@ async function dragon(options = {}) {
 }
 
 const pool = (enemy) => world.encounter().legendary.pools[enemy.id];
+// Another creature's turn ends: a fresh moment for one legendary option.
+function anotherTurnEnds() {
+  const encounter = world.encounter();
+  delete encounter.legendary.opportunities;
+  kit.saveEncounter(encounter);
+}
 
 await test("legendary actions: three a round, each at its cost, refused when the pool is short", async () => {
   const enemy = await dragon();
   const wing = await world.invoke("legendary_action", { enemyId: enemy.id, action: "Wing Attack" });
   assert.equal(wing.ok, true, wing.error);
   assert.equal(pool(enemy).actions, 1);
+  // One option at the end of each other creature's turn, never two at once.
+  assert.equal((await world.invoke("legendary_action", { enemyId: enemy.id, action: "Detect" })).ok, false);
+  assert.equal(pool(enemy).actions, 1);
+  anotherTurnEnds();
   const second = await world.invoke("legendary_action", { enemyId: enemy.id, action: "Wing Attack" });
   assert.equal(second.ok, false);
   assert.equal(pool(enemy).actions, 1);
   assert.equal((await world.invoke("legendary_action", { enemyId: enemy.id, action: "Detect" })).ok, true);
   assert.equal(pool(enemy).actions, 0);
+  anotherTurnEnds();
   assert.equal((await world.invoke("legendary_action", { enemyId: enemy.id, action: "Detect" })).ok, false);
   assert.equal(pool(enemy).actions, 0);
   // An action the block does not list is not improvised.
@@ -364,29 +375,58 @@ await test("legendary actions belong to legendary creatures", async () => {
   assert.equal((await world.invoke("legendary_resist", { enemyId: enemy.id })).ok, false);
 });
 
+// A save the dragon just failed, as the server records it (forced-save.ts).
+function failedSave(enemy) {
+  const encounter = world.encounter();
+  encounter.legendary.failedSave = { enemyId: enemy.id, round: encounter.round, detail: "DEX save" };
+  kit.saveEncounter(encounter);
+}
+
 await test("legendary resistance: three for the fight, never refilled", async () => {
   const enemy = await dragon();
+  // Nothing to resist: no save has failed.
+  assert.equal((await world.invoke("legendary_resist", { enemyId: enemy.id })).ok, false);
+  assert.equal(pool(enemy).resistances, 3);
   for (let left = 2; left >= 0; left -= 1) {
+    failedSave(enemy);
     const out = await world.invoke("legendary_resist", { enemyId: enemy.id });
     assert.equal(out.ok, true, out.error);
     assert.equal(pool(enemy).resistances, left);
+    // One failure is resisted once.
+    if (left > 0) assert.equal((await world.invoke("legendary_resist", { enemyId: enemy.id })).ok, false);
   }
+  failedSave(enemy);
   assert.equal((await world.invoke("legendary_resist", { enemyId: enemy.id })).ok, false);
   assert.equal(kit.endTurn(tank.userId), true);
   assert.equal(kit.endTurn(mage.userId), true);
   assert.equal(world.encounter().round, 2);
   assert.equal(pool(enemy).resistances, 0);
+  failedSave(enemy);
   assert.equal((await world.invoke("legendary_resist", { enemyId: enemy.id })).ok, false);
 });
 
-await test("a lair acts once a round, and only in a lair", async () => {
+await test("a lair acts on initiative count 20, once a round, and only in a lair", async () => {
   await stage(1, { lair: true });
   assert.equal(world.encounter().legendary.lair, true);
-  assert.equal((await world.invoke("lair_action", { action: "The floor tilts" })).ok, true);
+  // The count falls after everyone at 20 or above: the lair waits for them.
+  const atTop = () => world.encounter().order.filter((entry) => entry.initiative >= 20).length;
+  const tankFirst = atTop() > 0;
+  assert.equal((await world.invoke("lair_action", { action: "The floor tilts" })).ok, !tankFirst);
+  if (tankFirst) {
+    assert.equal(kit.endTurn(tank.userId), true);
+    assert.equal((await world.invoke("lair_action", { action: "The floor tilts" })).ok, true);
+  }
   assert.equal((await world.invoke("lair_action", { action: "The floor tilts again" })).ok, false);
-  assert.equal(kit.endTurn(tank.userId), true);
+  if (!tankFirst) {
+    assert.equal(kit.endTurn(tank.userId), true);
+  }
+  // Its moment has passed: the next turn does not bring it back.
   assert.equal(kit.endTurn(mage.userId), true);
   assert.equal(world.encounter().round, 2);
+  if (tankFirst) {
+    assert.equal((await world.invoke("lair_action", { action: "Stalactites fall" })).ok, false);
+    assert.equal(kit.endTurn(tank.userId), true);
+  }
   assert.equal((await world.invoke("lair_action", { action: "Stalactites fall" })).ok, true);
   await stage(1);
   assert.equal(world.encounter().legendary.lair, false);
@@ -396,6 +436,7 @@ await test("a lair acts once a round, and only in a lair", async () => {
 await test("A legendary creature regains its spent legendary actions at the start of its turn.", async () => {
   const enemy = await dragon();
   for (const action of ["Detect", "Detect", "Tail Attack"]) {
+    anotherTurnEnds();
     assert.equal((await world.invoke("legendary_action", { enemyId: enemy.id, action })).ok, true);
   }
   assert.equal(pool(enemy).actions, 0);
@@ -411,6 +452,7 @@ await test(
     const [enemy] = await stage();
     world.patch(mage.id, { ac: 12, acOverride: true });
     try {
+      await world.hitBy(mage.id, { enemyId: enemy.id });
       const shield = await world.invoke("use_reaction", { characterId: mage.id, feature: "Shield" });
       assert.equal(shield.ok, true, shield.error);
       assert.equal(world.sheet(mage.id).spellcasting.slots[1].used, 1);

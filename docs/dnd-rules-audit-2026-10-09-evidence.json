@@ -1,0 +1,1487 @@
+{
+  "auditDate": "2026-10-09",
+  "head": "9af14897e6552ec87a7c92ca1c80fd7d60ea8fa6",
+  "applicationVersion": "0.25.0",
+  "baseline": "2014 D&D 5e / SRD 5.1",
+  "scopeNote": "Independent disposable probes; helper/parser outputs are distinguished from full runtime calls in the findings. Scratch identifiers anonymized consistently. Raw output does not itself assign a defect: positive controls are included.",
+  "verification": {
+    "existingSuite": {
+      "command": "npm test",
+      "passedFiles": 461,
+      "durationSeconds": 286.53
+    },
+    "fallbackSuite": {
+      "environment": {
+        "CONTENT_DB_PATH": "/nonexistent"
+      },
+      "passedFiles": 10,
+      "durationSeconds": 12.7,
+      "files": [
+        "test-builder-reconcile.mjs",
+        "test-sheet-legality.mjs",
+        "test-cast-rules.mjs",
+        "test-race-languages.mjs",
+        "test-option-descriptions.mjs",
+        "test-rulebook.mjs",
+        "test-enforce-spell-effects.mjs",
+        "test-enforce-spell-engine.mjs",
+        "test-enforce-summons.mjs",
+        "test-enforce-final-features.mjs"
+      ]
+    },
+    "browser": "Preview opened; local navigation failed on retry. Static UI review only."
+  },
+  "inventory": {
+    "bundledCounts": {
+      "rules": 36,
+      "race": 9,
+      "class": 12,
+      "spell": 319,
+      "item": 239,
+      "monster": 318
+    },
+    "spellsWithCastingFacts": 319,
+    "generalMechanicResolutionCounts": {
+      "save": 90,
+      "attack": 16,
+      "none": 109,
+      "buff": 61,
+      "utility": 25,
+      "auto": 5,
+      "heal": 12,
+      "summon": 1
+    },
+    "noPackResolutionCounts": {
+      "save": 90,
+      "attack": 16,
+      "none": 109,
+      "buff": 61,
+      "utility": 25,
+      "auto": 5,
+      "heal": 12,
+      "summon": 1
+    },
+    "magicItemTableMatches": 103,
+    "itemsWithSelectedStructuredFields": 98,
+    "authoredFeatureCounts": {
+      "total": 533,
+      "typed": 189,
+      "counter": 150,
+      "narrated": 11,
+      "plain": 183,
+      "uncovered": 0,
+      "stale": 0
+    }
+  },
+  "observations": [
+    {
+      "id": "death-stabilization-reset",
+      "observed": {
+        "stabilized": {
+          "track": {
+            "successes": 3,
+            "failures": 2,
+            "stable": true,
+            "dead": false
+          },
+          "outcome": "stable"
+        },
+        "afterDamage": {
+          "successes": 3,
+          "failures": 3,
+          "stable": false,
+          "dead": true
+        }
+      }
+    },
+    {
+      "id": "death-save-bless",
+      "observed": {
+        "track": {
+          "successes": 0,
+          "failures": 1,
+          "stable": false,
+          "dead": false
+        },
+        "dice": [
+          {
+            "sides": 20,
+            "face": 8,
+            "forced": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "concentration-exhaustion",
+      "observed": {
+        "out": {
+          "concentration": {
+            "spell": "Fly",
+            "dc": 10,
+            "rolled": 17,
+            "held": true
+          }
+        },
+        "dice": [
+          {
+            "sides": 20,
+            "face": 15,
+            "forced": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "components-and-cost",
+      "observed": {
+        "emptyMaterial": null,
+        "cheapDiamond": {
+          "error": "Revivify needs a material component worth 300 gp (Diamonds worth 300gp, which the spell consumes), which the spell consumes. Audit carries none and has not the gold to have bought one. No slot was spent."
+        },
+        "unnamedValue": {
+          "kind": "item",
+          "index": 0,
+          "itemName": "Diamond",
+          "consume": true
+        },
+        "emptyWithGold": {
+          "kind": "purse",
+          "copper": 30000,
+          "consume": true,
+          "keepAs": "Diamond (300 gp)"
+        },
+        "zeroQuantity": {
+          "kind": "item",
+          "index": 0,
+          "itemName": "Diamond (300 gp)",
+          "consume": true
+        },
+        "clone": {
+          "error": "Clone needs a material component worth 3000 gp (A diamond worth at least 1,000 gp and at least 1 cubic inch of flesh of the creature that is to be cloned, which the spell consumes, and a vessel worth at least 2,000 gp that has a sealable lid and is large enough to hold a Medium creature, such as a huge urn, coffin, mud-filled cyst in the ground, or crystal container filled with salt water), which the spell consumes. Audit carries none and has not the gold to have bought one. No slot was spent."
+        }
+      }
+    },
+    {
+      "id": "war-caster-material-hand",
+      "observed": {
+        "busy": 2,
+        "problem": null
+      }
+    },
+    {
+      "id": "ritual-multiclass",
+      "observed": {
+        "held": null,
+        "ritual": null
+      }
+    },
+    {
+      "id": "aid-stacking",
+      "observed": {
+        "base": 30,
+        "once": 35,
+        "twice": 40,
+        "a": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Aid",
+            "applied": "aided (+5)",
+            "targets": [
+              "Hero 1"
+            ],
+            "hitPoints": "+5 to the maximum and current hit points of each",
+            "duration": "8 hours",
+            "slot": "level 2: 2/3 left",
+            "effect": "Aid: the hit point maximum and current hit points are higher by the amount in the name for 8 hours; they fall back when it ends.",
+            "spellNote": "Up to three creatures; each one's hit point maximum and current hit points rise by 5 (+5 a slot level above 2nd) for 8 hours.",
+            "note": "The server applied the effect; narrate exactly this."
+          },
+          "turnId": "audit-ref-001"
+        },
+        "b": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Aid",
+            "applied": "aided (+5)",
+            "targets": [
+              "Hero 1"
+            ],
+            "hitPoints": "+5 to the maximum and current hit points of each",
+            "duration": "8 hours",
+            "slot": "level 2: 1/3 left",
+            "effect": "Aid: the hit point maximum and current hit points are higher by the amount in the name for 8 hours; they fall back when it ends.",
+            "spellNote": "Up to three creatures; each one's hit point maximum and current hit points rise by 5 (+5 a slot level above 2nd) for 8 hours.",
+            "note": "The server applied the effect; narrate exactly this."
+          },
+          "turnId": "audit-ref-002"
+        },
+        "conditions": [
+          "aided (+5)"
+        ]
+      }
+    },
+    {
+      "id": "pc-sleep-damage",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "hp": "29/30"
+          },
+          "turnId": "audit-ref-003"
+        },
+        "hp": 29,
+        "conditions": []
+      }
+    },
+    {
+      "id": "condition-independent-sources",
+      "observed": {
+        "first": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Hold Person",
+            "caster": "Hero 1",
+            "target": "Goblin",
+            "cost": "their action",
+            "slot": "level 2: 2/3 left",
+            "save": 1,
+            "dc": 16,
+            "saved": false,
+            "conditionApplied": "paralyzed",
+            "duration": "until it succeeds on a WIS save (DC 16) at the end of a round"
+          },
+          "turnId": "audit-ref-004"
+        },
+        "second": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Hold Person",
+            "caster": "Hero 2",
+            "target": "Goblin",
+            "cost": "their action",
+            "slot": "level 2: 2/3 left",
+            "save": 1,
+            "dc": 16,
+            "saved": false
+          },
+          "turnId": "audit-ref-005"
+        },
+        "bConcentration": "Hold Person",
+        "before": {
+          "paralyzed": {
+            "saveEnds": {
+              "ability": "wis",
+              "dc": 16
+            },
+            "spell": "Hold Person",
+            "source": "audit-ref-006",
+            "slotLevel": 2
+          }
+        },
+        "after": []
+      }
+    },
+    {
+      "id": "pc-condition-resave-bless",
+      "observed": {
+        "conditions": [
+          "blessed"
+        ],
+        "dice": [
+          {
+            "sides": 20,
+            "face": 8,
+            "forced": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "troll-zero-hp",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "name": "Goblin 1",
+            "hp": "0/40",
+            "health": "dead",
+            "damageType": "slashing",
+            "down": true,
+            "note": "Goblin 1 falls at 0 hit points but is not dead: it regenerates and rises at the start of its turn, and dies then only if acid or fire damage has landed since its last turn. Narrate it collapsing, not dying."
+          },
+          "turnId": "audit-ref-007"
+        },
+        "status": "alive",
+        "hp": 0
+      }
+    },
+    {
+      "id": "legendary-resistance-no-save",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "enemy": "Goblin",
+            "remaining": 2,
+            "note": "The failed save becomes a success; narrate the effect shrugged off."
+          },
+          "turnId": "audit-ref-008"
+        },
+        "pool": {
+          "actions": 3,
+          "resistances": 2
+        }
+      }
+    },
+    {
+      "id": "ai-split-damage-bypass",
+      "observed": {
+        "hp": 90,
+        "beforeBudget": null,
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "applied": [
+              "Goblin 1 takes 7"
+            ],
+            "note": "The server already applied all of this. Narrate it; do not apply it again."
+          },
+          "turnId": "audit-ref-009"
+        },
+        "afterHp": 83
+      }
+    },
+    {
+      "id": "caster-first-level-multiclass-slots",
+      "observed": {
+        "ranger1wizard1": {
+          "1": 2
+        },
+        "paladin1wizard1": {
+          "1": 2
+        }
+      }
+    },
+    {
+      "id": "proficiency-underpicks-and-tool-expertise",
+      "observed": {
+        "underpicked": {
+          "problems": [],
+          "proficiencies": {
+            "saves": [
+              "dex",
+              "int"
+            ],
+            "skills": [],
+            "expertise": [],
+            "languages": [
+              "Common",
+              "Thieves' Cant"
+            ],
+            "tools": [
+              "thieves' tools"
+            ],
+            "armor": [
+              "light"
+            ],
+            "weapons": [
+              "simple",
+              "hand crossbows",
+              "longswords",
+              "rapiers",
+              "shortswords"
+            ]
+          }
+        },
+        "toolExpertise": {
+          "problems": [
+            "Expertise doubles a proficiency the character has; thieves' tools is not among their skills."
+          ],
+          "proficiencies": {
+            "saves": [
+              "dex",
+              "int"
+            ],
+            "skills": [
+              "stealth"
+            ],
+            "expertise": [
+              "thieves' tools"
+            ],
+            "languages": [
+              "Common",
+              "Thieves' Cant"
+            ],
+            "tools": [
+              "thieves' tools"
+            ],
+            "armor": [
+              "light"
+            ],
+            "weapons": [
+              "simple",
+              "hand crossbows",
+              "longswords",
+              "rapiers",
+              "shortswords"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "familiar-and-summon-catalog",
+      "observed": [
+        {
+          "name": "Animate Dead",
+          "row": {
+            "name": "Animate Dead",
+            "school": "necromancy",
+            "level": 3,
+            "concentration": false,
+            "rounds": 14400,
+            "forms": [
+              "Skeleton",
+              "Zombie"
+            ],
+            "base": 1,
+            "perSlotLevel": 2,
+            "initiative": "group",
+            "note": "A skeleton or zombie under the caster's command for 24 hours (two more for each slot level above 3rd); a bonus action commands them all."
+          }
+        },
+        {
+          "name": "Create Undead",
+          "row": {
+            "name": "Create Undead",
+            "school": "necromancy",
+            "level": 6,
+            "concentration": false,
+            "rounds": 14400,
+            "forms": [
+              "Ghoul",
+              "Ghast",
+              "Wight",
+              "Mummy"
+            ],
+            "bySlot": [
+              [
+                6,
+                {
+                  "Ghoul": 3
+                }
+              ],
+              [
+                7,
+                {
+                  "Ghoul": 4
+                }
+              ],
+              [
+                8,
+                {
+                  "Ghoul": 5,
+                  "Ghast": 2,
+                  "Wight": 2
+                }
+              ],
+              [
+                9,
+                {
+                  "Ghoul": 6,
+                  "Ghast": 3,
+                  "Wight": 3,
+                  "Mummy": 2
+                }
+              ]
+            ],
+            "initiative": "group",
+            "note": "Ghouls under the caster's command for 24 hours; from 8th level ghasts or wights, from 9th mummies."
+          }
+        },
+        {
+          "name": "Simulacrum",
+          "row": null
+        },
+        {
+          "name": "Conjure Animals",
+          "row": {
+            "name": "Conjure Animals",
+            "school": "conjuration",
+            "level": 3,
+            "concentration": true,
+            "rounds": 600,
+            "types": [
+              "beast"
+            ],
+            "byCr": [
+              [
+                2,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                0.5,
+                4
+              ],
+              [
+                0.25,
+                8
+              ]
+            ],
+            "multiplier": [
+              [
+                5,
+                2
+              ],
+              [
+                7,
+                3
+              ],
+              [
+                9,
+                4
+              ]
+            ],
+            "initiative": "group",
+            "note": "Fey spirits in beast form: one beast of CR 2, two of CR 1, four of CR 1/2 or eight of CR 1/4 (twice as many from a 5th level slot, three times from 7th, four from 9th)."
+          }
+        }
+      ]
+    },
+    {
+      "id": "long-duration-clamp",
+      "observed": {
+        "tenDays": 14400,
+        "thirtyDays": 14400
+      }
+    },
+    {
+      "id": "ready-applies-before-trigger",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "action": "Ready",
+            "spell": "Haste",
+            "slot": "level 3: 2/3 left",
+            "trigger": "when the goblin moves",
+            "applied": "Hero 1 casts Haste and holds it, concentrating, until the start of their next turn. When the trigger happens, cast Haste with its own tool (pc_attack, cast_at_enemy, cast_buff, aoe_damage, heal): it is released with their reaction and spends no second slot. If their concentration breaks first, or the trigger never comes, the spell is lost."
+          },
+          "turnId": "audit-ref-010"
+        },
+        "conditions": [
+          "readied"
+        ],
+        "concentration": "Haste"
+      }
+    },
+    {
+      "id": "pc-resave-bless-no-proficiency",
+      "observed": {
+        "conditions": [
+          "poisoned",
+          "blessed"
+        ],
+        "dice": [
+          {
+            "sides": 20,
+            "face": 8,
+            "forced": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "hold-person-duration-eleven-rounds",
+      "observed": {
+        "before": {
+          "paralyzed": {
+            "saveEnds": {
+              "ability": "wis",
+              "dc": 16
+            },
+            "spell": "Hold Person",
+            "source": "audit-ref-011",
+            "slotLevel": 2
+          }
+        },
+        "after": {
+          "paralyzed": {
+            "saveEnds": {
+              "ability": "wis",
+              "dc": 16
+            },
+            "spell": "Hold Person",
+            "source": "audit-ref-011",
+            "slotLevel": 2
+          }
+        },
+        "conditions": [
+          "paralyzed"
+        ],
+        "concentratingOn": "Hold Person"
+      }
+    },
+    {
+      "id": "unconscious-evasion",
+      "observed": {
+        "hp": 30,
+        "after": 20,
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "damageRolled": 10,
+            "dc": 15,
+            "saveAbility": "dex",
+            "halfOnSave": true,
+            "results": [
+              {
+                "target": "Hero 1",
+                "success": false,
+                "autoFailed": "unconscious: automatically fails DEX saves",
+                "damage": 10,
+                "hp": "20/30"
+              }
+            ]
+          },
+          "turnId": "audit-ref-012"
+        }
+      }
+    },
+    {
+      "id": "fireball-targets-100ft-apart",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Fireball",
+            "caster": "Hero 1",
+            "damageRolled": 8,
+            "dc": 16,
+            "saveAbility": "dex",
+            "halfOnSave": true,
+            "results": [
+              {
+                "target": "Goblin 1",
+                "save": 1,
+                "success": false,
+                "damage": 8,
+                "health": "healthy"
+              },
+              {
+                "target": "Goblin 2",
+                "save": 1,
+                "success": false,
+                "damage": 8,
+                "health": "healthy"
+              }
+            ],
+            "corrected": [
+              "8d6 at its base level",
+              "Hero 1 spent their action casting Fireball."
+            ]
+          },
+          "turnId": "audit-ref-013"
+        },
+        "hps": [
+          82,
+          82
+        ]
+      }
+    },
+    {
+      "id": "legendary-resist-does-not-reverse-damage",
+      "observed": {
+        "blast": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Fireball",
+            "caster": "Hero 1",
+            "damageRolled": 8,
+            "dc": 16,
+            "saveAbility": "dex",
+            "halfOnSave": true,
+            "results": [
+              {
+                "target": "Goblin",
+                "save": 1,
+                "success": false,
+                "damage": 8,
+                "health": "healthy"
+              }
+            ],
+            "corrected": [
+              "8d6 at its base level",
+              "Hero 1 spent their action casting Fireball."
+            ]
+          },
+          "turnId": "audit-ref-014"
+        },
+        "hp": 82,
+        "poolBefore": {
+          "actions": 3,
+          "resistances": 3
+        },
+        "resist": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "enemy": "Goblin",
+            "remaining": 2,
+            "note": "The failed save becomes a success; narrate the effect shrugged off."
+          },
+          "turnId": "audit-ref-015"
+        },
+        "afterHp": 82,
+        "poolAfter": {
+          "actions": 3,
+          "resistances": 2
+        }
+      }
+    },
+    {
+      "id": "counterspell-noncaster",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "reaction": "Counterspell",
+            "spent": "Hero 1's reaction and a level-3 slot are spent.",
+            "countered": true,
+            "applied": "Goblin's Fireball fails, and its action for the round is spent: the server will refuse its cast. Do not resolve the spell."
+          },
+          "turnId": "audit-ref-016"
+        },
+        "enemyStats": {
+          "ac": 13,
+          "maxHp": 90,
+          "dexMod": 0,
+          "saveMods": {
+            "str": 0,
+            "dex": 0,
+            "con": 0,
+            "int": 0,
+            "wis": 0,
+            "cha": 0
+          },
+          "speed": "30 ft.",
+          "attacks": [
+            {
+              "name": "Club",
+              "toHit": 4,
+              "damage": "1d6+2",
+              "type": "bludgeoning"
+            }
+          ],
+          "traits": [],
+          "resist": "",
+          "immune": "",
+          "vulnerable": "",
+          "conditionImmune": "",
+          "cr": 0.25,
+          "xp": 50,
+          "attacksPerTurn": 1,
+          "size": "Medium",
+          "type": "humanoid",
+          "abilities": {
+            "str": 10,
+            "dex": 10,
+            "con": 10,
+            "int": 10,
+            "wis": 10,
+            "cha": 10
+          },
+          "skills": {},
+          "senses": {
+            "passivePerception": 10
+          }
+        },
+        "encounter": {
+          "id": "audit-ref-017",
+          "campaignId": "audit-ref-018",
+          "status": "active",
+          "kind": "fight",
+          "round": 1,
+          "turnIndex": 0,
+          "orderReady": true,
+          "order": [
+            {
+              "kind": "pc",
+              "characterId": "audit-ref-019",
+              "userId": "audit-ref-020",
+              "name": "Hero 1",
+              "initiative": 21
+            },
+            {
+              "kind": "enemy",
+              "enemyId": "audit-ref-021",
+              "name": "Goblin",
+              "initiative": 3
+            }
+          ],
+          "waitingSeq": 4,
+          "turnBudget": null,
+          "surprisedIds": [],
+          "reactionsUsed": [
+            "audit-ref-019"
+          ],
+          "ammoSpent": {},
+          "targets": {
+            "round": 0,
+            "pairs": {}
+          },
+          "intents": {
+            "round": 0,
+            "byActor": {}
+          },
+          "legendary": {
+            "pools": {},
+            "lair": false,
+            "lairUsedRound": 0,
+            "acted": {
+              "round": 1,
+              "ids": [
+                "audit-ref-021"
+              ]
+            }
+          },
+          "outcome": "",
+          "summary": "",
+          "summaryCard": null,
+          "createdAt": "2026-10-09T21:38:29.421Z",
+          "updatedAt": "2026-10-09T21:38:29.425Z"
+        }
+      }
+    },
+    {
+      "id": "absorb-elements-no-persistent-effect",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "reaction": "Absorb Elements",
+            "spent": "Hero 1's reaction and a level-1 slot are spent.",
+            "applied": "Absorb Elements: the triggering acid, cold, fire, lightning or thunder damage is resisted, and their next melee hit before their next turn deals 1d6 extra of that type."
+          },
+          "turnId": "audit-ref-022"
+        },
+        "conditions": [],
+        "meta": {}
+      }
+    },
+    {
+      "id": "arcane-ward-resistance-order",
+      "observed": {
+        "ward": {
+          "raised": true,
+          "hp": 16,
+          "max": 16
+        },
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "hp": "30/30",
+            "damageApplied": 0,
+            "resistance": "Hero 1 is resistant to fire damage: halved",
+            "arcaneWard": "Arcane Ward takes 5 (11/16 left).",
+            "note": "Hero 1 takes no damage from it."
+          },
+          "turnId": "audit-ref-023"
+        },
+        "afterWard": {
+          "raised": true,
+          "hp": 11,
+          "max": 16
+        },
+        "resources": {
+          "arcane_recovery": {
+            "max": 1,
+            "used": 0
+          },
+          "sub_arcane_ward": {
+            "max": 16,
+            "used": 5
+          },
+          "sub_arcane_ward_raised": {
+            "max": 1,
+            "used": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "animate-dead-no-corpse-and-expiration",
+      "observed": {
+        "out": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Animate Dead",
+            "summoned": [
+              {
+                "characterId": "audit-ref-024",
+                "name": "Skeleton",
+                "hp": "13/13",
+                "ac": 13
+              }
+            ],
+            "creature": "Skeleton (undead, CR 0.25): 13 HP, AC 13, speed 30 ft. Attacks: Shortsword +4 (1d6+2 piercing), Shortbow +4 (1d6+2 piercing).",
+            "traits": "Darkvision 60 ft.",
+            "slot": "level 3: 2/3 left",
+            "spellNote": "A skeleton or zombie under the caster's command for 24 hours (two more for each slot level above 3rd); a bonus action commands them all.",
+            "note": "They are allies on the board and in the initiative order. Each attacks with pc_attack (its own characterId) on its turn; the server rolls its stat block's numbers. At 0 hit points one disappears. Narrate exactly this."
+          },
+          "turnId": "audit-ref-025"
+        },
+        "before": [
+          {
+            "name": "Skeleton",
+            "conditions": [
+              "summoned"
+            ],
+            "conditionMeta": {
+              "summoned": {
+                "source": "audit-ref-026",
+                "spell": "Animate Dead",
+                "rounds": 14400,
+                "slotLevel": 3
+              }
+            }
+          }
+        ],
+        "after": []
+      }
+    },
+    {
+      "id": "aid-expiry-after-stacking",
+      "observed": {
+        "hp": 35,
+        "maxHp": 35,
+        "conditions": []
+      }
+    },
+    {
+      "id": "long-spell-final-mechanics",
+      "observed": [
+        {
+          "spell": "Antipathy/Sympathy",
+          "facts": {
+            "name": "Antipathy/Sympathy",
+            "level": 8,
+            "castingTime": 60,
+            "verbal": true,
+            "somatic": true,
+            "material": true,
+            "materialCostGp": null,
+            "materialConsumed": false,
+            "ritual": false,
+            "concentration": false,
+            "range": {
+              "kind": "feet",
+              "feet": 60
+            },
+            "classes": [
+              "druid",
+              "wizard"
+            ],
+            "aliases": [],
+            "homebrew": false
+          },
+          "mechanics": {
+            "mech": {
+              "resolution": "save",
+              "save": "wis",
+              "halfOnSave": false,
+              "condition": {
+                "name": "frightened",
+                "rounds": 14400
+              }
+            },
+            "name": "Antipathy/Sympathy",
+            "spellLevel": 8,
+            "concentration": false
+          }
+        },
+        {
+          "spell": "Geas",
+          "facts": {
+            "name": "Geas",
+            "level": 5,
+            "castingTime": 1,
+            "verbal": true,
+            "somatic": false,
+            "material": false,
+            "materialCostGp": null,
+            "materialConsumed": false,
+            "ritual": false,
+            "concentration": false,
+            "range": {
+              "kind": "feet",
+              "feet": 60
+            },
+            "classes": [
+              "bard",
+              "cleric",
+              "druid",
+              "paladin",
+              "wizard"
+            ],
+            "aliases": [],
+            "homebrew": false
+          },
+          "mechanics": {
+            "mech": {
+              "resolution": "save",
+              "save": "wis",
+              "condition": {
+                "name": "charmed"
+              },
+              "noDamage": true,
+              "note": "Charmed for 30 days; acting against the command deals 5d10 psychic, once a day."
+            },
+            "name": "Geas",
+            "spellLevel": 5,
+            "concentration": false
+          }
+        },
+        {
+          "spell": "Clone",
+          "facts": {
+            "name": "Clone",
+            "level": 8,
+            "castingTime": 60,
+            "verbal": true,
+            "somatic": true,
+            "material": true,
+            "materialCostGp": 3000,
+            "materialConsumed": true,
+            "ritual": false,
+            "concentration": false,
+            "range": {
+              "kind": "touch"
+            },
+            "classes": [
+              "wizard"
+            ],
+            "aliases": [],
+            "homebrew": false
+          },
+          "mechanics": null
+        },
+        {
+          "spell": "Simulacrum",
+          "facts": {
+            "name": "Simulacrum",
+            "level": 7,
+            "castingTime": 720,
+            "verbal": true,
+            "somatic": true,
+            "material": true,
+            "materialCostGp": 1500,
+            "materialConsumed": true,
+            "ritual": false,
+            "concentration": false,
+            "range": {
+              "kind": "touch"
+            },
+            "classes": [
+              "wizard"
+            ],
+            "aliases": [],
+            "homebrew": false
+          },
+          "mechanics": null
+        },
+        {
+          "spell": "Teleport",
+          "facts": {
+            "name": "Teleport",
+            "level": 7,
+            "castingTime": "action",
+            "verbal": true,
+            "somatic": false,
+            "material": false,
+            "materialCostGp": null,
+            "materialConsumed": false,
+            "ritual": false,
+            "concentration": false,
+            "range": {
+              "kind": "feet",
+              "feet": 10
+            },
+            "classes": [
+              "bard",
+              "sorcerer",
+              "wizard"
+            ],
+            "aliases": [],
+            "homebrew": false
+          },
+          "mechanics": {
+            "mech": {
+              "resolution": "utility"
+            },
+            "name": "Teleport",
+            "spellLevel": 7,
+            "concentration": false
+          }
+        },
+        {
+          "spell": "Hold Person",
+          "facts": {
+            "name": "Hold Person",
+            "level": 2,
+            "castingTime": "action",
+            "verbal": true,
+            "somatic": true,
+            "material": true,
+            "materialCostGp": null,
+            "materialConsumed": false,
+            "ritual": false,
+            "concentration": true,
+            "range": {
+              "kind": "feet",
+              "feet": 60
+            },
+            "classes": [
+              "bard",
+              "cleric",
+              "druid",
+              "sorcerer",
+              "warlock",
+              "wizard"
+            ],
+            "aliases": [],
+            "homebrew": false
+          },
+          "mechanics": {
+            "mech": {
+              "resolution": "save",
+              "save": "wis",
+              "condition": {
+                "name": "paralyzed",
+                "saveEnds": true
+              },
+              "targets": {
+                "count": 1,
+                "perSlotLevel": 1
+              },
+              "targetTypes": [
+                "humanoid"
+              ],
+              "noDamage": true
+            },
+            "name": "Hold Person",
+            "spellLevel": 2,
+            "concentration": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "bonus-spell-reaction-core-guard",
+      "observed": {
+        "bonus": {
+          "ok": true,
+          "spell": "Misty Step",
+          "slotLevel": 2,
+          "slot": "level 2: 2/3 left",
+          "sharesLeft": 1,
+          "uses": 1,
+          "cost": "their bonus action"
+        },
+        "reaction": {
+          "ok": true,
+          "spell": "Shield",
+          "slotLevel": 1,
+          "slot": "level 1: 3/4 left"
+        },
+        "budget": {
+          "ownerId": "audit-ref-027",
+          "round": 1,
+          "actionUsed": false,
+          "bonusUsed": true,
+          "reactionUsed": false,
+          "attacksMade": 0,
+          "attacksAllowed": 1,
+          "oncePerTurn": [
+            "spell:bonus-action",
+            "cast-shares|misty step|2|1"
+          ],
+          "dashed": false,
+          "disengaged": false
+        }
+      }
+    },
+    {
+      "id": "monster-aboleth",
+      "observed": {
+        "traits": [
+          {
+            "name": "Multiattack",
+            "length": 54,
+            "truncated": false
+          },
+          {
+            "name": "Enslave (3/day)",
+            "length": 157,
+            "truncated": true
+          },
+          {
+            "name": "Amphibious",
+            "length": 50,
+            "truncated": false
+          },
+          {
+            "name": "Mucous Cloud",
+            "length": 154,
+            "truncated": true
+          },
+          {
+            "name": "Legendary action",
+            "length": 72,
+            "truncated": false
+          },
+          {
+            "name": "Legendary action",
+            "length": 64,
+            "truncated": false
+          },
+          {
+            "name": "Legendary action",
+            "length": 158,
+            "truncated": true
+          }
+        ],
+        "specials": [
+          {
+            "name": "Enslave",
+            "dc": 14,
+            "save": "wis",
+            "repeatSave": true,
+            "magical": true,
+            "perDay": 3
+          },
+          {
+            "name": "Mucous Cloud",
+            "dc": 14,
+            "save": "con"
+          },
+          {
+            "name": "Psychic Drain",
+            "damage": "3d6",
+            "damageType": "psychic",
+            "legendaryCost": 2
+          }
+        ],
+        "attacks": [
+          {
+            "name": "Tentacle",
+            "toHit": 9,
+            "damage": "2d6+5",
+            "type": "bludgeoning",
+            "mode": "melee",
+            "reach": 10
+          },
+          {
+            "name": "Tail",
+            "toHit": 9,
+            "damage": "3d6+5",
+            "type": "bludgeoning",
+            "mode": "melee",
+            "reach": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster-rakshasa",
+      "observed": {
+        "traits": [
+          {
+            "name": "Innate Spellcasting",
+            "length": 161,
+            "truncated": true
+          },
+          {
+            "name": "Multiattack",
+            "length": 48,
+            "truncated": false
+          },
+          {
+            "name": "Limited Magic Immunity",
+            "length": 164,
+            "truncated": true
+          }
+        ],
+        "attacks": [
+          {
+            "name": "Claw",
+            "toHit": 7,
+            "damage": "2d6+2",
+            "type": "slashing",
+            "mode": "melee",
+            "reach": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster-vampire",
+      "observed": {
+        "traits": [
+          {
+            "name": "Legendary Resistance (3/Day)",
+            "length": 100,
+            "truncated": false
+          },
+          {
+            "name": "Regeneration",
+            "length": 154,
+            "truncated": true
+          },
+          {
+            "name": "Multiattack (Vampire Form Only)",
+            "length": 103,
+            "truncated": false
+          },
+          {
+            "name": "Charm",
+            "length": 147,
+            "truncated": true
+          },
+          {
+            "name": "Children of the Night (1/Day)",
+            "length": 171,
+            "truncated": true
+          },
+          {
+            "name": "Shapechanger",
+            "length": 154,
+            "truncated": true
+          },
+          {
+            "name": "Legendary action",
+            "length": 96,
+            "truncated": false
+          },
+          {
+            "name": "Legendary action",
+            "length": 71,
+            "truncated": false
+          },
+          {
+            "name": "Legendary action",
+            "length": 76,
+            "truncated": false
+          }
+        ],
+        "specials": [
+          {
+            "name": "Charm",
+            "dc": 17,
+            "save": "wis",
+            "condition": "charmed",
+            "repeatSave": true,
+            "magical": true
+          },
+          {
+            "name": "Children of the Night",
+            "magical": true,
+            "perDay": 1
+          }
+        ],
+        "attacks": [
+          {
+            "name": "Unarmed Strike (Vampire Form Only)",
+            "toHit": 9,
+            "damage": "1d8+4",
+            "type": "bludgeoning",
+            "mode": "melee",
+            "reach": 5
+          },
+          {
+            "name": "Bite (Bat or Vampire Form Only)",
+            "toHit": 9,
+            "damage": "1d6+3d6+4",
+            "type": "piercing/necrotic",
+            "mode": "melee",
+            "reach": 5,
+            "riders": [
+              {
+                "dice": "3d6",
+                "type": "necrotic"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "authored-coverage-now",
+      "observed": {
+        "total": 533,
+        "typed": 189,
+        "counter": 150,
+        "narrated": 11,
+        "plain": 183,
+        "uncovered": 0,
+        "stale": 0
+      }
+    },
+    {
+      "id": "rakshasa-low-level-spell-immunity",
+      "observed": {
+        "before": 110,
+        "after": 102,
+        "blast": {
+          "ok": true,
+          "result": {
+            "ok": true,
+            "spell": "Fireball",
+            "caster": "Hero 1",
+            "damageRolled": 8,
+            "dc": 16,
+            "saveAbility": "dex",
+            "halfOnSave": true,
+            "results": [
+              {
+                "target": "Goblin",
+                "save": 4,
+                "success": false,
+                "damage": 8,
+                "health": "healthy"
+              }
+            ],
+            "corrected": [
+              "8d6 at its base level",
+              "Hero 1 spent their action casting Fireball."
+            ]
+          },
+          "turnId": "audit-ref-028"
+        }
+      }
+    }
+  ]
+}

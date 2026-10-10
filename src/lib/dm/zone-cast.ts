@@ -26,7 +26,7 @@ import { layZone, type SpellZone, type ZoneCasterKind } from "@/lib/battlemap/zo
 import { LIGHT_SPELLS, zoneKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { holdGasesBack } from "@/lib/battlemap/zones-walls";
 import { quakeShake } from "@/lib/dm/zone-quake";
-import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
+import { breakConcentration, clearSpellConditionsByName, concentrationRoundsFor } from "@/lib/dm/concentration";
 import { casterHolds, liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 
 export type ZoneCast = {
@@ -249,7 +249,7 @@ export function holdEnemyAreaConcentration(campaign: Campaign, enemyId: string, 
   if (enemy.concentration) {
     clearSpellConditionsByName(campaign, enemy.concentration, undefined, enemy.id);
   }
-  setEnemyConcentration(enemy.id, spell);
+  setEnemyConcentration(enemy.id, spell, concentrationRoundsFor(spell));
   return `${enemy.displayName} is now concentrating on ${spell}; damage to it forces a CON save and a break ends the area.`;
 }
 

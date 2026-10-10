@@ -49,7 +49,7 @@ export function violetRayTurnStart(campaign: Campaign, combatantIds: string[]): 
     for (const caster of casters) {
       const dc = spellSaveDcFor(caster, "Prismatic Spray") ?? 13;
       for (const enemy of held.filter((entry) => (entry.conditionMeta as ConditionMetaMap)[VIOLET_MARK]?.source === caster.id)) {
-        const save = rollEnemySave(campaign.id, enemy, "wis", dc, { magical: true, record: { turn, detail: `${enemy.displayName}: WIS save against Prismatic Spray's violet ray` } });
+        const save = rollEnemySave(campaign.id, enemy, "wis", dc, { magical: true, resist: true, record: { turn, detail: `${enemy.displayName}: WIS save against Prismatic Spray's violet ray` } });
         const cleared = withoutViolet(enemy.conditions, enemy.conditionMeta as ConditionMetaMap);
         patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
         lines.push(

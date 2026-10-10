@@ -51,6 +51,9 @@ export const summonSchema = z.object({
   // Conjure Elemental and Conjure Fey: when concentration breaks the
   // creature stays and turns on the party (an enemy with this stat block).
   hostileOnBreak: z.boolean().optional(),
+  // Animate Dead, Create Undead: when the duration (the caster's control)
+  // runs out, the creature stays and turns hostile rather than vanishing.
+  controlExpires: z.boolean().optional(),
   // Every creature of one casting shares this id (one group initiative).
   castId: z.string().trim().max(40).default(""),
 });

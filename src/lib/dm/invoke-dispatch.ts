@@ -61,6 +61,7 @@ import { handleGenerateImage } from "@/lib/dm/images";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { handleSplitDamage } from "@/lib/dm/split-damage";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
+import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import { EXPLORE_TOOL_NAMES, handleExploreCall } from "@/lib/dm/explore-tools";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -85,7 +86,14 @@ export async function dispatchAdjudication(
 ): Promise<Record<string, unknown>> {
   const { campaign, turn, sheets, sheetsById } = context;
   // "false" sent as a string is false (src/lib/dm/arg-coerce.ts).
-  const rawArguments = strictBooleanArgs(sentArguments);
+  const coerced = strictBooleanArgs(sentArguments);
+  // The model's damage, healing and binding conditions are the server's to
+  // roll (src/lib/dm/ai-gate.ts); the console keeps its free hand.
+  const gated = gateAiCall(name, coerced, { campaign, turn, sheetsById });
+  if ("result" in gated) {
+    return gated.result;
+  }
+  const rawArguments = gated.args;
 
   if (MUTATIONS.has(name)) {
     // inventoryApprovals holds for whoever runs the table: an item or gold

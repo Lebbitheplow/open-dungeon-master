@@ -5,7 +5,7 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
-import { expertiseSlotsFor } from "@/lib/srd/features";
+import { expertiseAllowed, expertiseSlotsFor, THIEVES_TOOLS } from "@/lib/srd/features";
 import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
 import type { ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
@@ -39,8 +39,10 @@ export function ClassChoices({
   // Only picks in a skill the character still has count: dropping a class
   // skill takes its expertise with it, here and in the step's gate.
   const expertiseChosen = state.expertisePicks.filter((skillId) =>
-    proficientSkills.includes(skillId),
+    expertiseAllowed(skillId, proficientSkills, klass ? [klass.id] : []),
   );
+  // A rogue may take thieves' tools in place of a skill.
+  const expertiseOptions = klass?.id === "rogue" ? [...proficientSkills, THIEVES_TOOLS] : proficientSkills;
   return (
     <>
       {/* "Three musical instruments of your choice", "one gaming set": the
@@ -117,20 +119,20 @@ export function ClassChoices({
             {proficientSkills.length === 0 ? (
               <span className="text-xs text-stone-500">Pick your class skills above first.</span>
             ) : null}
-            {proficientSkills.map((skillId) => {
+            {expertiseOptions.map((skillId) => {
               const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
               const selected = expertiseChosen.includes(skillId);
               return (
                 <PickPill
                   key={skillId}
-                  label={skill?.name ?? skillId}
+                  label={skill?.name ?? (skillId === THIEVES_TOOLS ? "Thieves' tools" : skillId)}
                   selected={selected}
-                  info={{ text: describeSkill(skillId) }}
+                  info={{ text: skill ? describeSkill(skillId) : "Your proficiency bonus is doubled for ability checks you make with thieves' tools." }}
                   onClick={() =>
                     state.setExpertisePicks((current) => {
                       // Picks whose skill has since been dropped are swept
                       // out here, so they never hold a slot they cannot use.
-                      const live = current.filter((entry) => proficientSkills.includes(entry));
+                      const live = current.filter((entry) => expertiseOptions.includes(entry));
                       return selected
                         ? live.filter((entry) => entry !== skillId)
                         : live.length < expertiseSlots

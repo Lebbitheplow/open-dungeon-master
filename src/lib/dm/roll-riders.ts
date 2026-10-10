@@ -55,7 +55,7 @@ function toolKey(name: string): string {
 // the tool among its proficiencies, twice that when it also lists expertise in
 // it (a rogue's thieves' tools). Null when they are not trained in it.
 export function toolProficiencyBonus(
-  sheet: Pick<CharacterSheet, "proficiencies">,
+  sheet: Pick<CharacterSheet, "proficiencies"> & Partial<Pick<CharacterSheet, "class" | "level" | "classes">>,
   tool: string,
   proficiencyBonus: number,
 ): { bonus: number; note: string } | null {
@@ -70,7 +70,14 @@ export function toolProficiencyBonus(
   if (!(sheet.proficiencies.tools ?? []).some(matches)) {
     return null;
   }
-  const expert = (sheet.proficiencies.expertise ?? []).some(matches);
+  // Tool Expertise (Artificer 6th): every tool the artificer is proficient
+  // with doubles.
+  const artificer = sheet.classes?.length
+    ? (sheet.classes.find((entry) => entry.id.toLowerCase() === "artificer")?.level ?? 0)
+    : (sheet.class ?? "").toLowerCase() === "artificer"
+      ? (sheet.level ?? 0)
+      : 0;
+  const expert = (sheet.proficiencies.expertise ?? []).some(matches) || artificer >= 6;
   const bonus = expert ? proficiencyBonus * 2 : proficiencyBonus;
   return {
     bonus,

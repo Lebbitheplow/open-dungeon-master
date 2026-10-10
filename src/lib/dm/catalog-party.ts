@@ -21,7 +21,8 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Temp hit points absorb first, hit points floor at zero, death saves start themselves.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "amount", label: "Damage", kind: "number", required: true, min: 1, max: 200 },
+      { name: "amount", label: "Damage", kind: "number", requiredUnless: "dice", min: 1, max: 200 },
+      { name: "dice", label: "Or dice", kind: "text", help: "2d6+3: the server rolls them." },
       damageTypeField("type", "Type", "Resistance, immunity and vulnerability read it."),
       {
         name: "magical",
@@ -40,6 +41,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "amount", label: "Hit points", kind: "number", min: 1, max: 200 },
+      { name: "dice", label: "Or dice", kind: "text", help: "2d4+2: the server rolls them." },
       { name: "spell", label: "Spell", kind: "text", help: "Cure Wounds, Healing Word... the server rolls it." },
       { name: "casterId", label: "Caster", kind: "character" },
       { name: "level", label: "Slot level", kind: "number", min: 1, max: 9 },
@@ -249,6 +251,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "rounds", label: "Rounds", kind: "number", min: 1, max: 100 },
       { name: "minutes", label: "Or minutes", kind: "number", min: 1, max: 1440 },
       { name: "hours", label: "Or hours", kind: "number", min: 1, max: 24 },
+      { name: "days", label: "Or days", kind: "number", min: 1, max: 365 },
       { name: "saveAbility", label: "Save to end", kind: "select", options: ABILITIES },
       { name: "saveDc", label: "Save DC", kind: "number", min: 1, max: 30 },
       {
@@ -371,6 +374,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "spell", label: "Spell", kind: "text" },
       { name: "concentration", label: "Concentration", kind: "boolean" },
       { name: "ritual", label: "Cast as a ritual", kind: "boolean" },
+      { name: "units", label: "Creatures, corpses or Hit Dice", kind: "number", min: 1, max: 100, help: "For a material priced per one (Astral Projection, Create Undead, Imprisonment)." },
       ...AREA_PLACEMENT_FIELDS,
     ],
   },

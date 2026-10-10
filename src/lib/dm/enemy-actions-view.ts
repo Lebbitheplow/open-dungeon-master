@@ -1,4 +1,5 @@
 import type { EnemyAttack } from "@/lib/bestiary/statblock";
+import { manualTraits } from "@/lib/dm/monster-traits";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { canEnemyAct, enemyActedThisRound } from "@/lib/dm/can-act";
@@ -62,6 +63,9 @@ export type PublicEnemyActions = {
   refusal: string | null;
   // It has taken its action this round.
   acted: boolean;
+  // The traits on its block the engine does not resolve: the DM applies
+  // them by hand (src/lib/dm/monster-traits.ts manualTraits).
+  manual: string[];
 };
 
 type ActingEncounter = Pick<
@@ -177,5 +181,6 @@ export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEne
     abilities: abilityViews,
     refusal: allowed.ok ? null : allowed.error,
     acted: enemyActedThisRound(encounter, enemy.id),
+    manual: manualTraits(stats),
   };
 }

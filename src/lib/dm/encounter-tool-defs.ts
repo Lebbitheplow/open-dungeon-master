@@ -87,7 +87,8 @@ export const damageEnemyTool: ToolDef = {
       additionalProperties: false,
       properties: {
         enemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
-        amount: { type: "integer", minimum: 1, maximum: 200, description: "The damage; omit it for a fall (fallFeet)." },
+        amount: { type: "integer", minimum: 1, maximum: 200, description: "A damage total the server rolled this turn; omit it for a fall (fallFeet) or dice." },
+        dice: { type: "string", description: "Dice the server rolls for the damage, e.g. \"4d10\". Instead of amount." },
         fallFeet: {
           type: "integer",
           minimum: 1,

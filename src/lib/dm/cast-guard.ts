@@ -21,6 +21,7 @@
 // module reads the live state and writes the spend. It must not import
 // mutations.ts (which imports it).
 
+import { enemyCounterspell } from "@/lib/dm/enemy-reactions";
 import { endInvisibilityOnCast } from "@/lib/dm/attack-marks";
 import { endSanctuaryOnHarm } from "@/lib/dm/spell-defenses";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -43,6 +44,7 @@ import { repeatSpell } from "@/lib/dm/cast-repeat";
 import {
   casterStateProblem,
   componentProblem,
+  focusProblem,
   longCastingProblem,
   materialPlan,
   openCastOf,
@@ -50,6 +52,7 @@ import {
   slotPlan,
   spellKeyOf,
   spellHeldProblem,
+  reactionSpellOnOwnTurn,
   turnCharge,
   withOpenCast,
   type SlotPlan,
@@ -64,6 +67,7 @@ import { castTempHp } from "@/lib/dm/authored-spells";
 import { takeItemCast } from "@/lib/srd/item-cast-credit";
 import { castFromItem } from "@/lib/dm/item-casts";
 import { summonSlotProblem } from "@/lib/srd/summon-spells";
+import { spellSupportLine } from "@/lib/srd/spell-support";
 import { wardOnCast } from "@/lib/dm/arcane-ward";
 import { casterCost } from "@/lib/dm/spell-self";
 
@@ -85,6 +89,9 @@ export type CastInput = {
   // How many of the casting's shares this call resolves (Magic Missile's
   // darts at one target); one when absent.
   uses?: number;
+  // What a material counts by: creatures affected, corpses, the target's
+  // Hit Dice (src/lib/dm/cast-materials.ts).
+  units?: number;
   // Where a spell with an area is laid on the board (src/lib/dm/zone-cast.ts).
   at?: { x: number; y: number };
   toward?: { x: number; y: number };
@@ -159,7 +166,9 @@ function spellcastingAfter(sheet: CharacterSheet, plan: SlotPlan): CharacterShee
 type TurnPlan =
   | { kind: "free" }
   | { kind: "budget"; budget: TurnBudget; cost: string; note?: string }
-  | { kind: "reaction" };
+  | { kind: "reaction"; budget?: TurnBudget }
+  // use_reaction spent the reaction; the cast only marks the caster's own turn.
+  | { kind: "mark"; budget: TurnBudget };
 
 function planTurn(
   sheet: CharacterSheet,
@@ -173,24 +182,30 @@ function planTurn(
     return { kind: "free" };
   }
   const time = facts?.castingTime ?? "action";
-  if (time === "reaction") {
-    if (via === "reaction") {
-      // use_reaction checks and spends the reaction itself.
-      return { kind: "free" };
-    }
-    if (encounter.reactionsUsed.includes(sheet.id)) {
-      return {
-        error: `${sheet.name} has already used their reaction; it comes back at the start of their next turn. ${facts?.name ?? spell} is not cast.`,
-      };
-    }
-    return { kind: "reaction" };
-  }
   const budget = budgetFor(
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
     conditionExtraActions(sheet.conditions),
   );
+  if (time === "reaction") {
+    // On the caster's own turn a reaction spell is the turn's other spell
+    // (cast-rules.ts, reactionSpellOnOwnTurn).
+    const own = reactionSpellOnOwnTurn(budget, sheet.name, facts?.name ?? spell);
+    if ("error" in own) {
+      return own;
+    }
+    if (via === "reaction") {
+      // use_reaction checks and spends the reaction itself.
+      return own.budget ? { kind: "mark", budget: own.budget } : { kind: "free" };
+    }
+    if (encounter.reactionsUsed.includes(sheet.id)) {
+      return {
+        error: `${sheet.name} has already used their reaction; it comes back at the start of their next turn. ${facts?.name ?? spell} is not cast.`,
+      };
+    }
+    return { kind: "reaction", ...(own.budget ? { budget: own.budget } : {}) };
+  }
   const charge = turnCharge({
     who: sheet.name,
     facts,
@@ -291,7 +306,7 @@ export function castSpell(
   if (state) {
     return { error: state };
   }
-  const voice = componentProblem(sheet, facts) ?? silenceProblem(campaign.id, sheet.id, sheet.name, facts) ?? antimagicProblem(campaign.id, sheet.id, sheet.name);
+  const voice = componentProblem(sheet, facts) ?? focusProblem(sheet, facts) ?? silenceProblem(campaign.id, sheet.id, sheet.name, facts) ?? antimagicProblem(campaign.id, sheet.id, sheet.name);
   if (voice) {
     return { error: voice };
   }
@@ -306,7 +321,7 @@ export function castSpell(
       return { error: long };
     }
   }
-  const material = materialPlan(sheet, facts);
+  const material = materialPlan(sheet, facts, { inFight, units: input.units, slotLevel: input.level ?? facts?.level ?? null });
   if ("error" in material) {
     return material;
   }
@@ -366,6 +381,11 @@ export function castSpell(
 
   // ---- the spend: nothing below refuses ----
   const result: CastResult = { ok: true, spell: name, slotLevel, slot: slotLine(slot) };
+  // What the server leaves to the DM of this spell (src/lib/srd/spell-support.ts).
+  const manual = spellSupportLine(name);
+  if (manual) {
+    result.manual = manual;
+  }
   const patch: FullPatchSheetInput = {};
   if (slot.kind !== "none") {
     patch.spellcasting = spellcastingAfter(sheet, slot);
@@ -422,8 +442,25 @@ export function castSpell(
     }
   } else if (turn.kind === "reaction" && encounter) {
     encounter.reactionsUsed = [...encounter.reactionsUsed, sheet.id];
+    if (turn.budget) {
+      encounter.turnBudget = turn.budget;
+    }
     saveEncounter(encounter);
     result.cost = "their reaction";
+  } else if (turn.kind === "mark" && encounter) {
+    storeBudget(encounter, turn.budget);
+  }
+
+  // A monster whose block lists Counterspell answers a spell cast at its
+  // side, after the slot and the action are spent (enemy-reactions.ts).
+  if (inFight && encounter && slotLevel && !input.ritual && (via === "enemy" || via === "aoe" || via === "attack")) {
+    const answered = enemyCounterspell(campaign.id, null, encounter, sheet, name, slotLevel);
+    if (answered?.countered) {
+      return { error: answered.note, countered: true, slotSpent: result.slot };
+    }
+    if (answered) {
+      result.counterspell = answered.note;
+    }
   }
 
   if (input.ritual) {

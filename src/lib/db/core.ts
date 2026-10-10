@@ -1418,6 +1418,9 @@ function ensureSchema(db: SqliteDatabase) {
     // Spell currently concentrated on; NULL = none. Managed by the server
     // concentration engine (src/lib/dm/concentration.ts).
     ["concentrating_on", `TEXT`],
+    // Rounds the concentration has left (the spell's duration); NULL = no
+    // clock (src/lib/dm/concentration-clock.ts).
+    ["concentration_rounds", `INTEGER`],
     ["library_character_id", `TEXT`],
     ["subclass", `TEXT NOT NULL DEFAULT ''`],
     // Free text off the builder's identity step. Only ever read by the
@@ -1812,6 +1815,9 @@ function ensureSchema(db: SqliteDatabase) {
     // CON save and a break clears the spell's conditions
     // (src/lib/dm/enemy-damage.ts).
     ["concentration", `TEXT`],
+    // Rounds the enemy's concentration has left (the spell's duration);
+    // NULL = no clock (src/lib/dm/concentration-clock.ts).
+    ["concentration_rounds", `INTEGER`],
   ]);
 
   addColumns("pending_rolls", [

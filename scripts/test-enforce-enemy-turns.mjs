@@ -229,7 +229,12 @@ await test("The AI's damage_enemy is for harm that is no creature's attack (a ha
   assert.equal(bare.ok, false, "damage with no source landed");
   const ally = await mk.ai(turn, "damage_enemy", { enemyId: enemy.id, amount: 10, source: "ally" });
   assert.equal(ally.ok, false, "an unrecruited ally's blow landed");
-  const falling = await mk.ai(turn, "damage_enemy", { enemyId: enemy.id, amount: 10, source: "hazard", reason: "the chandelier falls" });
+  // A hazard's damage is dice the server rolls (src/lib/dm/ai-gate.ts).
+  const written = await mk.ai(turn, "damage_enemy", { enemyId: enemy.id, amount: 10, source: "hazard", reason: "the chandelier falls" });
+  assert.equal(written.ok, false, "a number the model wrote landed");
+  world.dice(5, 5);
+  const falling = await mk.ai(turn, "damage_enemy", { enemyId: enemy.id, dice: "2d6", source: "hazard", reason: "the chandelier falls" });
+  world.clearDice();
   assert.equal(falling.ok, true, falling.error);
   assert.equal(kit.enemy(enemy.id).currentHp, 30);
   // The DM's own hand is not the AI's.

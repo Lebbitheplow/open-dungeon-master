@@ -58,6 +58,20 @@ function nextRound() {
   assert.equal(world.encounter().round, round + 1);
 }
 
+// Skips turns until this character's own turn has ended once: a save that
+// ends a condition is made at the end of the holder's turn (SRD 5.1).
+function throughTurnOf(id) {
+  const current = () => {
+    const encounter = world.encounter();
+    return encounter.order[encounter.turnIndex]?.characterId;
+  };
+  for (let turn = 0; turn < 8 && current() !== id; turn += 1) {
+    assert.equal(kit.skipTurn(), true);
+  }
+  assert.equal(current(), id);
+  assert.equal(kit.skipTurn(), true);
+}
+
 // ---- names ----
 
 for (const condition of SRD_CONDITIONS) {
@@ -202,12 +216,12 @@ async function saveEnds(ability, dc, face) {
   world.clearDice();
   world.diceLog();
   world.dice(face);
-  nextRound();
+  throughTurnOf(hero.id);
   world.clearDice();
   return { dice: kit.rolled(), held: held() };
 }
 
-await test("a save that ends a condition is rolled once a round with the right ability", async () => {
+await test("a save that ends a condition is rolled once a turn, at its end, with the right ability", async () => {
   // Proficient CON save: 10 on the die makes DC 10 + modifier exactly.
   const con = await saveEnds("con", 10 + CON_SAVE, 10);
   assert.deepEqual(con.dice, ["d20:10"]);
@@ -228,7 +242,7 @@ await test("a failed save keeps the condition and the save comes round again", a
   const first = await saveEnds("wis", 15, 2);
   assert.deepEqual(first.held, ["frightened"]);
   world.dice(20);
-  nextRound();
+  throughTurnOf(hero.id);
   world.clearDice();
   assert.deepEqual(held(), []);
 });

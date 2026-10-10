@@ -119,7 +119,8 @@ export const SRD_EFFECT_ROWS: Record<string, SpellMech> = {
   geas: {
     resolution: "save",
     save: "wis",
-    condition: { name: "charmed" },
+    // 30 days; a year from a 7th-level slot; until dispelled from 9th.
+    condition: { name: "charmed", rounds: 30 * DAY, roundsBySlot: [[7, 365 * DAY], [9, null]] },
     noDamage: true,
     note: "Charmed for 30 days; acting against the command deals 5d10 psychic, once a day.",
   },

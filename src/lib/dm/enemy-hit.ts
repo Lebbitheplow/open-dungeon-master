@@ -1,6 +1,8 @@
 import type { Campaign } from "@/lib/db/campaigns";
+import { saveDamageTaken } from "@/lib/srd/trait-rules";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import type { EncounterEnemy } from "@/lib/db/encounters";
+import { getEnemy, patchEnemyHp, type EncounterEnemy } from "@/lib/db/encounters";
+import { enemyHpCap } from "@/lib/dm/monster-abilities";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
@@ -8,7 +10,8 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { isValidExpression, rollExpression, type RollResult } from "@/lib/dice";
 import { sizeRank, type EnemyAttack, type TypedDice } from "@/lib/bestiary/statblock";
-import { damageAdjust, pcResistances, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { damageAdjust, durationArgsFor, effectiveMaxHp, maxHpRiders, pcResistances, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { handleSetCondition } from "@/lib/dm/set-condition";
 import { damageParts } from "@/lib/dm/damage-parts";
 import { immersedResistance } from "@/lib/dm/underwater";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
@@ -96,7 +99,9 @@ export function resolveOnHit(
   enemy: EncounterEnemy,
   attack: EnemyAttack,
   targetId: string,
-  { sheets, sheetsById }: Sheets,
+  // What the hit itself dealt, all of it and its necrotic part, for a
+  // drain of the maximum (Life Drain, a vampire's bite).
+  { sheets, sheetsById, dealt }: Sheets & { dealt?: { total: number; necrotic: number } },
 ): Record<string, unknown> | null {
   const rider = attack.onHit;
   const target = getSheetById(targetId);
@@ -135,7 +140,11 @@ export function resolveOnHit(
     });
     publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
     turn.rollIds.push(roll.id);
-    const dealt = saved ? (rider.halfOnSave ? Math.floor(outcome.total / 2) : 0) : outcome.total;
+    const taken = saveDamageTaken({ total: outcome.total, saved, halfOnSave: Boolean(rider.halfOnSave), ability: rider.save ?? "", sheet: target });
+    const dealt = rider.save && rider.dc ? taken.damage : outcome.total;
+    if (taken.evasion && rider.save && rider.dc) {
+      out.evasion = taken.evasion;
+    }
     if (dealt > 0) {
       const applied = applyDmMutation(
         campaign,
@@ -164,21 +173,28 @@ export function resolveOnHit(
     if (!standing || (standing.currentHp <= 0 && condition === "prone")) {
       continue;
     }
-    const applied = applyDmMutation(
-      campaign,
-      turn.id,
-      "set_condition",
-      JSON.stringify({
-        characterId: target.id,
-        condition,
-        sourceEnemyId: enemy.id,
-        ...(rider.rounds ? { rounds: rider.rounds } : {}),
-        ...(rider.repeatSave && rider.save && rider.dc ? { saveAbility: rider.save, saveDc: rider.dc } : {}),
-        reason: `${enemy.displayName}'s ${attack.name}`,
-      }),
-      sheets,
-      sheetsById,
-    ).result;
+    // The rider's own words for how long it lasts: a count (an hour of
+    // poison is 600 rounds), a repeat save, or a long rest
+    // (src/lib/dm/monster-abilities.ts parseSaveEffect).
+    const applied = rider.untilLongRest
+      ? handleSetCondition(campaign, turn.id, getSheetById(target.id) ?? target, { condition, sourceEnemyId: enemy.id }, `${enemy.displayName}'s ${attack.name}`, {
+          spellEffect: { source: enemy.id, untilLongRest: true },
+        })
+      : applyDmMutation(
+          campaign,
+          turn.id,
+          "set_condition",
+          JSON.stringify({
+            characterId: target.id,
+            condition,
+            sourceEnemyId: enemy.id,
+            ...(rider.rounds ? durationArgsFor(rider.rounds) : {}),
+            ...(rider.repeatSave && rider.save && rider.dc ? { saveAbility: rider.save, saveDc: rider.dc } : {}),
+            reason: `${enemy.displayName}'s ${attack.name}`,
+          }),
+          sheets,
+          sheetsById,
+        ).result;
     if (!("error" in applied)) {
       out.riderCondition = [...((out.riderCondition as string[] | undefined) ?? []), condition];
     }
@@ -198,5 +214,65 @@ export function resolveOnHit(
       }
     }
   }
+  // Life Drain: the maximum falls by what the hit dealt until a long rest,
+  // and a creature brought to a maximum of 0 dies (condition-logic.ts
+  // maxHpRiders keeps the drain on the sheet).
+  if (rider.drainMaxHp && !saved) {
+    const amount = rider.drainMaxHp === "necrotic" ? (dealt?.necrotic ?? 0) : (dealt?.total ?? 0);
+    const drained = amount > 0 ? drainMaxHp(campaign, target.id, enemy.id, amount) : null;
+    if (drained) {
+      out.maxHpDrained = drained;
+      if (rider.drainHeals) {
+        const now = getEnemy(enemy.id);
+        if (now && now.status === "alive") {
+          const healed = Math.min(enemyHpCap(now), now.currentHp + amount);
+          patchEnemyHp(now.id, healed, "alive");
+          out.drainHealed = `${enemy.displayName} regains ${healed - now.currentHp} hit points.`;
+        }
+      }
+    }
+  }
+  // Swallowed whole: blinded and restrained, with the creature as source.
+  if (rider.swallow && !saved && (!rider.maxSize || sizeRank(characterSize(target)) <= sizeRank(rider.maxSize))) {
+    for (const condition of ["blinded", "restrained"]) {
+      const applied = handleSetCondition(campaign, turn.id, getSheetById(target.id) ?? target, { condition, sourceEnemyId: enemy.id }, `swallowed by ${enemy.displayName}`, {
+        spellEffect: { source: enemy.id },
+      });
+      if (!("error" in applied)) {
+        out.riderCondition = [...((out.riderCondition as string[] | undefined) ?? []), condition];
+      }
+    }
+    out.swallowed = `${target.name} is swallowed: blinded and restrained inside ${enemy.displayName}, with total cover from everything outside it. Its stomach's damage each turn and the way out are the DM's to resolve from the block.`;
+  }
+  if (rider.manual?.length) {
+    out.manual = `The server does not model this part of ${attack.name}; resolve it by hand: ${rider.manual.join(" ")}`;
+  }
   return Object.keys(out).length ? out : null;
+}
+
+// Lowers a character's hit point maximum by `amount` until a long rest, all
+// drains folded into one line; a maximum brought to 0 kills.
+function drainMaxHp(campaign: Campaign, targetId: string, sourceId: string, amount: number): string | null {
+  const sheet = getSheetById(targetId);
+  if (!sheet || sheet.deathSaves?.dead) {
+    return null;
+  }
+  const meta = { ...(sheet.conditionMeta as ConditionMetaMap) };
+  const before = maxHpRiders(sheet.conditions, meta).drain;
+  const kept = sheet.conditions.filter((name) => !/^max hp reduced \(-\d+\)$/i.test(name.trim()));
+  for (const name of sheet.conditions.filter((entry) => !kept.includes(entry))) {
+    delete meta[name];
+  }
+  const name = `max hp reduced (-${before + amount})`;
+  const updated = patchSheet(sheet.id, { conditions: [...kept, name], conditionMeta: { ...meta, [name]: { source: sourceId, untilLongRest: true } } });
+  if (!updated) {
+    return null;
+  }
+  if (effectiveMaxHp(updated) <= 0) {
+    const dead = patchSheet(updated.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+    publishPersisted(campaign.id, "sheet_updated", { sheet: dead ?? updated });
+    return `${updated.name}'s hit point maximum falls to 0: they die.`;
+  }
+  publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+  return `${updated.name}'s hit point maximum is reduced by ${amount} (now ${effectiveMaxHp(updated)}) until they finish a long rest.`;
 }

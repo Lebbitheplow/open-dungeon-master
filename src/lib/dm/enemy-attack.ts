@@ -3,6 +3,10 @@
 // encounter-tools.ts, which dispatches to it and whose auto-act fallback
 // calls it for the enemies a turn skipped. Must not import encounter-tools.
 
+import { martialAdvantageDice, surpriseAttackDice } from "@/lib/dm/monster-traits";
+import { tilesBetween } from "@/lib/dm/attack-spatial";
+import { incapacitatedBy } from "@/lib/dm/condition-logic";
+import { listEnemies } from "@/lib/db/encounters";
 import { mirrorImageDecoy, sanctuaryRefusal } from "@/lib/dm/spell-defenses";
 import { enfeebledBlow, spellRetort, spendEnemyRiders } from "@/lib/dm/spell-retort";
 import { z } from "zod";
@@ -226,6 +230,8 @@ export function handleEnemyAttack(
   // The routine executes in this ONE call, each swing its own to-hit and
   // damage dice cards, stopping early if the target drops.
   const swings: Array<Record<string, unknown>> = [];
+  // Martial Advantage is once a turn: this call is the creature's turn.
+  let martialSpent = false;
   let dropped = false;
   let totalDamage = 0;
   let targetHp: string | undefined;
@@ -339,12 +345,19 @@ export function handleEnemyAttack(
       return;
     }
 
+    // Martial Advantage and Surprise Attack add their dice to the blow
+    // (src/lib/dm/monster-traits.ts), doubled on a critical hit like the rest.
+    const bonus = traitDice(encounter, standing, target.id, attack, martialSpent);
+    if (bonus.martial) {
+      martialSpent = true;
+    }
+    const baseDamage = bonus.dice.length ? `${attack.damage}+${bonus.dice.join("+")}` : attack.damage;
     const damageExpression = crit
-      ? critDamageExpression(attack.damage, 0, {
+      ? critDamageExpression(baseDamage, 0, {
           powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
           multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
         })
-      : attack.damage;
+      : baseDamage;
     const damageOutcome = rollExpression(damageExpression);
     const damageRoll = insertRoll({
       campaignId: campaign.id,
@@ -418,7 +431,11 @@ export function handleEnemyAttack(
     // What the hit carries besides its damage: a save against poison, a
     // shove to the ground, a grapple (SRD 5.1: the rider is part of the
     // attack, so it is the engine's to resolve).
-    const onHit = resolveOnHit(campaign, turn, standing, attack, target.id, { sheets, sheetsById });
+    // The necrotic part of the blow, for a drain of the target's maximum.
+    const necrotic = blow.byType
+      ? blow.byType.reduce((sum, part) => sum + (/^(\d+) necrotic\b/i.exec(part) ? Number(/^(\d+)/.exec(part)![1]) : 0), 0)
+      : /necrotic/i.test(blow.type ?? attack.type) ? dealt : 0;
+    const onHit = resolveOnHit(campaign, turn, standing, attack, target.id, { sheets, sheetsById, dealt: { total: dealt, necrotic } });
     // Fire Shield and Holy Aura answer the blow (spell-retort.ts).
     const retort = spellRetort(campaign, turn, standing, target.id, !ranged, spatial.distance === null || spatial.distance <= 1, sheets, sheetsById);
     if (typeof onHit?.targetHp === "string") {
@@ -465,4 +482,38 @@ export function handleEnemyAttack(
     ...(targetHp ? { targetHp } : {}),
     ...(dropped ? { dropped: true, note: `${target.name} falls to 0 HP.` } : {}),
   };
+}
+
+// The dice a trait adds to a hit: Martial Advantage (a weapon hit on a
+// creature within 5 feet of one of its allies that isn't incapacitated, once
+// a turn) and Surprise Attack (a hit on a creature it surprised, in the
+// first round).
+function traitDice(
+  encounter: { id: string; round: number; surprisedIds: string[] },
+  enemy: { id: string; stats: { traits?: string[] } },
+  targetId: string,
+  attack: { spellAttack?: boolean },
+  martialSpent: boolean,
+): { dice: string[]; martial: boolean } {
+  const dice: string[] = [];
+  let martial = false;
+  const martialDice = martialAdvantageDice(enemy.stats);
+  if (martialDice && !martialSpent && !attack.spellAttack) {
+    const ally = listEnemies(encounter.id).some(
+      (other) =>
+        other.id !== enemy.id &&
+        other.status === "alive" &&
+        !incapacitatedBy(other.conditions) &&
+        (tilesBetween(encounter.id, other.id, targetId) ?? Infinity) <= 1,
+    );
+    if (ally) {
+      dice.push(martialDice);
+      martial = true;
+    }
+  }
+  const surprise = surpriseAttackDice(enemy.stats);
+  if (surprise && encounter.round === 1 && encounter.surprisedIds.includes(targetId)) {
+    dice.push(surprise);
+  }
+  return { dice, martial };
 }

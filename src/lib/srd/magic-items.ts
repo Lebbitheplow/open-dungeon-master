@@ -18,7 +18,7 @@
 //   - a second copy of the same item adds nothing.
 
 import magicItemsJson from "@/lib/classes/magic-items.json";
-import { ATTUNEMENT_SLOTS, isWorn } from "@/lib/srd/armor";
+import { ATTUNEMENT_SLOTS, attunementSlotsFor, isWorn } from "@/lib/srd/armor";
 import type { Ability } from "@/lib/schemas/sheet";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
@@ -79,7 +79,8 @@ export type Wearer = {
   // a timed condition (src/lib/dm/consumables.ts).
   conditions?: string[];
   class?: string;
-  classes?: Array<{ id: string }>;
+  level?: number;
+  classes?: Array<{ id: string; level?: number }>;
   race?: string;
   alignment?: string;
   spellcasting?: unknown;
@@ -297,8 +298,9 @@ export function attunementProblem(
 ): string | null {
   const who = wearer?.name ?? "This character";
   const def = defOf(item);
+  const cap = attunementSlotsFor(wearer);
   if (def && !def.requiresAttunement) {
-    return `${item.name} needs no attunement: it works for whoever wears it, and takes none of the ${ATTUNEMENT_SLOTS} attunements.`;
+    return `${item.name} needs no attunement: it works for whoever wears it, and takes none of the ${cap} attunements.`;
   }
   if (def && wearer && !mayAttune(def, wearer)) {
     return `${item.name} can be attuned only by ${def.attunedBy?.text ?? "someone else"}, and ${who} is not one.`;
@@ -308,8 +310,8 @@ export function attunementProblem(
   if (def && others.some((entry) => defOf(entry)?.match === def.match)) {
     return `${who} is already attuned to a ${def.name}, and a creature attunes to one copy of an item at most.`;
   }
-  if (others.length >= ATTUNEMENT_SLOTS) {
-    return `${who} is attuned to ${ATTUNEMENT_SLOTS} items already, which is the most a creature can hold; end one attunement first.`;
+  if (others.length >= cap) {
+    return `${who} is attuned to ${cap} items already, which is the most ${cap > ATTUNEMENT_SLOTS ? "they" : "a creature"} can hold; end one attunement first.`;
   }
   return null;
 }

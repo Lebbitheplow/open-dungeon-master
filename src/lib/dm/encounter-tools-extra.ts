@@ -8,7 +8,9 @@ import { addEnemiesTool, handleAddEnemies } from "@/lib/dm/encounter-spawn";
 import { handleLairAction, handleLegendaryAction, handleLegendaryResist, legendaryTools } from "@/lib/dm/legendary-tools";
 import { declareIntentTool, handleDeclareIntent } from "@/lib/dm/intent-tools";
 import { canonicalCondition } from "@/lib/dm/mutations";
-import { isIncapacitated, pruneMeta } from "@/lib/dm/condition-logic";
+import { addConditionInstance, instancesOf, isIncapacitated, pruneMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { AI_BIND_REFUSAL, AI_CLEAR_REFUSAL, bindsCreature, engineKept } from "@/lib/dm/ai-boundary";
+import { rollEnemySave } from "@/lib/dm/forced-save";
 import { onEnemyIncapacitated } from "@/lib/dm/enemy-conditions";
 import { setEnemyExhaustion } from "@/lib/dm/enemy-exhaustion";
 import { enemyCallOutOfTurn, enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
@@ -241,24 +243,41 @@ function handleEnemyCondition(
     if (/^exhaust/.test(wanted)) {
       return setEnemyExhaustion(campaign, ctx.turn, encounter, enemy, args.level, ctx.sheets, ctx.sheetsById);
     }
-    if (enemy.conditions.includes(wanted)) {
-      return { ok: true, note: `${enemy.displayName} is already ${wanted}.` };
+    // The model does not bind a creature by saying so: the creature's save
+    // is rolled first, and the condition lands only on a failure
+    // (src/lib/dm/ai-boundary.ts). The console keeps its free hand.
+    let initialSave: string | null = null;
+    if (ctx.turn.actor === "ai" && bindsCreature(wanted)) {
+      if (!args.saveAbility || !args.saveDc) {
+        return { error: AI_BIND_REFUSAL(enemy.displayName, wanted) };
+      }
+      const save = rollEnemySave(campaign.id, enemy, args.saveAbility, args.saveDc, {
+        resist: true,
+        record: { turn: ctx.turn, detail: `${enemy.displayName}: ${args.saveAbility.toUpperCase()} save against being ${wanted}` },
+      });
+      initialSave = `${args.saveAbility.toUpperCase()} save ${save.total ?? "failed outright"} vs DC ${args.saveDc}`;
+      if (save.success) {
+        return { ok: true, name: enemy.displayName, saved: true, note: `${enemy.displayName} makes the ${initialSave}${save.legendaryResistance ? " (Legendary Resistance)" : ""}: no ${wanted}.` };
+      }
     }
     const source = (args.sourceCharacterId ?? args.sourceEnemyId ?? "").trim();
-    const meta =
+    const incoming =
       args.rounds || (args.saveAbility && args.saveDc) || source
         ? {
-            ...enemy.conditionMeta,
-            [wanted]: {
-              ...(source ? { source } : {}),
-              ...(args.rounds ? { rounds: args.rounds } : {}),
-              ...(args.saveAbility && args.saveDc
-                ? { saveEnds: { ability: args.saveAbility, dc: args.saveDc } }
-                : {}),
-            },
+            ...(source ? { source } : {}),
+            ...(args.rounds ? { rounds: args.rounds } : {}),
+            ...(args.saveAbility && args.saveDc
+              ? { saveEnds: { ability: args.saveAbility, dc: args.saveDc } }
+              : {}),
           }
-        : enemy.conditionMeta;
-    patchEnemyConditions(enemy.id, [...enemy.conditions, wanted], meta);
+        : undefined;
+    // A second source of a condition it holds holds it too, each with its
+    // own lifetime (src/lib/dm/condition-logic.ts).
+    const laid = addConditionInstance(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, wanted, incoming);
+    if (JSON.stringify(laid.meta) === JSON.stringify(enemy.conditionMeta) && laid.conditions.length === enemy.conditions.length) {
+      return { ok: true, note: `${enemy.displayName} is already ${wanted}.` };
+    }
+    patchEnemyConditions(enemy.id, laid.conditions, laid.meta);
     // An incapacitated creature loses its concentration (and the spell's
     // hold on its targets) and lets go of whoever it grapples.
     const released = isIncapacitated([wanted]) ? onEnemyIncapacitated(campaign, enemy) : [];
@@ -276,11 +295,12 @@ function handleEnemyCondition(
       ok: true,
       name: enemy.displayName,
       condition: wanted,
+      ...(initialSave ? { save: `fails the ${initialSave}` } : {}),
       ...(released.length ? { released: released.join(" ") } : {}),
       ...(args.rounds ? { duration: `${args.rounds} rounds, expires automatically` } : {}),
       ...(args.saveAbility && args.saveDc
         ? {
-            duration: `until it succeeds on a ${args.saveAbility.toUpperCase()} save (DC ${args.saveDc}), re-rolled automatically each round`,
+            duration: `until it succeeds on a ${args.saveAbility.toUpperCase()} save (DC ${args.saveDc}), re-rolled automatically at the end of each of its turns`,
           }
         : {}),
     };
@@ -318,6 +338,14 @@ function handleEnemyCondition(
     publishEncounter(campaign.id);
     publishBattleMapUpdate(campaign.id);
     return { ok: true, name: enemy.displayName, cleared: removed.join(", "), stood: "stood up for half its speed" };
+  }
+  // The model does not lift what the engine keeps: a save, a duration or a
+  // spell decides when it ends (src/lib/dm/ai-boundary.ts).
+  if (ctx.turn.actor === "ai") {
+    const kept = removed.find((name) => bindsCreature(canonicalCondition(name)) && instancesOf((enemy.conditionMeta as ConditionMetaMap)[name]).some(engineKept));
+    if (kept) {
+      return { error: AI_CLEAR_REFUSAL(enemy.displayName, kept) };
+    }
   }
   const remaining = enemy.conditions.filter((entry) => !matches(entry));
   patchEnemyConditions(enemy.id, remaining, pruneMeta(remaining, enemy.conditionMeta));

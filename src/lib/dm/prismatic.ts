@@ -16,6 +16,7 @@
 // (src/lib/dm/aoe-damage.ts); condition-tick.ts calls violetRayTurnStart as a
 // turn starts. One save per creature, which both of a double strike use.
 
+import { saveDamageTaken } from "@/lib/srd/trait-rules";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
@@ -151,7 +152,8 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
       const { color, type } = RAYS[ray - 1];
       if (type) {
         const rolled = rayDamage(input, sheet.id, color, sheet.name);
-        const amount = save.success ? Math.floor(rolled / 2) : rolled;
+        // A DEX save for half: Evasion turns it to none or half.
+        const amount = saveDamageTaken({ total: rolled, saved: save.success, halfOnSave: true, ability: "dex", sheet }).damage;
         applyDmMutation(campaign, turn.id, "apply_damage", JSON.stringify({ characterId: sheet.id, amount, type, spell: "Prismatic Spray", reason: `Prismatic Spray's ${color} ray` }), input.sheets, input.sheetsById);
         notes.push(`${color}: ${amount} ${type}`);
       } else if (!save.success && (color === "indigo" || color === "violet")) {

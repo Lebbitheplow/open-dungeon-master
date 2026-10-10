@@ -2,7 +2,7 @@ import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
-import { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
+import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
 export { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
@@ -520,6 +520,7 @@ export const fullPatchSheetSchema = patchSheetSchema.extend({
   // through undo, but never exposed to update_sheet or player patches.
   deathSaves: deathSavesSchema.optional(),
   concentratingOn: z.string().trim().max(80).nullable().optional(),
+  concentrationRounds: z.number().int().min(0).max(ROUND_CEILING).nullable().optional(),
   conditionMeta: conditionMetaSchema.optional(),
   resources: resourcesSchema.optional(),
   wildShape: wildShapeSchema.optional(),
@@ -592,6 +593,9 @@ export type CharacterSheet = {
   // Spell this character is concentrating on; null when none. Managed by
   // the server (src/lib/dm/concentration.ts).
   concentratingOn: string | null;
+  // Rounds that concentration has left: the spell's own duration, counted
+  // down by src/lib/dm/concentration-clock.ts. Null or absent = no clock.
+  concentrationRounds?: number | null;
   portrait: SheetAttachment | null;
   notes: string;
   backstory: string;

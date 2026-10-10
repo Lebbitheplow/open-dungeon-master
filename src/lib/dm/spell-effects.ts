@@ -16,7 +16,9 @@
 
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
-import { removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { addConditionInstance, removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { findSpellByName, spellMechanicsFor } from "@/lib/content";
+import { durationRounds } from "@/lib/srd/spell-mechanics";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
 import { conditionEffectsFor, type SaveAbilityId } from "@/lib/srd/condition-effects";
 import { MECH_OVERRIDES } from "@/lib/srd/spell-mechanics";
@@ -41,18 +43,38 @@ export type SpellSource = {
   slotLevel?: number | null;
 };
 
+// The rounds a spell lasts at most: its printed duration ("Concentration,
+// up to 1 minute" is 10), or the structured row's own count when the pack is
+// not there to say. Null for "Instantaneous", "Until dispelled" and the rest
+// that carry no count.
+export function spellDurationRounds(spell: string, authors?: string | string[]): number | null {
+  const row = findSpellByName(spell, authors);
+  const fromRow = row ? durationRounds(String(row.data.duration ?? "")) : null;
+  if (fromRow) {
+    return fromRow;
+  }
+  const mech = spellMechanicsFor({ spell, ...(typeof authors === "string" ? { userId: authors } : {}) })?.mech;
+  return mech?.buff?.rounds ?? mech?.condition?.rounds ?? null;
+}
+
 // The metadata one condition of a spell is stored with: its duration (the
-// spell's rounds, or a repeat save), who cast it, and what ends it early.
+// spell's rounds), a repeat save where the spell grants one, who cast it, and
+// what ends it early. A repeat save never outlives the spell (SRD 5.1, Hold
+// Person: "The spell ends... after 1 minute"), so a save-ends condition keeps
+// the spell's duration as its count too.
 export function spellConditionMeta(
-  condition: Pick<SpellCondition, "rounds" | "saveEnds" | "endsOnDamage" | "saveOnDamage">,
+  condition: Pick<SpellCondition, "rounds" | "roundsBySlot" | "saveEnds" | "endsOnDamage" | "saveOnDamage">,
   source: SpellSource,
   save: { ability: SaveAbilityId; dc: number } | null,
   roundsOverride?: number,
 ): ConditionMeta {
-  const rounds = roundsOverride ?? condition.rounds;
+  // A higher slot can buy a longer lifetime, or none at all (Geas at 9th).
+  const bySlot = (condition.roundsBySlot ?? []).filter(([level]) => (source.slotLevel ?? 0) >= level).pop();
+  const printed = bySlot ? (bySlot[1] ?? undefined) : condition.rounds;
+  const rounds = roundsOverride ?? printed ?? (condition.saveEnds && !bySlot ? spellDurationRounds(source.spell) ?? undefined : undefined);
   return {
     ...(condition.saveEnds && save ? { saveEnds: { ability: save.ability, dc: save.dc } } : {}),
-    ...(!condition.saveEnds && rounds ? { rounds } : {}),
+    ...(rounds ? { rounds } : {}),
     spell: source.spell.slice(0, 80),
     source: source.casterId.slice(0, 80),
     ...(source.slotLevel ? { slotLevel: source.slotLevel } : {}),
@@ -64,22 +86,27 @@ export function spellConditionMeta(
 }
 
 // Lays a spell's conditions on a living enemy, each one it is not immune to.
-// A condition it already holds keeps what it has. Returns what landed.
+// A condition it already holds from another source holds from this one too,
+// each with its own lifetime (two casters' Hold Person: ending one leaves
+// the other). Returns what landed.
 export function laySpellConditionsOnEnemy(enemyId: string, names: string[], meta: ConditionMeta): string[] {
   const enemy = getEnemy(enemyId);
   if (!enemy || enemy.status !== "alive") {
     return [];
   }
   const immune = (enemy.stats.conditionImmune ?? "").toLowerCase();
-  const landing = names.filter((name) => !immune.includes(name) && !enemy.conditions.includes(name));
+  const landing = names.filter((name) => !immune.includes(name));
   if (!landing.length) {
     return [];
   }
-  const nextMeta: ConditionMetaMap = { ...(enemy.conditionMeta as ConditionMetaMap) };
+  let conditions = enemy.conditions;
+  let nextMeta: ConditionMetaMap = { ...(enemy.conditionMeta as ConditionMetaMap) };
   for (const name of landing) {
-    nextMeta[name] = meta;
+    const laid = addConditionInstance(conditions, nextMeta, name, meta);
+    conditions = laid.conditions;
+    nextMeta = laid.meta;
   }
-  patchEnemyConditions(enemy.id, [...enemy.conditions, ...landing], nextMeta);
+  patchEnemyConditions(enemy.id, conditions, nextMeta);
   return landing;
 }
 
@@ -158,6 +185,7 @@ export function spellEffectsOnEnemyDamage(enemyId: string): string[] {
     // conditions count, and the DM sees the roll.
     const outcome = rollEnemySave(enemy.campaignId, enemy, ability, dc, {
       magical: true,
+      resist: true,
       advantage,
       record: { detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${entry.spell ?? name} (hurt)` },
     });

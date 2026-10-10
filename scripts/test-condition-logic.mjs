@@ -144,7 +144,8 @@ test("tickConditions: untimed conditions persist untouched", () => {
 test("tickConditions: save-ends surfaces due saves each round", () => {
   const meta = { paralyzed: { saveEnds: { ability: "wis", dc: 14 } } };
   const tick = tickConditions(["paralyzed"], meta);
-  assert.deepEqual(tick.savesDue, [{ name: "paralyzed", ability: "wis", dc: 14 }]);
+  // Each instance names itself (spell|source) so its own save ends only it.
+  assert.deepEqual(tick.savesDue, [{ name: "paralyzed", ability: "wis", dc: 14, key: "|" }]);
   assert.deepEqual(tick.conditions, ["paralyzed"]);
 });
 
@@ -167,8 +168,11 @@ test("conditionRoundsFrom folds minutes and hours into rounds", () => {
   assert.equal(conditionRoundsFrom({ hours: 1, minutes: 30 }), 900);
   assert.equal(conditionRoundsFrom({}), undefined);
   assert.equal(conditionRoundsFrom({ hours: 24 }), 14_400);
-  // A day is the ceiling: nothing stored can outlast a long rest by weeks.
-  assert.equal(conditionRoundsFrom({ hours: 24, minutes: 60 }), 14_400);
+  // Durations past a day hold (Geas's thirty days, Contagion's seven):
+  // docs/dnd-rules-audit-2026-10-09-extent.md F20. A year is the ceiling.
+  assert.equal(conditionRoundsFrom({ hours: 24, minutes: 60 }), 15_000);
+  assert.equal(conditionRoundsFrom({ days: 30 }), 432_000);
+  assert.equal(conditionRoundsFrom({ days: 400 }), 365 * 14_400);
 });
 
 test("describeConditionDuration speaks rounds, minutes, then hours", () => {

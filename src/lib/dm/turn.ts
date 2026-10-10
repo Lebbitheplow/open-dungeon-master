@@ -1,4 +1,5 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { manualTraits } from "@/lib/dm/monster-traits";
 import { findSpellByName } from "@/lib/content";
 import { allSpellNames, spellLevelOf } from "@/lib/srd/spell-lists";
 import { notReadyReason } from "@/lib/srd/spell-prep";
@@ -291,6 +292,9 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       // The trait lines, then the printed half of the block (scores,
       // skills, senses, languages, spells) for blocks that carry one.
       traits: [...enemy.stats.traits, ...extraBlockLines(enemy.stats)],
+      // What the engine does not resolve on this block: the DM's to apply
+      // (src/lib/dm/monster-traits.ts).
+      ...(manualTraits(enemy.stats).length ? { byHand: manualTraits(enemy.stats) } : {}),
       resist: enemy.stats.resist,
       immune: enemy.stats.immune,
       vulnerable: enemy.stats.vulnerable,

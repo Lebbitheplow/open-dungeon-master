@@ -380,6 +380,10 @@ export function resolveRollExpression(
     // The roller moved no more than half their speed this turn (Supreme
     // Sneak, src/lib/srd/check-traits.ts); the caller reads the board.
     movedLittle?: boolean;
+    // A death saving throw (src/lib/dm/death.ts): a saving throw tied to no
+    // ability, so no ability modifier and no proficiency, while every rider
+    // a save takes (Bless, an aura, exhaustion, Lucky) still applies.
+    death?: boolean;
   },
 ):
   | {
@@ -628,6 +632,33 @@ export function resolveRollExpression(
       expression: `${base}${bonusDie}${featRider?.die ? `+${featRider.die}` : ""}`,
       detail: skill.id,
       ...(skillNotes.length ? { conditionNotes: skillNotes } : {}),
+      ...inspirationFields,
+    };
+  }
+
+  if (args.kind === "saving_throw" && extras?.death) {
+    if (!sheet) {
+      return { error: "A death save needs a character." };
+    }
+    // What rides every saving throw whatever its ability: a paladin's own
+    // aura (the "features" part) and a Ring or Cloak of Protection.
+    const general = (computeSheetDerived(sheet).parts.saves.con ?? [])
+      .filter((part) => part.label === "features" || part.label === "magic items")
+      .reduce((sum, part) => sum + part.value, 0);
+    const modifier = general + (extras.saveBonus ?? 0) + (extras.effectBonus ?? 0);
+    const luckyBase = withLuck(d20Expression(modifier, advantage)).replace(
+      /^(\d+d20(?:k[hl]\d+)?)/,
+      `$1${lucky ? "r1" : ""}`,
+    );
+    const deathNotes = [
+      ...(conditionNotes ?? []),
+      ...(extras.saveBonus && extras.saveNote ? [extras.saveNote] : []),
+      ...(extras.effectNote ? [extras.effectNote] : []),
+    ];
+    return {
+      expression: `${luckyBase}${bonusDie}`,
+      detail: "death",
+      ...(deathNotes.length ? { conditionNotes: deathNotes } : {}),
       ...inspirationFields,
     };
   }

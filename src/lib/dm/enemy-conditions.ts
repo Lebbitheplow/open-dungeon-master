@@ -4,7 +4,7 @@ import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { publishPersisted } from "@/lib/events";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
-import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { releaseGrapplesHeldBy } from "@/lib/dm/set-condition";
 
 // What follows from a creature being taken out of the fight, or out of
@@ -19,11 +19,28 @@ import { releaseGrapplesHeldBy } from "@/lib/dm/set-condition";
 // instead (concentration.ts), and a web outlives the spider.
 const HELD_BY_SOURCE = new Set(["grappled", "charmed", "frightened"]);
 
-function heldBy(conditions: string[], meta: ConditionMetaMap | undefined, sourceId: string): string[] {
-  return conditions.filter((name) => {
-    const entry = meta?.[name];
-    return HELD_BY_SOURCE.has(name.toLowerCase()) && entry?.source === sourceId && !entry.spell;
-  });
+const heldBySource = (name: string, sourceId: string) => (entry: ConditionMeta) =>
+  HELD_BY_SOURCE.has(name.toLowerCase()) && entry.source === sourceId && !entry.spell;
+
+// The instances `sourceId` holds taken off: a fear another creature also
+// holds stays (src/lib/dm/condition-logic.ts). `ending` names what went.
+function withoutHeldBy(
+  conditions: string[],
+  meta: ConditionMetaMap | undefined,
+  sourceId: string,
+): { conditions: string[]; meta: ConditionMetaMap; ending: string[] } {
+  let nextConditions = conditions;
+  let nextMeta: ConditionMetaMap = { ...(meta ?? {}) };
+  const ending: string[] = [];
+  for (const name of conditions) {
+    const result = removeConditionInstances(nextConditions, nextMeta, name, heldBySource(name, sourceId));
+    if (result.removed) {
+      nextConditions = result.conditions;
+      nextMeta = result.meta;
+      ending.push(name);
+    }
+  }
+  return { conditions: nextConditions, meta: nextMeta, ending };
 }
 
 // Ends every grapple, charm and fear `sourceId` holds, on characters and on
@@ -32,11 +49,11 @@ export function endConditionsHeldBy(campaign: Campaign, sourceId: string): strin
   const freed: string[] = [];
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
-    const ending = heldBy(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, sourceId);
+    const cleared = withoutHeldBy(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, sourceId);
+    const ending = cleared.ending;
     if (!ending.length) {
       continue;
     }
-    const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ending);
     const updated = patchSheet(sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
     if (updated) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
@@ -46,11 +63,11 @@ export function endConditionsHeldBy(campaign: Campaign, sourceId: string): strin
   const encounter = getActiveEncounter(campaign.id);
   let enemiesChanged = false;
   for (const enemy of encounter ? listEnemies(encounter.id) : []) {
-    const ending = heldBy(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, sourceId);
+    const cleared = withoutHeldBy(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, sourceId);
+    const ending = cleared.ending;
     if (!ending.length || enemy.status !== "alive") {
       continue;
     }
-    const cleared = removeConditions(enemy.conditions, enemy.conditionMeta, ending);
     patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
     enemiesChanged = true;
     freed.push(`${enemy.displayName} (${ending.join(", ")})`);

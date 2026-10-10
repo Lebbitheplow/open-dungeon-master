@@ -11,6 +11,7 @@ import type { EncounterEnemy } from "@/lib/db/encounters";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import { applyField } from "@/lib/dm/effects-logic";
 import { effectiveAcFor } from "@/lib/srd";
+import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export function acWithEffects(campaignId: string, sheet: CharacterSheet): number {
@@ -20,10 +21,12 @@ export function acWithEffects(campaignId: string, sheet: CharacterSheet): number
   );
 }
 
-// The same for an enemy, whose base AC is a column rather than a derivation.
+// The same for an enemy, whose base AC is a column rather than a derivation,
+// with what its conditions add or take away (its own Shield, Shield of
+// Faith, Haste, a Slow).
 export function enemyAcWithEffects(campaignId: string, enemy: EncounterEnemy): number {
   return applyField(
-    enemy.ac,
+    enemy.ac + conditionAcRiders(enemy.conditions).bonus,
     effectOutcome(campaignId, { kind: "enemy", id: enemy.id }, "ac"),
   );
 }

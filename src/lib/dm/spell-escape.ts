@@ -64,7 +64,7 @@ export function enemySpellEscape(campaign: Campaign, turn: DmTurn, enemy: Encoun
   saveEncounter(encounter);
   const mod = Math.max(...hold.abilities.map((ability) => Math.floor(((enemy.stats.abilities?.[ability] ?? 10) - 10) / 2)));
   const saved = hold.save
-    ? rollEnemySave(campaign.id, enemy, hold.save, hold.dc, { magical: true, record: { turn, detail: `${enemy.displayName}: ${hold.save.toUpperCase()} save against ${hold.spell}` } })
+    ? rollEnemySave(campaign.id, enemy, hold.save, hold.dc, { magical: true, resist: true, record: { turn, detail: `${enemy.displayName}: ${hold.save.toUpperCase()} save against ${hold.spell}` } })
     : null;
   const total = saved ? (saved.total ?? 0) : dmRoll(campaign.id, turn, "ability_check", `${enemy.displayName}: breaking free of ${hold.spell}`, d20Expression(mod)).total;
   const escaped = saved ? saved.success : total >= hold.dc;

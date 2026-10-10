@@ -227,4 +227,11 @@ test("spell summaries read correctly for cantrips and levelled spells", () => {
   assert.equal(spellSummary(undefined), "");
 });
 
+test("a pack row's \"no\" is no: Light is neither concentration nor a ritual", () => {
+  // The SRD rows spell their flags as words (data/content/open5e.sqlite).
+  const light = spellSummary({ level: 0, school: "evocation", concentration: "no", ritual: "no" });
+  assert.doesNotMatch(light, /concentration|ritual/);
+  assert.match(spellSummary({ level: 1, school: "divination", concentration: "yes", ritual: "yes" }), /concentration · ritual/);
+});
+
 console.log(`\ntest-help-coverage: ${passed} passed`);

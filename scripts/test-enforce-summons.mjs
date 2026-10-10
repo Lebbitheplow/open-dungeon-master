@@ -386,7 +386,7 @@ await test("Animal Shapes: a willing creature becomes a Large or smaller beast o
 });
 
 await test("Shapechange: the caster takes a beast form of challenge rating up to their level, keeping their own mind.", async () => {
-  const { world, sheets: [druid] } = await board([{ ...DRUID(["Shapechange"], 17), gold: 2000 }], [{ x: 3, y: 4 }]);
+  const { world, sheets: [druid] } = await board([{ ...DRUID(["Shapechange"], 17), equipment: [{ name: "Jade circlet (1500 gp)", qty: 1 }] }], [{ x: 3, y: 4 }]);
   const cast = await world.invoke("cast_buff", { characterId: druid.id, spell: "Shapechange", level: 9, variant: "tyrannosaurus rex" });
   assert.equal(cast.ok, true, cast.error);
   const shaped = world.sheet(druid.id).wildShape;

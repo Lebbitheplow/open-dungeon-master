@@ -4,6 +4,7 @@
 // src/lib/dm/enemy-polymorph.ts; the swap and the way back are
 // src/lib/db/enemy-form.ts.
 
+import { immutableForm } from "@/lib/dm/monster-traits";
 import { formatCr, type BeastForm } from "@/lib/srd/beast-forms";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import type { EnemyAttack, EnemySaveMods, EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
@@ -55,6 +56,10 @@ export function enemyShapeProblem(
   }
   if (enemy.currentHp <= 0) {
     return `${rule.spell} has no effect on a creature at 0 hit points, and ${name} is at 0. Nothing was spent; pick another target.`;
+  }
+  // Immutable Form (the golems): no spell alters its form.
+  if (immutableForm(enemy.stats)) {
+    return `${name} has Immutable Form: it is immune to any spell or effect that would alter its form, and ${rule.spell} is one. Nothing was spent; pick another target or another spell.`;
   }
   if (rule.sparesShapechangers && isShapechanger(enemy.stats)) {
     return `${rule.spell} has no effect on a shapechanger, and ${name} is one. Nothing was spent; pick another target or another spell.`;

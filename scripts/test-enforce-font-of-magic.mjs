@@ -152,7 +152,10 @@ await test("Metamagic spends points without touching a slot", async () => {
     characterId: hero.id,
     resource: "Sorcery Points",
     amount: 3,
-    variant: "quickened spell",
+    // Twinned Spell on a 3rd-level spell: a plain spend of its points.
+    // Quickened Spell is a turn spend of its own (src/lib/dm/bonus-actions.ts,
+    // scripts/test-enforce-casting-limits.mjs).
+    variant: "twinned spell",
   });
   assert.equal(outcome.ok, true, outcome.error);
   assert.deepEqual(points(hero.id), { max: 5, used: 3 });

@@ -15,6 +15,7 @@
 //
 // Imports mutations (for the slot spend) and must never be imported by it.
 
+import { areaProblem, spellAreaShape } from "@/lib/dm/aoe-shape";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -82,6 +83,9 @@ export function planAoeSpell(
     reason?: string;
     enemies: EncounterEnemy[];
     characters: CharacterSheet[];
+    // Where the caller placed the area (atX/atY, towardX/towardY).
+    at?: { x: number; y: number };
+    toward?: { x: number; y: number };
   },
 ): AoeSpellPlan | { error: string } {
   if (!input.casterId) {
@@ -178,6 +182,26 @@ export function planAoeSpell(
       return {
         error: `${target.name} is ${apart * FEET_PER_TILE} ft from ${caster.name}: ${name} reaches ${facts.range.feet} ft and its area ${mech.areaFeet} ft more, so it cannot catch them. Leave them out or move closer. No slot was spent.`,
       };
+    }
+  }
+
+  // Everyone caught must fit one placement of the spell's shape
+  // (src/lib/dm/aoe-shape.ts): one sphere, one cone, one line.
+  const area = spellAreaShape(input.spell, authors);
+  if (area && !(cluster && everyone.length <= 2)) {
+    const problem = areaProblem({
+      encounterId: input.encounterId,
+      casterId: caster.id,
+      casterName: caster.name,
+      label: name,
+      area: { ...area, self: area.self || facts?.range.kind === "self" },
+      rangeFeet: facts?.range.kind === "feet" ? facts.range.feet : null,
+      creatures: everyone,
+      ...(input.at ? { at: input.at } : {}),
+      ...(input.toward ? { toward: input.toward } : {}),
+    });
+    if (problem) {
+      return { error: problem };
     }
   }
 

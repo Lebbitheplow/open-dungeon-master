@@ -15,7 +15,7 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { legendaryProfile, parseLegendaryLine, refillActions, spendLegendaryAction, spendResistance, freshPool } = await import("../src/lib/dm/legendary-logic.ts");
+const { legendaryProfile, parseLegendaryLine, refillActions, spendLegendaryAction, spendResistance, freshPool, lairCountPassed } = await import("../src/lib/dm/legendary-logic.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById } = await import("../src/lib/db/campaigns.ts");
 const { createEncounter, insertEnemy, getActiveEncounter, saveEncounter } = await import("../src/lib/db/encounters.ts");
@@ -121,6 +121,11 @@ test("resistance is spent on a binding failure and by hand, and the tracker show
   const stored = getActiveEncounter(campaign.id);
   assert.equal(autoLegendaryResistance(live(), stored, dragon), true);
   assert.equal(stored.legendary.pools[dragon.id].resistances, 2);
+  // By hand it answers only a save the server saw it fail this round.
+  assert.ok("error" in handleLegendaryResist(live(), JSON.stringify({ enemyId: dragon.id })));
+  const failing = getActiveEncounter(campaign.id);
+  failing.legendary.failedSave = { enemyId: dragon.id, round: failing.round, detail: "DEX save" };
+  saveEncounter(failing);
   const byHand = handleLegendaryResist(live(), JSON.stringify({ enemyId: dragon.id }));
   assert.equal(byHand.remaining, 1);
   assert.ok("error" in handleLegendaryResist(live(), JSON.stringify({ enemyId: goblin.id })));
@@ -132,11 +137,35 @@ test("resistance is spent on a binding failure and by hand, and the tracker show
   assert.equal(playerView.enemies.find((enemy) => enemy.id === dragon.id).legendary, undefined);
 });
 
-test("the lair acts once a round", () => {
+test("the lair acts on initiative count 20, with an option its block prints, once a round", () => {
+  // Before the count passes, the lair waits.
+  const early = handleLairAction(live(), null, JSON.stringify({ action: "The ground shakes." }));
+  assert.match(early.error, /initiative count 20/);
+  const stored = getActiveEncounter(campaign.id);
+  stored.legendary.lairDue = stored.round;
+  saveEncounter(stored);
+  // An option the block does not print is refused while it prints some.
+  const made = handleLairAction(live(), null, JSON.stringify({ action: "A rain of frogs." }));
+  assert.match(made.error, /options are printed/);
   const first = handleLairAction(live(), null, JSON.stringify({ action: "The ground shakes." }));
-  assert.equal(first.ok, true);
-  const again = handleLairAction(live(), null, JSON.stringify({ action: "Again." }));
+  assert.equal(first.ok, true, first.error);
+  // Its save resolves through the engine: aoe_damage with the printed DC.
+  assert.match(first.next, /aoe_damage: dc 15, saveAbility "dex"/);
+  const again = handleLairAction(live(), null, JSON.stringify({ action: "1" }));
   assert.match(again.error, /already acted/);
+});
+
+test("the lair's count 20 falls after everyone at 20 or above, before anyone below (ties lose)", () => {
+  const order = [{ initiative: 23 }, { initiative: 20 }, { initiative: 15 }, { initiative: 4 }];
+  assert.equal(lairCountPassed(order, -1, 0), null, "the 23 goes first");
+  assert.equal(lairCountPassed(order, 0, 1), null, "a tie at 20 goes before the lair");
+  assert.equal(lairCountPassed(order, 1, 2), "before", "the lair acts before the 15");
+  assert.equal(lairCountPassed(order, 3, 0), null, "the new round's top is above 20");
+  const low = [{ initiative: 18 }, { initiative: 9 }];
+  assert.equal(lairCountPassed(low, -1, 0), "before", "round 1 opens with the lair");
+  assert.equal(lairCountPassed(low, 1, 0), "after", "each new round opens with it");
+  const high = [{ initiative: 22 }, { initiative: 21 }];
+  assert.equal(lairCountPassed(high, 1, 0), "before", "everyone above 20: the lair closes the round");
 });
 
 console.log(`test-legendary: ${passed} passed`);

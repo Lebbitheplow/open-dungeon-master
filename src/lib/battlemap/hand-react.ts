@@ -11,7 +11,7 @@
 // own refusals (can-act, the cast guard's rules, the reaction budget).
 //
 // Pure; scripts/test-hand-engine.mjs drives it.
-import { casterStateProblem, componentProblem } from "@/lib/dm/cast-rules";
+import { casterStateProblem, componentProblem, focusProblem } from "@/lib/dm/cast-rules";
 import type { PublicLastHit } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
@@ -102,7 +102,7 @@ function spellReaction(
     card,
     standingGate(sheet, turn, "reaction"),
     problem(casterStateProblem(sheet)),
-    problem(componentProblem(sheet, facts)),
+    problem(componentProblem(sheet, facts) ?? focusProblem(sheet, facts)),
     slot ? null : { reason: `${sheet.name} has no spell slot left for ${spell}.`, spent: true },
     costGate("reaction", turn, sheet, spell),
   );

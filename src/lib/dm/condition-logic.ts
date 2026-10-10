@@ -61,8 +61,174 @@ export type ConditionMeta = {
   mote?: boolean;
   // A monster's grapple: its printed escape DC (grapple.ts).
   escapeDc?: number;
+  // Ends when the creature finishes a long rest (a succubus's Draining Kiss,
+  // a wight's Life Drain): src/lib/dm/rest-logic.ts.
+  untilLongRest?: boolean;
+  // Further sources of the same condition. SRD 5.1: the effects of the same
+  // spell (or the same condition) don't combine, but each keeps its own
+  // source and lifetime, so ending one leaves the others holding. Each entry
+  // is a whole instance and carries no `others` of its own; the condition
+  // holds while any instance does (instancesOf below).
+  others?: ConditionMeta[];
 };
 export type ConditionMetaMap = Record<string, ConditionMeta>;
+
+// ---- maximum hit points that ride conditions ----
+
+// Aid and Heroes' Feast raise the maximum while they last, and carry the
+// amount in the condition's name ("aided (+10)"); a wight's Life Drain or a
+// succubus's kiss lowers it ("max hp reduced (-7)") until a long rest.
+// SRD 5.1: castings of the same spell do not combine, so a family counts its
+// strongest instance; different spells add up; every drain counts.
+const MAX_HP_BONUS = [
+  { family: "aid", match: /^aided \(\+(\d+)\)$/i },
+  { family: "heroes' feast", match: /^heroes' feast \(\+(\d+)\)$/i },
+];
+const MAX_HP_DRAIN = /^max hp reduced \(-(\d+)\)$/i;
+
+export function maxHpRiders(
+  conditions: string[],
+  meta: ConditionMetaMap | undefined,
+): { bonus: number; drain: number } {
+  const strongest = new Map<string, number>();
+  let drain = 0;
+  for (const name of conditions) {
+    const trimmed = name.trim();
+    for (const rider of MAX_HP_BONUS) {
+      const hit = rider.match.exec(trimmed);
+      if (hit) {
+        strongest.set(rider.family, Math.max(strongest.get(rider.family) ?? 0, Number(hit[1])));
+      }
+    }
+    const drained = MAX_HP_DRAIN.exec(trimmed);
+    if (drained) {
+      drain += Number(drained[1]) * instancesOf(meta?.[name]).length;
+    }
+  }
+  return { bonus: [...strongest.values()].reduce((sum, value) => sum + value, 0), drain };
+}
+
+// ---- one condition, several sources ----
+
+// Every instance of a condition: the entry itself and its others. A held
+// condition with no metadata is one bare instance (until something ends it).
+export function instancesOf(entry: ConditionMeta | undefined): ConditionMeta[] {
+  if (!entry) {
+    return [{}];
+  }
+  const { others, ...primary } = entry;
+  return [primary, ...(others ?? [])];
+}
+
+// The stored shape of a list of instances: the first carries the rest.
+export function packInstances(list: ConditionMeta[]): ConditionMeta | undefined {
+  if (!list.length) {
+    return undefined;
+  }
+  const [primary, ...rest] = list.map((entry) => {
+    const copy = { ...entry };
+    delete copy.others;
+    return copy;
+  });
+  return rest.length ? { ...primary, others: rest } : primary;
+}
+
+// What makes two instances the same one: the same spell (or effect) from the
+// same source. A recast by the same caster refreshes its instance.
+export function instanceIdentity(entry: ConditionMeta): string {
+  return `${(entry.spell ?? "").toLowerCase()}|${entry.source ?? ""}`;
+}
+
+// Lays one instance of a condition. A condition not yet held is simply
+// added; one already held keeps every instance it has and gains this one,
+// unless this one is the same source's (then it replaces it).
+export function addConditionInstance(
+  conditions: string[],
+  meta: ConditionMetaMap | undefined,
+  name: string,
+  incoming: ConditionMeta | undefined,
+): { conditions: string[]; meta: ConditionMetaMap; stacked: boolean } {
+  const nextMeta: ConditionMetaMap = { ...(meta ?? {}) };
+  const held = conditions.find((entry) => entry.toLowerCase() === name.toLowerCase());
+  if (!held) {
+    if (incoming && Object.keys(incoming).length) {
+      nextMeta[name] = packInstances([incoming]) as ConditionMeta;
+    }
+    return { conditions: [...conditions, name], meta: nextMeta, stacked: false };
+  }
+  // A held condition with no metadata lasts until something ends it, and so
+  // does one a bare instance (no duration at all) lands on: nothing can
+  // expire it, so the entry is the bare one.
+  const existing = meta?.[held];
+  if (!existing) {
+    return { conditions, meta: nextMeta, stacked: false };
+  }
+  if (!incoming || !Object.keys(incoming).length) {
+    delete nextMeta[held];
+    return { conditions, meta: nextMeta, stacked: false };
+  }
+  const list = instancesOf(existing);
+  const identity = instanceIdentity(incoming);
+  const same = list.findIndex((entry) => instanceIdentity(entry) === identity);
+  // The same source again (a recast, or an unnamed source twice) keeps the
+  // longer of its two counts; a new source joins with its own.
+  const merged =
+    same >= 0
+      ? list.map((entry, index) => (index === same ? longerOf(entry, incoming) : entry))
+      : [...list, incoming];
+  nextMeta[held] = packInstances(merged) as ConditionMeta;
+  return { conditions, meta: nextMeta, stacked: same < 0 };
+}
+
+// Of two instances of one source, the one that lasts longer: no count at
+// all outlasts a count, a repeat save with no count outlasts a count.
+function longerOf(held: ConditionMeta, incoming: ConditionMeta): ConditionMeta {
+  const reach = (entry: ConditionMeta) =>
+    entry.untilTurnOf || entry.untilTurnEndOf
+      ? 1
+      : typeof entry.rounds === "number"
+        ? entry.rounds
+        : entry.saveEnds
+          ? Number.MAX_SAFE_INTEGER
+          : Number.POSITIVE_INFINITY;
+  return reach(incoming) >= reach(held) ? incoming : held;
+}
+
+// Removes the instances `pick` chooses from one condition. The name leaves
+// the list only when no instance is left.
+export function removeConditionInstances(
+  conditions: string[],
+  meta: ConditionMetaMap | undefined,
+  name: string,
+  pick: (entry: ConditionMeta) => boolean,
+): { conditions: string[]; meta: ConditionMetaMap; ended: boolean; removed: number } {
+  const held = conditions.find((entry) => entry.toLowerCase() === name.toLowerCase());
+  const nextMeta: ConditionMetaMap = { ...(meta ?? {}) };
+  if (!held) {
+    return { conditions, meta: nextMeta, ended: false, removed: 0 };
+  }
+  const list = instancesOf(meta?.[held]);
+  const kept = list.filter((entry) => !pick(entry));
+  if (kept.length === list.length) {
+    return { conditions, meta: nextMeta, ended: false, removed: 0 };
+  }
+  if (!kept.length) {
+    delete nextMeta[held];
+    return {
+      conditions: conditions.filter((entry) => entry !== held),
+      meta: nextMeta,
+      ended: true,
+      removed: list.length,
+    };
+  }
+  const packed = packInstances(kept);
+  if (packed && Object.keys(packed).length) {
+    nextMeta[held] = packed;
+  } else {
+    delete nextMeta[held];
+  }
+  return { conditions, meta: nextMeta, ended: false, removed: list.length - kept.length };
+}
 
 const INCAPACITATING = ["incapacitated", "paralyzed", "stunned", "unconscious", "petrified"];
 // Each of these says "can't move" (or speed 0) in its own text (SRD 5.1,
@@ -251,18 +417,38 @@ export function rollDerivation(
 // unit conditions are stored in. Combat ticks one round at a time; the
 // clock outside combat ticks minutes * 10 (issue #30).
 export const ROUNDS_PER_MINUTE = 10;
-export const MAX_CONDITION_ROUNDS = 24 * 60 * ROUNDS_PER_MINUTE;
+// A year: spells last days (Geas's thirty), and "until dispelled" carries no
+// count at all (src/lib/schemas/condition-meta.ts ROUND_CEILING).
+export const MAX_CONDITION_ROUNDS = 365 * 24 * 60 * ROUNDS_PER_MINUTE;
 
 export function conditionRoundsFrom(input: {
   rounds?: number;
   minutes?: number;
   hours?: number;
+  days?: number;
 }): number | undefined {
   const total =
     (input.rounds ?? 0) +
     (input.minutes ?? 0) * ROUNDS_PER_MINUTE +
-    (input.hours ?? 0) * 60 * ROUNDS_PER_MINUTE;
+    (input.hours ?? 0) * 60 * ROUNDS_PER_MINUTE +
+    (input.days ?? 0) * 24 * 60 * ROUNDS_PER_MINUTE;
   return total > 0 ? Math.min(MAX_CONDITION_ROUNDS, Math.round(total)) : undefined;
+}
+
+// A count of rounds as set_condition's arguments take it: rounds up to a
+// hundred, then days, hours or minutes, whichever says it exactly.
+export function durationArgsFor(rounds: number): { rounds?: number; minutes?: number; hours?: number; days?: number } {
+  if (rounds <= 100) {
+    return { rounds };
+  }
+  const day = 24 * 60 * ROUNDS_PER_MINUTE;
+  if (rounds % day === 0) {
+    return { days: rounds / day };
+  }
+  if (rounds % (60 * ROUNDS_PER_MINUTE) === 0 && rounds <= day) {
+    return { hours: rounds / (60 * ROUNDS_PER_MINUTE) };
+  }
+  return { minutes: Math.ceil(rounds / ROUNDS_PER_MINUTE) };
 }
 
 // Rounds left as people say them: "3 rounds", "45 min", "2 h 30 min".
@@ -275,6 +461,11 @@ export function describeConditionDuration(rounds: number): string {
     return `${minutes} min`;
   }
   const hours = Math.floor(minutes / 60);
+  if (hours >= 48) {
+    const days = Math.floor(hours / 24);
+    const leftHours = hours % 24;
+    return leftHours ? `${days} days ${leftHours} h` : `${days} days`;
+  }
   const rest = minutes % 60;
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
@@ -288,45 +479,74 @@ export function describeConditionDuration(rounds: number): string {
 // fight the pointer ends it (turnBoundConditionsEnding). Time passing with no
 // fight running has no turns left to wait for, so the clock passes
 // endTurnBound and they end with it.
+//
+// Each instance of a condition (instancesOf) counts on its own: the
+// condition expires when its last instance does, and every save-ends
+// instance asks its own save (`key` names the instance).
+//
+// In a fight a count belongs to a turn, not to the round's wrap: an instance
+// whose source is in the initiative order counts down as that combatant's
+// turn starts (so "1 minute" ends where it began), and a save to end it is
+// made at the end of the holder's own turn. The caller says which counts
+// this tick runs (`counts`) and whether it asks the saves (`saves`).
+export type TickOptions = {
+  endTurnBound?: boolean;
+  // Only instances whose source passes count down this tick.
+  counts?: (source: string | undefined) => boolean;
+  // Whether this tick asks the save-ends saves (default true).
+  saves?: boolean;
+};
+
+export type SaveDue = { name: string; ability: SaveAbilityId; dc: number; key: string };
+
 export function tickConditions(
   conditions: string[],
   meta: ConditionMetaMap | undefined,
   by = 1,
-  options?: { endTurnBound?: boolean },
+  options?: TickOptions,
 ): {
   conditions: string[];
   meta: ConditionMetaMap;
   expired: string[];
-  savesDue: Array<{ name: string; ability: SaveAbilityId; dc: number }>;
+  savesDue: SaveDue[];
 } {
   const nextMeta: ConditionMetaMap = {};
   const expired: string[] = [];
-  const savesDue: Array<{ name: string; ability: SaveAbilityId; dc: number }> = [];
+  const savesDue: SaveDue[] = [];
   for (const name of conditions) {
     const entry = meta?.[name];
     if (!entry) {
       continue;
     }
-    if (entry.untilTurnOf || entry.untilTurnEndOf) {
-      if (options?.endTurnBound) {
-        expired.push(name);
-      } else {
-        nextMeta[name] = entry;
-      }
-      continue;
-    }
-    if (typeof entry.rounds === "number") {
-      const left = entry.rounds - by;
-      if (left <= 0) {
-        expired.push(name);
+    const kept: ConditionMeta[] = [];
+    for (const instance of instancesOf(entry)) {
+      if (instance.untilTurnOf || instance.untilTurnEndOf) {
+        if (!options?.endTurnBound) {
+          kept.push(instance);
+        }
         continue;
       }
-      nextMeta[name] = { ...entry, rounds: left };
-    } else {
-      nextMeta[name] = entry;
+      const counting = typeof instance.rounds === "number" && (options?.counts ? options.counts(instance.source) : true);
+      if (counting) {
+        const left = (instance.rounds as number) - by;
+        if (left <= 0) {
+          continue;
+        }
+        kept.push({ ...instance, rounds: left });
+      } else {
+        kept.push(instance);
+      }
+      if (instance.saveEnds && options?.saves !== false) {
+        savesDue.push({ name, ability: instance.saveEnds.ability, dc: instance.saveEnds.dc, key: instanceIdentity(instance) });
+      }
     }
-    if (entry.saveEnds) {
-      savesDue.push({ name, ability: entry.saveEnds.ability, dc: entry.saveEnds.dc });
+    if (!kept.length) {
+      expired.push(name);
+      continue;
+    }
+    const packed = packInstances(kept);
+    if (packed) {
+      nextMeta[name] = packed;
     }
   }
   return {

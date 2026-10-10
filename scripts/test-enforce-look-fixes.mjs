@@ -69,7 +69,8 @@ await test("damage_enemy takes a homebrew damage type and names it in the result
 await test("a lair action's result says what the lair did and on which round", async () => {
   const { getDatabase } = await import("../src/lib/db/core.ts");
   const encounter = world.encounter();
-  const legendary = { ...(encounter.legendary ?? {}), lair: true };
+  // Initiative count 20 has just passed (legendary-logic.ts lairCountPassed).
+  const legendary = { ...(encounter.legendary ?? {}), lair: true, lairDue: encounter.round };
   getDatabase().prepare("UPDATE encounters SET legendary_json = ? WHERE id = ?").run(JSON.stringify(legendary), encounter.id);
   const out = await world.invoke("lair_action", { action: "The ceiling cracks and dust rains down." });
   assert.equal(out.ok, true, out.error);

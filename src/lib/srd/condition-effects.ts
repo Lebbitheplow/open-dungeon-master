@@ -290,8 +290,17 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "absorb_elements",
     match: ["absorb elements"],
     summary:
-      "Absorb Elements: resistance to the absorbed damage type (named in the condition) until the start of their next turn, and their first melee hit next turn deals +1d6 of that type.",
+      "Absorb Elements: resistance to the absorbed damage type (named in the condition) until the start of their next turn.",
     paramResistance: true,
+  },
+  {
+    id: "absorbed_strike",
+    match: ["absorbed strike"],
+    summary:
+      "Absorb Elements: the first time they hit with a melee attack on their next turn, the target takes the extra dice of the absorbed type named in the condition, and the spell ends.",
+    paramOnHitDice: true,
+    meleeOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "armor_of_agathys",
@@ -927,7 +936,7 @@ function matchesRollKind(
 // `hitSpent` the conditions the first hit uses up (the smites).
 export function conditionOnHitDice(
   conditions: string[],
-  context: { weapon?: boolean; marked?: (condition: string) => boolean } = {},
+  context: { weapon?: boolean; melee?: boolean; marked?: (condition: string) => boolean } = {},
 ): {
   suffix: string;
   notes: string[];
@@ -939,16 +948,21 @@ export function conditionOnHitDice(
   const typed: Array<{ dice: string; type: string }> = [];
   const hitSpent: string[] = [];
   for (const { row, condition } of activeConditionEffects(conditions)) {
-    if (!row.onHitDice) {
+    const carried = row.paramOnHitDice ? /\((\d+d\d+)\s+([a-z]+)\)/i.exec(condition) : null;
+    const onHitDice = row.onHitDice ?? (carried ? { dice: carried[1], type: carried[2].toLowerCase() } : null);
+    if (!onHitDice) {
       continue;
     }
     if (row.weaponOnly && context.weapon === false) {
       continue;
     }
+    if (row.meleeOnly && context.melee === false) {
+      continue;
+    }
     if (row.marksTarget && context.marked && !context.marked(condition)) {
       continue;
     }
-    const { dice, type } = row.onHitDice;
+    const { dice, type } = onHitDice;
     if (dice.startsWith("-")) {
       suffix += dice;
       notes.push(`${condition}: ${dice} damage`);

@@ -159,6 +159,21 @@ const EXPERTISE_GRANTS: Record<string, number[]> = {
   bard: [3, 10],
 };
 
+// A rogue's Expertise may take thieves' tools in place of a skill (SRD 5.1,
+// Rogue: "two of your skill proficiencies, or one of your skill
+// proficiencies and your proficiency with thieves' tools").
+export const THIEVES_TOOLS = "thieves' tools";
+export function isThievesTools(name: string): boolean {
+  return /^thieves['’]?\s*tools?$/i.test(name.trim());
+}
+
+// Whether an expertise pick doubles a proficiency the character may take it
+// in: one of their skills, or thieves' tools for a rogue.
+export function expertiseAllowed(pick: string, skills: string[], classIds: string[]): boolean {
+  const wanted = pick.trim().toLowerCase();
+  return skills.some((skill) => skill.toLowerCase() === wanted) || (isThievesTools(pick) && classIds.some((id) => id.trim().toLowerCase() === "rogue"));
+}
+
 // Total expertise picks a class has earned by `level` (2 per grant level).
 export function expertiseSlotsFor(classId: string, level: number): number {
   const grants = EXPERTISE_GRANTS[classId] ?? [];

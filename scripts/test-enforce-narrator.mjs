@@ -490,7 +490,10 @@ await test("The AI's per-turn caps on the invoke path count calls that resolved,
     assert.equal(refused.ok, false);
   }
   world.patch(kara.id, { currentHp: 20 });
-  const out = await ai.invoke("heal", { characterId: kara.id, amount: 1, reason: "a draught" });
+  // The model's healing is dice the server rolls (src/lib/dm/ai-gate.ts).
+  world.dice(1);
+  const out = await ai.invoke("heal", { characterId: kara.id, dice: "1d4", reason: "a draught" });
+  world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(world.sheet(kara.id).currentHp, 21);
   world.patch(kara.id, { currentHp: world.sheet(kara.id).maxHp });
