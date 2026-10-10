@@ -70,3 +70,4 @@ public/generated-audio
 # .dev.vars files hold local secrets. Neither belongs in history.
 .wrangler/
 .dev.vars*
+/ambience-pack.zip

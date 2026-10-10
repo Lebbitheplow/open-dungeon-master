@@ -137,6 +137,8 @@ export type UserSettings = {
   narrationMuted?: boolean;
   ambienceVolume?: number;
   ambienceMuted?: boolean;
+  ambienceBedLevel?: number;
+  ambienceMusicLevel?: number;
   chimeMuted?: boolean;
   // The player's virtual dice (src/lib/dice/dice-look.ts); absent means
   // the tray's original look.

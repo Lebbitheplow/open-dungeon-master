@@ -113,15 +113,16 @@ export default function LicensesPage() {
       {ambience.length ? (
         <PageSection heading="Sound library">
           <p className="text-sm leading-6 text-stone-400">
-            Ambience and music files were fetched from public archives by this server&apos;s
-            operator and are{" "}
-            <span className="text-stone-200">not distributed with Open Dungeon Master</span>.
-            Each one is credited below as its archive recorded it.
+            Each ambience and music file on this server is credited below as it arrived: made
+            here with a music model, carried in the release&apos;s sound pack, supplied by the
+            operator, or fetched from a public archive. Archive files are{" "}
+            <span className="text-stone-200">not distributed with Open Dungeon Master</span> and
+            are credited as their archive recorded them.
           </p>
           <ul className="mt-4 space-y-2">
             {ambience.map((track) => (
               <li
-                key={track.cueId}
+                key={track.file}
                 className="rounded-lg border border-stone-800 bg-stone-900/60 p-3 text-sm"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">

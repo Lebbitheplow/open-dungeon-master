@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { cueById } from "@/lib/ambience/catalog";
 import type { AmbienceState } from "@/lib/ambience/logic";
+import { AmbiencePlayer, type AmbienceLayerName, type PlayerSnapshot } from "@/lib/ambience/player";
 import { registerOutput, releaseOutput } from "@/lib/audio-devices";
-import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
+import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref, type AudioPrefField } from "@/lib/audio-prefs";
 
 // Plays what the table is hearing, in this browser, at this listener's own
 // volume.
@@ -12,90 +12,79 @@ import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audi
 // The server decides WHAT plays and every seat gets the same answer; how
 // loud it is, and whether it plays at all, is nobody's business but the
 // person wearing the headphones. So the cue rides the campaign stream and
-// the volume lives in localStorage, exactly the split narration audio uses
+// the volumes live in localStorage, exactly the split narration audio uses
 // (useNarrationAudio.ts), read through useSyncExternalStore so the server
 // render starts muted and the client snapshot takes over at hydration.
 //
-// Two looping layers and a one-shot. A layer changing cue crossfades rather
-// than cutting, because a hard cut is the thing that makes people reach for
-// the mute button.
+// How the sound is actually made is src/lib/ambience/player.ts; this hook
+// feeds it the stream, the prefs and the clock, and reads it back for the
+// sound panel.
 
-const MUTED_KEY = AUDIO_PREF_FIELDS.ambienceMuted.key;
-const VOLUME_KEY = AUDIO_PREF_FIELDS.ambienceVolume.key;
 const PREFS_EVENT = AUDIO_PREF_FIELDS.ambienceMuted.event;
-
-const CROSSFADE_MS = 1200;
-const FADE_TICK_MS = 50;
-// How far ambience drops while the DM's narration is being read aloud. Not
-// silence: the room should still be there behind the voice.
-const DUCK = 0.3;
-// Stings reuse a few elements rather than making one per sound: an element
-// stays registered with the output router for as long as it exists, so a
-// long fight's worth of hits would otherwise pile up there.
-const STING_POOL = 3;
+const TICK_MS = 50;
 
 function subscribePrefs(callback: () => void) {
   window.addEventListener(PREFS_EVENT, callback);
   return () => window.removeEventListener(PREFS_EVENT, callback);
 }
 
-function readMuted() {
-  const stored = window.localStorage.getItem(MUTED_KEY);
+function readFlag(field: AudioPrefField) {
+  const stored = window.localStorage.getItem(AUDIO_PREF_FIELDS[field].key);
   return stored === null ? false : stored === "1";
 }
 
-function readVolume() {
-  const stored = Number(window.localStorage.getItem(VOLUME_KEY));
-  return Number.isFinite(stored) && stored > 0 ? Math.min(1, stored) : 0.6;
+function readLevel(field: AudioPrefField, fallback: number) {
+  const stored = window.localStorage.getItem(AUDIO_PREF_FIELDS[field].key);
+  if (stored === null) {
+    return fallback;
+  }
+  const value = Number(stored);
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 }
 
-type Layer = {
-  cueId: string | null;
-  audio: HTMLAudioElement | null;
-  // Set while the current element is fading in; the volume effect leaves a
-  // fading layer alone rather than fighting the ramp.
-  fade: ReturnType<typeof setInterval> | null;
-};
+const readMuted = () => readFlag("ambienceMuted");
+const readVolume = () => readLevel("ambienceVolume", 0.6);
+const readBedLevel = () => readLevel("ambienceBedLevel", 1);
+const readMusicLevel = () => readLevel("ambienceMusicLevel", 1);
 
-function emptyLayer(): Layer {
-  return { cueId: null, audio: null, fade: null };
-}
+export type AmbienceTracks = Record<string, Array<{ url: string; title: string }>>;
 
-// Ramps `audio` from where it is to `target()` (read live, so a listener
-// dragging the slider mid-fade is obeyed) and calls done() at the end.
-function ramp(
-  audio: HTMLAudioElement,
-  from: number,
-  target: () => number,
-  done?: () => void,
-): ReturnType<typeof setInterval> {
-  const steps = Math.max(1, Math.round(CROSSFADE_MS / FADE_TICK_MS));
-  let step = 0;
-  const timer = setInterval(() => {
-    step += 1;
-    const progress = Math.min(1, step / steps);
-    audio.volume = Math.max(0, Math.min(1, from + (target() - from) * progress));
-    if (progress >= 1) {
-      clearInterval(timer);
-      done?.();
-    }
-  }, FADE_TICK_MS);
-  return timer;
-}
+export type AmbienceCounts = Record<"bed" | "music" | "sting", { installed: number; total: number; files: number }>;
 
 export type AmbienceAudio = {
   muted: boolean;
+  // The listener's master, and how the room and the music sit against it.
   volume: number;
+  bedLevel: number;
+  musicLevel: number;
   unlocked: boolean;
-  // True once the manifest says this install has at least one file. False
-  // means nobody has run scripts/fetch-ambience.mjs, and the control hides
-  // rather than offering a volume slider for silence.
+  // True once the library has at least one file. False means nobody has
+  // installed the sound library, and the control says so rather than
+  // offering a volume slider for silence.
   installed: boolean;
+  // Which cues this install can play, with every take's title, and how much
+  // of each layer that covers.
+  tracks: AmbienceTracks;
+  counts: AmbienceCounts | null;
+  // What the server says is playing, held layers included.
+  state: AmbienceState;
+  // What this browser is actually doing with it.
+  playing: PlayerSnapshot;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
+  setBedLevel: (level: number) => void;
+  setMusicLevel: (level: number) => void;
   unlock: () => void;
+  // The next take of a layer, now.
+  skip: (layer: AmbienceLayerName) => void;
   // Held down while narration is speaking.
   setDucked: (ducked: boolean) => void;
+};
+
+const SILENT: PlayerSnapshot = {
+  bed: { cueId: null, take: 0, takes: 0, playing: false },
+  music: { cueId: null, take: 0, takes: 0, playing: false },
+  blocked: false,
 };
 
 export function useAmbienceAudio(
@@ -105,25 +94,33 @@ export function useAmbienceAudio(
 ): AmbienceAudio {
   const muted = useSyncExternalStore(subscribePrefs, readMuted, () => true);
   const volume = useSyncExternalStore(subscribePrefs, readVolume, () => 0.6);
+  const bedLevel = useSyncExternalStore(subscribePrefs, readBedLevel, () => 1);
+  const musicLevel = useSyncExternalStore(subscribePrefs, readMusicLevel, () => 1);
   const [unlocked, setUnlocked] = useState(false);
-  const [urls, setUrls] = useState<Record<string, string> | null>(null);
-  const duckedRef = useRef(false);
-  const layersRef = useRef<{ bed: Layer; music: Layer }>({
-    bed: emptyLayer(),
-    music: emptyLayer(),
-  });
+  const [tracks, setTracks] = useState<AmbienceTracks | null>(null);
+  const [counts, setCounts] = useState<AmbienceCounts | null>(null);
+  const [playing, setPlaying] = useState<PlayerSnapshot>(SILENT);
+  const playerRef = useRef<AmbiencePlayer | null>(null);
   // The last sting timestamp acted on, so a re-render never sounds it twice.
   const stingAtRef = useRef(0);
-  const stingPoolRef = useRef<HTMLAudioElement[]>([]);
 
-  // What one layer should be playing at right now, before any fade.
-  const targetVolume = useCallback(
-    (cueId: string | null) => {
-      const gain = cueId ? (cueById(cueId)?.gain ?? 0.5) : 0;
-      return muted ? 0 : volume * gain * (duckedRef.current ? DUCK : 1);
-    },
-    [muted, volume],
-  );
+  // One player per mount, ticking while mounted, gone at unmount.
+  useEffect(() => {
+    const player = new AmbiencePlayer({
+      create: (url) => registerOutput(new Audio(url)),
+      release: (audio) => releaseOutput(audio as HTMLAudioElement),
+      now: () => performance.now(),
+    });
+    playerRef.current = player;
+    const unsubscribe = player.onChange(() => setPlaying(player.snapshot()));
+    const timer = window.setInterval(() => player.tick(), TICK_MS);
+    return () => {
+      window.clearInterval(timer);
+      unsubscribe();
+      player.dispose();
+      playerRef.current = null;
+    };
+  }, []);
 
   // Which cues this install can actually play. One fetch per mount; a table
   // with no library gets an empty map and the whole hook goes quiet.
@@ -136,12 +133,13 @@ export function useAmbienceAudio(
       .then((response) => (response.ok ? response.json() : { tracks: {} }))
       .then((data) => {
         if (!cancelled) {
-          setUrls(data.tracks ?? {});
+          setTracks(data.tracks ?? {});
+          setCounts(data.counts ?? null);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setUrls({});
+          setTracks({});
         }
       });
     return () => {
@@ -155,15 +153,33 @@ export function useAmbienceAudio(
     hydrateAudioPrefs();
   }, []);
 
-  const setMuted = useCallback((next: boolean) => {
-    writeAudioPref("ambienceMuted", next);
-  }, []);
+  useEffect(() => {
+    const urls: Record<string, string[]> = {};
+    for (const [cueId, takes] of Object.entries(tracks ?? {})) {
+      urls[cueId] = takes.map((take) => take.url);
+    }
+    playerRef.current?.setTracks(urls);
+  }, [tracks]);
 
-  const setVolume = useCallback((next: number) => {
-    writeAudioPref("ambienceVolume", Math.max(0, Math.min(1, next)));
-  }, []);
+  useEffect(() => {
+    playerRef.current?.setScene(enabled ? ambience.bed : null, enabled ? ambience.music : null);
+  }, [ambience.bed, ambience.music, enabled]);
 
+  useEffect(() => {
+    playerRef.current?.setLevels({ master: volume, bed: bedLevel, music: musicLevel, muted });
+  }, [volume, bedLevel, musicLevel, muted]);
+
+  useEffect(() => {
+    playerRef.current?.setUnlocked(unlocked && enabled);
+  }, [unlocked, enabled]);
+
+  const setMuted = useCallback((next: boolean) => writeAudioPref("ambienceMuted", next), []);
+  const setVolume = useCallback((next: number) => writeAudioPref("ambienceVolume", Math.max(0, Math.min(1, next))), []);
+  const setBedLevel = useCallback((next: number) => writeAudioPref("ambienceBedLevel", Math.max(0, Math.min(1, next))), []);
+  const setMusicLevel = useCallback((next: number) => writeAudioPref("ambienceMusicLevel", Math.max(0, Math.min(1, next))), []);
   const unlock = useCallback(() => setUnlocked(true), []);
+  const skip = useCallback((layer: AmbienceLayerName) => playerRef.current?.skip(layer), []);
+  const setDucked = useCallback((ducked: boolean) => playerRef.current?.setLevels({ ducked }), []);
 
   // The browser refuses audio before a user gesture, so any first
   // interaction with the page counts, exactly as it does for narration.
@@ -180,159 +196,39 @@ export function useAmbienceAudio(
     };
   }, [unlocked, enabled]);
 
-  // The one place a looping layer starts, stops or changes cue.
   useEffect(() => {
-    if (!urls) {
-      return;
-    }
-    const layers = layersRef.current;
-    for (const name of ["bed", "music"] as const) {
-      const layer = layers[name];
-      const wanted = !enabled || muted || !unlocked ? null : ambience[name];
-      const url = wanted ? urls[wanted] : undefined;
-      // A cue with no file on this install is silence, not an error: the
-      // library is fetched separately and may be partial.
-      const cueId = url ? wanted : null;
-      if (cueId === layer.cueId) {
-        continue;
-      }
-
-      if (layer.fade) {
-        clearInterval(layer.fade);
-        layer.fade = null;
-      }
-      const outgoing = layer.audio;
-      if (outgoing) {
-        ramp(outgoing, outgoing.volume, () => 0, () => {
-          outgoing.pause();
-          outgoing.src = "";
-          releaseOutput(outgoing);
-        });
-      }
-      layer.cueId = cueId;
-      layer.audio = null;
-      if (!cueId || !url) {
-        continue;
-      }
-      const audio = registerOutput(new Audio(url));
-      audio.loop = true;
-      audio.volume = 0;
-      layer.audio = audio;
-      layer.fade = ramp(audio, 0, () => targetVolume(cueId), () => {
-        layer.fade = null;
-      });
-      audio.play().catch(() => {
-        // Autoplay still blocked, or the file went missing. Drop the layer
-        // rather than leaving a silent element claiming to be playing; the
-        // next unlock or cue change tries again.
-        if (layer.audio === audio) {
-          if (layer.fade) {
-            clearInterval(layer.fade);
-            layer.fade = null;
-          }
-          layer.cueId = null;
-          layer.audio = null;
-          releaseOutput(audio);
-        }
-      });
-    }
-  }, [ambience, urls, enabled, muted, unlocked, targetVolume]);
-
-  // Volume, mute and ducking retarget what is already playing. A layer
-  // mid-crossfade is skipped: its ramp reads targetVolume live and lands on
-  // the new number by itself.
-  const applyVolumes = useCallback(() => {
-    for (const name of ["bed", "music"] as const) {
-      const layer = layersRef.current[name];
-      if (layer.audio && !layer.fade) {
-        layer.audio.volume = targetVolume(layer.cueId);
-      }
-    }
-  }, [targetVolume]);
-
-  useEffect(() => {
-    applyVolumes();
-  }, [applyVolumes]);
-
-  const setDucked = useCallback(
-    (ducked: boolean) => {
-      if (duckedRef.current === ducked) {
-        return;
-      }
-      duckedRef.current = ducked;
-      applyVolumes();
-    },
-    [applyVolumes],
-  );
-
-  // A sting plays over whatever is running and is never queued: if two land
-  // together the second one is simply the one you hear.
-  useEffect(() => {
-    if (!sting || !urls || !enabled || muted || !unlocked) {
-      return;
-    }
-    if (sting.at <= stingAtRef.current) {
+    if (!sting || sting.at <= stingAtRef.current) {
       return;
     }
     stingAtRef.current = sting.at;
-    const url = urls[sting.cue];
-    if (!url) {
-      return;
+    if (enabled) {
+      playerRef.current?.sting(sting.cue);
     }
-    // An idle element from the pool, a new one while the pool is short, or
-    // the oldest one cut short: a sting that lands on top of three others
-    // is not one anybody would miss.
-    const pool = stingPoolRef.current;
-    let audio = pool.find((entry) => entry.paused || entry.ended);
-    if (!audio) {
-      if (pool.length < STING_POOL) {
-        audio = registerOutput(new Audio());
-        pool.push(audio);
-      } else {
-        audio = pool[0];
-        pool.push(...pool.splice(0, 1));
-      }
-    }
-    audio.src = url;
-    audio.volume = Math.min(1, volume * (cueById(sting.cue)?.gain ?? 0.7));
-    void audio.play().catch(() => {});
-  }, [sting, urls, enabled, muted, unlocked, volume]);
+  }, [sting, enabled]);
 
-  // Unmount: stop everything this hook started and let the output router
-  // forget the elements. Nothing here is shared, so a torn-down session
-  // never leaves a loop running behind the lobby.
-  useEffect(() => {
-    const layers = layersRef.current;
-    const pool = stingPoolRef.current;
-    return () => {
-      for (const name of ["bed", "music"] as const) {
-        const layer = layers[name];
-        if (layer.fade) {
-          clearInterval(layer.fade);
-        }
-        if (layer.audio) {
-          layer.audio.pause();
-          layer.audio.src = "";
-          releaseOutput(layer.audio);
-        }
-        layer.cueId = null;
-        layer.audio = null;
-        layer.fade = null;
-      }
-      for (const audio of pool) {
-        audio.pause();
-        audio.src = "";
-        releaseOutput(audio);
-      }
-      pool.length = 0;
-    };
-  }, []);
-
-  const installed = Boolean(urls && Object.keys(urls).length);
+  const installed = Boolean(tracks && Object.keys(tracks).length);
   // One object per real change, so the memoized header is not handed a new
   // ambience prop on every table render.
   return useMemo(
-    () => ({ muted, volume, unlocked, installed, setMuted, setVolume, unlock, setDucked }),
-    [muted, volume, unlocked, installed, setMuted, setVolume, unlock, setDucked],
+    () => ({
+      muted,
+      volume,
+      bedLevel,
+      musicLevel,
+      unlocked,
+      installed,
+      tracks: tracks ?? {},
+      counts,
+      state: ambience,
+      playing,
+      setMuted,
+      setVolume,
+      setBedLevel,
+      setMusicLevel,
+      unlock,
+      skip,
+      setDucked,
+    }),
+    [muted, volume, bedLevel, musicLevel, unlocked, installed, tracks, counts, ambience, playing, setMuted, setVolume, setBedLevel, setMusicLevel, unlock, skip, setDucked],
   );
 }

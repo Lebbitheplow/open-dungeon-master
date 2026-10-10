@@ -99,6 +99,7 @@ export function GameSettingsPanel({
   // powers the hint on the Ambience row. Defaults to true so the hint never
   // flashes on installs that are fine while the answer is in flight.
   const [ambienceInstalled, setAmbienceInstalled] = useState(true);
+  const [ambienceCounts, setAmbienceCounts] = useState<Record<"bed" | "music" | "sting", { installed: number; total: number }> | null>(null);
 
   // Installed world packs, so the lead can switch worlds after creation. An
   // empty list simply hides the row.
@@ -130,6 +131,7 @@ export function GameSettingsPanel({
       .then((data) => {
         if (!cancelled) {
           setAmbienceInstalled(Object.keys(data.tracks ?? {}).length > 0);
+          setAmbienceCounts(data.counts ?? null);
         }
       })
       .catch(() => undefined);
@@ -439,8 +441,15 @@ export function GameSettingsPanel({
             // toggle above is currently a promise of silence. Say so where
             // it is being switched on rather than letting the table wonder.
             <span className="text-stone-500">
-              No ambience audio is installed yet, so this plays silence. Run npm run fetch-ambience
-              on the server; setting a FREESOUND_API_KEY first widens the sources.
+              No sound library is installed on this server yet, so this plays silence. The server
+              admin installs it from the admin panel (Sound library), or with npm run fetch-ambience.
+            </span>
+          ) : settings.ambienceEnabled && ambienceCounts ? (
+            <span className="text-stone-500">
+              Audio for {ambienceCounts.bed.installed} of {ambienceCounts.bed.total} rooms,{" "}
+              {ambienceCounts.music.installed} of {ambienceCounts.music.total} moods and{" "}
+              {ambienceCounts.sting.installed} of {ambienceCounts.sting.total} sounds. The speaker in the
+              table header opens the sound panel.
             </span>
           ) : null}
         </div>

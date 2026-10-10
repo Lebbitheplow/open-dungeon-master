@@ -399,6 +399,8 @@ function PlaybackSection({ devices }: { devices: ReturnType<typeof useDevices> }
   const narrationVolume = useAudioLevel("narrationVolume", 0.8);
   const ambienceMuted = useAudioFlag("ambienceMuted", false);
   const ambienceVolume = useAudioLevel("ambienceVolume", 0.6);
+  const bedLevel = useAudioLevel("ambienceBedLevel", 1);
+  const musicLevel = useAudioLevel("ambienceMusicLevel", 1);
   const selectable = supportsOutputSelection();
   return (
     <section>
@@ -456,6 +458,20 @@ function PlaybackSection({ devices }: { devices: ReturnType<typeof useDevices> }
           label="Ambience"
           on={!ambienceMuted}
           onChange={(on) => writeAudioPref("ambienceMuted", !on)}
+        />
+        <Slider
+          label="Room (within ambience)"
+          value={bedLevel}
+          max={1}
+          min={0}
+          onChange={(value) => writeAudioPref("ambienceBedLevel", value)}
+        />
+        <Slider
+          label="Music (within ambience)"
+          value={musicLevel}
+          max={1}
+          min={0}
+          onChange={(value) => writeAudioPref("ambienceMusicLevel", value)}
         />
       </div>
     </section>

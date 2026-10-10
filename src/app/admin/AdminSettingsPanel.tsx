@@ -14,6 +14,7 @@ import { AdminBackupSection } from "@/app/admin/AdminBackupSection";
 import { BackendProbe } from "@/app/admin/BackendProbe";
 import { AdminImagesSection } from "@/app/admin/AdminImagesSection";
 import { AdminSpeechSection } from "@/app/admin/AdminSpeechSection";
+import { AmbienceLibraryCard } from "@/app/admin/AmbienceLibraryCard";
 import { AdminHarnessSection } from "@/app/admin/AdminHarnessSection";
 import {
   Field,
@@ -34,6 +35,7 @@ const STOPS: Array<{ id: string; label: string; glyph: string; server?: boolean 
   { id: "admin-utility", label: "Utility model", glyph: "tab-log" },
   { id: "admin-images", label: "Images", glyph: "sense-truesight" },
   { id: "admin-speech", label: "Speech", glyph: "tab-ambience" },
+  { id: "admin-ambience", label: "Sound library", glyph: "cue-tavern" },
   { id: "admin-voice", label: "Voice chat", glyph: "cue-horn", server: true },
   { id: "admin-discord", label: "Discord", glyph: "system-share", server: true },
   { id: "admin-backup", label: "Backup", glyph: "tab-handout", server: true },
@@ -472,6 +474,8 @@ export function AdminSettingsPanel() {
         onSpeech={(speech) => setConfig({ ...config, speech })}
         onApiKey={setTtsApiKey}
       />
+
+      <AmbienceLibraryCard />
 
       {deviceWorld ? null : (
         <AdminNetworkSections

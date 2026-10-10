@@ -66,6 +66,7 @@ import { SessionHeader } from "@/app/campaigns/[campaignId]/SessionHeader";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
+import type { SoundSteering } from "@/app/campaigns/[campaignId]/SoundPanel";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop, TabletopChronicle } from "@/app/campaigns/[campaignId]/CinematicParts";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
@@ -334,6 +335,16 @@ export function SessionView({
   const floor = useMemo(() => campaign?.floor ?? { mode: "open" as const }, [campaign?.floor]);
   const isDm = caps.role === "dm";
   const steersStory = caps.steersStory;
+  // Who may change what the table hears, for the header's sound panel.
+  const sound = useMemo<SoundSteering>(
+    () => ({
+      campaignId: campaign?.id ?? "",
+      canSteer: steersStory,
+      auto: Boolean(campaign?.gameSettings?.ambienceAuto),
+      isAdmin: Boolean((me as { isAdmin?: boolean } | null)?.isAdmin),
+    }),
+    [campaign?.id, campaign?.gameSettings?.ambienceAuto, steersStory, me],
+  );
   if (isDm && !seenDmSeat) {
     setSeenDmSeat(true);
     setKind("narrate");
@@ -704,6 +715,7 @@ export function SessionView({
         narration={narration}
         ambienceEnabled={Boolean(campaign.gameSettings?.ambienceEnabled)}
         ambience={ambience}
+        sound={sound}
         onHelp={openHelp}
         stage={state.battleMap && docked ? { on: stageView === "board", onToggle: toggleStage } : undefined}
         ribbon={

@@ -37,23 +37,32 @@ its contents page and ends with the SRD's legal notice as its last page.
 
 ## Ambience and music
 
-**No audio ships with this project.** `src/lib/ambience/catalog.ts` names the
-cues the app can play; the files live in `public/ambience/`, are not in git,
-and arrive only when an operator runs `scripts/fetch-ambience.mjs`.
+`src/lib/ambience/catalog.ts` names the cues the app can play; the files live
+in `public/ambience/`, are not in git, and arrive in one of four ways, each
+credited in `data/ambience-lock.json`, `public/ambience/manifest.json` and on
+the in-app `/licenses` page under "Sound library".
 
-That script reads the licence each archive records for a file and refuses
-anything it cannot positively identify, including a blank licence field. By
-default it accepts only public-domain dedications: CC0 and the Public Domain
-Mark, both of which impose no further obligation on a downstream user.
+**The sound pack** (`ambience-pack.zip` on a release) holds tracks made for
+the project with ACE-Step 1.5, which is MIT-licensed and whose output carries
+no third-party claim. Those tracks are the project's and are distributed under
+its licence; `scripts/pack-ambience.mjs` packs only tracks the lock marks as
+generated, never archive downloads.
+
+**Archive downloads** (`scripts/fetch-ambience.mjs`) are not redistributed by
+this project. The script reads the licence each archive records for a file
+and refuses anything it cannot positively identify, including a blank licence
+field. By default it accepts only public-domain dedications: CC0 and the
+Public Domain Mark, both of which impose no further obligation on a
+downstream user.
 
 `--allow-attribution` widens it to CC BY and CC BY-SA. Those are usable but
 oblige you to keep the credit visible, which the app does for you: every
-accepted file's title, author, source URL and licence are written into
-`public/ambience/manifest.json` and listed on the in-app `/licenses` page,
-under "Sound library". NonCommercial and NoDerivatives licences are refused
-under every setting, because whether a given install is a commercial or a
-derivative use is a question about the operator, not about this project, and
-the script must not answer it on their behalf.
+accepted file's title, author, source URL and licence are written into the
+lock and the manifest and listed on the licenses page. NonCommercial and
+NoDerivatives licences are refused under every setting, because whether a
+given install is a commercial or a derivative use is a question about the
+operator, not about this project, and the script must not answer it on their
+behalf.
 
 Files an operator supplies by hand (dropped into `public/ambience/`, or pinned
 in `data/ambience-sources.json`) are credited as locally supplied. The licence

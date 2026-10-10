@@ -1,16 +1,16 @@
-// Fills the sound library: downloads one audio file per cue in
-// src/lib/ambience/catalog.ts into public/ambience, and writes the manifest
-// the app reads to know what it can play.
+// Fills the sound library: downloads audio for the cues in
+// src/lib/ambience/catalog.ts into public/ambience, and rebuilds the
+// manifest the app reads to know what it can play.
 //
-// The audio is NOT in git and is not redistributed by this project. Each
+// Archive audio is NOT in git and is not redistributed by this project. Each
 // file is fetched from a public archive at the operator's request, and the
 // licence is read from that archive's own metadata rather than guessed. By
 // default only public-domain dedications are accepted (CC0 and the Public
 // Domain Mark): an unlicensed file is worse than a missing one, because a
 // missing one is obvious. --allow-attribution widens that to CC BY and
 // CC BY-SA, which are usable but oblige you to keep the credit visible;
-// every accepted file's credit is written into the manifest and shown on
-// the app's /licenses page either way.
+// every accepted file's credit is written into the lock and the manifest
+// and shown on the app's /licenses page either way.
 //
 // Sources, tried in the order that suits the layer:
 //   commons    Wikimedia Commons. Best for room tone and one-shot sounds,
@@ -22,6 +22,11 @@
 //   archive    The Internet Archive. Best for music, where "public domain"
 //              usually means an old recording rather than a dedication.
 //
+// Every candidate goes through scripts/lib/ambience-gate.mjs: licence,
+// spoken word, relevance and length. The archives are full of correctly
+// licensed audiobooks and pronunciation clips, and one in the cave is worse
+// than silence.
+//
 // Usage:
 //   node scripts/fetch-ambience.mjs                    fill every empty cue
 //   node scripts/fetch-ambience.mjs --cue tavern       just this one
@@ -31,38 +36,46 @@
 //   node scripts/fetch-ambience.mjs --force            refetch cues already filled
 //   node scripts/fetch-ambience.mjs --dry-run          resolve and report only
 //   node scripts/fetch-ambience.mjs --manifest         rebuild manifest.json only
+//   node scripts/fetch-ambience.mjs --pack [url]       install the sound pack
+//                                                      (this release's asset by default)
 //
-// Curating by hand: drop a file named after the cue (tavern.mp3) into
-// public/ambience and run with --manifest. It is kept, credited as locally
-// supplied, and never overwritten. data/ambience-sources.json pins exact
-// URLs for cues the searches cannot fill; see docs/configuration.md.
+// A cue may hold several takes: tavern.mp3, tavern-2.mp3, tavern-3.ogg. The
+// fetch fills a cue that has none; scripts/generate-ambience.mjs adds takes.
+// Curating by hand: drop a file named after the cue into public/ambience and
+// run with --manifest. It is kept, credited as locally supplied, and never
+// overwritten. data/ambience-sources.json pins exact URLs for cues the
+// searches cannot fill; data/ambience-lock.json records what each file
+// resolved to, so a second machine fetches the same files rather than
+// whatever the search returns that day. See docs/configuration.md.
 import { mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { register } from "node:module";
+import { acceptLicense, admit } from "./lib/ambience-gate.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { AMBIENCE_CUES } = await import("../src/lib/ambience/catalog.ts");
+const { AUDIO_EXTENSIONS, libraryRoot, nextTrackFile, parseTrackFile, readLock, rebuildManifest, writeLock } =
+  await import("../src/lib/ambience/library.ts");
+const { installPack, packAssetUrl } = await import("../src/lib/ambience/pack.ts");
 
 const ROOT = process.cwd();
-const OUT_DIR = path.join(ROOT, "public", "ambience");
-const MANIFEST = path.join(OUT_DIR, "manifest.json");
-// Resolved sources, kept in git-ignored data/ so a second machine fetches
-// the same files rather than whatever the search returns that day.
-const LOCK = path.join(ROOT, "data", "ambience-lock.json");
+const OUT_DIR = libraryRoot();
 const SOURCES = path.join(ROOT, "data", "ambience-sources.json");
 
-const EXTENSIONS = [".mp3", ".ogg", ".opus", ".m4a", ".wav"];
 const MIN_BYTES = 20 * 1024;
 const MAX_BYTES = 25 * 1024 * 1024;
 const DELAY_MS = 400;
-const AGENT = "open-dungeon-master/ambience (local install; https://github.com/)";
+// Commons answers a burst of searches with 429; waiting it out beats
+// reporting "nothing found" for a cue it simply had not answered yet.
+const RETRY_MS = [3000, 8000, 20000];
+const AGENT = "open-dungeon-master/ambience (local install; https://github.com/Lebbitheplow/open-dungeon-master)";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
 function option(name, fallback = null) {
   const index = args.indexOf(`--${name}`);
-  return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+  return index >= 0 && args[index + 1] && !args[index + 1].startsWith("--") ? args[index + 1] : fallback;
 }
 
 const onlyCue = option("cue");
@@ -86,86 +99,27 @@ function readJson(file, fallback) {
 }
 
 async function getJson(url) {
-  const response = await fetch(url, { headers: { "User-Agent": AGENT } });
-  if (!response.ok) {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(url, { headers: { "User-Agent": AGENT } });
+    if (response.ok) {
+      return response.json();
+    }
+    if ((response.status === 429 || response.status >= 500) && attempt < RETRY_MS.length) {
+      await sleep(RETRY_MS[attempt]);
+      continue;
+    }
     throw new Error(`${new URL(url).hostname} answered ${response.status}`);
   }
-  return response.json();
-}
-
-// ---- the licence gate ----
-
-// Returns a short label when the licence is acceptable, null when it is not.
-// Deliberately conservative: anything this cannot positively identify is
-// refused, including a blank licence field.
-function acceptLicense(shortName, url) {
-  const text = `${shortName ?? ""} ${url ?? ""}`.toLowerCase();
-  if (
-    text.includes("publicdomain/zero") ||
-    text.includes("publicdomain/mark") ||
-    text.includes("creative commons 0") ||
-    /\bcc0\b/.test(text) ||
-    text.includes("public domain")
-  ) {
-    return "Public domain (CC0 or PD Mark)";
-  }
-  if (!allowAttribution) {
-    return null;
-  }
-  // Order matters: "by-sa" contains "by".
-  if (text.includes("by-sa") || text.includes("attribution-sharealike")) {
-    return "CC BY-SA (attribution and share-alike required)";
-  }
-  if (text.includes("by-nc") || text.includes("noncommercial") || text.includes("noderiv")) {
-    // NC and ND are refused even under --allow-attribution: whether an app
-    // that plays them is a commercial or derivative use is exactly the
-    // question this script must not answer on an operator's behalf.
-    return null;
-  }
-  if (text.includes("cc by") || text.includes("cc-by") || text.includes("licenses/by/")) {
-    return "CC BY (attribution required)";
-  }
-  return null;
 }
 
 function sizeOk(bytes) {
   return bytes >= MIN_BYTES && bytes <= MAX_BYTES;
 }
 
-// ---- the relevance gate ----
-
-// Words that appear in every query and so distinguish nothing.
-const NOISE = new Set([
-  "sound", "sounds", "effect", "effects", "ambience", "ambient", "ambiance",
-  "loop", "public", "domain", "music", "instrumental", "orchestral", "noise",
-  "the", "and", "with", "from", "field", "recording",
-]);
-
-function words(text) {
-  return String(text ?? "")
-    .toLowerCase()
-    .replace(/[^a-z]+/g, " ")
-    .split(" ")
-    .filter((word) => word.length >= 4 && !NOISE.has(word));
-}
-
-// A search that returns something correctly licensed but about the wrong
-// thing is the worse failure of the two: a missing cue is silent, and a
-// wrong one is a polka in the crypt. The candidate's title has to share a
-// distinguishing word with what was asked for.
-function relevant(query, title) {
-  const wanted = words(query);
-  if (!wanted.length) {
-    return true;
-  }
-  const found = new Set(words(title));
-  return wanted.some((word) => found.has(word));
-}
-
 // ---- sources ----
 
 // Each returns an ordered list of candidates:
-// { title, author, license, source, url, bytes }
+// { title, author, license, source, url, bytes, seconds }
 
 async function fromCommons(query) {
   const url = new URL("https://commons.wikimedia.org/w/api.php");
@@ -175,6 +129,7 @@ async function fromCommons(query) {
   url.searchParams.set("gsrnamespace", "6");
   url.searchParams.set("gsrlimit", "25");
   url.searchParams.set("prop", "imageinfo");
+  // size carries the duration for audio, which the length gate needs.
   url.searchParams.set("iiprop", "url|extmetadata|size|mime");
   url.searchParams.set("format", "json");
   const body = await getJson(url);
@@ -187,23 +142,21 @@ async function fromCommons(query) {
     }
     // Commons hands back a URL with tracking parameters on it, so the
     // extension has to come from the path rather than the whole string.
-    if (!EXTENSIONS.includes(path.extname(new URL(info.url).pathname).toLowerCase())) {
-      continue;
-    }
-    const license = acceptLicense(
-      strip(meta.LicenseShortName?.value) || strip(meta.License?.value),
-      strip(meta.LicenseUrl?.value),
-    );
-    if (!license) {
+    if (!AUDIO_EXTENSIONS.includes(path.extname(new URL(info.url).pathname).toLowerCase())) {
       continue;
     }
     candidates.push({
       title: String(page.title ?? "").replace(/^File:/, ""),
       author: strip(meta.Artist?.value) || strip(meta.Credit?.value) || "Unknown",
-      license,
+      license: acceptLicense(
+        strip(meta.LicenseShortName?.value) || strip(meta.License?.value),
+        strip(meta.LicenseUrl?.value),
+        allowAttribution,
+      ),
       source: `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,
       url: info.url,
       bytes: Number(info.size ?? 0),
+      seconds: Number(info.duration ?? 0),
     });
   }
   return candidates;
@@ -220,7 +173,7 @@ async function fromFreesound(query) {
   url.searchParams.set(
     "filter",
     allowAttribution
-      ? '(license:"Creative Commons 0" OR license:"Attribution" OR license:"Attribution NonCommercial")'
+      ? '(license:"Creative Commons 0" OR license:"Attribution")'
       : 'license:"Creative Commons 0"',
   );
   url.searchParams.set("fields", "id,name,username,license,url,previews,filesize,duration");
@@ -229,18 +182,18 @@ async function fromFreesound(query) {
   const body = await getJson(url);
   const candidates = [];
   for (const hit of body?.results ?? []) {
-    const license = acceptLicense(hit.license, hit.license);
     const preview = hit.previews?.["preview-hq-mp3"] ?? hit.previews?.["preview-lq-mp3"];
-    if (!license || !preview) {
+    if (!preview) {
       continue;
     }
     candidates.push({
       title: String(hit.name ?? `freesound ${hit.id}`),
       author: String(hit.username ?? "Unknown"),
-      license,
+      license: acceptLicense(hit.license, hit.license, allowAttribution),
       source: String(hit.url ?? `https://freesound.org/s/${hit.id}/`),
       url: preview,
       bytes: 0,
+      seconds: Number(hit.duration ?? 0),
     });
   }
   return candidates;
@@ -248,7 +201,12 @@ async function fromFreesound(query) {
 
 async function fromArchive(query) {
   const url = new URL("https://archive.org/advancedsearch.php");
-  url.searchParams.set("q", `${query} AND mediatype:(audio)`);
+  // The spoken-word collections are left out at the search rather than
+  // filtered after, so the 25 rows are not all LibriVox.
+  url.searchParams.set(
+    "q",
+    `${query} AND mediatype:(audio) AND NOT collection:(librivoxaudio OR audio_bookspoetry OR podcasts OR audio_news OR audio_religion OR spokenwordaudio)`,
+  );
   for (const field of ["identifier", "title", "creator", "licenseurl"]) {
     url.searchParams.append("fl[]", field);
   }
@@ -258,34 +216,39 @@ async function fromArchive(query) {
   const body = await getJson(url);
   const candidates = [];
   for (const doc of body?.response?.docs ?? []) {
-    const license = acceptLicense(doc.licenseurl, doc.licenseurl);
-    if (!license) {
-      continue;
-    }
     candidates.push({
       identifier: doc.identifier,
       title: String(doc.title ?? doc.identifier),
       author: Array.isArray(doc.creator) ? doc.creator.join(", ") : String(doc.creator ?? "Unknown"),
-      license,
+      license: acceptLicense(doc.licenseurl, doc.licenseurl, allowAttribution),
       source: `https://archive.org/details/${doc.identifier}`,
       url: null,
       bytes: 0,
+      seconds: 0,
     });
   }
   return candidates;
 }
 
 // An archive.org hit names an item, not a file, so the file is chosen in a
-// second call. Smallest usable one: these are loops and one-shots, and the
-// archive's own derivative mp3 is almost always the right pick.
-async function resolveArchiveFile(candidate) {
+// second call. Smallest usable one of the right length: these are loops and
+// one-shots, and the archive's own derivative mp3 is almost always the
+// right pick.
+async function resolveArchiveFile(candidate, layer) {
   const body = await getJson(
     `https://archive.org/metadata/${encodeURIComponent(candidate.identifier)}`,
   );
   const file = (body?.files ?? [])
-    .map((entry) => ({ name: String(entry.name ?? ""), size: Number(entry.size ?? 0) }))
+    .map((entry) => ({
+      name: String(entry.name ?? ""),
+      size: Number(entry.size ?? 0),
+      seconds: Number(entry.length ?? 0),
+    }))
     .filter(
-      (entry) => EXTENSIONS.includes(path.extname(entry.name).toLowerCase()) && sizeOk(entry.size),
+      (entry) =>
+        AUDIO_EXTENSIONS.includes(path.extname(entry.name).toLowerCase()) &&
+        sizeOk(entry.size) &&
+        admit({ ...candidate, seconds: entry.seconds }, { layer, query: candidate.query, allowAttribution }).ok,
     )
     .sort((a, b) => a.size - b.size)[0];
   if (!file) {
@@ -295,6 +258,7 @@ async function resolveArchiveFile(candidate) {
     ...candidate,
     url: `https://archive.org/download/${encodeURIComponent(candidate.identifier)}/${encodeURIComponent(file.name)}`,
     bytes: file.size,
+    seconds: file.seconds,
   };
 }
 
@@ -315,6 +279,7 @@ function queriesFor(cue) {
 
 async function resolve(cue) {
   let seen = 0;
+  const refused = new Map();
   for (const source of sourcesFor(cue.layer)) {
     for (const query of queriesFor(cue)) {
       let candidates = [];
@@ -330,7 +295,9 @@ async function resolve(cue) {
         continue;
       }
       for (const candidate of candidates) {
-        if (!relevant(query, candidate.title)) {
+        const verdict = admit(candidate, { layer: cue.layer, query, allowAttribution });
+        if (!verdict.ok) {
+          refused.set(verdict.why, (refused.get(verdict.why) ?? 0) + 1);
           continue;
         }
         if (seen++ < skipCount) {
@@ -340,13 +307,17 @@ async function resolve(cue) {
           return { ...candidate, source_name: source };
         }
         await sleep(DELAY_MS);
-        const resolved = await resolveArchiveFile(candidate);
+        const resolved = await resolveArchiveFile({ ...candidate, query }, cue.layer);
         if (resolved) {
           return { ...resolved, source_name: source };
         }
       }
       await sleep(DELAY_MS);
     }
+  }
+  if (refused.size) {
+    const why = [...refused.entries()].map(([reason, count]) => `${count} ${reason}`).join(", ");
+    console.log(`  refused: ${why}`);
   }
   return null;
 }
@@ -364,67 +335,40 @@ async function download(url, destination) {
   return buffer.length;
 }
 
-// ---- the manifest ----
-
-// Rebuilt from what is actually on disk, every run. The lock file supplies
-// the credits; a file with no lock entry is one somebody added by hand, and
-// is kept and credited as such rather than treated as an error.
-function writeManifest(lock) {
-  mkdirSync(OUT_DIR, { recursive: true });
-  const known = new Set(AMBIENCE_CUES.map((cue) => cue.id));
-  const tracks = {};
-  for (const name of readdirSync(OUT_DIR)) {
-    const extension = path.extname(name).toLowerCase();
-    const cueId = path.basename(name, extension);
-    if (!EXTENSIONS.includes(extension) || !known.has(cueId)) {
-      continue;
-    }
-    const entry = lock[cueId];
-    tracks[cueId] =
-      entry?.file === name
-        ? {
-            file: name,
-            title: entry.title,
-            author: entry.author,
-            source: entry.source,
-            license: entry.license,
-          }
-        : {
-            file: name,
-            title: cueId,
-            author: "Supplied locally",
-            source: "",
-            license: "Declared by the operator",
-          };
+function filesFor(cueId) {
+  if (!existsSync(OUT_DIR)) {
+    return [];
   }
-  writeFileSync(
-    MANIFEST,
-    `${JSON.stringify({ generatedAt: new Date().toISOString(), tracks }, null, 2)}\n`,
-  );
-  return Object.keys(tracks).length;
-}
-
-function existingFile(cueId) {
-  for (const extension of EXTENSIONS) {
-    if (existsSync(path.join(OUT_DIR, `${cueId}${extension}`))) {
-      return `${cueId}${extension}`;
-    }
-  }
-  return null;
+  return readdirSync(OUT_DIR).filter((name) => parseTrackFile(name)?.cueId === cueId);
 }
 
 // ---- run ----
 
 mkdirSync(OUT_DIR, { recursive: true });
-mkdirSync(path.dirname(LOCK), { recursive: true });
-
-const lock = readJson(LOCK, {});
-const pinned = readJson(SOURCES, {});
 
 if (manifestOnly) {
-  console.log(`[ambience] manifest rebuilt: ${writeManifest(lock)} cues playable.`);
+  console.log(`[ambience] manifest rebuilt: ${rebuildManifest()} cues playable.`);
   process.exit(0);
 }
+
+if (flag("pack")) {
+  const pkg = readJson(path.join(ROOT, "package.json"), { version: "0.0.0" });
+  const url = process.env.AMBIENCE_PACK_URL || option("pack") || packAssetUrl(pkg.version);
+  console.log(`[ambience] fetching the sound pack from ${url}`);
+  const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(10 * 60_000) });
+  if (!response.ok) {
+    console.error(`[ambience] ${new URL(url).host} answered ${response.status}; no pack for this version?`);
+    process.exit(1);
+  }
+  const result = await installPack(Buffer.from(await response.arrayBuffer()), { replace: force });
+  console.log(
+    `[ambience] ${result.installed} tracks installed, ${result.kept} already here, ${result.playable} cues playable.`,
+  );
+  process.exit(0);
+}
+
+const lock = readLock();
+const pinned = readJson(SOURCES, {});
 
 const cues = AMBIENCE_CUES.filter((cue) => !onlyCue || cue.id === onlyCue);
 if (onlyCue && !cues.length) {
@@ -442,15 +386,21 @@ let skipped = 0;
 const missing = [];
 
 for (const cue of cues) {
-  if (existingFile(cue.id) && !force) {
+  const existing = filesFor(cue.id);
+  if (existing.length && !force) {
     skipped += 1;
     continue;
   }
   console.log(`[ambience] ${cue.id} (${cue.label})`);
 
   // A pinned source wins outright: somebody chose that file deliberately,
-  // and the licence they recorded is theirs to stand behind.
+  // and the licence they recorded is theirs to stand behind. After that,
+  // what this cue resolved to last time, so a second machine gets the same
+  // file; a search only when neither says anything.
   const pin = pinned[cue.id];
+  const locked = Object.entries(lock).find(
+    ([name, entry]) => parseTrackFile(name)?.cueId === cue.id && entry.url && entry.origin === "fetched",
+  );
   const hit = pin?.url
     ? {
         title: pin.title ?? cue.label,
@@ -460,7 +410,9 @@ for (const cue of cues) {
         url: pin.url,
         source_name: "pinned",
       }
-    : await resolve(cue);
+    : locked && !force
+      ? { ...locked[1], source_name: "lock" }
+      : await resolve(cue);
 
   if (!hit) {
     console.log("  nothing acceptable found");
@@ -468,21 +420,21 @@ for (const cue of cues) {
     continue;
   }
   console.log(`  ${hit.title} — ${hit.author} [${hit.source_name}]`);
-  console.log(`  ${hit.license} · ${hit.source}`);
+  console.log(`  ${hit.license} · ${hit.source}${hit.seconds ? ` · ${Math.round(hit.seconds)}s` : ""}`);
   if (dryRun) {
     continue;
   }
 
   const extension = path.extname(new URL(hit.url).pathname).toLowerCase() || ".mp3";
-  const file = `${cue.id}${EXTENSIONS.includes(extension) ? extension : ".mp3"}`;
+  const file = nextTrackFile(cue.id, AUDIO_EXTENSIONS.includes(extension) ? extension : ".mp3", force ? [] : existing);
   try {
     const bytes = await download(hit.url, path.join(OUT_DIR, file));
-    lock[cue.id] = {
-      file,
+    lock[file] = {
       title: hit.title,
       author: hit.author,
       license: hit.license,
       source: hit.source,
+      origin: hit.source_name === "pinned" ? "local" : "fetched",
       url: hit.url,
     };
     console.log(`  saved ${(bytes / 1024 / 1024).toFixed(1)} MB as ${file}`);
@@ -495,13 +447,14 @@ for (const cue of cues) {
 }
 
 if (!dryRun) {
-  writeFileSync(LOCK, `${JSON.stringify(lock, null, 2)}\n`);
+  writeLock(lock);
   console.log(
-    `\n[ambience] ${filled} fetched, ${skipped} already present, ${writeManifest(lock)} cues playable.`,
+    `\n[ambience] ${filled} fetched, ${skipped} already present, ${rebuildManifest()} cues playable.`,
   );
 }
 if (missing.length) {
   console.log(`\n[ambience] no file for: ${missing.join(", ")}`);
   console.log("[ambience] try --allow-attribution, --skip 1, a FREESOUND_API_KEY,");
-  console.log("[ambience] or pin a URL in data/ambience-sources.json.");
+  console.log("[ambience] pin a URL in data/ambience-sources.json, or make the track here:");
+  console.log("[ambience] npm run generate-ambience (see docs/configuration.md).");
 }

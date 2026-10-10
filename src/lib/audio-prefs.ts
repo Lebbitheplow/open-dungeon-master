@@ -18,6 +18,10 @@ export type AudioPrefField =
   | "narrationVolume"
   | "ambienceMuted"
   | "ambienceVolume"
+  // How the room and the music sit against the ambience volume, 0..1 each,
+  // for a listener who wants the tavern but not the lute.
+  | "ambienceBedLevel"
+  | "ambienceMusicLevel"
   | "chimeMuted";
 
 // The localStorage keys and change events predate the account sync and are
@@ -29,6 +33,8 @@ export const AUDIO_PREF_FIELDS: Record<AudioPrefField, { key: string; event: str
   narrationVolume: { key: "odm_tts_volume", event: "odm-tts-prefs" },
   ambienceMuted: { key: "odm_ambience_muted", event: "odm-ambience-prefs" },
   ambienceVolume: { key: "odm_ambience_volume", event: "odm-ambience-prefs" },
+  ambienceBedLevel: { key: "odm_ambience_bed_level", event: "odm-ambience-prefs" },
+  ambienceMusicLevel: { key: "odm_ambience_music_level", event: "odm-ambience-prefs" },
   chimeMuted: { key: "odm_chat_chime_muted", event: "odm-chime-prefs" },
 };
 
