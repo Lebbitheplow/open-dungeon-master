@@ -211,7 +211,7 @@ export function storageBytesFor(urls: Iterable<string>): number {
     seen.add(url);
     const root = url.startsWith("/generated/") ? "generated" : "uploads";
     const name = url.slice(`/${root}/`.length);
-    const dir = path.join(process.cwd(), "public", root);
+    const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", root);
     let entries: string[] = [];
     try {
       const stem = name.replace(/\.[a-z0-9]+$/i, "");

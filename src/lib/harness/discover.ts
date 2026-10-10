@@ -56,7 +56,7 @@ function nodeManagerDirs(home: string): string[] {
   const out: string[] = [];
   for (const base of [path.join(home, ".nvm", "versions", "node"), path.join(home, ".local", "share", "fnm", "node-versions")]) {
     try {
-      const entries = readdirSync(base);
+      const entries = readdirSync(/*turbopackIgnore: true*/ base);
       entries
         .sort()
         .reverse()

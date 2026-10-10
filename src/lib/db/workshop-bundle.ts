@@ -73,7 +73,7 @@ function saveBundleImage(image: BundleImage | null, uploadDir: string, written: 
     return "";
   }
   const filename = `${crypto.randomUUID()}.${image.ext}`;
-  writeFileSync(path.join(uploadDir, filename), image.bytes);
+  writeFileSync(path.join(/*turbopackIgnore: true*/ uploadDir, filename), image.bytes);
   const url = `/uploads/${filename}`;
   written.push(url);
   return url;
