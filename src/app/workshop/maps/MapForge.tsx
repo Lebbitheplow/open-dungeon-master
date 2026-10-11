@@ -18,15 +18,16 @@ import {
   clampSize,
   createBodyFor,
   dieSpins,
-  explainRead,
+  explainForge,
   floodTotalMs,
+  forgeOutcome,
   freshSeed,
   pushHistory,
-  readHint,
   type ForgeRoll,
   type ForgeSettings,
 } from "@/app/workshop/maps/forge";
 import { THEME_LABELS, type LibraryState, type PreparedMap } from "@/app/workshop/maps/types";
+import { cueById, sceneOptions } from "@/lib/ambience/catalog";
 
 // The Map Forge (docs/visual-overhaul-plan.md 4.1): one component for both
 // places a map is rolled. In the library it names a map, rolls it, shows it
@@ -36,8 +37,9 @@ import { THEME_LABELS, type LibraryState, type PreparedMap } from "@/app/worksho
 //
 // What is previewed is what is saved: the library's preview runs the very
 // generator the server creates the map with, from the same seed and the same
-// words (forge.ts, held to it by scripts/test-map-forge.mjs). The studio's
-// preview comes from the server, which knows how many are at the table.
+// kind of place (forge.ts, held to it by scripts/test-map-forge.mjs). The
+// studio's preview comes from the server, which knows how many are at the
+// table.
 
 type Entry = { roll: ForgeRoll; map: ForgeMap };
 
@@ -155,10 +157,8 @@ export function MapForge({
 
   const named = name.trim().length > 0;
   const canRoll = !busy && !rolling && (!library || named);
-  const read = useMemo(() => readHint(settings.hint, genre), [settings.hint, genre]);
-  const theme = settings.theme || read.theme;
-  const ambient = settings.ambient || read.ambient;
-  const sentences = explainRead(read, settings, (value) => THEME_LABELS[value]);
+  const { theme, ambient } = forgeOutcome(settings);
+  const sentences = explainForge(settings, (value) => THEME_LABELS[value], (scene) => cueById(scene)?.label ?? scene);
   const skinGroups = useMemo(() => skinChoices(genre), [genre]);
 
   async function show(roll: ForgeRoll, stretch: number) {
@@ -188,7 +188,7 @@ export function MapForge({
 
   const rollOne = () => show({ ...settings, ...clampSize(settings.width, settings.height), seed: freshSeed() }, 1);
   function restore(entry: Entry) {
-    setSettings({ width: entry.roll.width, height: entry.roll.height, theme: entry.roll.theme, ambient: entry.roll.ambient, hint: entry.roll.hint });
+    setSettings({ width: entry.roll.width, height: entry.roll.height, theme: entry.roll.theme, ambient: entry.roll.ambient, scene: entry.roll.scene });
     void show(entry.roll, Math.max(1, RESTORE_MS / floodTotalMs(entry.roll.width, entry.roll.height)));
   }
 
@@ -228,44 +228,28 @@ export function MapForge({
               />
             </label>
           ) : null}
-          <label className="block space-y-1">
+          <div className="block space-y-1">
             <span className="flex items-baseline justify-between">
-              <span className="font-display text-[9px] uppercase tracking-[0.18em] text-stone-500">What the place is like</span>
+              <span className="font-display text-[9px] uppercase tracking-[0.18em] text-stone-500">Kind of place</span>
               <span className="font-mono text-[9px] text-stone-600">steers the generator</span>
             </span>
-            <input
-              value={settings.hint}
-              maxLength={200}
-              onChange={(event) => setSettings({ ...settings, hint: event.target.value })}
-              placeholder={library ? "what the place is like, for the generator" : "a flooded crypt, torchlit"}
-              className={cn(mapInput, "map-read py-2 text-sm", read.themeWord && "border-amber-500/55")}
+            <Select<string>
+              value={settings.scene}
+              onChange={(scene) => setSettings({ ...settings, scene })}
+              label="Kind of place"
+              className="w-full"
+              options={[{ value: "", label: "Not set: open ground" }, ...sceneOptions()]}
             />
-          </label>
+          </div>
 
-          {/* What it read */}
+          {/* What it decided */}
           <div
             className={cn(
               "map-read space-y-1.5 rounded-lg border p-2.5",
-              read.themeWord ? "border-amber-500/35 bg-amber-400/[0.06]" : "border-stone-700/60 bg-stone-950/40",
+              settings.scene ? "border-amber-500/35 bg-amber-400/[0.06]" : "border-stone-700/60 bg-stone-950/40",
             )}
           >
-            <p className="font-display text-[9px] uppercase tracking-[0.18em] text-amber-400/80">What it read</p>
-            {read.words.length ? (
-              <p className="flex flex-wrap gap-x-1 gap-y-0.5 font-mono text-[11px] text-stone-500">
-                {read.words.map((word, index) => (
-                  <span
-                    key={`${index}-${word.text}-${word.hit ?? ""}`}
-                    className={cn("rounded px-1", word.hit && "map-word-hit bg-amber-400/15 text-amber-100")}
-                    // The words light in the order they are read.
-                    style={word.hit ? { animationDelay: `${index * 40}ms` } : undefined}
-                  >
-                    {word.text}
-                  </span>
-                ))}
-              </p>
-            ) : (
-              <FinePrint>Say anything about the place and the words it recognises light up here.</FinePrint>
-            )}
+            <p className="font-display text-[9px] uppercase tracking-[0.18em] text-amber-400/80">What it decided</p>
             <div className="flex flex-wrap gap-1.5">
               <FactChip name="Theme" claim={theme}>
                 {THEME_LABELS[theme]}
@@ -285,7 +269,7 @@ export function MapForge({
                   key={option}
                   type="button"
                   aria-pressed={settings.theme === option}
-                  title={settings.theme === option ? "Press again to go back to the words" : `Always ${THEME_LABELS[option].toLowerCase()}, whatever the words say`}
+                  title={settings.theme === option ? "Press again to go back to the kind of place" : `Always ${THEME_LABELS[option].toLowerCase()}, whatever the kind of place`}
                   onClick={() => setSettings({ ...settings, theme: settings.theme === option ? "" : option })}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-lg border px-1 py-2 motion-press",
@@ -300,8 +284,8 @@ export function MapForge({
               ))}
             </div>
             <div className="grid grid-cols-4 gap-1">
-              <Chip active={settings.ambient === ""} onClick={() => setSettings({ ...settings, ambient: "" })} title="Light from the words">
-                Words
+              <Chip active={settings.ambient === ""} onClick={() => setSettings({ ...settings, ambient: "" })} title="Light from the kind of place">
+                Auto
               </Chip>
               {(["bright", "dim", "dark"] as AmbientLight[]).map((option) => (
                 <Chip key={option} active={settings.ambient === option} onClick={() => setSettings({ ...settings, ambient: option })}>
@@ -436,7 +420,7 @@ export function MapForge({
               ? named
                 ? "Nothing here touches the table until you put it there."
                 : "Name it first. Nothing here touches the table until you put it there."
-              : "The generator reads the words for terrain and light. What you say outright overrules them."}
+              : "The kind of place picks the terrain and the light. What you say outright overrules it."}
           </FinePrint>
         </div>
 
@@ -505,7 +489,7 @@ export function MapForge({
               <div className="flex gap-1.5 overflow-x-auto pb-1">
                 {history.map((entry) => (
                   <HistoryTile
-                    key={`${entry.roll.seed}-${entry.roll.width}x${entry.roll.height}-${entry.roll.theme}-${entry.roll.ambient}-${entry.roll.hint}`}
+                    key={`${entry.roll.seed}-${entry.roll.width}x${entry.roll.height}-${entry.roll.theme}-${entry.roll.ambient}-${entry.roll.scene}`}
                     entry={entry}
                     genre={genre}
                     skin={library ? skin : null}

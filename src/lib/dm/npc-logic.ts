@@ -284,45 +284,15 @@ export function advanceSessionGoal(
   };
 }
 
-// ---- goal collisions ----
+// ---- names a tool did not find ----
 
-const STOPWORDS = new Set([
-  "the", "and", "for", "with", "from", "into", "over", "their", "them",
-  "they", "that", "this", "his", "her", "its", "our", "your", "who",
-  "what", "where", "when", "will", "wants", "want", "take", "get", "keep",
-  "make", "become", "becomes", "out", "off", "own", "new", "old", "all",
-  "party", "gold",
-]);
-
-function goalTokens(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, " ")
-      .split(/\s+/)
-      .filter((token) => token.length > 3 && !STOPWORDS.has(token)),
-  );
-}
-
-export type GoalCollision = { a: string; b: string; over: string };
-
-// Two NPCs whose session goals name the same significant thing are after
-// the same prize; the caller resolves each collision with opposed dice.
-export function detectGoalCollisions(
-  npcs: Array<{ name: string; goalText: string }>,
-): GoalCollision[] {
-  const collisions: GoalCollision[] = [];
-  for (let indexA = 0; indexA < npcs.length; indexA += 1) {
-    for (let indexB = indexA + 1; indexB < npcs.length; indexB += 1) {
-      const tokensA = goalTokens(npcs[indexA].goalText);
-      const tokensB = goalTokens(npcs[indexB].goalText);
-      const shared = [...tokensA].find((token) => tokensB.has(token));
-      if (shared) {
-        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: shared });
-      }
-    }
-  }
-  return collisions;
+// What a tool that found no NPC by a name adds to its error when the roster
+// nearly has it (db/npcs.ts nearestNpcName), ahead of the error's own
+// "Register them" sentence: an either/or, so the model, who knows whether
+// the two are one person, neither registers a duplicate nor takes the known
+// name for someone new.
+export function nearestNpcHint(nearest: string | null): string {
+  return nearest ? ` If you mean "${nearest}", use that name. Someone new?` : "";
 }
 
 // ---- pressure ----

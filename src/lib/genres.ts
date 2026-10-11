@@ -18,12 +18,21 @@ export type GenrePreset = {
   // One line telling the DM how people are described in this world, used in
   // the add_companion schema and the companion rules.
   raceHint: string;
-  // Hints the story-setup pass can lean on.
+  // Hints the story-setup pass can lean on. Read through nameRegisterHint.
   nameHints: string;
   defaultTheme: string;
   // The weather table the sky rolls from (src/lib/srd/weather.ts).
   climate: Climate;
 };
+
+// A world's name hint as a prompt gives it: the register without the
+// examples in parentheses, which are for the person choosing a world (the
+// create-campaign screen shows them). Handed to the model, the examples were
+// reused: every new high-fantasy campaign opened in "Thornhollow", at every
+// table and in every language, even when told to invent names of its own.
+export function nameRegisterHint(nameHints: string): string {
+  return nameHints.replace(/\s*\([^)]*\)/g, "").trim();
+}
 
 export const GENRE_PRESETS: GenrePreset[] = [
   {

@@ -23,7 +23,7 @@ import {
   parseWaypointJudge,
   setWaypointDone,
   signalFromToolCall,
-  stems,
+  taggedWaypoint,
   tickWaypoints,
 } from "../src/lib/dm/waypoint-logic.ts";
 import { applyBeatEdit } from "../src/lib/dm/arc-edit-logic.ts";
@@ -54,19 +54,32 @@ const gatedArc = () =>
     ],
   });
 
-test("stems drop the words every waypoint shares and agree across plurals", () => {
-  assert.deepEqual(stems("Reach the Drowned Cathedral of Vael"), ["drown", "cathe", "vael"]);
-  assert.deepEqual(stems("the cathedrals"), ["cathe"]);
+test("a name matches a waypoint when its stems all appear, or most stems are shared", () => {
+  const en = (waypoint, name) => lexicalMatch(waypoint, name, "english");
+  assert.equal(en("Reach the Drowned Cathedral of Vael", "the drowned cathedral"), true);
+  assert.equal(en("Reach the Drowned Cathedral of Vael", "the drowned cathedrals"), true);
+  assert.equal(en("Reach the Drowned Cathedral of Vael", "Drowned Cathedral of Vael"), true);
+  assert.equal(en("Speak with Brisca Hale about the safe path", "Brisca"), true);
+  assert.equal(en("Speak with Brisca Hale about the safe path", "Brisca Hale"), true);
+  assert.equal(en("Reach the Drowned Cathedral of Vael", "the ferry landing"), false);
+  assert.equal(en("Recover the glass fragment", "Salt-Glass Husk"), false);
+  assert.equal(en("Speak with Brisca Hale", "Father Kaelen"), false);
+  assert.equal(en("Reach the House of the Guild", "Gate of the Guild"), false);
 });
 
-test("a name matches a waypoint when its distinctive stems all appear, or most stems are shared", () => {
-  assert.equal(lexicalMatch("Reach the Drowned Cathedral of Vael", "the drowned cathedral"), true);
-  assert.equal(lexicalMatch("Reach the Drowned Cathedral of Vael", "Drowned Cathedral of Vael"), true);
-  assert.equal(lexicalMatch("Speak with Brisca Hale about the safe path", "Brisca"), true);
-  assert.equal(lexicalMatch("Speak with Brisca Hale about the safe path", "Brisca Hale"), true);
-  assert.equal(lexicalMatch("Reach the Drowned Cathedral of Vael", "the ferry landing"), false);
-  assert.equal(lexicalMatch("Recover the glass fragment", "Salt-Glass Husk"), false);
-  assert.equal(lexicalMatch("Speak with Brisca Hale", "Father Kaelen"), false);
+test("each table language reads its own function words: the wrong place never ticks, the right one does", () => {
+  const cases = [
+    ["italian", "Raggiungi la Casa della Gilda", "Porta della Gilda", "la Casa della Gilda"],
+    ["french", "Atteindre la Salle des Mages", "Tour des Mages", "la Salle des Mages"],
+    ["spanish", "Llegar a la Casa del Gremio", "Puerta del Gremio", "la Casa del Gremio"],
+    ["german", "Erreiche das Haus der Gilde", "Tor der Gilde", "das Haus der Gilde"],
+  ];
+  for (const [language, waypoint, wrong, right] of cases) {
+    assert.equal(lexicalMatch(waypoint, wrong, language), false, `${language}: ${wrong}`);
+    assert.equal(lexicalMatch(waypoint, right, language), true, `${language}: ${right}`);
+  }
+  assert.equal(lexicalMatch("Raggiungi la Torre della Strega", "Torre della Strega", "italian"), true);
+  assert.equal(lexicalMatch("Raggiungi la Torre delle Streghe", "la torre della strega", "italian"), true);
 });
 
 test("tool calls become typed signals with the name the DM used", () => {
@@ -85,11 +98,11 @@ test("tool calls become typed signals with the name the DM used", () => {
 
 test("a signal ticks only open waypoints of its own kind, never a narrative one", () => {
   const { beat } = activeBeat(gatedArc());
-  assert.deepEqual(matchSignal(beat, { kind: "place", names: ["the drowned cathedral"] }), [1]);
-  assert.deepEqual(matchSignal(beat, { kind: "npc", names: ["Brisca"] }), [0]);
-  assert.deepEqual(matchSignal(beat, { kind: "item", names: ["the glass fragment"] }), [2]);
-  assert.deepEqual(matchSignal(beat, { kind: "narrative", names: ["the petrified pilgrims"] }), []);
-  assert.deepEqual(matchSignal(beat, { kind: "place", names: ["Brisca"] }), []);
+  assert.deepEqual(matchSignal(beat, { kind: "place", names: ["the drowned cathedral"] }, "english"), [1]);
+  assert.deepEqual(matchSignal(beat, { kind: "npc", names: ["Brisca"] }, "english"), [0]);
+  assert.deepEqual(matchSignal(beat, { kind: "item", names: ["the glass fragment"] }, "english"), [2]);
+  assert.deepEqual(matchSignal(beat, { kind: "narrative", names: ["the petrified pilgrims"] }, "english"), []);
+  assert.deepEqual(matchSignal(beat, { kind: "place", names: ["Brisca"] }, "english"), []);
 });
 
 test("ticks record on the beat and the gate lifts only when every step is done", () => {
@@ -186,7 +199,7 @@ test("the planners' beats parse with or without waypoints, and land on the new a
 test("only the beat in play shows its checklist to the DM", () => {
   const arc = tickWaypoints(gatedArc(), 2, [1]);
   const rendered = renderArcForPrompt(arc);
-  assert.ok(rendered.includes("waypoints: [ ] Speak with Brisca Hale about the safe path (npc) | [x] Reach the Drowned Cathedral of Vael (place)"));
+  assert.ok(rendered.includes("waypoints: 1. [ ] Speak with Brisca Hale about the safe path (npc) | 2. [x] Reach the Drowned Cathedral of Vael (place)"));
   assert.equal((rendered.match(/waypoints:/g) ?? []).length, 1);
   assert.ok(rendered.includes("cannot complete until every one is ticked"));
 });
@@ -222,6 +235,33 @@ test("the lead ticks and clears waypoints by hand, never on a settled beat", () 
   assert.ok("error" in applyBeatEdit(arc, { op: "waypoint", beat: 1, index: 0, done: true }));
   assert.ok("error" in applyBeatEdit(arc, { op: "waypoint", beat: 2, index: 7, done: true }));
   assert.ok("error" in applyBeatEdit(arc, { op: "waypoint", beat: 3, index: 0, done: true }));
+});
+
+test("a tool call's waypoint tag names an open step of the kind the tool can satisfy", () => {
+  const beat = {
+    text: "Cross to the cathedral.",
+    status: "active",
+    act: 1,
+    waypoints: [
+      { kind: "place", text: "Reach the Drowned Cathedral of Vael", done: false },
+      { kind: "npc", text: "Speak with Brisca Hale", done: false },
+      { kind: "place", text: "Reach the ferry", done: true },
+    ],
+  };
+  const tag = (tool, args) => taggedWaypoint(beat, tool, JSON.stringify(args));
+  // The DM names the step, whatever it calls the place.
+  assert.equal(tag("move_party", { name: "the sunken church of Vael", waypoint: 1 }), 0);
+  assert.equal(tag("set_npc", { name: "the old boatwoman", waypoint: 2 }), 1);
+  // A step of another kind, a done step, or one past the list: no tag.
+  assert.equal(tag("move_party", { name: "Brisca's hut", waypoint: 2 }), null);
+  assert.equal(tag("move_party", { name: "the ferry", waypoint: 3 }), null);
+  assert.equal(tag("move_party", { name: "nowhere", waypoint: 9 }), null);
+  // Malformed tags count as no tag; a tool that ticks nothing takes none.
+  for (const waypoint of [0, -1, 1.5, "1", null]) {
+    assert.equal(tag("move_party", { name: "x", waypoint }), null);
+  }
+  assert.equal(taggedWaypoint(beat, "move_party", "not json"), null);
+  assert.equal(tag("apply_damage", { waypoint: 1 }), null);
 });
 
 console.log(`test-waypoints: ${passed} tests passed`);

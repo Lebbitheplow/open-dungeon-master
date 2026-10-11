@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { compareNames } from "@/lib/language/text-logic";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getDatabase, parseJson } from "@/lib/db/core";
@@ -11,7 +12,8 @@ import { getCommonWorkshop } from "@/lib/db/workshop-common";
 import { worldForBundle } from "@/lib/db/world-forge-bundle";
 import { normalizeStock } from "@/lib/db/shops";
 import { clampMarkup } from "@/lib/dm/shop-logic";
-import { createSheetSchema } from "@/lib/schemas/sheet";
+import { storedSheetSchema } from "@/lib/schemas/sheet";
+import { storedGender } from "@/lib/gender";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { normalizeMapSkin } from "@/lib/battlemap/skins";
 import { normalizeRoutes } from "@/lib/workshop/board";
@@ -84,17 +86,24 @@ export function refFor(campaignId: string, kind: OriginKind, rowId: string): str
   );
 }
 
+const rowsByName = (a: Row, b: Row) => compareNames(str(a.name), str(b.name));
+
 // The rows of one linkable kind: this workshop's, then the ones its cards
-// pick from the shared workshop (#159), each with the workshop it lives in.
-function linkable(sql: string, own: string, sharedIds: string[], common: string | null): Array<Row & { home: string }> {
-  const rows = allRows(sql.replace("{where}", "campaign_id = ?"), own).map((row) => ({ ...row, home: own }));
+// pick from the shared workshop (#159), each with the workshop it lives in,
+// each part in `order` when one is given.
+function linkable(sql: string, own: string, sharedIds: string[], common: string | null, order?: (a: Row, b: Row) => number): Array<Row & { home: string }> {
+  const read = (id: string) => {
+    const rows = allRows(sql.replace("{where}", "campaign_id = ?"), id);
+    return order ? rows.sort(order) : rows;
+  };
+  const rows = read(own).map((row) => ({ ...row, home: own }));
   if (!common || !sharedIds.length) {
     return rows;
   }
   const wanted = new Set(sharedIds);
   return [
     ...rows,
-    ...allRows(sql.replace("{where}", "campaign_id = ?"), common)
+    ...read(common)
       .filter((row) => wanted.has(str(row.id)))
       .map((row) => ({ ...row, home: common })),
   ];
@@ -124,7 +133,7 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
     left: { ...IDENTITY, visited: "play", is_current: "play", map_image_json: "a legacy column nothing reads" },
   },
   npcs: {
-    carried: ["name", "attitude", "trait", "location", "role", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
+    carried: ["name", "attitude", "trait", "location", "role", "gender", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
     left: {
       ...IDENTITY,
       last_shift_turn: "the source table's clock",
@@ -222,18 +231,20 @@ export function exportWorkshopBundle(
   }
   const commonId = common?.id ?? null;
   const npcRows = linkable(
-    `SELECT * FROM npcs WHERE {where} AND archived = 0 ORDER BY name COLLATE NOCASE`,
+    `SELECT * FROM npcs WHERE {where} AND archived = 0`,
     workshopId,
     [...picked.npcId],
     commonId,
+    rowsByName,
   );
   const locationRows = linkable(`SELECT * FROM locations WHERE {where} ORDER BY created_at`, workshopId, [...picked.locationId], commonId);
-  const mapRows = linkable(`SELECT * FROM prepared_maps WHERE {where} ORDER BY name COLLATE NOCASE`, workshopId, [...picked.mapId], commonId);
+  const mapRows = linkable(`SELECT * FROM prepared_maps WHERE {where}`, workshopId, [...picked.mapId], commonId, rowsByName);
   const encounterRows = linkable(
-    `SELECT * FROM encounter_templates WHERE {where} ORDER BY name COLLATE NOCASE`,
+    `SELECT * FROM encounter_templates WHERE {where}`,
     workshopId,
     [...picked.encounterId],
     commonId,
+    rowsByName,
   );
   const indexOf = (rows: Row[]) => new Map(rows.map((row, index) => [str(row.id), index]));
   const npcIndex = indexOf(npcRows);
@@ -249,11 +260,11 @@ export function exportWorkshopBundle(
   // making the whole bundle unreadable on the other side.
   const pregenRows = allRows(
     `SELECT name, level, role, sheet_json FROM library_characters
-     WHERE workshop_id = ? AND user_id = ? ORDER BY name COLLATE NOCASE`,
+     WHERE workshop_id = ? AND user_id = ?`,
     workshopId,
     campaign.ownerUserId,
-  ).flatMap((row) => {
-    const sheet = createSheetSchema.safeParse(parseJson<unknown>(str(row.sheet_json, "{}"), {}));
+  ).sort(rowsByName).flatMap((row) => {
+    const sheet = storedSheetSchema.safeParse(parseJson<unknown>(str(row.sheet_json, "{}"), {}));
     return sheet.success
       ? [{ name: str(row.name), level: Math.min(20, Math.max(1, Number(row.level) || 1)), role: str(row.role) === "companion" ? ("companion" as const) : ("pc" as const), sheet: sheet.data }]
       : [];
@@ -264,9 +275,9 @@ export function exportWorkshopBundle(
     workshopId,
   );
   const factionRows = allRows(
-    `SELECT id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+    `SELECT id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path FROM factions WHERE campaign_id = ?`,
     workshopId,
-  );
+  ).sort(rowsByName);
   const ownIds = (rows: Array<Row & { home?: string }>) => rows.map((row) => (row.home === undefined || row.home === workshopId ? str(row.id) : ""));
 
   const shelf = shelfForBundle({
@@ -324,6 +335,7 @@ export function exportWorkshopBundle(
       trait: str(row.trait),
       location: str(row.location),
       role: str(row.role),
+      gender: storedGender(row.gender),
       aliases: parseJson<string[]>(str(row.aliases_json, "[]"), []),
       personality: str(row.personality_json),
       goals: str(row.goals_json),
@@ -356,6 +368,7 @@ export function exportWorkshopBundle(
         notes: str(row.notes),
         map: {
           map: at(mapIndex, map.mapId),
+          scene: typeof map.scene === "string" ? map.scene : null,
           seed: number(map.seed),
           theme: typeof map.theme === "string" ? map.theme : null,
           ambient: typeof map.ambient === "string" ? map.ambient : null,
@@ -368,9 +381,9 @@ export function exportWorkshopBundle(
       };
     }),
     tables: allRows(
-      `SELECT name, entries_json, no_replacement FROM roll_tables WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+      `SELECT name, entries_json, no_replacement FROM roll_tables WHERE campaign_id = ?`,
       workshopId,
-    ).map((row) => ({
+    ).sort(rowsByName).map((row) => ({
       name: str(row.name),
       entries: parseJson<unknown[]>(str(row.entries_json, "[]"), []),
       noReplacement: Number(row.no_replacement) === 1,
@@ -429,7 +442,7 @@ export function exportWorkshopBundle(
     // The world pack draft travels whole, art and all; it is the one thing
     // in a workshop that was built to be handed on.
     // The Market (#171), the place and keeper as indexes like a card's picks.
-    shops: allRows(`SELECT * FROM shops WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`, workshopId).map((row) => {
+    shops: allRows(`SELECT * FROM shops WHERE campaign_id = ?`, workshopId).sort(rowsByName).map((row) => {
       const prepared = str(row.prepared_stock_json);
       return {
         name: str(row.name),

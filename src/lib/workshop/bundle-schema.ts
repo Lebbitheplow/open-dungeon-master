@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { createSheetSchema } from "@/lib/schemas/sheet";
+import { storedSheetSchema } from "@/lib/schemas/sheet";
+import { GENDERS } from "@/lib/gender";
 import { GENRES } from "@/lib/schemas/game-settings";
 import { BEAT_KINDS, ROUTE_KINDS, ROUTE_LABEL_MAX } from "@/lib/workshop/board";
 import { worldPackDraftSchema } from "@/lib/worlds/draft";
@@ -115,6 +116,8 @@ const npcSchema = z.object({
   location: z.string().max(120).default(""),
   // A role id or free text; bundles written before the field have none.
   role: z.string().trim().max(40).default(""),
+  // src/lib/gender.ts; bundles written before the field have none.
+  gender: z.enum(["", ...GENDERS]).default(""),
   aliases: z.array(z.string().trim().max(80)).max(20).default([]),
   personality: z.string().max(4_000).default(""),
   goals: z.string().max(4_000).default(""),
@@ -158,13 +161,14 @@ const encounterSchema = z.object({
   map: z
     .object({
       map: indexSchema,
+      scene: z.string().max(40).nullable().default(null),
       seed: z.number().int().nullable().default(null),
       theme: z.string().max(40).nullable().default(null),
       ambient: z.string().max(40).nullable().default(null),
       width: z.number().int().nullable().default(null),
       height: z.number().int().nullable().default(null),
     })
-    .default({ map: null, seed: null, theme: null, ambient: null, width: null, height: null }),
+    .default({ map: null, scene: null, seed: null, theme: null, ambient: null, width: null, height: null }),
   extras: z.record(z.string(), z.unknown()).default({}),
   ref: refSchema,
   shared: sharedSchema,
@@ -314,7 +318,7 @@ const pregenSchema = z.object({
   name: z.string().trim().min(1).max(80),
   level: z.number().int().min(1).max(20),
   role: z.enum(["pc", "companion"]).default("pc"),
-  sheet: createSheetSchema,
+  sheet: storedSheetSchema,
 });
 
 export const workshopBundleSchema = z.object({

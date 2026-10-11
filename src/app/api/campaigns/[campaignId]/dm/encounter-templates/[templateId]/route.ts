@@ -18,6 +18,7 @@ import {
 import { templateDifficulty } from "@/lib/dm/encounter-templates";
 import { getPreparedMap } from "@/lib/db/prepared-maps";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { sceneIds } from "@/lib/ambience/catalog";
 import { layOver } from "@/lib/schemas/parse-keeping-valid";
 
 export const runtime = "nodejs";
@@ -68,6 +69,7 @@ export async function PATCH(
       : normalizeTemplateMap(layOver(template.map, parsed.data.map), {
           themes: MAP_THEMES,
           ambients: ["bright", "dim", "dark"],
+          scenes: sceneIds(),
         });
   // Same drawer check the create route makes; the normalizer is pure and
   // only shape-checks the id.

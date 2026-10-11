@@ -15,7 +15,8 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { dmQueuePaused, enqueueDmJob, pauseDmQueue, resumeDmQueue } = await import("../src/lib/dm/queue.ts");
-const { buildLinePrompt, boundaryNegativeTerms, lineViolations, normalizeSafety, renderSafetyBlock } = await import("../src/lib/dm/safety-logic.ts");
+const { buildLinePrompt, boundaryNegativeTerms, normalizeSafety, renderSafetyBlock } = await import("../src/lib/dm/safety-logic.ts");
+const { lineViolations } = await import("../src/lib/dm/safety-lines-logic.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { raiseXCard, resumeAfterXCard, xCardRaised } = await import("../src/lib/dm/safety.ts");
@@ -61,11 +62,34 @@ await test("raising the card publishes an anonymous, persisted event and resumin
   assert.ok(events.some((chunk) => chunk.includes("safety_resumed") && chunk.includes('"action":"continue"')));
 });
 
+await test("a line catches its plural and singular in the table's own language, and nothing inside another word", async () => {
+  const cases = [
+    ["italian", "ragno", "Un ragno scende dal soffitto.", "Tre ragni scendono dal soffitto."],
+    ["spanish", "ratón", "Un ratón cruza la sala.", "Los ratones cruzan la sala."],
+    ["german", "Spinne", "Eine Spinne krabbelt herab.", "Die Spinnen krabbeln herab."],
+    ["french", "araignée", "Une araignée descend du plafond.", "Des araignées descendent du plafond."],
+    ["english", "spider", "A spider drops.", "Spiders drop."],
+  ];
+  for (const [language, line, one, many] of cases) {
+    assert.deepEqual(lineViolations(one, [line], language), [line], `${language}: ${one}`);
+    assert.deepEqual(lineViolations(many, [line], language), [line], `${language}: ${many}`);
+  }
+  // A line written with an elided article still catches the bare word.
+  assert.deepEqual(lineViolations("Une araignée descend.", ["l'araignée"], "french"), ["l'araignée"]);
+  // A name starting or ending with an accented letter.
+  assert.deepEqual(lineViolations("Niccolò entra nella stanza.", ["Niccolò"], "italian"), ["Niccolò"]);
+  assert.deepEqual(lineViolations("Élodie sourit.", ["Élodie"], "french"), ["Élodie"]);
+  // Inside a longer word is no match: the old prefix rule read "rat" in "pirate".
+  assert.deepEqual(lineViolations("The pirate laughs.", ["rat"], "english"), []);
+  assert.deepEqual(lineViolations("The slave market is closed; a Slavic merchant waits.", ["Slavic"], "english"), ["Slavic"]);
+  assert.deepEqual(lineViolations("A Slavic merchant waits.", ["slave"], "english"), []);
+});
+
 await test("a line is caught by phrase or by stem, and the prompt block lists lines and veils", async () => {
   const lines = ["spiders", "harm to children"];
-  assert.deepEqual(lineViolations("A spider drops from the rafters.", lines), ["spiders"]);
-  assert.deepEqual(lineViolations("The child is safe; nothing harms her.", lines), ["harm to children"]);
-  assert.deepEqual(lineViolations("The rain falls on the mill.", lines), []);
+  assert.deepEqual(lineViolations("A spider drops from the rafters.", lines, "english"), ["spiders"]);
+  assert.deepEqual(lineViolations("The child is safe; nothing harms her.", lines, "english"), ["harm to children"]);
+  assert.deepEqual(lineViolations("The rain falls on the mill.", lines, "english"), []);
   assert.match(buildLinePrompt(["spiders"]), /ruled out entirely: spiders/);
   const safety = normalizeSafety({ lines, veils: ["torture"], boundaries: "family", xCard: false });
   const block = renderSafetyBlock(safety);

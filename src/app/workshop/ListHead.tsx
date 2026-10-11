@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { ListControls, useListControls, type Listed } from "@/components/ui/ListControls";
+import { compareNames } from "@/lib/language/text-logic";
 
 // The same head on every workshop list long enough to need one: the shared
 // search, tag and sort controls (src/components/ui/ListControls.tsx) and a
@@ -65,7 +66,7 @@ export function ListHead({
 export type RowSort = "made" | "name";
 
 export function sortRows<T>(rows: readonly T[], sort: RowSort, name: (row: T) => string): T[] {
-  return sort === "name" ? [...rows].sort((a, b) => name(a).localeCompare(name(b))) : [...rows];
+  return sort === "name" ? [...rows].sort((a, b) => compareNames(name(a), name(b))) : [...rows];
 }
 
 export function ListTally({

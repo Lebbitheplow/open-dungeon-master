@@ -38,6 +38,7 @@ export async function DELETE(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "system-party",
     content: `The party lead sends ${String(result.dismissed)} on their way; they leave the party.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });

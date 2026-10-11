@@ -1,5 +1,6 @@
 "use client";
 
+import type { Gender } from "@/lib/gender";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { toolChoiceOf } from "@/lib/srd/tool-choices";
 import { useEffect, useRef, useState } from "react";
@@ -210,7 +211,7 @@ export function useBuilderState({
   // One-shot acknowledgement for the "caster with no spells" warning.
   const [spellWarningAck, setSpellWarningAck] = useState(false);
   const [backstory, setBackstory] = useState(initial?.backstory ?? "");
-  const [gender, setGender] = useState(initial?.gender ?? "");
+  const [gender, setGender] = useState<Gender>(initial?.gender ?? "");
   const [appearance, setAppearance] = useState(initial?.appearance ?? "");
   // An uploaded photo here means the creation routes skip the ComfyUI render
   // entirely (they only queue one when the sheet arrives without a portrait).

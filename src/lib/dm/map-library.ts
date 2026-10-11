@@ -85,7 +85,8 @@ export function createLibraryMap(
     height?: number;
     theme?: MapTheme;
     ambient?: AmbientLight;
-    hint?: string;
+    // The kind of place (an ambience bed id) the generator rolls.
+    scene?: string;
     seed?: number;
     // Absent means roll one with the generator.
     blank?: BlankFill;
@@ -129,8 +130,7 @@ export function createLibraryMap(
     seed,
     width,
     height,
-    genre: campaign.gameSettings.genre,
-    hint: input.hint,
+    scene: input.scene ?? null,
     theme: input.theme,
     ambient: input.ambient,
     pcCount: 4,

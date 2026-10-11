@@ -43,6 +43,7 @@ async function table(settings = {}) {
 
 async function recruit(world, classId, extra = {}) {
   const joined = await world.invoke("add_companion", {
+    gender: "Unknown",
     name: `The ${classId}`,
     class: classId,
     race: "human",
@@ -289,6 +290,7 @@ await test("every setting class makes a companion, and the companion levels", as
     const world = await table({ genre, maxGuests: 3 });
     for (const classId of genreClassIds(genre)) {
       const joined = await world.invoke("add_companion", {
+        gender: "Unknown",
         name: `The ${classId}`,
         class: classId,
         race: "human",

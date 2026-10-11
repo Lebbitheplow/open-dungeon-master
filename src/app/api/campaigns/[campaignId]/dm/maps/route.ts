@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
 import { MAP_SIZE, MAP_THEMES } from "@/lib/battlemap/generate";
+import { sceneIds } from "@/lib/ambience/catalog";
 import { UVTT_MAX_POINTS, UVTT_SIZE } from "@/lib/battlemap/uvtt";
 import { isBackdropPath } from "@/lib/battlemap/backdrop";
 import { skinById } from "@/lib/battlemap/skins";
@@ -32,7 +33,7 @@ const createSchema = z.object({
   height: z.number().int().min(MAP_SIZE.minHeight).max(MAP_SIZE.maxHeight).optional(),
   theme: z.enum(MAP_THEMES as [string, ...string[]]).optional(),
   ambient: z.enum(["bright", "dim", "dark"]).optional(),
-  hint: z.string().trim().max(200).optional(),
+  scene: z.enum(sceneIds()).optional(),
   seed: z.number().int().min(0).max(0xffffffff).optional(),
   blank: z.enum(BLANK_FILLS as unknown as [string, ...string[]]).optional(),
   // A named skin to start in. Material overrides come later, from the editor.
@@ -160,7 +161,7 @@ export async function POST(
     // string.
     theme: body.theme as Parameters<typeof createLibraryMap>[1]["theme"],
     ambient: body.ambient,
-    hint: body.hint,
+    scene: body.scene,
     seed: body.seed,
     blank: body.blank as Parameters<typeof createLibraryMap>[1]["blank"],
     skin: body.skin ? { id: body.skin.id, bind: {} } : undefined,

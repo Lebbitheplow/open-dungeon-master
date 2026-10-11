@@ -4,6 +4,7 @@
 // the zod schemas, which are the bulk of that module.
 import type { WorldPack } from "@/lib/worlds/types";
 import { packArtUrl } from "@/lib/worlds/art";
+import { compareNames } from "@/lib/language/text-logic";
 
 // Where a pack came from. Bundled packs ship with the app under its MIT
 // license and are always original works; installed packs were added by an
@@ -83,8 +84,8 @@ export function groupByFranchise(packs: WorldPackSummary[]): FranchiseGroup[] {
     .map(([franchise, editions]) => ({
       franchise,
       editions: [...editions].sort(
-        (a, b) => a.editionOrder - b.editionOrder || a.name.localeCompare(b.name),
+        (a, b) => a.editionOrder - b.editionOrder || compareNames(a.name, b.name),
       ),
     }))
-    .sort((a, b) => a.franchise.localeCompare(b.franchise));
+    .sort((a, b) => compareNames(a.franchise, b.franchise));
 }

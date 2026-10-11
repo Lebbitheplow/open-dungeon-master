@@ -93,7 +93,7 @@ export function classArt(classId: string, gender?: string | null): string {
   }
   const borrowed = characterPlaceholder({
     class: classId,
-    gender: stableBit(classId) ? "feminine" : "masculine",
+    gender: stableBit(classId) ? "Female" : "Male",
   });
   return borrowed.includes("/character-class/") ? borrowed : own;
 }

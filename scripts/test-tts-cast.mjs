@@ -6,7 +6,8 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { castingPool, genderFromProse, guessGender, pickVoice, voiceGender } = await import("../src/lib/tts-cast.ts");
+const { castingPool, pickVoice, voiceGender } = await import("../src/lib/tts-cast.ts");
+const { genderMark } = await import("../src/lib/gender.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -26,17 +27,15 @@ test("the pool is the narrator's language, without the narrator, old takes and n
   assert.deepEqual(castingPool(["alloy", "nova", "onyx"], "alloy"), ["nova", "onyx"], "a server with its own names is taken as it is");
 });
 
-test("a voice says what it sounds like, and so does a description", () => {
+test("a voice says what it sounds like, and a gender field which voice it asks for", () => {
   assert.equal(voiceGender("af_heart"), "f");
   assert.equal(voiceGender("bm_george"), "m");
   assert.equal(voiceGender("onyx"), "m");
   assert.equal(voiceGender("af_heart(30)+af_bella(70)"), "");
-  assert.equal(guessGender("she/her"), "f");
-  assert.equal(guessGender("Male"), "m");
-  assert.equal(guessGender("female"), "f", "female is not male");
-  assert.equal(guessGender("a tired old man who misses his wife"), "m");
-  assert.equal(guessGender("they/them"), "");
-  assert.equal(guessGender(""), "");
+  assert.equal(genderMark("Female"), "f");
+  assert.equal(genderMark("Male"), "m");
+  assert.equal(genderMark("Nonbinary"), "");
+  assert.equal(genderMark(""), "");
 });
 
 test("a pick suits the speaker, is stable, and avoids voices already taken", () => {
@@ -55,47 +54,14 @@ test("a pick suits the speaker, is stable, and avoids voices already taken", () 
   assert.equal(pickVoice("Wren", "f", ["onyx"], []), "onyx", "with nothing suitable, any voice beats none");
 });
 
-test("the story so far says who is a he and who is a she", () => {
-  const table = [
-    { kind: "pc", id: "brom", name: "Brom Ironfist" },
-    { kind: "pc", id: "kara", name: "Kara" },
-    { kind: "npc", id: "wren", name: "Wren" },
-    { kind: "npc", id: "pike", name: "Old Pike" },
-  ];
-  const told = genderFromProse(table, [
-    "Brom plants his feet and raises his shield. Kara draws her bow, and she does not miss.",
-    "Brom grunts as the blow lands on him. Wren says nothing.",
-    "Pike looks at Kara. He hands her the key, and she takes it.",
-  ]);
-  assert.equal(told.get("brom"), "m");
-  assert.equal(told.get("kara"), "f");
-  assert.equal(told.get("wren"), "", "nothing said, nothing guessed");
-  assert.equal(told.get("pike"), "", "the pronouns after the next name are that person's, not his");
-});
-
-test("pronouns count for the person a sentence is about, never the one it mentions or the words of a quote", () => {
-  const table = [
-    { kind: "npc", id: "sella", name: "Sella" },
-    { kind: "pc", id: "liriel", name: "Liriel" },
-    { kind: "npc", id: "brom", name: "Brom" },
-  ];
-  const told = genderFromProse(table, [
-    "Sella folds her arms and turns to Liriel. She waits.",
-    'Brom laughs. "She will never know," he says. "Not her, not anyone."',
-  ]);
-  assert.equal(told.get("sella"), "f");
-  assert.equal(told.get("liriel") ?? "", "", "Liriel was only turned to");
-  assert.equal(told.get("brom"), "m", "the quote's she and her are somebody else");
-});
-
 const { unvoicedSpeakers } = await import("../src/lib/tts.ts");
 
-test("a voice is cast for whoever spoke, from what the prose said about them", () => {
+test("a voice is cast for whoever the stored lines say spoke, or the one the passage is spoken as", () => {
   const entry = (key, name) => ({ key, kind: "npc", name, aliases: [], portraitUrl: "", ownerUserId: "", gender: "", voice: null });
-  const roster = [entry("npc:marla", "Marla"), entry("npc:pike", "Old Pike")];
-  const { keys, hints } = unvoicedSpeakers('Marla turns to Old Pike, his face grim. "We go," she says.', roster, null);
-  assert.deepEqual([...keys], ["npc:marla"], "Pike was only spoken to");
-  assert.equal(hints.get("npc:marla"), "f", "his face is Pike's; she is Marla");
+  const roster = [entry("npc:marla", "Marla"), entry("npc:pike", "Old Pike"), entry("monster:goblin", "Goblin")];
+  const lines = [{ line: "We go,", speaker: { kind: "npc", id: "marla", name: "Marla" } }];
+  assert.deepEqual([...unvoicedSpeakers(lines, roster, null)], ["npc:marla"], "Pike, only spoken to, has no line");
+  assert.deepEqual([...unvoicedSpeakers([], roster, { kind: "monster", id: "e2", name: "Goblin 2" })], ["monster:goblin"]);
 });
 
 console.log(`test-tts-cast: ${passed} passed`);

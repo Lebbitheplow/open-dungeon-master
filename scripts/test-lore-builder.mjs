@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   normalizeLoreInput,
   renderLoreForPrompt,
-  scoreLoreByKeywords,
 } from "../src/lib/dm/world-lore-logic.ts";
 
 let passed = 0;
@@ -45,12 +44,6 @@ test("normalizeLoreInput validates and bounds", () => {
   assert.ok(!ok.tags.includes(""));
 });
 
-test("scoreLoreByKeywords matches title, tags, and body", () => {
-  assert.ok(scoreLoreByKeywords("who runs the salt roads", entry()) > 0.3);
-  assert.ok(scoreLoreByKeywords("grey ring tattoo", entry()) > 0.5);
-  assert.equal(scoreLoreByKeywords("dragons atop frozen peaks", entry()), 0);
-});
-
 test("renderLoreForPrompt pins first, dedupes, and clips", () => {
   const pinned = entry({ id: "p1", title: "Pinned Truth", body: "z".repeat(600) });
   const also = entry({ id: "r1", title: "Retrieved" });
@@ -60,6 +53,16 @@ test("renderLoreForPrompt pins first, dedupes, and clips", () => {
   assert.ok(block.indexOf("Pinned Truth") < block.indexOf("Retrieved"));
   // Bodies clip to ~300 chars per entry.
   assert.ok(!block.includes("z".repeat(400)));
+});
+
+test("renderLoreForPrompt says retrieved entries are the nearest matches, and only when there are some", () => {
+  // Retrieval has no relevance cut-off, so the DM is told what it got.
+  const retrieved = renderLoreForPrompt([], [entry({ id: "r1", title: "Retrieved" })], 1600);
+  assert.ok(retrieved.startsWith("WORLD LORE (established by the party lead; treat as canon. The entries picked"));
+  assert.match(retrieved, /nearest matches, nearest first; use only those that bear on it\):/);
+  // Pinned entries are the lead's choice, not a pick: unchanged.
+  const pinned = renderLoreForPrompt([entry({ id: "p1", title: "Pinned" })], [], 1600);
+  assert.ok(pinned.startsWith("WORLD LORE (established by the party lead; treat as canon):\n"));
 });
 
 test("renderLoreForPrompt respects the budget and empty case", () => {

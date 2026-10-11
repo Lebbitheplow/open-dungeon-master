@@ -1,3 +1,4 @@
+import { campaignLanguage } from "@/lib/db/campaigns";
 import {
   getChapter,
   listChapterEmbeddings,
@@ -12,7 +13,7 @@ import {
   listSceneChunksMissingVectors,
   setSceneChunkEmbedding,
 } from "@/lib/db/scene-chunks";
-import { getDatabase, nowIso } from "@/lib/db/core";
+import { getDatabase } from "@/lib/db/core";
 import { bufferToVector, cosine, embed, similarityOf, vectorToBuffer } from "@/lib/embeddings";
 import { chunkScenes } from "@/lib/dm/scene-logic";
 import {
@@ -167,7 +168,7 @@ export async function indexChapter(campaignId: string, chapterId: string): Promi
       const [vector] = await embed([summaryText]);
       setChapterEmbedding(chapterId, vectorToBuffer(vector));
     }
-    await dedupFactsSemantically(campaignId);
+    await embedPendingFacts(campaignId);
   } catch (error) {
     console.error("[memory-index] indexing failed", error);
   }
@@ -233,7 +234,6 @@ export type RecalledScene = {
 
 const PHASE1_CHAPTERS = 3;
 const PHASE2_SCENES = 3;
-const SCENE_FLOOR = 0.25;
 // Scene chunks are cut from a continuous transcript, so pull a wider fused
 // set and let MMR thin it: without that, the three best matches for "the
 // vault" are routinely three overlapping windows onto the same conversation.
@@ -267,18 +267,20 @@ export async function searchScenes(
   let queryVector: Float32Array | null = null;
   try {
     [queryVector] = await embed([trimmed]);
-  } catch {
+  } catch (error) {
     // embedder unavailable; lexical ranking carries the search
+    console.error("[memory-index] embedding failed", error);
   }
 
-  const chapterIdf = computeIdf(chapters.map((row) => `${row.title} ${row.summary}`));
+  const language = campaignLanguage(campaignId);
+  const chapterIdf = computeIdf(chapters.map((row) => `${row.title} ${row.summary}`), language);
   const pickedIds = fuseRanked(
     chapters.map((row) => ({
       id: row.id,
-      lexical: lexicalScore(trimmed, `${row.title} ${row.summary}`, chapterIdf),
+      lexical: lexicalScore(trimmed, `${row.title} ${row.summary}`, chapterIdf, language),
       similarity: similarityOf(queryVector, row.embedding),
     })),
-    { similarityFloor: SCENE_FLOOR, limit: PHASE1_CHAPTERS },
+    { limit: PHASE1_CHAPTERS },
   );
   if (!pickedIds.length) {
     return [];
@@ -289,15 +291,15 @@ export async function searchScenes(
   if (!scenes.length) {
     return [];
   }
-  const sceneIdf = computeIdf(scenes.map((scene) => scene.text));
+  const sceneIdf = computeIdf(scenes.map((scene) => scene.text), language);
   const sceneById = new Map(scenes.map((scene) => [scene.id, scene]));
   const fusedSceneIds = fuseRanked(
     scenes.map((scene) => ({
       id: scene.id,
-      lexical: lexicalScore(trimmed, scene.text, sceneIdf),
+      lexical: lexicalScore(trimmed, scene.text, sceneIdf, language),
       similarity: similarityOf(queryVector, scene.embedding),
     })),
-    { similarityFloor: SCENE_FLOOR, limit: PHASE2_CANDIDATES },
+    { limit: PHASE2_CANDIDATES },
   );
 
   const shortlist = fusedSceneIds
@@ -323,7 +325,7 @@ export async function searchScenes(
     .filter((scene): scene is NonNullable<typeof scene> => scene !== undefined)
     .map((scene) => ({ id: scene.id, text: scene.text, scene }));
 
-  return applyMmr(candidates, PHASE2_SCENES, MMR_LAMBDA).map(({ scene }) => {
+  return applyMmr(candidates, PHASE2_SCENES, language, MMR_LAMBDA).map(({ scene }) => {
     const vector = bufferToVector(scene.embedding);
     return {
       chapterIndex: chapterIndexById.get(scene.chapterId) ?? 0,
@@ -345,10 +347,10 @@ export async function indexClosedChapters(campaignId: string, chapters: Chapter[
   }
 }
 
-const FACT_DUP_SIMILARITY = 0.92;
-
 // Embeds every active fact that lacks a vector. Facts are written without
-// one; this runs from the dedup below and from the re-embed pass.
+// one; this runs when a chapter is indexed, before an extraction call ranks
+// the facts on file (src/lib/dm/fact-consolidation.ts), and from the
+// re-embed pass.
 export async function embedPendingFacts(campaignId: string): Promise<number> {
   const db = getDatabase();
   const missing = (
@@ -369,51 +371,4 @@ export async function embedPendingFacts(campaignId: string): Promise<number> {
     update.run(vectorToBuffer(vectors[index]), row.id);
   });
   return missing.length;
-}
-
-// Semantic upgrade over the token-overlap dedup that runs at insert time:
-// embeds facts that lack a vector, then retires an unpinned active fact
-// whose wording near-duplicates an older one in the same category. Runs on
-// the chapter-close heartbeat, so drift never accumulates for long.
-export async function dedupFactsSemantically(campaignId: string): Promise<void> {
-  await embedPendingFacts(campaignId);
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT id, category, fact, pinned, embedding, created_at FROM world_facts
-       WHERE campaign_id = ? AND status = 'active'
-       ORDER BY created_at ASC, id ASC`,
-    )
-    .all(campaignId) as Array<{
-    id: string;
-    category: string;
-    fact: string;
-    pinned: number;
-    embedding: Buffer | null;
-    created_at: string;
-  }>;
-  if (!rows.length) {
-    return;
-  }
-  const retire = db.prepare(
-    `UPDATE world_facts SET status = 'superseded', updated_at = ? WHERE id = ?`,
-  );
-  const kept: Array<{ category: string; vector: Float32Array; pinned: boolean }> = [];
-  for (const row of rows) {
-    const vector = bufferToVector(row.embedding);
-    if (!vector) {
-      continue;
-    }
-    const duplicate =
-      row.pinned !== 1 &&
-      kept.some(
-        (entry) =>
-          entry.category === row.category && cosine(entry.vector, vector) >= FACT_DUP_SIMILARITY,
-      );
-    if (duplicate) {
-      retire.run(nowIso(), row.id);
-    } else {
-      kept.push({ category: row.category, vector, pinned: row.pinned === 1 });
-    }
-  }
 }

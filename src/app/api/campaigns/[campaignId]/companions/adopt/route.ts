@@ -137,6 +137,7 @@ export async function POST(
       campaignId,
       seq,
       authorType: "system",
+      glyph: "system-party",
       content: `${context.user.username} hands ${sheet.name} to the DM: from here they travel with the party as a companion, and the DM plays their turns.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });

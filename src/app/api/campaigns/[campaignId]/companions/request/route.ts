@@ -58,6 +58,7 @@ export async function POST(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "system-party",
     userId: context.user.id,
     content: `${who}'s player asks the DM to write ${mode === "guests" ? "a temporary ally" : "a companion"} into the story at the next natural moment.`,
   });

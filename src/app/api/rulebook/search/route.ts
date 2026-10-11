@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const QUERY_MAX = 120;
 
 // GET /api/rulebook/search?q=grapple: the passages that match, best first,
-// with the stems the reader highlights.
+// each with the page's words the reader highlights.
 export async function GET(request: Request) {
   const user = await currentUser();
   if (!user) {

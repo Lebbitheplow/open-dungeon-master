@@ -11,6 +11,7 @@ import {
   planRename,
 } from "../src/lib/dm/entity-review-logic.ts";
 
+
 let passed = 0;
 const check = (name, fn) => {
   fn();
@@ -56,7 +57,8 @@ check("aliases dedupe on normalized form, not exact text", () => {
     ),
   );
   const harbour = plan.aliases.filter((alias) => /harbourmaster/i.test(alias));
-  assert.equal(harbour.length, 1, "one spelling, however it was cased or spaced");
+  // However it was cased or spaced; with its article it is a spelling of its own.
+  assert.deepEqual(harbour, ["The Harbourmaster", "Harbourmaster"]);
 });
 
 check("an incoming name equal to the keeper's is not re-added as an alias", () => {
@@ -67,22 +69,19 @@ check("an incoming name equal to the keeper's is not re-added as an alias", () =
 });
 
 check("a merge never deletes a spelling the keeper already answered to", () => {
-  // "Captain Marla" normalizes to "marla", the keeper's own name. Deduping
-  // the keeper's existing aliases against its name would silently drop it.
-  const plan = ok(
-    planMerge({ name: "Marla", aliases: ["Captain Marla"] }, { name: "Venn", aliases: [] }),
-  );
-  assert.ok(plan.aliases.includes("Captain Marla"));
+  // "WARDEN" normalizes to "warden", the keeper's own name. Deduping the
+  // keeper's existing aliases against its name would silently drop it.
+  const plan = ok(planMerge({ name: "Warden", aliases: ["WARDEN"] }, { name: "Venn", aliases: [] }));
+  assert.ok(plan.aliases.includes("WARDEN"));
 });
 
 check("merging a name into itself is refused", () => {
   assert.ok(isReviewError(planMerge({ name: "Marla", aliases: [] }, { name: "Marla", aliases: [] })));
-  // Titles normalize away, so these are the same person by ODM's own rule.
-  assert.ok(
-    isReviewError(
-      planMerge({ name: "Marla", aliases: [] }, { name: "Captain Marla", aliases: [] }),
-    ),
-  );
+  assert.ok(isReviewError(planMerge({ name: "Warden", aliases: [] }, { name: "WARDEN", aliases: [] })));
+  // An article is a word of the name, as a title is.
+  ok(planMerge({ name: "Warden", aliases: [] }, { name: "the warden", aliases: [] }));
+  // A title does not: "Captain Marla" may be a different person from "Marla".
+  ok(planMerge({ name: "Marla", aliases: [] }, { name: "Captain Marla", aliases: [] }));
 });
 
 check("a nameless side is refused rather than merged into nothing", () => {
@@ -122,8 +121,8 @@ check("a pair key is the same in either direction", () => {
   assert.equal(pairKey("Aldric", "Alaric"), pairKey("Alaric", "Aldric"));
 });
 
-check("a pair key ignores case and honorifics", () => {
-  assert.equal(pairKey("Captain Marla", "Venn"), pairKey("marla", "VENN"));
+check("a pair key ignores case and spacing", () => {
+  assert.equal(pairKey("The Warden", "Venn"), pairKey("the  WARDEN", "VENN"));
 });
 
 check("different pairs get different keys", () => {

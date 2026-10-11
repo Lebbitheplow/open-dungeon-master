@@ -21,8 +21,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// The NPC review queue: the fuzzy name matches entity-logic.ts deliberately
-// refuses to resolve on its own.
+// The NPC review queue: the containment and fuzzy name matches
+// entity-logic.ts deliberately refuses to resolve on its own.
 //
 // suggestNpcMerges has existed and been computed for a while, and nothing
 // ever read it, so "Aldric" and "Alaric" stayed two NPCs with two attitudes

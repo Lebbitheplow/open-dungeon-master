@@ -38,6 +38,7 @@ function settle(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content: disputeTranscriptLine({
       status,
       raisedBy: getUserById(dispute.raisedByUserId)?.username ?? "A player",

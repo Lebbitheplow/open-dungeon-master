@@ -1,5 +1,6 @@
 import { hasWorldDoc, worldView, type WorldEntity } from "@/lib/db/world-forge";
 import { typeFor, type FieldValue, type WorldDoc } from "@/lib/worldforge/model";
+import { foldName, wordPositions } from "@/lib/language/text-logic";
 
 // What the AI DM is told from the table's WorldForge (src/lib/worldforge/
 // model.ts), kept small: the prompt window is shared with everything else
@@ -52,18 +53,17 @@ function fieldsLine(doc: WorldDoc, entity: WorldEntity): string {
     .join("; ");
 }
 
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 // How strongly the text points at an entity: each mention of its name or an
-// alias, the later in the text the more (the newest message last).
+// alias, the later in the text the more (the newest message last). Names
+// are found by Unicode letters, in any language the table writes.
 function mentionScore(entity: WorldEntity, text: string): number {
   if (!text) return 0;
   let score = 0;
   for (const name of [entity.name, ...entity.aliases, ...entity.entry.aliases]) {
     const clean = name.trim();
     if (clean.length < 3) continue;
-    for (const match of text.matchAll(new RegExp(`\\b${escape(clean)}\\b`, "gi"))) {
-      score += 1 + (match.index ?? 0) / Math.max(1, text.length);
+    for (const at of wordPositions(text, clean)) {
+      score += 1 + at / Math.max(1, text.length);
     }
   }
   return score;
@@ -105,7 +105,7 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   const here = entities.find((entity) => entity.shelf === "location" && entity.table.here === true);
   const present = new Set<string>([
     ...(here ? [here.ref] : []),
-    ...entities.filter((entity) => entity.shelf === "npc" && here && String(entity.table.home ?? "").toLowerCase() === here.name.toLowerCase()).map((entity) => entity.ref),
+    ...entities.filter((entity) => entity.shelf === "npc" && here && foldName(String(entity.table.home ?? "")) === foldName(here.name)).map((entity) => entity.ref),
   ]);
   const scored = entities
     .map((entity) => ({ entity, score: mentionScore(entity, text) * 2 + (present.has(entity.ref) ? 1 : 0) }))

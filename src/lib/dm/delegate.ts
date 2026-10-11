@@ -29,6 +29,8 @@ import {
   type MonsterDecision,
 } from "@/lib/dm/delegation";
 import { enqueueNarrationAudio } from "@/lib/tts";
+import { mergeLines } from "@/lib/dm/speech";
+import { modelLines } from "@/lib/dm/speech-lines";
 import { extractStoryText, stripReasoningArtifacts } from "@/lib/story-prompt";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -234,6 +236,7 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
       campaignId: campaign.id,
       seq,
       authorType: "system",
+      glyph: "cue-battle",
       content: `The monsters act: ${notes.join(" ")}`,
     });
     publishWithSeq(campaign.id, seq, "message_added", { message });
@@ -346,6 +349,7 @@ export async function expandBeat(
   if (!narration) {
     return { error: "The model returned nothing; the beat stands as you wrote it." };
   }
+  const spoken = await modelLines(campaign, narration, `expand ${messageId}`);
 
   // Re-read after the call: the DM may have edited the beat while the model
   // was working.
@@ -357,7 +361,7 @@ export async function expandBeat(
   if (appended.capped) {
     return { error: `That is all ${MAX_VARIANTS} takes; pick one.` };
   }
-  const updated = setMessageVariants(messageId, appended.variants, appended.index);
+  const updated = setMessageVariants(messageId, appended.variants, appended.index, mergeLines(current.speech, spoken));
   if (!updated) {
     return { error: "Could not store the spoken take." };
   }
@@ -367,6 +371,7 @@ export async function expandBeat(
       campaign.id,
       updated.id,
       updated.content,
+      updated.speech,
       campaign.gameSettings,
       updated.speaker ?? null,
     );

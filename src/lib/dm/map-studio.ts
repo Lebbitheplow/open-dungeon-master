@@ -46,7 +46,8 @@ export type StudioSettings = {
   height?: number;
   theme?: MapTheme;
   ambient?: AmbientLight;
-  hint?: string;
+  // The kind of place (an ambience bed id); absent, the current place's.
+  scene?: string;
 };
 
 // The counts a preview should spawn for. Taken from the board when one is
@@ -86,10 +87,7 @@ export function generateForStudio(
       seed,
       width: settings.width,
       height: settings.height,
-      genre: campaign.gameSettings.genre,
-      locationName: location?.name,
-      layoutDescription: location?.layoutDescription,
-      hint: settings.hint,
+      scene: settings.scene ?? location?.ambience?.bed ?? null,
       theme: settings.theme,
       ambient: settings.ambient,
       pcCount: crowd.pcCount,

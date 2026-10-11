@@ -2,6 +2,7 @@ import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
+import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
@@ -267,7 +268,7 @@ export const createSheetSchema = z.object({
   subclass: z.string().trim().max(60).default(""),
   background: z.string().trim().max(60).default(""),
   alignment: z.string().trim().max(30).default(""),
-  gender: z.string().trim().max(30).default(""),
+  gender: z.enum(["", ...GENDERS]).default(""),
   // Free-text physical description; feeds the auto-generated portrait.
   appearance: z.string().trim().max(500).default(""),
   abilities: abilityScoresSchema,
@@ -353,6 +354,14 @@ export const createSheetSchema = z.object({
   backstory: z.string().trim().max(2000).default(""),
 });
 export type CreateSheetInput = z.infer<typeof createSheetSchema>;
+
+// A sheet read back from a file or a stored bundle: a gender written as free
+// text before the field was fixed reads as unspecified rather than refusing
+// the whole sheet.
+export const storedSheetSchema = z.preprocess(
+  (raw) => (raw && typeof raw === "object" ? { ...raw, gender: storedGender((raw as { gender?: unknown }).gender) } : raw),
+  createSheetSchema,
+);
 
 // Fields a player may patch during play. Outside a level-up only the
 // cosmetic three (portrait, notes, backstory) are applied. Inside one, the
@@ -555,9 +564,9 @@ export type CharacterSheet = {
   subclass: string;
   background: string;
   alignment: string;
-  // Free text from the builder ("she/her", "male", ""). Read only by the
-  // portrait prompt and the placeholder resolver.
-  gender: string;
+  // The builder's choice, or "" (src/lib/gender.ts): read by the portrait
+  // prompt, the placeholder face, the voice cast and the speech reader.
+  gender: Gender;
   level: number;
   xp: number;
   abilities: AbilityScores;

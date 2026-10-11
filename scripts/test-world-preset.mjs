@@ -6,7 +6,7 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { presetFor, packFor } = await import("../src/lib/worlds/preset.ts");
-const { genrePreset } = await import("../src/lib/genres.ts");
+const { genrePreset, nameRegisterHint, GENRE_PRESETS } = await import("../src/lib/genres.ts");
 const { listWorldPacks, worldPack } = await import("../src/lib/worlds/index.ts");
 const { applyIdReskins, applyClassReskins, displayName, packRecommends, packIds } =
   await import("../src/lib/worlds/reskin-logic.ts");
@@ -198,6 +198,17 @@ test("worldPack() resolves by id and refuses anything else", () => {
   assert.equal(worldPack(sample.id)?.id, sample.id);
   assert.equal(worldPack(""), null);
   assert.equal(worldPack("nope"), null);
+});
+
+test("a prompt gets a world's naming register without the example names, which the model would reuse", () => {
+  assert.equal(nameRegisterHint("Evocative medieval-fantasy names (Thornhollow, the Gilded Reach)."), "Evocative medieval-fantasy names.");
+  assert.equal(nameRegisterHint("Norse names: Bjorn, Sigrid."), "Norse names: Bjorn, Sigrid.", "examples written as the register itself stay");
+  assert.equal(nameRegisterHint(""), "");
+  for (const preset of GENRE_PRESETS) {
+    assert.ok(!/\(/.test(nameRegisterHint(preset.nameHints)), `${preset.id} keeps no example`);
+  }
+  const primer = renderWorldPrimer({ ...listWorldPacks()[0], nameHints: "Old Saxon names (Wulfric, Aldgyth)." });
+  assert.ok(primer.includes("Naming: Old Saxon names.") && !primer.includes("Wulfric"));
 });
 
 console.log(`test-world-preset: ${passed} passed`);

@@ -1,3 +1,4 @@
+import { campaignLanguage } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { embed, similarityOf } from "@/lib/embeddings";
@@ -50,7 +51,6 @@ export const searchLoreTool = {
 
 const RESULT_LIMIT = 8;
 const TEXT_CLIP = 400;
-const VECTOR_FLOOR = 0.28;
 
 // Fact categories that a tool-call category filter maps onto.
 const FACT_CATEGORY_MAP: Record<string, string[]> = {
@@ -101,8 +101,9 @@ export async function handleSearchLore(
   let queryVector: Float32Array | null = null;
   try {
     [queryVector] = await embed([query]);
-  } catch {
+  } catch (error) {
     // Keyword fallback carries the search.
+    console.error("[lore-search] embedding failed", error);
   }
 
   const candidates: LoreCandidate[] = [];
@@ -210,18 +211,19 @@ export async function handleSearchLore(
     // Chapter memory unavailable; the other sources still answer.
   }
 
-  const idf = computeIdf(candidates.map((candidate) => candidate.haystack));
+  const language = campaignLanguage(campaignId);
+  const idf = computeIdf(candidates.map((candidate) => candidate.haystack), language);
   const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const results = fuseRanked(
     candidates.map((candidate) => ({
       id: candidate.id,
-      lexical: lexicalScore(query, candidate.haystack, idf),
+      lexical: lexicalScore(query, candidate.haystack, idf, language),
       similarity:
         candidate.similarity !== undefined
           ? candidate.similarity
           : similarityOf(queryVector, candidate.embedding),
     })),
-    { similarityFloor: VECTOR_FLOOR, limit: RESULT_LIMIT },
+    { limit: RESULT_LIMIT },
   )
     .map((id) => byId.get(id))
     .filter((candidate): candidate is LoreCandidate => candidate !== undefined)
@@ -234,7 +236,8 @@ export async function handleSearchLore(
   }
   return {
     results,
-    note: "These are established canon; stay strictly consistent with them.",
+    // Retrieval has no relevance cut-off (fusion-logic.ts).
+    note: "These are established canon, nearest to your query first; some may not concern it. Stay strictly consistent with every one that does. If none does, this detail is not established and you may invent it, consistent with what you do know.",
   };
 }
 

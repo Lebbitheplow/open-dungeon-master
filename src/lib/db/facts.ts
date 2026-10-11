@@ -101,6 +101,27 @@ export function listActiveFacts(campaignId: string, limit = 200): WorldFact[] {
   return rows.map(mapFact);
 }
 
+// NULL until embedded (src/lib/dm/memory-index.ts embedPendingFacts).
+export function listActiveFactVectors(campaignId: string): Array<{ id: string; embedding: Buffer | null }> {
+  return getDatabase()
+    .prepare(`SELECT id, embedding FROM world_facts WHERE campaign_id = ? AND status = 'active'`)
+    .all(campaignId) as Array<{ id: string; embedding: Buffer | null }>;
+}
+
+// Retires the facts an extraction call said to retire
+// (src/lib/dm/fact-consolidation-logic.ts). Keyed by campaign, so an id from
+// another campaign retires nothing; a pin is a human statement that the fact
+// stays, and one can land while the call runs, so a pinned fact is never
+// retired.
+export function retireFacts(campaignId: string, ids: string[]): number {
+  const retire = getDatabase().prepare(
+    `UPDATE world_facts SET status = 'superseded', updated_at = ?
+     WHERE campaign_id = ? AND id = ? AND status = 'active' AND pinned = 0`,
+  );
+  const now = nowIso();
+  return getDatabase().transaction(() => ids.reduce((count, id) => count + retire.run(now, campaignId, id).changes, 0))();
+}
+
 // Facts a member may see, per known_by scoping. DM secrets only surface
 // when the lead explicitly requests them.
 export function listFactsVisibleTo(
@@ -192,8 +213,9 @@ export function updateFactText(
 }
 
 // Retires every active fact sharing the candidate's category+subject; used
-// when a newer fact supersedes what was on file about that subject.
-function supersedeSubject(campaignId: string, category: FactCategory, subject: string) {
+// when a newer fact supersedes what was on file about that subject, except
+// the `spare` ids.
+function supersedeSubject(campaignId: string, category: FactCategory, subject: string, spare: string[]) {
   if (!subject) {
     return;
   }
@@ -202,10 +224,10 @@ function supersedeSubject(campaignId: string, category: FactCategory, subject: s
       `
         UPDATE world_facts SET status = 'superseded', updated_at = ?
         WHERE campaign_id = ? AND category = ? AND subject = ? AND status = 'active'
-          AND pinned = 0
+          AND pinned = 0${spare.length ? ` AND id NOT IN (${spare.map(() => "?").join(", ")})` : ""}
       `,
     )
-    .run(nowIso(), campaignId, category, subject);
+    .run(nowIso(), campaignId, category, subject, ...spare);
 }
 
 // Records a batch of extracted candidates with dedup and supersede
@@ -215,7 +237,12 @@ export function recordExtractedFacts(
   campaignId: string,
   candidates: FactCandidate[],
   source: WorldFactSource,
-  options: { knownBy?: FactKnownBy; sourceSeq?: number | null; witnessedBy?: string[] } = {},
+  options: {
+    knownBy?: FactKnownBy;
+    sourceSeq?: number | null;
+    witnessedBy?: string[];
+    shownIds?: string[];
+  } = {},
 ): WorldFact[] {
   const inserted: WorldFact[] = [];
   for (const candidate of candidates) {
@@ -225,7 +252,16 @@ export function recordExtractedFacts(
       continue;
     }
     if (verdict === "supersedes") {
-      supersedeSubject(campaignId, candidate.category, normalizeSubject(candidate.subject));
+      // Spared: this batch's own facts, since a batch states one moment
+      // ("Kara lost the key" and "Kara means to return" are both true), and
+      // the facts the call was shown, since it says itself which of those to
+      // retire (src/lib/dm/fact-consolidation-logic.ts).
+      supersedeSubject(
+        campaignId,
+        candidate.category,
+        normalizeSubject(candidate.subject),
+        [...(options.shownIds ?? []), ...inserted.map((fact) => fact.id)],
+      );
     }
     inserted.push(
       insertFact({

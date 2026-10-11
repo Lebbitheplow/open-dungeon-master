@@ -1,11 +1,16 @@
 // Who is talking (docs/vtt-parity-implementation-plan.md 8.1): a quote
-// near a known name is theirs, a quote near nobody stays the narrator's.
+// the prose ties to a known person is theirs, any other stays the
+// narrator's. The reading is structural in every table language; English
+// alone also follows its pronouns back.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { attributeSpeech, normalizeSpeaker, speakersIn, spokenLine } = await import("../src/lib/dm/speech.ts");
+const speech = await import("../src/lib/dm/speech.ts");
+const { normalizeSpeaker, speakersIn, spokenLine } = speech;
+// An English table: the pronouns are read (src/lib/dm/speech-prose.ts).
+const attributeSpeech = (text, speakers, options = {}) => speech.attributeSpeech(text, speakers, { pronouns: true, ...options });
 
 let passed = 0;
 function test(name, fn) {
@@ -95,8 +100,8 @@ test("a line the tag splits in two stays one speaker's, a reply does not", () =>
 // A name beside a line is not its speaker: the sentence before a line is
 // about whoever it opens with, and a person the table does not know is
 // still somebody.
-const said = (text, table) =>
-  attributeSpeech(text, table)
+const said = (text, table, options) =>
+  attributeSpeech(text, table, options)
     .filter((segment) => segment.kind === "speech")
     .map((segment) => `${segment.speaker.name}: ${segment.text.slice(0, 12)}`);
 
@@ -126,7 +131,7 @@ test("the subject of the sentence before a line speaks it, not the person it tur
 test("a tag's pronoun is the person before it, never a name the tag mentions", () => {
   assert.deepEqual(said('Marla kneels by the fire. "Hold still," she says, glancing at Old Pike.', cast), ["Marla: Hold still,"]);
   assert.deepEqual(said('Marla looks up. "Who goes there?" a guard calls.', cast), [], "a stranger's tag is a stranger's line");
-  assert.deepEqual(said('Sella turns to Marla. "Who goes there?" Marla calls out.', cast), ["Marla: Who goes the"], "a name with a verb of speech after a question is its tag");
+  assert.deepEqual(said('Sella turns to Marla. "Who goes there?" Marla calls out.', cast), [], "after a line that ends its sentence, no word list tells a tag from an action");
   assert.deepEqual(said('Marla looks up. "Fine," you say.', cast), [], "the players' own words are nobody's at the table");
 });
 
@@ -165,6 +170,71 @@ test("Say quotes a player's words once, and never turns their action into speech
   const mixed = 'Liriel leaves the fragment untouched. "Then tell us. Which waystone did this come from?"';
   assert.equal(spokenLine(mixed), mixed, "the action stays action and the line stays a line");
   assert.equal(spokenLine("“Then tell us,” Liriel says."), "“Then tell us,” Liriel says.");
+  assert.equal(spokenLine("«Allora diccelo.»"), "«Allora diccelo.»", "every language's quote marks count as already quoted");
+});
+
+// Every table language reads the same structure: the quote pairs its prose
+// uses, a tag after a comma, a colon lead-in, the subject before a line and
+// the action after it. Pronouns are English's alone.
+const other = (text, table) =>
+  speech
+    .attributeSpeech(text, table, { pronouns: false })
+    .filter((segment) => segment.kind === "speech")
+    .map((segment) => `${segment.speaker.name}: ${segment.text.slice(0, 12)}`);
+
+test("each language's quote pairs and comma tags find the speaker", () => {
+  assert.deepEqual(other("«Tenete il cancello», dice Marla. «Subito», risponde il Vecchio Pike.", [cast[0], { kind: "npc", id: "n2", name: "Vecchio Pike" }]), ["Marla: Tenete il ca", "Vecchio Pike: Subito"]);
+  assert.deepEqual(other("« Tenez la porte », dit Marla.", cast), ["Marla: Tenez la por"]);
+  assert.deepEqual(other("„Haltet das Tor“, sagt Marla.", cast), ["Marla: Haltet das T"]);
+  assert.deepEqual(other("»Hold porten«, siger Marla.", cast), ["Marla: Hold porten"]);
+  assert.deepEqual(other("“Sujetad la puerta”, dice Marla.", cast), ["Marla: Sujetad la p"]);
+  assert.deepEqual(other("L'oste ride. «Non stanotte.»", cast), [], "an apostrophe opens no quote, and a stranger is nobody");
+  assert.deepEqual(other("Pike segna « sulla mappa. «Basta!» dice Marla.", cast), ["Marla: Basta!"], "a lone guillemet opens nothing");
+});
+
+test("the subject before a line, the action after it and a colon lead-in, in any language", () => {
+  assert.deepEqual(other("Marla alza lo sguardo. «Sei tornato.»", cast), ["Marla: Sei tornato."]);
+  assert.deepEqual(other("«Non stanotte.» Marla aggrotta la fronte.", cast), ["Marla: Non stanotte"]);
+  assert.deepEqual(other("Pike guarda mentre Marla dice: «Basta.»", cast), ["Marla: Basta."]);
+  assert.deepEqual(other("Sella si volta verso Marla. «Chi va là?»", cast), [], "the person turned to is not the speaker");
+  assert.deepEqual(other("Senza alzare gli occhi, Marla posa la tazza. «Basta.»", cast), ["Marla: Basta."]);
+});
+
+test("pronouns are followed back only at an English table", () => {
+  assert.deepEqual(other("Marla alza lo sguardo. Sorride. «Siediti.»", cast), [], "Italian drops the pronoun: nothing to follow");
+  assert.deepEqual(other('Marla looks up. She smiles. "Sit."', cast), [], "English prose at another table is read structurally");
+  assert.deepEqual(said('Marla looks up. She smiles. "Sit."', cast), ["Marla: Sit."]);
+});
+
+test("who 'she' can mean comes from the gender field", () => {
+  const table = [
+    { kind: "npc", id: "n1", name: "Marla", gender: "Female" },
+    { kind: "npc", id: "n2", name: "Old Pike", gender: "Male" },
+  ];
+  assert.deepEqual(said('"Hold still," he says. Marla kneels by the fire.', table), []);
+  assert.deepEqual(said('Marla nods to Old Pike. She waits. "Fine."', table), ["Marla: Fine."], "only Marla is a she");
+  assert.deepEqual(said('Marla nods to Old Pike. He grins. "Fine."', table), [], "he is not Marla");
+});
+
+test("a word of a name the story writes in lower case names nobody where it opens a sentence", () => {
+  const pike = [{ kind: "npc", id: "n2", name: "Old Pike" }];
+  assert.deepEqual(said('Old habits die hard. "Never again."', pike, { common: new Set(["old"]) }), []);
+  assert.deepEqual(said('Old habits die hard. "Never again."', pike), ["Old Pike: Never again."], "nothing says old is a common word");
+  assert.deepEqual(said('"Never again," mutters Old Pike.', pike, { common: new Set(["old"]) }), ["Old Pike: Never again,"]);
+  const venn = [{ kind: "npc", id: "n1", name: "Marla Venn" }];
+  assert.deepEqual(said('The captain waits. Captain Venn frowns. "Not tonight."', venn), ["Marla Venn: Not tonight."], "a title the story writes in lower case is passed over");
+});
+
+test("stored lines draw the same segments, survive a rewrite of other lines, and read back only when shaped", () => {
+  const text = '"Hold the gate," says Marla. "Aye," says Old Pike. "Who?"';
+  const lines = speech.linesOf(attributeSpeech(text, cast));
+  assert.deepEqual(lines.map((entry) => [entry.line, entry.speaker.name]), [["Hold the gate,", "Marla"], ["Aye,", "Old Pike"]]);
+  assert.deepEqual(speech.segmentsOf(text, lines), attributeSpeech(text, cast).map((segment) => (segment.kind === "speech" ? { ...segment, speaker: speech.storedSpeaker(segment.speaker) } : segment)));
+  const edited = '"Hold the gate," says Marla. "Never," says Old Pike.';
+  const kept = speech.mergeLines(lines, speech.linesOf(attributeSpeech(edited, cast)));
+  assert.deepEqual(speech.segmentsOf(edited, kept).filter((segment) => segment.kind === "speech").map((segment) => segment.text), ["Hold the gate,", "Never,"]);
+  assert.deepEqual(speech.normalizeSpokenLines([{ line: "Hi", speaker: { kind: "pc", id: "s1", name: "Kara" } }, { line: "x", speaker: { kind: "narrator", name: "N" } }, "junk"]), [{ line: "Hi", speaker: { kind: "pc", id: "s1", name: "Kara" } }]);
+  assert.equal(speech.storedSpeaker({ kind: "npc", id: "n1", name: "Marla", aliases: ["M"], gender: "Female" }).gender, undefined, "a stored line keeps who, not how they were found");
 });
 
 console.log(`test-speech-attribution: ${passed} passed`);

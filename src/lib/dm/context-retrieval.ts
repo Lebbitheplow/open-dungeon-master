@@ -1,3 +1,4 @@
+import type { TableLanguage } from "@/lib/schemas/game-settings";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { CampaignMessage } from "@/lib/db/messages";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
@@ -24,9 +25,6 @@ import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 // same thing. Both are now handled by rank fusion (src/lib/dm/fusion-logic.ts),
 // which reads order rather than magnitude.
 
-// Cosine-only eligibility. Lexical eligibility is any overlap at all, so a
-// rare proper noun still qualifies a candidate that cosine would have missed.
-const SIMILARITY_FLOOR = 0.3;
 const RULES_TOP = 3;
 const LORE_TOP = 2;
 
@@ -57,21 +55,22 @@ function pickFused<T>(
   query: string,
   queryVector: Float32Array | null,
   limit: number,
+  language: TableLanguage,
 ): T[] {
   if (!entries.length) {
     return [];
   }
   // IDF is computed over this corpus, so "dragon" is rare in a campaign that
   // never mentions dragons and unremarkable in one about nothing else.
-  const idf = computeIdf(entries.map((entry) => entry.text));
+  const idf = computeIdf(entries.map((entry) => entry.text), language);
   const byId = new Map(entries.map((entry) => [entry.id, entry.value]));
   const picked = fuseRanked(
     entries.map((entry) => ({
       id: entry.id,
-      lexical: lexicalScore(query, entry.text, idf),
+      lexical: lexicalScore(query, entry.text, idf, language),
       similarity: similarityOf(queryVector, entry.embedding),
     })),
-    { similarityFloor: SIMILARITY_FLOOR, limit },
+    { limit },
   );
   return picked
     .map((id) => byId.get(id))
@@ -116,8 +115,9 @@ export async function buildTurnRetrieval(
       if (query && anyEmbedding) {
         try {
           [queryVector] = await embed([query]);
-        } catch {
+        } catch (error) {
           // Embedder unavailable; keyword fallback carries the turn.
+          console.error("[context-retrieval] embedding failed", error);
         }
       }
 
@@ -146,6 +146,7 @@ export async function buildTurnRetrieval(
         query,
         queryVector,
         RULES_TOP,
+        campaign.gameSettings.tableLanguage,
       );
       houseRulesBlock = renderHouseRules(pinnedRules, retrievedRules);
 
@@ -162,6 +163,7 @@ export async function buildTurnRetrieval(
         query,
         queryVector,
         LORE_TOP,
+        campaign.gameSettings.tableLanguage,
       );
       loreBlock = renderLoreForPrompt(pinnedLore, retrievedLore);
     }

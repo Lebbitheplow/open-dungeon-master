@@ -1,3 +1,4 @@
+import type { SystemGlyph } from "@/lib/system-glyphs";
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getParty, updateParty } from "@/lib/db/party";
@@ -62,12 +63,13 @@ export const partyTools: ToolDef[] = [
   },
 ];
 
-function tableNote(campaign: Campaign, content: string) {
+function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph,
     content,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
@@ -136,7 +138,7 @@ export function handlePartyStash(
       patchSheet(fresh.id, { equipment: taken.equipment });
       const party = updateParty(campaign.id, (current) => ({ ...current, inventory: added.inventory }));
       publishParty(campaign.id, party);
-      tableNote(campaign, `${fresh.name} puts ${name}${taken.removed > 1 ? ` x${taken.removed}` : ""} in the party's pack.`);
+      tableNote(campaign, `${fresh.name} puts ${name}${taken.removed > 1 ? ` x${taken.removed}` : ""} in the party's pack.`, "cue-bell");
       return { ok: true, stowed: name, qty: taken.removed };
     }
 
@@ -151,7 +153,7 @@ export function handlePartyStash(
     patchSheet(fresh.id, { equipment: granted.equipment });
     const next = updateParty(campaign.id, (current) => ({ ...current, inventory: taken.inventory }));
     publishParty(campaign.id, next);
-    tableNote(campaign, `${fresh.name} takes ${name}${taken.removed > 1 ? ` x${taken.removed}` : ""} from the party's pack.`);
+    tableNote(campaign, `${fresh.name} takes ${name}${taken.removed > 1 ? ` x${taken.removed}` : ""} from the party's pack.`, "cue-bell");
     return { ok: true, took: name, qty: taken.removed };
   }
 
@@ -176,7 +178,7 @@ export function handlePartyStash(
       copper: current.copper + copper,
     }));
     publishParty(campaign.id, party);
-    tableNote(campaign, `${fresh.name} puts ${formatCopper(copper)} in the common purse.`);
+    tableNote(campaign, `${fresh.name} puts ${formatCopper(copper)} in the common purse.`, "cue-coin");
     return { ok: true, deposited: formatCopper(copper), purse: formatCopper(party.copper) };
   }
 
@@ -191,7 +193,7 @@ export function handlePartyStash(
     copper: Math.max(0, current.copper - copper),
   }));
   publishParty(campaign.id, next);
-  tableNote(campaign, `${fresh.name} takes ${formatCopper(copper)} from the common purse.`);
+  tableNote(campaign, `${fresh.name} takes ${formatCopper(copper)} from the common purse.`, "cue-coin");
   return { ok: true, withdrew: formatCopper(copper), purse: formatCopper(next.copper) };
 }
 
@@ -219,6 +221,7 @@ export function payOutBankedXp(
   tableNote(
     campaign,
     `The party divides ${split.spent} experience between ${targets.map((sheet) => sheet.name).join(", ")}.`,
+    "cue-bell",
   );
   return { each: split.each[0], paid: targets.map((sheet) => sheet.name) };
 }

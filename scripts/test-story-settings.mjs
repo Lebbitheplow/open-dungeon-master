@@ -19,7 +19,8 @@ const { maskStorySettings, normalizeSettings, scrubStorySettings, withoutAdminOn
   "../src/lib/db/settings.ts"
 );
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
-const { storyContextTokens } = await import("../src/lib/model-client.ts");
+const { storyContextTokens, utilityContextTokens, localContextTokens } = await import("../src/lib/model-client.ts");
+const { DEFAULT_STORY_SETTINGS } = await import("../src/lib/defaults.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, publicCampaign, updateStorySettings } = await import(
   "../src/lib/db/campaigns.ts"
@@ -161,6 +162,35 @@ test("a campaign on an OpenAI key packs against a real window, not the 16K stand
   assert.equal(storyContextTokens({ ...openai, customModel: "gpt-5.1" }), 200_000, "the operator's number wins");
   delete process.env.OPENAI_COMPAT_CONTEXT;
 });
+
+// Ask and the lore check run on the utility model, routed as
+// requestUtilityMessage routes it. A local or custom utility model that fails
+// is retried on the story model, so those two budget against the smaller
+// window; the harness never falls back. No case here touches the network: an
+// OpenAI model resolves by name, and an OpenRouter endpoint is never probed.
+{
+  const story = { textProvider: "custom", localTextModel: "", customBaseUrl: "https://api.openai.com/v1", customModel: "gpt-5.1" };
+  const small = { ...story, customModel: "gpt-3.5-turbo" };
+  const none = { utilityProvider: "custom", utilityModel: "", utilityBaseUrl: "", utilityApiKey: "" };
+  const openaiUtility = { ...none, utilityBaseUrl: "https://api.openai.com/v1" };
+  assert.equal(await utilityContextTokens({ ...story, ...none }), 128_000, "no utility model: the story model's window");
+  assert.equal(await utilityContextTokens({ ...story, ...openaiUtility, utilityModel: "gpt-3.5-turbo" }), 16_385, "a custom utility model's own window");
+  assert.equal(await utilityContextTokens({ ...small, ...openaiUtility, utilityModel: "gpt-5.1" }), 16_385, "never past the story model it falls back to");
+  assert.equal(
+    await utilityContextTokens({ ...story, ...none, utilityBaseUrl: "https://openrouter.ai/api/v1", utilityModel: "m" }),
+    16_384,
+    "an endpoint that cannot be probed gets the conservative default",
+  );
+  const localModel = DEFAULT_STORY_SETTINGS.localTextModel;
+  assert.equal(
+    await utilityContextTokens({ ...small, ...none, utilityProvider: "local", utilityModel: localModel }),
+    Math.min(localContextTokens(localModel), 16_385),
+    "a local utility model, capped by the story model",
+  );
+  assert.equal(await utilityContextTokens({ ...small, ...none, utilityProvider: "harness" }), 128_000, "the harness never falls back: its own window");
+  passed += 1;
+  console.log("ok: the utility model's window follows its route and never exceeds the model it falls back to");
+}
 
 // A world an app hosts: the backend is the device's, chosen once in the app's
 // Story AI screen, and every campaign follows it. The campaign above was

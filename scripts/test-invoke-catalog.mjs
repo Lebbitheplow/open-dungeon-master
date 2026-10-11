@@ -595,10 +595,14 @@ function formOmissions(entry) {
     cast_at_enemy: { targetEnemyId: "enemyIds" },
     cast_at_player: { characterId: "characterIds" },
   };
+  // waypoint tags the AI DM's call with the [NOW] step it accomplishes; a
+  // person's console call never ticks a step (src/lib/dm/waypoint-tick.ts),
+  // the arc panel does, so no form offers it.
   return found.keys.filter(
     (key) =>
       key !== "..." &&
       key !== "reason" &&
+      key !== "waypoint" &&
       !offered.has(key) &&
       !offered.has(aliases[entry.name]?.[key] ?? "") &&
       !(allowed ?? []).includes(key),

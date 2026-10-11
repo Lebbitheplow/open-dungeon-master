@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import type { RollTableEntry } from "@/lib/dm/roll-table-logic";
 
 // DM-authored random tables. Owned by the campaign, written by whoever holds
@@ -47,9 +48,9 @@ function mapTable(row: TableRow): RollTable {
 
 export function listRollTables(campaignId: string): RollTable[] {
   const rows = getDatabase()
-    .prepare(`SELECT * FROM roll_tables WHERE campaign_id = ? ORDER BY name COLLATE NOCASE ASC`)
+    .prepare(`SELECT * FROM roll_tables WHERE campaign_id = ?`)
     .all(campaignId) as TableRow[];
-  return rows.map(mapTable);
+  return rows.map(mapTable).sort(byName);
 }
 
 export function getRollTable(tableId: string): RollTable | null {

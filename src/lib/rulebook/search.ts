@@ -5,34 +5,30 @@
 // typed. Titles and headings outrank body text, so "grapple" lands on
 // Grappling in Combat before the monsters that grapple.
 //
-// Words are compared by a light stem ("grappling", "grappled" and "grapple"
-// are one word) that the reader also uses to highlight what matched.
+// Words are compared by Snowball's English stem and stop list
+// (src/lib/language): the rulebook is the English SRD at every table, so it
+// is read in English whatever language the table plays in. Each hit carries
+// the page's words that matched, which the reader marks as written: the
+// browser never stems anything.
 import { blockText, parseBook, stripInline, type BookBlock } from "./markdown";
 import type { RulebookKind, RulebookPage, SearchHit } from "./types";
-
-const STOP = new Set(["a", "an", "and", "the", "of", "to", "in", "on", "or", "for", "is", "it", "at", "by", "be", "as", "with", "do", "does", "how", "what", "when", "can", "i", "you", "my"]);
+import { stemWord, stopWordsFor } from "../language/language";
+import { compareNames, words as textWords } from "../language/text-logic";
 
 export function stem(word: string): string {
-  let w = word.toLowerCase().replace(/['’]s$/, "").replace(/['’]/g, "");
-  if (w.length > 4 && w.endsWith("ies")) w = `${w.slice(0, -3)}y`;
-  else if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
-  else if (w.length > 4 && w.endsWith("ed")) w = w.slice(0, -2);
-  else if (w.length > 4 && /(ss|x|ch|sh)es$/.test(w)) w = w.slice(0, -2);
-  else if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us")) w = w.slice(0, -1);
-  if (w.length > 4 && w.endsWith("e")) w = w.slice(0, -1);
-  // "grappl" from grapple and grappling, "attack" from attacks and attacked.
-  return w;
+  return stemWord(word.toLowerCase(), "english");
 }
 
 export function words(text: string): string[] {
-  return text.toLowerCase().match(/[a-z0-9]+(?:['’][a-z]+)?/g) ?? [];
+  return textWords(text).map((word) => word.toLowerCase());
 }
 
 // The query as the stems it will be matched by, stop words dropped unless
 // they are all there is.
 export function queryTerms(query: string): string[] {
   const all = words(query);
-  const kept = all.filter((word) => !STOP.has(word));
+  const stop = stopWordsFor("english");
+  const kept = all.filter((word) => !stop.has(word));
   return [...new Set((kept.length ? kept : all).map(stem))];
 }
 
@@ -48,6 +44,9 @@ type Passage = {
 
 type PageEntry = {
   page: RulebookPage;
+  // Every word on the page, as written (lower case), with its stem: what a
+  // hit hands the reader to mark.
+  wordStems: Map<string, string>;
   titleStems: Set<string>;
   titleLower: string;
   passages: Passage[];
@@ -113,12 +112,22 @@ export function buildIndex(
   chapters: Array<{ id: string; numeral: string; title: string }>,
 ): RulebookIndex {
   return {
-    pages: pages.map((page) => ({
-      page,
-      titleStems: new Set(words(page.title).map(stem)),
-      titleLower: page.title.toLowerCase(),
-      passages: passagesOf(page, parseBook(page.md)),
-    })),
+    pages: pages.map((page) => {
+      const passages = passagesOf(page, parseBook(page.md));
+      const wordStems = new Map<string, string>();
+      for (const text of [page.title, ...passages.flatMap((item) => [item.heading ?? "", item.text])]) {
+        for (const word of words(text)) {
+          if (!wordStems.has(word)) wordStems.set(word, stem(word));
+        }
+      }
+      return {
+        page,
+        wordStems,
+        titleStems: new Set(words(page.title).map(stem)),
+        titleLower: page.title.toLowerCase(),
+        passages,
+      };
+    }),
     chapters: new Map(chapters.map((chapter) => [chapter.id, { numeral: chapter.numeral, title: chapter.title }])),
   };
 }
@@ -175,12 +184,16 @@ export function searchRulebook(index: RulebookIndex, query: string, limit = 40):
   // The last word may still be being typed.
   const typed = /[a-z0-9]$/i.test(query.trim());
   const isPrefix = (position: number) => typed && position === terms.length - 1;
+  const matching = (key: string) =>
+    terms.some((term, position) => key === term || (isPrefix(position) && term.length >= 2 && key.startsWith(term)));
   const hits: SearchHit[] = [];
 
   for (const entry of index.pages) {
     const { page } = entry;
     const chapter = index.chapters.get(page.chapter);
     const pageHits: SearchHit[] = [];
+    let marked: string[] | null = null;
+    const pageWords = () => (marked ??= [...entry.wordStems].filter(([, key]) => matching(key)).map(([word]) => word));
     const titleAll = terms.every((term, position) => hasTerm(entry.titleStems, term, isPrefix(position)));
     entry.passages.forEach((item, passageIndex) => {
       const matches = terms.every(
@@ -212,12 +225,13 @@ export function searchRulebook(index: RulebookIndex, query: string, limit = 40):
         heading: item.heading,
         at: item.at,
         snippet: snippetFor(item.text, terms),
+        words: pageWords(),
         score,
       });
     });
     pageHits.sort((a, b) => b.score - a.score);
     hits.push(...pageHits.slice(0, 3));
   }
-  hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  hits.sort((a, b) => b.score - a.score || compareNames(a.title, b.title));
   return hits.slice(0, limit);
 }

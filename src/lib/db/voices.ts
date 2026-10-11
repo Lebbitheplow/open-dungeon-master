@@ -1,4 +1,5 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import { normalizeNpcVoice, type NpcVoice } from "@/lib/npcs/forge";
 
 // Read-aloud voices for the speakers who are not NPCs (issue 97): a
@@ -12,7 +13,7 @@ type Row = { speaker_key: string; name: string; voice_id: string; speed: number 
 
 export function listCampaignVoices(campaignId: string): SavedVoice[] {
   const rows = getDatabase()
-    .prepare(`SELECT speaker_key, name, voice_id, speed FROM campaign_voices WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`)
+    .prepare(`SELECT speaker_key, name, voice_id, speed FROM campaign_voices WHERE campaign_id = ?`)
     .all(campaignId) as Row[];
   const voices: SavedVoice[] = [];
   for (const row of rows) {
@@ -21,7 +22,7 @@ export function listCampaignVoices(campaignId: string): SavedVoice[] {
       voices.push({ key: row.speaker_key, name: row.name, voice });
     }
   }
-  return voices;
+  return voices.sort(byName);
 }
 
 // null gives the speaker back to the narrator.

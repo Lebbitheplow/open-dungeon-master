@@ -36,6 +36,7 @@ import { startingKitFor } from "@/lib/srd/starting-kit";
 import { legalCompanionSheet } from "@/lib/dm/companion-level";
 import { queueCompanionPortrait } from "@/lib/portrait";
 import { settingClassIds } from "@/lib/classes";
+import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
 import { resolveCompanionMode, type CompanionMode } from "@/lib/schemas/game-settings";
@@ -135,6 +136,7 @@ export function companionTools(campaign: Campaign): ToolDef[] {
               description: "A dragonborn's draconic ancestry, when the story names one. Omit it and the server rolls one.",
             },
             class: { type: "string", description: classDescription },
+            gender: { type: "string", enum: [...TOLD_GENDERS], description: TOLD_GENDER_HELP },
             level: {
               type: "integer",
               minimum: 1,
@@ -153,7 +155,7 @@ export function companionTools(campaign: Campaign): ToolDef[] {
               description: "For casters: the spells they know (level-appropriate).",
             },
           },
-          required: ["name", "class", "personality", "kind"],
+          required: ["name", "class", "gender", "personality", "kind"],
         },
       },
     },
@@ -182,6 +184,7 @@ const addArgsSchema = z.object({
   race: z.string().trim().max(60).optional(),
   ancestry: z.string().trim().max(40).optional(),
   class: z.string().trim().min(1).max(60),
+  gender: z.enum(TOLD_GENDERS),
   level: z.number().int().min(1).max(20).optional(),
   personality: z.string().trim().min(1).max(500),
   kind: z.enum(["party", "guest"]).default("guest"),
@@ -221,7 +224,7 @@ export function handleAddCompanion(
   } catch {
     return {
       error:
-        "Invalid arguments: add_companion needs name, class, personality, and kind ('party' or 'guest').",
+        "Invalid arguments: add_companion needs name, class, gender (Female, Male, Nonbinary or Unknown), personality, and kind ('party' or 'guest').",
     };
   }
 
@@ -329,6 +332,7 @@ export function handleAddCompanion(
     class: klass.id,
     background: "",
     alignment: "",
+    gender: toldGender(args.gender) ?? "",
     abilities,
     // A figure to start from; the legality check derives the real one by
     // the table's hit point method, and the armor engine the armor class.
@@ -408,16 +412,13 @@ export function finalizeNewCompanion(
   // model, so only lasting party members are worth a portrait; a sheet built
   // with its own portrait already (manual build) keeps it.
   if (kind === "party" && !sheet.portrait) {
-    queueCompanionPortrait({
+    queueCompanionPortrait(campaign, {
       id: sheet.id,
-      campaignId: campaign.id,
       name: sheet.name,
       race: sheet.race,
       class: sheet.class,
       background: sheet.background,
       personality,
-      genre: campaign.gameSettings.genre,
-      worldPack: campaign.gameSettings.worldPack,
     });
   }
 
@@ -572,6 +573,7 @@ export function dismissGuestCompanions(campaign: Campaign, reason: string): stri
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "system-party",
     content: `${names.join(" and ")} ${names.length === 1 ? "was" : "were"} a temporary ally and leaves the party now that the fight is over. Narrate the goodbye.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });

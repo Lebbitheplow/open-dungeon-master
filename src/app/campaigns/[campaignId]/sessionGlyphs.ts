@@ -48,35 +48,3 @@ export const MODE_GLYPHS: Record<InputKind, string> = {
   lead: "tab-lead",
   narrate: "tab-dm",
 };
-
-// A plain system line carries no type, only its words, so the painting is
-// picked from them. A die is matched after a count too ("2d6"), hence the
-// lookbehind rather than a word boundary. Order matters: the first match
-// wins, and the bell is the catch-all for "the table is being told something".
-const SYSTEM_LINE_RULES: Array<[RegExp, string]> = [
-  [/(?<![a-z])d100\b|\bpercentile\b/i, "die-d100"],
-  [/(?<![a-z])d12\b/i, "die-d12"],
-  [/(?<![a-z])d10\b/i, "die-d10"],
-  [/(?<![a-z])d8\b/i, "die-d8"],
-  [/(?<![a-z])d6\b/i, "die-d6"],
-  [/(?<![a-z])d4\b/i, "die-d4"],
-  [/(?<![a-z])d20\b|\b(rolls?|rolled|rerolls?|dice|saving throw|check)\b/i, "die-d20"],
-  [/\blevel(s|ed)? up\b|\breach(es|ed)? level\b/i, "rest-level-up"],
-  [/\blong rest\b/i, "rest-long"],
-  [/\bshort rest\b|\brests?\b/i, "rest-short"],
-  [/\b(dies|died|death|slain|falls unconscious|fallen)\b/i, "cue-death"],
-  [/\b(heals?|healed|recovers?|stabili[sz]ed?)\b/i, "cue-heal"],
-  [/\b(combat|initiative|encounter|battle|ambush|fight)\b/i, "cue-battle"],
-  [/\b(gold|coins?|gp|sp|cp|paid|buys?|sells?|sold|bought)\b/i, "cue-coin"],
-  [/\b(travel(s|led)?|arrives?|arrived|journey|sets? out|departs?)\b/i, "cue-travel"],
-  [/\b(x-card|paused|pause)\b/i, "cue-calm"],
-];
-
-export function systemLineGlyph(content: string): string {
-  for (const [pattern, glyph] of SYSTEM_LINE_RULES) {
-    if (pattern.test(content)) {
-      return glyph;
-    }
-  }
-  return "cue-bell";
-}

@@ -1,5 +1,8 @@
-// Entity resolution: keeping "Marla", "Marla Venn", and "Captain Marla" one
-// person without ever silently fusing two different ones.
+// Entity resolution: keeping "marla", "MARLA" and "Église"/"église" one
+// person without ever silently fusing two different ones. Only an exact
+// match (case, spacing and punctuation aside) resolves on its own; one name
+// inside another and a near-typo are suggestions for the lead, in every
+// table language, English included.
 import assert from "node:assert/strict";
 import {
   FUZZY_THRESHOLD,
@@ -17,55 +20,72 @@ function test(name, fn) {
   passed += 1;
 }
 
-test("normalizeName strips titles, punctuation, and case", () => {
-  assert.equal(normalizeName("Captain Marla"), "marla");
-  assert.equal(normalizeName("  LADY  Marla Venn  "), "marla venn");
-  assert.equal(normalizeName("Ser Aldric,"), "aldric");
-  assert.equal(normalizeName("The Warden"), "warden");
-  assert.deepEqual(tokensOf("Sir Marla O'Venn"), ["marla", "o", "venn"]);
+test("normalizeName drops punctuation, case and spacing, never a word", () => {
+  assert.equal(normalizeName("The Warden"), "the warden");
+  assert.equal(normalizeName("  Marla   Venn,  "), "marla venn");
+  assert.equal(normalizeName("Captain Marla"), "captain marla");
+  assert.equal(normalizeName("Il fabbro"), "il fabbro");
+  assert.equal(normalizeName("L'oste Bruno"), "l oste bruno");
+  assert.equal(normalizeName("Église Saint-Martin"), "église saint martin");
+  assert.deepEqual(tokensOf("Marla O'Venn"), ["marla", "o", "venn"]);
   assert.equal(normalizeName("!!!"), "");
 });
 
-test("exact tier matches through titles and spacing", () => {
-  const known = ["Marla Venn", "Aldric"];
+test("exact tier matches through case, spacing and Unicode form", () => {
+  const known = ["Marla Venn", "Aldric", "Il fabbro"];
   assert.deepEqual(matchEntity("marla venn", known), {
     name: "Marla Venn",
     tier: "exact",
     needsConfirmation: false,
   });
-  assert.equal(matchEntity("Lady Marla Venn", known).tier, "exact");
   assert.equal(matchEntity("ALDRIC", known).name, "Aldric");
+  assert.equal(matchEntity("il FABBRO", known).tier, "exact");
+  // A decomposed "ò" is the composed one.
+  assert.equal(matchEntity("Niccolò", ["Niccolò"]).tier, "exact");
 });
 
-test("containment tier links a short name to its full form", () => {
-  const match = matchEntity("Marla", ["Marla Venn"]);
-  assert.equal(match.name, "Marla Venn");
-  assert.equal(match.tier, "containment");
-  assert.equal(match.needsConfirmation, false);
-  // And the other direction.
-  assert.equal(matchEntity("Marla Venn", ["Marla"]).tier, "containment");
-});
-
-test("containment refuses to merge two role names", () => {
-  // The guard that matters: these are roles, not identities, so neither
-  // direction of containment may fuse them.
-  assert.equal(matchEntity("guard captain", ["guard"]), null);
-  assert.equal(matchEntity("guard", ["guard captain"]), null);
+test("one name inside another is a suggestion for the lead, never a silent merge, in every language", () => {
+  const pairs = [
+    ["english", "Bruno the smith", "the smith"],
+    ["english", "Marla", "Marla Venn"],
+    ["english", "Captain Marla", "Marla"],
+    ["english", "guard captain", "guard"],
+    ["italian", "Il fabbro Bruno", "Il fabbro"],
+    ["italian", "La guardia del porto", "La guardia"],
+    ["french", "Le forgeron Bruno", "Le forgeron"],
+    ["spanish", "El herrero Bruno", "El herrero"],
+    ["german", "Der Schmied Bruno", "Der Schmied"],
+  ];
+  for (const [language, name, known] of pairs) {
+    for (const [a, b] of [
+      [name, known],
+      [known, name],
+    ]) {
+      const match = matchEntity(a, [b]);
+      assert.equal(match?.tier, "containment", `${language}: ${a} / ${b}`);
+      assert.equal(match.needsConfirmation, true, `${language}: ${a} / ${b}`);
+    }
+  }
+  // Two different roles share no name.
   assert.equal(matchEntity("temple guard", ["city guard"]), null);
-  assert.equal(matchEntity("Innkeeper", ["Shopkeeper"]), null);
-  // But a role word plus a real name still resolves.
-  assert.equal(matchEntity("Captain Marla", ["Marla"]).name, "Marla");
-  assert.equal(matchEntity("Marla", ["Captain Marla"]).name, "Captain Marla");
 });
 
-test("titles strip only in leading position", () => {
-  // "captain" is an honorific in front of a name and a role word behind one.
-  assert.equal(normalizeName("Captain Marla"), "marla");
-  assert.equal(normalizeName("guard captain"), "guard captain");
-  assert.equal(normalizeName("Master Aldric"), "aldric");
-  assert.equal(normalizeName("guild master"), "guild master");
-  // A name that is nothing but a title keeps it rather than vanishing.
-  assert.equal(normalizeName("Lady"), "lady");
+// A word that is an article, a pronoun or a number in one language is a
+// name in another ("Hans" is Danish for "his"), so no word is dropped to
+// make two names equal.
+test("a name whose first word is a common word is never merged on its own", () => {
+  for (const [a, b] of [
+    ["Hans Gruber", "Gruber"],
+    ["Sei Dita", "Dita"],
+    ["Sin Nombre", "Nombre"],
+    ["Over the Hill", "Hill"],
+    ["The Warden", "Warden"],
+    ["Il fabbro", "fabbro"],
+  ]) {
+    const match = matchEntity(a, [b]);
+    assert.equal(match?.tier, "containment", `${a} / ${b}`);
+    assert.equal(match.needsConfirmation, true, `${a} / ${b}`);
+  }
 });
 
 test("fuzzy tier catches a typo but always asks first", () => {
@@ -85,13 +105,13 @@ test("fuzzy does not fuse two genuinely different names", () => {
   // Short names are excluded: edit distance is meaningless there.
   assert.equal(matchEntity("Ana", ["Ane"]), null);
   assert.equal(matchEntity("Bo", ["Jo"]), null);
+  assert.equal(matchEntity("Innkeeper", ["Shopkeeper"]), null);
 });
 
 test("unknown names resolve to nothing", () => {
   assert.equal(matchEntity("Vhaeric", ["Marla Venn", "Aldric"]), null);
   assert.equal(matchEntity("Marla", []), null);
   assert.equal(matchEntity("", ["Marla"]), null);
-  assert.equal(matchEntity("Lady", ["Marla"]), null);
 });
 
 test("similarity helpers behave", () => {
@@ -105,8 +125,10 @@ test("similarity helpers behave", () => {
 
 test("mergeAliases dedupes on the normalized form and bounds growth", () => {
   assert.deepEqual(mergeAliases([], "Marla"), ["Marla"]);
-  // Same person spelled with a title: nothing new to record.
-  assert.deepEqual(mergeAliases(["Marla"], "Captain Marla"), ["Marla"]);
+  // The same name in another case: nothing new. With an article it is a
+  // spelling of its own.
+  assert.deepEqual(mergeAliases(["Warden"], "WARDEN"), ["Warden"]);
+  assert.deepEqual(mergeAliases(["Warden"], "the warden"), ["Warden", "the warden"]);
   assert.deepEqual(mergeAliases(["Marla"], "Marla Venn"), ["Marla", "Marla Venn"]);
   assert.deepEqual(mergeAliases(["Marla"], "  "), ["Marla"]);
   const many = Array.from({ length: 12 }, (_, index) => `Name${index}`);

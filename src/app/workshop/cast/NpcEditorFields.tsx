@@ -18,6 +18,7 @@ import {
   type RelationGraph,
 } from "@/lib/npcs/forge";
 import { npcRoleOptions } from "@/lib/placeholders";
+import { GENDERS, type Gender } from "@/lib/gender";
 import {
   GOAL_FIELDS,
   PersonalitySliders,
@@ -114,6 +115,14 @@ export function NpcEditorFields({
                 key: attitude === "hostile" ? "attitude-hostile" : attitude === "friendly" ? "attitude-friendly" : "attitude-neutral",
               },
             }))}
+          />
+          </span>
+          <span className="w-full sm:w-40">
+          <Select<Gender>
+            label="Gender"
+            value={draft.gender}
+            onChange={(gender) => onChange({ ...draft, gender })}
+            options={[{ value: "", label: "Unspecified" }, ...GENDERS.map((gender) => ({ value: gender, label: gender }))]}
           />
           </span>
         </div>

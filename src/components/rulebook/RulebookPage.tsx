@@ -4,7 +4,6 @@ import { PagePrep } from "./PagePrep";
 import { Fragment, useMemo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { inlineText, parseBook, parseInline, type BookBlock, type InlineNode } from "@/lib/rulebook/markdown";
-import { stem } from "@/lib/rulebook/search";
 import type { RulebookPageResponse } from "@/lib/rulebook/types";
 
 // One page of the rulebook, set like a printed page: the running head, the
@@ -19,6 +18,7 @@ import type { RulebookPageResponse } from "@/lib/rulebook/types";
 export type OpenPage = (id: string, at?: string) => void;
 
 type Ctx = {
+  // The page's words a search matched (src/lib/rulebook/search.ts).
   terms: string[];
   // Lettered in Cinzel, whose 1 reads as an I: digits go in the text face.
   display?: boolean;
@@ -49,12 +49,12 @@ export function Digits({ text }: { text: string }) {
 
 function marked(text: string, terms: string[], key: string, display = false): ReactNode {
   if (!terms.length && !(display && /\d/.test(text))) return text;
-  const parts = text.split(/([A-Za-z0-9]+(?:['’][A-Za-z]+)?)/);
+  const parts = text.split(/([\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*)/u);
   return parts.map((part, index) => {
     if (index % 2 === 0 || !part) return part;
-    const key2 = stem(part);
     const body = display ? <Digits key={`${key}-d${index}`} text={part} /> : part;
-    if (terms.some((term) => key2 === term || (term.length >= 3 && key2.startsWith(term)))) {
+    // The search's matched words, as the server read them: never stemmed here.
+    if (terms.includes(part.toLowerCase().replace(/’/g, "'"))) {
       return (
         <mark key={`${key}-${index}`} className="rb-mark">
           {body}

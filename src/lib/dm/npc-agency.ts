@@ -1,3 +1,4 @@
+import { campaignLanguage } from "@/lib/db/campaigns";
 import { listNpcs, patchNpcAgency, setNpcArchived, type Npc } from "@/lib/db/npcs";
 import { shouldArchive } from "@/lib/dm/npc-archive-logic";
 import { recordExtractedFacts } from "@/lib/db/facts";
@@ -5,10 +6,10 @@ import { publishEphemeral } from "@/lib/events";
 import { rollExpression } from "@/lib/dice";
 import {
   advanceSessionGoal,
-  detectGoalCollisions,
   shiftRelation,
   tickPressure,
 } from "@/lib/dm/npc-logic";
+import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 
 // The background goal engine: once per chapter close, every tracked NPC's
@@ -82,8 +83,14 @@ export function advanceNpcAgency(
 
   // Two NPCs chasing the same prize contest it with opposed dice; the loser
   // resents the winner and the outcome surfaces as a rumor-ready fact.
+  const pool = npcs.flatMap((npc) => {
+    const { scene, session, ambition } = npc.agency.goals;
+    return [scene, session?.text, ambition].filter((goal): goal is string => Boolean(goal));
+  });
   const collisions = detectGoalCollisions(
     holders.map((holder) => ({ name: holder.npc.name, goalText: holder.goalText })),
+    campaignLanguage(campaignId),
+    pool,
   ).slice(0, 2);
   for (const collision of collisions) {
     const a = holders.find((holder) => holder.npc.name === collision.a);

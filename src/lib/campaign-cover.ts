@@ -3,6 +3,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { setCampaignCover } from "@/lib/db/campaigns";
 import { publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
+import { toEnglishForImage } from "@/lib/image-english";
 import { copyIntoUploads, whenImagesAvailable } from "@/lib/portrait";
 import { presetFor } from "@/lib/worlds/preset";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
@@ -60,21 +61,24 @@ export function buildCoverPrompt(input: CoverPromptInput): string {
 // open table through campaign_updated, whose payload merges straight into the
 // client's campaign (useCampaignStream.ts).
 export function queueCampaignCover(
-  campaign: Pick<Campaign, "id" | "title" | "description" | "theme" | "gameSettings">,
+  campaign: Pick<Campaign, "id" | "title" | "description" | "theme" | "settings" | "gameSettings">,
 ): void {
   const map = statusMap();
-  const prompt = buildCoverPrompt({
-    title: campaign.title,
-    description: campaign.description,
-    theme: campaign.theme,
-    genre: campaign.gameSettings.genre,
-    worldPack: campaign.gameSettings.worldPack,
-  });
   void whenImagesAvailable(() => {
     map.set(campaign.id, "queued");
     return enqueueMediaJob(`cover ${campaign.id}`, async () => {
       map.set(campaign.id, "generating");
       try {
+        const words = await toEnglishForImage(campaign, {
+          title: campaign.title,
+          description: campaign.description,
+          theme: campaign.theme,
+        });
+        const prompt = buildCoverPrompt({
+          ...words,
+          genre: campaign.gameSettings.genre,
+          worldPack: campaign.gameSettings.worldPack,
+        });
         const settings = configuredDefaultStorySettings();
         const image = await generateStoryImage(settings, {
           prompt,

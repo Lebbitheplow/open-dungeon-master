@@ -1,8 +1,10 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { generateStoryImage } from "@/lib/image-generate";
+import { toEnglishForImage } from "@/lib/image-english";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { presetFor } from "@/lib/worlds/preset";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
@@ -21,8 +23,12 @@ import { typeFor } from "@/lib/worldforge/model";
 
 type Failure = { error: string };
 
-async function ask(campaign: Campaign, messages: Array<{ role: "system" | "user"; content: string }>): Promise<string | Failure> {
-  const { message, error } = await requestUtilityMessage(campaign.settings, messages, { timeoutMs: arcTextTimeoutMs() });
+async function ask(campaign: Campaign, [system, ...rest]: Array<{ role: "system" | "user"; content: string }>): Promise<string | Failure> {
+  const { message, error } = await requestUtilityMessage(
+    campaign.settings,
+    [{ ...system, content: withLanguage(system.content, campaign.gameSettings.tableLanguage) }, ...rest],
+    { timeoutMs: arcTextTimeoutMs() },
+  );
   if (error) return { error: "The model could not be reached." };
   const text = stripReasoningArtifacts(String(message?.content ?? "")).trim();
   return text || { error: "The model returned nothing usable." };
@@ -87,10 +93,11 @@ export function paintEntry(campaign: Campaign, ref: string): boolean {
       ? presetFor({ genre: campaign.gameSettings.genre, worldPack: campaign.gameSettings.worldPack }).portraitStyle
       : `${campaign.gameSettings.genre.replace(/_/g, " ")} setting`;
   const about = [entity.tagline, entity.entry.article || entity.text].filter(Boolean).join(" ");
-  const prompt = paintPrompt(entity.shelf, type.name, about, style);
   void whenImagesAvailable(() =>
     enqueueMediaJob(`world picture ${ref}`, async () => {
       try {
+        const english = await toEnglishForImage(campaign, { type: type.name, about });
+        const prompt = paintPrompt(entity.shelf, english.type, english.about, style);
         const image = await generateStoryImage(configuredDefaultStorySettings(), { prompt, mode: "fast", aspect: entity.shelf === "location" ? "landscape" : "square" });
         updateWorldEntity(campaign.id, ref, { portrait: copyIntoUploads(image.url).url });
       } catch (error) {

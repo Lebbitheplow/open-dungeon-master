@@ -166,3 +166,42 @@ export function renderChapterLod(
 
   return { text, tokens, tierById };
 }
+
+export type FittedChapter = {
+  index: number;
+  title: string;
+  summary: string;
+  highlights: string[];
+  shortened: boolean;
+};
+
+// The chapters a recall matched (recall_story, Ask, the lore check), fitted
+// into a token budget by the same cascade as the prompt's chapter block:
+// whole summaries while they fit, first sentences next, the oldest dropped
+// last. A stored summary runs up to 8,000 characters and a reader would
+// otherwise take every matched one whole. Highlights count toward the budget
+// and ride only with a whole summary. Oldest first, as the block renders.
+export function fitChaptersToBudget(
+  chapters: Array<{ id: string; index: number; title: string; summary: string; highlights: string[] }>,
+  budgetTokens: number,
+): FittedChapter[] {
+  const { tierById } = renderChapterLod(
+    chapters.map((chapter) => ({
+      id: chapter.id,
+      index: chapter.index,
+      title: chapter.title,
+      summary: chapter.highlights.length
+        ? `${chapter.summary}\n${chapter.highlights.join(" | ")}`
+        : chapter.summary,
+    })),
+    budgetTokens,
+  );
+  return chapters
+    .filter((chapter) => tierById[chapter.id] !== "dropped")
+    .sort((a, b) => (a.index !== b.index ? a.index - b.index : a.id.localeCompare(b.id)))
+    .map((chapter) =>
+      tierById[chapter.id] === "summary"
+        ? { index: chapter.index, title: chapter.title, summary: chapter.summary, highlights: chapter.highlights, shortened: false }
+        : { index: chapter.index, title: chapter.title, summary: firstSentence(chapter.summary), highlights: [], shortened: true },
+    );
+}

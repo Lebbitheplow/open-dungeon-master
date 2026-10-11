@@ -147,6 +147,7 @@ async function companionTable() {
   const player = world.addUser();
   const hero = world.addHero({ user: player, class: "fighter", level: 3 });
   const joined = await world.invoke("add_companion", {
+    gender: "Unknown",
     name: "Wren", class: "fighter", race: "human", level: 3, personality: "Quiet.", kind: "guest",
   });
   assert.equal(joined.ok, true, joined.error);
@@ -207,6 +208,7 @@ await test("a companion added while the order is being collected takes its place
   assert.equal(started.ok, true, started.error);
   assert.equal(world.encounter().orderReady, false);
   const joined = await world.invoke("add_companion", {
+    gender: "Unknown",
     name: "Tamsin", class: "fighter", race: "human", level: 3, personality: "Bold.", kind: "guest",
   });
   assert.equal(joined.ok, true, joined.error);

@@ -1,4 +1,5 @@
-import { buildLinePrompt, lineViolations } from "@/lib/dm/safety-logic";
+import { buildLinePrompt } from "@/lib/dm/safety-logic";
+import { lineViolations } from "@/lib/dm/safety-lines-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -7,17 +8,19 @@ import { extractStoryText } from "@/lib/story-prompt";
 import { stripToolText } from "@/lib/dm/tool-text";
 import {
   buildCorrectionPrompt,
-  checkNarration,
-  normalizeSpellName,
-  type LiveState,
+  guardOutcomes,
+  ruleClaims,
+  type Contradiction,
+  type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
-import spellManifest from "@/lib/srd/manifest/spells.json";
+import { claimKindsFor, type ClaimKind, type PartRead } from "@/lib/dm/claims-logic";
+import { hasQuotedLine, type SpokenLine } from "@/lib/dm/speech";
+import { guardGate, liveStateFor, readClaims } from "@/lib/dm/claims";
 
-// The DB/model rim of the engine-boundary guard. All the matching lives in
-// dm/engine-boundary.ts (pure); this file only decides what to do about a
-// detection, and its answer is deliberately small: ask the model to fix its
-// own prose, once.
+// The DB/model rim of the engine-boundary guard. The ruling lives in
+// dm/engine-boundary.ts (pure) and the reading in dm/claims.ts; this file
+// only decides what to do about a detection, and its answer is deliberately
+// small: ask the model to fix its own prose, once.
 //
 // That one call is held in reserve outside the turn's four-call budget
 // (GUARD_RESERVED_CALLS). The turns most likely to contradict their results
@@ -30,46 +33,64 @@ import spellManifest from "@/lib/srd/manifest/spells.json";
 // contradiction is a prose bug, so only prose is ever changed. When the
 // rewrite is no better, the original narration stands and the contradiction
 // is logged rather than papered over.
+//
+// Its reads also say who speaks each quoted line of the narration that
+// stands, which the turn stores with the message (src/lib/dm/speech.ts).
 
 export const GUARD_RESERVED_CALLS = 1;
 
-type ManifestSpell = { n: string; l: number; a?: string[] };
-
-let leveled: string[] | null = null;
-
-// Every leveled spell in the bundled spell checklist, with its aliases,
-// normalized the way the guard compares names. Cantrips are left out:
-// casting one spends nothing, so a missing tool call proves nothing.
-export function leveledSpellNames(): string[] {
-  if (!leveled) {
-    leveled = [
-      ...new Set(
-        (spellManifest as { spells: ManifestSpell[] }).spells
-          .filter((spell) => spell.l >= 1)
-          .flatMap((spell) => [spell.n, ...(spell.a ?? [])])
-          .map(normalizeSpellName)
-          .filter((name) => name.length >= 3),
-      ),
-    ];
-  }
-  return leveled;
+// The claim kinds the guard rules on for this turn, from engine state alone.
+export function guardKinds(
+  campaign: Campaign,
+  outcomes: ResolvedOutcomes,
+  sheets: readonly CharacterSheet[],
+): ClaimKind[] {
+  return claimKindsFor({
+    ...guardGate(campaign, outcomes, sheets),
+    rollAsk: false,
+    fightStart: false,
+    unrolled: false,
+    speech: false,
+  });
 }
 
-// The running fight's enemies as they stand now, after every call this
-// turn made: what a tool-less kill or a refused attack is checked against.
-export function liveStateFor(campaignId: string): LiveState | null {
-  const encounter = getActiveEncounter(campaignId);
-  if (!encounter) {
-    return null;
-  }
+// What the narration contradicts, and who speaks its quoted lines: the
+// claims already read with each part (the turn loop reads every reply it
+// keeps), plus one read of the parts no read covered, ruled against the
+// turn's outcomes and the encounter as it now stands.
+async function readNarration(
+  campaign: Campaign,
+  turn: DmTurn,
+  sheets: readonly CharacterSheet[],
+  parts: readonly string[],
+  partReads: ReadonlyMap<string, PartRead>,
+): Promise<{ contradictions: Contradiction[]; lines: SpokenLine[] }> {
+  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
+  const kinds = guardKinds(campaign, outcomes, sheets);
+  const wanted = (part: string): ClaimKind[] => (hasQuotedLine(part) ? [...kinds, "speaker"] : kinds);
+  // A part read before this turn's outcomes gave the guard more to check (an
+  // attack resolved after its prose was read) was never asked those kinds,
+  // so it is read again with all of them, and that read replaces its own.
+  const covered = (part: string) => {
+    const read = partReads.get(part);
+    return read && wanted(part).every((kind) => read.kinds.includes(kind)) ? read : null;
+  };
+  const known = parts.flatMap((part) => covered(part)?.claims ?? []);
+  const unread = parts.filter((part) => !covered(part));
+  const read = await readClaims(campaign, {
+    label: `turn ${turn.id}`,
+    text: unread.join("\n\n"),
+    kinds: [...new Set(unread.flatMap(wanted))],
+    outcomes,
+    sheets,
+  });
+  const claims = [...known, ...read];
   return {
-    enemies: listEnemies(encounter.id).map((enemy) => ({
-      id: enemy.id,
-      name: enemy.displayName,
-      hp: enemy.currentHp,
-      maxHp: enemy.maxHp,
-      status: enemy.status,
-    })),
+    contradictions: ruleClaims(
+      claims.filter((claim) => kinds.includes(claim.kind)),
+      outcomes,
+    ),
+    lines: claims.flatMap((claim) => (claim.kind === "speaker" ? [{ line: claim.line, speaker: claim.speaker }] : [])),
   };
 }
 
@@ -77,30 +98,21 @@ export async function enforceEngineBoundary(
   campaign: Campaign,
   turn: DmTurn,
   sheets: readonly CharacterSheet[],
-): Promise<void> {
+  // What each kept reply was read for, by its persisted text.
+  partReads: ReadonlyMap<string, PartRead>,
+): Promise<SpokenLine[]> {
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
-    return;
+    return [];
   }
   // A line crossed is refused the same way a hit written on a miss is
   // (docs/vtt-parity-implementation-plan.md 9.1), whether or not the
   // outcome check is on: safety is not a setting.
   const lines = campaign.gameSettings.safety?.lines ?? [];
-  const crossed = lineViolations(narration, lines);
-  const partyNames = sheets.map((sheet) => sheet.name);
-  const live = liveStateFor(campaign.id);
-  const leveledSpells = leveledSpellNames();
-  const contradictions = campaign.gameSettings.narrationGuard
-    ? checkNarration({
-        conversation: turn.conversation,
-        narration,
-        partyNames,
-        live,
-        leveledSpells,
-      })
-    : [];
+  const crossed = lineViolations(narration, lines, campaign.gameSettings.tableLanguage);
+  const { contradictions, lines: spoken } = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
   if (!contradictions.length && !crossed.length) {
-    return;
+    return spoken;
   }
 
   const summary = [...contradictions.map((entry) => entry.detail), ...crossed.map((line) => `line crossed: ${line}`)].join("; ");
@@ -129,7 +141,7 @@ export async function enforceEngineBoundary(
   turn.callIndex += 1;
   if (error) {
     console.warn(`[engine-boundary] turn ${turn.id}: correction call failed (${summary})`);
-    return;
+    return spoken;
   }
 
   // Tool text the rewrite wrote out (a call it was not offered, as brackets,
@@ -142,26 +154,18 @@ export async function enforceEngineBoundary(
     console.warn(
       `[engine-boundary] turn ${turn.id}: correction came back too short to use (${summary})`,
     );
-    return;
+    return spoken;
   }
   // A rewrite is only an improvement if it actually removes contradictions. A
   // model that swapped one wrong claim for another keeps its original text,
   // which at least the table already saw streaming.
-  const remaining = campaign.gameSettings.narrationGuard
-    ? checkNarration({
-        conversation: turn.conversation,
-        narration: corrected,
-        partyNames,
-        live,
-        leveledSpells,
-      })
-    : [];
-  const stillCrossed = lineViolations(corrected, lines);
+  const { contradictions: remaining, lines: respoken } = await readNarration(campaign, turn, sheets, [corrected], new Map());
+  const stillCrossed = lineViolations(corrected, lines, campaign.gameSettings.tableLanguage);
   if (remaining.length + stillCrossed.length >= contradictions.length + crossed.length) {
     console.warn(
       `[engine-boundary] turn ${turn.id}: correction did not resolve the contradiction (${summary})`,
     );
-    return;
+    return spoken;
   }
   // finalize() renders the turn's dice cards between the last narration part
   // and the ones before it, so a multi-part turn keeps that shape: the rewrite
@@ -175,7 +179,8 @@ export async function enforceEngineBoundary(
       paragraphs.slice(0, -1).join("\n\n"),
       paragraphs[paragraphs.length - 1],
     );
-    return;
+    return respoken;
   }
   turn.narrationParts.push(corrected);
+  return respoken;
 }

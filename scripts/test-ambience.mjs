@@ -11,8 +11,6 @@ const {
   EMPTY_AMBIENCE,
   applyAuto,
   describeAmbience,
-  inferBedCue,
-  inferCue,
   normalizeAmbience,
   sameAmbience,
   setCue,
@@ -111,40 +109,6 @@ test("silencing a layer never leaves it held", () => {
   const off = setCue(held, "music", null, { hold: true });
   assert.equal(off.state.music, null);
   assert.deepEqual(off.state.held, []);
-});
-
-test("a place description picks the bed a DM would have picked", () => {
-  assert.equal(inferBedCue("The Rusted Anchor, a low-beamed tavern by the docks"), "tavern");
-  assert.equal(inferBedCue("A dripping cavern, the floor slick with run-off"), "cave");
-  assert.equal(inferBedCue("Endless dunes under a white sky"), "desert");
-  assert.equal(inferBedCue("The market square, packed with stalls"), "market");
-  assert.equal(inferBedCue("A ford across the river, waist deep"), "river");
-  assert.equal(inferBedCue("Wind off the sea, gulls over the shore"), "coast");
-});
-
-test("the more specific keyword wins", () => {
-  // "dark forest" is two words and beats the bare "forest" inside it.
-  assert.equal(inferBedCue("a dark forest, older than the road"), "deep_forest");
-  assert.equal(inferBedCue("a forest, bright and loud with birds"), "forest");
-});
-
-test("a word that merely contains a keyword is not a match", () => {
-  // "sea" inside "season", "mine" inside "determined", "camp" in "campaign".
-  assert.equal(inferBedCue("the season had just turned"), null);
-  assert.equal(inferBedCue("she was determined to go on"), null);
-  assert.equal(inferBedCue("a campaign three winters old"), null);
-});
-
-test("nothing to hear reads as nothing", () => {
-  assert.equal(inferBedCue(""), null);
-  assert.equal(inferBedCue("   "), null);
-  assert.equal(inferBedCue("He nods once and says nothing."), null);
-  assert.equal(inferCue("a low-beamed tavern", "sting"), null);
-});
-
-test("music can be read too", () => {
-  assert.equal(inferCue("the ambush is sprung", "music")?.cueId, "battle");
-  assert.equal(inferCue("a funeral, and nobody speaks", "music")?.cueId, "sorrow");
 });
 
 test("sameAmbience compares held sets, not their order", () => {

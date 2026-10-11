@@ -1,3 +1,4 @@
+import { byName, foldName } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { clampPower, normalizeFactionAttitude, type Faction, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -37,9 +38,11 @@ function map(row: Row): Faction {
 export function listFactions(campaignId: string): Faction[] {
   return (
     getDatabase()
-      .prepare(`SELECT * FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`)
+      .prepare(`SELECT * FROM factions WHERE campaign_id = ?`)
       .all(campaignId) as Row[]
-  ).map(map);
+  )
+    .map(map)
+    .sort(byName);
 }
 
 export function getFaction(factionId: string): Faction | null {
@@ -48,22 +51,21 @@ export function getFaction(factionId: string): Faction | null {
 }
 
 // Exact first, then the loose match a model tends to produce ("the reed
-// court", "Reed Court"): one side contains the other, articles aside.
+// court", "Reed Court"): one side contains the other. Both compare by Unicode
+// case (src/lib/language), never SQLite's ASCII-only NOCASE.
 export function findFactionByName(campaignId: string, name: string): Faction | null {
-  const wanted = name.trim();
-  const row = getDatabase()
-    .prepare(`SELECT * FROM factions WHERE campaign_id = ? AND name = ? COLLATE NOCASE LIMIT 1`)
-    .get(campaignId, wanted) as Row | undefined;
-  if (row) {
-    return map(row);
+  const factions = listFactions(campaignId);
+  const wanted = foldName(name);
+  const exact = factions.find((faction) => foldName(faction.name) === wanted);
+  if (exact) {
+    return exact;
   }
-  const loose = wanted.toLowerCase().replace(/^the\s+/, "");
-  if (loose.length < 3) {
+  if (wanted.length < 3) {
     return null;
   }
-  const candidates = listFactions(campaignId).filter((faction) => {
-    const own = faction.name.toLowerCase().replace(/^the\s+/, "");
-    return own === loose || own.includes(loose) || loose.includes(own);
+  const candidates = factions.filter((faction) => {
+    const own = foldName(faction.name);
+    return own.includes(wanted) || wanted.includes(own);
   });
   return candidates.length === 1 ? candidates[0] : null;
 }

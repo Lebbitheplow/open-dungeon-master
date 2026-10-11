@@ -1292,6 +1292,21 @@ test("a bundle naming the same place twice is numbered rather than refused", () 
   assert.ok(names.some((name) => /\(2\)/.test(name)));
 });
 
+test("a faction's members find their NPCs across Unicode case, which SQLite's NOCASE cannot fold", () => {
+  const [template] = exported.npcs;
+  const result = importWorkshopBundle(userId, {
+    ...exported,
+    npcs: [...exported.npcs, { ...template, ref: "", name: "Élodie" }],
+    factions: [{ name: "La Cour des Roseaux", blurb: "", goal: "", attitude: "neutral", power: 1, tags: [], members: ["élodie", "Nobody Known"], portrait: "" }],
+  });
+  assert.ok(!("error" in result), result.error);
+  const member = db
+    .prepare(`SELECT n.name FROM npcs n JOIN factions f ON f.id = n.faction_id WHERE f.campaign_id = ?`)
+    .all(result.workshopId)
+    .map((row) => row.name);
+  assert.deepEqual(member, ["Élodie"]);
+});
+
 // Every import writes fresh files, so the art a bundle carries counts
 // against the importer's upload budget (src/lib/upload-budget.ts), and an
 // import that fails takes its art back off the disk.

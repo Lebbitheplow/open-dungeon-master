@@ -59,7 +59,8 @@ const nextConfig: NextConfig = {
   },
   // mediasoup spawns a native worker binary and resolves it by path, so
   // bundling it breaks the lookup exactly the way it does for better-sqlite3.
-  serverExternalPackages: ["better-sqlite3-multiple-ciphers", "mediasoup"],
+  // multilingual-stemmer reads its .wasm beside its own module the same way.
+  serverExternalPackages: ["better-sqlite3-multiple-ciphers", "mediasoup", "multilingual-stemmer"],
   turbopack: {
     root: process.cwd(),
   },

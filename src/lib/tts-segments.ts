@@ -1,4 +1,4 @@
-import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
+import { segmentsOf, type Speaker, type SpokenLine } from "@/lib/dm/speech";
 
 // Which voice reads which part of a message (docs/vtt-parity-
 // implementation-plan.md section 8.2, issue 97). Prose is the narrator's; a
@@ -31,7 +31,14 @@ export function baseCreatureName(name: string): string {
 
 export function planSpeech(
   text: string,
-  options: { narratorVoice: string; narratorSpeed?: number; cast: CastVoice[]; speaker?: Speaker | null },
+  options: {
+    narratorVoice: string;
+    narratorSpeed?: number;
+    cast: CastVoice[];
+    speaker?: Speaker | null;
+    // Who speaks each quoted line, as stored with the message.
+    lines: readonly SpokenLine[];
+  },
 ): SpeechPlan {
   const byName = new Map<string, CastVoice>();
   for (const entry of options.cast) {
@@ -54,15 +61,14 @@ export function planSpeech(
     const chosen = voiceFor(options.speaker.name);
     return flat(text) ? [{ text: flat(text), ...chosen, speaker: options.speaker.name }] : [];
   }
-  // Lines are read with the whole cast, as the transcript reads them, so a
-  // voiceless speaker's line is never handed to the voiced name beside it;
-  // only someone with a voice of their own is worth a cut in the audio.
-  const speakers: Speaker[] = options.cast.map((entry) => ({ kind: "npc", id: "", name: entry.name, aliases: entry.aliases }));
+  // The lines' speakers are the ones the transcript draws
+  // (src/lib/dm/speech.ts); only someone with a voice of their own is worth a
+  // cut in the audio.
   const plan: SpeechPlan = [];
   // The narrator's current run as written, quote marks and all.
   let run = "";
   let cursor = 0;
-  for (const segment of attributeSpeech(text, speakers)) {
+  for (const segment of segmentsOf(text, options.lines)) {
     const at = text.indexOf(segment.text, cursor);
     const written = segment.kind === "speech" && at > 0 ? text.slice(at - 1, at + segment.text.length + 1) : segment.text;
     cursor = at === -1 ? cursor : at + segment.text.length;

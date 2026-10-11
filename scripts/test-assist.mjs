@@ -1,17 +1,18 @@
-// The DM's assist rail: turning what a player said into a shortlist of
-// adjudications, and reading back what the model proposed.
-//
-// The catalog is imported for real, so this also fails if an entry the
-// ranking leans on is renamed out from under it.
+// The DM's assist rail: what a player said turned into a shortlist of
+// adjudications ranked by meaning (each entry with the SRD text of the choices
+// it offers), and what the model proposed read back.
+// The ranking reads only vector order, so here it is fed hand-made vectors;
+// the embedder and the model are exercised against fakes in
+// test-table-language-calls.mjs.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { intentTokens, parseSuggestionJson, rankAdjudications, synonymKeys } = await import(
-  "../src/lib/dm/assist-logic.ts"
-);
+const { availableEntries, candidateLine, catalogEntryText, catalogPassages, parseSuggestionJson, rankBySimilarity, srdSections } =
+  await import("../src/lib/dm/assist-logic.ts");
 const { ADJUDICATIONS } = await import("../src/lib/dm/invoke-catalog.ts");
+const { rulebookPages } = await import("../src/lib/rulebook/book.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -19,50 +20,68 @@ function test(name, fn) {
   passed += 1;
 }
 
-const names = (intent, options = {}) =>
-  rankAdjudications(intent, ADJUDICATIONS, options).map(({ entry }) => entry.name);
+const unit = (...values) => {
+  const length = Math.hypot(...values);
+  return Float32Array.from(values.map((value) => value / length));
+};
 
-test("common words are not evidence of anything", () => {
-  assert.deepEqual(intentTokens("I want to go into the room"), ["room"]);
-  assert.deepEqual(intentTokens(""), []);
+test("an entry is embedded as its name in words, its label and its summary", () => {
+  const attack = ADJUDICATIONS.find((entry) => entry.name === "pc_attack");
+  const text = catalogEntryText(attack);
+  assert.ok(text.startsWith("pc attack: "));
+  assert.ok(text.includes(attack.label) && text.includes(attack.summary));
 });
 
-test("what a player says reaches the tool, not the tool's own vocabulary", () => {
-  // Nobody types "resolve a player attack"; they type this.
-  assert.ok(names("I stab the goblin with my shortsword").includes("pc_attack"));
-  assert.ok(names("Can I sneak past the guard?").includes("request_roll"));
-  assert.ok(names("I cast a spell at the ogre").includes("cast_at_enemy"));
-  assert.ok(names("We make camp for the night").includes("take_rest"));
+test("an entry also carries the SRD's text for each choice it offers, and only what the SRD titles that way", () => {
+  const sections = srdSections(rulebookPages());
+  // A run-in paragraph and a heading both count, as plain text.
+  assert.match(sections.get("athletics"), /^Athletics\. Your Strength \(Athletics\) check covers .*climb/);
+  assert.match(sections.get("poisoned"), /poisoned creature has disadvantage on attack rolls/i);
+  assert.ok([...sections.values()].every((text) => text.length <= 1200 && !/[*#]/.test(text)));
+  const roll = catalogPassages(ADJUDICATIONS.find((entry) => entry.name === "request_roll"), sections);
+  assert.equal(roll[0], catalogEntryText(ADJUDICATIONS.find((entry) => entry.name === "request_roll")));
+  assert.ok(roll.some((passage) => passage.startsWith("Ask for a roll: Athletics. Athletics. Your Strength")));
+  assert.ok(roll.some((passage) => passage.startsWith("Ask for a roll: Stealth. ")));
+  // An entry whose choices the SRD does not title has its own text alone.
+  const gold = ADJUDICATIONS.find((entry) => entry.name === "modify_gold");
+  assert.deepEqual(catalogPassages(gold, sections), [catalogEntryText(gold)]);
 });
 
-test("every synonym key is a real adjudication", () => {
-  // A renamed tool would drop out of the shortlist silently, which is worse
-  // than a missing button because nothing looks wrong.
-  const known = new Set(ADJUDICATIONS.map((entry) => entry.name));
-  for (const key of synonymKeys()) {
-    assert.ok(known.has(key), `${key} has synonyms but is not in the catalog`);
+test("the model sees each action's arguments, a pick list with its values, so a prefill is one the form offers", () => {
+  const roll = candidateLine(ADJUDICATIONS.find((entry) => entry.name === "request_roll"));
+  assert.ok(roll.startsWith("- request_roll: "));
+  assert.match(roll, /skill \(select: acrobatics\|animal_handling\|[^)]*athletics[^)]*\)/);
+  assert.match(roll, /arguments: characterId \(character\), kind \(select, required: skill_check\|/);
+  // A pick list that also takes a typed value says so.
+  const typed = ADJUDICATIONS.flatMap((entry) => entry.fields.filter((field) => field.options?.length && field.other).map(() => entry))[0];
+  if (typed) {
+    assert.match(candidateLine(typed), /\|other text\)/);
   }
+  const gold = candidateLine(ADJUDICATIONS.find((entry) => entry.name === "modify_gold"));
+  assert.ok(!gold.includes("select"));
 });
 
-test("an empty intent proposes nothing rather than guessing", () => {
-  assert.deepEqual(names(""), []);
-  assert.deepEqual(names("the a of"), []);
-});
-
-test("fight tools are not proposed when there is no fight", () => {
-  const combatOnly = ADJUDICATIONS.filter((entry) => entry.needsEncounter).map(
-    (entry) => entry.name,
-  );
+test("fight tools are not offered when there is no fight", () => {
+  const combatOnly = ADJUDICATIONS.filter((entry) => entry.needsEncounter);
   assert.ok(combatOnly.length > 0, "the catalog has no encounter-gated entries");
-  const suggested = names("I attack the bandit", { inEncounter: false });
-  for (const name of suggested) {
-    assert.ok(!combatOnly.includes(name), `${name} needs an encounter and was still proposed`);
-  }
+  const calm = availableEntries(ADJUDICATIONS, false);
+  assert.ok(calm.every((entry) => !entry.needsEncounter));
+  assert.equal(availableEntries(ADJUDICATIONS, true).length, ADJUDICATIONS.length);
 });
 
-test("the shortlist stays short", () => {
-  assert.ok(names("I attack and roll and cast and move and heal").length <= 5);
-  assert.equal(names("I attack the goblin", { limit: 2 }).length <= 2, true);
+test("the nearest entries come first by their nearest passage, the list stays short, and ties keep catalog order", () => {
+  const [a, b, c, d] = ADJUDICATIONS;
+  const vectors = new Map([
+    // a's own text is far, but one of its passages is the nearest of all.
+    [a.name, [unit(0, 1), unit(1, 0.01)]],
+    [b.name, [unit(1, 0.1)]],
+    [c.name, [unit(1, 0.1)]],
+    [d.name, [unit(1, 0.05)]],
+  ]);
+  const ranked = rankBySimilarity(unit(1, 0), [a, b, c, d], vectors, 3).map((entry) => entry.name);
+  assert.deepEqual(ranked, [a.name, d.name, b.name]);
+  // An entry with no vector is never ranked.
+  assert.deepEqual(rankBySimilarity(unit(1, 0), [a, b], new Map([[a.name, [unit(0, 1)]]]), 5).map((entry) => entry.name), [a.name]);
 });
 
 test("a model's JSON pick is read, fences and all", () => {

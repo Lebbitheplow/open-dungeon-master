@@ -12,6 +12,7 @@ const { test, finish } = suite("test-prepared-encounter-run");
 const { dispatchAdjudication } = await import("../src/lib/dm/invoke-dispatch.ts");
 const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
 const { listSheets } = await import("../src/lib/db/sheets.ts");
+const { getBattleMapForEncounter } = await import("../src/lib/db/battle-maps.ts");
 const { getEncounterTemplate, insertEncounterTemplate, setTemplateCued } = await import(
   "../src/lib/db/encounter-templates.ts"
 );
@@ -26,7 +27,7 @@ const template = insertEncounterTemplate({
   name: "Goblins at the ford",
   enemies: [{ monster: "goblin", count: 2 }],
   battlefield: "a shallow ford between reeds",
-  map: { mapId: null, seed: null, theme: null, ambient: null, width: null, height: null },
+  map: { mapId: null, scene: "river", seed: null, theme: null, ambient: null, width: null, height: null },
   notes: "They want the toll, not a fight.",
   extras: { rewards: "12 sp and a fishing net", phases: ["When one falls, the other flees."], overrides: [{ slot: 0, name: "Snik", hp: 3 }] },
   createdByUserId: world.owner.id,
@@ -56,6 +57,10 @@ await test("running it by name starts that roster, not one the model invents", a
   const enemies = world.enemies();
   assert.equal(enemies.length, 2);
   assert.ok(enemies.every((enemy) => /goblin/i.test(enemy.slug)));
+});
+
+await test("the board is drawn as the fight's own kind of ground, not the place's", async () => {
+  assert.equal(getBattleMapForEncounter(world.encounter().id)?.theme, "riverside");
 });
 
 await test("the plan lands on the fight: the override, and what it is worth", async () => {

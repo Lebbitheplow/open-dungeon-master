@@ -2,6 +2,9 @@
 // descriptions and argument schemas. Split from encounter-tools.ts, which
 // offers them (encounterTools) and handles every call.
 
+import { sceneIds } from "@/lib/ambience/catalog";
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
+
 export type ToolDef = {
   type: "function";
   function: { name: string; description: string; parameters: Record<string, unknown> };
@@ -55,10 +58,11 @@ export const startEncounterTool: ToolDef = {
           description:
             "A whole side the story has already decided is caught off guard, overriding ambush. Default none.",
         },
-        battlefield: {
+        scene: {
           type: "string",
+          enum: sceneIds(),
           description:
-            "One line describing the fighting ground, used to shape the tactical battle map, e.g. 'a torchlit crypt with a flooded channel'.",
+            "The kind of ground this fight is on, for its battle map, when it is not the current place's own (an ambush on the road outside the town). Omit it and the map follows the place.",
         },
         distanceFeet: {
           type: "integer",
@@ -154,6 +158,7 @@ export const endEncounterTool: ToolDef = {
       type: "object",
       additionalProperties: false,
       properties: {
+        ...waypointProperty,
         outcome: {
           type: "string",
           enum: ["victory", "enemies_fled", "party_fled", "party_defeated", "truce"],

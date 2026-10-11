@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { bestiaryFor, resolveMonster, suggestEnemies } from "@/lib/bestiary";
@@ -7,10 +8,16 @@ import { listSheets } from "@/lib/db/sheets";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { ADJUDICATIONS } from "@/lib/dm/invoke-catalog";
-import { findAdjudication } from "@/lib/dm/catalog-types";
+import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import { embed } from "@/lib/embeddings";
+import { rulebookPages } from "@/lib/rulebook/book";
 import {
+  availableEntries,
+  candidateLine,
+  catalogPassages,
   parseSuggestionJson,
-  rankAdjudications,
+  rankBySimilarity,
+  srdSections,
   type ParsedSuggestion,
 } from "@/lib/dm/assist-logic";
 import { parseRollTable, TABLE_MAX_ENTRIES, type RollTableEntry } from "@/lib/dm/roll-table-logic";
@@ -32,37 +39,94 @@ export type SuggestedAdjudication = {
 };
 
 const SUGGEST_SYSTEM =
-  'You map a player\'s stated intention onto exactly one action the rules engine can perform. You are given a shortlist of candidate actions with their arguments. Return STRICT JSON only, no code fences, shaped: {"name": string, "args": object, "why": string}. name MUST be one of the candidate names. args fills in what you can infer from the intention and leaves out what you cannot; never invent a character name or an id that is not given to you. why is one short clause saying what the roll or effect is for. If none of the candidates fits, return the closest one with empty args.';
+  'You map a player\'s stated intention onto exactly one action the rules engine can perform. You are given every action the engine can perform right now, with their arguments. Return STRICT JSON only, no code fences, shaped: {"name": string, "args": object, "why": string}. name MUST be one of the listed action names. args fills in what you can infer from the intention and leaves out what you cannot; never invent a character name or an id that is not given to you. An argument with listed values takes one of them, written exactly as listed. why is one short clause saying what the roll or effect is for. If no action fits well, return the closest one with empty args.';
 
-// A keyword shortlist first, always, then one small model call to pick among
-// it and prefill. The shortlist is what the DM sees if the model is slow,
-// unreachable, or simply wrong.
+// How many of the nearest actions the DM is shown before the model answers.
+const SHORTLIST = 5;
+
+// Survives dev-mode HMR, same pattern as the embedder (src/lib/embeddings.ts).
+declare global {
+  var __odmAssistCatalogVectors: Promise<Map<string, Float32Array[]>> | undefined;
+}
+
+// Texts per embedding call when the catalog is embedded. One call pads
+// every text to the longest SRD section; short texts batched with their own
+// length took a fifth of the time (about 2 seconds instead of 9 on CPU).
+const EMBED_BATCH = 16;
+
+async function embedByLength(texts: readonly string[]): Promise<Float32Array[]> {
+  const order = texts.map((text, index) => ({ text, index })).sort((a, b) => a.text.length - b.text.length);
+  const vectors = new Array<Float32Array>(texts.length);
+  for (let start = 0; start < order.length; start += EMBED_BATCH) {
+    const batch = order.slice(start, start + EMBED_BATCH);
+    const embedded = await embed(batch.map((item) => item.text));
+    batch.forEach((item, at) => {
+      vectors[item.index] = embedded[at];
+    });
+  }
+  return vectors;
+}
+
+// The catalog's passage vectors, embedded once per process: the catalog
+// and the SRD only change with the code.
+function catalogVectorsOnce(): Promise<Map<string, Float32Array[]>> {
+  if (globalThis.__odmAssistCatalogVectors) {
+    return globalThis.__odmAssistCatalogVectors;
+  }
+  const sections = srdSections(rulebookPages());
+  const passages = ADJUDICATIONS.flatMap((entry) =>
+    catalogPassages(entry, sections).map((text) => ({ name: entry.name, text })),
+  );
+  globalThis.__odmAssistCatalogVectors = embedByLength(passages.map((passage) => passage.text)).then(
+    (vectors) => {
+      const byName = new Map<string, Float32Array[]>();
+      passages.forEach((passage, index) => {
+        byName.set(passage.name, [...(byName.get(passage.name) ?? []), vectors[index]]);
+      });
+      return byName;
+    },
+    (error: unknown) => {
+      globalThis.__odmAssistCatalogVectors = undefined;
+      throw error;
+    },
+  );
+  return globalThis.__odmAssistCatalogVectors;
+}
+
+export type AssistSuggestion = { suggestions: SuggestedAdjudication[]; picked: ParsedSuggestion | null };
+
+// The actions nearest the intent by meaning (embedded on this server, no
+// model call), then one small model call that picks from every action this
+// moment allows and prefills it: a shortlist cut by embedding would tie the
+// pick to the operator's embedding model. The shortlist is what the DM sees
+// if the model is slow, unreachable or wrong; with neither an embedder nor a
+// model there is nothing to suggest, and the DM is told so.
 export async function suggestAdjudication(
   campaign: Campaign,
   intent: string,
   options: { inEncounter: boolean; useModel?: boolean },
-): Promise<{ suggestions: SuggestedAdjudication[]; picked: ParsedSuggestion | null }> {
-  const ranked = rankAdjudications(intent, ADJUDICATIONS, {
-    inEncounter: options.inEncounter,
-    limit: 5,
-  });
-  const suggestions: SuggestedAdjudication[] = ranked.map(({ entry }) => ({
+): Promise<AssistSuggestion | { error: string }> {
+  const available = availableEntries(ADJUDICATIONS, options.inEncounter);
+  const toSuggestion = (entry: CatalogEntry): SuggestedAdjudication => ({
     name: entry.name,
     label: entry.label,
     summary: entry.summary,
-  }));
-  if (!ranked.length || options.useModel === false) {
-    return { suggestions, picked: null };
+  });
+  let suggestions: SuggestedAdjudication[] = [];
+  let embedded = true;
+  try {
+    const [vectors, [intentVector]] = await Promise.all([catalogVectorsOnce(), embed([intent])]);
+    suggestions = rankBySimilarity(intentVector, available, vectors, SHORTLIST).map(toSuggestion);
+  } catch (error) {
+    embedded = false;
+    console.error("[assist] the embedder failed; the shortlist is empty", error);
+  }
+  const unavailable = { error: "Suggestions are unavailable: the embedding model could not be loaded." };
+  if (options.useModel === false) {
+    return embedded ? { suggestions, picked: null } : unavailable;
   }
 
-  const candidates = ranked
-    .map(({ entry }) => {
-      const fields = entry.fields
-        .map((field) => `${field.name} (${field.kind}${field.required ? ", required" : ""})`)
-        .join(", ");
-      return `- ${entry.name}: ${entry.summary}\n  arguments: ${fields || "none"}`;
-    })
-    .join("\n");
+  const candidates = available.map(candidateLine).join("\n");
   const roster = listSheets(campaign.id)
     .map((sheet) => `${sheet.name} (id ${sheet.id})`)
     .join("; ");
@@ -70,13 +134,13 @@ export async function suggestAdjudication(
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
-      { role: "system", content: SUGGEST_SYSTEM },
+      { role: "system", content: withLanguage(SUGGEST_SYSTEM, campaign.gameSettings.tableLanguage) },
       {
         role: "user",
         content: [
           `Player's intention: ${intent}`,
           roster ? `The party: ${roster}` : "",
-          `Candidate actions:\n${candidates}`,
+          `Actions:\n${candidates}`,
         ]
           .filter(Boolean)
           .join("\n\n"),
@@ -84,25 +148,17 @@ export async function suggestAdjudication(
     ],
     { timeoutMs: arcTextTimeoutMs() },
   );
-  if (error) {
-    return { suggestions, picked: null };
+  const parsed = error ? null : parseSuggestionJson(stripReasoningArtifacts(String(message?.content ?? "")));
+  // A pick that names no action this moment allows is discarded rather than
+  // trusted: the console would render a form for an action it cannot run.
+  const entry = parsed ? available.find((candidate) => candidate.name === parsed.name) : undefined;
+  if (!parsed || !entry) {
+    return embedded ? { suggestions, picked: null } : unavailable;
   }
-  const parsed = parseSuggestionJson(stripReasoningArtifacts(String(message?.content ?? "")));
-  // A pick that names something outside the shortlist is discarded rather
-  // than trusted: the console would render a form for an action the DM never
-  // saw proposed.
-  if (!parsed || !ranked.some(({ entry }) => entry.name === parsed.name)) {
-    return { suggestions, picked: null };
-  }
-  const entry = findAdjudication(ADJUDICATIONS, parsed.name);
-  if (entry) {
-    const index = suggestions.findIndex((item) => item.name === parsed.name);
-    if (index >= 0) {
-      suggestions[index] = { ...suggestions[index], args: parsed.args, why: parsed.why };
-      // The model's pick leads the list.
-      suggestions.unshift(...suggestions.splice(index, 1));
-    }
-  }
+  // The model's pick leads the list, prefilled, whether or not the
+  // shortlist had it.
+  const picked = { ...toSuggestion(entry), args: parsed.args, why: parsed.why };
+  suggestions = [picked, ...suggestions.filter((item) => item.name !== entry.name)].slice(0, SHORTLIST);
   return { suggestions, picked: parsed };
 }
 
@@ -207,7 +263,7 @@ export async function generateRollTable(
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
-      { role: "system", content: TABLE_SYSTEM },
+      { role: "system", content: withLanguage(TABLE_SYSTEM, campaign.gameSettings.tableLanguage) },
       {
         role: "user",
         content: [

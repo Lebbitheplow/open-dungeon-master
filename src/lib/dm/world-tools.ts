@@ -416,6 +416,7 @@ function tableNote(campaign: Campaign, content: string) {
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });

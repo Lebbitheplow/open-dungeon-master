@@ -55,6 +55,7 @@ export function turnStartEffects(
       campaignId: campaign.id,
       seq,
       authorType: "system",
+      glyph: "cue-bell",
       content: turnStartLines.join(" "),
     });
     publishWithSeq(campaign.id, seq, "message_added", { message });

@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   allocateSeq,
   getCampaignById,
@@ -13,11 +14,14 @@ import {
 } from "@/lib/db/character-events";
 import { getDatabase } from "@/lib/db/core";
 import { countMessages, listMessagesPage } from "@/lib/db/messages";
-import { recordExtractedFacts } from "@/lib/db/facts";
+import { recordExtractedFacts, retireFacts } from "@/lib/db/facts";
 import { listSheets } from "@/lib/db/sheets";
 import { publishEphemeral } from "@/lib/events";
 import { extractStoryText, stripReasoningArtifacts } from "@/lib/story-prompt";
 import { normalizeCandidate, type FactCandidate } from "@/lib/dm/fact-logic";
+import { CONSOLIDATION_INSTRUCTIONS, consolidationRetirements } from "@/lib/dm/fact-consolidation-logic";
+import { factsOnFileFor } from "@/lib/dm/fact-consolidation";
+import type { ChunkableMessage } from "@/lib/dm/scene-logic";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 
@@ -171,8 +175,10 @@ export async function maybeCompactHistory(campaignId: string): Promise<boolean> 
       [
         {
           role: "system",
-          content:
+          content: withLanguage(
             "You maintain the canonical campaign memory for an ongoing D&D 5e game. Merge the existing summary with the new passages into one updated summary. Preserve plot threads, NPCs met, promises, injuries, loot, locations, and party decisions. Compact past-tense prose, at most 500 words. Output only the summary.",
+            campaign.gameSettings.tableLanguage,
+          ),
         },
         {
           role: "user",
@@ -205,7 +211,7 @@ export async function maybeCompactHistory(campaignId: string): Promise<boolean> 
     const block = milestoneBlock(campaignId, batch[batch.length - 1]?.seq ?? 0);
     const body = updated.slice(0, Math.max(0, SUMMARY_MAX_CHARS - block.length));
     setCampaignSummaryState(campaignId, `${body}${block}`, coveredCount + batch.length);
-    await extractCharacterEvents(campaign, transcript);
+    await extractCharacterEvents(campaign, transcript, batch);
   }
   return true;
 }
@@ -215,23 +221,29 @@ export async function maybeCompactHistory(campaignId: string): Promise<boolean> 
 // durable world-state facts. This is the fallback fact extractor for the
 // stretch before a campaign's first chapter closes (chapter close is the
 // primary heartbeat and usually fires well before the compaction threshold).
-async function extractCharacterEvents(campaign: Campaign, transcript: string) {
+async function extractCharacterEvents(campaign: Campaign, transcript: string, batch: ChunkableMessage[]) {
   const sheets = listSheets(campaign.id);
   if (!sheets.length) {
     return;
   }
+  const onFile = await factsOnFileFor(campaign.id, batch);
   const { message, error } = await trackUtilityCall(campaign.id, "compaction", () =>
     requestUtilityMessage(
       campaign.settings,
       [
         {
           role: "system",
-          content:
-            'Extract durable memory from this D&D transcript as JSON only, shaped: {"events": [{"characterName": string, "kind": "achievement"|"item"|"relationship"|"death"|"level_up"|"story", "summary": string}], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. events: lasting per-character milestones worth remembering months later (victories, treasures, bonds, deaths, oaths), one past-tense sentence each. facts: up to 6 world-state facts the passages established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about. Empty arrays if none. No code fences.',
+          content: withLanguage(
+            'Extract durable memory from this D&D transcript as JSON only, shaped: {"events": [{"characterName": string, "kind": "achievement"|"item"|"relationship"|"death"|"level_up"|"story", "summary": string}], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. events: lasting per-character milestones worth remembering months later (victories, treasures, bonds, deaths, oaths), one past-tense sentence each. facts: up to 6 world-state facts the passages established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about. Empty arrays if none. No code fences.' +
+            (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""),
+            campaign.gameSettings.tableLanguage,
+          ),
         },
         {
           role: "user",
-          content: `Characters: ${sheets.map((sheet) => sheet.name).join(", ")}\n\nTranscript:\n${transcript}`,
+          content: `Characters: ${sheets.map((sheet) => sheet.name).join(", ")}${
+            onFile.text ? `\n\nFacts already on file:\n${onFile.text}` : ""
+          }\n\nTranscript:\n${transcript}`,
         },
       ],
       {},
@@ -279,13 +291,22 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string) {
     .filter((entry): entry is FactCandidate => entry !== null);
   if (candidates.length) {
     try {
-      const inserted = recordExtractedFacts(campaign.id, candidates, "compaction");
+      const inserted = recordExtractedFacts(campaign.id, candidates, "compaction", {
+        shownIds: onFile.shown.map((fact) => fact.id),
+      });
       if (inserted.length) {
         publishEphemeral(campaign.id, "facts_updated", {});
       }
     } catch (factError) {
       console.error("[facts] compaction extraction failed", factError);
     }
+  }
+  try {
+    if (retireFacts(campaign.id, consolidationRetirements(raw, onFile.shown))) {
+      publishEphemeral(campaign.id, "facts_updated", {});
+    }
+  } catch (factError) {
+    console.error("[facts] compaction consolidation failed", factError);
   }
   for (const entry of parsed.slice(0, 10)) {
     const name = String(entry.characterName ?? "").trim().toLowerCase();

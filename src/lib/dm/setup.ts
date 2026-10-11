@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   getCampaignById,
   setCampaignScene,
@@ -6,6 +7,7 @@ import {
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
+import { nameRegisterHint } from "@/lib/genres";
 import { publishPersisted } from "@/lib/events";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { requestDmMessage } from "@/lib/dm/model";
@@ -29,7 +31,7 @@ export async function runStorySetup(campaignId: string) {
     campaign.description ? `Table's own premise notes: ${campaign.description}` : "",
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
-      : `Genre: ${preset.name}. ${preset.dmFlavor} ${preset.nameHints}`,
+      : `Genre: ${preset.name}. ${preset.dmFlavor} ${nameRegisterHint(preset.nameHints)}`,
     // A selected world pack brings its own factions, places and hooks, which
     // is exactly the raw material this pass is trying to invent.
     packWorldHints(campaign.gameSettings),
@@ -42,8 +44,10 @@ export async function runStorySetup(campaignId: string) {
     [
       {
         role: "system",
-        content:
+        content: withLanguage(
           "You design the seed of a D&D 5e campaign. Reply with ONLY a JSON object, no code fences, shaped exactly: {\"premise\": string, \"openingScene\": string, \"secretOutline\": string}. premise: 2-3 sentences the players will read. openingScene: one sentence naming where the story opens. secretOutline: 6-10 numbered beats for the DM only, with a central antagonist, two twists, and a finale; players never see this.",
+          campaign.gameSettings.tableLanguage,
+        ),
       },
       {
         role: "user",

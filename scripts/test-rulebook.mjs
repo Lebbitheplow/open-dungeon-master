@@ -255,6 +255,16 @@ try {
     assert.deepEqual(rulebookSearch("   ").hits, []);
   });
 
+  await test("a hit carries the page's matched words, as written, for the reader to mark", () => {
+    const [hit] = rulebookSearch("grappling").hits;
+    assert.ok(hit.words.includes("grappling"), hit.words.join(","));
+    assert.ok(hit.words.some((word) => word.startsWith("grappl") && word !== "grappling"), hit.words.join(","));
+    assert.ok(hit.words.every((word) => word === word.toLowerCase()));
+    assert.ok(!hit.words.includes("the"));
+    // A half-typed last word marks the words it starts.
+    assert.ok(rulebookSearch("grapp").hits[0].words.every((word) => word.startsWith("grapp")));
+  });
+
   await test("search keeps at most three passages a page and forty in all", () => {
     const { hits } = rulebookSearch("attack");
     assert.ok(hits.length <= 40);

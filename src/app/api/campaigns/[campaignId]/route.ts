@@ -285,6 +285,7 @@ export async function PATCH(
       campaignId,
       seq,
       authorType: "system",
+      glyph: "cue-bell",
       content: humanDm
         ? "The party is assembled and the adventure begins. The Dungeon Master opens the scene."
         : "The party is assembled and the adventure begins. Introduce the opening scene, set the premise, and give the party their first decision.",

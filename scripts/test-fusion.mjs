@@ -25,21 +25,38 @@ const corpus = [
 ];
 
 test("tokenize drops stop words and short tokens", () => {
-  const tokens = tokenize("The party was in the vault");
-  assert.ok(tokens.includes("party"));
+  const tokens = tokenize("The party was in the vault", "english");
+  assert.ok(tokens.includes("parti"));
   assert.ok(tokens.includes("vault"));
   assert.ok(!tokens.includes("the"));
   assert.ok(!tokens.includes("was"));
 });
 
+test("tokenize reads the table's language: its function words go, elisions and plurals join the bare word", () => {
+  // "della" is a function word at an Italian table, not a scoring term.
+  assert.deepEqual(tokenize("la Porta della Gilda", "italian"), tokenize("Porta Gilda", "italian"));
+  // Elided and possessive forms share the bare word's term, either apostrophe.
+  for (const form of ["l'oracolo", "dell'Oracolo", "l’oracolo"]) {
+    assert.deepEqual(tokenize(form, "italian"), tokenize("oracolo", "italian"), form);
+  }
+  for (const form of ["Marla's", "Marla’s"]) {
+    assert.deepEqual(tokenize(form, "english"), tokenize("Marla", "english"), form);
+  }
+  // A contraction is a stop word whole; nothing of it is left to score.
+  assert.deepEqual(tokenize("don't isn't", "english"), []);
+  // English "war", "son" and "come" still score at an English table.
+  assert.deepEqual(tokenize("war son come", "english").length, 3);
+  // Plurals join the singular.
+  assert.deepEqual(tokenize("merchants", "english"), tokenize("merchant", "english"));
+  assert.deepEqual(tokenize("ragni", "italian"), tokenize("ragno", "italian"));
+});
+
 test("computeIdf weights a rare name above a common word", () => {
-  const idf = computeIdf(corpus);
+  const idf = computeIdf(corpus, "english");
   // "marla" appears in 1 of 4 documents; "party" in 3 of 4.
-  assert.ok(idf.get("marla") > idf.get("party"));
-  // "merchants" is in 2 of 4. There is no stemming, so the singular
-  // "merchant" is a different term with its own count; that is fine, both
-  // still rank below a name seen once.
-  assert.ok(idf.get("merchants") < idf.get("marla"));
+  assert.ok(idf.get("marla") > idf.get("parti"));
+  // "merchant" (stemmed, so the plural counts too) is in 3 of 4.
+  assert.ok(idf.get("merchant") < idf.get("marla"));
   // Never negative, even for a term in every document.
   for (const value of idf.values()) {
     assert.ok(value >= 0);
@@ -47,8 +64,8 @@ test("computeIdf weights a rare name above a common word", () => {
 });
 
 test("lexicalScore finds the rare proper noun, not the common word", () => {
-  const idf = computeIdf(corpus);
-  const scores = corpus.map((document) => lexicalScore("what did Marla find in the vault", document, idf));
+  const idf = computeIdf(corpus, "english");
+  const scores = corpus.map((document) => lexicalScore("what did Marla find in the vault", document, idf, "english"));
   const best = scores.indexOf(Math.max(...scores));
   assert.equal(best, 3);
   assert.ok(scores[3] > 0.5);
@@ -57,15 +74,15 @@ test("lexicalScore finds the rare proper noun, not the common word", () => {
 });
 
 test("lexicalScore stays in range and handles empty input", () => {
-  const idf = computeIdf(corpus);
+  const idf = computeIdf(corpus, "english");
   for (const document of corpus) {
-    const score = lexicalScore("marla vault chapel merchants party river guild", document, idf);
+    const score = lexicalScore("marla vault chapel merchants party river guild", document, idf, "english");
     assert.ok(score >= 0 && score <= 1, `score ${score} out of range`);
   }
-  assert.equal(lexicalScore("", corpus[0], idf), 0);
-  assert.equal(lexicalScore("marla", "", idf), 0);
+  assert.equal(lexicalScore("", corpus[0], idf, "english"), 0);
+  assert.equal(lexicalScore("marla", "", idf, "english"), 0);
   // Query terms the corpus never saw still score rather than vanishing.
-  assert.ok(lexicalScore("Vhaeric", "The sigil of Vhaeric burned cold.", idf) > 0);
+  assert.ok(lexicalScore("Vhaeric", "The sigil of Vhaeric burned cold.", idf, "english") > 0);
 });
 
 test("fuseRRF rewards consistent high placement", () => {
@@ -119,34 +136,49 @@ test("rankByFusion is stable for equal scores", () => {
 
 test("fuseRanked keeps a lexical-only hit that cosine missed", () => {
   // The classic failure of pure-cosine recall: a rare proper noun sits close
-  // to every other name in vector space, so it never clears the floor, but it
-  // is unmistakable lexically.
+  // to every other name in vector space, but it is unmistakable lexically.
   const picked = fuseRanked(
     [
       { id: "rare-name", lexical: 0.9, similarity: 0.11 },
       { id: "vague-paraphrase", lexical: 0, similarity: 0.62 },
       { id: "unrelated", lexical: 0, similarity: 0.04 },
     ],
-    { similarityFloor: 0.3, limit: 3 },
+    { limit: 2 },
   );
   assert.deepEqual(picked.sort(), ["rare-name", "vague-paraphrase"]);
-  assert.ok(!picked.includes("unrelated"));
 });
 
-test("fuseRanked returns nothing when nothing is eligible", () => {
-  // Fusion only orders; without this guard it would cheerfully hand back the
-  // least-bad match and inject junk lore into the prompt.
+test("fuseRanked has no cosine floor: a low cosine with no overlap is still ranked, within the limit", () => {
+  // Whether it is relevant is for the reader to judge; what a cosine of 0.05
+  // means depends on the embedding model.
   assert.deepEqual(
     fuseRanked(
       [
         { id: "a", lexical: 0, similarity: 0.05 },
         { id: "b", lexical: 0, similarity: null },
       ],
-      { similarityFloor: 0.3, limit: 3 },
+      { limit: 3 },
     ),
-    [],
+    ["a"],
   );
-  assert.deepEqual(fuseRanked([], { similarityFloor: 0.3, limit: 3 }), []);
+  assert.deepEqual(fuseRanked([], { limit: 3 }), []);
+});
+
+test("fuseRanked keeps a strong cosine-only match over weak overlap with a weak cosine", () => {
+  // A paraphrase sharing no word with the query against candidates that
+  // share a word and score low. Fused over full lists, each weak one sits in
+  // both rankings and outscores the answer, which sits in one; each ranking
+  // is cut to the limit first, so the answer keeps its place.
+  const picked = fuseRanked(
+    [
+      { id: "answer", lexical: 0, similarity: 0.56 },
+      { id: "weak-1", lexical: 0.1, similarity: 0.25 },
+      { id: "weak-2", lexical: 0.08, similarity: 0.24 },
+      { id: "weak-3", lexical: 0.05, similarity: 0.3 },
+    ],
+    { limit: 2 },
+  );
+  assert.ok(picked.includes("answer"), `answer pushed out: ${picked.join(", ")}`);
 });
 
 test("fuseRanked degrades to lexical-only with no embeddings", () => {
@@ -156,7 +188,7 @@ test("fuseRanked degrades to lexical-only with no embeddings", () => {
       { id: "b", lexical: 0.8, similarity: null },
       { id: "c", lexical: 0, similarity: null },
     ],
-    { similarityFloor: 0.3, limit: 2 },
+    { limit: 2 },
   );
   assert.deepEqual(picked, ["b", "a"]);
 });
@@ -167,7 +199,7 @@ test("fuseRanked honours the limit", () => {
     lexical: 1 - index / 10,
     similarity: 0.9 - index / 20,
   }));
-  assert.equal(fuseRanked(candidates, { similarityFloor: 0.3, limit: 3 }).length, 3);
+  assert.equal(fuseRanked(candidates, { limit: 3 }).length, 3);
 });
 
 test("applyMmr drops a near-duplicate for a novel result", () => {
@@ -176,7 +208,7 @@ test("applyMmr drops a near-duplicate for a novel result", () => {
     { id: "2", text: "Marla opened the vault beneath the chapel again" },
     { id: "3", text: "The river crossing cost the party three silver" },
   ];
-  const picked = applyMmr(candidates, 2, 0.7);
+  const picked = applyMmr(candidates, 2, "english", 0.7);
   assert.equal(picked[0].id, "1");
   assert.equal(picked[1].id, "3", "the near-duplicate should lose to the novel chunk");
 });
@@ -187,9 +219,9 @@ test("applyMmr keeps order when nothing is redundant and respects the limit", ()
     { id: "2", text: "vault chapel sigil" },
     { id: "3", text: "river crossing silver toll" },
   ];
-  assert.deepEqual(applyMmr(candidates, 3, 0.7).map((entry) => entry.id), ["1", "2", "3"]);
-  assert.equal(applyMmr(candidates, 2, 0.7).length, 2);
-  assert.deepEqual(applyMmr([], 3, 0.7), []);
+  assert.deepEqual(applyMmr(candidates, 3, "english", 0.7).map((entry) => entry.id), ["1", "2", "3"]);
+  assert.equal(applyMmr(candidates, 2, "english", 0.7).length, 2);
+  assert.deepEqual(applyMmr([], 3, "english", 0.7), []);
 });
 
 console.log(`test-fusion: ${passed} tests passed`);

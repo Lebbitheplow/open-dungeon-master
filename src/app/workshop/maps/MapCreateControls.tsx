@@ -37,8 +37,8 @@ export function MapCreateControls({
       showHeading={showHeading}
       onCreate={onCreate}
       onImport={onImport}
-      // The same generator, seed and words the server saves with.
-      generate={(roll) => forgeGenerate(roll, genre)}
+      // The same generator, seed and kind of place the server saves with.
+      generate={(roll) => forgeGenerate(roll)}
     />
   );
 }

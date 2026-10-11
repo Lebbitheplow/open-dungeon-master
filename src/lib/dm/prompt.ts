@@ -1,4 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
+import { sceneIds } from "@/lib/ambience/catalog";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -18,6 +19,7 @@ import { authoredFeatureTags } from "@/lib/srd/authored-effects";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { presetFor, packFor } from "@/lib/worlds/preset";
+import { nameRegisterHint } from "@/lib/genres";
 import { renderWorldPrimer } from "@/lib/worlds/primer-logic";
 import { packIds } from "@/lib/worlds/reskin-logic";
 import { genreClassIds } from "@/lib/classes";
@@ -59,6 +61,8 @@ import { summonStateLine } from "@/lib/dm/summon-rules";
 import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/prompt-rules";
 import { rollerName } from "@/lib/roll-labels";
 import { tableHazards } from "@/lib/srd/table-hazards";
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
+import { languageDirective } from "@/lib/dm/table-language-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -95,6 +99,10 @@ export function buildDmSystem(campaign: Campaign): string {
   const cover = coverPromptBlock(campaign.dmCover);
   if (cover) {
     parts.push(cover);
+  }
+  const language = languageDirective(campaign.gameSettings.tableLanguage);
+  if (language) {
+    parts.push(language);
   }
   return parts.join("\n\n");
 }
@@ -257,7 +265,7 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
       ? ` Only these classes exist here: ${classIds.join(", ")}; add_companion refuses anything else.`
       : "",
     ` ${preset.raceHint}`,
-    preset.nameHints ? ` Name them in the world's register: ${preset.nameHints}` : "",
+    preset.nameHints ? ` Name them in the world's register: ${nameRegisterHint(preset.nameHints)}` : "",
   ].join("");
   const kinds =
     mode === "full"
@@ -1139,6 +1147,15 @@ export const requestPlayerInputTool = {
 
 // Location tools: the DM keeps a structured record of where the party is
 // and how areas connect, feeding GAME STATE and the map renderer.
+
+// A place's kind from a fixed list, so its sound, battle map and picture
+// never depend on reading its name in some language.
+const sceneProperty = {
+  type: "string",
+  enum: sceneIds(),
+  description: "What kind of place this is, for its sound, battle map and picture. Set it when the party arrives somewhere new.",
+} as const;
+
 export const movePartyTool = {
   type: "function",
   function: {
@@ -1149,6 +1166,7 @@ export const movePartyTool = {
       type: "object",
       additionalProperties: false,
       properties: {
+        ...waypointProperty,
         name: { type: "string", description: "Short place name, e.g. The Rusted Flagon." },
         layoutDescription: {
           type: "string",
@@ -1165,6 +1183,7 @@ export const movePartyTool = {
           description:
             "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
         },
+        scene: sceneProperty,
       },
       required: ["name", "visionClear"],
     },
@@ -1250,7 +1269,7 @@ export const recallStoryTool = {
   function: {
     name: "recall_story",
     description:
-      "Look up the full summary of a past chapter when players reference old events you no longer remember. Give a chapter number, or a query to search titles and summaries.",
+      "Look up past chapters when players reference old events you no longer remember. Give a chapter number for that chapter's summary, or a query for the verbatim scenes that match it, nearest first, and the chapters they come from.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -1272,9 +1291,11 @@ export const updateLocationTool = {
       type: "object",
       additionalProperties: false,
       properties: {
+        ...waypointProperty,
         layoutDescription: { type: "string" },
         connections: { type: "array", items: { type: "string" } },
         visionClear: { type: "boolean" },
+        scene: sceneProperty,
       },
       required: ["layoutDescription", "visionClear"],
     },

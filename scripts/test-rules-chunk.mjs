@@ -117,4 +117,14 @@ test("renderHouseRules pins first and respects the budget", () => {
   assert.equal(renderHouseRules([], [], 1200), "");
 });
 
+test("renderHouseRules says retrieved sections are the nearest matches, and only when there are some", () => {
+  // Retrieval has no relevance cut-off, so the DM is told what it got.
+  const retrieved = renderHouseRules([], [{ heading: "Potions", text: "a".repeat(100) }], 1200);
+  assert.ok(retrieved.startsWith("HOUSE RULES (set by the party lead; they override the standard rules. The sections picked"));
+  assert.match(retrieved, /nearest matches, nearest first; apply only those that bear on it\):/);
+  // Pinned sections, or a document riding whole, are not a pick: unchanged.
+  const pinned = renderHouseRules([{ heading: "Death", text: "b".repeat(100) }], [], 1200);
+  assert.ok(pinned.startsWith("HOUSE RULES (set by the party lead; they override the standard rules):\n"));
+});
+
 console.log(`test-rules-chunk: ${passed} tests passed`);

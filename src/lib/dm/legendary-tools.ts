@@ -384,6 +384,7 @@ export function handleLairAction(campaign: Campaign, turn: DmTurn | null, rawArg
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph: "cue-battle",
     content: `Lair action (initiative 20, round ${due}): ${picked}`,
     ...(turn ? { dmTurnId: turn.id } : {}),
   });

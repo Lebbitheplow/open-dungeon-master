@@ -7,6 +7,7 @@ import {
   GENRES,
   HP_METHODS,
   STARTING_WEALTH,
+  TABLE_LANGUAGES,
 } from "@/lib/schemas/game-settings-options";
 import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 
@@ -27,6 +28,10 @@ export {
   HP_METHODS,
   STARTING_WEALTH,
   STARTING_WEALTH_LABELS,
+  TABLE_LANGUAGE_HELP,
+  TABLE_LANGUAGE_LABELS,
+  TABLE_LANGUAGE_NAMES,
+  TABLE_LANGUAGES,
   type CampaignLengthSetting,
   type CompanionSetting,
   type DicePolicy,
@@ -34,6 +39,7 @@ export {
   type Genre,
   type HpMethodSetting,
   type StartingWealthSetting,
+  type TableLanguage,
 } from "@/lib/schemas/game-settings-options";
 
 // Game-facing campaign settings. Stored in campaigns.game_settings_json,
@@ -62,6 +68,8 @@ export const gameSettingsSchema = z.object({
     .default({ monsters: true, narration: true, cover: true }),
   genre: z.enum(GENRES).default("high_fantasy"),
   customGenreText: z.string().trim().max(500).default(""),
+  // The language the table plays in (game-settings-options.ts).
+  tableLanguage: z.enum(TABLE_LANGUAGES).default("english"),
   // Selected pre-configured world (src/lib/worlds/packs), or "" for a plain
   // genre. Choosing a pack ALSO writes its baseGenre into `genre` above, so
   // every existing genre consumer keeps working and a pack that is later

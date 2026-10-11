@@ -29,9 +29,13 @@ import {
   COMPANION_LABELS,
   HP_METHODS,
   STARTING_WEALTH,
+  TABLE_LANGUAGE_HELP,
+  TABLE_LANGUAGE_LABELS,
+  TABLE_LANGUAGES,
   type CampaignLengthSetting,
   type DicePolicy,
   type Genre,
+  type TableLanguage,
 } from "@/lib/schemas/game-settings-options";
 
 // Short forms of the character-rule settings for a settings row; the long
@@ -350,6 +354,18 @@ export function GameSettingsPanel({
             />
           </div>
         ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="pk-rowlabel">Language</span>
+          <Select<TableLanguage>
+            size="sm"
+            label="Table language"
+            value={settings.tableLanguage}
+            onChange={(tableLanguage) => patch({ tableLanguage })}
+            options={TABLE_LANGUAGES.map((value) => ({ value, label: TABLE_LANGUAGE_LABELS[value] }))}
+            className={selectClass}
+          />
+          <span className="text-stone-500">{TABLE_LANGUAGE_HELP}</span>
+        </div>
         {aiNarrates ? (
         <div className="reveal flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Length</span>

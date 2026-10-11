@@ -7,6 +7,7 @@ import {
   effectiveAge,
   estimateLodTokens,
   firstSentence,
+  fitChaptersToBudget,
   renderChapterLod,
 } from "../src/lib/dm/chapter-lod.ts";
 
@@ -173,6 +174,43 @@ check("an empty summary degrades to the title rather than a blank line", () => {
   if (result.tierById.c2 !== "dropped") {
     assert.ok(result.text.includes("Nameless deeds"));
   }
+});
+
+// The chapters a recall matched, fitted into a budget (recall_story, Ask, the
+// lore check): a stored summary runs up to 8,000 characters.
+const matched = (index, summaryChars, highlights = []) => ({
+  ...chapter(index),
+  summary: `Opening sentence of chapter ${index}. ${"More detail follows. ".repeat(Math.ceil(summaryChars / 21))}`.slice(0, summaryChars),
+  highlights,
+});
+
+check("fitted chapters keep whole summaries and highlights while they fit, oldest first", () => {
+  const fitted = fitChaptersToBudget([matched(3, 400, ["A duel."]), matched(1, 400)], 1_000);
+  assert.deepEqual(fitted.map((entry) => entry.index), [1, 3]);
+  assert.ok(fitted.every((entry) => !entry.shortened));
+  assert.deepEqual(fitted[1].highlights, ["A duel."]);
+});
+
+check("fitted chapters fall to their first sentence, without highlights, when whole ones do not fit", () => {
+  const fitted = fitChaptersToBudget([matched(1, 8_000, ["A duel."]), matched(2, 8_000)], 184);
+  assert.equal(fitted.length, 2);
+  for (const entry of fitted) {
+    assert.ok(entry.shortened);
+    assert.equal(entry.summary, `Opening sentence of chapter ${entry.index}.`);
+    assert.deepEqual(entry.highlights, []);
+  }
+});
+
+check("fitted chapters count highlights toward the budget", () => {
+  // The summary alone fits; with its highlights it does not.
+  const highlights = Array.from({ length: 6 }, () => "h".repeat(300));
+  const [entry] = fitChaptersToBudget([matched(1, 300, highlights)], estimateLodTokens(`Chapter 1 - Chapter 1 title\n${"x".repeat(300)}`) + 10);
+  assert.ok(entry.shortened);
+});
+
+check("fitted chapters drop the oldest when even first sentences overflow", () => {
+  const fitted = fitChaptersToBudget([matched(1, 200), matched(2, 200)], 20);
+  assert.deepEqual(fitted.map((entry) => entry.index), [2]);
 });
 
 console.log(`chapter-lod: ${passed} tests passed`);

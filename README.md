@@ -244,6 +244,7 @@ and clamped by code.
 - **TTS narration** - local Kokoro renders each DM message on the serial media queue, autoplayed latest-only with per-user mute.
 - **STT push-to-talk** - proxies audio to a local faster-whisper service, kept off the network.
 - **Portrait generation** - a one-shot ComfyUI character portrait at creation, with an icon fallback.
+- **Table language** - each campaign plays in one of 15 languages (English, Danish, Dutch, Finnish, French, German, Hungarian, Indonesian, Irish, Italian, Norwegian, Portuguese, Russian, Spanish, Swedish). The DM narrates and every prose call writes in it; nothing reads story text through English word lists: one utility call per narrated reply reads its claims (a hit, a kill, a spell, a roll asked in words) for the engine to check, word matching stems with each language's Snowball stemmer and stop list, and a place's kind of scene is picked from a list rather than read from its name. Rules names, the interface and the SRD rulebook stay English, image prompts are rewritten into English, and a non-English table needs a multilingual embedding model (below).
 
 ### Human DM and the workshop
 
@@ -362,10 +363,10 @@ longer bundled in the repo. transformers.js downloads it from HuggingFace into
 `npm run fetch-model` fetches it ahead of time.
 
 The default, `Xenova/all-MiniLM-L6-v2`, understands English only. For a table that
-plays in another language, set a multilingual model in `.env.server`:
+plays in another language (its Table language setting), set a multilingual model in `.env.server`:
 
 ```bash
-EMBEDDING_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_MODEL=Xenova/multilingual-e5-small
 EMBEDDING_DTYPE=q8
 ```
 

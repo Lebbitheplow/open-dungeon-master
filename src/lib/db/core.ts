@@ -1128,9 +1128,10 @@ function ensureSchema(db: SqliteDatabase) {
       name TEXT NOT NULL,
       -- [{monster, count}], the parsed form of the DM's shorthand.
       enemies_json TEXT NOT NULL DEFAULT '[]',
-      -- The battlefield hint start_encounter takes, plus the map studio's
-      -- saved seed/theme/ambient/size, or nulls to let the generator read
-      -- the scene as it always has.
+      -- A note on where the fight happens, for whoever runs it. The board
+      -- comes from map_json: the kind of ground the fight is on, and the
+      -- map studio's saved map, seed, theme, ambient and size, or nulls to
+      -- let the generator draw the place the party is in.
       battlefield TEXT NOT NULL DEFAULT '',
       map_json TEXT NOT NULL DEFAULT '{}',
       notes TEXT NOT NULL DEFAULT '',
@@ -1584,6 +1585,15 @@ function ensureSchema(db: SqliteDatabase) {
     // the prompt shows it to the model and the turn can check it was
     // resolved. Null on typed actions and on messages written before it.
     ["intent_json", `TEXT`],
+    // A system line's icon, stored by the code that writes the line
+    // (src/lib/system-glyphs.ts) rather than read from its words, which only
+    // worked in English. Null on other messages and on lines written before
+    // it, which draw the neutral bell.
+    ["glyph", `TEXT`],
+    // Who speaks each quoted line of a DM message ([{ line, speaker }],
+    // src/lib/dm/speech.ts SpokenLine), decided when the message is written.
+    // Null on messages written before it, whose lines stay the narrator's.
+    ["speech_json", `TEXT`],
   ]);
 
   addColumns("dm_turns", [
@@ -2053,6 +2063,9 @@ function ensureSchema(db: SqliteDatabase) {
     // portrait exists (src/lib/placeholders.ts) and is shown on the cast
     // list; no rule reads it.
     ["role", `TEXT NOT NULL DEFAULT ''`],
+    // One of the builder's genders or '' (src/lib/gender.ts): what the voice
+    // cast and the speech reader's pronouns read, never their prose.
+    ["gender", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   addColumns("library_characters", [

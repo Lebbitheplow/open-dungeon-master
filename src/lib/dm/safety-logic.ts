@@ -69,28 +69,6 @@ export function renderSafetyBlock(safety: SafetySettings): string {
   return parts.join("\n");
 }
 
-// The line a narration crossed, if any. A line is matched as a whole
-// phrase or as each of its words of four letters or more, so "spiders"
-// catches "spider" and "harm to children" catches "children".
-export function lineViolations(text: string, lines: string[]): string[] {
-  const haystack = text.toLowerCase();
-  const out: string[] = [];
-  for (const line of lines) {
-    const phrase = line.trim().toLowerCase();
-    if (!phrase) {
-      continue;
-    }
-    const stems = phrase.split(/\s+/).filter((word) => word.length >= 4).map((word) => word.replace(/(s|es|ing|ed)$/u, ""));
-    const hit =
-      haystack.includes(phrase) ||
-      stems.some((stem) => new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*`, "i").test(haystack));
-    if (hit) {
-      out.push(line);
-    }
-  }
-  return out;
-}
-
 export function buildLinePrompt(violations: string[]): string {
   return `Your passage touches a subject this table has ruled out entirely: ${violations.join("; ")}. Rewrite the whole passage so that subject never appears, is not implied, and is not replaced with a wink at it. Keep every dice result and mechanical outcome exactly as it was. Reply with the rewritten passage only.`;
 }

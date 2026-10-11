@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { arcTextTimeoutMs } from "@/lib/model-client";
@@ -37,7 +38,7 @@ export async function generateWorldArcs(
     requestUtilityMessage(
       campaign.settings,
       [
-        { role: "system", content: GENERATE_SYSTEM },
+        { role: "system", content: withLanguage(GENERATE_SYSTEM, campaign.gameSettings.tableLanguage) },
         {
           role: "user",
           content: [

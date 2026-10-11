@@ -21,7 +21,8 @@ import { computeAbilityScore, INSPIRATION_SPEND, toolProficiencyBonus } from "@/
 import { rollFeatureRiders } from "@/lib/dm/roll-feature-riders";
 import type { RollArgs } from "@/lib/dm/roll-args";
 import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/tool-text";
-import { acBreakdownFor, computeSheetDerived, findSkill, SRD_SKILLS } from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived, findSkill } from "@/lib/srd";
+import { squash, type NarrationClaim } from "@/lib/dm/claims-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { StreamedToolCall } from "@/lib/model-client";
 import { senseCheckFailure } from "@/lib/srd/sense-checks";
@@ -223,116 +224,67 @@ export function salvageTextualToolCalls(text: string): {
   return { text: cleaned, calls };
 }
 
-const ABILITY_WORDS: Record<string, "str" | "dex" | "con" | "int" | "wis" | "cha"> = {
-  strength: "str",
-  dexterity: "dex",
-  constitution: "con",
-  intelligence: "int",
-  wisdom: "wis",
-  charisma: "cha",
-};
-
-// Longest names first so "Sleight of Hand" wins over any shorter overlap.
-const SKILLS_BY_LENGTH = [...SRD_SKILLS].sort((a, b) => b.name.length - a.name.length);
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const CHECK_KIND = {
+  skill: "skill_check",
+  ability: "ability_check",
+  save: "saving_throw",
+  initiative: "initiative",
+} as const;
 
 // Sentences like "**Avery, make an Intelligence (Investigation) check,
 // DC 15.**" are the model asking for dice in prose instead of calling
 // request_roll (a residual qwen failure the bracket salvage cannot catch:
-// there is no bracket to find). Convert each such sentence into a synthetic
-// request_roll call and strip the meta-text; the roll card carries the ask.
-export function salvageProseRollAsks(
+// there is no bracket to find). The claims reader (src/lib/dm/claims.ts)
+// reads them as roll_ask claims in any language; each becomes a synthetic
+// request_roll call for its character, or every character for "all", and
+// the sentence holding it is stripped: the roll card carries the ask.
+export function rollAsksFromClaims(
   text: string,
-  sheets: CharacterSheet[],
+  claims: readonly NarrationClaim[],
+  sheets: readonly CharacterSheet[],
 ): { text: string; calls: ParsedToolCall[] } {
-  if (!text || !sheets.length) {
+  const asks = claims.filter((claim) => claim.kind === "roll_ask");
+  if (!text || !asks.length) {
     return { text, calls: [] };
   }
   const calls: ParsedToolCall[] = [];
-  const removals: Array<[number, number]> = [];
-  const sentenceRe = /[^.!?\n]+[.!?]*/g;
-  let match: RegExpExecArray | null;
-  while ((match = sentenceRe.exec(text))) {
-    const sentence = match[0];
-    if (!/\b(make|makes|roll|rolls|attempt|give me|I need|let'?s see|needs? to)\b/i.test(sentence)) {
-      continue;
+  // Where each stripped sentence starts, and where it ends.
+  const removals = new Map<number, number>();
+  const sentences = [...text.matchAll(/[^.!?\n]+[.!?]*/g)];
+  for (const ask of asks) {
+    const base: Record<string, unknown> = { kind: CHECK_KIND[ask.check] };
+    if (ask.check === "skill") {
+      base.skill = ask.skill;
     }
-    const isSave = /\bsaving throws?\b|\bsaves?\b/i.test(sentence);
-    const isInitiative = /\binitiative\b/i.test(sentence);
-    const hasCheck = /\bchecks?\b/i.test(sentence);
-    if (!isSave && !isInitiative && !hasCheck) {
-      continue;
+    if (ask.check === "ability" || ask.check === "save") {
+      base.ability = ask.ability;
     }
-
-    // Targets: named party members; "everyone"-style asks hit the whole
-    // party; otherwise the solo character. Ambiguous multiplayer asks with
-    // no resolvable name are left alone rather than guessed.
-    const named = sheets.filter((sheet) =>
-      new RegExp(`\\b${escapeRegExp(sheet.name)}\\b`, "i").test(sentence),
-    );
-    const wholeParty = /\b(everyone|everybody|all of you|each of you|the (?:whole )?party|both of you)\b/i.test(
-      sentence,
-    );
-    const targets = named.length
-      ? named
-      : wholeParty
-        ? sheets
-        : sheets.length === 1
-          ? sheets
-          : [];
-    if (!targets.length) {
-      continue;
+    if (ask.dc !== undefined && ask.check !== "initiative") {
+      base.dc = ask.dc;
     }
-
-    const dcMatch = /\bDC\s*:?\s*(\d{1,2})\b/i.exec(sentence);
-    const abilityMatch =
-      /\b(strength|dexterity|constitution|intelligence|wisdom|charisma)\b/i.exec(sentence);
-    const ability = abilityMatch ? ABILITY_WORDS[abilityMatch[1].toLowerCase()] : undefined;
-    const skill = SKILLS_BY_LENGTH.find((entry) =>
-      new RegExp(`\\b${escapeRegExp(entry.name)}\\b`, "i").test(sentence),
-    );
-
-    let base: Record<string, unknown> | null = null;
-    if (isInitiative) {
-      base = { kind: "initiative" };
-    } else if (isSave && ability) {
-      base = { kind: "saving_throw", ability };
-    } else if (skill) {
-      base = { kind: "skill_check", skill: skill.id };
-    } else if (ability && hasCheck) {
-      base = { kind: "ability_check", ability };
-    }
-    if (!base) {
-      continue;
-    }
-    if (dcMatch && base.kind !== "initiative") {
-      base.dc = Number(dcMatch[1]);
-    }
-    for (const target of targets) {
+    const targets = ask.character === "all" ? sheets.map((sheet) => sheet.id) : [ask.character];
+    for (const characterId of targets) {
       calls.push({
         id: `prose-roll-${calls.length}`,
         name: "request_roll",
-        rawArguments: JSON.stringify({ ...base, characterId: target.id }),
+        rawArguments: JSON.stringify({ ...base, characterId }),
       });
     }
-
-    // Swallow trailing bold markers so no orphan ** litters the narration
-    // (leading ones sit inside the sentence match already).
-    let end = match.index + sentence.length;
-    if (text.slice(end, end + 2) === "**") {
-      end += 2;
+    const quote = squash(ask.quote);
+    const sentence = sentences.find((match) => squash(match[0]).includes(quote));
+    if (sentence?.index !== undefined) {
+      // Swallow trailing bold markers so no orphan ** litters the narration
+      // (leading ones sit inside the sentence match already).
+      let end = sentence.index + sentence[0].length;
+      if (text.slice(end, end + 2) === "**") {
+        end += 2;
+      }
+      removals.set(sentence.index, end);
     }
-    removals.push([match.index, end]);
-  }
-  if (!calls.length) {
-    return { text, calls: [] };
   }
   let cleaned = "";
   let cursor = 0;
-  for (const [start, end] of removals) {
+  for (const [start, end] of [...removals].sort((a, b) => a[0] - b[0])) {
     cleaned += text.slice(cursor, start);
     cursor = end;
   }

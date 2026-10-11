@@ -4,6 +4,7 @@
 // (src/lib/dm/invoke.ts). The board's entries (pets, tokens, legendary
 // creatures) live in catalog-board.ts and are spread in at the end.
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import { sceneOptions } from "@/lib/ambience/catalog";
 import { BOARD_ADJUDICATIONS } from "@/lib/dm/catalog-board";
 import { summonFormNames } from "@/lib/srd/summon-forms";
 import { familiarFormNames } from "@/lib/srd/familiar-forms";
@@ -84,7 +85,13 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         ],
         help: "Overrides the ambush roll for a whole side.",
       },
-      { name: "battlefield", label: "Battlefield", kind: "text" },
+      {
+        name: "scene",
+        label: "Ground",
+        kind: "select",
+        options: sceneOptions(),
+        help: "The kind of place the battle map is drawn as. Blank: the current place's.",
+      },
       {
         name: "distanceFeet",
         label: "Opening distance (feet)",

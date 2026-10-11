@@ -72,7 +72,7 @@ const CREATE = "campaigns/[campaignId]/companions/create";
 const ADOPT = "campaigns/[campaignId]/companions/adopt";
 
 // The lead's hero first (the owner is the party lead), then a plain player.
-const leadHero = world.addHero({ name: "Lead" });
+world.addHero({ name: "Lead" });
 const player = world.addUser("player");
 const playerHero = world.addHero({ user: player, name: "Player Hero" });
 const ally = createCharacter(player.id, 1, libraryInput("Wren"), "companion");

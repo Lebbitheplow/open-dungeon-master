@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import {
   allocateSeq,
   campaignSeats,
@@ -11,6 +12,7 @@ import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
+import { nameRegisterHint } from "@/lib/genres";
 import {
   activeBeatNumber,
   activeQuestLines,
@@ -90,7 +92,7 @@ function worldContext(campaignId: string): string {
     campaign.description ? `Premise: ${campaign.description}` : "",
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
-      : `Genre: ${preset.name}. ${preset.dmFlavor} ${preset.nameHints}`,
+      : `Genre: ${preset.name}. ${preset.dmFlavor} ${nameRegisterHint(preset.nameHints)}`,
     // The pack's factions and hooks give the saga real named powers to plan
     // against instead of inventing a pantheon the world does not have.
     packWorldHints(campaign.gameSettings),
@@ -264,7 +266,7 @@ export async function generateStoryArc(
     const { message, error } = await requestDmMessage(
       campaign.settings,
       [
-        { role: "system", content: sagaGenerateSystem(profile) },
+        { role: "system", content: withLanguage(sagaGenerateSystem(profile), campaign.gameSettings.tableLanguage) },
         { role: "user", content: context },
       ],
       { timeoutMs: arcTextTimeoutMs() },
@@ -603,7 +605,7 @@ async function arcModelCall(
   const { message, error } = await requestDmMessage(
     campaign.settings,
     [
-      { role: "system", content: system },
+      { role: "system", content: withLanguage(system, campaign.gameSettings.tableLanguage) },
       { role: "user", content: user },
     ],
     { timeoutMs: arcTextTimeoutMs() },
@@ -1054,7 +1056,7 @@ async function writeActRecap(
       requestUtilityMessage(
         campaign.settings,
         [
-          { role: "system", content: ACT_RECAP_SYSTEM },
+          { role: "system", content: withLanguage(ACT_RECAP_SYSTEM, campaign.gameSettings.tableLanguage) },
           {
             role: "user",
             content: `Act ${romanNumeral(ended.act)}${ended.title ? ` ("${ended.title}")` : ""} has just ended.${
@@ -1079,6 +1081,6 @@ async function writeActRecap(
 
 function noteAtTable(campaignId: string, content: string) {
   const seq = allocateSeq(campaignId);
-  const message = insertCampaignMessage({ campaignId, seq, authorType: "system", content });
+  const message = insertCampaignMessage({ campaignId, seq, authorType: "system", glyph: "cue-bell", content });
   publishWithSeq(campaignId, seq, "message_added", { message });
 }

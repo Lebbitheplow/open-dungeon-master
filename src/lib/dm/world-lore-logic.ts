@@ -231,26 +231,6 @@ export function loreLinkNames(text: string): string[] {
   return [...new Set([...text.matchAll(LINK)].map((match) => match[1].trim()))];
 }
 
-// Keyword fallback when an entry has no embedding yet (or the embedder is
-// down): overlap of query words against title/body/tags.
-export function scoreLoreByKeywords(query: string, entry: WorldLoreEntry): number {
-  const words = query
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
-    .filter((word) => word.length > 2);
-  if (!words.length) {
-    return 0;
-  }
-  const haystack = `${entry.title} ${entry.tags.join(" ")} ${entry.body}`.toLowerCase();
-  let hits = 0;
-  for (const word of words) {
-    if (haystack.includes(word)) {
-      hits += 1;
-    }
-  }
-  return hits / words.length;
-}
-
 function clipBody(body: string, max: number): string {
   return body.length <= max ? body : `${body.slice(0, max - 3)}...`;
 }
@@ -266,8 +246,9 @@ export function renderLoreForPrompt(
 ): string {
   const lines: string[] = [];
   let used = 0;
+  let retrievedShown = false;
   const seen = new Set<string>();
-  for (const entry of [...pinned, ...retrieved]) {
+  for (const [index, entry] of [...pinned, ...retrieved].entries()) {
     if (seen.has(entry.id)) {
       continue;
     }
@@ -279,9 +260,14 @@ export function renderLoreForPrompt(
     }
     lines.push(line);
     used += line.length;
+    retrievedShown ||= index >= pinned.length;
   }
   if (!lines.length) {
     return "";
   }
-  return `WORLD LORE (established by the party lead; treat as canon):\n${lines.join("\n")}`;
+  // Retrieval has no relevance cut-off (fusion-logic.ts).
+  const picked = retrievedShown
+    ? ". The entries picked for this moment are the nearest matches, nearest first; use only those that bear on it"
+    : "";
+  return `WORLD LORE (established by the party lead; treat as canon${picked}):\n${lines.join("\n")}`;
 }

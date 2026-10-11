@@ -84,7 +84,7 @@ export async function deployTemplate(
       args: {
         enemies: template.enemies,
         summary: template.notes.split("\n")[0]?.slice(0, 200) ?? "",
-        battlefield: template.battlefield,
+        ...(template.map.scene ? { scene: template.map.scene } : {}),
       },
     },
   );

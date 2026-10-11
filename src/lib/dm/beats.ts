@@ -1,6 +1,8 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertDmBeat, type DmBeat } from "@/lib/db/dm-beats";
 import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
+import { personLines } from "@/lib/dm/speech-lines";
 import { listRecentRolls } from "@/lib/db/rolls";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { listSheets } from "@/lib/db/sheets";
@@ -48,6 +50,7 @@ export function recordBeat(
     authorType: "dm",
     userId: authorUserId,
     content: body,
+    speech: personLines(campaign, body),
   });
   // The `beat` flag rides on the event rather than the row. A narration is
   // the DM answering the party, and the client clears the console's "waiting
@@ -161,7 +164,7 @@ export async function draftBeat(
     requestUtilityMessage(
       campaign.settings,
       [
-        { role: "system", content: DRAFT_SYSTEM },
+        { role: "system", content: withLanguage(DRAFT_SYSTEM, campaign.gameSettings.tableLanguage) },
         { role: "user", content: `The record of play:\n${beatSourceText(lines)}` },
       ],
       { timeoutMs: arcTextTimeoutMs() },

@@ -1,5 +1,6 @@
 import type { ObjectEntry, TileEntry } from "@/lib/battlemap/render/painted";
 import { GENRES, SKIN_ROLES, type SkinChar } from "@/lib/battlemap/skins";
+import { compareNames } from "@/lib/language/text-logic";
 
 // How the two pickers order the painted catalogue: the stamp picker's sets and
 // the tileset panel's materials. Apart from the components so it runs under
@@ -71,10 +72,10 @@ export function groupStamps(objects: readonly ObjectEntry[], ownSets: readonly s
   const groups = [...bySet.entries()].map(([set, list]) => ({
     set,
     label: setLabel(set),
-    objects: [...list].sort((a, b) => (a.label ?? a.id).localeCompare(b.label ?? b.id)),
+    objects: [...list].sort((a, b) => compareNames(a.label ?? a.id, b.label ?? b.id)),
     own: ownSets.includes(set),
   }));
-  return groups.sort((a, b) => Number(b.own) - Number(a.own) || a.label.localeCompare(b.label));
+  return groups.sort((a, b) => Number(b.own) - Number(a.own) || compareNames(a.label, b.label));
 }
 
 export type MaterialGroup = { group: string; tiles: TileEntry[] };
@@ -101,7 +102,7 @@ export function materialChoices(
     [...list].sort(
       (a, b) =>
         Number(b.themes?.includes(theme) ?? false) - Number(a.themes?.includes(theme) ?? false) ||
-        (a.label ?? a.id).localeCompare(b.label ?? b.id),
+        compareNames(a.label ?? a.id, b.label ?? b.id),
     );
   const groups: MaterialGroup[] = [];
   if (own) {

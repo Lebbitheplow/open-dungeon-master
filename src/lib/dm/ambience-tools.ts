@@ -4,7 +4,6 @@ import { cueById, cueIds } from "@/lib/ambience/catalog";
 import {
   applyAuto,
   describeAmbience,
-  inferBedCue,
   setCue,
   type AmbienceState,
 } from "@/lib/ambience/logic";
@@ -197,18 +196,19 @@ export function handlePlaySting(
 
 // ---- the automatic half ----
 
-// The party arrived somewhere. Reads the place for a bed and takes it,
-// unless the table turned scene-following off or is holding the layer.
-// Called from handleLocationCall, so it fires for the AI DM, for a human
-// DM's console form and for anything else that moves the party.
-export function followSceneAmbience(campaign: Campaign, placeText: string) {
+// The party arrived somewhere. Takes the place's own bed (its kind of
+// place, set by move_party or the console), unless the table turned
+// scene-following off or is holding the layer. Called from
+// handleLocationCall, so it fires for the AI DM, for a human DM's console
+// form and for anything else that moves the party.
+export function followSceneAmbience(campaign: Campaign, placeBed: string | null) {
   if (!enabled(campaign) || !campaign.gameSettings.ambienceAuto) {
     return;
   }
-  // The table's tone stands in when the description says nothing about
-  // sound and no bed is playing yet (docs/vtt-parity-implementation-plan.md
-  // 9.2); an unnamed room otherwise keeps the dungeon's drip.
-  const bed = inferBedCue(placeText) ?? (getAmbience(campaign.id).bed ? null : toneBedBias(campaign.gameSettings.gm?.tone ?? []));
+  // The table's tone stands in when the place has no kind and no bed is
+  // playing yet (docs/vtt-parity-implementation-plan.md 9.2); a place with
+  // no kind otherwise keeps what is playing.
+  const bed = placeBed ?? (getAmbience(campaign.id).bed ? null : toneBedBias(campaign.gameSettings.gm?.tone ?? []));
   if (!bed) {
     return;
   }

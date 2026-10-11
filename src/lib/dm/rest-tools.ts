@@ -1,3 +1,4 @@
+import type { SystemGlyph } from "@/lib/system-glyphs";
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -153,12 +154,13 @@ function auditRest(
   }
 }
 
-function tableNote(campaign: Campaign, content: string) {
+function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
     seq,
     authorType: "system",
+    glyph,
     content,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
@@ -262,6 +264,7 @@ export function handleTakeRest(
       `The party takes a long rest (${restedFor})${nowReads ? `. It is now ${nowReads}` : ""}.${
         unaffected.length ? ` No benefit from it for ${unaffected.join("; ")}.` : ""
       }`,
+      "rest-long",
     );
     // A night passing is a timeskip: the off-screen world moves too (world
     // arcs, NPC goals), with results landing as DM-only facts and sparks.
@@ -379,6 +382,7 @@ export function handleTakeRest(
   tableNote(
     campaign,
     `The party takes a short rest (${restedFor})${nowReads ? `. It is now ${nowReads}` : ""}.`,
+    "rest-short",
   );
   return {
     ok: true,

@@ -1,3 +1,4 @@
+import { withLanguage } from "@/lib/dm/table-language-logic";
 import { publishTitleCard } from "@/lib/dm/scene-state";
 import { listTranscriptSince } from "@/lib/db/voice-transcript";
 import { renderTranscript } from "@/lib/voice/transcript";
@@ -25,10 +26,12 @@ import {
   shouldCloseChapter,
   shouldJudgeBeat,
 } from "@/lib/dm/chapter-logic";
-import { recordExtractedFacts } from "@/lib/db/facts";
+import { recordExtractedFacts, retireFacts } from "@/lib/db/facts";
 import { listNpcs } from "@/lib/db/npcs";
 import { detectWitnesses } from "@/lib/dm/witness-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
+import { CONSOLIDATION_INSTRUCTIONS, consolidationRetirements } from "@/lib/dm/fact-consolidation-logic";
+import { factsOnFileFor } from "@/lib/dm/fact-consolidation";
 import { advanceNpcAgency } from "@/lib/dm/npc-agency";
 import { advanceRelationships } from "@/lib/dm/relationship-tick";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
@@ -312,6 +315,14 @@ export async function maybeCloseChapter(
   );
   setDmStatus(campaignId, "writing_chapter");
 
+  const summariesOn = isStageEnabled(campaign.gameSettings.stages, "chapterSummary");
+  const onFile = summariesOn
+    ? await factsOnFileFor(
+        campaignId,
+        listMessagesInSeqRange(campaignId, chapter.seqStart, seqEnd).filter((message) => message.authorType !== "system"),
+      )
+    : { text: "", shown: [] };
+  let reply = "";
   let parsed = {
     title: `Chapter ${chapter.index}`,
     summary: "",
@@ -321,7 +332,7 @@ export async function maybeCloseChapter(
   try {
     // Skipped when the table turned chapter summaries off; the chapter still
     // closes, it just carries no summary (src/lib/dm/stages.ts).
-    const { message, error } = !isStageEnabled(campaign.gameSettings.stages, "chapterSummary")
+    const { message, error } = !summariesOn
       ? { message: null, error: "chapter summaries disabled" }
       : await trackUtilityCall(campaign.id, "chapter", () =>
           requestUtilityMessage(
@@ -329,13 +340,17 @@ export async function maybeCloseChapter(
             [
               {
                 role: "system",
-                content:
-                  'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.',
+                content: withLanguage(
+                  'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.' +
+                  (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""),
+                  campaign.gameSettings.tableLanguage,
+                ),
               },
               {
                 role: "user",
                 content: [
                   previous ? `Previous chapters for continuity:\n${previous}` : "",
+                  onFile.text ? `Facts already on file:\n${onFile.text}` : "",
                   `Transcript of the closing chapter:\n${transcript || "(quiet chapter with no recorded scenes)"}`,
                 ]
                   .filter(Boolean)
@@ -346,7 +361,8 @@ export async function maybeCloseChapter(
           ),
         );
     if (!error) {
-      parsed = parseChapterJson(String(message?.content ?? ""), chapter.index);
+      reply = String(message?.content ?? "");
+      parsed = parseChapterJson(reply, chapter.index);
     }
   } catch {
     // Model unavailable; close with the fallback title so the campaign
@@ -384,6 +400,7 @@ export async function maybeCloseChapter(
       const inserted = recordExtractedFacts(campaignId, parsed.facts, "chapter", {
         sourceSeq: seqEnd,
         witnessedBy,
+        shownIds: onFile.shown.map((fact) => fact.id),
       });
       if (inserted.length) {
         publishEphemeral(campaignId, "facts_updated", {});
@@ -391,6 +408,16 @@ export async function maybeCloseChapter(
     } catch (error) {
       console.error("[facts] chapter extraction failed", error);
     }
+  }
+
+  // The facts on file the summary call said this chapter repeats, updates or
+  // proved false. Never blocks a close.
+  try {
+    if (retireFacts(campaignId, consolidationRetirements(reply, onFile.shown))) {
+      publishEphemeral(campaignId, "facts_updated", {});
+    }
+  } catch (error) {
+    console.error("[facts] chapter consolidation failed", error);
   }
 
   pacingByCampaign.delete(campaignId);
@@ -421,6 +448,7 @@ export async function maybeCloseChapter(
     campaignId,
     seq,
     authorType: "system",
+    glyph: "cue-bell",
     content: `Chapter ${result.closed.index}${result.closed.title ? `, "${result.closed.title}",` : ""} comes to a close.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: divider });

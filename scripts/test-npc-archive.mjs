@@ -79,6 +79,18 @@ check("name matching is word-bounded", () => {
   assert.equal(mentionsNpc("Al waves from the bar", al), true);
 });
 
+check("names are found by Unicode letters, whole, never inside a longer name", () => {
+  const npc = (name) => ({ id: "n", name, ignored: 0, engaged: 0 });
+  assert.equal(mentionsNpc("Then José nods.", npc("José")), true);
+  assert.equal(mentionsNpc("Joséphine nods.", npc("José")), false);
+  assert.equal(mentionsNpc("Niccolò entra.", npc("Niccolò")), true);
+  assert.equal(mentionsNpc("Élodie sourit.", npc("Élodie")), true);
+  assert.equal(mentionsNpc("il cavallo d'Arturo", npc("Arturo")), true);
+  assert.equal(mentionsNpc("Jeanne d'Arc arrive.", npc("Jeanne d'Arc")), true);
+  assert.equal(mentionsNpc("Jean-Luc waves.", npc("Jean-Luc")), true);
+  assert.equal(mentionsNpc("O'Brien laughs.", npc("O'Brien")), true);
+});
+
 check("aliases count for restoring", () => {
   const npc = { id: "n1", name: "Marla", aliases: ["Captain Marla"], ignored: 0, engaged: 0 };
   assert.equal(mentionsNpc("Captain Marla returns", npc), true);

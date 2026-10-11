@@ -84,6 +84,7 @@ import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { checklistClassSpell, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import { casterViewsOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
 import { subclassSpellsFor } from "@/lib/srd/features";
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -229,6 +230,7 @@ export const mutationTools: ToolDef[] = [
     coins: { type: "string", description: "Amount in denominations, e.g. '340 silver'. Overrides delta's size; delta's sign still says gain or spend." },
   }, ["delta"]),
   tool("grant_item", "Give a character an item (loot, purchase, gift). Only for items the fiction actually put in their hands. Set unidentified when the party cannot tell what it is yet: then `name` is the description they would use ('an ornate silver ring'), never the true name, and reveal_item names it later.", {
+    ...waypointProperty,
     unidentified: { type: "boolean", description: "True when the party does not yet know what this is." },
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },

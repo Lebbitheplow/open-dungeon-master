@@ -3,6 +3,7 @@
 // and the table note and sheet push every engine sends
 // (src/lib/dm/afflictions.ts, src/lib/dm/lifestyle.ts).
 
+import type { SystemGlyph } from "@/lib/system-glyphs";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getClock, setClock } from "@/lib/db/clock";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -17,9 +18,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
-export function tableNote(campaign: Campaign, content: string) {
+export function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
   const seq = allocateSeq(campaign.id);
-  const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", content });
+  const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph, content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }
 

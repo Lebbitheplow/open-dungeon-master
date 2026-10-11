@@ -5,6 +5,8 @@
 // caret. No "@/" imports and no DOM, so scripts/test-tours.mjs can load it
 // straight from disk.
 
+import { compareNames } from "../language/text-logic.ts";
+
 // The SRD's standard and exotic languages, in the order a stat block
 // prints them.
 export const LANGUAGES = [
@@ -97,7 +99,7 @@ export function collectTags(entries: ReadonlyArray<{ tags?: readonly string[] }>
       if (key && !seen.has(key)) seen.set(key, tag.trim());
     }
   }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  return [...seen.values()].sort(compareNames);
 }
 
 // The values a spell's timing fields take in the books. Offered beside the

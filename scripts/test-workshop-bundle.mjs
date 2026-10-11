@@ -424,6 +424,13 @@ test("hand-built monsters are refused with the reason, not silently dropped", ()
   assert.match(refusal.reason, /slug/);
 });
 
+test("a prepared fight's kind of ground travels, and an older file reads as none", () => {
+  const carried = workshopBundleSchema.parse(bundle({ encounters: [{ name: "Ford", map: { map: null, scene: "river" } }] }));
+  assert.equal(carried.encounters[0].map.scene, "river");
+  const older = workshopBundleSchema.parse(bundle({ encounters: [{ name: "Ford", map: { map: null, seed: 3 } }] }));
+  assert.equal(older.encounters[0].map.scene, null);
+});
+
 test("scenario content is refused as belonging in the bundle, not the pack", () => {
   const withScenario = workshopBundleSchema.parse(
     bundle({ encounters: [{ name: "Ambush" }], maps: [{ name: "Hall", width: 8, height: 8 }] }),

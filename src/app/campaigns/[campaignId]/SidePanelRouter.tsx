@@ -30,7 +30,7 @@ import { PinsPanel } from "@/app/campaigns/[campaignId]/PinsPanel";
 import { SessionSettings } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { SideChatPanel } from "@/app/campaigns/[campaignId]/SideChatPanel";
 import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
-import { attributeSpeech, speakersIn } from "@/lib/dm/speech";
+import { segmentsOf, speakersIn } from "@/lib/dm/speech";
 import type { CastMember } from "@/lib/dm/cast";
 import { QuestsPanel } from "@/app/campaigns/[campaignId]/QuestsPanel";
 import { TimelinePanel } from "@/app/campaigns/[campaignId]/TimelinePanel";
@@ -284,7 +284,7 @@ export function SidePanelRouter({
     }
     const speakers = latest.speaker
       ? [latest.speaker]
-      : speakersIn(attributeSpeech(latest.content, cast.map((member) => ({ kind: "npc" as const, id: member.id, name: member.name, aliases: member.aliases }))));
+      : speakersIn(segmentsOf(latest.content, latest.speech.filter((entry) => entry.speaker.kind === "npc")));
     return { speakers, cast, messageId: latest.id };
   }, [campaign?.gameSettings?.presentation, messages, cast]);
   const partySize = partySlotCount(

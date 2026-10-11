@@ -23,6 +23,7 @@ import {
   type WorldDoc,
   type WorldType,
 } from "@/lib/worldforge/model";
+import { byName } from "@/lib/language/text-logic";
 
 // The workshop's WorldForge: one document beside the records it describes
 // (src/lib/worldforge/model.ts says why). Everything that writes a record
@@ -135,7 +136,7 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
       table: { category: lore.category, visibility: lore.visibility, pinned: lore.pinned },
     });
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  return out.sort(byName);
 }
 
 // The document with whatever points at a deleted record dropped, and the

@@ -198,7 +198,7 @@ test("a list with groups keeps its leading group whole; a single list folds by c
 
 test("every bundled race resolves to its own family plate, in all three genders", () => {
   for (const race of SRD_RACES) {
-    for (const gender of ["", "male", "female"]) {
+    for (const gender of ["", "Male", "Female"]) {
       const art = lineageArt(race.id, race.name, gender);
       assert.match(art, /\/character-race\//, race.id);
       assert.ok(exists(art), `${art} exists`);
@@ -225,7 +225,7 @@ test("every class card has a plate that exists, and a neutral look still shows t
   const ids = [...SRD_CLASSES.map((klass) => klass.id), ...CUSTOM_CLASSES.map((klass) => klass.id)];
   assert.ok(ids.length > 40);
   for (const id of ids) {
-    for (const gender of ["", "male", "female"]) {
+    for (const gender of ["", "Male", "Female"]) {
       const art = classArt(id, gender);
       assert.ok(exists(art), `${art} exists`);
       assert.match(art, /\/character-class\//, `${id} (${gender || "neutral"}) shows its class`);

@@ -4,8 +4,8 @@ import { listSheets } from "@/lib/db/sheets";
 import { listCampaignVoices, setCampaignVoice } from "@/lib/db/voices";
 import { publishCast } from "@/lib/dm/cast";
 import type { NpcVoice } from "@/lib/npcs/forge";
-import { listRecentMessages } from "@/lib/db/messages";
-import { castingPool, genderFromProse, guessGender, pickVoice, type VoiceGender } from "@/lib/tts-cast";
+import { castingPool, pickVoice, type VoiceGender } from "@/lib/tts-cast";
+import { genderMark } from "@/lib/gender";
 import { baseCreatureName } from "@/lib/tts-segments";
 import { serverVoices, ttsBackend, type TtsBackend } from "@/lib/tts-backend";
 
@@ -51,7 +51,7 @@ export function voiceRoster(campaignId: string): RosterEntry[] {
       aliases: [],
       portraitUrl: sheet.portrait?.url ?? "",
       ownerUserId: sheet.isCompanion ? "" : sheet.userId,
-      gender: guessGender(sheet.gender),
+      gender: genderMark(sheet.gender),
       voice: saved.get(key)?.voice ?? null,
     });
   }
@@ -66,7 +66,7 @@ export function voiceRoster(campaignId: string): RosterEntry[] {
       aliases: npc.aliases,
       portraitUrl: npc.portraitUrl,
       ownerUserId: "",
-      gender: guessGender(`${npc.trait} ${npc.role}`),
+      gender: genderMark(npc.gender),
       voice: npc.voice,
     });
   }
@@ -103,13 +103,13 @@ export function setRosterVoice(campaignId: string, entry: Pick<RosterEntry, "key
 
 // Gives every listed speaker without a voice one of the server's, each as
 // different from the rest of the table as the server allows, and saves the
-// choices. `only` narrows it to the speakers of one passage; `hints` carries
-// what that passage said about them ("she says"). Returns how many were cast.
+// choices. `only` narrows it to the speakers of one passage. Returns how
+// many were cast.
 export async function castUnvoiced(
   campaignId: string,
   roster: RosterEntry[],
   narratorVoice: string,
-  options: { only?: Set<string>; hints?: Map<string, VoiceGender>; backend?: TtsBackend } = {},
+  options: { only?: Set<string>; backend?: TtsBackend } = {},
 ): Promise<number> {
   const waiting = roster.filter((entry) => !entry.voice && (!options.only || options.only.has(entry.key)));
   if (!waiting.length) {
@@ -119,26 +119,10 @@ export async function castUnvoiced(
   const { ids } = await serverVoices(backend);
   const pool = castingPool(ids, narratorVoice || backend.defaultVoice);
   const taken = roster.flatMap((entry) => (entry.voice ? [entry.voice.voiceId] : []));
-  // Whoever's own record says nothing is looked up in the story so far.
-  let told = new Map<string, VoiceGender>();
-  const unknown = waiting.filter((entry) => !entry.gender && !options.hints?.get(entry.key) && entry.kind !== "monster");
-  if (unknown.length) {
-    try {
-      told = genderFromProse(
-        unknown.map((entry) => ({ kind: "npc" as const, id: entry.key, name: entry.name, aliases: entry.aliases })),
-        listRecentMessages(campaignId, 80)
-          .filter((message) => message.authorType === "dm")
-          .map((message) => message.content),
-      );
-    } catch {
-      // No readable transcript: they are cast without it.
-    }
-  }
   let cast = 0;
   let npcChanged = false;
   for (const entry of waiting) {
-    const gender = entry.gender || options.hints?.get(entry.key) || told.get(entry.key) || "";
-    const voiceId = pickVoice(entry.name, gender, pool, taken);
+    const voiceId = pickVoice(entry.name, entry.gender, pool, taken);
     if (!voiceId) {
       break;
     }

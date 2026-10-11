@@ -3,6 +3,7 @@
 import { ArrowDownAZ, Clock, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
+import { compareNames } from "@/lib/language/text-logic";
 
 // Search, tag filter and a sort for every workshop list (docs/vtt-parity-
 // implementation-plan.md section 10.9). The list hands over its items with
@@ -24,7 +25,7 @@ export function useListControls<T extends Listed>(items: T[]) {
         counts.set(entry, (counts.get(entry) ?? 0) + 1);
       }
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || compareNames(a[0], b[0])).map(([name]) => name);
   }, [items]);
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -34,8 +35,8 @@ export function useListControls<T extends Listed>(items: T[]) {
     );
     return [...filtered].sort((a, b) =>
       sort === "name"
-        ? a.name.localeCompare(b.name)
-        : (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "") || a.name.localeCompare(b.name),
+        ? compareNames(a.name, b.name)
+        : (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "") || compareNames(a.name, b.name),
     );
   }, [items, query, tag, sort]);
   return { query, setQuery, tag, setTag, sort, setSort, tags, shown, filtered: shown.length !== items.length };

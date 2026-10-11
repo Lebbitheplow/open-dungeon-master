@@ -4,6 +4,7 @@ import { presetFor } from "@/lib/worlds/preset";
 import { publishPersisted } from "@/lib/events";
 import { pictureFailureReason, publishMediaStatus } from "@/lib/dm/images";
 import { enqueueMediaJob } from "@/lib/media-queue";
+import { toEnglishForImage } from "@/lib/image-english";
 import type { Campaign } from "@/lib/db/campaigns";
 
 // Renders a top-down illustrated map of a location on the serial media
@@ -17,16 +18,20 @@ export function enqueueLocationMap(campaign: Campaign, locationId: string) {
       return;
     }
     publishMediaStatus(campaign.id, "map", locationId, "generating");
-    const prompt = [
-      "top-down illustrated game map",
-      preset.mapStyle,
-      "labeled areas, clear pathways, no text captions",
-      location.name,
-      location.layoutDescription,
-    ]
-      .filter(Boolean)
-      .join(", ");
     try {
+      const place = await toEnglishForImage(campaign, {
+        name: location.name,
+        layout: location.layoutDescription,
+      });
+      const prompt = [
+        "top-down illustrated game map",
+        preset.mapStyle,
+        "labeled areas, clear pathways, no text captions",
+        place.name,
+        place.layout,
+      ]
+        .filter(Boolean)
+        .join(", ");
       const image = await generateStoryImage(campaign.settings, {
         prompt,
         mode: campaign.settings.imageMode,

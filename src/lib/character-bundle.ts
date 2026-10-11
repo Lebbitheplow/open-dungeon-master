@@ -9,7 +9,7 @@
 // which is what lets scripts/test-character-bundle.mjs drive the whole
 // thing without a filesystem or a database.
 import { z } from "zod";
-import { createSheetSchema, type CreateSheetInput, type SheetAttachment } from "@/lib/schemas/sheet";
+import { storedSheetSchema, type CreateSheetInput, type SheetAttachment } from "@/lib/schemas/sheet";
 import { isUploadedImagePath } from "@/lib/uploads";
 
 export const CHARACTER_BUNDLE_KIND = "odm.character";
@@ -72,7 +72,7 @@ export const characterBundleSchema = z.object({
   // The experience behind the level. Optional: a file written before the
   // field arrives with the least its level takes.
   xp: z.number().int().min(0).max(1_000_000).optional(),
-  sheet: createSheetSchema,
+  sheet: storedSheetSchema,
   portrait: bundlePortraitSchema.optional(),
 });
 export type CharacterBundle = z.infer<typeof characterBundleSchema>;

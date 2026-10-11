@@ -8,6 +8,7 @@ import type {
   DmModeSetting,
   GameSettings,
   Genre,
+  TableLanguage,
 } from "@/lib/schemas/game-settings";
 
 // Everything the new-campaign wizard collects, as one object. The wizard is
@@ -26,6 +27,7 @@ export type CampaignDraft = {
   campaignLength: CampaignLengthSetting;
   genre: Genre;
   customGenreText: string;
+  tableLanguage: TableLanguage;
   worldPack: string;
   // A theme or premise the person typed is never clobbered by a later pack
   // choice; one the pack filled in is fair game to replace.
@@ -90,6 +92,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   campaignLength: "standard",
   genre: "high_fantasy",
   customGenreText: "",
+  tableLanguage: "english",
   worldPack: "",
   themeTouched: false,
   descriptionTouched: false,

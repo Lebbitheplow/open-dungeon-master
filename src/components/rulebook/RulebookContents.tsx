@@ -3,7 +3,6 @@
 import { Bookmark, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { cn } from "@/lib/cn";
-import { stem } from "@/lib/rulebook/search";
 import type { ContentsChapter, ContentsEntry, RulebookContents as Contents, RulebookPart, SearchHit } from "@/lib/rulebook/types";
 import { Digits } from "./RulebookPage";
 
@@ -15,14 +14,15 @@ import { Digits } from "./RulebookPage";
 
 export type OpenFromContents = (id: string, at?: string, terms?: string[]) => void;
 
-function Highlighted({ text, terms }: { text: string; terms: string[] }) {
-  const parts = text.split(/([A-Za-z0-9]+(?:['’][A-Za-z]+)?)/);
+// `words` are the page's words the search matched, as the server read them
+// (src/lib/rulebook/search.ts): marked as written, never stemmed here.
+function Highlighted({ text, words }: { text: string; words: string[] }) {
+  const parts = text.split(/([\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*)/u);
   return (
     <>
       {parts.map((part, index) => {
         if (index % 2 === 0 || !part) return part;
-        const key = stem(part);
-        return terms.some((term) => key === term || (term.length >= 3 && key.startsWith(term))) ? (
+        return words.includes(part.toLowerCase().replace(/’/g, "'")) ? (
           <mark key={index} className="rb-mark">
             {part}
           </mark>
@@ -105,7 +105,7 @@ export function RulebookContents({
   searchRef: RefObject<HTMLInputElement | null>;
 }) {
   const [query, setQuery] = useState("");
-  const [result, setResult] = useState<{ query: string; hits: SearchHit[]; terms: string[] } | null>(null);
+  const [result, setResult] = useState<{ query: string; hits: SearchHit[] } | null>(null);
   const [searching, setSearching] = useState(false);
   const currentChapter = useMemo(
     () => contents?.chapters.find((chapter) => chapter.entries.some((entry) => entry.id === current))?.id ?? null,
@@ -133,8 +133,8 @@ export function RulebookContents({
       setSearching(true);
       try {
         const response = await fetch(`/api/rulebook/search?q=${encodeURIComponent(q)}`);
-        const data = response.ok ? await response.json() : { hits: [], terms: [] };
-        if (asked.current === q) setResult({ query: q, hits: data.hits ?? [], terms: data.terms ?? [] });
+        const data = response.ok ? await response.json() : { hits: [] };
+        if (asked.current === q) setResult({ query: q, hits: data.hits ?? [] });
       } finally {
         if (asked.current === q) setSearching(false);
       }
@@ -200,7 +200,7 @@ export function RulebookContents({
             }
             if (event.key === "Enter" && shown?.hits[0]) {
               const hit = shown.hits[0];
-              onOpen(hit.page, hit.at, shown.terms);
+              onOpen(hit.page, hit.at, hit.words);
             }
           }}
           placeholder="Seek a rule, a spell, a monster"
@@ -231,7 +231,7 @@ export function RulebookContents({
               <ol className="rb-hits" key={shown.query}>
                 {shown.hits.map((hit, index) => (
                   <li key={`${hit.page}-${hit.at ?? ""}`} style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}>
-                    <button type="button" className="rb-hit" data-on={hit.page === current || undefined} onClick={() => onOpen(hit.page, hit.at, shown.terms)}>
+                    <button type="button" className="rb-hit" data-on={hit.page === current || undefined} onClick={() => onOpen(hit.page, hit.at, hit.words)}>
                       <span className="rb-hit-where">
                         {hit.numeral} &middot; <Digits text={hit.chapter} />
                       </span>
@@ -247,7 +247,7 @@ export function RulebookContents({
                         ) : null}
                       </span>
                       <span className="rb-hit-snippet">
-                        <Highlighted text={hit.snippet} terms={shown.terms} />
+                        <Highlighted text={hit.snippet} words={hit.words} />
                       </span>
                     </button>
                   </li>

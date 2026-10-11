@@ -12,8 +12,11 @@
 // optional group, plus formula attributes that are rollable. No code is
 // copied; see docs/LICENSES.md.
 //
-// Pure by design: no imports at all, so scripts/test-attributes.mjs can load
-// it and the client can validate a value before sending it.
+// Pure by design: nothing imported but the dependency-free text-logic, so
+// scripts/test-attributes.mjs can load it and the client can validate a value
+// before sending it.
+
+import { compareNames } from "../language/text-logic.ts";
 
 export const ATTRIBUTE_TYPES = ["text", "number", "boolean", "resource", "formula"] as const;
 export type AttributeType = (typeof ATTRIBUTE_TYPES)[number];
@@ -248,7 +251,7 @@ export function groupAttributes(
     groups.set(attribute.group, list);
   }
   return [...groups.entries()]
-    .sort((a, b) => (a[0] === "" ? -1 : b[0] === "" ? 1 : a[0].localeCompare(b[0])))
+    .sort((a, b) => (a[0] === "" ? -1 : b[0] === "" ? 1 : compareNames(a[0], b[0])))
     .map(([group, list]) => ({ group, attributes: list }));
 }
 

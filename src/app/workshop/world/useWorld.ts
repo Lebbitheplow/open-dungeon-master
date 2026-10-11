@@ -5,6 +5,7 @@ import { readLoad, useLoadStatus } from "@/lib/load-state";
 import type { Slice, WorldDoc } from "@/lib/worldforge/model";
 import type { WorldEntity } from "@/lib/db/world-forge";
 import { applyRowOps, docOps, type DocOps } from "@/lib/worldforge/ops";
+import { byName } from "@/lib/language/text-logic";
 
 // The workshop's WorldForge on the client: one load of the document and the
 // records it describes, slice saves that show at once and settle when the
@@ -125,7 +126,7 @@ export function useWorld(campaignId: string) {
       current
         ? {
             doc: { ...current.doc, entries: { ...current.doc.entries, [entity.ref]: entity.entry } },
-            entities: [...current.entities.filter((entry) => entry.ref !== entity.ref), entity].sort((a, b) => a.name.localeCompare(b.name)),
+            entities: [...current.entities.filter((entry) => entry.ref !== entity.ref), entity].sort(byName),
           }
         : current,
     );

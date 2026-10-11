@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { byName } from "@/lib/language/text-logic";
 import { createSheet, getSheetById, getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { admitSheet } from "@/lib/characters/admit";
@@ -7,6 +8,7 @@ import { XP_THRESHOLDS, levelForXp } from "@/lib/srd";
 import { subclassExtrasFor } from "@/lib/db/subclass-extras";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
+import { storedGender } from "@/lib/gender";
 import { dedupeName } from "@/lib/workshop/import";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type { CampaignStatus } from "@/lib/campaign-types";
@@ -75,6 +77,10 @@ function withSplitCantrips(sheet: CreateSheetInput): CreateSheetInput {
     : sheet;
 }
 
+function withStoredGender(sheet: CreateSheetInput): CreateSheetInput {
+  return { ...sheet, gender: storedGender(sheet.gender) };
+}
+
 function mapCharacter(row: LibraryRow): LibraryCharacter {
   return {
     id: row.id,
@@ -87,7 +93,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     background: row.background,
     level: row.level,
     xp: row.xp,
-    sheet: withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput)),
+    sheet: withStoredGender(withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput))),
     workshopId: row.workshop_id ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -185,10 +191,10 @@ export function listCharactersForUser(
 export function listPregens(userId: string, workshopId: string): LibraryCharacter[] {
   const rows = getDatabase()
     .prepare(
-      `SELECT * FROM library_characters WHERE user_id = ? AND workshop_id = ? ORDER BY name COLLATE NOCASE`,
+      `SELECT * FROM library_characters WHERE user_id = ? AND workshop_id = ?`,
     )
     .all(userId, workshopId) as LibraryRow[];
-  return rows.map(mapCharacter);
+  return rows.map(mapCharacter).sort(byName);
 }
 
 // Files a library character under a workshop as a pregen, or takes it out

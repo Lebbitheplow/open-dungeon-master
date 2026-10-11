@@ -10,6 +10,7 @@ import { boundaryNegativeTerms } from "@/lib/dm/safety-logic";
 import { imageToolArgsSchema, type ImageToolArgs } from "@/lib/image-tool";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
+import { toEnglishForImage } from "@/lib/image-english";
 import type { AspectPreset, GeneratedImage, ImageRequest, StorySettings } from "@/lib/types";
 
 // Ephemeral progress refinements for the pending-media placeholders. The
@@ -59,11 +60,17 @@ export function fulfillMessageImage(
   return enqueueMediaJob(`image ${messageId}`, async () => {
     publishMediaStatus(campaignId, "image", messageId, "generating");
     try {
+      const campaign = getCampaignById(campaignId);
+      if (!campaign) {
+        return;
+      }
       // The table's boundary decides what the picture leaves out
       // (docs/vtt-parity-implementation-plan.md 9.1).
-      const boundaries = getCampaignById(campaignId)?.gameSettings.safety?.boundaries ?? "standard";
+      const boundaries = campaign.gameSettings.safety?.boundaries ?? "standard";
+      // The AI DM writes its prompt in English, a human DM may not.
+      const english = await toEnglishForImage(campaign, { prompt });
       const image = await generateStoryImage(settings, {
-        prompt,
+        prompt: english.prompt,
         mode: request.mode ?? settings.imageMode,
         aspect: request.aspect ?? settings.aspect,
         negative: boundaryNegativeTerms(boundaries),

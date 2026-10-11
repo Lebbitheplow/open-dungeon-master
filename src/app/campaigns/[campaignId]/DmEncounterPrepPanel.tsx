@@ -144,6 +144,7 @@ export function DmEncounterPrepPanel({
             name: template.name,
             enemies: formatRoster(template.enemies),
             battlefield: template.battlefield,
+            scene: template.map.scene ?? "",
             notes: template.notes,
             mapId: template.map.mapId ?? "",
             extras: template.extras,
@@ -170,7 +171,7 @@ export function DmEncounterPrepPanel({
           enemies: draft.enemies,
           battlefield: draft.battlefield,
           notes: draft.notes,
-          map: { mapId: draft.mapId || null },
+          map: { mapId: draft.mapId || null, scene: draft.scene || null },
           extras: draft.extras,
         }),
       });

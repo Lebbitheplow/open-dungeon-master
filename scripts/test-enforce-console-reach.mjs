@@ -399,7 +399,7 @@ await test("npc_reaction rolls 2d6 with a penalty as well as a bonus, the whole 
   const staged = await table({ fight: false });
   const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
   for (const modifier of [-10, -3, 0, 4, 10]) {
-    const met = await staged.invoke("npc_reaction", { name: `Stranger ${modifier + 10}`, modifier, trait: "wary", location: "The Old Mill" });
+    const met = await staged.invoke("npc_reaction", { name: `Stranger ${modifier + 10}`, modifier, trait: "wary", location: "The Old Mill", gender: "Unknown" });
     assert.equal(met.ok, true, `modifier ${modifier}: ${met.error}`);
   }
   const rolls = listRecentRolls(staged.world.campaignId, 20).filter((roll) => /^2d6/.test(roll.expression));

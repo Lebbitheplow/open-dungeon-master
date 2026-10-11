@@ -82,15 +82,12 @@ export async function POST(
   const npc = createNpcFromDraft(campaignId, outcome.draft);
   publishCast(campaignId);
   if (parsed.data.portrait) {
-    queueNpcPortrait({
+    queueNpcPortrait(context.campaign, {
       id: npc.id,
-      campaignId,
       trait: npc.trait,
       // The axes as adjectives, which is what a render prompt can use;
       // "warmth: -2" would mean nothing to it.
       personality: describePersonality(outcome.draft.personality),
-      genre: context.campaign.gameSettings.genre,
-      worldPack: context.campaign.gameSettings.worldPack,
     });
   }
   return Response.json({ ok: true, npc }, { status: 201 });

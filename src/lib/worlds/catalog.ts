@@ -14,13 +14,14 @@ import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
 import classFeaturesJson from "@/lib/srd/class-features.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
+import { compareNames } from "@/lib/language/text-logic";
 
 export type CatalogOption = { value: string; label: string };
 
 export const RACE_OPTIONS: CatalogOption[] = SRD_RACES.map((race) => ({
   value: race.id,
   label: race.name,
-})).sort((a, b) => a.label.localeCompare(b.label));
+})).sort((a, b) => compareNames(a.label, b.label));
 
 // Casters get a casting label ("Programs", "Prayers"); a non-caster must not.
 export const CLASS_OPTIONS: Array<CatalogOption & { caster: boolean }> = ALL_CLASSES.map(
@@ -29,12 +30,12 @@ export const CLASS_OPTIONS: Array<CatalogOption & { caster: boolean }> = ALL_CLA
     label: klass.name,
     caster: klass.spellAbility !== null,
   }),
-).sort((a, b) => a.label.localeCompare(b.label));
+).sort((a, b) => compareNames(a.label, b.label));
 
 export const BACKGROUND_OPTIONS: CatalogOption[] = [
   ...SRD_BACKGROUNDS.map((entry) => ({ value: entry.id, label: entry.name })),
   ...CUSTOM_BACKGROUNDS.map((entry) => ({ value: entry.id, label: entry.name })),
-].sort((a, b) => a.label.localeCompare(b.label));
+].sort((a, b) => compareNames(a.label, b.label));
 
 export function isCasterClass(id: string): boolean {
   return CLASS_OPTIONS.find((option) => option.value === id)?.caster ?? false;
@@ -91,7 +92,7 @@ function buildFeatureOptions(): CatalogOption[] {
   }
   return [...found.entries()]
     .map(([value, source]) => ({ value, label: `${value} (${source})` }))
-    .sort((a, b) => a.value.localeCompare(b.value));
+    .sort((a, b) => compareNames(a.value, b.value));
 }
 
 let featureOptions: CatalogOption[] | null = null;

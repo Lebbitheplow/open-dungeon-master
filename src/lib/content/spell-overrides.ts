@@ -22,6 +22,7 @@
 
 import { authoredSpells, type AuthoredSpell } from "@/lib/srd/spell-facts";
 import { checklistSpell } from "@/lib/srd/spell-lists";
+import { compareNames } from "@/lib/language/text-logic";
 
 export type RawSpellRow = {
   slug: string;
@@ -205,5 +206,5 @@ export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
       return !owner || owner === row || documentRank(row.documentSlug) < 2;
     })
     .map(corrected)
-    .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+    .sort((a, b) => a.level - b.level || compareNames(a.name, b.name));
 }

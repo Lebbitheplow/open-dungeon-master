@@ -4,6 +4,8 @@ import { getCampaignMessage, updateMessageContent } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { runLoreCheck } from "@/lib/dm/lore-check";
 import { LORE_CHECK_CATEGORIES } from "@/lib/dm/lore-logic";
+import { mergeLines } from "@/lib/dm/speech";
+import { personLines } from "@/lib/dm/speech-lines";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,7 +60,11 @@ export async function POST(
         { status: 400 },
       );
     }
-    const updated = updateMessageContent(message.id, parsed.data.content);
+    const updated = updateMessageContent(
+      message.id,
+      parsed.data.content,
+      mergeLines(message.speech, personLines(context.campaign, parsed.data.content)),
+    );
     if (!updated) {
       return Response.json({ error: "Could not update the message." }, { status: 500 });
     }

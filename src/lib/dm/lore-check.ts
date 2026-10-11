@@ -1,13 +1,16 @@
-import { getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
+import { withLanguage } from "@/lib/dm/table-language-logic";
+import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { listActiveFacts } from "@/lib/db/facts";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { getNpcByName, listNpcs } from "@/lib/db/npcs";
-import { arcTextTimeoutMs } from "@/lib/model-client";
+import { arcTextTimeoutMs, utilityContextTokens } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { scoreChaptersByKeywords } from "@/lib/dm/recall-logic";
+import { fitChaptersToBudget } from "@/lib/dm/chapter-lod";
+import { computeBudgets } from "@/lib/dm/context-budget";
 import { searchScenes } from "@/lib/dm/memory-index";
 import { agencyFragment } from "@/lib/dm/npc-logic";
 import {
@@ -44,7 +47,7 @@ export type LoreCheckRequest = {
   npcName?: string;
 };
 
-async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
+async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number): Promise<string[]> {
   const { campaignId, selection } = request;
   const evidence: string[] = [];
 
@@ -68,14 +71,15 @@ async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
       (scene) => `[scene:ch${scene.chapterIndex}@${scene.seqStart}] ${scene.text}`,
     );
     chapterIndexes = [...new Set(scenes.map((scene) => scene.chapterIndex))];
-  } catch {
+  } catch (error) {
     // embedder unavailable; chapters below still anchor the check
+    console.error("[lore-check] scene search failed", error);
   }
   const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
   const relevantChapters = chapterIndexes.length
     ? closed.filter((chapter) => chapterIndexes.includes(chapter.index))
-    : scoreChaptersByKeywords(closed, selection).slice(0, 2);
-  for (const chapter of relevantChapters.slice(0, 3)) {
+    : scoreChaptersByKeywords(closed, selection, campaignLanguage(campaignId)).slice(0, 2);
+  for (const chapter of fitChaptersToBudget(relevantChapters.slice(0, 3), chapterBudget)) {
     evidence.push(
       `[chapter:${chapter.index}] "${chapter.title}": ${chapter.summary}${
         chapter.highlights.length ? `\nHighlights: ${chapter.highlights.join(" | ")}` : ""
@@ -83,7 +87,8 @@ async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
     );
   }
   if (sceneLines.length) {
-    evidence.push(`Verbatim past scenes (the actual play):\n${sceneLines.join("\n\n")}`);
+    // Retrieval has no relevance cut-off (fusion-logic.ts).
+    evidence.push(`Verbatim past scenes (the actual play), nearest to the passage first; some may not bear on it:\n${sceneLines.join("\n\n")}`);
   }
 
   const { summary } = getCampaignSummaryState(campaignId);
@@ -123,7 +128,8 @@ export async function runLoreCheck(
   }
   const selection = request.selection.trim().slice(0, 2000) || message.content.slice(0, 2000);
 
-  const evidence = await assembleEvidence({ ...request, selection });
+  const chapterBudget = computeBudgets(await utilityContextTokens(campaign.settings)).chapters;
+  const evidence = await assembleEvidence({ ...request, selection }, chapterBudget);
   if (!evidence.length) {
     return { error: "Nothing recorded yet to check against." };
   }
@@ -141,7 +147,7 @@ export async function runLoreCheck(
         requestUtilityMessage(
           campaign.settings,
           [
-            { role: "system", content: CHECK_SYSTEM },
+            { role: "system", content: withLanguage(CHECK_SYSTEM, campaign.gameSettings.tableLanguage) },
             {
               role: "user",
               content: [

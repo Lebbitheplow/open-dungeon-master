@@ -3,9 +3,16 @@
 import { ImageIcon } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { GENRE_PRESETS } from "@/lib/genres";
-import type { Genre } from "@/lib/schemas/game-settings";
+import {
+  TABLE_LANGUAGE_HELP,
+  TABLE_LANGUAGE_LABELS,
+  TABLE_LANGUAGES,
+  type Genre,
+  type TableLanguage,
+} from "@/lib/schemas/game-settings-options";
 import type { WorldPackSummary } from "@/lib/worlds/types";
 import { FieldLabel } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
@@ -207,6 +214,21 @@ export function WorldStep({
             </span>
           ))}
         </div>
+      </div>
+
+      <div className="cc-field">
+        <div className="cc-field-head">
+          <span className="cc-eyebrow">Table language</span>
+          <span className="cc-note">what the story is written in</span>
+        </div>
+        <Select<TableLanguage>
+          value={draft.tableLanguage}
+          onChange={(tableLanguage) => patch({ tableLanguage })}
+          label="Table language"
+          className="w-full"
+          options={TABLE_LANGUAGES.map((value) => ({ value, label: TABLE_LANGUAGE_LABELS[value] }))}
+        />
+        <p className="mt-1 text-xs text-stone-500">{TABLE_LANGUAGE_HELP}</p>
       </div>
 
       <label className="cc-field block">

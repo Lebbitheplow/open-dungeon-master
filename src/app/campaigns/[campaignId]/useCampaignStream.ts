@@ -136,6 +136,8 @@ export type CampaignLocation = {
   visited: boolean;
   isCurrent: boolean;
   mapImage: { url: string } | null;
+  // The place's ambience bed and music, which name its kind of scene.
+  ambience: { bed: string; music: string } | null;
   updatedAt: string;
 };
 

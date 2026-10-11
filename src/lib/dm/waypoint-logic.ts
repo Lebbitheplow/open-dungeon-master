@@ -1,10 +1,12 @@
 // Pure waypoint mechanics (issue #31): which of a beat's steps a tool call
 // satisfies, how a tick is recorded, and how the judge's reply is read.
 // Database-free and model-free so scripts/test-waypoints.mjs can exercise
-// every branch; waypoint-tick.ts wraps this with the campaign, the
-// embeddings and the model.
+// every branch; waypoint-tick.ts wraps this with the campaign and the
+// model.
 
 import type { ArcBeat, StoryArc, Waypoint, WaypointKind } from "./arc-logic.ts";
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
+import { stems } from "../language/language.ts";
 
 export type WaypointSignal = { kind: WaypointKind; names: string[] };
 
@@ -62,38 +64,17 @@ export function signalFromToolCall(
   }
 }
 
-const STOPWORDS = new Set([
-  "the", "a", "an", "of", "to", "at", "in", "on", "with", "and", "or", "for", "from", "into",
-  "reach", "reaches", "reaching", "arrive", "arrives", "arriving", "find", "finds", "finding",
-  "go", "goes", "get", "gets", "meet", "meets", "meeting", "speak", "speaks", "talk", "talks",
-  "obtain", "obtains", "recover", "recovers", "take", "takes", "defeat", "defeats", "kill",
-  "kills", "beat", "beats", "win", "wins", "party", "their", "its", "his", "her", "them", "it",
-  "is", "are", "be", "by", "up", "out", "down",
-]);
-
-// Lower-case, unaccented, punctuation-free word stems (five letters, so
-// "cathedral" and "cathedrals" agree) minus the words every waypoint
-// shares. The stems are what the two sides are compared on.
-export function stems(text: string): string[] {
-  return text
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/['’]s\b/g, "")
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length >= 3 && !STOPWORDS.has(word))
-    .map((word) => word.slice(0, 5));
-}
-
 // Whether a name the DM used (a location, a person, an item) is the thing
-// a waypoint names. Every distinctive stem of the name has to appear in the
-// waypoint, or the two have to share most of their stems: "the drowned
-// cathedral" matches "Reach the Drowned Cathedral of Vael", and "Brisca"
-// matches "speak with Brisca Hale", while "the ferry" does not match
-// "reach the drowned cathedral".
-export function lexicalMatch(waypointText: string, name: string): boolean {
-  const target = new Set(stems(waypointText));
-  const given = stems(name);
+// a waypoint names. The two are compared as Snowball stems in the table's
+// language, its function words dropped (src/lib/language). Every stem of
+// the name has to appear in the waypoint, or the two have to share most of
+// their stems: "the drowned cathedral" matches "Reach the Drowned Cathedral
+// of Vael", and "Brisca" matches "speak with Brisca Hale", while "the ferry"
+// does not match "reach the drowned cathedral", nor "Porta della Gilda"
+// "Casa della Gilda".
+export function lexicalMatch(waypointText: string, name: string, language: TableLanguage): boolean {
+  const target = new Set(stems(waypointText, language));
+  const given = stems(name, language);
   if (!target.size || !given.length) {
     return false;
   }
@@ -107,17 +88,62 @@ export function lexicalMatch(waypointText: string, name: string): boolean {
 
 // Open waypoints of the beat that a signal satisfies by name. Narrative
 // waypoints never match here: only the judge can settle those.
-export function matchSignal(beat: ArcBeat, signal: WaypointSignal): number[] {
+export function matchSignal(beat: ArcBeat, signal: WaypointSignal, language: TableLanguage): number[] {
   const matched: number[] = [];
   (beat.waypoints ?? []).forEach((waypoint, index) => {
     if (waypoint.done || waypoint.kind !== signal.kind || waypoint.kind === "narrative") {
       return;
     }
-    if (signal.names.some((name) => lexicalMatch(waypoint.text, name))) {
+    if (signal.names.some((name) => lexicalMatch(waypoint.text, name, language))) {
       matched.push(index);
     }
   });
   return matched;
+}
+
+// The kind of step each ticking tool can satisfy, for the `waypoint` tag
+// below. tick_objective ticks by its quest's own ids and takes no tag.
+const TOOL_WAYPOINT_KIND: Record<string, WaypointKind> = {
+  move_party: "place",
+  update_location: "place",
+  set_npc: "npc",
+  npc_reaction: "npc",
+  social_check: "npc",
+  grant_item: "item",
+  buy_item: "item",
+  end_encounter: "fight",
+};
+
+// The optional argument those tools take: the DM names the [NOW] step its
+// call accomplishes, so a place or person it calls by another name than the
+// step's still ticks it.
+export const waypointProperty = {
+  waypoint: {
+    type: "integer",
+    minimum: 1,
+    description: "The number of the [NOW] checklist step this call accomplishes, if it accomplishes one.",
+  },
+};
+
+// The 0-based index of the step a call's `waypoint` tag names, when that step
+// is open on the active beat and of the kind the tool can satisfy; null
+// otherwise. A malformed tag counts as no tag: the call itself still stands.
+export function taggedWaypoint(beat: ArcBeat, toolName: string, rawArguments: string): number | null {
+  const kind = TOOL_WAYPOINT_KIND[toolName];
+  if (!kind) {
+    return null;
+  }
+  let tag: unknown;
+  try {
+    tag = (JSON.parse(rawArguments || "{}") as Record<string, unknown>).waypoint;
+  } catch {
+    return null;
+  }
+  if (typeof tag !== "number" || !Number.isInteger(tag) || tag < 1) {
+    return null;
+  }
+  const waypoint = beat.waypoints?.[tag - 1];
+  return waypoint && !waypoint.done && waypoint.kind === kind ? tag - 1 : null;
 }
 
 // Records ticks on one beat. Out-of-range or already-done indexes are
