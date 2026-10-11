@@ -492,6 +492,7 @@ export function mapPlaceholder(look: MapLook, seed = ""): string {
 const WORKSHOP_ROOMS = new Set([
   "workshop", "maps", "cast", "bestiary", "encounters",
   "lore", "storyboard", "tables", "rulesets",
+  "region", "party", "factions", "homebrew", "plugin", "share",
 ]);
 
 export function workshopPlaceholder(room: string | null | undefined): string {

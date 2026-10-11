@@ -27,14 +27,14 @@ const PUBLIC = path.join(ROOT, "public");
 const SET_DIR = path.join(PUBLIC, "assets", "placeholders");
 
 // The whole set rides inside the desktop app and the Android APK. These are
-// ceilings, not targets: generate-placeholders.mjs encodes at 256px squares
-// and 704px landscapes at quality 70, which lands well under both.
-// Raised from 3.5 MB for the painted race and class portraits, which replace
-// the flat silhouettes at the same 256px / q70 encode and add a neutral plate
-// for each of the 36 genre classes and the two pack classes (about 2 MB for
-// those 219 plates; 4.2 MB shipped in total).
-const BUDGET_TOTAL_BYTES = 4.5 * 1024 * 1024;
+// ceilings, not targets. The 177 majority-selected plates preserve their
+// reviewed WebP bytes: 13.76 MiB plus the existing race/class portraits.
+// Allow 18 MiB total, with separate scene and painted-square ceilings;
+// race/class portraits retain their 48 KiB ceiling.
+const BUDGET_TOTAL_BYTES = 18 * 1024 * 1024;
 const BUDGET_FILE_BYTES = 48 * 1024;
+const BUDGET_SCENE_FILE_BYTES = 192 * 1024;
+const BUDGET_PAINTED_SQUARE_BYTES = 128 * 1024;
 
 const failures = [];
 const reached = new Set();
@@ -123,8 +123,11 @@ for (const genre of GENRES) {
   }
 }
 
-for (const room of ["workshop", "maps", "cast", "bestiary", "encounters", "lore", "storyboard", "tables", "rulesets", "", "nope"]) {
+for (const room of ["workshop", "maps", "cast", "bestiary", "encounters", "lore", "storyboard", "tables", "rulesets", "region", "party", "factions", "homebrew", "plugin", "share", "", "nope"]) {
   check(R.workshopPlaceholder(room), `workshop ${room}`);
+  if (room && room !== "nope" && R.workshopPlaceholder(room) !== `/assets/placeholders/workshop/${room}.webp`) {
+    failures.push(`workshop ${room} did not resolve to its dedicated plate`);
+  }
 }
 
 for (const tile of ["party", "quest", "faction", "treasure", "chapter", "session", "journey", "empty", "nope"]) {
@@ -210,8 +213,14 @@ let totalBytes = 0;
 for (const url of shipped) {
   const size = statSync(path.join(PUBLIC, url.replace(/^\//, ""))).size;
   totalBytes += size;
-  if (size > BUDGET_FILE_BYTES) {
-    failures.push(`${url} is ${(size / 1024).toFixed(0)} KB, over the ${BUDGET_FILE_BYTES / 1024} KB ceiling`);
+  const group = url.split("/")[3];
+  const ceiling = ["campaign", "map", "misc", "workshop"].includes(group)
+    ? BUDGET_SCENE_FILE_BYTES
+    : ["npc", "monster", "avatar", "character", "character-genre"].includes(group)
+      ? BUDGET_PAINTED_SQUARE_BYTES
+      : BUDGET_FILE_BYTES;
+  if (size > ceiling) {
+    failures.push(`${url} is ${(size / 1024).toFixed(0)} KB, over the ${ceiling / 1024} KB ceiling`);
   }
 }
 // The effect assets a feature ships under public/fx (stings, glyph sprites;
