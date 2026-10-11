@@ -22,7 +22,7 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 const { GET, PATCH } = await import("../src/app/api/admin/settings/route.ts");
 const { getGlobalConfig } = await import("../src/lib/db/app-settings.ts");
-const { AdminImagesSection, comfyModelOptions, comfyModelPatch, fetchComfyModels } = await import("../src/app/admin/AdminImagesSection.tsx");
+const { AdminImagesSection, comfyModelOptions, comfyModelPatch, comfyModelStatus, fetchComfyModels } = await import("../src/app/admin/AdminImagesSection.tsx");
 
 async function patch(images) {
   return PATCH(new Request("http://localhost/api/admin/settings", {
@@ -65,14 +65,15 @@ passed += 1;
 console.log("ok - rendered Z selection shows one image model control");
 
 const options = comfyModelOptions("saved-checkpoint.safetensors", ["installed.safetensors"], true);
+const DEFAULT = { value: "checkpoint:", label: "Default checkpoint", hint: "CyberRealisticXLPlay_V6.0.safetensors" };
 assert.deepEqual(options, [
-  { value: "checkpoint:", label: "Default checkpoint" },
+  DEFAULT,
   { value: "checkpoint:saved-checkpoint.safetensors", label: "saved-checkpoint.safetensors", hint: "Saved selection; not reported by this ComfyUI." },
   { value: "checkpoint:installed.safetensors", label: "installed.safetensors" },
   { value: "preset:z_turbo", label: "Z-Image Turbo" },
 ]);
 assert.deepEqual(comfyModelOptions("", [], true), [
-  { value: "checkpoint:", label: "Default checkpoint" },
+  DEFAULT,
   { value: "preset:z_turbo", label: "Z-Image Turbo" },
 ]);
 assert.deepEqual(comfyModelPatch("checkpoint:installed.safetensors", options), {
@@ -96,21 +97,35 @@ assert.doesNotMatch(render(restored), /ComfyUI workflow preset|Checkpoint \(mode
 passed += 1;
 console.log("ok - discovered, saved, default, and Z choices map to one persisted selection");
 
+const found = { unet: "zimage/z_image_turbo_bf16.safetensors", clip: "qwen_3_4b.safetensors", vae: "ae.safetensors" };
+const lacking = { ...found, clip: "" };
+assert.deepEqual(comfyModelOptions("", [], true, found).at(-1), { value: "preset:z_turbo", label: "Z-Image Turbo", hint: "Uses z_image_turbo_bf16.safetensors" });
+assert.deepEqual(comfyModelOptions("", [], true, lacking).at(-1), { value: "preset:z_turbo", label: "Z-Image Turbo", hint: "Its files are not all on this ComfyUI." });
+// A failed check says nothing about the files.
+assert.deepEqual(comfyModelOptions("", [], false, lacking).at(-1), { value: "preset:z_turbo", label: "Z-Image Turbo" });
+assert.equal(comfyModelStatus(null, true), "Checking installed models…");
+assert.equal(comfyModelStatus({ checkpoints: [], zImage: null, error: "Could not reach ComfyUI." }, true), "Could not reach ComfyUI.");
+assert.equal(comfyModelStatus({ checkpoints: ["a.safetensors"], zImage: found, error: null }, false), "Installed checkpoints from ComfyUI.");
+assert.match(comfyModelStatus({ checkpoints: [], zImage: found, error: null }, true), /with z_image_turbo_bf16\.safetensors, qwen_3_4b\.safetensors and ae\.safetensors\. It runs without a negative prompt/);
+assert.equal(comfyModelStatus({ checkpoints: [], zImage: lacking, error: null }, true), "This ComfyUI is missing the Qwen 3 4B text encoder (models/text_encoders).");
+passed += 1;
+console.log("ok - the picker names the Z-Image files it found, and what a ComfyUI still lacks");
+
 const requests = [];
 const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
   requests.push({ url, init });
   const requestedUrl = JSON.parse(init.body).url;
   return Response.json(requestedUrl.endsWith(":8188")
-    ? { ok: true, checkpoints: ["installed.safetensors", 7] }
+    ? { ok: true, checkpoints: ["installed.safetensors", 7], zImage: { unet: "z.safetensors", clip: 4, vae: "ae.safetensors" } }
     : { ok: false, error: "Could not reach ComfyUI.", checkpoints: [] });
 });
 try {
   const signal = new AbortController().signal;
   assert.deepEqual(await fetchComfyModels("http://localhost:8188", signal), {
-    checkpoints: ["installed.safetensors"], error: null,
+    checkpoints: ["installed.safetensors"], zImage: { unet: "z.safetensors", clip: "", vae: "ae.safetensors" }, error: null,
   });
   assert.deepEqual(await fetchComfyModels("http://localhost:8288", signal), {
-    checkpoints: [], error: "Could not reach ComfyUI.",
+    checkpoints: [], zImage: null, error: "Could not reach ComfyUI.",
   });
   assert.deepEqual(requests.map(({ url, init }) => [url, init.method, JSON.parse(init.body).url, init.signal]), [
     ["/api/comfy", "POST", "http://localhost:8188", signal],
@@ -130,6 +145,22 @@ assert.equal(response.status, 400);
 assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "checkpoint");
 passed += 1;
 console.log("ok - partial updates keep checkpoint and reject invalid presets");
+
+// The desktop app's local AI installer writes only the checkpoint it put in
+// place; that is a choice of checkpoint, not one ignored behind Z-Image.
+await patch({ comfyWorkflowPreset: "z_turbo" });
+response = await patch({ defaultBackend: "comfyui", comfyUrl: "http://127.0.0.1:8188", comfyCheckpoint: "installed.safetensors" });
+assert.equal(response.status, 200);
+assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "checkpoint");
+assert.equal(getGlobalConfig().images.comfyCheckpoint, "installed.safetensors");
+// The admin panel sends both, and its Z choice stands.
+response = await patch({ comfyCheckpoint: "installed.safetensors", comfyWorkflowPreset: "z_turbo" });
+assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "z_turbo");
+// A save about something else leaves the choice alone.
+response = await patch({ comfyUrl: "http://127.0.0.1:8189" });
+assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "z_turbo");
+passed += 1;
+console.log("ok - a save naming only a checkpoint switches Z-Image Turbo off");
 
 removeTempDir(dir);
 console.log(`test-comfy-preset: ${passed} passed`);

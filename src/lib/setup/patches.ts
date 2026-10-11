@@ -62,7 +62,9 @@ export function storyPatch(choice: StoryChoice, savedBaseUrl = ""): { patch: Pat
 }
 
 export type PicturesChoice =
-  | { kind: "comfyui"; url: string; checkpoint: string }
+  // preset "z_turbo" paints with Z-Image Turbo and keeps the checkpoint for
+  // switching back.
+  | { kind: "comfyui"; url: string; checkpoint: string; preset?: "checkpoint" | "z_turbo" }
   // OpenAI's images API on the storyteller's OpenAI key, or on its own.
   | { kind: "openai"; apiKey: string }
   // The agent program's own image tool, once a test picture has come back.
@@ -78,6 +80,7 @@ export function picturesPatch(choice: PicturesChoice): Patch {
         defaultBackend: "comfyui",
         comfyUrl: choice.url.trim().replace(/\/+$/, ""),
         comfyCheckpoint: choice.checkpoint.trim(),
+        comfyWorkflowPreset: choice.preset ?? "checkpoint",
       },
     };
   }

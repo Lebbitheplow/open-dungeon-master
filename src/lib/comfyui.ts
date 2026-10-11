@@ -3,11 +3,20 @@ import path from "node:path";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
 import { sniffImage } from "@/lib/image-format";
 import { scheduleImageVariants } from "@/lib/image-variants";
+import {
+  Z_IMAGE_SLOTS,
+  pickZImageFiles,
+  readComfyFiles,
+  zImageMissing,
+  type ZImageFiles,
+  type ZImageSlot,
+} from "@/lib/setup/discovery-logic";
 import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
 
 // First-party ComfyUI backend: the app submits a plain text-to-image workflow
 // over ComfyUI's HTTP API and saves the result exactly like the FLUX worker
-// does. Any running ComfyUI instance works — the user picks the checkpoint.
+// does. Any running ComfyUI instance works: the admin picks a checkpoint, or
+// Z-Image Turbo, whose three files are found in that ComfyUI's own lists.
 
 const DEFAULT_COMFY_URL = "http://127.0.0.1:8188";
 const STATUS_TIMEOUT_MS = 4_000;
@@ -98,48 +107,66 @@ export type ComfyStatus = {
   ok: boolean;
   error?: string;
   checkpoints: string[];
+  // The Z-Image Turbo files this ComfyUI has, "" for each one it lacks.
+  zImage: ZImageFiles;
 };
 
-// One call powers the Images panel: reachability plus the checkpoint list
-// from CheckpointLoaderSimple's declared inputs.
+const NO_Z_IMAGE: ZImageFiles = { unet: "", clip: "", vae: "" };
+
+// A loader's file list, or none when ComfyUI does not know the node or its
+// answer is not JSON. A redirect or a flood still refuses the whole check.
+async function readFileList(response: Response, node: string, input: string): Promise<string[]> {
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return [];
+  }
+  try {
+    return readComfyFiles(await readJson<unknown>(response), node, input);
+  } catch (error) {
+    if (error instanceof ComfyRefusal) {
+      throw error;
+    }
+    return [];
+  }
+}
+
+// One call powers the Images panel: reachability, the checkpoint list from
+// CheckpointLoaderSimple's declared inputs, and the Z-Image Turbo files from
+// the three loaders that workflow uses.
 export async function comfyStatus(rawUrl: string | undefined): Promise<ComfyStatus> {
   const url = resolveComfyUrl(rawUrl);
   const timeout = timeoutSignal(STATUS_TIMEOUT_MS);
+  const slots = Object.keys(Z_IMAGE_SLOTS) as ZImageSlot[];
 
   try {
-    const [stats, objectInfo] = await Promise.all([
+    const [stats, objectInfo, ...loaders] = await Promise.all([
       comfyFetch(`${url}/system_stats`, { cache: "no-store", signal: timeout.signal }),
-      comfyFetch(`${url}/object_info/CheckpointLoaderSimple`, {
-        cache: "no-store",
-        signal: timeout.signal,
-      }),
+      ...["CheckpointLoaderSimple", ...slots.map((slot) => Z_IMAGE_SLOTS[slot].node)].map((node) =>
+        comfyFetch(`${url}/object_info/${node}`, { cache: "no-store", signal: timeout.signal }),
+      ),
     ]);
 
     if (!stats.ok) {
-      await objectInfo.body?.cancel().catch(() => {});
-      return { ok: false, error: `ComfyUI answered ${stats.status}.`, checkpoints: [] };
+      await Promise.all([objectInfo, ...loaders].map((response) => response.body?.cancel().catch(() => {})));
+      return { ok: false, error: `ComfyUI answered ${stats.status}.`, checkpoints: [], zImage: NO_Z_IMAGE };
     }
 
-    let checkpoints: string[] = [];
-    if (objectInfo.ok) {
-      const info = await readJson<{
-        CheckpointLoaderSimple?: { input?: { required?: { ckpt_name?: unknown[] } } };
-      }>(objectInfo);
-      const names = info.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
-      if (Array.isArray(names)) {
-        checkpoints = names.filter((name): name is string => typeof name === "string");
-      }
-    }
+    const [checkpoints, unet, clip, vae] = await Promise.all([
+      readFileList(objectInfo, "CheckpointLoaderSimple", "ckpt_name"),
+      ...slots.map((slot, index) => readFileList(loaders[index], Z_IMAGE_SLOTS[slot].node, Z_IMAGE_SLOTS[slot].input)),
+    ]);
+    const zImage = pickZImageFiles({ unet, clip, vae });
 
-    return { ok: true, checkpoints };
+    return { ok: true, checkpoints, zImage };
   } catch (error) {
     if (error instanceof ComfyRefusal) {
-      return { ok: false, error: error.message, checkpoints: [] };
+      return { ok: false, error: error.message, checkpoints: [], zImage: NO_Z_IMAGE };
     }
     return {
       ok: false,
       error: `Could not reach ComfyUI at ${url}. Start ComfyUI and check the URL.`,
       checkpoints: [],
+      zImage: NO_Z_IMAGE,
     };
   } finally {
     timeout.clear();
@@ -212,12 +239,18 @@ export function buildCheckpointWorkflow(options: {
 }
 
 // The Z-Image Turbo graph from the supplied ComfyUI API workflow. Only the
-// positive text, latent dimensions, and seed vary between generations.
+// positive text, latent dimensions, and seed vary between generations, and
+// the three file names, which come from this ComfyUI's own lists (comfyStatus).
+//
+// It runs at CFG 1 with a zeroed negative, so a table boundary's picture
+// negatives have nowhere to go. They are not folded into the prompt either:
+// "Leave out: blood, wounds" in a positive prompt paints blood and wounds.
 export function buildZTurboWorkflow(options: {
   prompt: string;
   width: number;
   height: number;
   seed: number;
+  files: ZImageFiles;
 }) {
   return {
     "9": {
@@ -227,12 +260,12 @@ export function buildZTurboWorkflow(options: {
     },
     "57:30": {
       class_type: "CLIPLoader",
-      inputs: { clip_name: "qwen_3_4b_fp8_mixed.safetensors", type: "lumina2", device: "default" },
+      inputs: { clip_name: options.files.clip, type: "lumina2", device: "default" },
       _meta: { title: "Load CLIP" },
     },
     "57:29": {
       class_type: "VAELoader",
-      inputs: { vae_name: "ae.safetensors" },
+      inputs: { vae_name: options.files.vae },
       _meta: { title: "Load VAE" },
     },
     "57:33": {
@@ -247,7 +280,7 @@ export function buildZTurboWorkflow(options: {
     },
     "57:28": {
       class_type: "UNETLoader",
-      inputs: { unet_name: "z_image_turbo_nvfp4.safetensors", weight_dtype: "default" },
+      inputs: { unet_name: options.files.unet, weight_dtype: "default" },
       _meta: { title: "Load Diffusion Model" },
     },
     "57:27": {
@@ -315,23 +348,34 @@ export async function generateComfyImage(options: {
 
   const preset = getGlobalConfig().images.comfyWorkflowPreset;
   let checkpoint = (options.checkpoint || "").trim();
-  if (preset === "checkpoint" && !checkpoint) {
+  let zImage = NO_Z_IMAGE;
+  if (preset === "z_turbo" || !checkpoint) {
     const status = await comfyStatus(url);
     if (!status.ok) {
       throw new Error(status.error || `Could not reach ComfyUI at ${url}.`);
     }
-    checkpoint = status.checkpoints[0] || "";
-    if (!checkpoint) {
-      throw new Error(
-        "ComfyUI has no checkpoints installed. Put a model in ComfyUI/models/checkpoints and refresh.",
-      );
+    if (preset === "z_turbo") {
+      // The files this ComfyUI has, whatever precision it downloaded; a
+      // missing one is named here rather than in ComfyUI's validation error.
+      const missing = zImageMissing(status.zImage);
+      if (missing.length) {
+        throw new Error(`ComfyUI is missing ${missing.join(", ")} for Z-Image Turbo. Add it, or pick a checkpoint in Admin > Images.`);
+      }
+      zImage = status.zImage;
+    } else {
+      checkpoint = status.checkpoints[0] || "";
+      if (!checkpoint) {
+        throw new Error(
+          "ComfyUI has no checkpoints installed. Put a model in ComfyUI/models/checkpoints and refresh.",
+        );
+      }
     }
   }
 
   const seed = options.seed ?? Math.floor(Math.random() * 2_147_483_647);
   const { width, height } = comfyDimensions(options.mode, options.aspect);
   const workflow = preset === "z_turbo"
-    ? buildZTurboWorkflow({ prompt: options.prompt, width, height, seed })
+    ? buildZTurboWorkflow({ prompt: options.prompt, width, height, seed, files: zImage })
     : buildCheckpointWorkflow({ checkpoint, prompt: options.prompt, width, height, seed, negative: options.negative });
 
   const submitTimeout = timeoutSignal(STATUS_TIMEOUT_MS * 2);
@@ -399,7 +443,7 @@ export async function generateComfyImage(options: {
     }
     if (entry.status?.status_str === "error") {
       throw new Error(
-        "ComfyUI failed to run the workflow. Check the ComfyUI console — usually a missing checkpoint or out-of-memory.",
+        "ComfyUI failed to run the workflow. Check the ComfyUI console: it is usually a missing model file or out-of-memory.",
       );
     }
     const images = Object.values(entry.outputs || {}).flatMap((output) => output.images || []);

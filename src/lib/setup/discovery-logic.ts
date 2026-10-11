@@ -254,13 +254,80 @@ export function recommendedModel(models: readonly ListedModel[], preferred: read
   return models[0]?.id ?? "";
 }
 
+// A loader node's file list, from GET /object_info/<node>. ComfyUI declares
+// a file input as [names, options], and its newer nodes as
+// ["COMBO", { options: names }].
+export function readComfyFiles(json: unknown, node: string, input: string): string[] {
+  const field = (json as Record<string, { input?: { required?: Record<string, unknown> } }> | null)?.[node]?.input
+    ?.required?.[input];
+  const list = !Array.isArray(field)
+    ? null
+    : Array.isArray(field[0])
+      ? field[0]
+      : field[0] === "COMBO"
+        ? (field[1] as { options?: unknown } | undefined)?.options
+        : null;
+  return Array.isArray(list) ? list.filter((name): name is string => typeof name === "string" && name.trim() !== "") : [];
+}
+
 // ComfyUI's checkpoint list, from GET /object_info/CheckpointLoaderSimple.
 export function readComfyCheckpoints(json: unknown): string[] {
-  const node = (json as { CheckpointLoaderSimple?: { input?: { required?: { ckpt_name?: unknown } } } } | null)
-    ?.CheckpointLoaderSimple;
-  const field = node?.input?.required?.ckpt_name;
-  const list = Array.isArray(field) && Array.isArray(field[0]) ? field[0] : [];
-  return list.filter((name): name is string => typeof name === "string" && name.trim() !== "");
+  return readComfyFiles(json, "CheckpointLoaderSimple", "ckpt_name");
+}
+
+// Z-Image Turbo is three files, not a checkpoint: the diffusion model
+// (UNETLoader), the Qwen 3 4B text encoder (CLIPLoader) and the FLUX VAE
+// (VAELoader). Each slot takes ComfyUI's own tutorial download when this
+// ComfyUI has it, then any other precision or rename of the same model
+// (fp8, nvfp4, int8, a fine-tune), first in ComfyUI's list. Matched on the
+// file name alone, so a copy kept in a subfolder counts. "" = not found.
+export type ZImageFiles = { unet: string; clip: string; vae: string };
+
+export const Z_IMAGE_SLOTS = {
+  unet: {
+    node: "UNETLoader",
+    input: "unet_name",
+    tutorial: ["z_image_turbo_bf16.safetensors"],
+    family: /z[-_ ]?image[-_ ]?turbo/i,
+    what: "the Z-Image Turbo model (models/diffusion_models)",
+  },
+  clip: {
+    node: "CLIPLoader",
+    input: "clip_name",
+    tutorial: ["qwen_3_4b.safetensors"],
+    family: /qwen[-_ ]?3[-_ ]?4b/i,
+    what: "the Qwen 3 4B text encoder (models/text_encoders)",
+  },
+  vae: {
+    node: "VAELoader",
+    input: "vae_name",
+    tutorial: ["ae.safetensors", "ae.sft"],
+    family: /flux.*vae|vae.*flux|z[-_ ]?image.*vae/i,
+    what: "the FLUX VAE, ae.safetensors (models/vae)",
+  },
+} as const;
+
+export type ZImageSlot = keyof typeof Z_IMAGE_SLOTS;
+
+const fileName = (name: string) => name.split(/[\\/]/).pop() ?? name;
+
+export function pickZImageFiles(lists: Record<ZImageSlot, readonly string[]>): ZImageFiles {
+  const pick = (slot: ZImageSlot) => {
+    const { tutorial, family } = Z_IMAGE_SLOTS[slot];
+    const names = lists[slot];
+    return (
+      names.find((name) => (tutorial as readonly string[]).includes(fileName(name).toLowerCase())) ??
+      names.find((name) => family.test(fileName(name))) ??
+      ""
+    );
+  };
+  return { unet: pick("unet"), clip: pick("clip"), vae: pick("vae") };
+}
+
+// What a ComfyUI still needs before it can paint with Z-Image Turbo, worded
+// for the admin; empty once every file is there.
+export function zImageMissing(files: ZImageFiles): string[] {
+  return (Object.keys(Z_IMAGE_SLOTS) as ZImageSlot[]).filter((slot) => !files[slot]).map((slot) => Z_IMAGE_SLOTS[slot].what);
 }
 
 // Kokoro-FastAPI's voice list, from GET /v1/audio/voices.

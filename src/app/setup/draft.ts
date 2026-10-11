@@ -34,7 +34,7 @@ export type Draft = {
   key: { provider: KeyProviderId; baseUrl: string; apiKey: string; model: string; list: ModelList };
   agent: { id: HarnessChoiceId | ""; model: string; utilityModel: string };
   pictures: "comfyui" | "openai" | "agent" | "none" | "";
-  comfy: { url: string; checkpoint: string };
+  comfy: { url: string; checkpoint: string; preset: "checkpoint" | "z_turbo" };
   picturesKey: string;
   narration: "kokoro" | "openai" | "off" | "";
   kokoro: { url: string; voice: string };
@@ -102,7 +102,7 @@ export function draftFromConfig(config: MaskedConfig, firstRun: boolean): Draft 
             : firstRun
               ? ""
               : "none",
-    comfy: { url: images.comfyUrl, checkpoint: images.comfyCheckpoint },
+    comfy: { url: images.comfyUrl, checkpoint: images.comfyCheckpoint, preset: images.comfyWorkflowPreset },
     picturesKey: "",
     narration:
       config.speech.ttsProvider === "kokoro" && config.speech.kokoroUrl
@@ -121,6 +121,17 @@ export function draftFromConfig(config: MaskedConfig, firstRun: boolean): Draft 
 
 // The scan's findings fill whatever the saved settings left open. Nothing
 // the admin already chose (or saved) is overwritten.
+// The ComfyUI the scan found, filling what the draft left open: its first
+// checkpoint, or Z-Image Turbo when that is all it has the files for.
+export function comfyFromScan(current: Draft["comfy"], found: NonNullable<ScanResult["comfyui"]>): Draft["comfy"] {
+  const checkpoint = current.checkpoint || found.checkpoints[0] || "";
+  return {
+    url: found.url,
+    checkpoint,
+    preset: found.zImage && (current.preset === "z_turbo" || !checkpoint) ? "z_turbo" : "checkpoint",
+  };
+}
+
 export function draftWithScan(draft: Draft, scan: ScanResult, storyIsOpenAi: boolean): Draft {
   const next = { ...draft };
   const firstText = scan.text.find((found) => !found.needsKey && found.models.length) ?? scan.text[0];
@@ -150,7 +161,7 @@ export function draftWithScan(draft: Draft, scan: ScanResult, storyIsOpenAi: boo
     next.pictures = scan.comfyui ? "comfyui" : storyIsOpenAi ? "openai" : "none";
   }
   if (next.pictures === "comfyui" && !next.comfy.url && scan.comfyui) {
-    next.comfy = { url: scan.comfyui.url, checkpoint: next.comfy.checkpoint || scan.comfyui.checkpoints[0] || "" };
+    next.comfy = comfyFromScan(next.comfy, scan.comfyui);
   }
   if (!next.narration) {
     // Narration reads every passage, so a paid voice is never switched on

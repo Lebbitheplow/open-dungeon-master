@@ -52,6 +52,13 @@ function fakeComfy(overrides = {}) {
     "/system_stats": () => json({ system: {} }),
     "/object_info/CheckpointLoaderSimple": () =>
       json({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [["model.safetensors"]] } } } }),
+    // ComfyUI's tutorial downloads for Z-Image Turbo, not the files the
+    // reference workflow names; the VAE kept in a subfolder.
+    "/object_info/UNETLoader": () =>
+      json({ UNETLoader: { input: { required: { unet_name: [["flux1-schnell.safetensors", "z_image_turbo_bf16.safetensors"]] } } } }),
+    "/object_info/CLIPLoader": () =>
+      json({ CLIPLoader: { input: { required: { clip_name: ["COMBO", { options: ["clip_l.safetensors", "qwen_3_4b.safetensors"] }] } } } }),
+    "/object_info/VAELoader": () => json({ VAELoader: { input: { required: { vae_name: [["flux/ae.safetensors"]] } } } }),
     "/prompt": () => json({ prompt_id: "p1" }),
     "/history/p1": () =>
       json({ p1: { status: { completed: true }, outputs: { 7: { images: [{ filename: "out.png", subfolder: "", type: "output" }] } } } }),
@@ -95,10 +102,20 @@ function assertNothingLeaked(seen, before) {
 }
 
 const zReference = JSON.parse(fs.readFileSync(new URL("./fixtures/comfy-z-turbo.json", import.meta.url), "utf8"));
+const REFERENCE_FILES = { unet: "z_image_turbo_nvfp4.safetensors", clip: "qwen_3_4b_fp8_mixed.safetensors", vae: "ae.safetensors" };
+const TUTORIAL_FILES = { unet: "z_image_turbo_bf16.safetensors", clip: "qwen_3_4b.safetensors", vae: "flux/ae.safetensors" };
+// The reference graph with another ComfyUI's files in its three loaders.
+const withFiles = (graph, files) => {
+  const copy = structuredClone(graph);
+  copy["57:28"].inputs.unet_name = files.unet;
+  copy["57:30"].inputs.clip_name = files.clip;
+  copy["57:29"].inputs.vae_name = files.vae;
+  return copy;
+};
 assert.deepEqual(
-  buildZTurboWorkflow({ prompt: "a tavern", width: 1024, height: 1024, seed: 42 }),
+  buildZTurboWorkflow({ prompt: "a tavern", width: 1024, height: 1024, seed: 42, files: REFERENCE_FILES }),
   zReference,
-  "Z-Image Turbo graph must match the supplied API workflow with only four variable inputs",
+  "Z-Image Turbo graph must match the supplied API workflow with only its prompt, size, seed and files varying",
 );
 passed += 1;
 console.log("ok - Z-Image Turbo graph matches the supplied workflow");
@@ -234,19 +251,48 @@ await test(
 );
 
 saveGlobalConfig({ images: { comfyCheckpoint: "keep-this-checkpoint.safetensors", comfyWorkflowPreset: "z_turbo" } });
-await test("Z-Image Turbo submits its graph without checkpoint lookup or table negatives", fakeComfy(), async ({ seen }) => {
+await test("Z-Image Turbo submits its graph with this ComfyUI's files, no checkpoint and no table negatives", fakeComfy(), async ({ seen }) => {
   const image = await generateComfyImage({
     url: COMFY, checkpoint: "", prompt: "a tavern",
     mode: "fast", aspect: "square", seed: 42, negative: "private table boundary",
   });
   assert.match(image.url, /^\/generated\/.*-comfyui-a-tavern\.png$/);
   assert.deepEqual(fs.readFileSync(path.join(dir, "public", image.url)), PNG);
-  assert.ok(!seen.some((call) => call.url.includes("/object_info/")));
+  assert.equal(JSON.stringify(JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body)).includes("CheckpointLoaderSimple"), false);
   const sent = JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body);
-  assert.deepEqual(sent.prompt, zReference);
+  // The files this ComfyUI lists, in the otherwise unchanged reference graph.
+  assert.deepEqual(sent.prompt, withFiles(zReference, TUTORIAL_FILES));
   assert.equal(JSON.stringify(sent).includes("private table boundary"), false);
   assert.equal(getGlobalConfig().images.comfyCheckpoint, "keep-this-checkpoint.safetensors");
 });
+
+await test(
+  "Z-Image Turbo names the file a ComfyUI lacks instead of submitting a graph it will refuse",
+  fakeComfy({ "/object_info/CLIPLoader": () => json({ CLIPLoader: { input: { required: { clip_name: [["clip_l.safetensors"]] } } } }) }),
+  async ({ seen }) => {
+    const before = generatedFiles();
+    await assert.rejects(
+      generateComfyImage({ url: COMFY, prompt: "a tavern", mode: "fast", aspect: "square" }),
+      /missing the Qwen 3 4B text encoder \(models\/text_encoders\) for Z-Image Turbo/,
+    );
+    assert.ok(!seen.some((call) => call.url.endsWith("/prompt")), "a graph went to ComfyUI anyway");
+    assertNothingLeaked(seen, before);
+  },
+);
+
+await test("the status check reports the Z-Image Turbo files it found", fakeComfy(), async () => {
+  assert.deepEqual((await comfyStatus(COMFY)).zImage, TUTORIAL_FILES);
+});
+await test(
+  "a ComfyUI without the Z-Image loaders still reports its checkpoints",
+  fakeComfy({ "/object_info/UNETLoader": () => new Response("no such node", { status: 404 }), "/object_info/VAELoader": () => new Response("<html>") }),
+  async () => {
+    const status = await comfyStatus(COMFY);
+    assert.equal(status.ok, true);
+    assert.deepEqual(status.checkpoints, ["model.safetensors"]);
+    assert.deepEqual(status.zImage, { unet: "", clip: "qwen_3_4b.safetensors", vae: "" });
+  },
+);
 
 saveGlobalConfig({ images: { comfyWorkflowPreset: "checkpoint" } });
 await test("switching back keeps the stored checkpoint and submits the standard graph", fakeComfy(), async ({ seen }) => {

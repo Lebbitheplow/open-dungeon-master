@@ -13,13 +13,17 @@ import {
   modelsUrl,
   normalizeBaseUrl,
   originOf,
+  pickZImageFiles,
   readComfyCheckpoints,
+  readComfyFiles,
   readKokoroVoices,
   readModelList,
   readModelsAnswer,
   recommendedModel,
   scanHosts,
   textPorts,
+  zImageMissing,
+  Z_IMAGE_SLOTS,
   type ListedModel,
   type TextServerKind,
 } from "@/lib/setup/discovery-logic";
@@ -44,7 +48,8 @@ export type FoundTextServer = {
 export type ScanResult = {
   inContainer: boolean;
   text: FoundTextServer[];
-  comfyui: { url: string; checkpoints: string[] } | null;
+  // zImage: all three Z-Image Turbo files are there to pick it.
+  comfyui: { url: string; checkpoints: string[]; zImage: boolean } | null;
   kokoro: { url: string; voices: string[] } | null;
   whisper: { url: string } | null;
 };
@@ -88,8 +93,16 @@ async function findComfy(host: string) {
   if (stats.status !== 200) {
     return null;
   }
-  const info = await getJson(`${url}/object_info/CheckpointLoaderSimple`, SCAN_TIMEOUT_MS);
-  return { url, checkpoints: readComfyCheckpoints(info.body) };
+  const { unet, clip, vae } = Z_IMAGE_SLOTS;
+  const [info, unets, clips, vaes] = await Promise.all(
+    ["CheckpointLoaderSimple", unet.node, clip.node, vae.node].map((node) => getJson(`${url}/object_info/${node}`, SCAN_TIMEOUT_MS)),
+  );
+  const zImage = pickZImageFiles({
+    unet: readComfyFiles(unets.body, unet.node, unet.input),
+    clip: readComfyFiles(clips.body, clip.node, clip.input),
+    vae: readComfyFiles(vaes.body, vae.node, vae.input),
+  });
+  return { url, checkpoints: readComfyCheckpoints(info.body), zImage: zImageMissing(zImage).length === 0 };
 }
 
 async function findKokoro(host: string) {
