@@ -73,7 +73,7 @@ function saveBundleImage(image: BundleImage | null, uploadDir: string, written: 
     return "";
   }
   const filename = `${crypto.randomUUID()}.${image.ext}`;
-  writeFileSync(path.join(uploadDir, filename), image.bytes);
+  writeFileSync(path.join(/*turbopackIgnore: true*/ uploadDir, filename), image.bytes);
   const url = `/uploads/${filename}`;
   written.push(url);
   return url;
@@ -132,7 +132,7 @@ export function importWorkshopBundle(
   // order would commit rows pointing at images that were never written. If
   // the rows then fail, the files none of them ended up naming are removed
   // again rather than left in public/uploads for good.
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  const uploadDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
   mkdirSync(uploadDir, { recursive: true });
   const written: string[] = [];
   try {

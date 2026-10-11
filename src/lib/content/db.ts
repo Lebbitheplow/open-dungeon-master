@@ -16,13 +16,13 @@ declare global {
 }
 
 const contentDbPath =
-  process.env.CONTENT_DB_PATH || path.join(process.cwd(), "data", "content", "open5e.sqlite");
+  process.env.CONTENT_DB_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "content", "open5e.sqlite");
 
 export function getContentDb(): SqliteDatabase | null {
   if (globalThis.__odmContentDb !== undefined) {
     return globalThis.__odmContentDb;
   }
-  if (!existsSync(contentDbPath)) {
+  if (!existsSync(/*turbopackIgnore: true*/ contentDbPath)) {
     globalThis.__odmContentDb = null;
     return null;
   }

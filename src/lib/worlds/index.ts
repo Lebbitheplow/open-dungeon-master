@@ -34,7 +34,7 @@ import { MAX_PACK_ART_BYTES, PACK_ART_DATA_URL, PACK_ART_KEY } from "@/lib/world
 // next start, and Docker.
 const BUNDLED_DIR = path.join(process.cwd(), "src", "lib", "worlds", "bundled");
 export const INSTALLED_DIR =
-  process.env.WORLD_PACKS_DIR || path.join(process.cwd(), "data", "worlds");
+  process.env.WORLD_PACKS_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "worlds");
 
 // One decoded picture, held in memory for the art route. A pack's art is a
 // megabyte or two of WebP, and lifting it out of the manifest at load time is
@@ -180,7 +180,7 @@ export function installedPackPath(id: string): string | null {
     return null;
   }
   const target = path.resolve(INSTALLED_DIR, `${id}.json`);
-  const root = path.resolve(INSTALLED_DIR);
+  const root = path.resolve(/*turbopackIgnore: true*/ INSTALLED_DIR);
   if (path.dirname(target) !== root) {
     return null;
   }

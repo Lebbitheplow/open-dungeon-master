@@ -363,10 +363,10 @@ export async function generateComfyImage(options: {
     throw new Error("ComfyUI returned something that is not a PNG, JPEG or WebP image.");
   }
 
-  const generatedDir = path.join(process.cwd(), "public", "generated");
+  const generatedDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
   const filename = `${Date.now()}-${seed}-comfyui-${promptSlug(options.prompt)}.${kind.ext}`;
-  const saved = path.join(generatedDir, filename);
+  const saved = path.join(/*turbopackIgnore: true*/ generatedDir, filename);
   writeFileSync(saved, bytes);
   // The smaller WebP copies the table draws, written after the fact; the
   // original is what the campaign stores and what a client without them gets.

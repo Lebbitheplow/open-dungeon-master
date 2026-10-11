@@ -40,7 +40,7 @@ function stripForSpeech(text: string): string {
 }
 
 export function narrationAudioPath(campaignId: string, messageId: string): string {
-  return path.join(process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
 }
 
 // Where a take is listened to. The files are served to be kept for a year,
@@ -227,7 +227,7 @@ export function takeNarrationFailure(messageId: string): string | null {
 const narrationLists = new Map<string, { mtimeMs: number; audio: Record<string, string> }>();
 
 export function listNarrationAudio(campaignId: string): Record<string, string> {
-  const directory = path.join(process.cwd(), "public", "generated-audio", campaignId);
+  const directory = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated-audio", campaignId);
   let mtimeMs: number;
   try {
     mtimeMs = statSync(directory).mtimeMs;
@@ -246,7 +246,7 @@ export function listNarrationAudio(campaignId: string): Record<string, string> {
       // One stat per file, paid only when the folder changed.
       let version = 0;
       try {
-        version = statSync(path.join(directory, file)).mtimeMs;
+        version = statSync(path.join(/*turbopackIgnore: true*/ directory, file)).mtimeMs;
       } catch {
         continue;
       }
@@ -282,7 +282,7 @@ export function voicePreviewName(voice: string, backend: Pick<TtsBackend, "v1" |
 }
 
 export function voicePreviewPath(name: string): string {
-  return path.join(process.cwd(), "public", "generated-audio", "previews", name);
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated-audio", "previews", name);
 }
 
 export function voicePreviewCached(voice: string): boolean {

@@ -213,13 +213,13 @@ export async function generateOpenAiImage(
     throw new Error("The OpenAI image API returned something that is not a PNG, JPEG or WebP picture.");
   }
 
-  const generatedDir = path.join(process.cwd(), "public", "generated");
+  const generatedDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
   // Named by what came back, not what was asked for: a proxy may answer
   // a WebP request with PNG, and the file must open under its own name.
   const extension = sniffImage(bytes)?.ext ?? "png";
   const filename = `${Date.now()}-openai-${promptSlug(options.prompt)}.${extension}`;
-  const saved = path.join(generatedDir, filename);
+  const saved = path.join(/*turbopackIgnore: true*/ generatedDir, filename);
   writeFileSync(saved, bytes);
   scheduleImageVariants(saved);
 

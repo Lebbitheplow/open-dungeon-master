@@ -308,7 +308,7 @@ export async function servedSegments(
   if (!name || segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     return segments;
   }
-  const root = path.join(process.cwd(), "public", rootDir);
+  const root = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", rootDir);
   const original = path.resolve(root, ...segments);
   if (!original.startsWith(root + path.sep)) {
     return segments;

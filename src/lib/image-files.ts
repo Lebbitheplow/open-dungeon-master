@@ -141,7 +141,7 @@ function stillNamed(candidates: string[]): Set<string> {
 function removeFile(url: string) {
   const root = url.startsWith("/generated/") ? "generated" : "uploads";
   const name = url.slice(`/${root}/`.length);
-  const dir = path.join(process.cwd(), "public", root);
+  const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", root);
   const names = isUploadedPdfPath(url) ? [name] : [name, ...VARIANT_WIDTHS.map((width) => variantFileName(name, width))];
   for (const file of names) {
     try {

@@ -156,7 +156,7 @@ async function start(options: HarnessStartOptions) {
             }
             if ((!bytes || bytes.length < 64) && typeof item.savedPath === "string" && item.savedPath) {
               try {
-                bytes = readFileSync(item.savedPath);
+                bytes = readFileSync(/*turbopackIgnore: true*/ item.savedPath);
               } catch {
                 bytes = null;
               }

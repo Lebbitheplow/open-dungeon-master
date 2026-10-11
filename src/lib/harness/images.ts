@@ -208,10 +208,10 @@ export async function generateHarnessImage(options: {
   if (!accepted) {
     throw new Error(noPictureMessage(ADAPTERS[config.id].label, said));
   }
-  const generatedDir = path.join(process.cwd(), "public", "generated");
+  const generatedDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
   const filename = `${Date.now()}-harness-${slug(options.prompt)}.${accepted.ext}`;
-  const saved = path.join(generatedDir, filename);
+  const saved = path.join(/*turbopackIgnore: true*/ generatedDir, filename);
   writeFileSync(saved, accepted.bytes);
   scheduleImageVariants(saved);
   const size = imageSize(accepted.bytes);

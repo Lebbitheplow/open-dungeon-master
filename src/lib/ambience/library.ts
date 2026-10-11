@@ -28,8 +28,8 @@ type ManifestEntry = {
   license?: unknown;
 };
 
-const ROOT = path.join(process.cwd(), "public", "ambience");
-const MANIFEST = path.join(ROOT, "manifest.json");
+const ROOT = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "ambience");
+const MANIFEST = path.join(/*turbopackIgnore: true*/ ROOT, "manifest.json");
 
 // Re-read only when the manifest's mtime moves. A fetch run while the server
 // is up therefore shows up without a restart, and the common case (every
@@ -67,7 +67,7 @@ function read(): InstalledTrack[] {
     if (!file || !cueById(cueId) || path.basename(file) !== file) {
       continue;
     }
-    if (!existsSync(path.join(ROOT, file))) {
+    if (!existsSync(path.join(/*turbopackIgnore: true*/ ROOT, file))) {
       continue;
     }
     tracks.push({

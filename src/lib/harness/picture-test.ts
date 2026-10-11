@@ -90,7 +90,7 @@ export async function testHarnessPictures(): Promise<PictureTestResult> {
   let file: { bytes: number; kind: string | null; width: number; height: number } | null = null;
   if (painted) {
     try {
-      const full = path.join(process.cwd(), "public", painted.url.replace(/^\/+/, ""));
+      const full = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", painted.url.replace(/^\/+/, ""));
       const bytes = readFileSync(full);
       const size = imageSize(bytes);
       file = { bytes: statSync(full).size, kind: sniffImage(bytes)?.ext ?? null, width: size.width, height: size.height };

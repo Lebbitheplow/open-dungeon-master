@@ -16,7 +16,7 @@ import { campaignFilePaths, removeUnreferencedFiles } from "@/lib/image-files";
 export function removeCampaignAudio(campaignId: string) {
   // The narration cache, one folder per campaign (src/lib/tts.ts).
   try {
-    fs.rmSync(path.join(process.cwd(), "public", "generated-audio", campaignId), {
+    fs.rmSync(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated-audio", campaignId), {
       recursive: true,
       force: true,
     });

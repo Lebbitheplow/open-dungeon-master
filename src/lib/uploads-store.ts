@@ -30,7 +30,7 @@ function mimeForExtension(extension: string): UploadMimeType {
 }
 
 function uploadsDir(): string {
-  return path.join(process.cwd(), "public", "uploads");
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
 }
 
 // Names the file itself, so every stored path has the shape
@@ -43,7 +43,7 @@ export async function writeUploadedImage(
   const filename = `${id}.${uploadExtension(type)}`;
   const dir = uploadsDir();
   await mkdir(dir, { recursive: true });
-  const saved = path.join(dir, filename);
+  const saved = path.join(/*turbopackIgnore: true*/ dir, filename);
   await writeFile(saved, bytes);
   // Smaller WebP copies beside it, written after this returns and never
   // fatal (src/lib/image-variants.ts); covers the upload route and the
@@ -58,7 +58,7 @@ export async function writeUploadedPdf(bytes: Uint8Array): Promise<{ id: string;
   const filename = `${id}.pdf`;
   const dir = uploadsDir();
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), bytes);
+  await writeFile(path.join(/*turbopackIgnore: true*/ dir, filename), bytes);
   return { id, url: `/uploads/${filename}` };
 }
 
@@ -67,7 +67,7 @@ export async function readUploadedPdf(url: unknown): Promise<Buffer | null> {
     return null;
   }
   try {
-    return await readFile(path.join(uploadsDir(), url.slice("/uploads/".length)));
+    return await readFile(path.join(/*turbopackIgnore: true*/ uploadsDir(), url.slice("/uploads/".length)));
   } catch {
     return null;
   }
@@ -86,7 +86,7 @@ export async function readUploadedImage(
   const filename = url.slice("/uploads/".length);
   const extension = filename.split(".").pop() ?? "";
   try {
-    const bytes = await readFile(path.join(uploadsDir(), filename));
+    const bytes = await readFile(path.join(/*turbopackIgnore: true*/ uploadsDir(), filename));
     return { bytes, type: mimeForExtension(extension === "jpeg" ? "jpg" : extension) };
   } catch {
     return null;

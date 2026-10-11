@@ -67,11 +67,11 @@ function managedPaths(manifest: { includes?: unknown }): string[] {
 }
 
 export function backupDir(): string {
-  return path.resolve(serverEnv("ODM_BACKUP_DIR") || path.join(os.homedir(), "odm-backups"));
+  return path.resolve(/*turbopackIgnore: true*/ serverEnv("ODM_BACKUP_DIR") || path.join(os.homedir(), "odm-backups"));
 }
 
 function dbPath(): string {
-  return path.resolve(serverEnv("SQLITE_DB_PATH") || path.join(root(), "data", "local-roleplay.sqlite"));
+  return path.resolve(/*turbopackIgnore: true*/ serverEnv("SQLITE_DB_PATH") || path.join(/*turbopackIgnore: true*/ root(), "data", "local-roleplay.sqlite"));
 }
 
 // Archives are the size of the whole state tree and can pass 2 GiB, where
@@ -95,7 +95,7 @@ function envValue(file: string, key: string): string {
 function encryptionKey(): string {
   const fromEnv = serverEnv("DB_ENCRYPTION_KEY").trim();
   if (fromEnv) return fromEnv;
-  const dockerKey = path.join(root(), "data", ".db-key");
+  const dockerKey = path.join(/*turbopackIgnore: true*/ root(), "data", ".db-key");
   return fs.existsSync(dockerKey) ? fs.readFileSync(dockerKey, "utf8").trim() : "";
 }
 
@@ -157,9 +157,9 @@ export async function createBackup(): Promise<BackupEntry> {
     }
 
     for (const rel of INCLUDES) {
-      const src = path.join(appRoot, rel);
+      const src = path.join(/*turbopackIgnore: true*/ appRoot, rel);
       if (!fs.existsSync(src)) continue;
-      const dst = path.join(stage, rel);
+      const dst = path.join(/*turbopackIgnore: true*/ stage, rel);
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       // WAL/SHM sidecars belong to the live database, not to the VACUUM INTO
       // snapshot that replaces it; shipping them makes the archive corrupt.
@@ -175,7 +175,7 @@ export async function createBackup(): Promise<BackupEntry> {
       format: 1,
       createdAt: createdAt.toISOString(),
       database: relativeDb.replaceAll(path.sep, "/"),
-      includes: INCLUDES.filter((rel) => fs.existsSync(path.join(appRoot, rel))),
+      includes: INCLUDES.filter((rel) => fs.existsSync(path.join(/*turbopackIgnore: true*/ appRoot, rel))),
       source: "app",
     };
     fs.writeFileSync(path.join(stage, "odm-backup.json"), `${JSON.stringify(manifest, null, 2)}\n`, {
@@ -262,9 +262,9 @@ export async function verifyBackup(name: string): Promise<{ proof: RestoreProof;
     // Prefer the key the archive carries (it matches the archive's data);
     // fall back to this server's key for archives made without one.
     const key =
-      envValue(path.join(stage, ".env.server"), "DB_ENCRYPTION_KEY") ||
-      (fs.existsSync(path.join(stage, "data", ".db-key"))
-        ? fs.readFileSync(path.join(stage, "data", ".db-key"), "utf8").trim()
+      envValue(path.join(/*turbopackIgnore: true*/ stage, ".env.server"), "DB_ENCRYPTION_KEY") ||
+      (fs.existsSync(path.join(/*turbopackIgnore: true*/ stage, "data", ".db-key"))
+        ? fs.readFileSync(path.join(/*turbopackIgnore: true*/ stage, "data", ".db-key"), "utf8").trim()
         : "") ||
       encryptionKey();
 
@@ -314,7 +314,7 @@ export async function restoreBackup(name: string): Promise<{ proof: RestoreProof
     for (const rel of managedPaths(manifest)) {
       const src = path.join(stage, rel);
       if (!fs.existsSync(src)) continue;
-      const dst = path.join(root(), rel);
+      const dst = path.join(/*turbopackIgnore: true*/ root(), rel);
       fs.rmSync(dst, { recursive: true, force: true });
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       fs.cpSync(src, dst, { recursive: true });

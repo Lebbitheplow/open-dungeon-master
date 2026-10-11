@@ -20,7 +20,7 @@ function loadEnvServer() {
     return cachedEnvServer;
   }
 
-  const envPath = path.join(process.cwd(), ".env.server");
+  const envPath = path.join(/*turbopackIgnore: true*/ process.cwd(), ".env.server");
   if (!existsSync(envPath)) {
     cachedEnvServer = {};
     return cachedEnvServer;

@@ -12,7 +12,7 @@ import { registerTableHazardReader } from "@/lib/srd/table-hazards";
 import { tableHazardsFrom } from "@/lib/db/table-hazards";
 
 const dbPath =
-  process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
+  process.env.SQLITE_DB_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "local-roleplay.sqlite");
 
 // A table's workshop feats, for the rules that read a feat wherever a sheet
 // is (src/lib/srd/feat-effects.ts tableFeat). The boot resync reads them off

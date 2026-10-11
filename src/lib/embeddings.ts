@@ -74,7 +74,7 @@ export function checkEmbeddingDim(modelId: string, size: number): void {
 
 async function loadEmbedder(): Promise<Embedder> {
   const { pipeline, env } = await import("@huggingface/transformers");
-  env.cacheDir = path.join(process.cwd(), "models", "embeddings");
+  env.cacheDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "models", "embeddings");
   const pipe = (await pipeline("feature-extraction", MODEL_ID, { dtype: DTYPE })) as unknown as Embedder;
   const probe = await pipe(["probe"], { pooling: "mean", normalize: true });
   checkEmbeddingDim(MODEL_ID, probe.tolist()[0].length);
