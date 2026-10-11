@@ -452,11 +452,15 @@ await test("a manual roll is the caller's own, and its total is the server's", a
   const digital = await table("digital_only");
   const { world, who, params } = digital;
   world.signIn(who.player);
+  // Somebody else's sheet is refused outright, never rolled on the caller's
+  // own (a player fielding several names the one on screen; PR #191).
+  const foreign = await call(route.rolls, "POST", { expression: "1d20", characterId: who.otherSheet.id }, params);
+  assert.equal(foreign.status, 404);
   world.dice(13);
   const aimed = await call(
     route.rolls,
     "POST",
-    { expression: "1d20", total: 20, characterId: who.otherSheet.id, kind: "saving_throw", dc: 5, success: true },
+    { expression: "1d20", total: 20, characterId: who.sheet.id, kind: "saving_throw", dc: 5, success: true },
     params,
   );
   assert.equal(aimed.status, 201);
@@ -471,7 +475,7 @@ await test("a manual roll is the caller's own, and its total is the server's", a
   const check = await call(
     route.rolls,
     "POST",
-    { kind: "skill_check", skill: "stealth", characterId: who.otherSheet.id },
+    { kind: "skill_check", skill: "stealth", characterId: who.sheet.id },
     params,
   );
   assert.equal(check.json.roll.characterId, who.sheet.id);
