@@ -24,7 +24,8 @@ import {
   type HandTargetDetail,
 } from "@/lib/battlemap/hand-play";
 import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
-import { turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
+import { playingSheet, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
+
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 import { replayAnimation } from "@/lib/motion/replay";
 import { markTourSeen, tourSeen } from "@/lib/tours/logic";
@@ -88,10 +89,15 @@ function HandInner({
   trackAmmo,
   leaving,
   edges,
+  activeSheetId,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
   meUserId: string;
+  // The character this player is running when they field several
+  // (src/lib/battlemap/hand-table.ts playingSheet).
+  activeSheetId?: string;
+
   encounter: PublicEncounter;
   floor: Floor;
   inputBlocked: boolean;
@@ -108,10 +114,8 @@ function HandInner({
   // keyed by enemy id; absent off the map.
   edges?: Record<string, TargetEdge>;
 }) {
-  const sheet = useMemo(
-    () => sheets.find((entry) => entry.userId === meUserId && !entry.isCompanion) ?? null,
-    [sheets, meUserId],
-  );
+  const sheet = useMemo(() => playingSheet(sheets, meUserId, activeSheetId), [sheets, meUserId, activeSheetId]);
+
   const floorTurn = floor.mode === "initiative" ? floor.userIds.includes(meUserId) : !inputBlocked;
   const floorName = floor.mode === "initiative" ? floor.currentName : undefined;
 

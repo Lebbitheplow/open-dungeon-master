@@ -22,7 +22,8 @@
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { getActiveEncounter, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
-import { chebyshev } from "@/lib/battlemap/types";
+import { tilesApart } from "@/lib/dm/board-reach";
+
 import type { Advantage } from "@/lib/dice";
 import { activeAuthored, hasCondition } from "@/lib/srd/authored-effects";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
@@ -51,7 +52,8 @@ export function withinFeet(encounterId: string, fromRef: string, toRef: string, 
   if (!from || !to) {
     return false;
   }
-  return chebyshev(from.x, from.y, to.x, to.y) <= Math.floor(feet / 5);
+  return tilesApart(from, to) <= Math.floor(feet / 5);
+
 }
 
 function sourcedMark(enemy: EncounterEnemy, name: string): { condition: string; source: string | undefined } | null {

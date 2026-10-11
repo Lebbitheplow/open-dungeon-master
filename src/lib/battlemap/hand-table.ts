@@ -90,3 +90,18 @@ export function turnSignature(turn: HandTurn): string {
     turn.table?.acting?.name ?? "",
   ].join("|");
 }
+
+// The character a player is running: the one their seat marks active when
+// they field several (Play as, src/app/api/campaigns/[campaignId]/sheet/
+// switch/route.ts), else the first they made. The Hand, the board's turn
+// HUD and the session read this, so a switch moves all of them at once;
+// the first owned sheet alone left the Hand on the old character (issue
+// #185). A companion is never the one played.
+export function playingSheet<T extends { id: string; userId: string; isCompanion?: boolean }>(
+  sheets: T[],
+  meUserId: string,
+  activeSheetId: string | undefined,
+): T | null {
+  const own = sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion);
+  return own.find((sheet) => sheet.id === activeSheetId) ?? own[0] ?? null;
+}

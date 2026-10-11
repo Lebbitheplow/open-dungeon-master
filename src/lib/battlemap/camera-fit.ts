@@ -4,7 +4,10 @@
 // view is the plain one. Where the frame is a fixed window (the fight stage,
 // the enlarged tabletop, the shared screen, the side panel or a phone on a
 // short screen) a tall board would run out of the bottom, so the resting
-// view shrinks it until all of it shows and centres it.
+// view shrinks it until all of it shows and centres it; a wide board in a
+// window taller than it sits in the middle of the window rather than along
+// its top edge with the table bare beneath (issue 189, the enlarged board).
+
 
 export type FitCamera = { zoom: number; x: number; y: number };
 
@@ -19,8 +22,9 @@ export function fitCamera(frame: { width: number; height: number }, board: { wid
   const tall = (frame.width * board.height) / board.width;
   // A pixel of slack: a frame sized by its own board rounds either way.
   if (tall <= frame.height + 1) {
-    return { zoom: 1, x: 0, y: 0 };
+    return { zoom: 1, x: 0, y: Math.max(0, (frame.height - tall) / 2) };
   }
+
   const zoom = frame.height / tall;
   return { zoom, x: (frame.width - frame.width * zoom) / 2, y: 0 };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { playingSheet } from "@/lib/battlemap/hand-table";
 import { BookMarked, BookOpen, Flag, Heart, History, ListChecks, ScrollText, ShoppingBag, Users } from "lucide-react";
 import { FactionsPanel } from "@/app/campaigns/[campaignId]/FactionsPanel";
 import { MarketPanel } from "@/app/campaigns/[campaignId]/MarketPanel";
@@ -357,7 +358,8 @@ export function SidePanelRouter({
               campaignId={campaignId}
               steersStory={steersStory}
               isDm={adjudicates}
-              mySheet={sheets.find((sheet) => sheet.id === activeSheetId) ?? sheets.find((sheet) => sheet.userId === meUserId && !sheet.isCompanion) ?? null}
+              mySheet={playingSheet(sheets, meUserId, activeSheetId)}
+
               refreshKey={shopsVersion}
               coins={coins}
             />
@@ -444,14 +446,22 @@ export function SidePanelRouter({
       {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
       <BattleMapPanel
         campaignId={campaignId}
+        meUserId={meUserId}
+        activeSheetId={activeSheetId}
+        multiCharacter={campaign?.gameSettings?.multiCharacter ?? "off"}
         view={battleMap}
+
         intents={battleMap.intents}
         genre={campaign?.gameSettings?.genre ?? null}
         turnBudget={
-          encounter?.turn && sheets.some((sheet) => sheet.id === encounter.turn?.ownerId && sheet.userId === meUserId)
+          // The character being played, as the Hand reads it
+          // (src/lib/battlemap/hand-table.ts): any owned sheet's turn put
+          // the other character's budget on the board after Play as.
+          encounter?.turn && encounter.turn.ownerId === playingSheet(sheets, meUserId, activeSheetId)?.id
             ? { action: !encounter.turn.actionUsed, bonus: !encounter.turn.bonusUsed, reaction: !encounter.turn.reactionUsed }
             : null
         }
+
         canDirect={adjudicates}
         canFocusPing={steersStory}
         ping={mapPing ?? null}

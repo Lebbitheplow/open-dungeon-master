@@ -4,7 +4,9 @@
 // and no arrow. Database-free like attack-logic.ts;
 // scripts/test-attack-rules.mjs walks the branches.
 
+import { footprintDistance, footprintSide, type Footprint } from "@/lib/battlemap/footprint";
 import { featTwinOf } from "@/lib/srd/feat-effects";
+
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { matchResource } from "@/lib/srd/class-resources";
@@ -225,21 +227,38 @@ export function isUndeadOrFiend(enemy: {
 
 // ---- positions ----
 
-const adjacent = (a: XY, b: XY) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1;
+// A square with the size of what stands on it: a Large creature's space is
+// two by two from its anchor, and "within 5 feet" is measured to its nearest
+// square (src/lib/battlemap/footprint.ts). Absent, one square.
+export type Spot = XY & { footprint?: Footprint };
+
+const adjacent = (a: Spot, b: Spot) => footprintDistance(a, a.footprint ?? 1, b, b.footprint ?? 1) <= 1;
 
 // The Flanking variant (DMG): an ally who can act stands on the opposite
-// side of the target from the attacker, both within 5 feet of it. On a grid
-// of one-square creatures "opposite" is the mirrored square.
-export function isFlanking(attacker: XY, target: XY, allies: XY[]): boolean {
-  if (!adjacent(attacker, target) || (attacker.x === target.x && attacker.y === target.y)) {
+// side of the target from the attacker, both within 5 feet of it. For a
+// one-square target that is the mirrored square; for a larger one, the
+// opposite edge or the opposite corner of its space.
+export function isFlanking(attacker: Spot, target: Spot, allies: Spot[]): boolean {
+  if (!adjacent(attacker, target)) {
     return false;
   }
-  const mirrored = { x: 2 * target.x - attacker.x, y: 2 * target.y - attacker.y };
-  return allies.some((ally) => ally.x === mirrored.x && ally.y === mirrored.y);
+  const footprint = target.footprint ?? 1;
+  const mine = footprintSide(attacker, attacker.footprint ?? 1, target, footprint);
+  if (mine.x === 0 && mine.y === 0) {
+    return false;
+  }
+  return allies.some((ally) => {
+    if (!adjacent(ally, target)) {
+      return false;
+    }
+    const theirs = footprintSide(ally, ally.footprint ?? 1, target, footprint);
+    return theirs.x === -mine.x && theirs.y === -mine.y;
+  });
 }
 
 // A ranged attack is made at disadvantage with a hostile creature within 5
 // feet that can see the attacker and is not incapacitated.
-export function hostileWithinFiveFeet(attacker: XY, hostiles: XY[]): boolean {
+export function hostileWithinFiveFeet(attacker: Spot, hostiles: Spot[]): boolean {
   return hostiles.some((hostile) => adjacent(attacker, hostile));
 }
+

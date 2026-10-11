@@ -43,19 +43,76 @@ export function useBoardCamera(
   // the board moves between the side panel and the enlarged view (a new
   // element each time).
   const [frameEl, setFrameEl] = useState<HTMLDivElement | null>(null);
-  const attachFrame = useCallback((element: HTMLDivElement | null) => {
-    frameRef.current = element;
-    setFrameEl(element);
-  }, []);
   const [camera, setCamera] = useState<Camera>(IDENTITY);
+  // Whether a transition should ease (a pull, a follow) or snap (a wheel).
+  const [eased, setEased] = useState(false);
+  // True while the view rests on the fit, so a window that changes shape
+  // re-fits instead of leaving the board half out of it. Any move the
+  // viewer makes clears it; "Fit the board" sets it again.
+  const fittedRef = useRef(true);
+  // The frame's last known width, for scaling the pan on a resize (below).
+  const frameWidth = useRef(0);
+  // Every frame the board is drawn in right now, newest last, and the view
+  // each one was last drawn with. The enlarged tabletop is a second frame
+  // beside the panel's: it opens on its own fit (a wide board in the middle
+  // of the window, not the panel's close-up with its top cut off, issue
+  // #189), and closing it hands the panel's frame back with the view it had.
+  // The view is recorded as it is drawn, never at a handover: under Strict
+  // Mode a frame attaches, detaches and attaches again before anything is
+  // drawn in it, and recording then would hand the new frame the old view.
+  const frames = useRef<HTMLDivElement[]>([]);
+  const remembered = useRef(new WeakMap<HTMLDivElement, Camera>());
   // A mirror for effects that need the camera without depending on it.
   const cameraRef = useRef(camera);
   useEffect(() => {
     cameraRef.current = camera;
+    if (frameRef.current) {
+      remembered.current.set(frameRef.current, camera);
+    }
   }, [camera]);
-  // Whether a transition should ease (a pull, a follow) or snap (a wheel).
-  const [eased, setEased] = useState(false);
+
+  const take = useCallback((element: HTMLDivElement | null) => {
+    frameRef.current = element;
+
+
+    setFrameEl(element);
+    // The observer below reads a fresh frame's width for itself.
+    frameWidth.current = 0;
+    if (!element) {
+      return;
+    }
+    const view = remembered.current.get(element);
+    if (view) {
+      fittedRef.current = false;
+      setEased(false);
+      setCamera(view);
+    } else {
+      // A frame never seen rests on its fit; the observer lands it.
+      fittedRef.current = true;
+    }
+  }, []);
+  // A ref callback with a cleanup (React 19): the cleanup knows which frame
+  // left, so a closing tabletop gives the panel's frame back.
+  const attachFrame = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) {
+        return;
+      }
+      frames.current.push(element);
+      take(element);
+      return () => {
+        frames.current = frames.current.filter((frame) => frame !== element);
+        if (frameRef.current === element) {
+
+          take(frames.current.at(-1) ?? null);
+        }
+      };
+    },
+    [take],
+  );
+
   const [locked, setLocked] = useState(false);
+
   // The escape hatch opens ten seconds into a lock.
   const [canRelease, setCanRelease] = useState(false);
   useEffect(() => {
@@ -70,12 +127,8 @@ export function useBoardCamera(
   // A drag of the view ends in a click on whatever lies under the pointer;
   // that click is the drag's, not a tap on a tile.
   const pannedRef = useRef(false);
-  // True while the view rests on the fit, so a window that changes shape
-  // re-fits instead of leaving the board half out of it. Any move the
-  // viewer makes clears it; "Fit the board" sets it again.
-  const fittedRef = useRef(true);
-
   // Frame size in CSS pixels, and the scale from SVG units to pixels.
+
   const metrics = useCallback(() => {
     const frame = frameRef.current;
     if (!frame) {
@@ -233,8 +286,8 @@ export function useBoardCamera(
   // when it shows again. A view still resting on the fit is simply fitted
   // again, which is also how a board first lands whole in a fixed window
   // (issue 87).
-  const frameWidth = useRef(0);
   useEffect(() => {
+
     if (!frameEl) {
       return;
     }
