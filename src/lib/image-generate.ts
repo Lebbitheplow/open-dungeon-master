@@ -1,3 +1,4 @@
+import { getGlobalConfig } from "@/lib/app-config";
 import { generateComfyImage } from "@/lib/comfyui";
 import { generateOpenAiImage, openAiImagesConfigured, openAiImagesPaid } from "@/lib/openai-images";
 import { generateHarnessImage, harnessImagesReady } from "@/lib/harness/images";
@@ -72,7 +73,14 @@ export async function generateStoryImage(
     kind: "image",
     role: request.mode,
     backend: settings.imageBackend === "openai" || settings.imageBackend === "harness" ? settings.imageBackend : "comfyui",
-    model: settings.imageBackend === "comfyui" ? settings.comfyCheckpoint : "",
+    // Z-Image Turbo is the server's choice for every ComfyUI picture
+    // (src/lib/comfyui.ts), whatever checkpoint the campaign kept.
+    model:
+      settings.imageBackend !== "comfyui"
+        ? ""
+        : getGlobalConfig().images.comfyWorkflowPreset === "z_turbo"
+          ? "Z-Image Turbo"
+          : settings.comfyCheckpoint,
     paid,
     units: 1,
     durationMs: Date.now() - started,

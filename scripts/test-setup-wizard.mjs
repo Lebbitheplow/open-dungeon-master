@@ -21,6 +21,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const logic = await import("../src/lib/setup/discovery-logic.ts");
 const patches = await import("../src/lib/setup/patches.ts");
 const { listModels } = await import("../src/lib/setup/discovery.ts");
+const { comfyFromScan } = await import("../src/app/setup/draft.ts");
 const { getSetupState, markSetup, setupNudgeWanted } = await import("../src/lib/setup/state.ts");
 
 let passed = 0;
@@ -136,6 +137,56 @@ try {
     assert.deepEqual(logic.readKokoroVoices(null), []);
   });
 
+  await test("Z-Image Turbo's three files are found under whatever names and folders ComfyUI lists", () => {
+    // Both ways ComfyUI declares a file list: [names, options] and its newer
+    // ["COMBO", { options }].
+    assert.deepEqual(logic.readComfyFiles({ UNETLoader: { input: { required: { unet_name: [["a.safetensors"], {}] } } } }, "UNETLoader", "unet_name"), ["a.safetensors"]);
+    assert.deepEqual(
+      logic.readComfyFiles({ CLIPLoader: { input: { required: { clip_name: ["COMBO", { options: ["b.safetensors", 4] }] } } } }, "CLIPLoader", "clip_name"),
+      ["b.safetensors"],
+    );
+    assert.deepEqual(logic.readComfyFiles({ VAELoader: {} }, "VAELoader", "vae_name"), []);
+    assert.deepEqual(logic.readComfyFiles(null, "VAELoader", "vae_name"), []);
+
+    // ComfyUI's tutorial downloads win over another precision of the same model.
+    assert.deepEqual(
+      logic.pickZImageFiles({
+        unet: ["flux1-schnell.safetensors", "z_image_turbo_nvfp4.safetensors", "z_image_turbo_bf16.safetensors"],
+        clip: ["clip_l.safetensors", "qwen_3_4b_fp8_mixed.safetensors", "qwen_3_4b.safetensors"],
+        vae: ["qwen_image_vae.safetensors", "ae.safetensors"],
+      }),
+      { unet: "z_image_turbo_bf16.safetensors", clip: "qwen_3_4b.safetensors", vae: "ae.safetensors" },
+    );
+    // Any precision or rename otherwise, in a subfolder too, Windows separators included.
+    assert.deepEqual(
+      logic.pickZImageFiles({
+        unet: ["qwen_image_2.1_int8_convrot.safetensors", "zimage\\z_image_turbo_nvfp4.safetensors"],
+        clip: ["text/Qwen3-4B-fp8.safetensors"],
+        vae: ["Wan2_1_VAE_bf16.safetensors", "flux/ae.safetensors"],
+      }),
+      { unet: "zimage\\z_image_turbo_nvfp4.safetensors", clip: "text/Qwen3-4B-fp8.safetensors", vae: "flux/ae.safetensors" },
+    );
+    const partial = logic.pickZImageFiles({ unet: ["zImageTurbo_v10.safetensors"], clip: ["qwen3vl_8b_int8_convrot.safetensors"], vae: [] });
+    assert.deepEqual(partial, { unet: "zImageTurbo_v10.safetensors", clip: "", vae: "" });
+    assert.deepEqual(logic.zImageMissing(partial), [
+      "the Qwen 3 4B text encoder (models/text_encoders)",
+      "the FLUX VAE, ae.safetensors (models/vae)",
+    ]);
+  });
+
+  await test("the scan offers Z-Image Turbo only where no checkpoint is known and its files are there", () => {
+    const blank = { url: "", checkpoint: "", preset: "checkpoint" };
+    assert.deepEqual(comfyFromScan(blank, { url: "http://127.0.0.1:8188", checkpoints: [], zImage: true }), {
+      url: "http://127.0.0.1:8188", checkpoint: "", preset: "z_turbo",
+    });
+    assert.deepEqual(comfyFromScan(blank, { url: "http://127.0.0.1:8188", checkpoints: ["sdxl.safetensors"], zImage: true }), {
+      url: "http://127.0.0.1:8188", checkpoint: "sdxl.safetensors", preset: "checkpoint",
+    });
+    assert.equal(comfyFromScan({ ...blank, preset: "z_turbo" }, { url: "u", checkpoints: ["sdxl.safetensors"], zImage: true }).preset, "z_turbo");
+    // A saved Z choice on a ComfyUI without its files would paint nothing.
+    assert.equal(comfyFromScan({ ...blank, preset: "z_turbo" }, { url: "u", checkpoints: [], zImage: false }).preset, "checkpoint");
+  });
+
   await test("each storyteller answer writes the admin panel's own fields", () => {
     assert.deepEqual(patches.storyPatch({ kind: "none" }), { patch: { text: { provider: "none" } } });
     assert.deepEqual(
@@ -177,7 +228,10 @@ try {
 
   await test("pictures, narration, name and joining patches", () => {
     assert.deepEqual(patches.picturesPatch({ kind: "comfyui", url: "http://127.0.0.1:8188/", checkpoint: "a.safetensors" }), {
-      images: { defaultBackend: "comfyui", comfyUrl: "http://127.0.0.1:8188", comfyCheckpoint: "a.safetensors" },
+      images: { defaultBackend: "comfyui", comfyUrl: "http://127.0.0.1:8188", comfyCheckpoint: "a.safetensors", comfyWorkflowPreset: "checkpoint" },
+    });
+    assert.deepEqual(patches.picturesPatch({ kind: "comfyui", url: "http://127.0.0.1:8188", checkpoint: "a.safetensors", preset: "z_turbo" }).images, {
+      defaultBackend: "comfyui", comfyUrl: "http://127.0.0.1:8188", comfyCheckpoint: "a.safetensors", comfyWorkflowPreset: "z_turbo",
     });
     assert.deepEqual(patches.picturesPatch({ kind: "openai", apiKey: "" }), { images: { defaultBackend: "openai", openaiBaseUrl: "" } });
     assert.equal(patches.picturesPatch({ kind: "openai", apiKey: "sk-i" }).images.openaiApiKey, "sk-i");

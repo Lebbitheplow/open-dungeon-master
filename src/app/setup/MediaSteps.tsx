@@ -7,7 +7,7 @@ import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
 import { BuiltinSpeechCard } from "@/app/admin/BuiltinSpeechCard";
 import { HarnessPictureTest } from "@/app/admin/HarnessPictureTest";
-import type { Draft } from "@/app/setup/draft";
+import { comfyFromScan, type Draft } from "@/app/setup/draft";
 import { ChoiceCard, ChoiceCards, Lamp, host, type ScanResult } from "@/app/setup/SetupParts";
 
 // Pictures and Voice: optional, so each offers "none" as a real answer, and
@@ -17,6 +17,8 @@ import { ChoiceCard, ChoiceCards, Lamp, host, type ScanResult } from "@/app/setu
 type Update = (change: (draft: Draft) => Draft) => void;
 
 const MEDIA_GUIDE = "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/media-setup.md";
+// Z-Image Turbo in the model picker; no checkpoint file is named like this.
+const Z_TURBO = "preset:z_turbo";
 
 function KeyField({ label, value, onChange, saved, hint }: { label: string; value: string; onChange: (value: string) => void; saved: boolean; hint: string }) {
   return (
@@ -65,7 +67,7 @@ export function PicturesStep({
     update((current) => ({
       ...current,
       pictures,
-      comfy: pictures === "comfyui" && !current.comfy.url && comfy ? { url: comfy.url, checkpoint: current.comfy.checkpoint || comfy.checkpoints[0] || "" } : current.comfy,
+      comfy: pictures === "comfyui" && !current.comfy.url && comfy ? comfyFromScan(current.comfy, comfy) : current.comfy,
     }));
   const setComfy = (patch: Partial<Draft["comfy"]>) => update((current) => ({ ...current, comfy: { ...current.comfy, ...patch } }));
 
@@ -126,13 +128,20 @@ export function PicturesStep({
               <span className="mb-1 block text-xs font-medium text-stone-400">ComfyUI address</span>
               <input className={ui.input} value={draft.comfy.url} onChange={(event) => setComfy({ url: event.target.value })} placeholder="http://127.0.0.1:8188" />
             </label>
-            {comfy?.checkpoints.length ? (
+            {comfy?.checkpoints.length || comfy?.zImage || (comfy && draft.comfy.preset === "z_turbo") ? (
               <div role="group" aria-label="Model file" className="block">
                 <span className="mb-1 block text-xs font-medium text-stone-400">Model file (checkpoint)</span>
                 <Select
-                  value={draft.comfy.checkpoint}
-                  onChange={(checkpoint) => setComfy({ checkpoint })}
-                  options={comfy.checkpoints.map((name) => ({ value: name, label: name }))}
+                  value={draft.comfy.preset === "z_turbo" ? Z_TURBO : draft.comfy.checkpoint}
+                  onChange={(value) => setComfy(value === Z_TURBO ? { preset: "z_turbo" } : { checkpoint: value, preset: "checkpoint" })}
+                  options={[
+                    ...comfy.checkpoints.map((name) => ({ value: name, label: name })),
+                    // Offered once its three files are found (src/lib/setup/discovery.ts),
+                    // and kept in the list while it is the saved choice.
+                    ...(comfy.zImage || draft.comfy.preset === "z_turbo"
+                      ? [{ value: Z_TURBO, label: "Z-Image Turbo", hint: comfy.zImage ? "Diffusion model, Qwen 3 4B encoder and VAE found" : "Its files were not all found on this ComfyUI" }]
+                      : []),
+                  ]}
                   label="Model file (checkpoint)"
                   className="w-full"
                 />
@@ -140,11 +149,15 @@ export function PicturesStep({
             ) : (
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-stone-400">Model file (checkpoint)</span>
-                <input className={ui.input} value={draft.comfy.checkpoint} onChange={(event) => setComfy({ checkpoint: event.target.value })} placeholder="Any SDXL checkpoint in ComfyUI/models/checkpoints" />
+                <input className={ui.input} value={draft.comfy.checkpoint} onChange={(event) => setComfy({ checkpoint: event.target.value, preset: "checkpoint" })} placeholder="Any SDXL checkpoint in ComfyUI/models/checkpoints" />
               </label>
             )}
           </div>
-          <p className="text-[11px] text-stone-500">Any checkpoint works; the campaign&apos;s genre supplies the art style.</p>
+          <p className="text-[11px] text-stone-500">
+            {draft.comfy.preset === "z_turbo"
+              ? "Z-Image Turbo runs without a negative prompt, so a table's boundary cannot keep anything out of its pictures."
+              : "Any checkpoint works; the campaign's genre supplies the art style."}
+          </p>
         </div>
       ) : draft.pictures === "agent" ? (
         <div key="agent" className="reveal-height">

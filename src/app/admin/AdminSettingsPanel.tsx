@@ -132,6 +132,7 @@ export function AdminSettingsPanel() {
             defaultBackend: config.images.defaultBackend,
             comfyUrl: config.images.comfyUrl,
             comfyCheckpoint: config.images.comfyCheckpoint,
+            comfyWorkflowPreset: config.images.comfyWorkflowPreset,
             fluxWorkerUrl: config.images.fluxWorkerUrl,
             openaiBaseUrl: config.images.openaiBaseUrl,
             openaiModel: config.images.openaiModel,
