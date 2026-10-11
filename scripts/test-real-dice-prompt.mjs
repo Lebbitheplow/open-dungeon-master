@@ -140,9 +140,12 @@ test("human ownership and selection distinguish siblings from AI companions", ()
   state.members[0].activeCharacterId = "a2";
   state.sheets = [makeSheet({ id: "a1", name: "A1" }), makeSheet({ id: "a2", name: "A2" }), makeSheet({ id: "bot", userId: "bot-user", name: "Guide", isCompanion: true })];
   const block = buildGameStateBlock(state);
-  assert.ok(block.includes("Player A: controls A1 [a1], A2 [a2]; selected A2 [a2]."));
-  assert.ok(block.includes("A human-owned sheet is never an AI companion"));
-  assert.ok(block.includes("exact initiative character"));
+  assert.ok(block.includes("- Player A: controls A1 [a1], A2 [a2]; selected A2 [a2]."));
+  assert.ok(block.includes("never an AI companion of yours"));
+  assert.ok(block.includes("in a fight the one whose turn it is"));
   assert.ok(block.includes("AI companion under your control"));
+  // A one-each table carries none of it: the window stays as it was.
+  state.sheets = [makeSheet({ id: "a1", name: "A1" }), makeSheet({ id: "bot", userId: "bot-user", name: "Guide", isCompanion: true })];
+  assert.equal(buildGameStateBlock(state).includes("Players running several characters"), false);
 });
 console.log(`test-real-dice-prompt: ${passed} tests passed.`);

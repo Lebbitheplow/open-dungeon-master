@@ -1,5 +1,6 @@
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getSheetById, getSheetForUser } from "@/lib/db/sheets";
+import { ownSheetFor } from "@/lib/character-seat";
 import { afflictionLines } from "@/lib/dm/between-lines";
 import { liveAfflictions } from "@/lib/dm/afflictions";
 import { lifestyleLine } from "@/lib/dm/lifestyle";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // progress, and the diseases, madness and poisons the engine holds
 // (src/lib/dm/between-lines.ts, the same lines the narrator reads).
 //
-// A player asks for their own character and the DM for anyone's. What has
+// A player asks for any of their own characters and the DM for anyone's. What has
 // not shown itself yet (a disease still incubating, a poison waiting for
 // midnight: an affliction with no condition on the sheet) is the DM's alone,
 // since the character does not know it is there (SRD 5.1, Diseases).
@@ -24,8 +25,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ camp
   }
   const dm = capsFor(context).role === "dm";
   const asked = new URL(request.url).searchParams.get("characterId")?.slice(0, 80) ?? "";
-  const own = getSheetForUser(campaignId, context.user.id);
-  const sheet = asked && asked !== own?.id ? (dm ? getSheetById(asked) : null) : own;
+  const sheet = asked
+    ? dm
+      ? getSheetById(asked)
+      : ownSheetFor(campaignId, context.user.id, asked)
+    : getSheetForUser(campaignId, context.user.id);
   if (!sheet || sheet.campaignId !== campaignId) {
     return Response.json({ lines: [] });
   }

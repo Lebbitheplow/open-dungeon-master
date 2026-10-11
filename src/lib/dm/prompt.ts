@@ -879,13 +879,27 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
-  sections.push(`Human control and selection:\n${state.members.map((member) => {
-    const owned = sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion);
-    const selected = owned.find((sheet) => sheet.id === member.activeCharacterId) ?? owned[0];
-    return owned.length ? `${member.username}: controls ${owned.map((sheet) => `${sheet.name} [${sheet.id}]`).join(", ")}; selected ${selected?.name} [${selected?.id}].` : "";
-  }).filter(Boolean).join("\n")}`);
+  // Only when somebody at the table fields several characters: the usual
+  // one-each table pays no window for it (issue 120). Each line names the
+  // player, the characters they control and the one they have selected.
+  const severalOwned = members
+    .map((member) => ({
+      member,
+      owned: sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion),
+    }))
+    .filter((entry) => entry.owned.length > 1);
+  if (severalOwned.length) {
+    sections.push(
+      `Players running several characters (player: the characters they control; the one they have selected). Every one of these is a player character and never an AI companion of yours, selected or not. The acting character is the one a player message names (its characterId), and in a fight the one whose turn it is; never speak or act for a player's other characters, and never turn one into a follower. A sheet's bound pet stays a pet.\n${severalOwned
+        .map(({ member, owned }) => {
+          const selected = owned.find((sheet) => sheet.id === member.activeCharacterId) ?? owned[0];
+          return `- ${member.username}: controls ${owned.map((sheet) => `${sheet.name} [${sheet.id}]`).join(", ")}; selected ${selected.name} [${selected.id}].`;
+        })
+        .join("\n")}`,
+    );
+  }
   sections.push(
-    `Human players may control multiple independent characters. A human-owned sheet is never an AI companion, including when its player has selected another sheet. Respect each player message\'s characterId as the acting character; do not turn an unselected sibling into a follower or act for them. In combat, ask the human for the exact initiative character. Bound pets on a sheet remain separate from independently controlled party sheets.\nParty:\n${sheets
+    `Party:\n${sheets
       .map((sheet) => {
         const base = describeSheet(
           sheet,

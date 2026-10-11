@@ -1,6 +1,6 @@
 import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
 import { isMemberMuted } from "@/lib/db/moderation";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { actingSheetFor } from "@/lib/character-seat";
 import { insertTranscriptLines, listTranscriptSince } from "@/lib/db/voice-transcript";
 import { describeInstant } from "@/lib/dm/calendar";
 import { publishEphemeral } from "@/lib/events";
@@ -50,7 +50,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if ("error" in transcribed) {
     return Response.json({ error: transcribed.error }, { status: 502 });
   }
-  const sheet = getSheetForUser(campaignId, context.user.id);
+  // On their character's turn the speech is that character's, whichever
+  // sheet the player has open (src/lib/character-seat.ts).
+  const sheet = actingSheetFor(campaignId, context.user.id);
   const speaker = sheet?.name ?? context.user.username;
   const clockLabel = describeInstant(context.campaign.clock.calendar, context.campaign.clock.instant);
   const lines = labelLines(transcribed.text, speaker, startedAt, clockLabel);

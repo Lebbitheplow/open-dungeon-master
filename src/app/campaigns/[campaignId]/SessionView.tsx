@@ -1,8 +1,6 @@
 "use client";
 
-import { ownedCharacters, selectedCharacter, initiativeCharacter } from "@/lib/player-characters";
-import { CharacterSwitcher } from "@/app/campaigns/[campaignId]/CharacterSwitcher";
-
+import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { levelForXp } from "@/lib/srd";
@@ -314,8 +312,12 @@ export function SessionView({
   // Everything below runs on every dm_delta while the DM narrates, so the
   // values handed to the memoized panels are stabilized with useMemo and
   // useCallback. All hooks must stay above the null guard further down.
+  // Three "my character"s for a player fielding several
+  // (src/lib/player-characters.ts): the selected one (Play as, in the party
+  // panel), the one whose turn it is, and the one that acts: the turn's
+  // character while it lasts, else the selected one. The Hand, the HUD and
+  // the composer follow actingSheet; OOC stays with the selected one.
   const mySheet = useMemo(() => selectedCharacter(sheets, me?.id ?? "", state.activeSheetId), [sheets, me?.id, state.activeSheetId]);
-  const owned = useMemo(() => ownedCharacters(sheets, me?.id ?? ""), [sheets, me?.id]);
   const turnSheet = initiativeCharacter(sheets, me?.id ?? "", state.encounter?.acting?.id);
   const actingSheet = turnSheet ?? mySheet;
   // The server's notice opens the level-up dialog once, when the experience
@@ -686,9 +688,6 @@ export function SessionView({
 
   return (
     <main className="cine-stage flex h-dvh flex-col">
-      {!isDm && campaign.gameSettings.multiCharacter !== "off" && owned.length > 1 ? (
-        <CharacterSwitcher campaignId={campaign.id} sheets={owned} selectedId={mySheet?.id ?? ""} initiativeName={turnSheet?.name} onError={setError} />
-      ) : null}
       {/* The cinematic frame ("ODM World Concepts" 3b): the scene's painting
           behind everything, the party down the left, the turn order along
           the top, the last roll as a pill. CinematicParts.tsx. */}

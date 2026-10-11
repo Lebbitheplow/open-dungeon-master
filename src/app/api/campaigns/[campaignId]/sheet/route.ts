@@ -6,10 +6,10 @@ import {
   steersStory,
   type MemberContext,
 } from "@/lib/campaign-api";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { seatAddedSheet } from "@/lib/character-seat";
 import { JOIN_NOTE_PREFIX } from "@/lib/campaign-types";
 import { admitSheet, refusal } from "@/lib/characters/admit";
-import { allocateSeq, setMemberReady, setMemberActiveCharacter, listMembers } from "@/lib/db/campaigns";
+import { allocateSeq, listMembers, setMemberReady } from "@/lib/db/campaigns";
 import {
   createCharacter,
   getCharacterForUser,
@@ -39,7 +39,7 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { buildLevelUp } from "@/lib/srd/level-up";
 import { freeCantripCount } from "@/lib/srd/free-cantrips";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 // A character arriving after the adventure started gets a table note so the
 // DM writes them into the story on its next turn.
@@ -138,11 +138,10 @@ export async function POST(
     if (typeof raw.libraryCharacterId === "string") return Response.json({ error: "Players choose characters from their own libraries." }, { status: 403 });
   }
 
-  const selected = getSheetForUser(campaignId, targetUserId);
-  const encounter = getActiveEncounter(campaignId);
-  if (selected && context.campaign.gameSettings.multiCharacter === "one_active" && encounter && encounter.kind !== "scene" && raw?.libraryCharacterId !== selected.libraryCharacterId) {
-    return Response.json({ error: "Wait until the fight ends to change your fielded character." }, { status: 409 });
-  }
+  // A character added here takes the player's seat, except at a table that
+  // fields one at a time while a fight is on: then it waits on the bench
+  // (src/lib/character-seat.ts seatAddedSheet), and the player switches to it
+  // once the fight ends.
 
   // Path 1: pick an existing library character (adapted to campaign level).
   const fromLibrary = fromLibrarySchema.safeParse(raw);
@@ -160,9 +159,8 @@ export async function POST(
     if ("error" in result) {
       return Response.json(result, { status: 400 });
     }
-    setMemberActiveCharacter(campaignId, context.user.id, result.id);
+    seatAddedSheet(context.campaign, context.user.id, result.id);
     publishPersisted(campaignId, "sheet_updated", { sheet: result });
-    publishEphemeral(campaignId, "roster_updated", { userId: context.user.id, activeSheetId: result.id });
     if (!reused) announceMidGameJoin(context, result);
     return Response.json({ sheet: result }, { status: 201 });
   }
@@ -208,9 +206,8 @@ export async function POST(
   // The finished render lands on this campaign clone too (portrait.ts
   // mirrors to sheets whose portrait is still empty).
   queueLibraryPortrait(libraryCharacter);
-  setMemberActiveCharacter(campaignId, targetUserId, sheet.id);
+  seatAddedSheet(context.campaign, targetUserId, sheet.id);
   publishPersisted(campaignId, "sheet_updated", { sheet });
-  publishEphemeral(campaignId, "roster_updated", { userId: targetUserId, activeSheetId: sheet.id });
   announceMidGameJoin(context, sheet);
 
   return Response.json(

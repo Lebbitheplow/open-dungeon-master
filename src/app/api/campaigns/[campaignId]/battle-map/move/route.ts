@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { initiativeCharacter } from "@/lib/player-characters";
+import { actingSheetFor } from "@/lib/character-seat";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getFloor } from "@/lib/db/campaigns";
 import { getActiveBoard, listEnemies } from "@/lib/db/encounters";
-import { getSheetForUser, listSheets, patchSheet } from "@/lib/db/sheets";
+import { patchSheet } from "@/lib/db/sheets";
 import {
   getBattleMapForEncounter,
   getTokenByRef,
@@ -91,8 +91,9 @@ export async function POST(
     return Response.json({ error: "No active battle map." }, { status: 404 });
   }
   const campaign = getCampaignById(campaignId);
-  const currentActor = encounter.kind !== "scene" && encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
-  const sheet = initiativeCharacter(listSheets(campaignId), user.id, currentActor?.kind === "pc" ? currentActor.characterId : undefined) ?? getSheetForUser(campaignId, user.id);
+  // The mover is the character acting now, whichever sheet the player has
+  // open (src/lib/character-seat.ts).
+  const sheet = actingSheetFor(campaignId, user.id, undefined, encounter);
   const token = sheet ? getTokenByRef(map.id, sheet.id) : null;
   if (!sheet || !token) {
     return Response.json({ error: "You have no token on this map." }, { status: 400 });

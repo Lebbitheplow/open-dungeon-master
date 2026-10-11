@@ -40,10 +40,11 @@ const joinRequest = body => new Request("http://localhost/api/sheet", {
 });
 const params = { params: Promise.resolve({ campaignId: world.campaignId }) };
 const anotherLibrary = characters.createCharacter(first.userId, 1, { ...input, name: "Benched" });
-assert.equal((await route.POST(joinRequest({ libraryCharacterId: anotherLibrary.id }), params)).status, 409);
-assert.equal(sheets.getSheetForUser(world.campaignId, first.userId).id, original.id);
-assert.equal(sheets.listSheetsForUser(world.campaignId, first.userId).length, 2);
+const benched = await route.POST(joinRequest({ libraryCharacterId: anotherLibrary.id }), params);
+assert.equal(benched.status, 201, JSON.stringify(await benched.clone().json()));
+assert.equal(sheets.getSheetForUser(world.campaignId, first.userId).id, original.id, "the fielded character keeps the seat while the fight runs");
+assert.equal(sheets.listSheetsForUser(world.campaignId, first.userId).length, 3);
 assert.equal((await route.POST(joinRequest({ libraryCharacterId: library.id }), params)).status, 201);
 assert.equal(sheets.getSheetForUser(world.campaignId, first.userId).id, original.id);
-console.log("ok: one-active joins cannot replace the fielded character during combat; the current sheet can rejoin");
+console.log("ok: at a one-active table a character added mid-fight waits on the bench; the fielded one can rejoin");
 world.close();

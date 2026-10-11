@@ -86,7 +86,7 @@ assert.equal(endOwnTurn(world.campaignId, a1.userId), true);
 assert.equal(endOwnTurn(world.campaignId, a2.userId), true);
 for (const hero of [b1, b2]) {
   const current = world.encounter(); assert.equal(current.order[current.turnIndex].characterId, hero.id);
-  campaigns.setFloor(world.campaignId, { mode: "initiative", userIds: [hero.userId], currentName: hero.name });
+  campaigns.setFloor(world.campaignId, { mode: "initiative", encounterId: fight.id, userIds: [hero.userId], currentName: hero.name, round: 1 });
   const map = buildPlayerMapView(world.campaignId, hero.userId);
   assert.ok(map); assert.equal(map.tokens.find(token => token.id === map.myTokenId).refId, hero.id);
   assert.equal(new Set(map.tokens.filter(token => token.kind === "pc").map(token => token.refId)).size, 5);

@@ -114,14 +114,17 @@ function RequestCompanionButton({ campaignId }: { campaignId: string }) {
 // A table below the library character's level saves gear, gold and notes
 // only; the library keeps its own level (issue #36), and the button says so
 // for a moment instead of a bare "Saved".
-function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
+function SaveToLibraryButton({ campaignId, sheetId }: { campaignId: string; sheetId: string }) {
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [keptLevel, setKeptLevel] = useState<number | null>(null);
   async function save() {
     setState("saving");
     try {
+      // The card's own sheet: a player fielding several has a button on each.
       const response = await fetch(`/api/campaigns/${campaignId}/sheet/sync`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId: sheetId }),
       });
       const data = response.ok ? await response.json().catch(() => ({})) : {};
       const kept = typeof data.keptLevel === "number" ? data.keptLevel : null;
@@ -706,7 +709,7 @@ export function PartyPanel({
                   </>
                 ) : null}
                 {mine && sheet.libraryCharacterId ? (
-                  <SaveToLibraryButton campaignId={sheet.campaignId} />
+                  <SaveToLibraryButton campaignId={sheet.campaignId} sheetId={sheet.id} />
                 ) : null}
               </div>
             ) : null}
