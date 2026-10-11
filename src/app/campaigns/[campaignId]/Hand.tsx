@@ -1,5 +1,7 @@
 "use client";
 
+import { selectedCharacter, initiativeCharacter } from "@/lib/player-characters";
+
 import { ChevronDown, CircleHelp } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, Dispatch, RefObject, SetStateAction } from "react";
@@ -24,7 +26,7 @@ import {
   type HandTargetDetail,
 } from "@/lib/battlemap/hand-play";
 import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
-import { playingSheet, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
+import { turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
 
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 import { replayAnimation } from "@/lib/motion/replay";
@@ -78,6 +80,7 @@ function HandInner({
   campaignId,
   sheets,
   meUserId,
+  activeSheetId,
   encounter,
   floor,
   inputBlocked,
@@ -89,15 +92,11 @@ function HandInner({
   trackAmmo,
   leaving,
   edges,
-  activeSheetId,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
   meUserId: string;
-  // The character this player is running when they field several
-  // (src/lib/battlemap/hand-table.ts playingSheet).
   activeSheetId?: string;
-
   encounter: PublicEncounter;
   floor: Floor;
   inputBlocked: boolean;
@@ -114,8 +113,10 @@ function HandInner({
   // keyed by enemy id; absent off the map.
   edges?: Record<string, TargetEdge>;
 }) {
-  const sheet = useMemo(() => playingSheet(sheets, meUserId, activeSheetId), [sheets, meUserId, activeSheetId]);
-
+  const sheet = useMemo(
+    () => initiativeCharacter(sheets, meUserId, encounter.acting?.id) ?? selectedCharacter(sheets, meUserId, activeSheetId),
+    [sheets, meUserId, activeSheetId, encounter.acting?.id],
+  );
   const floorTurn = floor.mode === "initiative" ? floor.userIds.includes(meUserId) : !inputBlocked;
   const floorName = floor.mode === "initiative" ? floor.currentName : undefined;
 
@@ -285,7 +286,7 @@ function HandInner({
         : await fetch(`/api/campaigns/${campaignId}/actions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: sentence, kind: "do", intent: intentBody(picked, aim, attachedRiders, choices) }),
+            body: JSON.stringify({ content: sentence, kind: "do", characterId: sheet?.id, intent: intentBody(picked, aim, attachedRiders, choices) }),
           });
       if (!response.ok) {
         // The engine's own reason (the actions route asks canAct and the

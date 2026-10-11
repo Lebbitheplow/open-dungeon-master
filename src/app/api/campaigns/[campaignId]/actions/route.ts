@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { resolveActionCharacter } from "@/lib/player-characters";
+import { currentPcId } from "@/lib/character-seat";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import { isErrorResponse, requireVoice } from "@/lib/campaign-api";
 import {
   allocateSeq,
@@ -29,6 +32,7 @@ export const dynamic = "force-dynamic";
 
 const actionSchema = z.object({
   content: z.string().trim().min(1).max(2000),
+  characterId: z.string().trim().min(1).optional(),
   kind: z.enum(["do", "say", "ooc"]).default("do"),
   // The card the Hand played, beside the sentence it wrote. Optional: typed
   // actions and older clients send none, and a malformed one is dropped
@@ -51,8 +55,8 @@ export async function POST(
     return Response.json({ error: "The adventure has not started yet." }, { status: 400 });
   }
 
-  const sheet = getSheetForUser(campaignId, user.id);
-  if (!sheet) {
+  const selected = getSheetForUser(campaignId, user.id);
+  if (!selected) {
     return Response.json({ error: "You need a character to act." }, { status: 400 });
   }
 
@@ -64,7 +68,6 @@ export async function POST(
 
   const { kind } = parsed.data;
   const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
-
   // Floor control: during a spotlight only the named players may act (ooc is
   // always allowed); the floor releases once ALL of them have answered.
   // During a hold nobody may act until the lead releases. This read-modify-
@@ -118,6 +121,26 @@ export async function POST(
       { status: 409 },
     );
   }
+
+  // Which of the player's characters acts (src/lib/player-characters.ts):
+  // the one named, else the one whose turn it is, else the selected one.
+  // The floor has already said whether this player may act at all, so a
+  // refusal here is only ever about the wrong sibling. The initiative
+  // pointer binds only while the fight owns the floor: a table the DM opened
+  // mid-fight is free to act as whoever it has selected.
+  const actor = resolveActionCharacter({
+    sheets: listSheets(campaignId),
+    userId: user.id,
+    selectedId: selected.id,
+    characterId: parsed.data.characterId,
+    initiativeId: kind !== "ooc" && combatOwnsFloor(floor) ? currentPcId(getActiveEncounter(campaignId)) : undefined,
+    reaction: intent?.card === "reaction",
+    multiCharacter: campaign.gameSettings.multiCharacter,
+  });
+  if ("error" in actor) {
+    return Response.json({ error: actor.error, floor }, { status: actor.status });
+  }
+  const { sheet } = actor;
   // A card the engine would refuse is refused here, with the engine's own
   // reason and before anything is posted, so the Hand never marks spent a
   // card that was never going to resolve (src/lib/dm/intent-check.ts).

@@ -549,6 +549,8 @@ export type CharacterSheet = {
   libraryRole?: "pc" | "companion";
   name: string;
   race: string;
+  // Derived presentation name; never replaces the admitted rules ID.
+  raceLabel?: string;
   class: string;
   subclass: string;
   background: string;

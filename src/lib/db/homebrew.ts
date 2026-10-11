@@ -229,6 +229,17 @@ export function tableAuthors(campaignId: string): string[] {
   ];
 }
 
+export function homebrewRaceLabel(userId: string, race: string, campaignId?: string): string | undefined {
+  // Keep the admitted ID for rules and edits; resolve only its display name.
+  if (!race.startsWith("homebrew:")) return undefined;
+  const authors = campaignId ? tableAuthors(campaignId) : [userId];
+  for (const author of authors) {
+    const entry = getHomebrew(author, race.slice("homebrew:".length));
+    if (entry?.kind === "race") return entry.name;
+  }
+  return undefined;
+}
+
 // A sheet's equipment with every homebrew item's mechanics snapshotted onto
 // its line (src/lib/homebrew/gear.ts). Run on every read, so an item edited
 // in the workshop reaches the sheets that carry it.

@@ -1,4 +1,5 @@
 import { getCampaignById, getFloor } from "@/lib/db/campaigns";
+import { actingSheetFor } from "@/lib/character-seat";
 import { getClock } from "@/lib/db/clock";
 import { lightRemaining } from "@/lib/dm/light-timers";
 import { breakDown } from "@/lib/dm/calendar";
@@ -10,7 +11,7 @@ import { speedFor } from "@/lib/srd";
 import { getMounts } from "@/lib/db/mounts";
 import { effectiveMaxHp, effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { budgetApplies } from "@/lib/dm/action-budget";
-import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { listSheets } from "@/lib/db/sheets";
 import { footprintForSize, footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
 import { healthWord } from "@/lib/battlemap/health-words";
 import { orderEntryId } from "@/lib/db/encounters";
@@ -169,7 +170,9 @@ export function buildPlayerMapView(
   if (!map) {
     return null;
   }
-  const sheet = getSheetForUser(campaignId, userId);
+  // "My" token follows the character acting now: on this player's own
+  // character's turn that one, else the selected one (character-seat.ts).
+  const sheet = actingSheetFor(campaignId, userId, undefined, encounter);
   const tokens = listTokens(map.id);
   const tileCount = map.width * map.height;
   const myToken = sheet ? getTokenByRef(map.id, sheet.id) : null;

@@ -91,7 +91,28 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   }
 
   const myMember = members.find((member) => member.userId === me.id);
-  const mySheet = sheets.find((sheet) => sheet.userId === me.id);
+  const mySheet = sheets.find((sheet) => sheet.id === state.activeSheetId && sheet.userId === me.id)
+    ?? sheets.find((sheet) => sheet.userId === me.id && !sheet.isCompanion);
+  const mySheets = sheets.filter((sheet) => sheet.userId === me.id && !sheet.isCompanion);
+  async function selectCharacter(characterId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaign!.id}/sheet/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        setError(result.error || "Could not select the character.");
+      } else refresh();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
   // The DM runs no character, so every "create your character" prompt below
   // has to know that. The seat is on the campaign row; the mode alone is not
   // enough, because an assisted campaign can still be AI-narrated.
@@ -370,6 +391,18 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           ) : null}
 
           <div className="lobby-enter order-4 mb-8" style={enter(3)}>
+            {campaign.gameSettings.multiCharacter !== "off" && mySheets.length > 1 ? (
+              <div className="mb-3 flex flex-wrap justify-center gap-2" aria-label="Your characters">
+                {mySheets.map((sheet) => (
+                  <button key={sheet.id} type="button" disabled={busy}
+                    aria-pressed={mySheet?.id === sheet.id}
+                    onClick={() => void selectCharacter(sheet.id)}
+                    className={cn(ui.btnSecondary, "px-3 py-1 text-xs", mySheet?.id === sheet.id && "border-amber-400 text-amber-200")}>
+                    {sheet.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <LobbyActions
               campaign={campaign}
               myMember={myMember}

@@ -678,6 +678,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           next.questsVersion = state.questsVersion + 1;
           return next;
         case "roster_updated":
+          next.members = state.members.map((member) => member.userId === payload.userId ? { ...member, activeCharacterId: String(payload.activeSheetId ?? "") } : member);
           if (String(payload.userId ?? "") === state.me?.id) {
             next.activeSheetId = String(payload.activeSheetId ?? "");
           }

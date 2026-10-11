@@ -1,5 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
+import { createSheet, getSheetById, getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { admitSheet } from "@/lib/characters/admit";
 import { getCampaignById } from "@/lib/db/campaigns";
@@ -293,6 +293,13 @@ export function instantiateIntoCampaign(
   if (character.role === "companion") {
     return { error: companionRoleRefusal(character) };
   }
+
+  // A retry selects the existing campaign copy; it must not clone the same
+  // library character again or discard progress on the copy already here.
+  const existing = listSheetsForUser(campaignId, userId).find(
+    (sheet) => sheet.libraryCharacterId === characterId && !sheet.isCompanion,
+  );
+  if (existing) return existing;
   const campaign = getCampaignById(campaignId);
   // One character each, unless the table allows several: then the new one
   // waits beside the one in play until its player switches to it.

@@ -172,7 +172,7 @@ export function CharacterSheetDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // A correction names the sheet; a player is answered on their own.
-        body: JSON.stringify(mine ? body : { ...body, characterId: sheet.id }),
+        body: JSON.stringify({ ...body, characterId: sheet.id }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
@@ -223,7 +223,7 @@ export function CharacterSheetDialog({
                   {sheet.name}
                 </Dialog.Title>
                 <p className="text-xs text-stone-400">
-                  Level {sheet.level} {titleCase(sheet.race)}{" "}
+                  Level {sheet.level} {sheet.raceLabel ?? titleCase(sheet.race)}{" "}
                   {(sheet.classes?.length ?? 0) > 1
                     ? (sheet.classes ?? [])
                         .map((entry) => `${titleCase(entry.id)} ${entry.level}`)

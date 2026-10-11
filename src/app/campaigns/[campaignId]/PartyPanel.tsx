@@ -164,14 +164,17 @@ function HandToDmButton({ campaignId, sheet }: { campaignId: string; sheet: Char
 // A table below the library character's level saves gear, gold and notes
 // only; the library keeps its own level (issue #36), and the button says so
 // for a moment instead of a bare "Saved".
-function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
+function SaveToLibraryButton({ campaignId, sheetId }: { campaignId: string; sheetId: string }) {
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   const [keptLevel, setKeptLevel] = useState<number | null>(null);
   async function save() {
     setState("saving");
     try {
+      // The card's own sheet: a player fielding several has a button on each.
       const response = await fetch(`/api/campaigns/${campaignId}/sheet/sync`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId: sheetId }),
       });
       const data = response.ok ? await response.json().catch(() => ({})) : {};
       const kept = typeof data.keptLevel === "number" ? data.keptLevel : null;
@@ -297,6 +300,7 @@ export function PartyPanel({
   const [buildingCompanion, setBuildingCompanion] = useState(false);
   const [tradingWithId, setTradingWithId] = useState("");
   const [switching, setSwitching] = useState("");
+  const [switchError, setSwitchError] = useState("");
   const tradingWith = sheets.find((sheet) => sheet.id === tradingWithId);
   const myOwn = sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion);
   const mySheet = myOwn.find((sheet) => sheet.id === activeSheetId) ?? myOwn[0];
@@ -304,7 +308,14 @@ export function PartyPanel({
   async function playAs(sheetId: string) {
     setSwitching(sheetId);
     try {
-      await fetch(`/api/campaigns/${campaignId}/sheet/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ characterId: sheetId }) });
+      setSwitchError("");
+      const response = await fetch(`/api/campaigns/${campaignId}/sheet/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ characterId: sheetId }) });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        setSwitchError(result.error || "Could not select the character.");
+      }
+    } catch {
+      setSwitchError("Could not reach the server.");
     } finally {
       setSwitching("");
     }
@@ -343,7 +354,7 @@ export function PartyPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         sheet.userId === meUserId
-          ? { portrait: { url } }
+          ? { characterId: sheet.id, portrait: { url } }
           : { sheetId: sheet.id, portrait: { url } },
       ),
     });
@@ -359,6 +370,7 @@ export function PartyPanel({
       {embedded ? null : (
         <SectionHead title="Party" glyph="tab-party" level="h2" aside={sheets.length} />
       )}
+      {switchError ? <p role="alert" className="text-sm text-red-300">{switchError}</p> : null}
       {sheets.map((sheet) => {
         const derived = computeSheetDerived(sheet);
         const mine = sheet.userId === meUserId;
@@ -453,7 +465,7 @@ export function PartyPanel({
                   ) : null}
                 </span>
                 <span className="block text-xs text-stone-400">
-                  {sheet.race.replaceAll("_", " ")}{" "}
+                  {sheet.raceLabel ?? sheet.race.replaceAll("_", " ")}{" "}
                   {(sheet.classes?.length ?? 0) > 1
                     ? (sheet.classes ?? []).map((entry) => `${entry.id} ${entry.level}`).join(" / ")
                     : `${sheet.class} ${sheet.level}`}
@@ -751,7 +763,7 @@ export function PartyPanel({
                   </>
                 ) : null}
                 {mine && sheet.libraryCharacterId ? (
-                  <SaveToLibraryButton campaignId={sheet.campaignId} />
+                  <SaveToLibraryButton campaignId={sheet.campaignId} sheetId={sheet.id} />
                 ) : null}
               </div>
             ) : null}

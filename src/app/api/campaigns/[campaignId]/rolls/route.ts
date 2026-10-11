@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { listSheets } from "@/lib/db/sheets";
+import { actingSheetFor } from "@/lib/character-seat";
 import { insertRoll, listRollsVisibleTo } from "@/lib/db/rolls";
 import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
 import { trayExpressionProblem } from "@/lib/dice/tray-rules";
@@ -15,10 +16,14 @@ export const dynamic = "force-dynamic";
 // Manual rolls: a raw expression, or a named check/save resolved from the
 // caller's own sheet. `secret` rolls behind the screen: a DM seat's secret
 // roll is the DM's alone ("dm"), a player's is theirs and the DM's ("self").
+// `characterId` names which of the caller's characters rolls (the sheet on
+// screen); unnamed, the dice belong to the one whose turn it is, else the
+// selected one (src/lib/character-seat.ts).
 const rollRequestSchema = z.union([
   z.object({
     expression: z.string().trim().min(2).max(60),
     secret: z.boolean().default(false),
+    characterId: z.string().max(80).optional(),
   }),
   z.object({
     kind: z.enum(["skill_check", "saving_throw", "ability_check"]),
@@ -26,6 +31,7 @@ const rollRequestSchema = z.union([
     ability: z.enum(ABILITIES).optional(),
     advantage: z.enum(["none", "advantage", "disadvantage"]).default("none"),
     secret: z.boolean().default(false),
+    characterId: z.string().max(80).optional(),
   }),
 ]);
 
@@ -66,8 +72,11 @@ export async function POST(
     return Response.json({ error: "Invalid roll request." }, { status: 400 });
   }
 
-  const sheet = getSheetForUser(campaignId, context.user.id);
   const input = parsed.data;
+  const sheet = actingSheetFor(campaignId, context.user.id, input.characterId);
+  if (input.characterId && !sheet) {
+    return Response.json({ error: "That is not one of your characters." }, { status: 404 });
+  }
 
   let expression: string;
   let kind: "skill_check" | "saving_throw" | "ability_check" | "custom" = "custom";

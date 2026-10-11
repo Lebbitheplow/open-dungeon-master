@@ -93,7 +93,6 @@ function ComposerInner({
   campaignId: string;
   sheets: CampaignState["sheets"];
   meUserId: string;
-  // The character this player runs when they field several (Play as).
   activeSheetId?: string;
   steersStory: boolean;
 
@@ -204,11 +203,10 @@ function ComposerInner({
         ) : null}
         {!isDm && hand.encounter ? (
           <CombatHand
+            activeSheetId={activeSheetId}
             campaignId={campaignId}
             sheets={sheets}
             meUserId={meUserId}
-            activeSheetId={activeSheetId}
-
             encounter={hand.encounter}
             leaving={hand.leaving}
             floor={floor}

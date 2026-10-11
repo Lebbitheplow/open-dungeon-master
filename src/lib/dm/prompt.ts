@@ -879,6 +879,25 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
+  // Only when somebody at the table fields several characters: the usual
+  // one-each table pays no window for it (issue 120). Each line names the
+  // player, the characters they control and the one they have selected.
+  const severalOwned = members
+    .map((member) => ({
+      member,
+      owned: sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion),
+    }))
+    .filter((entry) => entry.owned.length > 1);
+  if (severalOwned.length) {
+    sections.push(
+      `Players running several characters (player: the characters they control; the one they have selected). Every one of these is a player character and never an AI companion of yours, selected or not. The acting character is the one a player message names (its characterId), and in a fight the one whose turn it is; never speak or act for a player's other characters, and never turn one into a follower. A sheet's bound pet stays a pet.\n${severalOwned
+        .map(({ member, owned }) => {
+          const selected = owned.find((sheet) => sheet.id === member.activeCharacterId) ?? owned[0];
+          return `- ${member.username}: controls ${owned.map((sheet) => `${sheet.name} [${sheet.id}]`).join(", ")}; selected ${selected.name} [${selected.id}].`;
+        })
+        .join("\n")}`,
+    );
+  }
   sections.push(
     `Party:\n${sheets
       .map((sheet) => {

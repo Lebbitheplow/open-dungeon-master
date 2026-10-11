@@ -3,7 +3,8 @@ import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { claimRestSong, inShortRestWindow } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
-import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { listSheets } from "@/lib/db/sheets";
+import { ownSheetFor } from "@/lib/character-seat";
 import { partySongOfRestDie, spendHitDice } from "@/lib/dm/hit-dice";
 
 export const runtime = "nodejs";
@@ -14,22 +15,26 @@ export const dynamic = "force-dynamic";
 // spend another after each roll). The DM's take_rest opens the choice for
 // every character whose player is at the table; it closes when the clock
 // next moves. The server rolls each die and heals; a player never writes the
-// spent count or the hit points themselves.
+// spent count or the hit points themselves. `characterId` names which of the
+// player's own characters spends (the sheet on screen); unnamed, the
+// selected one.
 const spendSchema = z.object({
   dice: z.number().int().min(1).max(20),
+  characterId: z.string().max(80).optional(),
 });
 
 const refuse = (error: string, status = 409) => Response.json({ error }, { status });
 
 // Whether the asking player's character is in the short-rest window now, so
 // the sheet offers "Spend a hit die" only while the engine would take it.
-export async function GET(_request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
   const context = await requireMember(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
-  const sheet = getSheetForUser(campaignId, context.user.id);
+  const asked = new URL(request.url).searchParams.get("characterId")?.slice(0, 80);
+  const sheet = ownSheetFor(campaignId, context.user.id, asked);
   const open = Boolean(sheet && !getActiveEncounter(campaignId) && inShortRestWindow(campaignId, sheet.id));
   return Response.json({ open });
 }
@@ -43,13 +48,16 @@ export async function POST(
   if (isErrorResponse(context)) {
     return context;
   }
-  const sheet = getSheetForUser(campaignId, context.user.id);
-  if (!sheet) {
-    return Response.json({ error: "You have no character in this campaign." }, { status: 404 });
-  }
   const parsed = spendSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Send the number of hit dice to spend, 1 or more." }, { status: 400 });
+  }
+  const sheet = ownSheetFor(campaignId, context.user.id, parsed.data.characterId);
+  if (!sheet) {
+    return Response.json(
+      { error: parsed.data.characterId ? "That is not one of your characters." : "You have no character in this campaign." },
+      { status: 404 },
+    );
   }
   if (getActiveEncounter(campaignId)) {
     return refuse("Hit dice are spent at the end of a short rest, and a fight is going on.");

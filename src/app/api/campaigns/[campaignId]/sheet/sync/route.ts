@@ -1,6 +1,6 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getCharacterForUser, keepsLibraryLevel, syncProgressToLibrary } from "@/lib/db/characters";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { ownSheetFor } from "@/lib/character-seat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,8 +9,10 @@ export const dynamic = "force-dynamic";
 // sheet back to the linked library character on demand. `keptLevel` is the
 // library level a lower table left alone (issue #36), or null when the whole
 // sheet went back; the panel's button tells the player which happened.
+// `characterId` names which of the player's own characters to save (the card
+// whose button was pressed); unnamed, the selected one.
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
@@ -18,9 +20,17 @@ export async function POST(
   if (isErrorResponse(context)) {
     return context;
   }
-  const sheet = getSheetForUser(campaignId, context.user.id);
+  const raw: unknown = await request.json().catch(() => ({}));
+  const named =
+    raw && typeof raw === "object" && typeof (raw as { characterId?: unknown }).characterId === "string"
+      ? (raw as { characterId: string }).characterId.slice(0, 80)
+      : undefined;
+  const sheet = ownSheetFor(campaignId, context.user.id, named);
   if (!sheet) {
-    return Response.json({ error: "You have no character in this campaign." }, { status: 404 });
+    return Response.json(
+      { error: named ? "That is not one of your characters." : "You have no character in this campaign." },
+      { status: 404 },
+    );
   }
   if (!sheet.libraryCharacterId) {
     return Response.json(

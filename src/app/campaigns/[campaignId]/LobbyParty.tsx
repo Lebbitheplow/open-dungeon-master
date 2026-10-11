@@ -118,7 +118,8 @@ export function LobbyParty({
         </div>
         <ul className="stagger space-y-2">
           {members.map((member, index) => {
-            const sheet = sheets.find((entry) => entry.userId === member.userId);
+            const owned = sheets.filter((entry) => entry.userId === member.userId && !entry.isCompanion);
+            const sheet = owned.find((entry) => entry.id === member.activeCharacterId) ?? owned[0];
             return (
               <li
                 key={member.userId}
@@ -162,7 +163,7 @@ export function LobbyParty({
                     </p>
                     <p className="truncate text-sm text-stone-400">
                       {sheet
-                        ? `${sheet.name} · ${sheet.race.replaceAll("_", " ")} ${sheet.class} ${sheet.level}`
+                        ? `${sheet.name} · ${sheet.raceLabel ?? sheet.race.replaceAll("_", " ")} ${sheet.class} ${sheet.level}`
                         : "No character yet"}
                     </p>
                   </div>
@@ -258,6 +259,11 @@ export function LobbyParty({
                     </div>
                   );
                 })()}
+                {owned.length > 1 ? (
+                  <p className="mt-2 text-xs text-stone-400">
+                    Characters: {owned.map((entry) => entry.name).join(", ")}
+                  </p>
+                ) : null}
               </li>
             );
           })}
@@ -311,7 +317,7 @@ export function LobbyParty({
                     <div className="min-w-0">
                       <p className="truncate font-medium text-stone-100">{companion.name}</p>
                       <p className="truncate text-sm text-stone-400">
-                        {companion.race.replaceAll("_", " ")} {companion.class} {companion.level}
+                        {companion.raceLabel ?? companion.race.replaceAll("_", " ")} {companion.class} {companion.level}
                       </p>
                     </div>
                   </div>

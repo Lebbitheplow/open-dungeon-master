@@ -3,6 +3,7 @@ import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { admitSheet, refusal } from "@/lib/characters/admit";
 import { createCharacter } from "@/lib/db/characters";
 import { createSheet, getSheetForUser } from "@/lib/db/sheets";
+import { seatAddedSheet } from "@/lib/character-seat";
 import { publishPersisted } from "@/lib/events";
 import { queueLibraryPortrait } from "@/lib/portrait";
 import { createSheetSchema } from "@/lib/schemas/sheet";
@@ -28,7 +29,10 @@ export async function POST(
   if (!capsFor(context).needsCharacter) {
     return Response.json({ error: "The DM seat plays no character." }, { status: 400 });
   }
-  if (getSheetForUser(campaignId, context.user.id)) {
+  // The same door rule as a built character (POST /sheet): a table that
+  // allows several characters per player lets a ready-made hero in beside
+  // the one they have.
+  if (getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
     return Response.json({ error: "You already have a character in this campaign." }, { status: 409 });
   }
   const parsed = pickSchema.safeParse(await request.json().catch(() => ({})));
@@ -51,6 +55,7 @@ export async function POST(
   const sheet = createSheet(campaignId, context.user.id, context.campaign.startingLevel, admitted.sheet, libraryCharacter.id);
   admitted.settle();
   queueLibraryPortrait(libraryCharacter);
+  seatAddedSheet(context.campaign, context.user.id, sheet.id);
   publishPersisted(campaignId, "sheet_updated", { sheet });
   return Response.json({ sheet }, { status: 201 });
 }

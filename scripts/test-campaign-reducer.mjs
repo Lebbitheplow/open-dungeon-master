@@ -163,4 +163,33 @@ test("E2: the snapshot carries the scene, the active sheet, the handout, the pau
   console.log("ok: issue 193: a sheet update replaces that sheet only; a player's other characters stay");
 }
 
+test("updating one character preserves the same player's other sheets", () => {
+  const first = { id: "first", userId: "player", level: 8, currentHp: 59 };
+  const second = { id: "second", userId: "player", level: 8, currentHp: 67 };
+  const other = { id: "other", userId: "other", level: 8 };
+  const state = { ...loaded, sheets: [first, second, other], activeSheetId: "second" };
+  const updated = { ...first, currentHp: 58 };
+  const next = campaignReducer(state, event("sheet_updated", { sheet: updated }, 11));
+  assert.deepEqual(next.sheets, [updated, second, other]);
+  assert.equal(next.activeSheetId, "second");
+  const deleted = campaignReducer(next, event("sheet_deleted", { sheetId: "first" }, 12));
+  assert.deepEqual(deleted.sheets, [second, other]);
+  const replacement = { ...first, id: "replacement" };
+  const replaced = campaignReducer(deleted, event("sheet_updated", { sheet: replacement }, 13));
+  assert.deepEqual(replaced.sheets.map((sheet) => sheet.id), ["second", "other", "replacement"]);
+});
+
+test("selection events update the named member without changing another player's selection", () => {
+  const state = { ...loaded, me: { id: "player-a" }, activeSheetId: "a1", members: [
+    { userId: "player-a", activeCharacterId: "a1" }, { userId: "player-b", activeCharacterId: "b1" },
+  ] };
+  const other = campaignReducer(state, event("roster_updated", { userId: "player-b", activeSheetId: "b2" }));
+  assert.equal(other.activeSheetId, "a1");
+  assert.equal(other.members[1].activeCharacterId, "b2");
+  const own = campaignReducer(other, event("roster_updated", { userId: "player-a", activeSheetId: "a2" }));
+  assert.equal(own.activeSheetId, "a2");
+  assert.equal(own.members[0].activeCharacterId, "a2");
+  const reconnect = campaignReducer(own, { type: "snapshot", payload: { members: own.members, sheets: own.sheets, activeSheetId: own.activeSheetId, lastSeq: own.lastSeq } });
+  assert.equal(reconnect.activeSheetId, "a2");
+});
 console.log(`\n${passed} campaign reducer tests passed.`);

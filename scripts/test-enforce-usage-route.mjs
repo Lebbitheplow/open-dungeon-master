@@ -97,7 +97,7 @@ await test("a counter the sheet does not have cannot be invented", async () => {
   assert.deepEqual(Object.keys(world.sheet(fighter.id).resources).sort(), ["action_surge", "second_wind"]);
 });
 
-await test("the route reaches the caller's own sheet and no other", async () => {
+await test("the route refuses a foreign sheet and unnamed usage still reaches the caller's sheet", async () => {
   const mine = fighterOf(world);
   const theirs = fighterOf(world);
   const before = stored(world, theirs.id);
@@ -105,9 +105,12 @@ await test("the route reaches the caller's own sheet and no other", async () => 
     characterId: theirs.id,
     resources: { second_wind: 1 },
   });
-  assert.equal(response.status, 200, response.json.error);
-  assert.equal(response.json.sheet.id, mine.id);
+  assert.equal(response.status, 404);
   assert.deepEqual(stored(world, theirs.id), before);
+  assert.equal(world.sheet(mine.id).resources.second_wind.used, 0);
+  const own = await postUsage(world, mine.id, { resources: { second_wind: 1 } });
+  assert.equal(own.status, 200, own.json.error);
+  assert.equal(own.json.sheet.id, mine.id);
   assert.equal(world.sheet(mine.id).resources.second_wind.used, 1);
 });
 

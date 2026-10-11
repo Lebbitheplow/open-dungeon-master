@@ -110,7 +110,7 @@ export function HitDiceSpend({
   useEffect(() => {
     if (!asks) return;
     let live = true;
-    fetch(`/api/campaigns/${sheet.campaignId}/sheet/hit-dice`)
+    fetch(`/api/campaigns/${sheet.campaignId}/sheet/hit-dice?characterId=${encodeURIComponent(sheet.id)}`)
       .then((response): Promise<{ open?: boolean }> | { open?: boolean } =>
         response.ok ? (response.json() as Promise<{ open?: boolean }>) : {},
       )
@@ -123,7 +123,7 @@ export function HitDiceSpend({
     return () => {
       live = false;
     };
-  }, [asks, sheet.campaignId, left, asked]);
+  }, [asks, sheet.campaignId, sheet.id, left, asked]);
 
   async function spend() {
     setBusy(true);
@@ -132,7 +132,9 @@ export function HitDiceSpend({
       const response = await fetch(`/api/campaigns/${sheet.campaignId}/sheet/hit-dice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dice: 1 }),
+        // This sheet's dice, not the selected character's: a player fielding
+        // several may have another one open.
+        body: JSON.stringify({ dice: 1, characterId: sheet.id }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; healed?: number; hp?: string };
       if (!response.ok) {
