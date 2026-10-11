@@ -27,6 +27,8 @@ const settingsSchema = z.object({
   narrationMuted: z.boolean().optional(),
   ambienceVolume: volumeSchema.optional(),
   ambienceMuted: z.boolean().optional(),
+  ambienceBedLevel: volumeSchema.optional(),
+  ambienceMusicLevel: volumeSchema.optional(),
   chimeMuted: z.boolean().optional(),
   diceLook: diceLookSchema.optional(),
 });

@@ -334,17 +334,22 @@ export function HelpDialog({
 
       <Section icon={Music} title="Ambience and music">
         <p>
-          With ambience enabled in the game settings, the table shares a soundtrack: a background
-          bed for where the party is (a tavern, a forest, a crypt), a music layer for what the
-          scene is doing, and one-shot stings for dramatic moments. The DM changes it as the story
-          moves, and combat brings its own sound. Whoever runs the story can also hold a layer on a
-          chosen cue so the auto-picker leaves it alone. Your speaker button and volume slider in
-          the header control it for you alone, and it ducks automatically while narration speaks.
+          With ambience enabled in the game settings, the table shares a soundtrack: a room for
+          where the party is (a tavern, a forest, a crypt), music for what the scene is doing, and
+          one-shot sounds for dramatic moments. The DM changes it as the story moves, and combat
+          brings its own music. A cue may have several takes; the player moves between them so a
+          long fight is not one loop forever, and Next skips ahead.
         </p>
         <p>
-          The sounds themselves are public-domain and Creative Commons recordings the server admin
-          installs; see the licenses page for who made what. If ambience is on but silent, the
-          server simply has no audio installed yet.
+          The speaker in the table header opens the sound panel: what is playing, a level for the
+          room and one for the music (for you alone), and, if you steer the story, the pickers for
+          the room, the music and the sounds, with a hold that keeps the scene from changing a
+          layer you chose. Sound ducks automatically while narration speaks.
+        </p>
+        <p>
+          The library itself ships with the game: public-domain and Creative Commons recordings,
+          and the licenses page says who made what. If ambience is on but silent, the panel says
+          why.
         </p>
       </Section>
 

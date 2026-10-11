@@ -237,7 +237,16 @@ holds the auto-picker respects), combat following, and scene inference. Per
 listener volume and mute, automatic ducking under TTS narration. No audio
 ships with the repository: `npm run fetch-ambience` pulls public-domain and
 CC recordings (Freesound needs an API key) and the licenses page credits every
-installed track.
+installed track. **Sound panel (2026-10):** the header's speaker opens a panel
+naming the room and the music with the take that is on, a level for each per
+listener, Next, and the pickers (every cue painted) with a hold per layer for
+whoever steers the story; cues hold several takes crossfaded at the tail; the
+library is open-licensed recordings resolved from OpenGameArt, Kevin
+MacLeod's catalogue, Commons, Freesound and the Internet Archive, pinned in
+`src/lib/ambience/sources.json` and shipped in the repository, so a table
+has sound out of the box; the fetch is gated against spoken word and the wrong
+length, and attribution licences are honoured by keeping every credit in the
+app.
 
 **Bluetooth and per-die dice sources (2026-08):** on top of the existing
 real-dice mode, each opted-in player picks per die shape whether that die is
@@ -365,8 +374,8 @@ version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
 - One Next.js process owns everything: the SQLite database, the event bus,
   the DM turn queue and the voice rooms. Multi-instance deployment is
   unsupported, and a restart drops live voice calls (players rejoin).
-- The ambience library ships empty until `npm run fetch-ambience` is run on
-  the server; without a `FREESOUND_API_KEY` the best source is skipped.
+- One ambience cue (the dark spell sting) has no recording yet; the open
+  sources had nothing usable for it.
 - Dice-source choices (including Pixels pairings) are per device, and the
   server cannot distinguish a typed physical roll from a typed lie; real-dice
   mode remains a trust feature, as tabletop dice always have been.

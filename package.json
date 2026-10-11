@@ -21,7 +21,9 @@
     "setup": "node scripts/setup.mjs",
     "fetch-model": "node scripts/fetch-embedding-model.mjs",
     "fetch-ambience": "node scripts/fetch-ambience.mjs",
-    "postinstall": "node scripts/copy-dice-assets.mjs"
+    "postinstall": "node scripts/copy-dice-assets.mjs",
+    "generate-ambience": "node scripts/generate-ambience.mjs",
+    "pack-ambience": "node scripts/pack-ambience.mjs"
   },
   "dependencies": {
     "@3d-dice/dice-box-threejs": "^0.0.12",

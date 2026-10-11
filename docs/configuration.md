@@ -285,43 +285,68 @@ browsers require a secure context for web-app installs.
 ## Ambience and music
 
 The sound library is a set of CUES (a tavern, a cave, a battle, a thunderclap)
-rather than a set of files. `src/lib/ambience/catalog.ts` names them; what is
-actually on disk lives in `public/ambience/`, is never committed, and is
-fetched on request:
+rather than a set of files. `src/lib/ambience/catalog.ts` names them; the
+files live in `public/ambience/` and ship with the project: public-domain and
+open-licensed recordings (CC0 and Public Domain Mark, and the attribution
+licences CC BY, CC BY-SA and OpenGameArt's OGA-BY), each credited by title,
+author, source and licence in `src/lib/ambience/sources.json`, in
+`public/ambience/manifest.json` and on the `/licenses` page. Nothing has to be
+installed. A cue may have several takes (`battle.mp3`, `battle-2.mp3`); the
+player moves between them so a long fight is not one loop forever, and Next
+in the sound panel skips ahead.
+
+**The sound pack.** A release may also attach `ambience-pack.zip`, the same
+library (or a newer one) as one file, for an install that wants to update
+without pulling the repository. Install it from the admin panel (Sound
+library: one button, with progress) or on the command line:
 
 ```bash
-npm run fetch-ambience              # fill every cue that has no file yet
-npm run fetch-ambience -- --dry-run # resolve and report, download nothing
-npm run fetch-ambience -- --cue tavern --skip 1   # try the next candidate
-npm run fetch-ambience -- --manifest             # rebuild the manifest only
+npm run fetch-ambience -- --pack              # this release's pack
+npm run fetch-ambience -- --pack https://...  # another pack
 ```
 
-The script reads each archive's own licence metadata and refuses anything it
-cannot positively identify. By default it accepts only public-domain
-dedications (CC0 and the Public Domain Mark). `--allow-attribution` widens
-that to CC BY and CC BY-SA, which you may use but must keep credited;
-NonCommercial and NoDerivatives are refused either way, because whether your
-install is a commercial or derivative use is not a question this script may
-answer for you. Every accepted file's credit is written into
-`public/ambience/manifest.json` and shown on the app's `/licenses` page.
+**Fetch more.** The script that resolved the library can add takes or refill
+a cue from the open sources, trying each in the order that suits the layer:
 
-Three sources are tried, in the order that suits the layer. Room tone and
-one-shot sounds go to Wikimedia Commons first, music to the Internet Archive,
-and both fall through to [Freesound](https://freesound.org/apiv2/apply), which
-is much the best source for this material and the only one needing a key:
+- OpenGameArt.org: game music, loops and effects under CC0, CC BY, CC BY-SA
+  and OGA-BY, the licence stated on every page. Room tone, stings, loops.
+- Kevin MacLeod's catalogue (incompetech.com), CC BY 4.0: every piece tagged
+  by mood and filed under collections such as Tension, Mystery, Wonder,
+  Horror and Celtic and Folk, which is where the music cues come from.
+- Wikimedia Commons: public-domain field recordings and one-shots.
+- Freesound: CC0 recordings, the one source that needs a key
+  (`FREESOUND_API_KEY`, free from freesound.org/apiv2/apply).
+- The Internet Archive: old public-domain recordings.
 
 ```bash
-FREESOUND_API_KEY=... npm run fetch-ambience
+npm run fetch-ambience                       # fill every cue that has no file yet
+npm run fetch-ambience -- --layer music --takes 2   # a second take of every mood
+npm run fetch-ambience -- --dry-run          # resolve and report, download nothing
+npm run fetch-ambience -- --cue tavern --skip 1     # try the next candidate
+npm run fetch-ambience -- --public-domain-only      # CC0 and PD Mark alone
+npm run fetch-ambience -- --manifest         # rebuild the manifest only
 ```
 
-**Curating by hand.** Freely licensed audio is thin in places, and a cue the
-searches cannot fill is simply silent. Two ways to fill one yourself:
+Where a file comes from, in order: your own pins (`data/ambience-sources.json`),
+the lock (`data/ambience-lock.json`, what this install resolved before), the
+shipped pins (`src/lib/ambience/sources.json`, the library the project
+resolved and committed, so every install gets the same tracks), and only
+then a search. The licence is read from each source's own record and never
+guessed; anything the script cannot positively identify is refused, and
+NonCommercial and NoDerivatives are refused under every setting. Every
+candidate also passes a spoken-word gate (the archives are full of correctly
+licensed audiobooks, pronunciation clips and articles read aloud, and Commons
+files them under categories that say so), a relevance gate and a length gate
+per layer (a bed or a music cue has to run at least half a minute, a sting at
+most twenty seconds).
 
-- Drop a file named after the cue into `public/ambience/` (`tavern.mp3`,
-  `cave.ogg`; `.mp3`, `.ogg`, `.opus`, `.m4a` and `.wav` all work) and run
-  `npm run fetch-ambience -- --manifest`. It is never overwritten, and it is
-  credited as locally supplied: the licence is then yours to stand behind.
-- Pin exact URLs in `data/ambience-sources.json`, which wins over any search:
+**Curating by hand.** Drop a file named after the cue into `public/ambience/`
+(`tavern.mp3`, `cave.ogg`, or `tavern-2.mp3` for a second take; `.mp3`,
+`.ogg`, `.opus`, `.m4a` and `.wav` all work) and rescan from the admin panel
+or run `npm run fetch-ambience -- --manifest`. It is never overwritten, it is
+credited as locally supplied, and it stays out of the pack: the licence is
+then yours to stand behind. Or pin exact URLs in `data/ambience-sources.json`,
+which win over everything:
 
   ```json
   {
@@ -335,17 +360,28 @@ searches cannot fill is simply silent. Two ways to fill one yourself:
   }
   ```
 
-`data/ambience-lock.json` records what each cue resolved to, so a second
-machine fetches the same files rather than whatever the search returns that
-day. Both live under `data/` and are not committed.
+**Making the pack.** `npm run pack-ambience` zips every public-domain or
+attribution-licensed track on disk with its credits (`--all` takes every
+file, `--include-generated` the takes below). `npm run fetch-ambience --
+--export-sources` writes the resolved library to the shipped pins file.
+
+**Optional: a music model.** `npm run generate-ambience` makes takes with an
+ACE-Step 1.5 server (`ACESTEP_URL`, `http://127.0.0.1:8002` by default) from
+the prompt each room and music cue carries. It is an experiment, not the
+library: generated takes are credited as such, stay out of the pack unless
+asked for, and are no substitute for a recording somebody made.
 
 **At the table.** Ambience is a per-campaign setting (Setup → Ambience), on by
-default; a table with no files fetched hears nothing and the volume control
-hides itself. "Follows the scene" lets the engine pick a bed from each new
-place and switch to combat music when initiative starts. The AI DM and a human
-DM both reach the same two engine actions, `set_ambience` and `play_sting`;
-volume and mute are per listener, in their own browser, and ambience ducks
-automatically while narration is being read aloud.
+default. "Follows the scene" lets the engine pick a room from each new place
+and switch to combat music when initiative starts. The speaker in the table
+header opens the sound panel: what is playing and which take, a level each
+for the room and the music (per listener, synced to the account like the
+other audio preferences), Next, and, for whoever steers the story (the DM, or
+the party lead at an AI table), the pickers for the room, the music and the
+sounds with a hold per layer. The AI DM, the DM console and the panel all
+reach the same two engine actions, `set_ambience` and `play_sting`. Sound
+ducks automatically while narration is being read aloud, and a cue with no
+file on the server is silence, named as such in the panel.
 
 ## Physical and Bluetooth dice
 

@@ -16,6 +16,7 @@ import { VoiceDock } from "@/app/campaigns/[campaignId]/VoiceDock";
 import { RulebookDialog } from "@/components/rulebook/RulebookDialog";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { AmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
+import { SoundControl, type SoundSteering } from "@/app/campaigns/[campaignId]/SoundPanel";
 
 // One audio group in the header: narration or ambience. On sm+ it is the
 // familiar icon button with an inline slider. Below sm the header has no
@@ -136,6 +137,7 @@ export const SessionHeader = memo(function SessionHeader({
   narration,
   ambienceEnabled,
   ambience,
+  sound,
   onHelp,
   ribbon,
   stage,
@@ -156,9 +158,13 @@ export const SessionHeader = memo(function SessionHeader({
   // withheld, not disabled, when it is off.
   ttsEnabled: boolean;
   narration: NarrationAudio;
-  // Likewise ambience: on in settings and the pack installed on this server.
+  // Likewise ambience: on in settings. The library may still be empty; the
+  // sound panel says so rather than hiding, because "where is the sound"
+  // had no answer when the button simply was not there.
   ambienceEnabled: boolean;
   ambience: AmbienceAudio;
+  // Who may change what plays, and where to send it (SoundPanel.tsx).
+  sound: SoundSteering;
   onHelp: () => void;
   // The initiative ribbon during a fight (CinematicParts.tsx), laid along
   // the middle of the bar from md up; the phone keeps the banner above the
@@ -260,23 +266,7 @@ export const SessionHeader = memo(function SessionHeader({
             glyph="cue-horn"
           />
         ) : null}
-        {ambienceEnabled && ambience.installed ? (
-          <HeaderAudioControl
-            onLabel="Mute ambience and music"
-            offLabel="Unmute ambience and music"
-            enableLabel="Enable ambience"
-            volumeLabel="Ambience and music volume"
-            unlocked={ambience.unlocked}
-            muted={ambience.muted}
-            volume={ambience.volume}
-            onToggle={() => {
-              ambience.unlock();
-              ambience.setMuted(!ambience.muted);
-            }}
-            onVolume={(value) => ambience.setVolume(value)}
-            glyph="tab-ambience"
-          />
-        ) : null}
+        {ambienceEnabled ? <SoundControl ambience={ambience} steering={sound} /> : null}
         {stage ? (
           <Tooltip content={stage.on ? "Show the story here, with the board in its tab" : "Show the board here, with the story beside it"} side="bottom">
             <button
