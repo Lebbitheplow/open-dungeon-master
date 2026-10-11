@@ -29,6 +29,18 @@ function textResult(text: string, isError = false) {
   return { content: [{ type: "text" as const, text }], ...(isError ? { isError: true } : {}) };
 }
 
+// What a connected agent is told once, before it picks a tool. A player
+// agent that read the records instead of the table kept missing the newest
+// narration; each tool's description says the same thing for that tool.
+export function connectionInstructions(grant: ConnectionGrant): string {
+  const base = "Open Dungeon Master: act on this server as the signed-in player, with that player's permissions.";
+  if (!grant.scopes.includes("read")) {
+    return base;
+  }
+  const records = grant.scopes.includes("play") ? "odm_ask, odm_timeline and odm_lore" : "odm_timeline and odm_lore";
+  return `${base} For what is happening at a table now, read odm_get_campaign (turn state and the newest messages) and odm_get_whispers (what the DM told you alone). ${records} answer from records and background, not the live table.`;
+}
+
 function serverFor(grant: Grant): Server {
   const server = new Server(
     { name: "open-dungeon-master", version: VERSION },
@@ -37,7 +49,7 @@ function serverFor(grant: Grant): Server {
       instructions:
         grant.kind === "turn"
           ? "These tools are the Open Dungeon Master rules engine for the turn you are narrating."
-          : "Open Dungeon Master: act on this server as the signed-in player, with that player's permissions.",
+          : connectionInstructions(grant.grant),
     },
   );
   server.setRequestHandler("tools/list", async () => ({

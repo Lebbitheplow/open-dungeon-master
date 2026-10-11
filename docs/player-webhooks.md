@@ -383,7 +383,8 @@ because it must sign outgoing requests. Protect the database and backups;
 use the existing database encryption option where supported.
 
 The agent reads the table with `odm_get_campaign`, `odm_get_sheet` (the
-table's copy of its character, not the library copy) and
+table's copy of its character, not the library copy), `odm_get_whispers`
+(the DM's private whispers, which the transcript never carries) and
 `odm_get_messages`. Every tool result stays under the agent's result cap
 as valid JSON. `odm_get_campaign` puts the safety pause, DM status, floor,
 caps, pending rolls and encounter first, then the newest messages that

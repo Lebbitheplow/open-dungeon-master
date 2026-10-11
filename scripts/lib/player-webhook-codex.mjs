@@ -12,8 +12,9 @@ export function playerCodexEnvironment(directory, inherited = process.env) {
 
 export function playerMcpOverride(url, helper) {
   // The table's own sheet (odm_get_sheet), not the library copy play does
-  // not change, and the transcript pager for anything older than the snapshot.
-  const tools = ["odm_whoami", "odm_get_campaign", "odm_get_sheet", "odm_get_messages", "odm_get_player_webhook_opportunities", "odm_take_action", "odm_answer_roll", "odm_end_turn"];
+  // not change, the transcript pager for anything older than the snapshot, and
+  // the DM's private whispers, which the transcript never carries.
+  const tools = ["odm_whoami", "odm_get_campaign", "odm_get_sheet", "odm_get_messages", "odm_get_whispers", "odm_get_player_webhook_opportunities", "odm_take_action", "odm_answer_roll", "odm_end_turn"];
   return `mcp_servers={odm_player={url=${JSON.stringify(url)},http_headers_helper=${JSON.stringify(helper)},enabled_tools=${JSON.stringify(tools)},default_tools_approval_mode="approve",tool_timeout_sec=120,startup_timeout_sec=30}}`;
 }
 
