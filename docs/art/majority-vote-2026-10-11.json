@@ -1,0 +1,2751 @@
+{
+  "selectedOn": "2026-10-11",
+  "datasetId": "odm-art-b7d711f4c048112a",
+  "reviewCount": 3,
+  "selectionRule": "One vote per named reviewer per asset; select the option with at least two votes. Shared internal review IDs do not collapse different named reviewers.",
+  "comparisons": 177,
+  "unanimous": 97,
+  "split": 80,
+  "winners": {
+    "codex": 98,
+    "grok": 79
+  },
+  "reencoded": false,
+  "selectedBytes": 14426602,
+  "entries": [
+    {
+      "key": "workshop/bestiary",
+      "path": "public/assets/placeholders/workshop/bestiary.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "266079b29a822a470d4e669fc41b4ce23493860c4dd4b8d79cb5dc8e904a6e84",
+      "bytes": 149318,
+      "width": 1000,
+      "height": 428,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/cast",
+      "path": "public/assets/placeholders/workshop/cast.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "2e8858c29947ee94af63257268c2bfd0f066574b77ad874c6ee709e11abb591c",
+      "bytes": 66398,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "workshop/encounters",
+      "path": "public/assets/placeholders/workshop/encounters.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "10ca7781a662c1796f44e72000ea62f90fea3a120ea62ffdb5f99fa16d8155fa",
+      "bytes": 91290,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "workshop/factions",
+      "path": "public/assets/placeholders/workshop/factions.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "ae3c37a70d6668c4579f94b11345b9b2c702a6aed7a8b9d9acfc0d6ef1510a3a",
+      "bytes": 121732,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/homebrew",
+      "path": "public/assets/placeholders/workshop/homebrew.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "cf2d8ad53a0ece5b639e45592e37a624bdc2328068d74279bb1dd7af1c469a32",
+      "bytes": 87342,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "workshop/lore",
+      "path": "public/assets/placeholders/workshop/lore.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "2d2418d019264a456b0417cfa407092ced6f590c02699d00c41bfafc1af0e050",
+      "bytes": 82374,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "workshop/maps",
+      "path": "public/assets/placeholders/workshop/maps.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "16b829991cfb69e9cc696e389e977b7f251eef951ddea8406142e0a51f734817",
+      "bytes": 185172,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/party",
+      "path": "public/assets/placeholders/workshop/party.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "3671752c048231eb8b7053b3e762e36d55768be5590a4fcdf21ccf0d1af70f49",
+      "bytes": 81932,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "workshop/plugin",
+      "path": "public/assets/placeholders/workshop/plugin.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "75aed76830a0b62eb3b13c85749d66dc1481fc43bab9e79515b2df8aa02bb4da",
+      "bytes": 128398,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/region",
+      "path": "public/assets/placeholders/workshop/region.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "a29fc15b4e71b720380616ee0c9b1e33e7056f1b9cdfc0b7e1d54350ed4ac50c",
+      "bytes": 74920,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "workshop/rulesets",
+      "path": "public/assets/placeholders/workshop/rulesets.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "cc8b63cdffc8b0165dcd28361521b424ff5dabdc2365da3041919ba321dc823e",
+      "bytes": 122578,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/share",
+      "path": "public/assets/placeholders/workshop/share.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "43b9ee53473e755fcbedc9e186f94de196152082c35a2deb9013d6546a3b52d0",
+      "bytes": 132922,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/storyboard",
+      "path": "public/assets/placeholders/workshop/storyboard.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "1a4b2aabb396741bec068506e8b50fe632eab1c13e4aaae3eb709f520a656748",
+      "bytes": 115678,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/tables",
+      "path": "public/assets/placeholders/workshop/tables.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "0a6ea5e94ae74a6763340cc21c1c776b8487c2c94117454f8d9b70e8b91586cd",
+      "bytes": 104662,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "workshop/workshop",
+      "path": "public/assets/placeholders/workshop/workshop.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "d3bb5f416ee046885d296c7eddf930ca069e81d21fd8403f8453fa69be56ce5c",
+      "bytes": 124176,
+      "width": 1000,
+      "height": 441,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/custom-1",
+      "path": "public/assets/placeholders/campaign/custom-1.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "26d4ba7f0faef17a4877ee412e4ef5a95d98948f37dea087ea15b7fedddf9a89",
+      "bytes": 92634,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/custom-2",
+      "path": "public/assets/placeholders/campaign/custom-2.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "90b691f56c51ecfbe17d4fc25599643fce6b6480e8c58505af1bf1d5afe87bd9",
+      "bytes": 66700,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/custom-3",
+      "path": "public/assets/placeholders/campaign/custom-3.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "d9bff4b4d8897c095dd646461020f332145d269947ab54b3818b80b1b26acf8f",
+      "bytes": 146700,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/cyberpunk-1",
+      "path": "public/assets/placeholders/campaign/cyberpunk-1.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "7c6477bdd7125c061a7887f852374145261001230629c0ae0126b4e4678b94cc",
+      "bytes": 153604,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/cyberpunk-2",
+      "path": "public/assets/placeholders/campaign/cyberpunk-2.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "167a3cf7416d10148d9cb7b926c1b4231651199ce539e9c3d756fc8e0ca55804",
+      "bytes": 149944,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/cyberpunk-3",
+      "path": "public/assets/placeholders/campaign/cyberpunk-3.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "90dc2cd1fe2bb95dba3171a226d27c2aa5e46a39efd6a3955ce7ef9e341a1895",
+      "bytes": 144830,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/dark-fantasy-1",
+      "path": "public/assets/placeholders/campaign/dark-fantasy-1.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "800cea67cad466f25c61dd19a2889ad9f0ea27e24bbb0e39a672f0401e7a0770",
+      "bytes": 59244,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/dark-fantasy-2",
+      "path": "public/assets/placeholders/campaign/dark-fantasy-2.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "7249c4793f97849392162706ef31d15956b586e9484011ac61d7ec25352c752d",
+      "bytes": 62460,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/dark-fantasy-3",
+      "path": "public/assets/placeholders/campaign/dark-fantasy-3.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "b354c206996596c3dd3a8d222844beccf3fdc8902a384307eff93b7104e7effa",
+      "bytes": 34596,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/high-fantasy-1",
+      "path": "public/assets/placeholders/campaign/high-fantasy-1.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "0b21ecc34344f5ab7511798743f5d8bac8f9e1b37cf2c64229557d40be3d6ffd",
+      "bytes": 70066,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/high-fantasy-2",
+      "path": "public/assets/placeholders/campaign/high-fantasy-2.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "ed626d55f54b19b7af2977f56a708c1094372ecd13b8f2a5f79c05ec9f33f828",
+      "bytes": 94554,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/high-fantasy-3",
+      "path": "public/assets/placeholders/campaign/high-fantasy-3.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "c424d853cbf150ad06c188e6d8b1f13e3375d0a0a402074ef96e6b118c1886cd",
+      "bytes": 183382,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/horror-1",
+      "path": "public/assets/placeholders/campaign/horror-1.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "7faa78001f24b0c00b2fbd05af827416d93b495a425842bcc7b25f29d0e58150",
+      "bytes": 68356,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/horror-2",
+      "path": "public/assets/placeholders/campaign/horror-2.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "513e05a7f006fbe0a24cc79cff8e1158897dc427751e5378735709806644107e",
+      "bytes": 76080,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/horror-3",
+      "path": "public/assets/placeholders/campaign/horror-3.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "061c11f15fe744128c611fc1a2868fad091e01c807fe65c80d7a0d2a513b9092",
+      "bytes": 71370,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/mystery-1",
+      "path": "public/assets/placeholders/campaign/mystery-1.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "02a0adf5ec3864df4a6b29e313c115c94aed6100ffc6e3df5dabeeb6858f52d7",
+      "bytes": 57180,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "campaign/mystery-2",
+      "path": "public/assets/placeholders/campaign/mystery-2.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "b158d2fe2e9d985bf9007740c1110f8d4da21bb9dc0017410a92bced56514c03",
+      "bytes": 118234,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/mystery-3",
+      "path": "public/assets/placeholders/campaign/mystery-3.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "935b9662f36c6017b84b61f6a61fc5c998c5803588355f1c39ff562eac138b83",
+      "bytes": 96138,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/post-apocalyptic-1",
+      "path": "public/assets/placeholders/campaign/post-apocalyptic-1.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "d5e96f5146ed65510669f3fbef941b1967847d83d0bef3197dbae18c166d81d0",
+      "bytes": 145142,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/post-apocalyptic-2",
+      "path": "public/assets/placeholders/campaign/post-apocalyptic-2.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "51fc61c611318770685939ffd20978a048e5b96c953229c42d6e927d55e17ca0",
+      "bytes": 147312,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/post-apocalyptic-3",
+      "path": "public/assets/placeholders/campaign/post-apocalyptic-3.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "2ad8deb896ee76e3ddf1c78c4701c73adbd84000edd2ef2dd7b4b522bcedb01d",
+      "bytes": 139584,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/steampunk-1",
+      "path": "public/assets/placeholders/campaign/steampunk-1.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "77e4bd4c7f426869723b517364e55d32d869d73c3f9bf7667c6aacea4fa0df94",
+      "bytes": 162630,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/steampunk-2",
+      "path": "public/assets/placeholders/campaign/steampunk-2.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "7f3a89375de1239e110930397c68311c974c17b30fdb10d0935b2a79a3e3c6d7",
+      "bytes": 152440,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "campaign/steampunk-3",
+      "path": "public/assets/placeholders/campaign/steampunk-3.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "db55b564164b4809bdac71f3585c6fa3aceb665d387f609938606340cb46a396",
+      "bytes": 160700,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/arena",
+      "path": "public/assets/placeholders/map/arena.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "b5a9b11109054925edb4e507cea09d91339117c500ca1f3b4f66f8d2b62c898e",
+      "bytes": 150470,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/castle-hall",
+      "path": "public/assets/placeholders/map/castle-hall.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "c51f5ce244110e0405620d5a8f8c7347ef0981e2fa34259ecc7f835a516429f3",
+      "bytes": 122018,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/cavern",
+      "path": "public/assets/placeholders/map/cavern.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "419e61141bd6ff60fc11e765e3b02b4f182ad0336484db1f4ed486adef5575f2",
+      "bytes": 135740,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/city-gate",
+      "path": "public/assets/placeholders/map/city-gate.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "65d611249ec5a7a8006914b655444e5e83fce7b67e3a1b1529cda26187ef53ef",
+      "bytes": 159134,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/coast",
+      "path": "public/assets/placeholders/map/coast.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "a67710db43b774704ba99ddb8e631c733f61f05618cd8fa33217266f6467914d",
+      "bytes": 163208,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/crypt",
+      "path": "public/assets/placeholders/map/crypt.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "54add95653518228e56c2530f6b3e8743a103bbb29d5353dda54bcb21dff22a8",
+      "bytes": 107668,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/cyberpunk-arcology",
+      "path": "public/assets/placeholders/map/cyberpunk-arcology.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "e2b9a66c8a8453fe85f28293a87063c04ff84f4c933e85b1227eb3905347eb4e",
+      "bytes": 186534,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/cyberpunk-neon-alley",
+      "path": "public/assets/placeholders/map/cyberpunk-neon-alley.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "96f0454deb6fd5f4af83deb022e9249f61e226447b00dd6793a0fd7449c6999e",
+      "bytes": 113540,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/cyberpunk-server-farm",
+      "path": "public/assets/placeholders/map/cyberpunk-server-farm.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "5d7251f4b20b46abeebb0f0e99d18b848eab73faf3b175bc3052d4b5b873955b",
+      "bytes": 131678,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/cyberpunk-undercity",
+      "path": "public/assets/placeholders/map/cyberpunk-undercity.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "e54f18aa42d8443eafdeb7dd036c43da9473ce48eeaa571b69a17bff20a1deb3",
+      "bytes": 164154,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/deep-forest",
+      "path": "public/assets/placeholders/map/deep-forest.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "f1058c7f4dd2a8d9f21f524ed5699e83ace6320ee48523e0125e99a162e792bd",
+      "bytes": 147892,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/desert",
+      "path": "public/assets/placeholders/map/desert.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "0b0549db7c964a6bccf147aa0802d6cba8ffcc742690535d8dba60a3ed28c5df",
+      "bytes": 119182,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/dungeon",
+      "path": "public/assets/placeholders/map/dungeon.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "b74b014b106a0c542b3b460a57fb60bc26d982b0e22056d87b02aefdc1feb5ed",
+      "bytes": 141104,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/forest",
+      "path": "public/assets/placeholders/map/forest.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "a606ca3c11e49aac2ee57974c0f0c34c611e53dd2eab5e6a0df4631f235c78a5",
+      "bytes": 179590,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/horror-asylum",
+      "path": "public/assets/placeholders/map/horror-asylum.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "a89f807640e8a2a9b3762777a15486bcca402de46c0668dc2db35e468b9644f6",
+      "bytes": 81894,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/horror-crypt-chapel",
+      "path": "public/assets/placeholders/map/horror-crypt-chapel.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "b8a0837121ae20227af5070b9cf16b92de2c98a34d7a5122cbf10aa62b1de1b9",
+      "bytes": 104634,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/horror-graveyard",
+      "path": "public/assets/placeholders/map/horror-graveyard.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "8c130eccc961e34da1684d835a820ae9d9cac7a5b2b7684698dd37e2be8bd0df",
+      "bytes": 113012,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/horror-manor",
+      "path": "public/assets/placeholders/map/horror-manor.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "01dce4bcf3ed440e36bd46e9f74e9736d39ddff1eb47a811796e556d24e3ac77",
+      "bytes": 103020,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/laboratory",
+      "path": "public/assets/placeholders/map/laboratory.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "bfb4341819c790efd50bfb8baa6d9c832cb36ed5d4d63d56bced3758c536e4ce",
+      "bytes": 148916,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/library",
+      "path": "public/assets/placeholders/map/library.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "93519313190679f43e8bcde403f30b74a09f07b024576e0833a0a337a680217f",
+      "bytes": 84344,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "map/market",
+      "path": "public/assets/placeholders/map/market.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "64f1d87d7cb6348714a9f81b78f8e8b61b95c97e396c71d5e193ebb336d995d5",
+      "bytes": 173028,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/mountain-pass",
+      "path": "public/assets/placeholders/map/mountain-pass.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "f4d419e82475921e031a7a0f675b661a6877ad6b14db3146c69e33e68f669fae",
+      "bytes": 148656,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/mystery-back-alley",
+      "path": "public/assets/placeholders/map/mystery-back-alley.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "15495ed6896fc732b8e03a4c3b119ad7ffe0c5973aa4f8ffcc655025a5c0b58d",
+      "bytes": 142550,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/mystery-morgue",
+      "path": "public/assets/placeholders/map/mystery-morgue.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "5e3f6a78d2fcd0847cfc3be0a53ba14c45b232b99da6483201628f8137e252b8",
+      "bytes": 90482,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/mystery-parlour",
+      "path": "public/assets/placeholders/map/mystery-parlour.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "ed15da4dd2d263c60da16f111a9403d693fb193df2edb29b26e4956ffe671d99",
+      "bytes": 112076,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/mystery-precinct",
+      "path": "public/assets/placeholders/map/mystery-precinct.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "0e2a49eaad7efd40a5979588ba0d62fa659d6d10021335c6fc0274c5d5f5ae13",
+      "bytes": 100472,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/post-apocalyptic-dead-highway",
+      "path": "public/assets/placeholders/map/post-apocalyptic-dead-highway.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "89312a0e15facbeb64362c1a1125f7449e63a6dccb602ad26aacb5c83391a2e2",
+      "bytes": 138234,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/post-apocalyptic-overpass",
+      "path": "public/assets/placeholders/map/post-apocalyptic-overpass.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "848187e05b209fcd8777d70cf596ddc61f8b352e3d626283193a25ced5cf466b",
+      "bytes": 146606,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/post-apocalyptic-scrap-market",
+      "path": "public/assets/placeholders/map/post-apocalyptic-scrap-market.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "39d1a9a70ead3597d600393d9e81bd66a36e41885635608419a736a95633d9ad",
+      "bytes": 180970,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/post-apocalyptic-shelter",
+      "path": "public/assets/placeholders/map/post-apocalyptic-shelter.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "0c5d038183bd5db6c663c76883fe035e622df383150c401d102fd205bb4cc19b",
+      "bytes": 114748,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/ruins",
+      "path": "public/assets/placeholders/map/ruins.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "a9dae2a767ad88b7458c835f075d43a3a4f057473899cacd1cddcc43a15aff6a",
+      "bytes": 104650,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "map/sewer",
+      "path": "public/assets/placeholders/map/sewer.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "cda6e8271c59bf4a11ba8d0cda59c058e81eb75862573ae510a449d3350de016",
+      "bytes": 140950,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/ship-deck",
+      "path": "public/assets/placeholders/map/ship-deck.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "2c1035b4a965f3014c767a19825797314c3e98e0f291ffbb734d6f640ee999e9",
+      "bytes": 158434,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/steampunk-airship-dock",
+      "path": "public/assets/placeholders/map/steampunk-airship-dock.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "1584fd489e0867b95a4be19d2f1c5e9a8237cbe97b864ec33a64d4b658edec14",
+      "bytes": 165476,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/steampunk-clockwork-vault",
+      "path": "public/assets/placeholders/map/steampunk-clockwork-vault.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "3b93abf7be413cbabf7d59d0f2888557075fde8fdcf8e72aaca28cfbb95d51d9",
+      "bytes": 157416,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/steampunk-factory",
+      "path": "public/assets/placeholders/map/steampunk-factory.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "20005149828f97060efae29db8cb151d9a2e866b607b6c669cf2a8a9b7e53f2f",
+      "bytes": 179864,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/steampunk-gaslit-street",
+      "path": "public/assets/placeholders/map/steampunk-gaslit-street.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "8a9201112d950cfe6b51ef0dbb002ba2dcdd216ae6253d32e99fb4d30d690e2e",
+      "bytes": 155216,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/swamp",
+      "path": "public/assets/placeholders/map/swamp.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "ca4a0ac73247b3ddae095bee6d819feeb6af5b66b8fb1fa0beddf43c93f8164a",
+      "bytes": 129290,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/tavern",
+      "path": "public/assets/placeholders/map/tavern.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "90e0cd7ecaba6a08504c3d45251dc75c3093720a87e37d97ba11189e8829167c",
+      "bytes": 136970,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/temple",
+      "path": "public/assets/placeholders/map/temple.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "4c3a7103f617141f39bc5b27ea690394a9ce3fdb0d5a465824be46f8ff1db4f3",
+      "bytes": 126376,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/throne-room",
+      "path": "public/assets/placeholders/map/throne-room.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "2f8820110e57cd18575b154f3ee5a3d9ec8e872d70ea2aa55eff1669ca14a7c7",
+      "bytes": 112892,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/tundra",
+      "path": "public/assets/placeholders/map/tundra.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "05a566fc0f5b5ab325cf7a417d5db3575afaebcc3b9e603733adc4d0c57a4a4c",
+      "bytes": 136200,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/village",
+      "path": "public/assets/placeholders/map/village.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "e748916b986f2c202451d1a000773a133b0155aa423b1338523bb81dc0222d4a",
+      "bytes": 169190,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "map/wasteland",
+      "path": "public/assets/placeholders/map/wasteland.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "1b2616116f6590e3c747e3b41e6d29b75562ffaaafd5d4e7361ec36ec10f60e3",
+      "bytes": 143772,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "misc/chapter",
+      "path": "public/assets/placeholders/misc/chapter.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "715d88bf149a2c753aa50752a287c16f57ae1b1ad740d392ac29f14c7c967c76",
+      "bytes": 68616,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "misc/empty",
+      "path": "public/assets/placeholders/misc/empty.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "b5887add4fd625fe48ead54fc528ae18cab1d1bafca917e415ec1a5ad78efc5e",
+      "bytes": 43912,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "misc/faction",
+      "path": "public/assets/placeholders/misc/faction.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "ae3c37a70d6668c4579f94b11345b9b2c702a6aed7a8b9d9acfc0d6ef1510a3a",
+      "bytes": 121732,
+      "width": 1000,
+      "height": 439,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "misc/journey",
+      "path": "public/assets/placeholders/misc/journey.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "5bee868ae6498f9128df34ea2696b15553407484eec5f19b9e1ac199a0bb12b1",
+      "bytes": 83850,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "misc/party",
+      "path": "public/assets/placeholders/misc/party.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "fa79ffc565c0950d751e94613523d4774766cf790e6bac8b9cf7cc23c2735fec",
+      "bytes": 82982,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "misc/quest",
+      "path": "public/assets/placeholders/misc/quest.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "6db407988f67cc866f6c2c23280f01d346efc7caa5d47a768b83ca3d3c0a513d",
+      "bytes": 81122,
+      "width": 704,
+      "height": 400,
+      "sourcePR": 175,
+      "sourceCommit": "129acfa29bf6f1db1ea5522a5dce543945d7e025"
+    },
+    {
+      "key": "misc/session",
+      "path": "public/assets/placeholders/misc/session.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "c8b059dfdd25388c071ab3602331fec227659b37c95b56885ad7e07434a38e4b",
+      "bytes": 127114,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "misc/treasure",
+      "path": "public/assets/placeholders/misc/treasure.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "36311e810fae8a64a939e1452bcc3fa7174f01168670cc0080636f53760642a0",
+      "bytes": 166440,
+      "width": 1000,
+      "height": 563,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "npc/commoner",
+      "path": "public/assets/placeholders/npc/commoner.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "d41100dfbfc12049422213fb9af62389fbebd5cececdfb1cc74c6888758131d8",
+      "bytes": 64172,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "npc/cyberpunk-corp-exec",
+      "path": "public/assets/placeholders/npc/cyberpunk-corp-exec.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "2644e5f689c5e5453e0cef3c39f0330fd81ab78e561b89aa95c2477bafb91f98",
+      "bytes": 12180,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/cyberpunk-fixer",
+      "path": "public/assets/placeholders/npc/cyberpunk-fixer.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "c1b8374811fb5cebaad598f08f626ab41ace0bfe38a9f3ee9bbf490ed9af1c47",
+      "bytes": 11994,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/cyberpunk-street-doc",
+      "path": "public/assets/placeholders/npc/cyberpunk-street-doc.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "ba55fd92cd2689735846724ed948250d41a563515041a6620dccf0674ceaa887",
+      "bytes": 13824,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/guard",
+      "path": "public/assets/placeholders/npc/guard.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "7798e87db4f2d3f33d12032c7ec1050e46b2d1a296d3b0131a58fa8630c64c7f",
+      "bytes": 14286,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/horror-cult-elder",
+      "path": "public/assets/placeholders/npc/horror-cult-elder.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "ff66c10f6bfad5b2305a079348a7e1db4efaeb0d4b7283f7ba1282ee8f669ef8",
+      "bytes": 10960,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/horror-priest",
+      "path": "public/assets/placeholders/npc/horror-priest.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "a1e5fa491bbe622830af9fb13ded4e305f1db597b126e8a412c8cc6a565449d5",
+      "bytes": 6708,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/horror-warden",
+      "path": "public/assets/placeholders/npc/horror-warden.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "1e04658f6e4995397424d798324434595df74f9bd44b19d8c7633049404507b3",
+      "bytes": 7214,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/innkeeper",
+      "path": "public/assets/placeholders/npc/innkeeper.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "3495c1a8842e6965178a9a7562100419d7bf23321d17986730dc6d6d4f9c467e",
+      "bytes": 63196,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "npc/mercenary",
+      "path": "public/assets/placeholders/npc/mercenary.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "e390d153720edec3cf90bbc7fb1672e316485f11b9dd070b0ea3486f01231c1f",
+      "bytes": 14610,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/merchant",
+      "path": "public/assets/placeholders/npc/merchant.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "b67b8bbd6d3ab6350c5e3f313db4ed117123d1fca58979d024d058a82b4a3b23",
+      "bytes": 18834,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/mystery-informant",
+      "path": "public/assets/placeholders/npc/mystery-informant.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "af9029a96b9809cf6a87e9da794873bc716d8e094f02a3857f855cb253c356f6",
+      "bytes": 6094,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/mystery-inspector",
+      "path": "public/assets/placeholders/npc/mystery-inspector.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "7c4fd30d73b7697b0feb818ad8f25991e0ad17e03637bf19f84ecadf3d97ad5c",
+      "bytes": 11396,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/mystery-socialite",
+      "path": "public/assets/placeholders/npc/mystery-socialite.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "fbb7ae39635ce6b11cd5b6d910350237e7e511be63254d06d28a54500dfa242a",
+      "bytes": 14802,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/noble",
+      "path": "public/assets/placeholders/npc/noble.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "07895a140e1bf321d1441e6e08a7ba942ba3e8a8a390ab48f6d93526ea8d732e",
+      "bytes": 11430,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/outcast",
+      "path": "public/assets/placeholders/npc/outcast.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "0607e75873a10ce3a10e1e2724c21807b8f983541c7e30ef39c528a85fb51aa6",
+      "bytes": 16290,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/post-apocalyptic-caravan-guard",
+      "path": "public/assets/placeholders/npc/post-apocalyptic-caravan-guard.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "1dfd0d6d87e5ef15706f1a97362c8e7e4f72f9ccc385c45b5a92ba1eb8897d90",
+      "bytes": 15772,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/post-apocalyptic-elder",
+      "path": "public/assets/placeholders/npc/post-apocalyptic-elder.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "b1a2ece4c101f1a7c3f2abe6e776ebc02bf7543708a2f0aa95f578584201eac7",
+      "bytes": 16370,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/post-apocalyptic-water-baron",
+      "path": "public/assets/placeholders/npc/post-apocalyptic-water-baron.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "38712281b2787a42d1c8f5463cea1ddf9b3b424ca59145b025f2e647e2b3154d",
+      "bytes": 17770,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/priest",
+      "path": "public/assets/placeholders/npc/priest.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "39eaf011ecde3441ed09ce9930dfd5209d7cb7670311a6da06b8d51da460ba1a",
+      "bytes": 18232,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/ruler",
+      "path": "public/assets/placeholders/npc/ruler.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "cc0f0d992de1fd68be5ee7812261e009703e05860ff5268a63e65b0462590ee4",
+      "bytes": 18294,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/scholar",
+      "path": "public/assets/placeholders/npc/scholar.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "efeb7287f0465a2a02671afb8404580cb30e60f3e77a120393bbadea1c547115",
+      "bytes": 66422,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "npc/soldier",
+      "path": "public/assets/placeholders/npc/soldier.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "bc5e20750cc9467bfe888604f2f6f7c340ae56fa1b9d46257871328b6b77df83",
+      "bytes": 15528,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/steampunk-airship-captain",
+      "path": "public/assets/placeholders/npc/steampunk-airship-captain.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "0dbef2bcc564e1bde4a383f6d11f25dbab0a88d65cc928db0bb237c2ca8060ce",
+      "bytes": 18070,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/steampunk-foreman",
+      "path": "public/assets/placeholders/npc/steampunk-foreman.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "fcc74603d13b94b00a1ed7975e96342096570d23384fe46f03acb23bed792d34",
+      "bytes": 16674,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "npc/steampunk-inventor",
+      "path": "public/assets/placeholders/npc/steampunk-inventor.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "770fdad281d22af899276c60b903a9a0beca8c18768d5941186acfc6c689821d",
+      "bytes": 71890,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "npc/thief",
+      "path": "public/assets/placeholders/npc/thief.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "e9c3b00012d719a4ce0ac502c4f68e5b4ab5a384d7f42ebcf55a9be197c22f8c",
+      "bytes": 8510,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/aberration",
+      "path": "public/assets/placeholders/monster/aberration.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "b7a32083146030fcc31f3e2bc4d959cbae02bab4332ad83172be1a4c21293f62",
+      "bytes": 77388,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/beast",
+      "path": "public/assets/placeholders/monster/beast.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "d3c9a68c50d5c2f0d3e9ab1c09c18e19d94c4c4afac871271a3ac322130efda8",
+      "bytes": 114686,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/celestial",
+      "path": "public/assets/placeholders/monster/celestial.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "d807deba73f97f4266f13a422fbc12b6b156c06ee8c747c7366168b6f74a32e6",
+      "bytes": 24860,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/construct",
+      "path": "public/assets/placeholders/monster/construct.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "1b1751d534825ed42098261df1c48a66250f041537c653c678f83424ea4ff958",
+      "bytes": 98378,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/cyberpunk-boss",
+      "path": "public/assets/placeholders/monster/cyberpunk-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "be1a48f4850edc2cf9f2238f98176f40e07cb5abcb4cedcd1b75a1446ebd5a8d",
+      "bytes": 99118,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/cyberpunk-combat-mech",
+      "path": "public/assets/placeholders/monster/cyberpunk-combat-mech.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "cbdccc4d8dccbf405e7f7fa7f679511774e2dc987be00292c92d02008634017e",
+      "bytes": 90312,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/cyberpunk-cyberpsycho",
+      "path": "public/assets/placeholders/monster/cyberpunk-cyberpsycho.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "989afcfd3da1210f2e65a0d10b046a22a7dc694b68c19f065671bd4dd3182258",
+      "bytes": 76504,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/cyberpunk-security-drone",
+      "path": "public/assets/placeholders/monster/cyberpunk-security-drone.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "f31a5bada7ef1006308760f11317fbd90d96d8401c9a2c40a6570b650e17cdc6",
+      "bytes": 80686,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/dark-fantasy-boss",
+      "path": "public/assets/placeholders/monster/dark-fantasy-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "30eb71599bf5bd8f69209cd79326ffa6a710adad136e1cfad280fbd09601e80e",
+      "bytes": 79040,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/dragon",
+      "path": "public/assets/placeholders/monster/dragon.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "b9224aebec7b6879977f53191c131c282ebb758f370c0d60b6f60d54e7067ecc",
+      "bytes": 20020,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/elemental",
+      "path": "public/assets/placeholders/monster/elemental.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "542fb14eadd10911df6625fe45a2e052f1120b4e65f303fbb3a6a41d11fe0a6b",
+      "bytes": 26706,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/fey",
+      "path": "public/assets/placeholders/monster/fey.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "45699d4f2b79c95207926124cb8ba80883188f533a94d90d3a9b9be8ca9b74a9",
+      "bytes": 29664,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/fiend",
+      "path": "public/assets/placeholders/monster/fiend.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "e1eddd9c50f37fc4ac10a370b1a3b0cb591f337e37e9e83b27b3f258a2ff49d1",
+      "bytes": 22672,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/giant",
+      "path": "public/assets/placeholders/monster/giant.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "227533e0b1aa74711c6a390acc934e4edab145c79be25b91deae12dfd967fbdb",
+      "bytes": 21716,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/high-fantasy-boss",
+      "path": "public/assets/placeholders/monster/high-fantasy-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "4efff12c30a1007bbbd89b54669bce34fddeaeac9c8f25d2ff08196b48a30b3f",
+      "bytes": 83054,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/horror-boss",
+      "path": "public/assets/placeholders/monster/horror-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "1b2556b23c7a773fc8f60adab47125c098c582f96919f4bcb31cd9f913d97448",
+      "bytes": 67536,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/horror-flesh-thing",
+      "path": "public/assets/placeholders/monster/horror-flesh-thing.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "335f0869fc603647ae94880f59c09423a8acf6972eefd9c08f90fd9fb7c49d53",
+      "bytes": 15766,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/horror-revenant",
+      "path": "public/assets/placeholders/monster/horror-revenant.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "48911be243f47176080dacade4e4bcbe7115dd01c2921e5a50da88dcb815de8d",
+      "bytes": 11652,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/horror-wraith",
+      "path": "public/assets/placeholders/monster/horror-wraith.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "19489ae9512e0cb7ddf9582d82c03048805d58a18ad73e21a6f8ba998179e3ba",
+      "bytes": 63958,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/humanoid",
+      "path": "public/assets/placeholders/monster/humanoid.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "10836e5a843884e9964e8c2b800d54739f804fd15e5bd02a6804dab7622fec91",
+      "bytes": 78402,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/monstrosity",
+      "path": "public/assets/placeholders/monster/monstrosity.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "62743bf7710baacac65f42b5d324605f9be6a2a4b3a6302659a8fc58047a8360",
+      "bytes": 23730,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/mystery-boss",
+      "path": "public/assets/placeholders/monster/mystery-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "43f4e59d939cee20cd62e62b78b8fa59d8ca760bf38bc8293169f5782f7c327c",
+      "bytes": 56060,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/ooze",
+      "path": "public/assets/placeholders/monster/ooze.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "ccc2063779178dde0d5e4dd92e8d2655b71ed0dd399f5c3aa91420b622502fd0",
+      "bytes": 22438,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/plant",
+      "path": "public/assets/placeholders/monster/plant.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "aaafa31cefed1afc48a37ff640e5b114bd7a3ed6521803dc9e8966887496428e",
+      "bytes": 21378,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/post-apocalyptic-boss",
+      "path": "public/assets/placeholders/monster/post-apocalyptic-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "2f69304e6b744db762c93f9cb12b84b115e107d610cd847cf5ba5560604a9f77",
+      "bytes": 85878,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/post-apocalyptic-feral-mutant",
+      "path": "public/assets/placeholders/monster/post-apocalyptic-feral-mutant.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "e4ca2c5fbb6992de0f98f280d692c0b209f2dc2c05a931324347bf6aa51b079c",
+      "bytes": 89550,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/post-apocalyptic-rad-swarm",
+      "path": "public/assets/placeholders/monster/post-apocalyptic-rad-swarm.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "af89d14e87c52e8b5415e633d1bead94ab931a982fa952d10a994a388f2a3839",
+      "bytes": 105752,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/post-apocalyptic-scrap-hound",
+      "path": "public/assets/placeholders/monster/post-apocalyptic-scrap-hound.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "0fa456b901cc6ba17328c6a3d7231607806984c08f2d43014b36618d28590c32",
+      "bytes": 94858,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/steampunk-aether-wraith",
+      "path": "public/assets/placeholders/monster/steampunk-aether-wraith.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "26b3e0b763ed151115bef633dd89a0f508da0e362958b167b826944eadbac268",
+      "bytes": 84676,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/steampunk-automaton",
+      "path": "public/assets/placeholders/monster/steampunk-automaton.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "03a2173737013595c5fa96c804e86c57d205e32e797c1896250c6936f961e9b5",
+      "bytes": 21034,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "monster/steampunk-boiler-golem",
+      "path": "public/assets/placeholders/monster/steampunk-boiler-golem.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "a3ad66c8bbbbc21bd6b2d82f1506bbe57719990a746119a601b61dbd9d53f147",
+      "bytes": 89222,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/steampunk-boss",
+      "path": "public/assets/placeholders/monster/steampunk-boss.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "466c866efa7592964178b19fdf1b8d43607bda91c34f6d0e556f0ffb39cc2629",
+      "bytes": 87446,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "monster/undead",
+      "path": "public/assets/placeholders/monster/undead.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "cf458931803c44d246733e8ab20b2143ab0e349c82781c1e313b73cf9bf49f25",
+      "bytes": 17566,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "avatar/dragon",
+      "path": "public/assets/placeholders/avatar/dragon.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "1a2f6c52a316af022a82ad9264bb4f213cbcf003432b8271c83f45841bc448cd",
+      "bytes": 66816,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "avatar/flame",
+      "path": "public/assets/placeholders/avatar/flame.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "656cf60cd2606e57c3efb9beb6dc1e443f8b8f5d9d92a93c1fa80a643b5ec7b7",
+      "bytes": 47584,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "avatar/oak",
+      "path": "public/assets/placeholders/avatar/oak.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "306cb4dbebc3cc6bf281c68a1908e7b89864f440c774a260e63f64f446e78384",
+      "bytes": 112138,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "avatar/raven",
+      "path": "public/assets/placeholders/avatar/raven.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "83e4ebfd3ab9d132417ff4eb24a2b1966faf56e50f1eff758b4e4be1d3cc6e87",
+      "bytes": 13890,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "avatar/ship",
+      "path": "public/assets/placeholders/avatar/ship.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 3,
+        "grok": 0,
+        "neither": 0
+      },
+      "sha256": "483701df5539b7d584d61ca9f100e11863ff44f48154211b74fd6e0217f806de",
+      "bytes": 77598,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "avatar/stag",
+      "path": "public/assets/placeholders/avatar/stag.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "8e8f24a0c8d913c3515a3a45682884de4435297a1db1fb7fe8ec3aa7c2d13191",
+      "bytes": 22926,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "avatar/tower",
+      "path": "public/assets/placeholders/avatar/tower.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "87220e92e3a03a678ce377ddec600e6e63dd8081d32ca59a6ac5cd733939d428",
+      "bytes": 58588,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "avatar/wolf",
+      "path": "public/assets/placeholders/avatar/wolf.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "209cf71b34a649b3a6cabff74de9105e4f499a9873ad62f54399ded8afde6967",
+      "bytes": 18374,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/cyberpunk-feminine",
+      "path": "public/assets/placeholders/character-genre/cyberpunk-feminine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "31d73bf8688ad3416a13461dbc9a52ede72273e509a5b4bbbbf34cd65b291b3f",
+      "bytes": 19040,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/cyberpunk-masculine",
+      "path": "public/assets/placeholders/character-genre/cyberpunk-masculine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "c705620954f4fca4a0b41fe1f5340f95fbd3e95db5e21261b9ffcf16cee0849b",
+      "bytes": 14812,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/cyberpunk-neutral",
+      "path": "public/assets/placeholders/character-genre/cyberpunk-neutral.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "e3e38f09c5b9db5effa9afa35ffceecce2eb39c918e373d16aea65788a29e6cd",
+      "bytes": 11790,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/horror-feminine",
+      "path": "public/assets/placeholders/character-genre/horror-feminine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "e6fd8ea6238a1fd1259a268fd65039e0e71b66d70182ee2dc921f4870a893ea9",
+      "bytes": 10766,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/horror-masculine",
+      "path": "public/assets/placeholders/character-genre/horror-masculine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "747884afe95a45a45e79f0a6e5760f1ff57a373ac9d4f45dab896b7ad0f9de94",
+      "bytes": 8836,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/horror-neutral",
+      "path": "public/assets/placeholders/character-genre/horror-neutral.webp",
+      "winner": "codex",
+      "votes": {
+        "codex": 2,
+        "grok": 1,
+        "neither": 0
+      },
+      "sha256": "69b3a0e3ac50128e9b5918ed078f369c33c891a5abc10f251f20e73ed9c11899",
+      "bytes": 68352,
+      "width": 512,
+      "height": 512,
+      "source": "Codex built-in image generation; reviewed WebP preserved without re-encoding"
+    },
+    {
+      "key": "character-genre/mystery-feminine",
+      "path": "public/assets/placeholders/character-genre/mystery-feminine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "6be6a52a64a6ac2a485a1e5dbff809b7beb11015c71fe24bcf26a7520a236590",
+      "bytes": 14908,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/mystery-masculine",
+      "path": "public/assets/placeholders/character-genre/mystery-masculine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "822ac09d3694c54b7887bb10c81fdc219bb89e3aa7ecad614ed8998839bf655f",
+      "bytes": 11086,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/mystery-neutral",
+      "path": "public/assets/placeholders/character-genre/mystery-neutral.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "a6f2be7475df36c21d0a3833f3297377e7e899a08e87c819af730628c0ee36f7",
+      "bytes": 7408,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/post-apocalyptic-feminine",
+      "path": "public/assets/placeholders/character-genre/post-apocalyptic-feminine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 0,
+        "grok": 3,
+        "neither": 0
+      },
+      "sha256": "bf726e8747b763eb19d7d02c02f69b23c07fafa548b7b428da22a44cf7316270",
+      "bytes": 17840,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/post-apocalyptic-masculine",
+      "path": "public/assets/placeholders/character-genre/post-apocalyptic-masculine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "6ef9a814bb597189e1af0e954743af34cbbc5331b826086078ae675b3f7af744",
+      "bytes": 17608,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/post-apocalyptic-mutant-feminine",
+      "path": "public/assets/placeholders/character-genre/post-apocalyptic-mutant-feminine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "9dcb16c03527248fcd69a99202760cd64b26f1432f9ccbf9d3461c176c0251f0",
+      "bytes": 22286,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/post-apocalyptic-mutant-masculine",
+      "path": "public/assets/placeholders/character-genre/post-apocalyptic-mutant-masculine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "f987b9f4ef2fb4b3317f7eba515b68c21373fca5c73b1893dc5da1591d4483e3",
+      "bytes": 18596,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/post-apocalyptic-mutant-neutral",
+      "path": "public/assets/placeholders/character-genre/post-apocalyptic-mutant-neutral.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "862893abcc860a2dff32b52e5efed6bc5f1eeef5b3b88cde7cb2b6a726517167",
+      "bytes": 17596,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character-genre/post-apocalyptic-neutral",
+      "path": "public/assets/placeholders/character-genre/post-apocalyptic-neutral.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "c1a0d32bc0f738115b85b42284ce22cba630df4ac546318c5173ea0d61101bc1",
+      "bytes": 14552,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character/feminine",
+      "path": "public/assets/placeholders/character/feminine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "3ff570bd08f3913e60a7a833b172fa28c462e0a435b764cf917d1e5fff4223cf",
+      "bytes": 15736,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character/masculine",
+      "path": "public/assets/placeholders/character/masculine.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "b7efc2d7a5af77223afb1aff0e99eb9ca93cb589eebde5db8bca5f72fc3bdce0",
+      "bytes": 17586,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    },
+    {
+      "key": "character/neutral",
+      "path": "public/assets/placeholders/character/neutral.webp",
+      "winner": "grok",
+      "votes": {
+        "codex": 1,
+        "grok": 2,
+        "neither": 0
+      },
+      "sha256": "28fadfcf86cef6df05a9a95a2aa0c55713d52ef0374884f511448fd4ded4ccee",
+      "bytes": 15872,
+      "width": 256,
+      "height": 256,
+      "sourcePR": 176,
+      "sourceCommit": "ae21f55477215b5647b18e0b05e3c9941fce9b93"
+    }
+  ]
+}

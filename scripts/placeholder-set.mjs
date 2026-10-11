@@ -360,6 +360,12 @@ const WORKSHOP_TILES = [
   { id: "storyboard", subject: "A wall of pinned index cards joined by lengths of thread" },
   { id: "tables", subject: "A scatter of polygonal dice beside a printed column of numbered entries" },
   { id: "rulesets", subject: "A stack of thick leather-bound rule tomes with ribbon markers" },
+  { id: "region", subject: "A vast landscape of mountain passes, forests, rivers and a distant citadel" },
+  { id: "party", subject: "A band of adventurers gathered around a map before their next journey" },
+  { id: "factions", subject: "Rival heraldic banners surrounding a council table" },
+  { id: "homebrew", subject: "A clockwork golem under construction with spare parts and detailed schematics" },
+  { id: "plugin", subject: "Interlocking enchanted mechanisms forming a new wing of a fantasy workshop" },
+  { id: "share", subject: "An open travel chest filled with maps, books and miniature adventures ready to share" },
 ];
 
 // The remaining thumbnail slots that are not a person, a place or a room of

@@ -305,6 +305,7 @@ vendor `public/` from git HEAD:
 
 | Folder | Cap | Notes |
 | --- | --- | --- |
+| `public/assets/placeholders/` | 18 MiB total | Majority-selected painted thumbnails: 192 KiB per scene, 128 KiB per NPC/monster/avatar/generic or genre portrait; race/class portraits retain 48 KiB. Reviewed bytes preserved; selection record in `docs/art/majority-vote-2026-10-11.json`. |
 | `public/assets/tiles/` | 9 MB | 182 materials × 3 variants at 256 px WebP, quality 82, about 14 KB each |
 | `public/assets/props/` | 6 MB | about 160 objects at 256 px alpha WebP plus 40 decals |
 | `public/fx/` | 8 MB | raised from the parity plan's 1.5 MB for the flipbooks in 8b.3 |

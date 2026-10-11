@@ -44,7 +44,12 @@ const RENDER = {
   landscape: { width: 1344, height: 768 },
 };
 
-// Shipped at the size the UI draws, not the size the model painted. The
+// The shipped race/class portraits and majority-selected painted plates are
+// curated replacements. --force / --reencode can overwrite them with this
+// generator's silhouettes. Use --only to restrict generation deliberately;
+// docs/art/majority-vote-2026-10-11.json records the selected files and hashes.
+//
+// Generator defaults: shipped at the size the UI draws, not the size the model painted. The
 // whole set rides inside the desktop app and the Android APK (the client
 // repo vendors public/ wholesale), so bytes here are bytes on every phone.
 //
