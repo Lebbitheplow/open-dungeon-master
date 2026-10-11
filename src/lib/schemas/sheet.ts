@@ -543,6 +543,10 @@ export type CharacterSheet = {
   campaignId: string;
   userId: string;
   libraryCharacterId: string | null;
+  // In the snapshot only: the role the linked library row is filed under, so
+  // the party panel can show a player sheet that should have been a
+  // companion and offer the repair (issue 192). Events carry no such field.
+  libraryRole?: "pc" | "companion";
   name: string;
   race: string;
   class: string;

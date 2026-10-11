@@ -185,6 +185,24 @@ export function markSheetAsCompanion(
   return getSheetById(sheetId);
 }
 
+// A sheet seated as a player character that its library row files as an
+// ally the DM plays (issue 192) becomes the party companion it was meant to
+// be: the bot takes ownership and the mark is set. Everything else on the
+// row, hit points, experience, gear, conditions, stays as play left it, and
+// the id stays, so an initiative slot or a token keeps pointing at it.
+export function adoptSheetAsCompanion(
+  sheetId: string,
+  botUserId: string,
+  personality: string,
+): CharacterSheet | null {
+  getDatabase()
+    .prepare(
+      `UPDATE character_sheets SET user_id = ?, is_companion = 1, companion_kind = 'party', personality = ?, updated_at = ? WHERE id = ?`,
+    )
+    .run(botUserId, personality, nowIso(), sheetId);
+  return getSheetById(sheetId);
+}
+
 // Marks a sheet as a creature a spell or feature made (src/lib/dm/summon-store.ts),
 // or clears the mark. Kept out of patchSheet like the companion flag above.
 export function setSheetSummon(sheetId: string, summon: CharacterSheet["summon"]): CharacterSheet | null {

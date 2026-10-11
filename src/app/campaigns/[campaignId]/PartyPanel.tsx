@@ -111,6 +111,56 @@ function RequestCompanionButton({ campaignId }: { campaignId: string }) {
   );
 }
 
+// A player sheet whose library entry is an ally the DM plays came in through
+// the wrong door before the doors checked (issue 192). Whoever runs the
+// story hands it to the DM: same sheet, same progress, a bot owner and the
+// DM's turns from here. The server holds the companion setting and cap.
+function HandToDmButton({ campaignId, sheet }: { campaignId: string; sheet: CharacterSheet }) {
+  const [state, setState] = useState<"idle" | "sending">("idle");
+  const [error, setError] = useState("");
+  async function adopt() {
+    setState("sending");
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/companions/adopt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetId: sheet.id }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Could not hand the character to the DM.");
+      }
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setState("idle");
+    }
+  }
+  return (
+    <div className="reveal mt-2 space-y-1">
+      <p className="text-[11px] leading-4 text-amber-200">
+        {sheet.name} is filed in the library as an ally the DM plays, but sits here as a player&apos;s character, so the DM takes no turns for them.
+      </p>
+      <KitButton
+        tone="secondary"
+        onClick={adopt}
+        disabled={state === "sending"}
+        busy={state === "sending"}
+        title="Make this character a party companion: the sheet and its progress stay, the DM plays it from here"
+        className="w-full justify-center"
+      >
+        {state === "sending" ? null : <Bot className="size-3.5" />} Hand to the DM
+      </KitButton>
+      {error ? (
+        <p role="alert" className="motion-shake text-[11px] text-red-400">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // A table below the library character's level saves gear, gold and notes
 // only; the library keeps its own level (issue #36), and the button says so
 // for a moment instead of a bare "Saved".
@@ -678,6 +728,10 @@ export function PartyPanel({
               >
                 <Sparkles className="size-3.5" /> Level up to {levelUpLevel}
               </KitButton>
+            ) : null}
+
+            {campaignId && steersStory && !sheet.isCompanion && sheet.libraryRole === "companion" ? (
+              <HandToDmButton campaignId={campaignId} sheet={sheet} />
             ) : null}
 
             {setsPortrait ? (
