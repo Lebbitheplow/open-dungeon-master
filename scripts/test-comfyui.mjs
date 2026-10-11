@@ -19,7 +19,9 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { comfyStatus, generateComfyImage, MAX_COMFY_IMAGE_BYTES } = await import("../src/lib/comfyui.ts");
+const { buildCheckpointWorkflow, buildZTurboWorkflow, comfyStatus, generateComfyImage, MAX_COMFY_IMAGE_BYTES } = await import("../src/lib/comfyui.ts");
+const { getGlobalConfig, saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
+const { imageVariantsSettled } = await import("../src/lib/image-variants.ts");
 
 // Generated files land under the working directory; keep them out of the repo.
 const repoCwd = process.cwd();
@@ -59,7 +61,7 @@ function fakeComfy(overrides = {}) {
   const seen = [];
   const fetchStub = async (input, init) => {
     const url = new URL(String(input));
-    seen.push({ url: url.href, redirect: init?.redirect });
+    seen.push({ url: url.href, redirect: init?.redirect, body: init?.body });
     if (url.origin !== COMFY) {
       // Only reachable if a redirect was followed.
       return new Response("AWS_SECRET_ACCESS_KEY=hunter2");
@@ -91,6 +93,28 @@ function assertNothingLeaked(seen, before) {
   assert.ok(seen.every((call) => call.redirect === "manual"), "a ComfyUI request would follow redirects");
   assert.deepEqual(generatedFiles(), before, "something was written under public/generated");
 }
+
+const zReference = JSON.parse(fs.readFileSync(new URL("./fixtures/comfy-z-turbo.json", import.meta.url), "utf8"));
+assert.deepEqual(
+  buildZTurboWorkflow({ prompt: "a tavern", width: 1024, height: 1024, seed: 42 }),
+  zReference,
+  "Z-Image Turbo graph must match the supplied API workflow with only four variable inputs",
+);
+passed += 1;
+console.log("ok - Z-Image Turbo graph matches the supplied workflow");
+
+const checkpointGraph = buildCheckpointWorkflow({
+  checkpoint: "model.safetensors", prompt: "a tavern", width: 768, height: 768, seed: 42, negative: "no swords",
+});
+assert.equal(checkpointGraph["1"].inputs.ckpt_name, "model.safetensors");
+assert.equal(checkpointGraph["3"].inputs.text.endsWith(", no swords"), true);
+assert.deepEqual(checkpointGraph["5"].inputs, {
+  model: ["1", 0], positive: ["2", 0], negative: ["3", 0], latent_image: ["4", 0],
+  seed: 42, steps: 25, cfg: 6, sampler_name: "euler", scheduler: "normal", denoise: 1,
+});
+assert.equal(checkpointGraph["7"].inputs.filename_prefix, "open-dungeon");
+passed += 1;
+console.log("ok - standard checkpoint workflow keeps its model, negatives, and sampler");
 
 await test("a well-behaved ComfyUI still produces a picture", fakeComfy(), async ({ seen }) => {
   const image = await generate();
@@ -209,6 +233,31 @@ await test(
   },
 );
 
+saveGlobalConfig({ images: { comfyCheckpoint: "keep-this-checkpoint.safetensors", comfyWorkflowPreset: "z_turbo" } });
+await test("Z-Image Turbo submits its graph without checkpoint lookup or table negatives", fakeComfy(), async ({ seen }) => {
+  const image = await generateComfyImage({
+    url: COMFY, checkpoint: "", prompt: "a tavern",
+    mode: "fast", aspect: "square", seed: 42, negative: "private table boundary",
+  });
+  assert.match(image.url, /^\/generated\/.*-comfyui-a-tavern\.png$/);
+  assert.deepEqual(fs.readFileSync(path.join(dir, "public", image.url)), PNG);
+  assert.ok(!seen.some((call) => call.url.includes("/object_info/")));
+  const sent = JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body);
+  assert.deepEqual(sent.prompt, zReference);
+  assert.equal(JSON.stringify(sent).includes("private table boundary"), false);
+  assert.equal(getGlobalConfig().images.comfyCheckpoint, "keep-this-checkpoint.safetensors");
+});
+
+saveGlobalConfig({ images: { comfyWorkflowPreset: "checkpoint" } });
+await test("switching back keeps the stored checkpoint and submits the standard graph", fakeComfy(), async ({ seen }) => {
+  await generateComfyImage({ url: COMFY, checkpoint: getGlobalConfig().images.comfyCheckpoint,
+    prompt: "a tavern", mode: "fast", aspect: "square", seed: 42 });
+  const sent = JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body);
+  assert.equal(sent.prompt["1"].inputs.ckpt_name, "keep-this-checkpoint.safetensors");
+  assert.equal(sent.prompt["5"].inputs.sampler_name, "euler");
+});
+
+await imageVariantsSettled();
 process.chdir(repoCwd);
 removeTempDir(dir);
 console.log(`test-comfyui: ${passed} passed`);

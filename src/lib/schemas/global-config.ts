@@ -92,6 +92,7 @@ export const globalConfigSchema = z.object({
         .default(""),
       comfyUrl: z.string().trim().max(500).default(""),
       comfyCheckpoint: z.string().trim().max(300).default(""),
+      comfyWorkflowPreset: z.enum(["checkpoint", "z_turbo"]).default("checkpoint"),
       fluxWorkerUrl: z.string().trim().max(500).default(""),
       // The "openai" backend: any OpenAI-compatible images API. The key is
       // the server owner's, applied at request time only, and never leaves

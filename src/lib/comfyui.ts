@@ -159,7 +159,7 @@ function comfyDimensions(mode: ImageMode, aspect: AspectPreset) {
   return { width: longSide, height: longSide };
 }
 
-function buildWorkflow(options: {
+export function buildCheckpointWorkflow(options: {
   checkpoint: string;
   prompt: string;
   width: number;
@@ -211,6 +211,79 @@ function buildWorkflow(options: {
   };
 }
 
+// The Z-Image Turbo graph from the supplied ComfyUI API workflow. Only the
+// positive text, latent dimensions, and seed vary between generations.
+export function buildZTurboWorkflow(options: {
+  prompt: string;
+  width: number;
+  height: number;
+  seed: number;
+}) {
+  return {
+    "9": {
+      class_type: "SaveImage",
+      inputs: { filename_prefix: "z-image-turbo", images: ["57:8", 0] },
+      _meta: { title: "Save Image" },
+    },
+    "57:30": {
+      class_type: "CLIPLoader",
+      inputs: { clip_name: "qwen_3_4b_fp8_mixed.safetensors", type: "lumina2", device: "default" },
+      _meta: { title: "Load CLIP" },
+    },
+    "57:29": {
+      class_type: "VAELoader",
+      inputs: { vae_name: "ae.safetensors" },
+      _meta: { title: "Load VAE" },
+    },
+    "57:33": {
+      class_type: "ConditioningZeroOut",
+      inputs: { conditioning: ["57:27", 0] },
+      _meta: { title: "Conditioning Zero Out" },
+    },
+    "57:8": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["57:3", 0], vae: ["57:29", 0] },
+      _meta: { title: "VAE Decode" },
+    },
+    "57:28": {
+      class_type: "UNETLoader",
+      inputs: { unet_name: "z_image_turbo_nvfp4.safetensors", weight_dtype: "default" },
+      _meta: { title: "Load Diffusion Model" },
+    },
+    "57:27": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: options.prompt, clip: ["57:30", 0] },
+      _meta: { title: "CLIP Text Encode (Prompt)" },
+    },
+    "57:13": {
+      class_type: "EmptySD3LatentImage",
+      inputs: { width: options.width, height: options.height, batch_size: 1 },
+      _meta: { title: "EmptySD3LatentImage" },
+    },
+    "57:11": {
+      class_type: "ModelSamplingAuraFlow",
+      inputs: { shift: 3, sampling: "flow", model: ["57:28", 0] },
+      _meta: { title: "ModelSamplingAuraFlow" },
+    },
+    "57:3": {
+      class_type: "KSampler",
+      inputs: {
+        seed: options.seed,
+        steps: 8,
+        cfg: 1,
+        sampler_name: "res_multistep",
+        scheduler: "beta",
+        denoise: 1,
+        model: ["57:11", 0],
+        positive: ["57:27", 0],
+        negative: ["57:33", 0],
+        latent_image: ["57:13", 0],
+      },
+      _meta: { title: "KSampler" },
+    },
+  };
+}
+
 type HistoryEntry = {
   status?: { completed?: boolean; status_str?: string; messages?: unknown[] };
   outputs?: Record<string, { images?: Array<{ filename?: string; subfolder?: string; type?: string }> }>;
@@ -240,8 +313,9 @@ export async function generateComfyImage(options: {
   const startedAt = Date.now();
   const deadline = startedAt + GENERATE_TIMEOUT_MS;
 
+  const preset = getGlobalConfig().images.comfyWorkflowPreset;
   let checkpoint = (options.checkpoint || "").trim();
-  if (!checkpoint) {
+  if (preset === "checkpoint" && !checkpoint) {
     const status = await comfyStatus(url);
     if (!status.ok) {
       throw new Error(status.error || `Could not reach ComfyUI at ${url}.`);
@@ -256,7 +330,9 @@ export async function generateComfyImage(options: {
 
   const seed = options.seed ?? Math.floor(Math.random() * 2_147_483_647);
   const { width, height } = comfyDimensions(options.mode, options.aspect);
-  const workflow = buildWorkflow({ checkpoint, prompt: options.prompt, width, height, seed, negative: options.negative });
+  const workflow = preset === "z_turbo"
+    ? buildZTurboWorkflow({ prompt: options.prompt, width, height, seed })
+    : buildCheckpointWorkflow({ checkpoint, prompt: options.prompt, width, height, seed, negative: options.negative });
 
   const submitTimeout = timeoutSignal(STATUS_TIMEOUT_MS * 2);
   let promptId = "";

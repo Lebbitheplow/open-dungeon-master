@@ -29,6 +29,7 @@ export type MaskedConfig = {
     defaultBackend: "" | "comfyui" | "openai" | "mflux-hs" | "sdnq-hs" | "harness";
     comfyUrl: string;
     comfyCheckpoint: string;
+    comfyWorkflowPreset: "checkpoint" | "z_turbo";
     fluxWorkerUrl: string;
     openaiBaseUrl: string;
     openaiModel: string;
