@@ -89,6 +89,9 @@ const nextConfig: NextConfig = {
         // The WASM picture codecs (src/lib/image-variants.ts) are loaded
         // inside a worker thread from a code string, so nothing imports
         // them statically and the tracer would miss them too.
+        // LICENSE is read by nothing, so nothing traces it, but the MIT
+        // notice has to travel with every copy: the image's /app and the
+        // apps' server payload (whose prune keeps it) both start from here.
         outputFileTracingIncludes: {
           "/*": [
             "node_modules/better-sqlite3-multiple-ciphers/**/*",
@@ -99,6 +102,7 @@ const nextConfig: NextConfig = {
             "node_modules/mediasoup/worker/out/Release/**/*",
             "node_modules/@jsquash/**/*",
             "node_modules/wasm-feature-detect/**/*",
+            "LICENSE",
           ],
         },
       }

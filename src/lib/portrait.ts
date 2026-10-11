@@ -60,11 +60,11 @@ function buildPortraitPrompt(sheet: CreateSheetInput, style = ""): string {
 // to /uploads/ so full-sheet edits keep validating. Exported for the campaign
 // cover (src/lib/campaign-cover.ts), which stores its url under the same rule.
 export function copyIntoUploads(generatedUrl: string): { id: string; url: string } {
-  const source = path.join(process.cwd(), "public", ...generatedUrl.replace(/^\//, "").split("/"));
+  const source = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", ...generatedUrl.replace(/^\//, "").split("/"));
   const id = crypto.randomUUID();
-  const uploadsDir = path.join(process.cwd(), "public", "uploads");
+  const uploadsDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
   mkdirSync(uploadsDir, { recursive: true });
-  copyFileSync(source, path.join(uploadsDir, `${id}.png`));
+  copyFileSync(source, path.join(/*turbopackIgnore: true*/ uploadsDir, `${id}.png`));
   return { id, url: `/uploads/${id}.png` };
 }
 

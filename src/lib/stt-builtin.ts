@@ -37,12 +37,12 @@ const REQUIRED_FILES = [
 ];
 
 export function speechCacheDir(): string {
-  return path.join(process.cwd(), "models", "speech");
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "models", "speech");
 }
 
 export function builtinSpeechInstalled(): boolean {
-  const root = path.join(speechCacheDir(), BUILTIN_STT_MODEL);
-  return REQUIRED_FILES.every((file) => existsSync(path.join(root, file)));
+  const root = path.join(/*turbopackIgnore: true*/ speechCacheDir(), BUILTIN_STT_MODEL);
+  return REQUIRED_FILES.every((file) => existsSync(path.join(/*turbopackIgnore: true*/ root, file)));
 }
 
 type Transcriber = (

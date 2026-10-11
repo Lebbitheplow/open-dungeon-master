@@ -62,7 +62,7 @@ export function uploadLimits() {
 }
 
 function uploadsDir(): string {
-  return path.join(process.cwd(), "public", "uploads");
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
 }
 
 // Free bytes on the volume public/uploads lives on, or null when it cannot

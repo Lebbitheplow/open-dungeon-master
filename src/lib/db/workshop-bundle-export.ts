@@ -62,7 +62,7 @@ function loadImage(relPath: unknown, budget: ImageBudget): string {
   }
   let encoded = "";
   try {
-    encoded = encodeBundleImage(relPath, readFileSync(path.join(process.cwd(), "public", relPath)));
+    encoded = encodeBundleImage(relPath, readFileSync(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relPath)));
   } catch {
     // Dangling path; fall through to the skip below.
   }

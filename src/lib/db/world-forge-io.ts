@@ -37,10 +37,10 @@ export type WorldImportResult =
 
 function saveImage(image: BundleImage | null, written: string[]): string {
   if (!image) return "";
-  const dir = path.join(process.cwd(), "public", "uploads");
+  const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
   mkdirSync(dir, { recursive: true });
   const filename = `${crypto.randomUUID()}.${image.ext}`;
-  writeFileSync(path.join(dir, filename), image.bytes);
+  writeFileSync(path.join(/*turbopackIgnore: true*/ dir, filename), image.bytes);
   written.push(`/uploads/${filename}`);
   return `/uploads/${filename}`;
 }
@@ -211,7 +211,7 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
     })();
   } catch (error) {
     // Files no committed row names are taken away again.
-    for (const url of written) rmSync(path.join(process.cwd(), "public", url), { force: true });
+    for (const url of written) rmSync(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", url), { force: true });
     throw error;
   }
 }
@@ -225,7 +225,7 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
   const inline = (url: string) => {
     if (!isUploadedImagePath(url)) return "";
     try {
-      const encoded = encodeBundleImage(url, readFileSync(path.join(process.cwd(), "public", url)));
+      const encoded = encodeBundleImage(url, readFileSync(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", url)));
       if (!encoded || encoded.length > budget) return "";
       budget -= encoded.length;
       return encoded;

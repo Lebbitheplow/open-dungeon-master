@@ -71,7 +71,7 @@ export function backupDir(): string {
 }
 
 function dbPath(): string {
-  return path.resolve(/*turbopackIgnore: true*/ serverEnv("SQLITE_DB_PATH") || path.join(root(), "data", "local-roleplay.sqlite"));
+  return path.resolve(/*turbopackIgnore: true*/ serverEnv("SQLITE_DB_PATH") || path.join(/*turbopackIgnore: true*/ root(), "data", "local-roleplay.sqlite"));
 }
 
 // Archives are the size of the whole state tree and can pass 2 GiB, where
@@ -95,7 +95,7 @@ function envValue(file: string, key: string): string {
 function encryptionKey(): string {
   const fromEnv = serverEnv("DB_ENCRYPTION_KEY").trim();
   if (fromEnv) return fromEnv;
-  const dockerKey = path.join(root(), "data", ".db-key");
+  const dockerKey = path.join(/*turbopackIgnore: true*/ root(), "data", ".db-key");
   return fs.existsSync(dockerKey) ? fs.readFileSync(dockerKey, "utf8").trim() : "";
 }
 
@@ -262,9 +262,9 @@ export async function verifyBackup(name: string): Promise<{ proof: RestoreProof;
     // Prefer the key the archive carries (it matches the archive's data);
     // fall back to this server's key for archives made without one.
     const key =
-      envValue(path.join(stage, ".env.server"), "DB_ENCRYPTION_KEY") ||
-      (fs.existsSync(path.join(stage, "data", ".db-key"))
-        ? fs.readFileSync(path.join(stage, "data", ".db-key"), "utf8").trim()
+      envValue(path.join(/*turbopackIgnore: true*/ stage, ".env.server"), "DB_ENCRYPTION_KEY") ||
+      (fs.existsSync(path.join(/*turbopackIgnore: true*/ stage, "data", ".db-key"))
+        ? fs.readFileSync(path.join(/*turbopackIgnore: true*/ stage, "data", ".db-key"), "utf8").trim()
         : "") ||
       encryptionKey();
 

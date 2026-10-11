@@ -40,13 +40,13 @@ export function worldFromBundle(workshopId: string, world: BundleWorld, ids: Rec
     const id = parsed ? ids[parsed.shelf][index] : undefined;
     return parsed && id ? refOf(parsed.shelf, id) : null;
   });
-  const dir = path.join(process.cwd(), "public", "uploads");
+  const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
   doc.maps = doc.maps.map((atlas) => {
     const image = decodeBundleImage(world.images[atlas.id] ?? "");
     if (!image) return { ...atlas, image: "" };
     mkdirSync(dir, { recursive: true });
     const filename = `${crypto.randomUUID()}.${image.ext}`;
-    writeFileSync(path.join(dir, filename), image.bytes);
+    writeFileSync(path.join(/*turbopackIgnore: true*/ dir, filename), image.bytes);
     return { ...atlas, image: `/uploads/${filename}` };
   });
   saveWorldDoc(workshopId, doc);
