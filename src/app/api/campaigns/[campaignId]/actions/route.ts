@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { resolveActionCharacter } from "@/lib/player-characters";
+import { getActiveEncounter, orderEntryId } from "@/lib/db/encounters";
 import { isErrorResponse, requireVoice } from "@/lib/campaign-api";
 import {
   allocateSeq,
@@ -29,6 +31,7 @@ export const dynamic = "force-dynamic";
 
 const actionSchema = z.object({
   content: z.string().trim().min(1).max(2000),
+  characterId: z.string().trim().min(1).optional(),
   kind: z.enum(["do", "say", "ooc"]).default("do"),
   // The card the Hand played, beside the sentence it wrote. Optional: typed
   // actions and older clients send none, and a malformed one is dropped
@@ -51,8 +54,8 @@ export async function POST(
     return Response.json({ error: "The adventure has not started yet." }, { status: 400 });
   }
 
-  const sheet = getSheetForUser(campaignId, user.id);
-  if (!sheet) {
+  const selected = getSheetForUser(campaignId, user.id);
+  if (!selected) {
     return Response.json({ error: "You need a character to act." }, { status: 400 });
   }
 
@@ -64,6 +67,16 @@ export async function POST(
 
   const { kind } = parsed.data;
   const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
+  const encounter = getActiveEncounter(campaignId);
+  const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  const actor = resolveActionCharacter({
+    sheets: listSheets(campaignId), userId: user.id, selectedId: selected.id,
+    characterId: parsed.data.characterId,
+    initiativeId: kind !== "ooc" && current?.kind === "pc" ? current.characterId : kind !== "ooc" && current ? orderEntryId(current) : undefined,
+    reaction: intent?.card === "reaction", multiCharacter: campaign.gameSettings.multiCharacter,
+  });
+  if ("error" in actor) return Response.json({ error: actor.error }, { status: actor.status });
+  const { sheet } = actor;
 
   // Floor control: during a spotlight only the named players may act (ooc is
   // always allowed); the floor releases once ALL of them have answered.

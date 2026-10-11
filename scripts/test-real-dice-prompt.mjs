@@ -134,4 +134,15 @@ test("rule attaches only when a present sheet belongs to a real-dice player", ()
   assert.equal(buildDmMessages(state, [])[0].content.includes(REAL_DICE_RULE), false);
 });
 
+test("human ownership and selection distinguish siblings from AI companions", () => {
+  const state = makeState();
+  state.members[0].username = "Player A";
+  state.members[0].activeCharacterId = "a2";
+  state.sheets = [makeSheet({ id: "a1", name: "A1" }), makeSheet({ id: "a2", name: "A2" }), makeSheet({ id: "bot", userId: "bot-user", name: "Guide", isCompanion: true })];
+  const block = buildGameStateBlock(state);
+  assert.ok(block.includes("Player A: controls A1 [a1], A2 [a2]; selected A2 [a2]."));
+  assert.ok(block.includes("A human-owned sheet is never an AI companion"));
+  assert.ok(block.includes("exact initiative character"));
+  assert.ok(block.includes("AI companion under your control"));
+});
 console.log(`test-real-dice-prompt: ${passed} tests passed.`);

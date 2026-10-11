@@ -25,7 +25,9 @@ export function fieldedSheets(campaign: Campaign, sheets: CharacterSheet[] = lis
     if (sheet.isCompanion) {
       return true;
     }
-    const chosen = active.get(sheet.userId) || firstByUser.get(sheet.userId);
+    const selected = active.get(sheet.userId);
+    const chosen = sheets.some((entry) => entry.userId === sheet.userId && !entry.isCompanion && entry.id === selected)
+      ? selected : firstByUser.get(sheet.userId);
     return !chosen || chosen === sheet.id;
   });
 }

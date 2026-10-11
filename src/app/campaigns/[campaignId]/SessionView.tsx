@@ -1,5 +1,8 @@
 "use client";
 
+import { ownedCharacters, selectedCharacter, initiativeCharacter } from "@/lib/player-characters";
+import { CharacterSwitcher } from "@/app/campaigns/[campaignId]/CharacterSwitcher";
+
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { levelForXp } from "@/lib/srd";
@@ -311,7 +314,10 @@ export function SessionView({
   // Everything below runs on every dm_delta while the DM narrates, so the
   // values handed to the memoized panels are stabilized with useMemo and
   // useCallback. All hooks must stay above the null guard further down.
-  const mySheet = useMemo(() => sheets.find((sheet) => sheet.userId === me?.id), [sheets, me?.id]);
+  const mySheet = useMemo(() => selectedCharacter(sheets, me?.id ?? "", state.activeSheetId), [sheets, me?.id, state.activeSheetId]);
+  const owned = useMemo(() => ownedCharacters(sheets, me?.id ?? ""), [sheets, me?.id]);
+  const turnSheet = initiativeCharacter(sheets, me?.id ?? "", state.encounter?.acting?.id);
+  const actingSheet = turnSheet ?? mySheet;
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns
   // the level, so the party card offers a Level up button until it is done.
@@ -374,7 +380,7 @@ export function SessionView({
     Boolean(firstDmMessageId) &&
     narration.playingMessageId === firstDmMessageId &&
     messages.filter((message) => message.authorType === "dm").length === 1;
-  const myName = mySheet?.name ?? "your character";
+  const myName = actingSheet?.name ?? "your character";
   const meId = me?.id ?? "";
   // Muted by the party lead: the server refuses the send, so the box says
   // so instead of letting the player type into a wall.
@@ -476,7 +482,7 @@ export function SessionView({
               ? leadPrivate
                 ? ["director", { oneShot: null, absoluteCommand: content }]
                 : ["lead-note", { content }]
-              : ["actions", { content, kind }];
+              : ["actions", { content, kind, characterId: (kind === "ooc" ? mySheet : actingSheet)?.id }];
         const response = await fetch(`/api/campaigns/${campaignId}/${route}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -494,7 +500,7 @@ export function SessionView({
         setSending(false);
       }
     },
-    [campaignId, input, sending, gate.inputBlocked, muted, kind, leadPrivate, speaker],
+    [campaignId, input, sending, gate.inputBlocked, muted, kind, leadPrivate, speaker, mySheet, actingSheet],
   );
 
   const clearChatTarget = useCallback(() => setChatTarget(null), []);
@@ -680,6 +686,9 @@ export function SessionView({
 
   return (
     <main className="cine-stage flex h-dvh flex-col">
+      {!isDm && campaign.gameSettings.multiCharacter !== "off" && owned.length > 1 ? (
+        <CharacterSwitcher campaignId={campaign.id} sheets={owned} selectedId={mySheet?.id ?? ""} initiativeName={turnSheet?.name} onError={setError} />
+      ) : null}
       {/* The cinematic frame ("ODM World Concepts" 3b): the scene's painting
           behind everything, the party down the left, the turn order along
           the top, the last roll as a pill. CinematicParts.tsx. */}
@@ -743,10 +752,10 @@ export function SessionView({
                       // The engine's count, the one the Hand reads
                       // (src/lib/battlemap/hand-table.ts): a spent reaction
                       // lives in reactionsUsed, not the turn budget.
-                      mySheet && !mySheet.isCompanion && state.encounter
+                      actingSheet && !actingSheet.isCompanion && state.encounter
                         ? turnHudBudget(
-                            turnFromEncounter(state.encounter, mySheet, {
-                              myTurn: state.encounter.turn?.ownerId === mySheet.id,
+                            turnFromEncounter(state.encounter, actingSheet, {
+                              myTurn: state.encounter.turn?.ownerId === actingSheet.id,
                             }),
                           )
                         : null
@@ -797,6 +806,7 @@ export function SessionView({
               edges={state.battleMap?.edges}
               sheets={sheets}
               meUserId={me.id}
+              activeSheetId={state.activeSheetId}
               steersStory={steersStory}
               isDm={isDm}
               kind={kind}

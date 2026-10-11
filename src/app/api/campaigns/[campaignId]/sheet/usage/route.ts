@@ -32,8 +32,7 @@ export const dynamic = "force-dynamic";
 //   by `characterId`.
 const usageSchema = z
   .object({
-    // Whose sheet, for a correction by the DM or the lead. Anyone else is
-    // answered on their own sheet whatever they name.
+    // Players may name any sheet they own; DM/lead corrections may name any sheet.
     characterId: z.string().max(80).optional(),
     slots: z
       .record(z.string().regex(/^[1-9]$/), z.number().int().min(0).max(10))
@@ -80,10 +79,10 @@ export async function POST(
   // found before the body is judged: a correction names it.
   const corrects = capsFor(context).role === "dm" || isLead(context);
   const named =
-    corrects && raw && typeof raw === "object" && typeof raw.characterId === "string"
+    raw && typeof raw === "object" && typeof raw.characterId === "string"
       ? getSheetById(raw.characterId)
       : null;
-  if (named && named.campaignId !== campaignId) {
+  if (raw?.characterId && (!named || named.campaignId !== campaignId || (!corrects && (named.userId !== context.user.id || named.isCompanion)))) {
     return Response.json({ error: "Character not found." }, { status: 404 });
   }
   const sheet = named ?? getSheetForUser(campaignId, context.user.id);

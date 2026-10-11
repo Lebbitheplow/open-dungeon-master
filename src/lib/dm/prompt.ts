@@ -879,8 +879,13 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
+  sections.push(`Human control and selection:\n${state.members.map((member) => {
+    const owned = sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion);
+    const selected = owned.find((sheet) => sheet.id === member.activeCharacterId) ?? owned[0];
+    return owned.length ? `${member.username}: controls ${owned.map((sheet) => `${sheet.name} [${sheet.id}]`).join(", ")}; selected ${selected?.name} [${selected?.id}].` : "";
+  }).filter(Boolean).join("\n")}`);
   sections.push(
-    `Party:\n${sheets
+    `Human players may control multiple independent characters. A human-owned sheet is never an AI companion, including when its player has selected another sheet. Respect each player message\'s characterId as the acting character; do not turn an unselected sibling into a follower or act for them. In combat, ask the human for the exact initiative character. Bound pets on a sheet remain separate from independently controlled party sheets.\nParty:\n${sheets
       .map((sheet) => {
         const base = describeSheet(
           sheet,
