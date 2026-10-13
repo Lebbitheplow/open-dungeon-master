@@ -10,7 +10,7 @@ Four backends are exposed in the Images panel:
 |---|---|---|
 | MFLUX Mac | Apple Silicon (MLX) | FLUX.2-klein uncensored |
 | SDNQ GPU/CPU | NVIDIA CUDA, supported AMD (ROCm), CPU | FLUX.2-klein |
-| ComfyUI | anything ComfyUI runs on | your ComfyUI checkpoints |
+| ComfyUI | anything ComfyUI runs on | the image model catalog, or any checkpoint |
 | OpenAI | none, the pictures are made off-box | gpt-image-1 and friends |
 
 ## The FLUX worker (MFLUX / SDNQ)
@@ -52,81 +52,65 @@ SDNQ backend because MLX is not available there.
 ## ComfyUI
 
 Already run [ComfyUI](https://github.com/comfyanonymous/ComfyUI)? Pick
-**ComfyUI** as the Images backend and the app drives your instance directly —
+**ComfyUI** as the Images backend and the app drives your instance directly:
 no FLUX worker, no `ultra-fast-image-gen`, and it works on any hardware
 ComfyUI supports.
 
 1. Start ComfyUI (default `http://127.0.0.1:8188`).
-2. In the Images panel, choose **ComfyUI**, confirm the server URL, and pick
-   a checkpoint from the list (or leave it on **Auto** to use the first one).
+2. In **Admin > Image generation**, choose **ComfyUI**, confirm the server URL,
+   and pick an **Image model**.
 
-The app submits a plain text-to-image workflow (positive/negative prompt,
-KSampler at 25 steps, CFG 6) and saves the finished PNG alongside the other
-generated images. Sizes clamp to a 1024/1344 long side, which suits
-SDXL-class checkpoints. Notes:
+Notes:
 
 - Character portrait references are not used by this backend; scenes with
   saved characters generate from the text prompt alone.
 - Generations queue behind whatever else your ComfyUI instance is doing.
 - Set `COMFYUI_URL` in `.env.local` to change the default server URL.
 
-### Benchmarking image models on your hardware
+### Image models
 
-`src/lib/image-models` catalogues the image models ComfyUI can run for the
-app, taken from ComfyUI's own workflow templates (comfyui-workflow-templates
-0.11.78, ComfyUI 0.39.2): each model's files and where they download from, and
-the graph it runs, with its steps, CFG, sampler, scheduler and shift.
-`scripts/bench-image-models.mjs` sends exactly that graph to a running ComfyUI
-and measures what a table would wait for:
+The **Image model** picker offers two kinds of choice:
 
-- the app's own prompts, a character portrait and a creature token (square)
-  and a scene (landscape), at the 1024 px fast size;
-- seconds per picture once the model is loaded, timed by ComfyUI from the
-  start to the end of each job;
-- the first picture after a model switch, which also loads the files;
-- peak GPU memory, from ComfyUI's own `/system_stats` while the job runs (on a
-  unified-memory machine this is the share of system memory the GPU mapped).
+- **Models**: the image models the app knows how to run, catalogued in
+  `src/lib/image-models`. Each carries its own ComfyUI graph and settings
+  (steps, CFG, sampler, scheduler, shift), taken from ComfyUI's own workflow
+  templates with the prompt-rewriting nodes left out, since the storyteller
+  already writes the prompt. A model is offered once ComfyUI lists every file
+  it needs. Names do not have to match exactly: another precision of the same
+  weights (fp8, int8, bf16), or a copy in a subfolder, counts. Choosing a model
+  paints every campaign's ComfyUI pictures with it.
+- **Checkpoints**: any checkpoint ComfyUI lists, and a campaign may keep its
+  own. Checkpoints the catalog recognises (SDXL, Pony, SD 3.5, NetaYume,
+  HiDream-O1) run with their family's settings; others run with the SDXL-era
+  defaults (25 steps, CFG 6). Video models, upscalers, refiners and bare
+  diffusion models linked into `models/checkpoints` are left out, since none of
+  them can paint a picture on their own.
 
-```bash
-node scripts/bench-image-models.mjs                    # every installed model
-node scripts/bench-image-models.mjs --models z_turbo,flux2_klein_4b
-node scripts/bench-image-models.mjs --models all --download --comfy-dir ~/ComfyUI
-node scripts/bench-image-models.mjs --table            # verified.json as Markdown
-```
+Under the picker, **Image models for this machine** lists the whole catalog
+for the hardware ComfyUI runs on: what that hardware was measured doing with
+each model, which are installed, and for the rest the files to add, with
+their download links and the `ComfyUI/models/` folder each one goes in. The
+setup wizard offers the same choices, preselects the model its hardware was
+measured recommending when ComfyUI has its files, and names the best measured
+model when it does not.
 
-Each model's pictures and a contact sheet land in `/tmp/odm-image-bench` (or
-`--out DIR`), so the numbers come with something to judge by eye. Flags:
+Distilled models (the Turbo, Lightning and schnell ones, and most others at
+CFG 1) run without a negative prompt, so a table's boundary cannot keep
+anything out of their pictures; the picker says so when one is chosen. The
+boundary's words are never folded into the positive prompt instead, because a
+diffusion model paints the nouns it is given, negated or not.
 
-| Flag | Does |
-|---|---|
-| `--url` | ComfyUI's address, default `http://127.0.0.1:8188` |
-| `--models` | `installed` (default), `all`, or catalog ids, comma-separated |
-| `--download --comfy-dir DIR` | fetch a model's missing files into `DIR/models/<folder>` first; a Hugging Face token from `HF_TOKEN` or `~/.cache/huggingface/token` is sent for gated repositories; what was fetched is listed in `<out>/downloaded.json` so it can be removed again |
-| `--write` | record the rows in `src/lib/image-models/verified.json` |
-| `--hardware ID` | the profile to record when the device is not one the app recognises |
-| `--steps N`, `--cfg N`, `--files slot=name`, `--drop-patch Node`, `--label L` | try other settings or another precision of a file; leave `--write` off for these |
-| `--timeout-min N` | give up on one picture after N minutes (default 30) |
-| `--restart-cmd CMD` | restart ComfyUI with CMD before each model (for example `"systemctl --user restart comfyui"`) instead of asking it to unload the last one; on a unified-memory machine ComfyUI's unload copies the old model to CPU memory first, which can run the box out of memory between two big models |
+### Measured hardware
 
-`verified.json` holds one row per model and hardware profile: the files that
-ran, steps, seconds for each picture shape, the first picture, peak memory, a
-verdict (`recommended`, `works`, `poor` for a model that runs but whose pictures are
-not fit for a table, `fails`) and a note. The timing fields come
-from the script; the verdict and note come from looking at the pictures, and a
-later `--write` keeps them. Hardware profiles live in `HARDWARE_PROFILES`
-(`src/lib/image-models/curate.ts`), each a name pattern matched against the
-device ComfyUI reports; add one for your GPU, run with `--write`, and send the
-rows with the contact sheets in a pull request. `npm test` checks every row
-names a catalog model and a known profile, once each.
+Each catalog model was timed with `scripts/bench-image-models.mjs`, which
+sends the graph the server sends: the app's own portrait, creature and scene
+prompts at 1024 px (fast mode), seconds per picture once the model is loaded,
+the first picture after a model switch (which loads it from disk), and peak GPU
+memory. The rows live in `src/lib/image-models/verified.json`, one per model
+and hardware profile, and the picker shows the row for the hardware it
+recognises from ComfyUI's `/system_stats`.
 
-The run so far on the reference machine, an AMD Ryzen AI Max+ 395 with 128 GB
-of unified memory, measured as the box runs day to day: llama-server with the
-default storyteller model (qwen3.6-35b at Q8, which it unloads when idle), Kokoro
-and the other services up beside ComfyUI. A model whose first picture takes over
-four minutes gets one portrait instead of two. If ComfyUI is restarted mid-run
-(an out-of-memory kill while switching between two big models is the usual cause
-on this machine), the script waits for it and measures that model again, and the
-row says so.
+<!-- measured-table: node scripts/bench-image-models.mjs --table -->
 
 On strix-halo (AMD Radeon 8060S Graphics, ComfyUI 0.39.2, torch 2.14.0+rocm7.2):
 
@@ -176,7 +160,25 @@ On strix-halo (AMD Radeon 8060S Graphics, ComfyUI 0.39.2, torch 2.14.0+rocm7.2):
 | FLUX.2 dev | fails | - | - | - | - | 20 | Ran out of memory twice from a freshly restarted ComfyUI: the 35 GB model and 18 GB Mistral encoder do not fit beside this box's other services (about 40 GB, with swap full). |
 
 FLUX.2 [klein] 9B is not measured: its weights are gated behind a licence the
-reference machine's account has not accepted.
+reference machine's account has not accepted. "first picture" is the first after
+ComfyUI loads the model; rows from ERNIE-Image on were measured with ComfyUI
+restarted before each model, earlier rows after asking it to unload the last one.
+
+### Measuring your own hardware
+
+```bash
+node scripts/bench-image-models.mjs                       # every installed model
+node scripts/bench-image-models.mjs --models z_turbo,flux2_klein_4b
+node scripts/bench-image-models.mjs --models all --download --comfy-dir ~/ComfyUI
+```
+
+Pictures and a contact sheet per model land in `/tmp/odm-image-bench` (or
+`--out`) for review. `--write` records the rows in `verified.json`; a device
+the app does not recognise yet needs a profile in `HARDWARE_PROFILES`
+(`src/lib/image-models/curate.ts`) and `--hardware <id>`. `--steps`, `--cfg`,
+`--files slot=name` and `--drop-patch <node>` try other settings without
+writing anything. `--download` sends a Hugging Face token from `HF_TOKEN` or
+`~/.cache/huggingface/token` for the gated repositories (FLUX.2 [klein] 9B).
 
 ## OpenAI
 

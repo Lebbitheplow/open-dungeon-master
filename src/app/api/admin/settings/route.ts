@@ -3,6 +3,7 @@ import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { speedStatus } from "@/lib/speed-status";
 import { getGlobalConfig, saveGlobalConfig } from "@/lib/db/app-settings";
 import { isDeviceWorld, serverEnv } from "@/lib/server-env";
+import { isComfyPreset } from "@/lib/image-models/catalog";
 import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
 import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
 import { forgetHarnessStatus } from "@/lib/harness/status";
@@ -158,7 +159,7 @@ const patchSchema = z.object({
       defaultBackend: z.enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs", "harness"]).optional(),
       comfyUrl: z.string().trim().max(500).optional(),
       comfyCheckpoint: z.string().trim().max(300).optional(),
-      comfyWorkflowPreset: z.enum(["checkpoint", "z_turbo"]).optional(),
+      comfyWorkflowPreset: z.string().trim().max(80).refine(isComfyPreset, "Not a known image model.").optional(),
       fluxWorkerUrl: z.string().trim().max(500).optional(),
       openaiBaseUrl: z.string().trim().max(500).optional(),
       openaiModel: z.string().trim().max(200).optional(),
@@ -239,8 +240,7 @@ export async function PATCH(request: Request) {
       (harnessPatch.binaryPath !== undefined && harnessPatch.binaryPath !== before.binaryPath));
   // A save that names a checkpoint and no workflow means that checkpoint:
   // the desktop app's local AI installer sends only the file it installed,
-  // and a Z-Image Turbo choice left standing would paint every picture
-  // without it.
+  // and a catalog model left standing would paint every picture without it.
   const images =
     parsed.data.images?.comfyCheckpoint !== undefined && parsed.data.images.comfyWorkflowPreset === undefined
       ? { ...parsed.data.images, comfyWorkflowPreset: "checkpoint" as const }

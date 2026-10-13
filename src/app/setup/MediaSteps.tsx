@@ -3,10 +3,11 @@
 import { Check, Loader2, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { registerOutput, releaseOutput } from "@/lib/audio-devices";
-import { zImageMissing } from "@/lib/setup/discovery-logic";
+import { CHECKPOINT_PRESET, comfyModel } from "@/lib/image-models/catalog";
+import { honoursNegative } from "@/lib/image-models/workflow";
 import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
-import { fetchComfyModels } from "@/app/admin/AdminImagesSection";
+import { comfyModelOptions, comfyModelPatch, fetchComfyModels } from "@/app/admin/AdminImagesSection";
 import { BuiltinSpeechCard } from "@/app/admin/BuiltinSpeechCard";
 import { HarnessPictureTest } from "@/app/admin/HarnessPictureTest";
 import { comfyFromScan, type Draft } from "@/app/setup/draft";
@@ -19,8 +20,6 @@ import { ChoiceCard, ChoiceCards, Lamp, host, type ScanResult } from "@/app/setu
 type Update = (change: (draft: Draft) => Draft) => void;
 
 const MEDIA_GUIDE = "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/media-setup.md";
-// Z-Image Turbo in the model picker; no checkpoint file is named like this.
-const Z_TURBO = "preset:z_turbo";
 type SetupComfyModels = NonNullable<ScanResult["comfyui"]> & { error: string | null };
 
 const sameComfyAddress = (left: string, right: string) => left.replace(/\/+$/, "") === right.replace(/\/+$/, "");
@@ -34,12 +33,17 @@ export async function loadSetupComfyModels(
   if (!address) return null;
   if (scanned && sameComfyAddress(address, scanned.url)) return { ...scanned, url: address, error: null };
   const found = await fetchComfyModels(address, signal);
-  return {
-    url: address,
-    checkpoints: found.checkpoints,
-    zImage: Boolean(found.zImage && zImageMissing(found.zImage).length === 0),
-    error: found.error,
-  };
+  return { url: address, checkpoints: found.checkpoints, models: found.models, hardware: found.hardware, error: found.error };
+}
+
+// The best model measured on this hardware, when this ComfyUI lacks it and
+// has none as good: worth a line in the wizard.
+export function betterModelHint(comfy: SetupComfyModels | null): string {
+  if (!comfy?.hardware || comfy.error) return "";
+  const recommended = comfy.models.filter((model) => model.verified?.verdict === "recommended");
+  if (!recommended.length || recommended.some((model) => !model.missing.length)) return "";
+  const best = recommended[0];
+  return `Measured best on ${comfy.hardware.label}: ${comfyModel(best.id)?.label ?? best.id}, about ${Math.round(best.verified!.seconds.square)} s a picture. This ComfyUI lacks its files (${best.downloadGb} GB); Admin > Images lists them.`;
 }
 
 function KeyField({ label, value, onChange, saved, hint }: { label: string; value: string; onChange: (value: string) => void; saved: boolean; hint: string }) {
@@ -99,7 +103,7 @@ export function PicturesStep({
         })
         .catch(() => {
           if (!controller.signal.aborted) {
-            setCheckedComfy({ url: address, checkpoints: [], zImage: false, error: "Could not check ComfyUI. Check its address." });
+            setCheckedComfy({ url: address, checkpoints: [], models: [], hardware: null, error: "Could not check ComfyUI. Check its address." });
           }
         });
     }, 250);
@@ -113,6 +117,10 @@ export function PicturesStep({
     ? { ...scannedComfy, url: address, error: null }
     : checkedComfy?.url === address ? checkedComfy : null;
   const checkingComfy = Boolean(address && draft.pictures === "comfyui" && !comfy);
+  // The same choices as Admin > Images: catalog models this ComfyUI has every
+  // file for, measured ones first, then its checkpoints.
+  const options = comfyModelOptions(draft.comfy, comfy && { ...comfy, device: null });
+  const chosenModel = draft.comfy.preset !== CHECKPOINT_PRESET ? comfyModel(draft.comfy.preset) : undefined;
   const pick = (pictures: Draft["pictures"]) =>
     update((current) => ({
       ...current,
@@ -183,24 +191,21 @@ export function PicturesStep({
                 <span className="mb-1 block text-xs font-medium text-stone-400">Model file (checkpoint)</span>
                 <input className={ui.input} disabled placeholder="Checking installed models…" />
               </label>
-            ) : comfy?.checkpoints.length || comfy?.zImage || (comfy && draft.comfy.preset === "z_turbo") ? (
-              <div role="group" aria-label="Model file" className="block">
-                <span className="mb-1 block text-xs font-medium text-stone-400">Model file (checkpoint)</span>
+            ) : comfy && (comfy.checkpoints.length || options.length > 1) ? (
+              <div role="group" aria-label="Image model" className="block">
+                <span className="mb-1 block text-xs font-medium text-stone-400">Image model</span>
                 <Select
-                  value={draft.comfy.preset === "z_turbo" ? Z_TURBO : draft.comfy.checkpoint}
-                  onChange={(value) => setComfy(value === Z_TURBO ? { preset: "z_turbo" } : { checkpoint: value, preset: "checkpoint" })}
-                  options={[
-                    ...comfy.checkpoints.map((name) => ({ value: name, label: name })),
-                    ...(draft.comfy.checkpoint && !comfy.checkpoints.includes(draft.comfy.checkpoint)
-                      ? [{ value: draft.comfy.checkpoint, label: draft.comfy.checkpoint, hint: "Saved selection; not reported by this ComfyUI." }]
-                      : []),
-                    // Offered once its three files are found (src/lib/setup/discovery.ts),
-                    // and kept in the list while it is the saved choice.
-                    ...(comfy.zImage || draft.comfy.preset === "z_turbo"
-                      ? [{ value: Z_TURBO, label: "Z-Image Turbo", hint: comfy.zImage ? "Diffusion model, Qwen 3 4B encoder and VAE found" : "Its files were not all found on this ComfyUI" }]
-                      : []),
-                  ]}
-                  label="Model file (checkpoint)"
+                  value={draft.comfy.preset !== CHECKPOINT_PRESET ? `preset:${draft.comfy.preset}` : `checkpoint:${draft.comfy.checkpoint}`}
+                  onChange={(value) => {
+                    const patch = comfyModelPatch(value, options);
+                    if (!patch) return;
+                    setComfy({
+                      preset: patch.comfyWorkflowPreset ?? CHECKPOINT_PRESET,
+                      ...(patch.comfyCheckpoint !== undefined ? { checkpoint: patch.comfyCheckpoint } : {}),
+                    });
+                  }}
+                  options={options}
+                  label="Image model"
                   className="w-full"
                 />
               </div>
@@ -213,10 +218,11 @@ export function PicturesStep({
           </div>
           {comfy?.error ? <p role="alert" className="text-xs text-red-300">{comfy.error}</p> : checkingComfy ? <p role="status" className="text-xs text-stone-500">Checking models at this address…</p> : null}
           <p className="text-[11px] text-stone-500">
-            {draft.comfy.preset === "z_turbo"
-              ? "Z-Image Turbo runs without a negative prompt, so a table's boundary cannot keep anything out of its pictures."
+            {chosenModel && !honoursNegative(chosenModel)
+              ? `${chosenModel.label} runs without a negative prompt, so a table's boundary cannot keep anything out of its pictures.`
               : "Any checkpoint works; the campaign's genre supplies the art style."}
           </p>
+          {betterModelHint(comfy) ? <p className="text-[11px] text-stone-500">{betterModelHint(comfy)}</p> : null}
         </div>
       ) : draft.pictures === "agent" ? (
         <div key="agent" className="reveal-height">

@@ -1,7 +1,7 @@
 // The ComfyUI image models ODM knows how to paint with: the files each one
 // needs, where they download from, and the graph it runs. Pure data, so the
-// benchmark (scripts/bench-image-models.mjs) and the server's image backend
-// can build the very same workflow.
+// server (src/lib/comfyui.ts), the setup wizard and
+// scripts/bench-image-models.mjs build the very same workflow.
 
 // The ComfyUI models/ folders a catalog file lives in.
 export type ComfyFolder = "checkpoints" | "diffusion_models" | "text_encoders" | "vae" | "loras";
@@ -109,7 +109,7 @@ export type GraphRecipe = {
 };
 
 export type ComfyModel = {
-  // The model's key in the catalog and in verified.json.
+  // Stored as images.comfyWorkflowPreset when the admin picks it.
   id: string;
   label: string;
   family: string;
@@ -117,7 +117,7 @@ export type ComfyModel = {
   license: string;
   // YYYY-MM the weights came out.
   released: string;
-  // One line on what it is good at and what it costs.
+  // One line for the picker: what it is good at, what it costs.
   blurb: string;
   // A specialist look; anime models paint anime whatever the genre asks.
   style?: "anime";

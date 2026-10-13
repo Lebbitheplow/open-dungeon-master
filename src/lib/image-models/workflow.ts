@@ -1,9 +1,8 @@
 import type { ComfyModel, GraphPatch, GraphValue, GuiderSpec, ModelFiles, SigmasSpec } from "./types.ts";
 
-// One catalog model's ComfyUI API graph for one picture. The benchmark
-// (scripts/bench-image-models.mjs) builds through here, and the server's
-// image backend is to as well, so a measured time is the time of the graph
-// ODM really sends.
+// One catalog model's ComfyUI API graph for one picture. The server
+// (src/lib/comfyui.ts) and scripts/bench-image-models.mjs both build through
+// here, so a measured time is the time of the graph ODM really sends.
 
 // Kept out of every picture whose model honours a negative prompt; a
 // table's boundary adds its own words after these.

@@ -46,7 +46,7 @@ let loaded = await (await GET()).json();
 assert.equal(loaded.config.images.comfyWorkflowPreset, "z_turbo");
 assert.equal(loaded.config.images.comfyCheckpoint, "saved-checkpoint.safetensors");
 passed += 1;
-console.log("ok - admin PATCH persists and GET reloads the Z-Image Turbo preset");
+console.log("ok - admin PATCH persists and GET reloads a catalog model preset");
 
 const render = (config) => renderToStaticMarkup(React.createElement(AdminImagesSection, {
   images: config.images,
@@ -64,18 +64,58 @@ assert.doesNotMatch(zHtml, /ComfyUI workflow preset|Checkpoint \(model file\)/);
 passed += 1;
 console.log("ok - rendered Z selection shows one image model control");
 
-const options = comfyModelOptions("saved-checkpoint.safetensors", ["installed.safetensors"], true);
+// What /api/comfy reports for a ComfyUI (src/lib/comfyui.ts).
+const report = (id, files, { missing = [], verified = null } = {}) => ({ id, files, missing, downloadGb: 0, verified, needGb: null, fits: null });
+const zFiles = { unet: "zimage/z_image_turbo_bf16.safetensors", clip: "qwen_3_4b.safetensors", vae: "ae.safetensors" };
+const measured = { verdict: "recommended", seconds: { square: 19, landscape: 14.7 }, coldSeconds: 24, peakGb: 23.6, steps: 8, device: "AMD Radeon 8060S Graphics" };
+const discovery = (models, checkpoints = ["installed.safetensors"]) => ({
+  checkpoints, models, hardware: { id: "strix-halo", label: "AMD Strix Halo" }, device: null, error: null,
+});
 const DEFAULT = { value: "checkpoint:", label: "Default checkpoint", hint: "CyberRealisticXLPlay_V6.0.safetensors" };
+
+const found = discovery([
+  report("z_turbo", zFiles, { verified: measured }),
+  report("flux2_klein_4b", { unet: "", clip: "qwen_3_4b.safetensors", vae: "" }, { missing: [{ what: "the FLUX.2 klein 4B model" }] }),
+]);
+const options = comfyModelOptions({ checkpoint: "saved-checkpoint.safetensors", preset: "checkpoint" }, found);
+
+// A model this hardware failed to run, or that peaked past this GPU, is
+// kept off the picker; the saved one stays whatever its verdict.
+const unfit = discovery([
+  report("z_turbo", zFiles, { verified: measured }),
+  { ...report("flux2_dev", zFiles, { verified: { ...measured, verdict: "fails" } }) },
+  { ...report("krea2_turbo", zFiles), needGb: 90, fits: false },
+]);
+assert.deepEqual(
+  comfyModelOptions({ checkpoint: "", preset: "checkpoint" }, unfit).filter((option) => option.group === "Models").map((option) => option.value),
+  ["preset:z_turbo"],
+);
+assert.ok(
+  comfyModelOptions({ checkpoint: "", preset: "flux2_dev" }, unfit).some((option) => option.value === "preset:flux2_dev"),
+  "the saved model is offered even when its verdict is fails",
+);
+passed += 1;
+console.log("ok - the picker leaves off what cannot paint here, keeping the saved model");
 assert.deepEqual(options, [
   DEFAULT,
-  { value: "checkpoint:saved-checkpoint.safetensors", label: "saved-checkpoint.safetensors", hint: "Saved selection; not reported by this ComfyUI." },
-  { value: "checkpoint:installed.safetensors", label: "installed.safetensors" },
-  { value: "preset:z_turbo", label: "Z-Image Turbo" },
+  { value: "preset:z_turbo", label: "Z-Image Turbo", group: "Models", hint: "Recommended. 19 s a picture, peaks 23.6 GB on AMD Strix Halo." },
+  { value: "checkpoint:saved-checkpoint.safetensors", label: "saved-checkpoint.safetensors", group: "Checkpoints", hint: "Saved selection; not reported by this ComfyUI." },
+  { value: "checkpoint:installed.safetensors", label: "installed.safetensors", group: "Checkpoints" },
 ]);
-assert.deepEqual(comfyModelOptions("", [], true), [
+// Before any check: the saved model is still offered, with nothing claimed about it.
+assert.deepEqual(comfyModelOptions({ checkpoint: "", preset: "z_turbo" }, null), [
   DEFAULT,
-  { value: "preset:z_turbo", label: "Z-Image Turbo" },
+  { value: "preset:z_turbo", label: "Z-Image Turbo", group: "Models" },
 ]);
+// A saved model whose files are gone stays listed, and says so.
+assert.deepEqual(comfyModelOptions({ checkpoint: "", preset: "flux2_klein_4b" }, found).find((option) => option.value === "preset:flux2_klein_4b"), {
+  value: "preset:flux2_klein_4b", label: "FLUX.2 [klein] 4B", group: "Models", hint: "Its files are not all on this ComfyUI.",
+});
+// A checkpoint the catalog knows is named with its settings.
+assert.equal(
+  comfyModelOptions({ checkpoint: "", preset: "checkpoint" }, discovery([], ["sd3.5_large_fp8_scaled.safetensors"])).at(-1).hint,
+  "Stable Diffusion 3.5 Large settings.",
+);
 assert.deepEqual(comfyModelPatch("checkpoint:installed.safetensors", options), {
   comfyWorkflowPreset: "checkpoint", comfyCheckpoint: "installed.safetensors",
 });
@@ -83,11 +123,10 @@ assert.deepEqual(comfyModelPatch("preset:z_turbo", options), { comfyWorkflowPres
 assert.deepEqual(comfyModelPatch("checkpoint:saved-checkpoint.safetensors", options), {
   comfyWorkflowPreset: "checkpoint", comfyCheckpoint: "saved-checkpoint.safetensors",
 });
-assert.deepEqual(comfyModelPatch("checkpoint:", options), {
-  comfyWorkflowPreset: "checkpoint", comfyCheckpoint: "",
-});
+assert.deepEqual(comfyModelPatch("checkpoint:", options), { comfyWorkflowPreset: "checkpoint", comfyCheckpoint: "" });
 assert.equal(comfyModelPatch("checkpoint:invented.safetensors", options), null);
-const collision = comfyModelOptions("", ["preset:z_turbo"], true);
+assert.equal(comfyModelPatch("preset:flux2_klein_4b", options), null);
+const collision = comfyModelOptions({ checkpoint: "", preset: "checkpoint" }, discovery([], ["preset:z_turbo"]));
 assert.deepEqual(comfyModelPatch("checkpoint:preset:z_turbo", collision), {
   comfyWorkflowPreset: "checkpoint", comfyCheckpoint: "preset:z_turbo",
 });
@@ -95,37 +134,39 @@ const restored = { ...loaded.config, images: { ...loaded.config.images, ...comfy
 assert.match(render(restored), /saved-checkpoint\.safetensors/);
 assert.doesNotMatch(render(restored), /ComfyUI workflow preset|Checkpoint \(model file\)/);
 passed += 1;
-console.log("ok - discovered, saved, default, and Z choices map to one persisted selection");
+console.log("ok - installed models, saved, default and checkpoint choices map to one persisted selection");
 
-const found = { unet: "zimage/z_image_turbo_bf16.safetensors", clip: "qwen_3_4b.safetensors", vae: "ae.safetensors" };
-const lacking = { ...found, clip: "" };
-assert.deepEqual(comfyModelOptions("", [], true, found).at(-1), { value: "preset:z_turbo", label: "Z-Image Turbo", hint: "Uses z_image_turbo_bf16.safetensors" });
-assert.deepEqual(comfyModelOptions("", [], true, lacking).at(-1), { value: "preset:z_turbo", label: "Z-Image Turbo", hint: "Its files are not all on this ComfyUI." });
-// A failed check says nothing about the files.
-assert.deepEqual(comfyModelOptions("", [], false, lacking).at(-1), { value: "preset:z_turbo", label: "Z-Image Turbo" });
-assert.equal(comfyModelStatus(null, true), "Checking installed models…");
-assert.equal(comfyModelStatus({ checkpoints: [], zImage: null, error: "Could not reach ComfyUI." }, true), "Could not reach ComfyUI.");
-assert.equal(comfyModelStatus({ checkpoints: ["a.safetensors"], zImage: found, error: null }, false), "Installed checkpoints from ComfyUI.");
-assert.match(comfyModelStatus({ checkpoints: [], zImage: found, error: null }, true), /with z_image_turbo_bf16\.safetensors, qwen_3_4b\.safetensors and ae\.safetensors\. It runs without a negative prompt/);
-assert.equal(comfyModelStatus({ checkpoints: [], zImage: lacking, error: null }, true), "This ComfyUI is missing the Qwen 3 4B text encoder (models/text_encoders).");
+assert.equal(comfyModelStatus(null, "z_turbo"), "Checking installed models…");
+assert.equal(comfyModelStatus({ ...found, error: "Could not reach ComfyUI." }, "z_turbo"), "Could not reach ComfyUI.");
+assert.equal(comfyModelStatus(found, "checkpoint"), "Installed checkpoints from ComfyUI.");
+assert.match(
+  comfyModelStatus(found, "z_turbo"),
+  /with z_image_turbo_bf16\.safetensors, qwen_3_4b\.safetensors and ae\.safetensors\. It runs without a negative prompt/,
+);
+assert.equal(comfyModelStatus(found, "flux2_klein_4b"), "This ComfyUI is missing the FLUX.2 klein 4B model.");
+// A model that honours a negative prompt says nothing about the boundary.
+assert.doesNotMatch(
+  comfyModelStatus(discovery([report("chroma1_hd", { unet: "Chroma1-HD-fp8mixed.safetensors", t5: "t5xxl_fp16.safetensors", vae: "ae.safetensors" })]), "chroma1_hd"),
+  /negative prompt/,
+);
 passed += 1;
-console.log("ok - the picker names the Z-Image files it found, and what a ComfyUI still lacks");
+console.log("ok - the picker names the files it found for a model, and what a ComfyUI still lacks");
 
 const requests = [];
 const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
   requests.push({ url, init });
   const requestedUrl = JSON.parse(init.body).url;
   return Response.json(requestedUrl.endsWith(":8188")
-    ? { ok: true, checkpoints: ["installed.safetensors", 7], zImage: { unet: "z.safetensors", clip: 4, vae: "ae.safetensors" } }
+    ? { ok: true, checkpoints: ["installed.safetensors", 7], models: [report("z_turbo", zFiles), null], hardware: null, device: null }
     : { ok: false, error: "Could not reach ComfyUI.", checkpoints: [] });
 });
 try {
   const signal = new AbortController().signal;
   assert.deepEqual(await fetchComfyModels("http://localhost:8188", signal), {
-    checkpoints: ["installed.safetensors"], zImage: { unet: "z.safetensors", clip: "", vae: "ae.safetensors" }, error: null,
+    checkpoints: ["installed.safetensors"], models: [report("z_turbo", zFiles)], hardware: null, device: null, error: null,
   });
   assert.deepEqual(await fetchComfyModels("http://localhost:8288", signal), {
-    checkpoints: [], zImage: null, error: "Could not reach ComfyUI.",
+    checkpoints: [], models: [], hardware: null, device: null, error: "Could not reach ComfyUI.",
   });
   assert.deepEqual(requests.map(({ url, init }) => [url, init.method, JSON.parse(init.body).url, init.signal]), [
     ["/api/comfy", "POST", "http://localhost:8188", signal],
@@ -160,7 +201,17 @@ assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "z_turbo");
 response = await patch({ comfyUrl: "http://127.0.0.1:8189" });
 assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "z_turbo");
 passed += 1;
-console.log("ok - a save naming only a checkpoint switches Z-Image Turbo off");
+console.log("ok - a save naming only a checkpoint switches a catalog model off");
+
+// Every catalog model is a valid choice; a model dropped from a later
+// catalog reads back as checkpoints rather than breaking the settings.
+response = await patch({ comfyWorkflowPreset: "qwen_image_21_turbo" });
+assert.equal(response.status, 200);
+assert.equal(getGlobalConfig().images.comfyWorkflowPreset, "qwen_image_21_turbo");
+const { globalConfigSchema } = await import("../src/lib/schemas/global-config.ts");
+assert.equal(globalConfigSchema.parse({ images: { comfyWorkflowPreset: "retired_model" } }).images.comfyWorkflowPreset, "checkpoint");
+passed += 1;
+console.log("ok - any catalog model can be saved, and a retired one falls back to checkpoints");
 
 removeTempDir(dir);
 console.log(`test-comfy-preset: ${passed} passed`);

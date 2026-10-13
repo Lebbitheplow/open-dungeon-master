@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { ui } from "@/lib/ui";
 import { PageSection } from "@/components/PageShell";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
-import { zImageMissing, type ZImageFiles } from "@/lib/setup/discovery-logic";
+import type { ComfyModelReport, ComfyStatus } from "@/lib/comfyui";
+import { CHECKPOINT_PRESET, comfyModel } from "@/lib/image-models/catalog";
+import { checkpointModel } from "@/lib/image-models/curate";
+import { listWords, measuredLine } from "@/lib/image-models/describe";
+import { honoursNegative } from "@/lib/image-models/workflow";
+import { ComfyModelCatalog } from "@/app/admin/ComfyModelCatalog";
 import {
   Field,
   SecretField,
@@ -21,107 +26,118 @@ import {
 
 type Images = MaskedConfig["images"];
 type Group = "comfyui" | "flux" | "openai";
-const Z_TURBO = "preset:z_turbo";
+const PRESET_PREFIX = "preset:";
 const CHECKPOINT_PREFIX = "checkpoint:";
 
-type Discovery = {
-  url: string;
-  revision: number;
-  checkpoints: string[];
-  zImage: ZImageFiles | null;
-  error: string | null;
-};
+// What the last check of this ComfyUI found (src/lib/comfyui.ts comfyStatus).
+export type ComfyDiscovery = Pick<ComfyStatus, "checkpoints" | "models" | "hardware" | "device"> & { error: string | null };
+
+type Discovery = ComfyDiscovery & { url: string; revision: number };
 
 const fileName = (name: string) => name.split(/[\\/]/).pop() || name;
 
-// `zImage` is what the last check found on this ComfyUI, null until one has
-// answered.
-export function comfyModelOptions(
-  saved: string,
-  checkpoints: string[],
-  discoverySucceeded: boolean,
-  zImage: ZImageFiles | null = null,
-) {
+// A catalog model loaded from a checkpoint is offered as that checkpoint;
+// the others as models of their own.
+const loadsCheckpoint = (id: string) => {
+  const model = comfyModel(id);
+  return Boolean(model && "checkpoint" in model.graph.load);
+};
+
+// The picker: the default checkpoint, the catalog models this ComfyUI has
+// every file for (measured ones first), then its picture checkpoints. The
+// saved choice stays listed when the check no longer finds it. `discovery`
+// is null until a check has answered.
+// Whether a catalog model can paint on the machine this ComfyUI runs on:
+// not one its hardware failed to run, and not one that peaked past what
+// this GPU holds. Unmeasured models pass: unknown is not unfit.
+export function paintsHere(report: Pick<ComfyModelReport, "verified" | "fits">): boolean {
+  return report.verified?.verdict !== "fails" && report.fits !== false;
+}
+
+export function comfyModelOptions(saved: { checkpoint: string; preset: string }, discovery: ComfyDiscovery | null) {
+  const succeeded = Boolean(discovery && !discovery.error);
+  const hardware = discovery?.hardware?.label ?? null;
+  const reports = discovery?.models ?? [];
+  const checkpoints = discovery?.checkpoints ?? [];
+  // The picker offers what runs here; the saved model stays whatever its
+  // verdict, flagged, never swapped.
+  const installed = reports.filter((report) => !report.missing.length && !loadsCheckpoint(report.id) && (paintsHere(report) || report.id === saved.preset));
+  const savedModel = saved.preset !== CHECKPOINT_PRESET ? comfyModel(saved.preset) : undefined;
+  const models = [
+    ...installed.map((report) => ({ id: report.id, report })),
+    ...(savedModel && !installed.some((report) => report.id === savedModel.id) ? [{ id: savedModel.id, report: null }] : []),
+  ];
+  const checkpointHint = (name: string) => {
+    if (name === saved.checkpoint && succeeded && !checkpoints.includes(name)) return "Saved selection; not reported by this ComfyUI.";
+    const known = checkpointModel(name);
+    if (!known) return undefined;
+    const report = reports.find((entry) => entry.id === known.id);
+    return report?.verified ? `${known.label}. ${measuredLine(report, hardware)}` : `${known.label} settings.`;
+  };
   return [
     // A blank checkpoint is the shipped default for new campaigns
     // (src/lib/runtime-defaults.ts), not "whatever ComfyUI lists first".
     { value: CHECKPOINT_PREFIX, label: "Default checkpoint", hint: DEFAULT_STORY_SETTINGS.comfyCheckpoint },
-    ...[saved, ...checkpoints]
+    ...models.map(({ id, report }) => ({
+      value: `${PRESET_PREFIX}${id}`,
+      label: comfyModel(id)?.label ?? id,
+      group: "Models",
+      ...(report ? { hint: measuredLine(report, hardware) } : succeeded ? { hint: "Its files are not all on this ComfyUI." } : {}),
+    })),
+    ...[saved.checkpoint, ...checkpoints]
       .filter((name, index, names) => name && names.indexOf(name) === index)
-      .map((name) => ({
-        value: `${CHECKPOINT_PREFIX}${name}`,
-        label: name,
-        ...(name === saved && discoverySucceeded && !checkpoints.includes(name)
-          ? { hint: "Saved selection; not reported by this ComfyUI." }
-          : {}),
-      })),
-    {
-      value: Z_TURBO,
-      label: "Z-Image Turbo",
-      ...(discoverySucceeded && zImage
-        ? { hint: zImageMissing(zImage).length ? "Its files are not all on this ComfyUI." : `Uses ${fileName(zImage.unet)}` }
-        : {}),
-    },
+      .map((name) => {
+        const hint = checkpointHint(name);
+        return { value: `${CHECKPOINT_PREFIX}${name}`, label: name, group: "Checkpoints", ...(hint ? { hint } : {}) };
+      }),
   ];
 }
 
 export function comfyModelPatch(value: string, options: ReturnType<typeof comfyModelOptions>): Partial<Images> | null {
-  if (value === Z_TURBO) return { comfyWorkflowPreset: "z_turbo" };
-  if (options.some((option) => option.value === value) && value.startsWith(CHECKPOINT_PREFIX)) {
-    return { comfyWorkflowPreset: "checkpoint", comfyCheckpoint: value.slice(CHECKPOINT_PREFIX.length) };
+  if (!options.some((option) => option.value === value)) return null;
+  if (value.startsWith(PRESET_PREFIX)) return { comfyWorkflowPreset: value.slice(PRESET_PREFIX.length) };
+  if (value.startsWith(CHECKPOINT_PREFIX)) {
+    return { comfyWorkflowPreset: CHECKPOINT_PRESET, comfyCheckpoint: value.slice(CHECKPOINT_PREFIX.length) };
   }
   return null;
 }
 
-function readZImage(value: unknown): ZImageFiles | null {
-  const files = value as Partial<Record<keyof ZImageFiles, unknown>> | null;
-  return files && typeof files === "object"
-    ? {
-        unet: typeof files.unet === "string" ? files.unet : "",
-        clip: typeof files.clip === "string" ? files.clip : "",
-        vae: typeof files.vae === "string" ? files.vae : "",
-      }
-    : null;
-}
-
-export async function fetchComfyModels(url: string, signal: AbortSignal) {
+export async function fetchComfyModels(url: string, signal: AbortSignal): Promise<ComfyDiscovery> {
   const response = await fetch("/api/comfy", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
     signal,
   });
-  const result = await response.json() as {
-    ok?: boolean;
-    error?: string;
-    checkpoints?: unknown;
-    zImage?: unknown;
-  };
+  const result = (await response.json()) as Partial<ComfyStatus>;
   if (!response.ok || !result.ok) {
-    return { checkpoints: [], zImage: null, error: result.error || "Could not check ComfyUI." };
+    return { checkpoints: [], models: [], hardware: null, device: null, error: result.error || "Could not check ComfyUI." };
   }
   return {
-    checkpoints: Array.isArray(result.checkpoints)
-      ? result.checkpoints.filter((name): name is string => typeof name === "string")
-      : [],
-    zImage: readZImage(result.zImage),
+    checkpoints: Array.isArray(result.checkpoints) ? result.checkpoints.filter((name): name is string => typeof name === "string") : [],
+    models: Array.isArray(result.models) ? result.models.filter((entry): entry is ComfyModelReport => Boolean(entry && typeof entry.id === "string")) : [],
+    hardware: result.hardware ?? null,
+    device: result.device ?? null,
     error: null,
   };
 }
 
 // The line under the picker: what the check found for the model chosen.
-export function comfyModelStatus(discovery: Pick<Discovery, "checkpoints" | "zImage" | "error"> | null, zTurbo: boolean) {
+export function comfyModelStatus(discovery: ComfyDiscovery | null, preset: string) {
   if (!discovery) return "Checking installed models…";
   if (discovery.error) return discovery.error;
-  if (!zTurbo) {
+  const model = preset === CHECKPOINT_PRESET ? undefined : comfyModel(preset);
+  if (!model) {
     return discovery.checkpoints.length ? "Installed checkpoints from ComfyUI." : "No checkpoints reported by ComfyUI.";
   }
-  const missing = discovery.zImage ? zImageMissing(discovery.zImage) : [];
-  if (!discovery.zImage || missing.length) {
-    return `This ComfyUI is missing ${missing.length ? missing.join(", ") : "the Z-Image Turbo files"}.`;
+  const report = discovery.models.find((entry) => entry.id === model.id);
+  if (!report || report.missing.length) {
+    return `This ComfyUI is missing ${report ? listWords(report.missing.map((file) => file.what)) : `the ${model.label} files`}.`;
   }
-  const { unet, clip, vae } = discovery.zImage;
-  return `Paints every campaign's ComfyUI pictures with ${fileName(unet)}, ${fileName(clip)} and ${fileName(vae)}. It runs without a negative prompt, so a table's boundary cannot keep anything out of its pictures.`;
+  const files = listWords(Object.values(report.files).map(fileName));
+  return `Paints every campaign's ComfyUI pictures with ${files}.${
+    honoursNegative(model) ? "" : " It runs without a negative prompt, so a table's boundary cannot keep anything out of its pictures."
+  }`;
 }
 
 function ComfyModelField({
@@ -145,7 +161,7 @@ function ComfyModelField({
         if (!controller.signal.aborted) setDiscovery({ url, revision, ...result });
       } catch {
         if (!controller.signal.aborted) {
-          setDiscovery({ url, revision, checkpoints: [], zImage: null, error: "Could not check ComfyUI. Check the server URL." });
+          setDiscovery({ url, revision, checkpoints: [], models: [], hardware: null, device: null, error: "Could not check ComfyUI. Check the server URL." });
         }
       }
     }, 250);
@@ -156,34 +172,40 @@ function ComfyModelField({
   }, [url, revision]);
 
   const current = discovery?.url === url && discovery.revision === revision ? discovery : null;
-  const saved = images.comfyCheckpoint;
-  const checkpoints = current?.checkpoints ?? [];
-  const succeeded = Boolean(current && !current.error);
-  const options = comfyModelOptions(saved, checkpoints, succeeded, current?.zImage ?? null);
-  const zTurbo = images.comfyWorkflowPreset === "z_turbo";
-  const selected = zTurbo ? Z_TURBO : `${CHECKPOINT_PREFIX}${saved}`;
-  const zMissing = zTurbo && succeeded && (!current?.zImage || zImageMissing(current.zImage).length > 0);
+  const preset = images.comfyWorkflowPreset;
+  const options = comfyModelOptions({ checkpoint: images.comfyCheckpoint, preset }, current);
+  const selected = preset !== CHECKPOINT_PRESET ? `${PRESET_PREFIX}${preset}` : `${CHECKPOINT_PREFIX}${images.comfyCheckpoint}`;
+  const report = current?.models.find((entry) => entry.id === preset);
+  const missing = Boolean(current && !current.error && preset !== CHECKPOINT_PRESET && (!report || report.missing.length));
 
+  // The picker sits beside the address; the catalog spans the row under both.
   return (
-    <div>
-      <SelectField<string>
-        label="Image model"
-        value={selected}
-        onChange={(value) => {
-          const patch = comfyModelPatch(value, options);
-          if (patch) onChange(patch);
-        }}
-        options={options}
-      />
-      <div className="mt-1 flex items-start justify-between gap-2">
-        <p role={current?.error || zMissing ? "alert" : "status"} className="text-[11px] leading-4 text-stone-500">
-          {comfyModelStatus(current, zTurbo)}
-        </p>
-        <button type="button" className="shrink-0 text-[11px] text-amber-300 hover:text-amber-200" onClick={() => setRevision((value) => value + 1)}>
-          Refresh
-        </button>
+    <>
+      <div>
+        <SelectField<string>
+          label="Image model"
+          value={selected}
+          onChange={(value) => {
+            const patch = comfyModelPatch(value, options);
+            if (patch) onChange(patch);
+          }}
+          options={options}
+        />
+        <div className="mt-1 flex items-start justify-between gap-2">
+          <p role={current?.error || missing ? "alert" : "status"} className="text-[11px] leading-4 text-stone-500">
+            {comfyModelStatus(current, preset)}
+          </p>
+          <button type="button" className="shrink-0 text-[11px] text-amber-300 hover:text-amber-200" onClick={() => setRevision((value) => value + 1)}>
+            Refresh
+          </button>
+        </div>
       </div>
-    </div>
+      {current && !current.error ? (
+        <div className="sm:col-span-2">
+          <ComfyModelCatalog discovery={current} preset={preset} checkpoint={images.comfyCheckpoint} onPick={onChange} />
+        </div>
+      ) : null}
+    </>
   );
 }
 

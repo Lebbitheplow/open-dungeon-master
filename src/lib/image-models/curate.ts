@@ -62,7 +62,7 @@ export function checkpointModel(checkpoint: string): ComfyModel | null {
 }
 
 // Hardware a measurement was taken on. A row in verified.json names one of
-// these, so each model's cost is known per kind of hardware.
+// these; the picker shows a model's row for the hardware it is talking to.
 export type HardwareProfile = { id: string; label: string; match: RegExp };
 
 export const HARDWARE_PROFILES: readonly HardwareProfile[] = [

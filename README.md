@@ -324,7 +324,8 @@ takes it from there, one question at a time:
   exact command to fix it when not. Or choose a person at the table. Each choice is
   tested the way a campaign uses it before you move on.
 - **Pictures and voice.** ComfyUI, Kokoro and Whisper are found the same way, with
-  ComfyUI's checkpoints and Kokoro's voices listed to pick from. One OpenAI key
+  ComfyUI's image models (measured on your hardware where it has been) and
+  checkpoints, and Kokoro's voices, listed to pick from. One OpenAI key
   covers pictures, narration and dictation too.
 - **Players.** The addresses to send your friends, and whether accounts take an
   invite code.
@@ -629,8 +630,10 @@ More backends and model guidance: [docs/text-backends.md](docs/text-backends.md)
 
 ComfyUI at `COMFYUI_URL` (default `http://127.0.0.1:8188`) drives three things:
 character portraits generated once at character creation, inline scene art during
-play, and the top-down battle maps. Any checkpoint works; the genre preset supplies
-the art style. If ComfyUI is down or busy, these features fail soft to a placeholder
+play, and the top-down battle maps. Pick one of the image models the app knows
+(Z-Image Turbo, Qwen Image 2.1, FLUX.2 [klein] and 40-odd more, each with its
+time and memory measured on the hardware tested so far) or any checkpoint; the
+genre preset supplies the art style. If ComfyUI is down or busy, these features fail soft to a placeholder
 or a plain icon and the session keeps going.
 
 All GPU-heavy media (ComfyUI images and TTS) run on a **single serial media queue**.

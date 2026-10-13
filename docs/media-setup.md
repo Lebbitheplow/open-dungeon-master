@@ -31,11 +31,13 @@ menu, top right). Players never touch it.
 
    Install the PyTorch build for your GPU first if the ComfyUI README says to.
 
-2. **Give it a checkpoint.** Put one checkpoint file (`.safetensors`) in
-   `ComfyUI/models/checkpoints/`. Any checkpoint works; an SDXL-class one suits
-   the sizes the game asks for (1024 to 1344 on the long side). The campaign's
-   genre supplies the art style, so a general-purpose checkpoint is the right
-   pick.
+2. **Give it a model.** Either add the files of one of the image models the
+   app knows (Z-Image Turbo, Qwen Image 2.1, FLUX.2 [klein] and more; **Admin >
+   Image generation** lists each one's files, sizes and download links, and
+   what your hardware was measured doing with it), or put one checkpoint file
+   (`.safetensors`) in `ComfyUI/models/checkpoints/`. Any SDXL-class checkpoint
+   suits the sizes the game asks for (1024 to 1344 on the long side). The
+   campaign's genre supplies the art style either way.
 
 3. **Start it.**
 
@@ -51,8 +53,8 @@ menu, top right). Players never touch it.
    - **Default backend**: ComfyUI (local)
    - **Server URL**: `http://127.0.0.1:8188` (in Docker:
      `http://host.docker.internal:8188`, which is the compose file's default)
-   - **Checkpoint (model file)**: pick yours from the list, or leave it on
-     Auto to use the first one
+   - **Image model**: pick a model or a checkpoint from the list, or leave it
+     on the default checkpoint
 
    Save. New characters get a portrait, scenes get art, and fights get a
    painted map.
@@ -64,8 +66,8 @@ Things to know:
   picture from stalling a turn.
 - ComfyUI must be running whenever you want pictures. Nothing breaks when it is
   not; the placeholder has a Generate button that works once it is back.
-- The other backends (the FLUX worker, OpenAI) are covered in
-  [image-generation.md](image-generation.md).
+- The other backends (the FLUX worker, OpenAI), and every model's measured
+  time and memory, are covered in [image-generation.md](image-generation.md).
 
 ## Pictures with an OpenAI key (no GPU)
 

@@ -561,8 +561,8 @@ export function comfyModel(id: string): ComfyModel | undefined {
   return COMFY_MODELS.find((model) => model.id === id);
 }
 
-// The preset value that means "each campaign's own checkpoint" rather than a
-// catalog model.
+// images.comfyWorkflowPreset: "checkpoint" paints with each campaign's
+// checkpoint; any catalog id paints every campaign's pictures with that model.
 export const CHECKPOINT_PRESET = "checkpoint";
 
 export function isComfyPreset(value: string): boolean {

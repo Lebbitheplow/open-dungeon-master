@@ -137,7 +137,7 @@ try {
     assert.deepEqual(logic.readKokoroVoices(null), []);
   });
 
-  await test("Z-Image Turbo's three files are found under whatever names and folders ComfyUI lists", () => {
+  await test("a loader's file list is read in both of ComfyUI's formats", () => {
     // Both ways ComfyUI declares a file list: [names, options] and its newer
     // ["COMBO", { options }].
     assert.deepEqual(logic.readComfyFiles({ UNETLoader: { input: { required: { unet_name: [["a.safetensors"], {}] } } } }, "UNETLoader", "unet_name"), ["a.safetensors"]);
@@ -148,43 +148,38 @@ try {
     assert.deepEqual(logic.readComfyFiles({ VAELoader: {} }, "VAELoader", "vae_name"), []);
     assert.deepEqual(logic.readComfyFiles(null, "VAELoader", "vae_name"), []);
 
-    // ComfyUI's tutorial downloads win over another precision of the same model.
-    assert.deepEqual(
-      logic.pickZImageFiles({
-        unet: ["flux1-schnell.safetensors", "z_image_turbo_nvfp4.safetensors", "z_image_turbo_bf16.safetensors"],
-        clip: ["clip_l.safetensors", "qwen_3_4b_fp8_mixed.safetensors", "qwen_3_4b.safetensors"],
-        vae: ["qwen_image_vae.safetensors", "ae.safetensors"],
-      }),
-      { unet: "z_image_turbo_bf16.safetensors", clip: "qwen_3_4b.safetensors", vae: "ae.safetensors" },
-    );
-    // Any precision or rename otherwise, in a subfolder too, Windows separators included.
-    assert.deepEqual(
-      logic.pickZImageFiles({
-        unet: ["qwen_image_2.1_int8_convrot.safetensors", "zimage\\z_image_turbo_nvfp4.safetensors"],
-        clip: ["text/Qwen3-4B-fp8.safetensors"],
-        vae: ["Wan2_1_VAE_bf16.safetensors", "flux/ae.safetensors"],
-      }),
-      { unet: "zimage\\z_image_turbo_nvfp4.safetensors", clip: "text/Qwen3-4B-fp8.safetensors", vae: "flux/ae.safetensors" },
-    );
-    const partial = logic.pickZImageFiles({ unet: ["zImageTurbo_v10.safetensors"], clip: ["qwen3vl_8b_int8_convrot.safetensors"], vae: [] });
-    assert.deepEqual(partial, { unet: "zImageTurbo_v10.safetensors", clip: "", vae: "" });
-    assert.deepEqual(logic.zImageMissing(partial), [
-      "the Qwen 3 4B text encoder (models/text_encoders)",
-      "the FLUX VAE, ae.safetensors (models/vae)",
-    ]);
   });
 
-  await test("the scan offers Z-Image Turbo only where no checkpoint is known and its files are there", () => {
+  // A catalog model as ComfyUI's status check reports it (src/lib/comfyui.ts).
+  const report = (id, { missing = [], verdict } = {}) => ({
+    id, files: {}, missing, downloadGb: 0, needGb: null, fits: null,
+    verified: verdict ? { verdict, seconds: { square: 10, landscape: 8 } } : null,
+  });
+  const found = (checkpoints, models) => ({ url: "http://127.0.0.1:8188", checkpoints, models, hardware: null });
+
+  await test("the scan fills an open ComfyUI choice from what that ComfyUI has, measured models first", () => {
     const blank = { url: "", checkpoint: "", preset: "checkpoint" };
-    assert.deepEqual(comfyFromScan(blank, { url: "http://127.0.0.1:8188", checkpoints: [], zImage: true }), {
-      url: "http://127.0.0.1:8188", checkpoint: "", preset: "z_turbo",
-    });
-    assert.deepEqual(comfyFromScan(blank, { url: "http://127.0.0.1:8188", checkpoints: ["sdxl.safetensors"], zImage: true }), {
+    // Only a catalog model installed: that model.
+    assert.deepEqual(comfyFromScan(blank, found([], [report("z_turbo")])), { url: "http://127.0.0.1:8188", checkpoint: "", preset: "z_turbo" });
+    // A checkpoint beats an unmeasured model...
+    assert.deepEqual(comfyFromScan(blank, found(["sdxl.safetensors"], [report("z_turbo")])), {
       url: "http://127.0.0.1:8188", checkpoint: "sdxl.safetensors", preset: "checkpoint",
     });
-    assert.equal(comfyFromScan({ ...blank, preset: "z_turbo" }, { url: "u", checkpoints: ["sdxl.safetensors"], zImage: true }).preset, "z_turbo");
-    // A saved Z choice on a ComfyUI without its files would paint nothing.
-    assert.equal(comfyFromScan({ ...blank, preset: "z_turbo" }, { url: "u", checkpoints: [], zImage: false }).preset, "checkpoint");
+    // ...but not one this hardware was measured recommending.
+    assert.equal(
+      comfyFromScan(blank, found(["sdxl.safetensors"], [report("qwen_image_21_turbo", { verdict: "recommended" }), report("z_turbo")])).preset,
+      "qwen_image_21_turbo",
+    );
+    // A recommendation the ComfyUI lacks the files for is not picked.
+    assert.equal(comfyFromScan(blank, found(["sdxl.safetensors"], [report("flux2_klein_4b", { verdict: "recommended", missing: [{}] })])).preset, "checkpoint");
+    // A saved model stays while its files are there, and falls back when they are not.
+    assert.equal(comfyFromScan({ ...blank, preset: "z_turbo" }, found(["sdxl.safetensors"], [report("z_turbo")])).preset, "z_turbo");
+    assert.equal(comfyFromScan({ ...blank, preset: "z_turbo" }, found([], [report("z_turbo", { missing: [{}] })])).preset, "checkpoint");
+    // A checkpoint the admin chose is never swapped for a recommendation.
+    assert.equal(
+      comfyFromScan({ ...blank, checkpoint: "mine.safetensors" }, found(["sdxl.safetensors"], [report("qwen_image_21_turbo", { verdict: "recommended" })])).preset,
+      "checkpoint",
+    );
   });
 
   await test("each storyteller answer writes the admin panel's own fields", () => {

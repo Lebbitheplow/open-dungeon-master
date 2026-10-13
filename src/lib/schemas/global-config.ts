@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHECKPOINT_PRESET, isComfyPreset } from "@/lib/image-models/catalog";
 
 // App-wide settings editable from /admin, stored as one JSON blob under
 // app_settings.key = 'global_config'. Every string field treats "" as "no
@@ -97,7 +98,15 @@ export const globalConfigSchema = z.object({
         .default(""),
       comfyUrl: z.string().trim().max(500).default(""),
       comfyCheckpoint: z.string().trim().max(300).default(""),
-      comfyWorkflowPreset: z.enum(["checkpoint", "z_turbo"]).default("checkpoint"),
+      // "checkpoint" paints with each campaign's checkpoint; a catalog
+      // model's id (src/lib/image-models) paints every picture with it. A
+      // model since dropped from the catalog falls back to checkpoints.
+      comfyWorkflowPreset: z
+        .string()
+        .trim()
+        .max(80)
+        .default(CHECKPOINT_PRESET)
+        .transform((value) => (isComfyPreset(value) ? value : CHECKPOINT_PRESET)),
       fluxWorkerUrl: z.string().trim().max(500).default(""),
       // The "openai" backend: any OpenAI-compatible images API. The key is
       // the server owner's, applied at request time only, and never leaves

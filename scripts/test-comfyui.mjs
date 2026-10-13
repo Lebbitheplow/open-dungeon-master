@@ -19,7 +19,9 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { buildCheckpointWorkflow, buildZTurboWorkflow, comfyStatus, generateComfyImage, MAX_COMFY_IMAGE_BYTES } = await import("../src/lib/comfyui.ts");
+const { comfyStatus, generateComfyImage, MAX_COMFY_IMAGE_BYTES } = await import("../src/lib/comfyui.ts");
+const { ANY_CHECKPOINT, comfyModel } = await import("../src/lib/image-models/catalog.ts");
+const { buildModelWorkflow } = await import("../src/lib/image-models/workflow.ts");
 const { getGlobalConfig, saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
 const { imageVariantsSettled } = await import("../src/lib/image-variants.ts");
 
@@ -112,16 +114,34 @@ const withFiles = (graph, files) => {
   copy["57:29"].inputs.vae_name = files.vae;
   return copy;
 };
+// A graph as the picture it paints: every node from the decode back, with
+// links replaced by the node they point at. Node ids, titles and the save
+// node's file prefix do not change the picture.
+function painted(graph) {
+  const node = (id) => {
+    const { class_type, inputs } = graph[id];
+    return {
+      class_type,
+      inputs: Object.fromEntries(
+        Object.entries(inputs)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => [key, Array.isArray(value) && graph[value[0]] ? { from: node(value[0]), output: value[1] } : value]),
+      ),
+    };
+  };
+  return node(Object.keys(graph).find((id) => graph[id].class_type === "VAEDecode"));
+}
+const zTurbo = comfyModel("z_turbo");
 assert.deepEqual(
-  buildZTurboWorkflow({ prompt: "a tavern", width: 1024, height: 1024, seed: 42, files: REFERENCE_FILES }),
-  zReference,
+  painted(buildModelWorkflow(zTurbo, { prompt: "a tavern", width: 1024, height: 1024, seed: 42, files: REFERENCE_FILES })),
+  painted(zReference),
   "Z-Image Turbo graph must match the supplied API workflow with only its prompt, size, seed and files varying",
 );
 passed += 1;
 console.log("ok - Z-Image Turbo graph matches the supplied workflow");
 
-const checkpointGraph = buildCheckpointWorkflow({
-  checkpoint: "model.safetensors", prompt: "a tavern", width: 768, height: 768, seed: 42, negative: "no swords",
+const checkpointGraph = buildModelWorkflow(ANY_CHECKPOINT, {
+  prompt: "a tavern", width: 768, height: 768, seed: 42, negative: "no swords", files: { ckpt: "model.safetensors" },
 });
 assert.equal(checkpointGraph["1"].inputs.ckpt_name, "model.safetensors");
 assert.equal(checkpointGraph["3"].inputs.text.endsWith(", no swords"), true);
@@ -261,7 +281,7 @@ await test("Z-Image Turbo submits its graph with this ComfyUI's files, no checkp
   assert.equal(JSON.stringify(JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body)).includes("CheckpointLoaderSimple"), false);
   const sent = JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body);
   // The files this ComfyUI lists, in the otherwise unchanged reference graph.
-  assert.deepEqual(sent.prompt, withFiles(zReference, TUTORIAL_FILES));
+  assert.deepEqual(painted(sent.prompt), painted(withFiles(zReference, TUTORIAL_FILES)));
   assert.equal(JSON.stringify(sent).includes("private table boundary"), false);
   assert.equal(getGlobalConfig().images.comfyCheckpoint, "keep-this-checkpoint.safetensors");
 });
@@ -280,9 +300,35 @@ await test(
   },
 );
 
+const zReport = (status) => status.models.find((model) => model.id === "z_turbo");
 await test("the status check reports the Z-Image Turbo files it found", fakeComfy(), async () => {
-  assert.deepEqual((await comfyStatus(COMFY)).zImage, TUTORIAL_FILES);
+  const status = await comfyStatus(COMFY);
+  assert.deepEqual(zReport(status).files, TUTORIAL_FILES);
+  assert.deepEqual(zReport(status).missing, []);
+  // Installed models come first in the curated list.
+  assert.equal(status.models[0].missing.length, 0);
+  assert.ok(status.models.length > 30, "every catalog model is reported");
 });
+await test(
+  "the status check names the machine and leaves video models and bare diffusion models out of the checkpoints",
+  fakeComfy({
+    "/system_stats": () => json({
+      system: { comfyui_version: "0.39.2", pytorch_version: "2.14.0+rocm7.2", ram_total: 134296588288 },
+      devices: [{ name: "cuda:0 AMD Radeon 8060S Graphics : native", vram_total: 128849018880 }],
+    }),
+    "/object_info/CheckpointLoaderSimple": () =>
+      json({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [["ltx-video-2b-v0.9.safetensors", "flux1-schnell.safetensors", "model.safetensors"]] } } } }),
+  }),
+  async () => {
+    const status = await comfyStatus(COMFY);
+    // flux1-schnell is also a diffusion model here: a bare model linked into
+    // models/checkpoints, which CheckpointLoaderSimple cannot load.
+    assert.deepEqual(status.checkpoints, ["model.safetensors"]);
+    assert.equal(status.device.name, "AMD Radeon 8060S Graphics");
+    assert.equal(status.device.memoryGb, 120);
+    assert.equal(status.hardware.id, "strix-halo");
+  },
+);
 await test(
   "a ComfyUI without the Z-Image loaders still reports its checkpoints",
   fakeComfy({ "/object_info/UNETLoader": () => new Response("no such node", { status: 404 }), "/object_info/VAELoader": () => new Response("<html>") }),
@@ -290,7 +336,8 @@ await test(
     const status = await comfyStatus(COMFY);
     assert.equal(status.ok, true);
     assert.deepEqual(status.checkpoints, ["model.safetensors"]);
-    assert.deepEqual(status.zImage, { unet: "", clip: "qwen_3_4b.safetensors", vae: "" });
+    assert.deepEqual(zReport(status).files, { unet: "", clip: "qwen_3_4b.safetensors", vae: "" });
+    assert.equal(status.hardware, null);
   },
 );
 

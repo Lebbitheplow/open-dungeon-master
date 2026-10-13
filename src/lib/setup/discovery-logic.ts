@@ -275,61 +275,6 @@ export function readComfyCheckpoints(json: unknown): string[] {
   return readComfyFiles(json, "CheckpointLoaderSimple", "ckpt_name");
 }
 
-// Z-Image Turbo is three files, not a checkpoint: the diffusion model
-// (UNETLoader), the Qwen 3 4B text encoder (CLIPLoader) and the FLUX VAE
-// (VAELoader). Each slot takes ComfyUI's own tutorial download when this
-// ComfyUI has it, then any other precision or rename of the same model
-// (fp8, nvfp4, int8, a fine-tune), first in ComfyUI's list. Matched on the
-// file name alone, so a copy kept in a subfolder counts. "" = not found.
-export type ZImageFiles = { unet: string; clip: string; vae: string };
-
-export const Z_IMAGE_SLOTS = {
-  unet: {
-    node: "UNETLoader",
-    input: "unet_name",
-    tutorial: ["z_image_turbo_bf16.safetensors"],
-    family: /z[-_ ]?image[-_ ]?turbo/i,
-    what: "the Z-Image Turbo model (models/diffusion_models)",
-  },
-  clip: {
-    node: "CLIPLoader",
-    input: "clip_name",
-    tutorial: ["qwen_3_4b.safetensors"],
-    family: /qwen[-_ ]?3[-_ ]?4b/i,
-    what: "the Qwen 3 4B text encoder (models/text_encoders)",
-  },
-  vae: {
-    node: "VAELoader",
-    input: "vae_name",
-    tutorial: ["ae.safetensors", "ae.sft"],
-    family: /flux.*vae|vae.*flux|z[-_ ]?image.*vae/i,
-    what: "the FLUX VAE, ae.safetensors (models/vae)",
-  },
-} as const;
-
-export type ZImageSlot = keyof typeof Z_IMAGE_SLOTS;
-
-const fileName = (name: string) => name.split(/[\\/]/).pop() ?? name;
-
-export function pickZImageFiles(lists: Record<ZImageSlot, readonly string[]>): ZImageFiles {
-  const pick = (slot: ZImageSlot) => {
-    const { tutorial, family } = Z_IMAGE_SLOTS[slot];
-    const names = lists[slot];
-    return (
-      names.find((name) => (tutorial as readonly string[]).includes(fileName(name).toLowerCase())) ??
-      names.find((name) => family.test(fileName(name))) ??
-      ""
-    );
-  };
-  return { unet: pick("unet"), clip: pick("clip"), vae: pick("vae") };
-}
-
-// What a ComfyUI still needs before it can paint with Z-Image Turbo, worded
-// for the admin; empty once every file is there.
-export function zImageMissing(files: ZImageFiles): string[] {
-  return (Object.keys(Z_IMAGE_SLOTS) as ZImageSlot[]).filter((slot) => !files[slot]).map((slot) => Z_IMAGE_SLOTS[slot].what);
-}
-
 // Kokoro-FastAPI's voice list, from GET /v1/audio/voices.
 export function readKokoroVoices(json: unknown): string[] {
   const voices = (json as { voices?: unknown } | null)?.voices;
