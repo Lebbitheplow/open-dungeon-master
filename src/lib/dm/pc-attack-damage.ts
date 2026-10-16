@@ -30,6 +30,7 @@ import { conditionOnHitDice } from "@/lib/srd/condition-effects";
 import { conditionStrikesMagical } from "@/lib/srd/condition-effect-queries";
 import { effectsFor, type CombatRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 export type FeatureRider = CombatRiders["damageRiders"][number];
 
@@ -342,8 +343,8 @@ function magicalStrikeApplies(plan: Pick<AttackPlan, "kind" | "profile" | "rider
   return effectsFor(plan.sheet)
     .filter(({ effect }) => effect.kind === "magical_attacks")
     .some(({ feature }) => {
-      const name = feature.toLowerCase();
-      if (name.startsWith("ki-empowered strikes")) {
+      const name = textKey(feature);
+      if (name.startsWith("ki empowered strikes")) {
         return plan.profile.unarmed === true;
       }
       if (name.startsWith("primal strike")) {

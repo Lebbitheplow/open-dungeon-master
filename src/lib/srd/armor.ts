@@ -1,5 +1,6 @@
 import { gearDefFor, gearDefOfRow, gearRidersActive } from "@/lib/srd/magic-gear";
 import { speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
+import { textKey } from "@/lib/language/text-logic";
 
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
@@ -65,13 +66,10 @@ const byName = new Map(SRD_ARMOR.map((armor) => [normalize(armor.name), armor]))
 // ("Shields" is a shield). `written` keeps the plural, for the tail rule
 // below: "work leathers" is clothing, not Leather (issue #113).
 function written(term: string) {
-  return term
-    .toLowerCase()
-    .replace(/[+-]\d+/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(armor|armour)\b/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
+  return textKey(term)
+    .split(" ")
+    .filter((part) => !/^[+-]/.test(part) && part !== "armor" && part !== "armour")
+    .join(" ");
 }
 
 function normalize(term: string) {
@@ -338,7 +336,7 @@ export function unarmoredFormulaFor(
   classId: string | string[],
   features: Array<{ name: string }>,
 ): UnarmoredFormula | null {
-  const names = features.map((feature) => feature.name.trim().toLowerCase());
+  const names = features.map((feature) => textKey(feature.name));
   const wantedClasses = (Array.isArray(classId) ? classId : [classId]).map((entry) =>
     entry.trim().toLowerCase(),
   );

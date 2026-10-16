@@ -38,8 +38,8 @@ import { zoneTurnStart } from "@/lib/dm/zone-triggers";
 import { violetRayTurnStart } from "@/lib/dm/prismatic-violet";
 import { authoredTurnStart } from "@/lib/dm/authored-turns";
 import { readiedSpellOf } from "@/lib/dm/readied-spell";
-import { spellKeyOf as castKeyOf } from "@/lib/dm/cast-rules";
 import { sweepSummons } from "@/lib/dm/summon-store";
+import { textKey } from "@/lib/language/text-logic";
 
 // Condition upkeep: timed conditions count down and expire, save-ends
 // conditions get their re-save rolled server-side (enemy saves from stat
@@ -181,7 +181,7 @@ export function startTurnConditions(
     const lostSpell = ending.some((name) => name.toLowerCase() === "readied")
       ? readiedSpellOf(sheet)?.spell
       : undefined;
-    if (lostSpell && castKeyOf(sheet.concentratingOn ?? "") === castKeyOf(lostSpell)) {
+    if (lostSpell && textKey(sheet.concentratingOn ?? "") === textKey(lostSpell)) {
       breakConcentration(campaign, null, sheet.id, "the readied spell was never released");
     }
     const updated = patchSheet(sheet.id, {
@@ -282,7 +282,7 @@ function endTurnRage(
   if (!sheet || !ragingAs) {
     return;
   }
-  if (sheet.features.some((feature) => feature.name.toLowerCase().includes("persistent rage"))) {
+  if (sheet.features.some((feature) => textKey(feature.name).includes("persistent rage"))) {
     return;
   }
   const meta = sheet.conditionMeta as ConditionMetaMap;

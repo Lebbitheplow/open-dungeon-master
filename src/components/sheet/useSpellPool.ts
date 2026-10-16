@@ -4,7 +4,7 @@ import { scopedParams, useContentCampaign } from "@/lib/content-scope";
 import { useEffect, useRef, useState } from "react";
 import spellManifest from "@/lib/srd/manifest/spells.json";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // Every spell a class can take up to a spell level, for the spell book's
 // "available" tiles: the content pack (homebrew included) when installed,
@@ -42,7 +42,7 @@ function checklistPool(classSlug: string, maxLevel: number): PoolSpell[] {
 function uniqueByName(rows: PoolSpell[]): PoolSpell[] {
   const seen = new Set<string>();
   return rows.filter((row) => {
-    const key = row.name.trim().toLowerCase();
+    const key = textKey(row.name);
     if (seen.has(key)) {
       return false;
     }
@@ -57,7 +57,7 @@ function uniqueByName(rows: PoolSpell[]): PoolSpell[] {
 // each have a homebrew spell of one name. Names the checklist knows never
 // cost a request.
 const lookups = new Map<string, PoolSpell | null>();
-const scoped = (campaignId: string | null, name: string) => `${campaignId ?? "library"}|${name.toLowerCase()}`;
+const scoped = (campaignId: string | null, name: string) => `${campaignId ?? "library"}|${textKey(name)}`;
 
 export function useSpellLookups(names: string[]): Map<string, PoolSpell> {
   const campaignId = useContentCampaign();
@@ -97,7 +97,7 @@ export function useSpellLookups(names: string[]): Map<string, PoolSpell> {
   for (const name of wanted) {
     const row = lookups.get(scoped(campaignId, name));
     if (row) {
-      found.set(name.toLowerCase(), row);
+      found.set(textKey(name), row);
     }
   }
   return found;
@@ -108,7 +108,7 @@ const inFlight = new Map<string, Promise<void>>();
 
 function lookUp(name: string, campaignId: string | null): Promise<void> {
   const key = scoped(campaignId, name);
-  const wantedName = name.toLowerCase();
+  const wantedName = textKey(name);
   if (lookups.has(key)) {
     return Promise.resolve();
   }
@@ -123,7 +123,7 @@ function lookUp(name: string, campaignId: string | null): Promise<void> {
       const body = response.ok
         ? ((await response.json()) as { results?: Array<PoolSpell & { slug: string }> })
         : {};
-      const row = (body.results ?? []).find((entry) => entry.name.trim().toLowerCase() === wantedName);
+      const row = (body.results ?? []).find((entry) => textKey(entry.name) === wantedName);
       lookups.set(
         key,
         row

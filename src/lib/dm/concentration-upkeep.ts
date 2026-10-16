@@ -10,9 +10,10 @@ import { spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { breakConcentration } from "@/lib/dm/concentration";
-import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";
+import { heldBySpell } from "@/lib/dm/spell-effects";
 import { summonsOf } from "@/lib/dm/summon-store";
 import { summonSpellFor } from "@/lib/srd/summon-spells";
+import { textKey } from "@/lib/language/text-logic";
 
 // A conjuring spell places no condition: what it holds is the creatures it
 // brought. When the last of them has faded (its hour run out on the clock,
@@ -74,7 +75,7 @@ export function endSpentConcentration(campaign: Campaign, lines: string[]) {
     if (!places.size) {
       continue;
     }
-    const spellNames = new Set([spellKey(spell), spellKey(resolved?.name ?? spell)]);
+    const spellNames = new Set([textKey(spell), textKey(resolved?.name ?? spell)]);
     // Every instance counts: a target another caster also holds still
     // carries this caster's own (src/lib/dm/condition-logic.ts instancesOf).
     const stillHeld = held.some(({ conditions, meta }) =>

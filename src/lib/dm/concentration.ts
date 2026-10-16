@@ -11,13 +11,14 @@ import { findSpellByName, spellEngineName, spellMechanicsFor } from "@/lib/conte
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { conditionConcentrationFloor } from "@/lib/srd/condition-effects";
 import { removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { heldBySpell, spellDurationRounds, spellKey } from "@/lib/dm/spell-effects";
+import { heldBySpell, spellDurationRounds } from "@/lib/dm/spell-effects";
 import { publishPersisted } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { endSpellZones } from "@/lib/dm/zone-store";
 import { endSpellSummons } from "@/lib/dm/summon-store";
 import { authoredConcentrationGuard } from "@/lib/srd/authored-effects-more";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
+import { textKey } from "@/lib/language/text-logic";
 
 // Server-tracked concentration: casting a concentration spell sets it (and
 // breaks the previous one), taking damage forces the CON save server-side,
@@ -159,7 +160,7 @@ export function clearSpellConditionsByName(
       .filter((name): name is string => Boolean(name))
       .map((name) => name.toLowerCase()),
   );
-  const spellNames = new Set([spellKey(spell), spellKey(resolved.name)]);
+  const spellNames = new Set([textKey(spell), textKey(resolved.name)]);
   const encounter = getActiveEncounter(campaign.id);
   for (const target of listSheets(campaign.id)) {
     // Only this casting's instances go: a condition another source still

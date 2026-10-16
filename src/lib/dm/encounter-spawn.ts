@@ -24,6 +24,7 @@ import type { SettingRef } from "@/lib/worlds/preset";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Enemy spawning shared by start_encounter and the mid-combat add_enemies
 // tool, so reinforcements and summons are real server-tracked combatants
@@ -65,8 +66,8 @@ export function resolveEnemyRequests(
   const cast = campaignId ? listNpcs(campaignId).filter((npc) => npc.statBlock) : [];
   for (const request of requests) {
     const count = request.count ?? 1;
-    const wanted = request.monster.trim().toLowerCase();
-    const npc = cast.find((entry) => entry.name.toLowerCase() === wanted || entry.aliases.some((alias) => alias.toLowerCase() === wanted));
+    const wanted = textKey(request.monster);
+    const npc = cast.find((entry) => textKey(entry.name) === wanted || entry.aliases.some((alias) => textKey(alias) === wanted));
     const match = npc
       ? (() => {
           const block = resolveMonster(npc.statBlock, setting, { userIds: authorList });

@@ -1,5 +1,5 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
-import { byName } from "@/lib/language/text-logic";
+import { byName, textKey } from "@/lib/language/text-logic";
 import { resolveMonster } from "@/lib/bestiary";
 import { tableAuthors } from "@/lib/db/homebrew";
 import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
@@ -404,7 +404,7 @@ export function runContentImport(input: {
     const table = { maps: "prepared_maps", locations: "locations", lore: "lore_entries", tables: "roll_tables", encounters: "encounter_templates", npcs: "npcs", shops: "shops" }[kind];
     let set = taken.get(kind);
     if (!set) {
-      set = new Set(allRows(`SELECT ${label} AS name FROM ${table} WHERE campaign_id = ?`, campaignId).map((row) => String(row.name).trim().toLowerCase()));
+      set = new Set(allRows(`SELECT ${label} AS name FROM ${table} WHERE campaign_id = ?`, campaignId).map((row) => textKey(String(row.name))));
       taken.set(kind, set);
     }
     return set;

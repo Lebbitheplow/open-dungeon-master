@@ -17,6 +17,7 @@ import {
   type MonsterDraft,
 } from "@/lib/bestiary/monster-draft";
 import type { EnemyAttack, SaveAbility } from "@/lib/bestiary/statblock";
+import { textKey } from "@/lib/language/text-logic";
 
 // Building a monster out of the parts the app already has.
 //
@@ -137,7 +138,7 @@ export function formatTerms(terms: string[]): string {
   const seen = new Set<string>();
   const kept: string[] = [];
   for (const term of terms) {
-    const key = term.trim().toLowerCase();
+    const key = textKey(term);
     if (key && !seen.has(key)) {
       seen.add(key);
       kept.push(term.trim());
@@ -149,18 +150,18 @@ export function formatTerms(terms: string[]): string {
 // Add the term if it is missing, remove it if it is there. Case-insensitive,
 // because "Fire" and "fire" are the same immunity.
 export function toggleTerm(text: string, term: string): string {
-  const wanted = term.trim().toLowerCase();
+  const wanted = textKey(term);
   if (!wanted) {
     return text;
   }
   const terms = parseTerms(text);
-  const without = terms.filter((entry) => entry.toLowerCase() !== wanted);
+  const without = terms.filter((entry) => textKey(entry) !== wanted);
   return formatTerms(without.length === terms.length ? [...terms, term.trim()] : without);
 }
 
 export function hasTerm(text: string, term: string): boolean {
-  const wanted = term.trim().toLowerCase();
-  return parseTerms(text).some((entry) => entry.toLowerCase() === wanted);
+  const wanted = textKey(term);
+  return parseTerms(text).some((entry) => textKey(entry) === wanted);
 }
 
 // ---- ancestry ----
@@ -245,7 +246,7 @@ export function classFeatureLines(
   for (const feature of classFeaturesFor(classId, subclass, level)) {
     const text = subclassFeatureDescription(classId, subclass, feature.name) ?? "";
     const line = (text ? `${feature.name}: ${text}` : feature.name).slice(0, TRAIT_MAX);
-    const key = line.toLowerCase();
+    const key = textKey(line);
     if (seen.has(key)) {
       continue;
     }
@@ -346,8 +347,8 @@ export function addTrait(draft: MonsterDraft, line: string): MonsterDraft {
   if (!trimmed || draft.stats.traits.length >= MAX_TRAITS) {
     return draft;
   }
-  const key = trimmed.toLowerCase();
-  if (draft.stats.traits.some((trait) => trait.trim().toLowerCase() === key)) {
+  const key = textKey(trimmed);
+  if (draft.stats.traits.some((trait) => textKey(trait) === key)) {
     return draft;
   }
   return { ...draft, stats: { ...draft.stats, traits: [...draft.stats.traits, trimmed] } };

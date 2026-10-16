@@ -10,6 +10,7 @@ import { chosenResistances, featureDamageImmunities } from "@/lib/srd/trait-rule
 import { authoredResistances } from "@/lib/srd/authored-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 import { DAMAGE_TYPES, PHYSICAL_TYPES, rageApplies, resistsAllDamage } from "@/lib/dm/damage-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 // Damage types a character's features make them immune to (Purity of Body:
 // poison), as a keyword string damageAdjust can match against.
@@ -30,7 +31,7 @@ export function pcResistances(sheet: {
   level?: number;
 }, options?: { magical?: boolean; spell?: boolean }): string {
   const out: string[] = [];
-  const race = sheet.race.toLowerCase();
+  const race = textKey(sheet.race);
   // The authored subclass features' resistances (Soul of the Forge, a
   // raging bear totem, Spell Resistance against a spell's damage).
   out.push(...authoredResistances(sheet, options));
@@ -61,7 +62,7 @@ export function pcResistances(sheet: {
   if (resistsAllDamage(sheet.conditions)) {
     out.push(...DAMAGE_TYPES);
   }
-  const featureNames = sheet.features.map((feature) => feature.name.toLowerCase());
+  const featureNames = sheet.features.map((feature) => textKey(feature.name));
   const hasFeature = (fragment: string) =>
     featureNames.some((name) => name.includes(fragment));
   if (race.includes("dwarf") || hasFeature("dwarven resilience")) {

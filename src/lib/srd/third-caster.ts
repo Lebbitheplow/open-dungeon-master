@@ -4,6 +4,8 @@
 // here in the SRD's own shape. Import-free, so src/lib/srd/index.ts and the
 // multiclass table can both read it without a cycle.
 
+import { textKey } from "@/lib/language/text-logic";
+
 const THIRD_CASTERS: Record<string, string> = {
   fighter: "eldritch knight",
   rogue: "arcane trickster",
@@ -24,7 +26,7 @@ const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, 
 // Whether this class and subclass cast as a third caster.
 export function isThirdCaster(classId: string, subclass: string | undefined | null): boolean {
   const wanted = THIRD_CASTERS[normalize(classId)];
-  return Boolean(wanted) && normalize(subclass ?? "") === wanted;
+  return Boolean(wanted) && textKey(subclass ?? "") === wanted;
 }
 
 // Spell slots {level: max} at a class level; empty below 3rd.

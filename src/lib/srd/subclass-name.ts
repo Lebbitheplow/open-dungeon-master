@@ -6,8 +6,7 @@
 // oath's features, and a fighter whose subclass reads "Master" opens no
 // maneuvers.
 
-export const normalizeSubclassName = (value: string) =>
-  value.trim().toLowerCase().replace(/\s+/g, " ");
+import { textKey } from "@/lib/language/text-logic";
 
 // A subclass name with its title taken off, so a sheet that stores the short
 // form ("Evocation", "Devotion") still names the subclass it means. Only a
@@ -17,15 +16,15 @@ const SUBCLASS_TITLES =
   /^(oath of the|oath of|circle of the|circle of|college of|school of|path of the|path of|way of the|way of|the)\s+/;
 
 export function strippedSubclassName(value: string): string {
-  return normalizeSubclassName(value).replace(SUBCLASS_TITLES, "").replace(/\s+domain$/, "").trim();
+  return textKey(value).replace(SUBCLASS_TITLES, "").replace(/\s+domain$/, "").trim();
 }
 
 // Exact name or alias.
 export function subclassNamedExactly(stored: string, name: string, aliases: string[] = []): boolean {
-  const wanted = normalizeSubclassName(stored);
+  const wanted = textKey(stored);
   return (
     Boolean(wanted) &&
-    [name, ...aliases].some((candidate) => normalizeSubclassName(candidate) === wanted)
+    [name, ...aliases].some((candidate) => textKey(candidate) === wanted)
   );
 }
 

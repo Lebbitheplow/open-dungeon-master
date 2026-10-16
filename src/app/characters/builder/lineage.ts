@@ -7,6 +7,7 @@
 import { characterPlaceholder, normalizeGender, raceFamily } from "@/lib/placeholders";
 import type { Ability } from "@/lib/schemas/sheet";
 import { canonicalRaceId, srdRaceFor } from "@/lib/content/race-options";
+import { textKey } from "@/lib/language/text-logic";
 
 const BASE = "/assets/placeholders";
 
@@ -301,7 +302,7 @@ export function filterGroups<T extends { name: string; meta?: string }>(
   groups: Array<CardGroupLike<T>>,
   query: string,
 ): Array<CardGroupLike<T>> {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = textKey(query).split(" ").filter(Boolean);
   if (!words.length) {
     return groups;
   }
@@ -309,7 +310,7 @@ export function filterGroups<T extends { name: string; meta?: string }>(
     .map((group) => ({
       ...group,
       options: group.options.filter((option) => {
-        const haystack = `${option.name} ${option.meta ?? ""}`.toLowerCase();
+        const haystack = textKey(`${option.name} ${option.meta ?? ""}`);
         return words.every((word) => haystack.includes(word));
       }),
     }))

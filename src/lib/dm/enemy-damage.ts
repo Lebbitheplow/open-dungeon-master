@@ -35,6 +35,7 @@ import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The single server-side path for damage landing on an enemy. Used by the
 // damage_enemy tool AND by damage rolls carrying targetEnemyId, which the
@@ -60,7 +61,7 @@ export function resolveEnemyRef(encounterId: string, ref: string): EncounterEnem
   }
   return (
     listEnemies(encounterId).find(
-      (enemy) => enemy.displayName.toLowerCase() === trimmed.toLowerCase(),
+      (enemy) => textKey(enemy.displayName) === textKey(trimmed),
     ) ?? null
   );
 }

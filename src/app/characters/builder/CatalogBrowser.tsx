@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
 import { uniqueByName } from "./pickerRows";
 import type { PickerEntry } from "./useContentSearch";
+import { textKey } from "@/lib/language/text-logic";
 
 // The whole catalog, not just what you can name.
 //
@@ -99,7 +100,7 @@ export default function CatalogBrowser({
   const fetched = useRef(new Set<string>());
 
   const selected = useMemo(
-    () => new Set(selectedNames.map((name) => name.trim().toLowerCase())),
+    () => new Set(selectedNames.map((name) => textKey(name))),
     [selectedNames],
   );
 
@@ -185,14 +186,14 @@ export default function CatalogBrowser({
   }
 
   function toggleRow(entry: PickerEntry) {
-    if (selected.has(entry.name.trim().toLowerCase())) {
+    if (selected.has(textKey(entry.name))) {
       onUnpick?.(entry.name);
     } else {
       onPick(entry);
     }
   }
 
-  const needle = filter.trim().toLowerCase();
+  const needle = textKey(filter);
 
   return (
     <div className="mt-2">
@@ -226,9 +227,9 @@ export default function CatalogBrowser({
               ) : null}
               <ul>
                 {recommended.entries
-                  .filter((entry) => !needle || entry.name.toLowerCase().includes(needle))
+                  .filter((entry) => !needle || textKey(entry.name).includes(needle))
                   .map((entry) => {
-                    const on = selected.has(entry.name.trim().toLowerCase());
+                    const on = selected.has(textKey(entry.name));
                     return (
                       <li key={entry.name} className="flex items-center gap-1 pr-1 hover:bg-stone-800/60">
                         <button
@@ -275,7 +276,7 @@ export default function CatalogBrowser({
             const isLoading = loading.includes(section.key);
             const rows = loaded[section.key]?.rows ?? [];
             const visible = needle
-              ? rows.filter((entry) => entry.name.toLowerCase().includes(needle))
+              ? rows.filter((entry) => textKey(entry.name).includes(needle))
               : rows;
             return (
               <div key={section.key} className="border-t border-stone-800/80 first:border-t-0">
@@ -318,7 +319,7 @@ export default function CatalogBrowser({
                           ) : null}
                           <ul>
                             {bucket.rows.map((entry) => {
-                              const on = selected.has(entry.name.trim().toLowerCase());
+                              const on = selected.has(textKey(entry.name));
                               return (
                                 <li
                                   key={entry.slug}

@@ -8,20 +8,19 @@
 
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
+import { textKey } from "@/lib/language/text-logic";
 
 type Caster = Pick<CharacterSheet, "class" | "classes" | "spellcasting" | "features">;
 
-const keyOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
 const hasName = (list: string[] | undefined, names: Set<string>) =>
-  (list ?? []).some((entry) => names.has(keyOf(entry)));
+  (list ?? []).some((entry) => names.has(textKey(entry)));
 
 // Whether a wizard's Spell Mastery names this spell: the choice is kept on
 // the feature ("Spell Mastery: Shield, Misty Step").
 export function masteredSpell(sheet: Caster, names: Set<string>): boolean {
   return sheet.features.some((feature) => {
     const match = /^spell mastery\s*[:(-]\s*(.+?)\)?$/i.exec(feature.name.trim());
-    return Boolean(match && match[1].split(/,|\band\b/).some((entry) => names.has(keyOf(entry))));
+    return Boolean(match && match[1].split(/,|\band\b/).some((entry) => names.has(textKey(entry))));
   });
 }
 

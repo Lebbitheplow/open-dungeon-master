@@ -5,6 +5,7 @@
 
 import { effectiveAbilities } from "@/lib/srd/magic-items";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -43,12 +44,7 @@ export function spendInspirationCounter(
 // "Thieves' tools", "thieves tools" and "Thieves' Tools (lockpicks)" are one
 // tool: compared without case, punctuation, or a trailing note.
 function toolKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\([^)]*\)/g, "")
-    .replace(/[^a-z ]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return textKey(name.replace(/\([^)]*\)/g, "").replace(/[^\p{L}\p{M}\s]|ʼ/gu, ""));
 }
 
 // The proficiency a check with this tool adds: the bonus when the sheet lists

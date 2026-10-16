@@ -8,6 +8,7 @@ import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import type { WorkshopBundle } from "@/lib/workshop/bundle";
+import { textKey } from "@/lib/language/text-logic";
 
 // A workshop bundle's share of its author's shelf (hand-built monsters, and
 // items, spells and options), both ways (docs/workshop-rulebook-audit-
@@ -41,7 +42,6 @@ export type ShelfReport = {
 
 export const PORTABLE_REF = "homebrew:@";
 
-const lower = (value: string) => value.trim().toLowerCase();
 const label = (kind: string, name: string) => `${kind === "archetype" ? "subclass" : kind === "race" ? "species" : kind} ${name}`;
 
 // The monster a fight's roster row names ("goblin", or {monster: "goblin"}).
@@ -115,13 +115,13 @@ export function shelfForBundle(input: {
   const monsters = listHomebrewMonsters(input.ownerUserId);
   const homebrew = listHomebrew(input.ownerUserId).filter((entry) => entry.kind !== "monster");
   const refs = [...input.statBlocks.filter(Boolean), ...input.rosters.flatMap(rosterMonsters)];
-  const named = new Set(refs.map(lower));
-  const prose = input.texts.join("\n").toLowerCase();
-  const mentioned = (name: string) => name.trim().length >= 4 && prose.includes(name.trim().toLowerCase());
-  const usedMonster = (monster: HomebrewMonster) => named.has(lower(monster.draft.name)) || named.has(lower(monster.slug)) || mentioned(monster.draft.name);
+  const named = new Set(refs.map(textKey));
+  const prose = textKey(input.texts.join("\n"));
+  const mentioned = (name: string) => name.trim().length >= 4 && prose.includes(textKey(name));
+  const usedMonster = (monster: HomebrewMonster) => named.has(textKey(monster.draft.name)) || named.has(textKey(monster.slug)) || mentioned(monster.draft.name);
   const pregens = input.sheets.map(sheetNames);
   const ids = new Set([...pregens.flatMap((names) => names.ids), ...(input.boundIds ?? [])]);
-  const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
+  const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
   const usedEntry = (entry: HomebrewEntry) =>
     ids.has(entry.id) ||
     mentioned(entry.name) ||
@@ -170,7 +170,7 @@ const comparable = (kind: HomebrewEntry["kind"], name: string, data: Record<stri
 function freeName(taken: Set<string>, name: string, bundleName: string): string {
   const base = `${name} [${bundleName}]`.slice(0, 80);
   let candidate = base;
-  for (let attempt = 2; taken.has(lower(candidate)); attempt += 1) {
+  for (let attempt = 2; taken.has(textKey(candidate)); attempt += 1) {
     candidate = `${base.slice(0, 74)} ${attempt}`;
   }
   return candidate;
@@ -181,39 +181,39 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
   const reused: string[] = [];
   const renamed: string[] = [];
   let copied = 0;
-  // kind:lower(name in the bundle) -> the name it has here.
+  // kind:textKey(name in the bundle) -> the name it has here.
   const renames = new Map<string, string>();
 
   // Where each monster and entry of the bundle landed: "<kind>:<name>" to its id here.
   const ids = new Map<string, string>();
-  const mine = new Map(listHomebrewMonsters(userId).map((monster) => [lower(monster.draft.name), monster]));
+  const mine = new Map(listHomebrewMonsters(userId).map((monster) => [textKey(monster.draft.name), monster]));
   const monsterNames = new Set(mine.keys());
   for (const monster of bundle.monsters) {
     const draft = draftFromData(monster.name, { desc: monster.desc, stats: monster.stats, extraDamagePerRound: monster.extraDamagePerRound });
-    const held = mine.get(lower(monster.name));
+    const held = mine.get(textKey(monster.name));
     if (held && stable(held.draft.stats) === stable(draft.stats)) {
       reused.push(label("monster", monster.name));
-      ids.set(`monster:${lower(monster.name)}`, held.id);
+      ids.set(`monster:${textKey(monster.name)}`, held.id);
       continue;
     }
     const name = held ? freeName(monsterNames, monster.name, bundleName) : monster.name;
     if (held) {
-      renames.set(`monster:${lower(monster.name)}`, name);
+      renames.set(`monster:${textKey(monster.name)}`, name);
       renamed.push(`${label("monster", monster.name)} is "${name}" here: your own ${monster.name} has other rules.`);
     }
-    ids.set(`monster:${lower(monster.name)}`, createHomebrewMonster(userId, { ...draft, name }, monster.desc).id);
-    monsterNames.add(lower(name));
+    ids.set(`monster:${textKey(monster.name)}`, createHomebrewMonster(userId, { ...draft, name }, monster.desc).id);
+    monsterNames.add(textKey(name));
     copied += 1;
   }
 
   const owned = listHomebrew(userId);
-  const byKey = new Map(owned.map((entry) => [`${entry.kind}:${lower(entry.name)}`, entry]));
+  const byKey = new Map(owned.map((entry) => [`${entry.kind}:${textKey(entry.name)}`, entry]));
   const names = new Map<string, Set<string>>();
-  for (const entry of owned) (names.get(entry.kind) ?? names.set(entry.kind, new Set()).get(entry.kind)!).add(lower(entry.name));
+  for (const entry of owned) (names.get(entry.kind) ?? names.set(entry.kind, new Set()).get(entry.kind)!).add(textKey(entry.name));
   for (const entry of bundle.homebrew) {
     const normalized = normalizeHomebrewData(entry.kind, entry.data, entry.name);
     if ("error" in normalized) continue;
-    const key = `${entry.kind}:${lower(entry.name)}`;
+    const key = `${entry.kind}:${textKey(entry.name)}`;
     const held = byKey.get(key);
     if (held && comparable(entry.kind, held.name, held.data) === comparable(entry.kind, entry.name, normalized.data)) {
       reused.push(label(entry.kind, entry.name));
@@ -228,7 +228,7 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
     }
     const created = createHomebrew(userId, { kind: entry.kind, name, data: normalized.data });
     ids.set(key, created.id);
-    taken.add(lower(name));
+    taken.add(textKey(name));
     names.set(entry.kind, taken);
     copied += 1;
   }
@@ -239,17 +239,21 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
   for (const [key, name] of renames) {
     if (!key.startsWith("monster:")) continue;
     const old = key.slice("monster:".length);
-    db.prepare(`UPDATE npcs SET stat_block = ? WHERE campaign_id = ? AND lower(stat_block) = ?`).run(name, workshopId, old);
+    // Matched in code: SQLite's lower() folds ASCII only.
+    const npcs = db.prepare(`SELECT id, stat_block FROM npcs WHERE campaign_id = ?`).all(workshopId) as Array<{ id: string; stat_block: string }>;
+    for (const npc of npcs.filter((row) => textKey(row.stat_block) === old)) {
+      db.prepare(`UPDATE npcs SET stat_block = ? WHERE id = ? AND campaign_id = ?`).run(name, npc.id, workshopId);
+    }
     const rows = db.prepare(`SELECT id, enemies_json FROM encounter_templates WHERE campaign_id = ?`).all(workshopId) as Array<{ id: string; enemies_json: string }>;
     for (const row of rows) {
       const enemies = parseJson<unknown[]>(row.enemies_json, []);
       let changed = false;
       const next = enemies.map((enemy) => {
-        if (typeof enemy === "string" && lower(enemy) === old) {
+        if (typeof enemy === "string" && textKey(enemy) === old) {
           changed = true;
           return name;
         }
-        if (enemy && typeof enemy === "object" && lower(String((enemy as { monster?: unknown }).monster ?? "")) === old) {
+        if (enemy && typeof enemy === "object" && textKey(String((enemy as { monster?: unknown }).monster ?? "")) === old) {
           changed = true;
           return { ...(enemy as Record<string, unknown>), monster: name };
         }
@@ -264,7 +268,7 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
     reused,
     renamed,
     renames,
-    entryFor: (kind, name) => ids.get(`${kind}:${lower(name)}`) ?? null,
+    entryFor: (kind, name) => ids.get(`${kind}:${textKey(name)}`) ?? null,
   };
 }
 
@@ -277,7 +281,7 @@ export function landedSheet(sheet: CreateSheetInput, arrival: { entryFor: (kind:
     const id = arrival.entryFor(kind, rest.join(":"));
     return id ? `homebrew:${id}` : ref;
   };
-  const rename = (kind: string, name: string) => arrival.renames.get(`${kind}:${lower(name)}`) ?? name;
+  const rename = (kind: string, name: string) => arrival.renames.get(`${kind}:${textKey(name)}`) ?? name;
   const record = sheet as unknown as Record<string, unknown>;
   const equipment = Array.isArray(record.equipment)
     ? (record.equipment as Array<Record<string, unknown>>).map((item) => ({

@@ -1,5 +1,5 @@
 import type { OrderEntry } from "@/lib/db/encounters";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // Pure combat bookkeeping, kept database-free like mutation-math.ts so
 // scripts/test-encounter-logic.mjs can exercise every branch.
@@ -311,7 +311,7 @@ export function nameArrivals(
   const groups = new Map<string, { base: string; existing: number[]; wanted: number[] }>();
   const groupOf = (name: string) => {
     const { base } = unnumbered(name);
-    const key = base.toLowerCase();
+    const key = textKey(base);
     let group = groups.get(key);
     if (!group) {
       group = { base, existing: [], wanted: [] };

@@ -43,6 +43,7 @@ import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The social-interaction engine: NPC disposition was pure narration with no
 // state, so a shopkeeper the party bullied yesterday greeted them warmly today
@@ -177,7 +178,7 @@ function bootstrapAgency(
     ? campaign.storyArc?.cast?.find(
         (entry) =>
           entry.status !== "gone" &&
-          entry.name.trim().toLowerCase() === npc.name.trim().toLowerCase(),
+          textKey(entry.name) === textKey(npc.name),
       )
     : undefined;
   if (cast) {

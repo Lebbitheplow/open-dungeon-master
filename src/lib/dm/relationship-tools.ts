@@ -48,6 +48,7 @@ import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The relationship engine: how each character actually stands with each NPC
 // and AI companion, on one server-owned meter running from open hostility to
@@ -194,8 +195,8 @@ function resolveSubject(
   rawName: string,
   sheets: CharacterSheet[],
 ): Subject | ToolError {
-  const needle = rawName.trim().toLowerCase();
-  const sheet = sheets.find((candidate) => candidate.name.trim().toLowerCase() === needle);
+  const needle = textKey(rawName);
+  const sheet = sheets.find((candidate) => textKey(candidate.name) === needle);
   if (sheet && !sheet.isCompanion) {
     return {
       error: `${sheet.name} is a player's character. How two player characters feel about each other belongs to those two players and is not metered here; play the scene.`,
@@ -323,7 +324,7 @@ export function handleRelationshipBeat(
   if ("error" in subject) {
     return subject;
   }
-  if (subject.name.trim().toLowerCase() === sheet.name.trim().toLowerCase()) {
+  if (textKey(subject.name) === textKey(sheet.name)) {
     return { error: "A character cannot have a relationship with themselves.", retry: true };
   }
 

@@ -1,5 +1,6 @@
 import { DISEASES, POISONS, type DiseaseSpec } from "@/lib/srd/afflictions";
 import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
+import { textKey } from "@/lib/language/text-logic";
 
 // The SRD's hazards as rows the workshop starts from (GET
 // /api/content/hazards): the poisons table, the three sample diseases and
@@ -32,7 +33,7 @@ function diseaseSpecOf(id: keyof typeof DISEASES): DiseaseSpec {
 }
 
 export function hazardCatalog(q = ""): CatalogRow[] {
-  const wanted = q.trim().toLowerCase();
+  const wanted = textKey(q);
   const rows: CatalogRow[] = [
     ...SAMPLE_TRAPS.map(({ id, name, ...trap }) => ({
       slug: `trap-${id}`,
@@ -62,5 +63,5 @@ export function hazardCatalog(q = ""): CatalogRow[] {
       table: { hazardKind: "disease", disease: diseaseSpecOf(id) },
     })),
   ];
-  return wanted ? rows.filter((row) => row.name.toLowerCase().includes(wanted)) : rows;
+  return wanted ? rows.filter((row) => textKey(row.name).includes(wanted)) : rows;
 }

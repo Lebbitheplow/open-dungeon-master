@@ -31,6 +31,7 @@ import { ALL_SKILLS, STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { KNOWN_TOOLS } from "@/lib/srd/feat-grant-text";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
+import { textKey } from "@/lib/language/text-logic";
 
 export type SaveGrant = {
   // The saving throw the feature grants, and what it grants instead when
@@ -363,7 +364,7 @@ export function subclassFixedTraining(grants: SubclassGrant[]): { armor: string[
 // already names is kept.
 export function autoSubclassPicks(grants: SubclassGrant[], held: Proficiencies, choices: FeatChoices = {}): FeatChoices {
   const out: FeatChoices = { ...choices };
-  const has = (list: string[], entry: string) => list.some((value) => value.trim().toLowerCase() === entry.trim().toLowerCase());
+  const has = (list: string[], entry: string) => list.some((value) => textKey(value) === textKey(entry));
   const skills = [...held.skills];
   const languages = [...held.languages];
   const tools = [...held.tools];

@@ -34,10 +34,11 @@ import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { damageAdjust, removeConditions, resistsAllDamage, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
-import { spellEffectsOnEnemyDamage, spellKey } from "@/lib/dm/spell-effects";
+import { spellEffectsOnEnemyDamage } from "@/lib/dm/spell-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { rollAgainst } from "@/lib/roll-labels";
+import { textKey } from "@/lib/language/text-logic";
 
 const FEET_PER_TILE = 5;
 
@@ -137,7 +138,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     if (!entry?.spell || !entry.source) {
       continue;
     }
-    const tag = `${spellKey(entry.spell)}|${entry.source}`;
+    const tag = `${textKey(entry.spell)}|${entry.source}`;
     if (seen.has(tag)) {
       continue;
     }
@@ -167,7 +168,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     if (save.success) {
       const ending = live.conditions.filter((name) => {
         const other = (live.conditionMeta as ConditionMetaMap)[name];
-        return other?.spell && `${spellKey(other.spell)}|${other.source ?? ""}` === tag;
+        return other?.spell && `${textKey(other.spell)}|${other.source ?? ""}` === tag;
       });
       const cleared = removeConditions(live.conditions, live.conditionMeta, ending);
       patchEnemyConditions(live.id, cleared.conditions, cleared.meta);

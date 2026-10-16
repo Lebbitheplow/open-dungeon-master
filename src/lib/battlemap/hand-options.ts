@@ -19,6 +19,7 @@ import {
   type HandTarget,
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
+import { textKey } from "@/lib/language/text-logic";
 
 const COST: Record<HeldOption["cost"], HandCost> = {
   action: "action",
@@ -117,7 +118,7 @@ export function optionCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] {
   }
   if (sheet.resources.sub_superiority_dice) {
     const die = `1${maneuverDieFor(sheet)}`;
-    const knows = (name: string) => sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && feature.name.toLowerCase().includes(name));
+    const knows = (name: string) => sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && textKey(feature.name).includes(name));
     if (knows("rally")) {
       cards.push(
         card(sheet, turn, { id: "sub_superiority_dice", label: "Dice" }, {

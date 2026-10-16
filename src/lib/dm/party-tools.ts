@@ -12,6 +12,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
+import { textKey } from "@/lib/language/text-logic";
 
 // Moving things between a character and the party.
 //
@@ -94,7 +95,7 @@ function resolve(
   if (direct) {
     return direct;
   }
-  const named = sheets.find((sheet) => sheet.name.toLowerCase() === id.toLowerCase());
+  const named = sheets.find((sheet) => textKey(sheet.name) === textKey(id));
   return named ?? null;
 }
 
@@ -133,7 +134,7 @@ export function handlePartyStash(
       const added = addPartyItem(getParty(campaign.id).inventory, {
         name,
         qty: taken.removed,
-        weight: fresh.equipment.find((item) => item.name.toLowerCase() === name.toLowerCase())?.weight,
+        weight: fresh.equipment.find((item) => textKey(item.name) === textKey(name))?.weight,
       });
       if ("error" in added) {
         return added;

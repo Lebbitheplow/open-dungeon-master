@@ -13,6 +13,7 @@ import {
   type WorldType,
 } from "./model.ts";
 import { ROW_TEXT, accountOf, leadOf } from "./account.ts";
+import { textKey } from "../language/text-logic.ts";
 
 // WorldForge's own file, both ways: its JSON export (format version 4) read
 // into a workshop with nothing dropped, and a workshop written back out as a
@@ -157,15 +158,15 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       fields: list(type.fields, LIMITS.fieldsPerType).map(rec).map((field) => ({ ...field, id: wfKey(field.id) })),
     } as WorldType;
   });
-  const typeByName = new Map(types.map((type) => [type.name.toLowerCase(), type]));
+  const typeByName = new Map(types.map((type) => [textKey(type.name), type]));
   // An entity can name a type the file's list does not carry (WorldForge
   // seeds its five defaults without writing them out): the type is made
   // from its name, coloured like WorldForge's default of that name if any.
   const typeNamed = (raw: unknown): WorldType => {
     const name = str(raw, 40) || "Other";
-    const known = typeByName.get(name.toLowerCase());
+    const known = typeByName.get(textKey(name));
     if (known) return known;
-    const seed = defaultTypes().find((type) => type.name.toLowerCase() === name.toLowerCase());
+    const seed = defaultTypes().find((type) => textKey(type.name) === textKey(name));
     const made: WorldType = {
       id: `t_${wfKey(name).toLowerCase()}`,
       name,
@@ -175,7 +176,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       fields: [],
     };
     types.push(made);
-    typeByName.set(name.toLowerCase(), made);
+    typeByName.set(textKey(name), made);
     return made;
   };
 

@@ -121,6 +121,19 @@ await test("The SRD's Oil of Taggit and Essence of Ether are found by their own 
   }
 });
 
+await test("A workshop poison is found by its name however it is written: apostrophe, case, spacing.", async () => {
+  await brew("Wyvern's Venom", {
+    desc: "Milked from a wyvern's sting.",
+    hazardKind: "poison",
+    poison: { type: "injury", dc: 15, damage: "7d6", conditions: [], minutes: 0, summary: "DC 15 CON: 7d6 poison, half on a success." },
+  });
+  for (const name of ["Wyvern's Venom", "wyvern’s  venom", "WYVERN'S VENOM"]) {
+    const victim = world.addHero({ class: "fighter", level: 1, abilities: { con: 10 } });
+    const out = await withDice([1, 3, 3, 3, 3, 3, 3, 3], () => world.invoke("afflict", { characterId: victim.id, kind: "poison", name }));
+    assert.equal(out.ok, true, `${name}: ${out.error ?? out.result?.error}`);
+  }
+});
+
 await test("A workshop hazard is its author's: another DM's table does not know it.", async () => {
   const other = await openWorld();
   const stranger = other.addHero({ class: "fighter", level: 1 });

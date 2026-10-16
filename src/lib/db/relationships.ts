@@ -1,4 +1,4 @@
-import { compareNames, foldName } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import {
   parseBeatCounts,
@@ -103,8 +103,8 @@ export function listRelationshipsForSubject(
   campaignId: string,
   subjectName: string,
 ): Relationship[] {
-  const wanted = foldName(subjectName);
-  return listRelationships(campaignId).filter((relationship) => foldName(relationship.subjectName) === wanted);
+  const wanted = textKey(subjectName);
+  return listRelationships(campaignId).filter((relationship) => textKey(relationship.subjectName) === wanted);
 }
 
 export function getRelationship(
@@ -112,11 +112,11 @@ export function getRelationship(
   characterId: string,
   subjectName: string,
 ): Relationship | null {
-  const wanted = foldName(subjectName);
+  const wanted = textKey(subjectName);
   const rows = getDatabase()
     .prepare(`SELECT * FROM relationships WHERE campaign_id = ? AND character_id = ?`)
     .all(campaignId, characterId) as RelationshipRow[];
-  const row = rows.find((candidate) => foldName(candidate.subject_name) === wanted);
+  const row = rows.find((candidate) => textKey(candidate.subject_name) === wanted);
   return row ? mapRelationship(row) : null;
 }
 

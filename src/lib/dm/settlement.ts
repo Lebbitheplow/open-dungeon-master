@@ -10,6 +10,7 @@ import { stockPool } from "@/lib/dm/shop-tools";
 import { generateSettlement, seedFromText, type Settlement } from "@/lib/overworld/settlement";
 import { publishEphemeral } from "@/lib/events";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Writing a generated settlement into a campaign (docs/vtt-parity-implementation-plan.md
 // 12.1): the people join the cast at that place, the shops open there with
@@ -19,8 +20,8 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 export type PopulateOutcome = { ok: true; settlement: Settlement; npcs: number; shops: number } | ToolError;
 
 export function placeIsWritten(campaign: Campaign, location: CampaignLocation): boolean {
-  const here = location.name.toLowerCase();
-  return listNpcs(campaign.id).some((npc) => npc.location.toLowerCase() === here) || listShopsAt(campaign.id, location.id, location.name).length > 0;
+  const here = textKey(location.name);
+  return listNpcs(campaign.id).some((npc) => textKey(npc.location) === here) || listShopsAt(campaign.id, location.id, location.name).length > 0;
 }
 
 export function populateSettlement(campaign: Campaign, location: CampaignLocation, options: { size?: unknown; terrain?: unknown; seed?: number; force?: boolean } = {}): PopulateOutcome {

@@ -13,6 +13,7 @@ import {
   type NpcDraft,
   type RelationGraph,
 } from "@/lib/npcs/forge";
+import { textKey } from "@/lib/language/text-logic";
 
 // The three parts of the NPC forge that are more than a text box.
 //
@@ -122,8 +123,8 @@ export function RelationEditor({
 }) {
   const edgeFor = (name: string) =>
     graph.edges.find((entry) => {
-      const pair = [entry.from.toLowerCase(), entry.to.toLowerCase()];
-      return pair.includes(name.toLowerCase()) && pair.includes(draft.name.toLowerCase());
+      const pair = [textKey(entry.from), textKey(entry.to)];
+      return pair.includes(textKey(name)) && pair.includes(textKey(draft.name));
     });
 
   return (
@@ -198,7 +199,7 @@ export function RelationEditor({
           .filter(
             (name) =>
               !draft.relations.some(
-                (relation) => relation.npcName.toLowerCase() === name.toLowerCase(),
+                (relation) => textKey(relation.npcName) === textKey(name),
               ),
           )
           .map((name) => (

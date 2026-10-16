@@ -27,6 +27,7 @@ import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The rules behind two board moves the model can make: a teleport, which
 // the AI makes only through the spell or ability that does it (cast and
@@ -48,7 +49,7 @@ const TELEPORT_FEET: Record<string, number> = {
 };
 
 export function teleportRangeFeet(spell: string): number | null {
-  const key = spell.trim().toLowerCase();
+  const key = textKey(spell);
   if (TELEPORT_FEET[key]) {
     return TELEPORT_FEET[key];
   }
@@ -105,18 +106,18 @@ export function payForTeleport(
     return typeof cast.error === "string" ? toolError(cast) : null;
   }
   if (args.casterEnemyId && encounter) {
-    const ref = args.casterEnemyId.trim().toLowerCase();
+    const ref = textKey(args.casterEnemyId);
     const enemy = listEnemies(encounter.id).find(
-      (entry) => entry.id === args.casterEnemyId || entry.displayName.toLowerCase() === ref,
+      (entry) => entry.id === args.casterEnemyId || textKey(entry.displayName) === ref,
     );
     if (!enemy || enemy.status !== "alive") {
       return { error: "Unknown or fallen casterEnemyId; use a living enemy from GAME STATE.", retry: true };
     }
-    const key = spell.toLowerCase();
+    const key = textKey(spell);
     const listed =
-      (enemy.stats.spells ?? []).some((name) => name.toLowerCase() === key) ||
-      abilityNames(enemy.stats).some((name) => name.toLowerCase() === key) ||
-      (enemy.stats.traits ?? []).some((line) => line.toLowerCase().startsWith(key));
+      (enemy.stats.spells ?? []).some((name) => textKey(name) === key) ||
+      abilityNames(enemy.stats).some((name) => textKey(name) === key) ||
+      (enemy.stats.traits ?? []).some((line) => textKey(line).startsWith(key));
     return listed ? null : { error: `${enemy.displayName} has no ${spell} on its stat block, so it cannot teleport. It may move with move_token or take another action.`, retry: true };
   }
   return { error: `${spell} needs its caster: casterId for a character, casterEnemyId for an enemy.`, retry: true };

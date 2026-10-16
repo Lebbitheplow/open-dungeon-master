@@ -25,9 +25,9 @@ import {
 import type { AbilityScores } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/legality/types";
 import { thirdCasterOutside, thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
+import { textKey } from "@/lib/language/text-logic";
 
-const lower = (name: string) => name.trim().toLowerCase();
-const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
+const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
 const added = (after: string[], before: string[]) =>
   dedupeNames(after).filter((name) => !has(before, name));
 
@@ -118,7 +118,7 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
       if (after.style !== "known" || !has(before.known, forget)) {
         return { error: `${forget} is not a spell this character knows, so it cannot be given up for another.` };
       }
-      after.known = after.known.filter((name) => lower(name) !== lower(forget));
+      after.known = after.known.filter((name) => textKey(name) !== textKey(forget));
       removed = [forget];
     }
   } else if (picks?.kind === "lists") {
@@ -184,7 +184,7 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
     if (spell.level !== 0) {
       return { error: `${spell.name} is a level ${spell.level} spell, not a cantrip; it cannot sit on the cantrip list.` };
     }
-    if (!spell.classes.map(lower).includes(input.list)) {
+    if (!spell.classes.map(textKey).includes(textKey(input.list))) {
       return { error: `${spell.name} is not a ${input.list} cantrip, so a ${label} cannot learn it.` };
     }
   }
@@ -196,7 +196,7 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
     if (spell.level === 0) {
       return { error: `${spell.name} is a cantrip; it belongs on the cantrip list, not among the spells.` };
     }
-    if (!spell.classes.map(lower).includes(input.list)) {
+    if (!spell.classes.map(textKey).includes(textKey(input.list))) {
       return { error: `${spell.name} is not on the ${input.list} spell list, so a ${label} cannot learn or prepare it.` };
     }
     if (spell.level > top) {

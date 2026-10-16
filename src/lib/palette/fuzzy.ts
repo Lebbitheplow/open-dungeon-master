@@ -7,6 +7,8 @@
 // the start of a word) or, failing that, as letters in order ("lgr" finds
 // "Long rest"), which scores lower so exact typing always wins.
 
+import { textKey, words } from "../language/text-logic.ts";
+
 export type Searchable = {
   label: string;
   group?: string;
@@ -14,13 +16,13 @@ export type Searchable = {
 };
 
 function isWordStart(text: string, index: number): boolean {
-  return index === 0 || /[^a-z0-9]/.test(text[index - 1]);
+  return index === 0 || !words(text[index - 1]).length;
 }
 
 // How well one word matches one text; null when it does not match at all.
 export function fuzzyScore(word: string, text: string): number | null {
-  const needle = word.trim().toLowerCase();
-  const hay = text.toLowerCase();
+  const needle = textKey(word);
+  const hay = textKey(text);
   if (!needle) {
     return 0;
   }
@@ -60,7 +62,7 @@ export function fuzzyScore(word: string, text: string): number | null {
 
 // The whole query against one command; null when any word misses.
 export function commandScore(query: string, command: Searchable): number | null {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = textKey(query).split(/\s+/).filter(Boolean);
   if (!words.length) {
     return 0;
   }

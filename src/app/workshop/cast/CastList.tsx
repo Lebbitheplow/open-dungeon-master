@@ -9,6 +9,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
 import { describeNpc, draftFrom } from "@/lib/npcs/forge";
+import { textKey } from "@/lib/language/text-logic";
 
 // The cast, two ways. CastChips is the DM console's compact row of names,
 // moved here unchanged from DmNpcForgePanel. CastRows is the workshop's
@@ -111,11 +112,11 @@ function wants(npc: Npc): string {
 }
 
 function matches(npc: Npc, query: string): boolean {
-  const needle = query.trim().toLowerCase();
+  const needle = textKey(query);
   if (!needle) {
     return true;
   }
-  return [npc.name, ...npc.aliases].some((name) => name.toLowerCase().includes(needle));
+  return [npc.name, ...npc.aliases].some((name) => textKey(name).includes(needle));
 }
 
 export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "selectedId">) {

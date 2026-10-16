@@ -7,6 +7,8 @@
 // are both subject "marla", so recording the second retires the first
 // instead of letting the sheet contradict itself.
 
+import { textKey } from "../language/text-logic.ts";
+
 export const FACT_CATEGORIES = [
   "location",
   "npc",
@@ -44,20 +46,13 @@ export function isFactCategory(value: unknown): value is FactCategory {
 }
 
 export function normalizeSubject(subject: string): string {
-  return subject
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, SUBJECT_MAX_CHARS);
+  return textKey(subject).slice(0, SUBJECT_MAX_CHARS);
 }
 
 function contentTokens(text: string): Set<string> {
   return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, " ")
-      .split(/\s+/)
+    textKey(text)
+      .split(" ")
       .filter((token) => token.length > 2),
   );
 }

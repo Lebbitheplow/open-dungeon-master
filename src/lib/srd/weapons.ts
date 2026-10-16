@@ -5,6 +5,8 @@
 // (cyberpunk, horror, steampunk...); names stay generic enough to read in
 // any genre. No runtime dependencies so test scripts can import directly.
 
+import { textKey } from "@/lib/language/text-logic";
+
 export type SrdWeapon = {
   name: string;
   category: "simple" | "martial" | "firearm" | "exotic";
@@ -131,7 +133,7 @@ const byName = new Map(SRD_WEAPONS.map((weapon) => [normalize(weapon.name), weap
 
 // "Longswords" / "quarterstaffs" / "Hand crossbows" -> canonical lookup key.
 function normalize(term: string) {
-  return term.trim().toLowerCase().replace(/s$/, "");
+  return textKey(term).replace(/s$/, "");
 }
 
 // Adventuring gear whose name sits inside a weapon's: the hammer of a

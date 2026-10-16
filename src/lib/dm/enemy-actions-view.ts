@@ -5,6 +5,7 @@ import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { canEnemyAct, enemyActedThisRound } from "@/lib/dm/can-act";
 import { plannedSwings } from "@/lib/dm/enemy-profile";
 import { abilityFromLine, abilityRefusal, type MonsterAbility } from "@/lib/dm/monster-abilities";
+import { textKey } from "@/lib/language/text-logic";
 
 // What an enemy can do on its turn, for the person running it (issue #108).
 //
@@ -121,7 +122,7 @@ function abilitiesOf(enemy: EncounterEnemy): MonsterAbility[] {
     : (stats.traits ?? []).map(abilityFromLine).filter((entry): entry is MonsterAbility => entry !== null);
   const seen = new Set<string>();
   return parsed.filter((ability) => {
-    const key = ability.name.trim().toLowerCase();
+    const key = textKey(ability.name);
     if (!key || seen.has(key)) {
       return false;
     }
@@ -137,7 +138,7 @@ export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEne
   const seen = new Set<string>();
   const attackViews: PublicEnemyAttack[] = [];
   for (const attack of attacks) {
-    const key = attack.name.trim().toLowerCase();
+    const key = textKey(attack.name);
     if (!key || seen.has(key)) {
       continue;
     }

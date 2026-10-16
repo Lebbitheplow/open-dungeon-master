@@ -7,6 +7,7 @@ import { ui } from "@/lib/ui";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { FieldLabel } from "@/app/workshop/kit";
 import { heldTraitNames, publishedTraits, withTrait, type PublishedTrait } from "@/lib/workshop/species-traits";
+import { textKey } from "@/lib/language/text-logic";
 
 // "Add a published trait": a search over every trait the catalog's species
 // print (the content pack's, or with none the bundled SRD's, and the DM's
@@ -55,10 +56,10 @@ export function SpeciesTraitPicker({ traits, onChange }: { traits: string; onCha
       .finally(() => setLoading(false));
   }
 
-  const held = new Set(heldTraitNames(traits).map((name) => name.toLowerCase()));
-  const words = query.trim().toLowerCase();
+  const held = new Set(heldTraitNames(traits).map(textKey));
+  const words = textKey(query);
   const shown = (catalog ?? []).filter(
-    (trait) => !words || trait.name.toLowerCase().includes(words) || trait.from.some((name) => name.toLowerCase().includes(words)),
+    (trait) => !words || textKey(trait.name).includes(words) || trait.from.some((name) => textKey(name).includes(words)),
   );
 
   return (
@@ -89,7 +90,7 @@ export function SpeciesTraitPicker({ traits, onChange }: { traits: string; onCha
       {open && shown.length ? (
         <ul className="reveal max-h-64 overflow-y-auto panel panel-smoke rounded-lg text-sm">
           {shown.slice(0, 60).map((trait) => {
-            const has = held.has(trait.name.toLowerCase());
+            const has = held.has(textKey(trait.name));
             return (
               <li key={trait.name} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
                 <button

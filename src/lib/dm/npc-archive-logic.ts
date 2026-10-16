@@ -16,7 +16,7 @@
 //
 // Dependency-free so scripts/test-npc-archive.mjs can import it directly.
 
-import { hasWord } from "../language/text-logic.ts";
+import { containsPhrase } from "../language/text-logic.ts";
 
 // Chapters of being unmentioned before an NPC leaves the roster. ODM's
 // pressureState already calls an NPC "ignored" at 2, which is a behavioural
@@ -79,7 +79,7 @@ export function shouldArchive(npc: ArchiveCandidate): ArchiveDecision {
 // a short name like "Al" matching inside "always" would resurrect the wrong
 // NPC every chapter.
 export function mentionsNpc(text: string, npc: ArchiveCandidate): boolean {
-  return [npc.name, ...(npc.aliases ?? [])].some((name) => hasWord(text, name ?? ""));
+  return [npc.name, ...(npc.aliases ?? [])].some((name) => containsPhrase(text, name ?? ""));
 }
 
 // Naming an archived NPC brings them straight back, so archiving is never a

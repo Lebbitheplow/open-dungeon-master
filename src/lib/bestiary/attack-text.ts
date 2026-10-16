@@ -1,5 +1,6 @@
 import { parseSaveEffect } from "@/lib/dm/monster-abilities";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
+import { textKey } from "@/lib/language/text-logic";
 
 // What an attack's printed line says beyond its bonus and dice (SRD 5.1,
 // Monsters: Actions): melee or ranged, its reach and range, the typed dice
@@ -225,10 +226,10 @@ const COUNTS: Record<string, number> = {
 };
 
 // "Bite (Bat or Vampire Form Only)" -> "bite".
-const bareName = (name: string) => name.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+const bareName = (name: string) => textKey(name.replace(/\([^)]*\)/g, ""));
 
 function matchAttack(word: string, names: string[]): string | null {
-  const wanted = word.replace(/^(?:its|his|her|their)\s+/i, "").trim().toLowerCase();
+  const wanted = textKey(word.replace(/^(?:its|his|her|their)\s+/i, ""));
   const singular = wanted.replace(/(?<=[^s])s$/, "");
   return (
     names.find((name) => bareName(name) === wanted) ??

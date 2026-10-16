@@ -11,6 +11,7 @@ import {
 } from "@/lib/dm/npc-logic";
 import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 // The background goal engine: once per chapter close, every tracked NPC's
 // life moves on without a single model call. Pressure counters notice who
@@ -29,7 +30,7 @@ export function advanceNpcAgency(
   if (!npcs.length) {
     return;
   }
-  const transcript = chapterTranscript.toLowerCase();
+  const transcript = textKey(chapterTranscript);
   const facts: FactCandidate[] = [];
   const holders: Array<{ npc: Npc; goalText: string }> = [];
 
@@ -38,7 +39,7 @@ export function advanceNpcAgency(
     const pressure =
       options.tickPressureCounters === false
         ? npc.agency.pressure
-        : tickPressure(npc.agency.pressure, transcript.includes(npc.name.toLowerCase()));
+        : tickPressure(npc.agency.pressure, transcript.includes(textKey(npc.name)));
 
     for (let round = 0; round < rounds && goals.session; round += 1) {
       const result = advanceSessionGoal(

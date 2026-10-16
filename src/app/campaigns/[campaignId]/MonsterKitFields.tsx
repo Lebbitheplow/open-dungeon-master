@@ -33,6 +33,7 @@ import {
 } from "@/lib/bestiary/kit";
 import { MAX_TRAITS, type MonsterDraft } from "@/lib/bestiary/monster-draft";
 import { proficiencyBonus } from "@/lib/srd";
+import { textKey } from "@/lib/language/text-logic";
 
 // The half of the monster editor that picks rather than types.
 //
@@ -68,7 +69,7 @@ export function TermPicker({
   glossary?: readonly GlossaryEntry[];
 }) {
   const extras = parseTerms(value).filter(
-    (term) => !known.some((entry) => entry.toLowerCase() === term.toLowerCase()),
+    (term) => !known.some((entry) => textKey(entry) === textKey(term)),
   );
   return (
     <div className="flex flex-col gap-1">
@@ -279,7 +280,7 @@ export function MonsterKitPanel({
           <div className="stagger-pop flex flex-wrap gap-1">
             {features.map((feature) => {
               const on = draft.stats.traits.some(
-                (trait) => trait.trim().toLowerCase() === feature.line.toLowerCase(),
+                (trait) => textKey(trait) === textKey(feature.line),
               );
               return (
                 <button

@@ -9,6 +9,7 @@ import { BEAST_FORMS, formatCr, formList, type BeastForm } from "@/lib/srd/beast
 import { xpForCr } from "@/lib/srd/encounter-math";
 import type { EnemyAttack, EnemySaveMods, EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type EnemyShapeSpell = {
   spell: string;
@@ -29,7 +30,7 @@ const SPELLS: Record<string, EnemyShapeSpell> = {
 
 // The spells that may turn an enemy into a beast, by name; null for others.
 export function enemyShapeSpellFor(spell: string): EnemyShapeSpell | null {
-  return SPELLS[spell.trim().toLowerCase()] ?? null;
+  return SPELLS[textKey(spell)] ?? null;
 }
 
 // A shapechanger says so in its type ("humanoid (shapechanger)") or in its

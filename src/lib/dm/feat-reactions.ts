@@ -26,6 +26,7 @@ import { publishPersisted } from "@/lib/events";
 import { defensiveDuelistBonus, hasMageSlayer, hasSentinel } from "@/lib/srd/feat-combat";
 import { listSheets } from "@/lib/db/sheets";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export function defensiveDuelist(ctx: Ctx): ToolResult {
   const { campaign, sheet } = ctx;
@@ -210,7 +211,7 @@ export function lucky(ctx: Ctx): ToolResult {
 export function reservesRecovery(ctx: Ctx, which: "ki" | "sorcery_points"): ToolResult {
   const { campaign, sheet } = ctx;
   const feat = which === "ki" ? "Boundless Reserves" : "Sorcerous Vigor";
-  if (!sheet.feats.some((entry) => entry.trim().toLowerCase() === feat.toLowerCase())) {
+  if (!sheet.feats.some((entry) => textKey(entry) === textKey(feat))) {
     return { error: `${sheet.name} has no ${feat}; that recovery is the feat's. Nothing was spent.`, refused: "rules" };
   }
   const fresh = getSheetById(sheet.id) ?? sheet;

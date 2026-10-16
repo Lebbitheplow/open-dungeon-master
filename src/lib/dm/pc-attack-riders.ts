@@ -22,6 +22,7 @@ import { GRAPPLING_STRIKE, MANEUVERED, maneuverDieFor, maneuverUse, offSwingRefu
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { optionsOfKind } from "@/lib/srd/options";
+import { textKey } from "@/lib/language/text-logic";
 
 export { superiorityDie, maneuverDieFor } from "@/lib/dm/maneuver-rules";
 
@@ -50,10 +51,10 @@ export function pickManeuver(
   const term = asked.trim().toLowerCase();
   const picks = sheet.features
     .map((feature) => feature.name)
-    .filter((name) => name.toLowerCase().startsWith("maneuver"));
+    .filter((name) => textKey(name).startsWith("maneuver"));
   const known = picks.some((name) => {
-    const bare = name.toLowerCase().replace(/^maneuver:\s*/, "");
-    return bare.includes(term) || term.includes(bare);
+    const bare = textKey(name.replace(/^maneuver:\s*/i, ""));
+    return bare.includes(textKey(asked)) || textKey(asked).includes(bare);
   });
   if (!known) {
     const theirs = picks.length ? ` Their maneuvers: ${picks.join(", ")}.` : " They have no maneuver picks.";
@@ -61,7 +62,7 @@ export function pickManeuver(
     // can still make; a name nobody knows is the call's to fix, from their
     // picks.
     return {
-      refused: optionsOfKind("maneuver").some((option) => option.n.toLowerCase() === term.replace(/^maneuver:\s*/, ""))
+      refused: optionsOfKind("maneuver").some((option) => textKey(option.n) === textKey(asked.replace(/^maneuver:\s*/i, "")))
         ? { error: `${sheet.name} knows no maneuver "${asked}".${theirs} They can make the attack without it.`, retry: true }
         : { error: `No maneuver called "${asked}" is known.${theirs} Send the one meant, by the name on the sheet.`, retry: true },
     };
@@ -236,7 +237,7 @@ function markAttacker(campaign: Campaign, characterId: string, condition: string
 // An Arcane Archer's arrow missed: Curving Shot may reroll it at another
 // creature with the bonus action, this turn (authored-economy.ts).
 export function openCurvingShot(campaignId: string, sheet: CharacterSheet, enemyId: string, weapon: string): string | null {
-  const holds = sheet.features.some((feature) => feature.name.trim().toLowerCase() === "curving shot");
+  const holds = sheet.features.some((feature) => textKey(feature.name) === "curving shot");
   if (!holds || !/bow\b/i.test(weapon)) {
     return null;
   }

@@ -24,6 +24,7 @@ import { buildAttackProfile } from "@/lib/dm/pc-attack-profile";
 import { objectProfile, type ObjectMaterial, type ObjectSize } from "@/lib/srd/objects";
 import { breakWallSection, sectionHit, wallSectionFor } from "@/lib/dm/zone-walls";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export const OBJECT_MATERIALS: ObjectMaterial[] = [
   "cloth", "paper", "rope", "crystal", "glass", "ice", "wood", "bone", "stone", "iron", "steel", "mithral", "adamantine",
@@ -47,7 +48,7 @@ const objectSchema = z.object({
   reason: z.string().optional(),
 });
 
-const keyOf = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 60);
+const keyOf = (name: string) => textKey(name).slice(0, 60);
 
 function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: string | null, kind: "attack" | "damage", detail: string, result: RollResult, attacker: RollAttacker | null) {
   const roll = insertRoll({ campaignId: campaign.id, characterId, requestedBy: "dm", kind, detail, result, attacker });

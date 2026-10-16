@@ -6,6 +6,7 @@
 // same shape (src/lib/homebrew/hazard-data.ts). Pure.
 
 import type { Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 export type TrapDamage = { dice: string; type: string };
 
@@ -102,5 +103,5 @@ export const SAMPLE_TRAPS: SampleTrap[] = [
 
 export function findSampleTrap(name: string): SampleTrap | null {
   const key = name.trim().toLowerCase();
-  return SAMPLE_TRAPS.find((trap) => trap.name.toLowerCase() === key || trap.id === key.replace(/[^a-z]+/g, "_")) ?? null;
+  return SAMPLE_TRAPS.find((trap) => textKey(trap.name) === textKey(name) || trap.id === key.replace(/[^a-z]+/g, "_")) ?? null;
 }

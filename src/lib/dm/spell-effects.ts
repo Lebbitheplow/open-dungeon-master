@@ -26,6 +26,7 @@ import { MECH_OVERRIDES } from "@/lib/srd/spell-mechanics";
 import { getDmTurn } from "@/lib/db/dm-turns";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The SRD's own conditions. One of these with no spell recorded on it may
 // have come from anywhere (a ghoul's claw, a net), so a spell ending does not
@@ -36,8 +37,6 @@ const SRD_CONDITIONS = new Set([
   "invisible", "paralyzed", "petrified", "poisoned", "prone", "restrained",
   "stunned", "unconscious",
 ]);
-
-export const spellKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 export type SpellSource = {
   spell: string;
@@ -131,7 +130,7 @@ export function heldBySpell(
 ): boolean {
   const lowered = name.toLowerCase();
   if (meta?.spell) {
-    return spellNames.has(spellKey(meta.spell)) && (!casterId || !meta.source || meta.source === casterId);
+    return spellNames.has(textKey(meta.spell)) && (!casterId || !meta.source || meta.source === casterId);
   }
   return conditionNames.has(lowered) && !SRD_CONDITIONS.has(lowered);
 }
@@ -145,10 +144,10 @@ export function lastCastSlot(characterId: string, spell: string): number | null 
       `SELECT delta_json FROM sheet_audit WHERE character_id = ? AND kind = 'use_spell_slot' ORDER BY seq DESC LIMIT 60`,
     )
     .all(characterId) as Array<{ delta_json: string }>;
-  const wanted = spellKey(spell);
+  const wanted = textKey(spell);
   for (const row of rows) {
     const delta = parseJson<Record<string, unknown>>(row.delta_json, {});
-    if (typeof delta.spell === "string" && spellKey(delta.spell) === wanted) {
+    if (typeof delta.spell === "string" && textKey(delta.spell) === wanted) {
       return typeof delta.level === "number" ? delta.level : null;
     }
   }
@@ -173,7 +172,7 @@ export function spellEffectsOnEnemyDamage(enemyId: string): string[] {
     if (meta[name]?.endsOnDamage) {
       ending.add(name);
       if (meta[name]?.spell) {
-        endingSpells.add(`${spellKey(meta[name].spell ?? "")}|${meta[name].source ?? ""}`);
+        endingSpells.add(`${textKey(meta[name].spell ?? "")}|${meta[name].source ?? ""}`);
       }
     }
   }
@@ -183,7 +182,7 @@ export function spellEffectsOnEnemyDamage(enemyId: string): string[] {
     if (!entry?.saveOnDamage || ending.has(name)) {
       continue;
     }
-    const tag = `${spellKey(entry.spell ?? "")}|${entry.source ?? ""}`;
+    const tag = `${textKey(entry.spell ?? "")}|${entry.source ?? ""}`;
     if (saved.has(tag)) {
       continue;
     }
@@ -210,7 +209,7 @@ export function spellEffectsOnEnemyDamage(enemyId: string): string[] {
   }
   for (const name of enemy.conditions) {
     const entry = meta[name];
-    if (entry?.spell && endingSpells.has(`${spellKey(entry.spell)}|${entry.source ?? ""}`)) {
+    if (entry?.spell && endingSpells.has(`${textKey(entry.spell)}|${entry.source ?? ""}`)) {
       ending.add(name);
     }
   }

@@ -13,6 +13,7 @@ import { ALL_SKILLS, STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { featSpellSpec, type FeatSpellSpec } from "@/lib/srd/feat-spells";
 import { ARTISANS_TOOLS, GAMING_SETS, MUSICAL_INSTRUMENTS } from "@/lib/srd/tool-choices";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { textKey } from "@/lib/language/text-logic";
 
 export type PickKind = "languages" | "skills" | "tools" | "weapons" | "armor";
 
@@ -99,7 +100,7 @@ const normalize = (desc: string) =>
 const languageName = (words: string) => {
   const wanted = words.trim().toLowerCase();
   return (
-    STANDARD_LANGUAGES.find((entry) => entry.toLowerCase() === wanted) ??
+    STANDARD_LANGUAGES.find((entry) => textKey(entry) === textKey(words)) ??
     wanted.replace(/(^|\s|')([a-z])/g, (_, before, letter) => `${before}${letter.toUpperCase()}`)
   );
 };

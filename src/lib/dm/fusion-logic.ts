@@ -15,6 +15,7 @@
 
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
 import { stems } from "../language/language.ts";
+import { textKey } from "../language/text-logic.ts";
 
 // The terms a text is scored by: Snowball stems in the table's language,
 // its function words dropped (src/lib/language), so "dell'Oracolo" and
@@ -116,7 +117,7 @@ export function lexicalScore(
   // clamp: scene chunks are short prose where most terms appear once, and
   // normalizing against the tf ceiling instead would cap them near 0.55.
   const overlap = Math.min(1, matched / mass);
-  const phrase = document.toLowerCase().includes(query.trim().toLowerCase()) ? PHRASE_BONUS : 0;
+  const phrase = textKey(document).includes(textKey(query)) ? PHRASE_BONUS : 0;
   return Math.min(1, overlap + phrase);
 }
 

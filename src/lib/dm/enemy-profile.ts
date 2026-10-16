@@ -1,4 +1,5 @@
 import type { EnemyAttack, EnemyStats, RoutineStep } from "@/lib/bestiary/statblock";
+import { textKey } from "@/lib/language/text-logic";
 
 // How an enemy's attack reaches (SRD 5.1, Monsters: melee or ranged, reach,
 // normal and long range) and which attacks a turn of it makes (its
@@ -86,18 +87,18 @@ export function swingMode(
   return null;
 }
 
-const nameKey = (name: string) => name.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+const attackKey = (name: string) => textKey(name.replace(/\([^)]*\)/g, ""));
 
 function findAttack(attacks: EnemyAttack[], wanted: string): EnemyAttack | null {
-  const key = wanted.trim().toLowerCase();
+  const key = textKey(wanted);
   if (!key) {
     return null;
   }
   return (
-    attacks.find((attack) => attack.name.toLowerCase() === key) ??
-    attacks.find((attack) => nameKey(attack.name) === nameKey(key)) ??
-    attacks.find((attack) => attack.name.toLowerCase().includes(key)) ??
-    attacks.find((attack) => key.includes(nameKey(attack.name))) ??
+    attacks.find((attack) => textKey(attack.name) === key) ??
+    attacks.find((attack) => attackKey(attack.name) === attackKey(wanted)) ??
+    attacks.find((attack) => textKey(attack.name).includes(key)) ??
+    attacks.find((attack) => attackKey(wanted).includes(attackKey(attack.name))) ??
     null
   );
 }

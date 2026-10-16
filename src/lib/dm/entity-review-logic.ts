@@ -1,4 +1,5 @@
 import { normalizeName } from "./entity-logic.ts";
+import { textKey } from "../language/text-logic.ts";
 
 // The review queue for the matches entity-logic.ts deliberately refuses to
 // resolve on its own.
@@ -115,8 +116,8 @@ export function planRename(
   // full of, so it is the one retrieval most needs to keep matching.
   for (const candidate of [npc.name, ...npc.aliases]) {
     const clamped = clampNpcName(candidate);
-    const key = clamped.toLowerCase();
-    if (!clamped || seen.has(key) || key === name.toLowerCase()) {
+    const key = textKey(clamped);
+    if (!clamped || seen.has(key) || key === textKey(name)) {
       continue;
     }
     seen.add(key);

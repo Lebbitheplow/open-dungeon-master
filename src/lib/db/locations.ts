@@ -1,4 +1,4 @@
-import { foldName } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { GeneratedImage } from "@/lib/types";
 
@@ -88,8 +88,8 @@ export function getLocation(id: string): CampaignLocation | null {
 // Compared in JavaScript, by Unicode case and form (src/lib/language): SQLite's
 // NOCASE folds ASCII only, so "église" after "Église" would be a second place.
 export function getLocationByName(campaignId: string, name: string): CampaignLocation | null {
-  const wanted = foldName(name);
-  return listLocations(campaignId).find((location) => foldName(location.name) === wanted) ?? null;
+  const wanted = textKey(name);
+  return listLocations(campaignId).find((location) => textKey(location.name) === wanted) ?? null;
 }
 
 export function listLocations(campaignId: string): CampaignLocation[] {
@@ -112,10 +112,10 @@ export function getCurrentLocation(campaignId: string): CampaignLocation | null 
 // the routes already known. update_location remains the way to revise them.
 // Names are compared folded, as places are (getLocationByName).
 export function withNewNames(known: string[], added: string[]): string[] {
-  const seen = new Set(known.map(foldName));
+  const seen = new Set(known.map(textKey));
   const merged = [...known];
   for (const name of added) {
-    const folded = foldName(name);
+    const folded = textKey(name);
     if (!seen.has(folded)) {
       seen.add(folded);
       merged.push(name);
@@ -260,7 +260,7 @@ export function renameLocation(
   if (!trimmed || !location || location.campaignId !== campaignId) {
     return null;
   }
-  if (trimmed.toLowerCase() === location.name.toLowerCase()) {
+  if (textKey(trimmed) === textKey(location.name)) {
     return location;
   }
   const clash = getLocationByName(campaignId, trimmed);
@@ -280,7 +280,7 @@ export function renameLocation(
         continue;
       }
       const repointed = other.connections.map((connection) =>
-        connection.trim().toLowerCase() === location.name.toLowerCase() ? trimmed : connection,
+        textKey(connection) === textKey(location.name) ? trimmed : connection,
       );
       if (repointed.join("\u0000") !== other.connections.join("\u0000")) {
         db.prepare(`UPDATE locations SET connections_json = ? WHERE id = ?`).run(

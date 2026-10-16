@@ -34,6 +34,7 @@ import { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { beastEnemyStats, enemyCr, enemyShapeNoEffect, enemyShapeProblem, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph-logic";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export { enemyShapeSpellFor };
 
@@ -64,7 +65,7 @@ export function castShapeAtEnemy(
     return { error: `${input.spell} cannot turn a creature into a beast; only Polymorph and True Polymorph do.`, retry: true };
   }
   // The name the casting goes by: a workshop copy's own, the rule's otherwise.
-  const named = input.runsAs && input.runsAs.trim().toLowerCase() !== input.spell.trim().toLowerCase() ? input.spell : rule.spell;
+  const named = input.runsAs && textKey(input.runsAs) !== textKey(input.spell) ? input.spell : rule.spell;
   const { caster } = input;
   const enemy = getEnemy(input.enemy.id) ?? input.enemy;
   const encounter = getActiveEncounter(campaign.id);
