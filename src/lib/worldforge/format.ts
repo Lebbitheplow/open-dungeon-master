@@ -87,6 +87,9 @@ export type ImportedBeat = { wfId: string; title: string; body: string; story: s
 
 export type WorldImport = {
   worldName: string;
+  // ODM's own extension: the workshop an ODM export came from, so a world
+  // keeps one identity when it is renamed. "" for a file from elsewhere.
+  worldId: string;
   premise: string;
   records: ImportedRecord[];
   doc: WorldDoc;
@@ -100,6 +103,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
     return { error: "Not a WorldForge export." };
   }
   const worldName = str(world.worldName, 70) || "A WorldForge world";
+  const worldId = str(world.odmWorldId, 80).replace(/[^\w:.-]/g, "");
 
   // Types first: every entity names one, and its fields are keyed to it.
   const fileTypes = list(world.types, LIMITS.types).map(rec);
@@ -261,7 +265,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
     const image = picture(backgrounds[atlas.id]);
     if (image) mapImages[atlas.id] = image;
   }
-  return { worldName, premise, records, doc, beats, mapImages };
+  return { worldName, worldId, premise, records, doc, beats, mapImages };
 }
 
 // ---- out ----
@@ -271,6 +275,7 @@ export type ExportBeat = { id: string; title: string; body: string; pov: string;
 
 export function writeWorldForge(input: {
   worldName: string;
+  worldId?: string;
   premise: string;
   records: ExportRecord[];
   doc: WorldDoc;
@@ -292,6 +297,7 @@ export function writeWorldForge(input: {
     version: 4,
     exportedAt: input.now,
     worldName: input.worldName,
+    ...(input.worldId ? { odmWorldId: input.worldId } : {}),
     entities: input.records.map((record) => ({
       id: idOf(record.ref),
       name: record.name,

@@ -49,6 +49,7 @@ type ImportReport = {
   linksUpdated?: number;
   linksRemoved?: number;
   conflicts?: string[];
+  matched?: string[];
   events: number;
   secrets: number;
   maps: number;
@@ -133,7 +134,10 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
             </span>
           ) : null}
           {report.conflicts?.length ? (
-            <span className="block text-amber-300">Changed here and in the file, kept as you had them: {report.conflicts.join(" ")}</span>
+            <span className="block text-amber-300">{report.conflicts.join(" ")}</span>
+          ) : null}
+          {report.matched?.length ? (
+            <span className="block text-amber-300">Matched by name to entries already here, so check they are the same: {report.matched.join(", ")}.</span>
           ) : null}
           {report.skipped.length ? <span className="block text-ember-300">Left out: {report.skipped.join("; ")}</span> : null}
         </div>

@@ -25,6 +25,9 @@ export function worldForBundle(workshopId: string, order: Record<Shelf, string[]
     const index = parsed ? at[parsed.shelf].get(parsed.id) : undefined;
     return parsed && index !== undefined ? refOf(parsed.shelf, `#${index}`) : null;
   });
+  // Where imported rows came from names sources and ids on this server
+  // only (src/lib/worldforge/import-merge.ts): a bundle starts fresh.
+  delete doc.origins;
   const images: Record<string, string> = {};
   for (const atlas of doc.maps) {
     const image = atlas.image ? inline(atlas.image) : "";

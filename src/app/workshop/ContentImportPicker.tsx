@@ -201,7 +201,7 @@ export function ContentImportPicker({
           Array.isArray(data.unresolved) && data.unresolved.length
             ? `No monster here answers to ${data.unresolved.join(", ")}: add them to your bestiary, or point those NPCs and fights at another.`
             : "",
-          Array.isArray(data.worldConflicts) && data.worldConflicts.length ? `Kept as you had them: ${data.worldConflicts.join(" ")}` : "",
+          Array.isArray(data.worldConflicts) && data.worldConflicts.length ? data.worldConflicts.join(" ") : "",
         ]
           .filter(Boolean)
           .join(" "),

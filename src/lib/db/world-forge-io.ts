@@ -7,16 +7,35 @@ import { getOverworld, setOverworldAnchor, setOverworldBackdrop } from "@/lib/db
 import { admitUpload, type UploadAccount, type UploadRefusal } from "@/lib/upload-budget";
 import { decodeBundleImage, encodeBundleImage, type BundleImage } from "@/lib/workshop/bundle";
 import { isUploadedImagePath } from "@/lib/uploads";
-import { createRecord, getWorldDoc, nextEntry, saveWorldDoc, worldEntities, worldView, writeRecord } from "@/lib/db/world-forge";
+import { createRecord, getWorldDoc, nextEntry, saveWorldDoc, worldEntities, worldView, writeRecord, type WorldEntity } from "@/lib/db/world-forge";
 import { firstSentence, readWorldForge, writeWorldForge, type ExportRecord, type WorldImport } from "@/lib/worldforge/format";
-import { LIMITS, LINK_LABELS, newId, parseRef, refOf, remapDoc, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
+import { LIMITS, LINK_LABELS, newId, parseRef, readEntry, refOf, remapDoc, type Entry, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
+import {
+  IMPORT_SLICES,
+  firstReadings,
+  hashOf,
+  mergeSliceRows,
+  mergeValues,
+  originFrom,
+  originKey,
+  ownedBy,
+  planIds,
+  remapEntryIds,
+  remapIds,
+  rowValue,
+  settle,
+  valueWords,
+  type ImportSlice,
+} from "@/lib/worldforge/import-merge";
 import { mergeImportedLinks } from "@/lib/db/world-link-merge";
 import { recordMediaFile } from "@/lib/media-access";
 
 // A WorldForge file into a workshop, and a workshop out as one. Importing
-// into a workshop that already has a world adds to it: a type, a field, a
-// place or a person it already has (by name, or by the WorldForge id an
-// earlier import of the same file left) is updated, not doubled.
+// into a workshop that already has a world adds to it: a type or a field of
+// the same name is the same one; an entry or a row an earlier import of the
+// same world brought is merged value by value, so what was changed here
+// since stands (src/lib/worldforge/import-merge.ts); another world's rows
+// keep their own ids even where the two worlds used the same ones.
 
 export type WorldImportResult =
   | {
@@ -28,6 +47,8 @@ export type WorldImportResult =
       linksUpdated: number;
       linksRemoved: number;
       conflicts: string[];
+      // Entries in the file matched to one already here by name alone.
+      matched: string[];
       events: number;
       secrets: number;
       maps: number;
@@ -74,12 +95,99 @@ function mergeTypes(doc: WorldDoc, incoming: WorldType[]) {
   return { types, fields };
 }
 
-// Rows by id: the file's replace the workshop's of the same id, new ones
-// are added up to the cap.
-function mergeRows<T extends { id: string }>(own: T[], incoming: T[], cap: number): T[] {
-  const byId = new Map(own.map((row) => [row.id, row]));
-  for (const row of incoming) if (byId.has(row.id) || byId.size < cap) byId.set(row.id, row);
-  return [...byId.values()];
+type Values = Record<string, unknown>;
+type Pending = { origin: string; key: string; source: string };
+
+// A type field's name, by its id, for a report.
+const fieldName = (doc: WorldDoc) => (id: string) => doc.types.flatMap((type) => type.fields).find((field) => field.id === id)?.name;
+
+// An entry's type fields as values of their own, one per field.
+const fieldValues = (fields: Entry["fields"]): Values => Object.fromEntries(Object.entries(fields).map(([id, value]) => [`fields.${id}`, value]));
+
+// What an import compares on the entry WorldForge keeps beside a record.
+function overlayValues(entry: Entry): Values {
+  return {
+    typeId: entry.typeId,
+    folderId: entry.folderId,
+    canon: entry.canon,
+    article: entry.article,
+    hiddenTruth: entry.hiddenTruth,
+    notes: entry.notes,
+    aliases: entry.aliases,
+    tags: entry.tags,
+    image: entry.image,
+    ...fieldValues(entry.fields),
+  };
+}
+
+// The same for a whole entity, its record's own values included.
+function recordValues(entity: WorldEntity): Values {
+  const short = entity.shelf === "npc" || entity.shelf === "faction";
+  return {
+    name: entity.name,
+    ...(short ? { tagline: entity.tagline } : { text: entity.text }),
+    aliases: entity.aliases,
+    tags: entity.tags,
+    portrait: entity.portrait,
+    typeId: entity.entry.typeId,
+    folderId: entity.entry.folderId,
+    canon: entity.entry.canon,
+    article: entity.entry.article,
+    hiddenTruth: entity.entry.hiddenTruth,
+    notes: entity.entry.notes,
+    ...fieldValues(entity.entry.fields),
+    ...(entity.shelf === "lore" ? { dmOnly: entity.table.visibility === "dm" } : {}),
+  };
+}
+
+// Taken values onto an entry, a type field at a time.
+function applyOverlay(entry: Entry, take: Values): Entry {
+  const fields = { ...entry.fields };
+  const next = { ...entry } as Values;
+  for (const [key, value] of Object.entries(take)) {
+    if (key.startsWith("fields.")) {
+      const id = key.slice("fields.".length);
+      if (value === undefined) delete fields[id];
+      else fields[id] = value as Entry["fields"][string];
+    } else next[key] = value;
+  }
+  return readEntry({ ...next, fields });
+}
+
+// The taken values as a patch for nextEntry, the type fields merged onto
+// the entry's own so a field nobody took is left as it is.
+function entryPatch(entry: Entry | undefined, take: Values, portrait: string | undefined): Parameters<typeof nextEntry>[2] {
+  const own = entry ?? readEntry({});
+  const fields = applyOverlay(own, Object.fromEntries(Object.entries(take).filter(([key]) => key.startsWith("fields.")))).fields;
+  const picked = Object.fromEntries(
+    (["typeId", "folderId", "canon", "article", "hiddenTruth", "notes", "aliases", "tags"] as const).filter((key) => key in take).map((key) => [key, take[key]]),
+  );
+  return { ...picked, ...(portrait !== undefined ? { portrait } : {}), fields };
+}
+
+// Folders and calendars point at no entry, and entries point at them: they
+// come in first. The rest point at entries, and come in after them.
+const FIRST_SLICES = ["folders", "calendars"] as const satisfies readonly ImportSlice[];
+const LATER_SLICES = IMPORT_SLICES.filter((slice) => !(FIRST_SLICES as readonly string[]).includes(slice));
+
+// The slices given, of what an import brings, merged row by row.
+function mergeSlices(
+  doc: WorldDoc,
+  moved: Pick<WorldDoc, ImportSlice>,
+  mapped: Pick<WorldDoc, ImportSlice>,
+  source: string,
+  slices: readonly ImportSlice[],
+  mapRow: (atlas: WorldDoc["maps"][number]) => WorldDoc["maps"][number] = (atlas) => atlas,
+): { conflicts: string[]; pending: Pending[] } {
+  const conflicts: string[] = [];
+  const pending: Pending[] = [];
+  for (const slice of slices) {
+    const rows = (slice === "maps" ? moved.maps.map(mapRow) : moved[slice]) as unknown as Array<{ id: string } & Values>;
+    const result = mergeSliceRows(doc, slice, rows, (mapped[slice] as Array<{ id: string }>).map((row) => row.id), source);
+    conflicts.push(...result.conflicts);
+    pending.push(...result.pending);
+  }
+  return { conflicts, pending };
 }
 
 export function importWorldForge(campaignId: string, account: UploadAccount, raw: unknown): WorldImportResult {
@@ -97,28 +205,82 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
   const refusal = admitUpload(account, images.reduce((sum, image) => sum + image.bytes.length, 0), images.length);
   if (refusal) return { error: refusal.error, refusal };
 
+  // The world this file is: the id an ODM export carries, or else its name,
+  // the one thing a WorldForge file says about itself.
+  const legacySource = `wf:${parsed.worldName}`;
+  const source = parsed.worldId ? `wf:${parsed.worldId}` : legacySource;
+
   const written: string[] = [];
   try {
     return getDatabase().transaction(() => {
       const doc = getWorldDoc(campaignId);
+      const origins = (doc.origins ??= {});
       const typeMap = mergeTypes(doc, parsed.doc.types);
-      doc.folders = mergeRows(doc.folders, parsed.doc.folders, LIMITS.folders);
-      doc.calendars = mergeRows(doc.calendars, parsed.doc.calendars, LIMITS.calendars);
+      const plan = planIds(doc, parsed.doc, source);
+      const firstRows = mergeSlices(doc, remapIds(parsed.doc, plan), parsed.doc, source, FIRST_SLICES);
 
       const existing = worldEntities(campaignId, doc);
-      const byWfId = new Map(existing.filter((entity) => entity.entry.wfId).map((entity) => [`${entity.shelf}|${entity.entry.wfId}`, entity.ref]));
+      const byRef = new Map(existing.map((entity) => [entity.ref, entity]));
+      const owned = ownedBy(doc);
+      // Entries imported before entries remembered their source: matched by
+      // their WorldForge id alone, as they were then.
+      const byWfId = new Map(
+        existing.filter((entity) => entity.entry.wfId && !origins[originKey("entries", entity.ref)]).map((entity) => [`${entity.shelf}|${entity.entry.wfId}`, entity.ref]),
+      );
       const byName = new Map(existing.map((entity) => [`${entity.shelf}|${entity.name.toLowerCase()}`, entity.ref]));
       const refMap = new Map<string, string>();
       const fresh = new Set<string>();
       const skipped: string[] = [];
+      const conflicts: string[] = [];
+      const matched: string[] = [];
+      const pending: Pending[] = [];
       let created = 0;
       let updated = 0;
       parsed.records.forEach((record, index) => {
         const typeId = typeMap.types.get(record.entry.typeId) ?? record.entry.typeId;
         const type = doc.types.find((entry) => entry.id === typeId) ?? doc.types.find((entry) => entry.shelf === record.shelf)!;
-        let ref = byWfId.get(`${record.shelf}|${record.entry.wfId}`) ?? byName.get(`${record.shelf}|${record.name.toLowerCase()}`) ?? "";
+        const from = originFrom(source, "entries", record.entry.wfId || record.ref);
+        const ownedRef = owned.get(from)?.slice("entries/".length);
+        let ref = ownedRef && byRef.has(ownedRef) ? ownedRef : "";
+        ref ||= byWfId.get(`${record.shelf}|${record.entry.wfId}`) ?? "";
+        if (!ref) {
+          // The same name here, the author's own or another world's: one
+          // entry, said aloud so the author can check it is the same one.
+          ref = byName.get(`${record.shelf}|${record.name.toLowerCase()}`) ?? "";
+          if (ref) matched.push(record.name);
+        }
+        const fieldIds = typeMap.fields.get(record.entry.typeId) ?? new Map<string, string>();
+        const entry = remapEntryIds(
+          { ...record.entry, fields: Object.fromEntries(Object.entries(record.entry.fields).map(([id, value]) => [fieldIds.get(id) ?? id, value])) },
+          plan,
+        );
+        const short = record.shelf === "npc" || record.shelf === "faction";
+        const theirs: Values = {
+          name: record.name,
+          ...(short ? { tagline: record.tagline } : { text: record.text }),
+          aliases: entry.aliases,
+          tags: record.tags,
+          // A picture is compared by its bytes, and written only when taken.
+          portrait: record.portrait ? `src:${hashOf(record.portrait)}` : "",
+          typeId: type.id,
+          folderId: entry.folderId,
+          canon: entry.canon,
+          article: entry.article,
+          hiddenTruth: entry.hiddenTruth,
+          notes: entry.notes,
+          ...fieldValues(entry.fields),
+          ...(record.shelf === "lore" ? { dmOnly: Boolean(record.dmOnly) } : {}),
+        };
+        let take: Values;
         if (ref) {
           updated += 1;
+          const key = originKey("entries", ref);
+          const prior = origins[key]?.from === from ? origins[key] : undefined;
+          const merged = mergeValues(prior, recordValues(byRef.get(ref)!), theirs);
+          take = merged.take;
+          origins[key] = { from, at: merged.at };
+          merged.pending.forEach((item) => pending.push({ origin: key, ...item }));
+          for (const words of new Set(merged.clashes.map((key) => valueWords(key, fieldName(doc))))) conflicts.push(`${record.name}: kept your ${words} over the file's.`);
         } else {
           const made = createRecord(campaignId, type, record);
           if ("error" in made) {
@@ -128,41 +290,61 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
           ref = made.ref;
           fresh.add(ref);
           created += 1;
+          take = theirs;
+          const key = originKey("entries", ref);
+          origins[key] = { from, at: {} };
+          for (const [value, reading] of Object.entries(theirs)) pending.push({ origin: key, key: value, source: hashOf(reading) });
         }
         refMap.set(record.ref, ref);
-        const portrait = saveImage(portraits[index], written) || undefined;
-        writeRecord(campaignId, ref, { name: record.name, tagline: record.tagline || undefined, text: record.text || undefined, aliases: record.entry.aliases, tags: record.tags, portrait }, type.shelf === "lore" ? type : undefined);
-        const fieldIds = typeMap.fields.get(record.entry.typeId) ?? new Map<string, string>();
-        const fields = Object.fromEntries(Object.entries(record.entry.fields).map(([id, value]) => [fieldIds.get(id) ?? id, value]));
-        doc.entries[ref] = { ...nextEntry(doc, ref, { ...record.entry, typeId: type.id, fields, tags: record.tags, portrait }), wfId: record.entry.wfId };
-        // A lore entry its author kept to the DM comes back kept to the DM.
+        const portrait = "portrait" in take ? saveImage(take.portrait ? portraits[index] : null, written) : undefined;
+        writeRecord(
+          campaignId,
+          ref,
+          {
+            ...("name" in take ? { name: record.name } : {}),
+            ...("tagline" in take ? { tagline: record.tagline } : {}),
+            ...("text" in take ? { text: record.text } : {}),
+            ...("aliases" in take ? { aliases: entry.aliases } : {}),
+            ...("tags" in take ? { tags: record.tags } : {}),
+            ...(portrait !== undefined ? { portrait } : {}),
+          },
+          type.shelf === "lore" && "typeId" in take ? type : undefined,
+        );
+        doc.entries[ref] = { ...nextEntry(doc, ref, entryPatch(doc.entries[ref], take, portrait)), wfId: record.entry.wfId };
+        // Whether a lore entry is kept to the DM is merged like its other
+        // values: the file's "kept to the DM" comes in where nobody changed
+        // it here, and a campaign that published or hid it keeps its choice.
         // One that is not canon yet is held back from players by its canon
         // alone (src/lib/db/world-publication.ts), so its audience is left
         // as the author set it and publishing it later needs no second step.
         const lore = parseRef(ref);
-        if (lore?.shelf === "lore" && record.dmOnly) {
-          getDatabase().prepare(`UPDATE lore_entries SET visibility = 'dm' WHERE id = ?`).run(lore.id);
+        if (lore?.shelf === "lore" && "dmOnly" in take) {
+          getDatabase().prepare(`UPDATE lore_entries SET visibility = ? WHERE id = ?`).run(take.dmOnly ? "dm" : "party", lore.id);
         }
       });
+      const after = new Map(worldEntities(campaignId, doc).map((entity) => [entity.ref, recordValues(entity)]));
+      settle(doc, pending, (origin, key) => after.get(origin.slice("entries/".length))?.[key]);
 
       const mapped = remapDoc(parsed.doc, (ref) => refMap.get(ref) ?? null);
+      const moved = remapIds(mapped, plan);
       const names = new Map(worldEntities(campaignId, doc).map((entity) => [entity.ref, entity.name]));
-      const merged = mergeImportedLinks(doc.links, mapped.links, `wf:${parsed.worldName}`, (ref) => names.get(ref) ?? "someone");
+      const merged = mergeImportedLinks(doc.links, mapped.links, source, (ref) => names.get(ref) ?? "someone", [legacySource]);
       doc.links = merged.links;
-      doc.events = mergeRows(doc.events, mapped.events, LIMITS.events);
-      doc.secrets = mergeRows(doc.secrets, mapped.secrets, LIMITS.secrets);
-      const stubNames = new Set(doc.stubs.map((stub) => stub.name.toLowerCase()));
-      doc.stubs = mergeRows(doc.stubs, mapped.stubs.filter((stub) => !stubNames.has(stub.name.toLowerCase())), LIMITS.stubs);
-      doc.maps = mergeRows(doc.maps, mapped.maps.map((atlas) => ({ ...atlas, image: saveImage(mapArt.get(atlas.id) ?? null, written) || doc.maps.find((own) => own.id === atlas.id)?.image || "" })), LIMITS.maps);
-      doc.pins = mergeRows(doc.pins, mapped.pins, LIMITS.pins);
+      // A map's art is compared by its bytes too, and written once taken.
+      const artUrl = new Map(mapped.maps.map((atlas) => [plan.maps.get(atlas.id) ?? atlas.id, parsed.mapImages[atlas.id] ?? ""]));
+      const artBytes = new Map(mapped.maps.map((atlas) => [plan.maps.get(atlas.id) ?? atlas.id, mapArt.get(atlas.id) ?? null]));
+      const rows = mergeSlices(doc, moved, mapped, source, LATER_SLICES, (atlas) => ({ ...atlas, image: artUrl.get(atlas.id) ? `src:${hashOf(artUrl.get(atlas.id))}` : "" }));
+      doc.maps = doc.maps.map((atlas) => (atlas.image.startsWith("src:") ? { ...atlas, image: saveImage(artBytes.get(atlas.id) ?? null, written) } : atlas));
+      settle(doc, [...firstRows.pending, ...rows.pending], (origin, key) => rowValue(doc, origin, key));
+      conflicts.push(...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts);
       saveWorldDoc(campaignId, doc);
 
       // Places pinned on the file's top map stand where their pins do on the
       // region map, when this import made them.
-      const root = mapped.maps.find((atlas) => !atlas.parentPinId) ?? mapped.maps[0];
+      const root = moved.maps.find((atlas) => !atlas.parentPinId) ?? moved.maps[0];
       if (root) {
         const region = getOverworld(campaignId);
-        for (const pin of mapped.pins.filter((entry) => entry.mapId === root.id)) {
+        for (const pin of moved.pins.filter((entry) => entry.mapId === root.id)) {
           const place = parseRef(pin.ref);
           if (place?.shelf === "location" && fresh.has(pin.ref)) {
             setOverworldAnchor(campaignId, place.id, { x: Math.round(pin.x * (region.width - 1)), y: Math.round(pin.y * (region.height - 1)) });
@@ -206,7 +388,8 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
         links: merged.added,
         linksUpdated: merged.updated,
         linksRemoved: merged.removed,
-        conflicts: merged.conflicts,
+        conflicts,
+        matched,
         events: mapped.events.length,
         secrets: mapped.secrets.length,
         maps: mapped.maps.length,
@@ -257,6 +440,9 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
   }
   return writeWorldForge({
     worldName: campaign?.title ?? "A world",
+    // The workshop's id names the world for good: renaming it later does
+    // not make a second import of the file a different world.
+    worldId: `odm-${campaignId}`,
     premise: campaign?.description ?? "",
     records,
     doc,
@@ -274,34 +460,71 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
 
 // The WorldForge of one campaign copied into another, its refs rewritten to
 // the copies of the records that travelled; a ref whose record did not
-// travel is dropped with whatever only it held up. Types, calendars and the
-// rest merge by id, so a second import of the same workshop updates; links
-// merge by the source link they came from (world-link-merge.ts), and what
-// both sides changed comes back in `conflicts`.
+// travel is dropped with whatever only it held up. A second copy of the
+// same workshop merges value by value against what the first one brought
+// (src/lib/worldforge/import-merge.ts), so what the campaign changed since
+// stands. Types merge by name, fields and all, so neither side loses a
+// field; links merge by the source link they came from
+// (world-link-merge.ts). What both sides changed comes back in `conflicts`.
 export function copyWorldDoc(
   sourceId: string,
   targetId: string,
   resolve: (shelf: "npc" | "location" | "faction" | "lore", id: string) => string | null,
 ): { count: number; conflicts: string[] } {
-  const source = getWorldDoc(sourceId);
-  const mapped = remapDoc(source, (ref) => {
+  const source = `campaign:${sourceId}`;
+  const sourceDoc = getWorldDoc(sourceId);
+  const toCopy = (ref: string) => {
     const parsed = parseRef(ref);
     const copy = parsed ? resolve(parsed.shelf, parsed.id) : null;
     return parsed && copy ? refOf(parsed.shelf, copy) : null;
-  });
+  };
+  const mapped = remapDoc(sourceDoc, toCopy);
   const target = getWorldDoc(targetId);
-  target.types = mergeRows(target.types, mapped.types, LIMITS.types);
-  target.entries = { ...target.entries, ...mapped.entries };
+  const origins = (target.origins ??= {});
+  const typeMap = mergeTypes(target, mapped.types);
+  const plan = planIds(target, mapped, source);
+  const moved = remapIds(mapped, plan);
+  const firstRows = mergeSlices(target, moved, mapped, source, FIRST_SLICES);
   const names = new Map(worldEntities(targetId, target).map((entity) => [entity.ref, entity.name]));
-  const merged = mergeImportedLinks(target.links, mapped.links, `campaign:${sourceId}`, (ref) => names.get(ref) ?? "someone");
-  target.links = merged.links;
-  for (const slice of ["folders", "calendars", "events", "secrets", "stubs", "maps", "pins"] as const) {
-    (target as Record<string, unknown>)[slice] = mergeRows(target[slice] as Array<{ id: string }>, mapped[slice] as Array<{ id: string }>, LIMITS[slice]);
+  const conflicts: string[] = [];
+  const pending: Pending[] = [];
+  let entries = 0;
+  for (const [sourceRef, raw] of Object.entries(sourceDoc.entries)) {
+    const ref = toCopy(sourceRef);
+    if (!ref) continue;
+    entries += 1;
+    const fieldIds = typeMap.fields.get(raw.typeId) ?? new Map<string, string>();
+    const entry = remapEntryIds(
+      { ...raw, typeId: typeMap.types.get(raw.typeId) ?? raw.typeId, fields: Object.fromEntries(Object.entries(raw.fields).map(([id, value]) => [fieldIds.get(id) ?? id, value])) },
+      plan,
+    );
+    const key = originKey("entries", ref);
+    const from = originFrom(source, "entries", sourceRef);
+    const own = target.entries[ref];
+    if (!own) {
+      target.entries[ref] = entry;
+      origins[key] = { from, at: firstReadings(overlayValues(entry)) };
+      continue;
+    }
+    const prior = origins[key]?.from === from ? origins[key] : undefined;
+    const merged = mergeValues(prior, overlayValues(own), overlayValues(entry));
+    target.entries[ref] = { ...applyOverlay(own, merged.take), wfId: own.wfId || entry.wfId };
+    origins[key] = { from, at: merged.at };
+    merged.pending.forEach((item) => pending.push({ origin: key, ...item }));
+    for (const words of new Set(merged.clashes.map((key) => valueWords(key, fieldName(target))))) conflicts.push(`${names.get(ref) ?? "An entry"}: kept your ${words} over the import's.`);
   }
+  settle(target, pending, (origin, value) => {
+    const own = target.entries[origin.slice("entries/".length)];
+    return own ? overlayValues(own)[value] : undefined;
+  });
+  const merged = mergeImportedLinks(target.links, mapped.links, source, (ref) => names.get(ref) ?? "someone");
+  target.links = merged.links;
+  const rows = mergeSlices(target, moved, mapped, source, LATER_SLICES);
+  settle(target, [...firstRows.pending, ...rows.pending], (origin, value) => rowValue(target, origin, value));
   saveWorldDoc(targetId, target);
   return {
-    count: Object.keys(mapped.entries).length + merged.added + merged.updated + mapped.events.length + mapped.secrets.length,
-    conflicts: merged.conflicts,
+    count: entries + merged.added + merged.updated + mapped.events.length + mapped.secrets.length,
+    conflicts: [...conflicts, ...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts],
   };
 }
 

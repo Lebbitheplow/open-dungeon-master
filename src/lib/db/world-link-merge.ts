@@ -28,6 +28,9 @@ export function mergeImportedLinks(
   incoming: WorldLink[],
   source: string,
   nameOf: (ref: string) => string = (ref) => ref,
+  // Other names the same source went by: a WorldForge file was known by
+  // its world's name before it carried an id of its own.
+  formerly: string[] = [],
 ): LinkMerge {
   const links = own.map((link) => ({ ...link }));
   const conflicts: string[] = [];
@@ -42,6 +45,7 @@ export function mergeImportedLinks(
     const print = linkFingerprint(theirs);
     const mine =
       links.find((link) => link.importedFrom === from) ??
+      links.find((link) => formerly.some((name) => link.importedFrom === `${name}:${theirs.id}`)) ??
       links.find((link) => !link.importedFrom && keyOf(link) === keyOf(theirs));
     if (!mine) {
       if (links.length >= LIMITS.links) continue;

@@ -145,7 +145,11 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
 export function worldView(campaignId: string): { doc: WorldDoc; entities: WorldEntity[] } {
   const doc = getWorldDoc(campaignId);
   const entities = worldEntities(campaignId, doc);
-  return { doc: pruneDoc(doc, new Set(entities.map((entity) => entity.ref))), entities };
+  // Where imported rows came from is the server's to merge with, not the
+  // editor's to carry.
+  const shown = pruneDoc(doc, new Set(entities.map((entity) => entity.ref)));
+  delete shown.origins;
+  return { doc: shown, entities };
 }
 
 function ownedBy(campaignId: string, ref: string): boolean {
