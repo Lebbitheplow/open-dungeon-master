@@ -157,7 +157,10 @@ export const LIMITS = {
   points: 200,
   refs: 40,
   name: 120,
-  article: 12_000,
+  // The article holds what a lore entry's own body does
+  // (src/lib/dm/world-lore-logic.ts LORE_BODY_MAX), so a long entry makes
+  // the round trip through a WorldForge file whole.
+  article: 20_000,
   note: 4_000,
 } as const;
 

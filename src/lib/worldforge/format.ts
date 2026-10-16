@@ -85,7 +85,17 @@ export type ImportedRecord = {
 
 export type ImportedBeat = { wfId: string; title: string; body: string; story: string; order: number; pov: string; place: string };
 
+// The newest WorldForge export format this reader knows. A newer file may
+// hold things this reader would drop without a word, so it is refused.
+export const WORLDFORGE_VERSION = 4;
+
 export type WorldImport = {
+  // What the file holds that does not come in whole, named before anything
+  // is written: text cut to a limit, rows over a cap, pictures that are not
+  // pictures. Empty when the file comes in whole.
+  losses: string[];
+  // What comes in on purpose differently, said so nobody is surprised.
+  notes: string[];
   worldName: string;
   // ODM's own extension: the workshop an ODM export came from, so a world
   // keeps one identity when it is renamed. "" for a file from elsewhere.
@@ -102,11 +112,36 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
   if (!isWorldForgeExport(world)) {
     return { error: "Not a WorldForge export." };
   }
+  const version = world.version as number;
+  if (!Number.isInteger(version) || version < 1 || version > WORLDFORGE_VERSION) {
+    return {
+      error: `That WorldForge file is format version ${String(world.version)}; this server reads versions 1 to ${WORLDFORGE_VERSION}. Nothing was imported.`,
+    };
+  }
   const worldName = str(world.worldName, 70) || "A WorldForge world";
   const worldId = str(world.odmWorldId, 80).replace(/[^\w:.-]/g, "");
+  const losses: string[] = [];
+  const notes: string[] = [];
+  const plural = (count: number, one: string, many: string) => `${count.toLocaleString("en")} ${count === 1 ? one : many}`;
+  // A list longer than its cap: only the first rows come in.
+  const capped = (value: unknown, cap: number, words: string) => {
+    if (Array.isArray(value) && value.length > cap) losses.push(`Only the first ${cap.toLocaleString("en")} of ${value.length.toLocaleString("en")} ${words} come in.`);
+    return list(value, cap);
+  };
+  // A text longer than its limit: cut, and said so.
+  const cut = (value: unknown, max: number, what: string) => {
+    if (typeof value === "string" && value.trim().length > max) losses.push(`${what} is cut to ${max.toLocaleString("en")} characters.`);
+    return str(value, max);
+  };
+  if (str(world.worldName, 1_000).length > 70) losses.push(`The world's name is cut to 70 characters.`);
 
   // Types first: every entity names one, and its fields are keyed to it.
-  const fileTypes = list(world.types, LIMITS.types).map(rec);
+  const fileTypes = capped(world.types, LIMITS.types, "types").map(rec);
+  for (const type of fileTypes) {
+    if (Array.isArray(type.fields) && type.fields.length > LIMITS.fieldsPerType) {
+      losses.push(`The ${str(type.name, 40) || "unnamed"} type keeps only its first ${LIMITS.fieldsPerType} of ${type.fields.length} fields.`);
+    }
+  }
   const types: WorldType[] = (fileTypes.length ? fileTypes : defaultTypes()).map((type) => {
     const name = str(type.name, 40) || "Other";
     // A file this workshop wrote says where each type lives; WorldForge's
@@ -144,20 +179,33 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
   };
 
   const images = rec(rec(world.media).entityImages);
-  const entities = list(world.entities, LIMITS.entries).map(rec).filter((entity) => wfKey(entity.id) && str(entity.name, 120));
+  const listed = capped(world.entities, LIMITS.entries, "entries").map(rec);
+  const entities = listed.filter((entity) => wfKey(entity.id) && str(entity.name, 120));
+  if (listed.length > entities.length) losses.push(`${plural(listed.length - entities.length, "entry has", "entries have")} no name or no id, and ${listed.length - entities.length === 1 ? "is" : "are"} left out.`);
+  let repeated = 0;
   const refById = new Map<string, string>();
   const records: ImportedRecord[] = [];
   for (const entity of entities) {
     const type = typeNamed(entity.type);
     const id = wfKey(entity.id);
-    if (refById.has(id)) continue;
+    if (refById.has(id)) {
+      repeated += 1;
+      continue;
+    }
+    const called = str(entity.name, 80);
+    if (str(entity.name, 1_000).length > 80) losses.push(`${called}: its name is cut to 80 characters.`);
     const ref = refOf(type.shelf, `wf~${id}`);
     refById.set(id, ref);
-    const summary = str(entity.summary, LIMITS.article);
+    const summary = cut(entity.summary, LIMITS.article, `${called}: its text`);
+    cut(entity.hiddenTruth, LIMITS.note, `${called}: its hidden truth`);
+    cut(entity.notes, LIMITS.note, `${called}: its notes`);
+    if (images[id] !== undefined && images[id] !== "" && !picture(images[id])) {
+      losses.push(`${called}: its picture is not a PNG, JPEG, WebP or GIF under 6 MB, so it is left out.`);
+    }
     // Places and lore keep their text in their own row, which holds 2,000
-    // and 4,000 characters; a longer article keeps the whole of it here.
+    // and 20,000 characters; a longer article keeps the whole of it here.
     const longRow = type.shelf === "location" || type.shelf === "lore";
-    const rowCap = type.shelf === "location" ? 2_000 : 4_000;
+    const rowCap = type.shelf === "location" ? 2_000 : LIMITS.article;
     const entry = readEntry({
       typeId: type.id,
       folderId: wfKey(entity.categoryId),
@@ -172,7 +220,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
     records.push({
       ref,
       shelf: type.shelf,
-      name: str(entity.name, 80),
+      name: called,
       tagline: longRow ? "" : firstSentence(summary, type.shelf === "npc" ? 200 : 400),
       text: longRow ? summary.slice(0, rowCap) : "",
       loreCategory: type.loreCategory,
@@ -182,6 +230,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       ...(type.shelf === "lore" && entity.odmVisibility === "dm" ? { dmOnly: true } : {}),
     });
   }
+  if (repeated) losses.push(`${plural(repeated, "entry repeats", "entries repeat")} another's id, and ${repeated === 1 ? "is" : "are"} left out.`);
   const refOfWf = (value: unknown) => refById.get(wfKey(value)) ?? "";
 
   const links = entities.flatMap((entity) =>
@@ -200,9 +249,9 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
     types,
     entries: Object.fromEntries(records.map((record) => [record.ref, record.entry])),
     links,
-    folders: list(world.categories, LIMITS.folders).map(rec).map((folder) => ({ id: wfKey(folder.id), name: folder.name, parentId: wfKey(folder.parentId) })),
-    calendars: list(world.calendars, LIMITS.calendars).map(rec).map((calendar) => ({ ...calendar, id: wfKey(calendar.id) })),
-    events: list(world.events, LIMITS.events).map(rec).map((event) => ({
+    folders: capped(world.categories, LIMITS.folders, "folders").map(rec).map((folder) => ({ id: wfKey(folder.id), name: folder.name, parentId: wfKey(folder.parentId) })),
+    calendars: capped(world.calendars, LIMITS.calendars, "calendars").map(rec).map((calendar) => ({ ...calendar, id: wfKey(calendar.id) })),
+    events: capped(world.events, LIMITS.events, "events").map(rec).map((event) => ({
       id: wfKey(event.id),
       title: event.title,
       body: event.body,
@@ -211,7 +260,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       refs: list(event.entityIds, LIMITS.refs).map(refOfWf),
       canon: CANON_STATES.includes(event.canon as never) ? event.canon : "canon",
     })),
-    secrets: list(world.secrets, LIMITS.secrets).map(rec).map((secret) => ({
+    secrets: capped(world.secrets, LIMITS.secrets, "secrets").map(rec).map((secret) => ({
       id: wfKey(secret.id),
       title: secret.title,
       subject: refOfWf(secret.entityId),
@@ -221,15 +270,15 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       knownBy: Object.values(rec(secret.knownBy)).flatMap((story) => Object.keys(rec(story))).map(refOfWf),
       partyKnows: false,
     })),
-    stubs: list(world.stubs, LIMITS.stubs).map(rec).map((stub) => ({ id: wfKey(stub.id), name: stub.name, note: stub.note, source: "import", status: stub.status === "dismissed" ? "dismissed" : "open" })),
-    maps: list(world.maps, LIMITS.maps).map(rec).map((atlas) => ({
+    stubs: capped(world.stubs, LIMITS.stubs, "names to write").map(rec).map((stub) => ({ id: wfKey(stub.id), name: stub.name, note: stub.note, source: "import", status: stub.status === "dismissed" ? "dismissed" : "open" })),
+    maps: capped(world.maps, LIMITS.maps, "maps").map(rec).map((atlas) => ({
       id: wfKey(atlas.id),
       name: atlas.name,
       image: "",
       parentPinId: wfKey(atlas.parentPinId),
       regions: list(atlas.regions, LIMITS.regions).map(rec).map((region) => ({ ...region, id: wfKey(region.id), ref: refOfWf(region.entityId) })),
     })),
-    pins: list(world.pins, LIMITS.pins).map(rec).map((pin) => ({
+    pins: capped(world.pins, LIMITS.pins, "pins").map(rec).map((pin) => ({
       id: wfKey(pin.id),
       // A pin with no map belongs to the first (WorldForge's own rule).
       mapId: wfKey(pin.mapId) || wfKey(rec(list(world.maps, 1)[0]).id),
@@ -264,8 +313,15 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
   for (const atlas of doc.maps) {
     const image = picture(backgrounds[atlas.id]);
     if (image) mapImages[atlas.id] = image;
+    else if (backgrounds[atlas.id]) losses.push(`The ${atlas.name} map: its picture is not a PNG, JPEG, WebP or GIF under 6 MB, so it is left out.`);
   }
-  return { worldName, worldId, premise, records, doc, beats, mapImages };
+  // An ODM export that ran out of room for pictures says whose it left out.
+  const omitted = list(world.odmOmitted, 200).map((name) => str(name, 120)).filter(Boolean);
+  if (omitted.length) losses.push(`The file was saved without the pictures of ${omitted.join(", ")}: they were over the export's room for pictures.`);
+  if (doc.secrets.length) {
+    notes.push("A secret new to this world comes in with the party knowing none of it yet; one brought in before keeps what the party has learned. Who in the world knows each one comes in as written.");
+  }
+  return { losses, notes, worldName, worldId, premise, records, doc, beats, mapImages };
 }
 
 // ---- out ----
@@ -276,6 +332,8 @@ export type ExportBeat = { id: string; title: string; body: string; pov: string;
 export function writeWorldForge(input: {
   worldName: string;
   worldId?: string;
+  // Entries and maps whose pictures did not fit the export's room for them.
+  omitted?: string[];
   premise: string;
   records: ExportRecord[];
   doc: WorldDoc;
@@ -298,6 +356,8 @@ export function writeWorldForge(input: {
     exportedAt: input.now,
     worldName: input.worldName,
     ...(input.worldId ? { odmWorldId: input.worldId } : {}),
+    // ODM's extension, read back as a loss so the next import names them.
+    ...(input.omitted?.length ? { odmOmitted: input.omitted } : {}),
     entities: input.records.map((record) => ({
       id: idOf(record.ref),
       name: record.name,

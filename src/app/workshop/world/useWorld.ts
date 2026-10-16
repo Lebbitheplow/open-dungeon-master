@@ -174,10 +174,12 @@ export function useWorld(campaignId: string) {
     [base, send, refresh],
   );
 
+  // A file that would not come in whole answers with what it would lose
+  // (`preview`); `accept` brings it in anyway.
   const importFile = useCallback(
-    async (text: string) => {
-      const payload = await send(`${base}/import`, { method: "POST", body: JSON.stringify({ text }) });
-      if (payload) refresh();
+    async (text: string, accept = false) => {
+      const payload = await send(`${base}/import`, { method: "POST", body: JSON.stringify({ text, accept }) });
+      if (payload && !payload.preview) refresh();
       return payload;
     },
     [base, send, refresh],

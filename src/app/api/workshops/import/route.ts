@@ -85,7 +85,9 @@ export async function POST(request: Request) {
       // and the importer's workshops that hold its shared rows.
       dependsOn: bundle.dependsOn,
       sharedHomes: sharedHomesFor(user.id, bundle),
-      warnings: bundleWarnings(bundle),
+      // A WorldForge file names what it would not bring in whole, and what
+      // it brings in differently, before the workshop is made.
+      warnings: [...bundleWarnings(bundle), ...(read.worldForge?.losses ?? []), ...(read.worldForge?.notes ?? [])],
     });
   }
 

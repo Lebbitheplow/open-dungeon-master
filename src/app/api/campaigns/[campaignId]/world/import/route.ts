@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { importWorldForge } from "@/lib/db/world-forge-io";
+import { applyWorldImport } from "@/lib/db/world-forge-io";
+import { readWorldForge } from "@/lib/worldforge/format";
 import { publishEphemeral } from "@/lib/events";
 import { uploadRefusalResponse } from "@/lib/upload-budget";
 import { MAX_BUNDLE_BYTES } from "@/lib/workshop/bundle";
@@ -16,7 +17,10 @@ export const dynamic = "force-dynamic";
 // (src/lib/worldforge/format.ts), pictures are weighed against the upload
 // budget, and the export's settings (which can hold an API key) are never
 // read.
-const bodySchema = z.object({ text: z.string().min(1).max(MAX_BUNDLE_BYTES) });
+// `accept` is the author's yes to a file that does not come in whole: until
+// it is given, such a file is answered with what it would lose, and
+// nothing is written.
+const bodySchema = z.object({ text: z.string().min(1).max(MAX_BUNDLE_BYTES), accept: z.boolean().default(false) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
@@ -34,7 +38,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   } catch {
     return Response.json({ error: "That file is not JSON." }, { status: 400 });
   }
-  const result = importWorldForge(campaignId, { id: context.user.id, isAdmin: context.user.isAdmin }, raw);
+  const read = readWorldForge(raw);
+  if ("error" in read) {
+    return Response.json({ error: read.error }, { status: 400 });
+  }
+  if (read.losses.length && !parsed.data.accept) {
+    return Response.json({ preview: true, losses: read.losses, notes: read.notes });
+  }
+  const result = applyWorldImport(campaignId, { id: context.user.id, isAdmin: context.user.isAdmin }, read);
   if ("error" in result) {
     return result.refusal ? uploadRefusalResponse(result.refusal) : Response.json({ error: result.error }, { status: 400 });
   }

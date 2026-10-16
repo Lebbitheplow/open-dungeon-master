@@ -251,7 +251,7 @@ await test("An oversized or malformed export is cut to the limits or refused, ne
   const { workshopId: cut } = openAsWorkshop(JSON.stringify(big));
   const { doc, entities } = worldView(cut);
   assert.ok(entities.every((entry) => entry.name.length <= 80));
-  assert.ok(entities.every((entry) => entry.entry.article.length <= 12_000));
+  assert.ok(entities.every((entry) => entry.entry.article.length <= 20_000));
   assert.ok(doc.links.every((link) => link.label.length <= 60 && ["known", "hidden", "believed"].includes(link.veracity)));
   assert.equal(entities.length, 7);
   assert.ok("error" in readBundle(JSON.stringify({ worldName: 4, entities: "x", version: 4 })));

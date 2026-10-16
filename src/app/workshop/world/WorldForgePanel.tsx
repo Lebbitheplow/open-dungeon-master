@@ -55,7 +55,12 @@ type ImportReport = {
   maps: number;
   beats: number;
   skipped: string[];
+  losses?: string[];
+  notes?: string[];
 };
+
+// A file that would not come in whole, waiting for the author's yes.
+type Held = { text: string; losses: string[]; notes: string[] };
 
 export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: string; onOpenSystem: (system: string) => void }) {
   const api = useWorld(campaignId);
@@ -67,6 +72,7 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
   const [focus, setFocus] = useState<string | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [reading, setReading] = useState(false);
+  const [held, setHeld] = useState<Held | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const world = api.world;
 
@@ -84,16 +90,22 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
     if (ref) setView("wiki");
   };
 
-  async function importFile(file: File) {
+  async function bringIn(text: string, accept: boolean) {
     setReading(true);
     setReport(null);
+    setHeld(null);
     try {
-      const result = await api.importFile(await file.text());
-      if (result) setReport(result as unknown as ImportReport);
+      const result = await api.importFile(text, accept);
+      if (result?.preview) setHeld({ text, losses: (result.losses as string[]) ?? [], notes: (result.notes as string[]) ?? [] });
+      else if (result) setReport(result as unknown as ImportReport);
     } finally {
       setReading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
+  }
+
+  async function importFile(file: File) {
+    await bringIn(await file.text(), false);
   }
 
   const counts: Partial<Record<View, number>> = world
@@ -123,6 +135,27 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
           </a>
         </span>
       </div>
+      {held ? (
+        <div className="motion-pop flex flex-col gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-100" role="alert" data-testid="world-import-losses">
+          <span>This file would not come in whole. Nothing has been brought in yet.</span>
+          <ul className="list-disc pl-4">
+            {held.losses.map((loss) => (
+              <li key={loss}>{loss}</li>
+            ))}
+          </ul>
+          {held.notes.map((note) => (
+            <span key={note} className="text-stone-300">{note}</span>
+          ))}
+          <span className="flex flex-wrap gap-2">
+            <KitButton tone="small" busy={reading} disabled={reading} onClick={() => bringIn(held.text, true)}>
+              Bring it in anyway
+            </KitButton>
+            <KitButton tone="small" onClick={() => setHeld(null)}>
+              Cancel
+            </KitButton>
+          </span>
+        </div>
+      ) : null}
       {report ? (
         <div className="motion-pop rounded-lg border border-emerald-700/40 bg-emerald-900/15 px-3 py-2 text-xs text-stone-200" role="status">
           Brought in {report.created} new {report.created === 1 ? "entry" : "entries"}
@@ -140,6 +173,8 @@ export function WorldForgePanel({ campaignId, onOpenSystem }: { campaignId: stri
             <span className="block text-amber-300">Matched by name to entries already here, so check they are the same: {report.matched.join(", ")}.</span>
           ) : null}
           {report.skipped.length ? <span className="block text-ember-300">Left out: {report.skipped.join("; ")}</span> : null}
+          {report.losses?.length ? <span className="block text-amber-300">Not in whole: {report.losses.join(" ")}</span> : null}
+          {report.notes?.length ? <span className="block text-stone-300">{report.notes.join(" ")}</span> : null}
         </div>
       ) : null}
       {api.error && !world ? <PanelError>{api.error}</PanelError> : null}

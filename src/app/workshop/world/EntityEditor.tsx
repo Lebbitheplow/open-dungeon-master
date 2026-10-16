@@ -7,7 +7,7 @@ import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
 import { KitButton, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
 import { LoreImageField } from "@/app/workshop/lore/LoreFields";
-import { CANON_STATES, type Canon, type FieldDef, type FieldValue, type WorldDoc, type YearValue } from "@/lib/worldforge/model";
+import { CANON_STATES, LIMITS, type Canon, type FieldDef, type FieldValue, type WorldDoc, type YearValue } from "@/lib/worldforge/model";
 import { folderTree } from "@/lib/worldforge/tree";
 import type { WorldEntity } from "@/lib/db/world-forge";
 import { changesSince, describeValue, editableOf, same, type Editable, type EntryConflict } from "@/lib/worldforge/entry-merge";
@@ -23,7 +23,8 @@ import { typeOf } from "./world-ui";
 
 const CANON_WORDS: Record<Canon, string> = { canon: "Canon", draft: "Draft", alternate: "Alternate", retired: "Retired" };
 const LINE_LIMIT = { npc: 200, faction: 400 } as const;
-const TEXT_LIMIT = { location: 2_000, lore: 4_000 } as const;
+// What each record's own row holds (src/lib/db/world-forge.ts writeRecord).
+const TEXT_LIMIT = { location: 2_000, lore: LIMITS.article } as const;
 
 const field = (label: string, child: React.ReactNode, hint?: string) => (
   <label className="flex flex-col gap-1">
@@ -231,7 +232,7 @@ export function EntityEditor({
       {shortRow || draft.article
         ? field(
             "Article",
-            <textarea className={cn(ui.input, "min-h-32")} maxLength={12_000} value={draft.article} onChange={(event) => set("article", event.target.value)} />,
+            <textarea className={cn(ui.input, "min-h-32")} maxLength={LIMITS.article} value={draft.article} onChange={(event) => set("article", event.target.value)} />,
             "The wiki's full account. Names of other entries link themselves.",
           )
         : null}
