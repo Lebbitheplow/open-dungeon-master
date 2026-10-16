@@ -119,8 +119,10 @@ export function EntityPage({
           api.clearError();
           setEditing(false);
         }}
-        onSave={async (input) => {
-          if (await api.update(entity.ref, input)) setEditing(false);
+        onSave={async (input, opened) => {
+          const outcome = await api.update(entity.ref, input, opened);
+          if (outcome && !("conflicts" in outcome)) setEditing(false);
+          return outcome;
         }}
       />
     );

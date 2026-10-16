@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Lock, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
@@ -10,12 +10,16 @@ import { LoreImageField } from "@/app/workshop/lore/LoreFields";
 import { CANON_STATES, type Canon, type FieldDef, type FieldValue, type WorldDoc, type YearValue } from "@/lib/worldforge/model";
 import { folderTree } from "@/lib/worldforge/tree";
 import type { WorldEntity } from "@/lib/db/world-forge";
-import type { EntryInput } from "./useWorld";
+import { changesSince, describeValue, editableOf, same, type Editable, type EntryConflict } from "@/lib/worldforge/entry-merge";
+import type { EntryInput, UpdateOutcome } from "./useWorld";
 import { typeOf } from "./world-ui";
 
 // Editing one entry: what its own record holds (name, its line or its text,
 // aliases, tags, picture) and what WorldForge adds (type, folder, canon, the
 // type's fields, the hidden truth, the author's notes), saved together.
+// Only the fields the author changed are sent, each with the value the
+// editor opened with, so another author's change elsewhere survives and a
+// clash on the same field is shown here with the draft kept.
 
 const CANON_WORDS: Record<Canon, string> = { canon: "Canon", draft: "Draft", alternate: "Alternate", retired: "Retired" };
 const LINE_LIMIT = { npc: 200, faction: 400 } as const;
@@ -36,6 +40,29 @@ function textList(value: string): string[] {
   return value.split(",").map((part) => part.trim()).filter(Boolean);
 }
 
+type Draft = Omit<Editable, "aliases" | "tags"> & { aliases: string; tags: string };
+const draftOf = (values: Editable): Draft => ({ ...values, aliases: listText(values.aliases), tags: listText(values.tags), fields: { ...values.fields } });
+const valuesOf = (draft: Draft): Editable => ({ ...draft, aliases: textList(draft.aliases), tags: textList(draft.tags) });
+
+// After a clash: the fields this author left alone take the other author's
+// values, the ones they changed keep theirs, and what the entry holds now
+// becomes the new base, so saving again writes this author's choices.
+function rebase(opened: Editable, theirs: Editable, mine: Editable): Editable {
+  const next = { ...mine } as Record<string, unknown>;
+  for (const key of Object.keys(theirs) as (keyof Editable)[]) {
+    if (key === "fields") continue;
+    if (same(mine[key], opened[key])) next[key] = theirs[key];
+  }
+  const fields = { ...mine.fields };
+  for (const id of new Set([...Object.keys(theirs.fields), ...Object.keys(opened.fields), ...Object.keys(mine.fields)])) {
+    if (!same(mine.fields[id], opened.fields[id])) continue;
+    if (theirs.fields[id] === undefined) delete fields[id];
+    else fields[id] = theirs.fields[id];
+  }
+  next.fields = fields;
+  return next as Editable;
+}
+
 export function EntityEditor({
   doc,
   entity,
@@ -49,7 +76,8 @@ export function EntityEditor({
   entity: WorldEntity;
   saving: boolean;
   error: string;
-  onSave: (input: EntryInput) => void;
+  // The changed fields and the value each had when the editor opened.
+  onSave: (input: EntryInput, opened: Partial<Editable>) => Promise<UpdateOutcome>;
   onCancel: () => void;
   // The model's draft of the entry's text, or null when there is no text
   // model (the button is then not offered at all).
@@ -58,21 +86,18 @@ export function EntityEditor({
   const [drafting, setDrafting] = useState(false);
   const [draftHint, setDraftHint] = useState("");
   const type = typeOf(doc, entity);
-  const [draft, setDraft] = useState({
-    name: entity.name,
-    tagline: entity.tagline,
-    text: entity.text,
-    article: entity.entry.article,
-    aliases: listText(entity.aliases),
-    tags: listText(entity.tags),
-    portrait: entity.portrait,
-    typeId: type.id,
-    folderId: entity.entry.folderId,
-    canon: entity.entry.canon,
-    hiddenTruth: entity.entry.hiddenTruth,
-    notes: entity.entry.notes,
-    fields: { ...entity.entry.fields } as Record<string, FieldValue>,
-  });
+  const [opened, setOpened] = useState(() => editableOf(doc, entity));
+  const [draft, setDraft] = useState<Draft>(() => draftOf(opened));
+  const [conflicts, setConflicts] = useState<EntryConflict[]>([]);
+  const clashRef = useRef<HTMLDivElement>(null);
+  // Set by a clash until the next save: the notice says what the error
+  // would, and stays quiet once its fields are settled.
+  const [rebased, setRebased] = useState(false);
+  const clashed = conflicts.length > 0;
+  // The notice sits at the top of the form; a long form puts it out of view.
+  useEffect(() => {
+    if (clashed) clashRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [clashed]);
   const set = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const chosenType = doc.types.find((entry) => entry.id === draft.typeId) ?? type;
   const sameShelf = doc.types.filter((entry) => entry.shelf === entity.shelf);
@@ -98,21 +123,35 @@ export function EntityEditor({
     else set("text", text.slice(0, TEXT_LIMIT[entity.shelf as "location" | "lore"]));
   }
 
-  function save() {
-    onSave({
-      name: draft.name,
-      ...(shortRow ? { tagline: draft.tagline } : { text: draft.text }),
-      article: draft.article,
-      aliases: textList(draft.aliases),
-      tags: textList(draft.tags),
-      portrait: draft.portrait,
-      typeId: draft.typeId,
-      folderId: draft.folderId,
-      canon: draft.canon,
-      hiddenTruth: draft.hiddenTruth,
-      notes: draft.notes,
-      fields: draft.fields,
-    });
+  async function save() {
+    setRebased(false);
+    const mine = valuesOf(draft);
+    const { patch, base } = changesSince(opened, mine);
+    const outcome = await onSave(patch as EntryInput, base);
+    if (!outcome || !("conflicts" in outcome)) return;
+    const theirs = editableOf(doc, outcome.entity);
+    setDraft(draftOf(rebase(opened, theirs, mine)));
+    setOpened(theirs);
+    setConflicts(outcome.conflicts);
+    setRebased(true);
+  }
+
+  // Takes the other author's value for one clashing field.
+  function takeTheirs(conflict: EntryConflict) {
+    if (conflict.key.startsWith("fields.")) {
+      const id = conflict.key.slice("fields.".length);
+      setDraft((current) => {
+        const fields = { ...current.fields };
+        if (conflict.theirs === undefined) delete fields[id];
+        else fields[id] = conflict.theirs as FieldValue;
+        return { ...current, fields };
+      });
+    } else {
+      const key = conflict.key as keyof Editable;
+      const value = key === "aliases" || key === "tags" ? listText((conflict.theirs as string[]) ?? []) : conflict.theirs;
+      setDraft((current) => ({ ...current, [key]: value }));
+    }
+    setConflicts((current) => current.filter((entry) => entry.key !== conflict.key));
   }
 
   return (
@@ -123,6 +162,24 @@ export function EntityEditor({
         save();
       }}
     >
+      {conflicts.length ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-sm text-amber-100" role="alert" data-testid="entry-conflicts" ref={clashRef} tabIndex={-1}>
+          <p>Another author saved this entry while you had it open. Their other changes are now in the form. These fields clash with yours:</p>
+          <ul className="flex flex-col gap-1.5">
+            {conflicts.map((conflict) => (
+              <li key={conflict.key} className="flex flex-wrap items-center gap-2">
+                <span>
+                  <strong>{conflict.label}</strong>: theirs is {describeValue(conflict.theirs)}.
+                </span>
+                <KitButton tone="small" onClick={() => takeTheirs(conflict)}>
+                  Use theirs
+                </KitButton>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-amber-200/80">Save keeps yours for any field you leave as it is.</p>
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         {field("Name", <input className={ui.input} maxLength={80} value={draft.name} onChange={(event) => set("name", event.target.value)} required />)}
         {field(
@@ -217,7 +274,7 @@ export function EntityEditor({
         )}
       </div>
 
-      {error ? <PanelError>{error}</PanelError> : null}
+      {error && !rebased ? <PanelError>{error}</PanelError> : null}
       <div className="flex justify-end gap-2">
         <KitButton tone="small" onClick={onCancel}>
           <X className="size-3.5" /> Cancel

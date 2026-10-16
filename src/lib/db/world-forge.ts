@@ -24,6 +24,7 @@ import {
   type WorldType,
 } from "@/lib/worldforge/model";
 import { byName } from "@/lib/language/text-logic";
+import { editableOf, mergeAgainst, type Editable, type EntryConflict } from "@/lib/worldforge/entry-merge";
 
 // The workshop's WorldForge: one document beside the records it describes
 // (src/lib/worldforge/model.ts says why). Everything that writes a record
@@ -167,7 +168,7 @@ export type EntityPatch = {
   portrait?: string;
 } & Partial<Pick<Entry, "typeId" | "folderId" | "canon" | "article" | "hiddenTruth" | "notes" | "fields">>;
 
-export type EntityResult = { entity: WorldEntity } | { error: string; status?: number };
+export type EntityResult = { entity: WorldEntity } | { error: string; status?: number; conflicts?: EntryConflict[]; entity?: WorldEntity };
 
 const clean = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : undefined);
 const cleanList = (value: unknown, max: number, each: number) =>
@@ -306,8 +307,29 @@ export function createWorldEntity(campaignId: string, input: { typeId?: unknown;
   return entityOf(campaignId, doc, made.ref);
 }
 
-export function updateWorldEntity(campaignId: string, ref: string, patch: EntityPatch): EntityResult {
+// With a base, the patch is checked against what the entry holds now (see
+// src/lib/worldforge/entry-merge.ts): another author's change to a field
+// this patch leaves alone survives, and a field both changed differently
+// is reported with nothing written. Without one it is written as sent.
+export function updateWorldEntity(campaignId: string, ref: string, input: EntityPatch & { base?: unknown }): EntityResult {
+  const { base, ...sent } = input;
+  let patch: EntityPatch = sent;
   const doc = getWorldDoc(campaignId);
+  if (base && typeof base === "object" && !Array.isArray(base)) {
+    const now = worldEntities(campaignId, doc).find((entry) => entry.ref === ref);
+    if (!now) return { error: "No such entry in this workshop.", status: 404 };
+    const merged = mergeAgainst(doc, editableOf(doc, now), sent as Partial<Editable>, base as Partial<Editable>);
+    if ("conflicts" in merged) {
+      const names = merged.conflicts.map((conflict) => conflict.label).join(", ");
+      return {
+        error: `Someone else changed ${names} while you were editing. Nothing was saved yet; your draft is kept.`,
+        status: 409,
+        conflicts: merged.conflicts,
+        entity: now,
+      };
+    }
+    patch = merged.patch as EntityPatch;
+  }
   const lore = patch.typeId ? doc.types.find((type) => type.id === patch.typeId && type.shelf === "lore") : undefined;
   const failed = writeRecord(campaignId, ref, patch, lore);
   if (failed) return failed;

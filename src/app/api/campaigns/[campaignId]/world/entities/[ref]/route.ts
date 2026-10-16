@@ -27,7 +27,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   const raw = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const result = updateWorldEntity(campaignId, ref, raw);
   if ("error" in result) {
-    return Response.json({ error: result.error }, { status: result.status ?? 400 });
+    // A conflict carries the fields and the entry as it is now, so the
+    // editor can show what changed and keep the author's draft.
+    return Response.json(
+      result.conflicts ? { error: result.error, conflicts: result.conflicts, entity: result.entity } : { error: result.error },
+      { status: result.status ?? 400 },
+    );
   }
   publishEphemeral(campaignId, result.entity.shelf === "faction" ? "factions_updated" : "world_updated", { at: Date.now() });
   return Response.json(result);

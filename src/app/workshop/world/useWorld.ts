@@ -6,6 +6,7 @@ import type { Slice, WorldDoc } from "@/lib/worldforge/model";
 import type { WorldEntity } from "@/lib/db/world-forge";
 import { applyRowOps, docOps, type DocOps } from "@/lib/worldforge/ops";
 import { byName } from "@/lib/language/text-logic";
+import type { Editable, EntryConflict } from "@/lib/worldforge/entry-merge";
 
 // The workshop's WorldForge on the client: one load of the document and the
 // records it describes, slice saves that show at once and settle when the
@@ -20,6 +21,8 @@ import { byName } from "@/lib/language/text-logic";
 // changed is kept as the first saved it and named in `error`.
 
 export type WorldState = { doc: WorldDoc; entities: WorldEntity[] };
+export type UpdateOutcome = { entity: WorldEntity } | { conflicts: EntryConflict[]; entity: WorldEntity } | null;
+
 export type EntryInput = Partial<Omit<WorldEntity["entry"], "wfId">> & {
   name?: string;
   tagline?: string;
@@ -70,6 +73,9 @@ export function useWorld(campaignId: string) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(typeof payload.error === "string" ? payload.error : "That did not save.");
+        // Another author changed the same fields: the caller gets them, and
+        // the entry as it is now, to keep its draft and show what changed.
+        if (response.status === 409 && Array.isArray(payload.conflicts)) return { ...payload, conflicted: true } as Record<string, unknown>;
         return null;
       }
       return payload as Record<string, unknown>;
@@ -141,12 +147,20 @@ export function useWorld(campaignId: string) {
     [base, send],
   );
 
+  // An entry's changed fields, each with the value the editor opened with.
+  // Resolves to the saved entry, to the conflicting fields (nothing saved,
+  // the entry as it is now beside them), or to null on any other failure.
   const update = useCallback(
-    async (ref: string, input: EntryInput) => {
-      const payload = await send(`${base}/entities/${encodeURIComponent(ref)}`, { method: "PATCH", body: JSON.stringify(input) });
+    async (ref: string, input: EntryInput, opened?: Partial<Editable>): Promise<UpdateOutcome> => {
+      const body = opened ? { ...input, base: opened } : input;
+      const payload = await send(`${base}/entities/${encodeURIComponent(ref)}`, { method: "PATCH", body: JSON.stringify(body) });
       const entity = payload?.entity as WorldEntity | undefined;
+      if (payload?.conflicted && entity) {
+        placeEntity(entity);
+        return { conflicts: payload.conflicts as EntryConflict[], entity };
+      }
       if (entity) placeEntity(entity);
-      return entity ?? null;
+      return entity ? { entity } : null;
     },
     [base, send],
   );
