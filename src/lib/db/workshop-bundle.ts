@@ -118,7 +118,7 @@ export function importWorkshopBundle(
     lore: bundle.lore.map((entry) => decodeBundleImage(entry.image)),
     factions: bundle.factions.map((faction) => decodeBundleImage(faction.portrait)),
     region: [bundle.overworld ? decodeBundleImage(bundle.overworld.backdrop) : null],
-    world: Object.values(bundle.world?.images ?? {}).map((image) => decodeBundleImage(image)),
+    world: [...Object.values(bundle.world?.images ?? {}), ...Object.values(bundle.world?.entryImages ?? {})].map((image) => decodeBundleImage(image)),
   };
   const images = Object.values(art)
     .flat()

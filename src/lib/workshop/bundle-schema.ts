@@ -359,11 +359,14 @@ export const workshopBundleSchema = z.object({
   plugin: worldPackDraftSchema.nullable().default(null),
   // The workshop's WorldForge (src/lib/db/world-forge-bundle.ts): its
   // document with refs as row positions, read through the model's floors on
-  // import, and the atlas's pictures. Null in bundles from earlier builds.
+  // import, the atlas's pictures by map id, and each entry's own picture (a
+  // place's illustration) by its ref. Null in bundles from earlier builds;
+  // entryImages is empty in bundles from before it travelled.
   world: z
     .object({
       doc: z.record(z.string(), z.unknown()),
       images: z.record(z.string().max(80), bundleImageSchema).refine((images) => Object.keys(images).length <= 100).default({}),
+      entryImages: z.record(z.string().max(120), bundleImageSchema).refine((images) => Object.keys(images).length <= 2_000).default({}),
     })
     .nullable()
     .default(null),

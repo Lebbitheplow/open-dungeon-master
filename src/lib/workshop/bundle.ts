@@ -249,6 +249,8 @@ export function bundleImageCount(bundle: WorkshopBundle): number {
     bundle.maps.filter((map) => map.backdrop !== "").length +
     bundle.maps.filter((map) => map.overlay !== "").length +
     bundle.npcs.filter((npc) => npc.portrait !== "").length +
+    Object.keys(bundle.world?.images ?? {}).length +
+    Object.keys(bundle.world?.entryImages ?? {}).length +
     (bundle.overworld?.backdrop ? 1 : 0)
   );
 }
