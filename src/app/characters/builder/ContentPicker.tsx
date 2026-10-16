@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { describeContentEntry, spellSummary } from "@/lib/help";
@@ -24,6 +24,7 @@ export default function ContentPicker({
   onPick,
   renderMeta,
   hide,
+  judge,
 }: {
   kind: "spells" | "items" | "feats";
   extraParams?: Record<string, string>;
@@ -32,11 +33,16 @@ export default function ContentPicker({
   renderMeta?: (entry: PickerEntry) => string;
   // Rows the caller does not offer here, left out of the list.
   hide?: (entry: PickerEntry) => boolean;
+  // A feat's prerequisite as judged (featPrereqs.ts): the note is written
+  // under the row and read as its description, and a blocked row cannot
+  // be picked.
+  judge?: (entry: PickerEntry) => { blocked: boolean; note: string } | null;
 }) {
   const { query, setQuery, results: found, setResults, open, setOpen, loading, unavailable, unadmitted } =
     useContentSearch(kind, extraParams);
   const results = hide ? found.filter((entry) => !hide(entry)) : found;
   const container = useRef<HTMLDivElement>(null);
+  const noteId = useId();
 
   useEffect(() => {
     function onClickOutside(event: MouseEvent) {
@@ -87,24 +93,37 @@ export default function ContentPicker({
       ) : null}
       {open && results.length ? (
         <ul className="mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg">
-          {results.map((entry) => (
+          {results.map((entry, index) => {
+            const verdict = judge?.(entry) ?? null;
+            return (
             <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button
                 type="button"
+                aria-disabled={verdict?.blocked || undefined}
+                aria-describedby={verdict ? `${noteId}-${index}` : undefined}
                 onClick={() => {
+                  if (verdict?.blocked) {
+                    return;
+                  }
                   onPick(entry);
                   setQuery("");
                   setOpen(false);
                 }}
-                className="flex grow items-center justify-between gap-2 px-3 py-2 text-left"
+                className={cn(
+                  "flex grow items-center justify-between gap-2 px-3 py-2 text-left",
+                  verdict?.blocked && "cursor-not-allowed opacity-70",
+                )}
               >
-                <span className="flex items-center gap-1.5">
-                  <Plus className="size-3.5 shrink-0 text-amber-200" />
-                  <span
-                    className={cn(entry.source === "homebrew" && "text-amber-300")}
-                  >
-                    {entry.name}
+                <span className="flex flex-col">
+                  <span className="flex items-center gap-1.5">
+                    <Plus className={cn("size-3.5 shrink-0", verdict?.blocked ? "text-stone-600" : "text-amber-200")} />
+                    <span
+                      className={cn(entry.source === "homebrew" && "text-amber-300")}
+                    >
+                      {entry.name}
+                    </span>
                   </span>
+                  {verdict ? <PrerequisiteLine id={`${noteId}-${index}`} {...verdict} /> : null}
                 </span>
                 <span className="shrink-0 text-xs text-stone-500">
                   {entry.source === "homebrew"
@@ -123,9 +142,21 @@ export default function ContentPicker({
                 }
               />
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : null}
     </div>
+  );
+}
+
+// A feat's prerequisite under its row, in words. It sits inside the row's
+// button for layout, and is hidden from the name and read once as the
+// button's description.
+export function PrerequisiteLine({ id, blocked, note }: { id: string; blocked: boolean; note: string }) {
+  return (
+    <span id={id} aria-hidden="true" className={cn("pl-5 text-[11px]", blocked ? "text-red-300" : "text-stone-500")}>
+      {note}
+    </span>
   );
 }
