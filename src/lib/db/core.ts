@@ -13,6 +13,7 @@ import { featsAsRun, registerTableFeatReader } from "@/lib/srd/feat-effects";
 import { tableFeatsFrom } from "@/lib/db/table-feats";
 import { registerTableHazardReader } from "@/lib/srd/table-hazards";
 import { tableHazardsFrom } from "@/lib/db/table-hazards";
+import { ROW_TEXT, settleLoreTexts } from "@/lib/worldforge/account";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "local-roleplay.sqlite");
@@ -2246,6 +2247,21 @@ function ensureSchema(db: SqliteDatabase) {
   // such owner as the DM. Idempotent: a repaired row no longer matches.
   repairWorkshopDmSeats(db);
 
+  // Lore entries with two texts (audit finding WF-13): an import cut a long
+  // text to fit the lore row and kept the whole as a WorldForge article
+  // beside it, and the wiki showed the article over every later edit of the
+  // row. A lore entry's body is now its one account
+  // (src/lib/worldforge/account.ts). Where one text holds the other they
+  // become one body, nothing lost; where they differ both stay, and the
+  // editor asks which to keep. One pass, guarded by an app_settings marker.
+  const worldTextMarker = db.prepare(`SELECT key FROM app_settings WHERE key = 'world_text_backfill_done'`).get();
+  if (!worldTextMarker) {
+    db.transaction(() => {
+      backfillWorldTexts(db);
+      db.prepare(`INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`).run("world_text_backfill_done", "true", new Date().toISOString());
+    })();
+  }
+
   // Connected agents (docs/archive/harness-mcp-plan.md 7): a player's own agent
   // session (Claude Code, Codex, any MCP client) acting as that player over
   // /api/mcp. Only the token's hash is kept, the same rule as sessions.
@@ -2669,6 +2685,38 @@ function backfillNpcBonds(db: SqliteDatabase) {
 
 // Copy each linked campaign sheet's portrait into its library character when
 // the library copy has none; the newest campaign sheet wins.
+// Returns how many lore entries became one text, for the tests.
+export function backfillWorldTexts(db: SqliteDatabase): number {
+  const docs = db.prepare(`SELECT campaign_id, doc_json FROM world_forge`).all() as Array<{ campaign_id: string; doc_json: string }>;
+  const bodyOf = db.prepare(`SELECT body FROM lore_entries WHERE id = ? AND campaign_id = ?`);
+  const setBody = db.prepare(`UPDATE lore_entries SET body = ? WHERE id = ?`);
+  const setDoc = db.prepare(`UPDATE world_forge SET doc_json = ? WHERE campaign_id = ?`);
+  let settled = 0;
+  for (const row of docs) {
+    let doc: { entries?: Record<string, { article?: unknown }> };
+    try {
+      doc = JSON.parse(row.doc_json);
+    } catch {
+      continue; // Unparseable documents stay untouched.
+    }
+    let changed = false;
+    for (const [ref, entry] of Object.entries(doc.entries ?? {})) {
+      if (!ref.startsWith("lore:") || !entry || typeof entry.article !== "string" || !entry.article.trim()) continue;
+      const id = ref.slice("lore:".length);
+      const lore = bodyOf.get(id, row.campaign_id) as { body: string } | undefined;
+      if (!lore) continue;
+      const one = settleLoreTexts(lore.body ?? "", entry.article, ROW_TEXT.lore);
+      if (!one) continue;
+      if (one.body !== lore.body) setBody.run(one.body, id);
+      entry.article = "";
+      changed = true;
+      settled += 1;
+    }
+    if (changed) setDoc.run(JSON.stringify(doc), row.campaign_id);
+  }
+  return settled;
+}
+
 function backfillLibraryPortraits(db: SqliteDatabase) {
   const rows = db
     .prepare(

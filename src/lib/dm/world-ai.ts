@@ -14,6 +14,7 @@ import { askMessages, draftMessages, forgeMessages, paintPrompt, readForgeReply,
 import { mentionSegments } from "@/lib/worldforge/text";
 import { fieldLines, formatYear, sortEvents } from "@/lib/worldforge/time";
 import { typeFor } from "@/lib/worldforge/model";
+import { accountOf } from "@/lib/worldforge/account";
 
 // WorldForge's AI tools against the workshop's own models: the forge (notes
 // into entries and links, previewed, nothing written), ask the world, draft
@@ -61,7 +62,7 @@ export async function draftEntry(campaign: Campaign, ref: string, hint: string):
   const nameOf = new Map(entities.map((entry) => [entry.ref, entry.name]));
   const known = [
     entity.tagline ? `In one line: ${entity.tagline}` : "",
-    entity.entry.article || entity.text ? `What is written so far: ${(entity.entry.article || entity.text).slice(0, 1_500)}` : "",
+    accountOf(entity) ? `What is written so far: ${accountOf(entity).slice(0, 1_500)}` : "",
     entity.aliases.length ? `Also called: ${entity.aliases.join(", ")}` : "",
     ...fieldLines(type, entity.entry, doc.calendars, false).map(({ def, text }) => `${def.name}: ${text}`),
     ...doc.links
@@ -92,7 +93,7 @@ export function paintEntry(campaign: Campaign, ref: string): boolean {
     entity.shelf === "npc"
       ? presetFor({ genre: campaign.gameSettings.genre, worldPack: campaign.gameSettings.worldPack }).portraitStyle
       : `${campaign.gameSettings.genre.replace(/_/g, " ")} setting`;
-  const about = [entity.tagline, entity.entry.article || entity.text].filter(Boolean).join(" ");
+  const about = [entity.tagline, accountOf(entity)].filter(Boolean).join(" ");
   void whenImagesAvailable(() =>
     enqueueMediaJob(`world picture ${ref}`, async () => {
       try {

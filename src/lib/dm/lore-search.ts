@@ -10,6 +10,7 @@ import { getCampaignById } from "@/lib/db/campaigns";
 import { bestPassage } from "@/lib/dm/passage";
 import { placementOf } from "@/lib/dm/prep-logic";
 import { typeFor } from "@/lib/worldforge/model";
+import { accountOf } from "@/lib/worldforge/account";
 
 // search_lore: the DM's world-knowledge search. One query runs against
 // every canon source at once: the lead's world lore entries, the
@@ -305,7 +306,7 @@ function worldForgeCandidates(campaignId: string, category: string): LoreCandida
         return `${def.name}: ${typeof value === "object" && value ? value.year : String(value)}`;
       })
       .join("; ");
-    const article = entity.entry.article || entity.text;
+    const article = accountOf(entity);
     const body = [article, fields, entity.entry.hiddenTruth ? `(secretly: ${entity.entry.hiddenTruth})` : ""].filter(Boolean).join(" ");
     if (!body.trim()) {
       continue;

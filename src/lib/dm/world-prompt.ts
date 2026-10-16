@@ -1,5 +1,6 @@
 import { hasWorldDoc, worldView, type WorldEntity } from "@/lib/db/world-forge";
 import { typeFor, type FieldValue, type WorldDoc } from "@/lib/worldforge/model";
+import { accountOf } from "@/lib/worldforge/account";
 import { foldName, wordPositions } from "@/lib/language/text-logic";
 
 // What the AI DM is told from the table's WorldForge (src/lib/worldforge/
@@ -115,7 +116,7 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
 
   const inPlay: string[] = [];
   for (const { entity } of scored.slice(0, RELEVANT_MAX)) {
-    const article = entity.entry.article || entity.text;
+    const article = accountOf(entity);
     const fields = fieldsLine(doc, entity);
     const events = doc.events
       .filter((event) => event.refs.includes(entity.ref) && event.canon !== "retired")

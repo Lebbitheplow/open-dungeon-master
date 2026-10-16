@@ -1,6 +1,7 @@
 import { LINK_LABELS, typeFor, type Shelf, type WorldDoc, type WorldType } from "./model.ts";
 import { fieldLines, formatYear, sortEvents } from "./time.ts";
 import { mentionSegments, type Named } from "./text.ts";
+import { accountOf } from "./account.ts";
 
 // WorldForge's AI tools, the pure half (the model calls are in
 // src/lib/dm/world-ai.ts), after WorldForge's forge, ask and draft (by
@@ -144,7 +145,7 @@ export function worldDigest(doc: WorldDoc, entities: DigestEntity[], focus: stri
   };
   for (const entity of order) {
     const type = typeFor(doc, entity.shelf, entity.entry.typeId);
-    const about = (entity.entry.article || entity.text || entity.tagline).replace(/\s+/g, " ").slice(0, asked.has(entity.ref) ? 900 : 280);
+    const about = (accountOf(entity) || entity.tagline).replace(/\s+/g, " ").slice(0, asked.has(entity.ref) ? 900 : 280);
     const fields = fieldLines(type, entity.entry, doc.calendars, true).map(({ def, text }) => `${def.name}: ${text}`).join("; ");
     const ties = doc.links
       .filter((link) => link.from === entity.ref && nameOf.has(link.to))

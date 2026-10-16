@@ -12,6 +12,7 @@ import {
   type WorldDoc,
   type WorldType,
 } from "./model.ts";
+import { ROW_TEXT, accountOf, leadOf } from "./account.ts";
 
 // WorldForge's own file, both ways: its JSON export (format version 4) read
 // into a workshop with nothing dropped, and a workshop written back out as a
@@ -202,15 +203,24 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
     if (images[id] !== undefined && images[id] !== "" && !picture(images[id])) {
       losses.push(`${called}: its picture is not a PNG, JPEG, WebP or GIF under 6 MB, so it is left out.`);
     }
-    // Places and lore keep their text in their own row, which holds 2,000
-    // and 20,000 characters; a longer article keeps the whole of it here.
+    // One text per job (src/lib/worldforge/account.ts). A lore entry's body
+    // is its whole account, and WorldForge keeps no article beside it. A
+    // place keeps its arrival text in its row and a longer account as its
+    // article; a Cast member or a faction keeps one line in its row. An ODM
+    // export carries the row's text as odmLine, so neither is guessed from
+    // the other; a file from elsewhere has only the summary to go on.
+    const line = str(entity.odmLine, ROW_TEXT.location);
     const longRow = type.shelf === "location" || type.shelf === "lore";
-    const rowCap = type.shelf === "location" ? 2_000 : LIMITS.article;
+    const placeArticle = type.shelf === "location" && (summary.length > ROW_TEXT.location || Boolean(line));
+    const article =
+      type.shelf === "lore" ? str(entity.odmOlderText, LIMITS.article)
+      : type.shelf === "location" ? (placeArticle ? summary : "")
+      : summary;
     const entry = readEntry({
       typeId: type.id,
       folderId: wfKey(entity.categoryId),
       canon: entity.canon,
-      article: !longRow || summary.length > rowCap ? summary : "",
+      article,
       hiddenTruth: entity.hiddenTruth,
       notes: entity.notes,
       fields: entity.fields,
@@ -221,8 +231,8 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       ref,
       shelf: type.shelf,
       name: called,
-      tagline: longRow ? "" : firstSentence(summary, type.shelf === "npc" ? 200 : 400),
-      text: longRow ? summary.slice(0, rowCap) : "",
+      tagline: longRow ? "" : line ? line.slice(0, type.shelf === "npc" ? 200 : 400) : firstSentence(summary, type.shelf === "npc" ? 200 : 400),
+      text: type.shelf === "lore" ? summary : type.shelf === "location" ? (placeArticle ? line || leadOf(summary, ROW_TEXT.location) : summary) : "",
       loreCategory: type.loreCategory,
       tags: list(entity.tags, 8).map((tag) => str(tag, 40)).filter(Boolean),
       portrait: picture(images[id]),
@@ -364,7 +374,12 @@ export function writeWorldForge(input: {
       type: typeName(record),
       ...(record.entry.folderId ? { categoryId: record.entry.folderId } : {}),
       aliases: record.entry.aliases,
-      summary: record.entry.article || record.text || record.tagline,
+      summary: accountOf(record) || record.tagline,
+      // ODM's extensions, written only when they say something the summary
+      // does not: the row's own line beside a longer article, and a lore
+      // entry's older article still waiting for its author's choice.
+      ...(record.shelf !== "lore" && record.entry.article && (record.tagline || record.text) ? { odmLine: record.shelf === "location" ? record.text : record.tagline } : {}),
+      ...(record.shelf === "lore" && record.entry.article && record.entry.article !== record.text ? { odmOlderText: record.entry.article } : {}),
       hiddenTruth: record.entry.hiddenTruth,
       notes: record.entry.notes,
       tags: record.tags,
