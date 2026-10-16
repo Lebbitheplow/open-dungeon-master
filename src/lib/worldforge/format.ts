@@ -76,6 +76,9 @@ export type ImportedRecord = {
   text: string;
   loreCategory: LoreCategory;
   tags: string[];
+  // ODM's own extension: a lore entry its author kept to the DM. A
+  // WorldForge file from elsewhere never sets it.
+  dmOnly?: boolean;
   portrait: string;
   entry: Entry;
 };
@@ -172,6 +175,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
       tags: list(entity.tags, 8).map((tag) => str(tag, 40)).filter(Boolean),
       portrait: picture(images[id]),
       entry,
+      ...(type.shelf === "lore" && entity.odmVisibility === "dm" ? { dmOnly: true } : {}),
     });
   }
   const refOfWf = (value: unknown) => refById.get(wfKey(value)) ?? "";
@@ -262,7 +266,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
 
 // ---- out ----
 
-export type ExportRecord = { ref: string; shelf: Shelf; name: string; tagline: string; text: string; tags: string[]; portrait: string; entry: Entry; createdAt: string };
+export type ExportRecord = { ref: string; shelf: Shelf; name: string; tagline: string; text: string; tags: string[]; portrait: string; entry: Entry; createdAt: string; dmOnly?: boolean };
 export type ExportBeat = { id: string; title: string; body: string; pov: string; place: string };
 
 export function writeWorldForge(input: {
@@ -299,6 +303,9 @@ export function writeWorldForge(input: {
       notes: record.entry.notes,
       tags: record.tags,
       canon: record.entry.canon,
+      // ODM's extension, written only when it says something: a lore entry
+      // kept to the DM comes back kept to the DM. Other readers ignore it.
+      ...(record.dmOnly ? { odmVisibility: "dm" } : {}),
       createdAt: record.createdAt,
       fields: record.entry.fields,
       links: doc.links

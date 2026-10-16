@@ -49,6 +49,10 @@ export type WorldLoreEntry = {
   audience: string[] | null;
   // A PDF that travels with the entry (section 5.3), as an /uploads/ path.
   attachmentPath: string;
+  // Held back from players because its WorldForge entry is not canon yet
+  // (draft, alternate, retired): src/lib/db/world-publication.ts. Absent for
+  // an entry with no world entry, or a canon one.
+  unpublished?: boolean;
   style: LoreStyle;
   createdAt: string;
   updatedAt: string;
@@ -132,7 +136,9 @@ export function loreReadableBy(entry: WorldLoreEntry, steersStory: boolean, user
   if (steersStory) {
     return true;
   }
-  if (entry.visibility === "dm") {
+  // The author's audience and the entry's canon both have to allow it: a
+  // draft is not the table's yet, whatever its audience will be.
+  if (entry.visibility === "dm" || entry.unpublished) {
     return false;
   }
   const audience = entry.audience ?? null;

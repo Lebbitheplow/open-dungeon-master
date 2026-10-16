@@ -2,7 +2,7 @@ import { listDmBeats } from "@/lib/db/dm-beats";
 import { listLoreEntries } from "@/lib/db/lore";
 import { listNpcs } from "@/lib/db/npcs";
 import { listNotesVisibleTo } from "@/lib/db/notes";
-import { loreBacklinks, type LoreMention } from "@/lib/dm/world-lore-logic";
+import { loreBacklinks, loreReadableBy, type LoreMention } from "@/lib/dm/world-lore-logic";
 
 // "Mentioned in" for one entry (docs/vtt-parity-implementation-plan.md
 // section 5.4): every other entry, the cast's own words, the DM's beats
@@ -24,7 +24,7 @@ export function backlinksFor(
     if (entry.id === entryId) {
       continue;
     }
-    if (!viewer.steersStory && (entry.visibility === "dm" || (entry.audience && !entry.audience.includes(viewer.userId)))) {
+    if (!loreReadableBy(entry, viewer.steersStory, viewer.userId)) {
       continue;
     }
     sources.push({ kind: "lore", id: entry.id, name: entry.title, text: entry.body });

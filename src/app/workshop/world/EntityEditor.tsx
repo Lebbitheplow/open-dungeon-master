@@ -153,7 +153,11 @@ export function EntityEditor({
               </button>
             ))}
           </div>,
-          draft.canon === "canon" ? undefined : "Not canon yet: kept from what players read.",
+          draft.canon === "canon"
+                ? undefined
+                : entity.shelf === "lore"
+                  ? "Not canon yet: kept from what players read until it is."
+                  : "Not canon yet: the AI DM treats it as uncertain.",
         )}
       </div>
 

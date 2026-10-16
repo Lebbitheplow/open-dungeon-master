@@ -135,9 +135,12 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
         const fieldIds = typeMap.fields.get(record.entry.typeId) ?? new Map<string, string>();
         const fields = Object.fromEntries(Object.entries(record.entry.fields).map(([id, value]) => [fieldIds.get(id) ?? id, value]));
         doc.entries[ref] = { ...nextEntry(doc, ref, { ...record.entry, typeId: type.id, fields, tags: record.tags, portrait }), wfId: record.entry.wfId };
-        // An entry that is not canon yet does not belong in what players read.
+        // A lore entry its author kept to the DM comes back kept to the DM.
+        // One that is not canon yet is held back from players by its canon
+        // alone (src/lib/db/world-publication.ts), so its audience is left
+        // as the author set it and publishing it later needs no second step.
         const lore = parseRef(ref);
-        if (lore?.shelf === "lore" && record.entry.canon !== "canon") {
+        if (lore?.shelf === "lore" && record.dmOnly) {
           getDatabase().prepare(`UPDATE lore_entries SET visibility = 'dm' WHERE id = ?`).run(lore.id);
         }
       });
@@ -245,6 +248,7 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
     portrait: inline(entity.portrait),
     entry: { ...entity.entry, aliases: entity.aliases },
     createdAt: entity.createdAt,
+    ...(entity.shelf === "lore" && entity.table.visibility === "dm" ? { dmOnly: true } : {}),
   }));
   const mapImages: Record<string, string> = {};
   for (const atlas of doc.maps) {

@@ -23,6 +23,8 @@ const { runContentImport } = await import("../src/lib/db/content-import.ts");
 const { worldForPrompt } = await import("../src/lib/dm/world-prompt.ts");
 const { getOverworld } = await import("../src/lib/db/overworld.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
+const { listLoreEntries } = await import("../src/lib/db/lore.ts");
+const { loreVisibleTo } = await import("../src/lib/dm/world-lore-logic.ts");
 
 const raw = fs.readFileSync(new URL("./fixtures/worldforge-saltmarch.json", import.meta.url), "utf8");
 const world = await openWorld();
@@ -68,8 +70,11 @@ await test("Every entry is a record the table plays with: Characters are the Cas
   const [horn] = rows(`SELECT category, visibility FROM lore_entries WHERE campaign_id = ? AND title = ?`, workshopId, "The Brine Horn");
   assert.equal(horn.category, "magic");
   assert.equal(horn.visibility, "party");
-  const [lantern] = rows(`SELECT visibility FROM lore_entries WHERE campaign_id = ? AND title = ?`, workshopId, "The Grey Lantern");
-  assert.equal(lantern.visibility, "dm", "an entry that is not canon was shown to players");
+  // Not canon, so held back from players by its canon (WF-01); its audience
+  // is left as written, so publishing it later needs no second step.
+  const lantern = listLoreEntries(workshopId).find((entry) => entry.title === "The Grey Lantern");
+  assert.equal(lantern.unpublished, true, "an entry that is not canon was not held back");
+  assert.equal(loreVisibleTo([lantern], false, "player").length, 0, "an entry that is not canon was shown to players");
   assert.equal(entity("The Grey Lantern").entry.canon, "alternate");
 });
 

@@ -10,6 +10,7 @@ import {
   type WorldLoreEntry,
 } from "@/lib/dm/world-lore-logic";
 import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
+import { heldBackLoreIds } from "@/lib/db/world-publication";
 
 // World lore builder storage (lore_entries): lead-authored world bible
 // entries the DM prompt samples from and search_lore queries. Embeddings
@@ -64,7 +65,11 @@ export function listLoreEntries(campaignId: string): WorldLoreEntry[] {
        WHERE campaign_id = ? ORDER BY category ASC, created_at ASC`,
     )
     .all(campaignId) as LoreRow[];
-  return rows.map(mapEntry);
+  const held = heldBackLoreIds(campaignId);
+  return rows.map((row) => {
+    const entry = mapEntry(row);
+    return held.has(entry.id) ? { ...entry, unpublished: true } : entry;
+  });
 }
 
 // Every entry carrying a PDF, across campaigns; the startup re-read in
@@ -84,7 +89,11 @@ export function getLoreEntry(entryId: string): WorldLoreEntry | null {
   const row = getDatabase()
     .prepare(`SELECT ${LORE_COLUMNS} FROM lore_entries WHERE id = ?`)
     .get(entryId) as LoreRow | undefined;
-  return row ? mapEntry(row) : null;
+  if (!row) {
+    return null;
+  }
+  const entry = mapEntry(row);
+  return heldBackLoreIds(row.campaign_id).has(entry.id) ? { ...entry, unpublished: true } : entry;
 }
 
 export function insertLoreEntry(input: {
