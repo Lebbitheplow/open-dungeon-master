@@ -2,8 +2,9 @@
 // the user as a download. Kept apart from the builder so the pdf-lib layout
 // stays environment-agnostic while this half touches the DOM.
 
-import { downloadBlob, filenameSlug } from "@/lib/download";
+import { downloadBlob } from "@/lib/download";
 import type { PdfCharacter } from "./character-sheet-pdf";
+import { slugOf } from "@/lib/language/text-logic";
 
 function isPng(bytes: Uint8Array): boolean {
   return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
@@ -72,5 +73,5 @@ export async function downloadCharacterSheetPdf(character: PdfCharacter): Promis
   });
   // Copy into a fresh ArrayBuffer so the Blob never sees a SharedArrayBuffer-backed view.
   const blob = new Blob([bytes.slice()], { type: "application/pdf" });
-  downloadBlob(`${filenameSlug(character.name)}-character-sheet.pdf`, blob);
+  downloadBlob(`${[slugOf(character.name), "character-sheet"].filter((part) => part !== "").join("-")}.pdf`, blob);
 }

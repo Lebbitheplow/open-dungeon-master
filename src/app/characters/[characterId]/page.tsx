@@ -11,7 +11,7 @@ import { ContextMenu } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { cn } from "@/lib/cn";
-import { downloadBlob, filenameSlug } from "@/lib/download";
+import { downloadBlob } from "@/lib/download";
 import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { CharacterPortrait, ui } from "@/lib/ui";
@@ -19,6 +19,7 @@ import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { SheetSections, StorySoFar, type CharacterEvent } from "./SheetSections";
 import { currentQuery, navigateTo, workshopReturnPath } from "@/lib/navigation";
 import { UseInCampaignDialog } from "./UseInCampaignDialog";
+import { slugOf } from "@/lib/language/text-logic";
 
 // Where this character is playing; see src/lib/db/characters.ts.
 type CharacterAssignment = {
@@ -102,7 +103,7 @@ export default function CharacterDetailPage({
         setExportError("Export failed.");
         return;
       }
-      downloadBlob(`${filenameSlug(character.name)}.odm-character.json`, await response.blob());
+      downloadBlob(`${slugOf(character.name) || "character"}.odm-character.json`, await response.blob());
     } catch {
       setExportError("Export failed.");
     } finally {
