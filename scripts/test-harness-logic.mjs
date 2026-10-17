@@ -427,7 +427,12 @@ test("a chat model reads the turn-to-turn state after the transcript, the same t
   assert.deepEqual(after.slice(1, 1 + history.length), before.slice(1, 1 + history.length), "the history is untouched");
   assert.equal(after.at(-1).content, "DIRECTOR: the bell rings once.", "the director's note stays last");
   assert.equal(`${after[0].content}\n\n${moment.content}`, `${before[0].content}\n\n${MOMENT_INSTRUCTION}`, "only the order changes, byte for byte");
-  assert.deepEqual(plain.contextTrace, chat.contextTrace, "the budget and the trace are the same");
+  // The same budget and trace; only where the turn's own calls begin moves,
+  // one message on, past the moment (src/lib/dm/turn-fit.ts).
+  const withoutLength = (trace) => ({ ...trace, shape: { ...trace.shape, promptMessages: 0 } });
+  assert.deepEqual(withoutLength(plain.contextTrace), withoutLength(chat.contextTrace), "the budget and the trace are the same");
+  assert.equal(chat.contextTrace.shape.promptMessages, plain.contextTrace.shape.promptMessages + 1);
+  assert.deepEqual(chat.contextTrace.shape.historyEnd, plain.contextTrace.shape.historyEnd, "the transcript sits in the same place");
 });
 
 // What Claude Code caches as its second system block: everything after the

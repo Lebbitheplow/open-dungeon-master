@@ -334,6 +334,55 @@ try {
     assert.equal(whole.olderBefore, null, "the first page of a campaign has nothing older");
   });
 
+  await test("a narrow read keeps what decides whether to act, and sinceSeq returns only what is new", () => {
+    const snapshot = {
+      campaign: { id: "c", title: "Ford", status: "active", description: "d".repeat(5_000), floor: { mode: "spotlight", userIds: ["u"] } },
+      me: { id: "u" },
+      activeSheetId: "s1",
+      safetyPause: null,
+      dmStatus: "idle",
+      caps: { adjudicates: false },
+      pendingRolls: [{ id: "r1", kind: "check" }],
+      disputes: [],
+      latestSeq: 40,
+      members: [{ userId: "u", username: "ana" }, { userId: "v", username: "bo" }],
+      sheets: [
+        { id: "s1", userId: "u", name: "Ana", currentHp: 7, maxHp: 10, spellcasting: { prepared: Array.from({ length: 30 }, (_, i) => `Spell ${i}`) } },
+        { id: "s2", userId: "v", name: "Bo", currentHp: 9, maxHp: 9, backstory: "b".repeat(4_000) },
+      ],
+      encounter: { id: "e1", round: 2, turnIndex: 1, status: "active", combatants: Array.from({ length: 40 }, (_, i) => ({ id: `m${i}`, notes: "x".repeat(200) })) },
+      messages: Array.from({ length: 40 }, (_, index) => ({ seq: index + 1, authorType: index % 2 ? "dm" : "player", userId: "u", characterId: "s1", content: `Line ${index + 1} ${"w".repeat(300)}` })),
+      rolls: Array.from({ length: 30 }, (_, i) => ({ id: `roll${i}` })),
+    };
+    const text = JSON.stringify(snapshot);
+    const full = campaignForAgent(text);
+    const status = JSON.parse(campaignForAgent(text, MAX_RESULT_CHARS, { view: "status" }));
+    assert.ok(JSON.stringify(status).length < full.length / 4, "the status view is a fraction of the full read");
+    assert.deepEqual(status.floor, snapshot.campaign.floor);
+    assert.deepEqual(status.pendingRolls, snapshot.pendingRolls);
+    assert.equal(status.dmStatus, "idle");
+    assert.equal(status.latestSeq, 40);
+    assert.equal(status.messages.length, 1, "the newest message for context");
+    assert.equal(status.messages[0].seq, 40);
+    assert.deepEqual(status.encounter, { id: "e1", round: 2, turnIndex: 1, status: "active" }, "a fight is named, not dumped");
+    assert.equal(status.mySheets[0].currentHp, 7);
+    const since = JSON.parse(campaignForAgent(text, MAX_RESULT_CHARS, { view: "recent", sinceSeq: 36 }));
+    assert.deepEqual(since.messages.map((m) => m.seq), [37, 38, 39, 40], "only what came after the seq read");
+    assert.equal(since.history.more, false);
+    const gap = JSON.parse(campaignForAgent(JSON.stringify({ ...snapshot, messages: snapshot.messages.slice(-5) }), MAX_RESULT_CHARS, { view: "recent", sinceSeq: 10 }));
+    assert.equal(gap.history.more, true, "a seq older than the page held is a gap, said so");
+    assert.match(gap.history.read, /odm_get_messages/);
+    const sheet = JSON.parse(campaignForAgent(text, MAX_RESULT_CHARS, { view: "sheet" }));
+    assert.equal(sheet.sheets.length, 1, "only your own sheets");
+    assert.equal(sheet.sheets[0].spellcasting.prepared.length, 30, "whole");
+    const encounter = JSON.parse(campaignForAgent(text, MAX_RESULT_CHARS, { view: "encounter" }));
+    assert.equal(encounter.encounter.combatants.length, 40);
+    const capped = campaignForAgent(text, MAX_RESULT_CHARS, { view: "recent", maxChars: 5_000 });
+    assert.ok(capped.length <= 5_000, `maxChars holds (${capped.length})`);
+    assert.deepEqual(JSON.parse(capped).pendingRolls, snapshot.pendingRolls, "the decisions survive the cap");
+    assert.equal(campaignForAgent(text, MAX_RESULT_CHARS, {}), full, "no arguments: the full read as before");
+  });
+
   console.log(`${passed} agent result tests passed`);
 } finally {
   globalThis.fetch = originalFetch;

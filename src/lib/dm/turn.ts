@@ -19,6 +19,7 @@ import {
   createDmTurn,
   failStaleRunningTurns,
   getDmTurn,
+  getLatestDmTurnId,
   listPendingForTurn,
   saveDmTurn,
   type DmTurn,
@@ -69,6 +70,7 @@ import { imagesAvailable } from "@/lib/capabilities";
 import { imageProducerReady } from "@/lib/image-generate";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { fitsStoryWindow, requestDmMessage } from "@/lib/dm/model";
+import { requestTokens, sharedPrefixTokens } from "@/lib/dm/request-fit";
 import { OOC_ANSWER_INSTRUCTION, OOC_UNANSWERED_PREFIX, oocAnswer, oocQuestionPending } from "@/lib/dm/ooc-question";
 import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { toMcpTools } from "@/lib/harness/render";
@@ -632,6 +634,7 @@ async function openTurn(
           }
         : null,
       recentPlayerLine: [...history].reverse().find((message) => message.authorType === "player")?.content.slice(0, 400) ?? "",
+      npcMomentText: history.slice(-6).map((entry) => clipKeepingEnds(entry.content, 600, 150, () => " ")).join("\n"),
       visitedLocationNames: listLocations(campaignId)
         .filter((location) => location.visited)
         .map((location) => location.name)
@@ -692,6 +695,20 @@ async function openTurn(
     return null;
   }
 
+  // What this turn's prompt shares with the previous turn's from its first
+  // token: the most a prompt cache could reuse (the context audit's F08).
+  const previousId = getLatestDmTurnId(campaignId);
+  const previous = previousId ? getDmTurn(previousId) : null;
+  const prefix = previous
+    ? {
+        sharedTokens: sharedPrefixTokens(
+          previous.conversation.slice(0, previous.contextTrace?.shape?.promptMessages || 1),
+          conversation,
+        ),
+        promptTokens: requestTokens(conversation),
+      }
+    : null;
+
   // A stop asked for while the scene was being set ends the turn here,
   // before it has a row or a model call.
   assertJobLive();
@@ -708,7 +725,7 @@ async function openTurn(
   // trace is carried onto the turn row rather than recomputed. What the turn
   // changed for the model rides with it, for the Context panel.
   turn.contextTrace = promptState.contextTrace
-    ? { ...promptState.contextTrace, profile: profileTrace, ...(tuning.notes.length ? { tuning: tuning.notes } : {}) }
+    ? { ...promptState.contextTrace, profile: profileTrace, ...(prefix ? { prefix } : {}), ...(tuning.notes.length ? { tuning: tuning.notes } : {}) }
     : null;
   // Remember which player whispers this turn's prompt carries; finalize()
   // marks them answered only when the turn succeeds.
@@ -1230,6 +1247,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     });
 
     const { message, error, finishReason } = reply;
+    // The provider's own continuation items (the Responses API's encrypted
+    // reasoning), echoed with the assistant turn they belong to.
+    const carried = message?.provider_items?.length ? { provider_items: message.provider_items } : {};
     if (error) {
       batcher.flush();
       const payload = (await error.json().catch(() => null)) as { error?: string; detail?: string } | null;
@@ -1691,7 +1711,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // narration, so the turn ends on the empty-turn line, not the plan.
       if (!finalCall && !planNudged && !toolCalls.length && planOnly) {
         planNudged = true;
-        turn.conversation.push({ role: "assistant", content: visibleText || "" });
+        turn.conversation.push({ role: "assistant", content: visibleText || "", ...carried });
         turn.conversation.push({ role: "user", content: planCorrection(turn.callIndex === MAX_MODEL_CALLS - 1) });
         saveDmTurn(turn);
         continue;
@@ -1711,6 +1731,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         turn.narrationParts.pop();
         turn.conversation.push({
           role: "assistant",
+          ...carried,
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
@@ -1732,6 +1753,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         turn.narrationParts.pop();
         turn.conversation.push({
           role: "assistant",
+          ...carried,
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
@@ -1756,6 +1778,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         }
         turn.conversation.push({
           role: "assistant",
+          ...carried,
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
@@ -1778,6 +1801,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       if ((spotlightSet || toolCalls.length > 0) && !turn.narrationParts.length && !finalCall) {
         turn.conversation.push({
           role: "assistant",
+          ...carried,
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
@@ -1800,6 +1824,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // with a tool result carrying the real dice outcome.
     turn.conversation.push({
       role: "assistant",
+      ...carried,
       content: visibleText || "",
       tool_calls: echoedToolCalls,
     });

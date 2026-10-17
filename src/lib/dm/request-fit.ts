@@ -27,6 +27,7 @@ export type FitMessage = {
   content: unknown;
   tool_calls?: unknown;
   tool_call_id?: string;
+  provider_items?: unknown;
 };
 
 // Role markers and separators a chat template wraps around each message,
@@ -68,6 +69,7 @@ export function messageTokens(message: FitMessage): number {
     estimateTokens(contentText(message.content)) +
     imageParts(message.content) * IMAGE_PART_TOKENS +
     (message.tool_calls ? estimateTokens(JSON.stringify(message.tool_calls)) : 0) +
+    (message.provider_items ? estimateTokens(JSON.stringify(message.provider_items)) : 0) +
     MESSAGE_FRAMING_TOKENS
   );
 }
@@ -292,4 +294,20 @@ export function fitRequest(input: readonly FitMessage[], options: FitOptions): F
       (tools ? `${tools.toLocaleString("en-US")} of tool definitions, ` : "") +
       `${minOutput.toLocaleString("en-US")} kept for the reply) and the model's window is ${window.toLocaleString("en-US")}.`,
   };
+}
+
+// How much of one request's start another shares, by the same estimate: the
+// most a server's prompt cache could reuse from the previous turn (the
+// context audit's F08). A diagnostic, never a sizing input.
+export function sharedPrefixTokens(previous: readonly FitMessage[], current: readonly FitMessage[]): number {
+  const flatten = (messages: readonly FitMessage[]) =>
+    messages.map((message) => `${message.role}\u0000${contentText(message.content)}`).join("\u0001");
+  const a = flatten(previous);
+  const b = flatten(current);
+  const limit = Math.min(a.length, b.length);
+  let at = 0;
+  while (at < limit && a.charCodeAt(at) === b.charCodeAt(at)) {
+    at += 1;
+  }
+  return estimateTokens(b.slice(0, at));
 }

@@ -135,6 +135,7 @@ const fakeOpenAi = async (url, init) => {
       );
     }
     assert.equal(body.store, false, "nothing is stored on OpenAI's side");
+    assert.deepEqual(body.include, ["reasoning.encrypted_content"], "the reasoning comes back to hand on, stored nowhere");
     assert.ok(Array.isArray(body.input), "input is an item array");
     for (const item of body.input) {
       assert.ok(!("tool_calls" in item) && item.role !== "tool", `a Chat Completions shape leaked: ${JSON.stringify(item)}`);
@@ -423,6 +424,29 @@ try {
   ]);
   assert.deepEqual(fromResponsesOutput(undefined), { content: "" });
   ok("transcripts, tools and replies translate both ways");
+}
+
+// --- reasoning carried across a tool step (the context audit's F14) -------------
+{
+  const reasoning = { type: "reasoning", id: "rs_1", encrypted_content: "gAAAA-opaque", summary: [] };
+  const message = fromResponsesOutput([
+    reasoning,
+    { type: "function_call", call_id: "call_1", name: "request_roll", arguments: '{"kind":"stealth"}' },
+  ]);
+  assert.deepEqual(message.provider_items, [reasoning], "the encrypted reasoning is kept, whole and unread");
+  assert.equal(message.content, "", "and never becomes narration");
+  // The next step hands it back ahead of the call it led to.
+  const items = toResponsesInput([
+    { role: "user", content: "I sneak." },
+    { role: "assistant", content: "", tool_calls: message.tool_calls, provider_items: message.provider_items },
+    { role: "tool", tool_call_id: "call_1", content: '{"total":14}' },
+  ]);
+  assert.deepEqual(items.map((item) => item.type ?? item.role), ["user", "reasoning", "function_call", "function_call_output"]);
+  assert.deepEqual(items[1], reasoning);
+  // Only reasoning items are replayed; anything else a message carries stays.
+  const other = toResponsesInput([{ role: "assistant", content: "Hi", provider_items: [{ type: "web_search_call" }] }]);
+  assert.deepEqual(other, [{ role: "assistant", content: "Hi" }]);
+  ok("encrypted reasoning rides the assistant turn and goes back before its calls");
 }
 
 // The database handle stays open on purpose; Windows refuses rmSync on it.

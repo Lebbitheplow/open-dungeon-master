@@ -79,6 +79,11 @@ export type ChatMessage = {
   content: string | Array<TextContentPart | ImageContentPart>;
   tool_calls?: unknown;
   tool_call_id?: string;
+  // A provider's own continuation items that rode with this assistant turn
+  // (the Responses API's encrypted reasoning, src/lib/openai-responses.ts):
+  // replayed to that transport on the next step of the same DM turn, never
+  // shown, never sent to any other backend.
+  provider_items?: unknown[];
 };
 
 export type StreamDeltaHandler = (text: string) => void;
@@ -92,6 +97,8 @@ export type StreamedToolCall = {
 export type UpstreamChatMessage = {
   content?: unknown;
   tool_calls?: unknown;
+  // See ChatMessage.provider_items.
+  provider_items?: unknown[];
 };
 
 export type UpstreamResult = {
@@ -879,7 +886,14 @@ async function requestCustomMessageNow(
       })
     : {
         model: resolvedModel,
-        messages,
+        // A Responses turn's reasoning items are that API's own; Chat
+        // Completions would refuse the unknown field.
+        messages: messages.map((message) => {
+          if (!message.provider_items) return message;
+          const rest = { ...message };
+          delete rest.provider_items;
+          return rest;
+        }),
         ...sampling,
         // Explicit 0 so a server-side sampler preset cannot override it: a
         // positive presence penalty over the long DM prompt suppresses the

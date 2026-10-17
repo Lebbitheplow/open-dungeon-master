@@ -52,6 +52,7 @@ import { normalizeGm, normalizeSafety, renderGmBlock, renderSafetyBlock } from "
 import { renderNarrationStyle } from "@/lib/dm/narration-style-logic";
 import { renderChapterLod } from "@/lib/dm/chapter-lod";
 import { buildPinnedMemoriesBlock } from "@/lib/dm/pin-logic";
+import { NPC_PROMPT_MAX, rankNpcsForPrompt } from "@/lib/dm/npc-rank-logic";
 import {
   computeBudgets,
   cutCoveredHistory,
@@ -291,6 +292,9 @@ export type DmGameState = {
   ruleContext?: RuleContext | null;
   // Excerpts the table pinned; injected unconditionally, no relevance filter.
   pins?: Array<{ text: string }>;
+  // The newest lines, for which tracked NPCs the roster lists first when it
+  // cannot list them all (src/lib/dm/npc-rank-logic.ts).
+  npcMomentText?: string;
   // The newest player line, for the arc render's scene cues (issue #301):
   // what the party just said it is doing names the event it is walking
   // toward before the location changes.
@@ -950,14 +954,20 @@ export function buildGameStateBlock(state: DmGameState): string {
     }
   }
   if (state.npcs?.length) {
+    // The ones here and the ones just named first (src/lib/dm/npc-rank-logic.ts).
+    const ranked = rankNpcsForPrompt(state.npcs, {
+      location: state.currentLocation?.name ?? "",
+      text: [campaign.scene ?? "", state.npcMomentText ?? ""].join("\n"),
+    });
+    const left = ranked.length - NPC_PROMPT_MAX;
     sections.push(
-      `Tracked NPCs (attitude is server-authoritative; it drives social_check DCs and persists across sessions, so narrate each NPC true to how they currently feel):\n${state.npcs
-        .slice(0, 20)
+      `Tracked NPCs (attitude is server-authoritative; it drives social_check DCs and persists across sessions, so narrate each NPC true to how they currently feel):\n${ranked
+        .slice(0, NPC_PROMPT_MAX)
         .map(
           (npc) =>
             `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
         )
-        .join("\n")}`,
+        .join("\n")}${left > 0 ? `\n(${left} more tracked NPC${left === 1 ? "" : "s"} elsewhere, not listed here; naming one brings their entry back, and recall_story finds what happened with them.)` : ""}`,
     );
   }
   if (state.shopsBlock) {

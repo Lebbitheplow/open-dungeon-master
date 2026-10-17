@@ -134,6 +134,11 @@ export type ContextTrace = {
   // for the compact profile, the groups the players' words opened when the
   // turn began, all the groups offered then, and those more_tools opened.
   profile?: { name: "full" | "lean" | "compact"; intent?: string[]; groups?: string[]; opened?: string[] };
+  // How much of this turn's opening prompt matches the previous turn's from
+  // the first token on (src/lib/dm/request-fit.ts sharedPrefixTokens): the
+  // most a server's prompt cache could reuse. Compare with the cached input
+  // the backend reports on the calls.
+  prefix?: { sharedTokens: number; promptTokens: number };
   // Lines no summary covers that the prompt left out for want of room: the
   // rolling compaction folds them next (src/lib/dm/compaction.ts), so play
   // that fell out of the window is in a summary rather than in nothing.

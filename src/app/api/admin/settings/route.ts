@@ -217,6 +217,7 @@ const patchSchema = z.object({
       model: z.string().trim().max(200).optional(),
       utilityModel: z.string().trim().max(200).optional(),
       effort: z.enum(["", ...HARNESS_EFFORTS]).optional(),
+      utilityEffort: z.enum(["", ...HARNESS_EFFORTS]).optional(),
       speed: z.enum(["", "fast"]).optional(),
       utilitySpeed: z.enum(["", "fast"]).optional(),
       images: z.enum(["off", "native"]).optional(),
