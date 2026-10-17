@@ -106,7 +106,10 @@ if (manifest && run && !problems.length) {
   }
   await stopAddon(manifest.id);
   for (const line of readAddonLog(manifest.id)) notes.push(`log ${line}`);
-  fs.rmSync(home, { recursive: true, force: true });
+  // Close the checker-owned SQLite handle before deleting its scratch world.
+  const { closeDatabaseForRestore } = await import("../src/lib/db/core.ts");
+  closeDatabaseForRestore();
+  fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
 if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
