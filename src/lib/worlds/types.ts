@@ -90,6 +90,7 @@ export const worldPackSchema = z.object({
   dmFlavor: z.string().max(1400).default(""),
   mapStyle: z.string().max(300).default(""),
   portraitStyle: z.string().max(300).default(""),
+  sceneStyle: z.string().max(300).default(""),
   nameHints: z.string().max(300).default(""),
   raceHint: z.string().max(300).default(""),
   companionRaces: z.array(z.string()).default([]),

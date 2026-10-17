@@ -2,6 +2,7 @@
 
 import { AlignLeft, Bot, Image as ImageIcon, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ART_STYLE_LABELS, ART_STYLE_NOTES } from "@/lib/art-direction";
 import { cn } from "@/lib/cn";
 import { ImagesNote } from "@/app/campaigns/[campaignId]/NarrationNote";
 import { ModelNote } from "@/components/ModelNote";
@@ -12,7 +13,10 @@ import { endpointKind } from "@/lib/dm/sampling-logic";
 import { shellHost } from "@/lib/shell-host";
 import type { TextProvider } from "@/lib/text-models";
 import {
+  ART_STYLE_TEXT_MAX,
+  ART_STYLES,
   PROSE_SIZE_VALUES,
+  type ArtStyle,
   type ImageBackend,
   type StorySettings,
 } from "@/lib/types";
@@ -88,6 +92,8 @@ export function StoryAiPanel({
     utilityBaseUrl: settings.utilityBaseUrl,
     utilityModel: settings.utilityModel,
     utilityApiKey: SECRET_KEPT,
+    artStyleMap: settings.artStyleMap,
+    artStyleScene: settings.artStyleScene,
   });
 
   useEffect(() => {
@@ -175,7 +181,9 @@ export function StoryAiPanel({
     }
   }
 
-  function commitText(field: "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel") {
+  function commitText(
+    field: "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel" | "artStyleMap" | "artStyleScene",
+  ) {
     const value = drafts[field].trim();
     if (value !== settings[field]) {
       void patch({ [field]: value });
@@ -202,7 +210,9 @@ export function StoryAiPanel({
         ? harnessName
         : PROVIDER_LABELS[settings.textProvider];
   const imagesSummary = settings.imageGenerationEnabled
-    ? `${BACKEND_LABELS[settings.imageBackend]}${settings.autoImages ? ", automatic" : ""}`
+    ? `${BACKEND_LABELS[settings.imageBackend]}${settings.autoImages ? ", automatic" : ""}${
+        settings.artStyle === "setting" ? "" : `, ${ART_STYLE_LABELS[settings.artStyle].toLowerCase()} style`
+      }`
     : "off";
 
   if (!steersStory) {
@@ -545,6 +555,53 @@ export function StoryAiPanel({
           </p>
         ) : settings.imageGenerationEnabled && !deviceManaged ? (
           <ImagesNote backend={settings.imageBackend} />
+        ) : null}
+        {settings.imageGenerationEnabled ? (
+          <div className="reveal space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={labelClass}>Art style</span>
+              <Select<ArtStyle>
+                value={settings.artStyle}
+                onChange={(artStyle) => patch({ artStyle })}
+                options={ART_STYLES.map((style) => ({ value: style, label: ART_STYLE_LABELS[style] }))}
+                label="Art style"
+                size="sm"
+              />
+              <span key={settings.artStyle} className="reveal text-stone-500">
+                {ART_STYLE_NOTES[settings.artStyle]}
+              </span>
+            </div>
+            {settings.artStyle === "custom" ? (
+              <div className="reveal space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Maps</span>
+                  <input
+                    value={drafts.artStyleMap}
+                    onChange={(event) => setDrafts((prev) => ({ ...prev, artStyleMap: event.target.value }))}
+                    onBlur={() => commitText("artStyleMap")}
+                    onKeyDown={blurOnEnter}
+                    maxLength={ART_STYLE_TEXT_MAX}
+                    placeholder="Realistic terrain from above, clear paths"
+                    aria-label="Map style"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Scenes</span>
+                  <input
+                    value={drafts.artStyleScene}
+                    onChange={(event) => setDrafts((prev) => ({ ...prev, artStyleScene: event.target.value }))}
+                    onBlur={() => commitText("artStyleScene")}
+                    onKeyDown={blurOnEnter}
+                    maxLength={ART_STYLE_TEXT_MAX}
+                    placeholder="Photorealistic, cinematic light"
+                    aria-label="Scene style"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">

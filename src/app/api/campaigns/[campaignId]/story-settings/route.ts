@@ -4,7 +4,7 @@ import { updateStorySettings } from "@/lib/db/campaigns";
 import { maskStorySettings, scrubStorySettings, withoutAdminOnlyFields } from "@/lib/db/settings";
 import { publishPersisted } from "@/lib/events";
 import { MAX_MODEL_ID_LENGTH } from "@/lib/text-models";
-import { IMAGE_BACKENDS, PROSE_SIZE_VALUES } from "@/lib/types";
+import { ART_STYLE_TEXT_MAX, ART_STYLES, IMAGE_BACKENDS, PROSE_SIZE_VALUES } from "@/lib/types";
 import { harnessOfferFor } from "@/lib/harness/policy";
 
 export const runtime = "nodejs";
@@ -56,6 +56,9 @@ const patchSchema = z.object({
   aspect: z.enum(["square", "portrait", "landscape"]).optional(),
   imageGenerationEnabled: z.boolean().optional(),
   autoImages: z.boolean().optional(),
+  artStyle: z.enum(ART_STYLES).optional(),
+  artStyleMap: z.string().trim().max(ART_STYLE_TEXT_MAX).optional(),
+  artStyleScene: z.string().trim().max(ART_STYLE_TEXT_MAX).optional(),
   proseSize: z.enum(PROSE_SIZE_VALUES).optional(),
 });
 

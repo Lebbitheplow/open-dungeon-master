@@ -12,6 +12,8 @@ import { imageToolArgsSchema, type ImageToolArgs } from "@/lib/image-tool";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { toEnglishForImage } from "@/lib/image-english";
+import { artDirection, scenePrompt, typedStyle } from "@/lib/art-direction";
+import { presetFor } from "@/lib/worlds/preset";
 import type { AspectPreset, GeneratedImage, ImageRequest, StorySettings } from "@/lib/types";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 
@@ -69,10 +71,14 @@ export function fulfillMessageImage(
       // The table's boundary decides what the picture leaves out
       // (docs/vtt-parity-implementation-plan.md 9.1).
       const boundaries = campaign.gameSettings.safety?.boundaries ?? "standard";
+      // The look the campaign has now (src/lib/art-direction.ts), leading
+      // the subject the DM wrote. A typed style may need English too.
+      const look = artDirection(campaign.settings, presetFor(campaign.gameSettings));
+      const typed = typedStyle(campaign.settings, "scene");
       // The AI DM writes its prompt in English, a human DM may not.
-      const english = await toEnglishForImage(campaign, { prompt });
+      const english = await toEnglishForImage(campaign, { prompt, style: typed });
       const image = await generateStoryImage(settings, {
-        prompt: english.prompt,
+        prompt: scenePrompt(typed ? english.style : look.scene, english.prompt),
         mode: request.mode ?? settings.imageMode,
         aspect: request.aspect ?? settings.aspect,
         negative: boundaryNegativeTerms(boundaries),
