@@ -10,8 +10,9 @@ default embedding model: with another `EMBEDDING_MODEL`, each new container down
 on first use (so it needs internet then), unless you build the image yourself with
 `docker compose up -d --build`, which bakes the model set in `.env` into it.
 
-Every GitHub release is published to both registries as linux/amd64 (an arm64 host builds
-its own image from a clone, below, and gets working embeddings the same way):
+Every GitHub release, beta or stable, is published to both registries as linux/amd64 (an
+arm64 host builds its own image from a clone, below, and gets working embeddings the same
+way):
 
 ```bash
 docker pull lebbi/open-dungeon-master:latest                 # Docker Hub
@@ -21,12 +22,16 @@ docker pull ghcr.io/lebbitheplow/open-dungeon-master:latest  # GHCR
 Grab the compose file and start it:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/stable/docker-compose.yml
 docker compose pull
 docker compose up -d        # http://localhost:3005
 ```
 
-`:latest` follows the newest release; pin one with `ODM_IMAGE_TAG=0.10.1` in `.env`. The
+`:latest` (also `:stable`) follows the stable releases, `:0.29` stays on one stable line
+and takes only its fixes, and `:beta` follows the nightly betas
+([releases.md](releases.md)). Choose one with `ODM_IMAGE_TAG=beta` (or `0.29`) in `.env`,
+or pin one version with `ODM_IMAGE_TAG=0.10.1`. On `:beta`, set `ODM_UPDATE_CHANNEL=beta`
+too, so the About dialog compares against the betas. The
 compose file pulls from Docker Hub by default; set
 `ODM_IMAGE=ghcr.io/lebbitheplow/open-dungeon-master` in `.env` to use GHCR instead. To
 build the image yourself rather than pulling it, clone the repository (the first two
