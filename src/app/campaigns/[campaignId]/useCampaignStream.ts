@@ -210,6 +210,9 @@ export type CampaignState = {
   // (world_updated, records_changed: both reach only the seats holding the
   // story's secrets), so the World tab reads it again.
   worldVersion: number;
+  // Bumped on lore_updated (a secret revealed to the party, WF-10), so the
+  // lore list reads itself again for this seat.
+  loreVersion: number;
   // Bumped on shops_updated so the market refetches (11.1).
   shopsVersion: number;
   // The last coin movement, for the purse FX.
@@ -349,6 +352,7 @@ const initialState: CampaignState = {
   relationshipsVersion: 0,
   factionsVersion: 0,
   worldVersion: 0,
+  loreVersion: 0,
   shopsVersion: 0,
   coins: null,
   questsVersion: 0,
@@ -699,6 +703,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "world_updated":
         case "records_changed":
           next.worldVersion = state.worldVersion + 1;
+          return next;
+        case "lore_updated":
+          next.loreVersion = state.loreVersion + 1;
           return next;
         case "calendar_updated":
           next.questsVersion = state.questsVersion + 1;
@@ -1104,6 +1111,9 @@ const EPHEMERAL_EVENTS = [
   // the world again.
   "world_updated",
   "records_changed",
+  // Lore the table reads changed (a secret revealed to the party).
+  // Contentless, to every seat: each lore list asks for its own view.
+  "lore_updated",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 // Every type the stream listens for; an event outside it never reaches the

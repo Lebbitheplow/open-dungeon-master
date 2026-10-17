@@ -197,7 +197,21 @@ export function useWorld(campaignId: string) {
     [base, send, refresh],
   );
 
-  return { world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, clearError: () => setError("") };
+  // "Reveal to the party" at a table: the secret marked learned and a lore
+  // entry for the players, made on the server in one step (world/secrets/
+  // [secretId]/reveal). Answers the entry made, or null with `error` said.
+  const reveal = useCallback(
+    async (secretId: string, told: { title: string; body: string; show: boolean }) => {
+      const payload = await send(`${base}/secrets/${encodeURIComponent(secretId)}/reveal`, { method: "POST", body: JSON.stringify(told) });
+      if (!payload || !payload.entry) return null;
+      const fresh = payload as unknown as WorldState;
+      setWorld(withPending({ doc: fresh.doc, entities: fresh.entities }));
+      return payload.entry as { id: string; title: string };
+    },
+    [base, send, withPending],
+  );
+
+  return { world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;

@@ -224,6 +224,15 @@ test("a change to the world reads the World tab again (WF-10)", () => {
   }
 });
 
+test("a secret revealed to the party reads every seat's lore again (WF-10)", () => {
+  // The ping carries nothing and goes to the whole table: each seat's lore
+  // list asks GET /lore, which answers for that seat.
+  assert.ok(new Set(STREAMED_EVENTS).has("lore_updated"), "the stream listens for lore_updated");
+  assert.deepEqual(EVENT_AUDIENCE.lore_updated, { kind: "table" });
+  const next = campaignReducer(loaded, event("lore_updated", { at: 1 }));
+  assert.equal(next.loreVersion, loaded.loreVersion + 1);
+});
+
 test("every table event the reducer handles is one the stream listens for", () => {
   // A case for a type the EventSource never subscribes to is dead: the
   // travel formation (issue 230) saved but showed nothing until a reload.
