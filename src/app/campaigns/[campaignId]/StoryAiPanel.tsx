@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ART_STYLE_LABELS, ART_STYLE_NOTES } from "@/lib/art-direction";
 import { cn } from "@/lib/cn";
 import { ImagesNote } from "@/app/campaigns/[campaignId]/NarrationNote";
+import { commitValue, draftsFrom, editDraft, followSaved, inStep } from "@/app/campaigns/[campaignId]/settingDrafts";
 import { ModelNote } from "@/components/ModelNote";
 import { Select } from "@/components/ui/Select";
 import type { MaskedStorySettings } from "@/lib/db/settings";
@@ -25,6 +26,9 @@ import {
 // as is" and the field is simply omitted from the PATCH. Same contract as the
 // admin settings panel.
 const SECRET_KEPT = "\u0000keep";
+
+// The text settings typed in place.
+type TextField = "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel" | "artStyleMap" | "artStyleScene";
 
 const PROVIDER_LABELS: Record<TextProvider, string> = {
   local: "Local (Ollama)",
@@ -85,16 +89,24 @@ export function StoryAiPanel({
   // the answer lands, so the choice never flashes on and off.
   const [harness, setHarness] = useState<HarnessOffer | null>(null);
   // Text fields commit on blur or Enter, so a half-typed URL never PATCHes.
-  const [drafts, setDrafts] = useState({
+  // Each follows the saved settings until the player types into it
+  // (settingDrafts.ts): a change saved in another window shows here, and a
+  // field that still showed the old value is not saved back over it.
+  const savedText: Record<TextField, string> = {
     customBaseUrl: settings.customBaseUrl,
     customModel: settings.customModel,
-    customApiKey: SECRET_KEPT,
     utilityBaseUrl: settings.utilityBaseUrl,
     utilityModel: settings.utilityModel,
-    utilityApiKey: SECRET_KEPT,
     artStyleMap: settings.artStyleMap,
     artStyleScene: settings.artStyleScene,
-  });
+  };
+  const [text, setText] = useState(() => draftsFrom(savedText));
+  if (!inStep(text, savedText)) {
+    setText(followSaved(text, savedText));
+  }
+  const setDraft = (field: TextField, value: string) => setText((prev) => editDraft(prev, field, value));
+  const [keys, setKeys] = useState({ customApiKey: SECRET_KEPT, utilityApiKey: SECRET_KEPT });
+  const drafts = { ...text.drafts, ...keys };
 
   useEffect(() => {
     if (!steersStory) {
@@ -169,10 +181,10 @@ export function StoryAiPanel({
         setHarness(data.harness);
       }
       if (update.customApiKey !== undefined) {
-        setDrafts((prev) => ({ ...prev, customApiKey: SECRET_KEPT }));
+        setKeys((prev) => ({ ...prev, customApiKey: SECRET_KEPT }));
       }
       if (update.utilityApiKey !== undefined) {
-        setDrafts((prev) => ({ ...prev, utilityApiKey: SECRET_KEPT }));
+        setKeys((prev) => ({ ...prev, utilityApiKey: SECRET_KEPT }));
       }
     } catch {
       setError("Could not reach the server.");
@@ -181,11 +193,9 @@ export function StoryAiPanel({
     }
   }
 
-  function commitText(
-    field: "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel" | "artStyleMap" | "artStyleScene",
-  ) {
-    const value = drafts[field].trim();
-    if (value !== settings[field]) {
+  function commitText(field: TextField) {
+    const value = commitValue(text, savedText, field);
+    if (value !== null) {
       void patch({ [field]: value });
     }
   }
@@ -333,7 +343,7 @@ export function StoryAiPanel({
                   <input
                     value={drafts.customModel}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
+                      setDraft("customModel", event.target.value)
                     }
                     onBlur={() => commitText("customModel")}
                     onKeyDown={blurOnEnter}
@@ -355,7 +365,7 @@ export function StoryAiPanel({
                   <input
                     value={drafts.customBaseUrl}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customBaseUrl: event.target.value }))
+                      setDraft("customBaseUrl", event.target.value)
                     }
                     onBlur={() => commitText("customBaseUrl")}
                     onKeyDown={blurOnEnter}
@@ -368,7 +378,7 @@ export function StoryAiPanel({
                   <input
                     value={drafts.customModel}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
+                      setDraft("customModel", event.target.value)
                     }
                     onBlur={() => commitText("customModel")}
                     onKeyDown={blurOnEnter}
@@ -382,7 +392,7 @@ export function StoryAiPanel({
                     type="password"
                     value={drafts.customApiKey === SECRET_KEPT ? "" : drafts.customApiKey}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customApiKey: event.target.value }))
+                      setKeys((prev) => ({ ...prev, customApiKey: event.target.value }))
                     }
                     onBlur={() => commitKey("customApiKey")}
                     onKeyDown={blurOnEnter}
@@ -415,7 +425,7 @@ export function StoryAiPanel({
               <input
                 value={drafts.utilityModel}
                 onChange={(event) =>
-                  setDrafts((prev) => ({ ...prev, utilityModel: event.target.value }))
+                  setDraft("utilityModel", event.target.value)
                 }
                 onBlur={() => commitText("utilityModel")}
                 onKeyDown={blurOnEnter}
@@ -432,7 +442,7 @@ export function StoryAiPanel({
                 <input
                   value={drafts.utilityBaseUrl}
                   onChange={(event) =>
-                    setDrafts((prev) => ({ ...prev, utilityBaseUrl: event.target.value }))
+                    setDraft("utilityBaseUrl", event.target.value)
                   }
                   onBlur={() => commitText("utilityBaseUrl")}
                   onKeyDown={blurOnEnter}
@@ -443,7 +453,7 @@ export function StoryAiPanel({
                   type="password"
                   value={drafts.utilityApiKey === SECRET_KEPT ? "" : drafts.utilityApiKey}
                   onChange={(event) =>
-                    setDrafts((prev) => ({ ...prev, utilityApiKey: event.target.value }))
+                    setKeys((prev) => ({ ...prev, utilityApiKey: event.target.value }))
                   }
                   onBlur={() => commitKey("utilityApiKey")}
                   onKeyDown={blurOnEnter}
@@ -577,7 +587,7 @@ export function StoryAiPanel({
                   <span className={labelClass}>Maps</span>
                   <input
                     value={drafts.artStyleMap}
-                    onChange={(event) => setDrafts((prev) => ({ ...prev, artStyleMap: event.target.value }))}
+                    onChange={(event) => setDraft("artStyleMap", event.target.value)}
                     onBlur={() => commitText("artStyleMap")}
                     onKeyDown={blurOnEnter}
                     maxLength={ART_STYLE_TEXT_MAX}
@@ -590,7 +600,7 @@ export function StoryAiPanel({
                   <span className={labelClass}>Scenes</span>
                   <input
                     value={drafts.artStyleScene}
-                    onChange={(event) => setDrafts((prev) => ({ ...prev, artStyleScene: event.target.value }))}
+                    onChange={(event) => setDraft("artStyleScene", event.target.value)}
                     onBlur={() => commitText("artStyleScene")}
                     onKeyDown={blurOnEnter}
                     maxLength={ART_STYLE_TEXT_MAX}
