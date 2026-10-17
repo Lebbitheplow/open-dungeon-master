@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a new feature or a change to an existing one.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open Dungeon Master tries to work well with no setup, so most features should simply work with a good default. If your idea needs a new setting, toggle or option, show us what it would look like: the setup already asks a lot of new players, and every new control has to earn its place.
+  - type: textarea
+    id: what
+    attributes:
+      label: What should happen?
+      description: The feature or change, as a player or Dungeon Master would see it.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would this help?
+      description: The table, campaign or moment where this matters, and what happens today instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: needs-setting
+    attributes:
+      label: Does this need a new setting, toggle or option?
+      options:
+        - No, it works with a sensible default
+        - Yes, it needs a setting (attach a screenshot or mockup below)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: mockup
+    attributes:
+      label: The proposed setting
+      description: |
+        Required when the answer above is yes. Attach a screenshot or mockup of the control as it would appear: an edited screenshot, a sketch or an HTML mockup are all fine. Say where it lives (the campaign creator, a campaign's panel, the admin console, the workshop) and what it is set to by default. A request that needs a setting and has no picture will be asked for one before work starts.
+      placeholder: Drag an image here, then say where the control lives and what its default is.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Related issues, other tools that do this well, version you are on.
