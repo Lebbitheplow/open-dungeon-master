@@ -73,7 +73,7 @@ export function handleRequestRoll(
   // The AI's advantage stands only on a circumstance the server cannot see
   // (the same rule as pc_attack's); the DM console rules freely.
   if (turn.actor === "ai" && args.advantage && args.advantage !== "none") {
-    const claim = claimedAdvantage({ requested: args.advantage, reason: args.advantageReason, byAi: true });
+    const claim = claimedAdvantage({ requested: args.advantage, source: args.advantageSource, reason: args.advantageReason, byAi: true });
     args = { ...args, advantage: claim.requested };
   }
   const sheet = resolveSheetRef(args.characterId, sheets, sheetsById);

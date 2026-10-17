@@ -81,6 +81,7 @@ import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
 import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -1203,12 +1204,18 @@ export const requestRollTool = {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
           description:
-            "Only for a circumstance the server cannot see, named in advantageReason. It already applies conditions, exhaustion, armor the character is untrained in, Help, spell and item effects, and the traits on the sheet; Inspiration is useInspiration, never this.",
+            "Only for a circumstance the server cannot see: advantageSource 'other', named in advantageReason. It already applies conditions, exhaustion, armor the character is untrained in, Help, spell and item effects, and the traits on the sheet; Inspiration is useInspiration, never this.",
+        },
+        advantageSource: {
+          type: "string",
+          enum: [...ADVANTAGE_SOURCES],
+          description:
+            "Where the advantage or disadvantage comes from. Only 'other', a circumstance of the fiction the server cannot see (named in advantageReason), counts: the server applies conditions, cover, light, range, Help, flanking, spells, Inspiration and features itself.",
         },
         advantageReason: {
           type: "string",
           description:
-            "The circumstance behind the advantage or disadvantage you claim, one the server cannot see itself. Without one, or naming a condition, cover, light, Help or a feature, the server sets the claim aside.",
+            "The circumstance behind the advantage or disadvantage you claim, one the server cannot see itself. Without one, the server sets the claim aside.",
         },
         targetEnemyId: {
           type: "string",

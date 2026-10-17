@@ -266,6 +266,17 @@ await test("Favored Enemy: advantage on Survival checks to track the favored ene
   assert.equal(forest.total - town.total, proficiencyBonus(3), "double proficiency in the favored terrain");
 });
 
+await test("What a check is about is its about, creature and terrain, never the words of its reason, in every table language.", async () => {
+  await kit.endFight();
+  const reasons = ["tracking the undead", "seguire le tracce dei non morti", "pister les morts-vivants", "rastrear a los no muertos", "die Untoten verfolgen"];
+  for (const reason of reasons) {
+    const named = await check(tracker, { kind: "skill_check", skill: "survival", about: "tracking", creature: "undead", reason }, [10, 4]);
+    assert.equal(d20Faces(named).length, 2, reason);
+    const unnamed = await check(tracker, { kind: "skill_check", skill: "survival", reason }, [10, 4]);
+    assert.equal(d20Faces(unnamed).length, 1, reason);
+  }
+});
+
 const dwarf = hero({ class: "fighter", level: 5, race: "hill dwarf" });
 const gnome = hero({ class: "wizard", level: 5, race: "rock gnome" });
 const deepGnome = hero({ class: "rogue", level: 5, race: "deep gnome" });

@@ -5,6 +5,7 @@
 import { sceneIds } from "@/lib/ambience/catalog";
 import { ENCOUNTER_OUTCOMES } from "@/lib/dm/encounter-logic";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
 export type ToolDef = {
   type: "function";
@@ -146,7 +147,13 @@ export const enemyAttackTool: ToolDef = {
         advantage: {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
-          description: "Situational advantage the server cannot see; counts only with advantageReason. Conditions, light, cover, range, flanking and Pack Tactics are the server's already.",
+          description: "Situational advantage the server cannot see; counts only with advantageSource 'other' and advantageReason. Conditions, light, cover, range, flanking and Pack Tactics are the server's already.",
+        },
+        advantageSource: {
+          type: "string",
+          enum: [...ADVANTAGE_SOURCES],
+          description:
+            "Where the advantage or disadvantage comes from. Only 'other', a circumstance of the fiction the server cannot see (named in advantageReason), counts: the server applies conditions, cover, light, range, Help, flanking, spells, Inspiration and features itself.",
         },
         advantageReason: { type: "string", description: "The circumstance behind advantage, in a few words." },
       },

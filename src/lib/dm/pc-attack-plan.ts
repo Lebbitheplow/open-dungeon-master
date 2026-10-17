@@ -449,6 +449,7 @@ export function planPcAttack(input: {
   // circumstance the engine does not already decide (pc-attack-options.ts).
   const claim = claimedAdvantage({
     requested: args.advantage,
+    source: args.advantageSource,
     reason: args.advantageReason,
     byAi: turn.actor === "ai",
   });

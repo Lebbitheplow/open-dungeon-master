@@ -274,6 +274,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         help: "Who they are frightened of, charmed or grappled by; it ends when that enemy falls.",
       },
       { name: "sourceCharacterId", label: "Or by character", kind: "character" },
+      { name: "magical", label: "From magic", kind: "boolean", help: "A creature's magical sleep, an enchanted trap: traits that resist magic apply." },
       REASON,
     ],
   },

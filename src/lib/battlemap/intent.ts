@@ -11,7 +11,8 @@
 export type IntentSource = "declared" | "likely";
 
 // What kind of thing is planned, which picks the badge's glyph.
-export type IntentVerbKind = "melee" | "ranged" | "spell" | "move" | "other";
+export const INTENT_VERB_KINDS = ["melee", "ranged", "spell", "move", "other"] as const;
+export type IntentVerbKind = (typeof INTENT_VERB_KINDS)[number];
 
 export type TokenIntent = {
   actorTokenId: string;

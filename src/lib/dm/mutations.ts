@@ -292,6 +292,10 @@ export const mutationTools: ToolDef[] = [
       description: "Save-ends: ability re-saved at the end of each round.",
     },
     saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
+    magical: {
+      type: "boolean",
+      description: "The condition comes from magic (a creature's magical sleep, an enchanted trap): traits that resist magic apply, such as Fey Ancestry against being put to sleep.",
+    },
     sourceEnemyId: {
       type: "string",
       description:

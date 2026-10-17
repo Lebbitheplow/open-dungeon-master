@@ -296,7 +296,7 @@ await test("pc_attack's class options and the advantage rule are in the prompt, 
     assert.ok(rule.includes(option), `pc_attack option ${option} missing from the rule`);
   }
   assert.match(rule, /A knocked-out enemy is out of the fight but alive/);
-  assert.match(rule, /counts only with advantageReason naming a circumstance the server cannot see/);
+  assert.match(rule, /counts only with advantageSource 'other' and advantageReason naming a circumstance the server cannot see/);
   assert.match(rule, /Hunter's Mark and Hex ride hits on one creature/);
   assert.match(rule, /Invisibility \(not Greater Invisibility\) ends when the invisible character attacks or casts/);
   assert.doesNotMatch(systemText(), /(pass|give|grant) advantage (for|when)[^.]*(dark|hidden|cover)/i);

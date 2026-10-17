@@ -54,12 +54,14 @@ import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
   targetCharacterId: z.string(),
   attack: z.string().optional(),
   advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
+  advantageSource: z.enum(ADVANTAGE_SOURCES).optional(),
   advantageReason: z.string().max(200).optional(),
 });
 

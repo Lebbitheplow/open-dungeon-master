@@ -289,17 +289,20 @@ export function claimHordeBreaker(budget: TurnBudget): TurnBudget {
 
 // ---- the AI's situational advantage ----
 
-// Circumstances the engine decides itself from the board, the conditions and
-// the features: a claim naming one of them is the model standing in for the
+// Where an advantage claim comes from. Every source but "other" is one the
+// engine decides itself from the board, the conditions, the spells and the
+// features: a claim from one of them is the model standing in for the
 // engine, and is dropped so the engine's own answer stands.
-const ENGINE_DECIDED =
-  /\b(prone|invisib|hidden|hiding|unseen|blind|restrain|paraly|stun|unconscious|poison|frighten|help|flank|dodg|reckless|cover|range|dark|dim|light|obscur|grappl|charm|pack tactics|bless|bane|faerie|true strike|inspir|exhaust|rage|raging|sneak)/i;
+export const ADVANTAGE_SOURCES = ["condition", "cover", "light", "range", "help", "flanking", "feature", "spell", "inspiration", "other"] as const;
+export type AdvantageSource = (typeof ADVANTAGE_SOURCES)[number];
 
 // What the AI's advantage claim on a roll is worth. A person running the
 // table rules freely (the console keeps its correction power); the AI names
-// the circumstance, and only one the engine does not already decide counts.
+// where the claim comes from, and only a circumstance the engine does not
+// decide ("other", described in the reason) counts.
 export function claimedAdvantage(input: {
   requested: Advantage | undefined;
+  source: AdvantageSource | undefined;
   reason: string | undefined;
   byAi: boolean;
 }): { requested: Advantage; note: string | null } {
@@ -311,16 +314,12 @@ export function claimedAdvantage(input: {
     return { requested, note: null };
   }
   const reason = (input.reason ?? "").trim();
-  if (!reason) {
+  if (input.source !== "other" || !reason) {
     return {
       requested: "none",
-      note: `the ${requested} claimed was set aside: name the circumstance in advantageReason (the server already applies conditions, cover, light, range, Help and features)`,
-    };
-  }
-  if (ENGINE_DECIDED.test(reason)) {
-    return {
-      requested: "none",
-      note: `the ${requested} claimed for "${reason.slice(0, 80)}" was set aside: the server decides that circumstance itself`,
+      note: input.source && input.source !== "other"
+        ? `the ${requested} claimed from ${input.source} was set aside: the server decides that itself`
+        : `the ${requested} claimed was set aside: name a circumstance the server cannot see, advantageSource "other" with it in advantageReason (the server already applies conditions, cover, light, range, Help, flanking, spells and features)`,
     };
   }
   return { requested, note: `DM ruling: ${requested} (${reason.slice(0, 80)})` };

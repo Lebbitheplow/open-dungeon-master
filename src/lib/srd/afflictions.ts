@@ -81,7 +81,8 @@ export function findDisease(text: string): Disease | null {
 
 // ---- madness ----
 
-export type MadnessKind = "short" | "long" | "indefinite";
+export const MADNESS_KINDS = ["short", "long", "indefinite"] as const;
+export type MadnessKind = (typeof MADNESS_KINDS)[number];
 
 export type MadnessEffect = {
   low: number;

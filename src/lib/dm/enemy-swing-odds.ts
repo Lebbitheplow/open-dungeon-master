@@ -19,7 +19,7 @@ import { attackContext, isIncapacitated, mergeAdvantage } from "@/lib/dm/conditi
 import { enemyAllyNear } from "@/lib/dm/enemy-approach";
 import { enemyExhaustion, hasTrait } from "@/lib/dm/monster-abilities";
 import { withLiveDodge } from "@/lib/dm/opportunity";
-import { claimedAdvantage } from "@/lib/dm/pc-attack-options";
+import { claimedAdvantage, type AdvantageSource } from "@/lib/dm/pc-attack-options";
 import { CHILL_TOUCH_DREAD } from "@/lib/dm/spell-attack-riders";
 import { cursedAgainst } from "@/lib/dm/spell-retort";
 import { inDirectSunlight } from "@/lib/dm/sunlight";
@@ -41,7 +41,7 @@ export function enemySwingOdds(input: {
   // The creature as it stands after the walk in (its live conditions).
   standing: EncounterEnemy;
   target: CharacterSheet;
-  requested: { advantage?: Advantage; advantageReason?: string };
+  requested: { advantage?: Advantage; advantageSource?: AdvantageSource; advantageReason?: string };
   ranged: boolean;
   longRange: boolean;
   // Tiles between the two, null off the map.
@@ -73,7 +73,7 @@ export function enemySwingOdds(input: {
     melee: !ranged,
     adjacent: distance === null ? !ranged : distance <= 1,
     // The AI names a circumstance the engine does not decide (pc-attack-options.ts).
-    requested: claimedAdvantage({ requested: requested.advantage, reason: requested.advantageReason, byAi: turn.actor === "ai" }).requested,
+    requested: claimedAdvantage({ requested: requested.advantage, source: requested.advantageSource, reason: requested.advantageReason, byAi: turn.actor === "ai" }).requested,
   });
   // A gale over an outdoor board: disadvantage on ranged attacks past 30
   // ft, for the monsters exactly as for the party.

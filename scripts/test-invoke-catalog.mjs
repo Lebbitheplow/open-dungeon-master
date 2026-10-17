@@ -578,6 +578,11 @@ const OMITTED_ON_PURPOSE = {
   // A person runs one character's downtime per form; the model may batch
   // several in activities, each with the same fields the form offers.
   downtime: ["activities"],
+  // A person's advantage stands as their ruling; only the AI names where it
+  // comes from (src/lib/dm/pc-attack-options.ts claimedAdvantage).
+  pc_attack: ["advantageSource"],
+  enemy_attack: ["advantageSource"],
+  request_roll: ["advantageSource"],
 };
 
 function formOmissions(entry) {

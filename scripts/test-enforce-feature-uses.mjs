@@ -136,9 +136,13 @@ await test("F:M6: Conditions a feature makes a character immune to are refused: 
 
 await test("F:M2 sleep: Fey Ancestry: magic cannot put an elf to sleep.", async () => {
   fresh(elf.id);
-  const slept = await world.invoke("set_condition", { characterId: elf.id, condition: "unconscious", rounds: 3, reason: "Sleep spell" });
+  const slept = await world.invoke("set_condition", { characterId: elf.id, condition: "unconscious", rounds: 3, magical: true, reason: "a pixie's sleeping dust" });
   assert.equal(slept.ok, false);
   assert.ok(!world.sheet(elf.id).conditions.includes("unconscious"));
+  // Knocked out by no magic, the elf goes down; the reason's words are not read.
+  const clubbed = await world.invoke("set_condition", { characterId: elf.id, condition: "unconscious", rounds: 3, reason: "un sonno profondo dopo il colpo" });
+  assert.equal(clubbed.ok, true, clubbed.error);
+  assert.ok(world.sheet(elf.id).conditions.includes("unconscious"));
 });
 
 // ---- hit points and scores ----

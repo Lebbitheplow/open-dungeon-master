@@ -276,14 +276,14 @@ test("the off-hand swing loses its modifier without the style", () => {
 
 test("Martial Arts arms the monk's unarmed strike", () => {
   const monk = ridersFor("monk", 5, "Martial Arts");
-  const fist = weaponAttackProfile(dexDerived, [], resolveAttackWeapon([], [], "unarmed"), {
+  const fist = weaponAttackProfile(dexDerived, [], resolveAttackWeapon([], [], "unarmed strike"), {
     riders: monk,
   });
   // DEX 4 beats STR -1, and level 5 rolls a d6.
   assert.equal(fist.damageExpression, "1d6+4");
   assert.equal(fist.ability, "dex");
   // Without the feature it is the SRD's 1 + STR.
-  const untrained = weaponAttackProfile(dexDerived, [], resolveAttackWeapon([], [], "unarmed"));
+  const untrained = weaponAttackProfile(dexDerived, [], resolveAttackWeapon([], [], "unarmed strike"));
   assert.equal(untrained.damageExpression, "1-1");
 });
 

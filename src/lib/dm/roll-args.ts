@@ -7,6 +7,7 @@ import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
 import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
 import { CHECK_ABOUT, CHECK_SENSES, NATURAL_TERRAINS, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
 // A check: what it is about, for the features keyed to it (Favored Enemy,
 // Stonecunning, Stone Camouflage, Actor, Dungeon Delver...): the
@@ -53,6 +54,7 @@ export const rollArgsSchema = z.object({
   // The circumstance behind an advantage or disadvantage the AI claims; with
   // none, or one the server decides itself, the claim is set aside
   // (src/lib/dm/pc-attack-options.ts claimedAdvantage).
+  advantageSource: z.enum(ADVANTAGE_SOURCES).optional(),
   advantageReason: z.string().max(120).optional(),
   // kind=damage only: the enemy this damage strikes; the server applies the
   // rolled total to that enemy the moment the dice resolve.

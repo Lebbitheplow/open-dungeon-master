@@ -110,8 +110,9 @@ function itemMatchesTerm(itemName: string, term: string): boolean {
 }
 
 // Which weapon the character attacks with. A named weapon fuzzy-matches
-// their carried equipment and the SRD table; no name picks the best
-// proficient carried weapon; nothing usable falls back to an unarmed strike.
+// their carried equipment and the SRD table, and "unarmed strike" is the
+// rules' own; no name picks the best proficient carried weapon; nothing
+// usable falls back to an unarmed strike.
 export function resolveAttackWeapon(
   equipment: EquipmentItem[],
   weaponProfs: string[],
@@ -119,7 +120,7 @@ export function resolveAttackWeapon(
 ): ResolvedWeapon {
   const arg = (weaponArg ?? "").trim();
   if (arg) {
-    if (/unarmed|fist|punch|kick/i.test(arg)) {
+    if (textKey(arg) === "unarmed strike") {
       return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
     }
     // The exact name wins over a name that merely contains it, so a

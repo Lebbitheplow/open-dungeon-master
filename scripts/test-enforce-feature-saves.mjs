@@ -86,6 +86,16 @@ await test("F:M2: Fey Ancestry gives advantage on saves against being charmed.",
   assert.equal(plain.faces.length, 1);
 });
 
+await test("What a save resists is its against, never the words of its reason, in every table language.", async () => {
+  const reasons = ["the vampire's charming gaze", "lo sguardo ammaliante del vampiro", "le regard charmeur du vampire", "la mirada hechizante del vampiro", "der bezaubernde Blick des Vampirs"];
+  for (const reason of reasons) {
+    const named = await roll(elf.id, { kind: "saving_throw", ability: "wis", against: "charmed", dc: 13, reason }, [3, 17]);
+    assert.equal(named.faces.length, 2, reason);
+    const unnamed = await roll(elf.id, { kind: "saving_throw", ability: "wis", dc: 13, reason }, [3]);
+    assert.equal(unnamed.faces.length, 1, reason);
+  }
+});
+
 await test("F:M3: Dwarven and Stout Resilience give advantage on saves against poison.", async () => {
   const dwarfSave = await roll(dwarf.id, { kind: "saving_throw", ability: "con", against: "poisoned", dc: 13 }, [3, 17]);
   assert.equal(dwarfSave.faces.length, 2);
