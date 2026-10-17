@@ -35,6 +35,8 @@ if (!process.env.CONTENT_DB_PATH && fs.existsSync(packPath)) {
 }
 export const hasPack = fs.existsSync(process.env.CONTENT_DB_PATH ?? "");
 process.chdir(dir);
+// A plain node run. Under Vitest this never fires and the run's scratch
+// root takes the directory with it (scripts/lib/test-temp-root.mjs).
 process.on("exit", () => removeTempDir(dir));
 
 register("./register-routes.mjs", import.meta.url);
@@ -341,7 +343,8 @@ export async function openWorld(options = {}) {
     },
     route: (name) => import(new URL(`../../src/app/api/${name}/route.ts`, import.meta.url).href),
     // The scratch directory is shared by every world this process opens, so
-    // it goes when the process does, not when one world is done.
+    // it goes when the process does (or the Vitest run sweeps it), not when
+    // one world is done.
     close: () => {
       clearDice();
     },

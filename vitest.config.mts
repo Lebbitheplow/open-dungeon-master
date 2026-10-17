@@ -9,6 +9,9 @@ import { BaseSequencer, type TestSpecification } from "vitest/node";
 // `node scripts/<name>.mjs` too.
 // A failure is a throw or a process.exit(1) (which Vitest turns into an
 // error); a bare process.exitCode = 1 passes unseen.
+// A worker is killed when its file is done, so a suite's process "exit"
+// handler never runs here: the global setup and the setup file own the
+// suites' scratch directories instead (scripts/lib/test-temp-root.mjs).
 
 // Files in name order, as npm test always ran them. Vitest's default runs the
 // slowest and last-failed first, which makes two runs' logs hard to compare.
@@ -40,6 +43,8 @@ export default defineConfig({
   },
   test: {
     include: ["scripts/test-*.mjs"],
+    globalSetup: ["scripts/lib/vitest-global-setup.mjs"],
+    setupFiles: ["scripts/lib/vitest-file-setup.mjs"],
     passWithNoTests: true,
     reporters: ["default", failAnEmptyRun],
     fileParallelism: false,

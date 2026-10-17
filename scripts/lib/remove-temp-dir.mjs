@@ -8,9 +8,10 @@
 // failing a suite whose assertions all passed. `force` does not cover that; it
 // only swallows ENOENT.
 //
-// So retry briefly for a lock that is merely slow to clear, then give up. The
-// directory lives under os.tmpdir(), which the OS reclaims on its own, and CI
-// runners are discarded after the job regardless.
+// So retry briefly for a lock that is merely slow to clear, then give up
+// quietly: the failure is the process's own open handle, not a fault. Under
+// Vitest the run's scratch root removes the directory after the worker has
+// exited and reports a removal that fails (scripts/lib/test-temp-root.mjs).
 import { rmSync } from "node:fs";
 
 export function removeTempDir(dir) {
