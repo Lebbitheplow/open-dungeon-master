@@ -167,4 +167,3 @@ await test("a table with nothing to rank by meaning waits on no embedder", async
 
 removeTempDir(dir);
 console.log(`retrieval-budget: ${passed} tests passed`);
-process.exit(0);

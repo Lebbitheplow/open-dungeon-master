@@ -245,4 +245,3 @@ function table(title, lines, promiseAt = 1, recordMilestone = true) {
 server.close();
 removeTempDir(dir);
 console.log("chapter-memory: all passed");
-process.exit(0);

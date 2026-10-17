@@ -345,4 +345,3 @@ const lastCalls = (n) =>
 server.close();
 removeTempDir(dir);
 console.log("model-calls: all passed");
-process.exit(0);

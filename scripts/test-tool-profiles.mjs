@@ -268,4 +268,3 @@ await test("a window the full set fits keeps the full set, uncut", async () => {
 server.close();
 removeTempDir(dir);
 console.log(`tool-profiles: ${passed} tests passed`);
-process.exit(0);
