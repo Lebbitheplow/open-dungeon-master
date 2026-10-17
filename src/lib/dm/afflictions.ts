@@ -298,7 +298,7 @@ export function inflictMadness(
 ): Record<string, unknown> {
   if (input.saveDc) {
     const ability = input.saveAbility ?? "wis";
-    const save = characterSave(campaign, sheet, { ability, dc: input.saveDc, detail: `${sheet.name}: ${ability.toUpperCase()} save against madness`, against: "madness" });
+    const save = characterSave(campaign, sheet, { ability, dc: input.saveDc, detail: `${sheet.name}: ${ability.toUpperCase()} save against madness` });
     if (save.success) {
       return { ok: true, resisted: true, note: `${sheet.name} keeps their mind (${ability.toUpperCase()} save ${save.total} vs DC ${input.saveDc}).` };
     }
@@ -558,7 +558,7 @@ export function afflictionStress(campaign: Campaign, turnId: string, sheetId: st
     }
   }
   if (cause === "damage" && holds(sheet, "madness: confusion on damage")) {
-    const save = characterSave(campaign, getSheetById(sheet.id) ?? sheet, { ability: "wis", dc: 15, detail: `${sheet.name}: WIS save against madness's confusion`, against: "madness" });
+    const save = characterSave(campaign, getSheetById(sheet.id) ?? sheet, { ability: "wis", dc: 15, detail: `${sheet.name}: WIS save against madness's confusion` });
     if (!save.success && afflictCondition(campaign, turnId, sheet.id, "confused", { rounds: 10, source: "long-term madness" })) {
       lines.push(`${sheet.name}'s madness takes hold: confused for 1 minute.`);
     }

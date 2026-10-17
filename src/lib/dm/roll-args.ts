@@ -5,6 +5,20 @@
 import { z } from "zod";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
+import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CHECK_ABOUT, CHECK_SENSES, NATURAL_TERRAINS, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
+
+// A check: what it is about, for the features keyed to it (Favored Enemy,
+// Stonecunning, Stone Camouflage, Actor, Dungeon Delver...): the
+// circumstance, the creature by its rules name (a type, or a humanoid race),
+// the terrain, and the sense it needs (a blinded or deafened character fails
+// it). src/lib/dm/roll-about.ts. request_roll's and group_check's.
+export const CHECK_KEY_FIELDS = {
+  about: z.enum([...CHECK_ABOUT, NONE]).optional(),
+  creature: z.string().trim().max(40).optional(),
+  terrain: z.enum([...NATURAL_TERRAINS, NONE]).optional(),
+  by: z.enum([...CHECK_SENSES, NONE]).optional(),
+};
 
 export const rollArgsSchema = z.object({
   // Who may read the result. Only a human DM sets anything but "public";
@@ -46,11 +60,14 @@ export const rollArgsSchema = z.object({
   // kind=damage only: damage type, so resistances and immunities apply.
   damageType: z.string().optional(),
   reason: z.string().optional(),
-  // kind=saving_throw only: what the save resists (a condition, a damage
-  // type, or "spell"/"magic" for a magical effect), so defensive traits apply
-  // server-side: Brave (frightened), Fey Ancestry (charmed), Dwarven and
-  // Stout Resilience (poison), Gnome Cunning (magic, INT/WIS/CHA).
-  against: z.string().max(60).optional(),
+  ...CHECK_KEY_FIELDS,
+  // kind=saving_throw only: what the save resists, whether it is magic, and
+  // a spell's caster's type, so defensive traits apply server-side: Brave
+  // (frightened), Fey Ancestry (charmed), Dwarven and Stout Resilience
+  // (poison), Gnome Cunning (magic, INT/WIS/CHA), Holy Nimbus.
+  against: z.enum([...SAVE_AGAINST, NONE]).optional(),
+  magical: z.boolean().optional(),
+  casterType: z.enum(CREATURE_TYPES).optional(),
   // kind=ability_check only: the tool the check is made with ("thieves'
   // tools"); a character proficient in it adds their proficiency bonus.
   tool: z.string().max(40).optional(),

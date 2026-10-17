@@ -38,6 +38,8 @@ import type {
   Gate,
 } from "@/lib/srd/authored-effects-types";
 import { textKey } from "@/lib/language/text-logic";
+import type { CheckAbout } from "@/lib/dm/roll-about";
+import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
 
 export type { Ability, AuthoredEffect, AuthoredEntry, AuthoredReaction, AuthoredSpend, Formula, Gate };
 
@@ -252,19 +254,26 @@ export function authoredCritImmune(sheet: AuthoredSheet): string | null {
 
 // ---- saves ----
 
-export function authoredSaveAdvantages(sheet: AuthoredSheet, ability: string | undefined, against: string | undefined): string[] {
-  const text = lower(against);
-  const notes: string[] = [];
-  for (const { effect, held } of activeAuthored(sheet, "save_adv")) {
-    if (effect.ability && effect.ability !== ability) {
-      continue;
-    }
-    if (effect.against && !(text && new RegExp(effect.against, "i").test(text))) {
-      continue;
-    }
-    notes.push(`${held.feature}: advantage on this save`);
-  }
-  return notes;
+// The save advantages the sheet's authored features give, each as the roll
+// it rides and the values it reads (src/lib/srd/roll-keys.ts), read with the
+// other save traits (trait-rules.ts heldSaveTraits).
+export function authoredSaveTraits(sheet: AuthoredSheet): Array<RollKey & { note: string }> {
+  return activeAuthored(sheet, "save_adv").map(({ effect, held }) => ({
+    roll: "save" as const,
+    ...(effect.ability ? { abilities: [effect.ability] } : {}),
+    ...(effect.against ? { against: effect.against } : {}),
+    ...(effect.magical ? { magical: true as const } : {}),
+    note: `${held.feature}: advantage on this save`,
+  }));
+}
+
+// The check advantages the sheet's authored features give, by skill, or by
+// ability and what the check is about.
+export function authoredCheckTraits(sheet: AuthoredSheet): Array<RollKey & { note: string }> {
+  return activeAuthored(sheet, "check_adv").flatMap(({ effect, held }) => [
+    ...(effect.skills ? [{ roll: "check" as const, skills: effect.skills }] : []),
+    ...(effect.abilities ? [{ roll: "check" as const, abilities: effect.abilities, ...(effect.about ? { about: effect.about } : {}) }] : []),
+  ].map((key) => ({ ...key, note: `${held.feature}: advantage` })));
 }
 
 export function authoredSaveProficiencies(sheet: AuthoredSheet): Ability[] {
@@ -334,7 +343,7 @@ const HELD_CHECKS: Array<{ condition: string; skills: string[]; label: string }>
 
 export function authoredRollRiders(
   sheet: AuthoredSheet,
-  input: { kind: "check" | "save" | "initiative"; ability?: string; skill?: string; reason?: string },
+  input: { kind: "check" | "save" | "initiative"; ability?: string; skill?: string; about?: CheckAbout },
 ): { advantage: string[]; spent: string[] } {
   const advantage: string[] = [];
   const spent: string[] = [];
@@ -355,15 +364,9 @@ export function authoredRollRiders(
         advantage.push(`${held.label}: advantage`);
       }
     }
-    for (const { effect, held } of activeAuthored(sheet, "check_adv")) {
-      const bySkill = skill && effect.skills?.includes(skill);
-      const byAbility =
-        input.ability &&
-        effect.abilities?.includes(input.ability as Ability) &&
-        (!effect.reason || new RegExp(effect.reason, "i").test(input.reason ?? ""));
-      if (bySkill || byAbility) {
-        advantage.push(`${held.feature}: advantage`);
-      }
+    const roll = { roll: "check" as const, skill, ability: input.ability, about: input.about };
+    for (const note of new Set(authoredCheckTraits(sheet).filter((key) => keyFits(key, roll)).map((key) => key.note))) {
+      advantage.push(note);
     }
   }
   return { advantage, spent };

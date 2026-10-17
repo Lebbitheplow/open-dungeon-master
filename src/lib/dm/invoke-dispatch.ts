@@ -139,7 +139,7 @@ export async function dispatchAdjudication(
     case "group_check":
       return handleGroupCheck(campaign, turn, rawArguments, sheets, sheetsById);
     case "check_notice":
-      return handleCheckNotice(campaign, rawArguments, sheets, sheetsById);
+      return handleCheckNotice(campaign, turn, rawArguments, sheets, sheetsById);
     case "split_damage":
       return handleSplitDamage(campaign, turn, rawArguments, sheets, sheetsById);
     case "apply_hazard":

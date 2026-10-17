@@ -2,14 +2,16 @@
 //
 // The AI's turn loop (turn.ts) used to carry its own copy of this, and the
 // two drifted: the copy skipped the table's strictness and rolled for the
-// dead. There is one now. The model's call differs in two things only, both
-// passed in: a parked roll remembers the tool call it answers, so the model
-// can be resumed with the result, and the refusals are worded for a model.
+// dead. There is one now. The model's call differs in three things only:
+// a parked roll remembers the tool call it answers, so the model can be
+// resumed with the result, the refusals are worded for a model, and a field
+// it leaves unnamed that the character's traits would read is asked for.
 // Everything else is shared: the expression comes from the sheet, conditions
 // can decide the roll outright, an inspiration die is spent whether the
 // dice are physical or digital, an initiative roll feeds the encounter, and
 // a damage roll aimed at an enemy applies itself.
 import { claimedAdvantage } from "@/lib/dm/pc-attack-options";
+import { askedFields, unnamedTraitFields } from "@/lib/dm/roll-feature-riders";
 import { rollExpression } from "@/lib/dice";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
@@ -115,13 +117,20 @@ export function handleRequestRoll(
     };
   }
 
-  const resolved = resolveRollExpression(
-    args,
-    sheet,
-    sheet
-      ? rollExtrasFor(campaign, sheet, args.kind)
-      : { encumbrance: campaign.gameSettings.variantRules.encumbrance },
-  );
+  const extras = sheet ? rollExtrasFor(campaign, sheet, args.kind) : { encumbrance: campaign.gameSettings.variantRules.encumbrance };
+  // A trait of the character's that a field the model left unnamed would
+  // call on (src/lib/dm/roll-about.ts): it names the field, or 'none', before
+  // anything is rolled, so the trait is never lost to an omission.
+  if (turn.actor === "ai" && sheet) {
+    const asked = unnamedTraitFields(sheet, args);
+    if (asked.length) {
+      return {
+        error: `${sheet.name} holds a trait this roll can call on. Name ${askedFields(asked)}, as the fiction is, and send the roll again. Nothing was rolled.`,
+        retry: true,
+      };
+    }
+  }
+  const resolved = resolveRollExpression(args, sheet, extras);
   if ("error" in resolved) {
     return toolError(resolved);
   }

@@ -43,6 +43,7 @@ import { laySpellConditionsOnEnemy } from "@/lib/dm/spell-effects";
 import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { saveAgainst } from "@/lib/dm/roll-about";
 
 // A turn for a character's saves and damage, closed once used, as an
 // opportunity attack's is (src/lib/dm/opportunity-strike.ts).
@@ -195,7 +196,7 @@ function strike(
   }
   return withZoneTurn(campaign.id, (turn) => {
     const save = trigger.save && !held
-      ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, [trigger.type, "spell"].filter(Boolean).join(" "))
+      ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, saveAgainst({ damageType: trigger.type, magical: true }))
       : null;
     const failed = !held && (trigger.save ? !save?.success : true);
     if (trigger.save && !held) {

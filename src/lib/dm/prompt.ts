@@ -17,6 +17,8 @@ import { featTwinOf } from "@/lib/srd/feat-effects";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { authoredFeatureTags } from "@/lib/srd/authored-effects";
+import { rollKeyCue } from "@/lib/srd/roll-keys";
+import { heldRollKeys } from "@/lib/dm/roll-feature-riders";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { presetFor, packFor } from "@/lib/worlds/preset";
@@ -75,6 +77,8 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
+import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -521,6 +525,12 @@ export function describeSheet(
   ];
   if (loadLine) {
     lines.push(loadLine);
+  }
+  // The fields of a roll their traits read (src/lib/srd/roll-keys.ts), so
+  // the call names them at once rather than being asked.
+  const keyCue = rollKeyCue(heldRollKeys(sheet));
+  if (keyCue) {
+    lines.push(`  Their traits read these fields of request_roll and group_check (name them, or 'none'): ${keyCue}`);
   }
   const customClass = findCustomClass(sheet.class);
   if (customClass) {
@@ -1207,13 +1217,23 @@ export const requestRollTool = {
         },
         reason: {
           type: "string",
-          description:
-            "Short private note on what this roll resolves, naming what a check is about (\"tracking the undead\", \"the stonework of the gate\"): the server reads it for the features keyed to it.",
+          description: "Short private note on what this roll resolves.",
         },
+        ...CHECK_KEY_PROPERTIES,
         against: {
           type: "string",
+          enum: [...SAVE_AGAINST, NONE],
           description:
-            "saving_throw only: what the save resists: a condition (frightened, charmed, poisoned), a damage type, or 'spell' for a magical effect, with its caster's type when known ('spell cast by a fiend'). The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Gnome Cunning, Countercharm and Holy Nimbus from it.",
+            "saving_throw only: what the save resists: a condition (frightened, charmed, poisoned), a damage type (fire, poison), disease, dismount for being thrown from a mount, or 'none'. The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Countercharm and the subclass traits from it.",
+        },
+        magical: {
+          type: "boolean",
+          description: "saving_throw only: the effect is a spell or other magic (Gnome Cunning, Spell Resistance).",
+        },
+        casterType: {
+          type: "string",
+          enum: [...CREATURE_TYPES],
+          description: "saving_throw against a spell: the caster's creature type, when known (Holy Nimbus).",
         },
         tool: {
           type: "string",

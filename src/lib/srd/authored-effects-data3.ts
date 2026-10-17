@@ -269,7 +269,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
     subclass: "The Undying",
     effects: [
       { kind: "attacked_disadv", from: ["undead"], note: "Lost against an undead the warlock attacks; the DM keeps to that." },
-      { kind: "save_adv", against: "disease" },
+      { kind: "save_adv", against: ["disease"] },
     ],
   },
 
@@ -287,7 +287,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   "wizard::Spell Resistance": {
     subclass: "School of Abjuration",
     effects: [
-      { kind: "save_adv", against: "spell|magic" },
+      { kind: "save_adv", magical: true },
       { kind: "resist", types: "all", spells: true },
     ],
   },

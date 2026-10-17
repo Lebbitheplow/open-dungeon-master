@@ -77,11 +77,9 @@ test("Elemental Adept names its type on the sheet, and floors the dice of that t
 
 test("Dungeon Delver notices traps and secret doors; Defensive Duelist needs the feat and a finesse weapon in hand", () => {
   const delver = sheet(["Dungeon Delver"]);
-  assert.equal(dungeonDelverNotices(delver, "a pressure plate trap under the rug"), true);
-  assert.equal(dungeonDelverNotices(delver, "the secret door behind the tapestry"), true);
-  assert.equal(dungeonDelverNotices(delver, "a concealed passage"), true);
-  assert.equal(dungeonDelverNotices(delver, "an ambusher in the rafters"), false);
-  assert.equal(dungeonDelverNotices(sheet([]), "a trap"), false);
+  assert.equal(dungeonDelverNotices(delver, "traps_and_secret_doors"), true);
+  assert.equal(dungeonDelverNotices(delver, undefined), false);
+  assert.equal(dungeonDelverNotices(sheet([]), "traps_and_secret_doors"), false);
   const duelist = sheet(["Defensive Duelist"], { equipment: [{ name: "Rapier", qty: 1, equipped: true }] });
   assert.equal(defensiveDuelistBonus(duelist, 3), 3);
   assert.equal(defensiveDuelistBonus(sheet(["Defensive Duelist"], { equipment: [{ name: "Rapier", qty: 1 }] }), 3), null, "not in hand");

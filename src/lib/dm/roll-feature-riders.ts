@@ -7,13 +7,17 @@
 // Split from rolls.ts, which folds these into the expression. Pure.
 
 import type { Advantage } from "@/lib/dice";
+import { named } from "@/lib/dm/roll-about";
 import { heldInspiration } from "@/lib/dm/roll-riders";
 import type { RollArgs } from "@/lib/dm/roll-args";
 import { computeSheetDerived, findSkill } from "@/lib/srd";
-import { authoredRollRiders } from "@/lib/srd/authored-effects";
-import { traitCheckRiders } from "@/lib/srd/check-traits";
+import { authoredCheckTraits, authoredRollRiders } from "@/lib/srd/authored-effects";
+import { heldCheckTraits, traitCheckRiders } from "@/lib/srd/check-traits";
+import { heldFeatChecks } from "@/lib/srd/feat-combat";
+import { unnamedRollKeys, type RollGap, type RollKey } from "@/lib/srd/roll-keys";
+import { lostSenses } from "@/lib/srd/sense-checks";
 import { itemCheckRiders } from "@/lib/srd/item-check-riders";
-import { initiativeAdvantage, traitSaveAdvantages } from "@/lib/srd/trait-rules";
+import { heldSaveTraits, initiativeAdvantage, traitSaveAdvantages } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
@@ -38,6 +42,57 @@ function findInspiration(
     }
   }
   return null;
+}
+
+// A skill check's skill, by its id or name as the call writes it.
+function rollSkill(args: RollArgs) {
+  return args.kind === "skill_check" ? findSkill((args.skill ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_")) : undefined;
+}
+
+// The check carries the skill's proficiency (or expertise).
+function proficientIn(sheet: CharacterSheet, skill: string | undefined): boolean {
+  return Boolean(skill && (sheet.proficiencies?.skills?.includes(skill) || (sheet.proficiencies?.expertise ?? []).includes(skill)));
+}
+
+// Every key the roller's traits, feats and conditions hold, for the ask
+// below and for GAME STATE (prompt.ts rollKeyCue).
+export function heldRollKeys(sheet: CharacterSheet): Array<RollKey & { feat?: string }> {
+  return [...heldCheckTraits(sheet), ...authoredCheckTraits(sheet), ...lostSenses(sheet.conditions), ...heldFeatChecks(sheet), ...heldSaveTraits(sheet)];
+}
+
+// The fields a model's request_roll leaves unnamed that a trait the roller
+// holds reads, with the values that would answer it (src/lib/srd/roll-keys.ts):
+// the model is asked for them before anything is rolled, so the trait is
+// never lost to an omission. Only the held traits are read, the same ones
+// the riders below apply; a roller who holds none is never asked.
+export function unnamedTraitFields(sheet: CharacterSheet, args: RollArgs): RollGap[] {
+  const roll = args.kind === "saving_throw" ? "save" : args.kind === "skill_check" || args.kind === "ability_check" ? "check" : null;
+  if (!roll) {
+    return [];
+  }
+  const skill = rollSkill(args);
+  // The feats' riders ride skill checks only (rolls.ts featCheckRider).
+  const keys = heldRollKeys(sheet).filter((key) => key.roll === roll && (skill || !key.feat));
+  return unnamedRollKeys(
+    { roll, skill: skill?.id, ability: args.ability ?? skill?.ability, proficient: proficientIn(sheet, skill?.id), about: args.about, creature: args.creature, terrain: args.terrain, by: args.by, against: args.against, magical: args.magical, casterType: args.casterType },
+    keys,
+  );
+}
+
+// The fields an ask names, with the values that would answer them, merged
+// over every roller asked (request_roll, group_check).
+export function askedFields(gaps: RollGap[]): string {
+  const merged = new Map<RollGap["field"], Set<string>>();
+  for (const gap of gaps) {
+    const values = merged.get(gap.field) ?? new Set<string>();
+    gap.values.forEach((value) => values.add(value));
+    merged.set(gap.field, values);
+  }
+  return [...merged]
+    .map(([field, values]) =>
+      field === "magical" ? "magical: true or false" : field === "creature" ? "creature: its type by the rules name, or 'none'" : `${field}: ${[...values].join(", ")}, or 'none'`,
+    )
+    .join("; ");
 }
 
 export type RollFeatureRiders = {
@@ -68,16 +123,16 @@ export function rollFeatureRiders(
   },
 ): RollFeatureRiders | ToolError {
   const { kind: derivationKind, ability: derivationAbility } = context;
-  const skillId =
-    derivationKind === "skill_check" ? findSkill((args.skill ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_"))?.id : undefined;
+  const skillId = rollSkill(args)?.id;
   // Traits that give advantage on a save: Danger Sense on DEX (while the
   // barbarian can see and hear), and the ones keyed to what the save resists
   // (Brave, Fey Ancestry, Dwarven and Stout Resilience, Gnome Cunning). The
-  // caller names what it resists through `against`; the recurring save-ends
-  // re-roll reads the same rules (condition-tick.ts).
+  // caller names what it resists through `against`, `magical` and
+  // `casterType`; the recurring save-ends re-roll reads the same rules
+  // (condition-tick.ts).
   const traitSaves =
     sheet && derivationKind === "saving_throw"
-      ? traitSaveAdvantages(sheet, derivationAbility, args.against)
+      ? traitSaveAdvantages(sheet, derivationAbility, { against: named(args.against), magical: args.magical, casterType: args.casterType })
       : [];
   // Feral Instinct: advantage on initiative.
   const feral = sheet && derivationKind === "initiative" ? initiativeAdvantage(sheet) : null;
@@ -98,9 +153,11 @@ export function rollFeatureRiders(
       ? traitCheckRiders(sheet, {
           ability: derivationAbility,
           skill: checkSkill,
-          reason: args.reason,
+          about: named(args.about),
+          creature: named(args.creature),
+          terrain: named(args.terrain),
           proficiencyBonus: checkDerived.proficiencyBonus,
-          proficient: Boolean(checkSkill && (sheet.proficiencies?.skills?.includes(checkSkill) || (sheet.proficiencies?.expertise ?? []).includes(checkSkill))),
+          proficient: proficientIn(sheet, checkSkill),
           // The proficiency the skill already carries (expertise twice).
           applied: (checkSkill ? checkDerived.parts.skills[checkSkill] ?? [] : []).find((part) => /proficiency|expertise/.test(part.label))?.value ?? 0,
           movedLittle: context.movedLittle,
@@ -126,7 +183,7 @@ export function rollFeatureRiders(
   // Authored subclass features on checks (Steady Eye, a spent Elegant
   // Maneuver or Vigilant Blessing): src/lib/srd/authored-effects.ts.
   const authoredRolls = sheet && effectKind
-    ? authoredRollRiders(sheet, { kind: effectKind, ability: derivationAbility, skill: skillId, reason: args.reason })
+    ? authoredRollRiders(sheet, { kind: effectKind, ability: derivationAbility, skill: skillId, about: named(args.about) })
     : { advantage: [], spent: [] };
   // A held Bardic Inspiration die rides along on the next d20 the character
   // rolls and is spent by doing so; the caller clears the condition.

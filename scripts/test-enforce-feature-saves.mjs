@@ -70,12 +70,12 @@ const stout = world.addHero({
 });
 
 await test("F:M1: Gnome Cunning gives advantage on INT, WIS and CHA saves against magic.", async () => {
-  const magic = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "spell (hold person)", dc: 13 }, [3, 17]);
+  const magic = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "paralyzed", magical: true, dc: 13 }, [3, 17]);
   assert.equal(magic.out.ok, true, magic.out.error);
   assert.equal(magic.faces.length, 2, "two d20s against a spell");
-  const mundane = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "a falling rock", dc: 13 }, [3]);
+  const mundane = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "bludgeoning", dc: 13 }, [3]);
   assert.equal(mundane.faces.length, 1, "one d20 against something that is not magic");
-  const dex = await roll(gnome.id, { kind: "saving_throw", ability: "dex", against: "spell", dc: 13 }, [3]);
+  const dex = await roll(gnome.id, { kind: "saving_throw", ability: "dex", magical: true, dc: 13 }, [3]);
   assert.equal(dex.faces.length, 1, "DEX saves are not covered");
 });
 

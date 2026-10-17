@@ -341,7 +341,8 @@ await test("The feature rules match the feature engine: Inspiration, the Channel
   assert.match(text, /Damage goes to its tool at the full amount with its type/);
   assert.doesNotMatch(text, /apply the frightened condition/i);
   const roll = requestRollTool.function.parameters.properties;
-  assert.match(roll.against.description, /'spell'/);
+  assert.ok(roll.against.enum.includes("frightened") && roll.against.enum.includes("poison"));
+  assert.match(roll.magical.description, /spell or other magic/);
   assert.match(roll.tool.description, /proficiency bonus/);
   assert.match(roll.useInspiration.description, /Inspiration/);
 });

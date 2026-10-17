@@ -207,13 +207,13 @@ await test("F29: Stonecunning on an expert's History check adds no third profici
     class: "rogue", level: 5, race: "hill_dwarf", abilities: { int: 10 },
     proficiencies: { ...FIGHTER.proficiencies, skills: ["history"], expertise: ["history"] },
   });
-  const resolved = resolveRollExpression({ kind: "skill_check", skill: "history", reason: "origin of stonework" }, world.sheet(rogue.id));
+  const resolved = resolveRollExpression({ kind: "skill_check", skill: "history", reason: "origin of stonework", about: "stonework" }, world.sheet(rogue.id));
   assert.match(resolved.expression, /^1d20\+6$/, resolved.expression);
   const plain = world.addHero({
     class: "fighter", level: 5, race: "hill_dwarf", abilities: { int: 10 },
     proficiencies: { ...FIGHTER.proficiencies, skills: [], expertise: [] },
   });
-  const untrained = resolveRollExpression({ kind: "skill_check", skill: "history", reason: "origin of stonework" }, world.sheet(plain.id));
+  const untrained = resolveRollExpression({ kind: "skill_check", skill: "history", reason: "origin of stonework", about: "stonework" }, world.sheet(plain.id));
   assert.match(untrained.expression, /^1d20\+6$/, "untrained: double proficiency from Stonecunning");
   world.close();
 });

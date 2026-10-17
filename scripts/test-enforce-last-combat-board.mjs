@@ -224,13 +224,13 @@ await test("A silvered weapon passes resistance and immunity to nonmagical attac
 
 await test("A blinded creature automatically fails any ability check that requires sight; a deafened one any that requires hearing.", async () => {
   world.patch(fighter.id, { conditions: ["blinded"], conditionMeta: {} });
-  const spot = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", reason: "spot the tracks in the mud" });
+  const spot = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", by: "sight", reason: "spot the tracks in the mud" });
   assert.equal(spot.ok, true, spot.error);
   assert.equal(spot.result.autoFailed, true, "a blinded character rolled to spot tracks");
-  const listen = await mk.forced([10], () => world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", reason: "listen at the door" }));
+  const listen = await mk.forced([10], () => world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", by: "hearing", reason: "listen at the door" }));
   assert.notEqual(listen.result.autoFailed, true, "a blinded character failed a hearing check");
   world.patch(fighter.id, { conditions: ["deafened"], conditionMeta: {} });
-  const hear = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", reason: "listen at the door" });
+  const hear = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", by: "hearing", reason: "listen at the door" });
   assert.equal(hear.result.autoFailed, true, "a deafened character rolled to listen");
   world.patch(fighter.id, { conditions: [], conditionMeta: {} });
 });

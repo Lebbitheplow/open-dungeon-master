@@ -2008,10 +2008,11 @@ async function resolveModelCall(
   // "false" sent as a string is false (src/lib/dm/arg-coerce.ts).
   const rawArguments = strictBooleanArgs(toolCall.rawArguments);
   // The model's damage, healing and binding conditions are the server's to
-  // roll (src/lib/dm/ai-gate.ts). The encounter and mutation calls below run
-  // their handlers directly, so they are held to it here, once a call is
-  // past its cap (the gate may roll dice or a save the table sees); the rest
-  // reach the gate in dispatchAdjudication, and are not gated twice.
+  // roll (src/lib/dm/ai-gate.ts). The encounter and mutation calls and
+  // request_roll below run their handlers directly, so they are held to it
+  // here, a capped call once it is past its cap (the gate may roll dice or a
+  // save the table sees); the rest reach the gate in dispatchAdjudication,
+  // and are not gated twice.
   const gate = () => gateAiCall(name, rawArguments, { campaign, turn, sheetsById });
   if (ENCOUNTER_NAMES.has(name)) {
     if (turn.encounterCount >= ENCOUNTER_CAP_PER_TURN) {
@@ -2067,9 +2068,14 @@ async function resolveModelCall(
     return result;
   }
   // One request_roll for both callers (src/lib/dm/invoke-roll.ts); the
-  // model's parks remember the call they answer.
+  // model's parks remember the call they answer. Held to the gate here, as
+  // dispatchAdjudication holds the console's path.
   if (name === "request_roll") {
-    const result = handleRequestRoll(campaign, turn, rawArguments, sheets, sheetsById, realDiceUserIds, {
+    const gated = gate();
+    if ("result" in gated) {
+      return gated.result;
+    }
+    const result = handleRequestRoll(campaign, turn, gated.args, sheets, sheetsById, realDiceUserIds, {
       toolCallId: toolCall.id ?? null,
     });
     if (result.parked) {
