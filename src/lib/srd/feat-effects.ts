@@ -187,6 +187,13 @@ export function authoredFeatDesc(name: string): string | null {
   return featRow(name)?.desc ?? null;
 }
 
+// The prerequisite of one of ODM's own feats ("" for none); null for a
+// content pack's feat, whose row carries its own.
+export function authoredFeatPrerequisite(name: string): string | null {
+  const row = featRow(name);
+  return row ? (row.prerequisite ?? "") : null;
+}
+
 // ---- the half-feats ----
 
 export type FeatIncrease = { from: Ability[]; amount: 1 };

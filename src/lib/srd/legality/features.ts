@@ -231,9 +231,59 @@ function prerequisiteText(raw: string): string {
 const MARTIAL_WEAPONS = SRD_WEAPONS.filter((weapon) => weapon.category === "martial").map((weapon) => weapon.name.toLowerCase());
 const RANGED_WEAPONS = SRD_WEAPONS.filter((weapon) => weapon.kind === "ranged").map((weapon) => weapon.name.toLowerCase());
 
-// Whether one requirement is not met. A requirement of a kind the server
-// cannot check (a prestige rating, a class feature by name) is met.
-function requirementUnmet(requirement: string, who: FeatCandidate): boolean {
+// What the builder has not settled yet, for a prerequisite that asks about
+// it: an ability score not yet assigned, a race or class not yet chosen,
+// skill picks still open. The server leaves this out; a requirement it
+// names is "waiting" rather than unmet, because a later pick may meet it.
+export type FeatWaiting = {
+  abilities?: Ability[];
+  // How far a score may still rise from picks left open (a racial bonus
+  // not yet placed, an improvement not yet resolved).
+  abilityRoom?: Partial<Record<Ability, number>>;
+  race?: boolean;
+  armor?: boolean;
+  casts?: boolean;
+  skills?: boolean;
+  tools?: boolean;
+  weapons?: boolean;
+};
+
+// One requirement as judged: met, plainly unmet, waiting on a pick the
+// builder has not made, or of a kind only the table can check. The note
+// says it in words ("Needs Strength 13, you have 12"), so no reader has to
+// go by its color.
+export type RequirementCheck = {
+  requirement: string;
+  state: "met" | "unmet" | "waiting" | "unchecked";
+  note: string;
+};
+
+export type PrerequisiteCheck = {
+  // The prerequisite as the feat states it; "" when it asks nothing.
+  text: string;
+  // "none" for a feat with no prerequisite. Unmet wins over waiting, and
+  // waiting over met; a requirement only the table checks counts as met,
+  // as it does on the server.
+  state: "none" | "met" | "unmet" | "waiting";
+  requirements: RequirementCheck[];
+};
+
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+const phrase = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+const orList = (items: string[]) =>
+  items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+
+// One requirement, judged. A requirement of a kind the server cannot check
+// (a prestige rating, a class feature by name) is the table's.
+function requirementCheck(requirement: string, who: FeatCandidate, waiting: FeatWaiting = {}): RequirementCheck {
+  const verdict = (state: RequirementCheck["state"], note: string): RequirementCheck => ({ requirement, state, note });
+  const unchecked = () => verdict("unchecked", `${sentence(requirement)}: the table checks this`);
+  const held = (yes: boolean, waits: boolean | undefined, waitsOn: string) =>
+    yes
+      ? verdict("met", `${sentence(requirement)}, you have it`)
+      : waits
+        ? verdict("waiting", `Waiting on ${waitsOn}`)
+        : verdict("unmet", `Needs ${phrase(requirement)}`);
   const part = requirement.toLowerCase().replace(/^(?:the|a|an) /, "").trim();
   const scores = /^(\w+)(?: or (\w+))? (\d+)(?: or higher)?$/.exec(part);
   if (scores) {
@@ -241,60 +291,106 @@ function requirementUnmet(requirement: string, who: FeatCandidate): boolean {
       .filter(Boolean)
       .map((name) => ABILITY_BY_NAME[name.toLowerCase()])
       .filter(Boolean);
-    return abilities.length > 0 && !abilities.some((ability) => who.abilities[ability] >= Number(scores[3]));
+    if (!abilities.length) {
+      return unchecked();
+    }
+    const need = Number(scores[3]);
+    const pending = abilities.filter((ability) => waiting.abilities?.includes(ability));
+    const meeting = abilities.find((ability) => !pending.includes(ability) && who.abilities[ability] >= need);
+    if (meeting) {
+      return verdict("met", `${ABILITY_NAMES[meeting]} ${need}, you have ${who.abilities[meeting]}`);
+    }
+    if (pending.length) {
+      return verdict("waiting", `Waiting on ${orList(pending.map((ability) => ABILITY_NAMES[ability]))}`);
+    }
+    const rising = abilities.find((ability) => who.abilities[ability] + (waiting.abilityRoom?.[ability] ?? 0) >= need);
+    if (rising) {
+      return verdict(
+        "waiting",
+        `${ABILITY_NAMES[rising]} ${need}, you have ${who.abilities[rising]}: waiting on your open ability score picks`,
+      );
+    }
+    const have = abilities.map((ability) => String(who.abilities[ability]));
+    return verdict("unmet", `Needs ${orList(abilities.map((ability) => ABILITY_NAMES[ability]))} ${need}, you have ${have.join(" and ")}`);
   }
   const armor = /^proficiency with (light|medium|heavy) armor$/.exec(part);
   if (armor) {
     const sample = { light: "Leather", medium: "Breastplate", heavy: "Plate" }[armor[1] as "light" | "medium" | "heavy"];
     const piece = SRD_ARMOR.find((entry) => entry.name === sample);
-    return !(piece && isArmorProficient(who.armor, piece));
+    return held(Boolean(piece && isArmorProficient(who.armor, piece)), waiting.armor, "your class");
   }
   if (/^(?:ability to cast (?:at least )?one spell|ability to cast spells|spellcasting or pact magic)$/.test(part)) {
-    return !who.casts;
+    return held(who.casts, waiting.casts, "your class");
   }
   if (/^elf or half-elf$/.test(part)) {
-    return !/elf|drow/i.test(`${who.raceId} ${who.raceName}`);
+    return held(/elf|drow/i.test(`${who.raceId} ${who.raceName}`), waiting.race, "your race");
   }
   const level = /^(\d+)(?:st|nd|rd|th) level or higher$/.exec(part);
   if (level) {
-    return who.level !== undefined && who.level < Number(level[1]);
+    if (who.level === undefined) {
+      return unchecked();
+    }
+    return who.level < Number(level[1])
+      ? verdict("unmet", `Needs level ${level[1]}, you are level ${who.level}`)
+      : verdict("met", `Level ${level[1]}, you are level ${who.level}`);
   }
   const trained = /^proficiency (?:in|with) (?:at least )?(?:one of the following skills: )?(.+?)(?: skills?)?$/.exec(part);
   if (!trained) {
-    return false;
+    return unchecked();
   }
   const wanted = trained[1];
   const skills = ALL_SKILLS.filter((id) => new RegExp(`\\b${id.replace(/_/g, " ")}\\b`).test(wanted));
   if (skills.length) {
-    return who.skills !== undefined && !skills.some((skill) => who.skills!.some((held) => lower(held) === skill));
+    return who.skills === undefined
+      ? unchecked()
+      : held(skills.some((skill) => who.skills!.some((entry) => lower(entry) === skill)), waiting.skills, "your skill picks");
   }
   if (/\btype of vehicle\b|\bvehicles?\b/.test(wanted)) {
-    return who.tools !== undefined && !who.tools.some((tool) => /vehicle/i.test(tool));
+    return who.tools === undefined
+      ? unchecked()
+      : held(who.tools.some((tool) => /vehicle/i.test(tool)), waiting.tools, "your tool picks");
   }
   const weapon = /^(?:one |a )?(martial|simple|ranged|melee)(?: (ranged|melee))? weapons?$/.exec(wanted);
   if (weapon && who.weapons !== undefined) {
-    const held = who.weapons.map(lower);
+    const owned = who.weapons.map(lower);
     const names = weapon[1] === "martial" ? MARTIAL_WEAPONS : weapon[1] === "ranged" || weapon[2] === "ranged" ? RANGED_WEAPONS : [];
     const broad = weapon[1] === "simple" ? ["simple", "martial"] : weapon[1] === "martial" ? ["martial"] : ["simple", "martial"];
-    return !(held.some((entry) => broad.includes(entry)) || held.some((entry) => names.includes(entry)));
+    return held(
+      owned.some((entry) => broad.includes(entry)) || owned.some((entry) => names.includes(entry)),
+      waiting.weapons,
+      "your class",
+    );
   }
-  return false;
+  return unchecked();
 }
 
-// What a feat's prerequisite asks that this character does not meet, or
-// null. Each requirement in turn ("Wisdom 13 or higher and the Ki class
-// feature", "Proficiency with Survival, 8th level or higher"); one the
-// server cannot check is left to the table.
-export function unmetPrerequisite(prerequisite: string, who: FeatCandidate): string | null {
+// A feat's prerequisite judged requirement by requirement ("Wisdom 13 or
+// higher and the Ki class feature", "Proficiency with Survival, 8th level
+// or higher"). The server and the builder's feat pickers both read feats
+// through this, so a feat the picker offers is one the save accepts.
+export function checkPrerequisite(prerequisite: string, who: FeatCandidate, waiting?: FeatWaiting): PrerequisiteCheck {
   const text = prerequisiteText(prerequisite);
   if (!text) {
-    return null;
+    return { text: "", state: "none", requirements: [] };
   }
   const requirements = text
     .split(/\s+and\s+|,\s*(?=(?:proficien|strength|dexterity|constitution|intelligence|wisdom|charisma|the ability|ability)\b|\d)/i)
     .map((entry) => entry.trim())
-    .filter(Boolean);
-  return requirements.some((requirement) => requirementUnmet(requirement, who)) ? text : null;
+    .filter(Boolean)
+    .map((requirement) => requirementCheck(requirement, who, waiting));
+  const state = requirements.some((entry) => entry.state === "unmet")
+    ? "unmet"
+    : requirements.some((entry) => entry.state === "waiting")
+      ? "waiting"
+      : "met";
+  return { text, state, requirements };
+}
+
+// What a feat's prerequisite asks that this character does not meet, or
+// null. One the server cannot check is left to the table.
+export function unmetPrerequisite(prerequisite: string, who: FeatCandidate): string | null {
+  const check = checkPrerequisite(prerequisite, who);
+  return check.state === "unmet" ? check.text : null;
 }
 
 export type FeatVerdict = { problems: string[]; feats: string[]; slotsUsed: number };
