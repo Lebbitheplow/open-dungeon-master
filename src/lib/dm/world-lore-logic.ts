@@ -4,6 +4,8 @@
 // directly; the impure rim is src/lib/db/lore.ts.
 
 import { bestPassage } from "./passage.ts";
+import { canonMeaning } from "../worldforge/canon.ts";
+import type { Canon } from "../worldforge/model.ts";
 
 export const WORLD_LORE_CATEGORIES = [
   "geography",
@@ -53,6 +55,10 @@ export type WorldLoreEntry = {
   // (draft, alternate, retired): src/lib/db/world-publication.ts. Absent for
   // an entry with no world entry, or a canon one.
   unpublished?: boolean;
+  // The canon state that holds it back, for the paths that hand lore to a
+  // model (src/lib/worldforge/canon.ts): a draft is marked, an alternate is
+  // marked as another telling, a retired one is left out. Absent when canon.
+  canon?: Exclude<Canon, "canon">;
   style: LoreStyle;
   createdAt: string;
   updatedAt: string;
@@ -320,8 +326,11 @@ export type LoreHeldInput = { entry: WorldLoreEntry; reason: string; close: bool
 function entryLine(entry: WorldLoreEntry, excerpt: string): string {
   // A draft WorldForge holds back from players (src/lib/db/world-publication.ts)
   // is no more theirs than a DM-only entry: the DM may use it, not state it.
-  const secret =
-    entry.visibility === "dm"
+  // The words for its state are the canon policy's (src/lib/worldforge/canon.ts),
+  // so an alternate reads as another telling and not as a draft.
+  const secret = entry.canon
+    ? ` (${canonMeaning(entry.canon, true)}; the party does not know this)`
+    : entry.visibility === "dm"
       ? " (SECRET: the party does not know this)"
       : entry.unpublished
         ? " (NOT CANON YET: the party does not know this; use it only if it fits)"
