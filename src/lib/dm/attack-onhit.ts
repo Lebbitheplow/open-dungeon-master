@@ -12,6 +12,7 @@
 //     (src/lib/dm/turn-end.ts).
 
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
@@ -19,7 +20,7 @@ import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { isIncapacitated, removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { pushTokenAway } from "@/lib/dm/map-tools";
@@ -210,6 +211,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
         meta[name] = { rounds, source: coat.name, ...(name === "unconscious" ? { endsOnDamage: true } : {}) };
       }
       patchEnemyConditions(fresh.id, [...new Set([...fresh.conditions, ...laid])], meta);
+      settleEnemyIncapacitation(fresh.id, isIncapacitated(fresh.conditions));
       publishEncounter(campaign.id);
       lines.push(`${label}: ${enemy.displayName} fails the CON save (${save.autoFailed ? "automatic" : save.total} vs DC ${coat.dc}) and is ${laid.join(" and ")}.`);
     }
@@ -292,6 +294,7 @@ export function hurlThroughHell(campaign: Campaign, warlockId: string, enemyId: 
     meta[name] = untilTurnEnd(warlockId, { source: warlockId });
   }
   patchEnemyConditions(enemy.id, conditions, meta);
+  settleEnemyIncapacitation(enemy.id, isIncapacitated(enemy.conditions));
   publishEncounter(campaign.id);
   return `Hurl Through Hell: ${enemy.displayName} vanishes through the lower planes until the end of the warlock's next turn.`;
 }

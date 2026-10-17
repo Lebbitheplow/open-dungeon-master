@@ -8,6 +8,7 @@
 // point after 1d4 hours (src/lib/dm/death.ts rollStableTimer).
 //
 // This module must not import mutations.ts (which imports it).
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { patchSheet } from "@/lib/db/sheets";
@@ -151,7 +152,7 @@ export function handleStabilize(
   // The action (or bonus action) before the method: asking whether to try
   // the check instead is moot when it cannot be paid for.
   const budget = encounter && !readied
-    ? budgetFor(encounter, healer.id, attacksAllowedFor(healer))
+    ? budgetFor(encounter, healer.id, attacksAllowedFor(healer), conditionTurnShape(healer.conditions))
     : null;
   const spent = budget ? spendAction(budget, quick ? "bonus" : "action", quick ? `Stabilizing a creature (${quick})` : "Stabilizing a creature", healer.name) : null;
   if (spent && !spent.ok) {
@@ -317,7 +318,7 @@ export function healerKitUse(
     if (far && healer.id !== target.id) {
       return far;
     }
-    const budget = budgetFor(encounter, healer.id, attacksAllowedFor(healer));
+    const budget = budgetFor(encounter, healer.id, attacksAllowedFor(healer), conditionTurnShape(healer.conditions));
     if (budget) {
       const spent = spendAction(budget, "action", "the healer's kit", healer.name);
       if (!spent.ok) {

@@ -24,13 +24,15 @@ import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
+import { lifetimeAtSlot } from "@/lib/dm/spell-effects";
+import { withTempHpClaim, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { healDeathHook } from "@/lib/dm/death";
 import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-reach";
 import { castShares } from "@/lib/srd/spell-mechanics";
 import { castRedirect } from "@/lib/dm/cast-redirect";
 import { castCure } from "@/lib/dm/cure-spell";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import { handleDispelMagic } from "@/lib/dm/dispel";
-import type { ConditionMeta } from "@/lib/dm/condition-logic";
 import { summonSpellFor } from "@/lib/srd/summon-spells";
 import { castSummon } from "@/lib/dm/summon-cast";
 import { castFindFamiliar, isFindFamiliar } from "@/lib/dm/familiar-cast";
@@ -314,16 +316,20 @@ export function handleCastBuff(
     condition = `${condition} (+${maxHpGain})`;
   }
 
-  // The spell's own duration. Rounds tick in a fight and on the clock
-  // outside one (src/lib/dm/condition-tick.ts), so Mage Armor's eight hours
-  // are eight hours.
-  const rounds = Math.max(1, buff.rounds);
+  // The spell's own duration, from the slot it was cast from (Hex from a
+  // 3rd-level slot: eight hours; until dispelled has no count). Rounds tick
+  // in a fight and on the clock outside one (src/lib/dm/condition-tick.ts),
+  // so Mage Armor's eight hours are eight hours.
+  const lasts = lifetimeAtSlot(resolvedMech.name, buff.rounds, slotLevel, authors);
+  const rounds = lasts === null ? null : Math.max(1, lasts);
   const duration =
-    rounds <= 100
-      ? { rounds }
-      : rounds % 600 === 0 && rounds / 600 <= 24
-        ? { hours: rounds / 600 }
-        : { minutes: Math.min(1440, Math.ceil(rounds / 10)) };
+    rounds === null
+      ? {}
+      : rounds <= 100
+        ? { rounds }
+        : rounds % 600 === 0 && rounds / 600 <= 24
+          ? { hours: rounds / 600 }
+          : { minutes: Math.min(1440, Math.ceil(rounds / 10)) };
   const spellMeta: ConditionMeta = {
     spell: resolvedMech.name,
     source: sheet.id,
@@ -363,6 +369,7 @@ export function handleCastBuff(
           beastMaxHp: polymorphForm.hp,
           beastAc: polymorphForm.ac,
           kind: "polymorph",
+          ...(shapeRule.keepsTraining ? { keepsTraining: true } : {}),
           abilities: shapedAbilities(shapeRule, polymorphForm, fresh.abilities),
           speed: polymorphForm.speed,
           attacks: polymorphForm.attacks,
@@ -398,8 +405,17 @@ export function handleCastBuff(
           sheets,
           sheetsById,
         );
+        // The pool is the spell's: it goes when the spell does (sheets.ts).
+        const granted = getSheetById(target.id);
+        const laid = granted?.conditions.find((name) => name.toLowerCase() === condition.toLowerCase());
+        if (granted && laid && granted.tempHp === tempHp) {
+          patchSheet(target.id, { conditionMeta: withTempHpClaim(granted.conditionMeta as ConditionMetaMap, laid, { spell: resolvedMech.name, source: sheet.id }, tempHp) });
+        }
       }
     }
+    // Aid or Heroes' Feast lifting a dying creature's hit points above 0: it
+    // is no longer dying (death.ts healDeathHook, as healing settles it).
+    healDeathHook(campaign, turn.id, fresh);
   }
   const noEffect = [...warded.values()].join(" ");
   if (!applied.length && noEffect) {
@@ -432,7 +448,9 @@ export function handleCastBuff(
         ? `${duration.hours} hour${duration.hours === 1 ? "" : "s"}`
         : "minutes" in duration
           ? `${duration.minutes} minutes`
-          : `${rounds} round${rounds === 1 ? "" : "s"}`,
+          : rounds === null
+            ? "until dispelled"
+            : `${rounds} round${rounds === 1 ? "" : "s"}`,
     ...(cast.cost ? { cost: cast.cost } : {}),
     ...(cast.slot ? { slot: cast.slot } : {}),
     ...(cast.droppedConcentration ? { droppedConcentration: cast.droppedConcentration } : {}),

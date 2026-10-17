@@ -92,7 +92,7 @@ export function conditionUntargetable(conditions: string[]): string | null {
 export function spellTurnHold(conditions: string[], kind: string): string | null {
   const acting = kind === "action" || kind === "attack" || kind === "cast";
   for (const { row, condition } of activeConditionEffects(conditions)) {
-    if ((row.noAction && acting) || (row.noAttacks && kind === "attack") || (row.noCasting && kind === "cast")) {
+    if ((row.noAction && acting) || (row.noMove && kind === "move") || (row.noAttacks && kind === "attack") || (row.noCasting && kind === "cast")) {
       return condition;
     }
   }

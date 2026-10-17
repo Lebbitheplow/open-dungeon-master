@@ -4,6 +4,7 @@
 // decides the attack these belong to.
 
 import { CURVING_SHOT } from "@/lib/srd/authored-economy";
+import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -14,7 +15,7 @@ import { resourceLeft } from "@/lib/dm/attack-rules";
 import type { ManeuverPick } from "@/lib/dm/pc-attack-plan";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
-import { removeConditions, type ConditionMeta } from "@/lib/dm/condition-logic";
+import { isIncapacitated, removeConditions, type ConditionMeta } from "@/lib/dm/condition-logic";
 import { sizeRank } from "@/lib/bestiary/statblock";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { applyDmMutation } from "@/lib/dm/mutations";
@@ -116,6 +117,8 @@ export type ParkedAttack = PendingAttack & {
   onHit?: OnHitSpends;
   nonlethal?: boolean;
   hitSpent?: string[];
+  // The once-per-turn riders the hit spends (Sneak Attack): pc-attack-damage.ts claimHitRiders.
+  hitClaims?: string[];
   spell?: string;
   // A melee attack, which a monster's Parry answers (enemy-reactions.ts).
   melee?: boolean;
@@ -294,6 +297,8 @@ export function stunningStrikeSave(
       ...fresh.conditionMeta,
       stunned: untilTurnEnd(monkId, { source: monkId }),
     });
+    // Stunned is out of action: its concentration and grapples end.
+    settleEnemyIncapacitation(fresh.id, isIncapacitated(fresh.conditions));
     publishEncounter(campaign.id);
   }
   return `Stunning Strike: ${fresh.displayName} fails the CON save (${save.autoFailed ? "automatic" : save.total} vs DC ${dc}) and is stunned until the end of the monk's next turn.`;

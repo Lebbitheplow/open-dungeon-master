@@ -36,6 +36,9 @@ export type LegendaryState = {
   // Enemies whose next enemy_attack is the one attack a legendary action
   // bought: one swing, not the Multiattack. Optional, like everything below.
   strikes?: string[];
+  // A concentration area's explicit strikes off the board: "<spell>|<caster
+  // id>|<creature id>" -> the turn it struck (src/lib/dm/area-casting.ts).
+  areaStruck?: Record<string, string>;
   // What each enemy has spent of its limited abilities this fight: recharge
   // abilities waiting on their d6, uses a day, spell slots
   // (src/lib/dm/monster-abilities.ts).
@@ -107,6 +110,9 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   const idle = (record.idle && typeof record.idle === "object" ? record.idle : null) as Record<string, unknown> | null;
   const failed = (record.failedSave && typeof record.failedSave === "object" ? record.failedSave : null) as Record<string, unknown> | null;
   const opportunities = (record.opportunities && typeof record.opportunities === "object" ? record.opportunities : null) as Record<string, unknown> | null;
+  const areaStruck = record.areaStruck && typeof record.areaStruck === "object"
+    ? Object.fromEntries(Object.entries(record.areaStruck as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+    : null;
   return {
     pools,
     lair: record.lair === true,
@@ -148,6 +154,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
       : {}),
     ...(Number(record.lairDue) > 0 ? { lairDue: Number(record.lairDue) } : {}),
     ...(typeof record.lairLast === "string" ? { lairLast: record.lairLast } : {}),
+    ...(areaStruck && Object.keys(areaStruck).length ? { areaStruck } : {}),
   };
 }
 

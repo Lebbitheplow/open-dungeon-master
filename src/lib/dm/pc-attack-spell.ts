@@ -70,8 +70,10 @@ export function checkAttackSpell(input: {
 }
 
 // Checked above, so the cast goes through: the slot, the material, the
-// action (or the rest of an open casting), and concentration.
-export function castAttackSpell(plan: AttackPlan) {
+// action (or the rest of an open casting), and concentration. A spell a
+// monster's Counterspell stops, or Slow holds back, is spent and ends here:
+// the refusal comes back for the caller to return in place of any roll.
+export function castAttackSpell(plan: AttackPlan): ToolError | null {
   const { campaign, turn, encounter, sheet, args, sheets, sheetsById } = plan;
   const cast = applyDmMutation(
     campaign,
@@ -98,4 +100,7 @@ export function castAttackSpell(plan: AttackPlan) {
     encounter.turnBudget = live.turnBudget;
     encounter.reactionsUsed = live.reactionsUsed;
   }
+  // Checked by the dry run, so a refusal now is a cast paid for and stopped
+  // (a counter, Slow's hold): no roll follows it.
+  return typeof cast.error === "string" ? toolError(cast) : null;
 }

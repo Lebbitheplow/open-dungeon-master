@@ -57,6 +57,11 @@ export type TurnBudget = {
   // Flurry of Blows: bonus-action unarmed strikes still to make this turn,
   // bought with 1 ki after the Attack action (src/lib/dm/bonus-actions.ts).
   flurryStrikes?: number;
+  // Haste's extra actions given this turn so far, spent or not: an effect
+  // that lands mid-turn adds only what is new (turn-budget.ts budgetFor).
+  hasteGranted?: number;
+  // Slow: an action OR a bonus action this turn, and one attack.
+  slowed?: boolean;
 };
 
 export function freshBudget(input: {
@@ -64,6 +69,7 @@ export function freshBudget(input: {
   round: number;
   attacksAllowed?: number;
   extraActions?: number;
+  slowed?: boolean;
 }): TurnBudget {
   return {
     ownerId: input.ownerId,
@@ -76,8 +82,29 @@ export function freshBudget(input: {
     oncePerTurn: [],
     dashed: false,
     disengaged: false,
-    ...(input.extraActions ? { extraActions: input.extraActions } : {}),
+    ...(input.extraActions ? { extraActions: input.extraActions, hasteGranted: input.extraActions } : {}),
+    ...(input.slowed ? { slowed: true } : {}),
   };
+}
+
+// Slow's refusal of the other half of the turn, or null (SRD 5.1: an action
+// or a bonus action, not both; one attack at most).
+function slowedProblem(budget: TurnBudget, kind: ActionKind | "attack", what: string, who: string): ({ ok: false } & ToolError) | null {
+  if (!budget.slowed) {
+    return null;
+  }
+  const other = kind === "bonus" ? budget.actionUsed || budget.attacksMade > 0 : kind !== "reaction" && budget.bonusUsed;
+  if (other) {
+    return {
+      ok: false,
+      error: `${who} is slowed: an action or a bonus action this turn, not both, and the ${kind === "bonus" ? "action" : "bonus action"} is already spent. ${what} does not happen.`,
+      refused: "rules",
+    };
+  }
+  if (kind === "attack" && budget.attacksMade >= 1) {
+    return { ok: false, error: `${who} is slowed and makes no more than one attack a turn. ${what} does not happen.`, refused: "rules" };
+  }
+  return null;
 }
 
 // Whether a stored budget still describes the combatant currently acting.
@@ -144,6 +171,10 @@ export function spendAction(
   what: string,
   who: string,
 ): SpendResult {
+  const slowed = slowedProblem(budget, kind, what, who);
+  if (slowed) {
+    return slowed;
+  }
   if (kind === "action" && budget.actionUsed) {
     const extra = spendGrantedAction(budget, what, who) ?? spendExtraAction(budget, what, who);
     if (extra) {
@@ -199,6 +230,10 @@ export function spendAttack(
   who: string,
   options: AttackSpendOptions = {},
 ): SpendResult {
+  const slowed = slowedProblem(budget, "attack", "Another attack", who);
+  if (slowed) {
+    return slowed;
+  }
   const swingsGone = budget.attacksMade >= budget.attacksAllowed || budget.castThisAction === true;
   // Flurry of Blows is spent only once the Attack action has no swing left
   // to give, so a monk with Extra Attack uses both before the flurry.
@@ -276,6 +311,10 @@ export function spendAttack(
 // An attack-roll spell cast through pc_attack: the whole action, never one
 // swing of Extra Attack.
 export function spendCastAttack(budget: TurnBudget, spell: string, who: string): SpendResult {
+  const slowed = slowedProblem(budget, "action", `Casting ${spell}`, who);
+  if (slowed) {
+    return slowed;
+  }
   if (budget.actionUsed) {
     const granted = spendGrantedAction(budget, `casting ${spell}`, who);
     if (granted && granted.ok) {

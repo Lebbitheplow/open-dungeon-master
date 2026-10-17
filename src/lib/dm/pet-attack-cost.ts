@@ -6,7 +6,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { claimOncePerTurn, spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 
@@ -26,7 +26,7 @@ export function petAttackCost(
   if (!allowed.ok) {
     return { ...toolError(allowed), error: `${allowed.error} ${pet.name} attacks when ${sheet.name} commands it on their turn.` };
   }
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   if (!budget) {
     return { commit: () => `${pet.name} attacks; there is no turn in play to charge.` };
   }

@@ -30,7 +30,7 @@ import { authoredHealMax } from "@/lib/srd/authored-economy";
 import { authoredSpellDice } from "@/lib/srd/authored-effects-more";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
-import { spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
+import { findSpellByName, spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
 import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-reach";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { handleStabilize } from "@/lib/dm/stabilize";
@@ -92,6 +92,14 @@ export function castHealingSpell(
   // workshop copy of it too, by the spell it runs as).
   if ((resolved?.runsAs ?? facts.runsAs ?? name).toLowerCase() === "spare the dying") {
     return { done: handleStabilize(campaign, turnId, target, caster, { method: "spell", reason: input.reason }) };
+  }
+  // Only a spell that restores hit points heals: Fireball's dice are damage,
+  // and Light with an amount is no healing spell either.
+  if (mech ? mech.resolution !== "heal" : !speaksOfHealing(input.spell, authors)) {
+    return {
+      error: `${name} does not restore hit points, so heal cannot cast it. Nothing was spent. Cast it with its own tool (cast_at_enemy, aoe_damage, pc_attack, cast_buff), or send heal with an amount and no spell for healing that is not a spell.`,
+      refused: "rules",
+    };
   }
 
   // Reach first: nothing is spent on a creature the spell cannot reach.
@@ -177,7 +185,8 @@ export function castHealingSpell(
   // Regenerate's 4d8 + 15 carries its own bonus: no modifier rides it.
   const modifier = dc !== null && !mech?.healNoModifier ? dc - 8 - derived.proficiencyBonus : 0;
   const riders: string[] = [];
-  let bonus = Math.max(0, modifier);
+  // Signed: a WIS 8 cleric's Cure Wounds is 1d8 - 1 (the floor is on the total).
+  let bonus = modifier;
   if (slotLevel >= 1 && hasFeature(caster, "disciple of life")) {
     bonus += 2 + slotLevel;
     riders.push(`Disciple of Life +${2 + slotLevel}`);
@@ -192,7 +201,7 @@ export function castHealingSpell(
   const bond = authoredSpellDice(caster, { healing: true }, derived.abilityMods);
   riders.push(...bond.notes);
   const withBond = [expression, ...bond.dice].join("+");
-  const full = bonus > 0 ? `${withBond}+${bonus}` : withBond;
+  const full = bonus > 0 ? `${withBond}+${bonus}` : bonus < 0 ? `${withBond}-${-bonus}` : withBond;
   let amount: number;
   if (maximize) {
     amount = maximumOf(full);
@@ -233,6 +242,13 @@ export function castHealingSpell(
     amount: Math.max(1, amount),
     note: `${name}: ${scaled?.note ?? expression}${riders.length ? ` (${riders.join(", ")})` : ""}, ${Math.max(1, amount)} hit points.${shared}`,
   };
+}
+
+// A spell with no mechanics row heals only when its own text says it
+// restores hit points (a table's mender whose dice the server cannot read).
+function speaksOfHealing(spell: string, authors: string[]): boolean {
+  const desc = String(findSpellByName(spell, authors)?.data.desc ?? "");
+  return /\b(regains?|restores?|heals?)\b[^.]{0,80}\bhit points?\b/i.test(desc);
 }
 
 // The mark Regenerate leaves: an hour of it, the spell and caster recorded.

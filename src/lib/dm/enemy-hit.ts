@@ -10,10 +10,9 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { isValidExpression, rollExpression, type RollResult } from "@/lib/dice";
 import { sizeRank, type EnemyAttack, type TypedDice } from "@/lib/bestiary/statblock";
-import { damageAdjust, durationArgsFor, effectiveMaxHp, maxHpRiders, pcResistances, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { durationArgsFor, effectiveMaxHp, maxHpRiders, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import { damageParts } from "@/lib/dm/damage-parts";
-import { immersedResistance } from "@/lib/dm/underwater";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -46,38 +45,41 @@ export function legacyRiders(attack: Pick<EnemyAttack, "damage" | "type">): Type
   return types.slice(1).map((type, index) => ({ dice: dice[index + 1], type }));
 }
 
-// The blow's damage by type, each part met by the target's resistances. The
-// attack rolled one expression; the typed riders are read back out of it.
+// The blow's damage by type, as rolled. The attack rolled one expression;
+// the typed riders are read back out of it, and each part goes on to meet
+// the target's defenses on its own in the damage path (pc-damage.ts parts):
+// the ward first, then resistance, immunity and vulnerability per type, so
+// a monk immune to poison takes only the bite's piercing.
 export function blowByType(
   attack: EnemyAttack,
   outcome: RollResult,
-  target: CharacterSheet,
   crit: boolean,
-  // Magic Weapons: the blow is magical, so nonmagical-only resistance fails.
-  magical = false,
-): { amount: number; type: string | undefined; byType: string[] | null } {
+): { amount: number; type: string | undefined; parts: Array<{ amount: number; type: string }> | null } {
   const mainType = attack.type.split("/")[0] || undefined;
   const rolled = Math.max(0, outcome.total);
   const riders = attack.riders?.length ? attack.riders : legacyRiders(attack);
   if (!riders.length || !mainType) {
     // One type, read as its first word: "piercing/fire" never lands whole
     // as whichever type a resistance line happens to name.
-    return { amount: rolled, type: mainType ?? attack.type, byType: null };
+    return { amount: rolled, type: mainType ?? attack.type, parts: null };
   }
   const parts = damageParts(outcome, mainType, riders, { crit });
   if (parts.length < 2) {
-    return { amount: rolled, type: mainType, byType: null };
+    return { amount: rolled, type: mainType, parts: null };
   }
-  // Fully immersed in water: resistance to fire (underwater.ts).
-  const resist = [pcResistances(target, { magical }), immersedResistance(target.campaignId, target.id)].filter(Boolean).join(", ");
-  const adjusted = parts.map((part) => ({ ...part, ...damageAdjust(part.amount, part.type, resist, "", "", { magical }) }));
-  return {
-    amount: adjusted.reduce((sum, part) => sum + part.amount, 0),
-    // Already met part by part: the total lands untyped so nothing halves
-    // it twice.
-    type: undefined,
-    byType: adjusted.map((part) => `${part.amount} ${part.type}${part.note ? ` (${part.note})` : ""}`),
-  };
+  return { amount: parts.reduce((sum, part) => sum + part.amount, 0), type: undefined, parts: parts.map((part) => ({ amount: part.amount, type: part.type })) };
+}
+
+// The typed parts scaled to a blow that something shrank (Ray of
+// Enfeeblement halves it): each part its share, the rounding on the first.
+export function scaledParts(parts: Array<{ amount: number; type: string }>, total: number) {
+  const raw = parts.reduce((sum, part) => sum + part.amount, 0);
+  if (raw <= 0 || total >= raw) {
+    return parts;
+  }
+  const scaled = parts.map((part) => ({ ...part, amount: Math.floor((part.amount * total) / raw) }));
+  scaled[0] = { ...scaled[0], amount: scaled[0].amount + total - scaled.reduce((sum, part) => sum + part.amount, 0) };
+  return scaled;
 }
 
 const SMALL_RACES = ["halfling", "gnome", "goblin", "kobold"];
@@ -259,11 +261,14 @@ function drainMaxHp(campaign: Campaign, targetId: string, sourceId: string, amou
   }
   const meta = { ...(sheet.conditionMeta as ConditionMetaMap) };
   const before = maxHpRiders(sheet.conditions, meta).drain;
+  // No more than the maximum there is to take: the record stays exact, so a
+  // long rest gives back what was taken and not a point more.
+  const taken = Math.min(amount, Math.max(0, effectiveMaxHp(sheet)));
   const kept = sheet.conditions.filter((name) => !/^max hp reduced \(-\d+\)$/i.test(name.trim()));
   for (const name of sheet.conditions.filter((entry) => !kept.includes(entry))) {
     delete meta[name];
   }
-  const name = `max hp reduced (-${before + amount})`;
+  const name = `max hp reduced (-${before + taken})`;
   const updated = patchSheet(sheet.id, { conditions: [...kept, name], conditionMeta: { ...meta, [name]: { source: sourceId, untilLongRest: true } } });
   if (!updated) {
     return null;
@@ -274,5 +279,5 @@ function drainMaxHp(campaign: Campaign, targetId: string, sourceId: string, amou
     return `${updated.name}'s hit point maximum falls to 0: they die.`;
   }
   publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-  return `${updated.name}'s hit point maximum is reduced by ${amount} (now ${effectiveMaxHp(updated)}) until they finish a long rest.`;
+  return `${updated.name}'s hit point maximum is reduced by ${taken} (now ${effectiveMaxHp(updated)}) until they finish a long rest.`;
 }

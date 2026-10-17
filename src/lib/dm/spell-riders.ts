@@ -20,7 +20,8 @@ import { getDatabase } from "@/lib/db/core";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { addConditionInstance, damageAdjust, resistsAllDamage, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { addConditionInstance, damageAdjust, isIncapacitated, resistsAllDamage, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -177,6 +178,8 @@ export function layOnEnemy(enemyId: string, entries: Array<[string, ConditionMet
     meta = laid.meta;
   }
   patchEnemyConditions(enemy.id, conditions, meta);
+  // Taken out of action: its concentration and its grapples end.
+  settleEnemyIncapacitation(enemy.id, isIncapacitated(enemy.conditions));
   return landing.map(([name]) => name);
 }
 

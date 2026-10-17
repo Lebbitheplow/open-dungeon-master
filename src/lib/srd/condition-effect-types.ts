@@ -99,6 +99,9 @@ export type ConditionEffectRow = {
   extraAction?: boolean;
   // The holder cannot take reactions (slow).
   noReactions?: boolean;
+  // An action or a bonus action on its turn, not both, and one attack at
+  // most (slow): the turn budget holds it (src/lib/dm/action-budget.ts).
+  actionOrBonus?: boolean;
   // Extra dice the holder's weapon and spell attacks deal on a hit
   // (divine favor +1d4 radiant, hunter's mark +1d6 of the weapon's type,
   // enlarged +1d4). `type` "" = the attack's own damage type. A leading "-"
@@ -127,6 +130,9 @@ export type ConditionEffectRow = {
   // The holder takes no action on its turn (Stinking Cloud's retching,
   // Command's Halt): read by the action guards (src/lib/dm/can-act.ts).
   noAction?: boolean;
+  // The holder cannot move (Command's Halt, Haste's lethargy), whatever bare
+  // incapacitation would allow: the same guards refuse a move.
+  noMove?: boolean;
   // Conditions the holder cannot be given while this holds (Heroism:
   // frightened), and damage types that do nothing to it (Heroes' Feast:
   // poison).

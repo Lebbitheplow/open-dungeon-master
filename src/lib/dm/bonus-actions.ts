@@ -21,7 +21,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import { authoredFlurryStrikes } from "@/lib/srd/authored-economy";
 import { spendAction } from "@/lib/dm/action-budget";
@@ -112,7 +112,7 @@ export function spendKiTechnique(
     return toolError(allowed);
   }
   const budget = inFight
-    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions))
+    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions))
     : null;
   if (technique === "flurry" && (!budget || !encounter)) {
     return { error: `Flurry of Blows is made in a fight, right after the Attack action on ${sheet.name}'s own turn.`, refused: "rules" };
@@ -187,7 +187,7 @@ export function spendQuickenedSpell(
   const encounter = getActiveEncounter(campaign.id);
   const inFight = encounter !== null && (encounter.kind ?? "fight") === "fight";
   const budget = inFight
-    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions))
+    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions))
     : null;
   if (!budget || !encounter) {
     return inFight

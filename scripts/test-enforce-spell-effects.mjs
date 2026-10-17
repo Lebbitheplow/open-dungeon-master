@@ -141,12 +141,15 @@ await test("Bane lands on a failed Charisma save and not on a made one, for a mi
   assert.equal(world.clearDice(), 0);
   assert.equal(failed.ok, true, failed.error);
   assert.deepEqual([failed.result.dc, failed.result.saved], [dc, false]);
+  const one = world.enemies().find((enemy) => enemy.id === first.id);
+  assert.deepEqual([one.conditions, one.conditionMeta], [["baned"], { baned: { rounds: 10, spell: "Bane", source: priest.id, slotLevel: 1 } }]);
   const made = await bane(second, dc);
   assert.equal(made.result.saved, true);
-  const [one, two] = world.enemies().sort((a, b) => a.displayName.localeCompare(b.displayName));
-  assert.deepEqual([one.conditions, one.conditionMeta], [["baned"], { baned: { rounds: 10, spell: "Bane", source: priest.id, slotLevel: 1 } }]);
-  assert.deepEqual(two.conditions, []);
+  assert.deepEqual(world.enemies().find((enemy) => enemy.id === second.id).conditions, []);
+  // Off the priest's turn each call is a casting of its own (a second slot),
+  // and one concentration holds one casting: the second ends the first.
   assert.equal(world.sheet(priest.id).spellcasting.slots["1"].used, 2);
+  assert.deepEqual(world.enemies().find((enemy) => enemy.id === first.id).conditions, []);
 });
 
 await test("a baned character takes a d4 off attack rolls and saving throws", async () => {
@@ -209,8 +212,8 @@ await test("Haste: +2 AC, advantage on Dexterity saves, for a minute", async () 
   // Exactly a minute: Haste is over and its lethargy holds for the next six
   // seconds; a little more time and that is over too.
   await world.invoke("pass_time", { amount: 1, unit: "minutes" });
-  assert.deepEqual(held(world, friend), ["incapacitated"]);
-  assert.deepEqual(meta(world, friend), { incapacitated: { rounds: 1, source: "haste" } });
+  assert.deepEqual(held(world, friend), ["incapacitated", "lethargic"]);
+  assert.deepEqual(meta(world, friend), { incapacitated: { rounds: 1, source: "haste" }, lethargic: { rounds: 1, source: "haste" } });
   assert.equal(world.sheet(friend.id).ac, ac);
   await world.invoke("pass_time", { amount: 1, unit: "minutes" });
   assert.deepEqual(held(world, friend), []);
@@ -280,9 +283,10 @@ await test("when Haste runs out on an enemy by its duration the enemy loses its 
   for (let round = 0; round < 10; round += 1) {
     nextRound(world);
   }
-  assert.deepEqual(foe(world, enemy).conditions, ["incapacitated"], "the spell ran out into lethargy");
+  assert.deepEqual(foe(world, enemy).conditions, ["incapacitated", "lethargic"], "the spell ran out into lethargy");
   // The lethargy waits on the enemy's next turn and ends with it.
-  assert.deepEqual(foe(world, enemy).conditionMeta, { incapacitated: { untilTurnEndOf: enemy.id, source: "haste" } });
+  const lethargy = { untilTurnEndOf: enemy.id, source: "haste" };
+  assert.deepEqual(foe(world, enemy).conditionMeta, { incapacitated: lethargy, lethargic: lethargy });
   const lost = await enemySwing(world, enemy, friend);
   assert.equal(lost.ok, false, "the enemy attacked on the turn the lethargy costs it");
   // An enemy's turn is over when the pointer next moves (src/lib/dm/turn-end.ts):
@@ -310,15 +314,16 @@ await test("when the concentration holding Haste on an enemy breaks, the enemy l
   await world.invoke("damage_enemy", { enemyId: casterFoe.id, amount: 12 });
   world.clearDice();
   assert.equal(foe(world, casterFoe).concentration, null);
-  assert.deepEqual(foe(world, ally).conditions, ["incapacitated"]);
-  assert.deepEqual(foe(world, ally).conditionMeta, { incapacitated: { untilTurnEndOf: ally.id, source: "haste" } });
+  assert.deepEqual(foe(world, ally).conditions, ["incapacitated", "lethargic"]);
+  const lethargy = { untilTurnEndOf: ally.id, source: "haste" };
+  assert.deepEqual(foe(world, ally).conditionMeta, { incapacitated: lethargy, lethargic: lethargy });
   assert.equal((await enemySwing(world, ally, friend)).ok, false, "the ally attacked through its lethargy");
 
   world.dice(1);
   await world.invoke("apply_damage", { characterId: mage.id, amount: 6 });
   world.clearDice();
   assert.equal(world.sheet(mage.id).concentratingOn ?? null, null);
-  assert.deepEqual(foe(world, charmed).conditions, ["incapacitated"]);
+  assert.deepEqual(foe(world, charmed).conditions, ["incapacitated", "lethargic"]);
   assert.equal((await enemySwing(world, charmed, friend)).ok, false, "the charmed foe attacked through its lethargy");
   // Each lethargy ends with the enemy's next turn, over as the pointer moves on.
   nextRound(world);

@@ -303,8 +303,10 @@ export function attackSituation(input: {
   if (underwater?.note) {
     conditionContext.notes.push(underwater.note);
   }
-  const advantage: Advantage = mergeAdvantage([
-    conditionContext.advantage,
+  // Every source, kept for the plan's last ones (a feint, Powerful
+  // Attacker): advantage and disadvantage cancel once over them all.
+  const sources: Advantage[] = [
+    ...conditionContext.sources,
     exhaustion.advantage,
     ...(load?.disadvantage ? ["disadvantage" as const] : []),
     ...attackRiders.advantageSources,
@@ -325,6 +327,6 @@ export function attackSituation(input: {
     ...(armorUntrained ? ["disadvantage" as const] : []),
     ...(gale.disadvantage ? ["disadvantage" as const] : []),
     ...(underwater?.disadvantage ? ["disadvantage" as const] : []),
-  ]);
-  return { context: conditionContext, advantage, helped, attackRiders };
+  ];
+  return { context: conditionContext, advantage: mergeAdvantage(sources), sources, helped, attackRiders };
 }

@@ -14,7 +14,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { matchResource, type ResourceAction } from "@/lib/srd/class-resources";
 import { spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
@@ -99,7 +99,7 @@ export function prepareResourceCharge(
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
-    conditionExtraActions(sheet.conditions),
+    conditionTurnShape(sheet.conditions),
   );
   if (!budget) {
     return FREE;

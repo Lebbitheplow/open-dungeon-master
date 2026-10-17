@@ -18,7 +18,7 @@ import { computeSheetDerived } from "@/lib/srd";
 import { authoredSpendFor, gateHolds, type AuthoredSpend, type HeldAuthored } from "@/lib/srd/authored-effects";
 import type { SpendAction, SpendDoes } from "@/lib/srd/authored-effects-types";
 import { canAct } from "@/lib/dm/can-act";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { spendAction } from "@/lib/dm/action-budget";
 import { attacksAllowedFor, budgetFor, prepareReaction, storeBudget } from "@/lib/dm/turn-budget";
 import { resolveSpendEffect, type SpendContext } from "@/lib/dm/authored-spend-effects";
@@ -72,7 +72,7 @@ function prepareCost(
   if (!inFight || !encounter) {
     return { commit: () => ({}) };
   }
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   if (onceKey && budget?.oncePerTurn.includes(onceKey)) {
     return { error: `${label} is used once a turn, and ${sheet.name} has used it this turn.`, refused: "rules" };
   }

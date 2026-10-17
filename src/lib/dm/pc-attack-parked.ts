@@ -18,7 +18,8 @@ import { publishPersisted } from "@/lib/events";
 import { adjudicateHit } from "@/lib/dm/attack-logic";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { liveTypedRiders, strikesAsMagic } from "@/lib/dm/pc-attack-damage";
+import { claimHitRiders, liveTypedRiders, strikesAsMagic } from "@/lib/dm/pc-attack-damage";
+import { budgetApplies } from "@/lib/dm/action-budget";
 import type { AttackPlan } from "@/lib/dm/pc-attack-plan";
 import type { Strike } from "@/lib/dm/pc-attack-resolve";
 import { clearHitSpent, gainTempHp, spendOnHit, stunningStrikeSave, type ParkedAttack } from "@/lib/dm/pc-attack-riders";
@@ -89,6 +90,7 @@ export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: strin
     ...(strike.hasOnHit ? { onHit: strike.onHitSpends } : {}),
     ...(plan.options.nonlethal ? { nonlethal: true } : {}),
     ...(plan.hitSpent.length ? { hitSpent: plan.hitSpent } : {}),
+    ...(plan.hitClaims.length ? { hitClaims: plan.hitClaims } : {}),
     ...(plan.kind === "spell" && plan.args.spell ? { spell: plan.args.spell } : {}),
     ...(critGear.suffix ? { critGear } : {}),
     ...(parkedExtras(plan) ?? {}),
@@ -184,6 +186,10 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   const parked = context as ParkedAttack;
   if (sheet && parked.hitSpent?.length) {
     clearHitSpent(campaign, sheet.id, parked.hitSpent);
+  }
+  // Sneak Attack and the other once-a-turn riders are spent by the hit.
+  if (encounter?.turnBudget && budgetApplies(encounter.turnBudget, pending.characterId ?? "", encounter.round)) {
+    claimHitRiders(encounter, encounter.turnBudget, parked.hitClaims);
   }
   const spellRider = spellAttackRider(parked.spell);
   const spellLine = spellRider && sheet ? applySpellHitCondition(campaign, spellRider, enemy.id, sheet.id) : null;
