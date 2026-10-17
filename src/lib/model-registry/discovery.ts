@@ -129,7 +129,7 @@ async function listModelIds(baseUrlInput: string, apiKey: string, read: (json: u
   }
 }
 
-type SoleCache = Map<string, { at: number; id: string; ttl: number }>;
+type SoleCache = Map<string, { at: number; id: string; answered: boolean; ttl: number }>;
 declare global {
   var __odmSoleModel: SoleCache | undefined;
 }
@@ -148,10 +148,16 @@ const SOLE_SILENT_TTL_MS = 30_000;
 // to work; a server with several models is asked to have one picked.
 // Remembered a few minutes per address.
 export async function soleListedModel(input: { provider: "local" | "custom" | "speech"; baseUrl: string; apiKey?: string }): Promise<string> {
+  return (await soleModelListing(input)).id;
+}
+
+// The same, with whether the server answered at all: a caller with a blank
+// model tells "pick one of several" from "nothing answered there" by it.
+export async function soleModelListing(input: { provider: "local" | "custom" | "speech"; baseUrl: string; apiKey?: string }): Promise<{ id: string; answered: boolean }> {
   const key = `${input.provider}::${input.baseUrl.trim()}`;
   const cache = (globalThis.__odmSoleModel ??= new Map());
   const kept = cache.get(key);
-  if (kept && Date.now() - kept.at < kept.ttl) return kept.id;
+  if (kept && Date.now() - kept.at < kept.ttl) return { id: kept.id, answered: kept.answered };
   let id = "";
   let answered = false;
   if (input.provider === "local") {
@@ -173,9 +179,9 @@ export async function soleListedModel(input: { provider: "local" | "custom" | "s
   // that was down is asked again on the next turn, which should find a
   // server just started; a speech server that was down is left alone for
   // the probe's window.
-  if (answered) cache.set(key, { at: Date.now(), id, ttl: SOLE_TTL_MS });
-  else if (input.provider === "speech") cache.set(key, { at: Date.now(), id: "", ttl: SOLE_SILENT_TTL_MS });
-  return id;
+  if (answered) cache.set(key, { at: Date.now(), id, answered, ttl: SOLE_TTL_MS });
+  else if (input.provider === "speech") cache.set(key, { at: Date.now(), id: "", answered, ttl: SOLE_SILENT_TTL_MS });
+  return { id, answered };
 }
 
 export function forgetSoleModelsForTests() {
