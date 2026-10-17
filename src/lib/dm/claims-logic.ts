@@ -420,8 +420,29 @@ export function withoutSentences(text: string, quotes: readonly string[]): strin
 // claims; empty when no word of the story is left (a stray quote mark or
 // bold marker is not one), which is how a reply that was only the model's
 // plan reads.
+// What a small model writes about the turn rather than in it, found without
+// the reader (Gemma4 e4b's reader, the same small model, quoted none of it):
+// its own input format echoed back ("Bram | attempt to ask the merchant..."),
+// a table note copied out, and sentences about tool calls and corrections
+// ("I will correct this by calling the necessary tool to resolve the attack
+// properly"). English phrasings only; the reader's asides cover every
+// language. A sentence holding a quotation is speech and is never taken.
+const META_SENTENCE =
+  /\btool[ -]?calls?\b|\b(?:the|this|a) tool'?s? (?:output|result)s?\b|\bcalling the (?:necessary |right |appropriate |correct )?tools?\b|\bnarrate the results?\b|\bunwarranted assumption\b|\bmy (?:previous|last|earlier) (?:response|reply|narration|message)\b/i;
+const ECHOED_LINE = /^[ \t]*(?:\[[^\]\n]{1,80}\|\s*attempt\][^\n]*|[^\n|[\]]{1,60}\s\|\s*attempt\b[^\n]*|\[Table note\][^\n]*)$/gim;
+
+export function metaQuotes(text: string): string[] {
+  const quotes = [...text.matchAll(ECHOED_LINE)].map((match) => match[0].trim());
+  for (const match of text.matchAll(/[^.!?\n]+[.!?]*/g)) {
+    if (META_SENTENCE.test(match[0]) && !/["\u201c\u201d\u00ab\u00bb]/.test(match[0])) {
+      quotes.push(match[0].trim());
+    }
+  }
+  return quotes.filter(Boolean);
+}
+
 export function withoutAsides(text: string, claims: readonly NarrationClaim[]): string {
-  const quotes = claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : []));
+  const quotes = [...claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : [])), ...metaQuotes(text)];
   if (!quotes.length) {
     return text;
   }

@@ -1323,8 +1323,16 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // and no tool call (PR #53). Nothing was said or done, so the same call
     // is simply asked again, once a turn and outside the call budget. An
     // empty last call is caught after the loop instead.
+    // A reply that is only an object of arguments no offered tool takes (a
+    // small model's call written as JSON, with no name and a key the tool
+    // lacks: Gemma4 e4b at 24K) says and does nothing either.
+    const replyText = extractReplyText(message?.content);
+    const onlyStrayJson = (text: string) => {
+      const salvaged = salvageJsonToolCalls(text, tools);
+      return !salvaged.calls.length && !extractStoryText(salvaged.text).trim();
+    };
     lastReplyEmpty =
-      !extractReplyText(message?.content).trim() && !extractToolCalls(message?.tool_calls).length;
+      !extractToolCalls(message?.tool_calls).length && (!replyText.trim() || onlyStrayJson(replyText));
     // An empty reply that stopped at the output cap is the window running
     // out, not the model declining to speak (issue #120: the prompt filled
     // the window and a thinking model hit the cap mid-thought). Named in the

@@ -145,6 +145,21 @@ await test("An aside is asked only when the gate says so; its sentences leave th
   assert.equal(withoutAsides(plan, [{ kind: "aside", quote: "The quay is not on the map yet. I will set the landing first." }]), "", "a quote over two sentences cuts both");
 });
 
+// Gemma4 e4b, whose reader (the same small model) quoted none of these, sent
+// its reply to a correction and its echo of a player's line to the table.
+await test("What a small model writes about the turn is cut without the reader; speech and fiction about tools are not.", () => {
+  const meta =
+    "It appears I made an unwarranted assumption about the combat sequence. Since you declared an action that resulted in damage without a tool call, I will correct this by calling the necessary tool to resolve the attack properly, and then narrate the results based on the tool's output.";
+  assert.equal(withoutAsides(meta, []), "");
+  assert.equal(withoutAsides("Bram | attempt to ask the merchant about the coffer's contents.", []), "", "the player's line echoed in its input format");
+  assert.equal(withoutAsides("[Avery | attempt] I search the reeds.\nThe reeds hide nothing but a heron.", []), "The reeds hide nothing but a heron.");
+  assert.equal(withoutAsides("Rain lashes the ford.\n[Table note] Bandit 2 attacks Avery.", []).trim(), "Rain lashes the ford.");
+  const speech = 'The innkeeper scowls. "I\'ll call the guards if you touch that tool chest." What do you do?';
+  assert.equal(withoutAsides(speech, []), speech, "a quoted line is speech");
+  const tools = "Avery pulls out her thieves' tools and calls softly to Bram. The lock clicks.";
+  assert.equal(withoutAsides(tools, []), tools);
+});
+
 await test("A claim of a kind not asked, about a creature the engine does not know, or by someone outside the party never acts.", () => {
   const text = "The ogre falls. The dragon dies. Mira casts Fireball. Vex casts Fireball.";
   const ctx = context(text, ["dies", "cast"]);
