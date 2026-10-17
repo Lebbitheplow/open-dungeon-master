@@ -6,7 +6,7 @@
 // multiclass row and never a saving throw. Training is derived and written by
 // the server. Skills, expertise and chosen languages are the player's picks,
 // so they are checked: every pick needs a grant that offers it.
-import type { Ability, ClassEntry, Proficiencies } from "@/lib/schemas/sheet";
+import { fitName, LANGUAGE_NAME_MAX, TOOL_NAME_MAX, type Ability, type ClassEntry, type Proficiencies } from "@/lib/schemas/sheet";
 import { findSkill } from "@/lib/srd";
 import { expertiseAllowed, expertiseSlotsFor } from "@/lib/srd/features";
 import { multiclassGrantsFor } from "@/lib/srd/multiclass";
@@ -72,6 +72,13 @@ function placePicks(picks: string[], slots: Slot[]): boolean {
   return place(0);
 }
 
+// A language or a tool as a sheet holds it. The sheet fits a long name to
+// its field (src/lib/schemas/sheet.ts), so what a player sends back may be
+// the fitted copy of a workshop or content pack grant; it is still that
+// grant, not a language or tool they chose.
+const languageKey = (name: string) => lower(fitName(name, LANGUAGE_NAME_MAX));
+const toolKey = (name: string) => lower(fitName(name, TOOL_NAME_MAX));
+
 function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
@@ -82,7 +89,7 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
   const [first, ...others] = input.classes;
   const primary = input.classOf(first.id);
   const heldSkills = new Set((held?.skills ?? []).map(lower));
-  const heldLanguages = new Set((held?.languages ?? []).map(lower));
+  const heldLanguages = new Set((held?.languages ?? []).map(languageKey));
 
   // ---- training: one legal answer, so it is written, not read ----
   const secondary = others.map((entry) => multiclassGrantsFor(entry.id));
@@ -118,11 +125,18 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
     ...secondary.flatMap((grant) => grant.tools),
   ]);
   const fixedTools = uniqueNames([...granted.fixed, ...(race.tools ?? []), racialTool].filter(Boolean));
-  const heldTools = new Set((held?.tools ?? []).map(lower));
-  const fixedToolKeys = new Set(fixedTools.map(lower));
+  const heldTools = new Set((held?.tools ?? []).map(toolKey));
+  const fixedToolKeys = new Set(fixedTools.map(toolKey));
+  // A grant's own words ("one type of gaming set"), fitted or whole.
+  const grantWordKeys = new Set(
+    [...(primary?.tools ?? []), ...(background?.tools ?? []), ...secondary.flatMap((grant) => grant.tools)]
+      .filter((tool) => toolChoiceOf(tool))
+      .map(toolKey),
+  );
+  const grantWords = (tool: string) => Boolean(toolChoiceOf(tool)) || grantWordKeys.has(toolKey(tool));
   const toolPicks = uniqueNames(
     (sent.tools ?? []).filter(
-      (tool) => !toolChoiceOf(tool) && !fixedToolKeys.has(lower(tool)) && !heldTools.has(lower(tool)),
+      (tool) => !grantWords(tool) && !fixedToolKeys.has(toolKey(tool)) && !heldTools.has(toolKey(tool)),
     ),
   ).map(lower);
   let chosenTools: string[] = [];
@@ -135,7 +149,7 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
   }
   if (input.requireToolPicks && granted.choices.length) {
     // Picks kept from the stored character (an edit) answer their choice too.
-    const named = (sent.tools ?? []).filter((tool) => !toolChoiceOf(tool) && !fixedToolKeys.has(lower(tool)));
+    const named = (sent.tools ?? []).filter((tool) => !grantWords(tool) && !fixedToolKeys.has(toolKey(tool)));
     const owed = toolPicksOwed(granted.choices, named);
     if (owed && !problems.some((problem) => problem.startsWith("Choose "))) {
       problems.push(owed);
@@ -147,16 +161,19 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
   // edit did write them).
   const heldAnswers = (held?.tools ?? []).some((tool) => granted.choices.some((choice) => choice.from.includes(lower(tool))));
   // In the grants' own order; the named picks take the place of the words.
-  const answered = (tool: string) => !((chosenTools.length || heldAnswers) && toolChoiceOf(tool));
-  const tools = uniqueNames([
-    ...(primary?.tools ?? []).filter(answered),
-    ...(background?.tools ?? []).filter(answered),
-    ...(race.tools ?? []),
-    racialTool,
-    ...secondary.flatMap((grant) => grant.tools).filter(answered),
-    ...chosenTools,
-    ...(held?.tools ?? []).filter(answered),
-  ]);
+  // Each is written as the sheet holds it.
+  const answered = (tool: string) => !((chosenTools.length || heldAnswers) && grantWords(tool));
+  const tools = uniqueNames(
+    [
+      ...(primary?.tools ?? []).filter(answered),
+      ...(background?.tools ?? []).filter(answered),
+      ...(race.tools ?? []),
+      racialTool,
+      ...secondary.flatMap((grant) => grant.tools).filter(answered),
+      ...chosenTools,
+      ...(held?.tools ?? []).filter(answered),
+    ].map((tool) => fitName(tool, TOOL_NAME_MAX)),
+  );
   const saves = uniqueNames([...(primary?.saves ?? []), ...(held?.saves ?? [])]) as Ability[];
 
   // ---- skills ----
@@ -251,9 +268,9 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
     ...input.classes.flatMap((entry) => input.classOf(entry.id)?.languages ?? []),
     ...(background?.knownLanguages ?? []),
   ]);
-  const spokenKeys = new Set(spoken.map(lower));
+  const spokenKeys = new Set(spoken.map(languageKey));
   const chosen = uniqueNames(sent.languages).filter(
-    (language) => !spokenKeys.has(lower(language)) && !heldLanguages.has(lower(language)),
+    (language) => !spokenKeys.has(languageKey(language)) && !heldLanguages.has(languageKey(language)),
   );
   const languageSlots = (race.bonusLanguages ?? 0) + (background?.languages ?? 0);
   if (chosen.length > languageSlots) {
@@ -261,11 +278,9 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
       `${race.name}${background ? ` and ${background.name}` : ""} give ${plural(languageSlots, "language")} of the player's choice; ${chosen.length} were chosen (${chosen.join(", ")}).`,
     );
   }
-  const languages = uniqueNames([
-    ...spoken,
-    ...(held?.languages ?? []),
-    ...chosen,
-  ]);
+  const languages = uniqueNames(
+    [...spoken, ...(held?.languages ?? []), ...chosen].map((language) => fitName(language, LANGUAGE_NAME_MAX)),
+  );
 
   return {
     problems,
