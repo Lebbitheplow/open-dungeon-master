@@ -1,5 +1,6 @@
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { FEAT_ONLY_SPEED } from "@/lib/srd/feature-effects";
+import { formSees } from "@/lib/srd/shape-rules";
 import { hasMediumArmorMaster } from "@/lib/srd/feat-combat";
 import backgroundsJson from "@/lib/srd/backgrounds.json";
 import classesJson from "@/lib/srd/classes.json";
@@ -244,19 +245,20 @@ export function effectiveAcFor(
     abilities?: AbilityScores;
   },
 ): number {
-  if (sheet.wildShape?.beastAc !== undefined && sheet.wildShape?.beastAc !== null) {
-    return sheet.wildShape.beastAc;
-  }
-  if (!sheet.acOverride || !sheet.conditions?.length) {
+  // A form's own AC is the base the ongoing effects ride (Shield of Faith,
+  // Haste, Slow, Barkskin's floor); the stored AC already carries them.
+  const formAc = sheet.wildShape?.beastAc ?? null;
+  if (formAc === null && (!sheet.acOverride || !sheet.conditions?.length)) {
     return sheet.ac;
   }
-  const mods = sheet.abilities
+  const scores = sheet.abilities ? { ...sheet.abilities, ...(sheet.wildShape?.abilities ?? {}) } : undefined;
+  const mods = scores
     ? Object.fromEntries(
-        Object.entries(sheet.abilities).map(([ability, score]) => [ability, abilityMod(score)]),
+        Object.entries(scores).map(([ability, score]) => [ability, abilityMod(score)]),
       )
     : undefined;
-  const riders = conditionAcRiders(sheet.conditions, mods);
-  const raised = sheet.ac + riders.bonus;
+  const riders = conditionAcRiders(sheet.conditions ?? [], mods);
+  const raised = (formAc ?? sheet.ac) + riders.bonus;
   return riders.floor ? Math.max(raised, riders.floor) : raised;
 }
 
@@ -396,6 +398,9 @@ export function computeSheetDerived(
     campaignId?: string;
   },
 ): SheetDerived {
+  // A Polymorph's beast is its own creature: none of the character's
+  // proficiencies, features, feats or gear (shape-rules.ts formSees).
+  sheet = formSees(sheet);
   const pb = proficiencyBonus(sheet.level);
   // Ability-setting magic items raise the scores every other number reads.
   const withItems = sheet.equipment

@@ -27,7 +27,7 @@ import { healthState } from "@/lib/bestiary/health";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { attackSight, characterSenses, enemySenses, lightOnAttack } from "@/lib/dm/attack-light";
 import { adjudicateHit, weaponAttackProfile, type ResolvedWeapon } from "@/lib/dm/attack-logic";
-import { invisibilityEndedByAction, planMarks, writeMarks } from "@/lib/dm/attack-marks";
+import { endInvisibilityOnCast, planMarks, writeMarks } from "@/lib/dm/attack-marks";
 import {
   attackContext,
   exhaustionRollState,
@@ -138,7 +138,7 @@ export function pcOpportunitySwing(input: {
   );
   const attackRiders = conditionRollRiders(sheet.conditions, "attack");
   const advantage: Advantage = mergeAdvantage([
-    context.advantage,
+    ...context.sources,
     exhaustionRollState(sheet.exhaustion ?? 0, "attack").advantage,
     ...light.sources,
     ...attackRiders.advantageSources,
@@ -267,7 +267,6 @@ function spendAttackCarriers(campaign: Campaign, sheet: CharacterSheet, enemy: E
   const fresh = getSheetById(sheet.id) ?? sheet;
   const mine = [
     ...fresh.conditions.filter((entry) => entry.trim().toLowerCase() === "hidden"),
-    ...invisibilityEndedByAction(fresh),
     ...riders,
   ];
   if (mine.length) {
@@ -277,6 +276,7 @@ function spendAttackCarriers(campaign: Campaign, sheet: CharacterSheet, enemy: E
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
     }
   }
+  endInvisibilityOnCast(campaign.id, sheet.id);
   const theirs = conditionsSpentAgainst(enemy.conditions);
   if (theirs.length) {
     const target = getEnemy(enemy.id);

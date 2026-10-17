@@ -307,6 +307,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "mode",
         label: "How",
         kind: "select",
+        help: "Set it to: Armor Class and Speed only. Advantage or disadvantage: attack rolls, saves, checks and initiative.",
         options: [
           { value: "add", label: "By an amount" },
           { value: "override", label: "Set it to" },

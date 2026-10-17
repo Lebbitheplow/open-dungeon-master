@@ -1,7 +1,7 @@
 import { normalizeHandLayout, type HandLayout } from "@/lib/battlemap/hand-layout";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
-import { effectiveMaxHp, maxHpRiders, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, maxHpRiders, tempHpClaims, withoutTempHpClaims, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
 import { XP_THRESHOLDS, deriveAc } from "@/lib/srd";
@@ -775,12 +775,28 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     const after = maxHpRiders(next.conditions, next.conditionMeta as ConditionMetaMap);
     const bonusDelta = after.bonus - before.bonus;
     const drainDelta = after.drain - before.drain;
+    // Exact deltas, so taking a rider away gives back what it took and no
+    // more: a drain may bring the maximum to 0 (a death), never past it on
+    // its own (src/lib/dm/enemy-hit.ts drainMaxHp caps it).
     if (bonusDelta || drainDelta) {
-      next.maxHp = Math.max(1, next.maxHp + bonusDelta - drainDelta);
+      next.maxHp = next.maxHp + bonusDelta - drainDelta;
       if (bonusDelta > 0) {
         next.currentHp = next.currentHp + bonusDelta;
       }
     }
+  }
+
+  // Temporary hit points a spell granted for its duration go when it ends
+  // (False Life, Heroism): the instance that granted them carries the claim.
+  // A new pool from anything else takes their place (they never stack) and
+  // is no spell's to take away.
+  if (patch.tempHp !== undefined && next.tempHp > existing.tempHp) {
+    next.conditionMeta = withoutTempHpClaims(next.conditionMeta as ConditionMetaMap);
+  } else if (
+    next.tempHp > 0 &&
+    tempHpClaims(next.conditions, next.conditionMeta as ConditionMetaMap) < tempHpClaims(existing.conditions, existing.conditionMeta as ConditionMetaMap)
+  ) {
+    next.tempHp = 0;
   }
 
   // The armor engine owns the AC unless a human pinned it: buying a

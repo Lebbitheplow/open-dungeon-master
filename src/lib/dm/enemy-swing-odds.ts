@@ -6,6 +6,7 @@
 // routine with what this returns. Nothing is spent or stored here.
 
 import type { Campaign } from "@/lib/db/campaigns";
+import { effectOutcome } from "@/lib/dm/effect-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
@@ -56,8 +57,11 @@ export function enemySwingOdds(input: {
   notes: string[];
   autoCrit: boolean;
   authored: ReturnType<typeof authoredIncomingAttack>;
+  // An active effect's amount on its attack rolls (set_effect).
+  attackBonus: number;
 } {
   const { campaign, turn, encounterId, standing, target, requested, ranged, longRange, distance, underwater, riders } = input;
+  const effect = effectOutcome(campaign.id, { kind: "enemy", id: standing.id }, "attack");
   // Conditions on both sides drive advantage and auto-crits; the model's
   // situational claim merges in as one more source.
   const conditionContext = attackContext({
@@ -113,7 +117,7 @@ export function enemySwingOdds(input: {
   // Authored subclass features (Among the Dead, Fungal Body, a guardian's mark): authored-hooks.ts.
   const authored = authoredIncomingAttack({ campaignId: campaign.id, encounterId, attacker: standing, target: liveTarget });
   const sources: Advantage[] = [
-    conditionContext.advantage,
+    ...conditionContext.sources,
     ...light.sources,
     ...(gale.disadvantage ? ["disadvantage" as const] : []),
     ...(crowded ? ["disadvantage" as const] : []),
@@ -128,9 +132,14 @@ export function enemySwingOdds(input: {
     ...(cursedAgainst(standing, target.id) ? ["disadvantage" as const] : []),
     ...riders.advantageSources,
     ...authored.sources,
+    // An active effect on its attack rolls (set_effect): its advantage, and
+    // its amount on the roll (attackBonus).
+    ...(effect.advantage ? ["advantage" as const] : []),
+    ...(effect.disadvantage ? ["disadvantage" as const] : []),
   ];
   const advantage: Advantage = mergeAdvantage(elusive ? sources.filter((source) => source !== "advantage") : sources);
   const notes = [
+    ...(effect.sources.length ? [`on its attack rolls: ${effect.sources.join("; ")}`] : []),
     ...conditionContext.notes,
     ...light.notes,
     ...(gale.note ? [gale.note] : []),
@@ -146,5 +155,5 @@ export function enemySwingOdds(input: {
     ...(input.defended ? [`Multiattack Defense: +4 AC against ${standing.displayName}'s later attacks this turn`] : []),
     ...authored.notes,
   ];
-  return { advantage, notes, autoCrit: conditionContext.autoCrit, authored };
+  return { advantage, notes, autoCrit: conditionContext.autoCrit, authored, attackBonus: effect.bonus };
 }

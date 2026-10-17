@@ -72,6 +72,15 @@ export const TAIL_CONDITION_EFFECTS: ConditionEffectRow[] = [
     match: ["halted"],
     summary: "Command (Halt): it does not move and takes no action on its turn.",
     noAction: true,
+    noMove: true,
+    speedMultiplier: 0,
+  },
+  {
+    id: "lethargic",
+    match: ["lethargic"],
+    summary: "Haste's lethargy: it cannot move or take actions until after its next turn.",
+    noAction: true,
+    noMove: true,
     speedMultiplier: 0,
   },
   {

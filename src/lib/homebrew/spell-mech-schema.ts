@@ -181,6 +181,7 @@ export const spellMechSchema = z.object({
   maxHpDice: dice.optional(),
   regainEachTurn: int(1, 100).optional(),
   healNoModifier: z.boolean().optional(),
+  durationBySlot: z.array(z.tuple([level, rounds.nullable()])).max(9).optional(),
   note: z.string().trim().max(400).optional(),
 });
 

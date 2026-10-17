@@ -19,7 +19,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
@@ -88,7 +88,7 @@ export function commandersStrikeCharge(campaign: Campaign, sheet: CharacterSheet
   if (!able.ok) {
     return toolError(able);
   }
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   if (!budget) {
     return { error: `Commander's Strike is taken on ${sheet.name}'s own turn, as part of the Attack action. What they declared waits for their turn. Nothing was spent.`, refused: "rules" };
   }

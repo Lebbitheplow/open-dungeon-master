@@ -344,7 +344,7 @@ export function resolveRollExpression(
       ? rollDerivation(sheet.conditions, derivationKind, derivationAbility, {
           rageSuppressed: wearsHeavyArmor(sheet.equipment),
         })
-      : { advantage: "none" as const, autoFail: false, notes: [] };
+      : { advantage: "none" as const, sources: [], autoFail: false, notes: [] };
   if (derivation.autoFail) {
     return { autoFail: true, detail: args.ability ?? "", notes: derivation.notes };
   }
@@ -438,7 +438,7 @@ export function resolveRollExpression(
     args.advantage ?? "none",
     ...(extras?.effectAdvantage ? ["advantage" as const] : []),
     ...(extras?.effectDisadvantage ? ["disadvantage" as const] : []),
-    derivation.advantage,
+    ...derivation.sources,
     exhaustion.advantage,
     ...effects.advantageSources,
     ...(helped ? ["advantage" as const] : []),

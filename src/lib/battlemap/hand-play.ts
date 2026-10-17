@@ -128,7 +128,7 @@ export function previewRows(
         adjacent,
         requested: "none",
       });
-      const sources = [context.advantage];
+      const sources = [...context.sources];
       if (edge?.flanking && card.melee) sources.push("advantage");
       if (choices.options?.includes("reckless")) sources.push("advantage");
       if (choices.options?.includes("useInspiration")) sources.push("advantage");

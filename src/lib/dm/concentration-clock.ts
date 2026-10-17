@@ -9,7 +9,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, setEnemyConcentration, setEnemyConcentrationRounds } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
+import { breakConcentration, clearSpellConditionsByName, settleFullDuration } from "@/lib/dm/concentration";
 
 export { concentrationRoundsFor } from "@/lib/dm/concentration";
 
@@ -34,6 +34,8 @@ export function tickConcentrationClocks(
       patchSheet(sheet.id, { concentrationRounds: left - by });
       continue;
     }
+    // Held to the end: what the spell leaves for good stays (full-duration.ts).
+    lines.push(...settleFullDuration(campaign, sheet.concentratingOn, sheet.id));
     const spell = breakConcentration(campaign, null, sheet.id, "the spell's duration ran out");
     if (spell) {
       lines.push(`${sheet.name}'s ${spell} has run its course; their concentration on it ends.`);
@@ -50,6 +52,7 @@ export function tickConcentrationClocks(
       continue;
     }
     const spell = enemy.concentration;
+    lines.push(...settleFullDuration(campaign, spell, enemy.id));
     setEnemyConcentration(enemy.id, null);
     clearSpellConditionsByName(campaign, spell, undefined, enemy.id);
     lines.push(`${enemy.displayName}'s ${spell} has run its course; the spell's effects end.`);

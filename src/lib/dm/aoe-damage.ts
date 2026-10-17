@@ -22,6 +22,7 @@ import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
 import { layEnemyCondition } from "@/lib/dm/cast-at-player";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import { planAoeSpell, type AoeSpellPlan } from "@/lib/dm/aoe-spell";
+import { freeRepeatOf, markRepeatStruck, repeatStrikesProblem } from "@/lib/dm/area-casting";
 import { aoePool } from "@/lib/dm/spell-pool";
 import { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { afterEnemySave, concentrationShaken, layAreaConditions, spellAutoSave, spellSaveOptions } from "@/lib/dm/spell-riders";
@@ -217,6 +218,15 @@ export function handleAoeDamage(
   // An enemy's spell (casterEnemyId) keeps the caller's numbers.
   const corrections: string[] = [];
   let plan: AoeSpellPlan | null = null;
+  // A held area coming again strikes each creature once a turn, where it
+  // stands (src/lib/dm/area-casting.ts).
+  const repeating = args.spell && !args.casterEnemyId ? freeRepeatOf(campaign, charmedCaster?.id, args.spell) : null;
+  const struck = repeating && charmedCaster
+    ? repeatStrikesProblem(encounter, repeating, charmedCaster.id, [...enemyTargets.map((enemy) => ({ id: enemy.id, name: enemy.displayName })), ...pcTargets.map((sheet) => ({ id: sheet.id, name: sheet.name }))])
+    : null;
+  if (struck) {
+    return struck;
+  }
   if (args.spell && !args.casterEnemyId) {
     const planned = planAoeSpell(campaign, turn, sheets, sheetsById, {
       encounterId: encounter.id,
@@ -572,7 +582,7 @@ export function handleAoeDamage(
         sheetsById,
       );
       if (!("error" in applied)) {
-        row.conditionApplied = enemyUse.condition;
+        row.conditionApplied = [enemyUse.condition, ...(Array.isArray(applied.alsoApplied) ? applied.alsoApplied : [])].join(", ");
       }
     }
   }
@@ -584,6 +594,10 @@ export function handleAoeDamage(
   // The spell's area on the board, where it was cast (src/lib/dm/zone-cast.ts).
   const areaCaster = plan ? { kind: "pc" as const, id: plan.caster.id, name: plan.caster.name } : enemyUse && args.spell ? { kind: "enemy" as const, id: enemyUse.enemy.id, name: enemyUse.enemy.displayName } : null;
   const area = areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", runsAs: plan?.runsAs, caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], ...zonePlacement(args) }) : null;
+  // This turn's strike of a recurring area, cast or come again.
+  if (plan?.mech?.repeat === "free") {
+    markRepeatStruck(campaign, plan.spell, plan.caster.id, [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)]);
+  }
 
   return {
     ok: true,

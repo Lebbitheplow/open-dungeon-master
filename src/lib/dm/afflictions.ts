@@ -14,7 +14,8 @@
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { removeConditions } from "@/lib/dm/condition-logic";
+import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { settleOnDamage } from "@/lib/dm/spell-effects";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import { exhaustionPatch } from "@/lib/dm/vitals-logic";
@@ -519,14 +520,24 @@ export function afflictionStress(campaign: Campaign, turnId: string, sheetId: st
     return [];
   }
   const lines: string[] = [];
-  // A condition that ends when the creature takes damage ends now: a
-  // madness's paralysis, a poison's sleep, a Sleep spell's slumber.
+  // A condition that ends when the creature takes damage ends now (a
+  // madness's paralysis, a poison's sleep, a Sleep spell's slumber), and one
+  // that grants a save when hurt saves (Dominate Person, Hideous Laughter):
+  // each source on its own, as a monster's are (spell-effects.ts).
   if (cause === "damage") {
-    const meta = sheet.conditionMeta as Record<string, { endsOnDamage?: boolean } | undefined>;
-    const waking = sheet.conditions.filter((name) => meta[name]?.endsOnDamage);
-    if (waking.length) {
-      dropConditions(campaign.id, sheet.id, waking);
-      lines.push(`${sheet.name} is jolted out of it by the blow: no longer ${waking.join(" or ")}.`);
+    const hurt = sheet;
+    const settled = settleOnDamage(hurt.conditions, hurt.conditionMeta as ConditionMetaMap, (entry, name) => {
+      const { ability, dc, advantage } = entry.saveOnDamage ?? { ability: "wis" as const, dc: 10 };
+      const save = characterSave(campaign, getSheetById(sheetId) ?? hurt, { ability, dc, advantage, detail: `${hurt.name}: ${ability.toUpperCase()} save against ${entry.spell ?? name} (hurt)` });
+      lines.push(save.success ? `${hurt.name} is hurt and shakes off ${entry.spell ?? name}.` : `${hurt.name} is hurt but stays ${name}.`);
+      return save.success;
+    });
+    if (settled.changed) {
+      patchSheet(hurt.id, { conditions: settled.conditions, conditionMeta: settled.meta });
+      publishSheetOf(campaign.id, hurt.id);
+      if (settled.endedByDamage.length) {
+        lines.push(`${hurt.name} is jolted out of it by the blow: no longer ${settled.endedByDamage.join(" or ")}.`);
+      }
       sheet = getSheetById(sheetId) ?? sheet;
     }
   }

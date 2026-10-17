@@ -301,7 +301,7 @@ export function rollEnemySave(
   const worn = enemyExhaustion(enemy.conditions) >= 3;
   const advantage = mergeAdvantage([
     ...(worn ? ["disadvantage" as const] : []),
-    derivation.advantage,
+    ...derivation.sources,
     ...(effect.advantage ? ["advantage" as const] : []),
     ...(effect.disadvantage ? ["disadvantage" as const] : []),
     ...(resistsMagic ? ["advantage" as const] : []),

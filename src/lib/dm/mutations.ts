@@ -45,7 +45,7 @@ import { combatFeatureSpend } from "@/lib/dm/combat-features";
 import { srdFeatureSpend } from "@/lib/dm/srd-feature-spends";
 import { handleStabilize } from "@/lib/dm/stabilize";
 import { canonicalCondition, handleSetCondition } from "@/lib/dm/set-condition";
-import { exhaustionPatch, namesExhaustion, PRONE, SUFFOCATING } from "@/lib/dm/vitals-logic";
+import { exhaustionPatch, namesExhaustion, PRONE, regainBlockedBy, SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { castMarkCharge, prepareResourceCharge } from "@/lib/dm/resource-turn";
 import { planCounterReaction } from "@/lib/dm/reaction-counters";
 import { channelOptions, channelOptionsHeld, optionCost } from "@/lib/dm/option-costs";
@@ -63,7 +63,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { canAct } from "@/lib/dm/can-act";
 import { spendAction } from "@/lib/dm/action-budget";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { payToStand } from "@/lib/dm/stand-up";
 import { copyCost, learnProblem } from "@/lib/dm/learn-rules";
 import { getAuditPreImage, listAuditForTurn, listAuditSince } from "@/lib/db/sheet-audit";
@@ -804,14 +804,14 @@ export function applyDmMutation(
           },
         };
       }
-      if (
-        !args.temp &&
-        sheet.currentHp <= 0 &&
-        sheet.conditions.some((entry) => entry.toLowerCase() === SUFFOCATING)
-      ) {
+      const blocked = args.temp ? null : regainBlockedBy(sheet);
+      if (blocked) {
         return {
           result: {
-            error: `${sheet.name} is still without air and cannot regain hit points until they can breathe. Get them to air, clear the suffocating condition, then heal them.`,
+            error:
+              blocked === SUFFOCATING
+                ? `${sheet.name} is still without air and cannot regain hit points until they can breathe. Get them to air, clear the suffocating condition, then heal them.`
+                : `${sheet.name} is gripped by Chill Touch and cannot regain hit points until its caster's next turn starts.`,
             refused: "rules",
           },
         };
@@ -1439,7 +1439,7 @@ export function applyDmMutation(
         if (able && !able.ok) {
           return { result: toolError(able) };
         }
-        const budget = fighting ? budgetFor(fighting, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions)) : null;
+        const budget = fighting ? budgetFor(fighting, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions)) : null;
         const bonus = budget ? spendAction(budget, "bonus", "Combat Wild Shape", sheet.name) : null;
         if (bonus && !bonus.ok) {
           return { result: toolError(bonus) };

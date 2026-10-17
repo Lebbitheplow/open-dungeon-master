@@ -62,14 +62,14 @@ export const effectTools: ToolDef[] = [
               properties: {
                 field: { type: "string", enum: [...EFFECT_FIELDS] },
                 mode: { type: "string", enum: [...EFFECT_MODES] },
-                value: { type: "integer", description: "For add and override." },
+                value: { type: "integer", description: "For add and override. Override (a set-to value) is for ac and speed only; advantage and disadvantage for attack, save, check and initiative." },
               },
               required: ["field"],
             },
           },
           duration: { type: "string", enum: [...EFFECT_DURATIONS] },
           remaining: { type: "integer", minimum: 1, description: "Rounds or minutes it lasts." },
-          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"] },
+          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off: the target rolls it at the end of each of its turns (once per stretch of time outside a fight), and a success ends the effect." },
           saveDc: { type: "integer", minimum: 1, maximum: 30 },
           visible: { type: "boolean", description: "True when the party can tell it is there." },
           auraFeet: {
@@ -208,6 +208,7 @@ export function handleSetEffect(
     saveAbility: args.saveAbility,
     saveDc: args.saveDc,
     visible: args.visible,
+    targetKind: target.kind,
   });
   if ("error" in checked) {
     return checked;

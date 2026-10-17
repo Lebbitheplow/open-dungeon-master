@@ -92,14 +92,17 @@ export function rollFeatureRiders(
   // only.
   const checkKind = derivationKind === "skill_check" || derivationKind === "ability_check";
   const checkSkill = skillId;
+  const checkDerived = sheet && checkKind ? computeSheetDerived(sheet) : null;
   const traitChecks =
-    sheet && checkKind
+    sheet && checkDerived
       ? traitCheckRiders(sheet, {
           ability: derivationAbility,
           skill: checkSkill,
           reason: args.reason,
-          proficiencyBonus: computeSheetDerived(sheet).proficiencyBonus,
+          proficiencyBonus: checkDerived.proficiencyBonus,
           proficient: Boolean(checkSkill && (sheet.proficiencies?.skills?.includes(checkSkill) || (sheet.proficiencies?.expertise ?? []).includes(checkSkill))),
+          // The proficiency the skill already carries (expertise twice).
+          applied: (checkSkill ? checkDerived.parts.skills[checkSkill] ?? [] : []).find((part) => /proficiency|expertise/.test(part.label))?.value ?? 0,
           movedLittle: context.movedLittle,
         })
       : { advantage: [], bonus: 0, notes: [] };

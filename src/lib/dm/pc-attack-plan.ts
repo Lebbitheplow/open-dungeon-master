@@ -48,7 +48,7 @@ import { rapidStrike, secondWeaponProblem } from "@/lib/dm/authored-attacks";
 import { curseRider } from "@/lib/dm/spell-retort";
 import type { AmmoSpend } from "@/lib/srd/ammunition";
 import { spendAmmo } from "@/lib/srd/ammunition";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { conditionsSpentAgainst } from "@/lib/srd/condition-effect-queries";
 import type { ConditionRollRiders } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -88,6 +88,9 @@ export type AttackPlan = {
   typedRiders: TypedRider[];
   // Once-per-turn riders already used this turn: they left the expression.
   droppedRiders: string[];
+  // The once-per-turn riders this attack carries, spent only by a hit
+  // (pc-attack-damage.ts claimHitRiders).
+  hitClaims: string[];
   effectiveAc: number;
   atRange: boolean;
   context: { advantage: Advantage; autoCrit: boolean; notes: string[] };
@@ -237,7 +240,7 @@ export function planPcAttack(input: {
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
-    conditionExtraActions(sheet.conditions),
+    conditionTurnShape(sheet.conditions),
   );
   // An option that cannot ride this swing says the attack can go without
   // it; on a weapon swing the turn can no longer pay for, the turn's
@@ -492,19 +495,21 @@ export function planPcAttack(input: {
   context.notes.push(...context0, ...featNotes);
   // Rapid Strike: the advantage of this attack traded for one more attack of
   // the action, once a turn (src/lib/dm/authored-attacks.ts).
-  let advantage = situation.advantage;
+  // The last sources join the situation's own, and all of them cancel once.
+  const sources = [...situation.sources];
   if (maneuver?.use === "feint") {
-    advantage = mergeAdvantage([advantage, "advantage"]);
+    sources.push("advantage");
     context.notes.push("Feinting Attack: advantage on this attack, for their bonus action");
   }
   if (options.featureBonus?.advantage) {
-    advantage = mergeAdvantage([advantage, "advantage"]);
+    sources.push("advantage");
     context.notes.push(`${options.featureBonus.feature}: advantage on this attack`);
   }
   // Powerful Attacker's trade: the roll at disadvantage (feat-combat.ts).
   if (powerDisadvantage) {
-    advantage = mergeAdvantage([advantage, "disadvantage"]);
+    sources.push("disadvantage");
   }
+  let advantage = mergeAdvantage(sources);
   if (args.rapidStrike) {
     const traded = rapidStrike({ sheet, budget, advantage, weaponAttack, bonus: Boolean(options.bonusAttack || args.offHand || grantedBonusAction) });
     if ("refused" in traded) {
@@ -536,6 +541,7 @@ export function planPcAttack(input: {
   }
   context.notes.push(...marks.notes);
   let droppedRiders: string[] = [];
+  let hitClaims: string[] = [];
   if (budget) {
     const claimed = claimOncePerTurnRiders({
       budget,
@@ -545,10 +551,10 @@ export function planPcAttack(input: {
       sneakAttackDice: sneak.dice,
       featureRiders: folded.featureRiders,
     });
-    budget = claimed.budget;
     profile = claimed.profile;
     context.notes = claimed.notes;
     droppedRiders = claimed.droppedRiders;
+    hitClaims = claimed.hitClaims;
   }
 
   return {
@@ -575,6 +581,7 @@ export function planPcAttack(input: {
     ammo: options.featureBonus?.noAmmo ? null : ammo,
     typedRiders: [...folded.typedRiders, ...gear.typed, ...(curse ? [curse] : [])],
     droppedRiders,
+    hitClaims,
     effectiveAc: geometry.effectiveAc,
     atRange,
     context,

@@ -25,7 +25,7 @@ import { publishPersisted } from "@/lib/events";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { RAGING } from "@/lib/srd/class-resources";
 import { concentrationDamageHook } from "@/lib/dm/concentration";
-import { effectiveMaxHp, pcResistances, removeConditions } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, pcImmunities, pcResistances, removeConditions } from "@/lib/dm/condition-logic";
 import { damageAdjust } from "@/lib/dm/damage-logic";
 import { isMassiveDamage } from "@/lib/dm/death-logic";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
@@ -41,13 +41,19 @@ function has(list: string[], name: string): boolean {
   return list.some((entry) => entry.toLowerCase() === name);
 }
 
-// Damage that reached the character from these swings, after resistance.
+// Damage that reached the character from these swings, after resistance
+// and immunity, a blow of several types part by part as it landed.
 export function landedBy(record: LastHit, swings: SwingRecord[]): number {
   const sheet = getSheetById(record.characterId);
-  const resist = sheet ? pcResistances({ ...sheet, conditions: record.before.conditions }) : "";
+  const held = sheet ? { ...sheet, conditions: record.before.conditions } : null;
+  const resist = held ? pcResistances(held) : "";
+  const immune = held ? pcImmunities(held) : "";
+  const meet = (amount: number, type: string | undefined) => damageAdjust(amount, type, resist, immune, "").amount;
   return swings
     .filter((swing) => swing.hit)
-    .reduce((sum, swing) => sum + damageAdjust(swing.raw, swing.type ?? record.type, resist, "", "").amount, 0);
+    .reduce((sum, swing) => sum + (swing.parts?.length
+      ? swing.parts.reduce((total, part) => total + meet(part.amount, part.type), 0)
+      : meet(swing.raw, swing.type ?? record.type)), 0);
 }
 
 type Replayed = {
@@ -119,7 +125,7 @@ function restoreConcentration(campaign: Campaign, record: LastHit): string | nul
       if (!missing.length && !lethargy) {
         continue;
       }
-      const base = lethargy ? removeConditions(now.conditions, now.conditionMeta, [LETHARGY]) : { conditions: now.conditions, meta: now.conditionMeta };
+      const base = lethargy ? removeConditions(now.conditions, now.conditionMeta, [LETHARGY, "lethargic"]) : { conditions: now.conditions, meta: now.conditionMeta };
       const meta = { ...base.meta } as Record<string, unknown>;
       for (const name of missing) {
         meta[name] = holder.meta[name] ?? {};
@@ -141,7 +147,7 @@ function restoreConcentration(campaign: Campaign, record: LastHit): string | nul
       if (!missing.length && !lethargy) {
         continue;
       }
-      const base = lethargy ? removeConditions(enemy.conditions, enemy.conditionMeta, [LETHARGY]) : { conditions: enemy.conditions, meta: enemy.conditionMeta };
+      const base = lethargy ? removeConditions(enemy.conditions, enemy.conditionMeta, [LETHARGY, "lethargic"]) : { conditions: enemy.conditions, meta: enemy.conditionMeta };
       const meta = { ...base.meta } as Record<string, unknown>;
       for (const name of missing) {
         meta[name] = holder.meta[name] ?? {};
