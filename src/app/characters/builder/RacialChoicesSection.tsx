@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import CatalogBrowser from "@/app/characters/builder/CatalogBrowser";
 import ContentPicker from "@/app/characters/builder/ContentPicker";
 import type { RaceOption } from "@/app/characters/builder/useBuilderOptions";
@@ -13,6 +14,8 @@ import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
 import type { FeatChoices, FeatGrantSpec, FeatPicks } from "@/lib/srd/feat-grants";
 import FeatChoicesFields, { type KnownTraining } from "./FeatChoicesFields";
+import { SelectedPrerequisite } from "./AsiFeatEditor";
+import { judgeEntry, useFeatJudge } from "./featPrereqs";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { Chip } from "./steps/shared";
@@ -104,6 +107,10 @@ export function RacialChoicesSection({
   );
   // The half-feat's choice of score, offered once the feat is picked.
   const featScores = racialFeats ? (featAbilityIncrease(feats[0] ?? "", featDescOf?.(feats[0] ?? ""))?.from ?? []) : [];
+  // The builder's prerequisite check (featPrereqs.ts): read off each row,
+  // and rechecked on the feat once picked.
+  const judge = useFeatJudge();
+  const noteId = useId();
   const pickFeat = (name: string) => {
     if (!onFeatsChange || feats.includes(name) || feats.length >= racialFeats) {
       return;
@@ -275,12 +282,16 @@ export function RacialChoicesSection({
               ))}
             </div>
           ) : null}
+          {feats.map((feat, index) => (
+            <SelectedPrerequisite key={feat} id={`${noteId}-${index}`} check={judge?.checkFeat(feat) ?? null} />
+          ))}
           {feats.length < racialFeats ? (
             <>
               <CatalogBrowser
                 kind="feats"
                 buttonLabel="Browse every feat"
                 selectedNames={feats}
+                judge={judge ? (entry) => judgeEntry(judge, entry) : undefined}
                 onPick={(entry) => pickFeat(entry.name)}
                 onUnpick={(featName) => onFeatsChange(feats.filter((entry) => entry !== featName))}
                 sections={[{ key: "feats:all", label: "All feats" }]}
@@ -289,6 +300,7 @@ export function RacialChoicesSection({
               <ContentPicker
                 kind="feats"
                 placeholder="Search feats (e.g. alert, tough)"
+                judge={judge ? (entry) => judgeEntry(judge, entry) : undefined}
                 onPick={(entry) => pickFeat(entry.name)}
               />
             </>
