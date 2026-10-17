@@ -22,6 +22,7 @@
 // Anything else stays as written, as before. Pure, and shared by the builder
 // (what the chips show) and the server (what the free kit is), so the two
 // can never disagree about what the character carries.
+import { fitItemName } from "@/lib/schemas/sheet";
 import { matchGear, resolveGearLine } from "@/lib/srd/adventuring-gear";
 import type { KitItem } from "@/lib/srd/starting-kit";
 import { ARTISANS_TOOLS, GAMING_SETS, MUSICAL_INSTRUMENTS, splitToolGrants } from "@/lib/srd/tool-choices";
@@ -329,5 +330,9 @@ export function expandBackgroundGear(
       }
     }
   }
-  return { names, choices, toolLines, problems };
+  // Each name as the sheet can hold it: a line kept as the book wrote it may
+  // say more than an item's name (a content pack's Lyceum Student carries "A
+  // writing kit (small pouch with a quill, ink, folded parchment, and a small
+  // penknife)"), and the builder and the server fit it the same way.
+  return { names: names.map(fitItemName), choices, toolLines, problems };
 }
