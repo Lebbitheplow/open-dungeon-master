@@ -11,7 +11,7 @@ const { TAB_GLYPHS, TABLE_GLYPH, SUBTAB_GLYPHS, MODE_GLYPHS } = await import(
   "../src/app/campaigns/[campaignId]/sessionGlyphs.ts"
 );
 const { SYSTEM_GLYPHS, isSystemGlyph } = await import("../src/lib/system-glyphs.ts");
-const { TABLE_TAB_IDS } = await import("../src/lib/dm/table-tabs.ts").catch(() => ({}));
+const { TABLE_TAB_IDS } = await import("../src/lib/dm/table-tabs.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -33,7 +33,8 @@ test("every mapped glyph is a file that ships", () => {
 });
 
 test("every panel tab has a painting", () => {
-  for (const id of TABLE_TAB_IDS ?? ["dm", "lead", "party", "battle", "map", "story", "notes", "chat", "context", "settings"]) {
+  // The rail's own list, so a tab added there (World, WF-10) is held to it.
+  for (const id of TABLE_TAB_IDS) {
     assert.ok(TAB_GLYPHS[id], `no glyph for the ${id} tab`);
   }
 });

@@ -105,7 +105,7 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   const selectedRegion = selected?.kind === "region" ? atlas.regions.find((region) => region.id === selected.id) ?? null : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+    <div className="grid gap-4 @4xl:grid-cols-[14rem_minmax(0,1fr)]">
       <aside className="flex flex-col gap-1" aria-label="Maps">
         <span className="eyebrow text-[10px] text-stone-500">Maps</span>
         {mapTree(doc.maps, doc.pins).map(({ map: entry, depth }) => (

@@ -8,7 +8,8 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { visiblePanelTabs } = await import("../src/lib/dm/table-tabs.ts");
+const { visiblePanelTabs, phoneBarSplit, TABLE_TAB_IDS } = await import("../src/lib/dm/table-tabs.ts");
+const { TAB_IDS } = await import("../src/lib/table-layout.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -88,8 +89,47 @@ test("the full ordering with every tab on", () => {
       adjudicates: true,
       isLead: true,
     }),
-    ["dm", "lead", "party", "battle", "map", "story", "notes", "chat", "context", "settings"],
+    ["dm", "lead", "party", "battle", "map", "story", "notes", "chat", "world", "context", "settings"],
   );
+});
+
+// WF-10: the campaign's world is the story authority's, hidden truths and
+// all; its routes answer nobody else (requireStoryAuthority), so the tab is
+// offered exactly where Context is.
+test("the World tab goes to story authority and to nobody else", () => {
+  // The DM at a human-run table: the console and the world.
+  const dm = visiblePanelTabs({ ...base, adjudicates: true, secretStory: true });
+  assert.equal(dm.includes("world"), true);
+  // The lead of an AI campaign steers the story without the console.
+  const aiLead = visiblePanelTabs({ ...base, isLead: true, secretStory: true });
+  assert.equal(aiLead.includes("world"), true);
+  assert.equal(aiLead.includes("dm"), false);
+  // The lead at a human-DM table, and every plain player, never see it.
+  assert.equal(visiblePanelTabs({ ...base, isLead: true }).includes("world"), false);
+  assert.equal(visiblePanelTabs(base).includes("world"), false);
+  // Not before the campaign has loaded, like Context.
+  assert.equal(visiblePanelTabs({ ...base, hasSettings: false, secretStory: true }).includes("world"), false);
+});
+
+test("the World tab sits beside Context and waits under More on a phone", () => {
+  const tabs = visiblePanelTabs({ ...base, isLead: true, secretStory: true });
+  assert.equal(tabs.indexOf("world") + 1, tabs.indexOf("context"));
+  const { bar, more } = phoneBarSplit(tabs);
+  assert.equal(bar.includes("world"), false);
+  assert.equal(more.includes("world"), true);
+});
+
+test("one list of tabs serves the rail, the layout's panes and the paintings", () => {
+  const all = visiblePanelTabs({
+    hasBattleMap: true,
+    mapsEnabled: true,
+    hasSettings: true,
+    secretStory: true,
+    adjudicates: true,
+    isLead: true,
+  });
+  assert.deepEqual([...TABLE_TAB_IDS], all);
+  assert.deepEqual([...TAB_IDS], all);
 });
 
 test("no campaign loaded means neither setup tab", () => {

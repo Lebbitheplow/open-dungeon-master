@@ -244,7 +244,7 @@ export function WebView({ world, focus, onOpen }: { world: WorldState; focus: st
           </svg>
         )}
         {chosen ? (
-          <div key={chosen.ref} className="sticky left-0 m-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/25 bg-stone-950/90 p-2 shadow-lg motion-pop sm:absolute sm:bottom-3 sm:left-3 sm:m-0">
+          <div key={chosen.ref} className="sticky left-0 m-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/25 bg-stone-950/90 p-2 shadow-lg motion-pop @lg:absolute @lg:bottom-3 @lg:left-3 @lg:m-0">
             <EntityAvatar entity={chosen} type={typeOf(doc, chosen)} size="size-8" />
             <span className="text-sm text-amber-100">{chosen.name}</span>
             <TypeChip type={typeOf(doc, chosen)} />
