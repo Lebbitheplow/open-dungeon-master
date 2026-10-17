@@ -404,7 +404,7 @@ const view = {
   theme: "cave",
   terrain: "#.. .#",
   backdrop: { path: "/uploads/abc.png", transform: { offsetX: 0, offsetY: 0, scale: 1, opacity: 1 } },
-  skin: {},
+  skin: { id: "stone-dungeon", bind: { ".": "flagstone-granite", "#": "wall-dungeon-mossy" } },
   addonView: { addonId: "hello-dungeon", data: { heights: [1] }, files: [{ name: "cave.glb", path: "/uploads/def.glb", type: "model/gltf-binary", bytes: 10 }] },
   visible: [1, 2],
   explored: [0, 1, 2, 4, 5],
@@ -436,6 +436,8 @@ await test("a snapshot is the viewer's projection, with only this addon's view d
   const mine = boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance });
   assert.equal(mine.terrain, view.terrain, "unexplored squares stay blank");
   assert.deepEqual(mine.skin, view.skin, "only the public skin binding is forwarded");
+  assert.equal(mine.genre, null, "existing callers need not supply a genre");
+  assert.equal(mine.appearance.audio, undefined, "existing callers need not supply audio preferences");
   const publicOptions = { canDirect: false, genre: "cyberpunk", appearance: { ...appearance, audio: { muted: true, volume: 0.2 } } };
   const presentation = boardSnapshot(view, "hello-dungeon", publicOptions);
   assert.equal(presentation.genre, "cyberpunk");
@@ -553,7 +555,7 @@ await test("Godot resources are isolated, typed and size-limited like other addo
   const { serveAddonFile } = await import("../src/lib/addons/static-files.ts");
   const root = await fsp.mkdtemp(nodePath.join(os.tmpdir(), "odm-addon-files-"));
   try {
-    for (const [name, mime] of [["board.pck", "application/octet-stream"], ["swish.wav", "audio/wav"]]) {
+    for (const [name, mime] of [["board.pck", "application/octet-stream"], ["swish.wav", "audio/wav"], ["board.wasm", "application/wasm"], ["board.js", "text/javascript; charset=utf-8"], ["tile.png", "image/png"]]) {
       await fsp.writeFile(nodePath.join(root, name), "test");
       const response = await serveAddonFile(root, [name], 64);
       assert.equal(response.status, 200);
