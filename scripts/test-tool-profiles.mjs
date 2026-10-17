@@ -156,6 +156,11 @@ const server = http.createServer((req, res) => {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
   req.on("end", () => {
+    // A llama-server launched with -c 65536, for a table that sets no window.
+    if (req.url.startsWith("/props")) {
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ default_generation_settings: { n_ctx: 65_536 } }));
+      return;
+    }
     if (!req.url.endsWith("/chat/completions")) {
       res.writeHead(404).end();
       return;
@@ -188,6 +193,7 @@ const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
 const { startDmTurn, dmTurnTuning, dmTurnTools } = await import("../src/lib/dm/turn.ts");
+const { forgetContextWindows } = await import("../src/lib/model-client.ts");
 
 const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x", { isAdmin: true });
 function table(line) {
@@ -332,6 +338,24 @@ await test("a window the full set fits keeps the full set, uncut", async () => {
   assert.equal(dmTurnTuning(campaign).toolProfile, "full");
   assert.deepEqual(first.tools, JSON.parse(JSON.stringify(dmTurnTools(campaign, false, false, false))), "the full set, as before");
   assert.ok(String(first.messages[0].content).includes(rules.DM_SYSTEM), "every rule, word for word");
+  process.env.OPENAI_COMPAT_CONTEXT = "16384";
+});
+
+await test("the first turn asks the endpoint for its window before it picks the tools", async () => {
+  delete process.env.OPENAI_COMPAT_CONTEXT;
+  forgetContextWindows();
+  const campaign = table("I look around the square.");
+  script = [{ content: "Pigeons scatter from the fountain." }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.contextTrace.profile.name, "full", "the 64K the server reports keeps the full set, not the 16K default's compact one");
+  const first = requests.find((body) => Array.isArray(body.tools));
+  assert.equal(first.tools.length, dmTurnTools(campaign, false, false, false).length);
+  // What the prompt was budgeted around: the full set's cost, not the compact
+  // one a 16K guess would have reserved before the endpoint was asked.
+  const reserved = turn.contextTrace.blocks.find((block) => block.kind === "tools")?.tokens ?? 0;
+  assert.ok(reserved >= requestTokens([], first.tools) - 200, `the full set was reserved (${reserved})`);
   process.env.OPENAI_COMPAT_CONTEXT = "16384";
 });
 

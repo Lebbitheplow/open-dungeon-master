@@ -134,6 +134,17 @@ function pickFused<T>(
     .filter((value): value is T => value !== undefined);
 }
 
+// Ask the story endpoint what window it was launched with before anything is
+// budgeted against it: the tool profile, the reply reserve and every block
+// read it. llama.cpp and llama-swap report their -c on /props; anything else
+// misses quietly and the configured or default value stands. Cached per base
+// URL and model, so this costs one request per process.
+export async function probeStoryWindow(settings: Campaign["settings"]): Promise<void> {
+  if (settings.textProvider !== "local") {
+    await probeCustomContextWindow(settings.customBaseUrl, settings.customApiKey, settings.customModel);
+  }
+}
+
 export async function buildTurnRetrieval(
   campaign: Campaign,
   history: CampaignMessage[],
@@ -143,18 +154,8 @@ export async function buildTurnRetrieval(
 ): Promise<TurnRetrieval> {
   // Resolved from the campaign's own provider and model rather than assuming
   // a default window, so the rules budget matches what the backend will
-  // actually accept.
-  // Ask the endpoint what window it was launched with before budgeting
-  // against it. llama.cpp and llama-swap report their -c on /props; anything
-  // else misses quietly and the configured or default value stands. Cached
-  // per base URL, so this costs one request per process.
-  if (campaign.settings.textProvider !== "local") {
-    await probeCustomContextWindow(
-      campaign.settings.customBaseUrl,
-      campaign.settings.customApiKey,
-      campaign.settings.customModel,
-    );
-  }
+  // actually accept (the turn has asked already; this is the cached answer).
+  await probeStoryWindow(campaign.settings);
   const contextLimitTokens = promptWindowTokens(storyContextTokens(campaign.settings), toolTokens);
   const variantRulesBlock = renderVariantRules(campaign.gameSettings.variantRules);
   let houseRulesBlock = "";

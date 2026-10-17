@@ -146,7 +146,7 @@ import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
 import { handleReadCard, readCardTool } from "@/lib/dm/prep-card-tool";
 import { countPrepCards } from "@/lib/db/prep-cards";
 import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
-import { buildTurnRetrieval } from "@/lib/dm/context-retrieval";
+import { buildTurnRetrieval, probeStoryWindow } from "@/lib/dm/context-retrieval";
 import { estimateTokens, promptWindowTokens, type ContextTrace } from "@/lib/dm/context-budget";
 import { maybeProposeItemChange, offerLinesForPrompt } from "@/lib/dm/proposal-intercept";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
@@ -515,6 +515,10 @@ async function openTurn(
   // The tool definitions ride on every call of this turn and were never
   // budgeted (issue #120), so they come off the window before any block is
   // packed, here and in the retrieval budget.
+  // The window decides the tool profile and every budget below, so the
+  // endpoint is asked for it first: the first turn after a restart (or with
+  // retrieval switched off) planned against the assumed default otherwise.
+  await probeStoryWindow(campaign.settings);
   const toolTokens = dmTurnToolTokens(campaign);
   opening.stage = "searching_lore";
   setJobStage("searching_lore");
