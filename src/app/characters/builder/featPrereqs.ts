@@ -27,6 +27,10 @@ export type FeatJudge = {
   check: (prerequisite: string, forSlot?: boolean) => PrerequisiteCheck;
   // A feat on the sheet by name; null while its text is still on its way.
   checkFeat: (name: string) => PrerequisiteCheck | null;
+  // Whether the stored character held this feat before the edit. The save
+  // does not judge such a feat again, so neither does its card nor a picker
+  // row: one taken off can be put back.
+  held: (name: string) => boolean;
 };
 
 export const FeatJudgeContext = createContext<FeatJudge | null>(null);
@@ -47,13 +51,14 @@ export function prerequisiteNote(check: PrerequisiteCheck): string {
 }
 
 // A picker row's verdict: a feat whose requirement is plainly unmet cannot
-// be picked; one waiting on an unfinished choice can, with its note.
+// be picked; one waiting on an unfinished choice can, with its note. A feat
+// the character held before the edit is not judged.
 export function judgeEntry(
   judge: FeatJudge | null,
   entry: Pick<PickerEntry, "name" | "data">,
   forSlot = false,
 ): { blocked: boolean; note: string } | null {
-  if (!judge) {
+  if (!judge || judge.held(entry.name)) {
     return null;
   }
   const check = judge.check(entryPrerequisite(entry), forSlot);
@@ -144,10 +149,12 @@ export function builderFeatJudge(facts: BuilderFacts, prerequisites: Record<stri
     const { who, waiting } = forSlot ? filling : settled;
     return checkPrerequisite(prerequisite, who, waiting);
   };
+  const isHeld = (name: string) => kept.has(name.trim().toLowerCase());
   return {
     check,
+    held: isHeld,
     checkFeat: (name) => {
-      if (kept.has(name.trim().toLowerCase())) {
+      if (isHeld(name)) {
         return null;
       }
       const prerequisite = authoredFeatPrerequisite(name) ?? prerequisites[name.trim().toLowerCase()];
