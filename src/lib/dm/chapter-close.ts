@@ -316,11 +316,17 @@ export async function maybeCloseChapter(
   setDmStatus(campaignId, "writing_chapter");
 
   const summariesOn = isStageEnabled(campaign.gameSettings.stages, "chapterSummary");
+  // The facts already on file only sharpen the summary; a failure reading
+  // them closes the chapter without them rather than leaving the table on
+  // "writing the chapter" (issue #383).
   const onFile = summariesOn
     ? await factsOnFileFor(
         campaignId,
         listMessagesInSeqRange(campaignId, chapter.seqStart, seqEnd).filter((message) => message.authorType !== "system"),
-      )
+      ).catch((error: unknown) => {
+        console.error(`[chapter] campaign ${campaignId}: could not read the facts on file; the summary is written without them`, error);
+        return { text: "", shown: [] };
+      })
     : { text: "", shown: [] };
   let reply = "";
   let parsed = {

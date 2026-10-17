@@ -5,6 +5,11 @@
 // node-only import stays inside that guard, so the edge bundle never traces it.
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // First, so the admin's Server log holds every line after it
+    // (src/lib/server-log.ts). The console still prints all of them.
+    const { installServerLog } = await import("@/lib/server-log");
+    installServerLog();
+
     const { startJobRunner } = await import("@/lib/jobs");
     startJobRunner();
 

@@ -172,6 +172,8 @@ export function tableGroupSummary(id: TableGroupId, settings: GameSettings, cont
         settings.dmMode === "assisted" ? assistWords(settings) : null,
         aiNarrates ? `story setup ${onOff(settings.aiStorySetup)}` : null,
         aiNarrates ? `outcome check ${onOff(settings.narrationGuard)}` : null,
+        aiNarrates && settings.narrationLength !== "standard" ? `${settings.narrationLength} narration` : null,
+        aiNarrates && settings.styleNotes ? "style notes set" : null,
         aiNarrates ? `living world ${onOff(settings.worldSimulation)}` : null,
         alliesShown(settings) ? `allies: ${ALLY_WORDS[settings.companions]}` : null,
       ]
@@ -217,7 +219,7 @@ const KEYWORDS: Record<TableGroupId, string> = {
   narration: "narration narrator voice voices read aloud speech tts speak pace character voices volume",
   atmosphere: "maps map ambience music sound audio scene theatre inserts faces portraits",
   safety: "safety x-card lines veils boundaries content tone strictness dc family mature",
-  ai: "ai story setup plot outcome check prose living world simulation allies companions guests party members assist monsters cover",
+  ai: "ai story setup plot outcome check prose narration length short rich verbose style notes voice pacing living world simulation allies companions guests party members assist monsters cover",
   memory: "memory history compaction recall retrieval rules lore chapter summaries stages model advanced",
   bonds: "bonds relationships standing romance",
   players: "players permissions mid-game joining invite held responses floor item offers loot gold vitals damage healing approvals confirm",

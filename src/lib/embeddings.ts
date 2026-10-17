@@ -56,7 +56,41 @@ type Embedder = (
   options: { pooling: "mean"; normalize: boolean },
 ) => Promise<{ tolist(): number[][] }>;
 
-type EmbedTask = { run: () => Promise<void> };
+// `dropped`: the caller stopped waiting before the task began, so it is
+// skipped rather than run for nobody.
+type EmbedTask = { run: () => Promise<void>; dropped?: boolean };
+
+// A foreground embed (a turn's search query, search_lore, recall) waits this
+// long, then the caller's keyword fallback carries on (issue #383: an
+// embedder that never answered held the turn, and every turn after it,
+// forever). Background indexing waits as long as it takes.
+const FOREGROUND_EMBED_TIMEOUT_MS = 20_000;
+// One task holding the serial queue longer than this has hung; the queue
+// moves on and the embedder is treated as failed (the load backoff below).
+const EMBED_TASK_CEILING_MS = 5 * 60_000;
+
+declare global {
+  var __odmEmbedTimeouts: { foregroundMs: number; ceilingMs: number } | undefined;
+}
+
+function embedTimeouts() {
+  return (globalThis.__odmEmbedTimeouts ??= {
+    foregroundMs: FOREGROUND_EMBED_TIMEOUT_MS,
+    ceilingMs: EMBED_TASK_CEILING_MS,
+  });
+}
+
+// Tests run the deadlines fast.
+export function configureEmbedTimeouts(settings: { foregroundMs?: number; ceilingMs?: number }): void {
+  Object.assign(embedTimeouts(), Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)));
+}
+
+export class EmbedTimeout extends Error {
+  constructor(ms: number) {
+    super(`The embedding model did not answer within ${ms < 1000 ? `${ms} ms` : `${Math.round(ms / 1000)} s`}.`);
+    this.name = "EmbedTimeout";
+  }
+}
 
 // A load that failed, and when: the next attempt waits out a backoff
 // instead of every embed call either retrying a broken download at once or,
@@ -148,21 +182,46 @@ function pumpEmbedTasks() {
   if (tasks.running) {
     return;
   }
-  const next = tasks.foreground.shift() ?? tasks.background.shift();
+  let next = tasks.foreground.shift() ?? tasks.background.shift();
+  while (next?.dropped) {
+    next = tasks.foreground.shift() ?? tasks.background.shift();
+  }
   if (!next) {
     return;
   }
   tasks.running = true;
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      tasks.running = false;
+      pumpEmbedTasks();
+    }
+  };
+  // A task that never settles (a model load that hung) would hold every
+  // later embed behind it, in every campaign, for the life of the process.
+  const ceiling = setTimeout(() => {
+    console.error(
+      `[embeddings] an embed ran past ${Math.round(embedTimeouts().ceilingMs / 60_000)} minutes; the embedder is treated as failed and keyword search stands in until it loads again`,
+    );
+    globalThis.__odmEmbedderPromise = undefined;
+    const failures = (globalThis.__odmEmbedderFailure?.failures ?? 0) + 1;
+    globalThis.__odmEmbedderFailure = { at: Date.now(), failures, permanent: false, error: new Error("The embedding model stopped answering.") };
+    release();
+  }, embedTimeouts().ceilingMs);
+  ceiling.unref?.();
   void next.run().finally(() => {
-    tasks.running = false;
-    pumpEmbedTasks();
+    clearTimeout(ceiling);
+    release();
   });
 }
 
 // Embeds a batch of texts into unit-normalized Float32Array(384) vectors.
 // Serialized: concurrent callers wait their turn rather than competing.
 // `background` marks indexing work (a re-embed, a backfill) that may wait
-// for anything a player is waiting on.
+// for anything a player is waiting on. A foreground caller waits at most
+// FOREGROUND_EMBED_TIMEOUT_MS and then rejects with EmbedTimeout, which
+// every caller already treats as "no embedder": keyword search carries on.
 export async function embed(
   texts: string[],
   options: { background?: boolean } = {},
@@ -171,16 +230,29 @@ export async function embed(
     return [];
   }
   return new Promise<Float32Array[]>((resolve, reject) => {
-    const run = async () => {
-      try {
-        const embedder = await embedderPromise();
-        const output = await embedder(texts, { pooling: "mean", normalize: true });
-        resolve(output.tolist().map((vector) => Float32Array.from(vector)));
-      } catch (error) {
-        reject(error);
-      }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const task: EmbedTask = {
+      run: async () => {
+        try {
+          const embedder = await embedderPromise();
+          const output = await embedder(texts, { pooling: "mean", normalize: true });
+          resolve(output.tolist().map((vector) => Float32Array.from(vector)));
+        } catch (error) {
+          reject(error);
+        } finally {
+          clearTimeout(timer);
+        }
+      },
     };
-    embedTasks()[options.background ? "background" : "foreground"].push({ run });
+    if (!options.background) {
+      const ms = embedTimeouts().foregroundMs;
+      timer = setTimeout(() => {
+        task.dropped = true;
+        reject(new EmbedTimeout(ms));
+      }, ms);
+      timer.unref?.();
+    }
+    embedTasks()[options.background ? "background" : "foreground"].push(task);
     pumpEmbedTasks();
   });
 }

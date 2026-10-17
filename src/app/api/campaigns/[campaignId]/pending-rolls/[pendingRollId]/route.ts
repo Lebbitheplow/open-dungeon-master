@@ -211,7 +211,7 @@ export async function POST(
     // already published itself and applied what it applies, so closing the
     // turn is the whole of "resuming" it.
     if (!resumeHumanTurn(pending.turnId)) {
-      enqueueDmJob(campaignId, () => resumeDmTurn(campaignId, pending.turnId));
+      enqueueDmJob(campaignId, () => resumeDmTurn(campaignId, pending.turnId), { kind: "turn" });
     }
   }
 

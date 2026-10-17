@@ -37,7 +37,7 @@ const { createSheet } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
-const { startDmTurn, dmTurnToolTokens, dmTurnTools, dmTurnToolCatalogue } = await import("../src/lib/dm/turn.ts");
+const { startDmTurn, dmTurnToolTokens, dmTurnTools, dmTurnToolCatalogue, dmTurnTuning } = await import("../src/lib/dm/turn.ts");
 const { toMcpTools } = await import("../src/lib/harness/render.ts");
 
 let mode = "narrate";
@@ -179,11 +179,15 @@ server.close();
   const harness = { ...chat, settings: { ...chat.settings, textProvider: "harness" } };
   const imageEnabled = chat.settings.imageGenerationEnabled && chat.settings.autoImages;
   const chatTokens = dmTurnToolTokens(chat);
+  // The set this window offers: on this test's window the full set would
+  // crowd the story, so the trimmed one is offered and charged (issue 383,
+  // src/lib/dm/model-tuning-logic.ts).
+  const lean = dmTurnTuning(chat).leanTools;
   assert.equal(
     chatTokens,
     Math.max(
-      estimateTokens(JSON.stringify(dmTurnTools(chat, false, imageEnabled, false))),
-      estimateTokens(JSON.stringify(dmTurnTools(chat, true, imageEnabled, false))),
+      estimateTokens(JSON.stringify(dmTurnTools(chat, false, imageEnabled, lean))),
+      estimateTokens(JSON.stringify(dmTurnTools(chat, true, imageEnabled, lean))),
     ),
     "a chat table is still charged the larger of its two sets",
   );

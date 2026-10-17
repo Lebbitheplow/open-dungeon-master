@@ -59,6 +59,9 @@ The app handles this per request, so you do not configure it on the server:
 - It sends `chat_template_kwargs: { enable_thinking: true }` on the **tool-decision**
   model calls only, and keeps the **final narration** call non-thinking so it still
   streams to players smoothly.
+- A model the catalog says does not reason is not asked to think (it would only sample
+  cooler for nothing). The Context panel's "Fitted to this model" lines say when that
+  happened.
 - Set `DM_THINKING=0` to force thinking off everywhere. That makes turns fast but tool
   calls unreliable; it is a fallback, not a normal mode.
 

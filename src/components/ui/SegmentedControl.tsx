@@ -57,6 +57,13 @@ export function SegmentedControl<T extends string>({
     place();
     const observer = new ResizeObserver(place);
     observer.observe(root);
+    // A row too wide for its frame scrolls, so its own box no longer changes
+    // when the display font lands and every label widens: the pill was left
+    // where the fallback font put it, beside the label it marks. The options
+    // themselves are watched too.
+    for (const option of root.querySelectorAll<HTMLElement>('[role="radio"]')) {
+      observer.observe(option);
+    }
     return () => observer.disconnect();
   }, [value, options.length, size]);
 

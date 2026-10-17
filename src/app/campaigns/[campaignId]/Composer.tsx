@@ -5,7 +5,6 @@ import { memo, useId, type ReactNode } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { D20Spinner } from "@/components/ui/D20Spinner";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Switch } from "@/components/ui/Switch";
 import { MODE_GLYPHS } from "@/app/campaigns/[campaignId]/sessionGlyphs";
@@ -20,6 +19,7 @@ import {
   DirectorPresets,
 } from "@/app/campaigns/[campaignId]/DirectorPanel";
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
+import { DmStatusLine } from "@/app/campaigns/[campaignId]/DmStatusLine";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import { StoryNudge } from "@/app/campaigns/[campaignId]/StoryNudge";
 import { SpeakerPicker } from "@/app/campaigns/[campaignId]/SpeakerPicker";
@@ -67,6 +67,7 @@ function ComposerInner({
   inputBlocked,
   placeholder,
   dmStatus,
+  dmJob,
   pendingRolls,
   members,
   floor,
@@ -109,6 +110,7 @@ function ComposerInner({
   inputBlocked: boolean;
   placeholder: string;
   dmStatus: CampaignState["dmStatus"];
+  dmJob: CampaignState["dmJob"];
   pendingRolls: CampaignState["pendingRolls"];
   // For the pending cards: who holds their own rolls (shake to roll).
   members: CampaignState["members"];
@@ -262,22 +264,7 @@ function ComposerInner({
               </Tooltip>
             ),
           )}
-          {dmStatus !== "idle" ? (
-            <span className="session-status live-in">
-              <D20Spinner className="size-4 shrink-0 text-amber-500" />
-              {dmStatus === "rolling"
-                ? "DM rolling dice..."
-                : dmStatus === "awaiting_rolls"
-                  ? "Waiting on real dice..."
-                  : dmStatus === "narrating"
-                    ? "DM narrating..."
-                    : dmStatus === "writing_chapter"
-                      ? "DM writing the chapter..."
-                      : dmStatus === "plotting_arc"
-                        ? "DM plotting the story arc..."
-                        : "DM at work..."}
-            </span>
-          ) : null}
+          <DmStatusLine campaignId={campaignId} dmStatus={dmStatus} dmJob={dmJob} canStop={steersStory} />
         </div>
         {/*
           Direct's own controls, and the reason there is no second row of

@@ -32,6 +32,7 @@ import {
   type TableLanguage,
 } from "@/lib/schemas/game-settings-options";
 import { alliesShown } from "@/app/campaigns/[campaignId]/table-settings-groups";
+import { NarrationStyleRows } from "@/app/campaigns/[campaignId]/NarrationStyleRows";
 
 // The bodies of the table settings' named groups (table-settings-groups.ts
 // names them and says what each holds on its closed face). Every control is
@@ -414,6 +415,7 @@ export function AiGroup({ settings, patch }: Base) {
           </span>
         </div>
       ) : null}
+      {aiNarrates ? <NarrationStyleRows settings={settings} patch={patch} /> : null}
       {aiNarrates ? (
         <div className="reveal flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">World</span>

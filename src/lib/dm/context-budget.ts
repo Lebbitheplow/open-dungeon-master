@@ -117,6 +117,9 @@ export type ContextTrace = {
   // for each and the block's measured budget (issue #305). Absent on turns
   // taken before it was recorded and on campaigns without lore.
   lore?: LoreTrace;
+  // What the turn changed for the table's model, one line each (issue #383,
+  // src/lib/dm/model-tuning-logic.ts). Absent when nothing was changed.
+  tuning?: string[];
 };
 
 // Allocation ported from NarrativeEngine-P's computeBudgets
