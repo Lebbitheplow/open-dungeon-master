@@ -544,4 +544,25 @@ await test("docs/addons/addon.schema.json matches the manifest schema", () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
+await test("Godot resources are isolated, typed and size-limited like other addon assets", async () => {
+  const { serveAddonFile } = await import("../src/lib/addons/static-files.ts");
+  const root = await fsp.mkdtemp(nodePath.join(os.tmpdir(), "odm-addon-files-"));
+  try {
+    for (const [name, mime] of [["board.pck", "application/octet-stream"], ["swish.wav", "audio/wav"]]) {
+      await fsp.writeFile(nodePath.join(root, name), "test");
+      const response = await serveAddonFile(root, [name], 64);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("Content-Type"), mime);
+      assert.match(response.headers.get("Content-Security-Policy"), /sandbox allow-scripts/);
+      assert.ok(!response.headers.get("Content-Security-Policy").includes("allow-same-origin"));
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+      await response.arrayBuffer();
+      assert.equal((await serveAddonFile(root, [name], 1)).status, 404);
+    }
+    assert.equal((await serveAddonFile(root, ["..", "board.pck"], 64)).status, 404);
+    assert.equal((await serveAddonFile(root, [".private.pck"], 64)).status, 404);
+    assert.equal((await serveAddonFile(root, ["board.exe"], 64)).status, 404);
+  } finally { await fsp.rm(root, { recursive: true, force: true, maxRetries: 3 }); }
+});
+
 console.log(`${passed} addon core checks passed`);

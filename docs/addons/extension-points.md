@@ -379,3 +379,7 @@ the addon would do, what it would read, and what it would hand back. A new
 extension point is added to the server with its own contract, checks and tests,
 in a release, and documented here; the contract version goes up only when an
 existing contract has to change.
+
+Godot single-threaded Web views may ship their `.pck` resource pack beside
+`.wasm`/JavaScript in `ui/`. Packs use `application/octet-stream`; `.wav` UI
+audio uses `audio/wav`. Existing size limits and sandbox policy apply.
