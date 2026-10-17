@@ -8,7 +8,8 @@ import fs from "node:fs";
 const { createElement } = await import("react");
 const { renderToStaticMarkup } = await import("react-dom/server");
 
-const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+// A Windows checkout may carry CRLF line endings; the patterns below expect LF.
+const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const submit = await import("../src/app/characters/builder/submit.ts");
 const { owedPicks } = await import("../src/app/characters/builder/owed.ts");
 
