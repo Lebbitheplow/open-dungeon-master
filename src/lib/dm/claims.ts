@@ -84,10 +84,11 @@ export function guardGate(
   campaign: Campaign,
   outcomes: ResolvedOutcomes,
   sheets: readonly CharacterSheet[],
-): Pick<ReaderGate, "guard" | "attacks" | "creatures" | "numbers" | "party"> {
+): Pick<ReaderGate, "guard" | "attacks" | "fight" | "creatures" | "numbers" | "party"> {
   return {
     guard: campaign.gameSettings.narrationGuard,
     attacks: outcomes.attacks.size > 0,
+    fight: Boolean(outcomes.liveFight),
     creatures: outcomes.creatures.size > 0,
     numbers: outcomes.numbers.size > 0 || Boolean(outcomes.liveFight),
     party: sheets.length > 0,
@@ -302,7 +303,7 @@ export async function readReply(
   turn: Pick<DmTurn, "id" | "conversation">,
   text: string,
   state: { inEncounter: boolean; encounterNudged: boolean; damageNudged: boolean; registering: readonly string[] },
-): Promise<PartRead> {
+): Promise<PartRead & { outcomes: ResolvedOutcomes }> {
   const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
   const kinds = claimKindsFor({
     ...guardGate(campaign, outcomes, sheets),
@@ -315,6 +316,7 @@ export async function readReply(
   return {
     kinds,
     claims: await readClaims(campaign, { label: `turn ${turn.id}`, text, kinds, outcomes, sheets, registering: state.registering }),
+    outcomes,
   };
 }
 

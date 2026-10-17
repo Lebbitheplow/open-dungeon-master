@@ -89,6 +89,8 @@ import {
   collectExchanges,
   FAKE_ENCOUNTER_PROMPT,
   fightAnnounced,
+  unrolledBlow,
+  unrolledBlowPrompt,
   unrolledFigure,
   unrolledDamagePrompt,
 } from "@/lib/dm/engine-boundary";
@@ -1195,6 +1197,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // The same single shot for a blow landed in prose alone: a damage figure
   // that no tool rolled this turn (unrolledFigure).
   let damageNudged = false;
+  // And for an attack resolved in prose alone during a fight: a hit or a
+  // miss on an enemy no tool touched this turn (unrolledBlow).
+  let attackNudged = false;
   // What each kept reply was read for, by its persisted text, so the guard
   // at the end of the turn reads only what no read covered.
   const partReads = new Map<string, PartRead>();
@@ -1793,6 +1798,27 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         });
         answerRanAbove(fightOwnsFloor(campaignId), false);
         turn.conversation.push({ role: "user", content: unrolledDamagePrompt(unrolled) });
+        saveDmTurn(turn);
+        continue;
+      }
+      // In a fight, a swing only the prose resolved did not happen either:
+      // no dice, no hit points. Held back the same way, once a turn, and
+      // the model is sent to the tool for the attack the player declared.
+      const blow =
+        !finalCall && !attackNudged && read && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
+          ? unrolledBlow(claims, read.outcomes)
+          : null;
+      if (blow) {
+        attackNudged = true;
+        turn.narrationParts.pop();
+        turn.conversation.push({
+          role: "assistant",
+          ...carried,
+          content: visibleText || "",
+          tool_calls: echoedToolCalls,
+        });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
+        turn.conversation.push({ role: "user", content: unrolledBlowPrompt(blow) });
         saveDmTurn(turn);
         continue;
       }

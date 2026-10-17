@@ -49,6 +49,9 @@ export type ReaderGate = {
   guard: boolean;
   // This turn resolved an attack, so a hit or a miss can be checked.
   attacks: boolean;
+  // A fight runs, so a hit or a miss on an enemy no tool touched this turn
+  // can be caught as an attack the prose alone resolved.
+  fight?: boolean;
   // A creature's hit points are known (this turn's results or the live
   // encounter), so a death or a drop can be checked.
   creatures: boolean;
@@ -79,7 +82,7 @@ export type PartRead = { kinds: readonly ClaimKind[]; claims: readonly Narration
 
 export function claimKindsFor(gate: ReaderGate): ClaimKind[] {
   const kinds: ClaimKind[] = [];
-  if (gate.guard && gate.attacks) {
+  if (gate.guard && (gate.attacks || gate.fight)) {
     kinds.push("hit", "miss");
   }
   if (gate.guard && gate.creatures) {
@@ -306,7 +309,10 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
     switch (claim.kind) {
       case "hit":
       case "miss":
-        if (context.attackRefs.has(claim.target)) {
+        // A blow on a creature the turn attacked is checked against the roll;
+        // one on a creature of the fight that no tool touched is a blow the
+        // prose alone resolved (engine-boundary.ts unrolledBlow).
+        if (context.attackRefs.has(claim.target) || context.creatureRefs.has(claim.target)) {
           kept.push(claim);
         }
         break;
