@@ -553,7 +553,9 @@ await test("docs/addons/addon.schema.json matches the manifest schema", () => {
 
 await test("Godot resources are isolated, typed and size-limited like other addon assets", async () => {
   const { serveAddonFile } = await import("../src/lib/addons/static-files.ts");
-  const root = await fsp.mkdtemp(nodePath.join(os.tmpdir(), "odm-addon-files-"));
+  const folder = await fsp.mkdtemp(nodePath.join(os.tmpdir(), "odm-addon-files-"));
+  const root = nodePath.join(folder, "ui");
+  await fsp.mkdir(root);
   try {
     for (const [name, mime] of [["board.pck", "application/octet-stream"], ["swish.wav", "audio/wav"], ["board.wasm", "application/wasm"], ["board.js", "text/javascript; charset=utf-8"], ["tile.png", "image/png"]]) {
       await fsp.writeFile(nodePath.join(root, name), "test");
@@ -566,10 +568,15 @@ await test("Godot resources are isolated, typed and size-limited like other addo
       await response.arrayBuffer();
       assert.equal((await serveAddonFile(root, [name], 1)).status, 404);
     }
-    assert.equal((await serveAddonFile(root, ["..", "board.pck"], 64)).status, 404);
+    // These files exist: rejection must come from the guards, not ENOENT.
+    await fsp.writeFile(nodePath.join(folder, "private.pck"), "private");
+    await fsp.writeFile(nodePath.join(root, ".private.pck"), "private");
+    await fsp.writeFile(nodePath.join(root, "board.exe"), "not a served format");
+    assert.equal((await serveAddonFile(root, ["..", "private.pck"], 64)).status, 404);
+    assert.equal((await serveAddonFile(root, ["%2e%2e", "private.pck"], 64)).status, 404);
     assert.equal((await serveAddonFile(root, [".private.pck"], 64)).status, 404);
     assert.equal((await serveAddonFile(root, ["board.exe"], 64)).status, 404);
-  } finally { await fsp.rm(root, { recursive: true, force: true, maxRetries: 3 }); }
+  } finally { await fsp.rm(folder, { recursive: true, force: true, maxRetries: 3 }); }
 });
 
 console.log(`${passed} addon core checks passed`);
