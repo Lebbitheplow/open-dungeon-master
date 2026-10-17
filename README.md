@@ -142,7 +142,7 @@ OpenAI-compatible provider), or a CLI agent you already pay for (Claude Code,
 Codex, opencode, Grok Build). Pictures and voice are optional.
 
 ```bash
-git clone --depth 1 https://github.com/Lebbitheplow/open-dungeon-master.git
+git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
 cd open-dungeon-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
@@ -157,9 +157,12 @@ players and your own agent, one question at a time.
 With Docker instead:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/stable/docker-compose.yml
 docker compose up -d        # http://localhost:3005
 ```
+
+Both follow the stable releases. Nightly betas, and how a beta becomes stable:
+[docs/releases.md](docs/releases.md).
 
 ## Documentation
 
@@ -167,6 +170,7 @@ docker compose up -d        # http://localhost:3005
   - [Install and first run](docs/install.md): requirements, the guided setup, setup by hand, the first admin account, the content pack, tests
   - [Run with Docker](docs/docker.md): the image, reaching AI services on the host, volumes and maintenance, publishing
   - [Backups and moving to another server](docs/backup-restore.md)
+  - [Releases and update channels](docs/releases.md): stable, the nightly betas, and how a beta is promoted
 - **The storyteller**
   - [Text backends](docs/text-backends.md): the recommended DM model and its settings, Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
   - [Agent programs as the DM](docs/agent-harness.md): Claude Code, Codex, opencode and Grok Build on their own sign-in

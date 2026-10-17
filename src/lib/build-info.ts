@@ -117,13 +117,24 @@ export function compareVersions(a: string, b: string): number {
 export const REPOSITORY = "Lebbitheplow/open-dungeon-master";
 export const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
 
-export type LatestRelease = { version: string; url: string; publishedAt: string; name: string };
+// Which releases a server is told about (docs/releases.md). Every build is
+// first published as a GitHub prerelease, the beta; the ones that hold up
+// are promoted to stable by clearing that flag, so "stable" is GitHub's
+// latest release and "beta" is the newest release of either kind.
+export type UpdateChannel = "stable" | "beta";
 
-// GitHub's "latest release" answer, reduced to what is shown. Null when it
-// is not a published release with a version for a tag.
-export function parseLatestRelease(payload: unknown): LatestRelease | null {
+export function parseUpdateChannel(value: string): UpdateChannel {
+  return value.trim().toLowerCase() === "beta" ? "beta" : "stable";
+}
+
+export type LatestRelease = { version: string; url: string; publishedAt: string; name: string; prerelease: boolean };
+
+// One release from GitHub, reduced to what is shown. Null when it is not a
+// published release with a version for a tag, or a beta on the stable
+// channel.
+export function parseLatestRelease(payload: unknown, channel: UpdateChannel = "stable"): LatestRelease | null {
   const release = payload as { tag_name?: unknown; html_url?: unknown; published_at?: unknown; name?: unknown; draft?: unknown; prerelease?: unknown } | null;
-  if (!release || typeof release.tag_name !== "string" || release.draft === true || release.prerelease === true) {
+  if (!release || typeof release.tag_name !== "string" || release.draft === true || (release.prerelease === true && channel !== "beta")) {
     return null;
   }
   const version = release.tag_name.trim().replace(/^v/i, "");
@@ -139,22 +150,46 @@ export function parseLatestRelease(payload: unknown): LatestRelease | null {
     url,
     publishedAt: typeof release.published_at === "string" ? release.published_at : "",
     name: typeof release.name === "string" ? release.name.slice(0, 160) : "",
+    prerelease: release.prerelease === true,
   };
+}
+
+// The highest version in GitHub's list of releases that the channel takes.
+// By version, not by list order: a fix to the stable line can be published
+// after a newer beta.
+export function newestRelease(payload: unknown, channel: UpdateChannel): LatestRelease | null {
+  if (!Array.isArray(payload)) {
+    return null;
+  }
+  let newest: LatestRelease | null = null;
+  for (const entry of payload) {
+    const release = parseLatestRelease(entry, channel);
+    if (release && (!newest || compareVersions(release.version, newest.version) > 0)) {
+      newest = release;
+    }
+  }
+  return newest;
 }
 
 export type UpdateStatus =
   // Not asked: switched off, or a world that updates with the app around it.
   | { state: "off"; reason: "disabled" | "device_world" }
   // Asked, and GitHub could not be reached or made no sense.
-  | { state: "unknown"; checkedAt: string }
-  | { state: "current" | "available" | "ahead"; latest: LatestRelease; checkedAt: string };
+  | { state: "unknown"; channel: UpdateChannel; checkedAt: string }
+  | { state: "current" | "available" | "ahead"; channel: UpdateChannel; latest: LatestRelease; checkedAt: string };
 
 // Where this build stands against the newest release. A build past the
-// newest release (a development checkout) is "ahead", not out of date.
-export function updateStatus(build: Pick<BuildInfo, "version">, latest: LatestRelease | null, checkedAt: string): UpdateStatus {
+// newest release (a development checkout, or a beta on the stable channel)
+// is "ahead", not out of date.
+export function updateStatus(
+  build: Pick<BuildInfo, "version">,
+  latest: LatestRelease | null,
+  checkedAt: string,
+  channel: UpdateChannel = "stable",
+): UpdateStatus {
   if (!latest) {
-    return { state: "unknown", checkedAt };
+    return { state: "unknown", channel, checkedAt };
   }
   const difference = compareVersions(latest.version, build.version);
-  return { state: difference > 0 ? "available" : difference < 0 ? "ahead" : "current", latest, checkedAt };
+  return { state: difference > 0 ? "available" : difference < 0 ? "ahead" : "current", channel, latest, checkedAt };
 }
