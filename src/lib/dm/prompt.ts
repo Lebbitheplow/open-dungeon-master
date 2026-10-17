@@ -75,6 +75,7 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
+import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
@@ -711,6 +712,7 @@ export function buildGameStateBlock(state: DmGameState): string {
     // the block; the cues only reorder a bounded list.
     const location = state.currentLocation?.name ?? "";
     const arc = renderArcPrompt(campaign.storyArc, {
+      stopWords: stopWordsFor(campaign.gameSettings.tableLanguage),
       location,
       scene: campaign.scene ?? "",
       npcs: (state.npcs ?? [])

@@ -12,7 +12,6 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { asciiSlugOf, commonWords, containsPhrase, findNamed, namesPattern, phraseOffsets, slugOf, splitWords, textKey, words } = await import(
   "../src/lib/language/text-logic.ts"
 );
-const { nameTerms } = await import("../src/lib/language/language.ts");
 const { attributeKey } = await import("../src/lib/dm/attributes-logic.ts");
 const { normalizeSpellName } = await import("../src/lib/dm/engine-boundary.ts");
 const { factSimilarity, normalizeSubject } = await import("../src/lib/dm/fact-logic.ts");
@@ -40,7 +39,7 @@ const { attachmentDisposition } = await import("../src/lib/serve-file.ts");
 const { exportFilename } = await import("../src/lib/export/story-document.ts");
 const { bundledGearRows } = await import("../src/lib/workshop/bundled-gear-rows.ts");
 const { plannedSwings } = await import("../src/lib/dm/enemy-profile.ts");
-const { stopWordsFor } = await import("../src/lib/language/language.ts");
+const { nameTerms, stopWordsFor } = await import("../src/lib/language/language.ts");
 const { bundledRaceRows } = await import("../src/lib/workshop/catalog-mechanics.ts");
 
 let passed = 0;
@@ -211,10 +210,10 @@ test("names found in text people write, across case and form", () => {
 test("the words a person types are searched by Unicode words, not ASCII runs", () => {
   assert.equal(pickLairOption(["Il soffitto crolla sui nemici.", "La nebbia avvolge la città."], "nebbia città"), "La nebbia avvolge la città.");
   const lines = [{ speaker: "dm", content: "Олег ушёл в лес." }, { speaker: "dm", content: "Nothing here." }];
-  const found = transcriptPassages(lines, "куда ушёл Олег");
+  const found = transcriptPassages(lines, "куда ушёл Олег", stopWordsFor("russian"));
   assert.equal(found.length, 1);
   assert.match(found[0], /Олег ушёл в лес\./);
-  const terms = cueTerms({ location: "Città Vecchia", npcs: ["Niccolò"] });
+  const terms = cueTerms({ stopWords: stopWordsFor("italian"), location: "Città Vecchia", npcs: ["Niccolò"] });
   assert.ok(scoreEvent({ name: "Agguato", trigger: decomposed("Niccolò arriva in CITTÀ VECCHIA"), detail: "" }, terms).score > 0);
   assert.equal(scoreRuleByKeywords("Überraschung", { heading: "Überraschung", text: "" }), 1);
   assert.deepEqual(deskTerms("Qu'est-ce que l'épée"), ["est", "que", "épée"]);

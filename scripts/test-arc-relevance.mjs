@@ -12,6 +12,7 @@ import {
   renderArcPrompt,
 } from "../src/lib/dm/arc-logic.ts";
 import { cueTerms, scoreEvent, selectPendingEvents } from "../src/lib/dm/arc-relevance.ts";
+import { stopWordsFor } from "../src/lib/language/language.ts";
 
 let passed = 0;
 function test(name, fn) {
@@ -106,18 +107,29 @@ test("a board act joining an arc carries its card ids and counts its events", ()
 
 // ---- the slice: relevance first, then act order, inside a budget ----
 
-test("cue terms are whole names plus loose words, stop words out", () => {
-  const terms = cueTerms({ location: "The Drowned Mill", npcs: ["Marla Quist"], recent: "We head for the lighthouse and ask about the keeper" });
+test("cue terms are whole names plus loose words, the table language's stop words out", () => {
+  const terms = cueTerms({ stopWords: stopWordsFor("english"), location: "The Drowned Mill", npcs: ["Marla Quist"], recent: "We head for the lighthouse and ask about the keeper" });
   assert.ok(terms.phrases.includes("the drowned mill"));
   assert.ok(terms.phrases.includes("marla quist"));
   assert.ok(terms.words.has("lighthouse"));
   assert.ok(terms.words.has("keeper"));
   assert.ok(!terms.words.has("the"));
-  assert.ok(!terms.words.has("ask"));
+  assert.ok(!terms.words.has("about"));
+  const lines = {
+    italian: ["Andiamo per il faro e chiediamo del guardiano", ["faro", "guardiano"], ["del", "per"]],
+    french: ["Nous allons vers le phare et demandons pour le gardien", ["phare", "gardien"], ["nous", "pour"]],
+    spanish: ["Vamos para el faro y preguntamos por el guardián", ["faro", "guardián"], ["por", "para"]],
+    german: ["Wir gehen zum Leuchtturm und fragen nach dem Wärter", ["leuchtturm", "wärter"], ["und", "nach", "dem"]],
+  };
+  for (const [language, [recent, kept, dropped]] of Object.entries(lines)) {
+    const words = cueTerms({ stopWords: stopWordsFor(language), recent }).words;
+    for (const word of kept) assert.ok(words.has(word), `${language}: ${word}`);
+    for (const word of dropped) assert.ok(!words.has(word), `${language}: ${word}`);
+  }
 });
 
 test("a whole name outscores loose words", () => {
-  const terms = cueTerms({ location: "Saltmarsh", npcs: ["Marla Quist"] });
+  const terms = cueTerms({ stopWords: stopWordsFor("english"), location: "Saltmarsh", npcs: ["Marla Quist"] });
   const byName = scoreEvent(event(1, { trigger: "When the party confronts Marla Quist." }), terms);
   const byWord = scoreEvent(event(2, { trigger: "When the party reaches the marsh road." }), terms);
   assert.ok(byName.score > byWord.score, `${byName.score} vs ${byWord.score}`);
@@ -128,7 +140,7 @@ test("a scene-relevant event twelfth in the list is shown ahead of unrelated ear
   const arc = bigArc({ beats: 4, events: 14 });
   arc.events[11].trigger = "When the party reaches the Drowned Mill and meets Marla.";
   arc.events[11].name = "The miller's bargain";
-  const { text, trace } = renderArcPrompt(arc, { location: "The Drowned Mill", npcs: ["Marla"] });
+  const { text, trace } = renderArcPrompt(arc, { stopWords: stopWordsFor("english"), location: "The Drowned Mill", npcs: ["Marla"] });
   const shown = trace.events.filter((pick) => pick.included).map((pick) => pick.id);
   assert.equal(shown[0], "ev12", `first shown was ${shown[0]}`);
   assert.match(trace.events[0].reason, /matches the scene \(the drowned mill, marla\)/);
@@ -170,7 +182,7 @@ test("the trace is empty of events on an arc with none pending", () => {
 
 test("a match never fires an event: the render still calls them opportunities", () => {
   const arc = bigArc({ beats: 4, events: 3 });
-  const text = renderArcForPrompt(arc, { location: "Scene 2" });
+  const text = renderArcForPrompt(arc, { stopWords: stopWordsFor("english"), location: "Scene 2" });
   assert.ok(text.includes("opportunities, NOT a schedule"));
 });
 

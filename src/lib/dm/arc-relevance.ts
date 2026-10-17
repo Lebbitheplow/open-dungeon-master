@@ -24,6 +24,11 @@ export type SceneCues = {
   // The newest player line, so "we head for the lighthouse" surfaces the
   // lighthouse before the party arrives.
   recent?: string;
+  // The table language's stop list (src/lib/language/language.ts
+  // stopWordsFor): the words too common to tell one event from another. Passed
+  // in, not looked up, because arc-logic.ts reaches the browser and the
+  // stemmer module must not.
+  stopWords: ReadonlySet<string>;
 };
 
 export type EventLike = {
@@ -58,35 +63,31 @@ export type ArcTrace = {
 export const RENDER_EVENT_CHARS = 1_200;
 export const RENDER_EVENTS_MAX = 6;
 
-const STOP_WORDS = new Set(
-  "the a an and or of to in on at by for with from into onto out over under near about after before while when where which who whom whose what that this these those they them their there then than as is are was were be been being have has had do does did not no nor so if but its it he she his her him we us our you your i me my mine party heads head go goes going toward towards back again all any some one two three ask asks say says said tell tells told look looks looking take takes make makes way".split(
-    " ",
-  ),
-);
-
-function words(text: string | undefined): string[] {
+function words(text: string | undefined, stopWords: ReadonlySet<string>): string[] {
   return textKey(text ?? "")
     .split(" ")
-    .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
+    .filter((word) => word.length >= 3 && !stopWords.has(word));
 }
+
+type CueTerms = { phrases: string[]; words: Set<string>; stopWords: ReadonlySet<string> };
 
 // The scene as search terms: whole names (a place or a person) count more
 // than loose words, because "Marla" in a trigger is a stronger signal than
 // "road".
-export function cueTerms(cues: SceneCues): { phrases: string[]; words: Set<string> } {
+export function cueTerms(cues: SceneCues): CueTerms {
   const phrases = [cues.location ?? "", ...(cues.npcs ?? []), ...(cues.enemies ?? [])]
     .map((phrase) => textKey(phrase))
     .filter((phrase) => phrase.length >= 3);
   const loose = new Set<string>();
   for (const source of [cues.location, cues.scene, cues.recent, ...(cues.npcs ?? []), ...(cues.enemies ?? [])]) {
-    for (const word of words(source)) {
+    for (const word of words(source, cues.stopWords)) {
       loose.add(word);
     }
   }
-  return { phrases: [...new Set(phrases)], words: loose };
+  return { phrases: [...new Set(phrases)], words: loose, stopWords: cues.stopWords };
 }
 
-export function scoreEvent(event: EventLike, terms: { phrases: string[]; words: Set<string> }): { score: number; matched: string[] } {
+export function scoreEvent(event: EventLike, terms: CueTerms): { score: number; matched: string[] } {
   const text = textKey(`${event.name} ${event.trigger} ${event.detail} ${event.castName ?? ""}`);
   const matched: string[] = [];
   let score = 0;
@@ -96,8 +97,8 @@ export function scoreEvent(event: EventLike, terms: { phrases: string[]; words: 
       matched.push(phrase);
     }
   }
-  const seen = new Set(matched.flatMap((phrase) => words(phrase)));
-  for (const word of new Set(words(text))) {
+  const seen = new Set(matched.flatMap((phrase) => words(phrase, terms.stopWords)));
+  for (const word of new Set(words(text, terms.stopWords))) {
     if (terms.words.has(word) && !seen.has(word)) {
       score += 1;
       matched.push(word);
@@ -122,9 +123,10 @@ export function selectPendingEvents<T extends EventLike>(
   budgetChars = RENDER_EVENT_CHARS,
   maxLines = RENDER_EVENTS_MAX,
 ): EventSelection<T> {
-  const terms = cueTerms(cues ?? {});
+  // With no scene to read, every event scores nothing and act order decides.
+  const terms = cues ? cueTerms(cues) : null;
   const pending = events
-    .map((event, index) => ({ event, index, ...scoreEvent(event, terms) }))
+    .map((event, index) => ({ event, index, ...(terms ? scoreEvent(event, terms) : { score: 0, matched: [] }) }))
     .filter((entry) => entry.event.status === "pending");
   // Hinted at this act or earlier: due now. No hint: could be any time, so
   // after the due ones. Hinted ahead: that far ahead.
