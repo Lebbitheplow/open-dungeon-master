@@ -147,6 +147,8 @@ export const MORE_TOOLS = "more_tools";
 // The least a compact call offers beside a group it has just opened, when the
 // window holds no more: the model asked for that group to use it now.
 export const ESSENTIAL_TOOLS = ["request_roll", "request_player_input", "record_event", "send_whisper"];
+// And in a fight, the actions no round runs without.
+export const ESSENTIAL_COMBAT_TOOLS = ["pc_attack", "enemy_attack", "end_turn"];
 
 const GROUP_IDS = Object.keys(TOOL_GROUPS) as ToolGroupId[];
 const GROUPED = new Map<string, ToolGroupId>(GROUP_IDS.flatMap((id) => TOOL_GROUPS[id].tools.map((name) => [name, id] as const)));

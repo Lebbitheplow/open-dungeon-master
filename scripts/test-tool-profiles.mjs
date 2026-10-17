@@ -11,7 +11,10 @@
 //   opened mid-turn brings its own lines;
 // - in a turn, opening a group costs no call of the budget, the group is
 //   offered from the next call on, and a tool never offered still runs when
-//   called by name.
+//   called by name;
+// - a later call the window no longer fits steps down to the essentials and
+//   the tools the turn has called, and one no set fits narrates without tools
+//   rather than halting the turn.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -159,10 +162,16 @@ const server = http.createServer((req, res) => {
     }
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     requests.push(body);
-    const next = Array.isArray(body.tools) ? (script.shift() ?? { content: "The road winds on. What do you do?" }) : { content: "[]" };
+    // The DM's calls carry its game state, tools offered or not; the rest are
+    // the claims reader's.
+    const dm = Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE");
+    const next = dm ? (script.shift() ?? { content: "The road winds on. What do you do?" }) : { content: "[]" };
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const delta = next.call
-      ? { tool_calls: [{ index: 0, id: `call_${requests.length}`, type: "function", function: { name: next.call, arguments: JSON.stringify(next.args ?? {}) } }] }
+      ? {
+          ...(next.content ? { content: next.content } : {}),
+          tool_calls: [{ index: 0, id: `call_${requests.length}`, type: "function", function: { name: next.call, arguments: JSON.stringify(next.args ?? {}) } }],
+        }
       : { content: next.content };
     res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
     res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: next.call ? "tool_calls" : "stop" }] })}\n\n`);
@@ -250,6 +259,67 @@ await test("the players' words open the group the move needs on the first call",
   assert.ok(first.tools.some((tool) => tool.function.name === "buy_item"), "the shop group rides from the start");
   const turn = getDmTurn(getLatestDmTurnId(campaign.id));
   assert.deepEqual(turn.contextTrace.profile.intent, ["shop"]);
+});
+
+// The window a lone first call of this table needs, by the same estimate the
+// fit checks use: what a later call of the same turn outgrows.
+async function firstCallTokens(line) {
+  const campaign = table(line);
+  script = [{ content: "Quiet fields." }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const first = requests.find((body) => Array.isArray(body.tools));
+  return requestTokens(first.messages, first.tools);
+}
+
+await test("a follow-up the compact set no longer fits steps down to the essentials and the tools the turn has called", async () => {
+  const line = "I wait by the crossroads stone.";
+  const need = await firstCallTokens(line);
+  // Room for the first call and its reply floor, not for a call and its
+  // result on top of the whole compact set.
+  process.env.OPENAI_COMPAT_CONTEXT = String(need + 1_024 + 30);
+  const campaign = table(line);
+  script = [{ call: "pass_time", args: { hours: 1 } }, { content: "An hour passes. A cart rattles by. What do you do?" }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the turn finished (${turn.status}): ${turn.error ?? ""}`);
+  const calls = requests.filter((body) => Array.isArray(body.tools));
+  assert.equal(calls.length, 2);
+  const offered = (body) => body.tools.map((tool) => tool.function.name);
+  assert.ok(offered(calls[1]).length < offered(calls[0]).length, `fewer tools (${offered(calls[0]).length} -> ${offered(calls[1]).length})`);
+  for (const name of ["request_roll", "pass_time", "more_tools"]) {
+    assert.ok(offered(calls[1]).includes(name), `${name} rides the narrow set`);
+  }
+  for (const body of calls) {
+    assert.ok(requestTokens(body.messages, body.tools) + body.max_tokens <= Number(process.env.OPENAI_COMPAT_CONTEXT), "every call fits");
+  }
+  assert.match(turn.narrationParts.join(" "), /A cart rattles by/);
+  process.env.OPENAI_COMPAT_CONTEXT = "16384";
+});
+
+await test("a follow-up no tool set fits narrates what the turn did with no tools offered, rather than halting", async () => {
+  const line = "I keep watch on the road.";
+  const need = await firstCallTokens(line);
+  process.env.OPENAI_COMPAT_CONTEXT = String(need + 1_024 + 30);
+  const campaign = table(line);
+  // A long passage beside the call: more than the narrow set saves.
+  // Varied, so the repetition guard leaves it be.
+  const words = ["wind", "grass", "hill", "cart", "crow", "stone", "river", "lantern", "fence", "orchard", "bell", "smoke", "ridge", "ford", "mill", "hedge", "barrow", "shrine"];
+  const passage = Array.from({ length: 1_600 }, (_, index) => `${words[(index * 7) % words.length]} ${words[(index * 11 + 3) % words.length]} ${index}`).join(", ");
+  script = [{ call: "pass_time", args: { hours: 1 }, content: passage }, { content: "Dusk settles over the watch. What do you do?" }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the turn finished (${turn.status}): ${turn.error ?? ""}`);
+  const dmCalls = requests.filter((body) => Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE"));
+  assert.equal(dmCalls.length, 2);
+  const echoed = dmCalls[1].messages.filter((message) => message.role === "assistant").map((message) => String(message.content ?? "").length);
+  assert.ok(!dmCalls[1].tools?.length, `the follow-up offered no tools (${dmCalls[1].tools?.length} offered; assistant text ${echoed}; window ${process.env.OPENAI_COMPAT_CONTEXT}; sent ${requestTokens(dmCalls[1].messages, dmCalls[1].tools)})`);
+  assert.ok(dmCalls[1].messages.some((message) => message.role === "tool"), "the call it narrates is answered");
+  assert.match(turn.narrationParts.join(" "), /Dusk settles over the watch/);
+  assert.ok(turn.contextTrace.calls.some((call) => call.task === "turn_without_tools"), "the trace names the call");
+  process.env.OPENAI_COMPAT_CONTEXT = "16384";
 });
 
 await test("a window the full set fits keeps the full set, uncut", async () => {

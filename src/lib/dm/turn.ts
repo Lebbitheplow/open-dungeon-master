@@ -32,6 +32,7 @@ import { noteTurnCall, turnCallFit, turnCallOptions, turnMinOutputTokens } from 
 import {
   autoGroups,
   closedGroups,
+  ESSENTIAL_COMBAT_TOOLS,
   ESSENTIAL_TOOLS,
   compactTool,
   compactToolNames,
@@ -1025,16 +1026,19 @@ export function compactTurnTools(
 
 // The richest compact set this call's window holds: every open group; else
 // only the group opened last (the players' words may have opened others);
-// else that group beside the essentials. Asked of the window before the
-// call (model.ts fitsStoryWindow), so a group opened on a small window is
-// offered rather than refused for room.
+// else the essentials beside that group and the tools this turn has already
+// called (an Extra Attack's second pc_attack, a second roll), with every
+// other group one more_tools call away. Asked of the window before the call
+// (model.ts fitsStoryWindow), so a group opened on a small window is offered
+// rather than refused for room. fits is false when not even the narrowest
+// set leaves the reply its room.
 function compactToolsThatFit(
   campaign: Campaign,
   turn: DmTurn,
   inEncounter: boolean,
   imageEnabled: boolean,
   sheets: readonly CharacterSheet[],
-): unknown[] {
+): { tools: unknown[]; fits: boolean } {
   const signals = profileSignals(campaign, sheets, inEncounter);
   const intent = (turn.contextTrace?.profile?.intent ?? []) as ToolGroupId[];
   const opened = (turn.contextTrace?.profile?.opened ?? []) as ToolGroupId[];
@@ -1043,15 +1047,25 @@ function compactToolsThatFit(
   if (intent.length || opened.length > 1) {
     variants.push(compactTurnTools(campaign, inEncounter, imageEnabled, signals, last ? [last] : []).tools);
   }
-  if (last) {
-    const wanted = new Set([...ESSENTIAL_TOOLS, ...TOOL_GROUPS[last].tools]);
-    const full = dmTurnTools(campaign, inEncounter, imageEnabled, false) as ToolDefLike[];
-    const names = full.map((tool) => tool.function.name);
-    const offered = new Set(names.filter((name) => wanted.has(name)));
-    variants.push([...full.filter((tool) => offered.has(tool.function.name)).map(compactTool), moreToolsTool(closedGroups(names, offered))]);
-  }
+  const called = turn.conversation.flatMap((message) =>
+    message.role === "assistant" && Array.isArray(message.tool_calls)
+      ? message.tool_calls.map((call) => (call as { function?: { name?: string } }).function?.name ?? "")
+      : [],
+  );
+  const wanted = new Set([
+    ...ESSENTIAL_TOOLS,
+    ...(inEncounter ? ESSENTIAL_COMBAT_TOOLS : []),
+    ...(last ? TOOL_GROUPS[last].tools : []),
+    ...called,
+  ]);
+  wanted.delete(MORE_TOOLS);
+  const full = dmTurnTools(campaign, inEncounter, imageEnabled, false) as ToolDefLike[];
+  const names = full.map((tool) => tool.function.name);
+  const offered = new Set(names.filter((name) => wanted.has(name)));
+  variants.push([...full.filter((tool) => offered.has(tool.function.name)).map(compactTool), moreToolsTool(closedGroups(names, offered))]);
   const options = turnCallOptions(campaign, turn, "turn");
-  return variants.find((tools) => fitsStoryWindow(campaign.settings, turn.conversation, { ...options, tools })) ?? variants.at(-1)!;
+  const fitting = variants.find((tools) => fitsStoryWindow(campaign.settings, turn.conversation, { ...options, tools }));
+  return { tools: fitting ?? variants.at(-1)!, fits: Boolean(fitting) };
 }
 
 function largestGroupTokens(campaign: Campaign, imageEnabled: boolean): number {
@@ -1211,12 +1225,23 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // A stopped turn makes no further call: it unwinds into its halted
     // notice (advance) with whatever it already applied kept.
     assertJobLive();
-    const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
     // Rebuilt each iteration (see dmTurnTools).
     const inEncounter = Boolean(getActiveEncounter(campaignId));
-    const tools = compact
+    const fitted = compact
       ? compactToolsThatFit(campaign, turn, inEncounter, imageEnabled, sheets)
-      : dmTurnTools(campaign, inEncounter, imageEnabled, leanTools);
+      : { tools: dmTurnTools(campaign, inEncounter, imageEnabled, leanTools), fits: true };
+    // When the turn has already acted and not even the narrowest compact set
+    // leaves the reply its room, the call narrates what those tools did with
+    // none offered, as the last permitted call does, rather than halting the
+    // turn for a few tokens. A first call that fits no set is refused for
+    // room (model.ts): narrating without tools would decide what dice must.
+    const toolsClosed = !fitted.fits && turn.callIndex > 0;
+    const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1 || toolsClosed;
+    const tools = toolsClosed ? [] : fitted.tools;
+    const callTask = toolsClosed ? "turn_without_tools" : "turn";
+    if (toolsClosed) {
+      console.warn(`[dm-turn] call ${turn.callIndex}: no compact tool set leaves the reply room in this window; this call narrates without tools.`);
+    }
     // Fresh reasoning-artifact filter per model call; each call is its own
     // stream. Withheld trailing text is flushed after the call completes.
     const filter = createStreamingArtifactFilter();
@@ -1259,7 +1284,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       batcher.flush();
       const payload = (await error.json().catch(() => null)) as { error?: string; detail?: string } | null;
       failed = payload?.error || "The Dungeon Master could not reach the model backend.";
-      noteTurnCall(turn, "turn", tools, reply, failed);
+      noteTurnCall(turn, callTask, tools, reply, failed);
       // The table reads one line; the server log keeps the status and what
       // the backend itself said (out of memory, a crash), so an operator can
       // tell a blip from a server that is down. The backend's words stay out
@@ -1272,7 +1297,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
     batcher.push(filter.flush());
     batcher.flush();
-    noteTurnCall(turn, "turn", tools, reply);
+    noteTurnCall(turn, callTask, tools, reply);
     setJobStage("resolving");
     if (process.env.DM_DEBUG) {
       console.log(
