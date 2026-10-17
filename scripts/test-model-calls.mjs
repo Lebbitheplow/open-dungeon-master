@@ -311,6 +311,20 @@ const lastCalls = (n) =>
   assert.equal(closed.tools, undefined, "a narration-only call sends no tools: Ollama has no tool_choice");
   assert.equal(closed.think, false);
   assert.equal(closed.options.num_predict, 300, "the call's own cap wins when smaller");
+  // A call salvaged from a reply's text is echoed in the OpenAI shape, its
+  // arguments a string; Ollama takes an object and refused the string (400).
+  await requestDmMessage(
+    local,
+    [
+      { role: "system", content: "Rules." },
+      { role: "user", content: "We charge." },
+      { role: "assistant", content: "", tool_calls: [{ id: "json-salvaged-0", type: "function", function: { name: "start_encounter", arguments: '{"enemies":[{"monster":"bandit"}]}' } }] },
+      { role: "tool", tool_call_id: "json-salvaged-0", content: '{"ok":true}' },
+    ],
+    { tools, toolChoice: "auto", meta: { task: "turn" } },
+  );
+  const echoed = seen.ollama.at(-1).messages.find((message) => message.role === "assistant").tool_calls[0];
+  assert.deepEqual(echoed, { function: { name: "start_encounter", arguments: { enemies: [{ monster: "bandit" }] } } });
   await requestDmMessage(local, [{ role: "system", content: "Rules." }, { role: "user", content: "Hi." }], { meta: { task: "recap" } });
   assert.equal(seen.ollama.at(-1).think, false, "left unset, thinking stays off as before");
   assert.equal(seen.ollama.at(-1).options.temperature, 0.9);

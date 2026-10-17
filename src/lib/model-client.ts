@@ -636,13 +636,37 @@ type OllamaChatMessage = {
   tool_calls?: unknown;
 };
 
+// Ollama takes a call's arguments as an object and refuses a JSON string with
+// a 400. The calls it returned itself are objects already; a call the turn
+// salvaged from a reply's text (a small model writing its call as JSON:
+// src/lib/dm/json-salvage.ts) is echoed in the OpenAI shape, a string, and
+// sank the next request of the turn.
+function ollamaToolCalls(calls: unknown): unknown {
+  if (!Array.isArray(calls)) {
+    return calls;
+  }
+  return calls.map((call) => {
+    const fn = (call as { function?: { name?: unknown; arguments?: unknown } })?.function;
+    if (!fn || typeof fn.arguments !== "string") {
+      return call;
+    }
+    let args: unknown = {};
+    try {
+      args = JSON.parse(fn.arguments || "{}");
+    } catch {
+      // A model's malformed arguments: the call already failed on its own.
+    }
+    return { function: { name: fn.name, arguments: args && typeof args === "object" && !Array.isArray(args) ? args : {} } };
+  });
+}
+
 function toOllamaMessages(messages: ChatMessage[]): OllamaChatMessage[] {
   return messages.map((message) => {
     if (typeof message.content === "string") {
       return {
         role: message.role,
         content: message.content,
-        ...(message.tool_calls ? { tool_calls: message.tool_calls } : {}),
+        ...(message.tool_calls ? { tool_calls: ollamaToolCalls(message.tool_calls) } : {}),
       };
     }
 
