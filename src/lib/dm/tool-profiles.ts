@@ -149,6 +149,19 @@ export const MORE_TOOLS = "more_tools";
 export const ESSENTIAL_TOOLS = ["request_roll", "request_player_input", "record_event", "send_whisper"];
 // And in a fight, the actions no round runs without.
 export const ESSENTIAL_COMBAT_TOOLS = ["pc_attack", "enemy_attack", "end_turn"];
+// What a fight's call can spare when its window is tight, before it falls to
+// the essentials: lookups and notes, noticing and group checks, a new NPC, a
+// prepared fight. Each still runs when called by name.
+export const COMBAT_SPARE_TOOLS = [
+  "recall_story",
+  "search_lore",
+  "read_card",
+  "write_campaign_note",
+  "run_prepared_encounter",
+  "set_npc",
+  "check_notice",
+  "group_check",
+];
 
 const GROUP_IDS = Object.keys(TOOL_GROUPS) as ToolGroupId[];
 const GROUPED = new Map<string, ToolGroupId>(GROUP_IDS.flatMap((id) => TOOL_GROUPS[id].tools.map((name) => [name, id] as const)));

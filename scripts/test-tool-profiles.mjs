@@ -147,6 +147,18 @@ await test("the full rules are every line, word for word; a compact table's carr
   assert.ok(!rules.encounterRulesText(false, fight).includes("Spell areas"));
   assert.ok(rules.encounterRulesText(false, { ...fight, map: true }).includes("Spell areas"));
   assert.equal(rules.encounterRulesText(false, null), rules.ENCOUNTER_RULES);
+  // A class's own sentences ride only when someone at the table has it; a
+  // class a world pack added (classes null) keeps every one.
+  const withClasses = (classes) => ({ ...empty, inEncounter: true, classFeatures: true, map: true, classes });
+  const fightersOnly = rules.encounterRulesText(false, withClasses(new Set(["fighter"])));
+  assert.ok(!fightersOnly.includes("Deflect Missiles with the missile caught"), "a monk's reaction rides with no monk");
+  assert.ok(rules.encounterRulesText(false, withClasses(new Set(["monk"]))).includes("Deflect Missiles with the missile caught"));
+  assert.ok(rules.encounterRulesText(false, withClasses(null)).includes("Deflect Missiles with the missile caught"), "a homebrew class keeps every line");
+  const coreFor = (classes) => rules.dmSystemText(false, { ...withClasses(classes), inEncounter: false });
+  assert.ok(coreFor(new Set(["fighter"])).includes("Indomitable rerolls the last failed save by itself."));
+  assert.ok(!coreFor(new Set(["fighter"])).includes("Channel Divinity variant"), "a cleric's Channel Divinity rides with no cleric");
+  assert.ok(coreFor(new Set(["cleric"])).includes("Channel Divinity variant"));
+  assert.ok(!coreFor(new Set(["cleric"])).includes("Indomitable rerolls"));
 });
 
 // ---- a compact turn against a fake backend ---------------------------------------

@@ -32,6 +32,7 @@ import { noteTurnCall, turnCallFit, turnCallOptions, turnMinOutputTokens } from 
 import {
   autoGroups,
   closedGroups,
+  COMBAT_SPARE_TOOLS,
   ESSENTIAL_COMBAT_TOOLS,
   ESSENTIAL_TOOLS,
   compactTool,
@@ -1032,7 +1033,8 @@ export function compactTurnTools(
 
 // The richest compact set this call's window holds: every open group; else
 // only the group opened last (the players' words may have opened others);
-// else the essentials beside that group and the tools this turn has already
+// in a fight, else that set without what a round can spare; else the
+// essentials beside that group and the tools this turn has already
 // called (an Extra Attack's second pc_attack, a second roll), with every
 // other group one more_tools call away. Asked of the window before the call
 // (model.ts fitsStoryWindow), so a group opened on a small window is offered
@@ -1052,6 +1054,10 @@ function compactToolsThatFit(
   const variants: unknown[][] = [compactTurnTools(campaign, inEncounter, imageEnabled, signals, [...intent, ...opened]).tools];
   if (intent.length || opened.length > 1) {
     variants.push(compactTurnTools(campaign, inEncounter, imageEnabled, signals, last ? [last] : []).tools);
+  }
+  if (inEncounter) {
+    const spare = new Set(COMBAT_SPARE_TOOLS);
+    variants.push((variants.at(-1) as ToolDefLike[]).filter((tool) => !spare.has(tool.function.name)));
   }
   const called = turn.conversation.flatMap((message) =>
     message.role === "assistant" && Array.isArray(message.tool_calls)

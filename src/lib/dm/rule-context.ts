@@ -1,5 +1,6 @@
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { RuleContext } from "@/lib/dm/prompt-rules";
+import { classListFor } from "@/lib/srd/multiclass";
 
 // What a compact prompt's rules are chosen by (src/lib/dm/prompt-rules.ts):
 // what the party can do, read from every sheet at the table, AI companions
@@ -11,6 +12,26 @@ const FEAT_SPELLS = /\b(fey touched|shadow touched|magic initiate|ritual caster)
 // and Natural Explorer, and the racial traits a check's reason triggers.
 const LEVEL_ONE_FEATURES_CLASS = /\branger\b/i;
 const LEVEL_ONE_FEATURES_RACE = /\b(dwarf|gnome|goliath)\b/i;
+
+// The SRD's classes; a line about one of them rides only when someone at the
+// table has it (prompt-rules.ts "class:" needs).
+const SRD_CLASSES = new Set(["barbarian", "bard", "cleric", "druid", "fighter", "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard"]);
+
+// Every class at the table, multiclass levels included; null when any is a
+// class a world pack added, whose features may be any of the SRD's.
+export function tableClasses(sheets: readonly CharacterSheet[]): Set<string> | null {
+  const classes = new Set<string>();
+  for (const sheet of sheets) {
+    for (const entry of classListFor(sheet)) {
+      const id = entry.id.trim().toLowerCase();
+      if (!SRD_CLASSES.has(id)) {
+        return null;
+      }
+      classes.add(id);
+    }
+  }
+  return classes;
+}
 
 export function casts(sheet: CharacterSheet): boolean {
   const spells = sheet.spellcasting;
@@ -51,5 +72,6 @@ export function ruleContextFor(input: {
     recall: input.recall,
     map: input.map,
     legendary: input.legendary,
+    classes: tableClasses(sheets),
   };
 }
