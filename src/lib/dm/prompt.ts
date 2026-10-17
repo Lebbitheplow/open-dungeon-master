@@ -1630,6 +1630,7 @@ export function buildDmMessages(
       : []),
   ];
   state.contextTrace.shape = { historyStart: 1, historyEnd: 1 + historyMessages.length, promptMessages: messages.length };
+  state.contextTrace.historyEvicted = fitted.dropped;
   return messages;
 }
 

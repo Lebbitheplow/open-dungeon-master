@@ -127,6 +127,10 @@ export type ContextTrace = {
   // again, and the turn's own calls and results start at promptMessages
   // (src/lib/dm/request-fit.ts). Absent on turns taken before it was kept.
   shape?: { historyStart: number; historyEnd: number; promptMessages: number };
+  // Lines no summary covers that the prompt left out for want of room: the
+  // rolling compaction folds them next (src/lib/dm/compaction.ts), so play
+  // that fell out of the window is in a summary rather than in nothing.
+  historyEvicted?: number;
   // Every model call the turn made, as it was sized and as the backend
   // reported it (the context audit's F09): the prompt grows call by call as
   // tool results come back, and this is where that shows.
