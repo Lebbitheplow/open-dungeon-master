@@ -383,3 +383,9 @@ existing contract has to change.
 Godot single-threaded Web views may ship their `.pck` resource pack beside
 `.wasm`/JavaScript in `ui/`. Packs use `application/octet-stream`; `.wav` UI
 audio uses `audio/wav`. Existing size limits and sandbox policy apply.
+
+Optional API-v1 board presentation fields: `snapshot.skin` forwards the existing
+player-safe skin ID/material bindings; `genre` identifies the campaign setting.
+`appearance.audio` contains only `{ muted, volume }` from global user controls.
+Older addons may ignore these additions; missing audio preferences should mean
+silence. These fields grant no session, file or gameplay authority.

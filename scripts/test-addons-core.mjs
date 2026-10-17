@@ -435,6 +435,11 @@ await test("a snapshot is the viewer's projection, with only this addon's view d
   const appearance = { theme: "night", reducedMotion: false };
   const mine = boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance });
   assert.equal(mine.terrain, view.terrain, "unexplored squares stay blank");
+  assert.deepEqual(mine.skin, view.skin, "only the public skin binding is forwarded");
+  const publicOptions = { canDirect: false, genre: "cyberpunk", appearance: { ...appearance, audio: { muted: true, volume: 0.2 } } };
+  const presentation = boardSnapshot(view, "hello-dungeon", publicOptions);
+  assert.equal(presentation.genre, "cyberpunk");
+  assert.deepEqual(presentation.appearance.audio, { muted: true, volume: 0.2 });
   assert.deepEqual(mine.tokens[0].conditions, ["Prone"]);
   assert.equal(mine.tokens[0].size, 1);
   assert.equal(mine.view.files[0].name, "cave.glb");
