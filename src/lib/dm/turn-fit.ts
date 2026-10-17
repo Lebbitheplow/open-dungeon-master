@@ -67,6 +67,7 @@ export function noteTurnCall(
     outputTokens: sizing?.outputTokens ?? 0,
     dropped: sizing?.dropped ?? 0,
     clipped: sizing?.clipped ?? 0,
+    ...(sizing?.windowAssumed ? { windowAssumed: true as const } : {}),
     ...(result.usage?.inputTokens !== undefined ? { reportedInputTokens: result.usage.inputTokens } : {}),
     ...(result.usage?.cachedInputTokens !== undefined ? { cachedInputTokens: result.usage.cachedInputTokens } : {}),
     ...(result.usage?.outputTokens !== undefined ? { outputTokensUsed: result.usage.outputTokens } : {}),

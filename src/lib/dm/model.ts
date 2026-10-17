@@ -56,6 +56,9 @@ export type CallSizing = {
   outputTokens: number;
   dropped: number;
   clipped: number;
+  // The window is only assumed (the endpoint reports none) and the request
+  // outgrew it: it went out uncapped, and outputTokens is 0.
+  windowAssumed?: true;
 };
 
 export type DmCallResult = UpstreamResult & {
@@ -254,6 +257,15 @@ async function attempt(
       // (model-client.ts contextOverflowWindow).
       console.warn(`[model] ${task}: ${fit.reason} The window is assumed (the endpoint reports none), so the request goes out anyway; set OPENAI_COMPAT_CONTEXT to the server's real window.`);
       sent = fit.messages as ChatMessage[];
+      sizing = {
+        windowTokens: route.windowTokens,
+        promptTokens: fit.promptTokens,
+        toolTokens: Math.ceil(toolTokens * calibration),
+        outputTokens: 0,
+        dropped: fit.dropped,
+        clipped: fit.clipped,
+        windowAssumed: true,
+      };
     } else if (!fit.ok) {
       console.warn(`[model] ${task}: ${fit.reason}`);
       recordModelCall({
@@ -306,7 +318,7 @@ async function attempt(
   void _min;
   void _fit;
   const call = () =>
-    send(route, sent, { ...transport, onDelta, ...(sizing ? { maxOutputTokens: sizing.outputTokens } : {}) });
+    send(route, sent, { ...transport, onDelta, ...(sizing && !sizing.windowAssumed ? { maxOutputTokens: sizing.outputTokens } : {}) });
   let waited = 0;
   if (background) {
     waited = await waitForInteractive(route.key);
@@ -350,7 +362,7 @@ async function attempt(
     cacheWriteTokens: result.usage?.cacheWriteTokens,
     outputTokens: result.usage?.outputTokens,
     reasoningTokens: result.usage?.reasoningTokens,
-    maxOutputTokens: sizing?.outputTokens,
+    maxOutputTokens: sizing?.windowAssumed ? undefined : sizing?.outputTokens,
     toolCount: options.tools?.length ?? 0,
     toolTokens,
     fitDropped: sizing?.dropped,

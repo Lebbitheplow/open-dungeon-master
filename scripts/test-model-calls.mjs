@@ -95,6 +95,16 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ model_info: {} }));
       return;
     }
+    // A keyed llama-server router: /props answers only with the key.
+    if (req.url.startsWith("/props")) {
+      seen.props = [...(seen.props ?? []), req.headers.authorization ?? ""];
+      if (req.headers.authorization !== "Bearer probe-key") {
+        res.writeHead(401).end();
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ default_generation_settings: { n_ctx: 24_576 } }));
+      return;
+    }
     res.writeHead(404).end();
   });
 });
@@ -105,7 +115,7 @@ process.env.OLLAMA_BASE_URL = base;
 const { requestDmMessage, requestUtilityMessage } = await import("../src/lib/dm/model.ts");
 const { listTurnModelCalls, summarizeModelCalls } = await import("../src/lib/usage/model-calls.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
-const { learnContextWindow, forgetContextWindows, contextOverflowWindow, storyContextTokens } = await import("../src/lib/model-client.ts");
+const { learnContextWindow, forgetContextWindows, contextOverflowWindow, storyContextTokens, probeCustomContextWindow } = await import("../src/lib/model-client.ts");
 const { asInteractive } = await import("../src/lib/dm/inference-gate.ts");
 const { resetCalibration } = await import("../src/lib/dm/token-calibration.ts");
 
@@ -204,6 +214,9 @@ const lastCalls = (n) =>
   );
   assert.equal(seen.chat.length, 1, "the request still went out");
   assert.ok(!result.error);
+  assert.equal(result.sizing?.windowAssumed, true, "its trace says the window was only assumed");
+  assert.ok(result.sizing.promptTokens > result.sizing.windowTokens, "and how far past it the request went");
+  assert.ok(seen.chat[0].max_tokens === undefined || seen.chat[0].max_tokens > 0, "it went out uncapped by the guess, never capped at zero");
   console.log("ok: a window the endpoint never reported does not refuse a turn the server may have room for");
 }
 
@@ -340,6 +353,36 @@ const lastCalls = (n) =>
   assert.ok(turn.errors >= 1, "the capacity refusals count as failures");
   assert.deepEqual(listTurnModelCalls("no-such-turn"), []);
   console.log("ok: the per-task summary reads medians, failures and the cached share");
+}
+
+// ---- 9. the window probe carries the key the chat call would ----------------------
+// A table on the server's own backend names no key; the server's env key is
+// what its calls go out with, so its /props probe needs it too. Another host
+// is never sent it.
+{
+  forgetContextWindows();
+  // An explicit window outranks any probe; this one is read from /props.
+  delete process.env.OPENAI_COMPAT_CONTEXT;
+  process.env.OPENAI_COMPAT_BASE_URL = `${base}/v1`;
+  process.env.OPENAI_COMPAT_API_KEY = "probe-key";
+  seen.props = [];
+  assert.equal(await probeCustomContextWindow(`${base}/v1`, "", "keyed"), 24_576, "the router's window, read with the server's key");
+  assert.deepEqual(seen.props, ["Bearer probe-key"]);
+  assert.equal(storyContextTokens(settings({ customModel: "keyed" })), 24_576);
+
+  const foreignHeaders = [];
+  const foreign = http.createServer((req, res) => {
+    foreignHeaders.push(req.headers.authorization ?? "");
+    res.writeHead(404).end();
+  });
+  await new Promise((resolve) => foreign.listen(0, "127.0.0.1", resolve));
+  assert.equal(await probeCustomContextWindow(`http://127.0.0.1:${foreign.address().port}/v1`, "", "keyed"), null);
+  assert.deepEqual(foreignHeaders, [""], "another host never receives the server's key");
+  foreign.close();
+  delete process.env.OPENAI_COMPAT_BASE_URL;
+  delete process.env.OPENAI_COMPAT_API_KEY;
+  forgetContextWindows();
+  console.log("ok: the window probe carries the key the chat call would, and only to the server's own backend");
 }
 
 server.close();

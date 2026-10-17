@@ -177,8 +177,14 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
               <ul className="mt-1 space-y-0.5">
                 {trace.calls.map((call, index) => (
                   <li key={`${index}-${call.task}`} className={cn("text-[11px]", call.error ? "text-red-300/90" : "text-stone-400")}>
-                    <span className="font-mono text-stone-500">{call.task}</span> {call.promptTokens.toLocaleString()}/{call.windowTokens.toLocaleString()} sent
-                    {call.toolCount ? `, ${call.toolCount} tools` : ""}, reply up to {call.outputTokens.toLocaleString()}
+                    <span className="font-mono text-stone-500">{call.task}</span>{" "}
+                    {call.windowTokens
+                      ? call.windowAssumed
+                        ? `about ${call.promptTokens.toLocaleString()} sent past an assumed ${call.windowTokens.toLocaleString()} window (the endpoint reports none), reply uncapped`
+                        : `${call.promptTokens.toLocaleString()}/${call.windowTokens.toLocaleString()} sent`
+                      : "sent unmeasured"}
+                    {call.toolCount ? `, ${call.toolCount} tools` : ""}
+                    {call.windowTokens && !call.windowAssumed ? `, reply up to ${call.outputTokens.toLocaleString()}` : ""}
                     {call.reportedInputTokens !== undefined ? `; backend counted ${call.reportedInputTokens.toLocaleString()} in` : ""}
                     {call.cachedInputTokens !== undefined ? ` (${call.cachedInputTokens.toLocaleString()} cached)` : ""}
                     {call.outputTokensUsed !== undefined ? `, ${call.outputTokensUsed.toLocaleString()} out` : ""}

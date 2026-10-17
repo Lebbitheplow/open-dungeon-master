@@ -398,12 +398,18 @@ export async function probeCustomContextWindow(
   if (running) {
     return running;
   }
+  // The key the chat call itself goes out with (resolveCustomKey): a table
+  // on the server's own backend names no key of its own, and a keyed
+  // llama-server refuses /props without one, so every such table was packed
+  // against the 16K default on a 64K server.
+  const trimmedBase = baseUrl.trim();
+  const key = resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey;
   const probe = (async () => {
     try {
       // Never redirected (the URL is a campaign's; see fetchBackend), and
       // read under a ceiling: the window is one number in a small object.
       const response = await fetch(url, {
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+        headers: key ? { Authorization: `Bearer ${key}` } : undefined,
         signal: AbortSignal.timeout(2_000),
         redirect: "error",
       });

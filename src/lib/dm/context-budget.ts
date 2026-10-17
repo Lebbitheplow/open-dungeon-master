@@ -168,6 +168,8 @@ export type CallTrace = {
   reportedInputTokens?: number;
   cachedInputTokens?: number;
   outputTokensUsed?: number;
+  // Sent past a window the endpoint never reported, uncapped (model.ts).
+  windowAssumed?: true;
   reasoningTokens?: number;
   durationMs?: number;
   firstTokenMs?: number;
