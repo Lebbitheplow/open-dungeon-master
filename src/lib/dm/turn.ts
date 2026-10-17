@@ -56,7 +56,7 @@ import { getSceneTracker } from "@/lib/db/scene-tracker";
 import { listQuests } from "@/lib/db/quests";
 import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
-import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
+import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
 import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
@@ -158,7 +158,6 @@ import {
   insertCharacterEvent,
   listRecentEventsForCampaign,
   CHARACTER_EVENT_KINDS,
-  type CharacterEventKind,
 } from "@/lib/db/character-events";
 import { enqueueLocationMap } from "@/lib/dm/maps";
 import {
@@ -2377,9 +2376,9 @@ export function handleRecordEvent(
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
   }
-  // Unknown kinds fall back to "story" instead of erroring: a milestone is
-  // always worth recording under some kind.
-  const kind = normalizeEventKind(args.kind, CHARACTER_EVENT_KINDS) as CharacterEventKind;
+  // A kind off the list is "story", never an error: a milestone is always
+  // worth recording under some kind. Its words are not read for one.
+  const kind = CHARACTER_EVENT_KINDS.find((entry) => entry === args.kind) ?? "story";
   const summary = String(args.summary ?? "").trim().slice(0, 300);
   if (!summary) {
     return { error: "record_event needs a one-sentence summary.", retry: true };

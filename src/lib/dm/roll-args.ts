@@ -3,7 +3,7 @@
 // three and resolves the roll itself.
 
 import { z } from "zod";
-import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
+import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
 
 export const rollArgsSchema = z.object({
@@ -11,18 +11,15 @@ export const rollArgsSchema = z.object({
   // the AI DM is never offered it (src/lib/dm/viewer.ts).
   visibility: z.enum(["public", "dm", "blind", "self"]).optional(),
   characterId: z.string().optional(),
-  kind: z.preprocess(
-    normalizeRollKind,
-    z.enum([
-      "skill_check",
-      "saving_throw",
-      "ability_check",
-      "attack",
-      "damage",
-      "initiative",
-      "custom",
-    ]),
-  ),
+  kind: z.enum([
+    "skill_check",
+    "saving_throw",
+    "ability_check",
+    "attack",
+    "damage",
+    "initiative",
+    "custom",
+  ]),
   skill: z.string().optional(),
   ability: z.preprocess(
     normalizeAbility,
@@ -32,16 +29,13 @@ export const rollArgsSchema = z.object({
   // A difficulty tier the server turns into the canonical DC (very_easy 5 ..
   // nearly_impossible 30). When both are sent, an explicit dc wins.
   difficulty: z.preprocess(
-    (value) => normalizeDifficulty(value) ?? undefined,
+    (value) => normalizeDifficulty(value) ?? value,
     z
       .enum(["very_easy", "easy", "moderate", "hard", "very_hard", "nearly_impossible"])
       .optional(),
   ),
   expression: z.string().max(60).optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
+  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
   // The circumstance behind an advantage or disadvantage the AI claims; with
   // none, or one the server decides itself, the claim is set aside
   // (src/lib/dm/pc-attack-options.ts claimedAdvantage).

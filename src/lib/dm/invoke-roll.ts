@@ -34,7 +34,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { moteAfterRoll, moteOf } from "@/lib/dm/authored-mote";
 import { applyRollGates } from "@/lib/dm/roll-gates";
-import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 
 export function handleRequestRoll(
   campaign: Campaign,
@@ -49,22 +49,24 @@ export function handleRequestRoll(
   model?: { toolCallId: string | null },
 ): ToolResult {
   const campaignId = campaign.id;
-  let args: RollArgs;
+  const needs = model
+    ? "Invalid request_roll arguments. Send JSON with kind, and skill/ability/dc or expression as documented."
+    : "Pick a roll kind, and a skill, ability or DC to go with it.";
+  let raw: unknown;
   try {
-    const raw = JSON.parse(rawArguments || "{}");
-    args = rollArgsSchema.parse(raw);
-    args = {
-      ...args,
-      dc: rollDcFor(args, raw, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard")),
-    };
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
-    return {
-      error: model
-        ? "Invalid request_roll arguments. Send JSON with kind, and skill/ability/dc or expression as documented."
-        : "Pick a roll kind, and a skill, ability or DC to go with it.",
-      retry: true,
-    };
+    return { error: needs, retry: true };
   }
+  const parsed = rollArgsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return model ? invalidArguments(needs, parsed.error) : { error: needs, retry: true };
+  }
+  let args: RollArgs = parsed.data;
+  args = {
+    ...args,
+    dc: rollDcFor(args, raw, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard")),
+  };
 
   // The AI's advantage stands only on a circumstance the server cannot see
   // (the same rule as pc_attack's); the DM console rules freely.

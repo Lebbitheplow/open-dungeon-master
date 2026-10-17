@@ -8,7 +8,6 @@ import { publishEncounter } from "@/lib/dm/enemy-damage";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
-import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { strikeDamage } from "@/lib/dm/pc-attack-damage";
@@ -28,7 +27,7 @@ import { spendInspirationCounter } from "@/lib/dm/roll-riders";
 import { spendLuckCounter } from "@/lib/srd/class-resources";
 import { moteBurst, moteOf } from "@/lib/dm/authored-mote";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { attacksLeft } from "@/lib/dm/action-budget";
 
 // Re-exported for the callers that learned them here.
@@ -217,10 +216,7 @@ const pcAttackArgsSchema = z.object({
   spell: z.string().max(80).optional(),
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
+  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
   twoHanded: z.coerce.boolean().optional(),
   offHand: z.coerce.boolean().optional(),
   smite: z.coerce.number().int().min(1).max(9).optional(),
@@ -275,12 +271,17 @@ export function handlePcAttack(
   if (!encounter) {
     return { error: "No active encounter. Call start_encounter first.", retry: true };
   }
-  let args: PcAttackArgs;
+  let raw: unknown;
   try {
-    args = pcAttackArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments: pc_attack needs characterId and targetEnemyId.", retry: true };
   }
+  const parsed = pcAttackArgsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return invalidArguments("Invalid arguments: pc_attack needs characterId and targetEnemyId.", parsed.error);
+  }
+  const args: PcAttackArgs = parsed.data;
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {

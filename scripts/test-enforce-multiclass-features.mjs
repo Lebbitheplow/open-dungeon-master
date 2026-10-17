@@ -50,7 +50,7 @@ async function fightGoblin() {
   getDatabase().prepare("DELETE FROM battle_maps WHERE encounter_id = ?").run(encounter.id);
   return world.enemies()[0];
 }
-const endFight = () => world.invoke("end_encounter", { outcome: "test over" });
+const endFight = () => world.invoke("end_encounter", { outcome: "truce" });
 
 await test("proficiency bonus follows character level at every level", async () => {
   hero({ class: "fighter", level: 1, abilities: all13, proficiencies: {

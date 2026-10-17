@@ -45,7 +45,7 @@ import { combatFeatureSpend } from "@/lib/dm/combat-features";
 import { srdFeatureSpend } from "@/lib/dm/srd-feature-spends";
 import { handleStabilize } from "@/lib/dm/stabilize";
 import { canonicalCondition, handleSetCondition } from "@/lib/dm/set-condition";
-import { exhaustionPatch, namesExhaustion, PRONE, regainBlockedBy, SUFFOCATING } from "@/lib/dm/vitals-logic";
+import { exhaustionPatch, namesExhaustion, PRONE, regainBlockedBy, STABILIZE_METHODS, SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { castMarkCharge, prepareResourceCharge } from "@/lib/dm/resource-turn";
 import { planCounterReaction } from "@/lib/dm/reaction-counters";
 import { channelOptions, channelOptionsHeld, optionCost } from "@/lib/dm/option-costs";
@@ -73,14 +73,14 @@ import {
   effectiveMaxHp,
   pruneMeta,
 } from "@/lib/dm/condition-logic";
-import { normalizeAbility, normalizeListAction } from "@/lib/dm/arg-coerce";
+import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { breakConcentration } from "@/lib/dm/concentration";
 import {
   computePurchase,
   computeUseItem,
   computeUseResource,
+  fontOfMagicDirection,
   payForUse,
-  parseFontOfMagic,
   rollHealing,
 } from "@/lib/dm/resource-tools";
 import { resourceTools } from "@/lib/dm/resource-tool-defs";
@@ -95,7 +95,7 @@ import { checklistClassSpell, isCantripName, spellsAgainstLimit } from "@/lib/sr
 import { casterViewsOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
-import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
@@ -190,7 +190,7 @@ export const mutationTools: ToolDef[] = [
       healerId: { type: "string", description: "Whoever tends them: exact characterId from GAME STATE." },
       method: {
         type: "string",
-        enum: ["check", "kit", "spell"],
+        enum: [...STABILIZE_METHODS],
         description: "Default 'check'.",
       },
     },
@@ -409,7 +409,7 @@ const argsSchema = z.object({
   magical: z.coerce.boolean().optional(),
   // stabilize: who tends to the dying character, and how.
   healerId: z.string().optional(),
-  method: z.string().max(40).optional(),
+  method: z.enum(STABILIZE_METHODS).optional(),
   // set_condition: who or what the condition is tied to.
   sourceEnemyId: z.string().max(80).optional(),
   sourceCharacterId: z.string().max(80).optional(),
@@ -472,11 +472,8 @@ const argsSchema = z.object({
   spell: z.string().optional(),
   // heal: who cast the healing spell, when it lands on someone else.
   casterId: z.string().optional(),
-  // learn_spell: add|remove; purchase: buy|sell (synonyms normalized).
-  action: z.preprocess(
-    normalizeListAction,
-    z.enum(["add", "remove", "buy", "sell"]).optional(),
-  ),
+  // learn_spell: add|remove; purchase: buy|sell.
+  action: z.enum(["add", "remove", "buy", "sell"]).optional(),
   reason: z.string().optional(),
 });
 
@@ -551,12 +548,17 @@ export function applyDmMutation(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): MutationOutcome {
-  let args: z.infer<typeof argsSchema>;
+  let raw: unknown;
   try {
-    args = argsSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { result: { error: "Invalid arguments.", retry: true } };
   }
+  const parsed = argsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { result: invalidArguments("Invalid arguments.", parsed.error) };
+  }
+  const args = parsed.data;
   const reason = (args.reason ?? "").slice(0, 200);
 
   // Resolve by id or name, then RE-FETCH from the database: earlier
@@ -1242,7 +1244,7 @@ export function applyDmMutation(
           },
         };
       }
-      const optionCharge = option?.cost ?? (counter?.id === "sorcery_points" && parseFontOfMagic(args.variant) ? "bonus" : undefined);
+      const optionCharge = option?.cost ?? (counter?.id === "sorcery_points" && fontOfMagicDirection(args.variant) ? "bonus" : undefined);
       // Embodiment of the Law and the genre surges move the next spell to
       // the bonus action (src/lib/dm/resource-turn.ts castMarkCharge).
       const castMark = castMarkCharge(campaign, sheet, counter?.id);

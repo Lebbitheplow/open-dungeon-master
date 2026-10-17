@@ -158,45 +158,21 @@ export function pickEnemyTarget(
   return scored[0].characterId;
 }
 
-export type EncounterOutcome =
-  | "victory"
-  | "enemies_fled"
-  | "party_fled"
-  | "party_defeated"
-  | "truce";
+export const ENCOUNTER_OUTCOMES = ["victory", "enemies_fled", "party_fled", "party_defeated", "truce"] as const;
+export type EncounterOutcome = (typeof ENCOUNTER_OUTCOMES)[number];
 
-// Forgiving outcome resolution for end_encounter: the model's wording
-// drifts ("peace", "the bandits surrender", "retreat"), and a rejected call
-// used to leave the fight stuck open while the narration declared it over.
-// Unknown or missing outcomes infer from the enemy roster instead of
-// erroring: everyone dead = victory, everyone gone = enemies_fled,
-// otherwise a truce.
-export function coerceEncounterOutcome(
-  raw: string | undefined,
+// end_encounter's outcome: one of the listed values as sent, or else the
+// enemy roster's, never refused (a rejected call used to leave the fight
+// stuck open while the narration declared it over): everyone dead = victory,
+// everyone gone = enemies_fled, otherwise a truce. Words are not read for an
+// outcome: they would read one language's.
+export function resolveEncounterOutcome(
+  sent: string | undefined,
   enemyStatuses: string[],
 ): { outcome: EncounterOutcome; inferred: boolean } {
-  const wanted = (raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-  const exact: EncounterOutcome[] = [
-    "victory",
-    "enemies_fled",
-    "party_fled",
-    "party_defeated",
-    "truce",
-  ];
-  if ((exact as string[]).includes(wanted)) {
-    return { outcome: wanted as EncounterOutcome, inferred: false };
-  }
-  const synonyms: Array<[RegExp, EncounterOutcome]> = [
-    [/party.*(flee|fled|retreat|escape|run)/, "party_fled"],
-    [/(party|hero|character).*(defeat|down|dead|fall)|tpk/, "party_defeated"],
-    [/win|won|victor|slain|kill|defeat/, "victory"],
-    [/flee|fled|retreat|escape|rout|scatter|drive.*off|run/, "enemies_fled"],
-    [/truce|parley|surrender|peace|yield|stand.*down|negotiat|talk|spare/, "truce"],
-  ];
-  for (const [pattern, outcome] of synonyms) {
-    if (wanted && pattern.test(wanted)) {
-      return { outcome, inferred: false };
-    }
+  const listed = ENCOUNTER_OUTCOMES.find((outcome) => outcome === sent);
+  if (listed) {
+    return { outcome: listed, inferred: false };
   }
   const living = enemyStatuses.filter((status) => status === "alive").length;
   const dead = enemyStatuses.filter((status) => status === "dead").length;

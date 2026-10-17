@@ -28,7 +28,6 @@ import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { planAttackFx } from "@/lib/battlemap/fx-plan";
 import { acWithEffects } from "@/lib/dm/ac-effects";
-import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import { coverFor } from "@/lib/dm/attack-spatial";
 import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
 import { spellAttackHold } from "@/lib/dm/spell-planes";
@@ -53,17 +52,14 @@ import { conditionRollRiders, conditionTurnShape } from "@/lib/srd/condition-eff
 import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
 import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
   targetCharacterId: z.string(),
   attack: z.string().optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
+  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
   advantageReason: z.string().max(200).optional(),
 });
 
@@ -103,12 +99,17 @@ export function handleEnemyAttack(
   if (!encounter) {
     return { error: "No active encounter: enemy_attack works only in a fight. Call start_encounter first.", retry: true };
   }
-  let args: z.infer<typeof attackArgsSchema>;
+  let raw: unknown;
   try {
-    args = attackArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments: enemy_attack needs enemyId and targetCharacterId.", retry: true };
   }
+  const parsed = attackArgsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return invalidArguments("Invalid arguments: enemy_attack needs enemyId and targetCharacterId.", parsed.error);
+  }
+  const args = parsed.data;
   const found = resolveEnemyRef(encounter.id, args.enemyId);
   if (!found) {
     return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };

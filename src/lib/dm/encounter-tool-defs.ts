@@ -3,6 +3,7 @@
 // offers them (encounterTools) and handles every call.
 
 import { sceneIds } from "@/lib/ambience/catalog";
+import { ENCOUNTER_OUTCOMES } from "@/lib/dm/encounter-logic";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 export type ToolDef = {
@@ -165,10 +166,7 @@ export const endEncounterTool: ToolDef = {
       additionalProperties: false,
       properties: {
         ...waypointProperty,
-        outcome: {
-          type: "string",
-          enum: ["victory", "enemies_fled", "party_fled", "party_defeated", "truce"],
-        },
+        outcome: { type: "string", enum: [...ENCOUNTER_OUTCOMES] },
         reason: { type: "string" },
       },
       required: ["outcome"],

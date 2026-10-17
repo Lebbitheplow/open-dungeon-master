@@ -6,6 +6,7 @@
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { sceneOptions } from "@/lib/ambience/catalog";
 import { BOARD_ADJUDICATIONS } from "@/lib/dm/catalog-board";
+import { ENCOUNTER_OUTCOMES, type EncounterOutcome } from "@/lib/dm/encounter-logic";
 import { summonFormNames } from "@/lib/srd/summon-forms";
 import { familiarFormNames } from "@/lib/srd/familiar-forms";
 import { BEAST_FORMS } from "@/lib/srd/beast-forms";
@@ -19,6 +20,14 @@ import {
   conditionField,
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
+
+const OUTCOME_LABELS: Record<EncounterOutcome, string> = {
+  victory: "Victory",
+  enemies_fled: "The enemies fled",
+  party_fled: "The party fled",
+  party_defeated: "The party was defeated",
+  truce: "A truce",
+};
 
 const BONUS_ATTACK = [
   { value: "martial arts", label: "Martial Arts strike" },
@@ -558,7 +567,13 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     needsEncounter: true,
     confirm: { message: "End the fight now? XP is awarded and the board clears; it cannot be reopened." },
     fields: [
-      { name: "outcome", label: "Outcome", kind: "text", placeholder: "The party held the bridge" },
+      {
+        name: "outcome",
+        label: "Outcome",
+        kind: "select",
+        options: ENCOUNTER_OUTCOMES.map((value) => ({ value, label: OUTCOME_LABELS[value] })),
+        help: "Left blank, the server decides from the enemies: all dead is a victory, none standing is the enemies fled, any still alive is a truce.",
+      },
       REASON,
     ],
   },

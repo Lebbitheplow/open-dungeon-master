@@ -468,7 +468,7 @@ test("every combat form sends only fields its handler reads", () => {
 
 // What the model is told to send and the handler does without: end_encounter
 // reads the outcome off the roster when none is given
-// (src/lib/dm/encounter-logic.ts coerceEncounterOutcome).
+// (src/lib/dm/encounter-logic.ts resolveEncounterOutcome).
 const HANDLER_FILLS_IN = {
   end_encounter: ["outcome"],
 };
