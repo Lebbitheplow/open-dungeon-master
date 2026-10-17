@@ -1,5 +1,6 @@
 import { LINK_LABELS, typeFor, type Shelf, type WorldDoc, type WorldType } from "./model.ts";
-import { fieldLines, formatYear, sortEvents } from "./time.ts";
+import { fieldLines } from "./time.ts";
+import { canonNote, eventLine, eventsInOrder } from "./canon.ts";
 import { mentionSegments, type Named } from "./text.ts";
 import { accountOf } from "./account.ts";
 
@@ -153,7 +154,7 @@ export function worldDigest(doc: WorldDoc, entities: DigestEntity[], focus: stri
       .slice(0, 8)
       .join("; ");
     const line = [
-      `## ${entity.name} (${type.name})${entity.aliases.length ? `, also ${entity.aliases.join(", ")}` : ""}`,
+      `## ${entity.name} (${type.name})${canonNote(entity.entry.canon) ? ` [${canonNote(entity.entry.canon)}]` : ""}${entity.aliases.length ? `, also ${entity.aliases.join(", ")}` : ""}`,
       about,
       fields ? `Facts: ${fields}` : "",
       ties ? `Ties: ${ties}` : "",
@@ -163,7 +164,8 @@ export function worldDigest(doc: WorldDoc, entities: DigestEntity[], focus: stri
       .join("\n");
     if (!push(line)) break;
   }
-  const events = sortEvents(doc.events, doc.calendars).map((event) => `- ${formatYear(event.when, doc.calendars).primary || "undated"}: ${event.title}${event.body ? `, ${event.body.slice(0, 160)}` : ""}`);
+  // The author is the one asking: retired events stay, named as retired.
+  const events = eventsInOrder(doc.events, doc.calendars, { retired: true }).map((event) => `- ${eventLine(event, doc.calendars, 160)}`);
   if (events.length) push(`## Timeline\n${events.slice(0, 40).join("\n")}`);
   const secrets = doc.secrets.map((secret) => `- ${secret.title}${secret.knownBy.length ? ` (kept by ${secret.knownBy.map((ref) => nameOf.get(ref)).filter(Boolean).join(", ")})` : ""}${secret.partyKnows ? ", the party knows" : ""}`);
   if (secrets.length) push(`## Secrets (DM only)\n${secrets.slice(0, 30).join("\n")}`);
