@@ -5,7 +5,8 @@ import { publishPersisted } from "@/lib/events";
 import { pictureFailureReason, publishMediaStatus } from "@/lib/dm/images";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { toEnglishForImage } from "@/lib/image-english";
-import type { Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import { MAP_NEGATIVE, artDirection, locationMapPrompt, typedStyle } from "@/lib/art-direction";
 
 // The place as stored, to every client: its map failure is part of the row.
 function publishLocation(campaignId: string, locationId: string) {
@@ -15,7 +16,7 @@ function publishLocation(campaignId: string, locationId: string) {
   }
 }
 
-// Renders a top-down illustrated map of a location on the serial media
+// Renders a top-down map of a location on the serial media
 // queue (never blocks narration; one GPU job at a time machine-wide).
 //
 // A failure is recorded on the place as well as announced: the
@@ -25,7 +26,6 @@ function publishLocation(campaignId: string, locationId: string) {
 // for; a restart that drops the queue turns it into the failure
 // (src/lib/dm/restart-recovery.ts). Queuing a new render clears a failure.
 export function enqueueLocationMap(campaign: Campaign, locationId: string) {
-  const preset = presetFor(campaign.gameSettings);
   if (setLocationMapPending(locationId)) {
     publishLocation(campaign.id, locationId);
   }
@@ -37,23 +37,22 @@ export function enqueueLocationMap(campaign: Campaign, locationId: string) {
     }
     publishMediaStatus(campaign.id, "map", locationId, "generating");
     try {
+      // The campaign as it is now: a style picked since the map was queued
+      // is the one a redraw asked for.
+      const current = getCampaignById(campaign.id) ?? campaign;
+      const look = artDirection(current.settings, presetFor(current.gameSettings));
+      const typed = typedStyle(current.settings, "map");
       const place = await toEnglishForImage(campaign, {
         name: location.name,
         layout: location.layoutDescription,
+        style: typed,
       });
-      const prompt = [
-        "top-down illustrated game map",
-        preset.mapStyle,
-        "labeled areas, clear pathways, no text captions",
-        place.name,
-        place.layout,
-      ]
-        .filter(Boolean)
-        .join(", ");
+      const prompt = locationMapPrompt(typed ? place.style : look.map, place);
       const image = await generateStoryImage(campaign.settings, {
         prompt,
         mode: campaign.settings.imageMode,
         aspect: "landscape",
+        negative: MAP_NEGATIVE,
       });
       if (!setLocationMap(location.id, image)) {
         return;

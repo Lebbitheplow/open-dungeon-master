@@ -185,6 +185,7 @@ export function compileToPack(bundle: WorkshopBundle): CompiledPack {
     dmFlavor: "",
     mapStyle: "",
     portraitStyle: "",
+    sceneStyle: "",
     nameHints: "",
     raceHint: "",
     companionRaces: [],

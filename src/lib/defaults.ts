@@ -40,6 +40,11 @@ export const DEFAULT_STORY_SETTINGS: StorySettings = {
   aspect: "square",
   imageGenerationEnabled: true,
   autoImages: true,
+  // The genre's or world pack's own look, which is what every campaign made
+  // before the choice existed already had.
+  artStyle: "setting",
+  artStyleMap: "",
+  artStyleScene: "",
   proseSize: "medium",
 };
 

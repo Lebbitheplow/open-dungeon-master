@@ -204,6 +204,14 @@ export function VoiceFields({ draft, onDraft }: SectionProps) {
         hint="Art-style words for maps."
       />
       <TextField
+        label="Scene style"
+        value={draft.sceneStyle}
+        onChange={(sceneStyle) => set({ sceneStyle })}
+        maxLength={300}
+        placeholder="Salt-washed illustration, grey overcast light"
+        hint="Art-style words for scene pictures: the look, not what is in them."
+      />
+      <TextField
         label="Name hints"
         value={draft.nameHints}
         onChange={(nameHints) => set({ nameHints })}
