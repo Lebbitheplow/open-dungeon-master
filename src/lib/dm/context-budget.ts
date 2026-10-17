@@ -130,6 +130,10 @@ export type ContextTrace = {
   // again, and the turn's own calls and results start at promptMessages
   // (src/lib/dm/request-fit.ts). Absent on turns taken before it was kept.
   shape?: { historyStart: number; historyEnd: number; promptMessages: number };
+  // Which tools the turn's calls were offered (src/lib/dm/tool-profiles.ts):
+  // for the compact profile, the groups the players' words opened when the
+  // turn began, all the groups offered then, and those more_tools opened.
+  profile?: { name: "full" | "lean" | "compact"; intent?: string[]; groups?: string[]; opened?: string[] };
   // Lines no summary covers that the prompt left out for want of room: the
   // rolling compaction folds them next (src/lib/dm/compaction.ts), so play
   // that fell out of the window is in a summary rather than in nothing.

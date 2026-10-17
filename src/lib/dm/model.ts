@@ -367,6 +367,26 @@ async function attempt(
   return { ...result, ...(sizing ? { sizing } : {}), durationMs, ...(firstTokenMs !== undefined ? { firstTokenMs } : {}) };
 }
 
+// Whether a story call would fit its window as it stands, without sending
+// it: the compact profile asks before choosing how many tools to offer
+// (src/lib/dm/turn.ts). An agent program, or a window only assumed, always
+// answers yes, as the call itself would go.
+export function fitsStoryWindow(settings: StorySettings, messages: ChatMessage[], options: DmCallOptions): boolean {
+  const route = storyRoute(settings);
+  if (route.provider === "harness" || route.windowAssumed) {
+    return true;
+  }
+  return fitRequest(messages as FitMessage[], {
+    windowTokens: route.windowTokens,
+    tools: options.tools,
+    minOutputTokens: Math.min(options.minOutputTokens ?? DEFAULT_MIN_OUTPUT.story, Math.floor(route.windowTokens / 2)),
+    maxOutputTokens: options.maxOutputTokens ?? Number.MAX_SAFE_INTEGER,
+    history: options.fit?.history,
+    protectFrom: options.fit?.protectFrom,
+    calibration: calibrationFor(route.key),
+  }).ok;
+}
+
 // Routes a DM-side model call through the campaign's configured provider.
 export async function requestDmMessage(
   settings: StorySettings,

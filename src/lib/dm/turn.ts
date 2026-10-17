@@ -28,6 +28,28 @@ import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, setJobStage } f
 import { describeStage, unbuiltReason, type DmJobStage } from "@/lib/dm/job-stage-logic";
 import { modelTuningFor } from "@/lib/dm/model-tuning";
 import { noteTurnCall, turnCallFit, turnCallOptions, turnMinOutputTokens } from "@/lib/dm/turn-fit";
+import {
+  autoGroups,
+  closedGroups,
+  ESSENTIAL_TOOLS,
+  compactTool,
+  compactToolNames,
+  MORE_TOOLS,
+  moreToolsTool,
+  readMoreToolsCall,
+  TOOL_GROUPS,
+  toolHelp,
+  type ProfileSignals,
+  type ToolDefLike,
+  type ToolGroupId,
+  type ToolProfile,
+} from "@/lib/dm/tool-profiles";
+import { casts, ruleContextFor } from "@/lib/dm/rule-context";
+import { companionMode } from "@/lib/dm/companion-tools";
+import { groupGuidance, tracksAmmunition, type RuleContext } from "@/lib/dm/prompt-rules";
+import { getMounts } from "@/lib/db/mounts";
+import { getSceneTracker } from "@/lib/db/scene-tracker";
+import { listQuests } from "@/lib/db/quests";
 import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
@@ -46,7 +68,7 @@ import { fulfillAutoImage } from "@/lib/dm/images";
 import { imagesAvailable } from "@/lib/capabilities";
 import { imageProducerReady } from "@/lib/image-generate";
 import { enqueueNarrationAudio } from "@/lib/tts";
-import { requestDmMessage } from "@/lib/dm/model";
+import { fitsStoryWindow, requestDmMessage } from "@/lib/dm/model";
 import { OOC_ANSWER_INSTRUCTION, OOC_UNANSWERED_PREFIX, oocAnswer, oocQuestionPending } from "@/lib/dm/ooc-question";
 import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { toMcpTools } from "@/lib/harness/render";
@@ -82,6 +104,8 @@ import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import {
   buildDmMessages,
   type DmGameState,
+  companionRules,
+  relationshipRules,
   completeBeatTool,
   movePartyTool,
   recallStoryTool,
@@ -119,7 +143,7 @@ import { handleReadCard, readCardTool } from "@/lib/dm/prep-card-tool";
 import { countPrepCards } from "@/lib/db/prep-cards";
 import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
 import { buildTurnRetrieval } from "@/lib/dm/context-retrieval";
-import { estimateTokens, promptWindowTokens } from "@/lib/dm/context-budget";
+import { estimateTokens, promptWindowTokens, type ContextTrace } from "@/lib/dm/context-budget";
 import { maybeProposeItemChange, offerLinesForPrompt } from "@/lib/dm/proposal-intercept";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
 import {
@@ -526,8 +550,38 @@ async function openTurn(
       .filter(Boolean)
       .join("\n"),
   });
+  // The tools this turn's calls are offered, and for the compact profile the
+  // groups open from the start: the ones the table's state calls for and the
+  // ones the players' newest words name (src/lib/dm/tool-profiles.ts). The
+  // rules then carry only the lines those tools and this party need.
+  const tuning = dmTurnTuning(campaign);
+  const encounterNow = buildEncounterState(campaignId, context.sheets);
+  let profileTrace: NonNullable<ContextTrace["profile"]> = { name: tuning.toolProfile };
+  let ruleContext: RuleContext | null = null;
+  if (tuning.toolProfile === "compact") {
+    const playerText = history
+      .slice(-6)
+      .filter((message) => message.authorType === "player")
+      .map((message) => message.content)
+      .join("\n");
+    const intent = [...autoGroups({ inEncounter: false, playerText })];
+    const signals = profileSignals(campaign, context.sheets, Boolean(encounterNow));
+    const offered = compactTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, signals, intent).offered;
+    const groups = Object.keys(TOOL_GROUPS).filter((group) => TOOL_GROUPS[group as ToolGroupId].tools.some((name) => offered.has(name)));
+    profileTrace = { name: "compact", intent, groups, opened: [] };
+    ruleContext = ruleContextFor({
+      sheets: context.sheets,
+      inEncounter: Boolean(encounterNow),
+      groups,
+      arc: Boolean(campaign.storyArc),
+      recall: isStageEnabled(stages, "recall"),
+      map: Boolean(encounterNow?.map),
+      legendary: Boolean(signals.legendary),
+    });
+  }
   const promptState: DmGameState = {
       campaign,
+      ruleContext,
       // The window the prompt is actually being built against; without this
       // every budget silently fell back to the default rather than the
       // campaign's configured model. Less the tool definitions and the reply
@@ -546,7 +600,7 @@ async function openTurn(
       preparedFightsBlock: preparedFightsBlock(campaign),
       members: listMembers(campaignId),
       sheets: context.sheets,
-      encounter: buildEncounterState(campaignId, context.sheets),
+      encounter: encounterNow,
       enemySuggestions: suggestEnemies(
         campaign.gameSettings,
         context.sheets.map((sheet) => sheet.level),
@@ -653,9 +707,8 @@ async function openTurn(
   // buildDmMessages fills this in on the state object it was handed, so the
   // trace is carried onto the turn row rather than recomputed. What the turn
   // changed for the model rides with it, for the Context panel.
-  const tuning = dmTurnTuning(campaign);
   turn.contextTrace = promptState.contextTrace
-    ? { ...promptState.contextTrace, ...(tuning.notes.length ? { tuning: tuning.notes } : {}) }
+    ? { ...promptState.contextTrace, profile: profileTrace, ...(tuning.notes.length ? { tuning: tuning.notes } : {}) }
     : null;
   // Remember which player whispers this turn's prompt carries; finalize()
   // marks them answered only when the turn succeeds.
@@ -877,25 +930,155 @@ export function dmTurnTools(
 // An agent program is handed the whole catalogue once, in and out of a fight
 // alike (dmTurnToolCatalogue), so that is what it is charged.
 export function dmTurnToolTokens(campaign: Campaign): number {
-  return toolSetTokens(campaign, dmTurnTuning(campaign).leanTools);
+  return toolSetTokens(campaign, dmTurnTuning(campaign).toolProfile);
 }
 
-// What the turn changes for the table's model: the trimmed tool set on a
-// window the full set would crowd, no thinking request for a model that does
-// not reason (src/lib/dm/model-tuning-logic.ts). Judged against the full set.
+// What the turn changes for the table's model: the trimmed or the compact
+// tool set on a window the full set would crowd, no thinking request for a
+// model that does not reason (src/lib/dm/model-tuning-logic.ts). Judged
+// against the full and the trimmed sets.
 export function dmTurnTuning(campaign: Campaign): ModelTuning {
-  return modelTuningFor(campaign, toolSetTokens(campaign, false));
+  return modelTuningFor(campaign, toolSetTokens(campaign, "full"), toolSetTokens(campaign, "lean"));
 }
 
-function toolSetTokens(campaign: Campaign, leanTools: boolean): number {
+function toolSetTokens(campaign: Campaign, profile: ToolProfile): number {
   const imageEnabled = campaign.settings.imageGenerationEnabled && campaign.settings.autoImages;
+  const leanTools = profile === "lean";
   if (campaign.settings.textProvider === "harness") {
     return estimateTokens(JSON.stringify(toMcpTools(dmTurnToolCatalogue(campaign, imageEnabled, leanTools))));
+  }
+  if (profile === "compact") {
+    // The compact set the table's state offers now, and room for the largest
+    // group a more_tools call could open. A fight that starts mid-turn grows
+    // the set; the call after it is fitted again (src/lib/dm/turn-fit.ts),
+    // so the transcript gives way then rather than on every quiet turn.
+    const sheets = listSheets(campaign.id);
+    const inEncounter = Boolean(getActiveEncounter(campaign.id));
+    const set = compactTurnTools(campaign, inEncounter, imageEnabled, profileSignals(campaign, sheets, inEncounter), []).tools;
+    return estimateTokens(JSON.stringify(set)) + largestGroupTokens(campaign, imageEnabled);
   }
   return Math.max(
     estimateTokens(JSON.stringify(dmTurnTools(campaign, false, imageEnabled, leanTools))),
     estimateTokens(JSON.stringify(dmTurnTools(campaign, true, imageEnabled, leanTools))),
   );
+}
+
+// ---- the compact profile (src/lib/dm/tool-profiles.ts) ----
+
+// What the table holds now, for the groups a compact call opens unasked.
+export function profileSignals(campaign: Campaign, sheets: readonly CharacterSheet[], inEncounter: boolean): ProfileSignals {
+  const encounter = inEncounter ? getActiveEncounter(campaign.id) : null;
+  return {
+    inEncounter,
+    shopOpen: !inEncounter && Boolean(shopsBlock(campaign)),
+    mounts: Object.keys(getMounts(campaign.id)).length > 0,
+    pets: sheets.some((sheet) => (sheet.pets?.length ?? 0) > 0),
+    scene: !inEncounter && Boolean(getSceneTracker(campaign.id)),
+    quests: !inEncounter && listQuests(campaign.id).length > 0,
+    legendary: encounter
+      ? listEnemies(encounter.id).some((enemy) => enemy.stats.traits.some((trait) => /\b(legendary|lair) actions?\b/i.test(trait)))
+      : false,
+    caster: sheets.some(casts),
+  };
+}
+
+// The tools a compact call offers: the core and the open groups, with their
+// descriptions cut to the first sentence, and more_tools for the rest.
+export function compactTurnTools(
+  campaign: Campaign,
+  inEncounter: boolean,
+  imageEnabled: boolean,
+  signals: ProfileSignals,
+  opened: Iterable<ToolGroupId>,
+): { tools: unknown[]; offered: Set<string> } {
+  const full = dmTurnTools(campaign, inEncounter, imageEnabled, false) as ToolDefLike[];
+  const names = full.map((tool) => tool.function.name);
+  const offered = compactToolNames(names, signals, opened);
+  const closed = closedGroups(names, offered);
+  return {
+    tools: [...full.filter((tool) => offered.has(tool.function.name)).map(compactTool), ...(closed.length ? [moreToolsTool(closed)] : [])],
+    offered,
+  };
+}
+
+// The richest compact set this call's window holds: every open group; else
+// only the group opened last (the players' words may have opened others);
+// else that group beside the essentials. Asked of the window before the
+// call (model.ts fitsStoryWindow), so a group opened on a small window is
+// offered rather than refused for room.
+function compactToolsThatFit(
+  campaign: Campaign,
+  turn: DmTurn,
+  inEncounter: boolean,
+  imageEnabled: boolean,
+  sheets: readonly CharacterSheet[],
+): unknown[] {
+  const signals = profileSignals(campaign, sheets, inEncounter);
+  const intent = (turn.contextTrace?.profile?.intent ?? []) as ToolGroupId[];
+  const opened = (turn.contextTrace?.profile?.opened ?? []) as ToolGroupId[];
+  const last = opened.at(-1);
+  const variants: unknown[][] = [compactTurnTools(campaign, inEncounter, imageEnabled, signals, [...intent, ...opened]).tools];
+  if (intent.length || opened.length > 1) {
+    variants.push(compactTurnTools(campaign, inEncounter, imageEnabled, signals, last ? [last] : []).tools);
+  }
+  if (last) {
+    const wanted = new Set([...ESSENTIAL_TOOLS, ...TOOL_GROUPS[last].tools]);
+    const full = dmTurnTools(campaign, inEncounter, imageEnabled, false) as ToolDefLike[];
+    const names = full.map((tool) => tool.function.name);
+    const offered = new Set(names.filter((name) => wanted.has(name)));
+    variants.push([...full.filter((tool) => offered.has(tool.function.name)).map(compactTool), moreToolsTool(closedGroups(names, offered))]);
+  }
+  const options = turnCallOptions(campaign, turn, "turn");
+  return variants.find((tools) => fitsStoryWindow(campaign.settings, turn.conversation, { ...options, tools })) ?? variants.at(-1)!;
+}
+
+function largestGroupTokens(campaign: Campaign, imageEnabled: boolean): number {
+  const all = dmTurnToolCatalogue(campaign, imageEnabled, false) as ToolDefLike[];
+  let largest = 0;
+  for (const group of Object.values(TOOL_GROUPS)) {
+    const tools = all.filter((tool, index) => group.tools.includes(tool.function.name) && all.findIndex((other) => other.function.name === tool.function.name) === index);
+    largest = Math.max(largest, estimateTokens(JSON.stringify(tools.map(compactTool))));
+  }
+  return largest;
+}
+
+// A more_tools call: the group opened for the rest of the turn, with the
+// rules that explain it, or one tool's full instructions.
+function handleMoreTools(campaign: Campaign, turn: DmTurn, imageEnabled: boolean, rawArguments: string): ToolResult {
+  const { group, tool } = readMoreToolsCall(rawArguments);
+  if (!group && !tool) {
+    return { error: `Name a group (${Object.keys(TOOL_GROUPS).join(", ")}) or a tool.`, retry: true };
+  }
+  const all = dmTurnToolCatalogue(campaign, imageEnabled, false) as ToolDefLike[];
+  const result: Record<string, unknown> = { ok: true };
+  if (group) {
+    const profile = (turn.contextTrace ??= { limitTokens: 0, promptTokens: 0, blocks: [] }).profile ?? { name: "compact" as const };
+    profile.opened = [...new Set([...(profile.opened ?? []), group])];
+    turn.contextTrace.profile = profile;
+    result.opened = group;
+    result.tools = TOOL_GROUPS[group].tools.filter((name) => all.some((entry) => entry.function.name === name));
+    result.note = "These are offered from your next reply on: call the one the moment needs now.";
+    // The rules that explain the group ride with it: its lines of the core
+    // rules, and the table's own companion or relationship rules.
+    const companions = companionMode(campaign);
+    const guidance = [
+      groupGuidance(group, tracksAmmunition(campaign)),
+      group === "companions" && companions !== "off" ? companionRules(campaign, companions) : "",
+      group === "relationships" && campaign.gameSettings.relationships !== "off"
+        ? relationshipRules(campaign.gameSettings.romance !== "off")
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    if (guidance) {
+      result.rules = guidance;
+    }
+  }
+  if (tool) {
+    const found = all.find((entry) => entry.function.name === tool);
+    result.help = found ? toolHelp(found) : `There is no action called "${tool}".`;
+  }
+  return result;
 }
 
 // Every tool a turn could offer at any point, in or out of a fight. An agent
@@ -945,6 +1128,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // decide when set.
   const tuning = dmTurnTuning(campaign);
   const leanTools = tuning.leanTools;
+  // The compact profile: the groups the players' words opened when the turn
+  // began, and the ones more_tools opened since (kept on the trace, so a
+  // resumed turn keeps them). Two openings a run cost no call of the budget.
+  const compact = tuning.toolProfile === "compact";
+  let freeOpens = 2;
   // Chapters close on story progress, not message volume: the DM reports a
   // finished beat with complete_beat and that ends the chapter. One per
   // advance() run, so a single reply can never burn several beats.
@@ -1004,7 +1192,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
     // Rebuilt each iteration (see dmTurnTools).
     const inEncounter = Boolean(getActiveEncounter(campaignId));
-    const tools = dmTurnTools(campaign, inEncounter, imageEnabled, leanTools);
+    const tools = compact
+      ? compactToolsThatFit(campaign, turn, inEncounter, imageEnabled, sheets)
+      : dmTurnTools(campaign, inEncounter, imageEnabled, leanTools);
     // Fresh reasoning-artifact filter per model call; each call is its own
     // stream. Withheld trailing text is flushed after the call completes.
     const filter = createStreamingArtifactFilter();
@@ -1282,6 +1472,16 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         accepted.add(locationCall);
       }
     }
+    const moreToolsResults = new Map<string, ToolResult>();
+    for (const moreCall of toolCalls.filter((toolCall) => toolCall.name === MORE_TOOLS)) {
+      moreToolsResults.set(moreCall.id ?? MORE_TOOLS, handleMoreTools(campaign, turn, imageEnabled, moreCall.rawArguments));
+    }
+    // A reply that only asked for more actions spends none of the turn's
+    // calls, twice a run: it is the compact profile's lookup, not a move.
+    if (moreToolsResults.size && toolCalls.every((toolCall) => toolCall.name === MORE_TOOLS) && freeOpens > 0 && !finalCall) {
+      freeOpens -= 1;
+      turn.callIndex -= 1;
+    }
     const recallResults = new Map<string, Record<string, unknown>>();
     for (const recallCall of recallCalls) {
       recallResults.set(
@@ -1424,6 +1624,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
           return whisperResults.get(toolCall.id ?? "send_whisper") ?? { ok: true };
         case "set_npc":
           return setNpcResults.get(toolCall.id ?? "set_npc") ?? { ok: true };
+        case MORE_TOOLS:
+          return moreToolsResults.get(toolCall.id ?? MORE_TOOLS) ?? { ok: true };
         default:
           return null;
       }
@@ -1469,6 +1671,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // use the answer.
       recallCalls.length > 0 ||
       searchLoreCalls.length > 0 ||
+      // more_tools was asked for actions the model means to use.
+      moreToolsResults.size > 0 ||
       // A reply that was only a plan beside its calls told the table
       // nothing of them, whatever the turn already narrated.
       planBesideCalls ||

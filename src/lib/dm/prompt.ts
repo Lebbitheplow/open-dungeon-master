@@ -67,7 +67,7 @@ import type { ChatMessage } from "@/lib/model-client";
 import { describeIntent } from "@/lib/dm/intent-logic";
 import { describeEquipmentItem } from "@/lib/dm/equipment-line";
 import { summonStateLine } from "@/lib/dm/summon-rules";
-import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/prompt-rules";
+import { dmSystemText, encounterRulesText, tracksAmmunition, type RuleContext } from "@/lib/dm/prompt-rules";
 import { rollerName } from "@/lib/roll-labels";
 import { tableHazards } from "@/lib/srd/table-hazards";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
@@ -82,7 +82,13 @@ export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/
 // with the campaign's settings (real dice, companions, relationships): they
 // join the rules above the turn heading, which the Claude Code harness caches
 // (src/lib/prompt-boundary.ts).
-export function buildDmSystem(campaign: Campaign, settingsRules: readonly string[]): string {
+export function buildDmSystem(
+  campaign: Campaign,
+  settingsRules: readonly string[],
+  // A compact call's rules: only the lines its tools and party need
+  // (src/lib/dm/prompt-rules.ts). Absent: every rule, as always.
+  ruleContext: RuleContext | null = null,
+): string {
   const preset = presetFor(campaign.gameSettings);
   // The engine-boundary contract leads: one labelled statement of which facts
   // the runtime owns, which the numbered rules below it then apply tool by
@@ -95,7 +101,7 @@ export function buildDmSystem(campaign: Campaign, settingsRules: readonly string
     campaign.gameSettings.narrationGuard
       ? `${ENGINE_BOUNDARY_RULES}${ENGINE_BOUNDARY_CHECK}`
       : ENGINE_BOUNDARY_RULES,
-    dmSystemText(tracksAmmunition(campaign)),
+    dmSystemText(tracksAmmunition(campaign), ruleContext),
   ];
   const gmBlock = renderGmBlock(normalizeGm(campaign.gameSettings.gm));
   if (gmBlock) {
@@ -280,6 +286,9 @@ export type DmGameState = {
   // The model's whole window, for the limit the trace shows: the window less
   // the reply reserve, never a nominal figure larger than the window.
   windowTokens?: number;
+  // Set for a compact call (src/lib/dm/tool-profiles.ts): the rules carry
+  // only the lines its tools, party and moment need.
+  ruleContext?: RuleContext | null;
   // Excerpts the table pinned; injected unconditionally, no relevance filter.
   pins?: Array<{ text: string }>;
   // The newest player line, for the arc render's scene cues (issue #301):
@@ -1460,18 +1469,26 @@ export function buildDmMessages(
   if (anyPhysicalDice) {
     settingsRules.push(REAL_DICE_RULE);
   }
+  // A compact call carries the companion and relationship rules only when
+  // they bear on the table now (a companion at the table, bonds on record,
+  // the group opened); more_tools hands them over with their tools otherwise
+  // (src/lib/dm/turn.ts handleMoreTools).
+  const compactRules = state.ruleContext ?? null;
   const mode = companionMode(state.campaign);
-  if (mode !== "off") {
+  if (mode !== "off" && (!compactRules || compactRules.groups.has("companions") || state.sheets.some((sheet) => sheet.isCompanion))) {
     settingsRules.push(companionRules(state.campaign, mode));
   }
-  if (state.campaign.gameSettings.relationships !== "off") {
+  if (
+    state.campaign.gameSettings.relationships !== "off" &&
+    (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
+  ) {
     settingsRules.push(
       relationshipRules(state.campaign.gameSettings.romance !== "off"),
     );
   }
-  const systemParts = [buildDmSystem(state.campaign, settingsRules)];
+  const systemParts = [buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null)];
   if (state.encounter) {
-    systemParts.push(encounterRulesText(tracksAmmunition(state.campaign)));
+    systemParts.push(encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null));
   }
   if (state.pendingPlayerWhispers?.length) {
     systemParts.push(PLAYER_WHISPER_RULES);

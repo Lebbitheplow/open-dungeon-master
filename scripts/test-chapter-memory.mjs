@@ -1,6 +1,6 @@
 // What a table remembers when its window is small and its summarizer fails
 // (docs/agent-context-efficiency-audit-2026-10-17.md F05, F06):
-// 1. a promise made early in a long first chapter, on a 32K window, with the
+// 1. a promise made early in a long first chapter, on a 16K window, with the
 //    chapter summary call failing: the chapter closes, keeps a record from
 //    the server's own milestones, the running summary and its mark stay, and
 //    the next turn's prompt still carries the promise;
@@ -20,8 +20,7 @@ import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-chapter-memory-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
-process.env.OPENAI_COMPAT_CONTEXT = "32768";
-process.env.DM_LEAN_TOOLS = "1";
+process.env.OPENAI_COMPAT_CONTEXT = "16384";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const {
@@ -160,7 +159,7 @@ function table(title, lines, promiseAt = 1, recordMilestone = true) {
   requests.length = 0;
   await startDmTurn(campaign.id);
   const opening = getDmTurn(getLatestDmTurnId(campaign.id));
-  assert.ok(opening.contextTrace.historyEvicted >= 8, `on 32K the early lines fell out of the prompt (${opening.contextTrace.historyEvicted})`);
+  assert.ok(opening.contextTrace.historyEvicted >= 8, `on 16K the early lines fell out of the prompt (${opening.contextTrace.historyEvicted})`);
   const promiseVisible = (body) => JSON.stringify(body.messages).includes("Silver Oath");
   assert.equal(promiseVisible(requests[0]), false, "and the promise with them");
 
@@ -215,7 +214,7 @@ function table(title, lines, promiseAt = 1, recordMilestone = true) {
   assert.match(String(closing.messages[1].content), /Earlier in this chapter, condensed in order/);
   for (const body of [...spanCalls, closing]) {
     const tokens = Math.ceil(JSON.stringify(body.messages).length / 4);
-    assert.ok(tokens + (body.max_tokens ?? 0) <= 32_768, `each call fits the window (${tokens} + ${body.max_tokens})`);
+    assert.ok(tokens + (body.max_tokens ?? 0) <= 16_384, `each call fits the window (${tokens} + ${body.max_tokens})`);
   }
   const closed = listChapters(campaign.id).find((chapter) => chapter.status === "closed");
   assert.equal(closed.title, "The Gate");

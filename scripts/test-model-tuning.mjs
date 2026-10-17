@@ -44,14 +44,27 @@ await test("The documented default (qwen3.6-35b on llama-server, a 64K window) k
 });
 
 await test("A window the full tool set would crowd gets the trimmed set, says why, and charges the trimmed set to the prompt.", () => {
-  const campaign = pointAt({ customBaseUrl: "http://127.0.0.1:8001/v1", customModel: "some-local-12b" }, 16_384);
+  const campaign = pointAt({ customBaseUrl: "http://127.0.0.1:8001/v1", customModel: "some-local-12b" }, 49_152);
   const tuning = dmTurnTuning(campaign);
   assert.equal(tuning.leanTools, true);
+  assert.equal(tuning.toolProfile, "lean");
   assert.match(tuning.notes.join(" "), /Trimmed tool set: the full set \(about \d+K tokens\) would leave only/);
   const lean = dmTurnToolTokens(campaign);
   const full = dmTurnToolTokens(pointAt({}, 131_072));
   assert.ok(lean < full, `the trimmed set (${lean}) is not smaller than the full set (${full})`);
   console.log(`[model-tuning] tool definitions: full ${full} tokens, trimmed ${lean}`);
+});
+
+await test("A window even the trimmed set would crowd gets the compact set, says why, and charges the compact set.", () => {
+  const campaign = pointAt({ customBaseUrl: "http://127.0.0.1:8001/v1", customModel: "some-local-12b" }, 16_384);
+  const tuning = dmTurnTuning(campaign);
+  assert.equal(tuning.toolProfile, "compact");
+  assert.equal(tuning.leanTools, false);
+  assert.match(tuning.notes.join(" "), /Compact tool set/);
+  const compact = dmTurnToolTokens(campaign);
+  const lean = dmTurnToolTokens(pointAt({ customModel: "some-local-12b" }, 49_152));
+  assert.ok(compact < lean * 0.7, `the compact set (${compact}) is well under the trimmed set (${lean})`);
+  console.log(`[model-tuning] tool definitions: trimmed ${lean} tokens, compact ${compact}`);
 });
 
 await test("DM_LEAN_TOOLS and DM_THINKING in the environment still decide when they are set.", () => {
@@ -86,7 +99,7 @@ await test("A hosted model the catalog says does not reason is not asked to thin
 
 await test("The rules, without the catalog: tools off in the catalog trim the set; an unknown model keeps today's behaviour.", () => {
   const base = { windowTokens: 65_536, fullToolTokens: 27_000, configuredOutputTokens: 16_384 };
-  assert.deepEqual(tuneForModel({ ...base, catalog: null }), { leanTools: false, thinking: true, outputCap: null, notes: [] });
+  assert.deepEqual(tuneForModel({ ...base, catalog: null }), { toolProfile: "full", leanTools: false, thinking: true, outputCap: null, notes: [] });
   assert.equal(tuneForModel({ ...base, catalog: { outputTokens: 0, toolCall: false, reasoning: true } }).leanTools, true);
   assert.equal(tuneForModel({ ...base, windowTokens: 27_000 + MIN_STORY_ROOM_TOKENS }).leanTools, false);
   assert.equal(tuneForModel({ ...base, windowTokens: 27_000 + MIN_STORY_ROOM_TOKENS - 1 }).leanTools, true);
