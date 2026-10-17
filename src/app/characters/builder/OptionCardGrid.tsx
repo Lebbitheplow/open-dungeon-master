@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, Star } from "lucide-react";
-import { useId, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Select } from "@/components/ui/Select";
 import { Ribbon } from "@/components/ui/Ribbon";
@@ -30,9 +30,9 @@ export type OptionCardGroup = {
   options: OptionCardView[];
 };
 
-// Past this many cards the grid grows a search box: a pack can bring eighty
-// peoples, and scrolling for "tiefling" is no way to start a character.
-const SEARCH_FROM = 13;
+// Every grid has a search box: a pack can bring eighty peoples, scrolling for
+// "tiefling" is no way to start a character, and a keyboard player types
+// "tank" and presses Enter on twelve cards as gladly as on eighty.
 // A grid longer than FOLD_FROM starts folded to FOLD_TO cards (plus the whole
 // recommended tier and the chosen card), so what sits under it stays in reach.
 const FOLD_FROM = 17;
@@ -40,6 +40,12 @@ const FOLD_TO = 12;
 // The entrance staggers the first rows only; card sixty should not arrive
 // two seconds late.
 const STAGGER_CAP = 12;
+
+// The keyboard-and-mouse case: a fine pointer that hovers. A phone, a tablet
+// and a touch laptop's touch screen all fail it.
+function prefersSearchFocus(): boolean {
+  return typeof window !== "undefined" && Boolean(window.matchMedia?.("(hover: hover) and (pointer: fine)").matches);
+}
 
 // One filter over the grid ("Raises", "Role"): its choices, and whether a
 // card passes for the one picked. The step that shows the grid supplies
@@ -75,6 +81,7 @@ export function OptionCardGrid({
   facets?: CardFacet[];
 }) {
   const gridId = useId();
+  const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const total = groups.reduce((sum, group) => sum + group.options.length, 0);
   const [expanded, setExpanded] = useState(false);
@@ -109,6 +116,31 @@ export function OptionCardGrid({
     return { shown: folded.groups, hidden: folded.hidden };
   }, [narrowed, query, folds, expanded, searching, value]);
   const shownCount = shown.reduce((sum, group) => sum + group.options.length, 0);
+  const lone = searching && shownCount === 1 ? shown[0].options[0] : null;
+
+  // Entering the step puts the caret in the search box, for a keyboard or a
+  // mouse; on a touch screen it would throw up the keyboard over the cards,
+  // so focus stays on the step's title there. The wizard moves focus to that
+  // title on every step change (Wizard.tsx); this follows it, and a "Show
+  // me" that focuses a pick afterwards still wins.
+  useEffect(() => {
+    const onFocus = (event: FocusEvent) => {
+      const target = event.target;
+      const input = searchRef.current;
+      if (
+        !(target instanceof HTMLElement) ||
+        !input ||
+        !target.classList.contains("wizard-step-heading") ||
+        !target.closest("section")?.contains(input) ||
+        !prefersSearchFocus()
+      ) {
+        return;
+      }
+      input.focus({ preventScroll: true });
+    };
+    document.addEventListener("focusin", onFocus);
+    return () => document.removeEventListener("focusin", onFocus);
+  }, []);
   // Where each group's first card sits in the whole run, for the stagger.
   const starts = useMemo(() => {
     const out: number[] = [];
@@ -122,19 +154,34 @@ export function OptionCardGrid({
 
   return (
     <div>
-      {total >= SEARCH_FROM ? (
-        <label className="relative mb-3 block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={`Search ${total} ${noun === "class" ? "classes" : `${noun}s`}`}
-            aria-label={`Search ${noun === "class" ? "classes" : `${noun}s`}`}
-            className={cn(ui.input, "pl-8")}
-          />
-        </label>
-      ) : null}
+      <label className="relative mb-3 block">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          // One card left: Enter chooses it, as a tap on it would.
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && lone) {
+              event.preventDefault();
+              onChoose(lone.id);
+            }
+          }}
+          placeholder={`Search ${total} ${noun === "class" ? "classes" : `${noun}s`}`}
+          aria-label={`Search ${noun === "class" ? "classes" : `${noun}s`}`}
+          aria-describedby={`${gridId}-search-hint`}
+          enterKeyHint={lone ? "done" : "search"}
+          className={cn(ui.input, "pl-8")}
+        />
+        <span id={`${gridId}-search-hint`} className="sr-only" aria-live="polite">
+          {lone
+            ? `One match, ${lone.name}. Press Enter to choose it.`
+            : query.trim()
+              ? `${shownCount} ${noun === "class" ? (shownCount === 1 ? "class" : "classes") : `${noun}${shownCount === 1 ? "" : "s"}`} match.`
+              : "Searches names, roles and the other words on each card."}
+        </span>
+      </label>
 
       {facets.length ? (
         // A suggestion of the filters a player reaches for; each step

@@ -23,7 +23,9 @@ const {
   lineageFamily,
   lineageTagline,
   parseTrait,
+  slidePosition,
   srdRaceFor,
+  swipeStep,
   traitLines,
   wrapIndex,
 } = await import("../src/app/characters/builder/lineage.ts");
@@ -288,6 +290,45 @@ test("every class card has a plate that exists, and a neutral look still shows t
   }
   // A pack class nobody painted falls back to the adventurer, not a 404.
   assert.ok(exists(classArt("marshal", "")));
+});
+
+// Q12. The search reads what the card prints, not only its name.
+test("search matches the tagline and the chips a card prints", () => {
+  const cards = [
+    {
+      label: "Core",
+      options: [
+        { id: "fighter", name: "Fighter", tagline: "Core class", chips: ["Easy to learn", "Tank", "d10"] },
+        { id: "paladin", name: "Paladin", tagline: "Like Fighter + Cleric · CHA caster", chips: ["Tank", "Healer", "d10"] },
+        { id: "rogue", name: "Rogue", tagline: "Core class", chips: ["Striker", "d8"] },
+      ],
+    },
+  ];
+  const ids = (query) => filterGroups(cards, query).flatMap((group) => group.options.map((option) => option.id));
+  assert.deepEqual(ids("tank"), ["fighter", "paladin"], "a role chip");
+  assert.deepEqual(ids("healer tank"), ["paladin"], "every word, across chips");
+  assert.deepEqual(ids("cleric"), ["paladin"], "the plays-like tagline");
+  assert.deepEqual(ids("easy"), ["fighter"], "the easy-to-learn chip");
+  assert.deepEqual(ids("D8"), ["rogue"], "case does not matter");
+  // A card with no tagline or chips still searches by name.
+  assert.deepEqual(filterGroups([{ label: null, options: [{ id: "elf", name: "Elf" }] }], "elf").length, 1);
+});
+
+// Q6. A step names the lineage it reached.
+test("the carousel's position names the lineage, and the seal only where it applies", () => {
+  assert.equal(slidePosition({ name: "Tiefling", recommended: true }, 2, 40), "Tiefling, 3 of 40, recommended");
+  assert.equal(slidePosition({ name: "Dwarf", recommended: false }, 0, 9), "Dwarf, 1 of 9");
+  assert.equal(slidePosition({ name: "Elf" }, 8, 9), "Elf, 9 of 9");
+});
+
+// Q14. A swipe pages; a tap, a nudge or a scroll does not.
+test("a sideways swipe pages the carousel and nothing else does", () => {
+  assert.equal(swipeStep(-120, 10), 1, "a swipe left goes on");
+  assert.equal(swipeStep(120, -10), -1, "a swipe right goes back");
+  assert.equal(swipeStep(0, 0), 0, "a tap");
+  assert.equal(swipeStep(-30, 0), 0, "a nudge");
+  assert.equal(swipeStep(-80, 200), 0, "mostly a scroll");
+  assert.equal(swipeStep(-80, 60), 0, "too diagonal to be meant");
 });
 
 console.log(`test-lineage-cards: ${passed} passed`);
