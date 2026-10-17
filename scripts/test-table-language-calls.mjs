@@ -85,7 +85,7 @@ await test("The claims reader, which only a machine reads, never carries the dir
       label: "test",
       text: "Tirate per l'iniziativa!",
       kinds: ["fight_start"],
-      outcomes: guardOutcomes([], null),
+      outcomes: guardOutcomes([], null, "english"),
       sheets: [],
     }),
   );

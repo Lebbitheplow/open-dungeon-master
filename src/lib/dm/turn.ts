@@ -1799,7 +1799,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // 91). Hold it back and send the model to the tool that resolves it.
       const unrolled =
         !finalCall && !damageNudged && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
-          ? unrolledFigure(claims, turn.conversation)
+          ? unrolledFigure(claims, turn.conversation, campaign.gameSettings.tableLanguage)
           : null;
       if (unrolled) {
         damageNudged = true;

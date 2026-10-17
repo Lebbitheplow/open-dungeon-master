@@ -12,9 +12,11 @@ const TRAIT = /^(.+?)\s*\((?:[^()]*?,\s*)?(\d+d\d+)\s+([a-z]+)\s+unarmed strike\
 
 export type RacialWeapon = { feature: string; srd: SrdWeapon };
 
-export function racialNaturalWeapon(features: Array<{ name: string }>, term: string | undefined): RacialWeapon | null {
-  const wanted = textKey(term ?? "").replace(/^(the|a|an|her|his|their|its) /, "");
-  if (!wanted) {
+// `terms` are the ways to read the weapon's name (src/lib/language/
+// language.ts nameTerms).
+export function racialNaturalWeapon(features: Array<{ name: string }>, terms: readonly string[]): RacialWeapon | null {
+  const wanted = terms.map(textKey).filter(Boolean);
+  if (!wanted.length) {
     return null;
   }
   for (const feature of features) {
@@ -26,7 +28,7 @@ export function racialNaturalWeapon(features: Array<{ name: string }>, term: str
     const own = found[1].trim();
     const bare = own.replace(/^[a-z]+'s\s+/i, "");
     const names = [textKey(own), textKey(bare)];
-    if (names.some((name) => wanted === name || wanted.startsWith(`${name} `) || name.startsWith(wanted))) {
+    if (names.some((name) => wanted.some((term) => term === name || term.startsWith(`${name} `) || name.startsWith(term)))) {
       return {
         feature: own,
         srd: { name: bare.replace(/\b\w/g, (letter) => letter.toUpperCase()), category: "simple", kind: "melee", damage: `${found[2]} ${found[3].toLowerCase()}` },

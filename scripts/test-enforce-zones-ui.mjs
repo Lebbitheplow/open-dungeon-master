@@ -171,7 +171,7 @@ await test("The board numbers a Wall of Ice's sections as damage_object names th
   // Each badge sits on a square of its own section.
   const wall = await wallIn();
   assert.ok(wall.sections.every((section) => wall.cells.includes(section.at)));
-  const broken = await world.invoke("damage_object", { name: `Wall of Ice section ${shown[1]}`, damage: "30", damageType: "bludgeoning" });
+  const broken = await world.invoke("damage_object", { name: "Wall of Ice", section: shown[1], damage: "30", damageType: "bludgeoning" });
   assert.equal(broken.ok, true, broken.error);
   assert.deepEqual((await wallIn()).sections.map((section) => section.n), shown.filter((n) => n !== shown[1]));
 });

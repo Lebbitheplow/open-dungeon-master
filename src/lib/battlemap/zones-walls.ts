@@ -6,8 +6,8 @@
 //     (a row marked `gas`) loses the wall's own squares and every square
 //     whose line from the cloud's centre crosses the wall.
 //   - Wall of Ice is made of 10-foot sections, numbered from the end it was
-//     laid from ("Wall of Ice section 1"), each with its own armor class and
-//     hit points; a section brought to 0 leaves a sheet of frigid air.
+//     laid from (section 1 first), each with its own armor class and hit
+//     points; a section brought to 0 leaves a sheet of frigid air.
 
 import { chebyshev, type XY } from "@/lib/battlemap/types";
 import { lineCells, type SpellZone } from "@/lib/battlemap/zones";
@@ -42,22 +42,20 @@ export function sectionCells(zone: Pick<SpellZone, "origin" | "cells">, section:
   return zone.cells.filter((cell) => sectionOf(zone, cell, width, sectionFeet) === section);
 }
 
-// "Wall of Ice section 3", "wall of ice, section 3", "Wall of Ice #3":
-// the wall's spell name and the section number, or null for another name.
-//
-// `walls` are the sectioned walls standing on the board, so a workshop copy
-// of Wall of Ice under a name of its own ("Rime Wall section 2") is found by
-// that name.
-export function parseSectionName(
-  name: string,
+// The sectioned wall a name points at ("Wall of Ice"), compared whole, or
+// null for another name. `terms` are the ways to read the name (src/lib/
+// language/language.ts nameTerms). `walls` are the sectioned walls standing
+// on the board, so a workshop copy of Wall of Ice under a name of its own
+// ("Rime Wall") is found by that name.
+export function wallNamed(
+  terms: readonly string[],
   walls: Array<{ spell: string; runsAs?: string }> = [],
-): { spell: string; section: number | null; runsAs?: string } | null {
-  const numbered = /^(?:the )?(.*?)[,:]?\s*(?:section|#|no\.?)\s*(\d{1,3})$/i.exec(name.trim());
-  const spell = textKey(numbered ? numbered[1] : name).replace(/^the /, "");
-  const copy = walls.find((wall) => wall.runsAs && textKey(wall.spell) === spell);
-  const row = zoneRowFor(copy ? { spell: copy.spell, runsAs: copy.runsAs } : spell);
-  if (!row?.sections) {
-    return null;
+): { spell: string; runsAs?: string } | null {
+  for (const spell of terms.map(textKey)) {
+    const copy = walls.find((wall) => wall.runsAs && textKey(wall.spell) === spell);
+    if (zoneRowFor(copy ? { spell: copy.spell, runsAs: copy.runsAs } : spell)?.sections) {
+      return { spell, ...(copy?.runsAs ? { runsAs: copy.runsAs } : {}) };
+    }
   }
-  return { spell, section: numbered ? Number(numbered[2]) : null, ...(copy?.runsAs ? { runsAs: copy.runsAs } : {}) };
+  return null;
 }

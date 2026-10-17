@@ -58,12 +58,12 @@ function conversationOf(exchanges) {
 }
 
 const kinds = (claims, exchanges) =>
-  ruleClaims(claims, guardOutcomes(conversationOf(exchanges), null))
+  ruleClaims(claims, guardOutcomes(conversationOf(exchanges), null, "english"))
     .map((entry) => entry.kind)
     .sort();
 
 // The claims a reader returns for a narration about the fight's goblin.
-const goblin = normalizeCreatureName("Goblin 1");
+const goblin = normalizeCreatureName("Goblin 1", "english");
 const on = (kind, quote) => ({ kind, target: goblin, quote });
 
 // A resolved player attack, as an exchange.
@@ -141,7 +141,7 @@ await test("the guard changes no state", async () => {
   const encounter = JSON.stringify(world.encounter());
   ruleClaims(
     [on("hit", "Kara's blade bites deep"), on("dies", "the goblin dies"), { kind: "amount", value: 99, of: "damage", quote: "99 damage" }],
-    guardOutcomes(conversationOf([exchange]), null),
+    guardOutcomes(conversationOf([exchange]), null, "english"),
   );
   assert.equal(JSON.stringify(world.sheets()), sheets);
   assert.equal(JSON.stringify(world.encounter()), encounter);

@@ -12,6 +12,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { asciiSlugOf, commonWords, containsPhrase, findNamed, namesPattern, phraseOffsets, slugOf, splitWords, textKey, words } = await import(
   "../src/lib/language/text-logic.ts"
 );
+const { nameTerms } = await import("../src/lib/language/language.ts");
 const { attributeKey } = await import("../src/lib/dm/attributes-logic.ts");
 const { normalizeSpellName } = await import("../src/lib/dm/engine-boundary.ts");
 const { factSimilarity, normalizeSubject } = await import("../src/lib/dm/fact-logic.ts");
@@ -113,8 +114,8 @@ test("a name keys the same however a model marks it, as spells, tools and gear a
   assert.ok(toolProficiencyBonus(rogue, "Thieves’ tools (lockpicks)", 2));
   // A creature or a form by the name a model writes.
   const spider = { name: "Giant Spider" };
-  assert.equal(findNamed([spider, { name: "Spider" }], "giant_spider", (entry) => entry.name), spider);
-  assert.equal(findNamed([spider], "a Giant-Spider", (entry) => entry.name), spider);
+  assert.equal(findNamed([spider, { name: "Spider" }], ["giant_spider"], (entry) => [entry.name]), spider);
+  assert.equal(findNamed([spider], nameTerms("a Giant-Spider", "english"), (entry) => [entry.name]), spider);
   // A possessive or an elision shares its word with the bare one.
   assert.equal(factSimilarity("Marla's sword gleams", "the sword of Marla gleams"), 1);
 });

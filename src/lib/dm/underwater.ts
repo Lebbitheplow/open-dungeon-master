@@ -16,9 +16,15 @@ import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { getActiveBoard } from "@/lib/db/encounters";
 import { TERRAIN, tileAt } from "@/lib/battlemap/types";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
+import { textKey } from "@/lib/language/text-logic";
+import { pluralForms } from "@/lib/srd/name-forms";
 
-const MELEE_UNDERWATER = /\b(dagger|javelin|shortsword|spear|trident)s?\b/i;
-const RANGED_UNDERWATER = /\b(crossbow|net|javelin|spear|trident|dart)s?\b/i;
+// The SRD weapons each rule names, with their plurals, found whole in the
+// weapon's name ("+1 Dagger", "Heavy Crossbow", "Javelins").
+const MELEE_UNDERWATER = ["dagger", "javelin", "shortsword", "spear", "trident"].flatMap(pluralForms);
+const RANGED_UNDERWATER = ["crossbow", "net", "javelin", "spear", "trident", "dart"].flatMap(pluralForms);
+
+const names = (weapon: string, list: string[]) => list.some((name) => ` ${textKey(weapon)} `.includes(` ${name} `));
 
 export type UnderwaterSwing = { disadvantage: boolean; misses: boolean; note: string | null };
 
@@ -39,14 +45,14 @@ export function underwaterSwing(input: {
     return CLEAR;
   }
   if (input.melee) {
-    return input.swims || MELEE_UNDERWATER.test(input.weapon)
+    return input.swims || names(input.weapon, MELEE_UNDERWATER)
       ? CLEAR
       : { disadvantage: true, misses: false, note: `underwater: a ${input.weapon} swung without a swimming speed is at disadvantage` };
   }
   if (input.beyondNormal) {
     return { disadvantage: false, misses: true, note: `underwater: a ranged attack past the ${input.weapon}'s normal range misses` };
   }
-  return RANGED_UNDERWATER.test(input.weapon)
+  return names(input.weapon, RANGED_UNDERWATER)
     ? CLEAR
     : { disadvantage: true, misses: false, note: `underwater: a ${input.weapon} shot through water is at disadvantage` };
 }

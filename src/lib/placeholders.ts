@@ -819,8 +819,12 @@ export const GENRE_ENEMY_TOKENS: Readonly<Record<string, GenreEnemyTable>> = {
   },
 };
 
-function genreNameKey(value: string | null | undefined): string {
-  return familyKey(value).replace(/^the-/, "");
+// A token's English names as a table may write them: with and without "The"
+// ("The Skittering", "Skittering", "the Burglar"), spelled on the table. The
+// name a monster has is looked up as written.
+function genreNameSpellings(name: string): string[] {
+  const bare = familyKey(name).replace(/^the-/, "");
+  return [familyKey(name), bare, `the-${bare}`];
 }
 
 const GENRE_ENEMY_LOOKUP: Record<string, { names: Map<string, string>; slugs: Record<string, string> }> =
@@ -829,7 +833,9 @@ const GENRE_ENEMY_LOOKUP: Record<string, { names: Map<string, string>; slugs: Re
       genre,
       {
         names: new Map(
-          Object.entries(table.names).flatMap(([plate, names]) => names.map((name) => [genreNameKey(name), plate] as const)),
+          Object.entries(table.names).flatMap(([plate, names]) =>
+            names.flatMap((name) => genreNameSpellings(name).map((spelling) => [spelling, plate] as const)),
+          ),
         ),
         slugs: table.slugs,
       },
@@ -843,7 +849,7 @@ function genreEnemyPlate(genre: string, slug: string | null | undefined, name: s
   if (!table) {
     return null;
   }
-  const byName = table.names.get(genreNameKey(name));
+  const byName = table.names.get(familyKey(name));
   if (byName) {
     return byName;
   }

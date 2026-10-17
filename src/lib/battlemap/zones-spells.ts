@@ -293,7 +293,7 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     shape: "wall", feet: 100, level: 6, concentration: true, rounds: 10 * MINUTE,
     blocks: {}, tone: "frost",
     sections: { feet: 10, ac: 12, hp: 30, vulnerable: "fire", leaves: "frigid air" },
-    summary: "a wall of ice: nothing walks or sees through it; each 10-foot section (\"Wall of Ice section 1\" from its first end) has AC 12 and 30 hit points, double damage from fire, and breaks with damage_object, leaving frigid air",
+    summary: "a wall of ice: nothing walks or sees through it; each 10-foot section (section 1 at its first end) has AC 12 and 30 hit points, double damage from fire, and breaks with damage_object, leaving frigid air",
   },
   // What a broken section of a Wall of Ice leaves in its space (SRD 5.1):
   // laid by the engine (src/lib/dm/zone-walls.ts), never cast; it lasts as

@@ -59,19 +59,20 @@ function toSrd(weapon: NaturalWeapon, level: number, mods: Record<string, number
 
 // The weapon a feature makes that pc_attack's `weapon` names ("claws", "the
 // psychic blade", "radiant sun bolt"), when its gate holds (a rage for Form
-// of the Beast). Null when the name is none of them.
+// of the Beast). `terms` are the ways to read the name (src/lib/language/
+// language.ts nameTerms). Null when the name is none of them.
 export function authoredNaturalWeapon(
   sheet: AuthoredSheet,
-  term: string | undefined,
+  terms: readonly string[],
   mods: Record<string, number> = {},
 ): HeldNaturalWeapon | null {
-  const wanted = textKey(term ?? "").replace(/^(the|a|an|her|his|their) /, "");
-  if (!wanted) {
+  const wanted = terms.map(textKey).filter(Boolean);
+  if (!wanted.length) {
     return null;
   }
   for (const { effect, held } of activeAuthored(sheet, "natural_weapon")) {
     const names = [effect.weapon.name, ...(effect.weapon.aliases ?? [])].map(textKey);
-    if (names.some((name) => name === wanted || wanted.startsWith(name) || name.startsWith(wanted))) {
+    if (names.some((name) => wanted.some((term) => name === term || term.startsWith(name) || name.startsWith(term)))) {
       return {
         feature: held.feature,
         weapon: effect.weapon,
@@ -85,14 +86,13 @@ export function authoredNaturalWeapon(
 
 // A natural weapon the sheet would have if its gate held: for the refusal
 // that says why it cannot swing it now ("claws, while raging").
-export function naturalWeaponGated(sheet: AuthoredSheet, term: string | undefined): string | null {
-  const wanted = textKey(term ?? "");
-  if (!wanted) {
+export function naturalWeaponGated(sheet: AuthoredSheet, terms: readonly string[]): string | null {
+  if (!terms.length) {
     return null;
   }
   const open = { ...sheet, conditions: [...(sheet.conditions ?? []), "raging"], equipment: [] };
-  const found = authoredNaturalWeapon(open, term);
-  return found && !authoredNaturalWeapon(sheet, term) ? found.feature : null;
+  const found = authoredNaturalWeapon(open, terms);
+  return found && !authoredNaturalWeapon(sheet, terms) ? found.feature : null;
 }
 
 // ---- reach, Sneak Attack, saves ----

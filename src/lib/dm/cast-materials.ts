@@ -15,7 +15,7 @@
 //
 // Pure: the Hand (src/lib/battlemap/hand-spells.ts) asks the same questions.
 
-import type { SpellFacts } from "@/lib/srd/spell-facts";
+import { spellNamesOf, type SpellFacts } from "@/lib/srd/spell-facts";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { COPPER_PER_GOLD, purseCopper } from "@/lib/srd/currency";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -63,13 +63,17 @@ const PRINTED: Record<string, MaterialComponent[]> = {
   simulacrum: [{ what: "ruby dust", gp: 1500, count: 1, consumed: true }],
 };
 
+const PRINTED_BY_KEY = new Map(Object.entries(PRINTED).map(([name, components]) => [textKey(name), components]));
+
 export function materialComponents(facts: Pick<SpellFacts, "name" | "material" | "materialCostGp" | "materialText" | "materialConsumed"> | null): MaterialComponent[] {
   if (!facts?.material) {
     return [];
   }
-  // The SRD's own name, without a wizard's ("Mordenkainen's Magnificent Mansion").
-  const key = facts.name.trim().toLowerCase();
-  const printed = PRINTED[key] ?? PRINTED[key.replace(/^[a-z]+'s\s+/, "")];
+  // The SRD's own name, without a wizard's ("Mordenkainen's Magnificent
+  // Mansion"), is one of the checklist's names for it.
+  const printed = spellNamesOf(facts.name)
+    .map((name) => PRINTED_BY_KEY.get(textKey(name)))
+    .find((components) => components !== undefined);
   if (printed) {
     return printed;
   }

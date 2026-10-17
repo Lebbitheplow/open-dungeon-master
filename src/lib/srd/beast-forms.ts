@@ -8,6 +8,7 @@
 // Coast LLC, CC-BY-4.0. See docs/LICENSES.md.
 
 import { compareNames, findNamed } from "@/lib/language/text-logic";
+import { creatureSpellings } from "@/lib/srd/name-forms";
 
 export type BeastAttack = {
   name: string;
@@ -162,7 +163,7 @@ export const BEAST_FORMS: BeastForm[] = [
 ];
 
 export function findBeastForm(term: string): BeastForm | null {
-  return findNamed(BEAST_FORMS, term, (form) => form.name);
+  return findNamed(BEAST_FORMS, [term], (form) => creatureSpellings(form.name));
 }
 
 // Creatures as a question or a refusal names them, the lowest challenge

@@ -283,7 +283,8 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
     category: "world",
     summary: "Doors, chests and chains with real AC and hit points for their material.",
     fields: [
-      { name: "name", label: "The object", kind: "text", placeholder: "the oak door", help: "Named, it keeps its damage between blows. A Wall of Ice is struck a section at a time: \"Wall of Ice section 2\", the numbers on the board." },
+      { name: "name", label: "The object", kind: "text", placeholder: "the oak door", help: "Named, it keeps its damage between blows." },
+      { name: "section", label: "Section", kind: "number", min: 1, max: 99, help: "A Wall of Ice is struck a section at a time: the numbers on the board." },
       { name: "material", label: "Material", kind: "select", options: OBJECT_MATERIAL_OPTIONS },
       { name: "size", label: "Size", kind: "select", options: OBJECT_SIZE_OPTIONS },
       { name: "characterId", label: "Struck by", kind: "character", help: "The server rolls their weapon attack against its AC and their damage." },

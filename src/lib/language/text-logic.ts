@@ -129,22 +129,26 @@ export function asciiSlugOf(name: string): string {
   return ascii.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-// A record by the name a caller gives (a creature, a battle-map token): the
-// name itself, an article or a trailing "form" aside ("a wolf", "brown bear
-// form"), or a part of one name only ("rex"). Anything else is none, never
-// the record whose name sits inside it: a giant elk is no Elk, a werewolf no
-// Wolf. Names are compared by textKey, so "giant_spider" and "Giant-Spider"
-// are the Giant Spider and an accented name matches.
-export function findNamed<T>(list: readonly T[], term: string, nameOf: (entry: T) => string): T | null {
-  const wanted = textKey(term).replace(/^(an?|the) /, "").replace(/ (form|shape)$/, "");
-  if (!wanted) {
+// A record by the name a caller gives: one of the record's spellings, or a
+// part of one record's name only ("rex"). Anything else is none, never the
+// record whose name sits inside it: a giant elk is no Elk, a werewolf no
+// Wolf. `terms` are the ways to read what was written (the name as written,
+// then without its article); a record's first spelling is its name, the only
+// one a part is looked for in. Compared by textKey, so "giant_spider" and
+// "Giant-Spider" are the Giant Spider and an accented name matches.
+export function findNamed<T>(list: readonly T[], terms: readonly string[], spellingsOf: (entry: T) => readonly [string, ...string[]]): T | null {
+  const wanted = [...new Set(terms.map(textKey).filter(Boolean))];
+  if (!wanted.length) {
     return null;
   }
-  const exact = list.find((entry) => textKey(nameOf(entry)) === wanted);
+  const exact = list.find((entry) => spellingsOf(entry).some((spelling) => wanted.includes(textKey(spelling))));
   if (exact) {
     return exact;
   }
-  const parts = list.filter((entry) => ` ${textKey(nameOf(entry))} `.includes(` ${wanted} `));
+  const parts = list.filter((entry) => {
+    const name = ` ${textKey(spellingsOf(entry)[0])} `;
+    return wanted.some((term) => name.includes(` ${term} `));
+  });
   return parts.length === 1 ? parts[0] : null;
 }
 

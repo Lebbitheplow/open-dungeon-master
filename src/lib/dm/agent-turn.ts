@@ -90,7 +90,7 @@ export async function readAgentNarration(
 ): Promise<{ problem: string | null; lines: SpokenLine[] }> {
   const turn = findAgentTurn(campaign.id);
   const sheets = listSheets(campaign.id);
-  const outcomes = guardOutcomes(turn?.conversation ?? [], liveStateFor(campaign.id));
+  const outcomes = guardOutcomes(turn?.conversation ?? [], liveStateFor(campaign.id), campaign.gameSettings.tableLanguage);
   const guarded = guardKinds(campaign, outcomes, sheets);
   const claims = await readClaims(campaign, {
     label: `agent turn ${turn?.id ?? "(none yet)"}`,
