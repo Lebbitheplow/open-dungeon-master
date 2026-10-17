@@ -446,7 +446,7 @@ await test("improvements a hero took in play are not asked for again", () => {
   assert.equal(abilitiesBlocker(derived), null);
   assert.equal(
     abilitiesBlocker({ ...derived, asiTakenInPlay: [true, false] })?.message,
-    "Resolve your level 8 ability score improvement first.",
+    "Choose what your hero gains at level 8: higher scores or a feat (ability score improvement).",
   );
   // Nothing is added for them: the scores that already carry them are kept.
   const sheet = builderEdit(PLAYED, 8).sheet;

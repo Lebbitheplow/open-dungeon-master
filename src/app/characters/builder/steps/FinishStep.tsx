@@ -185,7 +185,8 @@ export function FinishStep({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={portrait.url}
-              alt="Character portrait"
+              // Named for the hero, as the roster names it.
+              alt={state.name.trim() || "Your hero's portrait"}
               className="size-16 shrink-0 rounded-lg border border-amber-500/30 object-cover"
             />
           ) : (

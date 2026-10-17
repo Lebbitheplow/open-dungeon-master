@@ -189,7 +189,7 @@ await test("each step blocker names the block that holds the missing pick (issue
   // An acolyte's two languages, picked on the ancestry step.
   const acolyte = submit.ancestryBlocker(named, race("half_orc"), background("acolyte"));
   assert.equal(acolyte.target, "languages");
-  assert.equal(acolyte.message, "Pick 2 more languages first.");
+  assert.equal(acolyte.message, "Pick 2 more languages your hero can speak.");
   assert.equal(submit.ancestryBlocker({ ...named, bonusLanguages: ["Elvish", "Giant"] }, race("half_orc"), background("acolyte")), null);
   // A half-elf speaks one more tongue, then raises two scores, then picks
   // two skills: each hold names the block that collects it.
@@ -207,12 +207,12 @@ await test("each step blocker names the block that holds the missing pick (issue
   // The save's own check names what is missing and where, as the gates do:
   // it used to answer "Assign all six ability scores first." to everything.
   const save = (input) => submit.validateBuilder({ state: named, derived: { abilities: null }, ...input });
-  assert.deepEqual(save({}), { kind: "error", message: "Pick a race.", target: "race" });
+  assert.deepEqual(save({}), { kind: "error", message: "Choose where your hero comes from (race).", target: "race" });
   assert.equal(save({ race: race("half_orc") }).target, "class");
   assert.equal(save({ race: race("half_orc"), klass: { id: "fighter" } }).target, "background");
   assert.deepEqual(save({ race: race("half_orc"), klass: { id: "fighter" }, background: background("soldier") }), {
     kind: "error",
-    message: "Assign all six ability scores first.",
+    message: "Give each of the six abilities a score (ability scores).",
     target: "scores",
   });
 });

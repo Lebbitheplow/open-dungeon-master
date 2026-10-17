@@ -121,6 +121,8 @@ export default {
     const hints = page.locator(`${root}[data-background-hints]`).locator("visible=true").first();
     await eventually(() => hints.count(), { label: "backgrounds that suit the playstyle" });
     await page.getByRole("textbox", { name: "Name" }).locator("visible=true").first().fill("Wren Ashdown");
+    // No background is picked for the player: one of the suggested ones.
+    await t.tap(hints.locator("button").first());
     await eventually(async () => (await page.locator(`${root}[data-active] [data-owed]`).count()) === 0, { label: "the line goes once nothing is owed" });
     await t.shot("builder-playstyle");
 

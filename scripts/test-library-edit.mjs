@@ -184,9 +184,11 @@ await test("a race, class or background the builder cannot offer is named, never
   const stored = { ...FIGHTER, race: "table-ghoulkin", background: "table-gravedigger" };
   const state = { raceId: stored.race, classId: stored.class, backgroundId: stored.background };
   const missing = unofferedPicks(stored, state, races, classes, backgrounds);
-  // A missing race shows as not chosen; a missing background would save the
-  // list's first row, so only it names a stand-in.
-  assert.deepEqual(missing.map((entry) => entry.standIn), [undefined, "Acolyte"]);
+  // A missing race and a missing background both show as not chosen: no
+  // list row stands in for either.
+  assert.equal(missing.length, 2);
+  assert.ok(missing.every((entry) => !("standIn" in entry)));
+  assert.match(missing[1].what, /table gravedigger/);
   assert.match(missing[0].what, /table ghoulkin/);
   // Picked on purpose, it is the player's choice.
   assert.deepEqual(unofferedPicks(stored, { ...state, raceId: "human", backgroundId: "soldier" }, races, classes, backgrounds), []);

@@ -45,6 +45,7 @@ export function IdentityStep({
   pack,
   packInstalled,
   fixedLevel,
+  levelNote,
   role,
   playstyle,
   backgroundGroups,
@@ -54,8 +55,11 @@ export function IdentityStep({
   pack: WorldPack | null;
   packInstalled: boolean;
   fixedLevel?: number;
-  // Offered by the library page only: a campaign already knows which door
-  // the character comes through.
+  // Why the level select opened where it did (door.ts).
+  levelNote?: string;
+  // Offered by the library page only, and only when the link that opened
+  // it did not say (door.ts): a campaign already knows which door the
+  // character comes through.
   role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
   // Offered to a new character only; an edit keeps its class.
   playstyle?: IdentityPlaystyle;
@@ -224,6 +228,8 @@ export function IdentityStep({
                   <span className="mt-1 block text-xs text-stone-500">
                     Improvements taken in play are in their scores, so they stay level {state.levelFloor} or higher.
                   </span>
+                ) : levelNote ? (
+                  <span className="mt-1 block text-xs text-stone-500">{levelNote}</span>
                 ) : null}
               </>
             )}
@@ -306,7 +312,7 @@ export function IdentityStep({
               // tools") is picked on the class step, under the class's own;
               // said here like the languages (issue #117 follow-up).
               <span className="mt-1 block text-xs text-stone-500">
-                On the Calling step you will pick{" "}
+                On the Class step you will pick{" "}
                 {splitToolGrants(background.tools)
                   .choices.map((choice) => `${COUNT_WORDS[choice.count] ?? choice.count} ${choice.label}${choice.count === 1 || choice.label.endsWith("s") ? "" : "s"}`)
                   .join(" and ")}{" "}

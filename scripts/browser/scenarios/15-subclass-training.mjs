@@ -24,9 +24,9 @@ export default {
     let said = "";
     let save = null;
     for (let step = 0; step < 16 && !save; step += 1) {
-      // The builder keeps every step mounted; the Calling step is the one
+      // The builder keeps every step mounted; the Class step is the one
       // whose header is showing.
-      const calling = await page.getByText(/Step \d+ \/ \d+ · Calling/i).locator("visible=true").count();
+      const calling = await page.getByText(/Step \d+ \/ \d+ · Class/i).locator("visible=true").count();
       const grant = page.getByText("Your subclass grants this training").first();
       if (calling && !said && (await grant.count())) {
         said = (await grant.locator("xpath=..").innerText()).replace(/\s+/g, " ");
@@ -34,7 +34,7 @@ export default {
         await t.shot("calling-step");
       }
       // An edit offers Save changes on every step, so it is taken once the
-      // Calling step has been read (or when there is no step left).
+      // Class step has been read (or when there is no step left).
       const done = visible(page, root, /^Save changes$/);
       const next = visible(page, root, /^\s*Continue/i);
       if ((await done.count()) && (said || !(await next.count()))) {
@@ -48,7 +48,7 @@ export default {
       await t.tap(next.first());
       await sleep(500);
     }
-    check(Boolean(said), "the Calling step says what the subclass trains");
+    check(Boolean(said), "the Class step says what the subclass trains");
     check(/heavy armor/i.test(said), `the Life Domain's heavy armor is named (${said.slice(-200)})`);
     check(Boolean(save), "the build editor reached Save changes");
     await t.tap(save);

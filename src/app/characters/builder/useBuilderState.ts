@@ -111,7 +111,9 @@ export function useBuilderState({
   fixedLevel?: number;
   // "Level up" from the library: the stored character opens one level up,
   // and each step asks for what the new level brings. Ignored for a
-  // multiclass split, whose level the builder does not move.
+  // multiclass split, whose level the builder does not move. A new
+  // character opens at it when the door that opened the builder knows its
+  // level (door.ts), and can still change it.
   startLevel?: number;
   races: RaceOption[];
   classes: ClassOption[];
@@ -122,7 +124,7 @@ export function useBuilderState({
   const [alignment, setAlignment] = useState(initial?.alignment ?? "N");
   // A stored character opens at its own level, never at 1.
   const [level, setLevel] = useState(
-    fixedLevel ?? (initial ? (startLevel && !levelLocked ? Math.max(storedLevel, startLevel) : storedLevel) : 1),
+    fixedLevel ?? (initial ? (startLevel && !levelLocked ? Math.max(storedLevel, startLevel) : storedLevel) : (startLevel ?? 1)),
   );
   const [raceId, setRaceId] = useState(initial?.race ?? "");
   const [classId, setClassId] = useState(initial?.class ?? "");
@@ -318,11 +320,9 @@ export function useBuilderState({
   }
   type Selection = { raceId: string; classId: string; backgroundId: string; level: number };
   const selection: Selection = { raceId, classId, backgroundId, level };
-  // The rows the builder shows for these ids. A race or class not yet
-  // picked is none at all (CharacterBuilder.tsx does the same); until the
-  // background is picked the list's first row stands in, and the picks have
-  // to be checked against what is shown, or an unpicked background's
-  // language slots would be trimmed away by the next change.
+  // The rows the builder shows for these ids. A race, class or background
+  // not yet picked is none at all (CharacterBuilder.tsx does the same), so
+  // the picks are checked against what is shown.
   function reconciled(
     next: Partial<Selection>,
     current: BuilderPicks,
@@ -332,12 +332,12 @@ export function useBuilderState({
     const { picks, drops } = reconcilePicks(current, {
       race: findRace(races, ids.raceId),
       klass: classes.find((entry) => entry.id === ids.classId),
-      background: background ?? backgrounds[0],
+      background,
       level: fixedLevel ?? ids.level,
     });
     // A stored content-pack background is not in the bundled list the
     // builder opens with; its skill pick waits for the pack's rows rather
-    // than being checked against the stand-in and lost.
+    // than being checked against no background and lost.
     if (ids.backgroundId && !background) {
       return {
         picks: { ...picks, backgroundSkills: current.backgroundSkills },
