@@ -1,5 +1,6 @@
 import type { SqliteDatabase } from "./driver.ts";
 import type { WorkshopHazard } from "@/lib/srd/table-hazards";
+import { textKey } from "@/lib/language/text-logic";
 
 // The traps, poisons and diseases a table plays with: its owner's and its
 // DMs' workshop hazards, by lower-case name. src/lib/db/core.ts registers
@@ -25,7 +26,7 @@ export function tableHazardsFrom(db: SqliteDatabase, campaignId: string): Readon
         .prepare(`SELECT id, name, data_json FROM homebrew_entries WHERE user_id = ? AND kind = 'hazard'`)
         .all(author) as Array<{ id: string; name: string; data_json: string }>;
       for (const row of rows) {
-        const key = row.name.trim().toLowerCase().replace(/\s+/g, " ");
+        const key = textKey(row.name);
         if (hazards.has(key)) {
           continue;
         }

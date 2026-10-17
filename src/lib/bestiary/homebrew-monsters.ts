@@ -7,6 +7,7 @@ import {
   type MonsterDraft,
   type MonsterReadout,
 } from "@/lib/bestiary/monster-draft";
+import { textKey } from "@/lib/language/text-logic";
 
 // The DB rim for hand-built monsters.
 //
@@ -107,10 +108,10 @@ export function findHomebrewMonster(userId: string, ref: string): HomebrewMonste
   if (trimmed.startsWith("homebrew:")) {
     return getHomebrewMonster(userId, trimmed.slice("homebrew:".length));
   }
-  const lowered = trimmed.toLowerCase();
+  const lowered = textKey(trimmed);
   return (
     listHomebrewMonsters(userId, { archived: true }).find(
-      (monster) => monster.draft.name.toLowerCase() === lowered,
+      (monster) => textKey(monster.draft.name) === lowered,
     ) ?? null
   );
 }

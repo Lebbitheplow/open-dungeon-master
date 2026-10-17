@@ -9,7 +9,7 @@ import { contentSlug, describeContentEntry, spellRowConcentrates, spellSummary }
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { replayAnimation } from "@/lib/motion/replay";
 import { spellSupportFor, spellSupportWord } from "@/lib/srd/spell-support";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // The spell book: one tab per spell level (cantrips first), every spell a
 // tile that says at a glance whether it is ready, waiting for a long rest,
@@ -135,7 +135,7 @@ export function SpellBook({
   writingBook?: boolean;
 }) {
   const [filter, setFilter] = useState("");
-  const needle = filter.trim().toLowerCase();
+  const needle = textKey(filter);
   // The level row says which level is chosen only once mounted. The travelling
   // pill (src/lib/motion/pill.ts) decorates every pill group that has a chosen
   // button as soon as the page loads, and a pill appended to server-rendered
@@ -171,7 +171,7 @@ export function SpellBook({
   const shown = needle
     ? keys.flatMap((key) =>
         (byLevel.get(key) ?? []).filter((tile) =>
-          (tile.label ?? tile.name).toLowerCase().includes(needle),
+          textKey(tile.label ?? tile.name).includes(needle),
         ),
       )
     : (byLevel.get(active) ?? []);

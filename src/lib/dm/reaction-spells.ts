@@ -31,6 +31,7 @@ import { allyOf, noHit, settle, softenFall, spendReaction, type Ctx } from "@/li
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { takeItemCast } from "@/lib/srd/item-cast-credit";
 import { spellHeldProblem } from "@/lib/dm/cast-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 // ---- reaction spells ----
 
@@ -65,7 +66,7 @@ export function reactionSpell(ctx: Ctx, spellName: string): ToolResult {
   const { sheet, campaign } = ctx;
   // Which reaction it is: the published spell a table's workshop copy runs
   // as ("Iron Ward" running as Shield). The copy is cast under its own name.
-  const name = spellEngineName(spellName, spellAuthorsFor(campaign)).toLowerCase();
+  const name = textKey(spellEngineName(spellName, spellAuthorsFor(campaign)));
   // Whether they can cast it at all comes before what it answers: a caster
   // without the spell is told so, not sent to name its target first. A cast
   // an item just paid for (src/lib/srd/item-cast-credit.ts) needs no hold.
@@ -287,7 +288,7 @@ function checkCounterspell(ctx: Ctx): Counter | ToolError {
   // Only a spell the creature can cast: its block's list.
   const casting = enemy.stats.spellcasting;
   const listed = findMonsterSpell(casting, wanted);
-  const innate = (enemy.stats.spells ?? []).find((name) => name.toLowerCase() === wanted.toLowerCase());
+  const innate = (enemy.stats.spells ?? []).find((name) => textKey(name) === textKey(wanted));
   if (!listed && !innate) {
     return { error: `${enemy.displayName}'s stat block lists no ${wanted}; Counterspell answers a spell the creature is casting. Nothing was spent.`, refused: "rules" };
   }

@@ -35,6 +35,7 @@ import { backdropRect } from "@/lib/battlemap/backdrop";
 import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 const NO_FX: FxEvent[] = [];
 const NOOP = () => {};
@@ -169,7 +170,7 @@ export const BattleMapGrid = memo(
       }
       return byRef;
     }, [faces, sheets]);
-    const currentName = view.currentTurnName.toLowerCase();
+    const currentName = textKey(view.currentTurnName);
 
     // The particle canvas sits over the SVG in the same frame; effects are
     // planned in SVG units and converted at burst time from the frame's
@@ -251,7 +252,7 @@ export const BattleMapGrid = memo(
         view.tokens.find((token) =>
           view.turn
             ? view.turn.tokenId === token.id
-            : !token.down && currentName !== "" && token.name.toLowerCase() === currentName,
+            : !token.down && currentName !== "" && textKey(token.name) === currentName,
         ) ?? null
       );
     }, [view.board, view.tokens, view.turn, currentName]);
@@ -490,7 +491,7 @@ export const BattleMapGrid = memo(
         {view.tokens.map((token) => {
           const isCurrent = view.turn
             ? view.turn.tokenId === token.id
-            : !token.down && currentName !== "" && token.name.toLowerCase() === currentName;
+            : !token.down && currentName !== "" && textKey(token.name) === currentName;
           return (
             <TokenFigure
               key={token.id}

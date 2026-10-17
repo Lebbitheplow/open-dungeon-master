@@ -4,6 +4,8 @@
 // scripts/test-rules-chunk.mjs can load it directly; the impure rim is
 // src/lib/db/rules.ts.
 
+import { textKey } from "../language/text-logic.ts";
+
 export const HOUSE_RULES_MAX = 20_000;
 const CHUNK_MIN = 300;
 const CHUNK_MAX = 900;
@@ -108,7 +110,7 @@ export function chunkHouseRules(text: string): RuleChunkDraft[] {
 }
 
 function fingerprint(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, " ").slice(0, 80);
+  return textKey(text).slice(0, 80);
 }
 
 // Carries enabled/pinned flags across a re-chunk: a chunk keeps its flags
@@ -138,14 +140,13 @@ export function carryChunkFlags(
 }
 
 export function scoreRuleByKeywords(query: string, chunk: RuleChunkDraft): number {
-  const words = query
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
+  const words = textKey(query)
+    .split(" ")
     .filter((word) => word.length > 2);
   if (!words.length) {
     return 0;
   }
-  const haystack = `${chunk.heading} ${chunk.text}`.toLowerCase();
+  const haystack = textKey(`${chunk.heading} ${chunk.text}`);
   let hits = 0;
   for (const word of words) {
     if (haystack.includes(word)) {

@@ -3,6 +3,7 @@
 
 import { getContentDb } from "@/lib/content/db";
 import { legacyPackWeightLb, packWeightLb } from "@/lib/content/weight";
+import { textKey } from "@/lib/language/text-logic";
 
 type Mistake = { wrong: number; right: number };
 
@@ -65,12 +66,10 @@ function itemWeightIndex(): Map<string, number> {
 // trailing count dropped so "Arrows (20)" finds "Arrows". A magic bonus goes
 // too, so "+1 Longsword" weighs what a longsword weighs.
 function itemWeightKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\(\s*\d+\s*\)\s*$/, " ")
-    .replace(/[+-]\d+/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return textKey(name.replace(/\(\s*\d+\s*\)\s*$/, " "))
+    .split(" ")
+    .filter((part) => !/^[+-]/.test(part))
+    .join(" ");
 }
 
 // Pounds per unit for a free-text item name, or null when the content pack

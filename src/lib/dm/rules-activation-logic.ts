@@ -18,7 +18,7 @@
 // Dependency-free so scripts/test-rules-activation.mjs can import it directly.
 
 import { estimateTokens } from "./context-budget.ts";
-import { hasWord } from "../language/text-logic.ts";
+import { containsPhrase } from "../language/text-logic.ts";
 
 // NE-P's headroom factor. Retrieval is only worth its complexity when the
 // document genuinely cannot fit; at 1.2x the budget the whole thing still
@@ -52,7 +52,7 @@ export function serializeTriggerKeywords(keywords: string[]): string {
 // Multi-word keywords are matched as a phrase.
 export function matchesTrigger(query: string, keywords: string[]): string | null {
   for (const keyword of keywords) {
-    if (keyword.trim() && hasWord(query, keyword)) {
+    if (keyword.trim() && containsPhrase(query, keyword)) {
       return keyword;
     }
   }

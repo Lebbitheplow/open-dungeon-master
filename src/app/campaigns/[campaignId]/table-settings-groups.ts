@@ -3,6 +3,7 @@ import type { GameSettings } from "@/lib/schemas/game-settings";
 import { DELEGATIONS } from "@/lib/dm/delegation";
 import { CAMPAIGN_LENGTH_LABELS, TABLE_LANGUAGE_LABELS } from "@/lib/schemas/game-settings-options";
 import { bondsSummary, boardSummary, safetySummary, voiceSummary } from "@/app/create-campaign/summaries";
+import { textKey } from "@/lib/language/text-logic";
 
 // The live table's settings, in the named groups the campaign creator taught
 // (src/app/create-campaign/groups.ts): a lead who met "Bonds and romance"
@@ -229,8 +230,8 @@ const KEYWORDS: Record<TableGroupId, string> = {
 // Whether a group answers what was typed into the panel's search: every word
 // must appear in its title, its summary or its keywords.
 export function groupMatches(group: TableGroup, summary: string, query: string): boolean {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = textKey(query).split(" ").filter(Boolean);
   if (!words.length) return true;
-  const haystack = `${group.title} ${summary} ${KEYWORDS[group.id]}`.toLowerCase();
+  const haystack = textKey(`${group.title} ${summary} ${KEYWORDS[group.id]}`);
   return words.every((word) => haystack.includes(word));
 }

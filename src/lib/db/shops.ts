@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   clampMarkup,
@@ -61,7 +61,7 @@ export function normalizeStock(raw: unknown): StockLine[] {
     .reduce<StockLine[]>((shelf, line) => {
       // One line per item: a second "Lantern" line would never be found by
       // name, and could never be bought.
-      const same = shelf.find((entry) => entry.itemName.toLowerCase() === line.itemName.toLowerCase());
+      const same = shelf.find((entry) => textKey(entry.itemName) === textKey(line.itemName));
       if (same) {
         same.qty = Math.min(999, same.qty + line.qty);
       } else {
@@ -102,7 +102,7 @@ export function listShops(campaignId: string): Shop[] {
 // written before it had an id.
 export function listShopsAt(campaignId: string, locationId: string, locationName: string): Shop[] {
   return listShops(campaignId).filter(
-    (shop) => (shop.locationId && shop.locationId === locationId) || (!shop.locationId && shop.locationName.toLowerCase() === locationName.toLowerCase()),
+    (shop) => (shop.locationId && shop.locationId === locationId) || (!shop.locationId && textKey(shop.locationName) === textKey(locationName)),
   );
 }
 
@@ -112,8 +112,8 @@ export function getShop(shopId: string): Shop | null {
 }
 
 function byName(shops: Shop[], name: string): Shop | null {
-  const wanted = name.trim().toLowerCase();
-  return shops.find((shop) => shop.name.toLowerCase() === wanted) ?? shops.filter((shop) => shop.name.toLowerCase().includes(wanted)).at(0) ?? null;
+  const wanted = textKey(name);
+  return shops.find((shop) => textKey(shop.name) === wanted) ?? shops.filter((shop) => textKey(shop.name).includes(wanted)).at(0) ?? null;
 }
 
 export function findShopByName(campaignId: string, name: string): Shop | null {

@@ -4,6 +4,8 @@
 // "@/" imports so scripts/test-overworld-generate.mjs can load it directly;
 // the impure rim is src/lib/db/overworld.ts.
 
+import { textKey } from "../language/text-logic.ts";
+
 // Sized for long campaigns: anchors hop 4-7 tiles apart, so this grid
 // comfortably holds a couple hundred discovered locations before crowding.
 export const OVERWORLD_WIDTH = 96;
@@ -254,7 +256,7 @@ export function placeAnchor(input: {
   name: string;
 }): XY {
   const { terrain, width, height, existing, connected, name } = input;
-  const hash = fnv1a(name.toLowerCase());
+  const hash = fnv1a(textKey(name));
   const rng = mulberry32(hash);
   let start: XY;
   if (connected) {

@@ -202,7 +202,7 @@ await test("an invalid sheet is refused with its field named", async () => {
 });
 
 await test("export filename is a slug", () => {
-  assert.equal(characterBundleFilename("Testa Quill!"), "testa-quill.odm-character.json");
+  assert.equal(characterBundleFilename("Testa Quill!"), "testa_quill.odm-character.json");
   assert.equal(characterBundleFilename("   "), "character.odm-character.json");
 });
 

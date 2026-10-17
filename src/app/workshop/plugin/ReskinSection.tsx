@@ -19,6 +19,7 @@ import {
 } from "@/lib/worlds/catalog";
 import type { WorldPackDraft } from "@/lib/worlds/draft";
 import { input, removeAt, replaceAt, type SectionProps } from "@/app/workshop/plugin/types";
+import { textKey } from "@/lib/language/text-logic";
 
 // The reskin tables: the world's own names for things the engine already
 // has. Pick, do not type. A race, class or background is chosen from the
@@ -140,7 +141,7 @@ export function NameReskinList({ draft, onDraft, kind }: SectionProps & { kind: 
   const [feature, setFeature] = useState("");
   const addFrom = (from: string) => {
     const trimmed = from.trim();
-    if (!trimmed || list.some((entry) => entry.from.toLowerCase() === trimmed.toLowerCase())) {
+    if (!trimmed || list.some((entry) => textKey(entry.from) === textKey(trimmed))) {
       return;
     }
     set([...list, { from: trimmed, name: "", blurb: "" }]);

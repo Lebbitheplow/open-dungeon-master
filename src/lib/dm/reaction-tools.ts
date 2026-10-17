@@ -55,6 +55,7 @@ import { PRONE } from "@/lib/dm/vitals-logic";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { engineFeatNamed } from "@/lib/srd/feat-effects";
 import { isPublishedFeatureName } from "@/lib/srd/features";
+import { textKey } from "@/lib/language/text-logic";
 
 const useReactionSchema = z.object({
   characterId: z.string(),
@@ -84,7 +85,7 @@ export type Ctx = {
 };
 
 function holds(sheet: CharacterSheet, name: string): boolean {
-  return sheet.features.some((feature) => feature.name.toLowerCase().includes(name));
+  return sheet.features.some((feature) => textKey(feature.name).includes(name));
 }
 
 export function spendReaction(ctx: Ctx) {
@@ -435,7 +436,7 @@ export function handleUseReaction(
   if (refused) {
     return refused;
   }
-  const lowered = feature.toLowerCase();
+  const lowered = textKey(feature);
   const falling = /slow fall|feather fall/.test(lowered);
   if (!encounter && !falling) {
     return { error: "Reactions only exist in combat; there is no active encounter.", refused: "rules" };
@@ -543,7 +544,7 @@ export function handleUseReaction(
   // Any other reaction must be one the sheet holds; the reaction is spent
   // and the effect is the feature's own text.
   const held = sheet.features.find((entry) => {
-    const name = entry.name.toLowerCase();
+    const name = textKey(entry.name);
     return name.includes(lowered) || lowered.includes(name);
   });
   if (!held) {

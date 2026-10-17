@@ -1,7 +1,7 @@
 import { raceMechanics } from "@/lib/content/mechanics";
 import { DAMAGE_TYPES } from "@/lib/dm/damage-logic";
 import { pcResistances } from "@/lib/dm/pc-defenses";
-import { byName } from "@/lib/language/text-logic";
+import { byName, textKey } from "@/lib/language/text-logic";
 
 // The traits a workshop species can borrow from the published ones: the
 // species editor's "Add a published trait". A trait named as published is
@@ -37,9 +37,9 @@ export function publishedTraits(rows: Array<{ name: string; traits: string }>): 
   const found = new Map<string, PublishedTrait>();
   for (const row of rows) {
     for (const [name, text] of traitParagraphs(row.traits)) {
-      const held = found.get(name.toLowerCase());
+      const held = found.get(textKey(name));
       if (!held) {
-        found.set(name.toLowerCase(), { name, text, from: [row.name] });
+        found.set(textKey(name), { name, text, from: [row.name] });
         continue;
       }
       if (!held.from.includes(row.name)) held.from.push(row.name);
@@ -88,8 +88,8 @@ export function unreadResistances(traits: string): Array<{ trait: string; types:
 // The text with one trait more, in the book's words, unless the species
 // already holds one of that name.
 export function withTrait(traits: string, trait: Pick<PublishedTrait, "name" | "text">): string {
-  const wanted = trait.name.toLowerCase();
-  if (heldTraitNames(traits).some((name) => name.toLowerCase() === wanted)) {
+  const wanted = textKey(trait.name);
+  if (heldTraitNames(traits).some((name) => textKey(name) === wanted)) {
     return traits;
   }
   const paragraph = `**_${trait.name}._** ${trait.text}`.trim();

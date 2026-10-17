@@ -13,6 +13,7 @@ import horrorJson from "@/lib/bestiary/horror.json";
 import mysteryJson from "@/lib/bestiary/mystery.json";
 import postApocalypticJson from "@/lib/bestiary/post-apocalyptic.json";
 import steampunkJson from "@/lib/bestiary/steampunk.json";
+import { textKey } from "@/lib/language/text-logic";
 
 // Curated per-genre enemy catalogs: real Open5e stat blocks under
 // genre-appropriate names, so every setting fights with honest mechanics.
@@ -170,7 +171,7 @@ export function resolveMonster(
   }
 
   const catalogMatch = bestiaryFor(setting).find(
-    (entry) => entry.name.toLowerCase() === trimmed.toLowerCase(),
+    (entry) => textKey(entry.name) === textKey(trimmed),
   );
   if (catalogMatch) {
     const content = fromContent(catalogMatch.slug);
@@ -184,7 +185,7 @@ export function resolveMonster(
 
   const searched = searchMonsters({ q: trimmed, limit: 5 });
   const best =
-    searched.find((entry) => entry.name.toLowerCase() === trimmed.toLowerCase()) ??
+    searched.find((entry) => textKey(entry.name) === textKey(trimmed)) ??
     searched.find((entry) => entry.source === "open5e");
   if (best && best.source === "open5e") {
     const cr = typeof best.data.cr === "number" ? best.data.cr : 0;

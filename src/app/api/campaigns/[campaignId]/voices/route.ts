@@ -4,6 +4,7 @@ import { publishCast } from "@/lib/dm/cast";
 import { normalizeNpcVoice } from "@/lib/npcs/forge";
 import { castUnvoiced, setRosterVoice, voiceRoster, type RosterEntry } from "@/lib/tts-roster";
 import { baseCreatureName } from "@/lib/tts-segments";
+import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +65,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ camp
   // A monster may be given a voice before it ever stands on the board.
   if (!entry && key.startsWith("monster:") && all) {
     const name = baseCreatureName(key.slice("monster:".length));
-    entry = { key: `monster:${name.toLowerCase()}`, name, kind: "monster", ownerUserId: "" };
+    entry = { key: `monster:${textKey(name)}`, name, kind: "monster", ownerUserId: "" };
   }
   if (!entry) {
     return Response.json({ error: "No one by that name at this table." }, { status: 404 });

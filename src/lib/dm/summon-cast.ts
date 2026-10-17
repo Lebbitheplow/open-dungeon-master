@@ -18,6 +18,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { removeSummon, spawnSummons, summonsOf } from "@/lib/dm/summon-store";
 import { SUMMONED, summonRecord } from "@/lib/dm/summon-rules";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type SummonCastArgs = {
   caster: CharacterSheet;
@@ -93,7 +94,7 @@ export function castSummon(
 
   // Cast again while it still holds, the spell's first casting ends, and
   // the creatures it made with it.
-  const recast = spell.concentration && (caster.concentratingOn ?? "").trim().toLowerCase() === castAs.toLowerCase();
+  const recast = spell.concentration && textKey(caster.concentratingOn ?? "") === textKey(castAs);
 
   // The spend, through the one cast guard: the list, the slot, the turn, the
   // material, concentration (a second concentration spell ends the first,

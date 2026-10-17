@@ -46,8 +46,7 @@
 // is company it did not earn.
 
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
-import { stemWord, stopWordsFor } from "../language/language.ts";
-import { words } from "../language/text-logic.ts";
+import { stemmerWords, stemWord, stopWordsFor } from "../language/language.ts";
 import { CHARS_PER_TOKEN } from "./context-budget.ts";
 import { computeIdf, fuseRRF, lexicalScore, rankByFusion, tokenize } from "./fusion-logic.ts";
 
@@ -151,8 +150,7 @@ function namedByAsk(candidates: LoreCandidate[], ask: string, language: TableLan
   const holders = new Map<string, { word: string; ids: string[] }>();
   for (const candidate of candidates) {
     const counted = new Set<string>();
-    for (const raw of words(`${candidate.title} ${candidate.tags.join(" ")}`.normalize("NFC"))) {
-      const word = raw.toLowerCase();
+    for (const word of stemmerWords(`${candidate.title} ${candidate.tags.join(" ")}`)) {
       const stem = stop.has(word) ? "" : stemWord(word, language);
       if (stem.length <= 2 || !asked.has(stem) || counted.has(stem)) {
         continue;

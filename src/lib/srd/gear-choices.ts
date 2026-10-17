@@ -25,6 +25,7 @@
 import { matchGear, resolveGearLine } from "@/lib/srd/adventuring-gear";
 import type { KitItem } from "@/lib/srd/starting-kit";
 import { ARTISANS_TOOLS, GAMING_SETS, MUSICAL_INSTRUMENTS, splitToolGrants } from "@/lib/srd/tool-choices";
+import { textKey } from "@/lib/language/text-logic";
 
 const lower = (value: string) => value.trim().toLowerCase();
 
@@ -69,22 +70,21 @@ export function fillToolLine(
   input: { tools: string[]; backgroundTools: string[]; used: Set<string> },
 ): string | null {
   const text = lower(line);
-  const held = input.tools.map(lower);
   const choices = splitToolGrants(input.backgroundTools).choices;
-  const preferred = new Set(choices.flatMap((choice) => choice.from.map(lower)));
+  const preferred = new Set(choices.flatMap((choice) => choice.from.map(textKey)));
   let pool: string[];
   if (/to match your choice of tool proficiency/.test(text)) {
     pool = [...preferred];
   } else {
     const kinds = TOOL_KINDS.filter((kind) => kind.pattern.test(text));
-    pool = kinds.flatMap((kind) => kind.from.map(lower));
+    pool = kinds.flatMap((kind) => kind.from.map(textKey));
   }
-  const candidates = held.filter((tool) => pool.includes(tool) && !input.used.has(tool));
-  const pick = candidates.find((tool) => preferred.has(tool)) ?? candidates[0];
+  const candidates = input.tools.filter((tool) => pool.includes(textKey(tool)) && !input.used.has(textKey(tool)));
+  const pick = candidates.find((tool) => preferred.has(textKey(tool))) ?? candidates[0];
   if (!pick) {
     return null;
   }
-  input.used.add(pick);
+  input.used.add(textKey(pick));
   return toolItemName(pick);
 }
 
@@ -205,10 +205,10 @@ export function gearAlternatives(line: string): GearAlternative[] | null {
   }
   // "Lute or other musical instrument": the kind is the instruments the
   // line did not already name.
-  const named = new Set(alternatives.filter((entry) => !entry.options).flatMap((entry) => entry.items.map((item) => lower(item.name))));
+  const named = new Set(alternatives.filter((entry) => !entry.options).flatMap((entry) => entry.items.map((item) => textKey(item.name))));
   for (const entry of alternatives) {
     if (entry.options && named.size) {
-      entry.options = entry.options.filter((name) => !named.has(lower(name)));
+      entry.options = entry.options.filter((name) => !named.has(textKey(name)));
       entry.items = [{ name: entry.options[0], qty: 1 }];
     }
   }
@@ -298,11 +298,11 @@ export function expandBackgroundGear(
     }
     const asked = (input.picks[choices.length] ?? "").trim();
     // A pick is the alternative's words, or, for a kind, the tool's name.
-    let chosen = asked ? alternatives.findIndex((entry) => lower(entry.label) === lower(asked)) : 0;
+    let chosen = asked ? alternatives.findIndex((entry) => textKey(entry.label) === textKey(asked)) : 0;
     let named: string | undefined;
     if (asked && chosen < 0) {
-      chosen = alternatives.findIndex((entry) => entry.options?.some((name) => lower(name) === lower(asked)));
-      named = alternatives[chosen]?.options?.find((name) => lower(name) === lower(asked));
+      chosen = alternatives.findIndex((entry) => entry.options?.some((name) => textKey(name) === textKey(asked)));
+      named = alternatives[chosen]?.options?.find((name) => textKey(name) === textKey(asked));
     }
     if (chosen < 0) {
       problems.push(
@@ -314,12 +314,12 @@ export function expandBackgroundGear(
     if (taken.options) {
       // Unnamed: a tool of the kind the character is trained with, not yet
       // handed out by another line, else the kind's first.
-      const held = input.tools.map(lower);
+      const held = input.tools.map(textKey);
       const tool =
         named ??
-        taken.options.find((name) => held.includes(lower(name)) && !used.has(lower(name))) ??
+        taken.options.find((name) => held.includes(textKey(name)) && !used.has(textKey(name))) ??
         taken.options[0];
-      used.add(lower(tool));
+      used.add(textKey(tool));
       alternatives = alternatives.map((entry, at) => (at === chosen ? { ...entry, items: [{ name: tool, qty: 1 }] } : entry));
     }
     choices.push({ line, alternatives, chosen, pick: taken.options ? alternatives[chosen].items[0].name : taken.label });

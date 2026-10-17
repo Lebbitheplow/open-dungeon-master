@@ -11,6 +11,7 @@ import type { IntentVerbKind, TokenIntent } from "@/lib/battlemap/intent";
 import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { chebyshev } from "@/lib/battlemap/types";
 import { averageDetail } from "@/lib/srd/odds";
+import { textKey } from "@/lib/language/text-logic";
 
 // A stat snapshot keeps an attack's name, bonus, dice and damage type, and
 // nothing about reach or range, so the name decides, as it does for the
@@ -43,8 +44,8 @@ export function declaredVerbKind(
   verb: string,
   attacks: Array<Pick<EnemyAttack, "name">> = [],
 ): IntentVerbKind {
-  const wanted = verb.trim().toLowerCase();
-  const listed = attacks.find((entry) => entry.name.toLowerCase() === wanted);
+  const wanted = textKey(verb);
+  const listed = attacks.find((entry) => textKey(entry.name) === wanted);
   if (listed) {
     return attackVerbKind(listed);
   }

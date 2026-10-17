@@ -6,7 +6,7 @@
 
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
 import { stems } from "../language/language.ts";
-import { hasWord } from "../language/text-logic.ts";
+import { containsPhrase } from "../language/text-logic.ts";
 
 // A line is matched as a whole phrase or by any of its words' stems, so
 // "spiders" catches "spider" and "ragni" catches "ragno", while "rat" never
@@ -18,7 +18,7 @@ export function lineViolations(text: string, lines: string[], language: TableLan
     if (!line.trim()) {
       continue;
     }
-    if (hasWord(text, line) || stems(line, language).some((stem) => narration.has(stem))) {
+    if (containsPhrase(text, line) || stems(line, language).some((stem) => narration.has(stem))) {
       out.push(line);
     }
   }

@@ -4,6 +4,7 @@ import { Check, ChevronDown, Info, Star } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type Ref } from "react";
 import { cn } from "@/lib/cn";
 import { InfoDialog, type ContentRef } from "@/components/ui/InfoDialog";
+import { textKey } from "@/lib/language/text-logic";
 
 export type PickerOption = {
   // Value handed to onChange. The subclass picker stores names, not slugs,
@@ -58,7 +59,7 @@ export function moveActive(key: string, active: number, count: number): number |
 // searching on from the highlight. A single repeated letter cycles through
 // the names that start with it, so "ddd" walks the D's.
 export function typeaheadMatch(names: string[], typed: string, active: number): number | null {
-  const query = typed.toLowerCase();
+  const query = textKey(typed);
   const repeated = query.length > 1 && [...query].every((char) => char === query[0]);
   const needle = repeated ? query[0] : query;
   // A fresh letter, or a repeat, moves past the current row; a longer prefix
@@ -66,7 +67,7 @@ export function typeaheadMatch(names: string[], typed: string, active: number): 
   const start = query.length === 1 || repeated ? active + 1 : active;
   for (let step = 0; step < names.length; step += 1) {
     const index = (Math.max(start, 0) + step) % names.length;
-    if (names[index].toLowerCase().startsWith(needle)) return index;
+    if (textKey(names[index]).startsWith(needle)) return index;
   }
   return null;
 }

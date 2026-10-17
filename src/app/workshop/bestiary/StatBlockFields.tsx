@@ -28,6 +28,7 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { Field, FieldLabel, OptionalStepper, addChip, chip, chipOn, chipRow, rowIcon } from "@/app/workshop/kit";
+import { textKey } from "@/lib/language/text-logic";
 
 // The printed half of a stat block (docs/workshop-parity-audit.md phase
 // 12): ability scores, skills, senses, languages and alignment, the spells
@@ -310,7 +311,7 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           label="Find a spell in the catalogue to add"
           placeholder="Find a spell to add..."
           onPick={(entry) => {
-            if (!spells.some((known) => known.toLowerCase() === entry.name.toLowerCase())) {
+            if (!spells.some((known) => textKey(known) === textKey(entry.name))) {
               set({ spells: [...spells, entry.name] });
             }
           }}

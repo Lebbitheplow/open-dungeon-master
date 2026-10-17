@@ -1,4 +1,5 @@
 import spellManifest from "@/lib/srd/manifest/spells.json";
+import { textKey } from "@/lib/language/text-logic";
 
 // Cantrips live in their own list on a sheet (spellcasting.cantrips), apart
 // from prepared and known spells: they are never prepared and never count
@@ -16,16 +17,16 @@ const CANTRIP_NAMES = new Set(
   (spellManifest as { spells: ManifestSpell[] }).spells
     .filter((spell) => spell.l === 0)
     .flatMap((spell) => [spell.n, ...(spell.a ?? [])])
-    .map((name) => name.trim().toLowerCase()),
+    .map(textKey),
 );
 
 export function isCantripName(name: string): boolean {
-  return CANTRIP_NAMES.has(name.trim().toLowerCase());
+  return CANTRIP_NAMES.has(textKey(name));
 }
 
 const SPELL_LEVELS = new Map(
   (spellManifest as { spells: ManifestSpell[] }).spells.flatMap((spell) =>
-    [spell.n, ...(spell.a ?? [])].map((name) => [name.trim().toLowerCase(), spell.l] as const),
+    [spell.n, ...(spell.a ?? [])].map((name) => [textKey(name), spell.l] as const),
   ),
 );
 
@@ -33,12 +34,12 @@ const SPELL_LEVELS = new Map(
 // does not carry. Lets a sheet file its spells under level tabs without a
 // fetch.
 export function spellLevelOf(name: string): number | null {
-  return SPELL_LEVELS.get(name.trim().toLowerCase()) ?? null;
+  return SPELL_LEVELS.get(textKey(name)) ?? null;
 }
 
 const CHECKLIST = new Map(
   (spellManifest as { spells: Array<ManifestSpell & { c?: string }> }).spells.flatMap((spell) =>
-    [spell.n, ...(spell.a ?? [])].map((name) => [name.trim().toLowerCase(), spell] as const),
+    [spell.n, ...(spell.a ?? [])].map((name) => [textKey(name), spell] as const),
   ),
 );
 
@@ -50,7 +51,7 @@ export function checklistClassSpell(
   classSlug: string,
   maxLevel: number,
 ): string | null {
-  const spell = CHECKLIST.get(name.trim().toLowerCase());
+  const spell = CHECKLIST.get(textKey(name));
   if (!spell || spell.l < 1 || spell.l > maxLevel) {
     return null;
   }
@@ -89,7 +90,7 @@ const SRD_LIST_SUPPLEMENT: Record<string, string[]> = {
 const SUPPLEMENT_BY_SPELL = new Map<string, string[]>();
 for (const [classSlug, names] of Object.entries(SRD_LIST_SUPPLEMENT)) {
   for (const name of names) {
-    const key = name.trim().toLowerCase();
+    const key = textKey(name);
     SUPPLEMENT_BY_SPELL.set(key, [...(SUPPLEMENT_BY_SPELL.get(key) ?? []), classSlug]);
   }
 }
@@ -102,7 +103,7 @@ function classesOf(spell: ManifestSpell & { c?: string }): string[] {
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
   const more = [spell.n, ...(spell.a ?? [])].flatMap(
-    (name) => SUPPLEMENT_BY_SPELL.get(name.trim().toLowerCase()) ?? [],
+    (name) => SUPPLEMENT_BY_SPELL.get(textKey(name)) ?? [],
   );
   return [...new Set([...listed, ...more])];
 }
@@ -112,7 +113,7 @@ function classesOf(spell: ManifestSpell & { c?: string }): string[] {
 export function checklistSpell(
   name: string,
 ): { name: string; level: number; classes: string[] } | null {
-  const spell = CHECKLIST.get(name.trim().toLowerCase());
+  const spell = CHECKLIST.get(textKey(name));
   if (!spell) {
     return null;
   }
@@ -145,15 +146,15 @@ export function allSpellNames(lists: SpellLists | null | undefined): string[] {
 // allowance: cantrips never do, and neither do the always-prepared spells a
 // subclass grants (domain, circle, oath, patron), passed as `granted`.
 export function spellsAgainstLimit(names: string[], granted: string[] = []): number {
-  const free = new Set(granted.map((name) => name.trim().toLowerCase()));
-  return names.filter((name) => !isCantripName(name) && !free.has(name.trim().toLowerCase()))
+  const free = new Set(granted.map(textKey));
+  return names.filter((name) => !isCantripName(name) && !free.has(textKey(name)))
     .length;
 }
 
 function dedupe(names: string[]): string[] {
   const seen = new Set<string>();
   return names.filter((name) => {
-    const key = name.trim().toLowerCase();
+    const key = textKey(name);
     if (!key || seen.has(key)) {
       return false;
     }

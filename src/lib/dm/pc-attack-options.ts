@@ -19,6 +19,7 @@ import { CURVING_SHOT, authoredBonusAttackProblem } from "@/lib/srd/authored-eco
 import { featureBonusAttack, type FeatureBonusAttack } from "@/lib/dm/feature-bonus-attacks";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export const BONUS_ATTACKS = ["martial arts", "frenzy", "feature"] as const;
 export type AnyBonusAttack = (typeof BONUS_ATTACKS)[number];
@@ -42,10 +43,7 @@ export const ATTACKED = "attacked:";
 const HORDE_BREAKER = "horde-breaker";
 
 const hasFeature = (sheet: Pick<CharacterSheet, "features">, name: string) =>
-  sheet.features.some((feature) => {
-    const lowered = feature.name.trim().toLowerCase();
-    return lowered === name || lowered.startsWith(`${name} (`);
-  });
+  sheet.features.some((feature) => [feature.name, feature.name.replace(/\s*\(.*$/, "")].some((held) => textKey(held) === name));
 
 const hasCondition = (sheet: Pick<CharacterSheet, "conditions">, name: string) =>
   sheet.conditions.some((entry) => entry.trim().toLowerCase() === name);

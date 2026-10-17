@@ -16,6 +16,7 @@ import { subclassNamesFor } from "@/lib/srd/features";
 import { bundledRaceTraitText, rulebookPageIdFor } from "@/lib/rulebook/catalog-rows";
 import { traitParagraphs } from "@/lib/workshop/species-traits";
 import type { RulebookPage } from "@/lib/rulebook/types";
+import { textKey } from "@/lib/language/text-logic";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -39,9 +40,9 @@ export function spellMechanicsOf(row: Row): SpellMech | null {
 }
 
 const exactWeapon = (name: string): SrdWeapon | null =>
-  SRD_WEAPONS.find((weapon) => weapon.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
+  SRD_WEAPONS.find((weapon) => textKey(weapon.name) === textKey(name)) ?? null;
 const exactArmor = (name: string): SrdArmor | null =>
-  SRD_ARMOR.find((armor) => armor.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
+  SRD_ARMOR.find((armor) => textKey(armor.name) === textKey(name)) ?? null;
 
 // The fields a homebrew item's data blob takes (src/lib/homebrew/item-data.ts)
 // for a published item, or null for one the engine reads nothing from.
@@ -236,10 +237,10 @@ export function backgroundMechanicsOf(row: Row & { slug?: string; documentSlug?:
 // their grants, for "start from": those whose name holds `q`, less any a
 // row in `results` already stands for.
 export function bundledBackgroundRows(q: string, results: Array<{ slug: string }>): Array<Record<string, unknown>> {
-  const wanted = q.trim().toLowerCase();
+  const wanted = textKey(q);
   const held = new Set(results.map((row) => row.slug.toLowerCase().replace(/-/g, "_")));
   return srdBackgroundOptions()
-    .filter((option) => !held.has(option.id) && (!wanted || option.name.toLowerCase().includes(wanted)))
+    .filter((option) => !held.has(option.id) && (!wanted || textKey(option.name).includes(wanted)))
     .slice(0, 120)
     .map((option) => ({
       slug: option.id,
@@ -269,10 +270,10 @@ export function bundledBackgroundRows(q: string, results: Array<{ slug: string }
 // (`table`), less any a row in `results` already stands for.
 export function bundledRaceRows(q: string, results: Array<{ name: string }>): Array<Record<string, unknown>> {
   // Every word, in any order: "hill dwarf" finds the builder's "Dwarf (Hill)".
-  const words = q.trim().toLowerCase().split(/[^a-z0-9-]+/).filter(Boolean);
-  const held = new Set(results.map((row) => row.name.trim().toLowerCase()));
+  const words = textKey(q).split(" ").filter(Boolean);
+  const held = new Set(results.map((row) => textKey(row.name)));
   return srdRaceOptions()
-    .filter((option) => !held.has(option.name.toLowerCase()) && words.every((word) => option.name.toLowerCase().includes(word)))
+    .filter((option) => !held.has(textKey(option.name)) && words.every((word) => textKey(option.name).includes(word)))
     .map((option) => {
       // The traits in the bundled book's words where it prints them.
       const words = bundledRaceTraitText(option.name);
@@ -293,10 +294,10 @@ export function bundledRaceRows(q: string, results: Array<{ name: string }>): Ar
 
 export function bundledArchetypeRows(classSlug: string, q: string, results: Array<{ name: string }>): Array<Record<string, unknown>> {
   const classId = classSlug.trim().toLowerCase();
-  const wanted = q.trim().toLowerCase();
-  const held = new Set(results.map((row) => row.name.trim().toLowerCase()));
+  const wanted = textKey(q);
+  const held = new Set(results.map((row) => textKey(row.name)));
   return subclassNamesFor(classId)
-    .filter((name) => !held.has(name.toLowerCase()) && (!wanted || name.toLowerCase().includes(wanted)))
+    .filter((name) => !held.has(textKey(name)) && (!wanted || textKey(name).includes(wanted)))
     .map((name) => {
       const row = { name, source: "bundled", data: { desc: "" } };
       return {

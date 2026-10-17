@@ -13,13 +13,3 @@ export function downloadBlob(name: string, blob: Blob): void {
   URL.revokeObjectURL(url);
 }
 
-// A character name reduced to something every filesystem accepts.
-export function filenameSlug(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "character"
-  );
-}

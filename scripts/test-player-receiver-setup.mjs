@@ -31,7 +31,7 @@ await test("the receiver file is filled in from the server's IDs and holds no to
   assert.equal(config.characterId, "sheet-1");
   assert.equal(config.campaignId, "camp-1");
   assert.equal(config.port, 8787);
-  assert.equal(config.stateDirectory, "player-webhook-state-thorin-oakenshield-sheet1");
+  assert.equal(config.stateDirectory, "player-webhook-state-thorin_oakenshield-sheet1");
   assert.match(config.playerInstructions, /Thorin Oakenshield/);
   assert.equal(config.authCommand, undefined, "no helper: the receiver's own store holds the token");
   assert.ok(!JSON.stringify(config).includes("odm_"));
@@ -46,11 +46,12 @@ await test("addresses and ports the server or receiver would refuse are refused 
 });
 
 await test("each character gets its own file and state directory, so several receivers share a folder", () => {
-  assert.equal(receiverFileName("Thorin Oakenshield", "sheet-1"), "receiver-thorin-oakenshield-sheet1.json");
+  assert.equal(receiverFileName("Thorin Oakenshield", "sheet-1"), "receiver-thorin_oakenshield-sheet1.json");
   assert.notEqual(receiverSlug("Thorin", "a"), receiverSlug("Balin", "b"));
   assert.notEqual(receiverSlug("Thorin", "2f9c41aa-0001"), receiverSlug("Thorin", "77b0e3d2-0002"), "one library character copied into two campaigns");
   assert.equal(receiverSlug("Thorin", "025310b0-a80b-438f-acd3-47533d59f271"), "thorin-3d59f271", "the name, then the end of the sheet ID");
-  assert.equal(receiverSlug("Æ", "Sheet-42"), "sheet42", "a name with no plain letters is the sheet ID alone");
+  assert.equal(receiverSlug("Æ", "Sheet-42"), "æ-sheet42", "a name in any script keeps its letters");
+  assert.equal(receiverSlug("???", "Sheet-42"), "sheet42", "a name with no letter or digit is the sheet ID alone");
   assert.equal(receiverSlug("../../etc", "x"), "etc-x", "no path characters survive");
   assert.match(receiverSlug("A".repeat(80), "id"), /^a{24}-id$/);
 });

@@ -13,6 +13,7 @@
 // Pure by design: no imports beyond types, so scripts/test-mounts.mjs can load it.
 
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type MountProfile = {
   slug: string;
@@ -117,8 +118,8 @@ export function mountProfile(ref: string): MountProfile | null {
   const needle = ref.trim().toLowerCase();
   return (
     MOUNTS.find((mount) => mount.slug === needle) ??
-    MOUNTS.find((mount) => mount.name.toLowerCase() === needle) ??
-    MOUNTS.find((mount) => mount.name.toLowerCase().includes(needle)) ??
+    MOUNTS.find((mount) => textKey(mount.name) === textKey(ref)) ??
+    MOUNTS.find((mount) => textKey(mount.name).includes(textKey(ref))) ??
     null
   );
 }
@@ -247,8 +248,8 @@ export function vehicleProfile(ref: string): VehicleProfile | null {
   const needle = ref.trim().toLowerCase();
   return (
     VEHICLES.find((vehicle) => vehicle.slug === needle) ??
-    VEHICLES.find((vehicle) => vehicle.name.toLowerCase() === needle) ??
-    VEHICLES.find((vehicle) => vehicle.name.toLowerCase().includes(needle)) ??
+    VEHICLES.find((vehicle) => textKey(vehicle.name) === textKey(ref)) ??
+    VEHICLES.find((vehicle) => textKey(vehicle.name).includes(textKey(ref))) ??
     null
   );
 }

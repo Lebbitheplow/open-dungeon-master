@@ -11,6 +11,7 @@
 // scripts/test-ammunition.mjs can import it directly.
 
 import type { ToolError } from "../dm/tool-errors.ts";
+import { textKey } from "@/lib/language/text-logic";
 
 export type AmmoKind = "arrows" | "bolts" | "bullets" | "needles";
 
@@ -60,7 +61,7 @@ export const AMMO_LABELS: Record<AmmoKind, string> = {
 };
 
 export function ammoKindForWeapon(weaponName: string): AmmoKind | null {
-  const name = (weaponName ?? "").toLowerCase();
+  const name = textKey(weaponName ?? "");
   for (const [match, kind] of WEAPON_AMMO) {
     if (name.includes(match)) {
       return kind;

@@ -47,6 +47,7 @@ import type {
   RaceGrants,
   SpellFacts,
 } from "@/lib/srd/legality/types";
+import { textKey } from "@/lib/language/text-logic";
 
 const lower = (value: string) => value.trim().toLowerCase();
 const AUTHORED_FEATS = (authoredFeatsJson as { feats: FeatFacts[] }).feats;
@@ -132,12 +133,7 @@ export function backgroundGrantsFor(
 
 let priceIndex: Map<string, ItemPrice> | null = null;
 
-const priceKey = (name: string) =>
-  name
-    .toLowerCase()
-    .replace(/\(\s*\d+\s*\)\s*$/, " ")
-    .replace(/[^a-z0-9+]+/g, " ")
-    .trim();
+const priceKey = (name: string) => textKey(name.replace(/\(\s*\d+\s*\)\s*$/, " "));
 
 // Name to price, built once from the pack's items. A name the pack lists as
 // mundane gear is mundane, whatever else shares it (a Potion of Healing is
@@ -209,16 +205,16 @@ export function spellFactsFor(name: string, authors?: Authors): SpellFacts | nul
 }
 
 export function featFactsFor(name: string, authors?: Authors): FeatFacts | null {
-  const wanted = lower(name);
+  const wanted = textKey(name);
   if (!wanted) {
     return null;
   }
-  const authored = AUTHORED_FEATS.find((feat) => lower(feat.name) === wanted);
+  const authored = AUTHORED_FEATS.find((feat) => textKey(feat.name) === wanted);
   if (authored) {
     return { name: authored.name, prerequisite: authored.prerequisite ?? "", desc: authored.desc ?? "" };
   }
   const found = searchFeats({ q: name.trim(), limit: 50, userIds: authorIds(authors), includeArchived: true }).find(
-    (entry) => lower(entry.name) === wanted,
+    (entry) => textKey(entry.name) === wanted,
   );
   if (!found) {
     return null;
@@ -243,9 +239,9 @@ export function subclassIsOffered(
   if (bundledSubclassName(classId, name)) {
     return true;
   }
-  const wanted = lower(name);
+  const wanted = textKey(name);
   return listArchetypes(classId, { limit: 200, userIds: authorIds(authors), includeArchived: true }).some(
-    (entry) => lower(entry.name) === wanted || lower(entry.slug) === wanted,
+    (entry) => textKey(entry.name) === wanted || textKey(entry.slug) === wanted,
   );
 }
 

@@ -8,6 +8,7 @@ import { RAGING } from "@/lib/srd/class-resources";
 import { conditionIncomingAttackState, conditionSpeed } from "@/lib/srd/condition-effects";
 import { conditionSeesInvisible } from "@/lib/srd/condition-effect-queries";
 import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
+import { textKey } from "@/lib/language/text-logic";
 
 export {
   DAMAGE_TYPES,
@@ -140,7 +141,7 @@ export function packInstances(list: ConditionMeta[]): ConditionMeta | undefined 
 // What makes two instances the same one: the same spell (or effect) from the
 // same source. A recast by the same caster refreshes its instance.
 export function instanceIdentity(entry: ConditionMeta): string {
-  return `${(entry.spell ?? "").toLowerCase()}|${entry.source ?? ""}`;
+  return `${textKey(entry.spell ?? "")}|${entry.source ?? ""}`;
 }
 
 // Lays one instance of a condition. A condition not yet held is simply

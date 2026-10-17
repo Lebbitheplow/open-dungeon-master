@@ -15,6 +15,7 @@ import type { SpellMech } from "@/lib/srd/spell-mechanics";
 import type { EditorKind } from "@/app/workshop/homebrew/types";
 import { engineSpellNamed, materialOf, spellFlagsOf } from "@/lib/srd/spell-facts";
 import { readWeightLb } from "@/lib/content/weight";
+import { textKey } from "@/lib/language/text-logic";
 
 // The editor's working copy of an entry and what can be said about it
 // before it is saved. Pure so the panel's findings run client-side on
@@ -78,7 +79,7 @@ export function blankDraft(kind: EditorKind): HomebrewDraft {
 // entry keep the name it was saved under before the rule).
 export function draftFindings(draft: HomebrewDraft, variantRules: Partial<VariantRules>, savedName?: string): Finding[] {
   const published = publishedNameProblem(draft.kind, draft.name);
-  const kept = savedName !== undefined && savedName.trim().toLowerCase() === draft.name.trim().toLowerCase();
+  const kept = savedName !== undefined && textKey(savedName) === textKey(draft.name);
   const naming: Finding[] = published ? [{ level: kept ? "warn" : "error", text: published }] : [];
   const page = pageFor(draft);
   return [...naming, ...kindFindings(draft, variantRules).map((finding) => (finding.page || !page ? finding : { ...finding, page }))];

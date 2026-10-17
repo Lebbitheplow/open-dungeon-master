@@ -46,7 +46,7 @@ export default {
         label: "the check saying this server does not send there",
       });
       check(/tailscale funnel --bg --https=8443 http:\/\/127\.0\.0\.1:8787/.test(await panel.textContent()), "the Funnel line for a Tailscale address");
-      check(/--setup PATH\/receiver-tavi-lockwhisper-/.test(await panel.textContent()), "the setup line names the character's file");
+      check(/--setup PATH\/receiver-tavi_lockwhisper-/.test(await panel.textContent()), "the setup line names the character's file");
       await t.shot("receiver");
 
       // The admin's link opens Admin > Player agents in view.

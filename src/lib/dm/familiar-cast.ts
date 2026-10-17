@@ -13,8 +13,9 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { buildPet, handleSummonPet } from "@/lib/dm/pet-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
-export const isFindFamiliar = (spell: string) => spell.trim().toLowerCase() === "find familiar";
+export const isFindFamiliar = (spell: string) => textKey(spell) === "find familiar";
 
 export function castFindFamiliar(
   campaign: Campaign,

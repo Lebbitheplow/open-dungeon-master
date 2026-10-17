@@ -19,6 +19,7 @@ import subclassesJson from "@/lib/srd/subclasses.json";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { authoredFeatureDefs } from "@/lib/srd/authored-feature-defs";
 import { tableFeat } from "@/lib/srd/feat-effects";
+import { textKey } from "@/lib/language/text-logic";
 
 export type FightingStyleId =
   | "archery"
@@ -108,10 +109,10 @@ export type FeatureEffect =
   | { kind: "narrative" };
 
 export type FeatureDef = {
-  // Lowercased feature names this entry answers to. A sheet's feature
-  // matches when its name equals one of these or begins with one followed
-  // by " (" so the numbered SRD variants ("Extra Attack (2)", "Action Surge
-  // (1 use)") all land on the same entry.
+  // Feature names this entry answers to, keyed (textKey). A sheet's feature
+  // matches when its name, or its name before a note in parentheses, keys
+  // to one of these, so the numbered SRD variants ("Extra Attack (2)",
+  // "Action Surge (1 use)") all land on the same entry.
   match: string[];
   // Restrict to specific classes when one feature name means different
   // things to different classes.
@@ -202,7 +203,7 @@ export function songOfRestDie(level: number): string {
 // Feats live in sheet.feats, but they are named abilities like any other,
 // so they resolve through the same table. defenseRiders and the derived
 // stats read features AND feats together.
-export const FEATURE_EFFECTS: FeatureDef[] = [
+export const FEATURE_EFFECTS: FeatureDef[] = ([
   // A Level Up feat with the same rules as one of ODM's answers to both
   // names (feat-effects.ts FEAT_TWINS): Attentive is Alert, Intuitive is
   // Observant. (Level Up's Skirmisher is Mobile too, but the Scout
@@ -434,7 +435,7 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     guidance:
       "Agonizing Blast: their Charisma modifier is added to each Eldritch Blast beam's damage. The server applies it on pc_attack.",
   },
-];
+] as FeatureDef[]).map((def) => ({ ...def, match: def.match.map(textKey) }));
 
 // ---- Authored-catalog parsing ----
 //
@@ -546,7 +547,7 @@ const AUTHORED_PARSED = new Map<string, { effects: FeatureEffect[]; guidance: st
     rows.push({ n: feat.name, d: feat.desc ?? feat.d ?? "" });
   }
   for (const row of rows) {
-    const name = normalize(row.n);
+    const name = textKey(row.n);
     // The static table wins for names it already covers.
     if (FEATURE_EFFECTS.some((def) => def.match.includes(name))) {
       continue;
@@ -616,7 +617,7 @@ const CLASS_FEATURE_NAMES = new Set<string>();
     for (const entry of entries) {
       for (const features of Object.values(entry.levels)) {
         for (const feature of features) {
-          CLASS_FEATURE_NAMES.add(normalize(feature.n));
+          CLASS_FEATURE_NAMES.add(textKey(feature.n));
         }
       }
     }
@@ -624,7 +625,7 @@ const CLASS_FEATURE_NAMES = new Set<string>();
 }
 
 export function clashesWithClassFeature(name: string): boolean {
-  return CLASS_FEATURE_NAMES.has(normalize(name));
+  return CLASS_FEATURE_NAMES.has(textKey(name));
 }
 
 const REGISTERED_FEATS = new Set<string>();
@@ -636,7 +637,7 @@ const REGISTERED_FEATS = new Set<string>();
 // fetches a feat's text. A name this table already answers, or one a class
 // feature shares, is left alone. Returns whether anything was registered.
 export function registerFeatRules(name: string, desc: string): boolean {
-  const key = normalize(name);
+  const key = textKey(name);
   if (!key || REGISTERED_FEATS.has(key)) {
     return false;
   }
@@ -686,18 +687,19 @@ export function effectsFor(input: {
   for (const feature of input.features) {
     // A workshop feat that runs as a published one is read as that feat.
     const workshop = tableFeat(feature.name, input.campaignId);
-    const name = normalize(workshop?.runsAs ?? feature.name);
+    const written = workshop?.runsAs ?? feature.name;
+    const names = [textKey(written), textKey(written.replace(/\s*\(.*$/, ""))];
     const matches = FEATURE_EFFECTS.filter(
       (def) =>
         (!def.classes || def.classes.includes(wantedClass)) &&
-        def.match.some((term) => name === term || name.startsWith(`${term} (`)),
+        def.match.some((term) => names.includes(term)),
     );
     // Prefer the most specific match: "extra attack (2)" over "extra attack".
     let best: FeatureDef | null = null;
     let bestLength = -1;
     for (const def of matches) {
       const length = Math.max(
-        ...def.match.filter((term) => name === term || name.startsWith(`${term} (`)).map(
+        ...def.match.filter((term) => names.includes(term)).map(
           (term) => term.length,
         ),
       );
@@ -708,7 +710,7 @@ export function effectsFor(input: {
     }
     // A workshop feat of its own is read by its text, as a pack feat is.
     if (!best && workshop && !workshop.runsAs && workshop.desc) {
-      best = tableFeatDef(name, workshop.desc);
+      best = tableFeatDef(names[0], workshop.desc);
     }
     if (best) {
       for (const effect of best.effects) {
@@ -918,7 +920,7 @@ export function combatRiders(sheet: {
 // "Fighting Style" and "Additional Fighting Style" each grant one.
 export function fightingStyleSlots(features: Array<{ name: string }>): number {
   return features.filter((feature) => {
-    const name = normalize(feature.name);
+    const name = textKey(feature.name);
     return name === "fighting style" || name === "additional fighting style";
   }).length;
 }
@@ -1051,9 +1053,9 @@ export function hasHalflingLuck(sheet: {
   race?: string;
   features?: Array<{ name: string; source?: string }>;
 }): boolean {
-  const isHalfling = (sheet.race ?? "").toLowerCase().includes("halfling");
+  const isHalfling = textKey(sheet.race ?? "").includes("halfling");
   return (sheet.features ?? []).some((feature) => {
-    const name = feature.name.toLowerCase();
+    const name = textKey(feature.name);
     if (name.includes("reroll nat 1")) {
       return true;
     }
@@ -1068,7 +1070,7 @@ export function hasBrave(sheet: {
   features?: Array<{ name: string; source?: string }>;
 }): boolean {
   return (sheet.features ?? []).some((feature) => {
-    const name = feature.name.toLowerCase();
+    const name = textKey(feature.name);
     if (!name.includes("brave")) {
       return false;
     }
@@ -1085,6 +1087,6 @@ export function hasElvenAccuracy(sheet: {
   feats?: string[];
 }): boolean {
   return [...(sheet.features ?? []).map((feature) => feature.name), ...(sheet.feats ?? [])].some(
-    (name) => name.toLowerCase().includes("elven accuracy"),
+    (name) => textKey(name).includes("elven accuracy"),
   );
 }

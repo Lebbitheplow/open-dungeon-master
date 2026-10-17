@@ -27,6 +27,7 @@ import {
   withCasterViews,
   type CasterView,
 } from "@/lib/srd/spell-prep";
+import { textKey } from "@/lib/language/text-logic";
 
 // Taking a stored sheet into a campaign that runs at a different level.
 //
@@ -256,7 +257,7 @@ function trimToLevel(view: CasterView, abilities: CreateSheetInput["abilities"])
     names.filter((name) => (spellLevelOf(name) ?? 0) <= top);
   const granted = grantedSpellsOf(view);
   const isGranted = (name: string) =>
-    granted.some((entry) => entry.toLowerCase() === name.toLowerCase());
+    granted.some((entry) => textKey(entry) === textKey(name));
   // Keep the granted spells and the first `cap` others.
   const capList = (names: string[], cap: number | null) => {
     let room = cap ?? Infinity;

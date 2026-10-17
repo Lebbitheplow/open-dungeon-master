@@ -1,4 +1,5 @@
 import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // Parses Open5e's prose-ish mechanics fields (race asi arrays, class
 // proficiency strings) into the same shapes the bundled SRD data uses, so
@@ -81,8 +82,8 @@ const LANGUAGE_COUNT_WORDS: Record<string, number> = {
 // written, so Darakhul, Minotaur and Machine Speech survive instead of
 // vanishing.
 function canonicalLanguage(name: string): string {
-  const wanted = name.trim().toLowerCase();
-  return STANDARD_LANGUAGES.find((entry) => entry.toLowerCase() === wanted) ?? name.trim();
+  const wanted = textKey(name);
+  return STANDARD_LANGUAGES.find((entry) => textKey(entry) === wanted) ?? name.trim();
 }
 
 // A token that reads as a language name: capitalised words, nothing else.

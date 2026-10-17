@@ -5,16 +5,13 @@ import { Download, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { variantUrl } from "@/lib/image-format";
+import { slugOf } from "@/lib/language/text-logic";
 
 // Build a friendly download filename: slugified caption/alt plus the file
 // extension parsed from the URL, so saved portraits read "my-hero.png" rather
 // than a bare UUID. Falls back to "image" and drops the extension if unknown.
 function downloadName(src: string, label: string) {
-  const slug =
-    label
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "image";
+  const slug = slugOf(label) || "image";
   const match = /\.(png|jpe?g|webp|gif)(?:[?#]|$)/i.exec(src);
   return match ? `${slug}.${match[1].toLowerCase()}` : slug;
 }

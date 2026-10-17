@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { MARKUP_STEPS, costToCopper, type StockLine } from "@/lib/dm/shop-logic";
 import { formatCopper, parseCoins } from "@/lib/srd/currency";
 import { KitButton, panelField, SettingToggle } from "./PanelKit";
+import { textKey } from "@/lib/language/text-logic";
 
 // The Market's shop editor (#171), for whoever holds the prep: the DM seat,
 // the lead of an AI-narrated table, the workshop's author. Every field is
@@ -116,7 +117,7 @@ export function MarketShopEditor({
     setLines((current) => current.map((line, at) => (at === index ? { ...line, ...patch } : line)));
   const addLine = (line: StockLine) =>
     setLines((current) => {
-      const same = current.findIndex((entry) => entry.itemName.trim().toLowerCase() === line.itemName.toLowerCase() && line.itemName);
+      const same = current.findIndex((entry) => textKey(entry.itemName) === textKey(line.itemName) && line.itemName);
       if (same >= 0) {
         return current.map((entry, at) => (at === same ? { ...entry, qty: Math.min(999, entry.qty + line.qty) } : entry));
       }

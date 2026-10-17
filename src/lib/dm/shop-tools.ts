@@ -42,6 +42,7 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
+import { textKey } from "@/lib/language/text-logic";
 
 // The shop tools (docs/vtt-parity-implementation-plan.md 11.1). The server
 // prices everything: the model names the item, the shelf says what it
@@ -165,10 +166,10 @@ export function stockPool(kind: string): Array<{ name: string; cost: string }> {
   const seen = new Set<string>();
   for (const itemKind of spec.kinds) {
     for (const item of searchItems({ kind: itemKind, limit: 400 })) {
-      if (!item.cost || (spec.match && !spec.match.test(item.name)) || seen.has(item.name.toLowerCase())) {
+      if (!item.cost || (spec.match && !spec.match.test(item.name)) || seen.has(textKey(item.name))) {
         continue;
       }
-      seen.add(item.name.toLowerCase());
+      seen.add(textKey(item.name));
       pool.push({ name: item.name, cost: item.cost });
     }
   }
@@ -209,7 +210,7 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
     found &&
     (!location ||
       found.locationId === location.id ||
-      (!found.locationId && (!found.locationName || found.locationName.toLowerCase() === location.name.toLowerCase())))
+      (!found.locationId && (!found.locationName || textKey(found.locationName) === textKey(location.name))))
       ? found
       : null;
   if (existing) {
@@ -331,7 +332,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   if (!removal) {
     return notCarried(sheet.name, sheet.equipment.map((item) => item.name), args.item, isTableGearName(campaign.id, args.item));
   }
-  const carried = sheet.equipment.find((item) => item.name.toLowerCase() === args.item.toLowerCase())?.name ?? args.item;
+  const carried = sheet.equipment.find((item) => textKey(item.name) === textKey(args.item))?.name ?? args.item;
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure); a treasure named with its value is priced by it.
   // A value written into the name prices only treasure; "Longsword (15 gp)"

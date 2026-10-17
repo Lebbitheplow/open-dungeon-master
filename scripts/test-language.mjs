@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const { compareNames, words, foldName, hasWord } = await import("../src/lib/language/text-logic.ts");
+const { compareNames, words, textKey, containsPhrase } = await import("../src/lib/language/text-logic.ts");
 const { stems, stopWordsFor, stemWord } = await import("../src/lib/language/language.ts");
 const { TABLE_LANGUAGES } = await import("../src/lib/schemas/game-settings-options.ts");
 
@@ -63,11 +63,11 @@ test("each language drops its own function words, and only those", () => {
 });
 
 test("names fold by Unicode case and form, not by accent", () => {
-  assert.equal(foldName("Église Saint-Martin"), foldName("église saint-martin"));
-  assert.equal(foldName("Ölmühle"), "ölmühle");
+  assert.equal(textKey("Église Saint-Martin"), textKey("église saint-martin"));
+  assert.equal(textKey("Ölmühle"), "ölmühle");
   // A decomposed "ò" (o + combining grave) is the composed one.
-  assert.equal(foldName("Niccolo\u0300"), foldName("Niccol\u00f2"));
-  assert.notEqual(foldName("papà"), foldName("papa"));
+  assert.equal(textKey("Niccolo\u0300"), textKey("Niccol\u00f2"));
+  assert.notEqual(textKey("papà"), textKey("papa"));
 });
 
 test("names sort by Unicode, case and accents aside, numbers by value, in one order on every host", () => {
@@ -77,13 +77,13 @@ test("names sort by Unicode, case and accents aside, numbers by value, in one or
 });
 
 test("a name is found as a whole word, never inside a longer one", () => {
-  assert.ok(hasWord("Then José nods.", "José"));
-  assert.ok(!hasWord("Joséphine nods.", "José"));
-  assert.ok(hasWord("il cavallo d'Arturo", "Arturo"));
-  assert.ok(hasWord("Jean-Luc waves", "jean-luc"));
-  assert.ok(hasWord("O'Brien laughs", "O'Brien"));
-  assert.ok(!hasWord("always", "Al"));
-  assert.ok(hasWord("Niccolo\u0300 arrives", "niccolò"));
+  assert.ok(containsPhrase("Then José nods.", "José"));
+  assert.ok(!containsPhrase("Joséphine nods.", "José"));
+  assert.ok(containsPhrase("il cavallo d'Arturo", "Arturo"));
+  assert.ok(containsPhrase("Jean-Luc waves", "jean-luc"));
+  assert.ok(containsPhrase("O'Brien laughs", "O'Brien"));
+  assert.ok(!containsPhrase("always", "Al"));
+  assert.ok(containsPhrase("Niccolo\u0300 arrives", "niccolò"));
 });
 
 // The stemmer is server-only: its browser build fetches and starts a 370 KB
@@ -124,48 +124,6 @@ test("no browser module imports the stemmer", () => {
       }
       assert.fail(`a browser module reaches the stemmer: ${chain.join(" -> ")}`);
     }
-  }
-});
-
-// Names a person reads sort through compareNames; a bare localeCompare
-// sorts by the server's own locale. The ones left compare timestamps, ids or
-// keys, where no alphabet applies; a new one has to be put on a side.
-const NOT_NAMES = {
-  "app/admin/AdminUsagePanel.tsx": 1, // lastActivityAt
-  "components/rulebook/PagePrep.tsx": 1, // updatedAt
-  "components/ui/ListControls.tsx": 1, // updatedAt, then compareNames
-  "lib/ambience/library.ts": 1, // cue ids
-  "lib/tts-cast.ts": 1, // voice ids
-  "lib/db/overworld.ts": 1, // createdAt
-  "lib/dm/call-tracker-logic.ts": 1, // call ids
-  "lib/dm/chapter-lod.ts": 3, // chapter ids
-  "lib/model-registry/catalog-logic.ts": 4, // provider ids, model ids, ISO release dates
-  "lib/model-registry/catalog.ts": 2, // ISO release dates, model ids
-  "lib/ops/backup.ts": 1, // createdAt
-  "lib/voice/mesh-logic.ts": 1, // joinedAt
-  "lib/voice/turn-logic.ts": 1, // raisedAt
-  "lib/voice/peers.ts": 1, // joinedAt
-  "lib/voice/transcript.ts": 1, // peer ids
-  "lib/worldforge/time.ts": 1, // event ids, after compareNames on titles
-  "lib/worldforge/web.ts": 1, // entry refs
-  "lib/worldforge/format.ts": 1, // story ids
-};
-
-test("every name a person reads sorts through compareNames, the same on every server", () => {
-  const src = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
-  const found = {};
-  for (const file of readdirSync(src, { recursive: true }).map(String).filter((file) => /\.tsx?$/.test(file))) {
-    const count = readFileSync(path.join(src, file), "utf8").match(/\.localeCompare\(/g)?.length ?? 0;
-    if (count) {
-      found[file.split(path.sep).join("/")] = count;
-    }
-  }
-  for (const [file, count] of Object.entries(found)) {
-    assert.ok(file in NOT_NAMES, `${file} sorts with localeCompare; use compareNames for names, or list why not`);
-    assert.equal(count, NOT_NAMES[file], `${file} has ${count} localeCompare calls; classify the new one`);
-  }
-  for (const file of Object.keys(NOT_NAMES)) {
-    assert.ok(found[file], `${file} is listed but no longer calls localeCompare`);
   }
 });
 

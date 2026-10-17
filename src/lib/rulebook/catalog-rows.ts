@@ -1,6 +1,7 @@
 import bookJson from "@/lib/rulebook/srd-5.1.json";
 import type { RulebookData, RulebookPage } from "@/lib/rulebook/types";
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
+import { textKey } from "@/lib/language/text-logic";
 
 // The bundled book's spells and magic items as catalog rows, in the shape
 // the content pack serves them (src/lib/content/index.ts): what the
@@ -88,8 +89,8 @@ export function spellFieldsFromPage(page: Pick<RulebookPage, "md" | "meta">): Re
 }
 
 export function bundledSpellRows(q = ""): BundledSpellRow[] {
-  const wanted = q.trim().toLowerCase();
-  return PAGES.filter((page) => page.kind === "spell" && (!wanted || page.title.toLowerCase().includes(wanted))).map((page) => {
+  const wanted = textKey(q);
+  return PAGES.filter((page) => page.kind === "spell" && (!wanted || textKey(page.title).includes(wanted))).map((page) => {
     const data = spellFieldsFromPage(page);
     const facts = bundledSpellFacts(page.title);
     return {
@@ -122,8 +123,8 @@ function itemHead(meta: string): { category: string; rarity: string; attunement:
 }
 
 export function bundledItemRows(q = ""): BundledItemRow[] {
-  const wanted = q.trim().toLowerCase();
-  return PAGES.filter((page) => page.kind === "item" && (!wanted || page.title.toLowerCase().includes(wanted))).map((page) => {
+  const wanted = textKey(q);
+  return PAGES.filter((page) => page.kind === "item" && (!wanted || textKey(page.title).includes(wanted))).map((page) => {
     const head = itemHead(page.meta ?? "");
     const desc = page.md.split(/\n\n+/).slice(1).join("\n\n").trim();
     return {

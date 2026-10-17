@@ -10,6 +10,7 @@ import {
 } from "./import-kinds.ts";
 import type { PlanInput } from "./import.ts";
 import { ARC_LIMITS } from "../dm/arc-logic.ts";
+import { textKey } from "../language/text-logic.ts";
 
 // Planning the storyboard kind of an import (#156, #157, #159): what the
 // board's cards pick that the import is or is not bringing, what the source's
@@ -123,8 +124,8 @@ export function planBoard(
 
   const arc = input.targetArc ?? (input.targetHasArc ? { beats: [], acts: 1, room: 0, actRoom: false } : null);
   const mode = input.arcMode ?? "leave";
-  const known = new Set((arc?.beats ?? []).map((beat) => beat.trim().toLowerCase()));
-  const fresh = board.beats.filter((beat) => !known.has(beat.trim().toLowerCase()));
+  const known = new Set((arc?.beats ?? []).map((beat) => textKey(beat)));
+  const fresh = board.beats.filter((beat) => !known.has(textKey(beat)));
   const plan = {
     targetHasArc: Boolean(arc),
     arcMode: mode,
@@ -169,7 +170,7 @@ export function planBoard(
     });
   }
   if (fresh.length > arc.room) {
-    const freshTitles = (board.beatTitles ?? []).filter((_, index) => !known.has((board.beats[index] ?? "").trim().toLowerCase()));
+    const freshTitles = (board.beatTitles ?? []).filter((_, index) => !known.has(textKey(board.beats[index] ?? "")));
     warnings.push({
       kind: "storyboard",
       message: `The arc has room for ${arc.room} more beat${arc.room === 1 ? "" : "s"} (it holds ${ARC_LIMITS.beats}); the last ${fresh.length - arc.room} of the board's cannot join it${nameCards(freshTitles.slice(arc.room))}. ${fresh.length - arc.room === 1 ? "It keeps its" : "They keep their"} full text as a prep card, but the party will not be steered to ${fresh.length - arc.room === 1 ? "it" : "them"}.`,

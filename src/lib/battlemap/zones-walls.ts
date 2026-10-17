@@ -12,6 +12,7 @@
 import { chebyshev, type XY } from "@/lib/battlemap/types";
 import { lineCells, type SpellZone } from "@/lib/battlemap/zones";
 import { zoneRowFor } from "@/lib/battlemap/zones-spells";
+import { textKey } from "@/lib/language/text-logic";
 
 const xyOf = (cell: number, width: number): XY => ({ x: cell % width, y: Math.floor(cell / width) });
 
@@ -51,10 +52,9 @@ export function parseSectionName(
   name: string,
   walls: Array<{ spell: string; runsAs?: string }> = [],
 ): { spell: string; section: number | null; runsAs?: string } | null {
-  const text = name.trim().toLowerCase().replace(/\s+/g, " ");
-  const numbered = /^(?:the )?(.*?)[,:]?\s*(?:section|#|no\.?)\s*(\d{1,3})$/.exec(text);
-  const spell = numbered ? numbered[1].trim() : text.replace(/^the /, "");
-  const copy = walls.find((wall) => wall.runsAs && wall.spell.trim().toLowerCase().replace(/\s+/g, " ") === spell);
+  const numbered = /^(?:the )?(.*?)[,:]?\s*(?:section|#|no\.?)\s*(\d{1,3})$/i.exec(name.trim());
+  const spell = textKey(numbered ? numbered[1] : name).replace(/^the /, "");
+  const copy = walls.find((wall) => wall.runsAs && textKey(wall.spell) === spell);
   const row = zoneRowFor(copy ? { spell: copy.spell, runsAs: copy.runsAs } : spell);
   if (!row?.sections) {
     return null;

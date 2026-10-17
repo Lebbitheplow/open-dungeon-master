@@ -9,6 +9,7 @@ import type {
   Regeneration,
 } from "@/lib/dm/monster-abilities";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The parts of a stat block the engine runs beyond the six numbers and the
 // attack names: an attack's reach, range, rider dice and on-hit effect; the
@@ -294,7 +295,7 @@ export function checkSpellcasting(raw: unknown): MonsterSpellcasting | null {
   for (const entry of Array.isArray(source.spells) ? source.spells.slice(0, BLOCK_LIMITS.spells) : []) {
     const row = (entry ?? {}) as Raw;
     const name = text(row.name, BLOCK_LIMITS.spellName);
-    const key = name.toLowerCase();
+    const key = textKey(name);
     if (!name || seen.has(key)) {
       continue;
     }
@@ -353,14 +354,14 @@ export function checkRegeneration(raw: unknown): Regeneration | null {
 // Each step names one of the block's own attacks; a step naming none is
 // dropped, because the engine would have nothing to swing.
 export function checkRoutines(raw: unknown, attacks: EnemyAttack[]): RoutineStep[][] {
-  const names = new Set(attacks.map((attack) => attack.name.toLowerCase()));
+  const names = new Set(attacks.map((attack) => textKey(attack.name)));
   const out: RoutineStep[][] = [];
   for (const routine of Array.isArray(raw) ? raw.slice(0, BLOCK_LIMITS.routines) : []) {
     const steps: RoutineStep[] = [];
     for (const entry of Array.isArray(routine) ? routine.slice(0, BLOCK_LIMITS.routineSteps) : []) {
       const source = (entry ?? {}) as Raw;
       const attack = text(source.attack, 60);
-      if (!attack || !names.has(attack.toLowerCase())) {
+      if (!attack || !names.has(textKey(attack))) {
         continue;
       }
       steps.push({ attack, count: clamp(source.count, 1, 10) ?? 1, ...(source.ifHit === true ? { ifHit: true } : {}) });

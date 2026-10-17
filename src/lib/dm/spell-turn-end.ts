@@ -23,10 +23,11 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollEnemySave } from "@/lib/dm/forced-save";
-import { lastCastSlot, spellKey } from "@/lib/dm/spell-effects";
+import { lastCastSlot } from "@/lib/dm/spell-effects";
 import { hurtEnemy } from "@/lib/dm/spell-aura";
 import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
+import { textKey } from "@/lib/language/text-logic";
 
 type TurnEndHook = (campaign: Campaign, enemy: EncounterEnemy, meta: ConditionMeta) => string | null;
 
@@ -66,10 +67,10 @@ function saveAtTurnEnd(campaign: Campaign, enemy: EncounterEnemy, meta: Conditio
   if (!encounter || !resolved?.mech.save || !edge || !caster || enemy.status !== "alive") {
     return null;
   }
-  const tag = spellKey(resolved.name);
+  const tag = textKey(resolved.name);
   const held = enemy.conditions.filter((name) => {
     const entry = (enemy.conditionMeta as ConditionMetaMap)[name];
-    return Boolean(entry?.spell && spellKey(entry.spell) === tag && entry.source === caster.id);
+    return Boolean(entry?.spell && textKey(entry.spell) === tag && entry.source === caster.id);
   });
   if (!held.length) {
     return null;

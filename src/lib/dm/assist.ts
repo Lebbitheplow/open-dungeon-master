@@ -22,6 +22,7 @@ import {
 } from "@/lib/dm/assist-logic";
 import { parseRollTable, TABLE_MAX_ENTRIES, type RollTableEntry } from "@/lib/dm/roll-table-logic";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
+import { textKey } from "@/lib/language/text-logic";
 
 // The DM's assist rail: read-only answers from engines that already exist.
 // Nothing here applies anything. Every function returns something the DM
@@ -178,7 +179,7 @@ export type StatblockMatch = {
 // useful answer.
 export function searchStatblocks(campaign: Campaign, query: string): StatblockMatch[] {
   const setting = campaign.gameSettings;
-  const trimmed = query.trim().toLowerCase();
+  const trimmed = textKey(query);
   if (!trimmed) {
     const levels = listSheets(campaign.id).map((sheet) => sheet.level);
     return suggestEnemies(setting, levels, 12).map((entry) => ({
@@ -192,10 +193,10 @@ export function searchStatblocks(campaign: Campaign, query: string): StatblockMa
   return bestiaryFor(setting)
     .filter(
       (entry) =>
-        entry.name.toLowerCase().includes(trimmed) ||
-        entry.slug.includes(trimmed) ||
-        entry.type === trimmed ||
-        entry.blurb.toLowerCase().includes(trimmed),
+        textKey(entry.name).includes(trimmed) ||
+        textKey(entry.slug).includes(trimmed) ||
+        textKey(entry.type) === trimmed ||
+        textKey(entry.blurb).includes(trimmed),
     )
     .slice(0, 12)
     .map((entry) => ({

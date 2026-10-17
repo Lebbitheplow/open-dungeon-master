@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { cn } from "@/lib/cn";
 import type { ContentsChapter, ContentsEntry, RulebookContents as Contents, RulebookPart, SearchHit } from "@/lib/rulebook/types";
 import { Digits } from "./RulebookPage";
+import { splitWords, textKey } from "@/lib/language/text-logic";
 
 // The left-hand page: the book's name, a search line, the rules a table
 // reaches for mid-session, the reader's bookmarks, and the contents, book by
@@ -18,12 +19,12 @@ export type OpenFromContents = (id: string, at?: string, terms?: string[]) => vo
 // `words` are the page's words the search matched, as the server read them
 // (src/lib/rulebook/search.ts): marked as written, never stemmed here.
 function Highlighted({ text, words }: { text: string; words: string[] }) {
-  const parts = text.split(/([\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*)/u);
+  const parts = splitWords(text);
   return (
     <>
       {parts.map((part, index) => {
         if (index % 2 === 0 || !part) return part;
-        return words.includes(part.toLowerCase().replace(/’/g, "'")) ? (
+        return words.includes(textKey(part)) ? (
           <mark key={index} className="rb-mark">
             {part}
           </mark>

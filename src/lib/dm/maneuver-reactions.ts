@@ -40,12 +40,13 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { reactionMove } from "@/lib/dm/authored-reactions-more";
 import { noHit, settle, spendReaction, type Ctx } from "@/lib/dm/reaction-tools";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 const lower = (value: string) => value.trim().toLowerCase();
 
 // Whether the sheet knows this maneuver ("Maneuver: Parry").
 function knows(sheet: CharacterSheet, name: string): boolean {
-  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && lower(feature.name).includes(name));
+  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && textKey(feature.name).includes(name));
 }
 
 // The sheet's own mark, by its leading name ("grappling strike (1d8)").

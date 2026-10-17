@@ -8,6 +8,7 @@ import { castingPool, pickVoice, type VoiceGender } from "@/lib/tts-cast";
 import { genderMark } from "@/lib/gender";
 import { baseCreatureName } from "@/lib/tts-segments";
 import { serverVoices, ttsBackend, type TtsBackend } from "@/lib/tts-backend";
+import { textKey } from "@/lib/language/text-logic";
 
 // Everyone at a table who may be given a voice (issue 97): the characters
 // (players' and AI companions), the cast, and the monsters of the fight in
@@ -32,7 +33,7 @@ export type RosterEntry = {
 };
 
 function monsterKey(name: string): string {
-  return `monster:${baseCreatureName(name).toLowerCase().slice(0, 80)}`;
+  return `monster:${textKey(baseCreatureName(name)).slice(0, 80)}`;
 }
 
 export function voiceRoster(campaignId: string): RosterEntry[] {

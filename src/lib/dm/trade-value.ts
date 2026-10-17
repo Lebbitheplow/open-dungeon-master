@@ -16,6 +16,7 @@
 import { searchItems } from "@/lib/content";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { parseCoins } from "@/lib/srd/currency";
+import { textKey } from "@/lib/language/text-logic";
 
 const VALUE_PATTERNS = [
   /\(\s*([\d,]+\s*(?:pp|gp|ep|sp|cp))\s*\)/i,
@@ -73,9 +74,9 @@ function isMagicItem(name: string): boolean {
   if (matchMagicItem(bare) || MAGIC_NAMED.test(bare)) {
     return true;
   }
-  const wanted = bare.toLowerCase();
+  const wanted = textKey(bare);
   return searchItems({ q: bare, kind: "magic_item", limit: 8 }).some((item) => {
-    const known = item.name.trim().toLowerCase();
+    const known = textKey(item.name);
     return known === wanted || wanted.startsWith(`${known} (`) || wanted.startsWith(`${known},`);
   });
 }
@@ -86,14 +87,14 @@ function isMagicItem(name: string): boolean {
 // until the names run out, not only the first few rows.
 const PAGE = 200;
 function packItemsNamed(bare: string): ReturnType<typeof searchItems> {
-  const wanted = bare.trim().toLowerCase();
+  const wanted = textKey(bare);
   if (!wanted) {
     return [];
   }
   const found: ReturnType<typeof searchItems> = [];
   for (let offset = 0; offset < PAGE * 10; offset += PAGE) {
     const page = searchItems({ q: bare, limit: PAGE, offset });
-    found.push(...page.filter((item) => item.name.trim().toLowerCase() === wanted));
+    found.push(...page.filter((item) => textKey(item.name) === wanted));
     if (page.length < PAGE) {
       break;
     }
@@ -104,7 +105,7 @@ function packItemsNamed(bare: string): ReturnType<typeof searchItems> {
 // A piece of ordinary gear the pack prices (a Signet Ring at 5 gp): it sells
 // for half like any other equipment.
 function isPricedGear(name: string): boolean {
-  const wanted = nameWithoutValue(name).toLowerCase();
+  const wanted = textKey(nameWithoutValue(name));
   if (!wanted) {
     return false;
   }

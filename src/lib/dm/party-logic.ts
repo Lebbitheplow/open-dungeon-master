@@ -1,6 +1,7 @@
 import { normalizeReputation } from "@/lib/dm/faction-logic";
 import { describeFormation, normalizeFormationChange, type FormationChange } from "@/lib/dm/formation-logic";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The party as a thing in its own right.
 //
@@ -133,7 +134,7 @@ export function addPartyItem(
   const known = item.identified !== false;
   const index = inventory.findIndex(
     (row) =>
-      row.name.toLowerCase() === name.toLowerCase() && (row.identified !== false) === known,
+      textKey(row.name) === textKey(name) && (row.identified !== false) === known,
   );
   if (index < 0) {
     if (inventory.length >= MAX_PARTY_ITEMS) {
@@ -164,7 +165,7 @@ export function removePartyItem(
   known: boolean,
   qty = 1,
 ): { inventory: PartyItem[]; removed: number; item: PartyItem } | ToolError {
-  const index = inventory.findIndex((row) => row.name.toLowerCase() === name.trim().toLowerCase());
+  const index = inventory.findIndex((row) => textKey(row.name) === textKey(name));
   if (index < 0) {
     return known
       ? { error: `The pack does not hold "${name}".`, refused: "rules" }

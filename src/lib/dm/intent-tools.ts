@@ -8,6 +8,7 @@ import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // declare_intent (docs/visual-overhaul-plan.md 5.6): the DM, model or person,
 // says what an enemy is about to do, and the board telegraphs it for the
@@ -78,7 +79,7 @@ export function handleDeclareIntent(
   // A number is only ever the DM's own or the named attack's average: a verb
   // the stat block does not list gets none rather than a guess.
   const attack = enemy.stats.attacks.find(
-    (entry) => entry.name.toLowerCase() === args.verb.toLowerCase(),
+    (entry) => textKey(entry.name) === textKey(args.verb),
   );
   const expected =
     args.expected !== undefined ? Math.round(args.expected) : expectedDamage(attack?.damage);

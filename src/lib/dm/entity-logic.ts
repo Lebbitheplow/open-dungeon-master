@@ -14,7 +14,7 @@
 // not something a table can easily undo. No title or role-word list decides
 // it, in any language: telling a title from a name needs a person.
 
-import { foldName } from "../language/text-logic.ts";
+import { textKey } from "../language/text-logic.ts";
 
 export type MatchTier = "exact" | "containment" | "fuzzy";
 
@@ -25,7 +25,7 @@ export type EntityMatch = {
   needsConfirmation: boolean;
 };
 
-// Folded as every name lookup folds (foldName), punctuation stripped.
+// Folded by textKey: case, Unicode form and every mark set aside.
 // Nothing is dropped: an article or a title in one language is a name in
 // another ("Hans" is "his" in Danish), so "The Warden" and "Warden" are a
 // containment match the lead confirms once, after which the merged alias
@@ -35,9 +35,8 @@ export function normalizeName(name: string): string {
 }
 
 export function tokensOf(name: string): string[] {
-  return foldName(name)
-    .replace(/[^\p{L}\p{N}\s'’-]/gu, " ")
-    .split(/[\s'’-]+/u)
+  return textKey(name)
+    .split(" ")
     .filter((token) => token.length > 0);
 }
 

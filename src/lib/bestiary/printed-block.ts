@@ -7,6 +7,7 @@
 
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import { ENGINE_TRAIT_NAMES, parseAbilityText } from "@/lib/dm/monster-abilities";
+import { textKey } from "@/lib/language/text-logic";
 
 type RawAction = { name?: unknown; desc?: unknown; attack_bonus?: unknown; damage_dice?: unknown; damage_bonus?: unknown };
 
@@ -111,7 +112,7 @@ export function unrunPrintedAbilities(stats: { traits?: string[]; printed?: Prin
   if (!printed) {
     return [];
   }
-  const carried = (stats.traits ?? []).map((line) => line.toLowerCase());
-  const named = (ability: PrintedAbility) => carried.some((line) => line.includes(ability.name.toLowerCase()) && !line.endsWith("..."));
+  const carried = (stats.traits ?? []).filter((line) => !line.endsWith("...")).map(textKey);
+  const named = (ability: PrintedAbility) => carried.some((line) => line.includes(textKey(ability.name)));
   return [...printed.traits, ...printed.actions, ...printed.reactions].filter((ability) => ability.engine === "text" && !named(ability));
 }

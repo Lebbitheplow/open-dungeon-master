@@ -35,6 +35,7 @@ import { chosenOptions } from "@/lib/srd/options";
 // bonus-routes.ts, so the Hand can ask it too.
 import { holdsFeature as holds, kiLeft, usesLeft } from "@/lib/dm/bonus-routes";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 export { bonusRouteFor, kiLeft, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
 
 // The resources patch that spends `points` ki, or an error when the
@@ -180,7 +181,7 @@ export function spendQuickenedSpell(
   sheet: CharacterSheet,
   state: { max: number; used: number },
 ): { patch: FullPatchSheetInput; result: Record<string, unknown> } | ToolError {
-  const known = chosenOptions(sheet.features, "metamagic").some((name) => name.trim().toLowerCase() === "quickened spell");
+  const known = chosenOptions(sheet.features, "metamagic").some((name) => textKey(name) === "quickened spell");
   if (!known) {
     return { error: `${sheet.name} has not learned the Quickened Spell Metamagic option. Ask the player whether to cast it without Quickened Spell. Nothing was spent.`, retry: true };
   }

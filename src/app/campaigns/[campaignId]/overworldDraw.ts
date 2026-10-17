@@ -1,5 +1,6 @@
 import { skinForGenre, tileJitter, type OverworldTile, type XY } from "@/lib/overworld/logic";
 import type { OverworldLabel, OverworldPath, PathKind } from "@/lib/overworld/features";
+import { textKey } from "@/lib/language/text-logic";
 
 // Canvas drawing for the region map, lifted out of OverworldPanel so the
 // panel has room for the DM's authoring controls. Nothing here touches
@@ -169,7 +170,7 @@ export function drawOverworld(
       .map((location) => [location.id, location.anchor as { x: number; y: number }] as const),
   );
   const idByName = new Map(
-    data.locations.map((location) => [location.name.toLowerCase(), location.id] as const),
+    data.locations.map((location) => [textKey(location.name), location.id] as const),
   );
   context.strokeStyle = "rgba(240, 220, 170, 0.45)";
   context.lineWidth = 1.5;
@@ -181,7 +182,7 @@ export function drawOverworld(
       continue;
     }
     for (const connectionName of location.connections) {
-      const targetId = idByName.get(connectionName.toLowerCase());
+      const targetId = idByName.get(textKey(connectionName));
       const to = targetId ? anchorById.get(targetId) : null;
       if (!to || !targetId) {
         continue;

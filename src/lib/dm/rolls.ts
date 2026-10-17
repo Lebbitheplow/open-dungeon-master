@@ -28,6 +28,7 @@ import type { StreamedToolCall } from "@/lib/model-client";
 import { senseCheckFailure } from "@/lib/srd/sense-checks";
 import { sightRotPenalty } from "@/lib/srd/afflictions";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export { rollArgsSchema, rollDcFor, type RollArgs } from "@/lib/dm/roll-args";
 
@@ -695,7 +696,7 @@ export function resolveSheetRef(
   }
   return (
     sheetsById.get(trimmed) ??
-    sheets.find((entry) => entry.name.toLowerCase() === trimmed.toLowerCase()) ??
+    sheets.find((entry) => textKey(entry.name) === textKey(trimmed)) ??
     null
   );
 }

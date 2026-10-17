@@ -14,6 +14,8 @@
 // Pure by design: no "@/" imports of anything with I/O, so the guard test
 // can load it directly.
 
+import { containsPhrase } from "@/lib/language/text-logic";
+
 export type AdjudicationCategory =
   | "combat"
   | "party"
@@ -141,15 +143,8 @@ function selectAccepts(allowed: string[], value: string): boolean {
   if (allowed.includes(value)) {
     return true;
   }
-  const cleaned = value.trim().toLowerCase().replace(/\s+/g, " ");
-  return allowed.some((option) => {
-    const wanted = option.toLowerCase();
-    return (
-      cleaned === wanted ||
-      cleaned.replace(/ /g, "_") === wanted ||
-      new RegExp(`(^|[^a-z])${wanted.replace(/[^a-z0-9 _]/g, "")}([^a-z]|$)`).test(cleaned)
-    );
-  });
+  // An option also without its apostrophes: "Asps Kiss" is Asp's Kiss.
+  return allowed.some((option) => containsPhrase(value, option) || containsPhrase(value, option.replace(/['‘’ʼ´`]/g, "")));
 }
 
 // A pre-flight check for the console's form: required fields present,

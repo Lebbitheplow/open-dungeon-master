@@ -33,6 +33,7 @@ import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget"
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
 import { STABILIZE_DC, SUFFOCATING, stabilizeMethod } from "@/lib/dm/vitals-logic";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // A healer's kit holds ten uses (SRD 5.1, Adventuring Gear). The count lives
 // on the row's `charges`; a row with none recorded is a full kit, so every
@@ -131,7 +132,7 @@ export function handleStabilize(
   }
   // The healer spends their action on it, so they must have one to spend;
   // Field Surgeon and Triage make it a bonus action (issue 233).
-  const quick = ["Field Surgeon", "Triage"].find((name) => healer.features.some((feature) => feature.name.trim().toLowerCase() === name.toLowerCase())) ?? null;
+  const quick = ["Field Surgeon", "Triage"].find((name) => healer.features.some((feature) => textKey(feature.name) === textKey(name))) ?? null;
   const encounter = getActiveEncounter(campaign.id);
   // Off their turn, a healer who readied this: their reaction (readied-release.ts).
   const readied = readiedReleaseFor(healer, encounter, "stabilize");
@@ -174,7 +175,7 @@ export function handleStabilize(
   } else if (method === "spell") {
     const knows = healer.spellcasting
       ? allSpellNames(healer.spellcasting).some(
-          (entry) => entry.trim().toLowerCase() === "spare the dying",
+          (entry) => textKey(entry) === "spare the dying",
         )
       : false;
     if (!knows) {

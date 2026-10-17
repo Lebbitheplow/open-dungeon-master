@@ -11,6 +11,7 @@ import { SRD_ARMOR } from "@/lib/srd/armor";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { normalizeCreatureType } from "@/lib/bestiary/statblock";
 import type { WorldPack } from "@/lib/worlds/types";
+import { textKey } from "@/lib/language/text-logic";
 
 export type IntegrityReport = {
   problems: string[];
@@ -42,21 +43,21 @@ export function checkPackIntegrity(pack: WorldPack): IntegrityReport {
 
   if (pack.spells.length) {
     const names = new Set(
-      (db.prepare(`SELECT name FROM spells`).all() as Array<{ name: string }>).map((row) => row.name.toLowerCase()),
+      (db.prepare(`SELECT name FROM spells`).all() as Array<{ name: string }>).map((row) => textKey(row.name)),
     );
     for (const entry of pack.spells) {
-      if (!names.has(entry.from.toLowerCase())) problems.push(`"${entry.from}" is not a spell in the content pack.`);
+      if (!names.has(textKey(entry.from))) problems.push(`"${entry.from}" is not a spell in the content pack.`);
     }
   }
 
   if (pack.items.length) {
     const names = new Set(
-      (db.prepare(`SELECT name FROM items`).all() as Array<{ name: string }>).map((row) => row.name.toLowerCase()),
+      (db.prepare(`SELECT name FROM items`).all() as Array<{ name: string }>).map((row) => textKey(row.name)),
     );
-    for (const weapon of SRD_WEAPONS) names.add(weapon.name.toLowerCase());
-    for (const armor of SRD_ARMOR) names.add(armor.name.toLowerCase());
+    for (const weapon of SRD_WEAPONS) names.add(textKey(weapon.name));
+    for (const armor of SRD_ARMOR) names.add(textKey(armor.name));
     for (const entry of pack.items) {
-      if (!names.has(entry.from.toLowerCase())) problems.push(`"${entry.from}" is not an item in the content pack.`);
+      if (!names.has(textKey(entry.from))) problems.push(`"${entry.from}" is not an item in the content pack.`);
     }
   }
 

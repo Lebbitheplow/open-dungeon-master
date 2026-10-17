@@ -11,6 +11,7 @@
 
 import type { Speaker } from "@/lib/dm/speech";
 import type { GenderMark } from "@/lib/gender";
+import { namesPattern, splitWords, textKey, words } from "@/lib/language/text-logic";
 
 // A quoted line, in any pair prose uses: “…”, "…", «…», „…“, »…«. Only a
 // matched pair is a line, so an apostrophe or a lone guillemet opens
@@ -25,19 +26,8 @@ export function quotedText(match: RegExpMatchArray): string {
   return (match[1] ?? match[2] ?? match[3] ?? match[4] ?? "").trim();
 }
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 export function wordCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
-}
-
-function nameWords(name: string): string[] {
-  return name
-    .split(/[\s,]+/)
-    .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
-    .filter(Boolean);
 }
 
 // `short` holds the single words of a longer name, lower-cased: they only
@@ -54,9 +44,9 @@ export function speakerMatchers(speakers: Speaker[]): Matcher[] {
   const full = new Set<string>();
   for (const speaker of speakers) {
     for (const name of [speaker.name, ...(speaker.aliases ?? [])]) {
-      full.add(name.trim().toLowerCase());
+      full.add(textKey(name));
     }
-    for (const word of new Set(nameWords(speaker.name).map((entry) => entry.toLowerCase()))) {
+    for (const word of new Set(words(speaker.name).map(textKey))) {
       claimed.set(word, (claimed.get(word) ?? 0) + 1);
     }
   }
@@ -69,10 +59,10 @@ export function speakerMatchers(speakers: Speaker[]): Matcher[] {
       }
     }
     const short = new Set<string>();
-    const words = nameWords(speaker.name);
-    if (words.length > 1) {
-      for (const word of words) {
-        const key = word.toLowerCase();
+    const parts = words(speaker.name);
+    if (parts.length > 1) {
+      for (const word of parts) {
+        const key = textKey(word);
         if (word.length >= 3 && /^\p{Lu}/u.test(word) && claimed.get(key) === 1 && !full.has(key)) {
           names.add(word);
           short.add(key);
@@ -82,10 +72,9 @@ export function speakerMatchers(speakers: Speaker[]): Matcher[] {
     if (!names.size) {
       continue;
     }
-    const spellings = [...names].sort((a, b) => b.length - a.length).map(escapeRegExp);
     // Letter-aware edges, not \b, which takes "É" or "ø" for a gap and
     // so never found "Élodie" at all.
-    matchers.push({ speaker, pattern: new RegExp(`(?<![\\p{L}\\p{N}_])(?:${spellings.join("|")})(?![\\p{L}\\p{N}_])`, "giu"), short });
+    matchers.push({ speaker, pattern: namesPattern(names, "giu"), short });
   }
   return matchers;
 }
@@ -108,7 +97,7 @@ export function opensSentence(before: string): boolean {
 // writes it in lower case: "Marla frowns." is Marla, "Old habits die hard"
 // is not Old Pike.
 export function written(found: RegExpExecArray, short: Set<string>, reading: Reading, atStart: boolean): boolean {
-  const key = found[0].toLowerCase();
+  const key = textKey(found[0]);
   if (!short.has(key)) {
     return true;
   }
@@ -134,11 +123,12 @@ export function nameAt(text: string, reading: Reading, atStart: boolean): Found 
     if (best) {
       return best;
     }
-    const word = /^([\p{L}'’-]+)\s+/u.exec(rest);
-    if (!word || !reading.common.has(word[1].toLowerCase())) {
+    const [gap, word = "", after = ""] = splitWords(rest);
+    const space = /^\s+/.exec(after)?.[0];
+    if (gap || !space || !reading.common.has(textKey(word))) {
       return null;
     }
-    offset += word[0].length;
+    offset += word.length + space.length;
   }
   return null;
 }
@@ -261,5 +251,5 @@ export function aboutSubject(subject: Pointer): { text: string; whole: boolean; 
 }
 
 export function keyOf(speaker: Speaker): string {
-  return speaker.id || speaker.name.toLowerCase();
+  return speaker.id || textKey(speaker.name);
 }

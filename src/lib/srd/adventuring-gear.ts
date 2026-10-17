@@ -1,6 +1,7 @@
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { PACKS, type KitItem } from "@/lib/srd/starting-kit-data";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { textKey } from "@/lib/language/text-logic";
 
 // SRD 5.1 adventuring gear, tools, instruments and foci: name, price and
 // weight, as the "Adventuring Gear", "Tools" and "Equipment Packs" tables
@@ -172,13 +173,7 @@ export const SRD_GEAR: SrdGear[] = [
 // go, a trailing plural goes ("torches" -> "torch", "clothes" is kept by
 // the alias list naming it).
 export function gearKey(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[’']/g, "'")
-    .replace(/[^a-z0-9'+]+/g, " ")
-    .replace(/'/g, "")
-    .trim()
-    .replace(/\s+/g, " ");
+  return textKey(text.replace(/['‘’ʼ´]/g, ""));
 }
 
 function singular(key: string): string {

@@ -41,6 +41,7 @@ import { matchMagicItem } from "@/lib/srd/magic-items";
 import { grantItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export const LIFESTYLE_COST_CP: Record<Lifestyle, number> = {
   wretched: 0,
@@ -113,9 +114,9 @@ export type DowntimeEntry = {
 };
 
 const proficientWith = (sheet: CharacterSheet, tool: string) => {
-  const wanted = tool.trim().toLowerCase();
+  const wanted = textKey(tool);
   return (sheet.proficiencies.tools ?? []).some((entry) => {
-    const held = entry.trim().toLowerCase();
+    const held = textKey(entry);
     return held === wanted || held.includes(wanted) || wanted.includes(held);
   });
 };
@@ -145,19 +146,20 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
       }
     }
     const progress = downtimeOf(campaign.id, sheet.id).crafting;
-    const starting = !progress || progress.item.toLowerCase() !== entry.item.trim().toLowerCase();
+    const starting = !progress || textKey(progress.item) !== textKey(entry.item);
     const materials = Math.floor((listPriceCp(entry.item) ?? 0) / 2);
     if (starting && purseOf(sheet) < materials) {
       return { error: `${sheet.name} needs ${formatCopper(materials)} of raw materials (half the market value) to start crafting ${entry.item}, and has ${formatCopper(purseOf(sheet))}.`, refused: "rules" };
     }
   }
   if (entry.activity === "training") {
-    if (!entry.subject?.trim()) {
+    const subject = entry.subject?.trim();
+    if (!subject) {
       return { error: "Training needs the language or tool to learn (subject) and whether it is a language or a tool (kind).", retry: true };
     }
     const known = entry.kind === "tool"
-      ? (sheet.proficiencies.tools ?? []).some((tool) => tool.toLowerCase() === entry.subject?.trim().toLowerCase())
-      : (sheet.proficiencies.languages ?? []).some((language) => language.toLowerCase() === entry.subject?.trim().toLowerCase());
+      ? (sheet.proficiencies.tools ?? []).some((tool) => textKey(tool) === textKey(subject))
+      : (sheet.proficiencies.languages ?? []).some((language) => textKey(language) === textKey(subject));
     if (known) {
       return { error: `${sheet.name} already knows ${entry.subject}.`, refused: "rules" };
     }
@@ -201,7 +203,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
     const item = entry.item.trim();
     const valueCp = listPriceCp(item) ?? 0;
     let crafting = progress.crafting;
-    if (!crafting || crafting.item.toLowerCase() !== item.toLowerCase()) {
+    if (!crafting || textKey(crafting.item) !== textKey(item)) {
       if (crafting) {
         lines.push(`${sheet.name} sets aside the unfinished ${crafting.item}; its materials are spent.`);
       }
@@ -226,7 +228,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
   if (entry.activity === "training" && entry.subject) {
     const subject = entry.subject.trim();
     const kind = entry.kind === "tool" ? "tool" : "language";
-    const training = progress.training && progress.training.subject.toLowerCase() === subject.toLowerCase() ? progress.training : { subject, kind, days: 0 };
+    const training = progress.training && textKey(progress.training.subject) === textKey(subject) ? progress.training : { subject, kind, days: 0 };
     const affordable = Math.min(days, Math.floor(purseOf(getSheetById(sheet.id) ?? sheet) / 100));
     pay(campaign.id, getSheetById(sheet.id) ?? sheet, affordable * 100);
     const total = Math.min(250, training.days + affordable);
@@ -251,7 +253,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
     const affordable = Math.min(days, Math.floor(purseOf(getSheetById(sheet.id) ?? sheet) / 100));
     pay(campaign.id, getSheetById(sheet.id) ?? sheet, affordable * 100);
     const topic = entry.topic.trim();
-    const research = progress.research && progress.research.topic.toLowerCase() === topic.toLowerCase() ? progress.research : { topic, days: 0 };
+    const research = progress.research && textKey(progress.research.topic) === textKey(topic) ? progress.research : { topic, days: 0 };
     progress.research = { topic, days: research.days + affordable };
     lines.push(`${sheet.name} researches ${topic}: ${progress.research.days} day${progress.research.days === 1 ? "" : "s"} so far (1 gp a day paid). What they find is yours to say.`);
   }

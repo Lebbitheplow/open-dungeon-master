@@ -9,6 +9,7 @@ import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget"
 import { conditionExtraActions } from "@/lib/srd/condition-effects";
 import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // What commanding a pet's attack costs its owner in a fight (SRD 5.1 and
 // the subclasses' own text): a Beast Master's companion takes the ranger's
@@ -33,7 +34,7 @@ export function petAttackCost(
   let spent;
   let economy: string;
   if (pet.kind === "familiar") {
-    const once = claimOncePerTurn(budget, `familiar:${pet.name.toLowerCase()}`);
+    const once = claimOncePerTurn(budget, `familiar:${textKey(pet.name)}`);
     if (!once) {
       return { error: `${pet.name} has already attacked with its reaction this turn.`, refused: "rules" };
     }
