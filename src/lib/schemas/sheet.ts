@@ -63,7 +63,26 @@ export const deathSavesSchema = z
   .nullable();
 export type DeathSaves = z.infer<typeof deathSavesSchema>;
 
-// A name written from a content row's text rather than typed, clipped to
+// The longest language, tool, and armor or weapon name a sheet holds.
+export const LANGUAGE_NAME_MAX = 40;
+export const TOOL_NAME_MAX = 60;
+export const TRAINING_NAME_MAX = 40;
+
+// A name within `max`, cut at a word with an ellipsis when it runs longer.
+// The same text always comes to the same name and a fitted name fits to
+// itself, so a name the sheet clipped still matches the grant it was cut
+// from (src/lib/srd/legality/proficiencies.ts compares them this way).
+export function fitName(text: string, max: number): string {
+  const name = text.trim().replace(/\s+/g, " ");
+  if (name.length <= max) {
+    return name;
+  }
+  const cut = name.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.-]+$/, "")}…`;
+}
+
+// A name written from a content row's text rather than typed, fitted to
 // `max` rather than refused: a content pack or a workshop entry can say more
 // than a sheet holds, and the server writes these from the row itself.
 const clippedName = (max: number) =>
@@ -71,8 +90,8 @@ const clippedName = (max: number) =>
     .string()
     .trim()
     .max(300)
-    .transform((value) => value.slice(0, max));
-const trainingName = clippedName(40);
+    .transform((value) => fitName(value, max));
+const trainingName = clippedName(TRAINING_NAME_MAX);
 
 // The longest item name a sheet holds.
 export const ITEM_NAME_MAX = 80;
@@ -93,12 +112,7 @@ export function fitItemName(text: string): string {
     return bare;
   }
   const first = bare.split(/,?\s+or\s+/i)[0].trim() || bare;
-  if (first.length <= ITEM_NAME_MAX) {
-    return first;
-  }
-  const cut = first.slice(0, ITEM_NAME_MAX - 1);
-  const space = cut.lastIndexOf(" ");
-  return `${(space > ITEM_NAME_MAX / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.-]+$/, "")}…`;
+  return fitName(first, ITEM_NAME_MAX);
 }
 
 const featPicksSchema = z.object({
@@ -133,8 +147,8 @@ export const proficienciesSchema = z.object({
   // characters, a tool grant left unanswered is kept in its own words), and
   // an app built before the builder read the bundled class's training sends
   // the content pack's sentence.
-  languages: z.array(clippedName(40)).max(12),
-  tools: z.array(clippedName(60)).max(12),
+  languages: z.array(clippedName(LANGUAGE_NAME_MAX)).max(12),
+  tools: z.array(clippedName(TOOL_NAME_MAX)).max(12),
   armor: z.array(trainingName).max(8),
   weapons: z.array(trainingName).max(16),
 });
