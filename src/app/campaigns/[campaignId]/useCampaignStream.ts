@@ -37,6 +37,7 @@ import type { CameraEvent, HandoutShown, SceneState, TitleCard } from "@/lib/sce
 import type { MapPing } from "@/lib/dm/board-logic";
 import { capsForRole, type ViewerCaps } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { DmJobView } from "@/lib/dm/job-stage-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
@@ -261,6 +262,9 @@ export type CampaignState = {
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   lastSeq: number;
   dmStatus: DmStatus;
+  // The DM's job in flight: the step it is on and since when, for the
+  // status line and the lead's Stop (issue #383).
+  dmJob: DmJobView | null;
   // Background utility work in flight (compaction, chapter seal, world tick,
   // lore check, Ask). Separate from dmStatus, which describes the TURN: these
   // run outside one, several can overlap, and each carries its own label.
@@ -368,6 +372,7 @@ const initialState: CampaignState = {
   latestRoll: null,
   lastSeq: 0,
   dmStatus: "idle",
+  dmJob: null,
   utilityCalls: [],
   directorArm: null,
   mediaStatus: {},
@@ -930,6 +935,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "dm_status":
           next.dmStatus = payload.state as DmStatus;
           return next;
+        case "dm_job":
+          next.dmJob = (payload.job as DmJobView | null) ?? null;
+          return next;
         case "utility_calls":
           // The server sends the whole in-flight set each time, so a dropped
           // event self-heals on the next one rather than leaving a stuck chip.
@@ -1052,6 +1060,7 @@ const EPHEMERAL_EVENTS = [
   "cast_updated",
   "tts_stream",
   "dm_status",
+  "dm_job",
   "utility_calls",
   "dm_delta",
   // The turn withheld text it had streamed: the draft shows what it kept.
@@ -1221,6 +1230,7 @@ export function useCampaignStream(campaignId: string) {
             ? queuedIntents(data.messages ?? [], (data.beats ?? []).map((beat: { messageId: string }) => beat.messageId))
             : [],
           dmStatus: data.dmStatus ?? "idle",
+          dmJob: data.dmJob ?? null,
           utilityCalls: sortCalls(data.utilityCalls ?? []),
           narrationAudio: data.narrationAudio ?? {},
           ambience: data.ambience ?? EMPTY_AMBIENCE,

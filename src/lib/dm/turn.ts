@@ -23,10 +23,14 @@ import {
   saveDmTurn,
   type DmTurn,
 } from "@/lib/db/dm-turns";
-import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
+import { haltDmTurn, haltUnbuiltTurn } from "@/lib/dm/turn-halt";
+import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, setJobStage } from "@/lib/dm/job-control";
+import { describeStage, unbuiltReason, type DmJobStage } from "@/lib/dm/job-stage-logic";
+import { modelTuningFor } from "@/lib/dm/model-tuning";
+import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
-import { insertCampaignMessage, listMessagesPage, listRecentMessages } from "@/lib/db/messages";
+import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
 import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
@@ -45,7 +49,7 @@ import { requestDmMessage } from "@/lib/dm/model";
 import { OOC_ANSWER_INSTRUCTION, OOC_UNANSWERED_PREFIX, oocAnswer, oocQuestionPending } from "@/lib/dm/ooc-question";
 import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { toMcpTools } from "@/lib/harness/render";
-import { setDmStatus } from "@/lib/dm/status";
+import { getDmStatus, setDmStatus } from "@/lib/dm/status";
 import {
   extractToolCalls,
   resolveSheetRef,
@@ -389,6 +393,11 @@ function loadContext(campaign: Campaign): TurnContext {
 export async function startDmTurn(campaignId: string) {
   const campaign = getCampaignById(campaignId);
   if (!campaign || campaign.status !== "active") {
+    // A turn asked of a table that is not playing (back in the lobby, ended)
+    // has nothing to answer, and the "thinking" its request raised goes.
+    if (getDmStatus(campaignId) === "thinking") {
+      setDmStatus(campaignId, "idle");
+    }
     return;
   }
   failStaleRunningTurns(campaignId);
@@ -412,7 +421,39 @@ export async function startDmTurn(campaignId: string) {
   }
 
   setDmStatus(campaignId, "thinking");
+  // Everything between here and the first model call used to run
+  // unguarded: a throw anywhere in the prompt build left the table on "DM
+  // at work" with no turn row, no notice and no Retry, and the next action
+  // hit the same throw (issue #383). It now ends in the halted notice every
+  // other failed turn writes.
+  const opening: OpeningTurn = { stage: "setting_scene", turn: null };
+  setJobStage("setting_scene");
+  let opened: { context: TurnContext; turn: DmTurn } | null;
+  try {
+    opened = await openTurn(campaign, history, pendingWhispers, opening);
+  } catch (error) {
+    haltOpeningTurn(campaignId, opening, error);
+    return;
+  }
+  if (opened) {
+    await advance(opened.context, opened.turn);
+  }
+}
 
+// How far a turn got before its first model call: the stage it was on, and
+// its row once it has one.
+type OpeningTurn = { stage: DmJobStage; turn: DmTurn | null };
+
+// The turn up to its first model call: the prompt, built against the moment,
+// and the row that carries it. Null when the turn was an out-of-character
+// answer, which is finished here.
+async function openTurn(
+  campaign: Campaign,
+  history: CampaignMessage[],
+  pendingWhispers: ReturnType<typeof listPendingPlayerWhispers>,
+  opening: OpeningTurn,
+): Promise<{ context: TurnContext; turn: DmTurn } | null> {
+  const campaignId = campaign.id;
   // Table talk put to the DM and nothing else since it last spoke: the turn
   // is an out-of-character answer, which spends nothing a real turn would
   // (src/lib/dm/ooc-question.ts).
@@ -446,9 +487,13 @@ export async function startDmTurn(campaignId: string) {
   // budgeted (issue #120), so they come off the window before any block is
   // packed, here and in the retrieval budget.
   const toolTokens = dmTurnToolTokens(campaign);
+  opening.stage = "searching_lore";
+  setJobStage("searching_lore");
   const retrieval = isStageEnabled(stages, "retrieval")
     ? await buildTurnRetrieval(campaign, history, toolTokens)
     : { variantRulesBlock: renderVariantRules(campaign.gameSettings.variantRules), houseRulesBlock: "", loreBlock: "" };
+  opening.stage = "setting_scene";
+  setJobStage("setting_scene");
   // Taken (read and deleted in one statement) rather than read-then-clear, so
   // two turns racing cannot both fire the same directive. It is consumed here,
   // before the conversation is persisted below, which is what makes a retry
@@ -587,10 +632,15 @@ export async function startDmTurn(campaignId: string) {
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
     await answerOutOfCharacter(campaign, conversation);
-    return;
+    return null;
   }
 
+  // A stop asked for while the scene was being set ends the turn here,
+  // before it has a row or a model call.
+  assertJobLive();
   const turn = createDmTurn(campaignId, conversation);
+  opening.turn = turn;
+  bindJobTurn(turn.id);
   // The narration holds its place from the start, not only once words are on
   // screen: a move posted while the model is still thinking was not in this
   // prompt, so it belongs after this turn's narration, and it is still the
@@ -598,13 +648,37 @@ export async function startDmTurn(campaignId: string) {
   // answer (src/lib/dm/narration-slot.ts).
   narrationShown(campaignId, turn.id);
   // buildDmMessages fills this in on the state object it was handed, so the
-  // trace is carried onto the turn row rather than recomputed.
-  turn.contextTrace = promptState.contextTrace ?? null;
+  // trace is carried onto the turn row rather than recomputed. What the turn
+  // changed for the model rides with it, for the Context panel.
+  const tuning = dmTurnTuning(campaign);
+  turn.contextTrace = promptState.contextTrace
+    ? { ...promptState.contextTrace, ...(tuning.notes.length ? { tuning: tuning.notes } : {}) }
+    : null;
   // Remember which player whispers this turn's prompt carries; finalize()
   // marks them answered only when the turn succeeds.
   turn.playerWhisperIds = pendingWhispers.map((whisper) => whisper.id);
   saveDmTurn(turn);
-  await advance(context, turn);
+  return { context, turn };
+}
+
+// A turn that failed or was stopped before its first model call. A stop
+// (the lead's button, a rewind, the watchdog) says why in its own words; an
+// error is logged whole and the table reads which step it broke on. A turn
+// the queue already gave up on has had its notice written there.
+function haltOpeningTurn(campaignId: string, opening: OpeningTurn, error: unknown) {
+  const stopped = error instanceof DmJobStopped ? error.reason : null;
+  if (!stopped) {
+    console.error(`[dm-turn] campaign ${campaignId}: the turn failed while ${describeStage(opening.stage).toLowerCase()}, before the model was asked`, error);
+  }
+  if (jobAbandoned()) {
+    return;
+  }
+  const reason = stopped ?? unbuiltReason(opening.stage);
+  if (opening.turn && opening.turn.status === "running") {
+    haltDmTurn(campaignId, opening.turn, reason, takeNarrationSeq(campaignId, opening.turn.id));
+    return;
+  }
+  haltUnbuiltTurn(campaignId, reason);
 }
 
 export async function resumeDmTurn(campaignId: string, turnId: string) {
@@ -700,12 +774,22 @@ export async function reenterDmTurn(campaign: Campaign, turn: DmTurn) {
 // a DM that never speaks. Any unexpected throw now finalizes the turn at
 // once. Parked turns return with status 'awaiting_rolls' and are left alone.
 async function advance(context: TurnContext, turn: DmTurn) {
+  bindJobTurn(turn.id);
   try {
     await runAdvance(context, turn);
   } catch (error) {
-    console.error("[dm-turn] advance failed", error);
+    // A stop (the lead's button, a rewind, the watchdog) halts the turn in
+    // its own words. One the queue already gave up on had its notice
+    // written there, and writes nothing more.
+    const stopped = error instanceof DmJobStopped ? error.reason : null;
+    if (!stopped) {
+      console.error("[dm-turn] advance failed", error);
+    }
+    if (jobAbandoned()) {
+      return;
+    }
     if (turn.status === "running") {
-      finalize(context, turn, "The Dungeon Master hit an internal error and had to stop this turn.", []);
+      finalize(context, turn, stopped ?? "The Dungeon Master hit an internal error and had to stop this turn.", []);
     } else {
       setDmStatus(context.campaign.id, "idle");
     }
@@ -790,8 +874,18 @@ export function dmTurnTools(
 // An agent program is handed the whole catalogue once, in and out of a fight
 // alike (dmTurnToolCatalogue), so that is what it is charged.
 export function dmTurnToolTokens(campaign: Campaign): number {
+  return toolSetTokens(campaign, dmTurnTuning(campaign).leanTools);
+}
+
+// What the turn changes for the table's model: the trimmed tool set on a
+// window the full set would crowd, no thinking request for a model that does
+// not reason (src/lib/dm/model-tuning-logic.ts). Judged against the full set.
+export function dmTurnTuning(campaign: Campaign): ModelTuning {
+  return modelTuningFor(campaign, toolSetTokens(campaign, false));
+}
+
+function toolSetTokens(campaign: Campaign, leanTools: boolean): number {
   const imageEnabled = campaign.settings.imageGenerationEnabled && campaign.settings.autoImages;
-  const leanTools = process.env.DM_LEAN_TOOLS === "1";
   if (campaign.settings.textProvider === "harness") {
     return estimateTokens(JSON.stringify(toMcpTools(dmTurnToolCatalogue(campaign, imageEnabled, leanTools))));
   }
@@ -843,9 +937,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
   const imageEnabled =
     campaign.settings.imageGenerationEnabled && campaign.settings.autoImages;
-  // DM_LEAN_TOOLS=1 trims the mutation tools if the model's tool fidelity
-  // suffers under the full set.
-  const leanTools = process.env.DM_LEAN_TOOLS === "1";
+  // The trimmed tool set and the thinking request follow the model
+  // (dmTurnTuning); DM_LEAN_TOOLS and DM_THINKING in the environment still
+  // decide when set.
+  const tuning = dmTurnTuning(campaign);
+  const leanTools = tuning.leanTools;
   // Chapters close on story progress, not message volume: the DM reports a
   // finished beat with complete_beat and that ends the chapter. One per
   // advance() run, so a single reply can never burn several beats.
@@ -899,6 +995,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     settleDraft();
+    // A stopped turn makes no further call: it unwinds into its halted
+    // notice (advance) with whatever it already applied kept.
+    assertJobLive();
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
     // Rebuilt each iteration (see dmTurnTools).
     const inEncounter = Boolean(getActiveEncounter(campaignId));
@@ -925,7 +1024,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // narrates right past its tools (0/11 tool calls in live combat);
       // with it, rolls and encounters fire reliably. The forced-narration
       // final call skips it to keep turns snappy. DM_THINKING=0 disables.
-      thinking: !finalCall && process.env.DM_THINKING !== "0",
+      thinking: !finalCall && tuning.thinking,
       onDelta: (text) => {
         const visible = filter.push(text);
         if (visible) {
@@ -950,6 +1049,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
     batcher.push(filter.flush());
     batcher.flush();
+    setJobStage("resolving");
     if (process.env.DM_DEBUG) {
       console.log(
         `[dm-debug] call ${turn.callIndex}: content=${JSON.stringify(String(message?.content ?? "").slice(0, 300))} tool_calls=${JSON.stringify(message?.tool_calls ?? null).slice(0, 500)}`,
@@ -1560,8 +1660,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // disagree. Its reads also say who speaks the narration's lines.
     spoken = await enforceEngineBoundary(campaign, turn, sheets, partReads);
   }
+  // A turn the queue gave up on writes nothing if it ever wakes: its notice
+  // is already in the transcript (src/lib/dm/turn-halt.ts).
+  if (jobAbandoned()) {
+    throw new DmJobStopped("the turn was abandoned.");
+  }
   finalize(context, turn, failed, spoken);
   if (!failed) {
+    setJobStage("closing_chapter");
     await maybeCloseChapter(campaignId, { beatCompleted, beatGated, beatClaimed });
     if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
       compactHistoryInBackground(campaignId);
@@ -2182,30 +2288,9 @@ function emptyTurnPlayer(context: TurnContext): EmptyTurnPlayer | null {
   };
 }
 
-// A turn that could not finish: the "DM ran into a problem" notice, and the
-// row parked as failed with its conversation intact. `claimed` is the place
-// a player's reply made the narration take, when one did
-// (src/lib/dm/narration-slot.ts). Also what a starting server writes for a
-// turn the last process was running when it stopped
-// (src/lib/dm/restart-recovery.ts).
-export function haltDmTurn(campaignId: string, turn: DmTurn, failed: string, claimed: number | null = null) {
-  const seq = claimed ?? allocateSeq(campaignId);
-  const message = insertCampaignMessage({
-    campaignId,
-    seq,
-    authorType: "system",
-    glyph: "cue-bell",
-    content: `${DM_HALTED_PREFIX}${failed}`,
-    // Link the notice to the halted turn so the lead can retry it from its
-    // persisted conversation (src/lib/dm/retry-turn.ts) instead of retyping
-    // the action, which would duplicate it in the transcript.
-    dmTurnId: turn.id,
-  });
-  publishWithSeq(campaignId, claimed === null ? seq : allocateSeq(campaignId), "message_added", { message });
-  setDmStatus(campaignId, "idle");
-  turn.status = "failed";
-  saveDmTurn(turn);
-}
+// The halted notice lives beside the queue's own halts
+// (src/lib/dm/turn-halt.ts); restart recovery still reaches it here.
+export { haltDmTurn };
 
 function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: readonly SpokenLine[]) {
   const campaignId = context.campaign.id;

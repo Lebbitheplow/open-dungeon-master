@@ -137,6 +137,19 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
             </div>
           </div>
 
+          {trace.tuning?.length ? (
+            <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="tuning-trace">
+              <span className="whitespace-nowrap font-medium text-amber-200">Fitted to this model</span>
+              <ul className="mt-1 space-y-0.5">
+                {trace.tuning.map((line) => (
+                  <li key={line} className="text-[11px] text-stone-400">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {trace.arc ? (
             <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="arc-trace">
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">

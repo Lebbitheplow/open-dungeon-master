@@ -392,6 +392,31 @@ for (const viewport of ["desktop", "laptop", "phone"]) {
   closing[viewport] = table.id;
 }
 
+// A table per viewport for the DM's Stop (issue 383): its turn runs against
+// a model the scenario starts and never lets answer.
+const stopTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `Stop Table (${viewport})`,
+    description: "A table whose storyteller never answers.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The ferry waits at the pier, its lantern hissing in the fog.",
+  });
+  stopTables[viewport] = table.id;
+}
+
 for (const user of [world.owner, player, ...tourAccounts]) {
   setUserPassword(user.id, await hashPassword(PASSWORD), false);
 }
@@ -430,6 +455,7 @@ const ids = {
   prepSourceId: prepSource.id,
   prepSourceTitle: PREP_SOURCE_TITLE,
   closing,
+  stopTables,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [world.campaignId]: TITLE,
@@ -439,6 +465,7 @@ const ids = {
     [tourTable.id]: TOUR_TITLE,
     [prepSource.id]: PREP_SOURCE_TITLE,
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
   },
   systemLine,
   oocQuestion,

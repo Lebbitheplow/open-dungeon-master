@@ -105,11 +105,15 @@ export async function readBody(response: Response, max: number): Promise<{ text:
 // Reads an upstream streaming body line by line with an idle timeout that
 // resets on every chunk, so a stalled model server can't hold the turn open
 // forever while a slow-but-alive one is given all the time it needs.
+// `onChunk` hears every chunk too: the DM queue's watchdog counts a stream
+// that is still arriving (reasoning included) as progress
+// (src/lib/dm/job-control.ts).
 export async function forEachStreamLine(
   upstream: Response,
   idleMs: number,
   onIdleAbort: () => void,
   onLine: (line: string) => void,
+  onChunk?: () => void,
 ) {
   const reader = upstream.body!.getReader();
   const decoder = new TextDecoder();
@@ -129,6 +133,7 @@ export async function forEachStreamLine(
         break;
       }
       resetIdle();
+      onChunk?.();
       total += value.byteLength;
       if (total > MAX_BACKEND_STREAM_BYTES) {
         await reader.cancel().catch(() => {});

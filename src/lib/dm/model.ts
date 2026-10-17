@@ -7,6 +7,9 @@ import {
   type UpstreamResult,
 } from "@/lib/model-client";
 import { requestHarnessMessage } from "@/lib/harness/bridge";
+import { harnessConfig } from "@/lib/harness/status";
+import { raceJobStop, withJobStage } from "@/lib/dm/job-control";
+import { MODEL_STAGE_GRACE_MS } from "@/lib/dm/job-stage-logic";
 import { paidAiAllowedNow, paidAiRefusalResponse } from "@/lib/shared-host";
 import { recordUsage } from "@/lib/usage/ledger";
 import type { StorySettings } from "@/lib/types";
@@ -37,6 +40,22 @@ async function metered(
   return result;
 }
 
+// An agent program's reply, as a stage of the DM job it runs in. The program
+// cannot be aborted mid-reply, so a stopped job stops waiting on it; the
+// turn's own cleanup ends the program (releaseHarnessConversation).
+function harnessCall(
+  messages: ChatMessage[],
+  options: ChatRequestOptions,
+  context: Parameters<typeof requestHarnessMessage>[2],
+): Promise<UpstreamResult> {
+  const timeoutMs = options.timeoutMs ?? harnessConfig().turnTimeoutSec * 1_000;
+  return withJobStage("waiting_model", timeoutMs + MODEL_STAGE_GRACE_MS, () =>
+    raceJobStop(requestHarnessMessage(messages, options, context), (reason) => ({
+      error: Response.json({ error: reason, code: "stopped" }, { status: 499 }),
+    })),
+  );
+}
+
 function paidAndRefused(baseUrl: string, apiKey: string): boolean {
   return customBackendIsPaid(baseUrl, apiKey) && !paidAiAllowedNow();
 }
@@ -51,7 +70,7 @@ export function requestDmMessage(
     // The agent policy (src/lib/harness/policy.ts) answers for the agent
     // program, inside the bridge.
     return metered("story", () =>
-      requestHarnessMessage(messages, options, {
+      harnessCall(messages, options, {
         role: "story",
         campaignId: options.harness?.campaignId,
         catalogue: options.harness?.catalogue,
@@ -98,7 +117,7 @@ export async function requestUtilityMessage(
     settings.utilityProvider === "harness" ||
     (settings.textProvider === "harness" && !model)
   ) {
-    return metered("utility", () => requestHarnessMessage(messages, options, { role: "utility" }));
+    return metered("utility", () => harnessCall(messages, options, { role: "utility" }));
   }
   if (!model) {
     return requestDmMessage(settings, messages, options);

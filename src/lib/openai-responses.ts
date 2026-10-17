@@ -235,6 +235,7 @@ export async function readResponsesReply(
     onReasoningDelta?: StreamDeltaHandler;
     idleMs: number;
     onIdleAbort: () => void;
+    onChunk?: () => void;
   },
 ): Promise<ResponsesReply> {
   const { onDelta } = options;
@@ -315,7 +316,7 @@ export async function readResponsesReply(
         default:
           break;
       }
-    });
+    }, options.onChunk);
     if (failure) {
       return { failure };
     }

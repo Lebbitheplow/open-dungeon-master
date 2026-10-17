@@ -49,6 +49,7 @@ import { formatCopper } from "@/lib/srd/currency";
 import { coverPromptBlock } from "@/lib/dm/delegation";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
 import { normalizeGm, normalizeSafety, renderGmBlock, renderSafetyBlock } from "@/lib/dm/safety-logic";
+import { renderNarrationStyle } from "@/lib/dm/narration-style-logic";
 import { renderChapterLod } from "@/lib/dm/chapter-lod";
 import { buildPinnedMemoriesBlock } from "@/lib/dm/pin-logic";
 import {
@@ -97,6 +98,10 @@ export function buildDmSystem(campaign: Campaign, settingsRules: readonly string
   const gmBlock = renderGmBlock(normalizeGm(campaign.gameSettings.gm));
   if (gmBlock) {
     parts.push(gmBlock);
+  }
+  const styleBlock = renderNarrationStyle(campaign.gameSettings.narrationLength, campaign.gameSettings.styleNotes);
+  if (styleBlock) {
+    parts.push(styleBlock);
   }
   if (preset.dmFlavor) {
     parts.push(preset.dmFlavor);
