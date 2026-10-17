@@ -10,7 +10,8 @@ import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-world-use-in-campaign");
 const { runContentImport, planContentImport } = await import("../src/lib/db/content-import.ts");
-const { createWorldEntity, getWorldDoc, saveWorldDoc, worldView } = await import("../src/lib/db/world-forge.ts");
+const { createWorldEntity, getWorldDoc, saveWorldDoc, updateWorldEntity, worldView } = await import("../src/lib/db/world-forge.ts");
+const { createHomebrew, listHomebrew } = await import("../src/lib/db/homebrew.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
 const { listFactions } = await import("../src/lib/db/factions.ts");
 const { listNpcs } = await import("../src/lib/db/npcs.ts");
@@ -147,6 +148,43 @@ await test("The import route sends back what it used to drop: the monsters nothi
   const json = await response.json();
   assert.equal(response.status, 200, JSON.stringify(json));
   assert.deepEqual(json.unresolved, ["Nonexistent Wraithling"]);
+});
+
+await test("A World entry's links to another author's monster and item arrive working: both are copied into the table's own shelves and the links point at the copies.", () => {
+  const wyrm = createHomebrewMonster(author.id, draftFromCr("Tidewyrm", 4), "Coils under the wall.");
+  const lantern = createHomebrew(author.id, { kind: "item", name: "Drowned Lantern", data: { desc: "It burns under water." } });
+  const source = createWorkshop(author.id, { title: "Linked world" }).id;
+  const article = createWorldEntity(source, { typeId: "t_other", name: "The Tidewyrm", text: "It coils under the sea wall." }).entity;
+  const linked = updateWorldEntity(source, article.ref, { bindings: [{ kind: "monster", ref: `homebrew:${wyrm.id}` }, { kind: "item", ref: `homebrew:${lantern.id}` }] });
+  assert.ok(linked.entity, linked.error);
+  const target = createWorkshop(recipient.id, { title: "Linked table" }).id;
+
+  const plan = planContentImport(source, target, ["world"]);
+  const notes = plan.notes.map((note) => note.message).join(" ");
+  assert.match(notes, /hand-built monster \(Tidewyrm\) is copied into this table's bestiary/);
+  assert.match(notes, /hand-built item \(Drowned Lantern\) is copied into this table's Homebrew/);
+
+  const outcome = runContentImport({ sourceId: source, campaignId: target, selection: ["world"], houseRulesMode: "replace" });
+  assert.ok(!outcome.error, outcome.error);
+  assert.deepEqual(outcome.monstersBrought, ["Tidewyrm"]);
+  assert.deepEqual(outcome.itemsBrought, ["Drowned Lantern"]);
+  const copy = worldView(target).entities.find((entity) => entity.name === "The Tidewyrm");
+  assert.deepEqual(copy.bound.map((record) => [record.kind, record.name, record.found]), [["monster", "Tidewyrm", true], ["item", "Drowned Lantern", true]]);
+  assert.ok(copy.bound.every((record) => !record.ref.includes(wyrm.id) && !record.ref.includes(lantern.id)), "a link still points at the other author's record");
+  assert.ok(listHomebrew(recipient.id, "item").some((item) => item.name === "Drowned Lantern"));
+});
+
+await test("The same author's links need nothing copied: they already work at the table.", () => {
+  const ooze = createHomebrewMonster(author.id, draftFromCr("Silt Ooze", 1), "");
+  const source = createWorkshop(author.id, { title: "Own world" }).id;
+  const article = createWorldEntity(source, { typeId: "t_other", name: "The Silt Ooze" }).entity;
+  updateWorldEntity(source, article.ref, { bindings: [{ kind: "monster", ref: `homebrew:${ooze.id}` }] });
+  const target = createWorkshop(author.id, { title: "Own table" }).id;
+  const outcome = runContentImport({ sourceId: source, campaignId: target, selection: ["world"], houseRulesMode: "replace" });
+  assert.equal(outcome.monstersBrought, undefined);
+  const copy = worldView(target).entities.find((entity) => entity.name === "The Silt Ooze");
+  assert.equal(copy.bound[0].ref, `homebrew:${ooze.id}`);
+  assert.equal(copy.bound[0].found, true);
 });
 
 world.close();

@@ -27,7 +27,7 @@ import {
 } from "@/lib/db/content-copy";
 import { getCommonWorkshop } from "@/lib/db/workshop-common";
 import { getWorldDoc, hasWorldDoc } from "@/lib/db/world-forge";
-import { bringMonsters, foreignMonsters, monsterRefsOf } from "@/lib/db/import-monsters";
+import { boundRefsOf, bringItems, bringMonsters, foreignItems, foreignMonsters, monsterRefsOf } from "@/lib/db/import-monsters";
 import { parseRef } from "@/lib/worldforge/model";
 import { copyWorldDoc } from "@/lib/db/world-forge-io";
 import { normalizeStock } from "@/lib/db/shops";
@@ -316,11 +316,12 @@ export function planContentImport(
     worldFacts: chosen.includes("world") ? worldFactsOf(sourceId) : undefined,
     // The hand-built monsters the travelling NPCs and fights name that this
     // table's authors do not have, copied in on import (src/lib/db/import-monsters.ts).
-    foreignMonsters: foreignMonsters(
-      sourceId,
-      campaignId,
-      monsterRefsOf(sourceId, { npcs: chosen.includes("npcs"), encounters: chosen.includes("encounters") }),
-    ).map((monster) => monster.entry.name),
+    foreignMonsters: foreignMonsters(sourceId, campaignId, [
+      ...monsterRefsOf(sourceId, { npcs: chosen.includes("npcs"), encounters: chosen.includes("encounters") }),
+      // And the ones a World entry links to (WF-17), when the world travels.
+      ...(chosen.includes("world") ? boundRefsOf(sourceId, "monster") : []),
+    ]).map((monster) => monster.entry.name),
+    foreignItems: chosen.includes("world") ? foreignItems(sourceId, campaignId, boundRefsOf(sourceId, "item")).map((item) => item.entry.name) : undefined,
   });
 }
 
@@ -347,6 +348,10 @@ export type ImportOutcome = {
   // fights that name them, and the owner's identical ones reused (WF-07).
   monstersBrought?: string[];
   monstersReused?: string[];
+  // Hand-built items a World entry links to, copied into this table's
+  // Homebrew, and the owner's identical ones reused (WF-17).
+  itemsBrought?: string[];
+  itemsReused?: string[];
 };
 
 // Copies the planned rows. One transaction, so a constraint the planner
@@ -547,7 +552,10 @@ export function runContentImport(input: {
   // First, the hand-built monsters the copied rows need, brought into this
   // table's bestiary when its authors do not have them (WF-07).
   const ids = (kind: string) => [...idMap].filter(([key]) => key.startsWith(`${kind}:`)).map(([, id]) => id);
-  const monsters = bringMonsters(sourceId, campaignId, { npcs: ids("npcs"), encounters: ids("encounters") });
+  const travelled = selected.has("world") && hasWorldDoc(sourceId);
+  const monsters = bringMonsters(sourceId, campaignId, { npcs: ids("npcs"), encounters: ids("encounters") }, travelled);
+  // The items a World entry links to travel the same way (WF-17).
+  const items = travelled ? bringItems(sourceId, campaignId) : { brought: [], reused: [] };
   const unresolved = unresolvedMonsters(campaignId);
   return {
     plan,
@@ -560,6 +568,8 @@ export function runContentImport(input: {
     ...(unresolved.length ? { unresolved } : {}),
     ...(monsters.brought.length ? { monstersBrought: monsters.brought } : {}),
     ...(monsters.reused.length ? { monstersReused: monsters.reused } : {}),
+    ...(items.brought.length ? { itemsBrought: items.brought } : {}),
+    ...(items.reused.length ? { itemsReused: items.reused } : {}),
   };
 }
 
