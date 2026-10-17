@@ -12,6 +12,7 @@ import { placementOf } from "@/lib/dm/prep-logic";
 import { typeFor } from "@/lib/worldforge/model";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { accountOf } from "@/lib/worldforge/account";
+import { canonNote, eventsInOrder, yearOf } from "@/lib/worldforge/canon";
 
 // search_lore: the DM's world-knowledge search. One query runs against
 // every canon source at once: the lead's world lore entries, the
@@ -323,13 +324,14 @@ function worldForgeCandidates(campaignId: string, category: string): LoreCandida
   }
   if (category === "any" || category === "history") {
     const nameOf = new Map(entities.map((entity) => [entity.ref, entity.name]));
-    for (const event of doc.events.filter((entry) => entry.canon !== "retired")) {
+    for (const event of eventsInOrder(doc.events, doc.calendars)) {
       const names = event.refs.map((ref) => nameOf.get(ref)).filter(Boolean).join(", ");
+      const note = canonNote(event.canon);
       out.push({
         id: `world-event:${event.id}`,
-        source: "worldforge timeline",
-        ref: `${event.when.year ? `${event.when.year}: ` : ""}${event.title}`,
-        text: `${event.body}${names ? ` (involves ${names})` : ""}`.slice(0, TEXT_CLIP),
+        source: event.canon === "canon" ? "worldforge timeline" : `worldforge timeline (${event.canon})`,
+        ref: `${yearOf(event, doc.calendars)}: ${event.title}`,
+        text: `${note ? `[${note}] ` : ""}${event.body}${names ? ` (involves ${names})` : ""}`.slice(0, TEXT_CLIP),
         haystack: `${event.title} ${event.era} ${event.body} ${names}`,
         embedding: null,
       });

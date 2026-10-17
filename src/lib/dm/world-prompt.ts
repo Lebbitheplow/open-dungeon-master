@@ -1,5 +1,6 @@
 import { hasWorldDoc, worldView, type WorldEntity } from "@/lib/db/world-forge";
 import { typeFor, type FieldValue, type WorldDoc } from "@/lib/worldforge/model";
+import { establishedSecrets, eventLine, eventsInOrder } from "@/lib/worldforge/canon";
 import { accountOf } from "@/lib/worldforge/account";
 import { foldName, wordPositions } from "@/lib/language/text-logic";
 
@@ -118,10 +119,11 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   for (const { entity } of scored.slice(0, RELEVANT_MAX)) {
     const article = accountOf(entity);
     const fields = fieldsLine(doc, entity);
-    const events = doc.events
-      .filter((event) => event.refs.includes(entity.ref) && event.canon !== "retired")
+    // Its two latest events by the world's own dates, each with its status
+    // when it is not canon (src/lib/worldforge/canon.ts).
+    const events = eventsInOrder(doc.events, doc.calendars, { refs: [entity.ref] })
       .slice(-2)
-      .map((event) => `${event.when.year ? `${event.when.year}: ` : ""}${event.title}${event.body ? ` (${cut(event.body, 100)})` : ""}`);
+      .map((event) => eventLine(event, doc.calendars, 100));
     const status = entity.entry.canon === "canon" ? "" : ` [${entity.entry.canon}: not canon yet, use only if it fits]`;
     const parts = [
       article ? cut(article.replace(/\s+/g, " "), ARTICLE_MAX) : "",
@@ -149,7 +151,13 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   for (const entity of truths.slice(0, 6)) {
     lines.push(`- ${entity.name}: ${cut(entity.entry.hiddenTruth, 140)}`);
   }
-  if (!inPlay.length && !lines.length) {
+  // What the party has learned is established: the DM may say it plainly
+  // (src/lib/worldforge/canon.ts establishedSecrets).
+  const learned = establishedSecrets(doc.secrets)
+    .sort((a, b) => Number(aboutPlay([b.subject, ...b.knownBy])) - Number(aboutPlay([a.subject, ...a.knownBy])))
+    .slice(0, 6)
+    .map((secret) => `- ${secret.title}${secret.subject ? ` (about ${nameOf(secret.subject)})` : ""}${secret.notes ? `: ${cut(secret.notes, 140)}` : ""}`);
+  if (!inPlay.length && !lines.length && !learned.length) {
     return { npcNotes, block: "" };
   }
   let block = "";
@@ -161,6 +169,10 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   if (inPlay.length) {
     add("From the world's WorldForge, about who and what is in play now (the article is what the world knows and may surface as the party learns it; anything marked secretly is the DM's):");
     for (const line of inPlay) if (!add(line)) break;
+  }
+  if (learned.length) {
+    add("From the world's WorldForge, what the party has learned (established now; the table knows it):");
+    for (const line of learned) if (!add(line)) break;
   }
   if (lines.length) {
     add("From the world's WorldForge (DM-only; the party has not learned these, so let them surface through play and never state them outright):");

@@ -223,7 +223,11 @@ await test("The AI DM is told the hidden truths, ties and secrets, marked as its
   updateWorldEntity(world.campaignId, worldView(world.campaignId).entities.find((entry) => entry.name === "Ivo Brannock").ref, {});
   const doc = worldView(world.campaignId).doc;
   patchWorldDoc(world.campaignId, { secrets: doc.secrets.map((secret) => ({ ...secret, partyKnows: true })) });
-  assert.doesNotMatch(worldForPrompt(world.campaignId).block, /Ivo is the leak/, "a secret the party learned is still offered as a secret");
+  // Learned, it is established knowledge (WF-14): said as what the party
+  // knows, never again as a secret to keep.
+  const learned = worldForPrompt(world.campaignId).block;
+  assert.doesNotMatch(learned, /Secret: Ivo is the leak/, "a secret the party learned is still offered as a secret");
+  assert.match(learned, /what the party has learned[^]*Ivo is the leak/, "a learned secret is not given as established");
 });
 
 await test("An entry the newest messages name is in play, found by Unicode letters in any language.", () => {

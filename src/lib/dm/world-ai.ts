@@ -12,9 +12,10 @@ import { copyIntoUploads, whenImagesAvailable } from "@/lib/portrait";
 import { updateWorldEntity, worldView } from "@/lib/db/world-forge";
 import { askMessages, draftMessages, forgeMessages, paintPrompt, readForgeReply, replyJson, worldDigest, type ForgePreview } from "@/lib/worldforge/forge";
 import { mentionSegments } from "@/lib/worldforge/text";
-import { fieldLines, formatYear, sortEvents } from "@/lib/worldforge/time";
+import { fieldLines } from "@/lib/worldforge/time";
 import { parseRef, typeFor } from "@/lib/worldforge/model";
 import { recordsChanged } from "@/lib/workshop/record-events";
+import { eventLine, eventsInOrder } from "@/lib/worldforge/canon";
 import { accountOf } from "@/lib/worldforge/account";
 
 // WorldForge's AI tools against the workshop's own models: the forge (notes
@@ -70,9 +71,9 @@ export async function draftEntry(campaign: Campaign, ref: string, hint: string):
       .filter((link) => link.veracity !== "hidden" && (link.from === ref || (link.to === ref && !link.oneway)))
       .slice(0, 12)
       .map((link) => (link.from === ref ? `${entity.name} ${link.label} ${nameOf.get(link.to)}` : `${nameOf.get(link.from)} ${link.label} ${entity.name}`)),
-    ...sortEvents(doc.events.filter((event) => event.refs.includes(ref)), doc.calendars)
+    ...eventsInOrder(doc.events, doc.calendars, { refs: [ref] })
       .slice(0, 8)
-      .map((event) => `Event, ${formatYear(event.when, doc.calendars).primary || "undated"}: ${event.title}`),
+      .map((event) => `Event, ${eventLine(event, doc.calendars, 0)}`),
   ].filter(Boolean);
   const reply = await ask(
     campaign,
