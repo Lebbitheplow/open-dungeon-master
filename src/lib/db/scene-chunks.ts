@@ -118,3 +118,14 @@ export function listSceneChunksForChapters(
     .all(campaignId, ...chapterIds) as RawRow[];
   return rows.map(mapRow);
 }
+
+// The peak importance of each sealed chapter's scenes, by chapter id: what
+// the chapter index's level of detail weighs (src/lib/dm/chapter-lod.ts), so
+// a chapter holding a death or an oath keeps its full summary longer than a
+// quiet one of the same age.
+export function peakImportanceByChapter(campaignId: string): Map<string, number> {
+  const rows = getDatabase()
+    .prepare(`SELECT chapter_id AS chapterId, MAX(importance) AS peak FROM scene_chunks WHERE campaign_id = ? GROUP BY chapter_id`)
+    .all(campaignId) as Array<{ chapterId: string | null; peak: number | null }>;
+  return new Map(rows.flatMap((row) => (row.chapterId && typeof row.peak === "number" ? [[row.chapterId, row.peak] as const] : [])));
+}

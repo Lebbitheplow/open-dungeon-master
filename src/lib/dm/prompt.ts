@@ -271,6 +271,9 @@ export type DmGameState = {
   // section 15).
   skyLine?: string;
   questsBlock?: string;
+  // The pinned memories as rendered, costed on their own in the trace: they
+  // are never dropped, so a small window shows what they hold of it.
+  pinsBlock?: string;
   // A one-turn steer the party lead armed (src/lib/dm/director-logic.ts).
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
@@ -1064,7 +1067,8 @@ export function buildGameStateBlock(state: DmGameState): string {
     // Unconditional and unfiltered by design: the table asked for these to be
     // in front of the DM every turn. The cap that makes that safe is enforced
     // when a pin is created (src/lib/dm/pin-logic.ts), not here.
-    sections.push(buildPinnedMemoriesBlock(state.pins));
+    state.pinsBlock = buildPinnedMemoriesBlock(state.pins);
+    sections.push(state.pinsBlock);
   }
   if (state.chapters?.length) {
     // Level-of-detail rather than a flat list: recent and high-importance
@@ -1569,7 +1573,7 @@ export function buildDmMessages(
       ...systemParts.map((text, index) => {
         const last = index === systemParts.length - 1;
         const carved = last
-          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0)
+          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock, state.pinsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0)
           : index === 0
             ? safetyTokens
             : 0;
@@ -1601,6 +1605,21 @@ export function buildDmMessages(
           reason: kind === "shop" ? "only while a shop is open here" : "inside the game state, under its own floor",
           position: systemParts.length + 1 + index,
         })),
+      // What the table pinned rides whole on every turn, at most PIN_TOKEN_CAP
+      // (src/lib/dm/pin-logic.ts): shown on its own so a small window says
+      // what it costs there.
+      ...(state.pinsBlock
+        ? [
+            {
+              id: "pins",
+              kind: "state" as BlockKind,
+              tokens: estimateTokens(state.pinsBlock),
+              included: true,
+              reason: "pinned memories: always kept, never dropped for room; unpin one to free it",
+              position: systemParts.length + 5,
+            },
+          ]
+        : []),
       {
         id: "history",
         kind: "history" as BlockKind,

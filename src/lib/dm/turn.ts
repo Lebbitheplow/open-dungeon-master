@@ -49,6 +49,7 @@ import { casts, ruleContextFor } from "@/lib/dm/rule-context";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { groupGuidance, tracksAmmunition, type RuleContext } from "@/lib/dm/prompt-rules";
 import { getMounts } from "@/lib/db/mounts";
+import { peakImportanceByChapter } from "@/lib/db/scene-chunks";
 import { getSceneTracker } from "@/lib/db/scene-tracker";
 import { listQuests } from "@/lib/db/quests";
 import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
@@ -581,6 +582,7 @@ async function openTurn(
       legendary: Boolean(signals.legendary),
     });
   }
+  const chapterImportance = peakImportanceByChapter(campaignId);
   const promptState: DmGameState = {
       campaign,
       ruleContext,
@@ -658,6 +660,9 @@ async function openTurn(
           // The full sealed summary; the LOD renderer decides per chapter
           // whether the prompt gets all of it or just its first sentence.
           summary: chapter.summary || chapter.highlights[0] || "",
+          // Its scenes' peak importance, which keeps an eventful chapter in
+          // full longer (src/lib/dm/chapter-lod.ts effectiveAge).
+          importance: chapterImportance.get(chapter.id),
         })),
       publicNotes: listPublicCampaignNotes(campaignId, 10).map((note) => ({
         pinned: note.pinned,
