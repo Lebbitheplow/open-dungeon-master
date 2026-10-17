@@ -7,7 +7,7 @@ import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { Wizard, type WizardNotice, type WizardStep } from "@/components/ui/Wizard";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { useEffectsRoot } from "@/lib/effects-mode";
+import { prefersStillMotion, useEffectsRoot } from "@/lib/effects-mode";
 import type { Genre } from "@/lib/schemas/game-settings";
 import type { Ability, CreateSheetInput } from "@/lib/schemas/sheet";
 import { SRD_SKILLS } from "@/lib/srd";
@@ -314,7 +314,9 @@ function CharacterBuilderForm({
     if (!found) {
       return;
     }
-    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Smooth only when the device allows motion: the system setting or the
+    // app's own Effects setting can each ask for a jump instead.
+    const still = prefersStillMotion();
     found.scrollIntoView({ block: "start", inline: "nearest", behavior: still ? "auto" : "smooth" });
     found.removeAttribute("data-flash");
     void found.offsetWidth;

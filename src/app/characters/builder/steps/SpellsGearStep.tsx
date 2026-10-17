@@ -132,6 +132,8 @@ function SpellsSection({
   const cantripCap = cantripAdvice;
   const spellCap = spellAdvice?.count ?? null;
   const bookCap = spellbookAdvice;
+  // The working behind a prepared caster's count, said with the limit.
+  const limitWhy = spellAdvice?.formula ? `: ${spellAdvice.formula}` : "";
   const wizard = spellStyle === "spellbook";
   // A wizard fills the book first, then prepares from it.
   const [phase, setPhase] = useState<"book" | "prepare">("book");
@@ -197,7 +199,7 @@ function SpellsSection({
       setLimitNote(
         wizard
           ? `Your spellbook starts with ${cap} spells. Remove one to write in ${name}.`
-          : `You already have ${cap} ${spellAdvice?.label ?? "spells"}. Remove one to choose ${name}.`,
+          : `You already have ${cap} ${spellAdvice?.label ?? "spells"}${limitWhy}. Remove one to choose ${name}.`,
       );
       return;
     }
@@ -214,7 +216,7 @@ function SpellsSection({
       return;
     }
     if (spellCap !== null && chosenPrepared.length >= spellCap) {
-      setLimitNote(`You can prepare ${spellCap} spells. Unprepare one to prepare ${name}.`);
+      setLimitNote(`You can prepare ${spellCap} spells${limitWhy}. Unprepare one to prepare ${name}.`);
       return;
     }
     setBookPrepared((current) => [...current, name]);
