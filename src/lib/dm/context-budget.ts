@@ -119,6 +119,9 @@ export type ContextTrace = {
   // for each and the block's measured budget (issue #305). Absent on turns
   // taken before it was recorded and on campaigns without lore.
   lore?: LoreTrace;
+  // The house-rule sections the prompt showed, and the always-on ones it
+  // left out for room (src/lib/dm/rules-logic.ts renderHouseRulesWithTrace).
+  houseRules?: { shown: string[]; omitted: string[] };
   // What the turn changed for the table's model, one line each (issue #383,
   // src/lib/dm/model-tuning-logic.ts). Absent when nothing was changed.
   tuning?: string[];

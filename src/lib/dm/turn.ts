@@ -539,6 +539,7 @@ async function openTurn(
       houseRulesBlock: retrieval.houseRulesBlock,
       loreBlock: retrieval.loreBlock,
       loreTrace: retrieval.loreTrace,
+      rulesTrace: retrieval.rulesTrace,
       factionsBlock: renderFactionsForPrompt(listFactions(campaign.id), getParty(campaign.id).reputation, true),
       worldBlock: world.block,
       shopsBlock: shopsBlock(campaign),

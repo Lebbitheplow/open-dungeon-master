@@ -292,6 +292,8 @@ export type DmGameState = {
   // What the world lore block kept and held back, and why (issue #305):
   // built with the block by buildTurnRetrieval, copied onto contextTrace.
   loreTrace?: LoreTrace;
+  // The house rules shown and left out, copied onto contextTrace likewise.
+  rulesTrace?: { shown: string[]; omitted: string[] };
   // Filled in by buildDmMessages: what each block cost and what was dropped.
   // Mutable on purpose, so the caller can persist it on the dm_turns row
   // without buildDmMessages changing its return type.
@@ -1510,6 +1512,7 @@ export function buildDmMessages(
   state.contextTrace = {
     ...(state.arcTrace ? { arc: state.arcTrace } : {}),
     ...(state.loreTrace ? { lore: state.loreTrace } : {}),
+    ...(state.rulesTrace && (state.rulesTrace.shown.length || state.rulesTrace.omitted.length) ? { houseRules: state.rulesTrace } : {}),
     // Where the transcript sits in the messages, so every later call of the
     // turn can be fitted again (src/lib/dm/request-fit.ts): the oldest lines
     // go first, and the turn's own calls and results from promptMessages on

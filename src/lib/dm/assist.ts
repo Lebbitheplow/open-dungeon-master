@@ -115,7 +115,7 @@ export async function suggestAdjudication(
   let suggestions: SuggestedAdjudication[] = [];
   let embedded = true;
   try {
-    const [vectors, [intentVector]] = await Promise.all([catalogVectorsOnce(), embed([intent])]);
+    const [vectors, [intentVector]] = await Promise.all([catalogVectorsOnce(), embed([intent], { query: true })]);
     suggestions = rankBySimilarity(intentVector, available, vectors, SHORTLIST).map(toSuggestion);
   } catch (error) {
     embedded = false;
