@@ -185,7 +185,7 @@ export async function readClaims(
         ),
       },
     ],
-    { timeoutMs: arcTextTimeoutMs(), thinking: false, temperature: 0 },
+    { meta: { task: "claims" }, timeoutMs: arcTextTimeoutMs(), thinking: false, temperature: 0 },
   );
   if (error) {
     console.error(`[claims] ${input.label}: the reader call failed; the passage counts as claiming nothing`);

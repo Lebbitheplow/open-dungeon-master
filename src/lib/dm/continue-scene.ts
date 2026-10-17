@@ -102,6 +102,7 @@ export async function runContinueScene(input: {
         // No tools at all on top of toolChoice "none": a continuation that
         // called a tool would resolve mechanics outside any turn.
         toolChoice: "none",
+        meta: { task: "continue_scene" },
       });
       if (error) {
         failure = "The model is unavailable; try again shortly.";

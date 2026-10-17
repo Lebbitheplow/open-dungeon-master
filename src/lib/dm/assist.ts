@@ -146,7 +146,7 @@ export async function suggestAdjudication(
           .join("\n\n"),
       },
     ],
-    { timeoutMs: arcTextTimeoutMs() },
+    { meta: { task: "assist_adjudication" }, timeoutMs: arcTextTimeoutMs() },
   );
   const parsed = error ? null : parseSuggestionJson(stripReasoningArtifacts(String(message?.content ?? "")));
   // A pick that names no action this moment allows is discarded rather than
@@ -275,7 +275,7 @@ export async function generateRollTable(
           .join("\n"),
       },
     ],
-    { timeoutMs: arcTextTimeoutMs() },
+    { meta: { task: "roll_table" }, timeoutMs: arcTextTimeoutMs() },
   );
   if (error) {
     return { entries: [], error: "The model could not be reached." };

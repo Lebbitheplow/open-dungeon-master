@@ -57,6 +57,8 @@ import {
   cutCoveredHistory,
   estimateTokens,
   fitHistory,
+  historyAllowanceTokens,
+  responseReserveTokens,
   usableTokens,
   type BlockKind,
   type ContextTrace,
@@ -275,6 +277,9 @@ export type DmGameState = {
   // contextLimitTokens; recorded so the Context panel shows them beside the
   // blocks rather than as missing room.
   toolTokens?: number;
+  // The model's whole window, for the limit the trace shows: the window less
+  // the reply reserve, never a nominal figure larger than the window.
+  windowTokens?: number;
   // Excerpts the table pinned; injected unconditionally, no relevance filter.
   pins?: Array<{ text: string }>;
   // The newest player line, for the arc render's scene cues (issue #301):
@@ -1472,25 +1477,24 @@ export function buildDmMessages(
   const gameStateBlock = buildGameStateBlock(state);
   systemParts.push(gameStateBlock);
 
-  // The transcript takes its share of the window, and never more than what
-  // the rules, the game state and the director's note leave of it: those
-  // blocks are not dropped, so when they run past their shares (a table
-  // whose heroes carry many feats, say) the history gives way, and the
-  // packed prompt stays inside the limit the trace reports.
-  const budgets = computeBudgets(state.contextLimitTokens);
+  // The transcript takes its share of the window plus what the rules, the
+  // game state and the director's note left of theirs, up to a ceiling
+  // (context-budget.ts historyAllowanceTokens), and never more than those
+  // blocks leave of the window: they are not dropped, so when they run past
+  // their shares (a table whose heroes carry many feats, say) the history
+  // gives way. The newest line is always kept, cut to fit when it alone is
+  // over. Whatever this estimate misses, the whole request is fitted again
+  // before every call (src/lib/dm/request-fit.ts).
   const fixedTokens =
     estimateTokens(systemParts.join("\n\n")) + estimateTokens(state.directorBlock ?? "");
-  const historyAllowance = Math.max(
-    0,
-    Math.min(budgets.history, usableTokens(state.contextLimitTokens) - fixedTokens),
-  );
+  const historyAllowance = historyAllowanceTokens(state.contextLimitTokens, fixedTokens);
   const fitted = fitHistory(uncovered.kept, historyAllowance);
-  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
+  const keptText = new Map(fitted.kept.map((entry) => [entry.id, entry.text]));
   const historyMessages: ChatMessage[] = uncovered.kept
-    .filter((entry) => keptIds.has(entry.id))
+    .filter((entry) => keptText.has(entry.id))
     .map((entry) => ({
       role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
-      content: entry.text,
+      content: keptText.get(entry.id) ?? entry.text,
     }));
 
   // Record what this prompt cost, block by block. Nothing here is dropped:
@@ -1502,10 +1506,18 @@ export function buildDmMessages(
   // both figures: the limit is the packing window with them added back, the
   // prompt is the messages with them added on.
   const toolTokens = state.toolTokens ?? 0;
+  const safetyTokens = estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety)));
   state.contextTrace = {
     ...(state.arcTrace ? { arc: state.arcTrace } : {}),
     ...(state.loreTrace ? { lore: state.loreTrace } : {}),
-    limitTokens: usableTokens(state.contextLimitTokens) + toolTokens,
+    // Where the transcript sits in the messages, so every later call of the
+    // turn can be fitted again (src/lib/dm/request-fit.ts): the oldest lines
+    // go first, and the turn's own calls and results from promptMessages on
+    // are never dropped.
+    shape: { historyStart: 1, historyEnd: 1 + historyMessages.length, promptMessages: 0 },
+    limitTokens: state.windowTokens
+      ? Math.max(0, state.windowTokens - responseReserveTokens(state.windowTokens))
+      : usableTokens(state.contextLimitTokens) + toolTokens,
     promptTokens:
       estimateTokens(systemParts.join("\n\n")) +
       fitted.tokens +
@@ -1514,17 +1526,23 @@ export function buildDmMessages(
     blocks: [
       // The table's lines stand at the head of the first system part; they
       // are costed on their own so the inspector shows what the limit costs.
+      // Costed on its own and taken out of the first rules row, which holds
+      // it, so the rows add up to the prompt instead of counting it twice.
       {
         id: "safety",
         kind: "safety" as BlockKind,
-        tokens: estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety))),
+        tokens: safetyTokens,
         included: true,
         reason: "always included; ordered first so it is cached",
         position: 0,
       },
       ...systemParts.map((text, index) => {
         const last = index === systemParts.length - 1;
-        const carved = last ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0) : 0;
+        const carved = last
+          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0)
+          : index === 0
+            ? safetyTokens
+            : 0;
         return {
           id: last ? "game-state" : `rules-${index}`,
           kind: (last ? "state" : "rules") as BlockKind,
@@ -1559,11 +1577,12 @@ export function buildDmMessages(
         tokens: fitted.tokens,
         included: true,
         reason:
-          uncovered.cut || fitted.dropped
+          uncovered.cut || fitted.dropped || fitted.clipped
             ? [
                 `kept ${fitted.kept.length} of ${rendered.length} messages`,
                 ...(uncovered.cut ? [`${uncovered.cut} covered by the summaries left out`] : []),
                 ...(fitted.dropped ? [`${fitted.dropped} older dropped over the history budget`] : []),
+                ...(fitted.clipped ? ["the newest cut to fit, both ends kept"] : []),
               ].join("; ")
             : `all ${fitted.kept.length} messages fit`,
         position: systemParts.length + 1,
@@ -1587,7 +1606,8 @@ export function buildDmMessages(
               kind: "tools" as BlockKind,
               tokens: toolTokens,
               included: true,
-              reason: "offered on every call; taken off the window before the blocks are packed",
+              reason:
+                "reserved for the larger of the turn's tool sets (a fight can start mid-turn); what each call actually sent is under Calls",
               position: systemParts.length + 3,
             },
           ]
@@ -1597,7 +1617,7 @@ export function buildDmMessages(
 
   const system = systemParts.join("\n\n");
   const { standing, moment } = state.momentAfterHistory ? splitAtMoment(system) : { standing: system, moment: "" };
-  return [
+  const messages: ChatMessage[] = [
     { role: "system", content: standing },
     ...historyMessages,
     // The state, then the instruction to take the turn, so the newest player
@@ -1609,6 +1629,8 @@ export function buildDmMessages(
       ? [{ role: "user" as const, content: state.directorBlock }]
       : []),
   ];
+  state.contextTrace.shape = { historyStart: 1, historyEnd: 1 + historyMessages.length, promptMessages: messages.length };
+  return messages;
 }
 
 

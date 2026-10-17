@@ -27,6 +27,7 @@ import { haltDmTurn, haltUnbuiltTurn } from "@/lib/dm/turn-halt";
 import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, setJobStage } from "@/lib/dm/job-control";
 import { describeStage, unbuiltReason, type DmJobStage } from "@/lib/dm/job-stage-logic";
 import { modelTuningFor } from "@/lib/dm/model-tuning";
+import { noteTurnCall, turnCallFit, turnCallOptions, turnMinOutputTokens } from "@/lib/dm/turn-fit";
 import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
@@ -533,6 +534,7 @@ async function openTurn(
       // reserve (promptWindowTokens), which the packer cannot see.
       contextLimitTokens: promptWindowTokens(storyContextTokens(campaign.settings), toolTokens),
       toolTokens,
+      windowTokens: storyContextTokens(campaign.settings),
       variantRulesBlock: retrieval.variantRulesBlock,
       houseRulesBlock: retrieval.houseRulesBlock,
       loreBlock: retrieval.loreBlock,
@@ -631,7 +633,7 @@ async function openTurn(
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
-    await answerOutOfCharacter(campaign, conversation);
+    await answerOutOfCharacter(campaign, conversation, promptState.contextTrace);
     return null;
   }
 
@@ -1010,13 +1012,16 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       narrationShown(campaignId, turn.id);
       publishEphemeral(campaignId, "dm_delta", { text });
     });
-    const { message, error, finishReason } = await requestDmMessage(campaign.settings, turn.conversation, {
+    const reply = await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
         campaignId,
         catalogue: dmTurnToolCatalogue(campaign, imageEnabled, leanTools),
         turn: true,
       },
+      // Fitted again to the window before it goes: the prompt has grown by
+      // every call and result so far (src/lib/dm/turn-fit.ts).
+      ...turnCallOptions(campaign, turn, "turn"),
       // Force pure narration on the last permitted call so a tool-happy
       // model cannot loop forever.
       toolChoice: finalCall ? "none" : "auto",
@@ -1033,10 +1038,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       },
     });
 
+    const { message, error, finishReason } = reply;
     if (error) {
       batcher.flush();
       const payload = (await error.json().catch(() => null)) as { error?: string; detail?: string } | null;
       failed = payload?.error || "The Dungeon Master could not reach the model backend.";
+      noteTurnCall(turn, "turn", tools, reply, failed);
       // The table reads one line; the server log keeps the status and what
       // the backend itself said (out of memory, a crash), so an operator can
       // tell a blip from a server that is down. The backend's words stay out
@@ -1049,6 +1056,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
     batcher.push(filter.flush());
     batcher.flush();
+    noteTurnCall(turn, "turn", tools, reply);
     setJobStage("resolving");
     if (process.env.DM_DEBUG) {
       console.log(
@@ -1797,14 +1805,22 @@ function cardPlayed(
 // turn's after-effects. Its place is taken before the call, so a move posted
 // while the DM is answering lands after the answer and is still the newest
 // line for the turn it wakes.
-async function answerOutOfCharacter(campaign: Campaign, conversation: DmTurn["conversation"]) {
+async function answerOutOfCharacter(campaign: Campaign, conversation: DmTurn["conversation"], trace: DmTurn["contextTrace"] | undefined) {
   const campaignId = campaign.id;
   const seq = allocateSeq(campaignId);
   try {
     const { message, error } = await requestDmMessage(
       campaign.settings,
       [...conversation, { role: "user", content: OOC_ANSWER_INSTRUCTION }],
-      { tools: [], toolChoice: "none", harness: { campaignId, turn: true }, thinking: false },
+      {
+        tools: [],
+        toolChoice: "none",
+        harness: { campaignId, turn: true },
+        thinking: false,
+        fit: turnCallFit({ contextTrace: trace ?? null }),
+        minOutputTokens: turnMinOutputTokens(campaign),
+        meta: { task: "ooc_answer" },
+      },
     );
     const answer = error ? "" : stripToolText(extractStoryText(message?.content)).trim();
     if (answer) {
@@ -1861,7 +1877,7 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
     narrationShown(campaignId, turn.id);
     publishEphemeral(campaignId, "dm_delta", { text });
   });
-  const { message, error } = await requestDmMessage(
+  const rescue = await requestDmMessage(
     campaign.settings,
     [...turn.conversation, { role: "user", content: TOOLS_CLOSED_PROMPT }],
     {
@@ -1869,6 +1885,7 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
       toolChoice: "none",
       harness: { campaignId, turn: true },
       thinking: false,
+      ...turnCallOptions(campaign, turn, "tools_closed_rescue"),
       onDelta: (text) => {
         const visible = filter.push(text);
         if (visible) {
@@ -1877,8 +1894,10 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
       },
     },
   );
+  const { message, error } = rescue;
   batcher.push(filter.flush());
   batcher.flush();
+  noteTurnCall(turn, "tools_closed_rescue", [], rescue);
   turn.callIndex += 1;
   if (process.env.DM_DEBUG) {
     console.log(
@@ -1937,7 +1956,7 @@ async function ensureWhisperReplies(context: TurnContext, turn: DmTurn) {
   const owed = unanswered()
     .map((whisper) => `- ${whisper.characterName}: "${whisper.content}"`)
     .join("\n");
-  const { message } = await requestDmMessage(
+  const backstop = await requestDmMessage(
     campaign.settings,
     [
       ...turn.conversation,
@@ -1946,8 +1965,10 @@ async function ensureWhisperReplies(context: TurnContext, turn: DmTurn) {
         content: `[System] You have not yet privately answered these player messages. Reply to each one now using the send_whisper tool addressed to that character. Refuse any out-of-character request for levels, XP, perks, items, or abilities in-fiction, but resolve legitimate secret actions. Do not narrate anything to the shared table.\n${owed}`,
       },
     ],
-    { tools: [sendWhisperTool], toolChoice: "auto", thinking: true },
+    { tools: [sendWhisperTool], toolChoice: "auto", thinking: true, ...turnCallOptions(campaign, turn, "whisper_backstop") },
   );
+  noteTurnCall(turn, "whisper_backstop", [sendWhisperTool], backstop);
+  const { message } = backstop;
   const xmlSalvage = salvageXmlToolCalls(extractReplyText(message?.content));
   const jsonSalvage = salvageJsonToolCalls(xmlSalvage.text, [sendWhisperTool]);
   const salvage = salvageTextualToolCalls(extractStoryText(jsonSalvage.text));
