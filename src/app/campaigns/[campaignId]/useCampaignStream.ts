@@ -206,6 +206,10 @@ export type CampaignState = {
   questsVersion: number;
   // Bumped on factions_updated so the Factions panel refetches.
   factionsVersion: number;
+  // Bumped when the campaign's world or a record it describes changed
+  // (world_updated, records_changed: both reach only the seats holding the
+  // story's secrets), so the World tab reads it again.
+  worldVersion: number;
   // Bumped on shops_updated so the market refetches (11.1).
   shopsVersion: number;
   // The last coin movement, for the purse FX.
@@ -344,6 +348,7 @@ const initialState: CampaignState = {
   facts: [],
   relationshipsVersion: 0,
   factionsVersion: 0,
+  worldVersion: 0,
   shopsVersion: 0,
   coins: null,
   questsVersion: 0,
@@ -690,6 +695,10 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "factions_updated":
           next.factionsVersion = state.factionsVersion + 1;
+          return next;
+        case "world_updated":
+        case "records_changed":
+          next.worldVersion = state.worldVersion + 1;
           return next;
         case "calendar_updated":
           next.questsVersion = state.questsVersion + 1;
@@ -1090,6 +1099,11 @@ const EPHEMERAL_EVENTS = [
   // Prep came in from a workshop mid-campaign. Contentless: the handler
   // reloads the snapshot, and a reconnect resyncs anyway.
   "prep_imported",
+  // The campaign's world or a record it describes changed. Contentless, and
+  // sent only to the seats holding the story's secrets: the World tab reads
+  // the world again.
+  "world_updated",
+  "records_changed",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 // Every type the stream listens for; an event outside it never reaches the
