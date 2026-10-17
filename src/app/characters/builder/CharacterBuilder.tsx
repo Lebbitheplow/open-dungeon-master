@@ -44,7 +44,9 @@ import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
 import { listWords, unofferedPicks } from "./unoffered";
 import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState";
-import { useFeatDescs } from "./useFeatDescs";
+import { useFeatDescs, useFeatTexts } from "./useFeatDescs";
+import { builderFeatJudge, FeatJudgeContext, unmetFeatMessage } from "./featPrereqs";
+import { racialFeatCount } from "@/lib/srd/race-id";
 import { usePickerGroups } from "./usePickerGroups";
 import { useTableRules } from "./useTableRules";
 
@@ -230,11 +232,16 @@ function CharacterBuilderForm({
   const table = useTableRules(campaignId, klass?.id);
   // The text of every feat picked, for what each grants (issue #125); a
   // content pack's is fetched once.
-  const featDescs = useFeatDescs([
+  const featTexts = useFeatTexts([
     ...state.feats,
     ...state.asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
   ]);
+  const featDescs = featTexts.descs;
   const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs });
+  // Each feat's prerequisite judged as the save judges it, against the
+  // character as built so far (featPrereqs.ts): the feat pickers read it,
+  // and the gates below flag a picked feat a later choice broke.
+  const featJudge = builderFeatJudge({ state, derived, race, klass, background }, featTexts.prerequisites, initial?.feats);
   const actions = builderActions(state, klass, race, background);
   const pickers = usePickerGroups({
     races,
@@ -354,7 +361,7 @@ function CharacterBuilderForm({
       state.setLocalError(unofferedText);
       return;
     }
-    const input = { state, derived, race, klass, background, initial };
+    const input = { state, derived, race, klass, background, initial, featJudge };
     const problem = validateBuilder(input);
     if (problem) {
       if (problem.kind === "spellWarning") {
@@ -391,9 +398,14 @@ function CharacterBuilderForm({
   const gear = gearBlocker(derived);
   const owed = {
     identity: identityBlocks(state, background),
-    ancestry: ancestryBlocks(state, race, background, derived),
+    ancestry: ancestryBlocks(state, race, background, derived, featJudge),
     calling: callingBlocks(klass, state, derived),
-    abilities: abilitiesBlocks(derived, state),
+    // The scores set here can break the racial feat picked a step back;
+    // it is flagged here too, with the way back to it.
+    abilities: [
+      ...abilitiesBlocks(derived, state, featJudge),
+      ...racialFeatBlock(unmetFeatMessage(featJudge, state.feats.slice(0, race ? racialFeatCount(race.id) : 0))),
+    ],
     spells: [...spellsBlocks(state, derived, klass), ...(gear ? [gear] : [])],
   };
   const blockers = {
@@ -602,6 +614,7 @@ function CharacterBuilderForm({
           </button>
         </div>
       ) : null}
+      <FeatJudgeContext.Provider value={featJudge}>
       <Wizard
         step={step}
         onStepChange={setStep}
@@ -638,6 +651,7 @@ function CharacterBuilderForm({
           )
         }
       />
+      </FeatJudgeContext.Provider>
       {cropping ? (
         <AvatarCropDialog
           title={`Portrait for ${state.name.trim() || "your character"}`}
@@ -650,4 +664,8 @@ function CharacterBuilderForm({
       ) : null}
     </div>
   );
+}
+
+function racialFeatBlock(message: string | null): Array<{ message: string; target: BlockerTarget }> {
+  return message ? [{ message, target: "racialFeat" }] : [];
 }
