@@ -156,7 +156,8 @@ await test("The digest keeps to its budget, the asked entries first; paint promp
   const { doc, entities } = worldView(workshop.id);
   const digest = worldDigest(doc, entities, "Tell me about Mira Fenn", 600);
   assert.ok(digest.length <= 700);
-  assert.ok(digest.startsWith("## Mira Fenn"));
+  // A line explaining the canon tags may come first; the asked entry leads the entries.
+  assert.ok(digest.split("\n\n").find((part) => part.startsWith("## ")).startsWith("## Mira Fenn"));
   const prompt = paintPrompt("faction", "Faction", "A guild of salt-runners.", "oil painting");
   assert.match(prompt, /Heraldic sigil/);
   assert.doesNotMatch(paintPrompt("npc", "Character", "A warden.", ""), /Ivo/);

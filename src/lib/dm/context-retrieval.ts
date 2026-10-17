@@ -2,6 +2,7 @@ import type { TableLanguage } from "@/lib/schemas/game-settings";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { CampaignMessage } from "@/lib/db/messages";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
+import { canonAdmits } from "@/lib/worldforge/canon";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
 import { probeCustomContextWindow, storyContextTokens } from "@/lib/model-client";
@@ -119,7 +120,9 @@ export async function buildTurnRetrieval(
     const rules = listRuleChunksWithEmbeddings(campaign.id).filter(
       (entry) => entry.chunk.enabled,
     );
-    const lore = listLoreWithEmbeddings(campaign.id);
+    // A retired WorldForge entry is left out of the narrator's lore, by the
+    // canon policy every model path shares (src/lib/worldforge/canon.ts).
+    const lore = listLoreWithEmbeddings(campaign.id).filter(({ entry }) => !entry.canon || canonAdmits(entry.canon, "play"));
     if (rules.length || lore.length) {
       const moment = buildMoment(campaign, history);
       const { query } = moment;
