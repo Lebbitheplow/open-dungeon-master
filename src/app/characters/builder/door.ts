@@ -1,10 +1,11 @@
-import type { BuilderRole } from "./steps/IdentityStep";
+import type { BuilderRole } from "./steps/FinishStep";
 
 // What the page that opened the library builder already knows, carried in
 // /characters/new's query: "Player character" in the workshop knows it is a
 // player character, the Party tool knows that and the level its party is
 // built for. The builder asks only for what the door leaves open; plain
-// /characters/new knows neither, and keeps the role toggle and level select.
+// /characters/new knows neither: it starts a player character, offers the
+// role toggle on the Finish step, and keeps the level select.
 // Pure, for scripts/test-builder-door.mjs.
 
 export type BuilderDoor = {

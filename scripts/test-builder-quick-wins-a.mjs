@@ -163,4 +163,19 @@ const state = {
   const builderState = read("src/app/characters/builder/useBuilderState.ts");
   assert.ok(builderState.includes(": (startLevel ?? 1)"), "a new character opens at the door's level");
   console.log("ok: each door sets what it already knows (Q13)");
+
+  // Albert's call: plain "New character" starts a player character, and
+  // the toggle waits on the Finish step with its explanation.
+  assert.ok(page.includes('useState<"pc" | "companion">(door.role ?? "pc")'), "a new character starts as a player character");
+  const identity = read("src/app/characters/builder/steps/IdentityStep.tsx");
+  assert.ok(!identity.includes("Their place at the table"), "the Hero step no longer asks who plays them");
+  assert.ok(!identity.includes("role?:"), "the Hero step takes no role");
+  const finish = read("src/app/characters/builder/steps/FinishStep.tsx");
+  assert.ok(finish.includes("Their place at the table"), "the Finish step asks who plays them");
+  assert.ok(finish.includes("Joins a campaign as yours to control."), "the player character choice is explained");
+  assert.ok(finish.includes("Nobody has to roll them up again."), "the companion choice is explained");
+  const builder = read("src/app/characters/builder/CharacterBuilder.tsx");
+  assert.ok(/<FinishStep[\s\S]*?role=\{role\}[\s\S]*?\/>/.test(builder), "the builder hands the role to the Finish step");
+  assert.ok(!builder.match(/<IdentityStep[\s\S]*?\/>/)[0].includes("role={role}"), "and not to the Hero step");
+  console.log("ok: the role toggle waits on the Finish step (Q13)");
 }

@@ -16,15 +16,16 @@ const DRAFT_KEY = builderDraftKey("library");
 
 function NewCharacterInner() {
   // What the link that opened the builder already decided (door.ts): it is
-  // set here and not asked again on the first step.
+  // set here and not asked again.
   const door = readBuilderDoor(useSearchParams());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // The same sheet either way, and the same adaptation on the way into a
   // campaign (src/lib/characters/adapt.ts). What the role decides is which
   // door they come through: a player character joins a table as yours, a
-  // companion joins it as an ally the DM plays. The wizard's first step
-  // holds the toggle, unless the door already said which.
+  // companion joins it as an ally the DM plays. A new character starts as
+  // a player character; the Finish step holds the toggle, unless the door
+  // already said which.
   const [role, setRole] = useState<"pc" | "companion">(door.role ?? "pc");
 
   async function submit(result: BuilderResult) {

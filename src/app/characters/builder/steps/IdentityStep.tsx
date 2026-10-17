@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Select } from "@/components/ui/Select";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
@@ -24,12 +23,10 @@ import { GENDERS, type Gender } from "@/lib/gender";
 // How many tools a background's open grant leaves to the player, in words.
 const COUNT_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three" };
 
-export type BuilderRole = "pc" | "companion";
-
 // Step 1: for a new character, how they want to play (the class step opens
-// on the same answer), then the name, who plays them, gender (the cards'
-// art follows it), level and background. Alignment changes no number and
-// waits for the finishing touches. The setting notices live here too, so the first thing a player
+// on the same answer), then the name, gender (the cards' art follows it),
+// level and background. Alignment changes no number, and who plays them
+// changes nothing on the sheet; both wait for the Finish step. The setting notices live here too, so the first thing a player
 // sees under a world pack is whose names they are about to choose from.
 export type IdentityPlaystyle = {
   value: PlaystyleId | null;
@@ -46,7 +43,6 @@ export function IdentityStep({
   packInstalled,
   fixedLevel,
   levelNote,
-  role,
   playstyle,
   backgroundGroups,
   background,
@@ -57,10 +53,6 @@ export function IdentityStep({
   fixedLevel?: number;
   // Why the level select opened where it did (door.ts).
   levelNote?: string;
-  // Offered by the library page only, and only when the link that opened
-  // it did not say (door.ts): a campaign already knows which door the
-  // character comes through.
-  role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
   // Offered to a new character only; an edit keeps its class.
   playstyle?: IdentityPlaystyle;
   backgroundGroups: PickerGroup[];
@@ -164,26 +156,6 @@ export function IdentityStep({
               </button>
             ))}
           </span>
-        ) : null}
-        {role ? (
-          <div className="mt-4">
-            <span className="mb-1.5 block text-xs text-stone-400">Their place at the table</span>
-            <SegmentedControl
-              label="Role"
-              value={role.value}
-              onChange={role.onChange}
-              options={[
-                { value: "pc", label: "A character I play" },
-                { value: "companion", label: "An ally the DM plays" },
-              ]}
-              className="w-full"
-            />
-            <p className="mt-1.5 text-xs text-stone-500">
-              {role.value === "companion"
-                ? "Companions are offered when a party adds one, at whatever level that table plays at. Nobody has to roll them up again."
-                : "Joins a campaign as yours to control."}
-            </p>
-          </div>
         ) : null}
       </StepPanel>
 

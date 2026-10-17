@@ -20,8 +20,8 @@ import type { DroppedPick } from "./reconcile";
 import { AbilitiesStep } from "./steps/AbilitiesStep";
 import { AncestryStep } from "./steps/AncestryStep";
 import { CallingStep } from "./steps/CallingStep";
-import { FinishStep } from "./steps/FinishStep";
-import { IdentityStep, type BuilderRole } from "./steps/IdentityStep";
+import { FinishStep, type BuilderRole } from "./steps/FinishStep";
+import { IdentityStep } from "./steps/IdentityStep";
 import { SpellsGearStep } from "./steps/SpellsGearStep";
 import { OwedLine } from "./steps/shared";
 import { owedPicks } from "./owed";
@@ -180,9 +180,10 @@ function CharacterBuilderForm({
   onSubmit: (result: BuilderResult) => void;
   busy: boolean;
   error: string;
-  // Player character or DM-played ally; only the library page asks, and
-  // only when the link that opened it did not say (door.ts), since a
-  // campaign already knows which door the character comes through.
+  // Player character or DM-played ally, asked on the Finish step; only the
+  // library page asks, and only when the link that opened it did not say
+  // (door.ts), since a campaign already knows which door the character
+  // comes through.
   role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
   // Where a new character's progress is kept on this device
   // (builderDraftKey); the caller clears it once the save succeeds. Ignored
@@ -430,7 +431,6 @@ function CharacterBuilderForm({
             packInstalled={packInstalled}
             fixedLevel={fixedLevel}
             levelNote={levelNote}
-            role={role}
             playstyle={
               initial
                 ? undefined
@@ -553,6 +553,7 @@ function CharacterBuilderForm({
           onEdit={(key) => setStep(STEP_ORDER.indexOf(key))}
           alignmentGroups={pickers.alignmentGroups}
           alignmentInfo={pickers.alignmentInfo}
+          role={role}
         />
       ),
     },
