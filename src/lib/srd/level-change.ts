@@ -34,6 +34,9 @@ export type LevelState = {
   xp: number;
   classes: ClassEntry[];
   features: SheetFeature[];
+  // As the engines run them (src/lib/srd/feat-effects.ts featsAsRun): a
+  // feat can open choice slots no class does, which the regrant keeps.
+  feats: string[] | undefined;
   hitDice: CharacterSheet["hitDice"];
   hitDicePools: HitDicePool[] | null;
   spellcasting: Spellcasting;
@@ -152,7 +155,7 @@ export function settleLevelChange(
   extras?: SubclassExtras,
 ): Settled {
   const classes = classListOf(state);
-  const features = populateFeaturesForClasses(state.features, classes, state.race, undefined, extras);
+  const features = populateFeaturesForClasses(state.features, classes, state.race, state.feats, extras);
   const hitDicePools = settlePools(state);
   const total = Math.max(1, Math.min(20, state.level));
   const hitDice = hitDicePools

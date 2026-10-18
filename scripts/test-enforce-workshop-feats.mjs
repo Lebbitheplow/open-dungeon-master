@@ -44,6 +44,7 @@ async function brew(name, data, author = world.owner) {
 const swing = await brewCopy("Great Weapon Master", "Headsman's Swing");
 assert.equal(swing.data.runsAs, "Great Weapon Master", "the copy does not say what it runs as");
 await brewCopy("Tough", "Hardy Frame");
+await brewCopy("Martial Adept", "Drill Form");
 await brew("Fleetfoot", { desc: "You are quick on your feet. Your speed increases by 10 feet.", prerequisite: "" });
 
 await test("A renamed copy of Great Weapon Master trades -5 to hit for +10 damage with a heavy weapon.", async () => {
@@ -78,6 +79,27 @@ await test("A renamed copy of Tough taken at a level-up adds Tough's two hit poi
   });
   assert.equal(out.status, 200, out.json.error);
   assert.equal(world.sheet(hero.id).maxHp, before.maxHp + 6 + 2 + 2 * 4, "the copy of Tough added no hit points");
+});
+
+await test("A renamed copy of Martial Adept keeps its two maneuvers through a level-up, where the class opens none.", async () => {
+  const player = world.addUser("drill-player");
+  const hero = world.addHero({
+    user: player, class: "fighter", subclass: "Champion", level: 4, maxHp: 36,
+    feats: ["Drill Form"],
+    features: [{ name: "Maneuver: Riposte", source: "choice" }, { name: "Maneuver: Trip Attack", source: "choice" }],
+  });
+  const maneuvers = () => world.sheet(hero.id).features.filter((feature) => feature.name.startsWith("Maneuver:")).length;
+  assert.equal(maneuvers(), 2, "the copy's maneuvers were dropped when the sheet was made");
+  world.patch(hero.id, { xp: XP_BY_LEVEL[4] });
+  const before = world.sheet(hero.id);
+  const out = await patchSheetAs(world, sheetRoute, player, {
+    level: 5,
+    maxHp: before.maxHp + 6,
+    currentHp: before.currentHp + 6,
+    hitDice: { ...before.hitDice, total: 5 },
+  });
+  assert.equal(out.status, 200, out.json.error);
+  assert.equal(maneuvers(), 2, "the level-up dropped the copy's maneuvers");
 });
 
 await test("A workshop feat of the DM's own words is read for what its text grants: +10 feet of speed.", async () => {
