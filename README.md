@@ -38,7 +38,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 
 ### Your turn, in cards
 
-<img src="docs/screenshot-table.png" alt="A fight in progress: the battle map docked above the hand of action cards, a longbow card lifted with its two targets, damage and to-hit odds, the chronicle on the left and the party on the right" width="960">
+<img src="docs/screenshot-table.png" alt="A fight in progress: the hand of action cards fanned out under the battle map, from Longsword, Longbow, Cure Wounds and Hunter's Mark to Dodge, Dash, Help and End turn, with the chronicle on the left and the party on the right" width="960">
 
 <sub><i>A live session of <b>Embers of the Saltglass Coast</b>. Your hand holds every action the sheet allows, each card says what it rolls and what it costs, and the server does the rolling. The battle map, the turn order and the party sit around it.</i></sub>
 
