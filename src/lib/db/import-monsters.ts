@@ -188,12 +188,12 @@ export function bringItems(sourceId: string, campaignId: string): { brought: str
   const foreign = foreignItems(sourceId, campaignId, boundRefsOf(campaignId, "item"));
   if (!foreign.length) return { brought: [], reused: [] };
   const owner = target.ownerUserId;
-  const mine = new Map<string, HomebrewEntry>(listHomebrew(owner, "item").map((item) => [lower(item.name), item]));
+  const mine = new Map<string, HomebrewEntry>(listHomebrew(owner, "item").map((item) => [textKey(item.name), item]));
   const moved = new Map<string, string>();
   const brought: string[] = [];
   const reused: string[] = [];
   for (const { ref, entry } of foreign) {
-    const held = mine.get(lower(entry.name));
+    const held = mine.get(textKey(entry.name));
     if (held && stable(held.data) === stable(entry.data)) {
       moved.set(ref, `${HOMEBREW}${held.id}`);
       reused.push(entry.name);
@@ -203,10 +203,10 @@ export function bringItems(sourceId: string, campaignId: string): { brought: str
     if (held) {
       const base = `${entry.name} [${source.title}]`.slice(0, 80);
       name = base;
-      for (let attempt = 2; mine.has(lower(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
+      for (let attempt = 2; mine.has(textKey(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
     }
     const made = createHomebrew(owner, { kind: "item", name, data: { desc: "", ...entry.data } as Parameters<typeof createHomebrew>[1]["data"] });
-    mine.set(lower(name), made);
+    mine.set(textKey(name), made);
     moved.set(ref, `${HOMEBREW}${made.id}`);
     brought.push(name);
   }

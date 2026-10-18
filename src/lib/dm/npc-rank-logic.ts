@@ -9,7 +9,7 @@
 //
 // Dependency-free so scripts/test-npc-rank.mjs can drive it.
 
-import { hasWord } from "../language/text-logic.ts";
+import { containsPhrase } from "../language/text-logic.ts";
 
 export const NPC_PROMPT_MAX = 20;
 
@@ -21,7 +21,7 @@ export function rankNpcsForPrompt<T extends RankableNpc>(npcs: readonly T[], mom
     if (here && npc.location && npc.location.trim().toLowerCase() === here) {
       return 0;
     }
-    if (moment.text && [npc.name, ...(npc.aliases ?? [])].some((name) => name && hasWord(moment.text, name))) {
+    if (moment.text && [npc.name, ...(npc.aliases ?? [])].some((name) => name && containsPhrase(moment.text, name))) {
       return 1;
     }
     return 2;

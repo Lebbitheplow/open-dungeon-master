@@ -1,7 +1,7 @@
 // The plugin browser's filter: a search over the words an entry shows, its
 // genre, and whether it is an original world or a fan work. Pure, so the
 // admin panel and the tests share it, and client-safe (no zod, no fs).
-import { compareNames, foldName } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 export type PluginOrigin = "all" | "original" | "fan";
 
@@ -40,7 +40,7 @@ export function isFiltering(filter: PluginFilter): boolean {
 // Every word of the query has to appear somewhere in what the entry shows,
 // compared the way names are elsewhere (case and composed accents folded).
 export function filterPlugins<T extends FilterablePlugin>(entries: readonly T[], filter: PluginFilter): T[] {
-  const words = foldName(filter.query).split(/\s+/).filter(Boolean);
+  const words = textKey(filter.query).split(" ").filter(Boolean);
   return entries.filter((entry) => {
     if (filter.genre && entry.baseGenre !== filter.genre) {
       return false;
@@ -54,7 +54,7 @@ export function filterPlugins<T extends FilterablePlugin>(entries: readonly T[],
     if (!words.length) {
       return true;
     }
-    const haystack = foldName(
+    const haystack = textKey(
       [entry.name, entry.blurb, entry.franchise, entry.edition, entry.author, entry.inspiredBy].filter(Boolean).join(" "),
     );
     return words.every((word) => haystack.includes(word));

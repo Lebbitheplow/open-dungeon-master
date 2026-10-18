@@ -1,5 +1,4 @@
 import { ABILITIES, fitName, LANGUAGE_NAME_MAX, type Ability } from "@/lib/schemas/sheet";
-import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 
 // Parses Open5e's prose-ish mechanics fields (race asi arrays, class
