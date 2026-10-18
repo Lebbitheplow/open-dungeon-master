@@ -384,6 +384,23 @@ export async function harnessReady(): Promise<boolean> {
   }
 }
 
+// Whether a table may be handed to the AI at all: the storyteller the DM
+// path would dial is configured (the same answer the creator reads from
+// /api/capabilities, so the two never disagree). A storyteller that is down
+// still counts: an outage is not a missing setup. A snapshot that fails for
+// its own reasons answers yes, so a broken probe never stops a table from
+// being made; it is the positive "nothing is set up" that refuses.
+export const NO_STORYTELLER_MESSAGE =
+  "This server has no AI storyteller set up, so the AI cannot run this table. Choose a human Dungeon Master, or set up a text model in Admin first.";
+
+export async function storytellerConfigured(): Promise<boolean> {
+  try {
+    return (await capabilitiesSnapshot()).story.configured;
+  } catch {
+    return true;
+  }
+}
+
 export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const settings = configuredDefaultStorySettings();
   const cfg = getGlobalConfig();
