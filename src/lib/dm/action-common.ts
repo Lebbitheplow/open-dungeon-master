@@ -74,7 +74,7 @@ export function rollEnemyContest(
   detail: string,
 ): number {
   const worn = enemyExhaustion(enemy.conditions) >= 1;
-  const advantage = mergeAdvantage([rollDerivation(enemy.conditions, "skill_check", "str").advantage, ...(worn ? ["disadvantage" as const] : [])]);
+  const advantage = mergeAdvantage([...rollDerivation(enemy.conditions, "skill_check", "str").sources, ...(worn ? ["disadvantage" as const] : [])]);
   const outcome = rollExpression(d20Expression(contestModifier(enemy.stats, which), advantage));
   const roll = insertRoll({
     campaignId: campaign.id,

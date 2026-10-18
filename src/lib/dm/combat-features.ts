@@ -39,7 +39,7 @@ import { withOpportunityTurn } from "@/lib/dm/opportunity-strike";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { computeSheetDerived } from "@/lib/srd";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -79,7 +79,7 @@ export function priceTheAction(
     return toolError(able);
   }
   const fight = encounter && (encounter.kind ?? "fight") === "fight" ? encounter : null;
-  const budget = fight ? budgetFor(fight, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions)) : null;
+  const budget = fight ? budgetFor(fight, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions)) : null;
   if (!fight || !budget) {
     return { commit: () => {} };
   }

@@ -14,7 +14,7 @@ import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
 import { damageAdjust, resistsAllDamage, weaponMaterial } from "@/lib/dm/damage-logic";
 import { resistLineFor } from "@/lib/dm/underwater";
 import { effectOutcome } from "@/lib/dm/effect-tools";
-import type { EncounterEnemy } from "@/lib/db/encounters";
+import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { DAMAGE_TYPES } from "@/lib/dm/condition-logic";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { authoredSneakEdge } from "@/lib/dm/authored-hooks";
@@ -23,6 +23,7 @@ import { getEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
 import { allyAdjacentToEnemy } from "@/lib/dm/map-tools";
+import { storeBudget } from "@/lib/dm/turn-budget";
 import type { AttackPlan } from "@/lib/dm/pc-attack-plan";
 import type { AttackKind } from "@/lib/dm/pc-attack-profile";
 import type { OnHitSpends } from "@/lib/dm/pc-attack-riders";
@@ -227,9 +228,11 @@ function sneakBonusAgainst(sheetId: string, enemyId: string): { dice: number; fe
   return authoredSneakBonus(sheet, sheet.id, enemy.conditions.map((condition) => ({ condition, source: meta[condition]?.source })));
 }
 
-// The once-per-turn damage riders claim their turn slot as the attack is
-// charged. A rider already used this turn leaves the expression, its note
-// says so, and its dice are listed so the typed riders drop them too.
+// The once-per-turn damage riders: a rider already used this turn leaves the
+// expression, its note says so, and its dice are listed so the typed riders
+// drop them too. One still free rides this attack and is spent only by a
+// hit (`hitClaims`, claimed by claimHitRiders): a miss keeps Sneak Attack
+// for the next swing of the turn (SRD 5.1).
 export function claimOncePerTurnRiders(input: {
   budget: TurnBudget;
   profile: AttackProfile;
@@ -237,9 +240,11 @@ export function claimOncePerTurnRiders(input: {
   sneak: boolean;
   sneakAttackDice: number;
   featureRiders: FeatureRider[];
-}): { budget: TurnBudget; profile: AttackProfile; notes: string[]; droppedRiders: string[] } {
-  let { budget, profile, notes } = input;
+}): { profile: AttackProfile; notes: string[]; droppedRiders: string[]; hitClaims: string[] } {
+  const { budget } = input;
+  let { profile, notes } = input;
   const droppedRiders: string[] = [];
+  const hitClaims: string[] = [];
   if (input.sneak) {
     // Sneak Attack is once per turn however many swings land.
     const claimed = claimOncePerTurn(budget, "sneak_attack");
@@ -256,7 +261,7 @@ export function claimOncePerTurnRiders(input: {
       );
       notes.push("Sneak Attack already used this turn: no extra dice");
     } else {
-      budget = claimed;
+      hitClaims.push("sneak_attack");
     }
   }
   // Once-per-turn feature riders (Divine Strike) spend their turn slot the
@@ -265,7 +270,8 @@ export function claimOncePerTurnRiders(input: {
     if (!rider.oncePerTurn) {
       continue;
     }
-    const claimed = claimOncePerTurn(budget, `rider:${rider.feature.toLowerCase()}`);
+    const key = `rider:${rider.feature.toLowerCase()}`;
+    const claimed = claimOncePerTurn(budget, key);
     if (!claimed) {
       profile = {
         ...profile,
@@ -277,10 +283,23 @@ export function claimOncePerTurnRiders(input: {
       );
       notes.push(`${rider.feature} already used this turn: no extra dice`);
     } else {
-      budget = claimed;
+      hitClaims.push(key);
     }
   }
-  return { budget, profile, notes, droppedRiders };
+  return { profile, notes, droppedRiders, hitClaims };
+}
+
+// A hit spends the once-per-turn riders it carried, on the stored turn.
+export function claimHitRiders(encounter: Encounter, budget: TurnBudget | null, keys: string[] | undefined) {
+  if (!budget || !keys?.length) {
+    return;
+  }
+  for (const key of keys) {
+    if (!budget.oncePerTurn.includes(key)) {
+      budget.oncePerTurn.push(key);
+    }
+  }
+  storeBudget(encounter, budget);
 }
 
 // What the damage roll carries once the attack is paid for: the reroll and

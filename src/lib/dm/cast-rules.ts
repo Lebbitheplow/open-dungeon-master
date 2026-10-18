@@ -469,15 +469,24 @@ const SHARES = "cast-shares";
 
 // A casting whose attack rolls, darts or targets are resolved one call at a
 // time (Eldritch Blast's beams, Scorching Ray, Bane on three creatures): how
-// many the casting still holds, and the slot it was cast from.
-export type OpenCast = { spell: string; slotLevel: number | null; left: number };
+// many the casting still holds, and the slot it was cast from. An area
+// resolved a creature per call keeps who it has caught and its one damage
+// roll (cast-at-enemy.ts), so every call is the same placement and the same
+// dice.
+export type OpenCast = { spell: string; slotLevel: number | null; left: number; caught?: string[]; roll?: number };
 
 export function openCastOf(budget: TurnBudget | null, spell: string): OpenCast | null {
   const wanted = spellKeyOf(spell);
   for (const entry of budget?.oncePerTurn ?? []) {
-    const [tag, name, slot, left] = entry.split("|");
+    const [tag, name, slot, left, caught, roll] = entry.split("|");
     if (tag === SHARES && name === wanted && Number(left) > 0) {
-      return { spell: wanted, slotLevel: slot === "-" ? null : Number(slot), left: Number(left) };
+      return {
+        spell: wanted,
+        slotLevel: slot === "-" ? null : Number(slot),
+        left: Number(left),
+        ...(caught ? { caught: caught.split(",") } : {}),
+        ...(roll && roll !== "-" ? { roll: Number(roll) } : {}),
+      };
     }
   }
   return null;
@@ -493,7 +502,7 @@ export function withOpenCast(budget: TurnBudget, open: OpenCast): TurnBudget {
     ...budget,
     oncePerTurn:
       open.left > 0
-        ? [...kept, [SHARES, wanted, open.slotLevel ?? "-", open.left].join("|")]
+        ? [...kept, [SHARES, wanted, open.slotLevel ?? "-", open.left, (open.caught ?? []).join(","), open.roll ?? "-"].join("|")]
         : kept,
   };
 }

@@ -184,7 +184,7 @@ export function applyDamageDeathHook(
 // Called from heal after HP is restored: any healing ends the dying state.
 export function healDeathHook(
   campaign: Campaign,
-  turnId: string,
+  turnId: string | null,
   preSheet: CharacterSheet,
 ): Record<string, unknown> {
   if (preSheet.deathSaves?.dead || preSheet.currentHp > 0) {

@@ -43,7 +43,8 @@ import { opportunityWeapon } from "@/lib/dm/enemy-profile";
 import { opportunitySight, pcOpportunitySwing, withOpportunityTurn } from "@/lib/dm/opportunity-strike";
 import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
-import { blowByType, resolveOnHit } from "@/lib/dm/enemy-hit";
+import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
+import { effectOutcome } from "@/lib/dm/effect-tools";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enfeebledBlow, spellRetort } from "@/lib/dm/spell-retort";
 
@@ -236,13 +237,18 @@ export function resolveOpportunityAttacks(
     // Escape the Horde (a Hunter ranger's Defensive Tactics): opportunity
     // attacks against them are made at disadvantage.
     const escapes = sheet.features.some((feature) => /escape the horde/i.test(feature.name));
+    // An active effect on its attack and damage rolls (set_effect).
+    const attackEffect = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "attack");
+    const damageEffect = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "damage").bonus;
     const advantage = mergeAdvantage([
-      context.advantage,
+      ...context.sources,
       ...light.sources,
       ...(escapes ? ["disadvantage" as const] : []),
+      ...(attackEffect.advantage ? ["advantage" as const] : []),
+      ...(attackEffect.disadvantage ? ["disadvantage" as const] : []),
     ]);
     const targetAc = acWithEffects(campaign.id, sheet);
-    const hitOutcome = rollExpression(d20Expression(attack.toHit, advantage));
+    const hitOutcome = rollExpression(d20Expression(attack.toHit + attackEffect.bonus, advantage));
     const hitRoll = insertRoll({
       campaignId: campaign.id,
       characterId: null,
@@ -266,13 +272,14 @@ export function resolveOpportunityAttacks(
     }
     const crit = adjudicated.crit || context.autoCrit;
 
+    const rolledDamage = crit
+      ? critDamageExpression(attack.damage, 0, {
+          powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
+          multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
+        })
+      : attack.damage;
     const damageOutcome = rollExpression(
-      crit
-        ? critDamageExpression(attack.damage, 0, {
-            powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
-            multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
-          })
-        : attack.damage,
+      damageEffect > 0 ? `${rolledDamage}+${damageEffect}` : damageEffect < 0 ? `${rolledDamage}-${-damageEffect}` : rolledDamage,
     );
     const damageRoll = insertRoll({
       campaignId: campaign.id,
@@ -298,7 +305,7 @@ export function resolveOpportunityAttacks(
     // hit points, a beast form's pool first, Relentless Endurance, the rage
     // ending at 0, the death engine, and the concentration save.
     const magical = hasTrait(enemy.stats, "magicWeapons");
-    const blow = blowByType(attack, damageOutcome, sheet, crit, magical);
+    const blow = blowByType(attack, damageOutcome, crit);
     const rolled = enfeebledBlow(enemy, attack, false, Math.max(0, blow.amount));
     const { landed, onHit } = withOpportunityTurn(campaign.id, (turn) => {
       const hitSheets = listSheets(campaign.id);
@@ -308,6 +315,7 @@ export function resolveOpportunityAttacks(
           ? applyPcDamage(campaign, turn.id, sheet, {
               amount: rolled,
               ...(blow.type ? { type: blow.type } : {}),
+              ...(blow.parts ? { parts: scaledParts(blow.parts, rolled) } : {}),
               ...(magical ? { magical: true } : {}),
               crit,
               reason: `opportunity attack from ${enemy.displayName}`,
@@ -318,13 +326,13 @@ export function resolveOpportunityAttacks(
       return { landed: applied, onHit: rider };
     });
     const updated = getSheetById(sheet.id);
-    hitLog.swing(hitOutcome, targetAc, { hit: true, crit, raw: rolled, advantage, ...(blow.type ? { type: blow.type } : {}) });
+    hitLog.swing(hitOutcome, targetAc, { hit: true, crit, raw: rolled, advantage, ...(blow.type ? { type: blow.type } : {}), ...(blow.parts ? { parts: scaledParts(blow.parts, rolled) } : {}) });
     hitLog.close({ attacker: { kind: "enemy", id: enemy.id, name: enemy.displayName }, attack: `${attack.name} (opportunity attack)`, type: attack.type, ranged: false });
     if (updated && updated.currentHp <= 0 && !updated.wildShape) {
       downed = true;
       downedAt = leftFrom;
     }
-    const byType = blow.byType ? ` (${blow.byType.join(", ")})` : typeof landed.resistance === "string" ? ` (${landed.resistance})` : "";
+    const byType = Array.isArray(landed.damageByType) ? ` (${(landed.damageByType as string[]).join(", ")})` : typeof landed.resistance === "string" ? ` (${landed.resistance})` : "";
     const riderNote = Array.isArray(onHit?.riderCondition) ? ` ${sheet.name} is ${(onHit.riderCondition as string[]).join(" and ")}.` : "";
     notes.push(
       `${enemy.displayName} takes an opportunity attack as ${sheet.name} pulls away: ${

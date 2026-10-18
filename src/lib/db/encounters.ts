@@ -472,6 +472,21 @@ export function patchEnemyIdentity(
   return getEnemy(enemyId);
 }
 
+// The maximum moved by `delta` (an active effect's maxHp, effects-logic.ts):
+// a raise lifts the current hit points with it, a drop only caps them.
+export function shiftEnemyMaxHp(enemyId: string, delta: number): EncounterEnemy | null {
+  const existing = getEnemy(enemyId);
+  if (!existing || !delta) {
+    return existing;
+  }
+  const maxHp = Math.max(1, existing.maxHp + delta);
+  const currentHp = delta > 0 ? existing.currentHp + delta : Math.min(existing.currentHp, maxHp);
+  getDatabase()
+    .prepare(`UPDATE encounter_enemies SET max_hp = ?, current_hp = ?, updated_at = ? WHERE id = ?`)
+    .run(maxHp, currentHp, nowIso(), enemyId);
+  return getEnemy(enemyId);
+}
+
 // A new name and nothing else, mid-fight: hit points, conditions and the
 // stat snapshot stay exactly as the fight left them (patchEnemyIdentity
 // above resets hit points, which is right only before anybody has acted).

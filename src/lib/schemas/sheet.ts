@@ -518,6 +518,10 @@ export const wildShapeSchema = z
     // "wildshape" keeps the character's mental stats; "polymorph" replaces
     // every score the form carries. Missing = "wildshape".
     kind: z.enum(["wildshape", "polymorph"]).optional(),
+    // A "polymorph" whose spell keeps the target's proficiencies, features
+    // and lineage (Shapechange). Polymorph and Animal Shapes replace them
+    // with the beast's (src/lib/srd/shape-rules.ts formSees).
+    keepsTraining: z.boolean().optional(),
     // The form's ability scores, overriding the sheet's while transformed.
     // Wild Shape stores only STR/DEX/CON; Polymorph stores all six.
     abilities: z

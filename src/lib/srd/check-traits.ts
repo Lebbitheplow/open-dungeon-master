@@ -32,6 +32,11 @@ export type CheckInput = {
   proficiencyBonus: number;
   // The check already carries proficiency (a proficient skill).
   proficient: boolean;
+  // How much of the proficiency bonus the check already carries: none,
+  // half (Jack of All Trades), once, or twice (expertise). A feature that
+  // doubles the bonus brings the check to twice and no further; it never
+  // adds a third (SRD 5.1: a bonus is multiplied only once).
+  applied?: number;
   // Supreme Sneak's condition, measured by the caller from the board.
   movedLittle?: boolean;
 };
@@ -68,20 +73,22 @@ export function traitCheckRiders(sheet: TraitSheet & { race?: string }, input: C
 
   const terrains = namedPicks(sheet, /^natural explorer(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i);
   const inTerrain = terrains.find((terrain) => mentions(reason, terrain));
-  if (inTerrain && input.proficient && (ability === "int" || ability === "wis")) {
-    out.bonus += input.proficiencyBonus;
+  // What brings the check to twice the bonus from what it carries.
+  const doubled = Math.max(0, 2 * input.proficiencyBonus - (input.applied ?? (input.proficient ? input.proficiencyBonus : 0)));
+  if (inTerrain && input.proficient && (ability === "int" || ability === "wis") && doubled > 0) {
+    out.bonus += doubled;
     out.notes.push(`Natural Explorer: double proficiency in the ${inTerrain}`);
   }
 
   if (skill === "history") {
     const stonework = /\b(stone|stonework|masonry|rock|carved|tunnel|dwarven)\b/.test(reason);
-    if (stonework && (holdsFeature(sheet, "stonecunning") || /dwarf/.test(race))) {
-      out.bonus += input.proficient ? input.proficiencyBonus : 2 * input.proficiencyBonus;
+    if (stonework && (holdsFeature(sheet, "stonecunning") || /dwarf/.test(race)) && doubled > 0) {
+      out.bonus += doubled;
       out.notes.push("Stonecunning: double proficiency on History about stonework");
     }
     const device = /\b(magic|magical|wand|staff|rod|potion|alchemical|alchemy|device|devices|mechanism|clockwork|artifact|ring|amulet)\b/.test(reason);
-    if (device && (holdsFeature(sheet, "artificer's lore") || race === "rock gnome" || race === "rock_gnome")) {
-      out.bonus += input.proficient ? input.proficiencyBonus : 2 * input.proficiencyBonus;
+    if (device && (holdsFeature(sheet, "artificer's lore") || race === "rock gnome" || race === "rock_gnome") && doubled > 0) {
+      out.bonus += doubled;
       out.notes.push("Artificer's Lore: twice the proficiency bonus on History about magic items and devices");
     }
   }
