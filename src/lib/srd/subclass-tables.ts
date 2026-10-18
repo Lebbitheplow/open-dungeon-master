@@ -36,6 +36,27 @@ export type ExtraSubclass = {
 // By class id.
 export type SubclassExtras = Record<string, ExtraSubclass[]>;
 
+// The subclasses the browser fetched or was sent for this person: the
+// builder's and the level-up dialog's archetype rows (src/app/characters/
+// builder/useBuilderOptions.ts useArchetypes) and the campaign snapshot's
+// (useCampaignStream). src/lib/srd/features.ts reads them when a caller
+// passes no extras of its own. Set only in the browser, where everything
+// fetched is this one person's to see. Kept here, apart from features.ts,
+// so the campaign page registers them without loading the class tables
+// into its first load (scripts/bundle-budget.json).
+const browserExtras: SubclassExtras = {};
+
+export function registerBrowserSubclassExtras(classId: string, tables: SubclassExtras[string]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  browserExtras[classId] = tables;
+}
+
+export function browserSubclassExtras(): SubclassExtras {
+  return browserExtras;
+}
+
 const ORDINAL = /\b(?:at|beginning at|starting at|when you reach|by|upon reaching|once you reach)\s+(\d{1,2})(?:st|nd|rd|th)\s+level/i;
 const LEVEL_ANYWHERE = /\b(\d{1,2})(?:st|nd|rd|th)[- ]level\b/i;
 

@@ -10,7 +10,7 @@ import { findOptionByFeatureName, isOptionName, optionSlotsFor } from "@/lib/srd
 import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
-import type { SubclassExtras } from "@/lib/srd/subclass-tables";
+import { browserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { thirdCasterProfileOf, type ThirdCasterProfile } from "@/lib/srd/third-caster";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -219,22 +219,13 @@ function leveledNames(levels: Record<string, string[]>, level: number): SheetFea
 // whole. A string that is merely part of a name matches nothing, so a
 // paladin whose subclass reads "Oath" is granted no oath's features.
 // (The rule is src/lib/srd/subclass-name.ts, shared with options.ts.)
-// The archetypes the builder and the level-up dialog fetched for this
-// person (src/app/characters/builder/useBuilderOptions.ts useArchetypes),
-// read when a caller passes no extras of its own. Set only in the browser,
-// from an effect, where everything fetched is this one person's to see; the
+// Without extras of its own a caller reads the browser's registered ones
+// (src/lib/srd/subclass-tables.ts registerBrowserSubclassExtras); the
 // server always passes the table's own (src/lib/db/subclass-extras.ts).
-const browserExtras: SubclassExtras = {};
-
-export function registerBrowserSubclassExtras(classId: string, tables: SubclassExtras[string]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  browserExtras[classId] = tables;
-}
+export { registerBrowserSubclassExtras } from "@/lib/srd/subclass-tables";
 
 function extraSubclassNamed(classId: string, stored: string, extras?: SubclassExtras) {
-  const list = (extras ?? browserExtras)[classId] ?? [];
+  const list = (extras ?? browserSubclassExtras())[classId] ?? [];
   return (
     list.find((entry) => subclassNamedExactly(stored, entry.name)) ??
     list.find((entry) => subclassNamedBare(stored, entry.name)) ??

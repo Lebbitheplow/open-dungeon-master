@@ -41,8 +41,7 @@ import type { DmJobView } from "@/lib/dm/job-stage-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
-import { registerBrowserSubclassExtras } from "@/lib/srd/features";
-import type { SubclassExtras } from "@/lib/srd/subclass-tables";
+import { registerBrowserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 
 export type DmStatus =
