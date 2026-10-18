@@ -20,8 +20,8 @@ import type { DroppedPick } from "./reconcile";
 import { AbilitiesStep } from "./steps/AbilitiesStep";
 import { AncestryStep } from "./steps/AncestryStep";
 import { CallingStep } from "./steps/CallingStep";
-import { FinishStep } from "./steps/FinishStep";
-import { IdentityStep, type BuilderRole } from "./steps/IdentityStep";
+import { FinishStep, type BuilderRole } from "./steps/FinishStep";
+import { IdentityStep } from "./steps/IdentityStep";
 import { SpellsGearStep } from "./steps/SpellsGearStep";
 import { OwedLine } from "./steps/shared";
 import { owedPicks } from "./owed";
@@ -118,7 +118,7 @@ function droppedMessage({ because, drops }: DroppedNotice, stepLabel: string | u
 }
 
 // Full character creation flow as a six-step wizard: identity, ancestry,
-// calling, abilities, spells and gear, finishing touches, paced by the diamond
+// class, abilities, spells and gear, finish, paced by the diamond
 // stepper and the gold step wipe (docs/visual-overhaul-plan.md 7). Open5e
 // races/classes/subclasses/backgrounds (SRD fallback), three ability-score
 // methods, spell/equipment/feat pickers, live derived stats. Used by
@@ -144,6 +144,7 @@ function CharacterBuilderForm({
   initial,
   initialLevel,
   startLevel,
+  levelNote,
   submitLabel,
   onSubmit,
   busy,
@@ -172,14 +173,19 @@ function CharacterBuilderForm({
   // it earned up to there with no recorded pick were taken in play and are
   // already in its scores.
   initialLevel?: number;
-  // Open a stored character this many levels up ("Level up" in the library).
+  // Open a stored character this many levels up ("Level up" in the library),
+  // or a new one at this level when the door knows it (door.ts).
   startLevel?: number;
+  // Where that level came from, said under the level select.
+  levelNote?: string;
   submitLabel: string;
   onSubmit: (result: BuilderResult) => void;
   busy: boolean;
   error: string;
-  // Player character or DM-played ally; only the library page asks, since a
-  // campaign already knows which door the character comes through.
+  // Player character or DM-played ally, asked on the Finish step; only the
+  // library page asks, and only when the link that opened it did not say
+  // (door.ts), since a campaign already knows which door the character
+  // comes through.
   role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
   // Where a new character's progress is kept on this device
   // (builderDraftKey); the caller clears it once the save succeeds. Ignored
@@ -219,14 +225,13 @@ function CharacterBuilderForm({
     ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
   ]);
   const state = useBuilderState({ initial, initialFeatDescs, initialLevel, fixedLevel, startLevel, races, classes, backgrounds });
-  // No stand-in for a race or class the player has not chosen: the first
-  // row used to be shown as if picked ("Continue as Aarakocra"), so the
-  // step's own "Pick a race." could never hold. The background keeps its
-  // stand-in; its select on the first step shows it plainly.
+  // No stand-in for a race, class or background the player has not chosen:
+  // the first row used to be shown as if picked ("Continue as Aarakocra"),
+  // so the step's own race gate could never hold, and an untouched
+  // background was an Acolyte owing two languages nobody asked for.
   const race = findRace(races, state.raceId);
   const klass = classes.find((entry) => entry.id === state.classId);
-  const background =
-    backgrounds.find((entry) => entry.id === state.backgroundId) ?? backgrounds[0];
+  const background = backgrounds.find((entry) => entry.id === state.backgroundId);
   const archetypes = useArchetypes(klass?.id ?? "");
 
   const table = useTableRules(campaignId, klass?.id);
@@ -344,18 +349,11 @@ function CharacterBuilderForm({
     onBlocked: blocked ? () => locate(blocked.target) : undefined,
   });
 
-  // A stored race, class or background these lists do not hold: the race
-  // or class shows as not chosen, the background would be replaced by the
-  // list's first row on save. The save waits until the player picks on
-  // purpose (issue 229).
+  // A stored race, class or background these lists do not hold shows as not
+  // chosen. The save waits until the player picks on purpose (issue 229).
   const unoffered = initial && loaded ? unofferedPicks(initial, state, races, classes, backgrounds) : [];
-  const standIns = unoffered.flatMap((entry) => (entry.standIn ? [entry.standIn] : []));
   const unofferedText = unoffered.length
-    ? `This builder does not offer ${initial?.name || "this character"}'s ${listWords(unoffered.map((entry) => entry.what))}: a table's own content, or a row this server no longer has. ${
-        standIns.length
-          ? `Saving here would put ${listWords(standIns)} in ${standIns.length === 1 ? "its" : "their"} place, so the save`
-          : "The save"
-      } waits until you pick on purpose. Leave without saving to keep ${initial?.name || "them"} as stored.`
+    ? `This builder does not offer ${initial?.name || "this character"}'s ${listWords(unoffered.map((entry) => entry.what))}: a table's own content, or a row this server no longer has. The save waits until you pick on purpose. Leave without saving to keep ${initial?.name || "them"} as stored.`
     : "";
 
   function submit() {
@@ -427,13 +425,16 @@ function CharacterBuilderForm({
     }),
   );
 
+  // Each step's title is the task in plain words; its label is the short
+  // name printed under its diamond and said with it, and the one the notices
+  // above the steps use ("asked for on the Class step").
   // The steps' keys in order, for the finishing step's Edit links.
   const STEP_ORDER = ["identity", "ancestry", "calling", "abilities", "spells-gear", "finish"];
   const steps: WizardStep[] = [
     {
       key: "identity",
-      label: "Identity",
-      title: "Who is this?",
+      label: "Hero",
+      title: "Name your hero and choose their past",
       ...gate(blockers.identity),
       content: (
         <>
@@ -443,7 +444,7 @@ function CharacterBuilderForm({
             pack={pack}
             packInstalled={packInstalled}
             fixedLevel={fixedLevel}
-            role={role}
+            levelNote={levelNote}
             playstyle={
               initial
                 ? undefined
@@ -465,8 +466,8 @@ function CharacterBuilderForm({
     {
       key: "ancestry",
       label: "Ancestry",
-      title: "Ancestry",
-      blurb: "Where are they from, and what does that grant?",
+      title: "Choose where your hero comes from",
+      blurb: "Their people, and what that grants.",
       ...gate(blockers.ancestry),
       continueLabel: race ? `Continue as ${race.name}` : undefined,
       content: (
@@ -485,8 +486,8 @@ function CharacterBuilderForm({
     },
     {
       key: "calling",
-      label: "Calling",
-      title: "Calling",
+      label: "Class",
+      title: "Choose how you fight or use magic",
       blurb: "The class decides how this character plays.",
       ...gate(blockers.calling),
       content: (
@@ -513,8 +514,8 @@ function CharacterBuilderForm({
     },
     {
       key: "abilities",
-      label: "Ability scores",
-      title: "Ability scores",
+      label: "Abilities",
+      title: "Set what your hero is good at",
       blurb: "How do you roll?",
       ...gate(blockers.abilities),
       content: (
@@ -526,8 +527,8 @@ function CharacterBuilderForm({
     },
     {
       key: "spells-gear",
-      label: casts ? "Spells and gear" : "Gear",
-      title: casts ? "Spells and gear" : "Gear",
+      label: casts ? "Spells" : "Gear",
+      title: casts ? "Choose spells and gear" : "Choose your gear",
       blurb: casts ? "Pick what they can cast, then arm your hero." : "Arm your hero.",
       ...gate(blockers.spells),
       content: (
@@ -547,8 +548,8 @@ function CharacterBuilderForm({
     },
     {
       key: "finish",
-      label: "Finishing touches",
-      title: "Finishing touches",
+      label: "Finish",
+      title: "Check your hero and finish",
       blurb: "Who have you made?",
       canContinue: !busy,
       content: (
@@ -566,6 +567,7 @@ function CharacterBuilderForm({
           onEdit={(key) => setStep(STEP_ORDER.indexOf(key))}
           alignmentGroups={pickers.alignmentGroups}
           alignmentInfo={pickers.alignmentInfo}
+          role={role}
         />
       ),
     },
@@ -622,6 +624,7 @@ function CharacterBuilderForm({
         onStepChange={setStep}
         title={state.name.trim() || "New character"}
         variant="diamonds"
+        stepNames
         // The wipe paces a first build; an edit of a stored character moves
         // between steps at once.
         wipe={!initial}

@@ -128,7 +128,8 @@ export const CREATE_CHOICES: CreateChoice[] = [
         label: "Build a character",
         detail: "The character builder. It saves to your library.",
         ways: ["blank"],
-        href: "/characters/new",
+        // A player character, so the builder does not ask (door.ts).
+        href: "/characters/new?as=pc",
       },
       {
         label: "A pregen for this party",

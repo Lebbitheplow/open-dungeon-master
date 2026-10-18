@@ -33,6 +33,7 @@ import { ui } from "@/lib/ui";
 // comes back to: `jumpAhead` lets a diamond ahead be tapped once every gate
 // before it passes, and `finishFromAnyStep` offers the done button on every
 // step once every gate passes (an edit of something already complete).
+// `stepNames` prints each step's short label under its diamond.
 
 export type WizardStep = {
   key: string;
@@ -82,6 +83,7 @@ export function Wizard({
   notice,
   jumpAhead = false,
   finishFromAnyStep = false,
+  stepNames = false,
 }: {
   steps: WizardStep[];
   title: ReactNode;
@@ -99,6 +101,7 @@ export function Wizard({
   notice?: WizardNotice;
   jumpAhead?: boolean;
   finishFromAnyStep?: boolean;
+  stepNames?: boolean;
 }) {
   const [internalStep, setInternalStep] = useState(0);
   const controlled = controlledStep !== undefined;
@@ -237,6 +240,7 @@ export function Wizard({
             current={step}
             onSelect={go}
             reachable={jumpAhead ? reachable : undefined}
+            named={stepNames}
           />
         ) : (
           <div
