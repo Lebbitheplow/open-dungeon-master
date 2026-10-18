@@ -17,6 +17,7 @@ import { bundledRaceTraitText, rulebookPageIdFor } from "@/lib/rulebook/catalog-
 import { traitParagraphs } from "@/lib/workshop/species-traits";
 import type { RulebookPage } from "@/lib/rulebook/types";
 import { textKey } from "@/lib/language/text-logic";
+import { thirdCasterProfileForPackSubclass } from "@/lib/srd/third-caster";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -136,7 +137,12 @@ export function archetypeMechanicsOf(row: Row, classId: string): Record<string, 
   }
   const bundled = subclassTableFor(classId, row.name);
   if (!bundled) {
-    return Object.keys(prose).length ? { classSlug: classId, levels: prose } : null;
+    // A pack subclass that casts as a third caster (the Soulspy) keeps
+    // doing so in the copy; its prose headings alone would cast nothing.
+    const castingProfile = thirdCasterProfileForPackSubclass(row.name);
+    return Object.keys(prose).length || castingProfile
+      ? { classSlug: classId, levels: prose, ...(castingProfile ? { castingProfile } : {}) }
+      : null;
   }
   const levels: Record<string, SubclassFeatureRow[]> = {};
   for (const [level, names] of Object.entries(bundled.levels)) {

@@ -12,11 +12,10 @@ import {
   withoutPrimalChampion,
 } from "@/lib/srd/trait-rules";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
-import { suggestedCantripCount } from "@/lib/content/mechanics";
-import { spellClassFor } from "@/lib/classes";
 import { findClass } from "@/lib/srd";
 import { spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import {
+  cantripCapOf,
   casterViewsOf,
   dedupeNames,
   grantedSpellsOf,
@@ -269,11 +268,9 @@ function trimToLevel(view: CasterView, abilities: CreateSheetInput["abilities"])
       return room >= 0;
     });
   };
-  const cantripCap = suggestedCantripCount(
-    spellClassFor(view.classId),
-    view.level,
-    findClass(view.classId)?.casterType,
-  );
+  // A third caster's count (an Eldritch Knight's two) as much as a
+  // class's own.
+  const cantripCap = cantripCapOf(view);
   const cap = spellCapOf(view, abilities)?.count ?? null;
   const cantrips = cantripCap === null ? view.cantrips : view.cantrips.slice(0, cantripCap);
   const known = capList(castable(view.known), cap);

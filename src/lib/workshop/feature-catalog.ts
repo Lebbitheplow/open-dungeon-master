@@ -1,8 +1,8 @@
-import { subclassFeatureDescription, subclassNamesFor, subclassTableFor } from "@/lib/srd/features";
+import { subclassFeatureDescription, subclassMayCast, subclassNamesFor, subclassTableFor } from "@/lib/srd/features";
 import { effectsFor } from "@/lib/srd/feature-effects";
 import { authoredFeatureTags, heldAuthored } from "@/lib/srd/authored-effects";
 import { optionLabelsOpenedBy } from "@/lib/srd/options";
-import { isThirdCaster, isThirdCasterFeature } from "@/lib/srd/third-caster";
+import { isThirdCasterFeature } from "@/lib/srd/third-caster";
 
 // Every subclass feature the bundled tables carry, for the workshop's
 // subclass editor to borrow from: a DM building "Oath of Ash" picks the
@@ -58,14 +58,16 @@ export function engineRunsFeature(classId: string, name: string): string | null 
   // or rogue subclass their slots and spells known (src/lib/srd/
   // subclass-tables.ts castingProfileOf); a feature that opens a pick-list
   // (Combat Superiority's maneuvers) opens it.
-  if (isThirdCasterFeature(name) && isThirdCaster(classId, "", "third-caster")) {
+  if (isThirdCasterFeature(name) && subclassMayCast(classId)) {
     return "[spell slots]";
   }
   const picks = optionLabelsOpenedBy(classId, name);
   if (picks.length) {
     return `[opens ${picks.join(", ")} picks]`;
   }
-  const sheet = { class: classId, level: 20, features: [{ name, classId }] };
+  // As a subclass grants it: from this class, so a feature borrowed from
+  // another class's subclass reads as the engines run it there.
+  const sheet = { class: classId, level: 20, features: [{ name, classId, source: "class" }] };
   const tag = authoredFeatureTags(sheet).get(name);
   if (tag) {
     return tag;

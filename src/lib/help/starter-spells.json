@@ -146,6 +146,34 @@
         { "n": "Silent Image", "d": "A wall, a guard, a closed door: whatever you need them to see." },
         { "n": "Charm Person", "d": "Turns a hostile guard into a friendly one for an hour." }
       ]
+    },
+    "soulspy": {
+      "why": "You know a few cleric spells, almost all abjuration or necromancy, and cast them with Wisdom. You learn new ones as you level instead of preparing them each day.",
+      "cantrips": [
+        { "n": "Sacred Flame", "d": "Radiant damage that ignores cover, for when you cannot get close." },
+        { "n": "Guidance", "d": "A d4 on the ability check that matters, yours or a friend's." },
+        { "n": "Light", "d": "No torch to hold, so both hands stay free for your work." }
+      ],
+      "spells": [
+        { "n": "Inflict Wounds", "d": "A huge burst of necrotic damage when you get in close." },
+        { "n": "Sanctuary", "d": "Makes you or a friend hard to attack while you slip away." },
+        { "n": "Protection from Evil and Good", "d": "Shuts down charm, fear and possession from the creatures that use them." },
+        { "n": "Shield of Faith", "d": "Two more AC for ten minutes, on you or the friend taking the hits." }
+      ]
+    },
+    "underfoot": {
+      "why": "You know a few druid spells, almost all divination or transmutation, and cast them with Wisdom. Shillelagh comes free; you learn new spells as you level instead of preparing them each day.",
+      "cantrips": [
+        { "n": "Guidance", "d": "A d4 on the ability check that matters, yours or a friend's." },
+        { "n": "Produce Flame", "d": "Light in your hand, and ranged fire damage when you need it." },
+        { "n": "Druidcraft", "d": "Small nature tricks that sell a disguise or a distraction." }
+      ],
+      "spells": [
+        { "n": "Longstrider", "d": "Ten more feet of speed for an hour: in and out before anyone reacts." },
+        { "n": "Jump", "d": "Triples your jump, over walls and gaps nobody else can cross." },
+        { "n": "Detect Magic", "d": "A ritual, so it costs you nothing to cast, and it finds the trapped chest." },
+        { "n": "Speak with Animals", "d": "The guard dog and the stable cat have seen everything." }
+      ]
     }
   }
 }

@@ -11,7 +11,13 @@
 // builds them for whoever runs the table, src/lib/characters/
 // subclass-extras.ts; the builder from the rows it fetched). Pure.
 
-import { isThirdCasterFeature } from "@/lib/srd/third-caster";
+import {
+  defaultThirdCasterProfile,
+  isThirdCasterProfile,
+  thirdCasterProfileForFeature,
+  thirdCasterProfileForPackSubclass,
+  type ThirdCasterProfile,
+} from "@/lib/srd/third-caster";
 
 export type SubclassFeatureRow = { n: string; d: string };
 
@@ -21,8 +27,9 @@ export type ExtraSubclass = {
   // Always-prepared spells by class level (a domain's, an oath's).
   spells?: Record<string, string[]>;
   // Casts as an Eldritch Knight or Arcane Trickster does (src/lib/srd/
-  // third-caster.ts), on a fighter or rogue subclass.
-  castingProfile?: "third-caster";
+  // third-caster.ts). Read only for a class that casts nothing of its own
+  // (src/lib/srd/features.ts subclassCastingProfileFor).
+  castingProfile?: ThirdCasterProfile;
   source: "homebrew" | "pack";
 };
 
@@ -81,19 +88,31 @@ function spellLevels(raw: unknown): Record<string, string[]> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-// A workshop subclass casts as a third caster when its author said so, or,
-// when they said nothing, when it holds the Eldritch Knight's or Arcane
-// Trickster's Spellcasting feature: a copy of either, or a subclass that
-// borrowed the feature, casts without a second setting to find. "none" is
-// the author turning that off.
-function castingProfileOf(data: Record<string, unknown>, levels: Record<string, SubclassFeatureRow[]>): "third-caster" | undefined {
+// A workshop subclass casts as a third caster when its author said so (the
+// Eldritch Knight's rules or the Arcane Trickster's), or, when they said
+// nothing, when it holds either one's Spellcasting feature: a copy of
+// either, or a subclass that borrowed the feature, casts without a second
+// setting to find. "none" is the author turning that off; "third-caster"
+// is the first spelling, the class's own.
+function castingProfileOf(data: Record<string, unknown>, levels: Record<string, SubclassFeatureRow[]>): ThirdCasterProfile | undefined {
+  if (isThirdCasterProfile(data.castingProfile)) {
+    return data.castingProfile;
+  }
   if (data.castingProfile === "third-caster") {
-    return "third-caster";
+    return defaultThirdCasterProfile(String(data.classSlug ?? ""));
   }
   if (data.castingProfile === "none") {
     return undefined;
   }
-  return Object.values(levels).some((rows) => rows.some((row) => isThirdCasterFeature(row.n))) ? "third-caster" : undefined;
+  for (const rows of Object.values(levels)) {
+    for (const row of rows) {
+      const profile = thirdCasterProfileForFeature(row.n);
+      if (profile) {
+        return profile;
+      }
+    }
+  }
+  return undefined;
 }
 
 // One fetched archetype row as a table, or null when it says nothing a
@@ -102,7 +121,7 @@ export function extraSubclassOf(row: Row, defaultLevel = 3): ExtraSubclass | nul
   const homebrew = row.source === "homebrew";
   const levels = homebrew ? homebrewLevels(row.data.levels) : subclassLevelsFromProse(String(row.data.desc ?? ""), defaultLevel);
   const spells = homebrew ? spellLevels(row.data.spells) : undefined;
-  const castingProfile = homebrew ? castingProfileOf(row.data, levels) : undefined;
+  const castingProfile = homebrew ? castingProfileOf(row.data, levels) : (thirdCasterProfileForPackSubclass(row.name) ?? undefined);
   if (!Object.keys(levels).length && !spells) {
     if (!castingProfile) return null;
   }

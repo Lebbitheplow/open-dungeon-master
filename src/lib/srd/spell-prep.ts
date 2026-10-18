@@ -8,7 +8,10 @@ import { isCantripName, spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell
 import {
   isThirdCaster,
   thirdCasterCantrips,
+  thirdCasterList,
+  thirdCasterProfileOf,
   thirdCasterSpellsKnown,
+  type ThirdCasterSetting,
 } from "@/lib/srd/third-caster";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
@@ -55,7 +58,7 @@ export function spellbookAllowance(level: number): number {
 type Ability = "int" | "wis" | "cha";
 
 export type CasterLists = {
-  progression?: "third-caster";
+  progression?: ThirdCasterSetting;
   known: string[];
   prepared: string[];
   cantrips?: string[];
@@ -67,7 +70,7 @@ export type CasterLists = {
 // single-class character, or one `casters` entry on a multiclass one.
 export type CasterView = {
   classId: string;
-  progression?: "third-caster";
+  progression?: ThirdCasterSetting;
   ability: Ability;
   level: number;
   subclass: string;
@@ -386,12 +389,21 @@ function casterTypeOf(classId: string) {
   return findCustomClass(id)?.casterType ?? SRD_CLASSES.find((entry) => entry.id === id)?.casterType ?? "none";
 }
 
+// The class list a caster learns from: a third caster's profile list (an
+// Eldritch Knight learns wizard spells, a Soulspy cleric ones), else its
+// class's own.
+export function casterListOf(view: Pick<CasterView, "classId" | "subclass" | "progression">): string {
+  const profile =
+    casterTypeOf(view.classId) === "none" ? thirdCasterProfileOf(view.classId, view.subclass, view.progression) : null;
+  return profile ? thirdCasterList(profile) : spellClassFor(view.classId);
+}
+
 // Cantrips this class knows at its level, or null when it has none.
 export function cantripCapOf(
   view: Pick<CasterView, "classId" | "level" | "progression"> & { subclass?: string },
 ): number | null {
   if (isThirdCaster(view.classId, view.subclass, view.progression)) {
-    return view.level >= 3 ? thirdCasterCantrips(view.classId, view.level) : null;
+    return view.level >= 3 ? thirdCasterCantrips(view.classId, view.level, view.progression) : null;
   }
   return suggestedCantripCount(spellClassFor(view.classId), view.level, casterTypeOf(view.classId));
 }

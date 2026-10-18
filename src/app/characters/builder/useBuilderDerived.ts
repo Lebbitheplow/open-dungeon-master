@@ -593,7 +593,7 @@ export function useBuilderDerived({
   const starters = useMemo(
     () =>
       casts && klass
-        ? starterSpellsFor(casting.third ? (klass.id === "rogue" ? "arcane-trickster" : "eldritch-knight") : klass.id)
+        ? starterSpellsFor(casting.profile ?? klass.id)
         : null,
     [klass, casts, casting],
   );

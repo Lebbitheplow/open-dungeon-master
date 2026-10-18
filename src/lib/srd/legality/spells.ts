@@ -26,18 +26,19 @@ import {
   type CasterView,
 } from "@/lib/srd/spell-prep";
 import {
-  THIRD_CASTER_ABILITY,
-  THIRD_CASTER_LIST,
-  isThirdCaster,
+  thirdCasterAbility,
+  thirdCasterList,
   thirdCasterOutside,
+  thirdCasterProfileOf,
   thirdCasterSchoolProblem,
+  type ThirdCasterProfile,
 } from "@/lib/srd/third-caster";
 import { lower, type ClassGrants, type SpellFacts } from "@/lib/srd/legality/types";
 
 type Casting = NonNullable<Spellcasting>;
 type CastingAbility = Casting["ability"];
 
-export type CastingClass = { entry: ClassEntry; ability: CastingAbility; list: string; progression?: "third-caster" };
+export type CastingClass = { entry: ClassEntry; ability: CastingAbility; list: string; progression?: ThirdCasterProfile };
 
 // The classes on a sheet that cast, each with its ability and the spell list
 // it draws from. A class with a casting ability and no slots yet (a paladin
@@ -53,17 +54,21 @@ export function castingClassesOf(
     const klass = classOf(entry.id);
     const stored = sent?.casters?.find((caster) => lower(caster.classId) === lower(entry.id))?.progression ??
       (classes.length === 1 ? sent?.progression : undefined);
+    // The server's own reading: the table's workshop subclass, else the
+    // published subclass by name. A stored setting is kept only for the
+    // published one, where it can only say the same thing.
     const customProfile = subclassCastingProfileFor(entry.id, entry.subclass, extras);
-    const progression = customProfile ?? (isThirdCaster(entry.id, entry.subclass) ? stored : undefined);
-    const third = isThirdCaster(entry.id, entry.subclass, progression);
+    const bundled = thirdCasterProfileOf(entry.id, entry.subclass);
+    const profile = customProfile ?? bundled;
+    const progression = customProfile ?? (bundled && stored ? bundled : undefined);
     if (klass && klass.casterType !== "none" && klass.spellAbility) {
       out.push({
         entry,
         ability: klass.spellAbility,
         list: lower(klass.spellListFrom ?? spellClassFor(entry.id)),
       });
-    } else if (third && entry.level >= 3) {
-      out.push({ entry, ability: THIRD_CASTER_ABILITY, list: THIRD_CASTER_LIST, ...(progression ? { progression: "third-caster" } : {}) });
+    } else if (profile && entry.level >= 3) {
+      out.push({ entry, ability: thirdCasterAbility(profile), list: thirdCasterList(profile), ...(progression ? { progression } : {}) });
     }
   }
   return out;
@@ -243,8 +248,11 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
   const invalidProfile = input.classes.some((entry) => {
     const stored = input.sent?.casters?.find((caster) => lower(caster.classId) === lower(entry.id))?.progression ??
       (input.classes.length === 1 ? input.sent?.progression : undefined);
-    return stored === "third-caster" && !isThirdCaster(entry.id, entry.subclass) &&
-      subclassCastingProfileFor(entry.id, entry.subclass, input.subclassExtras) !== "third-caster";
+    // A sheet that says it casts as a third caster when nothing on the
+    // server says so: a subclass whose author turned it off, or a crafted
+    // request. A profile that differs is not refused, only overwritten.
+    return Boolean(stored) && !thirdCasterProfileOf(entry.id, entry.subclass) &&
+      !subclassCastingProfileFor(entry.id, entry.subclass, input.subclassExtras);
   });
   const [first] = input.classes;
   const level = input.classes.reduce((sum, entry) => sum + entry.level, 0);
@@ -403,7 +411,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
         profile: view.progression,
         level: view.level,
         spells: levelled((view.known.length ? view.known : view.prepared).filter((name) => !taught.spells.some((entry) => lower(entry) === lower(name)))),
-        heldOutside: thirdCasterOutside(view.classId, levelled(heldNames)),
+        heldOutside: thirdCasterOutside(view.classId, levelled(heldNames), view.progression),
       });
       if (schools) {
         problems.push(schools);

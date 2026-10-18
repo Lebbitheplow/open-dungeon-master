@@ -290,7 +290,8 @@ test("a Workshop casting profile is derived only from the selected fighter or ro
     judgeLists: false,
   });
   assert.deepEqual(accepted.problems, []);
-  assert.equal(accepted.spellcasting.progression, "third-caster");
+  // Stored by the rules it names: the fighter's own, the Eldritch Knight's.
+  assert.equal(accepted.spellcasting.progression, "eldritch-knight");
   assert.deepEqual(accepted.spellcasting.slots, { 1: { max: 2, used: 0 } });
 
   const rejected = judgeSpellcasting({

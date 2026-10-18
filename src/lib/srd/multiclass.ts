@@ -6,7 +6,7 @@
 
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
 import { findClass, spellSlotsFor } from "@/lib/srd";
-import { isThirdCaster } from "@/lib/srd/third-caster";
+import { isThirdCaster, type ThirdCasterSetting } from "@/lib/srd/third-caster";
 import type { Ability, AbilityScores, ClassEntry } from "@/lib/schemas/sheet";
 
 // UI sanity cap: RAW is unbounded, but nobody at this table needs four.
@@ -21,10 +21,10 @@ export type ClassListSource = {
   subclass?: string;
   level?: number;
   classes?: ClassEntry[];
-  spellcasting?: { progression?: "third-caster"; casters?: Array<{ classId: string; progression?: "third-caster" }> } | null;
+  spellcasting?: { progression?: ThirdCasterSetting; casters?: Array<{ classId: string; progression?: ThirdCasterSetting }> } | null;
 };
 
-export function progressionForClass(sheet: ClassListSource, classId: string): "third-caster" | undefined {
+export function progressionForClass(sheet: ClassListSource, classId: string): ThirdCasterSetting | undefined {
   const perClass = sheet.spellcasting?.casters?.find((caster) => caster.classId.toLowerCase() === classId.toLowerCase());
   if (perClass) return perClass.progression;
   return sheet.class.toLowerCase() === classId.toLowerCase() ? sheet.spellcasting?.progression : undefined;
@@ -74,7 +74,7 @@ export function casterLevelFor(classList: ClassEntry[], progressionFor: (entry: 
       total += Math.floor(entry.level / 2);
     } else if (klass.casterType === "artificer") {
       total += Math.ceil(entry.level / 2);
-    } else if (isThirdCaster(entry.id, entry.subclass, progressionFor(entry))) {
+    } else if (klass.casterType === "none" && isThirdCaster(entry.id, entry.subclass, progressionFor(entry))) {
       // Eldritch Knight and Arcane Trickster: a third, rounded down.
       total += Math.floor(entry.level / 3);
     }

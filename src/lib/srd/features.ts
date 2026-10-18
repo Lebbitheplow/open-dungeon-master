@@ -2,7 +2,8 @@ import { ancestryOf, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import classFeaturesJson from "@/lib/srd/class-features.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
 import racesJson from "@/lib/srd/races.json";
-import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
+import classesJson from "@/lib/srd/classes.json";
+import { CUSTOM_CLASS_FEATURES, findCustomClass } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, isOptionName, optionSlotsFor } from "@/lib/srd/options";
@@ -10,6 +11,7 @@ import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
+import { thirdCasterProfileOf, type ThirdCasterProfile } from "@/lib/srd/third-caster";
 import { textKey } from "@/lib/language/text-logic";
 
 export type SubclassTable = {
@@ -240,8 +242,34 @@ function extraSubclassNamed(classId: string, stored: string, extras?: SubclassEx
   );
 }
 
-export function subclassCastingProfileFor(classId: string, stored: string, extras?: SubclassExtras) {
-  return extraSubclassNamed(classId, stored, extras)?.castingProfile;
+// Whether a subclass of this class may bring its own Spellcasting: the
+// classes that cast nothing themselves (barbarian, fighter, monk, rogue, and
+// a genre class without a casting ability). A cleric's or a warlock's
+// subclass adds to the class's own casting, never a second one.
+export function subclassMayCast(classId: string): boolean {
+  const custom = findCustomClass(classId);
+  if (custom) {
+    return custom.casterType === "none";
+  }
+  const srd = (classesJson as unknown as { classes: Array<{ id: string; casterType: string }> }).classes.find(
+    (entry) => entry.id === classId,
+  );
+  return srd ? srd.casterType === "none" : false;
+}
+
+// The third-caster rules a workshop or pack subclass casts by, for a class
+// that may bring its own (subclassMayCast); undefined for any other.
+export function subclassCastingProfileFor(
+  classId: string,
+  stored: string,
+  extras?: SubclassExtras,
+): ThirdCasterProfile | undefined {
+  if (!subclassMayCast(classId)) {
+    return undefined;
+  }
+  // Read through the profile names, so a table built from older data
+  // ("third-caster", the first spelling) answers with the class's own.
+  return thirdCasterProfileOf(classId, "", extraSubclassNamed(classId, stored, extras)?.castingProfile) ?? undefined;
 }
 
 // A workshop or pack subclass as the bundled tables' shape: names by level.

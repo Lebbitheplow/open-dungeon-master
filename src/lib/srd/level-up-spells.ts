@@ -219,7 +219,11 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
       profile: after.progression,
       level: input.level,
       spells: levelled(after.known.length ? after.known : after.prepared),
-      heldOutside: thirdCasterOutside(before.classId, levelled(before.known.length ? before.known : before.prepared)),
+      heldOutside: thirdCasterOutside(
+        before.classId,
+        levelled(before.known.length ? before.known : before.prepared),
+        after.progression ?? before.progression,
+      ),
     });
     if (schools) {
       return { error: schools };

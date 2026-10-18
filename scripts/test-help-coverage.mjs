@@ -23,7 +23,7 @@ const {
 } = await import("../src/lib/help/index.ts");
 const { SRD_CLASSES } = await import("../src/lib/srd/index.ts");
 const { bundledSpellSchool } = await import("../src/lib/srd/spell-facts.ts");
-const { thirdCasterSchoolProblem } = await import("../src/lib/srd/third-caster.ts");
+const { THIRD_CASTER_PROFILES, thirdCasterSchoolProblem } = await import("../src/lib/srd/third-caster.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -217,10 +217,9 @@ test("a third caster's suggested spells are its own: real spells, from its two s
   // picks (Sleep, Minor Illusion) and the wizard's "prepare from your
   // spellbook", and "Fill with the suggested spells" chose spells their
   // school rule then refused (src/lib/srd/third-caster.ts).
-  for (const [key, classId, subclass] of [
-    ["eldritch-knight", "fighter", "Eldritch Knight"],
-    ["arcane-trickster", "rogue", "Arcane Trickster"],
-  ]) {
+  // Every profile, on a class that casts nothing of its own.
+  for (const { id: key } of THIRD_CASTER_PROFILES) {
+    const [classId, subclass] = ["barbarian", ""];
     const starter = starterSpellsFor(key);
     assert.ok(starter, `${key} has no suggestions`);
     assert.doesNotMatch(starter.why, /spellbook to prepare from$|prepare fresh each day/);
@@ -230,6 +229,7 @@ test("a third caster's suggested spells are its own: real spells, from its two s
     const problem = thirdCasterSchoolProblem({
       classId,
       subclass,
+      profile: key,
       level: 3,
       spells: starter.spells.map((pick) => ({ name: pick.n, school: bundledSpellSchool(pick.n) })),
     });
