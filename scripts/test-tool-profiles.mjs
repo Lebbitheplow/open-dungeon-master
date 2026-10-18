@@ -14,7 +14,10 @@
 //   called by name;
 // - a later call the window no longer fits steps down to the essentials and
 //   the tools the turn has called, and one no set fits narrates without tools
-//   rather than halting the turn.
+//   rather than halting the turn;
+// - the documented minimums (src/lib/story-window.ts) hold: an exploration
+//   turn at the narration floor, a fight's opening and next turn at the
+//   combat floor, every call fitted.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -200,7 +203,7 @@ const baseUrl = `http://127.0.0.1:${server.address().port}/v1`;
 
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, setCampaignStatus, updateStorySettings, allocateSeq } = await import("../src/lib/db/campaigns.ts");
-const { createSheet } = await import("../src/lib/db/sheets.ts");
+const { createSheet, listSheets } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
@@ -368,6 +371,61 @@ await test("the first turn asks the endpoint for its window before it picks the 
   // one a 16K guess would have reserved before the endpoint was asked.
   const reserved = turn.contextTrace.blocks.find((block) => block.kind === "tools")?.tokens ?? 0;
   assert.ok(reserved >= requestTokens([], first.tools) - 200, `the full set was reserved (${reserved})`);
+  process.env.OPENAI_COMPAT_CONTEXT = "16384";
+});
+
+// The minimums the README and the guided setup quote (src/lib/story-window.ts),
+// by the same estimate every fit check uses: the live runs behind them are in
+// docs/agent-context-efficiency-audit-2026-10-17.md.
+const windows = await import("../src/lib/story-window.ts");
+const COMBAT_TOOLS = ["pc_attack", "enemy_attack", "end_turn"];
+const dmBodies = () => requests.filter((body) => Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE"));
+function allFit(window) {
+  for (const body of dmBodies()) {
+    const tokens = requestTokens(body.messages, body.tools ?? []);
+    assert.ok(tokens + (body.max_tokens ?? 0) <= window, `${tokens} + ${body.max_tokens} fits ${window}`);
+  }
+}
+
+await test("the narration minimum narrates an exploration turn", async () => {
+  process.env.OPENAI_COMPAT_CONTEXT = String(windows.MIN_NARRATION_WINDOW);
+  const campaign = table("I rest by the crossroads shrine for an hour.");
+  script = [{ call: "pass_time", args: { hours: 1 } }, { content: "An hour slips by under the moss-grown stones. What do you do?" }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the turn finished (${turn.status}): ${turn.error ?? ""}`);
+  assert.ok(dmBodies().every((body) => body.tools?.length), "with tools on every call");
+  allFit(windows.MIN_NARRATION_WINDOW);
+  process.env.OPENAI_COMPAT_CONTEXT = "16384";
+});
+
+await test("the combat minimum opens a fight and plays its next turn with the attack tools", async () => {
+  process.env.OPENAI_COMPAT_CONTEXT = String(windows.MIN_COMBAT_WINDOW);
+  const campaign = table("Bandits leap from the ditch! I draw my sword.");
+  script = [{ call: "start_encounter", args: { enemies: [{ monster: "bandit" }, { monster: "bandit" }] } }, { content: "Steel rings as two bandits close in." }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  let turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the opening finished (${turn.status}): ${turn.error ?? ""}`);
+  const opening = dmBodies();
+  assert.ok(opening.length >= 2, "the fight opened and the turn went on");
+  for (const body of opening.slice(1)) {
+    const offered = (body.tools ?? []).map((tool) => tool.function.name);
+    for (const name of COMBAT_TOOLS) assert.ok(offered.includes(name), `${name} offered once the fight runs`);
+  }
+  allFit(windows.MIN_COMBAT_WINDOW);
+
+  const bram = listSheets(campaign.id)[0];
+  insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "player", userId: lead.id, characterId: bram.id, content: "I swing my longsword at the nearest bandit." });
+  script = [{ content: "The bandit circles, wary. Make your attack roll." }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the next turn finished (${turn.status}): ${turn.error ?? ""}`);
+  const offered = (dmBodies()[0].tools ?? []).map((tool) => tool.function.name);
+  for (const name of COMBAT_TOOLS) assert.ok(offered.includes(name), `${name} offered on the fight's next turn`);
+  allFit(windows.MIN_COMBAT_WINDOW);
   process.env.OPENAI_COMPAT_CONTEXT = "16384";
 });
 

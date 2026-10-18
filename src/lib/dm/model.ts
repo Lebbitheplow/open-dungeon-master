@@ -23,6 +23,7 @@ import { calibrationFor, noteReportedInput } from "@/lib/dm/token-calibration";
 import { asInteractive, waitForInteractive } from "@/lib/dm/inference-gate";
 import { currentModelTask } from "@/lib/usage/task-scope";
 import { afterFailure, afterSuccess, breakerOpen, CLOSED, type BreakerState } from "@/lib/dm/utility-breaker-logic";
+import { STORY_WINDOW_NEEDS } from "@/lib/story-window";
 import type { StorySettings } from "@/lib/types";
 
 // Every DM-side model call passes through here, which makes it the one place
@@ -158,7 +159,7 @@ function capacityResponse(route: Route, reason: string): Response {
       : "OPENAI_COMPAT_CONTEXT and the server's own context setting (llama-server -c)";
   return Response.json(
     {
-      error: `The ${route.backendRole === "utility" ? "utility" : "story"} model's context window is too small for this request. ${reason} Raise the window (${where}) or choose a model with a larger one.`,
+      error: `The ${route.backendRole === "utility" ? "utility" : "story"} model's context window is too small for this request. ${reason} Raise the window (${where}) or choose a model with a larger one.${route.backendRole === "utility" ? "" : ` ${STORY_WINDOW_NEEDS}`}`,
       code: "context_capacity",
     },
     { status: 413 },

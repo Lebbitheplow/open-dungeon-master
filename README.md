@@ -141,6 +141,12 @@ model server such as llama.cpp or Ollama, an API key (OpenAI, OpenRouter or any
 OpenAI-compatible provider), or a CLI agent you already pay for (Claude Code,
 Codex, opencode, Grok Build). Pictures and voice are optional.
 
+A local model needs a **context window of at least 16K tokens to narrate and
+24K to run fights; 32K or more is recommended**. The default storyteller runs
+at 64K, and the guided setup's **Test backend** reads the window a server runs
+([what each size plays](docs/text-backends.md#context-window)). Hosted models
+and agent programs have far more.
+
 ```bash
 git clone --depth 1 https://github.com/Lebbitheplow/open-dungeon-master.git
 cd open-dungeon-master
