@@ -71,9 +71,9 @@ export default {
     await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
     await page.mouse.down();
     await page.mouse.move(grip.x + grip.width / 2, target.y + 8, { steps: 6 });
-    await sleep(120);
-    const drop = await page.locator(`${root}[data-party-card="${ids.bree}"][data-drop="before"]`).count();
-    check(drop === 1, "the drop line shows above Bree while dragging");
+    // A slow runner can take longer than a frame or two to draw the line:
+    // look for it a few times while the button is still held.
+    await eventually(async () => (await page.locator(`${root}[data-party-card="${ids.bree}"][data-drop="before"]`).count()) === 1, { timeoutMs: 3_000, every: 100, label: "the drop line shows above Bree while dragging" });
     await page.mouse.move(grip.x + grip.width / 2, target.y + 6, { steps: 2 });
     await page.mouse.up();
     await eventually(async () => (await shown())[0] === ids.tavi, { label: "Tavi first after the drag" });
