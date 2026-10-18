@@ -868,8 +868,6 @@
     "lib/uploads.ts#[a-z]": [["key",8,"upload path formats"]],
     "lib/usage/ledger.ts#LIKE": [["key",1,"file extension, companion ids"]],
     "lib/usage/ledger.ts#[a-z]": [["key",1,"file extension, companion ids"]],
-    "lib/use-drag.ts#[a-z]": [["key",1,"data attribute names"]],
-    "lib/use-drag.ts#toUpperCase": [["key",1,"data attribute names"]],
     "lib/use-undo-ring.ts#toLowerCase": [["key",3,"keyboard keys"]],
     "lib/voice/mesh-logic.ts#localeCompare": [["key",1,"joinedAt"]],
     "lib/voice/peers.ts#localeCompare": [["key",1,"joinedAt"]],
