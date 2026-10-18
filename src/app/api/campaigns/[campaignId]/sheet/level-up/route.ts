@@ -30,8 +30,9 @@ export async function GET(
   }
   const query = new URL(request.url).searchParams;
   const classId = query.get("class") ?? undefined;
-  if (classId !== undefined && !/^[a-z0-9_-]{1,60}$/i.test(classId)) {
-    return Response.json({ error: "That class id is not valid." }, { status: 400 });
+  // An id no class has is refused as an unknown class below.
+  if (classId !== undefined && classId.length > 60) {
+    return Response.json({ error: "That class id is too long." }, { status: 400 });
   }
   const subclass = query.get("subclass") ?? undefined;
   if (subclass !== undefined && subclass.length > 80) {

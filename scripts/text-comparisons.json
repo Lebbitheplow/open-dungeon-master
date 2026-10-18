@@ -797,6 +797,7 @@
     "lib/srd/legality/features.ts#toUpperCase": [["display",1,"a sentence's first letter"]],
     "lib/srd/legality/types.ts#toLowerCase": [["rules",1,"SRD names"]],
     "lib/srd/level-change.ts#toLowerCase": [["key",3,"class ids"]],
+    "lib/srd/level-up-options.ts#toLowerCase": [["key",6,"class ids"]],
     "lib/srd/level-up.ts#toLowerCase": [["key",9,"class ids; skill id"]],
     "lib/srd/magic-gear.ts#RegExp i": [["rules",1,"pack item names"]],
     "lib/srd/magic-gear.ts#\\b": [["rules",2,"pack item names"]],
