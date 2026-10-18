@@ -56,7 +56,7 @@ export const resourceTools: ToolDef[] = [
         additionalProperties: false,
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-          item: { type: "string", description: "Item name; a treasure with its value ('Ruby (1000 gp)')." },
+          item: { type: "string", description: "Item name, without its worth: price carries that." },
           price: {
             type: "integer",
             minimum: 0,

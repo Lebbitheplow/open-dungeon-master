@@ -13,10 +13,11 @@ import { isTableGearName } from "@/lib/db/homebrew";
 import { textKey } from "@/lib/language/text-logic";
 
 // A purchase or a sale outside a shop. The table prices it, not the model:
-// the content pack's list price (or the value a treasure's name carries) is
-// what a buyer pays, and a seller gets half of it, full for gems, art and
-// trade goods (SRD 5.1, Selling Treasure; src/lib/dm/trade-value.ts). The
-// model's `price` stands only for a thing the table has no price for.
+// the content pack's list price (or the worth the item was given) is what a
+// buyer pays, and a seller gets half of it, full for gems, art and trade
+// goods (SRD 5.1, Selling Treasure; src/lib/dm/trade-value.ts). The model's
+// `price` stands only for a thing the table has no price for, and is then
+// the worth of what was bought.
 export function computePurchase(
   sheet: CharacterSheet,
   args: { item: string; price: number; qty: number; action: "buy" | "sell" },
@@ -41,7 +42,7 @@ export function computePurchase(
       };
     }
     const paid = addCopper(purse, -totalCp).purse;
-    const items = grantItemMath(sheet.equipment, args.item.slice(0, 80), args.qty);
+    const items = grantItemMath(sheet.equipment, args.item.slice(0, 80), args.qty, listCp === null && args.price > 0 ? { worth: args.price } : {});
     return {
       patch: { gold: paid.gold, copper: paid.copper, equipment: items.equipment },
       result: {

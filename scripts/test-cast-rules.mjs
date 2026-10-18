@@ -172,11 +172,11 @@ test("a costly material is carried, bought, or the spell is refused", () => {
   assert.equal(revivify.materialCostGp, 300);
   assert.equal(revivify.materialConsumed, true);
   assert.ok("error" in materialPlan(caster(), revivify));
-  const carried = materialPlan(caster({ equipment: [{ name: "Diamond (300 gp)", qty: 1 }] }), revivify);
+  const carried = materialPlan(caster({ equipment: [{ name: "Diamond", qty: 1, worth: 300 }] }), revivify);
   assert.equal(carried.kind, "components");
-  assert.deepEqual(carried.uses.map((use) => [use.itemName, use.take, use.consume]), [["Diamond (300 gp)", 1, true]]);
+  assert.deepEqual(carried.uses.map((use) => [use.itemName, use.take, use.consume]), [["Diamond", 1, true]]);
   // Pieces make the worth: three 100 gp diamonds.
-  const pieces = materialPlan(caster({ equipment: [{ name: "Diamond (100 gp)", qty: 5 }] }), revivify);
+  const pieces = materialPlan(caster({ equipment: [{ name: "Diamond", qty: 5, worth: 100 }] }), revivify);
   assert.deepEqual(pieces.uses.map((use) => use.take), [3]);
   // A name alone proves no worth.
   assert.ok("error" in materialPlan(caster({ equipment: [{ name: "Diamond", qty: 1 }] }), revivify, { inFight: true }));
@@ -363,8 +363,8 @@ test("the nine materials a single price cannot hold are kept as printed", () => 
   assert.equal(sum("Simulacrum"), 1500);
   // Two rings, each worth 50: one 100 gp ring is not a pair.
   const bond = { ...facts("Warding Bond"), material: true };
-  assert.ok("error" in materialPlan(caster({ equipment: [{ name: "Platinum ring (100 gp)", qty: 1 }] }), bond, { inFight: true }));
-  const pair = materialPlan(caster({ equipment: [{ name: "Platinum ring (50 gp)", qty: 2 }] }), bond, { inFight: true });
+  assert.ok("error" in materialPlan(caster({ equipment: [{ name: "Platinum ring", qty: 1, worth: 100 }] }), bond, { inFight: true }));
+  const pair = materialPlan(caster({ equipment: [{ name: "Platinum ring", qty: 2, worth: 50 }] }), bond, { inFight: true });
   assert.deepEqual(pair.uses.map((use) => use.take), [2]);
   // Imprisonment counts the target's Hit Dice.
   const prison = { ...facts("Imprisonment"), material: true };

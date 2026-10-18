@@ -6,8 +6,9 @@
 //     whether the spell consumes it. Nine SRD spells print theirs in a way a
 //     single price cannot hold (Clone's diamond and vessel, Warding Bond's
 //     pair of rings): their rows are written out below.
-//   - A carried line counts only when it states its worth ("Diamond (300 gp)")
-//     and that worth covers the component; a name alone proves nothing.
+//   - A carried line counts only when it carries its worth (the `worth` the
+//     tool that gave it set) and that worth covers the component; a name
+//     alone proves nothing, and a worth written into one is only a name.
 //   - What the caster does not carry may be bought from the purse outside a
 //     fight. In a fight there is no merchant: it must be carried.
 //   - A material with no price is replaced by a component pouch or the
@@ -102,14 +103,8 @@ export function materialWords(text: string): string[] {
   )];
 }
 
-// The worth a line states in its own name: "Diamond (300 gp)" is 300 for one.
-export function statedValue(name: string): number | null {
-  const match = /(\d[\d,]*)\s*gp\b/i.exec(name);
-  return match ? Number(match[1].replace(/,/g, "")) : null;
-}
-
 export type MaterialUse = { index: number; itemName: string; take: number; consume: boolean };
-export type MaterialBuy = { name: string; qty: number; copper: number; consume: boolean };
+export type MaterialBuy = { name: string; qty: number; gp: number; copper: number; consume: boolean };
 
 export type MaterialPlan =
   | { kind: "none" }
@@ -161,9 +156,9 @@ export function materialPlan(sheet: Holder, facts: SpellFacts | null, ctx: Mater
       return units;
     }
     const words = materialWords(component.what);
-    // Lines that name the component and state what one is worth.
+    // Lines that name the component and carry what one is worth.
     const lines = sheet.equipment
-      .map((item, index) => ({ item, index, value: statedValue(item.name), free: Math.max(1, item.qty ?? 1) - (taken.get(index) ?? 0) }))
+      .map((item, index) => ({ item, index, value: item.worth ?? null, free: Math.max(1, item.qty ?? 1) - (taken.get(index) ?? 0) }))
       .filter(({ item, value, free }) => free > 0 && value !== null && (words.length ? words.some((word) => textKey(item.name).includes(word)) : true));
     const pieces = component.count * units;
     let missing: { qty: number; gp: number } | null = null;
@@ -194,24 +189,24 @@ export function materialPlan(sheet: Holder, facts: SpellFacts | null, ctx: Mater
       continue;
     }
     const short = component.what.split(/\s+/).length <= 3 ? component.what : words[0] ?? "";
-    const name = `${short ? title(short) : `${facts.name} component`} (${missing.gp} gp)`;
+    const name = short ? title(short) : `${facts.name} component`;
     const copper = missing.qty * missing.gp * COPPER_PER_GOLD;
     const stated = /\d\s*gp/i.test(component.what);
     const printed = `${pieces > 1 ? `${pieces} × ` : ""}${component.what.replace(/\.$/, "")}${stated ? "" : ` worth ${component.gp} gp${pieces > 1 ? " each" : ""}`}${component.consumed && !/consum/i.test(component.what) ? ", which the spell consumes" : ""}`;
     if (ctx.inFight) {
       return {
-        error: `${facts.name} needs ${printed}, and ${sheet.name} does not carry it (a line on the sheet that states its worth, like "${name}"). There is no buying one in the middle of a fight. Nothing was spent.`,
+        error: `${facts.name} needs ${printed}, and ${sheet.name} does not carry it (a line on the sheet with its worth, like "${name}" with worth ${missing.gp}). There is no buying one in the middle of a fight. Nothing was spent.`,
         refused: "rules",
       };
     }
     if (purse < copper) {
       return {
-        error: `${facts.name} needs ${printed}. ${sheet.name} carries none (a line on the sheet that states its worth, like "${name}") and has not the gold to buy it. Nothing was spent.`,
+        error: `${facts.name} needs ${printed}. ${sheet.name} carries none (a line on the sheet with its worth, like "${name}" with worth ${missing.gp}) and has not the gold to buy it. Nothing was spent.`,
         refused: "rules",
       };
     }
     purse -= copper;
-    bought.push({ name, qty: missing.qty, copper, consume: component.consumed });
+    bought.push({ name, qty: missing.qty, gp: missing.gp, copper, consume: component.consumed });
   }
   return { kind: "components", uses, bought };
 }

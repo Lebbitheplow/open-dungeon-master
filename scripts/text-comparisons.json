@@ -370,7 +370,6 @@
     "lib/dm/cast-buff.ts#toLowerCase": [["key",6,"buff variant (tool argument) against the engine's variant list; condition label (engine vocabulary)"]],
     "lib/dm/cast-guard.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
     "lib/dm/cast-materials.ts#[a-z]": [["rules",1,"material-component words of SRD spell text matched in item names"]],
-    "lib/dm/cast-materials.ts#\\b": [["rules",1,"a material component's price in SRD spell text"]],
     "lib/dm/cast-materials.ts#toLowerCase": [["key",1,"class id"],["rules",1,"material-component words of SRD spell text matched in item names"]],
     "lib/dm/cast-materials.ts#toUpperCase": [["display",1,"capitalised word"]],
     "lib/dm/cast-rules.ts#toLowerCase": [["key",8,"class id; condition label (engine vocabulary)"]],

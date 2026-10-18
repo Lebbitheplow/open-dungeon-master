@@ -142,13 +142,14 @@ export function grantItemMath(
   equipment: EquipmentRow[],
   name: string,
   qty: number,
-  // What the item is, when no English row says it (src/lib/srd/item-tags.ts);
-  // never written on an unidentified one, whose secret stays off the sheet.
-  options: { identified?: boolean; tags?: ItemTag[] } = {},
+  // What the item is, when no English row says it (src/lib/srd/item-tags.ts),
+  // and what one is worth, when the pack does not price it; never written on
+  // an unidentified one, whose secret stays off the sheet.
+  options: { identified?: boolean; tags?: ItemTag[]; worth?: number } = {},
 ) {
   const amount = Math.max(1, Math.floor(qty));
   const known = options.identified !== false;
-  const tags = known && options.tags?.length ? { tags: options.tags } : {};
+  const tags = known ? { ...(options.tags?.length ? { tags: options.tags } : {}), ...(options.worth ? { worth: options.worth } : {}) } : {};
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known,
   );
@@ -177,6 +178,7 @@ export function revealItemMath(
   name: string,
   revealedName?: string,
   tags?: ItemTag[],
+  worth?: number,
 ): { equipment: EquipmentRow[]; from: string; to: string } | null {
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name) && !isIdentified(item),
@@ -191,7 +193,7 @@ export function revealItemMath(
   // and one representation for "identified" is one fewer thing to disagree.
   const rest = { ...next[index] };
   delete rest.identified;
-  next[index] = { ...rest, name: to, ...(tags?.length ? { tags } : {}) };
+  next[index] = { ...rest, name: to, ...(tags?.length ? { tags } : {}), ...(worth ? { worth } : {}) };
   return { equipment: next, from, to };
 }
 

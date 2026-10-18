@@ -197,6 +197,10 @@ export const equipmentItemSchema = z.object({
   // What the item is, when no English row says it (loot the model invents,
   // an item named in the table's language): src/lib/srd/item-tags.ts.
   tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
+  // What one is worth in gold pieces, for a thing the content pack does not
+  // price (a gem, an art object, loot the model invents): its sale and a
+  // material component read it (src/lib/dm/trade-value.ts).
+  worth: z.number().positive().max(100000).optional(),
   // A homebrew item's mechanics, snapshotted from the entry so the armour,
   // attack and magic-item engines read it exactly as they read SRD gear
   // (src/lib/homebrew/gear.ts). Refreshed on every sheet read; absent for

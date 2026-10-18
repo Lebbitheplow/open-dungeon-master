@@ -96,6 +96,7 @@ import { casterViewsOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-pre
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { invalidArguments, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { worthProblem } from "@/lib/dm/trade-value";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
@@ -142,6 +143,16 @@ const ITEM_TAGS_PROPERTY = {
   items: { type: "string", enum: [...ITEM_TAGS] },
   description:
     "What the item is, when its name is not an SRD or pack item's English name (loot you invent, a name in the table's language): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. Omit for an SRD item, and while it is unidentified.",
+};
+
+// What one is worth, for a thing the content pack does not price
+// (src/lib/dm/trade-value.ts).
+const ITEM_WORTH_PROPERTY = {
+  type: "number",
+  minimum: 0.01,
+  maximum: 100000,
+  description:
+    "What one is worth in gold pieces, for a thing no SRD or pack row prices: a gem (10 to 5,000 gp), an art object (25 to 7,500 gp), a trade good, loot you invent. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write the name without its worth. Omit for an SRD item, and while it is unidentified.",
 };
 
 function tool(name: string, description: string, extra: Record<string, unknown>, required: string[]): ToolDef {
@@ -261,6 +272,7 @@ export const mutationTools: ToolDef[] = [
     qty: { type: "integer", minimum: 1, maximum: 99 },
     additional: { type: "boolean", description: "Only when a player just accepted this same item and this is truly another one from a different source." },
     tags: ITEM_TAGS_PROPERTY,
+    worth: ITEM_WORTH_PROPERTY,
   }, ["name"]),
   tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, use use_item; for sales, use purchase.", {
     name: { type: "string" },
@@ -270,6 +282,7 @@ export const mutationTools: ToolDef[] = [
     name: { type: "string", description: "The description they have been calling it by, as on the sheet now ('an ornate silver ring')." },
     revealedName: { type: "string", description: "What it truly is ('Ring of Protection')." },
     tags: ITEM_TAGS_PROPERTY,
+    worth: ITEM_WORTH_PROPERTY,
   }, ["name"]),
   ...resourceTools,
   tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Always give a duration when the fiction has one, because only timed conditions ever expire on their own: rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.", {
@@ -455,6 +468,8 @@ const argsSchema = z.object({
   revealedName: z.string().optional(),
   // grant_item, reveal_item: what the item is (src/lib/srd/item-tags.ts).
   tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
+  // grant_item, reveal_item: what one is worth, in gold pieces.
+  worth: z.coerce.number().positive().max(100000).optional(),
   qty: z.coerce.number().int().optional(),
   // use_item / purchase / use_resource.
   item: z.string().optional(),
@@ -971,7 +986,11 @@ export function applyDmMutation(
       if (badQty) {
         return { result: badQty };
       }
-      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, tags: args.tags });
+      const priced = worthProblem(name, args.worth, "grant_item");
+      if (priced) {
+        return { result: priced };
+      }
+      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, tags: args.tags, worth: args.worth });
       const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name) ?? capacityProblem(sheet, math.equipment, name);
       if (noRoom) {
         return { result: noRoom };
@@ -996,7 +1015,11 @@ export function applyDmMutation(
       if (!name) {
         return { result: { error: "reveal_item needs the description the sheet carries now.", retry: true } };
       }
-      const math = revealItemMath(sheet.equipment, name, args.revealedName, args.tags);
+      const priced = worthProblem(args.revealedName?.trim() || name, args.worth, "reveal_item");
+      if (priced) {
+        return { result: priced };
+      }
+      const math = revealItemMath(sheet.equipment, name, args.revealedName, args.tags, args.worth);
       if (!math) {
         return {
           result: {

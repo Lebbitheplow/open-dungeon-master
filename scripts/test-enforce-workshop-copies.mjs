@@ -136,7 +136,7 @@ await test("F02: a renamed copy of Revivify keeps its casting facts through copy
   const poor = world.addHero(cleric(5, { gold: 0, equipment: [], spellcasting: { prepared: ["Second Chance"] } }));
   const refused = await world.invoke("use_spell_slot", { characterId: poor.id, level: 3, spell: "Second Chance" });
   assert.equal(refused.ok, false, "the copy was cast with no diamond and no gold");
-  const rich = world.addHero(cleric(5, { gold: 0, equipment: [{ name: "Diamond (300 gp)", qty: 1 }], spellcasting: { prepared: ["Second Chance"] } }));
+  const rich = world.addHero(cleric(5, { gold: 0, equipment: [{ name: "Diamond", qty: 1, worth: 300 }], spellcasting: { prepared: ["Second Chance"] } }));
   const cast = await world.invoke("use_spell_slot", { characterId: rich.id, level: 3, spell: "Second Chance" });
   assert.equal(cast.ok, true, cast.error);
   assert.deepEqual(world.sheet(rich.id).equipment.filter((item) => /diamond/i.test(item.name)), [], "the diamond was not consumed");

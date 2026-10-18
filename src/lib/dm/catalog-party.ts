@@ -25,6 +25,17 @@ const ITEM_TAGS_FIELD: CatalogField = {
   help: `For an item named in the table's language or invented, comma separated, from: ${ITEM_TAGS.join(", ")}.`,
 };
 
+// What one is worth, for a thing the content pack does not price
+// (src/lib/dm/trade-value.ts).
+const ITEM_WORTH_FIELD: CatalogField = {
+  name: "worth",
+  label: "Worth (gp each)",
+  kind: "number",
+  min: 0.01,
+  max: 100000,
+  help: "For a gem, an art object or anything the book does not price: its sale and a spell's costly material read it. Leave the worth out of the name.",
+};
+
 export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
   {
     name: "apply_damage",
@@ -180,6 +191,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         help: "With item offers on, the same item again within ten minutes of an accepted offer is refused unless it is truly another from a different source.",
       },
       ITEM_TAGS_FIELD,
+      ITEM_WORTH_FIELD,
       REASON,
     ],
   },
@@ -193,6 +205,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "name", label: "Called on the sheet", kind: "text", required: true },
       { name: "revealedName", label: "Actually", kind: "text", placeholder: "Ring of Protection" },
       ITEM_TAGS_FIELD,
+      ITEM_WORTH_FIELD,
       REASON,
     ],
   },
