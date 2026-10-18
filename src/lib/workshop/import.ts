@@ -97,6 +97,9 @@ export type PlanInput = {
   // Hand-built items the travelling World entries link to that this table's
   // authors do not have: copied into its Homebrew on import.
   foreignItems?: string[];
+  // How many battle maps and encounters the World's places link to, so
+  // leaving those kinds out says the links stay behind with them.
+  worldBound?: { maps: number; encounters: number };
 };
 
 export function planImport(input: PlanInput): ImportPlan {
@@ -183,6 +186,16 @@ export function planImport(input: PlanInput): ImportPlan {
         if (selected.has(other) || !(input.source[other] ?? []).length) continue;
         const facts = input.worldFacts?.[other];
         warnings.push({ kind, message: facts ? leftOut(IMPORT_KIND_LABELS[other], facts) : `WorldForge's links, secrets and pins for ${IMPORT_KIND_LABELS[other].toLowerCase()} stay behind with them.` });
+      }
+      // A place's battle maps and encounters are rows of their own kinds,
+      // chosen or not like any other: a link to one left behind is dropped,
+      // unless an earlier import already brought it.
+      for (const [other, count, one, many] of [
+        ["maps", input.worldBound?.maps ?? 0, "battle map", "battle maps"],
+        ["encounters", input.worldBound?.encounters ?? 0, "prepared encounter", "prepared encounters"],
+      ] as const) {
+        if (!count || selected.has(other) || !(input.source[other] ?? []).length) continue;
+        warnings.push({ kind, message: `World places link to ${count} ${count === 1 ? one : many}. Without ${IMPORT_KIND_LABELS[other].toLowerCase()}, those links stay behind unless an earlier import brought them.` });
       }
       items.push({ kind, sourceId: rows[0].id, name: rows[0].name, finalName: rows[0].name, renamed: false });
       continue;

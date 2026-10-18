@@ -3,14 +3,15 @@ import { entriesBoundTo } from "@/lib/db/world-bindings";
 import { createEntryForRecord, getWorldDoc } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { recordsChanged } from "@/lib/workshop/record-events";
-import { BINDING_KINDS, type BindingKind } from "@/lib/worldforge/model";
+import { BINDING_KINDS, isPlaceBinding, type BindingKind } from "@/lib/worldforge/model";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // The World entries that link to one playable record (audit finding WF-17),
 // for the record's own tool: the way back to each entry, and the names to
-// give before the record is deleted. ?kind=monster|item&ref=homebrew:<id>
+// give before the record is deleted. ?kind=monster|item&ref=homebrew:<id>,
+// or ?kind=map|encounter&ref=<the prepared map's or encounter's id>
 export async function GET(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
   const context = await requireStoryAuthority(campaignId);
@@ -38,7 +39,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const raw = (await request.json().catch(() => ({}))) as { kind?: unknown; ref?: unknown };
   const kind = raw.kind as BindingKind;
   const ref = typeof raw.ref === "string" ? raw.ref.trim().slice(0, 120) : "";
-  if (!BINDING_KINDS.includes(kind) || !ref) {
+  // A battle map or an encounter is a place's, given from the place.
+  if (!BINDING_KINDS.includes(kind) || isPlaceBinding(kind) || !ref) {
     return Response.json({ error: "Name a kind and a record." }, { status: 400 });
   }
   const result = createEntryForRecord(campaignId, { kind, ref });

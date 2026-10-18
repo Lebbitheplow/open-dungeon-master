@@ -322,7 +322,16 @@ export function planContentImport(
       ...(chosen.includes("world") ? boundRefsOf(sourceId, "monster") : []),
     ]).map((monster) => monster.entry.name),
     foreignItems: chosen.includes("world") ? foreignItems(sourceId, campaignId, boundRefsOf(sourceId, "item")).map((item) => item.entry.name) : undefined,
+    worldBound: chosen.includes("world") ? placeBoundCounts(sourceId) : undefined,
   });
+}
+
+// The battle maps and encounters a world's places link to, counted once each.
+function placeBoundCounts(sourceId: string): { maps: number; encounters: number } {
+  if (!hasWorldDoc(sourceId)) return { maps: 0, encounters: 0 };
+  const bindings = Object.values(getWorldDoc(sourceId).entries).flatMap((entry) => entry.bindings);
+  const count = (kind: "map" | "encounter") => new Set(bindings.filter((binding) => binding.kind === kind).map((binding) => binding.ref)).size;
+  return { maps: count("map"), encounters: count("encounter") };
 }
 
 // Every row that travelled, as `kind:oldId` -> newId. Storyboard links, the
@@ -535,8 +544,17 @@ export function runContentImport(input: {
     // After the records, so every ref can be rewritten to the copy that
     // travelled (or an earlier import brought).
     const kinds = { npc: "npcs", location: "locations", faction: "factions", lore: "lore" } as const;
-    const world = copyWorldDoc(sourceId, campaignId, (shelf, id) => main.resolve(kinds[shelf], id));
+    // A place's battle maps and encounters link to the copies that came
+    // with this import or an earlier one; a link to one left behind is
+    // dropped and counted with the other references that did not travel.
+    const world = copyWorldDoc(
+      sourceId,
+      campaignId,
+      (shelf, id) => main.resolve(kinds[shelf], id),
+      (kind, id) => main.resolve(kind === "map" ? "maps" : "encounters", id),
+    );
     counts.copied += world.count;
+    counts.unbound += world.unbound;
     worldConflicts = world.conflicts;
   }
 

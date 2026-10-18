@@ -57,12 +57,15 @@ export function worldForBundle(
 
 // Returns how many entries, links and events it brought, for the count.
 // `arrived` names the id a monster or item of the bundle's shelf landed as
-// here (src/lib/db/workshop-bundle-shelf.ts), for an entry's links.
+// here (src/lib/db/workshop-bundle-shelf.ts), for an entry's links, and
+// `rows` the ids the bundle's battle maps and encounters landed as, in the
+// bundle's order, for a place's.
 export function worldFromBundle(
   workshopId: string,
   world: BundleWorld,
   ids: Record<Shelf, string[]>,
   arrived: (kind: string, name: string) => string | null = () => null,
+  rows: { maps: string[]; encounters: string[] } = { maps: [], encounters: [] },
 ): number {
   const land = (ref: string) => {
     const parsed = parseRef(ref);
@@ -87,6 +90,13 @@ export function worldFromBundle(
   // A link travels by name and lands on the arrived copy; a link to a record
   // that did not travel is dropped, and a rulebook link stays as it is.
   const landBinding = (binding: Binding): Binding | null => {
+    if (binding.kind === "map" || binding.kind === "encounter") {
+      // Only a row the bundle carried: an id from the other server names
+      // nothing here, or worse, another table's row.
+      const index = /^@(map|encounter):#(\d+)$/.exec(binding.ref);
+      const id = index && index[1] === binding.kind ? (binding.kind === "map" ? rows.maps : rows.encounters)[Number(index[2])] : undefined;
+      return id ? { kind: binding.kind, ref: id } : null;
+    }
     const portable = /^homebrew:@(monster|item):(.+)$/.exec(binding.ref);
     if (portable) {
       const id = arrived(portable[1], portable[2]);

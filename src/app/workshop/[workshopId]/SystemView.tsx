@@ -181,7 +181,7 @@ export function SystemView({
             onChanged={onPregensChanged}
           />
         ) : null}
-        {system === "maps" ? <DmMapLibraryPanel campaignId={workshop.id} layout="gallery" /> : null}
+        {system === "maps" ? <DmMapLibraryPanel campaignId={workshop.id} layout="gallery" openOnArrival={openId} /> : null}
         {system === "region" ? (
           <OverworldPanel campaignId={workshop.id} genre={workshop.gameSettings.genre} steersStory />
         ) : null}

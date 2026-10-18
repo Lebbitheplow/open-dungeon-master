@@ -22,6 +22,7 @@ export function AtlasCard({
   making,
   subMapForm,
   regionActions,
+  battleMaps,
   onMakeSubMap,
   onOpenMap,
   onOpenEntry,
@@ -39,6 +40,9 @@ export function AtlasCard({
   // For a pin naming a place: placing it on the Region, or releasing it
   // (AtlasRegion's PinRegionActions).
   regionActions?: ReactNode;
+  // For a pin naming a place: its battle maps and encounters
+  // (PlaceBattleMaps), or a line on how to get them.
+  battleMaps?: ReactNode;
   onMakeSubMap: () => void;
   onOpenMap: (id: string) => void;
   onOpenEntry: (ref: string) => void;
@@ -115,6 +119,7 @@ export function AtlasCard({
       ) : null}
       {pin && making ? subMapForm : null}
       {pin ? regionActions : null}
+      {pin ? battleMaps : null}
     </div>
   );
 }

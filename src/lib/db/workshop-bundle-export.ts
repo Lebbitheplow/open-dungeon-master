@@ -474,8 +474,14 @@ export function exportWorkshopBundle(
       { npc: ownIds(npcRows), location: ownIds(locationRows), faction: ownIds(factionRows), lore: ownIds(loreRows) },
       (image) => loadImage(image, budget),
       // A link to the author's own record travels by that record's name, and
-      // only when the record is on the shelf the bundle carries.
+      // only when the record is on the shelf the bundle carries. A place's
+      // battle map or encounter travels by its place in the bundle's own
+      // list, and only when the bundle carries it.
       (binding) => {
+        if (binding.kind === "map" || binding.kind === "encounter") {
+          const index = at(binding.kind === "map" ? mapIndex : encounterIndex, binding.ref);
+          return index === null ? null : { kind: binding.kind, ref: `@${binding.kind}:#${index}` };
+        }
         if (!binding.ref.startsWith("homebrew:")) return binding;
         const id = binding.ref.slice("homebrew:".length);
         const name =
