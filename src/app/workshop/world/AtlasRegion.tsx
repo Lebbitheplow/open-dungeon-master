@@ -170,7 +170,18 @@ export function RegionBar({ region, atlas, pins }: { region: AtlasRegion; atlas:
         <span className="pk-chip text-[11px] text-emerald-200" data-testid="atlas-over-region">
           <Globe2 className="size-3.5" /> Over the Region
         </span>
-        {region.bridge && !region.bridge.backdropIsMap ? <span className="text-[11px] text-stone-500">The Region now shows another picture.</span> : null}
+        {region.bridge && !region.bridge.backdropIsMap ? (
+          <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
+            The Region now shows another picture.
+            {atlas.image && isUploadedImagePath(atlas.image) ? (
+              // A replaced picture (map settings) or one chosen in the
+              // Region's own tools: this map's can go back, reviewed.
+              <KitButton tone="link" disabled={region.busy} onClick={() => void region.reviewBackdrop(atlas.id)} data-testid="atlas-region-reshow">
+                Show this map&apos;s picture there
+              </KitButton>
+            ) : null}
+          </span>
+        ) : null}
         {placeable.length ? (
           <KitButton tone="small" disabled={region.busy} onClick={() => void region.reviewPlaces(null)} data-testid="atlas-place-all">
             Place every pinned place
@@ -192,7 +203,7 @@ export function RegionBar({ region, atlas, pins }: { region: AtlasRegion; atlas:
   );
 }
 
-function PlacementList({ placements }: { placements: Placement[] }) {
+export function PlacementList({ placements }: { placements: Placement[] }) {
   return (
     <ul className="flex flex-col gap-0.5" data-testid="atlas-region-placements">
       {placements.map((placement) => (
