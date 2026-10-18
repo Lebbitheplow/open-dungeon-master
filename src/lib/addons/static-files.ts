@@ -39,6 +39,9 @@ const CONTENT_TYPES: Record<string, string> = {
   // Binary glTF only: it carries its buffers and textures inside itself.
   ".glb": "model/gltf-binary",
   ".wasm": "application/wasm",
+  // Godot Web resource packs and ordinary board-view UI audio.
+  ".pck": "application/octet-stream",
+  ".wav": "audio/wav",
   ".woff2": "font/woff2",
   ".ktx2": "image/ktx2",
 };

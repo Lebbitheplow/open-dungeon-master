@@ -247,6 +247,10 @@ files). Bundle your libraries (three.js and its GLTFLoader, say) into `ui/`;
 nothing can load from a CDN. Keep the page self-contained: it must work with
 no network beyond your own files.
 
+Godot single-threaded Web views may ship their `.pck` resource pack beside
+`.wasm`/JavaScript in `ui/`. Packs use `application/octet-stream`; `.wav` UI
+audio uses `audio/wav`. Existing size limits and sandbox policy apply.
+
 ### Messages
 
 Every message carries `odm: 1`. The page posts to `window.parent` with target
@@ -318,6 +322,7 @@ table hides its own over a board view.
   terrain,          // row-major, one char per square; unexplored squares are spaces
   legend,           // { ".": "floor", "#": "wall", ..., " ": "unexplored" }
   theme, ambient, outdoors,
+  skin, genre,      // optional public skin binding and campaign setting
   visible,          // square indexes this viewer sees now
   explored,         // square indexes this viewer has seen
   fullVision,       // true for the DM's view (no fog)
@@ -344,9 +349,15 @@ table hides its own over a board view.
   assetsUrl,        // where your asset library is served, ending in "/"
   options,          // this viewer's choices for your view's options, e.g. { pixelScale: "2" }
   viewer: { canDirect },
-  appearance: { theme: "night" | "day", reducedMotion }
+  appearance: { theme: "night" | "day", reducedMotion, audio: { muted, volume } /* optional */ }
 }
 ```
+
+Optional API-v1 board presentation fields: `snapshot.skin` forwards the existing
+player-safe skin ID/material bindings; `genre` identifies the campaign setting.
+`appearance.audio` contains only `{ muted, volume }` from global user controls.
+Older addons may ignore these additions; missing audio preferences should mean
+silence. These fields grant no session, file or gameplay authority.
 
 `creature` and `character` are for a view that draws figures by kind: a
 skeleton model for `undead`, a sprite by `slug`, a robe for a `wizard`. A
