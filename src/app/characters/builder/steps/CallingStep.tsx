@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton, InfoDialog } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
+import { useClassFeatureText } from "@/lib/classes/use-feature-text";
 import { firstSentence } from "@/lib/help/rules-text";
 import { CLASS_ROLES, classRoles, type ClassRole } from "@/lib/srd/class-roles";
 import { subclassBlurb } from "@/lib/srd/features";
@@ -65,6 +66,8 @@ export function CallingStep({
   const { subclass } = state;
   const { effectiveLevel, grantedFeatures } = derived;
   const { gender } = state;
+  // A genre class's feature text arrives on demand (issue 411).
+  useClassFeatureText([klass?.id]);
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   // What "Suggest the rest" picked, said until the player changes a pick.
   const [suggested, setSuggested] = useState<string[] | null>(null);

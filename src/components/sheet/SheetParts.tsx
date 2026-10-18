@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { conditionIconKey } from "@/lib/battlemap/condition-glyphs";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { contentSlug, describeFeature } from "@/lib/help";
+import { useClassFeatureText } from "@/lib/classes/use-feature-text";
 import { ABILITIES } from "@/lib/schemas/sheet";
 import { formatModifier, SRD_SKILLS } from "@/lib/srd";
 
@@ -327,10 +328,12 @@ export function FeatureChips({
   classId,
   subclass,
 }: {
-  features: Array<{ name: string; source?: string; level?: number }>;
+  features: Array<{ name: string; source?: string; level?: number; classId?: string }>;
   classId: string;
   subclass?: string | null;
 }) {
+  // A genre class's feature text arrives on demand (issue 411).
+  useClassFeatureText([classId, ...features.map((feature) => feature.classId)]);
   return (
     <InfoChipList
       items={features.map((feature) => ({

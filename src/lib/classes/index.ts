@@ -1,25 +1,24 @@
 // Original setting-specific classes layered on top of the SRD twelve. Each
 // genre ships a definitions file (class stats) and a features file (level
 // tables with one-line rules text). Definitions merge into findClass and the
-// builder; feature names merge into the SRD grant tables; the rules text
-// feeds the DM prompt so the model knows what a custom feature does.
+// builder; feature names merge into the SRD grant tables, read from
+// feature-names.json (generated from the features files by
+// scripts/build-feature-names.mjs) so no page's first load carries the rules
+// text; the text feeds the DM prompt and the sheet's feature help through
+// feature-text.ts, fetched only when asked for (issue 411).
 // Import only types from @/lib/srd here: srd/index.ts imports our values,
 // and a value import back would create a require cycle.
 import type { Genre } from "@/lib/schemas/game-settings";
 import type { SrdClass } from "@/lib/srd";
 import cyberpunkJson from "@/lib/classes/cyberpunk.json";
-import cyberpunkFeaturesJson from "@/lib/classes/cyberpunk-features.json";
 import darkFantasyJson from "@/lib/classes/dark-fantasy.json";
-import darkFantasyFeaturesJson from "@/lib/classes/dark-fantasy-features.json";
 import horrorJson from "@/lib/classes/horror.json";
-import horrorFeaturesJson from "@/lib/classes/horror-features.json";
 import mysteryJson from "@/lib/classes/mystery.json";
-import mysteryFeaturesJson from "@/lib/classes/mystery-features.json";
 import postApocalypticJson from "@/lib/classes/post-apocalyptic.json";
-import postApocalypticFeaturesJson from "@/lib/classes/post-apocalyptic-features.json";
 import steampunkJson from "@/lib/classes/steampunk.json";
-import steampunkFeaturesJson from "@/lib/classes/steampunk-features.json";
-import { textKey } from "@/lib/language/text-logic";
+import featureNamesJson from "@/lib/classes/feature-names.json";
+
+export { classFeatureDescription } from "@/lib/classes/feature-text";
 
 export type CustomClass = SrdClass & {
   // Genres that surface this class in the picker's recommended group.
@@ -35,11 +34,13 @@ export type CustomClass = SrdClass & {
   castingLabel: string | null;
 };
 
-type RawFeature = { n: string; d: string };
-type RawFeatureTable = {
+// The generated names table: per class, the catalog it came from and its
+// levels, names only.
+type NamesTable = {
+  file: string;
   subclassLevel: number;
-  levels: Record<string, RawFeature[]>;
-  subclass: { name: string; levels: Record<string, RawFeature[]> };
+  levels: Record<string, string[]>;
+  subclass: { name: string; levels: Record<string, string[]> };
 };
 
 // Same shape features.ts uses for the SRD tables (names only). Genre classes
@@ -52,7 +53,6 @@ export type CustomFeatureTable = {
 };
 
 type DefinitionsFile = { classes: CustomClass[] };
-type FeaturesFile = { classes: Record<string, RawFeatureTable> };
 
 const DEFINITION_FILES = [
   cyberpunkJson,
@@ -62,58 +62,22 @@ const DEFINITION_FILES = [
   postApocalypticJson,
   steampunkJson,
 ] as unknown as DefinitionsFile[];
-const FEATURE_FILES = [
-  cyberpunkFeaturesJson,
-  darkFantasyFeaturesJson,
-  horrorFeaturesJson,
-  mysteryFeaturesJson,
-  postApocalypticFeaturesJson,
-  steampunkFeaturesJson,
-] as unknown as FeaturesFile[];
 
 export const CUSTOM_CLASSES: CustomClass[] = DEFINITION_FILES.flatMap(
   (file) => file.classes,
 );
 
-const stripNames = (levels: Record<string, RawFeature[]>) =>
-  Object.fromEntries(
-    Object.entries(levels).map(([level, features]) => [
-      level,
-      features.map((feature) => feature.n),
-    ]),
-  );
-
-// Names-only tables for features.ts, plus a per-class name -> rules-text map
-// for the DM prompt, built in one pass over the raw files.
-export const CUSTOM_CLASS_FEATURES: Record<string, CustomFeatureTable> = {};
-const FEATURE_DESCRIPTIONS: Record<string, Record<string, string>> = {};
-
-for (const file of FEATURE_FILES) {
-  for (const [classId, table] of Object.entries(file.classes)) {
-    CUSTOM_CLASS_FEATURES[classId] = {
+// Names-only tables for features.ts.
+export const CUSTOM_CLASS_FEATURES: Record<string, CustomFeatureTable> = Object.fromEntries(
+  Object.entries((featureNamesJson as { classes: Record<string, NamesTable> }).classes).map(([classId, table]) => [
+    classId,
+    {
       subclassLevel: table.subclassLevel,
-      levels: stripNames(table.levels),
-      subclasses: [
-        {
-          name: table.subclass.name,
-          levels: stripNames(table.subclass.levels),
-        },
-      ],
-    };
-    const descriptions: Record<string, string> = {};
-    for (const features of Object.values(table.levels)) {
-      for (const feature of features) {
-        descriptions[textKey(feature.n)] = feature.d;
-      }
-    }
-    for (const features of Object.values(table.subclass.levels)) {
-      for (const feature of features) {
-        descriptions[textKey(feature.n)] = feature.d;
-      }
-    }
-    FEATURE_DESCRIPTIONS[classId] = descriptions;
-  }
-}
+      levels: table.levels,
+      subclasses: [{ name: table.subclass.name, levels: table.subclass.levels }],
+    },
+  ]),
+);
 
 export function findCustomClass(id: string): CustomClass | null {
   return CUSTOM_CLASSES.find((entry) => entry.id === id) ?? null;
@@ -123,15 +87,6 @@ export function findCustomClass(id: string): CustomClass | null {
 // custom casters borrow an SRD class's list, everything else passes through.
 export function spellClassFor(classId: string): string {
   return findCustomClass(classId)?.spellListFrom ?? classId;
-}
-
-// Rules text for a custom class feature, or null (SRD feature names need no
-// gloss; the model knows them).
-export function classFeatureDescription(
-  classId: string,
-  featureName: string,
-): string | null {
-  return FEATURE_DESCRIPTIONS[classId]?.[textKey(featureName)] ?? null;
 }
 
 // SRD classes that also deserve a spot in a genre's recommended group.
