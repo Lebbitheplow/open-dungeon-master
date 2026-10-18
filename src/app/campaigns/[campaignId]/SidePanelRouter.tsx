@@ -159,6 +159,8 @@ export type SidePanelRouterProps = {
   // Bumped when the world changed (world_updated, records_changed), so the
   // World tab reads it again.
   worldVersion?: number;
+  // Bumped on lore_updated, so the lore list reads itself again.
+  loreVersion?: number;
   shopsVersion?: number;
   coins?: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
   activeSheetId?: string;
@@ -235,6 +237,7 @@ export function SidePanelRouter({
   relationshipsVersion,
   factionsVersion = 0,
   worldVersion = 0,
+  loreVersion = 0,
   shopsVersion = 0,
   coins = null,
   activeSheetId = "",
@@ -560,7 +563,7 @@ export function SidePanelRouter({
                 steersStory={steersStory}
                 refreshFacts={refreshFacts}
               />
-              <LorePanel campaignId={campaignId} steersStory={steersStory} isDm={adjudicates} members={members} />
+              <LorePanel campaignId={campaignId} steersStory={steersStory} isDm={adjudicates} members={members} refreshKey={loreVersion} />
             </div>
           ) : storySection === "quests" ? (
             <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
@@ -634,7 +637,7 @@ export function SidePanelRouter({
     // factions_updated, so that count refreshes it too.
     return (
       <Suspense fallback={<PanelLoading />}>
-        <WorldForgePanel campaignId={campaignId} at="table" refreshKey={worldVersion + factionsVersion} />
+        <WorldForgePanel campaignId={campaignId} at="table" canShowHandouts={adjudicates} refreshKey={worldVersion + factionsVersion} />
       </Suspense>
     );
   }

@@ -95,6 +95,7 @@ function keepPlace(campaignId: string, place: Place) {
 export function WorldForgePanel({
   campaignId,
   at = "workshop",
+  canShowHandouts = false,
   onOpenSystem,
   onCreate,
   refreshKey = 0,
@@ -105,6 +106,9 @@ export function WorldForgePanel({
   // world is the campaign's own copy, read and written through the routes
   // that answer only story authority, with no files and no Create.
   at?: "workshop" | "table";
+  // The DM seat at the table, who may put a revealed secret on every screen
+  // as a handout ("Show this now" is theirs alone).
+  canShowHandouts?: boolean;
   // A record's own workshop tool. The table has none to open.
   onOpenSystem?: OpenSystem;
   // The workshop's Create chooser, offered while the world is empty.
@@ -297,7 +301,7 @@ export function WorldForgePanel({
             {view === "web" ? <WebView world={world} focus={focus} onOpen={open} /> : null}
             {view === "timeline" ? <TimelineView api={api} world={world} onOpen={open} /> : null}
             {view === "atlas" ? <AtlasView api={api} world={world} onOpen={open} /> : null}
-            {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} /> : null}
+            {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} atTable={atTable} canShowHandouts={canShowHandouts} /> : null}
             {view === "stubs" ? <StubsView api={api} world={world} onOpen={open} /> : null}
             {view === "types" ? <TypesView api={api} world={world} /> : null}
             {api.error && !["wiki", "forge", "ask"].includes(view) ? <PanelError className="mt-2">{api.error}</PanelError> : null}

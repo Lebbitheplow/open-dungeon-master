@@ -5,7 +5,7 @@ import { deleteFaction, getFaction, insertFaction, listFactions, updateFaction }
 import { deleteLoreEntry, getLoreEntry, insertLoreEntry, listLoreEntries, updateLoreEntry } from "@/lib/db/lore";
 import { draftFrom, normalizeNpcDraft } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
-import { LORE_BODY_MAX } from "@/lib/dm/world-lore-logic";
+import { LORE_BODY_MAX, type WorldLoreCategory, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { applyRowOps, type DocOps } from "@/lib/worldforge/ops";
 import {
   SLICES,
@@ -20,6 +20,7 @@ import {
   typeFor,
   type Binding,
   type Entry,
+  type Secret,
   type Shelf,
   type Slice,
   type WorldDoc,
@@ -467,4 +468,29 @@ export function deleteWorldEntity(campaignId: string, ref: string): boolean {
 export function worldCounts(campaignId: string): { entries: number; links: number; events: number; secrets: number; maps: number } {
   const { doc, entities } = worldView(campaignId);
   return { entries: entities.length, links: doc.links.length, events: doc.events.length, secrets: doc.secrets.length, maps: doc.maps.length };
+}
+
+// ---- a secret told to the party ----
+
+// "Reveal to the party" at a table (audit WF-10): the words the story
+// authority chose become a lore entry the whole table reads, and the secret
+// is marked learned with the record of when and where it was told. All of it
+// is this campaign's own copy: a world brought in from a workshop was copied
+// (src/lib/db/content-import.ts), so the workshop's secret is not touched.
+// One reveal per secret; a second is refused with the first entry named.
+export function revealSecret(
+  campaignId: string,
+  secretId: string,
+  told: { title: string; body: string; category?: WorldLoreCategory },
+): { secret: Secret; entry: WorldLoreEntry } | Failure {
+  const doc = getWorldDoc(campaignId);
+  const secret = doc.secrets.find((entry) => entry.id === secretId);
+  if (!secret) return { error: "No such secret in this world.", status: 404 };
+  if (secret.revealedAs && getLoreEntry(parseRef(secret.revealedAs)?.id ?? "")?.campaignId === campaignId) {
+    return { error: "The party has already been told this one.", status: 409 };
+  }
+  const entry = insertLoreEntry({ campaignId, category: told.category ?? "other", title: told.title, body: told.body, tags: [], visibility: "party" });
+  const revealed: Secret = { ...secret, partyKnows: true, revealedAt: new Date().toISOString(), revealedAs: refOf("lore", entry.id) };
+  saveWorldDoc(campaignId, { ...doc, secrets: doc.secrets.map((row) => (row.id === secretId ? revealed : row)) });
+  return { secret: revealed, entry };
 }

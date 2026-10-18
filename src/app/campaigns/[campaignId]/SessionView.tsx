@@ -886,6 +886,7 @@ export function SessionView({
     relationshipsVersion: state.relationshipsVersion,
     factionsVersion: state.factionsVersion,
     worldVersion: state.worldVersion,
+    loreVersion: state.loreVersion,
     shopsVersion: state.shopsVersion,
     coins: state.coins,
     activeSheetId: state.activeSheetId,
