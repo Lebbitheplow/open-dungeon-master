@@ -95,17 +95,6 @@ function withoutTurnEndInstances(
   return { conditions: nextConditions, meta: nextMeta, gone, changed: gone.length > 0 };
 }
 
-// The conditions that end because these combatants' turns are ending: the
-// ones waiting on that turn whose turn has begun.
-export function turnEndConditionsEnding(
-  conditions: string[],
-  meta: ConditionMetaMap | undefined,
-  combatantIds: string[],
-): string[] {
-  const ending = new Set(combatantIds);
-  return conditions.filter((name) => instancesOf(meta?.[name]).some((entry) => endsWithTurn(entry, ending)));
-}
-
 // The meta a "until the end of <whose> next turn" effect is written with.
 export function untilTurnEnd(whose: string, extra: ConditionMeta = {}): ConditionMeta {
   return { ...extra, untilTurnEndOf: whose };

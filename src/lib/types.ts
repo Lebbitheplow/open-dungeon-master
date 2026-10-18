@@ -1,7 +1,5 @@
 import type { LocalTextModelId, TextProvider } from "@/lib/text-models";
 
-export type StoryRole = "user" | "assistant";
-
 export type AspectPreset = "square" | "portrait" | "landscape";
 
 export type ImageMode = "fast" | "slow";
@@ -50,14 +48,6 @@ export function isArtStyle(value: unknown): value is ArtStyle {
 // push the place or the scene out of what the model sees.
 export const ART_STYLE_TEXT_MAX = 200;
 
-export type Attachment = {
-  id: string;
-  name: string;
-  type: string;
-  url: string;
-  dataUrl?: string;
-};
-
 export type ImageRequest = {
   needed: boolean;
   prompt?: string;
@@ -70,16 +60,6 @@ export type ImageRequest = {
   // false). The failure itself is only an ephemeral media_status, so this is
   // what a reload or a late joiner reads instead of a placeholder that spins.
   failed?: string;
-};
-
-export type StoryMessage = {
-  id: string;
-  role: StoryRole;
-  content: string;
-  createdAt: string;
-  attachments?: Attachment[];
-  imageRequest?: ImageRequest;
-  generatedImage?: GeneratedImage;
 };
 
 export type GeneratedImage = {
@@ -135,32 +115,4 @@ export type StorySettings = {
   artStyleMap: string;
   artStyleScene: string;
   proseSize: ProseSize;
-};
-
-export type StoryChatSummary = {
-  id: string;
-  title: string;
-  settings: StorySettings;
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
-  lastMessagePreview?: string;
-};
-
-export type StoryChat = StoryChatSummary & {
-  messages: StoryMessage[];
-  characters: StoryCharacter[];
-};
-
-export type StoryCharacter = {
-  id: string;
-  chatId: string;
-  name: string;
-  details: string;
-  inventory: string;
-  skills: string;
-  spells: string;
-  portrait?: Attachment;
-  createdAt: string;
-  updatedAt: string;
 };

@@ -54,8 +54,7 @@ function lightlyObscuredByNature(campaign: Campaign, map: { outdoors?: boolean; 
 }
 
 // The name of a watcher who sees this character clearly and whom no trait
-// of theirs answers, or null when nobody does. Same reading of the board as
-// seenClearlyBy (attack-spatial.ts), watcher by watcher.
+// of theirs answers, or null when nobody does.
 export function seenClearlyDespiteTraits(
   campaign: Campaign,
   encounterId: string,

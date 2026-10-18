@@ -69,8 +69,3 @@ export function liftLimits(sheet: Carrier & { equipment: CarriedItem[] }): { cap
   const multiplier = carryMultiplier(sheet.race ? sizeForRace(sheet.race) : undefined);
   return { capacityLb: strength * 15 * multiplier, liftLb: strength * 30 * multiplier };
 }
-
-// Whether a character carries past their capacity right now.
-export function overCapacity(sheet: Carrier & { equipment: CarriedItem[] }): boolean {
-  return loadOf(sheet, sheet.equipment).overCapacity;
-}

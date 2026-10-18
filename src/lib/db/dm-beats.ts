@@ -92,10 +92,3 @@ export function listDmBeats(campaignId: string, limit = 20): DmBeat[] {
     .all(campaignId, limit) as BeatRow[];
   return rows.map(mapBeat);
 }
-
-export function latestDmBeat(campaignId: string): DmBeat | null {
-  const row = getDatabase()
-    .prepare(`SELECT * FROM dm_beats WHERE campaign_id = ? ORDER BY seq DESC LIMIT 1`)
-    .get(campaignId) as BeatRow | undefined;
-  return row ? mapBeat(row) : null;
-}

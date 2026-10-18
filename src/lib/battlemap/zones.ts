@@ -266,10 +266,6 @@ export function withAnchors(zones: SpellZone[], tokens: Array<Pick<BattleToken, 
 
 const rowOf = (zone: SpellZone) => zoneRowFor(zone);
 
-export function zonesAt(zones: SpellZone[], cell: number): SpellZone[] {
-  return zones.filter((zone) => zone.cells.includes(cell));
-}
-
 // A creature on the other side from the caster: characters and the DM's
 // bystanders against enemies.
 export function hostileTo(zone: SpellZone, moverKind: string): boolean {

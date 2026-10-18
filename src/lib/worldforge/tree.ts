@@ -71,11 +71,6 @@ export function folderPath(folders: Folder[], id: string): Folder[] {
   return path;
 }
 
-// A folder may not move under itself or anything inside it.
-export function canMoveFolder(folders: Folder[], id: string, parentId: string): boolean {
-  return !parentId || !folderAndBelow(folders, id).has(parentId);
-}
-
 // Deleting a folder never deletes what was in it: its folders and entries
 // move up to its parent.
 export function removeFolder(folders: Folder[], id: string): { folders: Folder[]; heir: string } {
@@ -151,17 +146,6 @@ export function nextRegionColor(regions: Region[]): string {
   return REGION_COLORS.reduce((best, shade) => (use.get(shade)! < use.get(best)! ? shade : best), REGION_COLORS[0]);
 }
 
-export function pointInPolygon(point: XY, points: XY[]): boolean {
-  if (points.length < 3) return false;
-  let inside = false;
-  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const a = points[i];
-    const b = points[j];
-    if (a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
-}
-
 // Where a region's label sits: its area-weighted centre, or the mean of its
 // corners when it has no area to speak of.
 export function polygonCentroid(points: XY[]): XY {
@@ -178,12 +162,4 @@ export function polygonCentroid(points: XY[]): XY {
     return { x: points.reduce((sum, p) => sum + p.x, 0) / points.length, y: points.reduce((sum, p) => sum + p.y, 0) / points.length };
   }
   return { x: cx / (area * 3), y: cy / (area * 3) };
-}
-
-// The topmost region under a point: the last drawn wins.
-export function regionAt(regions: Region[], point: XY): Region | null {
-  for (let i = regions.length - 1; i >= 0; i -= 1) {
-    if (pointInPolygon(point, regions[i].points)) return regions[i];
-  }
-  return null;
 }

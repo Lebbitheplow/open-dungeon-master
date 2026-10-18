@@ -12,5 +12,3 @@ export const TTS_VOICES = [
   { id: "bm_george", label: "George (British male)" },
   { id: "bm_fable", label: "Fable (British narrator)" },
 ] as const;
-
-export type TtsVoiceId = (typeof TTS_VOICES)[number]["id"];

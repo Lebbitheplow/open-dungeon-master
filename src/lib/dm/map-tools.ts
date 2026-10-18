@@ -81,11 +81,6 @@ export function publishBattleMapUpdate(campaignId: string) {
   publishEphemeral(campaignId, "battle_map_updated", {});
 }
 
-// A carried light matters only in dim/dark maps; inferred from equipment.
-export function carriedLightRadius(sheet: CharacterSheet): number {
-  return carriedLight(sheet).radius;
-}
-
 // The token fields for that light, lit as the party steps onto the board.
 export function carriedLightFields(campaignId: string, sheet: CharacterSheet) {
   return lightPlacement(carriedLight(sheet), getClock(campaignId).instant);

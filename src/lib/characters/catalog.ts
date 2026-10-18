@@ -224,13 +224,6 @@ export function featFactsFor(name: string, authors?: Authors): FeatFacts | null 
   return { name: found.name, prerequisite: text.prerequisite, desc: text.desc, ...(runsAs ? { runsAs } : {}) };
 }
 
-// A feat's text as one string, wherever the pack keeps it (src/lib/srd/
-// feat-text.ts), so the grants in it (feat-grants.ts, feat-spells.ts) are
-// found.
-export function packFeatDesc(data: Record<string, unknown>): string {
-  return packFeatText(data).desc;
-}
-
 export function subclassIsOffered(
   classId: string,
   name: string,

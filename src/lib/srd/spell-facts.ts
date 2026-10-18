@@ -148,13 +148,6 @@ export function rangeFrom(text: unknown): SpellRange {
   return { kind: "special" };
 }
 
-export function describeRange(range: SpellRange): string {
-  if (range.kind === "self" && range.areaFeet) {
-    return `self (${range.areaFeet} feet)`;
-  }
-  return range.kind === "feet" ? `${range.feet} feet` : range.kind;
-}
-
 // A row in the shape the pack and the authored file share.
 export type SpellRowLike = {
   name: string;

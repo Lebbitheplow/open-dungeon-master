@@ -23,9 +23,6 @@ import { textKey } from "@/lib/language/text-logic";
 
 export const BONUS_ATTACKS = ["martial arts", "frenzy", "feature"] as const;
 export type AnyBonusAttack = (typeof BONUS_ATTACKS)[number];
-// The class options the Hand offers; "feature" is a subclass's bonus attack
-// (src/lib/srd/authored-effects.ts), sent by the DM or the model.
-export type BonusAttack = Exclude<AnyBonusAttack, "feature">;
 
 // The condition Reckless Attack leaves on the barbarian until their next
 // turn starts (src/lib/srd/condition-effects.ts reckless row).

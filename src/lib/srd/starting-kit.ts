@@ -165,12 +165,6 @@ export function resolveKit(
   return { items, choices: { options, picks }, problems };
 }
 
-// The book's first option of every line and every slot's default: what a
-// companion the engine drafts carries.
-export function firstChoicesKit(kit: ClassKit): KitItem[] {
-  return resolveKit(kit, null, { armor: ["heavy"], weapons: ["martial"] }).items;
-}
-
 // The kit a class starts with for a caller that holds a class row: its
 // table when it has one, and for a class no table describes (a content
 // pack's own) the weapons and armor its training suggests, as before.

@@ -7,7 +7,7 @@ import {
   patchEnemyConditions,
 } from "@/lib/db/encounters";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
-import { findSpellByName, spellEngineName, spellMechanicsFor } from "@/lib/content";
+import { spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { conditionConcentrationFloor } from "@/lib/srd/condition-effects";
 import { addConditionInstance, instancesOf, removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
@@ -26,13 +26,6 @@ import { textKey } from "@/lib/language/text-logic";
 // and dropping to 0 HP always ends it. This module must not import
 // mutations.ts (which imports it). Enemy concentration is out of scope;
 // enemies have no tracked spells.
-
-// Whether a spell requires concentration: exact-name match against the
-// Open5e content pack plus the caster's homebrew. Null when unknown.
-export function spellRequiresConcentration(spellName: string, userId: string): boolean | null {
-  const exact = findSpellByName(spellName, userId);
-  return exact ? exact.concentration : null;
-}
 
 function writeConcentration(
   campaign: Campaign,

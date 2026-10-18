@@ -670,7 +670,7 @@
     "lib/media-access.ts#[a-z]": [["key",1,"upload paths, table names"]],
     "lib/model-registry/catalog-logic.ts#[a-z]": [["key",3,"hostnames, model and provider ids, release dates"]],
     "lib/model-registry/catalog-logic.ts#\\b": [["key",1,"hostnames, model and provider ids, release dates"]],
-    "lib/model-registry/catalog-logic.ts#localeCompare": [["key",4,"hostnames, model and provider ids, release dates"]],
+    "lib/model-registry/catalog-logic.ts#localeCompare": [["key",2,"model and provider ids"]],
     "lib/model-registry/catalog-logic.ts#toLowerCase": [["key",8,"hostnames, model and provider ids, release dates"]],
     "lib/model-registry/catalog.ts#localeCompare": [["key",2,"setting value, release dates, model ids"]],
     "lib/model-registry/catalog.ts#toLowerCase": [["key",1,"setting value, release dates, model ids"]],

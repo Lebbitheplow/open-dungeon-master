@@ -5,7 +5,6 @@ import { shiftEnemyMaxHp } from "@/lib/db/encounters";
 import { publishPersisted } from "@/lib/events";
 import { ROUNDS_PER_MINUTE } from "@/lib/dm/condition-logic";
 import {
-  endEncounterEffects,
   normalizeAura,
   tickMinutes,
   tickRound,
@@ -229,9 +228,4 @@ export function tickEffectRound(campaignId: string, round: number): ActiveEffect
 // conditions, so the same time is never counted twice.
 export function tickEffectMinutes(campaignId: string, minutes: number): ActiveEffect[] {
   return persistTick(campaignId, tickMinutes(listEffects(campaignId), minutes, ROUNDS_PER_MINUTE));
-}
-
-// The fight ending takes its own effects with it.
-export function clearEncounterEffects(campaignId: string): ActiveEffect[] {
-  return persistTick(campaignId, endEncounterEffects(listEffects(campaignId)));
 }

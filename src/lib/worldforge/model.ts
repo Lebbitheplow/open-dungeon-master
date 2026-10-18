@@ -215,8 +215,6 @@ export const LINK_LABELS = [
   "parent of", "child of", "spouse of", "sibling of", "descended from",
   "superior of", "reports to", "liege of", "vassal of",
 ] as const;
-export const KIN_LABELS = ["parent of", "child of", "spouse of", "sibling of"] as const;
-export const CHAIN_LABELS = ["superior of", "reports to", "liege of", "vassal of"] as const;
 
 export const TYPE_COLORS = ["#c44444", "#3d9e9e", "#c9a84c", "#a090e0", "#d08a3c", "#5d9b8a", "#b8608a", "#7a6e54", "#8a9bb8", "#7da868"];
 

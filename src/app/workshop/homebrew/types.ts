@@ -99,6 +99,3 @@ export const DAMAGE_TYPES = [
   "slashing",
   "thunder",
 ] as const;
-
-export const input =
-  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200 focus:border-amber-500/50 focus:outline-none";

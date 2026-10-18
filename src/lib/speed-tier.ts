@@ -25,7 +25,6 @@
 //     and Grok: no Fast tier ODM can ask for, so none is sent.
 
 export type Speed = "" | "fast";
-export type SpeedRole = "story" | "utility";
 
 export type SpeedEligibility = { ok: true } | { ok: false; reason: string };
 

@@ -15,11 +15,6 @@ export function conditionsSpentAgainst(targetConditions: string[]): string[] {
     .map(({ condition }) => condition);
 }
 
-// The condition that costs the holder its action, or null.
-export function conditionStopsAction(conditions: string[]): string | null {
-  return activeConditionEffects(conditions).find(({ row }) => row.noAction)?.condition ?? null;
-}
-
 // The conditions the holder's effects keep off it, each with the effect that
 // does it. `sourceType` is the creature type of whatever lays the condition
 // (Protection from Evil and Good answers only some).

@@ -169,7 +169,3 @@ export function shillelaghSwing(
     note: `Shillelagh: ${srd.name} deals 1d8 with the spellcasting ability, and is magical`,
   };
 }
-
-export function underShillelagh(sheet: Sheet, weaponName: string | undefined): boolean {
-  return holds(sheet, SHILLELAGH) && SHILLELAGH_WEAPONS.has(textKey(weaponName ?? ""));
-}

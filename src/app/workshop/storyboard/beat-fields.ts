@@ -29,9 +29,6 @@ export const KIND_CHIP: Record<BeatKind, string> = {
   npc_moment: "border-orange-500/40 bg-orange-500/10 text-orange-300",
 };
 
-export const beatInput =
-  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
-
 // Link field, the inventory bucket it picks from, the label the editor shows,
 // and the one word a card chip has room for.
 // The painted glyph for a kind of card and for each thing a card points at.

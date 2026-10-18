@@ -20,8 +20,6 @@ export const TERRAIN = {
   climb: "^",
 } as const;
 
-export type TerrainChar = (typeof TERRAIN)[keyof typeof TERRAIN];
-
 export type AmbientLight = "bright" | "dim" | "dark";
 
 export type XY = { x: number; y: number };

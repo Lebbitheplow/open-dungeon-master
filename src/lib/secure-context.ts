@@ -36,7 +36,3 @@ export function micBlockMessage(reason: MicBlockReason): string {
   }
   return "";
 }
-
-export function micBlocked(): boolean {
-  return micBlockReason() !== "";
-}

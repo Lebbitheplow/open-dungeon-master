@@ -99,10 +99,6 @@ export function lifespanIssue(span: { birth: number | null; death: number | null
   return "";
 }
 
-export function ageAt(span: { birth: number | null; death: number | null }, year: number): number | null {
-  return span.birth === null || !Number.isFinite(year) || lifespanIssue(span, year) ? null : year - span.birth;
-}
-
 // "61 TR to 118 TR (57 years)", "born 61 TR", "died 118 TR".
 export function formatLifespan(type: WorldType, entry: Entry, calendars: Calendar[]): string {
   const span = lifespan(type, entry, calendars);

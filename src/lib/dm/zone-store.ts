@@ -70,11 +70,6 @@ export function liveZones(map: BattleMap, encounter: Pick<Encounter, "round"> | 
   return holdGasesBack(withAnchors(holding, listTokens(map.id), map), map.width);
 }
 
-export function liveZonesFor(encounter: Pick<Encounter, "id" | "round">): { map: BattleMap; zones: SpellZone[] } | null {
-  const map = getBattleMapForEncounter(encounter.id);
-  return map ? { map, zones: liveZones(map, encounter) } : null;
-}
-
 // A spell's areas end: every one of that spell by that caster (any caster
 // when none is named), from the active board. Returns what ended.
 export function endZones(encounterId: string, spell: string, casterId?: string): string[] {
@@ -93,15 +88,6 @@ export function endZones(encounterId: string, spell: string, casterId?: string):
   }
   saveZones(map.id, map.spellZones.filter((zone) => !ending.includes(zone)));
   return ending.map((zone) => zone.spell);
-}
-
-// Writes one area's new state back (a Guardian's running total, who it
-// struck this turn, where a cloud drifted), dropping it when it is spent.
-export function updateZone(mapId: string, zones: SpellZone[], next: SpellZone | null, id: string) {
-  saveZones(
-    mapId,
-    zones.flatMap((zone) => (zone.id === id ? (next ? [next] : []) : [zone])),
-  );
 }
 
 // A spell ended (its concentration broke, it was dispelled): its areas on

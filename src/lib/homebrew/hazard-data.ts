@@ -87,7 +87,6 @@ export const diseaseSpecSchema = z.object({
 
 const SCHEMAS = { trap: trapSpecSchema, poison: poisonSpecSchema, disease: diseaseSpecSchema } as const;
 export type HazardKindName = keyof typeof SCHEMAS;
-export const HAZARD_KINDS = Object.keys(SCHEMAS) as HazardKindName[];
 
 function firstIssue(error: z.ZodError, kind: string): string {
   const issue = error.issues[0];

@@ -29,14 +29,6 @@ export const DENOMINATION_COPPER: Record<Denomination, number> = {
   pp: 1000,
 };
 
-export const DENOMINATION_NAMES: Record<Denomination, string> = {
-  cp: "copper",
-  sp: "silver",
-  ep: "electrum",
-  gp: "gold",
-  pp: "platinum",
-};
-
 // The words a person types, mapped to the code. Longest first is not needed
 // here because lookup is exact after normalizing.
 const WORD_TO_DENOMINATION: Record<string, Denomination> = {

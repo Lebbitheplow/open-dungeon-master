@@ -77,7 +77,6 @@ export const characterBundleSchema = z.object({
   portrait: bundlePortraitSchema.optional(),
 });
 export type CharacterBundle = z.infer<typeof characterBundleSchema>;
-export type BundlePortrait = NonNullable<CharacterBundle["portrait"]>;
 
 // What the export route reads off disk for us: the bytes behind a
 // /uploads/ path, or null when the file is gone.

@@ -9,8 +9,6 @@ export type ToolDef = {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 };
 
-export const RESOURCE_TOOL_NAMES = ["use_item", "purchase", "use_resource"] as const;
-
 export const resourceTools: ToolDef[] = [
   {
     type: "function",

@@ -370,13 +370,6 @@ export function setSayRange(peer: VoicePeer, sayRange: SayRange) {
   peer.sayRange = sayRange;
 }
 
-// Moves a peer to a breakout channel. Just a field: because channels are a
-// layer over one router rather than a router each, this takes effect on the
-// next audibility recompute with no renegotiation and no gap in audio.
-export function setChannel(peer: VoicePeer, channelId: string) {
-  peer.channelId = channelId;
-}
-
 function destroyPeer(room: VoiceRoom, peer: VoicePeer) {
   // Closing a transport closes every producer and consumer on it, so those do
   // not need closing individually. The consumer map is cleared anyway because

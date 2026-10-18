@@ -92,10 +92,6 @@ function stringList(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
-export function emptyLegendaryState(): LegendaryState {
-  return { pools: {}, lair: false, lairUsedRound: 0 };
-}
-
 export function normalizeLegendaryState(raw: unknown): LegendaryState {
   const record = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const pools: Record<string, LegendaryPool> = {};

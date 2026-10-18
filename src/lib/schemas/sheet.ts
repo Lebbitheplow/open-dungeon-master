@@ -132,7 +132,6 @@ const featPicksSchema = z.object({
   damageType: z.string().trim().max(20).optional(),
 });
 export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema);
-export type FeatChoicesInput = z.infer<typeof featChoicesSchema>;
 
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),

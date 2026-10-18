@@ -770,11 +770,6 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   };
 }
 
-// The check alone, for callers that only want to know.
-export function sheetProblems(input: CreateSheetInput, context: LegalityContext): string[] {
-  return legalizeSheet(input, context).problems;
-}
-
 // A stored sheet's features with the free casts its feats call for today:
 // one taken away by a re-pick comes off, one the feat teaches goes on.
 // A feature a feat's picks wrote: a free cast, or Elemental Adept's type.

@@ -222,8 +222,6 @@ export const runtimeSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export type AddonRuntime = z.infer<typeof runtimeSchema>;
-
 // A program the addon needs on this computer. The server looks for it before
 // the addon is enabled and says what is missing, so an admin is told
 // "Blender 4.2 or later" rather than shown a crash.
@@ -289,7 +287,6 @@ export const setupSchema = z.object({
   diskMB: z.number().int().min(0).max(200_000).default(0),
 });
 
-export type AddonSetup = z.infer<typeof setupSchema>;
 export type SetupDownload = z.infer<typeof setupDownloadSchema>;
 
 export const addonManifestSchema = z

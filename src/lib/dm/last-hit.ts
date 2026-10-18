@@ -120,12 +120,6 @@ export function readLastHit(campaignId: string, characterId: string): LastHit | 
   return row ? parseJson<LastHit | null>(row.payload_json, null) : null;
 }
 
-export function clearLastHit(campaignId: string, characterId: string) {
-  db()
-    .prepare(`DELETE FROM last_hits WHERE campaign_id = ? AND character_id = ?`)
-    .run(campaignId, characterId);
-}
-
 const FRESH_MS = 10 * 60 * 1000;
 
 // The record a reaction may still answer, or null: the same encounter, and

@@ -81,10 +81,6 @@ export async function machine(): Promise<Machine> {
   return found;
 }
 
-export function forgetMachineForTests() {
-  globalThis.__odmMachine = undefined;
-}
-
 export function describeMachine(found: Pick<Machine, "ramGb" | "gpu" | "unified">): string {
   const memory = `${Math.round(found.ramGb)} GB memory`;
   if (!found.gpu) return memory;

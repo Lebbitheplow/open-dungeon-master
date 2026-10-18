@@ -235,14 +235,3 @@ export function IconChip({
     </span>
   );
 }
-
-// Round user/character portrait with graceful fallback sizes; keeps avatar
-// sizing consistent instead of magic numbers per screen.
-export const AVATAR_SIZES = {
-  chat: "size-6",
-  menu: "size-8",
-  lobby: "size-12",
-  party: "size-12",
-  sheet: "size-14",
-  profile: "size-24",
-} as const;
