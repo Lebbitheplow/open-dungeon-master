@@ -1100,8 +1100,6 @@
     "lib/dm/companion-tools.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/companion-tools.ts#str-list": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/companion-tools.ts#toLowerCase": [["key",2,"tool-argument enum coercion; class id"],["display",1,"text inside a tool description"]],
-    "lib/dm/concentration-confirm-logic.ts#\\b": [["table-language",1,"meaning reader: English verbs (ends, drops, let ... go) read in a player's typed action to confirm dropping concentration"]],
-    "lib/dm/concentration-confirm-logic.ts#re-word": [["table-language",3,"meaning reader: English verbs (ends, drops, let ... go) read in a player's typed action to confirm dropping concentration"]],
     "lib/dm/concentration-confirm.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/concentration-upkeep.ts#toLowerCase": [["key",1,"condition labels from spell data (engine vocabulary)"]],
     "lib/dm/concentration.ts#str-eq": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
