@@ -6,7 +6,7 @@ import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
-export { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
+export type { ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export const abilityScoresSchema = z.object({
   str: z.number().int().min(1).max(30),

@@ -37,10 +37,6 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { VIOLET, VIOLET_MARK } from "@/lib/dm/prismatic-violet";
 import { textKey } from "@/lib/language/text-logic";
 
-// The turn-start save lives in its own module so condition-tick.ts can reach it
-// without loading the mutation dispatcher (an import cycle through the clock).
-export { VIOLET, violetRayTurnStart } from "@/lib/dm/prismatic-violet";
-
 export const PRISMATIC_SPRAY = "prismatic spray";
 export const INDIGO = "Indigo Ray";
 

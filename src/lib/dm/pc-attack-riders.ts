@@ -25,8 +25,6 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 import { optionsOfKind } from "@/lib/srd/options";
 import { textKey } from "@/lib/language/text-logic";
 
-export { superiorityDie, maneuverDieFor } from "@/lib/dm/maneuver-rules";
-
 // The condition a maneuver's rider save decides, when it has one.
 export const MANEUVER_RIDERS: Array<{ match: RegExp; condition: string; save: "str" | "wis" }> = [
   { match: /trip/i, condition: "prone", save: "str" },

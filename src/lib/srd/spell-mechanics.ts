@@ -29,7 +29,7 @@ import { MECH_OVERRIDES } from "@/lib/srd/spell-mech-overrides";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { textKey } from "@/lib/language/text-logic";
 
-export type { SpellAura, SpellCondition, SpellMech } from "@/lib/srd/spell-mech-types";
+export type { SpellMech } from "@/lib/srd/spell-mech-types";
 export { MECH_OVERRIDES };
 
 type AuthoredSpellRow = {

@@ -38,8 +38,6 @@ export { computePurchase } from "@/lib/dm/purchase-math";
 // the patch + result so mutations.ts only grows dispatch lines. Must not
 // import mutations.ts (the import points the other way).
 
-export { resourceTools } from "@/lib/dm/resource-tool-defs";
-
 export type Outcome = {
   patch: FullPatchSheetInput;
   result: ToolResult;

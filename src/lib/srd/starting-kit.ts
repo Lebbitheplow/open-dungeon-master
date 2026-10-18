@@ -18,7 +18,7 @@ import {
 import { SRD_WEAPONS, defaultLoadout } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 
-export type { ClassKit, KitItem, KitLine, KitOption, KitSlot } from "@/lib/srd/starting-kit-data";
+export type { ClassKit, KitItem, KitOption, KitSlot } from "@/lib/srd/starting-kit-data";
 
 // The choices a request makes, stored on the sheet so the builder reopens
 // with them: for each line of the class's kit, in order, the option taken

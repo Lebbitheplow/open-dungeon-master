@@ -18,8 +18,6 @@ import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
 import type { HandIntentExtras } from "@/lib/battlemap/hand-intent";
 import type { HandArea } from "@/lib/battlemap/hand-area";
 
-export type { HandBonusAttack } from "@/lib/battlemap/hand-intent";
-
 export type HandCost = "action" | "bonus" | "reaction" | "rider" | "free";
 export type HandCardType = "attack" | "rider" | "spell" | "control" | "mend" | "ward" | "feature" | "basic";
 export type HandTarget = "enemy" | "ally" | "self" | "none";

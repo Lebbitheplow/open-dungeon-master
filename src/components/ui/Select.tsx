@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronDown } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import type { IconRef } from "@/lib/icons";
@@ -125,5 +125,3 @@ export function Select<T extends string>({
 export function optionsFrom<T extends string>(pairs: Array<[T, string]>): SelectOption<T>[] {
   return pairs.map(([value, label]) => ({ value, label }));
 }
-
-export type { ReactNode };

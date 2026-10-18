@@ -22,7 +22,7 @@ import { LAST_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-last";
 import { NUMBERED_CONDITION_EFFECTS, STRIKE_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-spells";
 import type { ConditionEffectRow, SaveAbilityId } from "@/lib/srd/condition-effect-types";
 
-export type { ConditionEffectRow, GrantedAttack, SaveAbilityId } from "@/lib/srd/condition-effect-types";
+export type { ConditionEffectRow, SaveAbilityId } from "@/lib/srd/condition-effect-types";
 
 // Druid level for Starry Form's die upgrade and similar leveled attacks is
 // read from the holder's sheet level by the consumer; the table stores the

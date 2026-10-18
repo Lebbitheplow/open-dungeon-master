@@ -873,10 +873,3 @@ export function checkPcAttackRange(
   }
   return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`, retry: true };
 }
-
-// ---- spatial checks for enemy_attack ----
-
-// An enemy's reach, range and walk-in live in src/lib/dm/enemy-profile.ts and
-// src/lib/dm/enemy-approach.ts; the name reading is re-exported here for the
-// callers that learned it from this module.
-export { isRangedAttackName } from "@/lib/dm/enemy-profile";

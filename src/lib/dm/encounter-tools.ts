@@ -59,7 +59,7 @@ import {
   markEnemyActed,
   oweEnemiesAnAction,
 } from "@/lib/dm/can-act";
-import { acWithEffects, enemyAcWithEffects } from "@/lib/dm/ac-effects";
+import { acWithEffects } from "@/lib/dm/ac-effects";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import {
@@ -466,7 +466,7 @@ function nextTurn(
 
 // Armor Class with every active effect folded in lives in
 // src/lib/dm/ac-effects.ts; re-exported for the callers that learned it here.
-export { acWithEffects, enemyAcWithEffects };
+export { acWithEffects };
 
 // Exported for src/lib/dm/initiative.ts: a DM editing the order moves the
 // pointer without going through advancePointer, and the floor has to follow

@@ -13,7 +13,6 @@ import { textKey } from "@/lib/language/text-logic";
 export {
   DAMAGE_TYPES,
   damageAdjust,
-  rageApplies,
   resistsAllDamage,
   wearsHeavyArmor,
 } from "@/lib/dm/damage-logic";

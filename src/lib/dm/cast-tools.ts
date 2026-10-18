@@ -148,7 +148,6 @@ export const castAtEnemyTool: ToolDef = {
 // in src/lib/dm/cast-at-enemy.ts; re-exported for the callers that have
 // always found them here.
 export { castRedirect, handleCastAtEnemy } from "@/lib/dm/cast-at-enemy";
-export { sleepPool } from "@/lib/dm/spell-pool";
 
 // ---- cast_buff ----
 
