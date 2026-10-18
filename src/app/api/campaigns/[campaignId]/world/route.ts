@@ -1,5 +1,6 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { followPins } from "@/lib/db/atlas-region";
+import { partyAtlasChanged } from "@/lib/db/party-atlas";
 import { patchWorldDoc, worldCounts, worldView } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { recordsChanged } from "@/lib/workshop/record-events";
@@ -42,6 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   }
   const { conflicts, before, doc } = patchWorldDoc(campaignId, raw as Record<string, unknown>);
   const region = followPins(campaignId, before, doc);
+  partyAtlasChanged(campaignId, before);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, "world");
   return Response.json({ ...worldView(campaignId), ...(conflicts.length ? { conflicts } : {}), ...(region.length ? { region } : {}) });

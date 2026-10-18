@@ -18,6 +18,7 @@ export const panels = {
   FactsPanel: preloadable(() => import("@/app/campaigns/[campaignId]/FactsPanel").then((module) => module.FactsPanel)),
   LorePanel: preloadable(() => import("@/app/campaigns/[campaignId]/LorePanel").then((module) => module.LorePanel)),
   MapPanel: preloadable(() => import("@/app/campaigns/[campaignId]/MapPanel").then((module) => module.MapPanel)),
+  PartyAtlasPanel: preloadable(() => import("@/app/workshop/world/AtlasParty").then((module) => module.PartyAtlasPanel)),
   NotesPanel: preloadable(() => import("@/app/campaigns/[campaignId]/NotesPanel").then((module) => module.NotesPanel)),
   OverworldPanel: preloadable(() => import("@/app/campaigns/[campaignId]/OverworldPanel").then((module) => module.OverworldPanel)),
   ContextPanel: preloadable(() => import("@/app/campaigns/[campaignId]/ContextPanel").then((module) => module.ContextPanel)),

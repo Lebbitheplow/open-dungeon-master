@@ -167,7 +167,9 @@ export type Secret = {
 };
 export type Stub = { id: string; name: string; note: string; source: "scan" | "manual" | "import"; status: "open" | "dismissed" };
 export type XY = { x: number; y: number };
-export type Region = { id: string; name: string; points: XY[]; color: string; ref: string; notes: string };
+// `hidden` keeps a region off the party's Atlas when its map is shown to
+// them (src/lib/worldforge/party-atlas.ts); absent, it shows.
+export type Region = { id: string; name: string; points: XY[]; color: string; ref: string; notes: string; hidden?: true };
 
 // What an Atlas map is to the table (audit finding WF-09). Every Atlas map
 // is an illustrated, navigational picture; "region" says this one is laid
@@ -196,12 +198,17 @@ export const ASPECT_RANGE = { min: 0.1, max: 10 } as const;
 
 // `role` and `frame` are absent while they are the plain defaults, so a map
 // that never met the Region reads, hashes and merges as it always has.
-export type AtlasMap = { id: string; name: string; image: string; parentPinId: string; regions: Region[]; role?: MapRole; frame?: MapFrame };
+// `party: "shown"` puts the map on the party's Atlas (the player
+// projection, src/lib/worldforge/party-atlas.ts). Absent, it is the DM's
+// alone: a map is shown only by the reviewed step (src/lib/db/party-atlas.ts),
+// and the editor's saves may hide one but never show it.
+export type AtlasMap = { id: string; name: string; image: string; parentPinId: string; regions: Region[]; role?: MapRole; frame?: MapFrame; party?: "shown" };
 // `regionLink` is the place ref this pin was bound for with "Place this
 // location in the Region": while the pin still names that place and stands
 // on the Region's map, the two move together. A binding is only ever made
 // by that explicit step (src/lib/db/atlas-region.ts), never inferred.
-export type Pin = { id: string; mapId: string; x: number; y: number; name: string; ref: string; linkedMapId: string; notes: string; regionLink?: string };
+// `hidden` keeps the pin off the party's Atlas, as for a region.
+export type Pin = { id: string; mapId: string; x: number; y: number; name: string; ref: string; linkedMapId: string; notes: string; regionLink?: string; hidden?: true };
 
 // Where an imported row or entry came from ("<source>|<slice>|<id there>")
 // and how each of its values read: "<source reading>.<local reading>" as of
@@ -497,13 +504,14 @@ const readers: { [K in Exclude<Slice, "entries" | "types">]: (value: unknown) =>
       parentPinId: idOf(raw.parentPinId),
       ...(raw.role === "region" ? { role: "region" as const } : {}),
       ...(frame ? { frame } : {}),
+      ...(raw.party === "shown" ? { party: "shown" as const } : {}),
       regions: uniqueById(
         list(raw.regions, LIMITS.regions).flatMap((item) => {
           const region = rec(item);
           const points = list(region.points, LIMITS.points).map((point) => ({ x: unit(rec(point).x), y: unit(rec(point).y) }));
           const regionName = str(region.name, 80);
           return regionName && points.length >= 3
-            ? [{ id: idOf(region.id) || newId("rg"), name: regionName, points, color: color(region.color, "#c9a84c"), ref: ref(region.ref), notes: str(region.notes, 400) }]
+            ? [{ id: idOf(region.id) || newId("rg"), name: regionName, points, color: color(region.color, "#c9a84c"), ref: ref(region.ref), notes: str(region.notes, 400), ...(region.hidden === true ? { hidden: true as const } : {}) }]
             : [];
         }),
       ),
@@ -514,7 +522,7 @@ const readers: { [K in Exclude<Slice, "entries" | "types">]: (value: unknown) =>
     const id = idOf(raw.id);
     const mapId = idOf(raw.mapId);
     if (!id || !mapId) return null;
-    const pin: Pin = { id, mapId, x: unit(raw.x), y: unit(raw.y), name: str(raw.name, 80), ref: ref(raw.ref), linkedMapId: idOf(raw.linkedMapId), notes: str(raw.notes, 400) };
+    const pin: Pin = { id, mapId, x: unit(raw.x), y: unit(raw.y), name: str(raw.name, 80), ref: ref(raw.ref), linkedMapId: idOf(raw.linkedMapId), notes: str(raw.notes, 400), ...(raw.hidden === true ? { hidden: true as const } : {}) };
     // Bound for a place, and only for the place the pin still names.
     const link = ref(raw.regionLink);
     return link && link === pin.ref && parseRef(link)?.shelf === "location" ? { ...pin, regionLink: link } : pin;

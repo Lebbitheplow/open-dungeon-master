@@ -15,6 +15,7 @@ import { AtlasCard } from "./AtlasCard";
 import { isBound, movedText, OutOfStep, PinRegionActions, RegionBar, RegionNoticeLine, RegionReview, useAtlasRegion } from "./AtlasRegion";
 import { PlaceBattleMaps, type OpenPrep } from "./PlaceBattleMaps";
 import { CornerEditor, DeleteReview, MapSettings, NotSaved, PointFields, useAtlasDelete } from "./AtlasEdit";
+import { PartyBar } from "./AtlasParty";
 import type { WorldEntity } from "@/lib/db/world-forge";
 
 // The atlas, after WorldForge's map tab: pictures of the world with pins on
@@ -254,6 +255,7 @@ export function AtlasView({
           </p>
         ) : null}
         <RegionBar region={region} atlas={atlas} pins={pins} />
+        <PartyBar key={`party-${atlas.id}`} api={api} atlas={atlas} region={region} />
         {settings ? <MapSettings key={`settings-${atlas.id}`} api={api} atlas={atlas} region={region} onClose={() => setSettings(false)} /> : null}
         <RegionReview key={region.step ? region.step.kind : "none"} region={region} />
         <DeleteReview
@@ -322,7 +324,7 @@ export function AtlasView({
               <button
                 key={pin.id}
                 type="button"
-                className={cn("wf-pin absolute flex flex-col items-center", selectedPin?.id === pin.id && "z-10")}
+                className={cn("wf-pin absolute flex flex-col items-center", selectedPin?.id === pin.id && "z-10", pin.hidden && atlas.party === "shown" && "opacity-50")}
                 style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, "--i": index } as React.CSSProperties}
                 onClick={(event) => { event.stopPropagation(); setSelected({ kind: "pin", id: pin.id }); }}
                 onPointerDown={(event) => { if (mode === "look") { event.currentTarget.setPointerCapture(event.pointerId); setDrag({ id: pin.id, at: { x: pin.x, y: pin.y } }); } }}
@@ -330,6 +332,7 @@ export function AtlasView({
                 aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
                 aria-label={`${pin.name || entity?.name || "A pin"}${bound ? ", moves with its place on the Region" : ""}`}
                 data-bound={bound || undefined}
+                data-hidden={pin.hidden || undefined}
               >
                 <span className={cn("flex items-center gap-0.5 rounded px-1 text-[11px] text-amber-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]", selectedPin?.id === pin.id && "bg-stone-950/80")}>
                   {bound ? <Link2 className="size-3 text-emerald-300" aria-hidden="true" /> : null}

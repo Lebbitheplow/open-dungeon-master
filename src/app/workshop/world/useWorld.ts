@@ -264,7 +264,19 @@ export function useWorld(campaignId: string) {
     [base, send, refresh, withPending],
   );
 
-  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, atlasStep, clearError: () => setError("") };
+  // The party's Atlas (world/atlas/party, src/lib/db/party-atlas.ts): POST
+  // reviews or shows a map, DELETE hides one; either reads the world again
+  // once it changed something.
+  const party = useCallback(
+    async (method: "POST" | "DELETE", body: Record<string, unknown>) => {
+      const payload = await send(`${base}/atlas/party`, { method, body: JSON.stringify(body) });
+      if (payload?.applied || payload?.hidden) refresh();
+      return payload;
+    },
+    [base, send, refresh],
+  );
+
+  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, atlasStep, party, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;

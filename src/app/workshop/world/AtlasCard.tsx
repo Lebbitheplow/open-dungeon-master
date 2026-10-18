@@ -85,6 +85,11 @@ export function AtlasCard({
         </KitButton>
       </div>
       {failed ? <NotSaved onRetry={() => void save(failed)} what="Your words" /> : null}
+      <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
+        <input type="checkbox" checked={Boolean((pin ?? region)?.hidden)} onChange={(event) => void save({ hidden: event.target.checked ? true : undefined })} data-testid="atlas-card-hidden" />
+        Hidden from the party
+        <span className="text-stone-600">(players see a map only once you show it to them)</span>
+      </label>
       {position}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] text-stone-500">Stands for</span>

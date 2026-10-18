@@ -6,6 +6,8 @@ import {
   requireMember,
 } from "@/lib/campaign-api";
 import { followAnchor, type PinMove } from "@/lib/db/atlas-region";
+import { partyAtlasChanged } from "@/lib/db/party-atlas";
+import { getWorldDoc } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { insertKnownLocation, renameLocation } from "@/lib/db/locations";
 import {
@@ -179,8 +181,10 @@ export async function PATCH(
       x: patch.anchor.x,
       y: patch.anchor.y,
     });
+    const world = getWorldDoc(campaignId);
     atlas = followAnchor(campaignId, patch.anchor.locationId);
     if (atlas.length) {
+      partyAtlasChanged(campaignId, world);
       publishEphemeral(campaignId, "world_updated", { at: Date.now() });
       recordsChanged(campaignId, "world");
     }
