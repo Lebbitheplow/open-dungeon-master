@@ -3,7 +3,7 @@ import path from "node:path";
 import { getDatabase } from "@/lib/db/core";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { getBeat, insertBeat, listBeats, updateBeat } from "@/lib/db/workshop-beats";
-import { getOverworld, setOverworldAnchor, setOverworldBackdrop } from "@/lib/db/overworld";
+import { aspectOfBytes, importBridge } from "@/lib/db/atlas-region";
 import { admitUpload, type UploadAccount, type UploadRefusal } from "@/lib/upload-budget";
 import { decodeBundleImage, encodeBundleImage, type BundleImage } from "@/lib/workshop/bundle";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -218,6 +218,7 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
   const written: string[] = [];
   try {
     return getDatabase().transaction(() => {
+      const before = getWorldDoc(campaignId);
       const doc = getWorldDoc(campaignId);
       const origins = (doc.origins ??= {});
       const typeMap = mergeTypes(doc, parsed.doc.types);
@@ -343,22 +344,15 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
       doc.maps = doc.maps.map((atlas) => (atlas.image.startsWith("src:") ? { ...atlas, image: saveImage(artBytes.get(atlas.id) ?? null, written) } : atlas));
       settle(doc, [...firstRows.pending, ...rows.pending], (origin, key) => rowValue(doc, origin, key));
       conflicts.push(...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts);
-      saveWorldDoc(campaignId, doc);
 
-      // Places pinned on the file's top map stand where their pins do on the
-      // region map, when this import made them.
+      // The file's top map and the Region map, by the Atlas-to-Region rules
+      // (src/lib/db/atlas-region.ts): an undressed Region takes the map, and
+      // the places this import made stand where their pins do.
       const root = moved.maps.find((atlas) => !atlas.parentPinId) ?? moved.maps[0];
-      if (root) {
-        const region = getOverworld(campaignId);
-        for (const pin of moved.pins.filter((entry) => entry.mapId === root.id)) {
-          const place = parseRef(pin.ref);
-          if (place?.shelf === "location" && fresh.has(pin.ref)) {
-            setOverworldAnchor(campaignId, place.id, { x: Math.round(pin.x * (region.width - 1)), y: Math.round(pin.y * (region.height - 1)) });
-          }
-        }
-        const art = doc.maps.find((atlas) => atlas.id === root.id)?.image;
-        if (art && !region.backdropPath) setOverworldBackdrop(campaignId, art);
-      }
+      const aspects = new Map([...artBytes].map(([id, image]) => [id, image ? aspectOfBytes(image.bytes) : 0]));
+      const bridge = importBridge(campaignId, before, doc, { rootId: root?.id ?? "", fresh, aspects });
+      saveWorldDoc(campaignId, doc);
+      bridge.finish();
 
       // The file's scenes, as storyboard cards in each story's order.
       const titles = new Set(listBeats(campaignId).map((beat) => beat.title.toLowerCase()));
@@ -402,7 +396,7 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
         beats,
         skipped,
         losses: parsed.losses,
-        notes: parsed.notes,
+        notes: [...parsed.notes, ...bridge.notes],
       };
     })();
   } catch (error) {

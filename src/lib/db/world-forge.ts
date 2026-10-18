@@ -7,6 +7,7 @@ import { draftFrom, normalizeNpcDraft } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { LORE_BODY_MAX } from "@/lib/dm/world-lore-logic";
 import { applyRowOps, type DocOps } from "@/lib/worldforge/ops";
+import { keepRegionFields } from "@/lib/worldforge/atlas-frame";
 import {
   SLICES,
   emptyDoc,
@@ -88,7 +89,8 @@ export function saveWorldDoc(campaignId: string, doc: WorldDoc) {
 // other's work and a row changed under them is named in `conflicts`. A
 // whole slice is still taken (an older client, a script), and replaces the
 // stored one. `moveFolder` re-homes the entries of a deleted folder.
-export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>): { doc: WorldDoc; conflicts: string[] } {
+export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>): { doc: WorldDoc; conflicts: string[]; before: WorldDoc } {
+  const before = getWorldDoc(campaignId);
   let doc = getWorldDoc(campaignId);
   let conflicts: string[] = [];
   if (patch.ops && typeof patch.ops === "object" && !Array.isArray(patch.ops)) {
@@ -106,8 +108,11 @@ export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>
     const to = typeof move.to === "string" && doc.folders.some((folder) => folder.id === move.to) ? move.to : "";
     for (const entry of Object.values(doc.entries)) if (entry.folderId === move.from) entry.folderId = to;
   }
+  // A map's Region role and a pin's binding are set by the Region steps
+  // alone (src/lib/db/atlas-region.ts).
+  doc = keepRegionFields(before, doc);
   saveWorldDoc(campaignId, doc);
-  return { doc, conflicts };
+  return { doc, conflicts, before };
 }
 
 // ---- the records, as entries ----

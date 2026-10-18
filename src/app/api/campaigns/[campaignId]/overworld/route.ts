@@ -5,6 +5,8 @@ import {
   requireStoryAuthority,
   requireMember,
 } from "@/lib/campaign-api";
+import { followAnchor, type PinMove } from "@/lib/db/atlas-region";
+import { publishEphemeral } from "@/lib/events";
 import { insertKnownLocation, renameLocation } from "@/lib/db/locations";
 import {
   overworldView,
@@ -169,11 +171,19 @@ export async function PATCH(
   if (patch.partyXy !== undefined) {
     setOverworldParty(campaignId, patch.partyXy);
   }
+  // A place bound to an Atlas pin (src/lib/db/atlas-region.ts) takes the
+  // pin with it; `atlas` names each pin that moved and where it stood.
+  let atlas: PinMove[] = [];
   if (patch.anchor) {
     setOverworldAnchor(campaignId, patch.anchor.locationId, {
       x: patch.anchor.x,
       y: patch.anchor.y,
     });
+    atlas = followAnchor(campaignId, patch.anchor.locationId);
+    if (atlas.length) {
+      publishEphemeral(campaignId, "world_updated", { at: Date.now() });
+      recordsChanged(campaignId, "world");
+    }
   }
   if (patch.notes !== undefined) {
     setOverworldNotes(campaignId, patch.notes);
@@ -183,5 +193,5 @@ export async function PATCH(
   // that a DM who puts a lighthouse on a reef means it.
   // Only places and their names are records; paint and pins are the map's.
   if (patch.places || patch.rename) recordsChanged(campaignId, "location", "world");
-  return Response.json({ ...overworldView(campaignId, true), stranded });
+  return Response.json({ ...overworldView(campaignId, true), stranded, ...(atlas.length ? { atlas } : {}) });
 }

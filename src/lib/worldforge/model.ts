@@ -143,8 +143,40 @@ export type Secret = { id: string; title: string; subject: string; notes: string
 export type Stub = { id: string; name: string; note: string; source: "scan" | "manual" | "import"; status: "open" | "dismissed" };
 export type XY = { x: number; y: number };
 export type Region = { id: string; name: string; points: XY[]; color: string; ref: string; notes: string };
-export type AtlasMap = { id: string; name: string; image: string; parentPinId: string; regions: Region[] };
-export type Pin = { id: string; mapId: string; x: number; y: number; name: string; ref: string; linkedMapId: string; notes: string };
+
+// What an Atlas map is to the table (audit finding WF-09). Every Atlas map
+// is an illustrated, navigational picture; "region" says this one is laid
+// over the campaign's playable Region map edge to edge, so its pins can
+// place their places there (src/lib/worldforge/atlas-frame.ts). A world
+// has at most one. A prepared battle map is another thing again, with
+// combat geometry of its own: no picture here ever supplies walls, terrain
+// or light.
+export const MAP_ROLES = ["atlas", "region"] as const;
+export type MapRole = (typeof MAP_ROLES)[number];
+
+// How the 0..1 positions of a map's pins and regions relate to its
+// picture. `surface` is the width over height of the box they were placed
+// in, `image` the picture's own (0 while nobody has measured it), and
+// `fit` how the picture fills that box: "cover" crops it, "contain"
+// letterboxes it. A map made in the workshop is placed on a 16:10 box with
+// the picture cropped to fill it, which is what a map without a frame
+// means; a map from a WorldForge file is placed on its picture itself.
+export const MAP_FITS = ["cover", "contain"] as const;
+export type MapFit = (typeof MAP_FITS)[number];
+export type MapFrame = { surface: number; image: number; fit: MapFit };
+export const ATLAS_SURFACE = 16 / 10;
+export const DEFAULT_FRAME: MapFrame = { surface: ATLAS_SURFACE, image: 0, fit: "cover" };
+// Widest and tallest a box or a picture may be, as width over height.
+export const ASPECT_RANGE = { min: 0.1, max: 10 } as const;
+
+// `role` and `frame` are absent while they are the plain defaults, so a map
+// that never met the Region reads, hashes and merges as it always has.
+export type AtlasMap = { id: string; name: string; image: string; parentPinId: string; regions: Region[]; role?: MapRole; frame?: MapFrame };
+// `regionLink` is the place ref this pin was bound for with "Place this
+// location in the Region": while the pin still names that place and stands
+// on the Region's map, the two move together. A binding is only ever made
+// by that explicit step (src/lib/db/atlas-region.ts), never inferred.
+export type Pin = { id: string; mapId: string; x: number; y: number; name: string; ref: string; linkedMapId: string; notes: string; regionLink?: string };
 
 // Where an imported row or entry came from ("<source>|<slice>|<id there>")
 // and how each of its values read: "<source reading>.<local reading>" as of
@@ -279,6 +311,19 @@ const uploadedPath = (value: unknown) => {
 const strings = (value: unknown, max: number, each: number) =>
   [...new Set(list(value, max).map((item) => str(item, each)).filter(Boolean))];
 
+const aspect = (value: unknown) => {
+  const n = num(value, 0);
+  return n >= ASPECT_RANGE.min && n <= ASPECT_RANGE.max ? Math.round(n * 10_000) / 10_000 : 0;
+};
+
+export function readFrame(value: unknown): MapFrame | undefined {
+  const raw = rec(value);
+  const surface = aspect(raw.surface);
+  if (!surface) return undefined;
+  const frame: MapFrame = { surface, image: aspect(raw.image), fit: oneOf(raw.fit, MAP_FITS, "cover") };
+  return frame.surface === DEFAULT_FRAME.surface && frame.image === DEFAULT_FRAME.image && frame.fit === DEFAULT_FRAME.fit ? undefined : frame;
+}
+
 export function readYear(value: unknown): YearValue {
   const raw = rec(value);
   const yearNum = raw.yearNum === "" || raw.yearNum === undefined || raw.yearNum === null ? null : num(raw.yearNum, NaN);
@@ -406,11 +451,14 @@ const readers: { [K in Exclude<Slice, "entries" | "types">]: (value: unknown) =>
     const id = idOf(raw.id);
     const name = str(raw.name, 80);
     if (!id || !name) return null;
+    const frame = readFrame(raw.frame);
     return {
       id,
       name,
       image: uploadedPath(raw.image),
       parentPinId: idOf(raw.parentPinId),
+      ...(raw.role === "region" ? { role: "region" as const } : {}),
+      ...(frame ? { frame } : {}),
       regions: uniqueById(
         list(raw.regions, LIMITS.regions).flatMap((item) => {
           const region = rec(item);
@@ -427,9 +475,11 @@ const readers: { [K in Exclude<Slice, "entries" | "types">]: (value: unknown) =>
     const raw = rec(value);
     const id = idOf(raw.id);
     const mapId = idOf(raw.mapId);
-    return id && mapId
-      ? { id, mapId, x: unit(raw.x), y: unit(raw.y), name: str(raw.name, 80), ref: ref(raw.ref), linkedMapId: idOf(raw.linkedMapId), notes: str(raw.notes, 400) }
-      : null;
+    if (!id || !mapId) return null;
+    const pin: Pin = { id, mapId, x: unit(raw.x), y: unit(raw.y), name: str(raw.name, 80), ref: ref(raw.ref), linkedMapId: idOf(raw.linkedMapId), notes: str(raw.notes, 400) };
+    // Bound for a place, and only for the place the pin still names.
+    const link = ref(raw.regionLink);
+    return link && link === pin.ref && parseRef(link)?.shelf === "location" ? { ...pin, regionLink: link } : pin;
   },
 };
 
@@ -447,8 +497,24 @@ export function readSlice<K extends Slice>(slice: K, value: unknown): WorldDoc[K
     return entries as WorldDoc[K];
   }
   const read = readers[slice as Exclude<Slice, "entries" | "types">] as (value: unknown) => { id: string } | null;
-  const rows = list(value, LIMITS[slice as Exclude<Slice, "entries" | "types">]).map((item) => read(item)).filter((row): row is { id: string } => row !== null);
-  return uniqueById(rows) as unknown as WorldDoc[K];
+  const rows = uniqueById(list(value, LIMITS[slice as Exclude<Slice, "entries" | "types">]).map((item) => read(item)).filter((row): row is { id: string } => row !== null));
+  if (slice === "maps") {
+    // One map stands over the Region at a time: the first that says so.
+    const first = (rows as AtlasMap[]).find((atlas) => atlas.role === "region");
+    return (rows as AtlasMap[]).map((atlas) => (atlas.role === "region" && atlas !== first ? withoutRole(atlas) : atlas)) as unknown as WorldDoc[K];
+  }
+  return rows as unknown as WorldDoc[K];
+}
+
+function withoutRole(atlas: AtlasMap): AtlasMap {
+  return without(atlas, "role");
+}
+
+// A map or pin with its Region fields taken off (role, frame, regionLink).
+export function without<T extends AtlasMap | Pin>(row: T, ...keys: Array<"role" | "frame" | "regionLink">): T {
+  const copy: Record<string, unknown> = { ...row };
+  for (const key of keys) delete copy[key];
+  return copy as T;
 }
 
 const ORIGINS_MAX = 20_000;
@@ -513,7 +579,11 @@ export function remapDoc(doc: WorldDoc, map: (ref: string) => string | null): Wo
     events: doc.events.map((event) => ({ ...event, refs: many(event.refs) })),
     secrets: doc.secrets.map((secret) => ({ ...secret, subject: one(secret.subject), knownBy: many(secret.knownBy) })),
     maps: doc.maps.map((atlas) => ({ ...atlas, regions: atlas.regions.map((region) => ({ ...region, ref: one(region.ref) })) })),
-    pins: doc.pins.map((pin) => ({ ...pin, ref: one(pin.ref) })),
+    pins: doc.pins.map((pin) => {
+      const moved = { ...without(pin, "regionLink"), ref: one(pin.ref) };
+      const link = pin.regionLink ? one(pin.regionLink) : "";
+      return link && link === moved.ref ? { ...moved, regionLink: link } : moved;
+    }),
   };
 }
 
