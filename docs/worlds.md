@@ -181,7 +181,7 @@ every phone; the test enforces an empty `art` map there.
 | `franchise` / `edition` / `editionOrder` | grouping, see above |
 | `baseGenre` | one of the eight genres, never `custom`. Selecting the pack also sets the campaign's genre to this, so every existing genre consumer keeps working |
 | `dmFlavor` | appended to the genre's own flavor in the DM system prompt. The highest-leverage field: tone, what magic feels like, what the stakes are, what the DM should never do. At least 200 chars |
-| `mapStyle` / `portraitStyle` | art-style fragments for map and portrait generation |
+| `mapStyle` / `portraitStyle` / `sceneStyle` | art-style fragments for maps, portraits and scene illustrations. `sceneStyle` leads every scene picture the DM asks for, so keep it to the look (medium, palette, light) and leave subjects out. A campaign can pick another look for its maps and scenes in Story AI, which then wins |
 | `nameHints` / `raceHint` | one line each, steering the story-setup pass and the companion tools |
 | `companionRaces` | SRD race ids AI companions may use; empty means no restriction |
 | `theme` | seeds `campaigns.theme`, max 120 chars |
@@ -195,7 +195,8 @@ every phone; the test enforces an empty `art` map there.
 | `art` | thumbnails as image data URLs, keyed as described under Art. Optional |
 
 Empty string or empty array on `dmFlavor`, `mapStyle`, `portraitStyle`,
-`nameHints`, `raceHint` and `companionRaces` means "inherit the base genre".
+`sceneStyle`, `nameHints`, `raceHint` and `companionRaces` means "inherit the
+base genre".
 
 ## Valid ids
 

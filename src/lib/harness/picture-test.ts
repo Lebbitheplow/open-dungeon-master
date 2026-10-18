@@ -13,6 +13,7 @@
 // cannot paint (and would be moved onto it, src/lib/image-backend-rescue.ts).
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { locationMapPrompt } from "@/lib/art-direction";
 import { campaignPictures, strandedMoves, type CampaignPictures } from "@/lib/image-backend-rescue";
 import { generateStoryImage } from "@/lib/image-generate";
 import { imageSize, sniffImage } from "@/lib/image-format";
@@ -36,8 +37,10 @@ export type PictureTestResult = {
 
 // A location map, the picture the tables ask the agent for most, in the
 // words enqueueLocationMap uses.
-export const TEST_MAP_PROMPT =
-  "top-down illustrated game map, hand-drawn parchment cartography, labeled areas, clear pathways, no text captions, The Drowned Ford, a shallow river crossing with a ruined toll house on the east bank and reed beds to the south";
+export const TEST_MAP_PROMPT = locationMapPrompt("hand-drawn parchment cartography", {
+  name: "The Drowned Ford",
+  layout: "a shallow river crossing with a ruined toll house on the east bank and reed beds to the south",
+});
 
 // Pure: the stages a finished run earned, so scripts/test-harness-pictures.mjs
 // can check every verdict without painting.

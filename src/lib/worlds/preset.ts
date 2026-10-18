@@ -37,6 +37,7 @@ export function presetFor(setting: SettingRef): GenrePreset {
       : pack.dmFlavor || base.dmFlavor,
     mapStyle: pack.mapStyle || base.mapStyle,
     portraitStyle: pack.portraitStyle || base.portraitStyle,
+    sceneStyle: pack.sceneStyle || base.sceneStyle,
     nameHints: pack.nameHints || base.nameHints,
     raceHint: pack.raceHint || base.raceHint,
     companionRaces: pack.companionRaces.length ? pack.companionRaces : base.companionRaces,
