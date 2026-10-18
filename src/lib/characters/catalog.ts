@@ -27,7 +27,7 @@ import { defaultRng } from "@/lib/dice";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
-import { bundledSubclassName } from "@/lib/srd/features";
+import { bundledSubclassName, subclassNamesFor } from "@/lib/srd/features";
 import { packFeatText } from "@/lib/srd/feat-text";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { checklistSpell } from "@/lib/srd/spell-lists";
@@ -243,6 +243,21 @@ export function subclassIsOffered(
   return listArchetypes(classId, { limit: 200, userIds: authorIds(authors), includeArchived: true }).some(
     (entry) => textKey(entry.name) === wanted || textKey(entry.slug) === wanted,
   );
+}
+
+// The subclasses a class may pick at this table, by name: the bundled ones
+// with their feature tables first, then the content pack's and the table's
+// workshop archetypes, as the level-up dialog lists them. A forgotten
+// (archived) entry still answers subclassIsOffered for a sheet that holds
+// it, but is not offered to a new pick.
+export function offeredSubclasses(classId: string, authors?: Authors): string[] {
+  const names = [...subclassNamesFor(classId)];
+  for (const entry of listArchetypes(classId, { limit: 200, userIds: authorIds(authors) })) {
+    if (!names.some((name) => textKey(name) === textKey(entry.name))) {
+      names.push(entry.name);
+    }
+  }
+  return names;
 }
 
 // ---- the context ----

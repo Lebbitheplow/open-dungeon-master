@@ -484,6 +484,18 @@ export async function PATCH(
     .filter(([, value]) => value !== undefined)
     .map(([key]) => key);
   const levelingUp = typeof parsed.data.level === "number" && parsed.data.level > sheet.level;
+  // A level the sheet already has: most often a level-up sent twice (an
+  // agent retrying after its first call went through). Refused as any other
+  // edit outside a level-up is, but said as what it is.
+  if (typeof parsed.data.level === "number" && !levelingUp && !companionPortrait) {
+    return Response.json(
+      {
+        error: `${sheet.name} is already level ${sheet.level}. ${sheet.level >= 20 ? "No character passes level 20." : `A level-up names the next level, ${sheet.level + 1}.`}`,
+        level: sheet.level,
+      },
+      { status: 403 },
+    );
+  }
   if (!levelingUp && patchedKeys.some((key) => !cosmeticKeys.has(key))) {
     return Response.json(
       {

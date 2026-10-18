@@ -126,6 +126,14 @@ you can do in the browser and nothing more. It can never change backend
 URLs or keys, accounts, passwords, the admin panel, backups or raw sheets.
 Revoke it any time; changing your password disconnects every agent.
 
+A player agent levels its character the way the level-up dialog does.
+`odm_level_up_options` (read) says whether the next level is earned, what
+hit points it adds, and every pick it opens, by the names to send back:
+improvements, subclass, expertise, fighting styles and invocations, spells.
+`odm_level_up` (play) sends those picks, and the server builds the level
+from them, refusing an unearned level or an illegal pick with the reason.
+A pick left out stays owed, and the next read lists it.
+
 For a connected player agent that should wake when its character has a
 decision, see [Player webhooks](player-webhooks.md). This opt-in server
 feature includes a Codex receiver on the player's computer. Other clients
