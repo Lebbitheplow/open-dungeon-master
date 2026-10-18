@@ -240,6 +240,10 @@ function extraSubclassNamed(classId: string, stored: string, extras?: SubclassEx
   );
 }
 
+export function subclassCastingProfileFor(classId: string, stored: string, extras?: SubclassExtras) {
+  return extraSubclassNamed(classId, stored, extras)?.castingProfile;
+}
+
 // A workshop or pack subclass as the bundled tables' shape: names by level.
 function extraTableNamed(classId: string, stored: string, extras?: SubclassExtras): SubclassTable | null {
   const found = extraSubclassNamed(classId, stored, extras);

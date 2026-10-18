@@ -182,10 +182,11 @@ function arcanumTop(list: string, level: number): number {
 export function casterPreview(input: {
   classId: string;
   subclass: string;
+  progression?: "third-caster";
   level: number;
   abilitiesAfter: AbilityScores;
 }): CasterPreview {
-  const third = isThirdCaster(input.classId, input.subclass);
+  const third = isThirdCaster(input.classId, input.subclass, input.progression);
   const klass = findClass(input.classId);
   const ability = third
     ? THIRD_CASTER_ABILITY
@@ -240,6 +241,7 @@ export function freeCantripsIn(
 export function thirdCasterPickRefusal(input: {
   classId: string;
   subclass: string;
+  progression?: "third-caster";
   level: number;
   known: string[];
   picks: string[];
@@ -250,6 +252,7 @@ export function thirdCasterPickRefusal(input: {
   return thirdCasterSchoolProblem({
     classId: input.classId,
     subclass: input.subclass,
+    profile: input.progression,
     level: input.level,
     spells: [...input.known, ...input.picks, input.adding].map(of),
     heldOutside: thirdCasterOutside(input.classId, input.known.map(of)),

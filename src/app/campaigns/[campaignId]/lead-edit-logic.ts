@@ -24,8 +24,8 @@ export function highestStoredSlot(spellcasting: CharacterSheet["spellcasting"]):
 
 // The class list the pickers search: an Eldritch Knight or Arcane Trickster
 // learns from the wizard's.
-export function spellListOf(sheet: Pick<CharacterSheet, "class" | "subclass">): string {
-  return isThirdCaster(sheet.class, sheet.subclass) ? THIRD_CASTER_LIST : spellClassFor(sheet.class);
+export function spellListOf(sheet: Pick<CharacterSheet, "class" | "subclass" | "spellcasting">): string {
+  return isThirdCaster(sheet.class, sheet.subclass, sheet.spellcasting?.progression) ? THIRD_CASTER_LIST : spellClassFor(sheet.class);
 }
 
 // Round and clamp shared slot edits before the Adjust dialog sends them. A

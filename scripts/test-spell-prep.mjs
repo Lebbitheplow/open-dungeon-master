@@ -9,6 +9,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const {
   casterViewsOf,
   changePreparation,
+  maxSpellLevelOf,
   preparedCount,
   settlePreparation,
   spellStyleFor,
@@ -146,6 +147,21 @@ test("cantrips, known casters and subclass spells are refused", () => {
   const domain = changePreparation(warView, "unprepare", "Shield of Faith", { abilities: ABILITIES, inClassList: true });
   // War domain grants Shield of Faith at 1st level: always prepared, never removed.
   assert.ok("error" in domain, "domain spell stays prepared");
+});
+
+test("a custom third-caster sheet reads and keeps the known-spell progression", () => {
+  const sheet = {
+    class: "fighter",
+    level: 3,
+    subclass: "Custom Test Subclass",
+    abilities: ABILITIES,
+    spellcasting: { ability: "int", progression: "third-caster", slots: { 1: { max: 2, used: 0 } }, known: ["Shield"], prepared: [], cantrips: ["Fire Bolt"] },
+  };
+  const [view] = casterViewsOf(sheet);
+  assert.equal(view.progression, "third-caster");
+  assert.equal(view.style, "known");
+  assert.equal(maxSpellLevelOf(view), 1);
+  assert.equal(withCasterViews(sheet.spellcasting, [view]).progression, "third-caster");
 });
 
 test("the life domain grants its spells, always prepared and free", () => {

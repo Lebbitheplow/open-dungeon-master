@@ -488,7 +488,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // Trickster with Intelligence and a third caster's slots (./casting.ts).
   const casting = builderCasting(klass, state.subclass, effectiveLevel);
   const slots = Object.fromEntries(
-    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass)).map(([slotLevel, max]) => [
+    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass, casting.third ? "third-caster" : undefined)).map(([slotLevel, max]) => [
       slotLevel,
       { max, used: 0 },
     ]),
@@ -649,6 +649,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       spellcasting: casting.ability
         ? {
             ability: casting.ability,
+            ...(casting.third ? { progression: "third-caster" as const } : {}),
             slots,
             prepared: isKnownCaster ? [] : isWizard ? picks.bookPrepared : finalSpells,
             known: isKnownCaster ? finalSpells : [],

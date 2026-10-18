@@ -249,6 +249,7 @@ export const spellSlotSchema = z.object({
 export const spellcastingSchema = z
   .object({
     ability: z.enum(["int", "wis", "cha"]),
+    progression: z.literal("third-caster").optional(),
     slots: z.record(z.string().regex(/^[1-9]$/), spellSlotSchema),
     prepared: z.array(z.string().trim().min(1).max(80)).max(60),
     // Spells known (for known-casters); prepared casters leave this empty
@@ -275,6 +276,7 @@ export const spellcastingSchema = z
         z.object({
           classId: z.string().trim().min(1).max(60),
           ability: z.enum(["int", "wis", "cha"]),
+          progression: z.literal("third-caster").optional(),
           known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
           prepared: z.array(z.string().trim().min(1).max(80)).max(60).default([]),
           cantrips: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
