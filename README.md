@@ -64,60 +64,60 @@ and companions, following a secret story arc it regenerates as the campaign move
 <table>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/chats.png" width="56"><br>
+<img src="public/sidebar-icons/chats.webp" width="56"><br>
 <b>The multiplayer table</b><br>
 <sub>Create a campaign, share an invite code, ready up in the lobby, and play in real time (SSE live updates) with a party lead who steers settings, rolls and turn order. Solo play runs the same engines.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/text-model.png" width="56"><br>
+<img src="public/sidebar-icons/text-model.webp" width="56"><br>
 <b>Your AI Dungeon Master, your choice</b><br>
 <sub>A local model (llama.cpp, Ollama, LM Studio, vLLM), an API key (OpenAI, OpenRouter, any OpenAI-compatible endpoint with tool calling), or a CLI agent subscription you already have: Claude Code, Codex, opencode or Grok Build. Whichever narrates, it makes the creative calls and never states a roll or edits its own numbers.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/support.png" width="56"><br>
+<img src="public/sidebar-icons/support.webp" width="56"><br>
 <b>Server-enforced 5e rules</b><br>
 <sub>Initiative and action economy, server-resolved attacks and crits, spell slots and upcasting, the full condition table, short/long rests, AC and progression — all clamped and audit-logged.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/story.png" width="56"><br>
+<img src="public/sidebar-icons/story.webp" width="56"><br>
 <b>Secret story arc &amp; maps</b><br>
 <sub>A hidden spine (premise, stakes, antagonist, ordered beats) refreshed as chapters close and editable a beat at a time, a live quest log, rolling-summary memory, and procedural fog-of-war battle maps.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/characters.png" width="56"><br>
+<img src="public/sidebar-icons/characters.webp" width="56"><br>
 <b>Characters &amp; companions</b><br>
 <sub>Structured SRD 5.1 sheets, 48 classes and 49 backgrounds, a guided creation wizard and level-up flow, and full AI companions with real sheets that auto-level with the party.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/images.png" width="56"><br>
+<img src="public/sidebar-icons/images.webp" width="56"><br>
 <b>Battle maps &amp; scene art</b><br>
 <sub>Optional ComfyUI drives character portraits, inline scene art and top-down battle maps with per-character line of sight. Missing? It fails soft to a placeholder.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/local-data.png" width="56"><br>
+<img src="public/sidebar-icons/local-data.webp" width="56"><br>
 <b>On-device &amp; encrypted</b><br>
 <sub>All state lives in a local SQLite database, encrypted at rest. No accounts in the cloud, no telemetry — username/password auth (optional Discord), with an admin panel and undoable audit log.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/chats.png" width="56"><br>
+<img src="public/sidebar-icons/chats.webp" width="56"><br>
 <b>Session tools</b><br>
 <sub>Live voice chat with proximity rules and side rooms, dynamic ambience and music, private whispers and side chats, a 3D dice tray plus physical and Pixels Bluetooth dice, TTS narration, push-to-talk, and an installable PWA layout.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/support.png" width="56"><br>
+<img src="public/sidebar-icons/support.webp" width="56"><br>
 <b>Run the table yourself</b><br>
 <sub>A human-DM mode where a person narrates (usually over the voice chat) and the app keeps sheets, dice, maps and the record straight, with a DM console, story-beat capture, and an assisted mode that delegates monsters, read-alouds or a covered absence to the AI.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/story.png" width="56"><br>
+<img src="public/sidebar-icons/story.webp" width="56"><br>
 <b>Workshop prep space</b><br>
 <sub>Author maps in a graphical terrain editor, bosses with derived CR, NPCs, encounters, roll tables, lore and storyboards outside any campaign, then import them into new campaigns; workshops, campaigns, characters and individual assets all clone.</sub>
 </td>
