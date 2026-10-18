@@ -79,7 +79,9 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
 {
   const editor = read("src/app/characters/builder/AbilityEditor.tsx");
   const socket = editor.slice(editor.indexOf('className="pool-socket"'), editor.indexOf("</button>", editor.indexOf('className="pool-socket"')));
-  assert.ok(socket.includes("disabled={!pool || anyRolling}"), "an empty socket is not natively disabled");
+  // Natively disabled only with no pool at all; it opens while later throws
+  // are still landing (Q7, test-builder-quick-wins-b.mjs).
+  assert.ok(socket.includes("disabled={!pool}"), "an empty socket is not natively disabled");
   assert.ok(socket.includes("aria-disabled={(slot === null && held === null) || undefined}"), "an empty socket is aria-disabled");
   assert.ok(socket.includes("aria-describedby={pool ? poolNoteId : undefined}"), "the socket points at the tray's note");
   assert.ok(socket.includes("Pick up a throw from the tray first"), "an empty socket says what to do first");

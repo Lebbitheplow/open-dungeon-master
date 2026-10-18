@@ -153,6 +153,18 @@ export type PoolRoll = FourDice & { rest: DieRest[] };
 // sheet, where only the totals survive.
 export type PoolEntry = { total: number; roll: PoolRoll | null };
 
+// What a throw's button says to a screen reader. The button's own name
+// hides the dice drawn inside it, so the set-aside die is named here: "Throw
+// of 14, good, from 6, 5, 3 and a 2 set aside, on Strength". A throw kept
+// from the sheet has no dice to name.
+export function throwName(entry: PoolEntry, placedOn: string | null): string {
+  const roll = entry.roll;
+  const dice = roll
+    ? `, from ${roll.dice.filter((_, at) => at !== roll.dropIndex).join(", ")} and a ${roll.dice[roll.dropIndex]} set aside`
+    : "";
+  return `Throw of ${entry.total}, ${rollWord(entry.total)}${dice}${placedOn ? `, on ${placedOn}` : ", not placed"}`;
+}
+
 export function rollPool(rng: Rng = Math.random): PoolEntry[] {
   return Array.from({ length: POOL_SIZE }, () => {
     const four = rollFourDice(rng);

@@ -22,6 +22,7 @@ import {
   rollTier,
   rollWord,
   scoresFromSlots,
+  throwName,
   type PoolEntry,
   type PoolSlots,
 } from "./abilityDice";
@@ -31,6 +32,7 @@ import { AbilitySummary } from "./AbilitySummary";
 import { DiceDefs, DiceRow } from "./Dice";
 import { fetchOpenAbilityPool, requestAbilityPool, type AbilityPoolAnswer } from "./useTableRules";
 import { useContentCampaign } from "@/lib/content-scope";
+import { prefersStillMotion } from "@/lib/effects-mode";
 import { rerollWords } from "@/lib/srd/ability-rerolls";
 
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
@@ -248,7 +250,9 @@ export default function AbilityEditor({
       return;
     }
     setKeptAt(undefined);
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // The toss is decoration: under reduced motion or low effects the six
+    // land at once.
+    const still = prefersStillMotion();
     const thrown = answer.pool;
     for (const id of timers.current) window.clearTimeout(id);
     timers.current = [];
@@ -433,10 +437,12 @@ export default function AbilityEditor({
                       data-phase={anyRolling ? phase : undefined}
                       data-held={inHand || undefined}
                       data-placed={owner ? true : undefined}
-                      draggable={!anyRolling}
-                      disabled={anyRolling}
+                      // Each throw wakes as soon as its own dice land, not
+                      // when the last of the six does.
+                      draggable={!rolling}
+                      disabled={rolling}
                       aria-pressed={inHand}
-                      aria-label={`Throw of ${entry.total}, ${rollWord(entry.total)}${owner ? `, on ${ABILITY_LABELS[owner]}` : ", not placed"}`}
+                      aria-label={throwName(entry, owner ? ABILITY_LABELS[owner] : null)}
                       onClick={() => setHeld(inHand ? null : index)}
                       onDragStart={(event) => startDrag(event, index)}
                       onDragEnd={() => {
@@ -460,7 +466,7 @@ export default function AbilityEditor({
                       <span className={cn("dice-total", `roll-tier-${rollTier(entry.total)}`)} data-phase={rolling ? "rolling" : undefined}>
                         {entry.total}
                       </span>
-                      {anyRolling ? null : (
+                      {rolling ? null : (
                         <span className={cn("pool-tier", `roll-tier-${rollTier(entry.total)}`)} aria-hidden="true">
                           {rollWord(entry.total)}
                         </span>
@@ -561,7 +567,7 @@ export default function AbilityEditor({
           ];
           const label = ABILITY_LABELS[ability];
           const slot = method === "roll" ? slots[ability] : null;
-          const armed = method === "roll" && held !== null && !anyRolling;
+          const armed = method === "roll" && held !== null;
           return (
             <div
               key={ability}
@@ -602,10 +608,12 @@ export default function AbilityEditor({
                   data-held={slot !== null && held === slot ? true : undefined}
                   // An empty socket with nothing in hand stays reachable
                   // (aria-disabled) and its name says what to do first.
-                  disabled={!pool || anyRolling}
+                  // Open while later throws are still landing: only a landed
+                  // throw can be in hand.
+                  disabled={!pool}
                   aria-disabled={(slot === null && held === null) || undefined}
                   aria-describedby={pool ? poolNoteId : undefined}
-                  draggable={slot !== null && !anyRolling}
+                  draggable={slot !== null}
                   onClick={() => tapSocket(ability)}
                   onDragStart={slot !== null ? (event) => startDrag(event, slot) : undefined}
                   onDragEnd={() => {
