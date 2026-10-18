@@ -50,7 +50,8 @@ falls through to the env var.
 | `ODM_MODEL_CATALOG` | on | `off` stops the server fetching the model catalog from [models.dev](https://models.dev) (one anonymous request a day at most). The bundled snapshot and the cached copy still serve the model pickers; see [text-backends.md](text-backends.md#choosing-a-model-the-catalog-and-discovery) |
 | `ODM_MODEL_CATALOG_PATH` | `data/model-catalog.json` (beside the database) | Where the fetched catalog is cached |
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
-| `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
+| `DM_LEAN_TOOLS` | per model | Unset, the trimmed tool set is used when the full set would leave under 32K tokens of the window for the story, or when the model catalog says the model takes no tool calls (the Context panel says which). `1` always trims, `0` never does |
+| `DM_THINKING` | per model | Unset, tool-deciding calls ask for thinking unless the model catalog says the model does not reason. `0` never asks, `1` always does |
 | `DM_MOMENT_AFTER_HISTORY` | — | `1` sends the turn-to-turn part of GAME STATE (the fight, recent rolls, retrieved lore) after the transcript instead of in the system message, so a server that caches the prompt's start (llama-server) reuses the whole history between turns. Off by default: the default local model then skipped rolls it should have asked for |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
 | `DM_CHAPTER_MIN` | `16` | Non-system messages (players included) a chapter must hold before beats can close it |

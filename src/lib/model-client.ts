@@ -35,10 +35,12 @@ import { chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { apiSpeedEligibility } from "@/lib/speed-tier";
 import { noteSpeed } from "@/lib/speed-status";
 import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow } from "@/lib/text-models";
-import { catalogContextWindow, hostedContextWindow } from "@/lib/model-registry/catalog";
+import { catalogContextWindow, hostedCatalogModel, hostedContextWindow } from "@/lib/model-registry/catalog";
 import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
+import { currentJobSignal, jobStopReason, noteJobProgress, withJobStage } from "@/lib/dm/job-control";
+import { MODEL_STAGE_GRACE_MS } from "@/lib/dm/job-stage-logic";
 import {
   createStreamRepetitionGuard,
   cutRepetition,
@@ -159,6 +161,16 @@ export type ChatRequestOptions = {
     turn?: boolean;
   };
 };
+
+// The reply cap a request to this hosted model goes out with: the
+// configured cap, or the model's own when the catalog says it writes less
+// (issue #383). A strict API refuses a max_tokens above the model's limit.
+// A server on this machine or the LAN caps its own replies to its window.
+export function maxOutputTokensFor(baseUrl: string, model: string): number {
+  const configured = configuredMaxOutputTokens();
+  const own = hostedCatalogModel(baseUrl, model)?.outputTokens ?? 0;
+  return own > 0 && own < configured ? own : configured;
+}
 
 export function configuredMaxOutputTokens() {
   const raw = serverEnv("OPENROUTER_MAX_TOKENS");
@@ -393,13 +405,30 @@ function createRequestTimeout(ms: number) {
     controller.abort();
   };
   const timeoutId = setTimeout(abortNow, ms);
+  // The DM job this call runs in may be stopped (the lead's Stop, a rewind,
+  // the queue's watchdog: src/lib/dm/job-control.ts). The request goes with
+  // it, headers or stream, and says so rather than blaming the backend.
+  const job = currentJobSignal();
+  if (job?.aborted) {
+    controller.abort();
+  } else {
+    job?.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   return {
     signal: controller.signal,
     clear: () => clearTimeout(timeoutId),
     timedOut: () => timedOut,
+    stopped: () => job?.aborted === true && !timedOut,
     abortNow,
     cancel: () => controller.abort(),
+  };
+}
+
+// A call cut short because its DM job was stopped, in the stop's own words.
+function stoppedResult(): UpstreamResult {
+  return {
+    error: Response.json({ error: jobStopReason() ?? "the turn was stopped.", code: "stopped" }, { status: 499 }),
   };
 }
 
@@ -609,7 +638,23 @@ export function customBackendIsPaid(baseUrl: string, apiKey: string): boolean {
   return resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey !== "";
 }
 
-export async function requestCustomMessage(
+// Every model call says it is waiting on the model while it runs, with a
+// deadline past its own timeout, so the DM queue's watchdog shows the stage
+// and never stops a call its own timeout would still answer.
+export function requestCustomMessage(
+  baseUrl: string,
+  model: string,
+  apiKey: string,
+  messages: ChatMessage[],
+  options: ChatRequestOptions = {},
+): Promise<UpstreamResult> {
+  const timeoutMs = resolveTextTimeoutMs(options.timeoutMs, "CUSTOM_TEXT_TIMEOUT_MS", DEFAULT_CUSTOM_TEXT_TIMEOUT_MS);
+  return withJobStage("waiting_model", timeoutMs + MODEL_STAGE_GRACE_MS, () =>
+    requestCustomMessageNow(baseUrl, model, apiKey, messages, options),
+  );
+}
+
+async function requestCustomMessageNow(
   baseUrl: string,
   model: string,
   apiKey: string,
@@ -735,7 +780,7 @@ export async function requestCustomMessage(
         model: resolvedModel,
         messages,
         sampling,
-        maxOutputTokens: configuredMaxOutputTokens(),
+        maxOutputTokens: maxOutputTokensFor(trimmedBase, resolvedModel),
         stream: Boolean(onDelta),
         tools,
         toolChoice,
@@ -772,7 +817,7 @@ export async function requestCustomMessage(
         ? "max_completion_tokens"
         : "max_tokens";
     if (!dropped.has(maxTokensField)) {
-      requestPayload[maxTokensField] = configuredMaxOutputTokens();
+      requestPayload[maxTokensField] = maxOutputTokensFor(trimmedBase, resolvedModel);
     }
     if (tools?.length) {
       requestPayload.tools = tools;
@@ -826,6 +871,9 @@ export async function requestCustomMessage(
   } catch (error) {
     if (error instanceof BackendRefusal) {
       return { error: Response.json({ error: error.message }, { status: 502 }) };
+    }
+    if (requestTimeout.stopped()) {
+      return stoppedResult();
     }
     if (requestTimeout.timedOut()) {
       return {
@@ -947,6 +995,9 @@ export async function requestCustomMessage(
     if (error instanceof BackendRefusal) {
       return { error: Response.json({ error: error.message }, { status: 502 }) };
     }
+    if (requestTimeout.stopped()) {
+      return stoppedResult();
+    }
     return {
       error: Response.json(
         {
@@ -980,6 +1031,7 @@ export async function requestCustomMessage(
         onReasoningDelta: guardedReasoning,
         idleMs: timeoutMs,
         onIdleAbort: requestTimeout.abortNow,
+        onChunk: noteJobProgress,
       });
       if ("failure" in reply) {
         return {
@@ -1092,7 +1144,7 @@ export async function requestCustomMessage(
             }
           }
         }
-      });
+      }, noteJobProgress);
     } catch (error) {
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       return readFailure(error);
@@ -1154,7 +1206,18 @@ export async function requestCustomMessage(
   );
 }
 
-export async function requestLocalMessage(
+export function requestLocalMessage(
+  requestedModel: string,
+  messages: ChatMessage[],
+  options: ChatRequestOptions & { disableThinking?: boolean } = {},
+): Promise<UpstreamResult> {
+  const timeoutMs = resolveTextTimeoutMs(options.timeoutMs, "LOCAL_TEXT_TIMEOUT_MS", DEFAULT_LOCAL_TEXT_TIMEOUT_MS);
+  return withJobStage("waiting_model", timeoutMs + MODEL_STAGE_GRACE_MS, () =>
+    requestLocalMessageNow(requestedModel, messages, options),
+  );
+}
+
+async function requestLocalMessageNow(
   requestedModel: string,
   messages: ChatMessage[],
   options: ChatRequestOptions & { disableThinking?: boolean } = {},
@@ -1214,6 +1277,9 @@ export async function requestLocalMessage(
       signal: requestTimeout.signal,
     });
   } catch (error) {
+    if (requestTimeout.stopped()) {
+      return stoppedResult();
+    }
     if (requestTimeout.timedOut()) {
       return {
         error: Response.json(
@@ -1301,9 +1367,12 @@ export async function requestLocalMessage(
           toolCalls.push(...record.message.tool_calls);
         }
         localUsage = ollamaUsage(record) ?? localUsage;
-      });
+      }, noteJobProgress);
     } catch (error) {
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
+      if (requestTimeout.stopped()) {
+        return stoppedResult();
+      }
       return {
         error: Response.json(
           {

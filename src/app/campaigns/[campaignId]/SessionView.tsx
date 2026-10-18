@@ -1072,6 +1072,7 @@ export function SessionView({
                     inputBlocked={gate.inputBlocked || silenced}
                     placeholder={silenced ? silencedPlaceholder : gate.placeholder}
                     dmStatus={dmStatus}
+                    dmJob={state.dmJob}
                     pendingRolls={pendingRolls}
                     members={state.members}
                     floor={floor}

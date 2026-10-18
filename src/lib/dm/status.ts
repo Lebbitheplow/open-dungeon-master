@@ -1,5 +1,6 @@
 import { latestTurnParkedByAi } from "@/lib/db/dm-turns";
 import { publishEphemeral } from "@/lib/events";
+import { jobAbandoned } from "@/lib/dm/job-control";
 
 // Last-published DM status per campaign, kept in memory so the campaign
 // snapshot can report a turn already in flight (dm_status events are
@@ -24,8 +25,19 @@ function statuses() {
 }
 
 export function setDmStatus(campaignId: string, state: DmStatusState) {
+  // A job the queue gave up on (src/lib/dm/queue.ts) no longer speaks for
+  // the table: a newer job may own the line now.
+  if (jobAbandoned()) {
+    return;
+  }
   statuses().set(campaignId, state);
   publishEphemeral(campaignId, "dm_status", { state });
+}
+
+// What this process last set for the table, without asking the database:
+// undefined when it never set one.
+export function knownDmStatus(campaignId: string): DmStatusState | undefined {
+  return statuses().get(campaignId);
 }
 
 export function getDmStatus(campaignId: string): DmStatusState {

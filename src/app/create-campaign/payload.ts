@@ -100,7 +100,7 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       maxGuests,
       worldPack,
       voice: voiceChat,
-      // Four gameSettings fields are deliberately not offered here.
+      // Six gameSettings fields are deliberately not offered here.
       //
       // `stages` trades turn quality for speed on a slow local model,
       // which is an operator decision, not a table decision, so it
@@ -123,6 +123,11 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       // `targetParty` is not a campaign setting at all: it is the stand-in
       // party a workshop budgets prep against, and a campaign reads its real
       // character sheets instead (docs/workshop-plan.md section 1.1).
+      //
+      // `narrationLength` and `styleNotes` say how the AI DM writes for this
+      // table (issue 383). What its prose needs is learned by hearing it on
+      // the table's model, so both start as no change at all and live in the
+      // settings panel's AI group, where the lead tunes them after a session.
     },
   };
 }

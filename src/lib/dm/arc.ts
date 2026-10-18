@@ -273,18 +273,17 @@ export async function generateStoryArc(
       { timeoutMs: arcTextTimeoutMs() },
     );
     if (error) {
-      if (process.env.DM_DEBUG) {
-        const payload = await error
-          .clone()
-          .json()
-          .catch(() => null);
-        console.log("[dm-debug] arc generation: model call failed:", JSON.stringify(payload));
-      }
+      const payload = (await error
+        .clone()
+        .json()
+        .catch(() => null)) as { error?: string } | null;
+      console.warn(`[arc] campaign ${campaignId}: the story arc was not planned; the model call failed (${error.status}): ${payload?.error ?? "no detail"}`);
       return;
     }
     const raw = typeof message?.content === "string" ? message.content : "";
     const arc = parseSagaJson(raw, profile);
     if (!arc) {
+      console.warn(`[arc] campaign ${campaignId}: the story arc was not planned; the model's reply was not a readable plan`);
       if (process.env.DM_DEBUG) {
         console.log("[dm-debug] arc generation: unparseable reply:", raw.slice(0, 500));
       }
@@ -299,9 +298,9 @@ export async function generateStoryArc(
       setStoryArc(campaignId, withWorld);
     }
   } catch (error) {
-    if (process.env.DM_DEBUG) {
-      console.log("[dm-debug] arc generation threw:", error);
-    }
+    // Always logged: a plan that silently never arrived is what an operator
+    // reading the server log needs to see (issue #383).
+    console.error(`[arc] campaign ${campaignId}: the story arc could not be planned`, error);
   } finally {
     setDmStatus(campaignId, "idle");
   }
@@ -883,9 +882,7 @@ export async function refreshStoryArc(
       setQuestLog(campaignId, activeQuestLines(next));
     }
   } catch (error) {
-    if (process.env.DM_DEBUG) {
-      console.log("[dm-debug] arc refresh threw:", error);
-    }
+    console.error(`[arc] campaign ${campaignId}: the story arc could not be refreshed`, error);
   } finally {
     setDmStatus(campaignId, "idle");
   }
@@ -936,9 +933,7 @@ export async function planExhaustedArc(campaignId: string): Promise<boolean> {
     setQuestLog(campaignId, activeQuestLines(next));
     return true;
   } catch (error) {
-    if (process.env.DM_DEBUG) {
-      console.log("[dm-debug] exhausted-arc planning threw:", error);
-    }
+    console.error(`[arc] campaign ${campaignId}: the next stretch of the arc could not be planned`, error);
     return false;
   } finally {
     setDmStatus(campaignId, "idle");
