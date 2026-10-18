@@ -131,10 +131,16 @@ export function handlePartyStash(
       if (!taken) {
         return notCarried(fresh.name, fresh.equipment.map((item) => item.name), name, isTableGearName(campaign.id, name));
       }
+      const { srdName, tags, worth, spell } = taken.item;
       const added = addPartyItem(getParty(campaign.id).inventory, {
         name,
         qty: taken.removed,
-        weight: fresh.equipment.find((item) => textKey(item.name) === textKey(name))?.weight,
+        weight: taken.item.weight,
+        identified: taken.item.identified,
+        srdName,
+        tags,
+        worth,
+        spell,
       });
       if ("error" in added) {
         return added;
@@ -151,8 +157,13 @@ export function handlePartyStash(
     if ("error" in taken) {
       return taken;
     }
+    const { srdName, tags, worth, spell } = taken.item;
     const granted = grantItemMath(fresh.equipment, taken.item.name, taken.removed, {
       identified: taken.item.identified !== false,
+      srdName,
+      tags,
+      worth,
+      spell,
     });
     patchSheet(fresh.id, { equipment: granted.equipment });
     const next = updateParty(campaign.id, (current) => ({ ...current, inventory: taken.inventory }));

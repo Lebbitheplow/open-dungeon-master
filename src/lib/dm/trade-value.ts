@@ -82,7 +82,8 @@ function isTreasure(item: TradedItem): boolean {
   if (!TREASURE.some((tag) => hasItemTag(item, tag))) {
     return false;
   }
-  return !isMagicItem(item.name) && !isPricedGear(item.name);
+  const listed = item.srdName ?? item.name;
+  return !isMagicItem(listed) && !isPricedGear(listed);
 }
 
 // Gems, jewelry, art objects and trade goods keep their full value.
@@ -105,7 +106,7 @@ export function packListCp(name: string): number | null {
 // The list price the table holds for a thing: the pack's price when it knows
 // the item, else the worth it was given. Null when neither knows it.
 export function listPriceCp(item: TradedItem): number | null {
-  return packListCp(item.name) ?? (item.worth ? Math.round(item.worth * COPPER_PER_GOLD) : null);
+  return packListCp(item.srdName ?? item.name) ?? (item.worth ? Math.round(item.worth * COPPER_PER_GOLD) : null);
 }
 
 // Why a worth cannot be given to this item, or null when it can: the pack's

@@ -15,14 +15,24 @@ import {
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
 
-// What an item is, for one whose name is not an SRD or pack item's English
-// name (src/lib/srd/item-tags.ts), typed as the tags the server takes.
+// What an item is, for one no SRD or pack item is (src/lib/srd/item-tags.ts),
+// typed as the tags the server takes.
 const ITEM_TAGS_FIELD: CatalogField = {
   name: "tags",
   label: "What it is",
   kind: "list",
   placeholder: "potion, healing_potion",
-  help: `For an item named in the table's language or invented, comma separated, from: ${ITEM_TAGS.join(", ")}.`,
+  help: `For an item no SRD or pack list has, comma separated, from: ${ITEM_TAGS.join(", ")}.`,
+};
+
+// The SRD or pack item an item named in the table's language is
+// (src/lib/srd/item-tags.ts itemRow).
+const ITEM_SRD_NAME_FIELD: CatalogField = {
+  name: "srdName",
+  label: "SRD item it is",
+  kind: "text",
+  placeholder: "Elixir of Health",
+  help: "For an item named in the table's language: the SRD or pack item it is, by its English name, so it works as that item does.",
 };
 
 // What one is worth, for a thing the content pack does not price
@@ -199,6 +209,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         kind: "boolean",
         help: "With item offers on, the same item again within ten minutes of an accepted offer is refused unless it is truly another from a different source.",
       },
+      ITEM_SRD_NAME_FIELD,
       ITEM_TAGS_FIELD,
       ITEM_WORTH_FIELD,
       ITEM_SPELL_FIELD,
@@ -214,6 +225,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "name", label: "Called on the sheet", kind: "text", required: true },
       { name: "revealedName", label: "Actually", kind: "text", placeholder: "Ring of Protection" },
+      ITEM_SRD_NAME_FIELD,
       ITEM_TAGS_FIELD,
       ITEM_WORTH_FIELD,
       ITEM_SPELL_FIELD,

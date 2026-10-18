@@ -15,6 +15,9 @@ export type EquipmentRow = {
   identified?: boolean;
   // A spell scroll's spell: two scrolls of different spells never merge.
   spell?: string;
+  // The row it is, when its name is the table's: two potions of different
+  // rows never merge.
+  srdName?: string;
 };
 
 // Absent means known: an unidentified item is the exception, and the default
@@ -116,7 +119,7 @@ export function spendSlotMath(slot: SlotState | undefined | null): SlotState | n
 
 // Remove qty of an item; partial removal adjusts, zero removes the row.
 // Returns null when the item is absent.
-export function removeItemMath(equipment: EquipmentRow[], name: string, qty: number) {
+export function removeItemMath<Row extends EquipmentRow>(equipment: Row[], name: string, qty: number) {
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name),
   );
@@ -131,15 +134,16 @@ export function removeItemMath(equipment: EquipmentRow[], name: string, qty: num
   } else {
     next[index] = { ...item, qty: item.qty - removed };
   }
-  return { equipment: next, removed };
+  return { equipment: next, removed, item };
 }
 
 // What a tool says an item is, beyond its name: its tags, its worth, a
 // scroll's spell.
-export type ItemFacts = { tags?: ItemTag[]; worth?: number; spell?: string };
+export type ItemFacts = { srdName?: string; tags?: ItemTag[]; worth?: number; spell?: string };
 
 function itemFacts(facts: ItemFacts): ItemFacts {
   return {
+    ...(facts.srdName ? { srdName: facts.srdName } : {}),
     ...(facts.tags?.length ? { tags: facts.tags } : {}),
     ...(facts.worth ? { worth: facts.worth } : {}),
     ...(facts.spell ? { spell: facts.spell } : {}),
@@ -165,9 +169,10 @@ export function grantItemMath(
   const amount = Math.max(1, Math.floor(qty));
   const known = options.identified !== false;
   const facts = known ? itemFacts(options) : {};
-  // Two scrolls of different spells are two things, whatever they are called.
+  // Two scrolls of different spells, or two potions of different rows, are
+  // two things, whatever they are called.
   const index = equipment.findIndex(
-    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known && item.spell === facts.spell,
+    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known && item.spell === facts.spell && item.srdName === facts.srdName,
   );
   if (index < 0) {
     return {

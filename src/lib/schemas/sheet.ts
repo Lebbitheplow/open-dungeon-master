@@ -194,6 +194,10 @@ export const equipmentItemSchema = z.object({
   // the secret was never written to the sheet. The DM's reveal action renames
   // the row and flips this flag in one step.
   identified: z.boolean().optional(),
+  // The SRD or pack item this is, by the row's English name, when its own
+  // name is the table's ("Elixir of Health" for "Elisir di salute"): the
+  // engines read its row through this (src/lib/srd/item-tags.ts itemRow).
+  srdName: z.string().trim().min(1).max(80).optional(),
   // What the item is, when no English row says it (loot the model invents,
   // an item named in the table's language): src/lib/srd/item-tags.ts.
   tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),

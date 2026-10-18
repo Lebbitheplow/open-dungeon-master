@@ -114,7 +114,7 @@ await test("A scroll's name is never read for its spell: a Scroll of Magic Missi
 
 await test("A spell is refused on a thing that is no scroll, and a spell nobody knows is refused.", async () => {
   world.patch(mage.id, { equipment: [] });
-  const ring = await world.invoke("grant_item", { characterId: mage.id, name: "Silver Ring", spell: "Fireball", reason: "found" });
+  const ring = await world.invoke("grant_item", { characterId: mage.id, name: "Ring of Protection", spell: "Fireball", reason: "found" });
   assert.equal(ring.retry, true, "a ring was given a spell");
   const unknown = await world.invoke("grant_item", { characterId: mage.id, name: "Scroll", tags: SCROLL, spell: "Gloomwhistle", reason: "found" });
   assert.equal(unknown.retry, true, "a scroll was given a spell nobody knows");

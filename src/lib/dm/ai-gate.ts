@@ -36,6 +36,7 @@ import { heldSaveTraits } from "@/lib/srd/trait-rules";
 import { unnamedRollKeys } from "@/lib/srd/roll-keys";
 import { hasItemTag, itemRow } from "@/lib/srd/item-tags";
 import { listedItemTags } from "@/lib/schemas/item-tags";
+import { sentItemTags } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 
 export type GateContext = {
@@ -101,11 +102,11 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
 
 // What a granted or revealed item is, when its name alone does not tell the
 // engines, which read an item by its row or its tags and never the words of
-// its name (src/lib/srd/item-tags.ts): the tags of a thing no table knows by
-// name, and the spell a scroll holds. Asked for rather than lost, as a roll's
-// fields are (src/lib/srd/roll-keys.ts): a potion named in the table's
-// language with no tags would heal no one, a scroll with no spell would cast
-// nothing.
+// its name (src/lib/srd/item-tags.ts): the row a thing no table knows by name
+// is (srdName) or its tags, and the spell a scroll holds. Asked for rather
+// than lost, as a roll's fields are (src/lib/srd/roll-keys.ts): a potion
+// named in the table's language with neither would heal no one, a scroll
+// with no spell would cast nothing.
 function itemFacts(ctx: GateContext, name: string, args: Record<string, unknown>, rawArguments: string): GateOutcome {
   const described = String(args.name ?? "").trim();
   const itemName = (name === "reveal_item" && typeof args.revealedName === "string" && args.revealedName.trim()) || described;
@@ -114,17 +115,19 @@ function itemFacts(ctx: GateContext, name: string, args: Record<string, unknown>
   }
   // A revealed item keeps the tags it was granted with.
   const carried = name === "reveal_item" ? ctx.sheetsById.get(String(args.characterId ?? ""))?.equipment.find((item) => item.name === described) : undefined;
-  const tags = Array.isArray(args.tags) ? listedItemTags(args.tags) : carried?.tags;
-  const item = { name: itemName, ...(tags ? { tags } : {}) };
-  if (!tags && !itemRow(item) && !isTableGearName(ctx.campaign.id, itemName)) {
+  const srdName = typeof args.srdName === "string" && args.srdName.trim() ? args.srdName.trim() : undefined;
+  const spell = typeof args.spell === "string" ? args.spell : undefined;
+  const tags = sentItemTags({ name: itemName, srdName }, Array.isArray(args.tags) ? listedItemTags(args.tags) : undefined, spell) ?? carried?.tags;
+  const item = { name: itemName, ...(srdName ? { srdName } : {}), ...(tags ? { tags } : {}) };
+  if (!tags && !srdName && !itemRow(item) && !isTableGearName(ctx.campaign.id, itemName)) {
     return {
       result: {
-        error: `${name}: send it again with tags naming what "${itemName}" is, from the listed ones, or tags [] when none fits (a spell scroll names its spell in spell too); no item the game knows has that name. Nothing changed yet.`,
+        error: `${name}: send it again with srdName, the SRD or pack item "${itemName}" is by its English name, or, for loot no list has, tags naming what it is (tags [] when none fits); a spell scroll names its spell in spell. No item the game knows has that name. Nothing changed yet.`,
         retry: true,
       },
     };
   }
-  if (hasItemTag(item, "scroll") && !(typeof args.spell === "string" && args.spell.trim())) {
+  if (hasItemTag(item, "scroll") && !spell?.trim()) {
     return {
       result: {
         error: `${name}: send it again with the spell "${itemName}" holds in spell, as the spell lists name it; a scroll the party cannot read yet is granted unidentified. Nothing changed yet.`,

@@ -24,6 +24,8 @@ import type { ItemTag } from "@/lib/schemas/item-tags";
 export type TaggedItem = {
   name: string;
   slug?: string;
+  // The row's English name, when the item's own name is the table's.
+  srdName?: string;
   tags?: readonly ItemTag[];
   identified?: boolean;
   // A homebrew item's snapshot (src/lib/homebrew/item-data.ts), whatever
@@ -85,10 +87,13 @@ function rowNamed(name: string): ItemRow | null {
 // The row an item names: by its slug, else by its name as the tables spell
 // it, else by the weapon, armor or poison its name is ("+1 Longsword"). Null
 // for a name no table knows.
-export function itemRow(item: Pick<TaggedItem, "name" | "slug">): ItemRow | null {
+export function itemRow(item: Pick<TaggedItem, "name" | "slug" | "srdName">): ItemRow | null {
   const bySlug = item.slug ? BY_SLUG.get(item.slug) : undefined;
   if (bySlug) {
     return bySlug;
+  }
+  if (item.srdName) {
+    return itemRow({ name: item.srdName });
   }
   const spelled = matchMagicItem(item.name, item.slug)?.name ?? catalogName(item.name) ?? item.name;
   const found = rowNamed(spelled) ?? rowNamed(item.name);

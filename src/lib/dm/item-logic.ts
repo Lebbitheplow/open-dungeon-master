@@ -4,6 +4,7 @@ import { matchWeapon } from "@/lib/srd/weapons";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, itemRow, itemTags, type TaggedItem } from "@/lib/srd/item-tags";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 // Pure consumable knowledge for the use_item tool: healing potion tiers,
 // generic consumable detection, and ammunition lookup. Database-free so
@@ -114,4 +115,25 @@ export function notCarried(who: string, carried: string[], name: string, known: 
         } Send the one meant, by the name on the sheet.`,
         retry: true,
       };
+}
+
+// The row a tool names an item by (srdName), as the row spells it, or why it
+// cannot: a name no list holds is asked again rather than stored to mean
+// nothing.
+export function srdNameFor(srdName: string | undefined, what: string): { srdName?: string } | ToolError {
+  const listed = srdName?.trim();
+  if (!listed) {
+    return {};
+  }
+  const row = itemRow({ name: listed });
+  if (!row) {
+    return { error: `${what}: no SRD or pack item is called "${listed}". Send srdName as the item lists name it in English, or leave it out and name what it is in tags. Nothing changed.`, retry: true };
+  }
+  return { srdName: row.name };
+}
+
+// What a tool says a granted item is: the tags it sent, else a spell scroll
+// when it names a spell for a thing no row knows.
+export function sentItemTags(item: Pick<TaggedItem, "name" | "srdName">, tags: ItemTag[] | undefined, spell: string | undefined): ItemTag[] | undefined {
+  return tags ?? (spell?.trim() && !itemRow(item) ? ["consumable", "scroll"] : undefined);
 }

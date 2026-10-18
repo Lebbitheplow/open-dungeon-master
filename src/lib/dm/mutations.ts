@@ -97,7 +97,7 @@ import { subclassSpellsFor } from "@/lib/srd/features";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { invalidArguments, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { worthProblem } from "@/lib/dm/trade-value";
-import { findCarriedItem, notCarried } from "@/lib/dm/item-logic";
+import { findCarriedItem, notCarried, sentItemTags, srdNameFor } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
@@ -138,11 +138,17 @@ const characterProperty = {
 
 // What an item is, for an item whose name is not an SRD or pack item's
 // English name (src/lib/srd/item-tags.ts).
+const ITEM_SRD_NAME_PROPERTY = {
+  type: "string",
+  description:
+    "The SRD or pack item this is, by its English name ('Elixir of Health', 'Potion of Healing', 'Longsword'), when name is the table's own ('Elisir di salute'): the server reads what it does from that item. Omit when name already is that English name, for loot no list has, and while it is unidentified.",
+};
+
 const ITEM_TAGS_PROPERTY = {
   type: "array",
   items: { type: "string", enum: [...ITEM_TAGS] },
   description:
-    "What the item is, when its name is not an SRD or pack item's English name (loot you invent, a name in the table's language): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure; [] when none fits. Omit for an SRD item, and while it is unidentified.",
+    "What the item is, when it is no SRD or pack item (loot you invent): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure; [] when none fits. Omit for an SRD or pack item (its name or srdName says it), and while it is unidentified.",
 };
 
 // The spell a spell scroll holds (src/lib/dm/consumables.ts).
@@ -278,6 +284,7 @@ export const mutationTools: ToolDef[] = [
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
     additional: { type: "boolean", description: "Only when a player just accepted this same item and this is truly another one from a different source." },
+    srdName: ITEM_SRD_NAME_PROPERTY,
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
     spell: ITEM_SPELL_PROPERTY,
@@ -289,6 +296,7 @@ export const mutationTools: ToolDef[] = [
   tool("reveal_item", "Name an item the party has been carrying without knowing what it is. Only for items granted unidentified; an ordinary item needs no revealing.", {
     name: { type: "string", description: "The description they have been calling it by, as on the sheet now ('an ornate silver ring')." },
     revealedName: { type: "string", description: "What it truly is ('Ring of Protection')." },
+    srdName: ITEM_SRD_NAME_PROPERTY,
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
     spell: ITEM_SPELL_PROPERTY,
@@ -475,6 +483,9 @@ const argsSchema = z.object({
   unidentified: z.coerce.boolean().optional(),
   // reveal_item: what it actually turns out to be.
   revealedName: z.string().optional(),
+  // grant_item, reveal_item: the SRD or pack item it is, by its English
+  // name, when its name is the table's (src/lib/srd/item-tags.ts).
+  srdName: z.string().max(80).optional(),
   // grant_item, reveal_item: what the item is (src/lib/srd/item-tags.ts).
   tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
   // grant_item, reveal_item: what one is worth, in gold pieces.
@@ -995,15 +1006,20 @@ export function applyDmMutation(
       if (badQty) {
         return { result: badQty };
       }
-      const priced = worthProblem(name, args.worth, "grant_item");
+      const listed = srdNameFor(args.srdName, "grant_item");
+      if ("error" in listed) {
+        return { result: listed };
+      }
+      const priced = worthProblem(listed.srdName ?? name, args.worth, "grant_item");
       if (priced) {
         return { result: priced };
       }
-      const scroll = scrollSpellFor(campaign, { name, tags: args.tags }, args.spell, "grant_item");
+      const tags = sentItemTags({ name, ...listed }, args.tags, args.spell);
+      const scroll = scrollSpellFor(campaign, { name, ...listed, tags }, args.spell, "grant_item");
       if ("error" in scroll) {
         return { result: scroll };
       }
-      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, tags: args.tags, worth: args.worth, ...scroll });
+      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, ...listed, tags, worth: args.worth, ...scroll });
       const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name) ?? capacityProblem(sheet, math.equipment, name);
       if (noRoom) {
         return { result: noRoom };
@@ -1028,15 +1044,21 @@ export function applyDmMutation(
       if (!name) {
         return { result: { error: "reveal_item needs the description the sheet carries now.", retry: true } };
       }
-      const priced = worthProblem(args.revealedName?.trim() || name, args.worth, "reveal_item");
+      const revealed = args.revealedName?.trim() || name;
+      const listed = srdNameFor(args.srdName, "reveal_item");
+      if ("error" in listed) {
+        return { result: listed };
+      }
+      const priced = worthProblem(listed.srdName ?? revealed, args.worth, "reveal_item");
       if (priced) {
         return { result: priced };
       }
-      const scroll = scrollSpellFor(campaign, { name: args.revealedName?.trim() || name, tags: args.tags }, args.spell, "reveal_item");
+      const tags = sentItemTags({ name: revealed, ...listed }, args.tags, args.spell);
+      const scroll = scrollSpellFor(campaign, { name: revealed, ...listed, tags }, args.spell, "reveal_item");
       if ("error" in scroll) {
         return { result: scroll };
       }
-      const math = revealItemMath(sheet.equipment, name, args.revealedName, { tags: args.tags, worth: args.worth, ...scroll });
+      const math = revealItemMath(sheet.equipment, name, args.revealedName, { ...listed, tags, worth: args.worth, ...scroll });
       if (!math) {
         return {
           result: {
