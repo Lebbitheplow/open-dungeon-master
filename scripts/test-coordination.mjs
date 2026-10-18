@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
+import { settleQueue } from "./lib/enforce-narrator.mjs";
 import { fitSequence, joinPrevious, moveEarlier, moveLater, moveTo, normalizeSequence, ownStep } from "../src/lib/dm/plan-order.ts";
 import {
   coordinationBlock,
@@ -287,5 +288,7 @@ await test("A fight that begins sets an unresolved plan aside, saying what did n
   assert.equal((await post(world.owner, { action: "open" })).status, 409, "no plan while initiative runs");
 });
 
+// Each resolve queued a DM turn; it ends before the file does.
+await settleQueue(world.campaignId);
 world.close();
 finish();
