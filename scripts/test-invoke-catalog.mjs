@@ -875,15 +875,21 @@ const SCORES = { str: 10, dex: 12, con: 14, int: 8, wis: 13, cha: 15 };
 test("Correct a sheet turns a named field and its value into the sheet's own key", () => {
   assert.deepEqual(foldFieldValue({ field: "level", value: "5" }, SCORES), { args: { level: 5 } });
   assert.deepEqual(foldFieldValue({ field: "alignment", value: " LG " }, SCORES), { args: { alignment: "LG" } });
-  assert.deepEqual(foldFieldValue({ field: "Max HP", value: 40 }, SCORES), { args: { maxHp: 40 } });
-  assert.deepEqual(foldFieldValue({ field: "hp", value: "1,000" }, SCORES), { args: { currentHp: 1000 } });
+  assert.deepEqual(foldFieldValue({ field: "maxHp", value: 40 }, SCORES), { args: { maxHp: 40 } });
+  assert.deepEqual(foldFieldValue({ field: "currentHp", value: "1,000" }, SCORES), { args: { currentHp: 1000 } });
   assert.deepEqual(foldFieldValue({ field: "str", value: "16" }, SCORES), {
     args: { abilities: { ...SCORES, str: 16 } },
   });
   assert.deepEqual(foldFieldValue({ field: "conditions", value: "poisoned, prone" }, SCORES), {
     args: { conditions: ["poisoned", "prone"] },
   });
-  assert.deepEqual(foldFieldValue({ field: "conditions", value: "none" }, SCORES), { args: { conditions: [] } });
+  assert.deepEqual(foldFieldValue({ field: "conditions", value: "" }, SCORES), { args: { conditions: [] } });
+  // A field is its key, as the form's select sends it: a word for one, in
+  // any language, is no field, and a word typed as the list is its entry.
+  for (const field of ["Max HP", "hp", "pv max", "punti ferita"]) {
+    assert.match(foldFieldValue({ field, value: 40 }, SCORES).error, /no field called/, field);
+  }
+  assert.deepEqual(foldFieldValue({ field: "conditions", value: "none" }, SCORES), { args: { conditions: ["none"] } });
   // The model's own keys pass through, and win over the pair beside them.
   assert.deepEqual(foldFieldValue({ level: 3, gold: 10 }, SCORES), { args: { level: 3, gold: 10 } });
   assert.deepEqual(foldFieldValue({ field: "level", value: 9, level: 4 }, SCORES), { args: { level: 4 } });

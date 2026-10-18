@@ -47,30 +47,10 @@ export const UPDATE_SHEET_FIELDS: UpdateSheetField[] = [
   { name: "conditions", label: "Conditions", kind: "list" },
 ];
 
-const squash = (text: string) => text.toLowerCase().replace(/[^a-z]/g, "");
-
-// A person types "Max HP" or "hp" where the key is maxHp or currentHp.
-const SPOKEN: Record<string, string> = {
-  hp: "currentHp",
-  hitpoints: "currentHp",
-  maxhp: "maxHp",
-  maxhitpoints: "maxHp",
-  temphp: "tempHp",
-  armorclass: "ac",
-  experience: "xp",
-};
-
+// The field by its key, as the form's select sends it; a word for one in any
+// language ("max hp", "pv max") is no field.
 function fieldNamed(raw: string): UpdateSheetField | null {
-  const wanted = squash(raw);
-  if (!wanted) {
-    return null;
-  }
-  const key = SPOKEN[wanted];
-  return (
-    UPDATE_SHEET_FIELDS.find(
-      (field) => field.name === key || squash(field.name) === wanted || squash(field.label) === wanted,
-    ) ?? null
-  );
+  return UPDATE_SHEET_FIELDS.find((field) => field.name === raw) ?? null;
 }
 
 export type FoldedArgs = { args: Record<string, unknown> } | ToolError;
@@ -101,9 +81,9 @@ export function foldFieldValue(
     const list = Array.isArray(value)
       ? value.map(String)
       : String(value).split(/[,\n]/);
+    // Left empty, the list is cleared.
     const names = list.map((entry) => entry.trim()).filter(Boolean);
-    const cleared = names.length === 1 && /^(none|nothing|clear)$/i.test(names[0]);
-    return { args: { [found.name]: cleared ? [] : names, ...rest } };
+    return { args: { [found.name]: names, ...rest } };
   }
   if (found.kind === "text") {
     return { args: { [found.name]: String(value).trim(), ...rest } };

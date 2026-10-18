@@ -482,7 +482,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "value",
         label: "Becomes",
         kind: "text",
-        help: "A whole number for a number. Conditions as a list (poisoned, prone), or none to clear them.",
+        help: "A whole number for a number. Conditions as a list (poisoned, prone), or left empty to clear them.",
       },
       REASON,
     ],
