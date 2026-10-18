@@ -1,6 +1,7 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import {
   BackendRefusal,
+  describeTransportFailure,
   fetchBackend,
   forEachStreamLine,
   MAX_BACKEND_BODY_BYTES,
@@ -35,7 +36,7 @@ import { apiSpeedEligibility } from "@/lib/speed-tier";
 import { noteSpeed } from "@/lib/speed-status";
 import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow } from "@/lib/text-models";
 import { catalogContextWindow, hostedContextWindow } from "@/lib/model-registry/catalog";
-import { ollamaModelInfo, soleListedModel } from "@/lib/model-registry/discovery";
+import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
 import {
@@ -656,23 +657,35 @@ export async function requestCustomMessage(
   const isOpenRouter = caps.kind === "openrouter";
   // Nothing is named in code: a blank setting runs the one chat model the
   // server lists, when it lists exactly one (src/lib/model-registry).
-  const resolvedModel =
+  let resolvedModel =
     (model || "").trim() ||
     globalText.customModel ||
     serverEnv("OPENAI_COMPAT_MODEL") ||
-    (isOpenRouter ? serverEnv("OPENROUTER_MODEL") : "") ||
-    (await soleListedModel({ provider: "custom", baseUrl: trimmedBase, apiKey: resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey }));
+    (isOpenRouter ? serverEnv("OPENROUTER_MODEL") : "");
 
   if (!resolvedModel) {
-    return {
-      error: Response.json(
-        {
-          error:
-            "No model name set, and the server lists more than one. Pick the model in Text Model settings.",
-        },
-        { status: 400 },
-      ),
-    };
+    const listing = await soleModelListing({ provider: "custom", baseUrl: trimmedBase, apiKey: resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey });
+    resolvedModel = listing.id;
+    if (!resolvedModel) {
+      // A server that never answered the listing is down or misaddressed;
+      // only one that answered with several models needs a pick.
+      return {
+        error: listing.answered
+          ? Response.json(
+              {
+                error:
+                  "No model name set, and the server lists more than one. Pick the model in Text Model settings.",
+              },
+              { status: 400 },
+            )
+          : Response.json(
+              {
+                error: `Could not reach the backend at ${trimmedBase} to list its models. Check the URL and that your server is running.`,
+              },
+              { status: 502 },
+            ),
+      };
+    }
   }
 
   // How this model runs its tools: Chat Completions until its first refusal
@@ -825,10 +838,15 @@ export async function requestCustomMessage(
       };
     }
 
+    // Connection refused, DNS, TLS and a connect timeout all land here and
+    // used to read alike; the reason tells a server that is down from a
+    // wrong address or a certificate, and the code goes to the log.
+    const failure = describeTransportFailure(error);
     return {
       error: Response.json(
         {
-          error: `Could not reach the backend at ${endpoint}. Check the URL and that your server is running.`,
+          error: `Could not reach the backend at ${endpoint}.${failure.reason ? ` ${failure.reason}` : ""} Check the URL and that your server is running.`,
+          detail: `transport ${failure.code}`,
         },
         { status: 502 },
       ),
@@ -1195,7 +1213,7 @@ export async function requestLocalMessage(
       body: JSON.stringify(requestPayload),
       signal: requestTimeout.signal,
     });
-  } catch {
+  } catch (error) {
     if (requestTimeout.timedOut()) {
       return {
         error: Response.json(
@@ -1207,10 +1225,12 @@ export async function requestLocalMessage(
       };
     }
 
+    const failure = describeTransportFailure(error);
     return {
       error: Response.json(
         {
-          error: `Could not reach Ollama at ${baseUrl}. Start the Ollama app (or \`ollama serve\`), pull the model with \`ollama pull ${model}\`, or switch this chat to a custom backend (LM Studio, llama.cpp, OpenRouter, ...) in Text Model settings.`,
+          error: `Could not reach Ollama at ${baseUrl}.${failure.reason ? ` ${failure.reason}` : ""} Start the Ollama app (or \`ollama serve\`), pull the model with \`ollama pull ${model}\`, or switch this chat to a custom backend (LM Studio, llama.cpp, OpenRouter, ...) in Text Model settings.`,
+          detail: `transport ${failure.code}`,
         },
         { status: 502 },
       ),

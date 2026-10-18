@@ -1598,38 +1598,6 @@ function ensureSchema(db: SqliteDatabase) {
     backfillSheetFeatures(db);
   }
 
-  // This machine's DM backend moved from Ollama to llama-server (llama.cpp)
-  // on :8001. Retarget campaigns still pointing at the old Ollama endpoint;
-  // idempotent because rewritten rows no longer match the WHERE.
-  const staleBackends = db
-    .prepare(
-      `SELECT id, settings_json FROM campaigns
-       WHERE settings_json LIKE '%127.0.0.1:11434/v1%' OR settings_json LIKE '%localhost:11434/v1%'`,
-    )
-    .all() as Array<{ id: string; settings_json: string }>;
-  for (const row of staleBackends) {
-    try {
-      const settings = JSON.parse(row.settings_json) as {
-        textProvider?: string;
-        customBaseUrl?: string;
-        customModel?: string;
-      };
-      if (settings.textProvider !== "custom" || !/:11434\/v1$/.test(settings.customBaseUrl ?? "")) {
-        continue;
-      }
-      settings.customBaseUrl = "http://127.0.0.1:8001/v1";
-      if (settings.customModel?.startsWith("qwen3.6")) {
-        settings.customModel = "qwen3.6-35b";
-      }
-      db.prepare(`UPDATE campaigns SET settings_json = ? WHERE id = ?`).run(
-        JSON.stringify(settings),
-        row.id,
-      );
-    } catch {
-      // Unparseable settings stay untouched; the campaign UI can fix them.
-    }
-  }
-
   addColumns("campaign_messages", [
     // Who a DM message is spoken as (docs/vtt-parity-implementation-plan.md
     // 8.1). NULL is the narrator.

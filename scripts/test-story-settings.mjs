@@ -19,6 +19,7 @@ const { maskStorySettings, normalizeSettings, scrubStorySettings, withoutAdminOn
   "../src/lib/db/settings.ts"
 );
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
+const { closeDatabaseForRestore } = await import("../src/lib/db/core.ts");
 const { storyContextTokens, utilityContextTokens, localContextTokens } = await import("../src/lib/model-client.ts");
 const { DEFAULT_STORY_SETTINGS } = await import("../src/lib/defaults.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
@@ -290,6 +291,25 @@ test("only an admin's campaign runs on its own backend address", () => {
   assert.equal(maskStorySettings(run, admin).serverManaged, false);
 });
 
+// Boot used to retarget any campaign on Ollama's OpenAI-compatible port
+// (:11434/v1) at llama-server on :8001, a move this development machine
+// made once; for everyone else it pointed a working campaign at a port
+// with nothing on it ("Could not reach the backend at
+// http://127.0.0.1:8001/v1/chat/completions"), and again after every
+// restore. A saved address is the admin's and is kept.
+test("a campaign on Ollama's compatible API keeps its address across a boot", () => {
+  const admin = createUser("ollama-admin", "x", { isAdmin: true });
+  const input = { title: "T", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" };
+  const mine = createCampaign(admin.id, input);
+  updateStorySettings(mine.id, { textProvider: "custom", customBaseUrl: "http://127.0.0.1:11434/v1", customModel: "qwen3.6:35b" });
+  // The next getDatabase() opens the file again and runs the schema pass,
+  // as the next server start would.
+  closeDatabaseForRestore();
+  const after = getCampaignById(mine.id).settings;
+  assert.equal(after.customBaseUrl, "http://127.0.0.1:11434/v1");
+  assert.equal(after.customModel, "qwen3.6:35b");
+});
+
 test("a non-admin's patch loses its backend addresses and keys, nothing else", () => {
   const patch = withoutAdminOnlyFields({ ...{ customBaseUrl: "http://x", customApiKey: "k", utilityBaseUrl: "http://y", utilityApiKey: "k", comfyUrl: "http://z" }, customModel: "m", proseSize: "short" });
   assert.deepEqual(patch, { customModel: "m", proseSize: "short" });
@@ -391,6 +411,30 @@ test("a non-admin's patch loses its backend addresses and keys, nothing else", (
     assert.ok(Date.now() - started < 10_000, "an endless body was read to the end");
     passed += 1;
     console.log("ok: a campaign's backend cannot redirect the server elsewhere or flood it");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// The one notice every failed connection used to produce now says why, and
+// carries the bare code for the server log (turn.ts prints `detail`).
+{
+  const { requestCustomMessage } = await import("../src/lib/model-client.ts");
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8001"), { code: "ECONNREFUSED" }) });
+  };
+  try {
+    const result = await requestCustomMessage("http://127.0.0.1:8001/v1", "m", "", [{ role: "user", content: "hi" }]);
+    assert.equal(result.error?.status, 502);
+    const body = await result.error.json();
+    assert.equal(
+      body.error,
+      "Could not reach the backend at http://127.0.0.1:8001/v1/chat/completions. Nothing is listening at that address (connection refused). Check the URL and that your server is running.",
+    );
+    assert.equal(body.detail, "transport ECONNREFUSED");
+    passed += 1;
+    console.log("ok: a refused connection says so, with the code for the log");
   } finally {
     globalThis.fetch = realFetch;
   }

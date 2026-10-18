@@ -532,6 +532,11 @@ try {
     const refused = await requestCustomMessage(compatUrl, "", "sk-test", [{ role: "user", content: "hi" }], {});
     assert.equal(refused.error?.status, 400);
     assert.match((await refused.error.json()).error, /lists more than one/);
+    // A blank model against a server that is down used to read as "lists
+    // more than one"; nothing was listed, so the table hears what happened.
+    const down = await requestCustomMessage("http://127.0.0.1:9/v1", "", "", [{ role: "user", content: "hi" }], {});
+    assert.equal(down.error?.status, 502);
+    assert.match((await down.error.json()).error, /Could not reach the backend at http:\/\/127\.0\.0\.1:9\/v1 to list its models/);
   });
 
   await test("the wizard's list is kept to the models that can narrate, led by the catalog's pick, with no name in code", () => {
