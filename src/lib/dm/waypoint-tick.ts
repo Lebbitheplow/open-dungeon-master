@@ -143,7 +143,7 @@ export async function judgeWaypoints(campaignId: string, sinceSeq: number): Prom
             .join("\n")}\n\nRecent play:\n${recent}`,
         },
       ],
-      { timeoutMs: arcTextTimeoutMs() },
+      { meta: { task: "waypoint_judge" }, timeoutMs: arcTextTimeoutMs() },
     );
     if (error) {
       return [];

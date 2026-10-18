@@ -223,7 +223,9 @@ const CLASSIFIED = {
   "src/lib/dm/ask.ts": { prose: 2, machine: 0 },
   "src/lib/dm/assist.ts": { prose: 2, machine: 0 },
   "src/lib/dm/beats.ts": { prose: 1, machine: 0 },
-  "src/lib/dm/chapter-close.ts": { prose: 1, machine: 0 },
+  // The chapter summary, and the span accounts a long chapter is condensed
+  // into first (in the table's language, since the summary is built on them).
+  "src/lib/dm/chapter-close.ts": { prose: 2, machine: 0 },
   "src/lib/dm/compaction.ts": { prose: 2, machine: 0 },
   "src/lib/dm/lore-check.ts": { prose: 1, machine: 0 },
   "src/lib/dm/npc-suggest.ts": { prose: 1, machine: 0 },

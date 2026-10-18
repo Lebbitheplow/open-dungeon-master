@@ -26,6 +26,10 @@ export type UsageEvent = {
   paid: boolean;
   inputTokens?: number;
   outputTokens?: number;
+  // Of the input, what the backend served from its prompt cache; of the
+  // output, what it spent reasoning. Absent when the backend did not say.
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
   // Pictures, speech characters, dictation clips.
   units?: number;
   durationMs?: number;
@@ -39,8 +43,9 @@ export function recordUsage(event: UsageEvent): void {
     getDatabase()
       .prepare(
         `INSERT INTO usage_events
-           (at, campaign_id, user_id, kind, role, backend, model, paid, input_tokens, output_tokens, units, duration_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (at, campaign_id, user_id, kind, role, backend, model, paid, input_tokens, output_tokens, units, duration_ms,
+            cached_input_tokens, reasoning_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         nowIso(),
@@ -55,6 +60,8 @@ export function recordUsage(event: UsageEvent): void {
         Math.max(0, Math.round(event.outputTokens ?? 0)),
         Math.max(0, event.units ?? 0),
         Math.max(0, Math.round(event.durationMs ?? 0)),
+        event.cachedInputTokens === undefined ? null : Math.max(0, Math.round(event.cachedInputTokens)),
+        event.reasoningTokens === undefined ? null : Math.max(0, Math.round(event.reasoningTokens)),
       );
   } catch (error) {
     // Bookkeeping must never cost a table its turn.

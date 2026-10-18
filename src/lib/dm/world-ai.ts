@@ -28,7 +28,7 @@ async function ask(campaign: Campaign, [system, ...rest]: Array<{ role: "system"
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [{ ...system, content: withLanguage(system.content, campaign.gameSettings.tableLanguage) }, ...rest],
-    { timeoutMs: arcTextTimeoutMs() },
+    { meta: { task: "world_ai" }, timeoutMs: arcTextTimeoutMs() },
   );
   if (error) return { error: "The model could not be reached." };
   const text = stripReasoningArtifacts(String(message?.content ?? "")).trim();

@@ -781,7 +781,8 @@ async function completeWithHarness(
         binary,
         system: rendered.system,
         model,
-        effort: config.effort,
+        // The bookkeeping model's own effort when the admin set one.
+        effort: context.role === "utility" ? config.utilityEffort || config.effort : config.effort,
         ...(speed ? { speed } : {}),
         mcp: null,
         cwd,

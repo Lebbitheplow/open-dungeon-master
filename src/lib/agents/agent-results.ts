@@ -223,7 +223,24 @@ function fitExtras(extras: Record<string, Json[]>, budget: number): Trimmed[] {
 // of the newest messages as fit, then the smaller lists. Browser-only fields
 // (narration audio, background calls, the blocked list, faces, the sheet
 // audit) are left out.
-export function campaignForAgent(text: string, max = MAX_RESULT_CHARS): string {
+// What an agent may ask of the snapshot (odm_get_campaign's arguments): a
+// narrower view, only the messages after a seq it has already read, and a
+// smaller reply. Every view keeps the state that decides whether and how to
+// act (the context audit's F13): a small-model agent can ask "may I act, and
+// what changed?" without reading the whole table again.
+export type CampaignView = "full" | "status" | "sheet" | "encounter" | "recent";
+export const CAMPAIGN_VIEWS: readonly CampaignView[] = ["full", "status", "sheet", "encounter", "recent"];
+export const MIN_RESULT_CHARS = 4_000;
+
+export type CampaignReadOptions = { view?: CampaignView; sinceSeq?: number; maxChars?: number };
+
+export function campaignForAgent(text: string, max = MAX_RESULT_CHARS, options: CampaignReadOptions = {}): string {
+  const asked = options.view ?? "full";
+  const limit = Math.max(MIN_RESULT_CHARS, Math.min(max, Math.floor(options.maxChars ?? max)));
+  if (asked !== "full" || options.sinceSeq !== undefined) {
+    return narrowCampaignForAgent(text, limit, asked, options.sinceSeq);
+  }
+  max = limit;
   let snapshot: JsonObject;
   try {
     const parsed = JSON.parse(text) as Json;
@@ -326,4 +343,82 @@ export function historyForAgent(text: string, max = MAX_RESULT_CHARS): string {
     olderBefore: messages.length && (cut || page.olderBefore !== null) ? (messages[0].seq as number) : null,
     ...(cut ? { note: `Only the newest ${messages.length} of the ${all.length} messages asked for fit in one reply.` } : {}),
   });
+}
+
+// The status every view carries: whether the seat may act, and what waits.
+function statusOf(snapshot: JsonObject, campaign: JsonObject): JsonObject {
+  return {
+    campaign: { id: campaign.id ?? "", title: campaign.title ?? "", status: campaign.status ?? "" },
+    me: isObject(snapshot.me) ? snapshot.me : {},
+    activeSheetId: snapshot.activeSheetId ?? "",
+    safetyPause: snapshot.safetyPause ?? null,
+    dmStatus: snapshot.dmStatus ?? null,
+    floor: campaign.floor ?? null,
+    caps: snapshot.caps ?? null,
+    pendingRolls: snapshot.pendingRolls ?? [],
+    disputes: snapshot.disputes ?? [],
+    itemProposals: snapshot.itemProposals ?? [],
+    latestSeq: snapshot.latestSeq ?? 0,
+  };
+}
+
+function narrowCampaignForAgent(text: string, max: number, view: CampaignView, sinceSeq?: number): string {
+  let snapshot: JsonObject;
+  try {
+    const parsed = JSON.parse(text) as Json;
+    if (!isObject(parsed) || !isObject(parsed.campaign)) {
+      return boundResultText(text, max);
+    }
+    snapshot = parsed;
+  } catch {
+    return boundResultText(text, max);
+  }
+  const campaign = snapshot.campaign as JsonObject;
+  const me = isObject(snapshot.me) ? snapshot.me : {};
+  const sheets = (Array.isArray(snapshot.sheets) ? snapshot.sheets : []).filter(isObject);
+  const names = nameMap(snapshot.members, sheets);
+  const out: JsonObject = { view, ...statusOf(snapshot, campaign) };
+  const mine = sheets.filter((sheet) => sheet.userId === me.id);
+  if (view === "sheet") {
+    out.sheets = mine;
+  } else {
+    out.mySheets = mine.map(sheetSummary);
+  }
+  if (view === "encounter" || view === "full") {
+    out.encounter = snapshot.encounter ?? null;
+  } else if (isObject(snapshot.encounter)) {
+    // Enough to know a fight is on and whose turn it is.
+    const encounter = snapshot.encounter;
+    out.encounter = { id: encounter.id ?? null, round: encounter.round ?? null, turnIndex: encounter.turnIndex ?? null, status: encounter.status ?? null };
+  }
+  if (view === "full") {
+    out.scene = snapshot.scene ?? null;
+    out.members = snapshot.members ?? [];
+    out.sheets = sheets.map((sheet) => (sheet.userId === me.id ? sheet : sheetSummary(sheet)));
+  }
+  const all = (Array.isArray(snapshot.messages) ? snapshot.messages : [])
+    .filter(isObject)
+    .map((message) => agentMessage(message as Message, names));
+  // Messages: those after sinceSeq when given (the snapshot holds the newest
+  // page; an older seq than that page reaches is a gap, said so), else the
+  // newest one for "status", the newest that fit for the rest.
+  let messages = sinceSeq !== undefined ? all.filter((message) => (message.seq as number) > sinceSeq) : all;
+  const oldestHeld = all.length ? (all[0].seq as number) : null;
+  const gap = sinceSeq !== undefined && oldestHeld !== null && sinceSeq < oldestHeld - 1;
+  if (sinceSeq === undefined && view === "status") {
+    messages = all.slice(-1);
+  }
+  const room = Math.max(1_000, max - size(out) - 600);
+  const shown = newestThatFit(messages, room);
+  out.messages = shown;
+  out.history = {
+    shown: shown.length,
+    ...(sinceSeq !== undefined ? { since: sinceSeq, more: shown.length < messages.length || gap } : {}),
+    olderBefore: shown.length ? (shown[0].seq as number) : null,
+    read: gap
+      ? "Messages between your seq and the oldest shown are not in this reply: page them with odm_get_messages (before = olderBefore), or read the full view."
+      : "odm_get_messages pages older messages: pass before = olderBefore.",
+  };
+  const textOut = JSON.stringify(out);
+  return textOut.length <= max ? textOut : boundJson(out, max, new Set(["safetyPause", "dmStatus", "floor", "caps", "pendingRolls"]));
 }

@@ -27,7 +27,7 @@ export async function toEnglishForImage<K extends string>(
       { role: "system", content: IMAGE_ENGLISH_SYSTEM },
       { role: "user", content: JSON.stringify(Object.fromEntries(keys.map((key) => [key, fields[key]]))) },
     ],
-    { timeoutMs: arcTextTimeoutMs(), thinking: false },
+    { meta: { task: "image_english" }, timeoutMs: arcTextTimeoutMs(), thinking: false },
   );
   if (error) {
     throw new Error("The English rewrite for the image prompt failed.");

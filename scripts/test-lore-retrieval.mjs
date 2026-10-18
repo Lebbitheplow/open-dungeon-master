@@ -182,20 +182,25 @@ await test("at every window the lore keeps to its measured budget and the prompt
     assert.ok(block.length - block.indexOf("\n") <= trace.lore.budgetChars + 2, `${window}: the block itself fits`);
     assert.ok(trace.lore.budgetChars >= previous, "a larger window never shrinks it");
     previous = trace.lore.budgetChars;
-    if (window >= 49_152) {
-      assert.ok(trace.promptTokens <= trace.limitTokens, `${window}: the prompt fits (${trace.promptTokens} of ${trace.limitTokens})`);
+    // Every window now: the whole request is fitted before each call
+    // (src/lib/dm/request-fit.ts), and the small ones take the compact
+    // tool set (src/lib/dm/tool-profiles.ts).
+    for (const call of trace.calls ?? []) {
+      assert.ok(call.promptTokens + call.outputTokens <= window, `${window}: call ${call.index} fits (${call.promptTokens} + ${call.outputTokens})`);
     }
+    assert.ok((trace.calls ?? []).length >= 1, `${window}: the call was made`);
   }
 });
 
 await test("when the pinned entries fill a small window, what they crowd out is named, never implied complete", async () => {
   for (let index = 0; index < 4; index += 1) {
-    const extra = lore(`Standing Order ${index + 1}`, `${"The Margravine's standing orders run long and leave nothing to chance. ".repeat(6)}`, { category: "factions" });
+    const extra = lore(`Standing Order ${index + 1}`, `${"The Margravine's standing orders run long and leave nothing to chance. ".repeat(14)}`, { category: "factions" });
     getDatabase().prepare(`UPDATE lore_entries SET pinned = 1 WHERE id = ?`).run(extra.id);
   }
   await embedPendingLore(campaign.id);
   const { block, trace } = await turnOn("Tell me about every gate into the city.", 16_384);
-  assert.equal(trace.lore.budgetChars, 800, "the smallest windows get the floor");
+  const tools = dmTurnToolTokens(getCampaignById(campaign.id));
+  assert.equal(trace.lore.budgetChars, loreBudgetChars(computeBudgets(promptWindowTokens(16_384, tools)).retrieval, 0), "the budget is measured from the small window");
   const lines = block.split("\n").slice(1);
   const closing = lines.at(-1);
   assert.match(closing, /^Also bearing on this moment, left out for room \(search_lore reads them\): /, block);

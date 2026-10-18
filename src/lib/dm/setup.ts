@@ -70,7 +70,7 @@ export async function runStorySetup(campaignId: string) {
         content: `Difficulty: ${campaign.difficulty}. Party:\n${party}\n\n${worldHints}${prepared ? `\n\n${prepared}` : ""}`,
       },
     ],
-    {},
+    { meta: { task: "story_setup" } },
   );
 
   if (error) {

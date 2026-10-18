@@ -22,6 +22,11 @@ Back to the [README](../README.md). Prefer containers? See
     Pick it in **Admin > Agent program**. Works for a server started with npm or
     systemd, not inside the Docker image
     ([agent-harness.md](agent-harness.md)).
+
+  A local model needs a context window of at least 16K tokens to narrate and
+  24K to run fights; 32K or more is recommended
+  ([text-backends.md](text-backends.md#context-window)). Hosted models and
+  agent programs have far more.
 - **Optional services** (each feature simply stays off, or falls back to a
   placeholder, without it):
   - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for character

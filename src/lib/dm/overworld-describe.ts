@@ -50,7 +50,7 @@ export async function describeOverworld(
         ].join("\n"),
       },
     ],
-    { timeoutMs: arcTextTimeoutMs() },
+    { meta: { task: "overworld" }, timeoutMs: arcTextTimeoutMs() },
   );
   if (error) {
     return { error: "The model could not be reached." };

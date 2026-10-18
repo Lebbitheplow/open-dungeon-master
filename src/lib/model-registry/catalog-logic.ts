@@ -10,6 +10,8 @@
 // cache file). It is read field by field into fresh objects: nothing in it
 // is ever executed, and an unknown field is dropped.
 
+import { RECOMMENDED_WINDOW, storyWindowVerdict } from "@/lib/story-window";
+
 export type CatalogModel = {
   // The models.dev provider id ("openai", "openrouter", "deepinfra").
   provider: string;
@@ -390,7 +392,7 @@ export function describeCatalogModel(model: CatalogModel | null, options: { loca
 
 // The story prompt packs against the window; below this the table loses
 // its recent history every few turns.
-export const SMALL_CONTEXT_TOKENS = 32_000;
+export const SMALL_CONTEXT_TOKENS = RECOMMENDED_WINDOW;
 
 // `tools` is the backend's own word on tool calls where it gives one
 // (Ollama's capabilities); it outranks the catalog's.
@@ -461,7 +463,14 @@ export function assessModel(input: {
         noTools("Takes no tool calls.");
       }
     }
-    if (catalog.contextTokens && catalog.contextTokens < SMALL_CONTEXT_TOKENS) {
+    if (catalog.contextTokens && role === "story") {
+      // The storyteller's own minimums (src/lib/story-window.ts). Too small
+      // to narrate rules a hosted model out; a local row is a loose match
+      // for the weights, so it only warns.
+      const verdict = storyWindowVerdict(catalog.contextTokens);
+      if (verdict.level === "short" && !input.local) unfit(verdict.text);
+      else if (verdict.text) warn(verdict.text);
+    } else if (catalog.contextTokens && catalog.contextTokens < SMALL_CONTEXT_TOKENS) {
       warn(`A ${formatTokens(catalog.contextTokens)} window is small for a campaign; the table will forget recent turns often.`);
     }
   }

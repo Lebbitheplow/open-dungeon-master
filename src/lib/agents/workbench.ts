@@ -16,7 +16,15 @@ import { harnessMcpUrl } from "@/lib/harness/bridge";
 import { grantSessionToken, grantUser, type AgentScope, type ConnectionGrant } from "@/lib/agents/grants";
 import type { McpToolDefinition } from "@/lib/harness/types";
 import { createHash } from "node:crypto";
-import { boundResultText, campaignForAgent, historyForAgent } from "@/lib/agents/agent-results";
+import {
+  boundResultText,
+  CAMPAIGN_VIEWS,
+  campaignForAgent,
+  historyForAgent,
+  MAX_RESULT_CHARS,
+  MIN_RESULT_CHARS,
+  type CampaignView,
+} from "@/lib/agents/agent-results";
 import { finishWebhookWrite, playerSignalsEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
 import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
 import { ASK_SCOPES, ASK_VISIBILITIES, QUESTION_MAX_CHARS } from "@/lib/dm/ask-logic";
@@ -43,7 +51,7 @@ type WorkbenchTool = {
   check?: (args: Args) => string | null;
   // Reshapes a successful answer for an agent, under the result cap
   // (src/lib/agents/agent-results.ts). Others are only bounded.
-  shape?: (text: string) => string;
+  shape?: (text: string, args: Args) => string;
 };
 
 const campaignIdProp = { campaignId: { type: "string", description: "The campaign's id (from odm_list_campaigns)." } };
@@ -89,12 +97,22 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_campaign",
     scope: "read",
-    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the DM sent you alone are not here: odm_get_whispers reads them.",
-    properties: campaignIdProp,
+    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, DM status, floor, your caps, pending rolls, encounter, disputes; then the party, then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the DM sent you alone are not here: odm_get_whispers reads them. To read less: view 'status' (may I act, and the newest message), 'recent' (status and the newest messages), 'sheet' (status and your sheets whole) or 'encounter' (status and the fight); sinceSeq returns only messages after a seq you have read (latestSeq from your last read); maxChars caps the reply. Every view keeps the state that decides whether you may act.",
+    properties: {
+      ...campaignIdProp,
+      view: { type: "string", enum: [...CAMPAIGN_VIEWS], description: "How much to read (default full)." },
+      sinceSeq: { type: "integer", minimum: 0, description: "Only messages after this seq (latestSeq from your last read)." },
+      maxChars: { type: "integer", minimum: MIN_RESULT_CHARS, maximum: MAX_RESULT_CHARS, description: "The most characters the reply may run to." },
+    },
     required: ["campaignId"],
     method: "GET",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}`,
-    shape: campaignForAgent,
+    shape: (text, a) =>
+      campaignForAgent(text, MAX_RESULT_CHARS, {
+        ...(typeof a.view === "string" && (CAMPAIGN_VIEWS as readonly string[]).includes(a.view) ? { view: a.view as CampaignView } : {}),
+        ...(Number.isSafeInteger(a.sinceSeq) && (a.sinceSeq as number) >= 0 ? { sinceSeq: a.sinceSeq as number } : {}),
+        ...(Number.isSafeInteger(a.maxChars) ? { maxChars: a.maxChars as number } : {}),
+      }),
   },
   {
     name: "odm_get_messages",
@@ -119,7 +137,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
       }
       return `/api/campaigns/${seg(a.campaignId)}/messages${query.size ? `?${query}` : ""}`;
     },
-    shape: historyForAgent,
+    shape: (text) => historyForAgent(text),
   },
   {
     name: "odm_get_sheet",
@@ -562,7 +580,7 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   }
   // Held under the agent's result cap as JSON, so a long answer still parses
   // and keeps the fields that matter (src/lib/agents/agent-results.ts).
-  text = response.ok && tool.shape ? tool.shape(text) : boundResultText(text);
+  text = response.ok && tool.shape ? tool.shape(text, args) : boundResultText(text);
   const result = !response.ok
     ? { text: `HTTP ${response.status}: ${text || response.statusText}`, isError: true, campaignId }
     : { text: text || "{}", isError: false, campaignId };

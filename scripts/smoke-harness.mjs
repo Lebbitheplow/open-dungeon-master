@@ -114,9 +114,21 @@ for (let index = 0; index < TURNS; index += 1) {
   });
   const started = Date.now();
   await startDmTurn(campaign.id);
-  const last = listRecentMessages(campaign.id, 3).pop();
-  console.log(`\n--- turn ${index + 1} (${Math.round((Date.now() - started) / 1000)}s, ${last.authorType}) ---\n${last.content.slice(0, 900)}`);
-  assert.equal(last.authorType, "dm", `turn ${index + 1} did not produce narration: ${last.content}`);
+  // The DM's narration after the player's line. The engine may post table
+  // notes behind it (an enemy whose turn the program left resolves on its
+  // own), so the last message need not be the DM's.
+  const recent = listRecentMessages(campaign.id, 10);
+  const asked = recent.findLastIndex((message) => message.authorType === "player");
+  const after = recent.slice(asked + 1);
+  const narration = after.filter((message) => message.authorType === "dm").at(-1);
+  console.log(
+    `\n--- turn ${index + 1} (${Math.round((Date.now() - started) / 1000)}s) ---\n${(narration?.content ?? "(no narration)").slice(0, 900)}` +
+      after
+        .filter((message) => message.authorType !== "dm")
+        .map((message) => `\n[${message.authorType}] ${message.content.slice(0, 200)}`)
+        .join(""),
+  );
+  assert.ok(narration, `turn ${index + 1} did not produce narration: ${after.map((message) => message.content).join(" / ")}`);
   assert.equal(activeBridgeSessions(), 0, "a session outlived its turn");
 }
 

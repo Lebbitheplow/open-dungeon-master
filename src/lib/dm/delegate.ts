@@ -115,7 +115,7 @@ async function decideMonsterTurn(
           content: `The monster:\n${describeEnemy(enemy)}\n\nThe party it can see:\n${party}`,
         },
       ],
-      { timeoutMs: arcTextTimeoutMs() },
+      { meta: { task: "monster_turn" }, timeoutMs: arcTextTimeoutMs() },
     ),
   );
   if (error) {
@@ -332,6 +332,7 @@ export async function expandBeat(
         // called a tool would invent mechanics the DM already resolved by
         // hand at the table.
         toolChoice: "none",
+        meta: { task: "beat_expand" },
       });
       if (error) {
         failure = "The model is unavailable; the beat stands as you wrote it.";

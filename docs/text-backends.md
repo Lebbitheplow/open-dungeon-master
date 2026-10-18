@@ -46,6 +46,32 @@ ollama pull qwen3.6:35b-a3b-q8_0
 ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
 ```
 
+### Context window
+
+The storyteller needs a context window of at least 16K tokens to narrate and
+24K to run fights; 32K or more is recommended. The DM's instructions and the
+compact tool set come to about 15K tokens before any story is told, and every
+request is fitted to the window the backend really has
+([request-fit.ts](../src/lib/dm/request-fit.ts)):
+
+| Window | What plays |
+|---|---|
+| under 16K | nothing: each turn is refused with a note naming the fix |
+| 16K (`-c 16384`) | narration, exploration and checks on the compact tool set; a fight turn can be refused for room |
+| 24K (`-c 24576`) | fights too, on a trimmed tool set, with only the last few turns in view |
+| 32K (`-c 32768`) | everything, with recent turns in view |
+| 64K (`-c 65536`) | the default: the full tool set and a long transcript |
+
+Measured on Qwen3.6-35B-A3B and Gemma 4 E4B; a bigger party or a longer
+story leaves less of each window for history. llama-server reports its
+window on `/props`, read at the start of each turn. Ollama's OpenAI-compatible
+endpoint and most other servers report none, so a table plans for 16K and
+lets the server decide: set `OPENAI_COMPAT_CONTEXT` to the window the server
+runs. **Test backend** (the guided setup, and Admin > Text model defaults)
+says which window a campaign on that backend gets and whether it is enough.
+Hosted models take their window from the model catalog, and the model pickers
+leave out a model whose window is too small to narrate.
+
 ### Tool calls need thinking mode
 
 This is the setting that matters most for a working table, and it is not obvious.

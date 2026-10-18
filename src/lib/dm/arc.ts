@@ -270,7 +270,7 @@ export async function generateStoryArc(
         { role: "system", content: withLanguage(sagaGenerateSystem(profile), campaign.gameSettings.tableLanguage) },
         { role: "user", content: context },
       ],
-      { timeoutMs: arcTextTimeoutMs() },
+      { meta: { task: "arc_generate" }, timeoutMs: arcTextTimeoutMs() },
     );
     if (error) {
       const payload = (await error
@@ -484,7 +484,7 @@ export async function judgeBeatCompleted(campaignId: string, sinceSeq: number): 
         { role: "system", content: JUDGE_SYSTEM },
         { role: "user", content: `Beat: ${beat.text}\n\nRecent play:\n${recent}` },
       ],
-      { timeoutMs: arcTextTimeoutMs() },
+      { meta: { task: "beat_judge" }, timeoutMs: arcTextTimeoutMs() },
     );
     if (error) {
       return false;
@@ -610,7 +610,7 @@ async function arcModelCall(
       { role: "system", content: withLanguage(system, campaign.gameSettings.tableLanguage) },
       { role: "user", content: user },
     ],
-    { timeoutMs: arcTextTimeoutMs() },
+    { meta: { task: "arc_plan" }, timeoutMs: arcTextTimeoutMs() },
   );
   if (error) {
     if (process.env.DM_DEBUG) {
@@ -1062,7 +1062,7 @@ async function writeActRecap(
             }\n\nIts chapters:\n${source}`,
           },
         ],
-        { timeoutMs: arcTextTimeoutMs() },
+        { meta: { task: "act_recap" }, timeoutMs: arcTextTimeoutMs() },
       ),
     );
     if (error) {

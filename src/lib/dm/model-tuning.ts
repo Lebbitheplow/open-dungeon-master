@@ -35,14 +35,18 @@ function storyCatalogFacts(settings: Campaign["settings"]): CatalogFacts | null 
 
 // What this table's turn changes for its model (src/lib/dm/model-tuning-logic.ts).
 // An agent program keeps the environment's switches as before.
-export function modelTuningFor(campaign: Campaign, fullToolTokens: number): ModelTuning {
-  const env = { leanTools: process.env.DM_LEAN_TOOLS, thinking: process.env.DM_THINKING };
+export function modelTuningFor(campaign: Campaign, fullToolTokens: number, leanToolTokens?: number): ModelTuning {
+  const env = { leanTools: process.env.DM_LEAN_TOOLS, thinking: process.env.DM_THINKING, toolProfile: process.env.DM_TOOL_PROFILE };
+  // An agent program reads its whole catalogue once and keeps its own
+  // context, so it is offered the full set (or the trimmed one when asked).
   if (campaign.settings.textProvider === "harness") {
-    return { leanTools: env.leanTools === "1", thinking: env.thinking !== "0", outputCap: null, notes: [] };
+    const lean = env.leanTools === "1";
+    return { toolProfile: lean ? "lean" : "full", leanTools: lean, thinking: env.thinking !== "0", outputCap: null, notes: [] };
   }
   return tuneForModel({
     windowTokens: storyContextTokens(campaign.settings),
     fullToolTokens,
+    leanToolTokens,
     catalog: storyCatalogFacts(campaign.settings),
     configuredOutputTokens: configuredMaxOutputTokens(),
     env,
