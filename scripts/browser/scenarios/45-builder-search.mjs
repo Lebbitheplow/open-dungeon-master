@@ -19,6 +19,10 @@ export default {
     const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
     await name.waitFor({ state: "visible", timeout: 30_000 });
     await name.fill("Search Check");
+    // The first step owes a background once none stands in for the player
+    // (quick win Q1), so pick one before Continue.
+    await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
+    await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
 
     const search = page.locator(`${root}section[data-active] input[type="search"]`).locator("visible=true");
@@ -33,18 +37,30 @@ export default {
     if (!entry.fine && entry.search) found.push("a touch screen entered the step with focus in the search box (the keyboard would cover the cards)");
     if (!entry.fine && !entry.heading) found.push("a touch screen did not land on the step's title");
 
-    // Enter on a single match chooses it.
-    await search.first().focus();
-    await search.first().fill("tiefling");
-    await sleep(300);
+    // Enter on a single match chooses it. "tiefling" is one card on the
+    // bundled SRD, but a content pack can bring a Tiefling Heritage beside
+    // it, so the query is the first card name that matches alone.
     const matches = page.locator(`${root}section[data-active] .creator-card`).locator("visible=true");
-    if ((await matches.count()) === 1) {
+    const names = await page.evaluate(() =>
+      [...document.querySelectorAll("section[data-active] .creator-card .creator-plate-name")].map((node) => node.textContent?.trim() ?? ""),
+    );
+    let lone = "";
+    for (const query of ["tiefling", ...names.filter(Boolean)]) {
+      await search.first().focus();
+      await search.first().fill(query);
+      await sleep(300);
+      if ((await matches.count()) === 1) {
+        lone = query;
+        break;
+      }
+    }
+    if (lone) {
       await page.keyboard.press("Enter");
       await sleep(300);
       const pressed = await matches.first().getAttribute("aria-pressed");
-      if (pressed !== "true") found.push("Enter on the lone match did not choose it");
+      if (pressed !== "true") found.push(`Enter on the lone match for "${lone}" did not choose it`);
     } else {
-      found.push(`"tiefling" matched ${await matches.count()} cards, not one`);
+      found.push(`no search among ${names.length} card names matched one card alone`);
     }
     await search.first().fill("");
     await sleep(300);

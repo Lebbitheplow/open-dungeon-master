@@ -138,9 +138,18 @@ export default {
           await t.tap(diamond.first());
           await sleep(700);
           // Wizard.tsx moves focus to the new step's title on a step change,
-          // so a keyboard or screen reader starts at the top of the step.
+          // so a keyboard or screen reader starts at the top of the step. A
+          // step with a card grid then puts the caret in the grid's search
+          // box for a keyboard and a mouse (OptionCardGrid, quick win Q12):
+          // a labelled field at the top of the step, so it counts too.
           const focused = await eventually(
-            () => page.evaluate(() => document.activeElement?.matches("[data-builder-root] section[data-active] .wizard-step-heading") ?? false),
+            () =>
+              page.evaluate(
+                () =>
+                  document.activeElement?.matches(
+                    '[data-builder-root] section[data-active] .wizard-step-heading, [data-builder-root] section[data-active] input[type="search"]',
+                  ) ?? false,
+              ),
             { timeoutMs: 3_000, label: `focus on the step ${step} heading` },
           ).then(() => "", () => page.evaluate(() => {
             const node = document.activeElement;
