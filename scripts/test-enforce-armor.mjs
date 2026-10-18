@@ -188,10 +188,13 @@ async function adjust(user, body) {
 await test("putting armor on and off through the player's route moves the stored armor class", async () => {
   wear(["Chain Mail", "Shield", "Longsword"], { dex: 14 });
   assert.equal(world.sheet(hero.id).ac, 18);
-  // The first toggle makes wearing explicit: what is not marked is not worn.
-  let reply = await adjust(player, { gear: { "Chain Mail": { equipped: true } } });
+  // The first toggle makes wearing explicit, and what the sheet wore stays
+  // on: the mail and the shield the armor class counted (issue 412). Only
+  // the weapon, which marked worn would be a weapon in hand, comes off.
+  let reply = await adjust(player, { gear: { Shield: { equipped: false } } });
   assert.equal(reply.status, 200, reply.body.error);
   assert.equal(world.sheet(hero.id).ac, 16);
+  assert.deepEqual(world.sheet(hero.id).equipment.map((item) => item.equipped), [true, false, false]);
   reply = await adjust(player, { gear: { Shield: { equipped: true } } });
   assert.equal(world.sheet(hero.id).ac, 18);
   reply = await adjust(player, { gear: { "Chain Mail": { equipped: false } } });
@@ -200,9 +203,9 @@ await test("putting armor on and off through the player's route moves the stored
 
 await test("a character who has taken off their armor and shield is unarmored: 10 + DEX", async () => {
   wear(["Chain Mail", "Shield"], { dex: 14 });
-  await adjust(player, { gear: { Shield: { equipped: true } } });
-  assert.equal(world.sheet(hero.id).ac, 10 + 2 + 2);
-  const reply = await adjust(player, { gear: { Shield: { equipped: false } } });
+  await adjust(player, { gear: { Shield: { equipped: false } } });
+  assert.equal(world.sheet(hero.id).ac, 16);
+  const reply = await adjust(player, { gear: { "Chain Mail": { equipped: false } } });
   assert.deepEqual(reply.body.sheet.equipment.map((item) => item.equipped), [false, false]);
   assert.equal(reply.body.sheet.ac, 12, `with both items marked unworn the sheet stores AC ${reply.body.sheet.ac}`);
 });
@@ -316,6 +319,7 @@ await test("A character wearing armor they lack proficiency with cannot cast spe
 
 await test("Armor takes 1 to 10 minutes to don and a shield an action; nobody changes into plate in the middle of a fight.", async () => {
   wear(["Plate", "Shield"], { str: 16 });
+  world.patch(hero.id, { equipment: [{ name: "Plate", qty: 1, equipped: false }, { name: "Shield", qty: 1, equipped: false }] });
   // The shield goes on with the hero's action, on their own turn.
   const shield = await kit.onTurnOf(hero.id, () => adjust(player, { gear: { Shield: { equipped: true } } }));
   assert.equal(shield.status, 200, shield.body.error);

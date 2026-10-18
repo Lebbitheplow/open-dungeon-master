@@ -10,7 +10,8 @@ import { spendAction } from "@/lib/dm/action-budget";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { recordManualTicks } from "@/lib/dm/manual-ticks";
-import { attunementRefusal, gearChanges, usageLowers, usageSpendsHitDice } from "@/lib/dm/usage-rules";
+import { attunementRefusal, gearChanges, gearPatch, usageLowers, usageSpendsHitDice } from "@/lib/dm/usage-rules";
+import { acBreakdownFor } from "@/lib/srd";
 import { armorChangeMinutes } from "@/lib/dm/don-doff";
 import { advanceClock } from "@/lib/db/clock";
 
@@ -46,7 +47,10 @@ const usageSchema = z
     gear: z
       .record(
         z.string().max(80),
-        z.object({ equipped: z.boolean().optional(), attuned: z.boolean().optional() }),
+        // layered: worn beside another of its kind, the DM's exception to
+        // the one-per-place rule (src/lib/srd/wear-slots.ts); the DM and
+        // the party lead only.
+        z.object({ equipped: z.boolean().optional(), attuned: z.boolean().optional(), layered: z.boolean().optional() }),
       )
       .optional(),
   })
@@ -128,6 +132,7 @@ export async function POST(
   const changes = parsed.data.gear
     ? gearChanges(sheet, parsed.data.gear)
     : { armor: [], shields: [], attunement: [] };
+  let wornEquipment: FullPatchSheetInput["equipment"] | null = null;
   if (parsed.data.gear) {
     if (Object.keys(parsed.data.gear).some((name) => !sheet.equipment.some((item) => item.name === name))) {
       return Response.json(
@@ -142,6 +147,21 @@ export async function POST(
     if (attuneProblem) {
       return refuse(attuneProblem);
     }
+    // Equipping is opt-in per sheet; what a never-touched sheet wore stays
+    // on when it first says, and a second cloak, pair of boots or helmet is
+    // refused with the rows to take off (src/lib/dm/usage-rules.ts).
+    const armor = acBreakdownFor(sheet);
+    const worn = gearPatch(sheet, parsed.data.gear, {
+      corrects,
+      armor: { armorName: armor.armorName, shieldName: armor.shieldName },
+    });
+    if ("error" in worn) {
+      return Response.json(
+        { error: worn.error, ...("conflict" in worn ? { wearConflict: worn.conflict } : {}) },
+        { status: worn.status },
+      );
+    }
+    wornEquipment = worn.equipment;
   }
   let shieldBudget: ReturnType<typeof spendAction> | null = null;
   if (encounter && parsed.data.gear) {
@@ -227,39 +247,8 @@ export async function POST(
     }
   }
 
-  if (parsed.data.gear) {
-    const gear = parsed.data.gear;
-    // Equipping is opt-in per sheet: the first time anyone touches a toggle,
-    // every other item is explicitly marked unworn so the AC engine stops
-    // treating the whole pack as worn.
-    const explicit = sheet.equipment.some((item) => item.equipped) ||
-      Object.values(gear).some((entry) => entry.equipped);
-    const equipment = sheet.equipment.map((item) => {
-      const entry = gear[item.name];
-      // An attuned item works only while worn, so attuning on a sheet that
-      // says what it wears puts the item on.
-      const wornByAttuning = explicit && entry?.attuned === true && entry.equipped === undefined;
-      const equipped = wornByAttuning
-        ? true
-        : entry?.equipped ?? item.equipped ?? (explicit ? false : undefined);
-      // Attuning takes a short rest spent with the item (SRD 5.1,
-      // Attunement): asked for here, the row waits as `attuning` and the
-      // next short or long rest makes it attuned (src/lib/dm/rest-tools.ts).
-      // Letting go ends it at once, pending or not.
-      const asks = entry?.attuned === true && !item.attuned;
-      const lets = entry?.attuned === false;
-      const attuned = asks ? item.attuned : (entry?.attuned ?? item.attuned);
-      const { attuning: _pending, ...rest } = item;
-      void _pending;
-      const attuning = asks ? true : lets ? undefined : item.attuning;
-      return {
-        ...rest,
-        ...(equipped === undefined ? {} : { equipped }),
-        ...(attuned === undefined ? {} : { attuned }),
-        ...(attuning ? { attuning } : {}),
-      };
-    });
-    patch.equipment = equipment;
+  if (wornEquipment) {
+    patch.equipment = wornEquipment;
   }
 
   if (!Object.keys(patch).length) {

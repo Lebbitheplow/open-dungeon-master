@@ -13,6 +13,8 @@ import { contentSlug, describeFeature } from "@/lib/help";
 import { useClassFeatureText } from "@/lib/classes/use-feature-text";
 import { ABILITIES } from "@/lib/schemas/sheet";
 import { formatModifier, SRD_SKILLS } from "@/lib/srd";
+import { wearingIsExplicit } from "@/lib/srd/armor";
+import { oneOfKind, wornButIdle } from "@/lib/srd/wear-slots";
 
 // The pieces of the character sheet (docs/visual-overhaul-plan.md 8b.5), one
 // implementation drawn by both the session's sheet dialog and the character
@@ -300,10 +302,19 @@ export function EquipmentChips({
   equipment,
   extra,
 }: {
-  equipment: Array<{ name: string; qty: number; equipped?: boolean; attuned?: boolean; attuning?: boolean }>;
+  equipment: Array<{ name: string; qty: number; equipped?: boolean; attuned?: boolean; attuning?: boolean; layered?: boolean }>;
   // More for a row's note, by its index: its charges ("4/7 charges").
   extra?: (index: number) => string | null | undefined;
 }) {
+  // A worn second cloak (or pair of boots...) is marked as not in effect
+  // (src/lib/srd/wear-slots.ts); one the DM let stand beside another says so.
+  const explicit = wearingIsExplicit(equipment);
+  const wornNote = (item: (typeof equipment)[number]) => {
+    const idle = explicit ? wornButIdle(item, equipment) : null;
+    if (idle) return `worn, not in effect: ${oneOfKind(idle) ?? "one of its kind"} at a time`;
+    if (item.equipped && item.layered) return "worn beside another, on the DM's say";
+    return item.equipped ? "worn" : null;
+  };
   return (
     <InfoChipList
       items={equipment.map((item, index) => ({
@@ -311,7 +322,7 @@ export function EquipmentChips({
         icon: { kind: "item" as const, key: item.name, family: "item-gear" },
         note:
           [
-            item.equipped ? "worn" : null,
+            wornNote(item),
             item.attuned ? "attuned" : item.attuning ? "attunes at the next rest" : null,
             extra?.(index) ?? null,
           ]

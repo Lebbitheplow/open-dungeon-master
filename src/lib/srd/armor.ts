@@ -243,13 +243,13 @@ export type WornItem = {
 // row is read as it is marked, so a character who took the last piece off
 // stands unarmored. A sheet that has never said wears what it carries, which
 // keeps sheets written before the toggle working.
-export function wearingIsExplicit(equipment: Array<{ equipped?: boolean }>): boolean {
+export function wearingIsExplicit(equipment: ReadonlyArray<{ equipped?: boolean }>): boolean {
   return equipment.some((item) => item.equipped !== undefined);
 }
 
 export function isWorn(
   item: { equipped?: boolean },
-  equipment: Array<{ equipped?: boolean }>,
+  equipment: ReadonlyArray<{ equipped?: boolean }>,
 ): boolean {
   return wearingIsExplicit(equipment) ? item.equipped === true : true;
 }

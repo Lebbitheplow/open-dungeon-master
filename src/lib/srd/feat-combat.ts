@@ -5,6 +5,7 @@
 // cast engines ask these and apply the answers.
 import { featTwinOf, holdsFeat } from "@/lib/srd/feat-effects";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { armorOfRow, isWorn, type WornItem } from "@/lib/srd/armor";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -432,11 +433,14 @@ export function hitDieHealingFloor(sheet: FeatHolder, conMod: number): { feat: s
 // on Dexterity saves against effects that target only the character, and a
 // successful Dexterity save against such an effect costs the reaction to
 // take no damage (cast-at-player.ts).
-export function shieldMasterSaveBonus(sheet: FeatHolder & { equipment?: Array<{ name: string; equipped?: boolean }> }): number {
+export function shieldMasterSaveBonus(sheet: FeatHolder & { equipment?: WornItem[] }): number {
   if (!holdsFeat(sheet, "Shield Master")) {
     return 0;
   }
-  const worn = (sheet.equipment ?? []).some((item) => /\bshield\b/i.test(item.name) && item.equipped !== false);
+  // A shield the armor engine reads as worn (src/lib/srd/armor.ts): not one
+  // carried on a sheet that says it is off, nor a Shield Guardian's amulet.
+  const equipment = sheet.equipment ?? [];
+  const worn = equipment.some((item) => isWorn(item, equipment) && armorOfRow(item)?.armor.category === "shield");
   return worn ? 2 : 0;
 }
 
