@@ -32,7 +32,7 @@ export const MAX_ADDON_BUNDLE_BYTES = 256 * 1024 * 1024;
 export const MAX_BUNDLE_IMAGE_BYTES = 8 * 1024 * 1024;
 
 // A little over MAX_BUNDLE_IMAGE_BYTES * 4/3: base64 overhead plus header.
-const MAX_IMAGE_DATA_URL_CHARS = 11_300_000;
+export const MAX_IMAGE_DATA_URL_CHARS = 11_300_000;
 
 export const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 
