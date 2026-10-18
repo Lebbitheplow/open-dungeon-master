@@ -15,6 +15,12 @@
 // Either way it writes <dir>/index.json. Point a server's World registry URL at
 // wherever that index ends up.
 //
+// A pack with a tile at <dir>/thumbnails/<id>.webp (or .png, .jpg), which
+// `node scripts/world-pack-art.mjs thumbnails <dir>` writes from its cover, is
+// listed with a thumbnail the plugin browser shows: <base-url>/thumbnails/<file>
+// in the first form, and in the second the mapping may give an object,
+// { "downloadUrl": "...", "thumbnail": "..." }, instead of a bare URL.
+//
 // The manifests are validated on the way through, so a broken pack cannot be
 // published by accident.
 import fs from "node:fs";
@@ -50,6 +56,17 @@ if (second === "--urls") {
   }
 }
 
+const THUMBNAIL_EXTENSIONS = [".webp", ".png", ".jpg"];
+
+// The pack's tile, if the folder holds one, as the URL the index lists.
+function thumbnailFor(id, mapped) {
+  if (urlById) {
+    return typeof mapped === "object" && mapped?.thumbnail ? mapped.thumbnail : undefined;
+  }
+  const ext = THUMBNAIL_EXTENSIONS.find((candidate) => fs.existsSync(path.join(dir, "thumbnails", `${id}${candidate}`)));
+  return ext ? `${baseUrl}/thumbnails/${id}${ext}` : undefined;
+}
+
 const packs = [];
 for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json") && name !== "index.json").sort()) {
   const parsed = worldPackSchema.safeParse(JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")));
@@ -58,7 +75,8 @@ for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json") &
     process.exit(1);
   }
   const pack = parsed.data;
-  const downloadUrl = urlById ? urlById[pack.id] : `${baseUrl}/${pack.id}.json`;
+  const mapped = urlById ? urlById[pack.id] : undefined;
+  const downloadUrl = urlById ? (typeof mapped === "object" ? mapped?.downloadUrl : mapped) : `${baseUrl}/${pack.id}.json`;
   if (!downloadUrl) {
     console.error(`No download URL supplied for "${pack.id}". Add it to the mapping file.`);
     process.exit(1);
@@ -77,6 +95,7 @@ for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json") &
     editionOrder: pack.editionOrder,
     baseGenre: pack.baseGenre,
     downloadUrl,
+    thumbnail: thumbnailFor(pack.id, mapped),
   });
 }
 
