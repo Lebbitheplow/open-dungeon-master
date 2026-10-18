@@ -51,7 +51,7 @@ export function PointFields({ at, label, onCommit }: { at: XY; label: string; on
         max={100}
         step={0.1}
         inputMode="decimal"
-        aria-label={`${label}: ${name.toLowerCase()} (percent)`}
+        aria-label={`${label}: ${axis === "x" ? "across" : "down"} (percent)`}
         value={draft[axis]}
         onChange={(event) => setDraft({ ...draft, [axis]: event.target.value })}
         onBlur={commit}
