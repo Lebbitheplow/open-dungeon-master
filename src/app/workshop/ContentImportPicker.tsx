@@ -222,6 +222,12 @@ export function ContentImportPicker({
           Array.isArray(data.monstersReused) && data.monstersReused.length
             ? `Already in this table's bestiary: ${data.monstersReused.join(", ")}.`
             : "",
+          Array.isArray(data.itemsBrought) && data.itemsBrought.length
+            ? `Copied into this table's Homebrew: ${data.itemsBrought.join(", ")}.`
+            : "",
+          Array.isArray(data.itemsReused) && data.itemsReused.length
+            ? `Already in this table's Homebrew: ${data.itemsReused.join(", ")}.`
+            : "",
         ]
           .filter(Boolean)
           .join(" "),

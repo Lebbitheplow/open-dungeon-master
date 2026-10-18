@@ -93,6 +93,9 @@ export type PlanInput = {
   // authors do not have: copied into its bestiary on import (WF-07). Absent
   // when the caller did not look, and the old warning stands.
   foreignMonsters?: string[];
+  // Hand-built items the travelling World entries link to that this table's
+  // authors do not have: copied into its Homebrew on import.
+  foreignItems?: string[];
 };
 
 export function planImport(input: PlanInput): ImportPlan {
@@ -291,6 +294,13 @@ export function planImport(input: PlanInput): ImportPlan {
   // Hand-built monsters this table's authors do not have travel with the
   // NPCs and fights that name them (WF-07): said before, so nothing about
   // the bestiary changes unannounced.
+  if (input.foreignItems?.length) {
+    const names = [...new Set(input.foreignItems)];
+    notes.push({
+      kind: "world",
+      message: `${names.length} hand-built item${names.length === 1 ? "" : "s"} (${names.join(", ")}) ${names.length === 1 ? "is" : "are"} copied into this table's Homebrew, so the World entries that link to ${names.length === 1 ? "it" : "them"} keep their links.`,
+    });
+  }
   if (input.foreignMonsters?.length) {
     const names = [...new Set(input.foreignMonsters)];
     notes.push({
