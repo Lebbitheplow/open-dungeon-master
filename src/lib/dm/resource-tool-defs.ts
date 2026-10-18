@@ -17,7 +17,7 @@ export const resourceTools: ToolDef[] = [
     function: {
       name: "use_item",
       description:
-        "Resolve a character using up ONE consumable they carry (potion, scroll, thrown flask, ration, torch); in a fight it is the Use an Object action. Weapons, armor and other kept items (a Bag of Holding, a ring) are refused, since they are not used up. Never narrate a consumable's use without calling it.",
+        "Resolve a character using up ONE consumable they carry (potion, scroll, thrown flask, ration, torch); one taken in the same action (from a chest, off a fallen foe) is given with grant_item first. In a fight it is the Use an Object action. Weapons, armor and other kept items (a Bag of Holding, a ring) are refused, since they are not used up. Never narrate a consumable's use without calling it.",
       parameters: {
         type: "object",
         additionalProperties: false,

@@ -90,7 +90,8 @@ export function computeUseItem(
 ): Outcome | ToolError {
   const carried = findCarriedItem(sheet.equipment, itemName);
   if (!carried) {
-    return notCarried(sheet.name, sheet.equipment.map((item) => item.name), itemName, isTableGearName(campaign.id, itemName));
+    const refusal = notCarried(sheet.name, sheet.equipment.map((item) => item.name), itemName, isTableGearName(campaign.id, itemName));
+    return { ...refusal, error: `${refusal.error} One taken in this same action is given with grant_item first, then used.` };
   }
   const removal = removeItemMath(sheet.equipment, carried.name, 1);
   if (!removal) {

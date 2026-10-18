@@ -131,5 +131,14 @@ await test("An unidentified scroll keeps its spell off the sheet until it is rev
   assert.deepEqual(world.sheet(mage.id).equipment.map((item) => [item.name, item.qty, item.spell]), [["Pergamena", 1, "Fireball"], ["Pergamena", 1, "Magic Missile"]]);
 });
 
+await test("A potion taken from a chest and drunk in one breath is refused until it is given, and the refusal says to give it first, by an SRD name or the table's own.", async () => {
+  world.patch(drinker.id, { equipment: [] });
+  for (const name of ["Potion of Healing", "Pozione di guarigione"]) {
+    const out = await world.invoke("use_item", { characterId: drinker.id, item: name });
+    assert.ok(out.error, `${name} was drunk without being carried`);
+    assert.match(out.error, /given with grant_item first, then used/);
+  }
+});
+
 world.close();
 finish();
