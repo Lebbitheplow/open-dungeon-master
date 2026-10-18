@@ -2,5 +2,42 @@
   "kind": "odm.addons",
   "version": 1,
   "generated": "",
-  "addons": []
+  "addons": [
+    {
+      "id": "isometric-tabletop",
+      "name": "Isometric Tabletop",
+      "version": "0.1.0",
+      "apiVersion": 1,
+      "description": "Godot isometric board view with original pixel art, rotation and player-safe tactical interaction.",
+      "author": "Laurent Sparks",
+      "homepage": "https://github.com/laurentsparks-art/isometric-tabletop",
+      "license": "MIT",
+      "category": "maps",
+      "platforms": [
+        "win32"
+      ],
+      "runtime": "node",
+      "needs": [],
+      "permissions": [],
+      "contributes": {
+        "workshopImporters": [],
+        "mapGenerators": [],
+        "boardViews": [
+          "Isometric"
+        ]
+      },
+      "minServerVersion": "0.28.1",
+      "source": {
+        "repo": "laurentsparks-art/isometric-tabletop",
+        "path": "addon",
+        "commit": "f84cb14ff27cee0e95a42dcb3a18822daf21d249",
+        "tag": ""
+      },
+      "contentSha256": "965f4ca0c82d11a526e369fad059863b75f06cad18bb53c70211ccb46ddf7deb",
+      "bytes": 49554623,
+      "setupMB": 0,
+      "conflicts": [],
+      "exclusive": []
+    }
+  ]
 }
