@@ -13,6 +13,8 @@ export type EquipmentRow = {
   // False while the party does not know what this is. Absent reads as true,
   // so every row written before the flag existed stays identified.
   identified?: boolean;
+  // A spell scroll's spell: two scrolls of different spells never merge.
+  spell?: string;
 };
 
 // Absent means known: an unidentified item is the exception, and the default
@@ -132,6 +134,18 @@ export function removeItemMath(equipment: EquipmentRow[], name: string, qty: num
   return { equipment: next, removed };
 }
 
+// What a tool says an item is, beyond its name: its tags, its worth, a
+// scroll's spell.
+export type ItemFacts = { tags?: ItemTag[]; worth?: number; spell?: string };
+
+function itemFacts(facts: ItemFacts): ItemFacts {
+  return {
+    ...(facts.tags?.length ? { tags: facts.tags } : {}),
+    ...(facts.worth ? { worth: facts.worth } : {}),
+    ...(facts.spell ? { spell: facts.spell } : {}),
+  };
+}
+
 // Add qty of an item, merging with an existing row by name.
 //
 // An unidentified item never merges with an identified one, even under the
@@ -143,21 +157,23 @@ export function grantItemMath(
   name: string,
   qty: number,
   // What the item is, when no English row says it (src/lib/srd/item-tags.ts),
-  // and what one is worth, when the pack does not price it; never written on
-  // an unidentified one, whose secret stays off the sheet.
-  options: { identified?: boolean; tags?: ItemTag[]; worth?: number } = {},
+  // what one is worth, when the pack does not price it, and a scroll's
+  // spell; never written on an unidentified one, whose secret stays off the
+  // sheet.
+  options: { identified?: boolean } & ItemFacts = {},
 ) {
   const amount = Math.max(1, Math.floor(qty));
   const known = options.identified !== false;
-  const tags = known ? { ...(options.tags?.length ? { tags: options.tags } : {}), ...(options.worth ? { worth: options.worth } : {}) } : {};
+  const facts = known ? itemFacts(options) : {};
+  // Two scrolls of different spells are two things, whatever they are called.
   const index = equipment.findIndex(
-    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known,
+    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known && item.spell === facts.spell,
   );
   if (index < 0) {
     return {
       equipment: [
         ...equipment,
-        known ? { name, qty: amount, ...tags } : { name, qty: amount, identified: false },
+        known ? { name, qty: amount, ...facts } : { name, qty: amount, identified: false },
       ],
     };
   }
@@ -177,8 +193,7 @@ export function revealItemMath(
   equipment: EquipmentRow[],
   name: string,
   revealedName?: string,
-  tags?: ItemTag[],
-  worth?: number,
+  facts: ItemFacts = {},
 ): { equipment: EquipmentRow[]; from: string; to: string } | null {
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name) && !isIdentified(item),
@@ -193,7 +208,7 @@ export function revealItemMath(
   // and one representation for "identified" is one fewer thing to disagree.
   const rest = { ...next[index] };
   delete rest.identified;
-  next[index] = { ...rest, name: to, ...(tags?.length ? { tags } : {}), ...(worth ? { worth } : {}) };
+  next[index] = { ...rest, name: to, ...itemFacts(facts) };
   return { equipment: next, from, to };
 }
 

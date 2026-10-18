@@ -38,6 +38,11 @@ import { rollCard } from "@/lib/dm/roll-card";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, itemRow, type TaggedItem } from "@/lib/srd/item-tags";
+import { findSpellByName } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
+
+// A carried scroll and the spell it holds (the inventory entry's `spell`).
+type ScrollItem = TaggedItem & { spell?: string };
 
 // Sight rot's cure, by the names the SRD gives it (Diseases, Sight Rot).
 const EYEBRIGHT = new Set(["eyebright", "eyebright ointment"]);
@@ -82,10 +87,33 @@ export function potionPlan(item: TaggedItem): PotionPlan | null {
   return plan ?? (hasItemTag(item, "potion") ? { kind: "narrated" } : null);
 }
 
-// The spell a scroll holds: "Spell Scroll (Fireball)", "Scroll of Fireball".
-export function scrollSpell(name: string): string | null {
-  const match = /spell scroll\s*\(([^)]+)\)/i.exec(name) ?? /^scroll of (.+)$/i.exec(name.trim());
-  return match ? match[1].trim() : null;
+// The spell a scroll holds: the one the tool that gave it named, never a
+// spell read in its name.
+export function scrollSpell(item: ScrollItem): string | null {
+  return item.identified === false ? null : (item.spell ?? null);
+}
+
+// The spell a tool gives a scroll, as the spell lists name it, or why it
+// cannot: only a scroll holds one, and only a spell the table knows (the
+// pack's or the table's homebrew, else the bundled checklist of every official
+// spell, which an install without the pack still has).
+export function scrollSpellFor(
+  campaign: Campaign,
+  item: TaggedItem,
+  spell: string | undefined,
+  what: string,
+): { spell?: string } | ToolError {
+  if (!spell?.trim()) {
+    return {};
+  }
+  if (!hasItemTag(item, "scroll")) {
+    return { error: `${what}: spell is for a spell scroll; give "${item.name}" the tag scroll, or leave spell out. Nothing changed.`, retry: true };
+  }
+  const known = findSpellByName(spell, spellAuthorsFor(campaign)) ?? checklistSpell(spell);
+  if (!known) {
+    return { error: `${what}: no spell called "${spell}" is known; name it as the spell lists do. Nothing changed.`, retry: true };
+  }
+  return { spell: known.name };
 }
 
 // SRD 5.1 Spell Scroll table: the save DC and attack bonus by spell level.
@@ -114,13 +142,13 @@ function highestSlotLevel(sheet: CharacterSheet): number {
 
 // A refusal that must come before the item is spent: a scroll whose spell
 // is not on the reader's class list cannot be read, and stays in the pack.
-export function consumableRefusal(sheet: CharacterSheet, itemName: string): ToolError | null {
+export function consumableRefusal(sheet: CharacterSheet, item: ScrollItem): ToolError | null {
   // A vial of basic poison needs a weapon to coat (src/lib/dm/attack-onhit.ts).
-  const coat = poisonCoatRefusal(sheet, itemName);
+  const coat = poisonCoatRefusal(sheet, item.name);
   if (coat) {
     return coat;
   }
-  const spell = scrollSpell(itemName);
+  const spell = scrollSpell(item);
   if (!spell) {
     return null;
   }
@@ -168,11 +196,11 @@ export function applyConsumable(
   turnId: string,
   user: CharacterSheet,
   target: CharacterSheet,
-  item: TaggedItem,
+  item: ScrollItem,
 ): Record<string, unknown> | null {
   const itemName = item.name;
   const reason = itemName;
-  const spell = scrollSpell(itemName);
+  const spell = scrollSpell(item);
   if (spell) {
     return readScroll(campaign, turnId, user, spell);
   }

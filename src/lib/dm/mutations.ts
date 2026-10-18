@@ -53,7 +53,7 @@ import { BONUS_ATTACK_COUNTERS } from "@/lib/dm/feature-bonus-attacks";
 import { matchResource } from "@/lib/srd/class-resources";
 import { prepareUseItem } from "@/lib/dm/object-actions";
 import { chargedItemUse } from "@/lib/dm/item-use";
-import { applyConsumable, consumableRefusal } from "@/lib/dm/consumables";
+import { applyConsumable, consumableRefusal, scrollSpellFor } from "@/lib/dm/consumables";
 import { castSpell } from "@/lib/dm/cast-guard";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import { ZONE_ARGS, zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
@@ -97,7 +97,7 @@ import { subclassSpellsFor } from "@/lib/srd/features";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { invalidArguments, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { worthProblem } from "@/lib/dm/trade-value";
-import { notCarried } from "@/lib/dm/item-logic";
+import { findCarriedItem, notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
@@ -142,7 +142,14 @@ const ITEM_TAGS_PROPERTY = {
   type: "array",
   items: { type: "string", enum: [...ITEM_TAGS] },
   description:
-    "What the item is, when its name is not an SRD or pack item's English name (loot you invent, a name in the table's language): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. Omit for an SRD item, and while it is unidentified.",
+    "What the item is, when its name is not an SRD or pack item's English name (loot you invent, a name in the table's language): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure; [] when none fits. Omit for an SRD item, and while it is unidentified.",
+};
+
+// The spell a spell scroll holds (src/lib/dm/consumables.ts).
+const ITEM_SPELL_PROPERTY = {
+  type: "string",
+  description:
+    "A spell scroll only (tags with scroll): the spell it holds, by the spell's name as the spell lists give it ('Fireball'), whatever the scroll is called. Reading it casts that spell. Omit while it is unidentified.",
 };
 
 // What one is worth, for a thing the content pack does not price
@@ -273,6 +280,7 @@ export const mutationTools: ToolDef[] = [
     additional: { type: "boolean", description: "Only when a player just accepted this same item and this is truly another one from a different source." },
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
+    spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
   tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, use use_item; for sales, use purchase.", {
     name: { type: "string" },
@@ -283,6 +291,7 @@ export const mutationTools: ToolDef[] = [
     revealedName: { type: "string", description: "What it truly is ('Ring of Protection')." },
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
+    spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
   ...resourceTools,
   tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Always give a duration when the fiction has one, because only timed conditions ever expire on their own: rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.", {
@@ -990,7 +999,11 @@ export function applyDmMutation(
       if (priced) {
         return { result: priced };
       }
-      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, tags: args.tags, worth: args.worth });
+      const scroll = scrollSpellFor(campaign, { name, tags: args.tags }, args.spell, "grant_item");
+      if ("error" in scroll) {
+        return { result: scroll };
+      }
+      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, tags: args.tags, worth: args.worth, ...scroll });
       const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name) ?? capacityProblem(sheet, math.equipment, name);
       if (noRoom) {
         return { result: noRoom };
@@ -1019,7 +1032,11 @@ export function applyDmMutation(
       if (priced) {
         return { result: priced };
       }
-      const math = revealItemMath(sheet.equipment, name, args.revealedName, args.tags, args.worth);
+      const scroll = scrollSpellFor(campaign, { name: args.revealedName?.trim() || name, tags: args.tags }, args.spell, "reveal_item");
+      if ("error" in scroll) {
+        return { result: scroll };
+      }
+      const math = revealItemMath(sheet.equipment, name, args.revealedName, { tags: args.tags, worth: args.worth, ...scroll });
       if (!math) {
         return {
           result: {
@@ -1105,7 +1122,7 @@ export function applyDmMutation(
         return { result: objectCharge };
       }
       // A scroll off the reader's class list stays unread (consumables.ts).
-      const unreadable = consumableRefusal(sheet, itemName);
+      const unreadable = consumableRefusal(sheet, findCarriedItem(sheet.equipment, itemName) ?? { name: itemName });
       if (unreadable) {
         return { result: unreadable };
       }

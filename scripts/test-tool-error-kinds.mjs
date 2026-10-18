@@ -479,7 +479,7 @@ await test("the same offer twice is dropped while the first waits; a romance ste
   const world = await openWorld({ gameSettings: { inventoryApprovals: true, romance: true } });
   const kara = world.addHero(fighter());
   // Pacing, the DM's own offer already waiting.
-  const offer = { characterId: kara.id, name: "Coin purse", qty: 1, reason: "the test asks" };
+  const offer = { characterId: kara.id, name: "Coin purse", qty: 1, tags: [], reason: "the test asks" };
   assert.equal(kindOf(await ai(world, "grant_item", offer)), "ok");
   expect(await ai(world, "grant_item", offer), "retry", /still waiting/);
   // A relationship the story has not earned.

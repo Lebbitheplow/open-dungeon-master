@@ -154,7 +154,7 @@ await test("A lantern burns a flask of lamp oil, never a magic oil such as Oil o
 
 await test("A spell scroll whose reading check cannot be made is refused and kept, never used up and reported as a failed check of 0.", async () => {
   const mage = world.addHero({ class: "wizard", level: 5, abilities: { int: 16 } });
-  world.patch(mage.id, { equipment: [{ name: "Spell Scroll (Fireball)", qty: 1 }], spellcasting: { known: ["Magic Missile"] } });
+  world.patch(mage.id, { equipment: [{ name: "Spell Scroll (Fireball)", qty: 1, tags: ["consumable", "scroll", "carried"], spell: "Fireball" }], spellcasting: { known: ["Magic Missile"] } });
   const out = await world.invoke("use_item", { characterId: mage.id, item: "Spell Scroll (Fireball)" });
   assert.equal(carries(mage.id, "Spell Scroll (Fireball)"), true, `the scroll was used up: ${JSON.stringify(out.result ?? out.error)}`);
 });
@@ -171,7 +171,7 @@ await test("A spell cast from a scroll just read spends no spell slot when its e
   const cleric = world.addHero({
     class: "cleric", level: 3, abilities: { wis: 16 },
     spellcasting: { ability: "wis", slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } }, prepared: ["Cure Wounds"], known: [], cantrips: [] },
-    equipment: [{ name: "Spell Scroll (Cure Wounds)", qty: 1 }],
+    equipment: [{ name: "Spell Scroll (Cure Wounds)", qty: 1, tags: ["consumable", "scroll", "carried"], spell: "Cure Wounds" }],
   });
   const friend = world.addHero({ class: "fighter", level: 3, maxHp: 30 });
   world.patch(friend.id, { currentHp: 5 });
@@ -222,7 +222,7 @@ await test("A spell read from a scroll is cast with the scroll's save DC (13 for
   const sage = world.addHero({
     class: "wizard", level: 9, abilities: { int: 20 },
     spellcasting: { ability: "int", slots: { 1: { max: 4, used: 0 } }, prepared: ["Burning Hands"], known: [], cantrips: [] },
-    equipment: [{ name: "Spell Scroll (Burning Hands)", qty: 1 }],
+    equipment: [{ name: "Spell Scroll (Burning Hands)", qty: 1, tags: ["consumable", "scroll", "carried"], spell: "Burning Hands" }],
   });
   assert.equal(spellSaveDcFor(world.sheet(sage.id), "Burning Hands"), 17);
   const read = await world.invoke("use_item", { characterId: sage.id, item: "Spell Scroll (Burning Hands)" });

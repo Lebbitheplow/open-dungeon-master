@@ -8,6 +8,7 @@
 //     rolls (saveAbility and saveDc);
 //   - a binding condition the engine keeps (a save, a duration, a spell, a
 //     source decides when it ends) is not lifted by hand;
+//   - an item granted or revealed says what it is when its name does not;
 //   - an advantage claimed with its reason names where it comes from.
 //
 // Only the model's calls pass through here: those the AI's turn runs itself
@@ -33,6 +34,9 @@ import type { ToolResult } from "@/lib/dm/tool-errors";
 import { listedAgainst } from "@/lib/dm/roll-about";
 import { heldSaveTraits } from "@/lib/srd/trait-rules";
 import { unnamedRollKeys } from "@/lib/srd/roll-keys";
+import { hasItemTag, itemRow } from "@/lib/srd/item-tags";
+import { listedItemTags } from "@/lib/schemas/item-tags";
+import { isTableGearName } from "@/lib/db/homebrew";
 
 export type GateContext = {
   campaign: Campaign;
@@ -83,6 +87,9 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
       return bind(ctx, args);
     case "clear_condition":
       return lift(ctx, args, rawArguments);
+    case "grant_item":
+    case "reveal_item":
+      return itemFacts(ctx, name, args, rawArguments);
     case "pc_attack":
     case "enemy_attack":
     case "request_roll":
@@ -90,6 +97,42 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
     default:
       return { args: rawArguments };
   }
+}
+
+// What a granted or revealed item is, when its name alone does not tell the
+// engines, which read an item by its row or its tags and never the words of
+// its name (src/lib/srd/item-tags.ts): the tags of a thing no table knows by
+// name, and the spell a scroll holds. Asked for rather than lost, as a roll's
+// fields are (src/lib/srd/roll-keys.ts): a potion named in the table's
+// language with no tags would heal no one, a scroll with no spell would cast
+// nothing.
+function itemFacts(ctx: GateContext, name: string, args: Record<string, unknown>, rawArguments: string): GateOutcome {
+  const described = String(args.name ?? "").trim();
+  const itemName = (name === "reveal_item" && typeof args.revealedName === "string" && args.revealedName.trim()) || described;
+  if (!itemName || args.unidentified === true) {
+    return { args: rawArguments };
+  }
+  // A revealed item keeps the tags it was granted with.
+  const carried = name === "reveal_item" ? ctx.sheetsById.get(String(args.characterId ?? ""))?.equipment.find((item) => item.name === described) : undefined;
+  const tags = Array.isArray(args.tags) ? listedItemTags(args.tags) : carried?.tags;
+  const item = { name: itemName, ...(tags ? { tags } : {}) };
+  if (!tags && !itemRow(item) && !isTableGearName(ctx.campaign.id, itemName)) {
+    return {
+      result: {
+        error: `${name}: send it again with tags naming what "${itemName}" is, from the listed ones, or tags [] when none fits (a spell scroll names its spell in spell too); no item the game knows has that name. Nothing changed yet.`,
+        retry: true,
+      },
+    };
+  }
+  if (hasItemTag(item, "scroll") && !(typeof args.spell === "string" && args.spell.trim())) {
+    return {
+      result: {
+        error: `${name}: send it again with the spell "${itemName}" holds in spell, as the spell lists name it; a scroll the party cannot read yet is granted unidentified. Nothing changed yet.`,
+        retry: true,
+      },
+    };
+  }
+  return { args: rawArguments };
 }
 
 // An advantage claimed with a reason but no advantageSource: asked whether

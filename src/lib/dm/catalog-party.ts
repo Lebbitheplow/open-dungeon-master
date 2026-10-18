@@ -36,6 +36,15 @@ const ITEM_WORTH_FIELD: CatalogField = {
   help: "For a gem, an art object or anything the book does not price: its sale and a spell's costly material read it. Leave the worth out of the name.",
 };
 
+// The spell a spell scroll holds (src/lib/dm/consumables.ts).
+const ITEM_SPELL_FIELD: CatalogField = {
+  name: "spell",
+  label: "Spell on the scroll",
+  kind: "text",
+  placeholder: "Fireball",
+  help: "A spell scroll only, tagged scroll: the spell reading it casts, by its name in the spell lists, whatever the scroll is called.",
+};
+
 export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
   {
     name: "apply_damage",
@@ -192,6 +201,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       },
       ITEM_TAGS_FIELD,
       ITEM_WORTH_FIELD,
+      ITEM_SPELL_FIELD,
       REASON,
     ],
   },
@@ -206,6 +216,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "revealedName", label: "Actually", kind: "text", placeholder: "Ring of Protection" },
       ITEM_TAGS_FIELD,
       ITEM_WORTH_FIELD,
+      ITEM_SPELL_FIELD,
       REASON,
     ],
   },

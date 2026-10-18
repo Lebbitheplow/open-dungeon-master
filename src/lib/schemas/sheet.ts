@@ -201,6 +201,9 @@ export const equipmentItemSchema = z.object({
   // price (a gem, an art object, loot the model invents): its sale and a
   // material component read it (src/lib/dm/trade-value.ts).
   worth: z.number().positive().max(100000).optional(),
+  // The spell a spell scroll holds, by the name the spell lists use; what
+  // reading it casts (src/lib/dm/consumables.ts).
+  spell: z.string().trim().min(1).max(80).optional(),
   // A homebrew item's mechanics, snapshotted from the entry so the armour,
   // attack and magic-item engines read it exactly as they read SRD gear
   // (src/lib/homebrew/gear.ts). Refreshed on every sheet read; absent for
