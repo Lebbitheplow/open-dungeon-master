@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TERRAIN } from "@/lib/battlemap/types";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
 import { BACKDROP_LIMITS } from "@/lib/battlemap/backdrop";
+import { viewDataProblem } from "@/lib/addons/view-data";
 
 // The contract of each extension point: the arguments the server sends an
 // addon's MCP tool, and the result it accepts back (docs/addons/
@@ -178,6 +179,11 @@ export const mapResultSchema = z
         context.addIssue({ code: "custom", path: ["map", "lights"], message: `A light at ${light.x},${light.y} is off the map.` });
         return;
       }
+    }
+    const dataProblem = value.view ? viewDataProblem(value.view.data) : null;
+    if (dataProblem) {
+      context.addIssue({ code: "custom", path: ["view", "data"], message: dataProblem });
+      return;
     }
     for (const file of value.view?.files ?? []) {
       if (!viewFileType(file)) {

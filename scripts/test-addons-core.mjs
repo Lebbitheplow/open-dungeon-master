@@ -359,6 +359,23 @@ await test("map results: terrain alphabet, size, lights and view files", () => {
   assert.match(issue({ map: { ...map, lights: [{ x: 9, y: 0, brightRadius: 1, dimRadius: 2 }] } }), /off the map/);
   assert.match(issue({ map, view: { files: ["scene.fbx"] } }), /board view's files/);
   assert.equal(mapResultSchema.safeParse({ map, view: { files: ["scene.glb", "tex.webp"] } }).success, true);
+  // Issue 414: view data over the cap is refused where the addon hears it,
+  // never stored as null for the view to find empty later.
+  const big = mapResultSchema.safeParse({ map, view: { data: { blob: "x".repeat(300_000) } } });
+  assert.equal(big.success, false);
+  assert.deepEqual(big.error.issues[0].path, ["view", "data"]);
+  assert.match(big.error.issues[0].message, /256 KB as JSON, and this is 293 KB; put anything larger in a file/);
+  assert.equal(mapResultSchema.safeParse({ map, view: { data: { blob: "x".repeat(200_000) } } }).success, true);
+});
+
+await test("a bundle's map view data over the cap is refused with its map, not dropped", () => {
+  const map = { name: "Cave", width: 4, height: 4, terrain: "#".repeat(16), addonView: { addonId: "hello-dungeon", data: { heights: "9".repeat(300_000) }, files: [] } };
+  const bundleOf = (maps) => JSON.stringify(withManifestDefaults({ maps }, "cave.pdf", "Cave Maker"));
+  const read = readBundle(bundleOf([map]));
+  assert.match(read.error ?? "", /malformed at maps\.0\.addonView\.data: A board view's data may be 256 KB/);
+  const small = { ...map, addonView: { ...map.addonView, data: { heights: [1, 2, 3] } } };
+  const fine = readBundle(bundleOf([small]));
+  assert.deepEqual(fine.bundle?.maps[0].addonView?.data, { heights: [1, 2, 3] });
 });
 
 await test("an importer's bundle gets the manifest fields it left out", () => {

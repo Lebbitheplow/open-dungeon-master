@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
+import { settleQueue } from "./lib/enforce-narrator.mjs";
 import { acknowledgesDrop, confirmsSwap, spellsNamedIn, swapQuestion } from "../src/lib/dm/concentration-confirm-logic.ts";
 
 const { test, finish } = suite("test-concentration-confirm");
@@ -64,6 +65,8 @@ async function act(body) {
 await test("With nothing held, a concentration cast is posted at once.", async () => {
   const sent = await act({ content: "I cast Bless on the party." });
   assert.equal(sent.status, 202, sent.json.error);
+  // The DM turn it queued ends here, so its message is never counted below.
+  await settleQueue(world.campaignId);
 });
 
 world.patch(cleric.id, { concentratingOn: "Spirit Guardians" });

@@ -89,6 +89,7 @@ I/O, so the browser, the tests and `scripts/check-addon.mjs` share them.
 | `run-importer.ts`, `import-defaults.ts` | Workshop importer runs, `file:` picture references, the larger addon bundle cap |
 | `run-map.ts` | Map generator runs into a library |
 | `map-view.ts` | What a map keeps for its addon's board view (`addon_view_json`) |
+| `view-data.ts` | The 256 KB cap on a board view's data and the refusal every door gives (`viewDataProblem`); imports nothing |
 | `static-files.ts` | Serving an addon's `ui/` and asset library with the sandboxing headers |
 | `offered.ts` | What ready addons contribute, for `GET /api/addons` |
 | `admin-view.ts` | The admin panel's picture of addons and the catalog; `installedResponse` |

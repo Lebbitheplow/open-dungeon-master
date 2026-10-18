@@ -1,5 +1,6 @@
 import { ADDON_ID } from "@/lib/addons/manifest";
 import { isUploadedImagePath, isUploadedModelPath } from "@/lib/uploads";
+import { viewDataProblem } from "@/lib/addons/view-data";
 
 // What a map addon left on a map for its board view: free-form data and the
 // files it drew from (a .glb model, textures). Stored as addon_view_json on
@@ -20,19 +21,14 @@ export type MapAddonView = {
   files: MapAddonFile[];
 };
 
-export const MAX_VIEW_DATA_CHARS = 256 * 1024;
-
 export function normalizeMapAddonView(raw: unknown): MapAddonView | null {
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
   const addonId = typeof record.addonId === "string" ? record.addonId : "";
   if (!ADDON_ID.test(addonId)) return null;
-  let data: unknown = record.data ?? null;
-  try {
-    if (JSON.stringify(data ?? null).length > MAX_VIEW_DATA_CHARS) data = null;
-  } catch {
-    data = null;
-  }
+  // Every door that takes view data from outside refuses it first with
+  // viewDataProblem; this only keeps an impossible row out of storage.
+  const data: unknown = viewDataProblem(record.data) ? null : (record.data ?? null);
   const files: MapAddonFile[] = [];
   const names = new Set<string>();
   for (const entry of Array.isArray(record.files) ? record.files.slice(0, 8) : []) {

@@ -333,6 +333,16 @@ try {
     await assert.rejects(inlineBundleFiles({ image: "file:../outside.png" }, out), /outside outputDir/);
     await assert.rejects(inlineBundleFiles({ image: "file:notes.txt" }, out), /not a PNG, JPEG or WebP/);
     await assert.rejects(inlineBundleFiles({ image: "file:missing.png" }, out), /did not write/);
+    // A board view's file is held to its bytes too: the import would drop a
+    // bad one without a word (issue 414).
+    fs.writeFileSync(path.join(out, "fake.glb"), Buffer.from("<html>not a model</html>"));
+    fs.writeFileSync(path.join(out, "fake.png"), Buffer.from("GIF89a"));
+    const viewOf = (file) => ({ maps: [{ name: "Cave", addonView: { addonId: "x", files: [{ name: file, data: `file:${file}` }] } }] });
+    await assert.rejects(inlineBundleFiles(viewOf("fake.glb"), out), /fake\.glb is not a binary glTF file/);
+    await assert.rejects(inlineBundleFiles(viewOf("fake.png"), out), /fake\.png is not a PNG, JPEG or WebP picture/);
+    fs.writeFileSync(path.join(out, "tex.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]));
+    const picture = await inlineBundleFiles(viewOf("tex.png"), out);
+    assert.match(picture.maps[0].addonView.files[0].data, /^data:image\/png;base64,/);
   });
 
   await test("an upload of the wrong kind is refused before a run starts", async () => {

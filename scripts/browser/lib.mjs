@@ -51,9 +51,14 @@ export async function startServer({ tree, dbPath, key, port, log }) {
     APP_PUBLIC_URL: `http://127.0.0.1:${port}`,
     VOICE_ENABLED: "false",
     // No model, no pictures, no speech: the scenarios look at the pages, not
-    // at a storyteller. A table whose action would call one gets the same
-    // "not configured" the UI already handles.
-    DEFAULT_TEXT_PROVIDER: "",
+    // at a storyteller. An empty provider fell back to the shipped default,
+    // the llama-server address 127.0.0.1:8001, so on a machine running one
+    // the admin pages probed it and a posted action queued a real turn there
+    // (issue 414). The storyteller is set up but on a closed port, as on CI
+    // where nothing listens: an action that would call it fails the same way.
+    // No model is named, which admin-speed reads as "Name the model first".
+    DEFAULT_TEXT_PROVIDER: "custom",
+    OPENAI_COMPAT_BASE_URL: "http://127.0.0.1:9/v1",
     OPENAI_API_KEY: "",
     // No speech-to-text either, whatever this machine runs on :8870: a
     // scenario that dictates stands in the device's own recognizer, the same
