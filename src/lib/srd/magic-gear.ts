@@ -9,6 +9,7 @@
 // without a cycle. Pure: the builder runs it in the browser.
 
 import magicItemsJson from "@/lib/classes/magic-items.json";
+import { textKey } from "@/lib/language/text-logic";
 
 // Extra dice a magic weapon adds to a hit. `type` "weapon" is the weapon's
 // own damage type; `vs` limits it to those creature types, `notVs` keeps it
@@ -69,19 +70,11 @@ export type GearDef = {
 
 const ROWS = (magicItemsJson as { items: GearDef[] }).items;
 
-function keyOf(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .replace(/[^a-z0-9'À-ɏ]+/g, " ")
-    .trim();
-}
-
 const byKey = new Map<string, GearDef>();
 const bySlug = new Map<string, GearDef>();
 for (const row of ROWS) {
   for (const name of [row.name, ...(row.aliases ?? [])]) {
-    const key = keyOf(name);
+    const key = textKey(name);
     if (!byKey.has(key)) {
       byKey.set(key, row);
     }
@@ -99,7 +92,7 @@ function exact(name: string, slug?: string | null): GearDef | null {
     }
   }
   const bare = name.trim().replace(/^\+\d\s+/, "");
-  return byKey.get(keyOf(bare)) ?? byKey.get(keyOf(bare.replace(/\s*\([^()]*\)\s*$/, ""))) ?? null;
+  return byKey.get(textKey(bare)) ?? byKey.get(textKey(bare.replace(/\s*\([^()]*\)\s*$/, ""))) ?? null;
 }
 
 // The magic item a sheet row names, where the name may also say which
@@ -126,7 +119,7 @@ export function gearDefFor(
     .trim()
     .replace(/^,|,$/g, "")
     .trim();
-  if (!rest || keyOf(rest) === keyOf(name)) {
+  if (!rest || textKey(rest) === textKey(name)) {
     return null;
   }
   for (const candidate of [rest, `${rest} Weapon`, `${rest} Armor`, `Armor ${rest}`, `${rest} Sword`]) {
@@ -163,7 +156,7 @@ export function gearDefOfRow(
 ): GearDef | null {
   const own = (item.gear as RowGear | undefined)?.def;
   if (own && typeof own === "object") {
-    return { ...own, name: item.name, match: `homebrew ${keyOf(item.name)}` };
+    return { ...own, name: item.name, match: `homebrew ${textKey(item.name)}` };
   }
   return gearDefFor(item.name, item.slug, baseInName);
 }

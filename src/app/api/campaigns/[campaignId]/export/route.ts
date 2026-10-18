@@ -4,6 +4,7 @@ import { buildStoryDocument, exportFilename } from "@/lib/export/story-document"
 import { renderStoryHtml } from "@/lib/export/html";
 import { renderStoryOdt } from "@/lib/export/odt";
 import { renderStoryDocx } from "@/lib/export/docx";
+import { attachmentDisposition } from "@/lib/serve-file";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,7 @@ export async function GET(
   return new Response(body as BodyInit, {
     headers: {
       "Content-Type": CONTENT_TYPES[format],
-      "Content-Disposition": `attachment; filename="${exportFilename(doc, format)}"`,
+      "Content-Disposition": attachmentDisposition(exportFilename(doc, format)),
     },
   });
 }

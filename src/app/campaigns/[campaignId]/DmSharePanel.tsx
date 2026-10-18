@@ -8,6 +8,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { FieldLabel } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { BUNDLE_KIND_LABELS } from "@/lib/workshop/bundle";
+import { slugOf } from "@/lib/language/text-logic";
 
 // Handing a workshop to somebody else.
 //
@@ -31,13 +32,7 @@ function download(name: string, payload: unknown) {
 }
 
 function fileStem(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60) || "workshop"
-  );
+  return slugOf(name).slice(0, 60) || "workshop";
 }
 
 export function DmSharePanel({ campaignId }: { campaignId: string }) {

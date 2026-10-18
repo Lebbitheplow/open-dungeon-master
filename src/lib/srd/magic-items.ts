@@ -20,6 +20,7 @@
 import magicItemsJson from "@/lib/classes/magic-items.json";
 import { ATTUNEMENT_SLOTS, attunementSlotsFor, isWorn } from "@/lib/srd/armor";
 import type { Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
 // state. The full EquipmentItem satisfies this. `gear.magic` is a homebrew
@@ -92,19 +93,11 @@ const MAGIC_ITEMS = (magicItemsJson as { items: MagicItemDef[] }).items;
 
 // "Ring of Resistance (Fire)", "ring  of resistance fire" and the pack's
 // curly apostrophes all land on one key.
-function keyOf(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .replace(/[^a-z0-9'À-ɏ]+/g, " ")
-    .trim();
-}
-
 const byKey = new Map<string, MagicItemDef>();
 const bySlug = new Map<string, MagicItemDef>();
 for (const item of MAGIC_ITEMS) {
   for (const name of [item.name, ...(item.aliases ?? [])]) {
-    const key = keyOf(name);
+    const key = textKey(name);
     if (!byKey.has(key)) {
       byKey.set(key, item);
     }
@@ -126,12 +119,12 @@ export function matchMagicItem(name: string, slug?: string | null): MagicItemDef
     }
   }
   const bare = name.trim().replace(/^\+\d\s+/, "");
-  const whole = byKey.get(keyOf(bare));
+  const whole = byKey.get(textKey(bare));
   if (whole) {
     return whole;
   }
   const withoutNote = bare.replace(/\s*\([^()]*\)\s*$/, "");
-  return withoutNote !== bare ? (byKey.get(keyOf(withoutNote)) ?? null) : null;
+  return withoutNote !== bare ? (byKey.get(textKey(withoutNote)) ?? null) : null;
 }
 
 export type MagicItemRiders = {
@@ -178,7 +171,7 @@ export function mayAttune(def: Pick<MagicItemDef, "attunedBy">, wearer: Wearer):
 
 function defOf(item: WornMagicItem): MagicItemDef | null {
   return item.gear?.magic
-    ? { name: item.name, match: `homebrew ${keyOf(item.name)}`, ...item.gear.magic }
+    ? { name: item.name, match: `homebrew ${textKey(item.name)}`, ...item.gear.magic }
     : matchMagicItem(item.name, item.slug);
 }
 

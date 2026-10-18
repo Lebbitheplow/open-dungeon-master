@@ -35,6 +35,7 @@ import { layOnEnemy, turnEndMark } from "@/lib/dm/spell-riders";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { VIOLET, VIOLET_MARK } from "@/lib/dm/prismatic-violet";
+import { textKey } from "@/lib/language/text-logic";
 
 // The turn-start save lives in its own module so condition-tick.ts can reach it
 // without loading the mutation dispatcher (an import cycle through the clock).
@@ -53,7 +54,7 @@ const RAYS: Array<{ color: string; type?: string }> = [
   { color: "violet" },
 ];
 
-export const isPrismaticSpray = (spell: string | undefined) => (spell ?? "").trim().toLowerCase() === PRISMATIC_SPRAY;
+export const isPrismaticSpray = (spell: string | undefined) => textKey(spell ?? "") === PRISMATIC_SPRAY;
 
 // The rays one creature is struck by: one d8, or on an 8 two more, each 8
 // rolled again. `d8` rolls one die (a card, in a cast).

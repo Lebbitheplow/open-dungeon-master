@@ -7,6 +7,8 @@
 // The rows are read at use, never copied onto a stored zone, so a corrected
 // row corrects the areas already on a board. Pure data: no DB.
 
+import { textKey } from "@/lib/language/text-logic";
+
 export type ZoneShape =
   // A burst around a point: every square within `feet` of it (a cylinder
   // on the grid is the same thing).
@@ -351,9 +353,7 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
 };
 
 // Names a spell is kept under by its authors ("Evard's Black Tentacles").
-const ALIASES: Record<string, string> = {
-  "evard's black tentacles": "black tentacles",
-};
+const ALIASES = new Map([[textKey("Evard's Black Tentacles"), "black tentacles"]]);
 
 // A spell by its name, or a laid area by the spell it runs as: a table's
 // workshop copy under a name of its own ("Silkbind") lays and reads the row
@@ -363,8 +363,8 @@ export type ZoneNamed = string | { spell: string; runsAs?: string };
 
 export function zoneKey(spell: ZoneNamed): string {
   const name = typeof spell === "string" ? spell : spell.runsAs || spell.spell;
-  const key = name.trim().toLowerCase().replace(/\s+/g, " ");
-  return ALIASES[key] ?? key;
+  const key = textKey(name);
+  return ALIASES.get(key) ?? key;
 }
 
 // The spell's own name as a key, never what it runs as: what a caster's

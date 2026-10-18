@@ -19,6 +19,7 @@ import postApocalypticJson from "@/lib/classes/post-apocalyptic.json";
 import postApocalypticFeaturesJson from "@/lib/classes/post-apocalyptic-features.json";
 import steampunkJson from "@/lib/classes/steampunk.json";
 import steampunkFeaturesJson from "@/lib/classes/steampunk-features.json";
+import { textKey } from "@/lib/language/text-logic";
 
 export type CustomClass = SrdClass & {
   // Genres that surface this class in the picker's recommended group.
@@ -102,12 +103,12 @@ for (const file of FEATURE_FILES) {
     const descriptions: Record<string, string> = {};
     for (const features of Object.values(table.levels)) {
       for (const feature of features) {
-        descriptions[feature.n.toLowerCase()] = feature.d;
+        descriptions[textKey(feature.n)] = feature.d;
       }
     }
     for (const features of Object.values(table.subclass.levels)) {
       for (const feature of features) {
-        descriptions[feature.n.toLowerCase()] = feature.d;
+        descriptions[textKey(feature.n)] = feature.d;
       }
     }
     FEATURE_DESCRIPTIONS[classId] = descriptions;
@@ -130,7 +131,7 @@ export function classFeatureDescription(
   classId: string,
   featureName: string,
 ): string | null {
-  return FEATURE_DESCRIPTIONS[classId]?.[featureName.trim().toLowerCase()] ?? null;
+  return FEATURE_DESCRIPTIONS[classId]?.[textKey(featureName)] ?? null;
 }
 
 // SRD classes that also deserve a spot in a genre's recommended group.

@@ -16,6 +16,7 @@
 // class-resources.ts turns into a once-per-long-rest counter the cast guard
 // spends instead of a slot. Pure.
 import type { Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // The scores a spell is cast with.
 export type CastingAbility = "int" | "wis" | "cha";
@@ -395,7 +396,7 @@ export type SpellLists = {
   spellbook?: string[];
 };
 
-const has = (list: string[] | undefined, name: string) => (list ?? []).some((entry) => lower(entry) === lower(name));
+const has = (list: string[] | undefined, name: string) => (list ?? []).some((entry) => textKey(entry) === textKey(name));
 
 // The lists with every feat spell in its place: cantrips with the
 // cantrips, spells with the known, a ritual book's with the spellbook. A
@@ -433,11 +434,11 @@ export function withoutFeatSpells<T extends SpellLists>(lists: T | null, grants:
   if (!lists) {
     return lists;
   }
-  const drop = new Set(grants.flatMap((grant) => [...grant.cantrips, ...grant.spells, ...grant.rituals]).map(lower));
+  const drop = new Set(grants.flatMap((grant) => [...grant.cantrips, ...grant.spells, ...grant.rituals]).map(textKey));
   if (!drop.size) {
     return lists;
   }
-  const keep = (list: string[] | undefined) => (list ?? []).filter((entry) => !drop.has(lower(entry)));
+  const keep = (list: string[] | undefined) => (list ?? []).filter((entry) => !drop.has(textKey(entry)));
   return {
     ...lists,
     cantrips: keep(lists.cantrips),

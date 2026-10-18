@@ -5,6 +5,7 @@
 import { findSummonForm, summonFormsOf, type SummonForm } from "@/lib/srd/summon-forms";
 import { formatCr, formList } from "@/lib/srd/beast-forms";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 const HOUR = 600;
 const DAY = 14400;
@@ -162,8 +163,6 @@ export const SUMMON_SPELLS: SummonSpell[] = [
   },
 ];
 
-const key = (name: string) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
 // A summoning spell spent through a bare slot would leave its creatures to be
 // invented: the refusal that sends it to cast_buff, or null.
 export function summonSlotProblem(spell: string): ToolError | null {
@@ -174,8 +173,8 @@ export function summonSlotProblem(spell: string): ToolError | null {
 }
 
 export function summonSpellFor(spell: string): SummonSpell | null {
-  const wanted = key(spell);
-  return SUMMON_SPELLS.find((entry) => key(entry.name) === wanted) ?? null;
+  const wanted = textKey(spell);
+  return SUMMON_SPELLS.find((entry) => textKey(entry.name) === wanted) ?? null;
 }
 
 
@@ -216,7 +215,7 @@ export function summonPlan(
   const named = formName.trim();
   // A spell with a fixed list reads the caller's word against that list
   // first, so "spider" is Giant Insect's Giant Spider.
-  const fromList = named ? spell.forms?.map((name) => findSummonForm(name)).find((form) => form && key(form.name).includes(key(named))) : undefined;
+  const fromList = named ? spell.forms?.map((name) => findSummonForm(name)).find((form) => form && textKey(form.name).includes(textKey(named))) : undefined;
   const form = fromList ?? (named ? findSummonForm(named) : spell.forms?.length === 1 ? findSummonForm(spell.forms[0]) : null);
   if (!form) {
     const asked = named ? `${spell.name} has no stat block here for "${named}"; it calls` : `${spell.name} needs the creature in variant`;

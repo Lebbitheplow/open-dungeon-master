@@ -17,6 +17,7 @@ import {
 } from "@/lib/srd/spell-prep";
 import { SpellBook, type SpellTile } from "./SpellBook";
 import { useSpellLookups, useSpellPool, type PoolSpell } from "./useSpellPool";
+import { textKey } from "@/lib/language/text-logic";
 
 // A character's spells as a spell book, one per caster class. The owner of a
 // prepared caster can change what is prepared right here: unpreparing takes
@@ -227,7 +228,7 @@ function CasterBook({
 }
 
 function isGranted(view: CasterView, name: string) {
-  return grantedSpellsOf(view).some((entry) => entry.toLowerCase() === name.toLowerCase());
+  return grantedSpellsOf(view).some((entry) => textKey(entry) === textKey(name));
 }
 
 // Tiles for one caster: what is ready, what waits, and while editing what
@@ -236,9 +237,9 @@ function isGranted(view: CasterView, name: string) {
 // looked-up rows for this caster's own pack spells (already taken, so they
 // never turn into "available" tiles).
 function buildTiles(view: CasterView, pool: PoolSpell[], editing: boolean): SpellTile[] {
-  const levels = new Map(pool.map((spell) => [spell.name.toLowerCase(), spell]));
+  const levels = new Map(pool.map((spell) => [textKey(spell.name), spell]));
   const tile = (name: string, state: SpellTile["state"]): SpellTile => {
-    const row = levels.get(name.toLowerCase());
+    const row = levels.get(textKey(name));
     return {
       name,
       level: row?.level ?? spellLevelOf(name),
@@ -257,7 +258,7 @@ function buildTiles(view: CasterView, pool: PoolSpell[], editing: boolean): Spel
     ...heldSpells(view).map((name) => tile(name, "ready")),
     ...view.pending.map((name) => tile(name, "pending")),
   ].filter((entry) => {
-    const key = entry.name.toLowerCase();
+    const key = textKey(entry.name);
     if (taken.has(key)) {
       return false;
     }
@@ -268,13 +269,13 @@ function buildTiles(view: CasterView, pool: PoolSpell[], editing: boolean): Spel
     // The book is always worth seeing: it is what the wizard owns.
     tiles.push(
       ...spellbookOf(view)
-        .filter((name) => !taken.has(name.toLowerCase()))
+        .filter((name) => !taken.has(textKey(name)))
         .map((name) => tile(name, "inBook")),
     );
   } else if (editing && view.style === "prepared") {
     tiles.push(
       ...pool
-        .filter((spell) => spell.level > 0 && !taken.has(spell.name.toLowerCase()))
+        .filter((spell) => spell.level > 0 && !taken.has(textKey(spell.name)))
         .map((spell) => tile(spell.name, "available")),
     );
   }

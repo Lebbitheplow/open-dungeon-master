@@ -51,7 +51,6 @@ import {
   openCastOf,
   ritualProblem,
   slotPlan,
-  spellKeyOf,
   spellHeldProblem,
   reactionSpellOnOwnTurn,
   turnCharge,
@@ -78,6 +77,7 @@ import { spellSupportLine } from "@/lib/srd/spell-support";
 import { wardOnCast } from "@/lib/dm/arcane-ward";
 import { casterCost } from "@/lib/dm/spell-self";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Which tool the cast came through. It decides two things only: whether a
 // casting whose shares are resolved one call at a time (Eldritch Blast's
@@ -285,7 +285,7 @@ export function castSpell(
     const cantrip =
       facts?.level === 0 ||
       [sheet.spellcasting, ...(sheet.spellcasting?.casters ?? [])].some((entry) =>
-        (entry?.cantrips ?? []).some((name) => name.trim().toLowerCase() === spell.toLowerCase()),
+        (entry?.cantrips ?? []).some((name) => textKey(name) === textKey(spell)),
       );
     if (!(input.level === 0 && cantrip)) {
       return {
@@ -304,7 +304,7 @@ export function castSpell(
     mech?.repeat &&
     via !== "slot" &&
     sheet.concentratingOn &&
-    spellKeyOf(sheet.concentratingOn) === spellKeyOf(name)
+    textKey(sheet.concentratingOn) === textKey(name)
   ) {
     return repeatSpell(campaign, sheet, inRunningFight(encounter) ? encounter : null, facts, name, mech.repeat, input);
   }

@@ -28,6 +28,7 @@ import {
   storeBudget,
 } from "@/lib/dm/turn-budget";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type ResourceCharge =
   | ToolError
@@ -65,7 +66,7 @@ export function prepareResourceCharge(
   // Combat Wild Shape (Circle of the Moon) makes the change a bonus action.
   const action =
     def.effect.kind === "wild_shape" &&
-    sheet.features.some((feature) => feature.name.toLowerCase().includes("combat wild shape"))
+    sheet.features.some((feature) => textKey(feature.name).includes("combat wild shape"))
       ? "bonus"
       : def.action;
   if (action === "reaction") {

@@ -1,4 +1,4 @@
-import { foldName } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { shiftEnemyMaxHp } from "@/lib/db/encounters";
@@ -180,13 +180,13 @@ export function deleteEffectsByName(
   name: string,
 ): number {
   const db = getDatabase();
-  const wanted = foldName(name);
+  const wanted = textKey(name);
   const ids = (
     db
       .prepare(`SELECT id, name FROM active_effects WHERE campaign_id = ? AND target_kind = ? AND target_id = ?`)
       .all(campaignId, target.kind, target.id) as Array<{ id: string; name: string }>
   )
-    .filter((row) => foldName(row.name) === wanted)
+    .filter((row) => textKey(row.name) === wanted)
     .map((row) => row.id);
   const remove = db.prepare(`DELETE FROM active_effects WHERE campaign_id = ? AND id = ?`);
   followingMaxHp(campaignId, () => db.transaction(() => {

@@ -21,6 +21,7 @@ import type {
   CreateSheetInput,
   FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // Every rule that reads a species by id reads a pack or workshop species
 // through this (src/lib/srd/race-id.ts); every sheet the engines touch
@@ -249,7 +250,7 @@ function withBackgroundFeature(
   }
   // The sheet schema holds feature names to 80 characters.
   const label = `${granted.name} (${granted.background})`.slice(0, 80);
-  if (list.some((feature) => feature.name.toLowerCase() === label.toLowerCase())) {
+  if (list.some((feature) => textKey(feature.name) === textKey(label))) {
     return list;
   }
   return [...list, { name: label, source: "background" as const }];

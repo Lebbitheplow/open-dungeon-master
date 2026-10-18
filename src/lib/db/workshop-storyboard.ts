@@ -7,6 +7,7 @@ import type { PrepRole } from "@/lib/dm/prep-logic";
 import { dedupeName, type ArcMode, type LinkKind } from "@/lib/workshop/import";
 import type { BeatKind, BeatLinks } from "@/lib/workshop/board";
 import type { CompiledBoard, CompiledEncounter } from "@/lib/workshop/board-compile";
+import { textKey } from "@/lib/language/text-logic";
 
 // Writing a compiled storyboard into a campaign.
 //
@@ -130,7 +131,7 @@ export function writeStoryboardRows(
       db.prepare(`SELECT title FROM lore_entries WHERE campaign_id = ?`).all(campaignId) as Array<{
         title: string;
       }>
-    ).map((row) => row.title.trim().toLowerCase()),
+    ).map((row) => textKey(row.title)),
   );
   for (const entry of compiled.lore) {
     if (!resolver.compiled("board-lore", entry.cardId)) {
@@ -165,7 +166,7 @@ export function writeStoryboardRows(
       db
         .prepare(`SELECT name FROM encounter_templates WHERE campaign_id = ?`)
         .all(campaignId) as Array<{ name: string }>
-    ).map((row) => row.name.trim().toLowerCase()),
+    ).map((row) => textKey(row.name)),
   );
   for (const entry of compiled.encounters) {
     let id = entry.encounterId ? resolver.link("encounters", entry.encounterId) : null;
@@ -359,17 +360,17 @@ export function writeStoryboardColumns(
   // log on the campaign row. The old log alone was read by the storyteller
   // only while a campaign had no arc, so a board that also wrote an arc
   // delivered hooks nobody at the table, model or person, ever saw.
-  const logged = new Set(campaign.questLog.map((quest) => quest.trim().toLowerCase()));
-  const quests = compiled.quests.filter((quest) => !logged.has(quest.trim().toLowerCase()));
+  const logged = new Set(campaign.questLog.map((quest) => textKey(quest)));
+  const quests = compiled.quests.filter((quest) => !logged.has(textKey(quest)));
   if (quests.length) {
     setQuestLog(campaign.id, [...campaign.questLog, ...quests]);
     written += 1;
   }
-  const listed = new Set(listQuests(campaign.id).map((quest) => quest.title.trim().toLowerCase()));
+  const listed = new Set(listQuests(campaign.id).map((quest) => textKey(quest.title)));
   for (const title of compiled.quests) {
-    if (!listed.has(title.trim().toLowerCase())) {
+    if (!listed.has(textKey(title))) {
       insertQuest({ campaignId: campaign.id, title, source: "dm", visibility: "party" });
-      listed.add(title.trim().toLowerCase());
+      listed.add(textKey(title));
     }
   }
 

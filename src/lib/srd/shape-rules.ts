@@ -14,6 +14,7 @@
 
 import { BEAST_FORMS, type BeastForm } from "@/lib/srd/beast-forms";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type ShapeRule = {
   spell: string;
@@ -37,7 +38,7 @@ const RULES: Record<string, ShapeRule> = {
 };
 
 export function shapeRuleFor(spell: string): ShapeRule {
-  return RULES[spell.trim().toLowerCase()] ?? RULES.polymorph;
+  return RULES[textKey(spell)] ?? RULES.polymorph;
 }
 
 // Why this form is not allowed for this target, or null.

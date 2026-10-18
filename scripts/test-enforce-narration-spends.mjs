@@ -73,7 +73,7 @@ await test("A leveled spell narrated beside the curse, tied to nothing spent, is
   );
   assert.equal(turn.served, 3, "no correction call was made");
   const correction = String(model.requests[2]?.messages.at(-1)?.content ?? "");
-  assert.match(correction, /hold person/);
+  assert.match(correction, /Hold Person/);
   assert.doesNotMatch(correction, /bane/);
   assert.equal(turn.message?.content, rewrite);
 });

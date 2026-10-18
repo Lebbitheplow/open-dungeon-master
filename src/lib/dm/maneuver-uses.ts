@@ -30,12 +30,13 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type Resolution = ToolError | { result: Record<string, unknown> };
 
 // Whether the sheet knows this maneuver ("Maneuver: Rally").
 export function knowsManeuver(sheet: CharacterSheet, name: string): boolean {
-  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && feature.name.toLowerCase().replace(/[’`]/g, "'").includes(name));
+  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && textKey(feature.name).includes(textKey(name)));
 }
 
 function companion(sheet: CharacterSheet, targetId: string | undefined, label: string): CharacterSheet | ToolError {

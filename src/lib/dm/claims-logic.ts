@@ -11,6 +11,7 @@ import { z } from "zod";
 import { replyJsonObject } from "../reply-json-logic.ts";
 import type { Speaker } from "./speech.ts";
 import { QUOTE, quotedText, speakerMatchers } from "./speech-prose.ts";
+import { textKey, words } from "../language/text-logic.ts";
 
 export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
@@ -235,13 +236,7 @@ export function parseReaderReply(raw: string): unknown[] | null {
 // Quotes are compared with their quote marks, apostrophes, spacing and case
 // folded, so a reader that straightens a curly quote still matches.
 export function squash(text: string): string {
-  return text
-    .normalize("NFC")
-    .replace(/[“”«»„"]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
+  return textKey(text.replace(/[“”«»„"]/g, '"').replace(/[‘’]/g, "'"));
 }
 
 export type ClaimContext = {
@@ -274,7 +269,7 @@ export function namedSpeakers(text: string, speakers: ReadonlyMap<string, Speake
   return new Map(
     [...speakers].filter(([, speaker]) => {
       const [{ pattern, short }] = speakerMatchers([speaker]);
-      return [...prose.matchAll(pattern)].some((found) => !short.has(found[0].toLowerCase()) || /^\p{Lu}/u.test(found[0]));
+      return [...prose.matchAll(pattern)].some((found) => !short.has(textKey(found[0])) || /^\p{Lu}/u.test(found[0]));
     }),
   );
 }
@@ -329,13 +324,12 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
         break;
       case "cast": {
         const caster = context.party.get(claim.caster);
-        const spell = context.normalizeSpell(claim.spell);
         // Tied to what its own caster spent, the cast is that spend, which
         // its tool already resolved. A tie to anyone else's spend, or to none
         // the turn made, excuses nothing.
         const paid = claim.spent ? context.spent.get(claim.spent) === claim.caster : false;
-        if (caster && context.leveledSpells.has(spell) && !paid) {
-          kept.push({ kind: "cast", caster, spell, quote: claim.quote });
+        if (caster && context.leveledSpells.has(context.normalizeSpell(claim.spell)) && !paid) {
+          kept.push({ kind: "cast", caster, spell: claim.spell, quote: claim.quote });
         }
         break;
       }
@@ -447,5 +441,5 @@ export function withoutAsides(text: string, claims: readonly NarrationClaim[]): 
     return text;
   }
   const kept = withoutSentences(text, quotes);
-  return /[\p{L}\p{N}]/u.test(kept) ? kept : "";
+  return words(kept).length ? kept : "";
 }

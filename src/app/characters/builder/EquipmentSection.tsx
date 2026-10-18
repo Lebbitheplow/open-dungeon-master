@@ -10,6 +10,7 @@ import { packRowPrice } from "@/lib/srd/starting-wealth";
 import CatalogBrowser, { type CatalogSection } from "./CatalogBrowser";
 import ContentPicker, { type PickerEntry } from "./ContentPicker";
 import { Chip } from "./steps/shared";
+import { textKey } from "@/lib/language/text-logic";
 
 // What a catalog row brings into the pack beside its name: a homebrew row
 // its mechanics (so the live AC and attack lines read it before it is
@@ -101,11 +102,11 @@ export default function EquipmentSection({
   purse: PurseView;
   inputClass: string;
 }) {
-  const have = new Set(equipment.map((item) => item.name.trim().toLowerCase()));
-  const openSuggestions = suggestions.filter((entry) => !have.has(entry.name.trim().toLowerCase()));
+  const have = new Set(equipment.map((item) => textKey(item.name)));
+  const openSuggestions = suggestions.filter((entry) => !have.has(textKey(entry.name)));
   // Only what the kit does not already carry: most class kits come with a
   // pack, and a second backpack on top was what blocked the step (issue #111).
-  const starterMissing = STARTER_PACK.filter((entry) => !have.has(entry.name.trim().toLowerCase()));
+  const starterMissing = STARTER_PACK.filter((entry) => !have.has(textKey(entry.name)));
 
   return (
     <section className="panel rounded-xl p-4">

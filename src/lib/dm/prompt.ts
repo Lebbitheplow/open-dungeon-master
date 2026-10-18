@@ -75,6 +75,7 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
+import { textKey } from "@/lib/language/text-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -407,10 +408,10 @@ function spellListLabel(lists: {
 }): string {
   const cantrips = lists.cantrips ?? [];
   const spells = [...lists.known, ...lists.prepared];
-  const ready = new Set([...spells, ...cantrips].map((name) => name.toLowerCase()));
+  const ready = new Set([...spells, ...cantrips].map((name) => textKey(name)));
   const pending = lists.pending ?? [];
   const bookOnly = (lists.spellbook ?? []).filter(
-    (name) => !ready.has(name.toLowerCase()) && !pending.some((entry) => entry.toLowerCase() === name.toLowerCase()),
+    (name) => !ready.has(textKey(name)) && !pending.some((entry) => textKey(entry) === textKey(name)),
   );
   const parts = [
     cantrips.length ? `cantrips (no slot): ${cantrips.join(", ")}` : "",
@@ -713,7 +714,7 @@ export function buildGameStateBlock(state: DmGameState): string {
       location,
       scene: campaign.scene ?? "",
       npcs: (state.npcs ?? [])
-        .filter((npc) => !location || !npc.location || npc.location.toLowerCase() === location.toLowerCase())
+        .filter((npc) => !location || !npc.location || textKey(npc.location) === textKey(location))
         .map((npc) => npc.name)
         .slice(0, 12),
       enemies: (state.encounter?.enemies ?? []).map((enemy) => enemy.name).slice(0, 12),
@@ -807,7 +808,7 @@ export function buildGameStateBlock(state: DmGameState): string {
       lines.push(`Exits/known routes: ${location.connections.join(", ")}`);
     }
     const others = (state.visitedLocationNames ?? []).filter(
-      (name) => name.toLowerCase() !== location.name.toLowerCase(),
+      (name) => textKey(name) !== textKey(location.name),
     );
     if (others.length) {
       lines.push(`Previously visited: ${others.join(", ")}`);
@@ -1692,7 +1693,7 @@ export function buildDmMessages(
 function featPromptLine(feat: string, ownerUserId: string | string[] | undefined, campaignId?: string): string {
   const tag = featEngineTag(feat, campaignId);
   const twin = featTwinOf(feat, campaignId);
-  const known = twin !== feat.trim().toLowerCase() ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";
+  const known = twin !== textKey(feat) ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";
   const text = (featFactsFor(feat, ownerUserId)?.desc ?? "").replace(/\s+/g, " ").trim();
   const cut = text.length <= 360 ? text : `${text.slice(0, 360).replace(/\s+\S*$/, "")}...`;
   return `${feat}${known}${tag ? ` ${tag}` : ""}${cut ? `: ${cut}` : ""}`;

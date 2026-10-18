@@ -12,7 +12,7 @@ import { getNpcByName } from "@/lib/db/npcs";
 import { listSheets } from "@/lib/db/sheets";
 import { guardOutcomes } from "@/lib/dm/engine-boundary";
 import { liveStateFor, readClaims, speakerRoster } from "@/lib/dm/claims";
-import { commonWords, foldName } from "@/lib/language/text-logic";
+import { commonWords, textKey } from "@/lib/language/text-logic";
 import { attributeSpeech, hasQuotedLine, linesOf, mergeLines, storedSpeaker, type Speaker, type SpokenLine } from "@/lib/dm/speech";
 
 // How many of the latest messages commonWords reads: a fixed window, so its
@@ -78,7 +78,7 @@ export function modelTextLines(campaign: Pick<Campaign, "id" | "gameSettings">, 
     if (npc) {
       return { line, speaker: { kind: "npc", id: npc.id, name: npc.name } };
     }
-    const sheet = listSheets(campaign.id).find((entry) => foldName(entry.name) === foldName(speaker.name));
+    const sheet = listSheets(campaign.id).find((entry) => textKey(entry.name) === textKey(speaker.name));
     return { line, speaker: sheet ? { kind: "pc", id: sheet.id, name: sheet.name } : storedSpeaker(speaker) };
   });
   return mergeLines(

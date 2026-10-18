@@ -3,6 +3,7 @@ import type { DiceLook } from "@/lib/dice/dice-look";
 import { closeStreamsForSession, closeStreamsForUser } from "@/lib/live-streams";
 import { mergeLedgers, parseLedger, type TourLedger } from "@/lib/tours/account-logic";
 import { isTourId } from "@/lib/tours/registry";
+import { asciiSlugOf } from "@/lib/language/text-logic";
 
 export type UserAvatar = {
   url: string;
@@ -84,8 +85,7 @@ export function createUser(
 export function createCompanionUser(companionName: string): User {
   const db = getDatabase();
   const id = `comp_${crypto.randomUUID()}`;
-  const slug = companionName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24) || "companion";
-  const username = `companion-${slug}-${id.slice(5, 13)}`;
+  const username = ["companion", asciiSlugOf(companionName).slice(0, 24), id.slice(5, 13)].filter((part) => part !== "").join("-");
   db.prepare(
     `INSERT INTO users (id, username, password_hash, created_at, is_admin) VALUES (?, ?, ?, ?, 0)`,
   ).run(id, username, NO_PASSWORD_SENTINEL, nowIso());

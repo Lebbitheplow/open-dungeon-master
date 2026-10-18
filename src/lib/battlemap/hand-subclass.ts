@@ -15,7 +15,6 @@ import {
   costGate,
   gated,
   primaryClass,
-  spellKey,
   standingGate,
   type Gate,
   type HandCard,
@@ -23,6 +22,7 @@ import {
   type HandTarget,
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
+import { textKey } from "@/lib/language/text-logic";
 
 type SpendDoes = AuthoredSpend["does"];
 
@@ -63,8 +63,8 @@ export function subclassSpendCards(sheet: CharacterSheet, turn: HandTurn, taken:
       const does = spend.does;
       const action = spend.action ?? "action";
       if (spend.fight === "out" || does.kind === "choose" || action === "reaction") continue;
-      if (taken.has(spellKey(spend.name)) || !gateHolds(spend.gate, sheet, held)) continue;
-      taken.add(spellKey(spend.name));
+      if (taken.has(textKey(spend.name)) || !gateHolds(spend.gate, sheet, held)) continue;
+      taken.add(textKey(spend.name));
       const cost = COST[action] ?? "action";
       const pool = spend.pool;
       const state = pool ? sheet.resources[pool.id] : undefined;
@@ -72,7 +72,7 @@ export function subclassSpendCards(sheet: CharacterSheet, turn: HandTurn, taken:
       const lines = linesOf(does);
       const perUnit = Boolean(pool?.perUnit);
       const card: HandCard = {
-        id: `feature:authored:${spellKey(spend.name).replace(/\s+/g, "-")}`,
+        id: `feature:authored:${textKey(spend.name).replace(/\s+/g, "-")}`,
         type: does.kind === "save_effect" ? (lines.condition ? "control" : "spell") : does.kind === "buff" ? "ward" : "feature",
         name: spend.name,
         cost,

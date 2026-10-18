@@ -39,6 +39,7 @@ import { wakeConditions } from "@/lib/dm/vitals-logic";
 import { describeMinutes, minutesSinceDeath } from "@/lib/dm/revival";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type Cast = (args: Record<string, unknown>) => ToolResult;
 
@@ -50,7 +51,7 @@ export type HealSpellOutcome =
   | ToolError;
 
 const hasFeature = (sheet: CharacterSheet, name: string) =>
-  sheet.features.some((feature) => feature.name.trim().toLowerCase().startsWith(name));
+  sheet.features.some((feature) => textKey(feature.name).startsWith(name));
 
 // The most a dice expression can roll: "2d8+3" is 19.
 export function maximumOf(expression: string): number {
@@ -90,7 +91,7 @@ export function castHealingSpell(
 
   // Spare the Dying stabilizes a dying creature and heals nothing (a table's
   // workshop copy of it too, by the spell it runs as).
-  if ((resolved?.runsAs ?? facts.runsAs ?? name).toLowerCase() === "spare the dying") {
+  if (textKey(resolved?.runsAs ?? facts.runsAs ?? name) === "spare the dying") {
     return { done: handleStabilize(campaign, turnId, target, caster, { method: "spell", reason: input.reason }) };
   }
   // Only a spell that restores hit points heals: Fireball's dice are damage,

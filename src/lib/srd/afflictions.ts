@@ -4,6 +4,8 @@
 // leave on a sheet, and what those do to rolls, are rows in
 // src/lib/srd/affliction-conditions.ts. Pure.
 
+import { textKey } from "@/lib/language/text-logic";
+
 export type AbilityId = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
 // ---- diseases ----
@@ -73,7 +75,7 @@ export type DiseaseSpec = {
 };
 
 export function findDisease(text: string): Disease | null {
-  const key = text.trim().toLowerCase().replace(/[^a-z]+/g, "_").replace(/^_|_$/g, "");
+  const key = textKey(text.replace(/[^\p{L}\p{M}]+/gu, " ")).replaceAll(" ", "_");
   return (Object.values(DISEASES).find((disease) => disease.id === key || disease.condition.replace(/ /g, "_") === key) ?? null);
 }
 
@@ -206,7 +208,10 @@ export const POISONS: Poison[] = [
 // "Oil of Taggit" were never found by their own names, because the asked
 // name lost its "of" and the book's kept it.
 const poisonKey = (text: string) =>
-  text.trim().toLowerCase().replace(/\(.*\)/g, "").replace(/[^a-z]+/g, " ").replace(/\b(vial|dose|of)\b/g, " ").replace(/\s+/g, " ").trim();
+  textKey(text.replace(/\(.*\)/g, "").replace(/[^\p{L}\p{M}]+/gu, " "))
+    .split(" ")
+    .filter((word) => !["vial", "dose", "of"].includes(word))
+    .join(" ");
 
 export function findPoison(text: string): Poison | null {
   const key = poisonKey(text);

@@ -3,6 +3,7 @@ import { recordExtractedFacts } from "@/lib/db/facts";
 import { publishEphemeral } from "@/lib/events";
 import { decayBeatCounts, longingNote } from "@/lib/dm/relationship-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 // The relationship chapter pass, run at chapter close beside the NPC agency
 // engine (src/lib/dm/npc-agency.ts) and costing exactly zero model calls.
@@ -23,12 +24,12 @@ export function advanceRelationships(campaignId: string, chapterTranscript: stri
   if (!relationships.length) {
     return;
   }
-  const transcript = chapterTranscript.toLowerCase();
+  const transcript = textKey(chapterTranscript);
   const facts: FactCandidate[] = [];
 
   for (const relationship of relationships) {
     const seen =
-      Boolean(transcript) && transcript.includes(relationship.subjectName.toLowerCase());
+      Boolean(transcript) && transcript.includes(textKey(relationship.subjectName));
     const apartChapters = seen ? 0 : Math.min(relationship.apartChapters + 1, 20);
     const note = seen
       ? null

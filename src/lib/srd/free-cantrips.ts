@@ -15,12 +15,11 @@
 // (src/app/campaigns/[campaignId]/LevelUpDialog.tsx) share it.
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 type FreeCantripSheet = Pick<CharacterSheet, "race" | "level" | "spellcasting"> & {
   racialChoices?: { cantrip?: string } | null;
 };
-
-const lower = (name: string) => name.trim().toLowerCase();
 
 // Every cantrip name the sheet holds, across the per-class lists.
 function cantripsHeld(sheet: FreeCantripSheet): string[] {
@@ -36,11 +35,11 @@ function cantripsHeld(sheet: FreeCantripSheet): string[] {
 // server's content lookup knows): a sheet written before the pick was
 // recorded by name still gets its racial cantrip left out of the count.
 export function freeCantripCount(sheet: FreeCantripSheet, racialChoiceCount: number): number {
-  const held = new Set(cantripsHeld(sheet).map(lower));
+  const held = new Set(cantripsHeld(sheet).map(textKey));
   const pick = sheet.racialChoices?.cantrip ?? "";
-  const namedPick = pick && held.has(lower(pick)) ? 1 : 0;
+  const namedPick = pick && held.has(textKey(pick)) ? 1 : 0;
   const innate = innateCantripsFor(sheet.race, sheet.level).filter(
-    (name) => held.has(lower(name)) && lower(name) !== lower(pick),
+    (name) => held.has(textKey(name)) && textKey(name) !== textKey(pick),
   ).length;
   return Math.max(racialChoiceCount, namedPick) + innate;
 }

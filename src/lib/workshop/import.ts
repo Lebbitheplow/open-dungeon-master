@@ -32,6 +32,7 @@ import {
   type WorldRecordKind,
 } from "./import-kinds.ts";
 import { planBoard } from "./import-board.ts";
+import { textKey } from "../language/text-logic.ts";
 
 export * from "./import-kinds.ts";
 
@@ -45,21 +46,21 @@ export * from "./import-kinds.ts";
 // COLLATE NOCASE.
 export function dedupeName(name: string, taken: Set<string>): string {
   const trimmed = name.trim() || "Untitled";
-  if (!taken.has(trimmed.toLowerCase())) {
-    taken.add(trimmed.toLowerCase());
+  if (!taken.has(textKey(trimmed))) {
+    taken.add(textKey(trimmed));
     return trimmed;
   }
   for (let attempt = 2; attempt < 1000; attempt += 1) {
     const candidate = `${trimmed} (${attempt})`;
-    if (!taken.has(candidate.toLowerCase())) {
-      taken.add(candidate.toLowerCase());
+    if (!taken.has(textKey(candidate))) {
+      taken.add(textKey(candidate));
       return candidate;
     }
   }
   // A thousand copies of one name is not a real table; fall back to
   // something unique rather than looping or throwing.
   const fallback = `${trimmed} (${Date.now()})`;
-  taken.add(fallback.toLowerCase());
+  taken.add(textKey(fallback));
   return fallback;
 }
 
@@ -204,7 +205,7 @@ export function planImport(input: PlanInput): ImportPlan {
       continue;
     }
 
-    const taken = new Set((input.existing[kind] ?? []).map((name) => name.trim().toLowerCase()));
+    const taken = new Set((input.existing[kind] ?? []).map((name) => textKey(name)));
     let renamedCount = 0;
     let keptCount = 0;
     for (const row of rows) {

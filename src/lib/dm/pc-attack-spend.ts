@@ -25,6 +25,7 @@ import type { BuiltAttack } from "@/lib/dm/pc-attack-profile";
 import { hunterMultiattack } from "@/lib/dm/srd-attacks";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export function spendAttackEconomy(input: {
   sheet: CharacterSheet;
@@ -173,4 +174,4 @@ export function spendAttackEconomy(input: {
   return { budget, spendNote, notes };
 }
 
-const holdsPistolAndBlade = (sheet: CharacterSheet) => sheet.features.some((feature) => feature.name.trim().toLowerCase() === "pistol and blade");
+const holdsPistolAndBlade = (sheet: CharacterSheet) => sheet.features.some((feature) => textKey(feature.name) === "pistol and blade");

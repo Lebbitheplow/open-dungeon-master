@@ -99,6 +99,7 @@ import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -567,7 +568,7 @@ export function applyDmMutation(
     }
     const stale =
       sheetsById.get(trimmed) ??
-      sheets.find((entry) => entry.name.toLowerCase() === trimmed.toLowerCase()) ??
+      sheets.find((entry) => textKey(entry.name) === textKey(trimmed)) ??
       null;
     return stale ? getSheetById(stale.id) : null;
   };
@@ -1418,7 +1419,7 @@ export function applyDmMutation(
       // use_spell_slot with spell="Combat Wild Shape".
       if (/combat wild shape/i.test(spell)) {
         const hasFeature = sheet.features.some((feature) =>
-          feature.name.toLowerCase().includes("combat wild shape"),
+          textKey(feature.name).includes("combat wild shape"),
         );
         if (!hasFeature) {
           return { result: { error: `${sheet.name} has no Combat Wild Shape.`, refused: "rules" } };
@@ -1536,7 +1537,7 @@ export function applyDmMutation(
       const cantrips = sheet.spellcasting.cantrips ?? [];
       const book = sheet.spellcasting.spellbook ?? [];
       const pending = sheet.spellcasting.pending ?? [];
-      const matches = (entry: string) => entry.trim().toLowerCase() === spell.toLowerCase();
+      const matches = (entry: string) => textKey(entry) === textKey(spell);
       if (action === "add") {
         if (known.some(matches) || prepared.some(matches) || cantrips.some(matches) || book.some(matches) || pending.some(matches)) {
           return { result: { ok: true, note: `${sheet.name} already knows ${spell}.` } };

@@ -33,7 +33,6 @@ import {
   lowestSlot,
   signed,
   slotLine,
-  spellKey,
   standingGate,
   budgetOf,
   type BasicActionId,
@@ -47,6 +46,7 @@ import {
 import { featureCards, spellCards, spellNames } from "@/lib/battlemap/hand-spells";
 import { intimidatingPresenceCards, subclassSpendCards } from "@/lib/battlemap/hand-subclass";
 import { spellHoldOf } from "@/lib/battlemap/hand-escape";
+import { textKey } from "@/lib/language/text-logic";
 
 export * from "@/lib/battlemap/hand-core";
 
@@ -65,7 +65,7 @@ export function carriedWeapons(sheet: Pick<CharacterSheet, "equipment">): Carrie
     const own = weaponOf(item);
     const magic = magicWeaponOfRow(item);
     const srd = (magic.gear ? magic.srd : null) ?? own ?? matchWeapon(item.name);
-    const key = item.name.trim().toLowerCase();
+    const key = textKey(item.name);
     if (!srd || seen.has(key)) continue;
     seen.add(key);
     out.push({ name: item.name.trim(), srd, qty: item.qty, gear: magic.gear ?? null });
@@ -114,7 +114,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
         gated(
           {
             ...base,
-            id: `attack:${spellKey(attack.name)}`,
+            id: `attack:${textKey(attack.name)}`,
             name: attack.name,
             range: "5 ft",
             dice: `${attack.damage} ${attack.type}`.trim(),
@@ -172,7 +172,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
     const empty = ammoKind !== null && ammo === null;
     const card: HandCard = {
       ...base,
-      id: `${offHand ? "offhand" : "attack"}:${spellKey(name)}`,
+      id: `${offHand ? "offhand" : "attack"}:${textKey(name)}`,
       name: offHand ? `Off-hand ${name}` : name,
       cost: offHand ? "bonus" : "action",
       range: weaponRange(srd, profile.reachTiles, profile.thrown, profile.ranged),
@@ -226,7 +226,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
   // A lineage's bite or claws (src/lib/srd/racial-weapons.ts), proficient.
   for (const term of ["bite", "claws"]) {
     const natural = racialNaturalWeapon(sheet.features, term);
-    if (natural && !carried.some((weapon) => spellKey(weapon.name) === spellKey(natural.srd.name))) {
+    if (natural && !carried.some((weapon) => textKey(weapon.name) === textKey(natural.srd.name))) {
       cards.push(build(natural.srd.name, natural.srd, false, null, true));
     }
   }
@@ -323,7 +323,7 @@ function riderCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
         gated(
           {
             ...base,
-            id: `rider:${spellKey(name)}`,
+            id: `rider:${textKey(name)}`,
             name,
             dice: use === "grapple" ? `+${die} Athletics` : `+${die}`,
             rules,
@@ -483,7 +483,7 @@ export function deriveHand(sheet: CharacterSheet, turn: HandTurn = FRESH_TURN, o
   const riders = combatRiders(sheet);
   const spells = spellCards(sheet, turn, riders, options);
   const features = featureCards(sheet, turn);
-  const taken = new Set(features.map((card) => spellKey(card.name)));
+  const taken = new Set(features.map((card) => textKey(card.name)));
   return [
     ...attackCards(sheet, turn, riders, options),
     ...riderCards(sheet, turn, riders),

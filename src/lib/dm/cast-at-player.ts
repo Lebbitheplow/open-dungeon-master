@@ -34,6 +34,7 @@ import { sanctuaryWard } from "@/lib/dm/enemy-conditions";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { outOfReach } from "@/lib/dm/spell-planes";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // cast_at_player: a save forced on ONE character, by an enemy's spell or
 // ability or by a hazard (SRD 5.1, Saving Throws). The mirror of
@@ -85,7 +86,7 @@ export function trackEnemyConcentration(
   if (!resolved?.concentration) {
     return null;
   }
-  if (enemy.concentration && enemy.concentration.toLowerCase() !== resolved.name.toLowerCase()) {
+  if (enemy.concentration && textKey(enemy.concentration) !== textKey(resolved.name)) {
     clearSpellConditionsByName(campaign, enemy.concentration, undefined, enemy.id);
   }
   setEnemyConcentration(enemy.id, resolved.name, concentrationRoundsFor(resolved.name));

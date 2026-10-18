@@ -6,6 +6,7 @@ import { Fragment, useMemo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { inlineText, parseBook, parseInline, type BookBlock, type InlineNode } from "@/lib/rulebook/markdown";
 import type { RulebookPageResponse } from "@/lib/rulebook/types";
+import { splitWords, textKey } from "@/lib/language/text-logic";
 
 // One page of the rulebook, set like a printed page: the running head, the
 // title lettered over a painted rule, the text with a drop cap where a
@@ -50,12 +51,12 @@ export function Digits({ text }: { text: string }) {
 
 function marked(text: string, terms: string[], key: string, display = false): ReactNode {
   if (!terms.length && !(display && /\d/.test(text))) return text;
-  const parts = text.split(/([\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*)/u);
+  const parts = splitWords(text);
   return parts.map((part, index) => {
     if (index % 2 === 0 || !part) return part;
     const body = display ? <Digits key={`${key}-d${index}`} text={part} /> : part;
     // The search's matched words, as the server read them: never stemmed here.
-    if (terms.includes(part.toLowerCase().replace(/’/g, "'"))) {
+    if (terms.includes(textKey(part))) {
       return (
         <mark key={`${key}-${index}`} className="rb-mark">
           {body}

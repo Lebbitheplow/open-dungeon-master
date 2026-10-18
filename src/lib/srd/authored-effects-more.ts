@@ -23,6 +23,7 @@ import { standsCheaply } from "@/lib/srd/feat-combat";
 import { activeAuthored, resolveFormula, type AuthoredSheet } from "@/lib/srd/authored-effects";
 import type { NaturalWeapon } from "@/lib/srd/authored-effects-types";
 import type { SrdWeapon } from "@/lib/srd/weapons";
+import { textKey } from "@/lib/language/text-logic";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
@@ -64,12 +65,12 @@ export function authoredNaturalWeapon(
   term: string | undefined,
   mods: Record<string, number> = {},
 ): HeldNaturalWeapon | null {
-  const wanted = lower(term).replace(/^(the|a|an|her|his|their)\s+/, "");
+  const wanted = textKey(term ?? "").replace(/^(the|a|an|her|his|their) /, "");
   if (!wanted) {
     return null;
   }
   for (const { effect, held } of activeAuthored(sheet, "natural_weapon")) {
-    const names = [effect.weapon.name, ...(effect.weapon.aliases ?? [])].map(lower);
+    const names = [effect.weapon.name, ...(effect.weapon.aliases ?? [])].map(textKey);
     if (names.some((name) => name === wanted || wanted.startsWith(name) || name.startsWith(wanted))) {
       return {
         feature: held.feature,
@@ -85,7 +86,7 @@ export function authoredNaturalWeapon(
 // A natural weapon the sheet would have if its gate held: for the refusal
 // that says why it cannot swing it now ("claws, while raging").
 export function naturalWeaponGated(sheet: AuthoredSheet, term: string | undefined): string | null {
-  const wanted = lower(term);
+  const wanted = textKey(term ?? "");
   if (!wanted) {
     return null;
   }
@@ -173,12 +174,12 @@ export function authoredConcentrationGuard(
   spell: string | null | undefined,
   mods: Record<string, number> = {},
 ): { feature: string; tempHp: number } | null {
-  const wanted = lower(spell);
+  const wanted = textKey(spell ?? "");
   if (!wanted) {
     return null;
   }
   for (const { effect, held } of activeAuthored(sheet, "concentration_guard")) {
-    if (wanted.includes(lower(effect.spell)) || lower(effect.spell).includes(wanted)) {
+    if (wanted.includes(textKey(effect.spell)) || textKey(effect.spell).includes(wanted)) {
       return { feature: held.feature, tempHp: Math.max(0, Number(resolveFormula(effect.tempHp, held.level, mods)) || 0) };
     }
   }

@@ -54,6 +54,7 @@ import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
 import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
@@ -121,7 +122,7 @@ export function handleEnemyAttack(
   const staleTarget =
     sheetsById.get(args.targetCharacterId.trim()) ??
     sheets.find(
-      (sheet) => sheet.name.toLowerCase() === args.targetCharacterId.trim().toLowerCase(),
+      (sheet) => textKey(sheet.name) === textKey(args.targetCharacterId),
     );
   const target = staleTarget ? getSheetById(staleTarget.id) : null;
   if (!target) {

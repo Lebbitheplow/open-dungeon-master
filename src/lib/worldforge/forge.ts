@@ -3,6 +3,7 @@ import { fieldLines, formatYear } from "./time.ts";
 import { canonAdmits, canonLegend, canonRank, canonTag, eventLine, pickEvents, secretStanding } from "./canon.ts";
 import { mentionSegments, type Named } from "./text.ts";
 import { accountOf } from "./account.ts";
+import { textKey } from "../language/text-logic.ts";
 
 // WorldForge's AI tools, the pure half (the model calls are in
 // src/lib/dm/world-ai.ts), after WorldForge's forge, ask and draft (by
@@ -82,30 +83,30 @@ export function forgeMessages(text: string, types: WorldType[], known: string[],
 
 export function readForgeReply(reply: Raw | null, doc: Pick<WorldDoc, "types">, named: Named[]): ForgePreview {
   const byHandle = new Map<string, string>();
-  for (const entry of named) for (const handle of [entry.name, ...entry.aliases]) byHandle.set(handle.trim().toLowerCase(), entry.ref);
-  const catchAll = doc.types.find((type) => type.name.toLowerCase() === "other") ?? doc.types.find((type) => type.shelf === "lore") ?? doc.types[0];
+  for (const entry of named) for (const handle of [entry.name, ...entry.aliases]) byHandle.set(textKey(handle), entry.ref);
+  const catchAll = doc.types.find((type) => textKey(type.name) === "other") ?? doc.types.find((type) => type.shelf === "lore") ?? doc.types[0];
   const entities: ForgeEntity[] = [];
   const seen = new Set<string>();
   for (const raw of (Array.isArray(reply?.entities) ? reply!.entities : []).slice(0, 60)) {
     const row = rec(raw);
     const name = str(row.name, 80);
-    const low = name.toLowerCase();
+    const low = textKey(name);
     if (!name || seen.has(low)) continue;
     seen.add(low);
-    const type = doc.types.find((entry) => entry.name.toLowerCase() === str(row.type, 40).toLowerCase()) ?? catchAll;
+    const type = doc.types.find((entry) => textKey(entry.name) === textKey(str(row.type, 40))) ?? catchAll;
     entities.push({
       key: `new:${entities.length}`,
       name,
       typeId: type.id,
       summary: str(row.summary, 2_000),
-      aliases: (Array.isArray(row.aliases) ? row.aliases : []).map((alias) => str(alias, 80)).filter((alias) => alias && alias.toLowerCase() !== low).slice(0, 6),
+      aliases: (Array.isArray(row.aliases) ? row.aliases : []).map((alias) => str(alias, 80)).filter((alias) => alias && textKey(alias) !== low).slice(0, 6),
       hiddenTruth: str(row.hiddenTruth, 1_000),
       existing: byHandle.get(low) ?? "",
     });
   }
   const endpoint = (value: unknown) => {
-    const low = str(value, 80).toLowerCase();
-    const fresh = entities.find((entity) => entity.name.toLowerCase() === low || entity.aliases.some((alias) => alias.toLowerCase() === low));
+    const low = textKey(str(value, 80));
+    const fresh = entities.find((entity) => textKey(entity.name) === low || entity.aliases.some((alias) => textKey(alias) === low));
     return fresh ? fresh.existing || fresh.key : byHandle.get(low) ?? "";
   };
   const labels = new Map((LINK_LABELS as readonly string[]).map((label) => [label, label]));

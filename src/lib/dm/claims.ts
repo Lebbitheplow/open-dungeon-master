@@ -17,7 +17,7 @@ import {
   type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
 import { hasQuotedLine, type Speaker } from "@/lib/dm/speech";
-import { foldName } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import {
   checkClaims,
   claimKindsFor,
@@ -114,9 +114,9 @@ export function speakerRoster(
   for (const npc of npcs) {
     roster.set(npc.id, { kind: "npc", id: npc.id, name: npc.name, aliases: npc.aliases, gender: npc.gender });
   }
-  const taken = new Set(npcs.map((npc) => foldName(npc.name)));
+  const taken = new Set(npcs.map((npc) => textKey(npc.name)));
   for (const sheet of sheets) {
-    if (!sheet.summon && !taken.has(foldName(sheet.name))) {
+    if (!sheet.summon && !taken.has(textKey(sheet.name))) {
       roster.set(sheet.id, { kind: "pc", id: sheet.id, name: sheet.name, gender: sheet.gender });
     }
   }
@@ -124,7 +124,7 @@ export function speakerRoster(
     roster.set(ref, { kind: "monster", id: "", name: display });
   }
   for (const name of registering) {
-    if (!taken.has(foldName(name))) {
+    if (!taken.has(textKey(name))) {
       roster.set(`new:${name}`, { kind: "npc", id: "", name });
     }
   }

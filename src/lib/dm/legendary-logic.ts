@@ -2,6 +2,7 @@ import { groupTraits } from "@/lib/bestiary/block-sections";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import { normalizeAbilityLedgers, type AbilityLedger } from "@/lib/dm/monster-abilities";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Legendary and lair actions and legendary resistance (docs/vtt-parity-
 // implementation-plan.md 4.1): what a stat block says a creature may do
@@ -215,10 +216,10 @@ export function spendLegendaryAction(
   profile: LegendaryProfile,
   actionName: string,
 ): SpendOutcome {
-  const wanted = actionName.trim().toLowerCase();
+  const wanted = textKey(actionName);
   const action =
-    profile.actions.find((entry) => entry.name.toLowerCase() === wanted) ??
-    profile.actions.find((entry) => entry.name.toLowerCase().startsWith(wanted) || wanted.startsWith(entry.name.toLowerCase()));
+    profile.actions.find((entry) => textKey(entry.name) === wanted) ??
+    profile.actions.find((entry) => textKey(entry.name).startsWith(wanted) || wanted.startsWith(textKey(entry.name)));
   if (!action) {
     return { ok: false, error: `No legendary action called "${actionName}". It has: ${profile.actions.map((entry) => entry.name).join(", ")}.`, retry: true };
   }
@@ -289,16 +290,16 @@ export function lairCountPassed(order: Array<{ initiative?: number | null }>, fr
 // The printed lair option a DM names: its number in the list, or the line
 // whose words it carries. Null when none fits.
 export function pickLairOption(options: string[], wanted: string): string | null {
-  const text = wanted.trim().toLowerCase();
+  const text = textKey(wanted);
   const numbered = /^#?(\d{1,2})$/.exec(text);
   if (numbered) {
     return options[Number(numbered[1]) - 1] ?? null;
   }
-  const words = (line: string) => new Set(line.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+  const words = (line: string) => new Set(textKey(line).split(" ").filter((word) => word.length >= 4));
   const asked = words(text);
   let best: { line: string; shared: number } | null = null;
   for (const line of options) {
-    const lower = line.toLowerCase();
+    const lower = textKey(line);
     if (lower.includes(text) || text.includes(lower.slice(0, 40))) {
       return line;
     }

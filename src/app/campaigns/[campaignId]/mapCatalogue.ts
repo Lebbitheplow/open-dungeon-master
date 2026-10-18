@@ -1,6 +1,6 @@
 import type { ObjectEntry, TileEntry } from "@/lib/battlemap/render/painted";
 import { GENRES, SKIN_ROLES, type SkinChar } from "@/lib/battlemap/skins";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // How the two pickers order the painted catalogue: the stamp picker's sets and
 // the tileset panel's materials. Apart from the components so it runs under
@@ -52,15 +52,15 @@ export type StampGroup = { set: string; label: string; objects: ObjectEntry[]; o
 // object appears under each of its sets, the map's own sets lead, and a search
 // matches the label, the id or the set's name.
 export function groupStamps(objects: readonly ObjectEntry[], ownSets: readonly string[], query: string): StampGroup[] {
-  const needle = query.trim().toLowerCase();
+  const needle = textKey(query);
   const bySet = new Map<string, ObjectEntry[]>();
   for (const object of objects) {
     for (const set of object.sets) {
       const hit =
         !needle ||
-        (object.label ?? "").toLowerCase().includes(needle) ||
-        object.id.includes(needle) ||
-        setLabel(set).toLowerCase().includes(needle);
+        textKey(object.label ?? "").includes(needle) ||
+        textKey(object.id).includes(needle) ||
+        textKey(setLabel(set)).includes(needle);
       if (!hit) {
         continue;
       }
@@ -92,11 +92,11 @@ export function materialChoices(
 ): MaterialGroup[] {
   const setting = (genre || "").toLowerCase().replace(/-/g, "_");
   const own = GENRES.includes(setting) ? setting : null;
-  const needle = query.trim().toLowerCase();
+  const needle = textKey(query);
   const allowed = tiles.filter(
     (tile) =>
       SKIN_ROLES[char].categories.includes(tile.category ?? "") &&
-      (!needle || (tile.label ?? "").toLowerCase().includes(needle) || tile.id.includes(needle)),
+      (!needle || textKey(tile.label ?? "").includes(needle) || textKey(tile.id).includes(needle)),
   );
   const order = (list: TileEntry[]) =>
     [...list].sort(

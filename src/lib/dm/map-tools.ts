@@ -62,6 +62,7 @@ import { zoneCoverBetween } from "@/lib/dm/zone-rules";
 import { dragLandings, enemyDrag } from "@/lib/dm/drag-move";
 import { flightOf, markSqueezing } from "@/lib/dm/token-state";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export { landTheFlightless } from "@/lib/dm/token-state";
 
@@ -450,8 +451,8 @@ function resolveMoveTarget(
   const enemies = listEnemies(encounterId);
   const enemy =
     enemies.find((entry) => entry.id === trimmed) ??
-    enemies.find((entry) => entry.displayName.toLowerCase() === trimmed.toLowerCase()) ??
-    enemies.find((entry) => entry.displayName.toLowerCase().includes(trimmed.toLowerCase()));
+    enemies.find((entry) => textKey(entry.displayName) === textKey(trimmed)) ??
+    enemies.find((entry) => textKey(entry.displayName).includes(textKey(trimmed)));
   if (!enemy || enemy.status !== "alive") {
     return null;
   }

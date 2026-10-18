@@ -24,6 +24,7 @@ import {
   type AbilityLedger,
 } from "@/lib/dm/monster-abilities";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // An enemy's special action or spell aimed at the party (cast_at_player and
 // aoe_damage with casterEnemyId): it is the creature's action for the round
@@ -124,7 +125,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
   if (spellName) {
     const casting = enemy.stats.spellcasting;
     const listed = findMonsterSpell(casting, spellName) ?? null;
-    const known = listed ?? (enemy.stats.spells ?? []).find((name) => name.toLowerCase() === spellName.toLowerCase());
+    const known = listed ?? (enemy.stats.spells ?? []).find((name) => textKey(name) === textKey(spellName));
     if (!known) {
       return {
         error: `${enemy.displayName} cannot cast ${spellName}: it is not on its stat block.${describe(enemy)} Use one of those, or its attacks.`,

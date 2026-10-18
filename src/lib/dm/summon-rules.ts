@@ -9,16 +9,17 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SheetSummon, SummonAttack } from "@/lib/schemas/summon";
 import type { SummonForm } from "@/lib/srd/summon-forms";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export const SUMMONED = "summoned";
 
 const TILE = 5;
 
 function pickAttack(summon: SheetSummon, weapon: string | undefined): SummonAttack | null {
-  const wanted = (weapon ?? "").trim().toLowerCase();
+  const wanted = textKey(weapon ?? "");
   const named = wanted
     ? summon.attacks.find((attack) => {
-        const name = attack.name.toLowerCase();
+        const name = textKey(attack.name);
         return name.includes(wanted) || wanted.includes(name);
       })
     : null;

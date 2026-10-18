@@ -23,6 +23,7 @@ import {
 } from "@/lib/dm/effects-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Applying and lifting active effects, and the one helper every engine that
 // wants a modified number calls.
@@ -153,9 +154,10 @@ function resolveTarget(
   sheetsById: Map<string, CharacterSheet>,
 ): { kind: EffectTargetKind; id: string; name: string } | null {
   if (args.characterId) {
+    const wanted = textKey(args.characterId);
     const sheet =
       sheetsById.get(args.characterId) ??
-      sheets.find((entry) => entry.name.toLowerCase() === args.characterId?.toLowerCase());
+      sheets.find((entry) => textKey(entry.name) === wanted);
     if (sheet) {
       return { kind: "character", id: sheet.id, name: sheet.name };
     }
@@ -164,10 +166,11 @@ function resolveTarget(
     const encounter = getActiveEncounter(campaign.id);
     if (encounter) {
       const enemies = listEnemies(encounter.id);
+      const wanted = textKey(args.enemyId);
       const enemy =
         enemies.find((entry) => entry.id === args.enemyId) ??
         enemies.find(
-          (entry) => entry.displayName.toLowerCase() === args.enemyId?.toLowerCase(),
+          (entry) => textKey(entry.displayName) === wanted,
         );
       if (enemy) {
         return { kind: "enemy", id: enemy.id, name: enemy.displayName };

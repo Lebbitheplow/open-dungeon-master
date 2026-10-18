@@ -21,7 +21,7 @@ import type { SpellZone } from "@/lib/battlemap/zones";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { areaProblem, spellAreaShape } from "@/lib/dm/aoe-shape";
 import { openCastOf, withOpenCast, type OpenCast } from "@/lib/dm/cast-rules";
-import { spellKey } from "@/lib/dm/spell-effects";
+import { textKey } from "@/lib/language/text-logic";
 import { currentCombatantId, storeBudget } from "@/lib/dm/turn-budget";
 import { liveZones, saveZones, publishZones } from "@/lib/dm/zone-store";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -90,7 +90,7 @@ export function recordAreaShare(campaignId: string, casterId: string, spell: str
 
 // ---- a recurring area, once a turn ----
 
-const strikeKey = (spell: string, casterId: string, targetId: string) => `${spellKey(spell)}|${casterId}|${targetId}`;
+const strikeKey = (spell: string, casterId: string, targetId: string) => `${textKey(spell)}|${casterId}|${targetId}`;
 
 function zoneOf(encounter: Encounter, spell: string, casterId: string): { mapId: string; zones: SpellZone[]; zone: SpellZone } | null {
   const map = getBattleMapForEncounter(encounter.id);
@@ -98,7 +98,7 @@ function zoneOf(encounter: Encounter, spell: string, casterId: string): { mapId:
     return null;
   }
   const zones = liveZones(map, encounter);
-  const zone = zones.find((entry) => entry.casterId === casterId && [entry.spell, entry.heldBy ?? ""].some((name) => spellKey(name) === spellKey(spell)));
+  const zone = zones.find((entry) => entry.casterId === casterId && [entry.spell, entry.heldBy ?? ""].some((name) => textKey(name) === textKey(spell)));
   return zone ? { mapId: map.id, zones, zone } : null;
 }
 
@@ -123,7 +123,7 @@ export function repeatStrikeProblem(encounter: Encounter, input: { spell: string
 export function freeRepeatOf(campaign: Campaign, casterId: string | null | undefined, spell: string): string | null {
   const caster = casterId ? getSheetById(casterId) : null;
   const resolved = caster?.concentratingOn ? spellMechanicsFor({ spell, userIds: spellAuthorsFor(campaign) }) : null;
-  return resolved?.mech.repeat === "free" && spellKey(caster?.concentratingOn ?? "") === spellKey(resolved.name) ? resolved.name : null;
+  return resolved?.mech.repeat === "free" && textKey(caster?.concentratingOn ?? "") === textKey(resolved.name) ? resolved.name : null;
 }
 
 // The first creature of an aoe_damage call the held area may not strike now.

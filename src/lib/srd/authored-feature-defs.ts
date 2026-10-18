@@ -5,8 +5,7 @@
 // imports only what it reads.
 
 import { authoredRows, resolveFormula, type Ability } from "@/lib/srd/authored-effects";
-
-const lower = (value: string) => value.trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
 
 // The passive effects the feature-effects table already has a shape for
 // (walking speed, an ability on initiative, damage riders), as entries it
@@ -31,7 +30,7 @@ export function authoredFeatureDefs(): Array<{
   const out: ReturnType<typeof authoredFeatureDefs> = [];
   for (const row of authoredRows()) {
     for (const effect of row.entry.effects ?? []) {
-      const term = lower(effect.gate?.choice ? `${row.feature} (${effect.gate.choice})` : row.feature);
+      const term = textKey(effect.gate?.choice ? `${row.feature} (${effect.gate.choice})` : row.feature);
       const guidance = `${row.feature}: ${effect.note ?? "the server applies it."}`;
       if (effect.kind === "speed") {
         const amount = effect.amount;

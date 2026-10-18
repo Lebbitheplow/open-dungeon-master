@@ -21,6 +21,7 @@ import type { SheetDerived } from "@/lib/srd";
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type Sheet = Pick<CharacterSheet, "name" | "class" | "level" | "classes" | "features" | "feats" | "conditions" | "resources" | "spellcasting">;
 
@@ -66,7 +67,7 @@ export function favoredEnemyTypes(sheet: Sheet): string[] {
       out.push(
         ...match[1]
           .split(/,|\band\b/)
-          .map((entry) => lower(entry).replace(/s$/, ""))
+          .map((entry) => textKey(entry).replace(/s$/, ""))
           .filter(Boolean),
       );
     }
@@ -75,8 +76,8 @@ export function favoredEnemyTypes(sheet: Sheet): string[] {
 }
 
 export function isFavoredEnemy(sheet: Sheet, enemy: Pick<EncounterEnemy, "displayName" | "stats">): boolean {
-  const type = lower(String(enemy.stats.type ?? ""));
-  const name = lower(enemy.displayName);
+  const type = textKey(String(enemy.stats.type ?? ""));
+  const name = textKey(enemy.displayName);
   return favoredEnemyTypes(sheet).some((favored) => type.includes(favored) || name.includes(favored));
 }
 
@@ -170,5 +171,5 @@ export function shillelaghSwing(
 }
 
 export function underShillelagh(sheet: Sheet, weaponName: string | undefined): boolean {
-  return holds(sheet, SHILLELAGH) && SHILLELAGH_WEAPONS.has(lower(weaponName ?? ""));
+  return holds(sheet, SHILLELAGH) && SHILLELAGH_WEAPONS.has(textKey(weaponName ?? ""));
 }

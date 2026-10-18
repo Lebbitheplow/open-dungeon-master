@@ -1,5 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { byName } from "@/lib/language/text-logic";
+import { byName, textKey } from "@/lib/language/text-logic";
 import { createSheet, getSheetById, getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { admitSheet } from "@/lib/characters/admit";
@@ -563,7 +563,7 @@ export function duplicateCharacter(userId: string, id: string): LibraryCharacter
     return null;
   }
   const taken = new Set(
-    listCharactersForUser(userId).map((character) => character.name.trim().toLowerCase()),
+    listCharactersForUser(userId).map((character) => textKey(character.name)),
   );
   // Trimmed before the numbering so a long name cannot lose the "(2)".
   const name = dedupeName(`${source.name} (copy)`.slice(0, 72), taken);

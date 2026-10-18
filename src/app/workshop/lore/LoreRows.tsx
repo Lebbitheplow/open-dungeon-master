@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
 import { CATEGORY_LABELS, type LoreEntryView } from "@/app/workshop/lore/types";
+import { textKey } from "@/lib/language/text-logic";
 
 // The workshop's world lore as full-width rows: the title, whether it is
 // pinned into every DM turn, its category, its tags, and the first line of
@@ -21,12 +22,12 @@ import { CATEGORY_LABELS, type LoreEntryView } from "@/app/workshop/lore/types";
 // a row still says what kind of thing it is once search has mixed them.
 
 function matches(entry: LoreEntryView, query: string): boolean {
-  const needle = query.trim().toLowerCase();
+  const needle = textKey(query);
   if (!needle) {
     return true;
   }
   return [entry.title, entry.body, ...entry.tags].some((text) =>
-    text.toLowerCase().includes(needle),
+    textKey(text).includes(needle),
   );
 }
 

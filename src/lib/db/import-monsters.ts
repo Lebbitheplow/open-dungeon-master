@@ -6,6 +6,7 @@ import { getCampaignById } from "@/lib/db/campaigns";
 import { createHomebrew, getAuthorsHomebrew, listHomebrew, tableAuthors, type HomebrewEntry } from "@/lib/db/homebrew";
 import { getWorldDoc, hasWorldDoc, saveWorldDoc } from "@/lib/db/world-forge";
 import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
+import { textKey } from "@/lib/language/text-logic";
 
 // Hand-built monsters across a campaign import between different authors
 // (audit finding WF-07). A Cast member's stat block and a fight's roster
@@ -18,7 +19,6 @@ import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
 // import from the source may see what its rows fight as.
 
 const HOMEBREW = "homebrew:";
-const lower = (text: string) => text.trim().toLowerCase();
 // A stat block's rules, the same whatever order their keys were saved in.
 const stable = (value: unknown): string =>
   Array.isArray(value)
@@ -109,14 +109,14 @@ export function bringMonsters(
   if (!foreign.length) return { brought: [], reused: [] };
 
   const owner = target.ownerUserId;
-  const mine = new Map<string, HomebrewMonster>(listHomebrewMonsters(owner).map((monster) => [lower(monster.draft.name), monster]));
+  const mine = new Map<string, HomebrewMonster>(listHomebrewMonsters(owner).map((monster) => [textKey(monster.draft.name), monster]));
   const moved = new Map<string, string>();
   const brought: string[] = [];
   const reused: string[] = [];
   for (const { ref, entry } of foreign) {
     const draft = draftFromData(entry.name, entry.data);
     const desc = typeof (entry.data as { desc?: unknown }).desc === "string" ? String((entry.data as { desc?: unknown }).desc) : "";
-    const held = mine.get(lower(entry.name));
+    const held = mine.get(textKey(entry.name));
     if (held && stable(held.draft.stats) === stable(draft.stats)) {
       moved.set(ref, held.slug);
       reused.push(entry.name);
@@ -128,10 +128,10 @@ export function bringMonsters(
     if (held) {
       const base = `${entry.name} [${source.title}]`.slice(0, 80);
       name = base;
-      for (let attempt = 2; mine.has(lower(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
+      for (let attempt = 2; mine.has(textKey(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
     }
     const made = createHomebrewMonster(owner, { ...draft, name }, desc);
-    mine.set(lower(name), made);
+    mine.set(textKey(name), made);
     moved.set(ref, made.slug);
     brought.push(name);
   }

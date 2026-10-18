@@ -4,6 +4,7 @@
 
 import bakedSpellMechJson from "@/lib/srd/manifest/spell-mech.json";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
+import { textKey } from "@/lib/language/text-logic";
 
 // What the SRD rows' text answers, baked at build time
 // (scripts/annotate-spell-manifest.mjs) for a server with no content pack:
@@ -12,12 +13,12 @@ import type { SpellMech } from "@/lib/srd/spell-mechanics";
 type BakedSpell = { n: string; a?: string[]; m?: SpellMech; x?: Record<string, string>; u?: number };
 const BAKED = new Map<string, BakedSpell>(
   (bakedSpellMechJson as unknown as { spells: BakedSpell[] }).spells.flatMap((spell) =>
-    [spell.n, ...(spell.a ?? [])].map((name) => [name.trim().toLowerCase().replace(/\s+/g, " "), spell] as const),
+    [spell.n, ...(spell.a ?? [])].map((name) => [textKey(name), spell] as const),
   ),
 );
 
 function bakedSpell(name: string): BakedSpell | null {
-  return BAKED.get(name.trim().toLowerCase().replace(/\s+/g, " ")) ?? null;
+  return BAKED.get(textKey(name)) ?? null;
 }
 
 // The baked dice for a caster level (a cantrip) or a slot level.

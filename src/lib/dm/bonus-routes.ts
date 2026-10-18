@@ -9,6 +9,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import { authoredBonusRoute } from "@/lib/srd/authored-economy";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type MoveAction = "dodge" | "dash" | "disengage" | "hide";
 
@@ -23,9 +24,9 @@ const VANISH_COUNTER = "mystery_vanish";
 const ADRENALINE_SURGE = "horror_adrenaline_surge";
 
 export function holdsFeature(sheet: Pick<CharacterSheet, "features" | "feats">, name: string): boolean {
-  const wanted = name.toLowerCase();
+  const wanted = textKey(name);
   return [...sheet.features.map((feature) => feature.name), ...(sheet.feats ?? [])].some((entry) =>
-    entry.toLowerCase().includes(wanted),
+    textKey(entry).includes(wanted),
   );
 }
 

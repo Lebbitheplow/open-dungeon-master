@@ -45,6 +45,7 @@ import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import { builderHitPoints } from "./builderHp";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
+import { textKey } from "@/lib/language/text-logic";
 
 // Everything the builder computes from its fields: final abilities, the sheet
 // preview, the auto loadout and AC, spell counts and the class option slots.
@@ -68,14 +69,15 @@ export function resolveToolPicks(
   picks: string[],
 ): { fixed: string[]; choices: ToolChoice[]; chosen: string[]; left: number[] } {
   const { fixed, choices } = splitToolGrants(grants);
-  const taken = new Set(fixed.map((tool) => tool.toLowerCase()));
+  const taken = new Set(fixed.map((tool) => textKey(tool)));
   const left = choices.map((choice) => choice.count);
   const chosen: string[] = [];
-  for (const pick of picks.map((tool) => tool.trim().toLowerCase())) {
-    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.includes(pick));
-    if (slot >= 0 && !chosen.includes(pick) && !taken.has(pick)) {
+  for (const pick of picks.map((tool) => textKey(tool))) {
+    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.some((tool) => textKey(tool) === pick));
+    const tool = slot >= 0 ? choices[slot].from.find((entry) => textKey(entry) === pick) : undefined;
+    if (tool !== undefined && !chosen.includes(tool) && !taken.has(pick)) {
       left[slot] -= 1;
-      chosen.push(pick);
+      chosen.push(tool);
     }
   }
   return { fixed, choices, chosen, left };
@@ -626,7 +628,7 @@ export function useBuilderDerived({
     const own = race ? innateCantripsFor(race.id, effectiveLevel) : [];
     const seen = new Set<string>();
     return [...(racialCantripPick ? [racialCantripPick] : []), ...own].filter((name) => {
-      const key = name.trim().toLowerCase();
+      const key = textKey(name);
       if (!key || seen.has(key)) {
         return false;
       }
@@ -649,19 +651,19 @@ export function useBuilderDerived({
     [featNames, featDescOf, featChoices],
   );
   const chosenCantrips = useMemo(() => {
-    const free = new Set([...racialCantrips, ...featSpells.cantrips].map((name) => name.trim().toLowerCase()));
-    return cantrips.filter((name) => !free.has(name.trim().toLowerCase()));
+    const free = new Set([...racialCantrips, ...featSpells.cantrips].map((name) => textKey(name)));
+    return cantrips.filter((name) => !free.has(textKey(name)));
   }, [cantrips, racialCantrips, featSpells]);
   const chosenSpells = useMemo(() => {
-    const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
-    return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
+    const free = new Set(subclassSpells.map((spellName) => textKey(spellName)));
+    return spells.filter((spellName) => !free.has(textKey(spellName)));
   }, [spells, subclassSpells]);
   const chosenPrepared = useMemo(() => {
     if (spellStyle !== "spellbook") {
       return chosenSpells;
     }
-    const book = new Set(spells.map((spellName) => spellName.toLowerCase()));
-    return bookPrepared.filter((spellName) => book.has(spellName.toLowerCase()));
+    const book = new Set(spells.map((spellName) => textKey(spellName)));
+    return bookPrepared.filter((spellName) => book.has(textKey(spellName)));
   }, [spellStyle, chosenSpells, spells, bookPrepared]);
 
   return {

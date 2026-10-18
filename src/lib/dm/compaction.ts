@@ -27,6 +27,7 @@ import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { utilityContextTokens } from "@/lib/model-client";
 import { estimateTokens } from "@/lib/dm/context-budget";
 import { transcriptBudgetTokens } from "@/lib/dm/chapter-summary-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 // Rolling-summary compaction, mirroring the solo narrator: once the log
 // grows past a threshold, fold the oldest passages into the campaign summary.
@@ -345,8 +346,8 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string, ba
     console.error("[facts] compaction consolidation failed", factError);
   }
   for (const entry of parsed.slice(0, 10)) {
-    const name = String(entry.characterName ?? "").trim().toLowerCase();
-    const sheet = sheets.find((candidate) => candidate.name.toLowerCase() === name);
+    const name = textKey(String(entry.characterName ?? ""));
+    const sheet = sheets.find((candidate) => textKey(candidate.name) === name);
     const kind = String(entry.kind ?? "story") as CharacterEventKind;
     const summary = String(entry.summary ?? "").trim().slice(0, 300);
     if (!sheet || !summary || !CHARACTER_EVENT_KINDS.includes(kind)) {

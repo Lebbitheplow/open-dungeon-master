@@ -20,6 +20,7 @@ import { buildModelWorkflow, modelDimensions } from "@/lib/image-models/workflow
 import { readComfyFiles } from "@/lib/setup/discovery-logic";
 import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
 import { recordMediaFile } from "@/lib/media-access";
+import { asciiSlugOf } from "@/lib/language/text-logic";
 
 // First-party ComfyUI backend: the app submits a text-to-image workflow over
 // ComfyUI's HTTP API and saves the result exactly like the FLUX worker does.
@@ -216,15 +217,6 @@ type HistoryEntry = {
   outputs?: Record<string, { images?: Array<{ filename?: string; subfolder?: string; type?: string }> }>;
 };
 
-function promptSlug(prompt: string) {
-  return (
-    prompt
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 50) || "image"
-  );
-}
 
 // The catalog model chosen in Admin > Images, which paints every campaign's
 // pictures; undefined in checkpoint mode, where each campaign's checkpoint
@@ -402,7 +394,7 @@ export async function generateComfyImage(options: {
 
   const generatedDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
-  const filename = `${Date.now()}-${seed}-comfyui-${promptSlug(options.prompt)}.${kind.ext}`;
+  const filename = `${[Date.now(), seed, "comfyui", asciiSlugOf(options.prompt).slice(0, 50)].filter((part) => part !== "").join("-")}.${kind.ext}`;
   const saved = path.join(/*turbopackIgnore: true*/ generatedDir, filename);
   writeFileSync(saved, bytes);
   // The smaller WebP copies the table draws, written after the fact; the

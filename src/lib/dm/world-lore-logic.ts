@@ -6,6 +6,7 @@
 import { bestPassage } from "./passage.ts";
 import { canonMeaning } from "../worldforge/canon.ts";
 import type { Canon } from "../worldforge/model.ts";
+import { textKey } from "../language/text-logic.ts";
 
 export const WORLD_LORE_CATEGORIES = [
   "geography",
@@ -208,13 +209,13 @@ export function loreBacklinks(
   title: string,
   sources: Array<{ kind: LoreMention["kind"]; id: string; name: string; text: string }>,
 ): LoreMention[] {
-  const wanted = title.trim().toLowerCase();
+  const wanted = textKey(title);
   if (!wanted) {
     return [];
   }
   const out: LoreMention[] = [];
   for (const source of sources) {
-    if (loreLinkNames(source.text).some((name) => name.toLowerCase() === wanted)) {
+    if (loreLinkNames(source.text).some((name) => textKey(name) === wanted)) {
       out.push({ kind: source.kind, id: source.id, name: source.name });
     }
   }
@@ -237,7 +238,7 @@ export type LoreSegment =
 const LINK = /\[\[([^\]\n]{1,80})\]\]/g;
 
 export function splitLoreLinks(text: string, targets: LoreLinkTarget[]): LoreSegment[] {
-  const byName = new Map(targets.map((target) => [target.name.trim().toLowerCase(), target]));
+  const byName = new Map(targets.map((target) => [textKey(target.name), target]));
   const segments: LoreSegment[] = [];
   let last = 0;
   for (const match of text.matchAll(LINK)) {
@@ -246,7 +247,7 @@ export function splitLoreLinks(text: string, targets: LoreLinkTarget[]): LoreSeg
       segments.push({ kind: "text", text: text.slice(last, at) });
     }
     const name = match[1].trim();
-    segments.push({ kind: "link", name, target: byName.get(name.toLowerCase()) ?? null });
+    segments.push({ kind: "link", name, target: byName.get(textKey(name)) ?? null });
     last = at + match[0].length;
   }
   if (last < text.length) {

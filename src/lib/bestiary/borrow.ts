@@ -2,6 +2,7 @@ import { MAX_ATTACKS, MAX_TRAITS, type MonsterDraft } from "@/lib/bestiary/monst
 import { BLOCK_LIMITS } from "@/lib/bestiary/block-check";
 import { abilityKey, type MonsterAbility } from "@/lib/dm/monster-abilities";
 import type { EnemyAttack, EnemyStats } from "@/lib/bestiary/statblock";
+import { textKey } from "@/lib/language/text-logic";
 
 // Taking one part of a published monster onto a hand-built one: a dragon's
 // breath, a ghoul's paralysing claws, a mage's spellcasting, a troll's
@@ -110,7 +111,7 @@ export function borrowBlocked(draft: MonsterDraft, part: BorrowPart): string | n
   return null;
 }
 
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameName = (a: string, b: string) => textKey(a) === textKey(b);
 
 // The draft with the part on it. A part the draft already has under the
 // same name is replaced, not doubled.

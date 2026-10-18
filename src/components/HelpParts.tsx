@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { textKey } from "@/lib/language/text-logic";
 
 // The painted glyph each section of this dialog leads with, by title. The
 // other help dialogs pass titles that are not here and keep their line icon.
@@ -120,9 +121,9 @@ export function helpSectionId(title: string): string {
 // Whether a section answers the search: every word in its title, its
 // everyday words or its own text on the page.
 export function helpMatches(title: string, query: string, text = ""): boolean {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = textKey(query).split(" ").filter(Boolean);
   if (!words.length) return true;
-  const haystack = `${title} ${SECTION_WORDS[title] ?? ""} ${text}`.toLowerCase();
+  const haystack = textKey(`${title} ${SECTION_WORDS[title] ?? ""} ${text}`);
   return words.every((word) => haystack.includes(word));
 }
 
@@ -142,7 +143,7 @@ function jumpToSection(title: string) {
 // answers it.
 export function HelpContents({ withTours, initialSection }: { withTours: boolean; initialSection?: string }) {
   const [find, setFind] = useState("");
-  const needle = find.trim().toLowerCase();
+  const needle = textKey(find);
   // Opened from a control that has a section of its own: brought into view
   // once the dialog has drawn it.
   useEffect(() => {

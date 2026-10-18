@@ -3,7 +3,7 @@ import { typeFor, type Canon, type WorldDoc } from "@/lib/worldforge/model";
 import { canonAdmits, canonLegend, canonTag, eventLine, pickEvents } from "@/lib/worldforge/canon";
 import { fieldLines } from "@/lib/worldforge/time";
 import { accountOf } from "@/lib/worldforge/account";
-import { foldName, wordPositions } from "@/lib/language/text-logic";
+import { phraseOffsets, textKey } from "@/lib/language/text-logic";
 
 // What the AI DM is told from the table's WorldForge (src/lib/worldforge/
 // model.ts), kept small: the prompt window is shared with everything else
@@ -56,7 +56,7 @@ function mentionScore(entity: WorldEntity, text: string): number {
   for (const name of [entity.name, ...entity.aliases, ...entity.entry.aliases]) {
     const clean = name.trim();
     if (clean.length < 3) continue;
-    for (const at of wordPositions(text, clean)) {
+    for (const at of phraseOffsets(text, clean)) {
       score += 1 + at / Math.max(1, text.length);
     }
   }
@@ -103,7 +103,7 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   const here = entities.find((entity) => entity.shelf === "location" && entity.table.here === true);
   const present = new Set<string>([
     ...(here ? [here.ref] : []),
-    ...entities.filter((entity) => entity.shelf === "npc" && here && foldName(String(entity.table.home ?? "")) === foldName(here.name)).map((entity) => entity.ref),
+    ...entities.filter((entity) => entity.shelf === "npc" && here && textKey(String(entity.table.home ?? "")) === textKey(here.name)).map((entity) => entity.ref),
   ]);
   const scored = entities
     .map((entity) => ({ entity, score: mentionScore(entity, text) * 2 + (present.has(entity.ref) ? 1 : 0) }))

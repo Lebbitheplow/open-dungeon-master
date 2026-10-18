@@ -155,7 +155,7 @@ console.log("ok - standard checkpoint workflow keeps its model, negatives, and s
 
 await test("a well-behaved ComfyUI still produces a picture", fakeComfy(), async ({ seen }) => {
   const image = await generate();
-  assert.match(image.url, /^\/generated\/.*-comfyui-a-tavern\.png$/);
+  assert.match(image.url, /^\/generated\/.*-comfyui-a_tavern\.png$/);
   assert.deepEqual(fs.readFileSync(path.join(dir, "public", image.url)), PNG);
   assert.ok(seen.every((call) => call.redirect === "manual"));
 });
@@ -276,7 +276,7 @@ await test("Z-Image Turbo submits its graph with this ComfyUI's files, no checkp
     url: COMFY, checkpoint: "", prompt: "a tavern",
     mode: "fast", aspect: "square", seed: 42, negative: "private table boundary",
   });
-  assert.match(image.url, /^\/generated\/.*-comfyui-a-tavern\.png$/);
+  assert.match(image.url, /^\/generated\/.*-comfyui-a_tavern\.png$/);
   assert.deepEqual(fs.readFileSync(path.join(dir, "public", image.url)), PNG);
   assert.equal(JSON.stringify(JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body)).includes("CheckpointLoaderSimple"), false);
   const sent = JSON.parse(seen.find((call) => call.url.endsWith("/prompt")).body);

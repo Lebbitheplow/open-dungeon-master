@@ -12,13 +12,14 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { conditionConcentrationFloor } from "@/lib/srd/condition-effects";
 import { addConditionInstance, instancesOf, removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { fullDurationRule } from "@/lib/srd/full-duration";
-import { heldBySpell, spellDurationRounds, spellKey } from "@/lib/dm/spell-effects";
+import { heldBySpell, spellDurationRounds } from "@/lib/dm/spell-effects";
 import { publishPersisted } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { endSpellZones } from "@/lib/dm/zone-store";
 import { endSpellSummons } from "@/lib/dm/summon-store";
 import { authoredConcentrationGuard } from "@/lib/srd/authored-effects-more";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
+import { textKey } from "@/lib/language/text-logic";
 
 // Server-tracked concentration: casting a concentration spell sets it (and
 // breaks the previous one), taking damage forces the CON save server-side,
@@ -188,7 +189,7 @@ export function clearSpellConditionsByName(
       .filter((name): name is string => Boolean(name))
       .map((name) => name.toLowerCase()),
   );
-  const spellNames = new Set([spellKey(spell), ...(resolved ? [spellKey(resolved.name)] : [])]);
+  const spellNames = new Set([textKey(spell), ...(resolved ? [textKey(resolved.name)] : [])]);
   const encounter = getActiveEncounter(campaign.id);
   for (const target of listSheets(campaign.id)) {
     // Only this casting's instances go: a condition another source still
@@ -247,8 +248,8 @@ export function settleFullDuration(campaign: Campaign, spell: string, casterId: 
   if (!rule) {
     return [];
   }
-  const names = new Set([spellKey(spell), ...(resolved ? [spellKey(resolved.name)] : [])]);
-  const ours = (entry: ConditionMeta) => Boolean(entry.spell && names.has(spellKey(entry.spell))) && entry.source === casterId;
+  const names = new Set([textKey(spell), ...(resolved ? [textKey(resolved.name)] : [])]);
+  const ours = (entry: ConditionMeta) => Boolean(entry.spell && names.has(textKey(entry.spell))) && entry.source === casterId;
   const settle = (conditions: string[], meta: ConditionMetaMap) => {
     let next = { conditions, meta };
     let touched = false;

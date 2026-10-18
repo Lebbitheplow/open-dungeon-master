@@ -38,7 +38,8 @@ import { charmedBy } from "@/lib/dm/enemy-profile";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-reach";
 import { landSpellDamage } from "@/lib/dm/cast-at-enemy-damage";
-import { spellConditionMeta, spellKey } from "@/lib/dm/spell-effects";
+import { spellConditionMeta } from "@/lib/dm/spell-effects";
+import { textKey } from "@/lib/language/text-logic";
 import { areaShareProblem, markRepeatStruck, openAreaCast, recordAreaShare, repeatStrikeProblem } from "@/lib/dm/area-casting";
 // What the spell does beyond damage and condition (src/lib/dm/spell-riders.ts).
 import { afterEnemySave, chosenCondition, conditionMetaFor, heatMetalGrip } from "@/lib/dm/spell-riders";
@@ -281,7 +282,7 @@ export function handleCastAtEnemy(
   // event; another creature of one area casting fits its one placement
   // (src/lib/dm/area-casting.ts).
   const target = { id: enemy.id, name: enemy.displayName };
-  const repeating = mech?.repeat === "free" && spellKey(sheet.concentratingOn ?? "") === spellKey(spellName);
+  const repeating = mech?.repeat === "free" && textKey(sheet.concentratingOn ?? "") === textKey(spellName);
   const area = repeating
     ? repeatStrikeProblem(encounter, { spell: spellName, casterId: sheet.id, target })
     : areaShareProblem({ encounter, caster: sheet, spell: spellName, authors, rangeFeet: facts?.range.kind === "feet" ? facts.range.feet : null, rangeSelf: facts?.range.kind === "self", target, ...(args.atX !== undefined && args.atY !== undefined ? { at: { x: args.atX, y: args.atY } } : {}) });

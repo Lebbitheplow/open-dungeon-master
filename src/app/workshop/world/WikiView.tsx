@@ -14,6 +14,7 @@ import { EntityPage } from "./EntityPage";
 import { EntityAvatar, tint, typeOf } from "./world-ui";
 import type { OpenSystem } from "./WorldForgePanel";
 import { CreateButton } from "@/app/workshop/[workshopId]/CreateChooser";
+import { textKey } from "@/lib/language/text-logic";
 
 // The wiki: every entry of the world, which is every Cast member, place,
 // faction and lore entry of the workshop, filtered by type and folder and
@@ -67,13 +68,13 @@ export function WikiView({
   });
 
   const shown = useMemo(() => {
-    const words = query.trim().toLowerCase();
+    const words = textKey(query);
     const inFolder = folder === "" ? null : folder === "__none" ? new Set([""]) : folderAndBelow(doc.folders, folder);
     return entities.filter(
       (entity) =>
         (!typeFilter || typeOf(doc, entity).id === typeFilter) &&
         (!inFolder || inFolder.has(entity.entry.folderId)) &&
-        (!words || [entity.name, ...entity.aliases, ...entity.tags].some((name) => name.toLowerCase().includes(words))),
+        (!words || [entity.name, ...entity.aliases, ...entity.tags].some((name) => textKey(name).includes(words))),
     );
   }, [doc, entities, folder, query, typeFilter]);
   const open = entities.find((entity) => entity.ref === focus) ?? null;

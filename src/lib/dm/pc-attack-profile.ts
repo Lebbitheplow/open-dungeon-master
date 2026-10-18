@@ -33,6 +33,7 @@ import { SPECIAL_WEAPONS } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { summonAttackProfile } from "@/lib/dm/summon-rules";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type AttackKind = "weapon" | "spell" | "natural" | "granted";
 
@@ -143,8 +144,8 @@ export function buildAttackProfile(
     const mechDamageType = resolvedMech?.mech.damageType;
     const spellList = allSpellNames(sheet.spellcasting);
     const onList = spellList.some(
-      (entry) => entry.toLowerCase().includes(spellName.toLowerCase()) ||
-        spellName.toLowerCase().includes(entry.toLowerCase()),
+      (entry) => textKey(entry).includes(textKey(spellName)) ||
+        textKey(spellName).includes(textKey(entry)),
     );
     if (!onList) {
       // A spell the rules know is one they lack; a name nobody knows is the
@@ -193,7 +194,7 @@ export function buildAttackProfile(
     // Option riders on named attack spells (Agonizing Blast: +CHA per
     // Eldritch Blast beam).
     for (const rider of riders.cantripAbilityRiders) {
-      if (spellName.toLowerCase().includes(rider.spell)) {
+      if (textKey(spellName).includes(rider.spell)) {
         const mod =
           derived.abilityMods[rider.ability as keyof typeof derived.abilityMods] ?? 0;
         if (mod > 0) {
@@ -246,13 +247,13 @@ export function buildAttackProfile(
     // Transformed: the form's natural attacks replace the sheet's weapons,
     // with the statblock's own to-hit and damage. A named attack matches
     // loosely ("bite the goblin" -> Bite); no name takes the first attack.
-    const wantedAttack = (args.weapon ?? "").trim().toLowerCase();
+    const wantedAttack = textKey(args.weapon ?? "");
     const natural =
       sheet.wildShape.attacks.find(
         (attack) =>
           wantedAttack &&
-          (attack.name.toLowerCase().includes(wantedAttack) ||
-            wantedAttack.includes(attack.name.toLowerCase())),
+          (textKey(attack.name).includes(wantedAttack) ||
+            wantedAttack.includes(textKey(attack.name))),
       ) ?? sheet.wildShape.attacks[0];
     profile = {
       weapon: `${sheet.wildShape.form} ${natural.name}`,

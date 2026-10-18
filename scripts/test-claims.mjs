@@ -168,7 +168,7 @@ await test("A claim of a kind not asked, about a creature the engine does not kn
   assert.deepEqual(checkClaims([{ kind: "dies", target: "ogre", quote: "The ogre falls." }], ctx).length, 1);
   assert.deepEqual(checkClaims([{ kind: "cast", caster: "vex", spell: "Fireball", quote: "Vex casts Fireball." }], ctx), [], "an enemy caster");
   const [fireball] = checkClaims([{ kind: "cast", caster: mira.id, spell: "Fireball (3rd level)", quote: "Mira casts Fireball." }], ctx);
-  assert.deepEqual(fireball, { kind: "cast", caster: "Mira", spell: "fireball", quote: "Mira casts Fireball." });
+  assert.deepEqual(fireball, { kind: "cast", caster: "Mira", spell: "Fireball (3rd level)", quote: "Mira casts Fireball." });
 });
 
 await test("A cast tied to something its own caster spent this turn is that spend, not a spell; tied to anything else it is still a cast.", () => {
@@ -181,7 +181,7 @@ await test("A cast tied to something its own caster spent this turn is that spen
   assert.equal(checkClaims([{ ...hold, spent: "s9" }], ctx).length, 1, "a spend the turn never made");
   // A reader that fills the field it leaves empty with null.
   assert.equal(checkClaims([{ ...hold, spent: null }], ctx).length, 1, "no spend, written as null");
-  assert.deepEqual(checkClaims([{ ...bane, spent: "s1" }, hold], ctx), [{ kind: "cast", caster: "Mira", spell: "hold person", quote: hold.quote }]);
+  assert.deepEqual(checkClaims([{ ...bane, spent: "s1" }, hold], ctx), [{ kind: "cast", caster: "Mira", spell: "Hold Person", quote: hold.quote }]);
 });
 
 await test("A cantrip cast, an unknown skill or a save with no ability is dropped; a malformed claim drops alone.", () => {

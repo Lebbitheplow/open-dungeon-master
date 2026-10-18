@@ -23,6 +23,7 @@ import { removeConditionInstances, type ConditionMetaMap } from "@/lib/dm/condit
 import { isKnockedOut } from "@/lib/dm/knockout";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 export type MarkPlan = {
   // Mark conditions whose die rides this attack.
@@ -52,9 +53,9 @@ export function planMarks(input: {
     }
     let quarry = meta[condition]?.quarry ?? null;
     if (!quarry) {
-      const named = /\(([^)]+)\)/.exec(condition)?.[1]?.trim().toLowerCase();
+      const named = textKey(/\(([^)]+)\)/.exec(condition)?.[1] ?? "");
       const found = named
-        ? input.encounterEnemies.find((entry) => entry.displayName.toLowerCase() === named)
+        ? input.encounterEnemies.find((entry) => textKey(entry.displayName) === named)
         : undefined;
       quarry = found?.id ?? null;
     }

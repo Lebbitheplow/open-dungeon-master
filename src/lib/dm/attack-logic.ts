@@ -18,6 +18,7 @@ import { rageDamageBonus } from "@/lib/srd/class-resources";
 import { rageApplies } from "@/lib/dm/damage-logic";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import type { SheetDerived } from "@/lib/srd";
+import { textKey } from "@/lib/language/text-logic";
 
 // Pure attack math for the pc_attack engine: which weapon a character swings,
 // what their to-hit and damage bonuses are, and whether a roll beats an AC.
@@ -103,8 +104,8 @@ export function weaponOf(item: EquipmentItem | undefined): SrdWeapon | null {
 }
 
 function itemMatchesTerm(itemName: string, term: string): boolean {
-  const item = itemName.trim().toLowerCase();
-  const wanted = term.trim().toLowerCase();
+  const item = textKey(itemName);
+  const wanted = textKey(term);
   return Boolean(item && wanted && (item.includes(wanted) || wanted.includes(item)));
 }
 
@@ -123,9 +124,9 @@ export function resolveAttackWeapon(
     }
     // The exact name wins over a name that merely contains it, so a
     // "Longsword" asked for beside a "Longsword +1" is the plain one.
-    const wanted = arg.toLowerCase();
+    const wanted = textKey(arg);
     const carriedItem =
-      equipment.find((item) => item.name.trim().toLowerCase() === wanted) ??
+      equipment.find((item) => textKey(item.name) === wanted) ??
       equipment.find((item) => itemMatchesTerm(item.name, arg));
     // A carried homebrew weapon carries its own block (src/lib/homebrew/
     // gear.ts) and wins over a name that happens to resemble an SRD one. A

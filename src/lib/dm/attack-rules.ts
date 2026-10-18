@@ -13,6 +13,7 @@ import { matchResource } from "@/lib/srd/class-resources";
 import { matchWeapon } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type Carried = { name: string; qty?: number; equipped?: boolean };
 type XY = { x: number; y: number };
@@ -163,7 +164,7 @@ export function otherHandArmed(input: {
   if (input.shieldName) {
     return false;
   }
-  const wielded = input.weapon.trim().toLowerCase();
+  const wielded = textKey(input.weapon);
   return input.equipment.some((item) => {
     if (item.equipped !== true) {
       return false;
@@ -172,7 +173,7 @@ export function otherHandArmed(input: {
     if (!weapon || weapon.kind !== "melee" || (weapon.properties ?? []).includes("two-handed")) {
       return false;
     }
-    const same = item.name.trim().toLowerCase() === wielded;
+    const same = textKey(item.name) === wielded;
     return !same || (item.qty ?? 1) > 1;
   });
 }
@@ -194,7 +195,7 @@ export function loadingProblem(input: {
   if (hasFeat(input.feats, "crossbow expert", input.campaignId) || hasFeat(input.feats, "gunner", input.campaignId)) {
     return null;
   }
-  const fired = (input.budget.loadingFired ?? []).includes(input.profile.weapon.toLowerCase());
+  const fired = (input.budget.loadingFired ?? []).includes(textKey(input.profile.weapon));
   if (!fired) {
     return null;
   }
@@ -208,7 +209,7 @@ export function withLoadingFired(
   if (!(profile.properties ?? []).includes("loading")) {
     return budget;
   }
-  const key = profile.weapon.toLowerCase();
+  const key = textKey(profile.weapon);
   const fired = budget.loadingFired ?? [];
   return fired.includes(key) ? budget : { ...budget, loadingFired: [...fired, key] };
 }

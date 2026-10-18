@@ -14,6 +14,8 @@
 // which the prompt renders as a caution rather than a prohibition. What is
 // forbidden is an NPC citing a specific private moment they were absent for.
 
+import { containsPhrase, textKey } from "../language/text-logic.ts";
+
 // Facts everyone in the world may reasonably know regardless of who was
 // present. A public execution is not a secret.
 export const PUBLIC_CATEGORIES = ["world", "lore", "location"] as const;
@@ -54,7 +56,7 @@ export function normalizeWitnesses(names: string[], limit = 12): string[] {
     if (!name) {
       continue;
     }
-    const key = name.toLowerCase();
+    const key = textKey(name);
     if (seen.has(key)) {
       continue;
     }
@@ -81,28 +83,10 @@ export function detectWitnesses(
   if (!text.trim()) {
     return [];
   }
-  const haystack = text.toLowerCase();
   const found: string[] = [];
   for (const npc of roster) {
     const candidates = [npc.name, ...(npc.aliases ?? [])];
-    const present = candidates.some((candidate) => {
-      const needle = candidate.trim().toLowerCase();
-      if (needle.length < 3) {
-        return false;
-      }
-      // Word-boundary match without regex escaping surprises in names.
-      let index = haystack.indexOf(needle);
-      while (index >= 0) {
-        const before = index === 0 ? " " : haystack[index - 1];
-        const afterIndex = index + needle.length;
-        const after = afterIndex >= haystack.length ? " " : haystack[afterIndex];
-        if (!/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) {
-          return true;
-        }
-        index = haystack.indexOf(needle, index + 1);
-      }
-      return false;
-    });
+    const present = candidates.some((candidate) => textKey(candidate).length >= 3 && containsPhrase(text, candidate));
     if (present) {
       found.push(npc.name);
     }
@@ -125,8 +109,8 @@ export function npcCouldKnow(fact: WitnessableFact, npcName: string): boolean {
   if (!fact.witnessedBy.length) {
     return true;
   }
-  const needle = npcName.trim().toLowerCase();
-  return fact.witnessedBy.some((witness) => witness.trim().toLowerCase() === needle);
+  const needle = textKey(npcName);
+  return fact.witnessedBy.some((witness) => textKey(witness) === needle);
 }
 
 // The per-NPC prompt line naming what they were present for. Empty when

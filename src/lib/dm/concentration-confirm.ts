@@ -4,6 +4,7 @@ import { findSpellByName } from "@/lib/content";
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { spellNames } from "@/lib/battlemap/hand-spells";
 import { acknowledgesDrop, spellsNamedIn, type ConcentrationSwap } from "@/lib/dm/concentration-confirm-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 // The cast an action would make that ends the character's running
 // concentration spell, or null (issue 252). Read before anything is posted
@@ -28,7 +29,7 @@ export function concentrationSwapFor(
     const row = findSpellByName(name, authors);
     return row ? row.concentration === true : bundledSpellFacts(name)?.concentration === true;
   };
-  const same = (name: string) => name.trim().toLowerCase() === current.toLowerCase();
+  const same = (name: string) => textKey(name) === textKey(current);
   if (action.intent) {
     const spell = action.intent.card === "spell" ? (action.intent.spell ?? "").trim() : "";
     return spell && !same(spell) && concentrates(spell) ? { characterId: sheet.id, current, next: spell } : null;

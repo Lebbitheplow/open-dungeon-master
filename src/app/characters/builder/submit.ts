@@ -21,6 +21,7 @@ import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState, EquipmentItem } from "./useBuilderState";
+import { textKey } from "@/lib/language/text-logic";
 
 export type BuilderResult = { level: number; sheet: CreateSheetInput };
 
@@ -538,7 +539,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // Domain, circle, oath and patron spells are always prepared and free:
   // they ride onto the list on top of whatever the player picked.
   const grantedSpells = subclassSpellsFor(klass.id, picks.subclass, effectiveLevel).filter(
-    (spell) => !spells.some((entry) => entry.toLowerCase() === spell.toLowerCase()),
+    (spell) => !spells.some((entry) => textKey(entry) === textKey(spell)),
   );
   const finalSpells = casting.ability ? [...spells, ...grantedSpells] : spells;
   const racialFeatures =
@@ -707,19 +708,18 @@ function keepUnedited(
 // the background's feature (kept only while the background is). A feat
 // feature goes when the edit took its feat off the sheet.
 function grantedInPlay(initial: CreateSheetInput, built: CreateSheetInput) {
-  const lower = (text: string) => text.toLowerCase();
-  const builtNames = new Set(built.features.map((feature) => lower(feature.name)));
-  const keptFeats = new Set(built.feats.map(lower));
-  const droppedFeats = new Set((initial.feats ?? []).map(lower).filter((feat) => !keptFeats.has(feat)));
+  const builtNames = new Set(built.features.map((feature) => textKey(feature.name)));
+  const keptFeats = new Set(built.feats.map(textKey));
+  const droppedFeats = new Set((initial.feats ?? []).map(textKey).filter((feat) => !keptFeats.has(feat)));
   return (initial.features ?? []).filter((feature) => {
-    if (builtNames.has(lower(feature.name))) {
+    if (builtNames.has(textKey(feature.name))) {
       return false;
     }
     if (feature.source === "background") {
       return initial.background === built.background;
     }
     if (feature.source === "feat") {
-      return !droppedFeats.has(lower(feature.name));
+      return !droppedFeats.has(textKey(feature.name));
     }
     return feature.source === "story";
   });
@@ -786,7 +786,7 @@ function keptSpellcasting(
   const union = (pick: (caster: (typeof casters)[number]) => string[] | undefined) => {
     const seen = new Set<string>();
     return casters.flatMap((caster) => pick(caster) ?? []).filter((name) => {
-      const key = name.trim().toLowerCase();
+      const key = textKey(name);
       if (!key || seen.has(key)) {
         return false;
       }

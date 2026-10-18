@@ -31,6 +31,7 @@ import {
   type LegendaryPool,
 } from "@/lib/dm/legendary-logic";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Legendary actions, lair actions and legendary resistance as tools
 // (docs/vtt-parity-implementation-plan.md 4.1). Imports point downward
@@ -223,11 +224,11 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   }
   encounter.legendary.pools[enemy.id] = outcome.pool;
   encounter.legendary.opportunities = { key, ids: [...taken, enemy.id] };
-  const wanted = outcome.action.name.toLowerCase();
+  const wanted = textKey(outcome.action.name);
   // "Tail Attack", or "uses its Paralyzing Touch": the line names an attack.
   const attack = enemy.stats.attacks.find((entry) => {
-    const name = entry.name.replace(/\([^)]*\)/g, "").trim().toLowerCase();
-    return name === wanted || wanted.includes(name) || name.includes(wanted) || outcome.action.text.toLowerCase().includes(`its ${name}`);
+    const name = textKey(entry.name.replace(/\([^)]*\)/g, ""));
+    return name === wanted || wanted.includes(name) || name.includes(wanted) || textKey(outcome.action.text).includes(`its ${name}`);
   });
   // A line with its own numbers (Wing Attack's DC 22 save) resolves through
   // aoe_damage or cast_at_player naming it; "casts a cantrip" through a
@@ -305,13 +306,12 @@ export function handleLegendaryResist(campaign: Campaign, rawArguments: string):
   }
   // Settle the save as a success: what it laid comes off, and the hit points
   // a success would have spared come back.
-  const lower = (value: string | undefined) => (value ?? "").toLowerCase();
   let conditions = enemy.conditions;
   let meta = enemy.conditionMeta as ConditionMetaMap;
   const lifted: string[] = [];
   for (const name of failed.conditions ?? []) {
     const out = removeConditionInstances(conditions, meta, name, (entry) =>
-      (!failed.spell || !entry.spell || lower(entry.spell) === lower(failed.spell)) && (!failed.source || !entry.source || entry.source === failed.source),
+      (!failed.spell || !entry.spell || textKey(entry.spell) === textKey(failed.spell)) && (!failed.source || !entry.source || entry.source === failed.source),
     );
     if (out.removed > 0) {
       lifted.push(name);

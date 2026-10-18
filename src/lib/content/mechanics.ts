@@ -1,4 +1,6 @@
 import { ABILITIES, fitName, LANGUAGE_NAME_MAX, type Ability } from "@/lib/schemas/sheet";
+import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // Parses Open5e's prose-ish mechanics fields (race asi arrays, class
 // proficiency strings) into the same shapes the bundled SRD data uses, so
@@ -83,8 +85,8 @@ const LANGUAGE_COUNT_WORDS: Record<string, number> = {
 // a tongue longer than that, and the grant must be the name the sheet keeps,
 // or the server reads the sheet's clipped copy as a language the player chose.
 function canonicalLanguage(name: string): string {
-  const wanted = name.trim().toLowerCase();
-  return STANDARD_LANGUAGES.find((entry) => entry.toLowerCase() === wanted) ?? fitName(name, LANGUAGE_NAME_MAX);
+  const wanted = textKey(name);
+  return STANDARD_LANGUAGES.find((entry) => textKey(entry) === wanted) ?? fitName(name, LANGUAGE_NAME_MAX);
 }
 
 // A token that reads as a language name: capitalised words, nothing else.

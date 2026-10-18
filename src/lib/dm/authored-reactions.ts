@@ -40,6 +40,7 @@ import { projectWard } from "@/lib/dm/arcane-ward";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
@@ -49,8 +50,8 @@ type Found = { reaction: AuthoredReaction; held: HeldAuthored; holder: Character
 // it: their own feature, or an ally's feature that serves them. The feature
 // may carry its option after the name ("Raging Storm tundra").
 function findReaction(ctx: Ctx): Found | null | ToolError {
-  const asked = lower(ctx.args.feature);
-  const split = (name: string) => (asked === lower(name) || asked.startsWith(`${lower(name)} `) || asked.startsWith(`${lower(name)} (`) ? asked.slice(name.length).replace(/[()]/g, "").trim() : null);
+  const asked = textKey(ctx.args.feature ?? "");
+  const split = (name: string) => (asked === textKey(name) || asked.startsWith(`${textKey(name)} `) ? asked.slice(textKey(name).length).trim() : null);
   for (const held of heldAuthored(ctx.sheet)) {
     for (const reaction of held.entry.reactions ?? []) {
       for (const name of [reaction.name, ...(reaction.aliases ?? [])]) {
@@ -61,7 +62,7 @@ function findReaction(ctx: Ctx): Found | null | ToolError {
       }
     }
   }
-  const named = authoredReactionNamed(asked.replace(/\s*\(.*$/, ""));
+  const named = authoredReactionNamed((ctx.args.feature ?? "").replace(/\s*\(.*$/, ""));
   if (!named) {
     return null;
   }

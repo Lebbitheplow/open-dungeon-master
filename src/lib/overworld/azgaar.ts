@@ -7,6 +7,7 @@ import {
   type OverworldSize,
   type PathKind,
 } from "@/lib/overworld/features";
+import { textKey } from "@/lib/language/text-logic";
 
 // Reading a map made in Azgaar's Fantasy Map Generator into the region grid
 // (docs/workshop-parity-audit.md phase 15).
@@ -370,7 +371,7 @@ export function importAzgaar(
   for (const burg of [...found.burgs].sort(
     (a, b) => Number(b.capital) - Number(a.capital) || b.population - a.population,
   )) {
-    const key = burg.name.toLowerCase();
+    const key = textKey(burg.name);
     if (seen.has(key)) {
       continue;
     }

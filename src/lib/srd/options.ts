@@ -15,6 +15,7 @@ import { featOptionSlots } from "@/lib/srd/feat-combat";
 import optionsJson from "@/lib/srd/options.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
 import { subclassNamed } from "@/lib/srd/subclass-name";
+import { textKey } from "@/lib/language/text-logic";
 
 export type OptionKind =
   | "invocation"
@@ -67,8 +68,8 @@ export function chosenOptions(features: Array<{ name: string }>, kind: OptionKin
 
 // Whether a bare name is an option of any kind ("Riposte", "Agonizing Blast").
 export function isOptionName(name: string): boolean {
-  const wanted = normalize(name);
-  return OPTIONS.some((option) => normalize(option.n) === wanted);
+  const wanted = textKey(name);
+  return OPTIONS.some((option) => textKey(option.n) === wanted);
 }
 
 // Any option pick on a sheet, whatever its kind. Used by the help layer so
@@ -78,8 +79,8 @@ export function findOptionByFeatureName(featureName: string): OptionDef | null {
   for (const [kind, meta] of Object.entries(KINDS) as Array<[OptionKind, KindMeta]>) {
     const prefix = normalize(meta.prefix);
     if (name.startsWith(prefix)) {
-      const bare = normalize(featureName.slice(meta.prefix.length));
-      return OPTIONS.find((option) => option.k === kind && normalize(option.n) === bare) ?? null;
+      const bare = textKey(featureName.slice(meta.prefix.length));
+      return OPTIONS.find((option) => option.k === kind && textKey(option.n) === bare) ?? null;
     }
   }
   return null;

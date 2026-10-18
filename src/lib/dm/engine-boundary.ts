@@ -14,6 +14,7 @@
 
 import type { NarrationClaim } from "./claims-logic.ts";
 import { THIS_MOMENT_HEADING } from "../prompt-boundary.ts";
+import { textKey, WORD_CHAR } from "../language/text-logic.ts";
 
 // ---------------------------------------------------------------------------
 // Part 1: the contract block
@@ -187,9 +188,7 @@ export function collectExchanges(conversation: readonly GuardMessage[]): ToolExc
 // designator and any article are dropped so the matchers can look for the word
 // a narrator would actually write.
 export function normalizeCreatureName(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
+  return textKey(raw)
     .replace(/^the\s+/, "")
     .replace(/\s+(?:#\s*\d+|\d+|[a-z])$/i, "")
     .replace(/\s+/g, " ")
@@ -201,13 +200,7 @@ export function normalizeCreatureName(raw: string): string {
 // would read as a spell nobody paid for. Everything is folded to one shape
 // before either side is compared.
 export function normalizeSpellName(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/[^a-z' ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return textKey(raw.replace(/\([^)]*\)|\d+/g, " "));
 }
 
 function hpPair(raw: unknown): { hp: number; maxHp: number } | null {
@@ -622,7 +615,7 @@ export function ruleClaims(claims: readonly NarrationClaim[], outcomes: Resolved
       // accounted for. Enemy casters are never claims (their spells run
       // through other tools and spend nothing).
       case "cast":
-        if (!outcomes.spells.has(claim.spell)) {
+        if (!outcomes.spells.has(normalizeSpellName(claim.spell))) {
           add({
             kind: "spell",
             detail: `${claim.caster} casts ${claim.spell}, but no spell slot or resource was spent for it this turn`,
@@ -681,8 +674,8 @@ export const FAKE_ENCOUNTER_PROMPT = `[System] Your narration announced a fight 
 // ---------------------------------------------------------------------------
 
 // A whole number standing on its own, never a piece of an id or of dice
-// notation ("2d6", "a8b1-...").
-const BARE_NUMBER = /(?<![\w.-])\d{1,3}(?![\w-])/g;
+// notation ("2d6", "a8b1-...") or of a word in any script.
+const BARE_NUMBER = new RegExp(`(?<![${WORD_CHAR}_.-])\\d{1,3}(?![${WORD_CHAR}_-])`, "gu");
 
 // The model sometimes resolves a blow it was supposed to ask for: "The
 // Resonance Weaver attacks Alden with Resonance Blast. Hit! 8 damage." with

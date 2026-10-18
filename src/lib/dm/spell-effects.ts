@@ -28,6 +28,7 @@ import { MECH_OVERRIDES } from "@/lib/srd/spell-mechanics";
 import { getDmTurn } from "@/lib/db/dm-turns";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The SRD's own conditions. One of these with no spell recorded on it may
 // have come from anywhere (a ghoul's claw, a net), so a spell ending does not
@@ -38,8 +39,6 @@ const SRD_CONDITIONS = new Set([
   "invisible", "paralyzed", "petrified", "poisoned", "prone", "restrained",
   "stunned", "unconscious",
 ]);
-
-export const spellKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 export type SpellSource = {
   spell: string;
@@ -148,7 +147,7 @@ export function heldBySpell(
 ): boolean {
   const lowered = name.toLowerCase();
   if (meta?.spell) {
-    return spellNames.has(spellKey(meta.spell)) && (!casterId || !meta.source || meta.source === casterId);
+    return spellNames.has(textKey(meta.spell)) && (!casterId || !meta.source || meta.source === casterId);
   }
   return conditionNames.has(lowered) && !SRD_CONDITIONS.has(lowered);
 }
@@ -162,10 +161,10 @@ export function lastCastSlot(characterId: string, spell: string): number | null 
       `SELECT delta_json FROM sheet_audit WHERE character_id = ? AND kind = 'use_spell_slot' ORDER BY seq DESC LIMIT 60`,
     )
     .all(characterId) as Array<{ delta_json: string }>;
-  const wanted = spellKey(spell);
+  const wanted = textKey(spell);
   for (const row of rows) {
     const delta = parseJson<Record<string, unknown>>(row.delta_json, {});
-    if (typeof delta.spell === "string" && spellKey(delta.spell) === wanted) {
+    if (typeof delta.spell === "string" && textKey(delta.spell) === wanted) {
       return typeof delta.level === "number" ? delta.level : null;
     }
   }
@@ -221,7 +220,7 @@ export function settleOnDamage(
   meta: ConditionMetaMap,
   save: (entry: ConditionMeta, name: string) => boolean,
 ): { conditions: string[]; meta: ConditionMetaMap; changed: boolean; endedByDamage: string[] } {
-  const tagOf = (entry: ConditionMeta) => (entry.spell || entry.source ? `${spellKey(entry.spell ?? "")}|${entry.source ?? ""}` : null);
+  const tagOf = (entry: ConditionMeta) => (entry.spell || entry.source ? `${textKey(entry.spell ?? "")}|${entry.source ?? ""}` : null);
   const ending = new Set<string>();
   const byDamage = new Set<string>();
   for (const name of conditions) {
