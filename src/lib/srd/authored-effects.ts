@@ -37,6 +37,7 @@ import type {
   Formula,
   Gate,
 } from "@/lib/srd/authored-effects-types";
+import { textKey } from "@/lib/language/text-logic";
 
 export type { Ability, AuthoredEffect, AuthoredEntry, AuthoredReaction, AuthoredSpend, Formula, Gate };
 
@@ -53,7 +54,7 @@ type Row = { key: string; classId: string; feature: string; entry: AuthoredEntry
 const BY_KEY = new Map<string, Row>(
   Object.entries(AUTHORED_TABLE).map(([key, entry]) => {
     const [classId, feature] = key.split("::");
-    return [lower(key), { key, classId, feature, entry }];
+    return [`${lower(classId)}::${textKey(feature)}`, { key, classId, feature, entry }];
   }),
 );
 
@@ -91,13 +92,13 @@ export function heldAuthored(sheet: AuthoredSheet): HeldAuthored[] {
   const out: HeldAuthored[] = [];
   const classIds = [lower(sheet.class), ...(sheet.classes ?? []).map((entry) => lower(entry.id))].filter(Boolean);
   for (const feature of sheet.features ?? []) {
-    const full = lower(feature.name);
-    const chosen = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(full);
+    const full = textKey(feature.name);
+    const chosen = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(feature.name.trim());
     const candidates = feature.classId ? [lower(feature.classId)] : classIds;
     let found = false;
     for (const classId of candidates) {
       const exact = BY_KEY.get(`${classId}::${full}`);
-      const bare = chosen ? BY_KEY.get(`${classId}::${chosen[1]}`) : undefined;
+      const bare = chosen ? BY_KEY.get(`${classId}::${textKey(chosen[1])}`) : undefined;
       const row = exact ?? bare;
       if (row) {
         out.push({
@@ -120,7 +121,7 @@ export function heldAuthored(sheet: AuthoredSheet): HeldAuthored[] {
   return out;
 }
 
-const GENRE_BY_NAME = new Map(GENRE_AUTHORED.map((row) => [lower(row.feature), row]));
+const GENRE_BY_NAME = new Map(GENRE_AUTHORED.map((row) => [textKey(row.feature), row]));
 
 export function hasCondition(sheet: AuthoredSheet, name: string): boolean {
   const wanted = lower(name);
@@ -162,12 +163,12 @@ export function gateHolds(gate: Gate | undefined, sheet: AuthoredSheet, held: He
   if (gate.notCondition && hasCondition(sheet, gate.notCondition)) {
     return false;
   }
-  if (gate.choice && held.choice !== lower(gate.choice)) {
+  if (gate.choice && textKey(held.choice ?? "") !== textKey(gate.choice)) {
     return false;
   }
   if (gate.choiceOf) {
-    const other = heldAuthored(sheet).find((entry) => lower(entry.feature) === lower(gate.choiceOf!.feature));
-    if (!other || other.choice !== lower(gate.choiceOf.value)) {
+    const other = heldAuthored(sheet).find((entry) => textKey(entry.feature) === textKey(gate.choiceOf!.feature));
+    if (!other || textKey(other.choice ?? "") !== textKey(gate.choiceOf.value)) {
       return false;
     }
   }
@@ -393,11 +394,11 @@ export function authoredInitiativeRefills(
 // Later features win a shared name (Runic Juggernaut's Giant's Might over
 // Great Stature's).
 export function authoredSpendFor(sheet: AuthoredSheet, resourceName: string): { spend: AuthoredSpend; held: HeldAuthored } | null {
-  const wanted = lower(resourceName);
+  const wanted = textKey(resourceName);
   let found: { spend: AuthoredSpend; held: HeldAuthored } | null = null;
   for (const held of heldAuthored(sheet)) {
     for (const spend of held.entry.spends ?? []) {
-      const names = [spend.name, ...(spend.aliases ?? [])].map(lower);
+      const names = [spend.name, ...(spend.aliases ?? [])].map(textKey);
       if (names.includes(wanted)) {
         found = { spend, held };
       }
@@ -407,10 +408,10 @@ export function authoredSpendFor(sheet: AuthoredSheet, resourceName: string): { 
 }
 
 export function authoredReactionNamed(name: string): { reaction: AuthoredReaction; row: Row } | null {
-  const wanted = lower(name);
+  const wanted = textKey(name);
   for (const row of BY_KEY.values()) {
     for (const reaction of row.entry.reactions ?? []) {
-      if ([reaction.name, ...(reaction.aliases ?? [])].map(lower).includes(wanted)) {
+      if ([reaction.name, ...(reaction.aliases ?? [])].map(textKey).includes(wanted)) {
         return { reaction, row };
       }
     }
@@ -419,10 +420,10 @@ export function authoredReactionNamed(name: string): { reaction: AuthoredReactio
 }
 
 export function heldReaction(sheet: AuthoredSheet, name: string): { reaction: AuthoredReaction; held: HeldAuthored } | null {
-  const wanted = lower(name);
+  const wanted = textKey(name);
   for (const held of heldAuthored(sheet)) {
     for (const reaction of held.entry.reactions ?? []) {
-      if ([reaction.name, ...(reaction.aliases ?? [])].map(lower).includes(wanted)) {
+      if ([reaction.name, ...(reaction.aliases ?? [])].map(textKey).includes(wanted)) {
         return { reaction, held };
       }
     }

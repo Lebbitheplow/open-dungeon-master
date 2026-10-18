@@ -34,7 +34,7 @@ import { useTourPrepare } from "@/lib/tours/prepare";
 import { WorldEntryLink, useOpenOnArrival } from "@/app/workshop/world/WorldEntryLink";
 import { useUnsavedDraft } from "@/app/workshop/unsaved";
 import { NpcEditorFields } from "@/app/workshop/cast/NpcEditorFields";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // The NPC forge.
 //
@@ -489,7 +489,7 @@ export function DmNpcForgePanel({
           portraits={new Map(npcs.filter((npc) => npc.portraitUrl).map((npc) => [npc.name, npc.portraitUrl]))}
           factionOf={new Map(npcs.filter((npc) => npc.factionId).map((npc) => [npc.name, factions.find((faction) => faction.id === npc.factionId)?.name ?? ""]))}
           onOpen={(name) => {
-            const npc = npcs.find((entry) => entry.name.toLowerCase() === name.toLowerCase());
+            const npc = npcs.find((entry) => textKey(entry.name) === textKey(name));
             if (npc) {
               open(npc);
             }

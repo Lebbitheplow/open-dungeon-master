@@ -1,4 +1,5 @@
-import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
+import { ABILITIES, fitName, LANGUAGE_NAME_MAX, type Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // Parses Open5e's prose-ish mechanics fields (race asi arrays, class
 // proficiency strings) into the same shapes the bundled SRD data uses, so
@@ -79,10 +80,12 @@ const LANGUAGE_COUNT_WORDS: Record<string, number> = {
 
 // Canonical casing for a name the allowlist knows; anything else is kept as
 // written, so Darakhul, Minotaur and Machine Speech survive instead of
-// vanishing.
+// vanishing, fitted to what a sheet holds. A workshop species' prose may name
+// a tongue longer than that, and the grant must be the name the sheet keeps,
+// or the server reads the sheet's clipped copy as a language the player chose.
 function canonicalLanguage(name: string): string {
-  const wanted = name.trim().toLowerCase();
-  return STANDARD_LANGUAGES.find((entry) => entry.toLowerCase() === wanted) ?? name.trim();
+  const wanted = textKey(name);
+  return STANDARD_LANGUAGES.find((entry) => textKey(entry) === wanted) ?? fitName(name, LANGUAGE_NAME_MAX);
 }
 
 // A token that reads as a language name: capitalised words, nothing else.
@@ -349,7 +352,7 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
   const listedChoice = data.languageChoice as { count?: unknown; from?: unknown } | undefined;
   const grant: LanguageGrant = Array.isArray(data.languages)
     ? {
-        languages: (data.languages as unknown[]).map((entry) => canonicalLanguage(String(entry))).filter((entry) => looksLikeLanguage(entry)),
+        languages: (data.languages as unknown[]).map(String).filter((entry) => looksLikeLanguage(entry)).map(canonicalLanguage),
         bonusLanguages: Number(data.bonusLanguages ?? 0) || 0,
         // A pick from a short list, written out (a workshop species copied
         // from one whose prose said "your choice of Common or Undercommon").

@@ -1,4 +1,5 @@
 import { publishEphemeral } from "@/lib/events";
+import { withModelTask } from "@/lib/usage/task-scope";
 import {
   addCall,
   removeCall,
@@ -36,6 +37,9 @@ function publish(campaignId: string) {
 //
 // The finally is load-bearing. A throw, a timeout, or a model error must
 // still clear the chip, or the strip pins a job that is no longer running.
+// Upkeep nobody is waiting on: it can wait for a turn in progress.
+const BACKGROUND_KINDS = new Set<UtilityCallKind>(["compaction", "world"]);
+
 export async function trackUtilityCall<T>(
   campaignId: string,
   kind: UtilityCallKind,
@@ -49,7 +53,9 @@ export async function trackUtilityCall<T>(
   registry().set(campaignId, addCall(registry().get(campaignId) ?? [], call));
   publish(campaignId);
   try {
-    return await job();
+    // The job's model calls are recorded under its kind, and upkeep yields
+    // to a table's turn on the same backend (src/lib/usage/task-scope.ts).
+    return await withModelTask({ task: kind, background: BACKGROUND_KINDS.has(kind) }, job);
   } finally {
     registry().set(campaignId, removeCall(registry().get(campaignId) ?? [], call.id));
     publish(campaignId);

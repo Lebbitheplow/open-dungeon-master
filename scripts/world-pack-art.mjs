@@ -4,6 +4,7 @@
 //   node scripts/world-pack-art.mjs extract <dir-or-pack.json> [art-root]
 //   node scripts/world-pack-art.mjs strip   <dir-or-pack.json>
 //   node scripts/world-pack-art.mjs list    <dir-or-pack.json>
+//   node scripts/world-pack-art.mjs thumbnails <dir-or-pack.json> [--force]
 //
 // The folder layout is <art-root>/<pack id>/<key>.webp (or .png, .jpg), the
 // same one scripts/generate-world-art.mjs renders into; art-root defaults to
@@ -15,7 +16,11 @@
 // re-validates the result through worldPackSchema before writing, so a pack
 // that would fail to install is never written. `extract` is the reverse, for
 // editing a picture by hand. `strip` empties the map, which is how to get a
-// diffable manifest back.
+// diffable manifest back. `thumbnails` writes the plugin browser's tile for
+// every pack with a cover, as thumbnails/<id>.webp beside the manifest, which
+// is where scripts/build-world-registry.mjs looks for it. It leaves a tile
+// that exists alone unless --force is given, so a published folder's pictures
+// do not churn with every encoder release.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -26,10 +31,12 @@ const { worldPackSchema } = await import("../src/lib/worlds/types.ts");
 const { MAX_PACK_ART_BYTES, PACK_ART_KEY, packArtSlots } = await import("../src/lib/worlds/art.ts");
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const [command, target, artRootArg] = process.argv.slice(2);
-const usage = "usage: node scripts/world-pack-art.mjs (embed|extract|strip|list) <dir-or-pack.json> [art-root]";
+const args = process.argv.slice(2).filter((arg) => arg !== "--force");
+const force = process.argv.includes("--force");
+const [command, target, artRootArg] = args;
+const usage = "usage: node scripts/world-pack-art.mjs (embed|extract|strip|list|thumbnails) <dir-or-pack.json> [art-root]";
 
-if (!["embed", "extract", "strip", "list"].includes(command ?? "") || !target) {
+if (!["embed", "extract", "strip", "list", "thumbnails"].includes(command ?? "") || !target) {
   console.error(usage);
   process.exit(1);
 }
@@ -154,7 +161,33 @@ function list(file) {
   }
 }
 
-const run = { embed, extract, strip, list }[command];
+// Half the cover's 704x400: sharp enough for a tile two columns wide, and
+// about 15 KB.
+const THUMBNAIL_WIDTH = 352;
+const THUMBNAIL_HEIGHT = 200;
+
+async function thumbnails(file) {
+  const { pack } = readPack(file);
+  const cover = pack.art.cover;
+  const out = path.join(path.dirname(file), "thumbnails", `${pack.id}.webp`);
+  if (!cover) {
+    console.log(`${pack.id}: no cover, so no tile (the browser shows the genre plate)`);
+    return;
+  }
+  if (fs.existsSync(out) && !force) {
+    console.log(`${pack.id}: tile already at ${path.relative(process.cwd(), out)}`);
+    return;
+  }
+  const { default: sharp } = await import("sharp");
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  await sharp(Buffer.from(cover.slice(cover.indexOf(",") + 1), "base64"))
+    .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, { fit: "cover" })
+    .webp({ quality: 74 })
+    .toFile(out);
+  console.log(`${pack.id}: wrote ${path.relative(process.cwd(), out)} (${(fs.statSync(out).size / 1024).toFixed(0)} KB)`);
+}
+
+const run = { embed, extract, strip, list, thumbnails }[command];
 for (const file of packFiles()) {
-  run(file);
+  await run(file);
 }

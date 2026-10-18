@@ -4,6 +4,13 @@
 
 <br>
 
+[![Docker pulls](https://img.shields.io/docker/pulls/lebbi/open-dungeon-master?label=docker%20pulls&logo=docker&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://hub.docker.com/r/lebbi/open-dungeon-master)
+[![App downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-dungeon-master-client/total?label=app%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master-client/releases)
+[![Server downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-dungeon-master/total?label=server%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/releases)
+[![Latest release](https://img.shields.io/github/v/release/Lebbitheplow/open-dungeon-master?label=release&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/Lebbitheplow/open-dungeon-master?logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/stargazers)
+[![Discord](https://img.shields.io/badge/chat-Discord-e0703a?logo=discord&logoColor=e0703a&labelColor=151229&style=flat-square)](https://discord.gg/B2tQFr3TYD)
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4ab3a?labelColor=151229&style=flat-square)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-22%2B-d4ab3a?labelColor=151229&style=flat-square)](package.json)
 [![Ruleset: D&D 5e SRD 5.1](https://img.shields.io/badge/ruleset-D%26D%205e%20SRD%205.1-d4ab3a?labelColor=151229&style=flat-square)](docs/rules-coverage.md)
@@ -31,18 +38,18 @@ and companions, following a secret story arc it regenerates as the campaign move
 
 ### Your turn, in cards
 
-<img src="docs/screenshot-table.png" alt="A fight in progress: the hand of action cards, a longsword card lifted with its targets, damage and to-hit odds, and the battle map on the right" width="960">
+<img src="docs/screenshot-table.png" alt="A fight in progress: the hand of action cards fanned out under the battle map, from Longsword, Longbow, Cure Wounds and Hunter's Mark to Dodge, Dash, Help and End turn, with the chronicle on the left and the party on the right" width="960">
 
-<sub><i>A live session of <b>Embers of the Saltglass Coast</b> — your hand holds every action the sheet allows, each card says what it rolls and what it costs, and the server does the rolling. The battle map, the turn order and the party sit beside it.</i></sub>
+<sub><i>A live session of <b>Embers of the Saltglass Coast</b>. Your hand holds every action the sheet allows, each card says what it rolls and what it costs, and the server does the rolling. The battle map, the turn order and the party sit around it.</i></sub>
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/screenshot-battle-map.png" alt="The battle map enlarged: painted terrain, portrait tokens, the initiative strip and the fog shroud" width="460"><br><sub>The battle map, fogged and in initiative</sub></td>
-<td width="50%" align="center"><img src="docs/screenshot-builder.png" alt="The character builder on the spells and gear step, picking cantrips and prepared spells" width="460"><br><sub>The character builder, picking spells</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-battle-map.png" alt="The battle map enlarged: painted terrain, portrait tokens, the initiative strip and the fog shroud, with the chronicle beside it" width="460"><br><sub>The battle map, fogged and in initiative</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-builder.png" alt="The character builder on the ability scores step: the standard array placed across the six abilities, each with its racial bonus and final score" width="460"><br><sub>The character builder, placing ability scores</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/screenshot-workshop.png" alt="The workshop hub: storyboard, party, battle maps, region, encounters, cast, factions, bestiary, homebrew, lore, tables, rules, plugin and share" width="460"><br><sub>The workshop, where prep lives</sub></td>
-<td width="50%" align="center"><img src="docs/screenshot-map-studio.png" alt="The map studio: a description typed in plain words, the words it recognised, and the map it rolled" width="460"><br><sub>The map studio: describe it, roll it</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-workshop.png" alt="The workshop hub: an XP budget for the party it is built for, and tiles for WorldForge, storyboard, party, battle maps, region, encounters, cast, factions, bestiary, homebrew, lore, tables, rules, plugin and share" width="460"><br><sub>The workshop, where prep lives</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-map-studio.png" alt="The map studio: the tool rail, a painted stone chapel with its lights placed, and the layers, tileset and skin panels" width="460"><br><sub>The map studio: paint it, light it, put it on the table</sub></td>
 </tr>
 </table>
 
@@ -57,60 +64,60 @@ and companions, following a secret story arc it regenerates as the campaign move
 <table>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/chats.png" width="56"><br>
+<img src="public/sidebar-icons/chats.webp" width="56"><br>
 <b>The multiplayer table</b><br>
 <sub>Create a campaign, share an invite code, ready up in the lobby, and play in real time (SSE live updates) with a party lead who steers settings, rolls and turn order. Solo play runs the same engines.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/text-model.png" width="56"><br>
+<img src="public/sidebar-icons/text-model.webp" width="56"><br>
 <b>Your AI Dungeon Master, your choice</b><br>
 <sub>A local model (llama.cpp, Ollama, LM Studio, vLLM), an API key (OpenAI, OpenRouter, any OpenAI-compatible endpoint with tool calling), or a CLI agent subscription you already have: Claude Code, Codex, opencode or Grok Build. Whichever narrates, it makes the creative calls and never states a roll or edits its own numbers.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/support.png" width="56"><br>
+<img src="public/sidebar-icons/support.webp" width="56"><br>
 <b>Server-enforced 5e rules</b><br>
 <sub>Initiative and action economy, server-resolved attacks and crits, spell slots and upcasting, the full condition table, short/long rests, AC and progression — all clamped and audit-logged.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/story.png" width="56"><br>
+<img src="public/sidebar-icons/story.webp" width="56"><br>
 <b>Secret story arc &amp; maps</b><br>
 <sub>A hidden spine (premise, stakes, antagonist, ordered beats) refreshed as chapters close and editable a beat at a time, a live quest log, rolling-summary memory, and procedural fog-of-war battle maps.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/characters.png" width="56"><br>
+<img src="public/sidebar-icons/characters.webp" width="56"><br>
 <b>Characters &amp; companions</b><br>
 <sub>Structured SRD 5.1 sheets, 48 classes and 49 backgrounds, a guided creation wizard and level-up flow, and full AI companions with real sheets that auto-level with the party.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/images.png" width="56"><br>
+<img src="public/sidebar-icons/images.webp" width="56"><br>
 <b>Battle maps &amp; scene art</b><br>
 <sub>Optional ComfyUI drives character portraits, inline scene art and top-down battle maps with per-character line of sight. Missing? It fails soft to a placeholder.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/local-data.png" width="56"><br>
+<img src="public/sidebar-icons/local-data.webp" width="56"><br>
 <b>On-device &amp; encrypted</b><br>
 <sub>All state lives in a local SQLite database, encrypted at rest. No accounts in the cloud, no telemetry — username/password auth (optional Discord), with an admin panel and undoable audit log.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/chats.png" width="56"><br>
+<img src="public/sidebar-icons/chats.webp" width="56"><br>
 <b>Session tools</b><br>
 <sub>Live voice chat with proximity rules and side rooms, dynamic ambience and music, private whispers and side chats, a 3D dice tray plus physical and Pixels Bluetooth dice, TTS narration, push-to-talk, and an installable PWA layout.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/support.png" width="56"><br>
+<img src="public/sidebar-icons/support.webp" width="56"><br>
 <b>Run the table yourself</b><br>
 <sub>A human-DM mode where a person narrates (usually over the voice chat) and the app keeps sheets, dice, maps and the record straight, with a DM console, story-beat capture, and an assisted mode that delegates monsters, read-alouds or a covered absence to the AI.</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<img src="public/sidebar-icons/story.png" width="56"><br>
+<img src="public/sidebar-icons/story.webp" width="56"><br>
 <b>Workshop prep space</b><br>
 <sub>Author maps in a graphical terrain editor, bosses with derived CR, NPCs, encounters, roll tables, lore and storyboards outside any campaign, then import them into new campaigns; workshops, campaigns, characters and individual assets all clone.</sub>
 </td>
@@ -139,8 +146,14 @@ model server such as llama.cpp or Ollama, an API key (OpenAI, OpenRouter or any
 OpenAI-compatible provider), or a CLI agent you already pay for (Claude Code,
 Codex, opencode, Grok Build). Pictures and voice are optional.
 
+A local model needs a **context window of at least 16K tokens to narrate and
+24K to run fights; 32K or more is recommended**. The default storyteller runs
+at 64K, and the guided setup's **Test backend** reads the window a server runs
+([what each size plays](docs/text-backends.md#context-window)). Hosted models
+and agent programs have far more.
+
 ```bash
-git clone --depth 1 https://github.com/Lebbitheplow/open-dungeon-master.git
+git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
 cd open-dungeon-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
@@ -155,9 +168,12 @@ players and your own agent, one question at a time.
 With Docker instead:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/stable/docker-compose.yml
 docker compose up -d        # http://localhost:3005
 ```
+
+Both follow the stable releases. Nightly betas, and how a beta becomes stable:
+[docs/releases.md](docs/releases.md).
 
 ## Documentation
 
@@ -165,6 +181,7 @@ docker compose up -d        # http://localhost:3005
   - [Install and first run](docs/install.md): requirements, the guided setup, setup by hand, the first admin account, the content pack, tests
   - [Run with Docker](docs/docker.md): the image, reaching AI services on the host, volumes and maintenance, publishing
   - [Backups and moving to another server](docs/backup-restore.md)
+  - [Releases and update channels](docs/releases.md): stable, the nightly betas, and how a beta is promoted
 - **The storyteller**
   - [Text backends](docs/text-backends.md): the recommended DM model and its settings, Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
   - [Agent programs as the DM](docs/agent-harness.md): Claude Code, Codex, opencode and Grok Build on their own sign-in

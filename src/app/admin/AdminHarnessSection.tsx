@@ -15,7 +15,7 @@ import { HarnessTestPanel } from "@/app/admin/HarnessTestPanel";
 import { SpeedField } from "@/app/admin/SpeedField";
 import { agentSpeedEligibility } from "@/lib/speed-tier";
 import type { SpeedChannel, SpeedNote } from "@/lib/speed-status";
-import { effortChoices, withOfferedEffort } from "@/lib/harness/effort-choices";
+import { effortChoices, utilityEffortChoices, withOfferedEffort } from "@/lib/harness/effort-choices";
 import type { HarnessConfig, HarnessId, HarnessStatus } from "@/lib/harness/types";
 
 type Payload = {
@@ -51,6 +51,32 @@ function EffortField({
       options={(stale ? [...offered, draft.effort] : offered).map((effort) => ({
         value: effort,
         label: effort ? effort[0].toUpperCase() + effort.slice(1) : "The program's own default",
+      }))}
+    />
+  );
+}
+
+// The bookkeeping model's effort: its own list, blank following the story's.
+function UtilityEffortField({
+  status,
+  draft,
+  onChange,
+}: {
+  status: HarnessStatus;
+  draft: HarnessConfig;
+  onChange: (effort: HarnessConfig["utilityEffort"]) => void;
+}) {
+  const offered = utilityEffortChoices(status, draft);
+  const stale = !offered.includes(draft.utilityEffort);
+  return (
+    <SelectField
+      label="Bookkeeping effort"
+      hint={stale ? `The bookkeeping model has no ${draft.utilityEffort} setting and runs at its own default.` : "Summaries, the reader and Ask rarely need the story's reasoning; a lighter effort answers sooner."}
+      value={draft.utilityEffort}
+      onChange={onChange}
+      options={(stale ? [...offered, draft.utilityEffort] : offered).map((effort) => ({
+        value: effort,
+        label: effort ? effort[0].toUpperCase() + effort.slice(1) : "The same as the story",
       }))}
     />
   );
@@ -346,7 +372,10 @@ export function AdminHarnessSection({
                 </>
               ) : null}
               {chosen.id === "claude" || chosen.id === "codex" || chosen.id === "opencode" ? (
-                <EffortField status={chosen} draft={draft} onChange={(effort) => setDraft({ ...draft, effort })} />
+                <>
+                  <EffortField status={chosen} draft={draft} onChange={(effort) => setDraft({ ...draft, effort })} />
+                  <UtilityEffortField status={chosen} draft={draft} onChange={(utilityEffort) => setDraft({ ...draft, utilityEffort })} />
+                </>
               ) : null}
               <SelectField
                 label="Who may use it"

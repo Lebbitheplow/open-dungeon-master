@@ -23,9 +23,7 @@ import {
   spellbookOf,
   type CasterView,
 } from "@/lib/srd/spell-prep";
-import { compareNames } from "@/lib/language/text-logic";
-
-const lower = (name: string) => name.trim().toLowerCase();
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // Where a companion's improvements go: two points to the first score of its
 // class's priority that has room for both, and when the best it can do is a
@@ -109,11 +107,11 @@ const STAPLES = [
   "Finger of Death", "Resurrection", "Fire Storm", "Teleport", "Regenerate",
   "Sunburst", "Earthquake", "Dominate Monster", "Holy Aura",
   "Meteor Swarm", "Mass Heal", "Power Word Kill", "True Resurrection", "Foresight",
-].map(lower);
+].map(textKey);
 
 function byPreference<T extends { name: string }>(spells: T[]): T[] {
   const rank = (spell: T) => {
-    const index = STAPLES.indexOf(lower(spell.name));
+    const index = STAPLES.indexOf(textKey(spell.name));
     return index === -1 ? STAPLES.length : index;
   };
   return [...spells].sort((a, b) => rank(a) - rank(b) || compareNames(a.name, b.name));
@@ -143,7 +141,7 @@ export type CompanionSpellInput = {
 // spells as the class's tables have room for, and no more.
 export function companionSpellPicks(input: CompanionSpellInput): string[] {
   const after: CasterView = { ...input.before, level: input.level };
-  const granted = new Set(grantedSpellsOf(after).map(lower));
+  const granted = new Set(grantedSpellsOf(after).map(textKey));
   const held = new Set(
     [
       ...after.cantrips,
@@ -151,17 +149,17 @@ export function companionSpellPicks(input: CompanionSpellInput): string[] {
       ...after.prepared,
       ...after.pending,
       ...after.spellbook,
-    ].map(lower),
+    ].map(textKey),
   );
   const top = maxSpellLevelOf(after);
-  const wanted = (input.wanted ?? []).map(lower);
+  const wanted = (input.wanted ?? []).map(textKey);
   const open = input.candidates.filter(
-    (spell) => !held.has(lower(spell.name)) && !granted.has(lower(spell.name)),
+    (spell) => !held.has(textKey(spell.name)) && !granted.has(textKey(spell.name)),
   );
   // What was asked for leads, in the order it was asked.
   const ordered = [
-    ...wanted.flatMap((name) => open.filter((spell) => lower(spell.name) === name)),
-    ...byPreference(open.filter((spell) => !wanted.includes(lower(spell.name)))),
+    ...wanted.flatMap((name) => open.filter((spell) => textKey(spell.name) === name)),
+    ...byPreference(open.filter((spell) => !wanted.includes(textKey(spell.name)))),
   ];
 
   const cantripCap = cantripCapOf(after);
@@ -181,13 +179,13 @@ export function companionSpellPicks(input: CompanionSpellInput): string[] {
       const cap = spellCapOf(after, input.abilities);
       const count =
         after.style === "known"
-          ? dedupeNames(heldSpells(after)).filter((name) => !granted.has(lower(name))).length
+          ? dedupeNames(heldSpells(after)).filter((name) => !granted.has(textKey(name))).length
           : preparedCount(after);
       room = cap ? Math.max(0, cap.count - count) : 0;
     }
   }
   const reachable = ordered.filter((spell) => spell.level >= 1 && spell.level <= top);
-  const asked = reachable.filter((spell) => wanted.includes(lower(spell.name))).slice(0, room);
+  const asked = reachable.filter((spell) => wanted.includes(textKey(spell.name))).slice(0, room);
   const rest = reachable.filter((spell) => !asked.includes(spell));
   const spells = [...asked];
   if (room - spells.length <= 2) {

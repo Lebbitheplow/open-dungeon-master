@@ -66,7 +66,9 @@ await test("Every way in reaches a real tool or page, and the tool's panel answe
 await test("NPC and player-character choices lead to their own editors and stores; playable things never stop at WorldForge.", () => {
   assert.deepEqual(choice("npc").steps.map((step) => [step.system, step.prepare]), [["cast", "open-npc-editor"]]);
   const pc = choice("pc").steps;
-  assert.ok(pc.some((step) => step.href === "/characters/new"), "a player character does not reach the character builder");
+  assert.ok(pc.some((step) => step.href?.startsWith("/characters/new")), "a player character does not reach the character builder");
+  // The door says it is a player character, so the builder does not ask.
+  assert.ok(pc.some((step) => step.href === "/characters/new?as=pc"), "the player-character door leaves the role to the builder");
   assert.ok(pc.some((step) => step.system === "party"), "a player character cannot become this party's pregen");
   assert.ok(pc.every((step) => step.system !== "cast"), "a player character was sent to the NPC Cast");
   assert.deepEqual(choice("creature").steps.map((step) => [step.system, step.prepare]), [["bestiary", "open-monster-build"]]);

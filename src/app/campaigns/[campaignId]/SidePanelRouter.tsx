@@ -52,7 +52,7 @@ import { PanelLoading, panels } from "@/app/campaigns/[campaignId]/side-panel-lo
 const {
   BattleMapPanel, BondsPanel, ContextPanel, DmConsolePanel, DmInboxPanel, DmWhisperPanel, EventLog, FactionsPanel,
   FactsPanel, LeadPanel, LorePanel, MapPanel, MarketPanel, NotesPanel, OverworldPanel, PinsPanel, QuestsPanel,
-  SessionSettings, SideChatPanel, StoryPanel, TimelinePanel,
+  SessionSettings, SideChatPanel, StoryPanel, TimelinePanel, WorldForgePanel,
 } = panels;
 
 // Everything the side panel's content needs. SidePanel adds the rail's own
@@ -156,6 +156,11 @@ export type SidePanelRouterProps = {
   // its own scoped view when it changes.
   relationshipsVersion: number;
   factionsVersion?: number;
+  // Bumped when the world changed (world_updated, records_changed), so the
+  // World tab reads it again.
+  worldVersion?: number;
+  // Bumped on lore_updated, so the lore list reads itself again.
+  loreVersion?: number;
   shopsVersion?: number;
   coins?: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
   activeSheetId?: string;
@@ -174,7 +179,7 @@ export type SidePanelRouterProps = {
 };
 
 // Which panel the active tab shows. Every PanelTab has an explicit branch;
-// the guards on dm, lead, battle and context are belt and braces over
+// the guards on dm, lead, battle, world and context are belt and braces over
 // buildPanelTabs, so a stale selection never lands a player on a panel whose
 // route will only ever answer 403.
 export function SidePanelRouter({
@@ -231,6 +236,8 @@ export function SidePanelRouter({
   tab: rawTab,
   relationshipsVersion,
   factionsVersion = 0,
+  worldVersion = 0,
+  loreVersion = 0,
   shopsVersion = 0,
   coins = null,
   activeSheetId = "",
@@ -556,7 +563,7 @@ export function SidePanelRouter({
                 steersStory={steersStory}
                 refreshFacts={refreshFacts}
               />
-              <LorePanel campaignId={campaignId} steersStory={steersStory} isDm={adjudicates} members={members} />
+              <LorePanel campaignId={campaignId} steersStory={steersStory} isDm={adjudicates} members={members} refreshKey={loreVersion} />
             </div>
           ) : storySection === "quests" ? (
             <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
@@ -620,6 +627,17 @@ export function SidePanelRouter({
           onOpenHandled={onChatTargetHandled}
         />
       </div>
+      </Suspense>
+    );
+  }
+  if (tab === "world" && steersStory) {
+    // The campaign's own copy of its world (the records the import copied
+    // from a workshop, or written here), through the routes that answer
+    // only story authority. A faction entry's change arrives as
+    // factions_updated, so that count refreshes it too.
+    return (
+      <Suspense fallback={<PanelLoading />}>
+        <WorldForgePanel campaignId={campaignId} at="table" canShowHandouts={adjudicates} refreshKey={worldVersion + factionsVersion} />
       </Suspense>
     );
   }

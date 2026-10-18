@@ -113,6 +113,7 @@ export async function runRenarrate(input: {
         // No tools at all, on top of toolChoice "none": a variant that called
         // a tool would re-run mechanics that already resolved.
         toolChoice: "none",
+        meta: { task: "renarrate" },
         // Slightly hotter than the first pass, as a relative offset from the
         // story model's base rather than an absolute value that would
         // override whatever the campaign is tuned to.

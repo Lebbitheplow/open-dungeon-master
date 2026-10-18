@@ -1,13 +1,23 @@
 "use client";
 
 import { ChevronDown, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { useId, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { InfoButton, renderRules, type ContentRef } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { lineageFits } from "./lineageFits";
-import { asiChips, lineageChoices, parseTrait, srdRaceFor, traitLines, wrapIndex, type LineageEntry } from "./lineage";
+import {
+  asiChips,
+  lineageChoices,
+  parseTrait,
+  slidePosition,
+  srdRaceFor,
+  swipeStep,
+  traitLines,
+  wrapIndex,
+  type LineageEntry,
+} from "./lineage";
 
 // Everything the carousel shows for one lineage. `info` is exactly what the
 // old picker's info button carried (the pack's blurb, else the bundled trait
@@ -119,7 +129,23 @@ export function LineageCarousel({
   // Which way the last step went, so the incoming lineage slides in from
   // that side. Cleared on close: opening the dialog is not a step.
   const [dir, setDir] = useState<"next" | "prev" | null>(null);
+  // Where a touch began, for a swipe between lineages on a phone.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const slide = index === null ? null : slides[index];
+  const total = slides.length;
+  const nextArt = index === null || total < 2 ? null : slides[wrapIndex(index, 1, total)].art;
+  const prevArt = index === null || total < 3 ? null : slides[wrapIndex(index, -1, total)].art;
+  // The plates either side are fetched while this one is read, so a step
+  // lands on a painted slide rather than an empty frame.
+  useEffect(() => {
+    for (const src of [nextArt, prevArt]) {
+      if (src) {
+        const image = new Image();
+        image.decoding = "async";
+        image.src = src;
+      }
+    }
+  }, [nextArt, prevArt]);
   if (!slide || index === null) {
     return null;
   }
@@ -174,8 +200,14 @@ export function LineageCarousel({
             <span className="truncate">{prev.name}</span>
           </button>
           <span className="flex min-w-0 flex-col items-center gap-0.5 text-center">
-            <span className="font-mono text-[0.6875rem] text-stone-500" aria-live="polite">
+            {/* The count is for the eye; a step says which lineage it reached
+                ("Tiefling, 3 of 40, recommended") while focus stays on the
+                button that paged. */}
+            <span className="font-mono text-[0.6875rem] text-stone-500" aria-hidden="true">
               {index + 1} / {slides.length}
+            </span>
+            <span className="sr-only" aria-live="polite" aria-atomic="true">
+              {slidePosition(slide, index, slides.length)}
             </span>
             {slide.recommended ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-400/10 px-1.5 py-px font-display text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-amber-300">
@@ -193,7 +225,32 @@ export function LineageCarousel({
 
         {/* Keyed by lineage so the accordion and the entrance start over on
             every step of the carousel. */}
-        <div key={slide.id} className="creator-slide flex flex-wrap items-start gap-3.5" data-dir={dir ?? undefined}>
+        <div
+          key={slide.id}
+          className="creator-slide flex flex-wrap items-start gap-3.5"
+          data-dir={dir ?? undefined}
+          // A sideways swipe pages, as the arrows do; an upward drag still
+          // scrolls the traits.
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            touchStart.current = event.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : null;
+          }}
+          onTouchEnd={(event) => {
+            const start = touchStart.current;
+            const touch = event.changedTouches[0];
+            touchStart.current = null;
+            if (!start || !touch) {
+              return;
+            }
+            const delta = swipeStep(touch.clientX - start.x, touch.clientY - start.y);
+            if (delta) {
+              step(delta);
+            }
+          }}
+          onTouchCancel={() => {
+            touchStart.current = null;
+          }}
+        >
           <div className="flex w-full flex-row gap-3 sm:w-[172px] sm:flex-none sm:flex-col sm:gap-2.5">
             <span className="creator-plate rounded-[10px] border border-amber-500/30 shadow-glow-gold" data-detail="" role="img" aria-label={`${slide.name} portrait`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}

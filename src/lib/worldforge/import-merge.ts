@@ -1,4 +1,5 @@
 import { LIMITS, newId, type Entry, type Origin, type WorldDoc, type YearValue } from "./model";
+import { textKey } from "../language/text-logic";
 
 // A world brought in again: a WorldForge file imported a second time, or a
 // workshop copied into a campaign again. Audit findings WF-03 and WF-04.
@@ -170,7 +171,7 @@ export function planIds(doc: WorldDoc, incoming: Pick<WorldDoc, ImportSlice>, so
       const key = owned.get(originFrom(source, slice, row.id));
       let target = key && ids.has(key.slice(slice.length + 1)) ? key.slice(slice.length + 1) : "";
       if (!target && slice === "stubs") {
-        target = own.find((stub) => String(stub.name).toLowerCase() === String(row.name).toLowerCase())?.id ?? "";
+        target = own.find((stub) => textKey(String(stub.name)) === textKey(String(row.name)))?.id ?? "";
       }
       if (!target && ids.has(row.id) && !doc.origins?.[originKey(slice, row.id)]) target = row.id;
       if (!target || claimed.has(target)) target = ids.has(row.id) || claimed.has(row.id) ? newId(PREFIX[slice]) : row.id;

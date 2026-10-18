@@ -7,6 +7,8 @@
 // (src/lib/dm/invoke.ts), so what the DM saves and what they type into the
 // live form can never read differently.
 
+import { textKey } from "../language/text-logic.ts";
+
 export type TemplateEnemy = { monster: string; count: number };
 
 export const TEMPLATE_NAME_MAX = 80;
@@ -74,8 +76,8 @@ export function addToRoster(rows: TemplateEnemy[], monster: string): TemplateEne
   if (!name) {
     return rows;
   }
-  const wanted = name.toLowerCase();
-  const at = rows.findIndex((row) => row.monster.trim().toLowerCase() === wanted);
+  const wanted = textKey(name);
+  const at = rows.findIndex((row) => textKey(row.monster) === wanted);
   if (at === -1) {
     return rows.length >= TEMPLATE_MAX_ROWS
       ? rows
@@ -331,11 +333,11 @@ export function matchSlots<T extends { id: string; slug: string; displayName: st
       if (matched.has(slot.slot)) {
         continue;
       }
-      const wanted = slot.monster.trim().toLowerCase();
+      const wanted = textKey(slot.monster);
       const enemy = enemies.find(
         (candidate) =>
           !used.has(candidate.id) &&
-          test(candidate.slug.toLowerCase(), candidate.displayName.toLowerCase(), wanted),
+          test(textKey(candidate.slug), textKey(candidate.displayName), wanted),
       );
       if (enemy) {
         used.add(enemy.id);

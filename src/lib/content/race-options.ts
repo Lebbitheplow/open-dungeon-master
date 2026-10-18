@@ -2,6 +2,7 @@ import { raceMechanics, type RaceMechanics } from "@/lib/content/mechanics";
 import { SRD_RACES, type SrdRace } from "@/lib/srd";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { isEdition2024 } from "@/lib/content/edition";
+import { textKey } from "@/lib/language/text-logic";
 
 // The content pack's race rows, turned into the shape the character builder
 // works from. Three things happen here that raceMechanics alone cannot do:
@@ -46,14 +47,15 @@ export function canonicalRaceId(raceId: string): string {
 export function subraceLabel(name: string, parentName?: string | null): string {
   const sub = String(name ?? "").trim();
   const parent = String(parentName ?? "").trim();
-  if (!parent || !sub || sub.toLowerCase() === parent.toLowerCase() || sub.includes("(")) {
+  if (!parent || !sub || textKey(sub) === textKey(parent) || sub.includes("(")) {
     return sub;
   }
-  const escaped = parent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const word = new RegExp(`(^|\\s)${escaped}(\\s|$)`, "i");
+  const pieces = sub.split(/\s+/);
+  const length = parent.split(/\s+/).length;
+  const at = pieces.findIndex((_, index) => textKey(pieces.slice(index, index + length).join(" ")) === textKey(parent));
   let rest = sub;
-  if (word.test(sub)) {
-    rest = sub.replace(word, " ").replace(/\s+/g, " ").trim();
+  if (at >= 0) {
+    rest = [...pieces.slice(0, at), ...pieces.slice(at + length)].join(" ");
     if (!rest) {
       return sub;
     }

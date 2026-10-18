@@ -17,6 +17,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
 import type { HandIntentExtras } from "@/lib/battlemap/hand-intent";
 import type { HandArea } from "@/lib/battlemap/hand-area";
+import { textKey } from "@/lib/language/text-logic";
 
 export type { HandBonusAttack } from "@/lib/battlemap/hand-intent";
 
@@ -225,9 +226,6 @@ export type HandOptions = {
 // The fan's seats, End turn's included (src/lib/battlemap/hand-layout.ts).
 export { HAND_FAN_CAP } from "@/lib/battlemap/hand-layout";
 
-export function spellKey(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
 
 export function signed(value: number): string {
   return value >= 0 ? `+${value}` : `${value}`;
@@ -245,8 +243,8 @@ export function feet(range: string): string {
 }
 
 export function hasFeature(sheet: CharacterSheet, fragment: string): boolean {
-  const wanted = fragment.toLowerCase();
-  return sheet.features.some((feature) => feature.name.toLowerCase().includes(wanted));
+  const wanted = textKey(fragment);
+  return sheet.features.some((feature) => textKey(feature.name).includes(wanted));
 }
 
 export function primaryClass(sheet: CharacterSheet): string {

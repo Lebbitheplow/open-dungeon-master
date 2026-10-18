@@ -54,10 +54,6 @@ const PINNED_PATHS = new Map([
 // the change that removes them. An entry no longer found fails the test too,
 // so this list only shrinks.
 const LEFTOVERS = new Map([
-  ["src/lib/db/core.ts", {
-    ids: ["qwen3.6", "qwen3.6-35b"],
-    why: "the migration that moved campaigns off Ollama's port to llama-server; rewriting it changes data already upgraded",
-  }],
   ["src/app/setup/StorytellerStep.tsx", {
     ids: ["qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q8_0.gguf", "qwen3.6-35b", "qwen3.6:35b-a3b-q8_0", "qwen3.6-dm", "models/qwen3.6-dm.modelfile"],
     why: "the guided setup's instructions for starting a model server, which name the model to download; what to recommend instead is upstream's call",

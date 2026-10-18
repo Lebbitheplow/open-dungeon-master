@@ -2,6 +2,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { buildCharacterBundle, characterBundleFilename } from "@/lib/character-bundle";
 import { getCharacterForUser } from "@/lib/db/characters";
 import { readUploadedImage } from "@/lib/uploads-store";
+import { attachmentDisposition } from "@/lib/serve-file";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ export async function GET(
   return new Response(JSON.stringify(bundle, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${characterBundleFilename(character.name)}"`,
+      "Content-Disposition": attachmentDisposition(characterBundleFilename(character.name)),
     },
   });
 }

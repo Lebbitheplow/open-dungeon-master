@@ -169,3 +169,13 @@ export async function serveGeneratedFile(
     },
   });
 }
+
+// A download saved under its own name in any script: filename* carries the
+// UTF-8 name (RFC 6266), which a plain filename="" cannot. encodeURIComponent
+// leaves ' ( ) * as they are, and RFC 5987 does not allow them there.
+const RFC5987_ESCAPES: Record<string, string> = { "'": "%27", "(": "%28", ")": "%29", "*": "%2A" };
+
+export function attachmentDisposition(fileName: string): string {
+  const encoded = encodeURIComponent(fileName).replace(/['()*]/g, (char) => RFC5987_ESCAPES[char]);
+  return `attachment; filename*=UTF-8''${encoded}`;
+}

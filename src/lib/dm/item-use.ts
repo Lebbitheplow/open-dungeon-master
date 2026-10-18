@@ -28,7 +28,7 @@ import {
 } from "@/lib/dm/item-charges";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { gearDefOfRow } from "@/lib/srd/magic-gear";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { RollResult } from "@/lib/dice";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -106,7 +106,7 @@ export function chargedItemUse(
     if (!able.ok) {
       return toolError(able);
     }
-    budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+    budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
     if (budget) {
       const spent = spendAction(budget, "action", `using ${carried.name}`, sheet.name);
       if (!spent.ok) {

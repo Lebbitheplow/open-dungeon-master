@@ -3,6 +3,7 @@
 import { Camera, UserRound } from "lucide-react";
 import { useId } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
@@ -19,8 +20,10 @@ import type { BuilderState } from "../useBuilderState";
 import { hpExplainerInput } from "./AbilitiesStep";
 import { Chip, Field, StepPanel, inputClass } from "./shared";
 
+export type BuilderRole = "pc" | "companion";
+
 // Step 6: the hero at a glance with a way back to each choice, the numbers
-// the sheet will open with, then their alignment, the portrait, how they
+// the sheet will open with, who plays them (library only), their alignment, the portrait, how they
 // look, their story and extra feats. The save button is
 // the wizard footer.
 export type FinishEditStep = "identity" | "ancestry" | "calling" | "abilities" | "spells-gear";
@@ -38,6 +41,7 @@ export function FinishStep({
   onEdit,
   alignmentGroups,
   alignmentInfo,
+  role,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
@@ -56,6 +60,11 @@ export function FinishStep({
   onEdit?: (step: FinishEditStep) => void;
   alignmentGroups: PickerGroup[];
   alignmentInfo: string;
+  // Offered by the library page only, and only when the link that opened
+  // it did not say (door.ts): a campaign already knows which door the
+  // character comes through. It starts on a player character and is asked
+  // here, at the end, because it changes nothing on the sheet.
+  role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
 }) {
   const { portrait, setPortrait } = state;
   const appearanceId = useId();
@@ -165,6 +174,26 @@ export function FinishStep({
         </StepPanel>
       ) : null}
 
+      {role ? (
+        <StepPanel title="Their place at the table" help="It changes nothing on the sheet, only how they join a campaign.">
+          <SegmentedControl
+            label="Their place at the table"
+            value={role.value}
+            onChange={role.onChange}
+            options={[
+              { value: "pc", label: "A character I play" },
+              { value: "companion", label: "An ally the DM plays" },
+            ]}
+            className="w-full sm:max-w-md"
+          />
+          <p className="mt-1.5 text-xs text-stone-500">
+            {role.value === "companion"
+              ? "Companions are offered when a party adds one, at whatever level that table plays at. Nobody has to roll them up again."
+              : "Joins a campaign as yours to control."}
+          </p>
+        </StepPanel>
+      ) : null}
+
       <StepPanel
         title={
           <span className="inline-flex items-center gap-1">
@@ -185,7 +214,8 @@ export function FinishStep({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={portrait.url}
-              alt="Character portrait"
+              // Named for the hero, as the roster names it.
+              alt={state.name.trim() || "Your hero's portrait"}
               className="size-16 shrink-0 rounded-lg border border-amber-500/30 object-cover"
             />
           ) : (

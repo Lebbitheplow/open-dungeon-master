@@ -20,7 +20,8 @@ import { spellDamageRiders } from "@/lib/srd/spell-damage-riders";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Rolls and lands the damage, writing what happened onto `base`; returns the
-// damage dealt.
+// damage dealt and the dice's total. A later creature of one area casting
+// takes the casting's one roll (`sharedRoll`) and rolls nothing.
 export function landSpellDamage(input: {
   campaign: Campaign;
   turn: DmTurn;
@@ -42,8 +43,9 @@ export function landSpellDamage(input: {
   base: Record<string, unknown>;
   sheets: CharacterSheet[];
   sheetsById: Map<string, CharacterSheet>;
-}): number {
-  const { campaign, turn, encounter, sheet, enemy, spell, spellName, authors, mech, facts, scaled, damageExpression, damageType, spellLevel, halfOnSave, saved, base, sheets, sheetsById } = input;
+  sharedRoll?: number;
+}): { dealt: number; rolled: number | null } {
+  const { campaign, turn, encounter, sheet, enemy, spell, spellName, authors, mech, facts, scaled, damageExpression, damageType, spellLevel, halfOnSave, saved, base, sheets, sheetsById, sharedRoll } = input;
   const riders = spellDamageRiders(sheet, {
     school: spellSchoolFor(spell, authors),
     damageType,
@@ -60,9 +62,11 @@ export function landSpellDamage(input: {
   // The card shows the dice as rolled; the save halves or stops what lands.
   // A maximized blow rolls no dice, so it has no card.
   const outcome =
-    maxed === null
-      ? rollCard(campaign, turn, sheet.id, "damage", rollAgainst(spellName, enemy.displayName), rolledExpression, { kind: "sheet", id: sheet.id, name: sheet.name })
-      : { total: maxed };
+    maxed !== null
+      ? { total: maxed }
+      : sharedRoll !== undefined
+        ? { total: sharedRoll }
+        : rollCard(campaign, turn, sheet.id, "damage", rollAgainst(spellName, enemy.displayName), rolledExpression, { kind: "sheet", id: sheet.id, name: sheet.name });
   const total = outcome.total + riders.flat;
   const halves = halfOnSave || riders.potentCantrip;
   // Feeblemind's damage lands whatever the save (spell-mech-types.ts).
@@ -108,5 +112,5 @@ export function landSpellDamage(input: {
   } else {
     base.damage = 0;
   }
-  return damageDealt;
+  return { dealt: damageDealt, rolled: maxed === null ? outcome.total : null };
 }

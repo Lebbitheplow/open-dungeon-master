@@ -11,6 +11,7 @@ import { z } from "zod";
 import { replyJsonObject } from "../reply-json-logic.ts";
 import type { Speaker } from "./speech.ts";
 import { QUOTE, quotedText, speakerMatchers } from "./speech-prose.ts";
+import { textKey, words } from "../language/text-logic.ts";
 
 export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
@@ -49,6 +50,9 @@ export type ReaderGate = {
   guard: boolean;
   // This turn resolved an attack, so a hit or a miss can be checked.
   attacks: boolean;
+  // A fight runs, so a hit or a miss on an enemy no tool touched this turn
+  // can be caught as an attack the prose alone resolved.
+  fight?: boolean;
   // A creature's hit points are known (this turn's results or the live
   // encounter), so a death or a drop can be checked.
   creatures: boolean;
@@ -79,7 +83,7 @@ export type PartRead = { kinds: readonly ClaimKind[]; claims: readonly Narration
 
 export function claimKindsFor(gate: ReaderGate): ClaimKind[] {
   const kinds: ClaimKind[] = [];
-  if (gate.guard && gate.attacks) {
+  if (gate.guard && (gate.attacks || gate.fight)) {
     kinds.push("hit", "miss");
   }
   if (gate.guard && gate.creatures) {
@@ -232,13 +236,7 @@ export function parseReaderReply(raw: string): unknown[] | null {
 // Quotes are compared with their quote marks, apostrophes, spacing and case
 // folded, so a reader that straightens a curly quote still matches.
 export function squash(text: string): string {
-  return text
-    .normalize("NFC")
-    .replace(/[“”«»„"]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
+  return textKey(text.replace(/[“”«»„"]/g, '"').replace(/[‘’]/g, "'"));
 }
 
 export type ClaimContext = {
@@ -271,7 +269,7 @@ export function namedSpeakers(text: string, speakers: ReadonlyMap<string, Speake
   return new Map(
     [...speakers].filter(([, speaker]) => {
       const [{ pattern, short }] = speakerMatchers([speaker]);
-      return [...prose.matchAll(pattern)].some((found) => !short.has(found[0].toLowerCase()) || /^\p{Lu}/u.test(found[0]));
+      return [...prose.matchAll(pattern)].some((found) => !short.has(textKey(found[0])) || /^\p{Lu}/u.test(found[0]));
     }),
   );
 }
@@ -306,7 +304,10 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
     switch (claim.kind) {
       case "hit":
       case "miss":
-        if (context.attackRefs.has(claim.target)) {
+        // A blow on a creature the turn attacked is checked against the roll;
+        // one on a creature of the fight that no tool touched is a blow the
+        // prose alone resolved (engine-boundary.ts unrolledBlow).
+        if (context.attackRefs.has(claim.target) || context.creatureRefs.has(claim.target)) {
           kept.push(claim);
         }
         break;
@@ -323,13 +324,12 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
         break;
       case "cast": {
         const caster = context.party.get(claim.caster);
-        const spell = context.normalizeSpell(claim.spell);
         // Tied to what its own caster spent, the cast is that spend, which
         // its tool already resolved. A tie to anyone else's spend, or to none
         // the turn made, excuses nothing.
         const paid = claim.spent ? context.spent.get(claim.spent) === claim.caster : false;
-        if (caster && context.leveledSpells.has(spell) && !paid) {
-          kept.push({ kind: "cast", caster, spell, quote: claim.quote });
+        if (caster && context.leveledSpells.has(context.normalizeSpell(claim.spell)) && !paid) {
+          kept.push({ kind: "cast", caster, spell: claim.spell, quote: claim.quote });
         }
         break;
       }
@@ -414,11 +414,32 @@ export function withoutSentences(text: string, quotes: readonly string[]): strin
 // claims; empty when no word of the story is left (a stray quote mark or
 // bold marker is not one), which is how a reply that was only the model's
 // plan reads.
+// What a small model writes about the turn rather than in it, found without
+// the reader (Gemma4 e4b's reader, the same small model, quoted none of it):
+// its own input format echoed back ("Bram | attempt to ask the merchant..."),
+// a table note copied out, and sentences about tool calls and corrections
+// ("I will correct this by calling the necessary tool to resolve the attack
+// properly"). English phrasings only; the reader's asides cover every
+// language. A sentence holding a quotation is speech and is never taken.
+const META_SENTENCE =
+  /\btool[ -]?calls?\b|\b(?:the|this|a) tool'?s? (?:output|result)s?\b|\bcalling the (?:necessary |right |appropriate |correct )?tools?\b|\bnarrate the results?\b|\bunwarranted assumption\b|\bmy (?:previous|last|earlier) (?:response|reply|narration|message)\b/i;
+const ECHOED_LINE = /^[ \t]*(?:\[[^\]\n]{1,80}\|\s*attempt\][^\n]*|[^\n|[\]]{1,60}\s\|\s*attempt\b[^\n]*|\[Table note\][^\n]*)$/gim;
+
+export function metaQuotes(text: string): string[] {
+  const quotes = [...text.matchAll(ECHOED_LINE)].map((match) => match[0].trim());
+  for (const match of text.matchAll(/[^.!?\n]+[.!?]*/g)) {
+    if (META_SENTENCE.test(match[0]) && !/["\u201c\u201d\u00ab\u00bb]/.test(match[0])) {
+      quotes.push(match[0].trim());
+    }
+  }
+  return quotes.filter(Boolean);
+}
+
 export function withoutAsides(text: string, claims: readonly NarrationClaim[]): string {
-  const quotes = claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : []));
+  const quotes = [...claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : [])), ...metaQuotes(text)];
   if (!quotes.length) {
     return text;
   }
   const kept = withoutSentences(text, quotes);
-  return /[\p{L}\p{N}]/u.test(kept) ? kept : "";
+  return words(kept).length ? kept : "";
 }

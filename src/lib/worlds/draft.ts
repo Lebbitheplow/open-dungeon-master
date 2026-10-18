@@ -25,6 +25,7 @@ import {
 } from "@/lib/worlds/art";
 import { worldPackSchema, type WorldPack } from "@/lib/worlds/types";
 import { packIdFrom } from "@/lib/workshop/to-pack";
+import { textKey } from "@/lib/language/text-logic";
 
 // The caps mirror worldPackSchema; the mins are gone.
 const idReskinDraft = z.object({
@@ -73,6 +74,7 @@ export const worldPackDraftSchema = z.object({
   dmFlavor: z.string().max(1400).default(""),
   mapStyle: z.string().max(300).default(""),
   portraitStyle: z.string().max(300).default(""),
+  sceneStyle: z.string().max(300).default(""),
   nameHints: z.string().max(300).default(""),
   raceHint: z.string().max(300).default(""),
   companionRaces: z.array(z.string().max(60)).max(DRAFT_LIST_MAX).default([]),
@@ -197,6 +199,7 @@ export function finishDraft(draft: WorldPackDraft): Record<string, unknown> {
     dmFlavor: draft.dmFlavor.trim(),
     mapStyle: draft.mapStyle.trim(),
     portraitStyle: draft.portraitStyle.trim(),
+    sceneStyle: draft.sceneStyle.trim(),
     nameHints: draft.nameHints.trim(),
     raceHint: draft.raceHint.trim(),
     companionRaces: draft.companionRaces.map((id) => id.trim()).filter(Boolean),
@@ -273,7 +276,6 @@ export type PulledFlavour = {
   nameSeeds?: { people?: string[]; places?: string[] };
 };
 
-const fold = (value: string) => value.trim().toLowerCase();
 
 function appendUnique<T>(
   current: T[],
@@ -305,12 +307,12 @@ export function mergePulled(
   draft: WorldPackDraft,
   pulled: PulledFlavour,
 ): { draft: WorldPackDraft; added: number } {
-  const factions = appendUnique(draft.factions, pulled.factions ?? [], (entry) => fold(entry.name), DRAFT_LIST_MAX);
-  const locations = appendUnique(draft.locations, pulled.locations ?? [], (entry) => fold(entry.name), DRAFT_LIST_MAX);
-  const hooks = appendUnique(draft.hooks, pulled.hooks ?? [], fold, DRAFT_LIST_MAX);
-  const glossary = appendUnique(draft.glossary, pulled.glossary ?? [], (entry) => fold(entry.term), DRAFT_LIST_MAX);
-  const people = appendUnique(draft.nameSeeds.people, pulled.nameSeeds?.people ?? [], fold, DRAFT_SEEDS_MAX);
-  const places = appendUnique(draft.nameSeeds.places, pulled.nameSeeds?.places ?? [], fold, DRAFT_SEEDS_MAX);
+  const factions = appendUnique(draft.factions, pulled.factions ?? [], (entry) => textKey(entry.name), DRAFT_LIST_MAX);
+  const locations = appendUnique(draft.locations, pulled.locations ?? [], (entry) => textKey(entry.name), DRAFT_LIST_MAX);
+  const hooks = appendUnique(draft.hooks, pulled.hooks ?? [], textKey, DRAFT_LIST_MAX);
+  const glossary = appendUnique(draft.glossary, pulled.glossary ?? [], (entry) => textKey(entry.term), DRAFT_LIST_MAX);
+  const people = appendUnique(draft.nameSeeds.people, pulled.nameSeeds?.people ?? [], textKey, DRAFT_SEEDS_MAX);
+  const places = appendUnique(draft.nameSeeds.places, pulled.nameSeeds?.places ?? [], textKey, DRAFT_SEEDS_MAX);
   const next: WorldPackDraft = {
     ...draft,
     theme: draft.theme.trim() ? draft.theme : (pulled.theme ?? "").slice(0, 120),

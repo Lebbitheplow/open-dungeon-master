@@ -18,6 +18,7 @@ import {
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
 import { areaArgs, describePick, hasPick, type AreaPick, type HandArea } from "@/lib/battlemap/hand-area";
+import { textKey } from "@/lib/language/text-logic";
 
 // Who a card is aimed at. `ac` only ever arrives in the DM's projection; a
 // player's preview works from the challenge rating, which they can see.
@@ -128,7 +129,7 @@ export function previewRows(
         adjacent,
         requested: "none",
       });
-      const sources = [context.advantage];
+      const sources = [...context.sources];
       if (edge?.flanking && card.melee) sources.push("advantage");
       if (choices.options?.includes("reckless")) sources.push("advantage");
       if (choices.options?.includes("useInspiration")) sources.push("advantage");
@@ -413,9 +414,9 @@ export function afterCommit(turn: HandTurn, card: HandCard, allowed = 1): HandTu
 export function targetFromComposedText(text: string, names: string[]): string | null {
   const match = /^I (?:attack|cast\s+at)\s+(.+?)\.?\s*$/i.exec(text.trim());
   if (!match) return null;
-  const said = match[1].trim().toLowerCase();
+  const said = textKey(match[1]);
   const sorted = [...names].sort((a, b) => b.length - a.length);
-  return sorted.find((name) => name.trim().toLowerCase() === said) ?? null;
+  return sorted.find((name) => textKey(name) === said) ?? null;
 }
 
 // Window events a board can use to aim a raised card directly: the Hand

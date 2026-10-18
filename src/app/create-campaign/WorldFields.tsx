@@ -99,7 +99,7 @@ export function WorldFields({
                   style={{ backgroundImage: `url("${card.plate}")` }}
                 >
                   <span className="cc-plate-name">{card.name}</span>
-                  {card.humansOnly ? <span className="cc-humans">humans only</span> : null}
+                  {card.humansOnly ? <span className="cc-humans">all-human world</span> : null}
                 </span>
                 <span className="cc-portal-body">
                   <span className="cc-portal-blurb">{card.blurb}</span>

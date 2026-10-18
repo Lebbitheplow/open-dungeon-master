@@ -1,5 +1,7 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { exportWorldForge } from "@/lib/db/world-forge-io";
+import { slugOf } from "@/lib/language/text-logic";
+import { attachmentDisposition } from "@/lib/serve-file";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,11 +16,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cam
     return context;
   }
   const world = exportWorldForge(campaignId);
-  const name = String(world.worldName || "world").replace(/[^\w -]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "world";
+  const name = slugOf(String(world.worldName)) || "world";
   return new Response(JSON.stringify(world), {
     headers: {
       "content-type": "application/json",
-      "content-disposition": `attachment; filename="${name}.worldforge.json"`,
+      "content-disposition": attachmentDisposition(`${name}.worldforge.json`),
     },
   });
 }

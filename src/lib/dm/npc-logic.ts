@@ -8,6 +8,8 @@
 // ignored. Everything here is deterministic given its inputs; dice come in
 // as injected rolls so the engines cost zero model calls.
 
+import { textKey } from "../language/text-logic.ts";
+
 export type NpcPersonality = {
   drive: number;
   diligence: number;
@@ -188,7 +190,7 @@ export function derivePersonality(
   attitude: "hostile" | "indifferent" | "friendly",
   trait: string,
 ): NpcPersonality {
-  const seed = nameHash(`${name.toLowerCase()}|${trait.toLowerCase()}`);
+  const seed = nameHash(`${textKey(name)}|${textKey(trait)}`);
   const axisSeed = (index: number) => ((seed >> (index * 4)) % 3) - 1;
   const lean = attitude === "friendly" ? 1 : attitude === "hostile" ? -1 : 0;
   return {
@@ -231,7 +233,7 @@ export function shiftRelation(
   note?: string,
 ): NpcRelation[] {
   const existing = relations.find(
-    (relation) => relation.npcName.toLowerCase() === npcName.toLowerCase(),
+    (relation) => textKey(relation.npcName) === textKey(npcName),
   );
   if (!existing) {
     return [

@@ -14,6 +14,8 @@ export const TAB_GLYPHS: Record<TableTabId, string> = {
   story: "tab-story",
   notes: "tab-notes",
   chat: "tab-chat",
+  // The workshop's own painting for WorldForge: the same world, at the table.
+  world: "system-world",
   context: "tab-context",
   settings: "tab-settings",
 };

@@ -1,5 +1,5 @@
 import { COPPER_PER_GOLD, formatCopper, parseCoins } from "@/lib/srd/currency";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // Shops (docs/vtt-parity-implementation-plan.md 11.1): pure pricing and
 // stocking. Prices come from the content pack's cost strings, marked up by
@@ -122,15 +122,15 @@ export function goldFromCopper(cp: number): number {
 // Find a stock line by name, loosely: exact first, then a line that
 // contains the words asked for.
 export function findStockLine(stock: StockLine[], name: string): StockLine | null {
-  const wanted = name.trim().toLowerCase();
+  const wanted = textKey(name);
   if (!wanted) {
     return null;
   }
-  const exact = stock.find((line) => line.itemName.toLowerCase() === wanted);
+  const exact = stock.find((line) => textKey(line.itemName) === wanted);
   if (exact) {
     return exact;
   }
-  const loose = stock.filter((line) => line.itemName.toLowerCase().includes(wanted) || wanted.includes(line.itemName.toLowerCase()));
+  const loose = stock.filter((line) => textKey(line.itemName).includes(wanted) || wanted.includes(textKey(line.itemName)));
   return loose.length === 1 ? loose[0] : null;
 }
 
@@ -146,7 +146,7 @@ export function takeStock(stock: StockLine[], itemName: string, qty: number): St
 
 // Put qty of an item into stock at the keeper's list price, merging by name.
 export function addStock(stock: StockLine[], itemName: string, qty: number, priceCp: number, note = ""): StockLine[] {
-  const existing = stock.find((line) => line.itemName.toLowerCase() === itemName.toLowerCase());
+  const existing = stock.find((line) => textKey(line.itemName) === textKey(itemName));
   if (existing) {
     return stock.map((line) => (line === existing ? { ...line, qty: line.qty + qty } : line));
   }
@@ -180,13 +180,13 @@ export function stockFromPool(
 // prepared count at its prepared price, in the author's order, and anything
 // the keeper bought from the party since still on the shelf after them.
 export function refillStock(stock: StockLine[], prepared: StockLine[]): StockLine[] {
-  const now = new Map(stock.map((line) => [line.itemName.toLowerCase(), line]));
+  const now = new Map(stock.map((line) => [textKey(line.itemName), line]));
   const refilled = prepared.map((line) => {
-    const current = now.get(line.itemName.toLowerCase());
+    const current = now.get(textKey(line.itemName));
     return { ...line, qty: Math.max(line.qty, current?.qty ?? 0) };
   });
-  const authored = new Set(prepared.map((line) => line.itemName.toLowerCase()));
-  return [...refilled, ...stock.filter((line) => !authored.has(line.itemName.toLowerCase()))];
+  const authored = new Set(prepared.map((line) => textKey(line.itemName)));
+  return [...refilled, ...stock.filter((line) => !authored.has(textKey(line.itemName)))];
 }
 
 // The item kinds each shop kind stocks, for the pool the tool draws from.

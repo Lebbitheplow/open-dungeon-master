@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { Dialog } from "@/components/ui/Dialog";
 import type { ItemSheet } from "@/lib/help/item-sheet";
 import { firstSentence, parseRulesBlocks } from "@/lib/help/rules-text";
+import { textKey } from "@/lib/language/text-logic";
 
 // The "what does this do?" affordance, used everywhere a game term appears.
 //
@@ -127,13 +128,13 @@ function ContentBody({ reference }: { reference: ContentRef }) {
         }
         // The slug guessed from the name missed, or the row it found carries
         // no text. Search by name and take an exact match.
-        const wanted = (reference.name ?? reference.slug).trim().toLowerCase();
+        const wanted = textKey(reference.name ?? reference.slug);
         const search = await fetch(
           `/api/content/${reference.kind}?q=${encodeURIComponent(wanted)}&limit=20&mechanics=1${scopeQuery(campaignId, "&")}`,
         );
         const results = search.ok ? ((await search.json()).results ?? []) : [];
         const hit = results.find(
-          (entry: { name: string }) => entry.name.trim().toLowerCase() === wanted,
+          (entry: { name: string }) => textKey(entry.name) === wanted,
         );
         if (!cancelled) {
           setState({ text: describeContentEntry(hit?.data), loading: false });
@@ -218,7 +219,7 @@ function ItemBody({ reference }: { reference: ContentRef }) {
     let cancelled = false;
     async function load() {
       const name = (reference.name ?? reference.slug).trim();
-      const wanted = name.toLowerCase();
+      const wanted = textKey(name);
       const readJson = async (response: Response) => (response.ok ? response.json() : null);
       try {
         const [{ buildItemSheet }, direct, search] = await Promise.all([
@@ -227,7 +228,7 @@ function ItemBody({ reference }: { reference: ContentRef }) {
           fetch(`/api/content/items?q=${encodeURIComponent(wanted)}&limit=20${scopeQuery(campaignId, "&")}`).then(readJson).catch(() => null),
         ]);
         const hits = ((search?.results ?? []) as Array<{ name: string; data?: Record<string, unknown> }>)
-          .filter((entry) => entry.name.trim().toLowerCase() === wanted)
+          .filter((entry) => textKey(entry.name) === wanted)
           .map((entry) => entry.data);
         const sheet = buildItemSheet(name, [direct?.entry?.data, ...hits]);
         if (!cancelled) {

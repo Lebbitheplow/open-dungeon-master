@@ -94,7 +94,7 @@ export async function answerSampling(params: Record<string, unknown>, context: S
   const temperature = typeof params.temperature === "number" ? Math.min(2, Math.max(0, params.temperature)) : undefined;
   const settings = context.settings ?? configuredDefaultStorySettings();
   const result = await runInUsageScope(context.scope, () =>
-    requestUtilityMessage(settings, messages, { temperature, timeoutMs: arcTextTimeoutMs(), thinking: false }),
+    requestUtilityMessage(settings, messages, { temperature, timeoutMs: arcTextTimeoutMs(), thinking: false, meta: { task: "addon_sampling" } }),
   );
   if (result.error) {
     const body = (await result.error.json().catch(() => ({}))) as { error?: string };

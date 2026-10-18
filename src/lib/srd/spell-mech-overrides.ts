@@ -12,6 +12,8 @@ import { SRD_LAST_ROWS } from "@/lib/srd/spell-mech-last-rows";
 const MINUTE = 10;
 const TEN_MINUTES = 100;
 const HOUR = 600;
+const EIGHT_HOURS = 4800;
+const DAY = 14400;
 
 // Spells that move or remake rather than harm, or whose effect is the
 // table's to narrate. Their text mentions damage or a save only in passing.
@@ -109,6 +111,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
     condition: { name: "charmed", rounds: MINUTE, saveOnDamage: "normal" },
     targetTypes: ["humanoid"],
     noDamage: true,
+    durationBySlot: [[6, TEN_MINUTES], [7, HOUR], [8, EIGHT_HOURS]],
     note: "The caster commands the charmed creature; it saves again each time it takes damage (the server rolls it). Concentration.",
   },
   "dominate beast": {
@@ -117,6 +120,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
     condition: { name: "charmed", rounds: MINUTE, saveOnDamage: "normal" },
     targetTypes: ["beast"],
     noDamage: true,
+    durationBySlot: [[5, TEN_MINUTES], [6, HOUR], [7, EIGHT_HOURS]],
     note: "The caster commands the charmed beast; it saves again each time it takes damage (the server rolls it). Concentration.",
   },
   "dominate monster": {
@@ -124,6 +128,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
     save: "wis",
     condition: { name: "charmed", rounds: HOUR, saveOnDamage: "normal" },
     noDamage: true,
+    durationBySlot: [[9, EIGHT_HOURS]],
     note: "The caster commands the charmed creature; it saves again each time it takes damage (the server rolls it). Concentration.",
   },
   sleep: {
@@ -215,11 +220,13 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   "hunter's mark": {
     resolution: "buff",
     buff: { condition: "hunter's mark", target: "self", rounds: HOUR },
+    durationBySlot: [[3, EIGHT_HOURS], [5, DAY]],
     note: "Name the quarry in the condition, e.g. \"hunter's mark (the ogre)\".",
   },
   hex: {
     resolution: "buff",
     buff: { condition: "hexing", target: "self", rounds: HOUR },
+    durationBySlot: [[3, EIGHT_HOURS], [5, DAY]],
     note: "Name the target in the condition; it also has disadvantage on checks with one chosen ability.",
   },
   heroism: {

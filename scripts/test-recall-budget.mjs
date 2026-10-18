@@ -292,7 +292,9 @@ await test("the token budget still applies to what the summaries leave", async (
   say(`I tell the whole tale of the ford again: ${"the water, the ash, the miller. ".repeat(400)}`);
   await atWindow(8_000, async () => {
     const { history } = await dmTurn();
-    assert.match(history, /^kept \d+ of 23 messages; 12 covered by the summaries left out; \d+ older dropped over the history budget$/);
+    // The long retelling alone is over an 8K window's allowance: it is kept,
+    // cut at its middle (context-budget.ts fitHistory), not sent whole.
+    assert.match(history, /^kept \d+ of 23 messages; 12 covered by the summaries left out; \d+ older dropped over the history budget(; the newest cut to fit, both ends kept)?$/);
   });
 });
 

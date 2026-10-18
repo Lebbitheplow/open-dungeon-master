@@ -25,6 +25,7 @@ import {
   type OverworldSize,
 } from "@/lib/overworld/features";
 import { isUploadedImagePath } from "@/lib/uploads";
+import { textKey } from "@/lib/language/text-logic";
 
 // Overworld region map storage: one seeded terrain grid per campaign, with
 // known locations anchored at tile coordinates and lead-placed pins.
@@ -202,7 +203,7 @@ function carryAuthoring(
 // location lands near the places it was discovered from.
 function reconcileAnchors(map: OverworldMap, locations: CampaignLocation[]): OverworldMap {
   const anchorsByLocationId = { ...map.anchors };
-  const idByName = new Map(locations.map((location) => [location.name.toLowerCase(), location.id]));
+  const idByName = new Map(locations.map((location) => [textKey(location.name), location.id]));
   const ordered = [...locations].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   let changed = false;
   for (const location of ordered) {
@@ -211,7 +212,7 @@ function reconcileAnchors(map: OverworldMap, locations: CampaignLocation[]): Ove
     }
     let connected: XY | null = null;
     for (const connectionName of location.connections) {
-      const connectedId = idByName.get(connectionName.toLowerCase());
+      const connectedId = idByName.get(textKey(connectionName));
       if (connectedId && anchorsByLocationId[connectedId]) {
         connected = anchorsByLocationId[connectedId];
         break;

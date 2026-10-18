@@ -17,6 +17,12 @@ import assert from "node:assert/strict";
 import { call, posted, signOut } from "./lib/enforce-campaign.mjs";
 import { heroInput, openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
+import { standInStoryteller } from "./lib/stand-in-storyteller.mjs";
+
+// An AI-run table through the routes needs a storyteller set up (the routes
+// refuse one otherwise, and seat a person when none is named); this one never
+// answers.
+standInStoryteller();
 
 const { test, finish } = suite("test-enforce-campaign-config");
 const world = await openWorld({ status: "lobby" });

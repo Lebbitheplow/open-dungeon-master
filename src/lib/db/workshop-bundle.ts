@@ -18,7 +18,7 @@ import { normalizeAmbience } from "@/lib/battlemap/scene";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
 import { sceneIds } from "@/lib/ambience/catalog";
 import { normalizeNpcVoice } from "@/lib/npcs/forge";
-import { foldName } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import {
   EXTRAS_LIMITS,
   normalizeTemplateExtras,
@@ -272,10 +272,10 @@ function writeBundleRows(
         continue;
       }
       let name = map.name;
-      for (let suffix = 2; usedMapNames.has(name.toLowerCase()); suffix += 1) {
+      for (let suffix = 2; usedMapNames.has(textKey(name)); suffix += 1) {
         name = `${map.name} (${suffix})`;
       }
-      usedMapNames.add(name.toLowerCase());
+      usedMapNames.add(textKey(name));
       const id = crypto.randomUUID();
       insertBundleMap(id, workshop.id, { ...map, name }, { backdrop: mapBackdrops[index], overlay: mapOverlays[index] }, now);
       if (mapAddonViews[index]) writeMapAddonView("prepared_maps", id, mapAddonViews[index]);
@@ -297,10 +297,10 @@ function writeBundleRows(
         continue;
       }
       let name = location.name;
-      for (let suffix = 2; usedLocationNames.has(name.toLowerCase()); suffix += 1) {
+      for (let suffix = 2; usedLocationNames.has(textKey(name)); suffix += 1) {
         name = `${location.name} (${suffix})`;
       }
-      usedLocationNames.add(name.toLowerCase());
+      usedLocationNames.add(textKey(name));
       const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO locations
@@ -337,10 +337,10 @@ function writeBundleRows(
       // npcs carries UNIQUE (campaign_id, name): a shared NPC landing as the
       // chapter's own can share a name with one of the chapter's.
       let name = npc.name;
-      for (let suffix = 2; usedNpcNames.has(name.toLowerCase()); suffix += 1) {
+      for (let suffix = 2; usedNpcNames.has(textKey(name)); suffix += 1) {
         name = `${npc.name} (${suffix})`;
       }
-      usedNpcNames.add(name.toLowerCase());
+      usedNpcNames.add(textKey(name));
       const id = crypto.randomUUID();
       const voice = npc.voice ? normalizeNpcVoice(npc.voice) : null;
       db.prepare(
@@ -374,7 +374,7 @@ function writeBundleRows(
       );
       keyed("npcs", id, npc.ref);
       ids.npcs.push(id);
-      npcIdByName.set(foldName(name), id);
+      npcIdByName.set(textKey(name), id);
       copied += 1;
     }
 
@@ -387,7 +387,7 @@ function writeBundleRows(
       ).run(factionId, workshop.id, faction.name, faction.blurb, faction.goal, faction.attitude, faction.power, JSON.stringify(faction.tags), factionPortraits[index], now, now);
       ids.factions.push(factionId);
       for (const member of faction.members) {
-        const memberId = npcIdByName.get(foldName(member));
+        const memberId = npcIdByName.get(textKey(member));
         if (memberId) {
           db.prepare(`UPDATE npcs SET faction_id = ? WHERE id = ?`).run(factionId, memberId);
         }

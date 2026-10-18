@@ -3,6 +3,7 @@ import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
 import { endpointKind } from "@/lib/dm/sampling-logic";
+import { probeCustomContextWindow, storyContextTokens, storyWindowAssumed } from "@/lib/model-client";
 import { serverEnv } from "@/lib/server-env";
 import { soleListedModel } from "@/lib/model-registry/discovery";
 import { recordModelProbe } from "@/lib/model-registry/probes";
@@ -114,7 +115,22 @@ export async function POST(request: Request) {
     // Remembered per host and model (no key, no address), so the model
     // pickers can say what this server found of it.
     recordModelProbe(resolvedBaseUrl, resolvedModel, result as unknown as Parameters<typeof recordModelProbe>[2]);
-    return Response.json(result);
+    // The window a campaign on this backend packs against, read the way a
+    // turn reads it, so setup can say whether it is big enough to narrate
+    // and to fight (src/lib/story-window.ts). `reported` is false when the
+    // server named no size and the conservative stand-in is all there is.
+    let window: { tokens: number; reported: boolean } | undefined;
+    if (which === "story" && result.ok) {
+      const settings = {
+        textProvider: local ? "local" : "custom",
+        localTextModel: resolvedModel,
+        customBaseUrl: resolvedBaseUrl,
+        customModel: resolvedModel,
+      };
+      if (!local) await probeCustomContextWindow(resolvedBaseUrl, resolvedKey, resolvedModel);
+      window = { tokens: storyContextTokens(settings), reported: !storyWindowAssumed(settings) };
+    }
+    return Response.json(window ? { ...result, window } : result);
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "Probe failed." },

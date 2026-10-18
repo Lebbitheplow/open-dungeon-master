@@ -97,7 +97,7 @@ export default function BackgroundKitSection({
               <span className="text-stone-500">from your tool proficiency</span>
             </>
           ) : (
-            <span className="text-amber-300">the tool you pick on the Calling step.</span>
+            <span className="text-amber-300">the tool you pick on the Class step.</span>
           )}
         </p>
       ))}

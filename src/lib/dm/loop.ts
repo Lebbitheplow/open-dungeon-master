@@ -71,7 +71,7 @@ export function requestDmTurn(campaignId: string): boolean {
     // point is covered by this turn; later arrivals re-request.
     requested().delete(campaignId);
     await startDmTurn(campaignId);
-  });
+  }, { kind: "turn" });
   return true;
 }
 

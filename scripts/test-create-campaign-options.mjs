@@ -42,11 +42,18 @@ const creationSurface = `${payload}\n${worldSetup}\n${rulesPanel}`;
 // the stand-in party a WORKSHOP budgets prep against, and a campaign has real
 // character sheets to read instead (docs/workshop-plan.md section 1.1). It
 // lives in gameSettingsSchema because a workshop is a campaigns row.
+//
+// `narrationLength` and `styleNotes` are absent because they answer a table's
+// first sessions, not its creation (issue 383): how long the AI DM runs and
+// what its prose needs is learned by hearing it on this model. Both start
+// as no change at all, and the AI group of GameSettingsPanel owns them.
 const DELIBERATELY_OMITTED = new Set([
   "stages",
   "beatReminder",
   "dmAssist",
   "targetParty",
+  "narrationLength",
+  "styleNotes",
 ]);
 
 let passed = 0;

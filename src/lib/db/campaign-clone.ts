@@ -8,6 +8,7 @@ import { copyBeats } from "@/lib/db/workshop-beats";
 import { copyPackDraft } from "@/lib/db/world-pack-drafts";
 import { getCommonWorkshop, setCommonWorkshop } from "@/lib/db/workshop-common";
 import { dedupeName, IMPORT_KINDS, type ImportKind } from "@/lib/workshop/import";
+import { textKey } from "@/lib/language/text-logic";
 
 // Cloning a whole campaign or workshop.
 //
@@ -36,7 +37,7 @@ function takenTitles(userId: string): Set<string> {
     ...listCampaignsForUser(userId).map((campaign) => campaign.title),
     ...listWorkshopsForUser(userId).map((workshop) => workshop.title),
   ];
-  return new Set(titles.map((title) => title.trim().toLowerCase()));
+  return new Set(titles.map((title) => textKey(title)));
 }
 
 export function cloneCampaign(

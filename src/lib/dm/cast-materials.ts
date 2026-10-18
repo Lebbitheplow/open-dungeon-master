@@ -19,6 +19,7 @@ import type { SpellFacts } from "@/lib/srd/spell-facts";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { COPPER_PER_GOLD, purseCopper } from "@/lib/srd/currency";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type MaterialComponent = {
   // The words a carried line must share.
@@ -157,7 +158,7 @@ export function materialPlan(sheet: Holder, facts: SpellFacts | null, ctx: Mater
     // Lines that name the component and state what one is worth.
     const lines = sheet.equipment
       .map((item, index) => ({ item, index, value: statedValue(item.name), free: Math.max(1, item.qty ?? 1) - (taken.get(index) ?? 0) }))
-      .filter(({ item, value, free }) => free > 0 && value !== null && (words.length ? words.some((word) => item.name.toLowerCase().includes(word)) : true));
+      .filter(({ item, value, free }) => free > 0 && value !== null && (words.length ? words.some((word) => textKey(item.name).includes(word)) : true));
     const pieces = component.count * units;
     let missing: { qty: number; gp: number } | null = null;
     if (component.count === 1 && !component.per) {

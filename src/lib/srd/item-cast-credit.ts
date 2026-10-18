@@ -15,6 +15,8 @@
 // read and never resolved does not pay for a cast an hour later. A restart
 // forgets them, which costs only the old behaviour (the cast spends a slot).
 
+import { textKey } from "@/lib/language/text-logic";
+
 const WINDOW_MS = 5 * 60 * 1000;
 // A credit taken by the cast still lends its DC for a minute: the tool that
 // resolves the spell may ask for the DC after the cast guard ran.
@@ -32,10 +34,6 @@ type Credit = ItemCast & { key: string; at: number; usedAt?: number };
 
 const credits = new Map<string, Credit[]>();
 
-export function spellCreditKey(spell: string): string {
-  return spell.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 function live(sheetId: string, now: number): Credit[] {
   const kept = (credits.get(sheetId) ?? []).filter((credit) =>
     credit.usedAt !== undefined ? now - credit.usedAt <= NUMBERS_AFTER_USE_MS : now - credit.at <= WINDOW_MS,
@@ -50,8 +48,8 @@ function live(sheetId: string, now: number): Credit[] {
 
 // use_item just cast `cast.spell` for this character from an item.
 export function recordItemCast(sheetId: string, cast: ItemCast, now = Date.now()) {
-  const kept = live(sheetId, now).filter((credit) => credit.key !== spellCreditKey(cast.spell) || credit.usedAt !== undefined);
-  kept.push({ ...cast, key: spellCreditKey(cast.spell), at: now });
+  const kept = live(sheetId, now).filter((credit) => credit.key !== textKey(cast.spell) || credit.usedAt !== undefined);
+  kept.push({ ...cast, key: textKey(cast.spell), at: now });
   credits.set(sheetId, kept);
 }
 
@@ -62,7 +60,7 @@ export function takeItemCast(
   spell: string,
   { dryRun = false, now = Date.now() }: { dryRun?: boolean; now?: number } = {},
 ): ItemCast | null {
-  const key = spellCreditKey(spell);
+  const key = textKey(spell);
   const credit = live(sheetId, now).find((entry) => entry.key === key && entry.usedAt === undefined);
   if (!credit) {
     return null;
@@ -83,7 +81,7 @@ export function itemCastNumbers(
   if (!sheetId || !spell.trim()) {
     return null;
   }
-  const key = spellCreditKey(spell);
+  const key = textKey(spell);
   const credit = [...live(sheetId, now)].reverse().find((entry) => entry.key === key);
   return credit ? { saveDc: credit.saveDc, attackBonus: credit.attackBonus } : null;
 }

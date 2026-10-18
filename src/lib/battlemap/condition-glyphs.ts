@@ -42,6 +42,8 @@ export const CONDITION_GLYPHS: Record<string, ConditionGlyph> = {
   blessed: { id: "blessed", label: "Blessed", tone: BLESS, path: "M8 2v12M4 6h8M5 11h6" },
   hasted: { id: "hasted", label: "Hasted", tone: BLESS, path: "M2 5h6M2 8h9M2 11h6M11 4l3 4-3 4" },
   slowed: { id: "slowed", label: "Slowed", tone: HARM, path: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM8 5v3l2 2" },
+  // Haste's aftermath: its own arrows turned back.
+  lethargic: { id: "lethargic", label: "Lethargic", tone: HARM, path: "M8 5h6M10 8h4M8 11h6M5 4L2 8l3 4" },
   cursed: { id: "cursed", label: "Cursed", tone: HARM, path: "M3 3l10 10M13 3L3 13M8 2v12" },
   marked: { id: "marked", label: "Marked", tone: HARM, path: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM8 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8 7a1 1 0 1 0 0 2" },
   shielded: { id: "shielded", label: "Shielded", tone: WARD, path: "M8 2l5 2v4c0 3-2 5-5 6-3-1-5-3-5-6V4l5-2zM6 8l1.5 1.5L10.5 6" },
@@ -151,6 +153,7 @@ export function glyphFor(condition: string): ConditionGlyph {
 const GLYPH_ICON: Record<string, string> = {
   effect: "marked",
   inspiration: "blessed",
+  lethargic: "slowed",
   halted: "restrained",
   retching: "poisoned",
   wandering: "charmed",

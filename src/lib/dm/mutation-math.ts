@@ -2,6 +2,7 @@
 // test runner (scripts/test-mutations.mjs) can import it directly as TS.
 
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "../language/text-logic.ts";
 
 export type SlotState = { max: number; used: number };
 export type EquipmentRow = {
@@ -114,7 +115,7 @@ export function spendSlotMath(slot: SlotState | undefined | null): SlotState | n
 // Returns null when the item is absent.
 export function removeItemMath(equipment: EquipmentRow[], name: string, qty: number) {
   const index = equipment.findIndex(
-    (item) => item.name.toLowerCase() === name.toLowerCase(),
+    (item) => textKey(item.name) === textKey(name),
   );
   if (index < 0) {
     return null;
@@ -145,7 +146,7 @@ export function grantItemMath(
   const amount = Math.max(1, Math.floor(qty));
   const known = options.identified !== false;
   const index = equipment.findIndex(
-    (item) => item.name.toLowerCase() === name.toLowerCase() && isIdentified(item) === known,
+    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known,
   );
   if (index < 0) {
     return {
@@ -173,7 +174,7 @@ export function revealItemMath(
   revealedName?: string,
 ): { equipment: EquipmentRow[]; from: string; to: string } | null {
   const index = equipment.findIndex(
-    (item) => item.name.toLowerCase() === name.toLowerCase() && !isIdentified(item),
+    (item) => textKey(item.name) === textKey(name) && !isIdentified(item),
   );
   if (index < 0) {
     return null;

@@ -16,6 +16,7 @@ import type {
   ClassOption,
   RaceOption,
 } from "./useBuilderOptions";
+import { textKey } from "@/lib/language/text-logic";
 
 export const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
 
@@ -372,14 +373,14 @@ export function usePickerGroups({
     if (gate.locked) {
       return [];
     }
-    const known = new Set(builtInSubclasses.map((entry) => entry.toLowerCase()));
-    return archetypes.filter((entry) => !known.has(entry.name.toLowerCase()));
+    const known = new Set(builtInSubclasses.map((entry) => textKey(entry)));
+    return archetypes.filter((entry) => !known.has(textKey(entry.name)));
   }, [archetypes, builtInSubclasses, gate.locked]);
 
   // The pack row behind the chosen subclass, which carries its write-up.
   const chosenArchetype = useMemo(
     () =>
-      archetypes.find((entry) => entry.name.toLowerCase() === subclass.trim().toLowerCase()) ??
+      archetypes.find((entry) => textKey(entry.name) === textKey(subclass)) ??
       null,
     [archetypes, subclass],
   );
@@ -391,7 +392,7 @@ export function usePickerGroups({
         label: "Full features",
         options: builtInSubclasses.map((subclassName) => {
           const match = archetypes.find(
-            (entry) => entry.name.toLowerCase() === subclassName.toLowerCase(),
+            (entry) => textKey(entry.name) === textKey(subclassName),
           );
           return {
             id: subclassName,

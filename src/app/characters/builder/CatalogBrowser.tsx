@@ -2,12 +2,14 @@
 
 import { scopedParams, useContentCampaign } from "@/lib/content-scope";
 import { Check, ChevronDown, ChevronRight, Loader2, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
+import { PrerequisiteLine } from "./ContentPicker";
 import { uniqueByName } from "./pickerRows";
 import type { PickerEntry } from "./useContentSearch";
+import { textKey } from "@/lib/language/text-logic";
 
 // The whole catalog, not just what you can name.
 //
@@ -63,6 +65,7 @@ export default function CatalogBrowser({
   onUnpick,
   defaultOpen = false,
   openSections = [],
+  judge,
 }: {
   kind: "spells" | "items" | "feats";
   // "Browse all spells", "Browse all items"...
@@ -84,6 +87,9 @@ export default function CatalogBrowser({
   defaultOpen?: boolean;
   // Section keys expanded (and fetched) from the first render.
   openSections?: string[];
+  // A feat's prerequisite as judged (featPrereqs.ts), as ContentPicker
+  // shows it: written under the row, and a blocked row cannot be picked.
+  judge?: (entry: PickerEntry) => { blocked: boolean; note: string } | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [expanded, setExpanded] = useState<string[]>(openSections);
@@ -97,9 +103,10 @@ export default function CatalogBrowser({
   // with new props (a spell level change rewrites `sections` every keystroke
   // elsewhere in the step).
   const fetched = useRef(new Set<string>());
+  const noteId = useId();
 
   const selected = useMemo(
-    () => new Set(selectedNames.map((name) => name.trim().toLowerCase())),
+    () => new Set(selectedNames.map((name) => textKey(name))),
     [selectedNames],
   );
 
@@ -185,14 +192,14 @@ export default function CatalogBrowser({
   }
 
   function toggleRow(entry: PickerEntry) {
-    if (selected.has(entry.name.trim().toLowerCase())) {
+    if (selected.has(textKey(entry.name))) {
       onUnpick?.(entry.name);
-    } else {
+    } else if (!judge?.(entry)?.blocked) {
       onPick(entry);
     }
   }
 
-  const needle = filter.trim().toLowerCase();
+  const needle = textKey(filter);
 
   return (
     <div className="mt-2">
@@ -226,9 +233,9 @@ export default function CatalogBrowser({
               ) : null}
               <ul>
                 {recommended.entries
-                  .filter((entry) => !needle || entry.name.toLowerCase().includes(needle))
+                  .filter((entry) => !needle || textKey(entry.name).includes(needle))
                   .map((entry) => {
-                    const on = selected.has(entry.name.trim().toLowerCase());
+                    const on = selected.has(textKey(entry.name));
                     return (
                       <li key={entry.name} className="flex items-center gap-1 pr-1 hover:bg-stone-800/60">
                         <button
@@ -275,7 +282,7 @@ export default function CatalogBrowser({
             const isLoading = loading.includes(section.key);
             const rows = loaded[section.key]?.rows ?? [];
             const visible = needle
-              ? rows.filter((entry) => entry.name.toLowerCase().includes(needle))
+              ? rows.filter((entry) => textKey(entry.name).includes(needle))
               : rows;
             return (
               <div key={section.key} className="border-t border-stone-800/80 first:border-t-0">
@@ -318,7 +325,10 @@ export default function CatalogBrowser({
                           ) : null}
                           <ul>
                             {bucket.rows.map((entry) => {
-                              const on = selected.has(entry.name.trim().toLowerCase());
+                              const on = selected.has(textKey(entry.name));
+                              const verdict = judge?.(entry) ?? null;
+                              const blocked = Boolean(verdict?.blocked && !on);
+                              const describedBy = `${noteId}-${section.key}-${entry.slug}`;
                               return (
                                 <li
                                   key={entry.slug}
@@ -327,23 +337,31 @@ export default function CatalogBrowser({
                                   <button
                                     type="button"
                                     aria-pressed={on}
+                                    aria-disabled={blocked || undefined}
+                                    aria-describedby={verdict ? describedBy : undefined}
                                     onClick={() => toggleRow(entry)}
-                                    className="flex grow items-center justify-between gap-2 px-2 py-1.5 text-left text-xs"
+                                    className={cn(
+                                      "flex grow items-center justify-between gap-2 px-2 py-1.5 text-left text-xs",
+                                      blocked && "cursor-not-allowed opacity-70",
+                                    )}
                                   >
-                                    <span className="flex items-center gap-1.5">
-                                      {on ? (
-                                        <Check className="size-3.5 shrink-0 text-amber-200" />
-                                      ) : (
-                                        <Plus className="size-3.5 shrink-0 text-stone-600" />
-                                      )}
-                                      <span
-                                        className={cn(
-                                          on && "text-amber-200",
-                                          entry.source === "homebrew" && !on && "text-amber-300",
+                                    <span className="flex flex-col">
+                                      <span className="flex items-center gap-1.5">
+                                        {on ? (
+                                          <Check className="size-3.5 shrink-0 text-amber-200" />
+                                        ) : (
+                                          <Plus className="size-3.5 shrink-0 text-stone-600" />
                                         )}
-                                      >
-                                        {entry.name}
+                                        <span
+                                          className={cn(
+                                            on && "text-amber-200",
+                                            entry.source === "homebrew" && !on && "text-amber-300",
+                                          )}
+                                        >
+                                          {entry.name}
+                                        </span>
                                       </span>
+                                      {verdict ? <PrerequisiteLine id={describedBy} {...verdict} /> : null}
                                     </span>
                                     <span className="shrink-0 text-[11px] text-stone-500">
                                       {entry.source === "homebrew"

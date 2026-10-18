@@ -1,0 +1,71 @@
+name: Stable branch
+
+# Keeps the `stable` branch on the latest stable release, so an install
+# cloned with `git clone -b stable` updates with a plain `git pull`
+# (docs/releases.md). Runs whenever a release becomes stable: published that
+# way, or promoted from a beta by clearing its prerelease flag. It also runs
+# when this file lands on main, which creates the branch at the latest
+# release, and by hand with a tag to set the branch to that release.
+
+on:
+  release:
+    types: [released]
+  push:
+    branches: [main]
+    paths: [.github/workflows/stable-branch.yml]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Stable release tag the branch should point at (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stable-branch
+  cancel-in-progress: false
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Point stable at the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          # Only the latest stable release moves the branch: promoting a fix
+          # to an older line, while a newer stable exists, leaves it be.
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          # A push names no release: it is the latest one.
+          TAG="${TAG:-$latest}"
+          if [ "$latest" != "$TAG" ]; then
+            echo "::notice::$TAG is not the latest stable release ($latest); stable stays where it is."
+            exit 0
+          fi
+          target=$(git rev-parse "$TAG^{commit}")
+          if ! git rev-parse -q --verify refs/remotes/origin/stable > /dev/null; then
+            git push origin "$target:refs/heads/stable"
+            echo "Created stable at $TAG ($target)."
+            exit 0
+          fi
+          if git merge-base --is-ancestor refs/remotes/origin/stable "$target"; then
+            git push origin "$target:refs/heads/stable"
+            echo "Moved stable to $TAG ($target)."
+            exit 0
+          fi
+          # The release does not descend from the previous stable one (a
+          # release branch that was never merged back into main). A merge
+          # commit whose files are exactly the release's keeps `git pull` a
+          # fast-forward for everyone on the branch.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          commit=$(git commit-tree "$TAG^{tree}" -p refs/remotes/origin/stable -p "$target" -m "Stable is $TAG")
+          git push origin "$commit:refs/heads/stable"
+          echo "::warning::$TAG does not descend from the previous stable release, so stable got a merge commit with $TAG's files. Merge release branches back into main (docs/releases.md) to keep it a plain fast-forward."

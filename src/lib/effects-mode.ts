@@ -156,6 +156,14 @@ export function prefersReducedMotion(): boolean {
   );
 }
 
+// Whether decorative motion should stand down right now: the OS asks for
+// reduced motion, or this device is set to low effects. Read at the moment
+// of the motion (a toss, a smooth scroll), so a change in Settings counts
+// at once.
+export function prefersStillMotion(): boolean {
+  return prefersReducedMotion() || readEffectsMode() === "low";
+}
+
 // Haptics through the app shell when it offers them; a no-op on the web.
 export function haptic(kind: "hit" | "crit" | "turn" | "tap") {
   try {

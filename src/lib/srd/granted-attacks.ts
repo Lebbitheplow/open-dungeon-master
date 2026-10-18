@@ -6,11 +6,7 @@
 
 import { activeConditionEffects } from "@/lib/srd/condition-effects";
 import type { GrantedAttack } from "@/lib/srd/condition-effect-types";
-
-// Names compared as the registry compares them.
-function normalize(name: string) {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
+import { textKey } from "@/lib/language/text-logic";
 
 // Attack options the holder's conditions grant, resolved for pc_attack:
 // the named term matches loosely so "starry form" or "archer" finds it.
@@ -18,7 +14,7 @@ export function grantedAttackFor(
   conditions: string[],
   term: string,
 ): { attack: GrantedAttack; condition: string } | null {
-  const wanted = normalize(term);
+  const wanted = textKey(term);
   if (!wanted) {
     return null;
   }
@@ -27,12 +23,12 @@ export function grantedAttackFor(
     if (!attack) {
       continue;
     }
-    const name = normalize(attack.name);
+    const name = textKey(attack.name);
     if (
       name === wanted ||
       name.includes(wanted) ||
       wanted.includes(name) ||
-      normalize(condition).includes(wanted)
+      textKey(condition).includes(wanted)
     ) {
       return { attack, condition };
     }

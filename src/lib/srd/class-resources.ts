@@ -13,6 +13,7 @@ import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } f
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
 import { tableFeat } from "@/lib/srd/feat-effects";
+import { containsPhrase, textKey } from "@/lib/language/text-logic";
 
 export { isUnlimited, UNLIMITED_USES } from "@/lib/srd/resource-limits";
 
@@ -199,7 +200,7 @@ export type ResourceDef = {
   // level = class level. Absent = scale by the level of whichever class
   // granted the matching feature (feature.classId), else character level.
   classIds?: string[];
-  // Feature name(s) this resource attaches to, lowercased for matching.
+  // Feature name(s) this resource attaches to, compared by key (textKey).
   match: string[];
   // Require the feature name to BE the match term, not merely contain it as
   // a word: "Rage" is barbarian rage, "Road Rage" (road_warrior) is not.
@@ -762,32 +763,26 @@ function freeCastDef(id: string): ResourceDef {
   };
 }
 
-// Whole-word containment: the fragment must appear as its own word(s), so
-// "ki" matches "Ki" and "Ki Points" but never "Skill Versatility" (the
-// half-elf trait that a bare substring test turns into a monk).
-//
-// Both sides are stripped of punctuation, not just the fragment: a feature
-// named "Hexblade's Curse" or "Stone's Endurance" otherwise never matched its
-// own apostrophe-free fragment.
-function containsWord(haystack: string, fragment: string): boolean {
-  const clean = (value: string) => value.replace(/[^a-z ]/g, "");
-  return new RegExp(`(^|[^a-z])${clean(fragment)}([^a-z]|$)`).test(clean(haystack));
-}
+// Words compared without their apostrophes on either side: a feature named
+// "Hexblade's Curse" is also written "Hexblades Curse".
+const unquoted = (text: string) => text.replace(/['‘’ʼ´`]/g, "");
 
 // Fuzzy find by id or display/feature name ("rage", "Ki", "sorcery
 // points"...); used by the use_resource tool with model-supplied names.
 export function matchResource(term: string): ResourceDef | null {
-  const wanted = term.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  const wanted = textKey(term);
   if (!wanted) {
     return null;
   }
+  // A fragment counts as whole words, so "ki" matches "Ki" and "Ki Points"
+  // but never "Skill Versatility" (the half-elf trait that a bare substring
+  // test turns into a monk).
+  const asked = unquoted(term);
   return (
-    RESOURCE_DEFS.find((def) => def.id.replace(/_/g, " ") === wanted) ??
-    RESOURCE_DEFS.find((def) => def.displayName.toLowerCase() === wanted) ??
+    RESOURCE_DEFS.find((def) => textKey(def.id) === wanted) ??
+    RESOURCE_DEFS.find((def) => textKey(def.displayName) === wanted) ??
     RESOURCE_DEFS.find((def) =>
-      def.match.some(
-        (name) => name === wanted || containsWord(wanted, name) || containsWord(name, wanted),
-      ),
+      def.match.some((name) => containsPhrase(asked, unquoted(name)) || containsPhrase(unquoted(name), asked)),
     ) ??
     null
   );
@@ -826,9 +821,6 @@ function resourceLevelFor(
   return { level, classId: granting };
 }
 
-const plainName = (value: string) =>
-  value.trim().toLowerCase().replace(/[^a-z0-9()]+/g, " ").trim();
-
 // "Hardened (2 uses)" is the feature Hardened, grown: the suffix is what an
 // upgrade line adds to the name of the feature it upgrades.
 const withoutUses = (name: string) => name.replace(/\s*\((?:\d+|[a-z]+) uses?\)\s*$/i, "");
@@ -845,15 +837,15 @@ function featureHolds(def: ResourceDef, feature: { name: string; classId?: strin
       return false;
     }
   }
-  const name = feature.name.trim().toLowerCase();
+  const name = textKey(feature.name);
   return def.match.some((fragment) => {
-    if (name === fragment || plainName(withoutUses(name)) === plainName(fragment)) {
+    if (name === textKey(fragment) || textKey(withoutUses(feature.name)) === textKey(fragment)) {
       return true;
     }
-    if (def.upgrades?.some((upgrade) => plainName(upgrade.match) === plainName(name))) {
+    if (def.upgrades?.some((upgrade) => textKey(upgrade.match) === name)) {
       return true;
     }
-    return !def.exact && containsWord(name, fragment);
+    return !def.exact && containsPhrase(unquoted(feature.name), unquoted(fragment));
   });
 }
 
@@ -918,9 +910,8 @@ export function populateResources(
     // A feature that upgrades this one raises the ceiling: by the row the
     // catalog wrote for it, or by the count its own name states.
     for (const feature of held) {
-      const name = feature.name.trim().toLowerCase();
-      const row = def.upgrades?.find((upgrade) => plainName(upgrade.match) === plainName(name));
-      const stated = def.upgrades ? usesNamed(name) : null;
+      const row = def.upgrades?.find((upgrade) => textKey(upgrade.match) === textKey(feature.name));
+      const stated = def.upgrades ? usesNamed(feature.name) : null;
       max = Math.max(max, row?.uses ?? 0, stated ?? 0);
     }
     const key = def.into ?? def.id;

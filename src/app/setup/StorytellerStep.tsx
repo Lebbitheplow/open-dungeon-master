@@ -4,6 +4,7 @@ import { ExternalLink, Loader2, RefreshCw, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { RECOMMENDED_WINDOW, STORY_WINDOW_NEEDS, windowFlag } from "@/lib/story-window";
 import { BackendProbe } from "@/app/admin/BackendProbe";
 import { CopyLine } from "@/components/CopyLine";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -293,6 +294,7 @@ function LocalPanel({
       {local.baseUrl && local.model ? (
         <BackendProbe which="story" baseUrl={normalizeBaseUrl(local.baseUrl)} model={local.model} apiKey={local.apiKey} />
       ) : null}
+      <p className="text-[11px] leading-4 text-stone-500">{STORY_WINDOW_NEEDS} The server sets it (llama-server -c, Ollama&apos;s num_ctx).</p>
     </div>
   );
 }
@@ -309,6 +311,10 @@ function StartHints({ inContainer }: { inContainer: boolean }) {
             the server on the host listening on 0.0.0.0, not only 127.0.0.1.
           </p>
         ) : null}
+        <p>
+          {STORY_WINDOW_NEEDS} The commands below run the default storyteller at 64K; on a smaller machine,{" "}
+          <code>-c {windowFlag(RECOMMENDED_WINDOW)}</code> still plays everything.
+        </p>
         <div>
           <span className="mb-1 block">llama.cpp with the default storyteller (Qwen3.6-35B-A3B, 64K window):</span>
           <CopyLine

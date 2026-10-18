@@ -5,7 +5,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { spendAction, spendAttack, type SpendResult, type TurnBudget } from "@/lib/dm/action-budget";
 import { addSheetCondition } from "@/lib/dm/action-common";
 import { bonusRouteFor, counterSpend, kiSpend, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-actions";
@@ -397,7 +397,7 @@ export function handleTakeAction(
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
-    conditionExtraActions(sheet.conditions),
+    conditionTurnShape(sheet.conditions),
   );
   // Under Fire's route opens while an ally lies at 0 hit points.
   const allyDown = sheets.some((entry) => entry.id !== sheet.id && (getSheetById(entry.id) ?? entry).currentHp <= 0 && !(getSheetById(entry.id) ?? entry).deathSaves?.dead);

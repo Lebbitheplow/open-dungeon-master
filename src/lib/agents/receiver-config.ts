@@ -7,6 +7,8 @@
 // Each file names its own state directory, so receivers for several agents
 // can share one private folder.
 
+import { slugOf } from "../language/text-logic.ts";
+
 export const RECEIVER_PATH = "/odm-player";
 export const RECEIVER_PORT = 8787;
 
@@ -39,13 +41,13 @@ export function receiverPort(value: number): number {
   return value;
 }
 
-// A name for the character's files: lower case letters, digits and dashes.
+// A name for the character's files: the name's words, in any script.
 // The name is for the person reading the folder; the end of the campaign
 // sheet's ID keeps two sheets apart that share a name (one library character
 // copied into two campaigns), so their receivers never share state or a
 // stored token.
 export function receiverSlug(characterName: string, characterId: string): string {
-  const name = characterName.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24).replace(/-+$/, "");
+  const name = slugOf(characterName).slice(0, 24).replace(/_+$/, "");
   const id = characterId.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(-8) || "player";
   return name ? `${name}-${id}` : id;
 }

@@ -61,7 +61,7 @@ export function LinkEditor({
       {!target ? (
         <EntityPicker doc={doc} entities={entities} exclude={[from.ref]} label="the other end" autoFocus onPick={(entity) => setTo(entity.ref)} />
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 @lg:grid-cols-2">
           <div className="flex flex-col gap-1">
             <span className="eyebrow text-[10px] text-stone-500">Words</span>
             <Select
@@ -112,7 +112,7 @@ export function LinkEditor({
             </label>
           ) : null}
           {from.shelf === "npc" && playFieldOf(label, target.shelf) ? (
-            <p className="text-[11px] text-stone-500 sm:col-span-2" data-testid="world-link-play-note">
+            <p className="text-[11px] text-stone-500 @lg:col-span-2" data-testid="world-link-play-note">
               {`Play keeps its own ${playFieldOf(label, target.shelf)} for ${from.name}. This link changes it only when you choose it under In play on this entry.`}
             </p>
           ) : null}

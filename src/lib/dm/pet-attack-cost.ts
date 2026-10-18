@@ -6,9 +6,10 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { claimOncePerTurn, spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // What commanding a pet's attack costs its owner in a fight (SRD 5.1 and
 // the subclasses' own text): a Beast Master's companion takes the ranger's
@@ -26,14 +27,14 @@ export function petAttackCost(
   if (!allowed.ok) {
     return { ...toolError(allowed), error: `${allowed.error} ${pet.name} attacks when ${sheet.name} commands it on their turn.` };
   }
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   if (!budget) {
     return { commit: () => `${pet.name} attacks; there is no turn in play to charge.` };
   }
   let spent;
   let economy: string;
   if (pet.kind === "familiar") {
-    const once = claimOncePerTurn(budget, `familiar:${pet.name.toLowerCase()}`);
+    const once = claimOncePerTurn(budget, `familiar:${textKey(pet.name)}`);
     if (!once) {
       return { error: `${pet.name} has already attacked with its reaction this turn.`, refused: "rules" };
     }

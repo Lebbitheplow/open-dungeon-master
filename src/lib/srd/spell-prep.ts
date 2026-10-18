@@ -10,6 +10,7 @@ import {
   thirdCasterSpellsKnown,
 } from "@/lib/srd/third-caster";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // How a caster's spell list works, and the 5e (SRD 5.1) timing for changing
 // it. Pure and database-free, shared by the sheet, the builder, the server
@@ -80,13 +81,13 @@ type SheetLike = Pick<CharacterSheet, "class" | "level" | "subclass" | "classes"
 };
 
 const lower = (name: string) => name.trim().toLowerCase();
-const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
-const without = (list: string[], name: string) => list.filter((entry) => lower(entry) !== lower(name));
+const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
+const without = (list: string[], name: string) => list.filter((entry) => textKey(entry) !== textKey(name));
 
 export function dedupeNames(names: string[]): string[] {
   const seen = new Set<string>();
   return names.filter((name) => {
-    const key = lower(name);
+    const key = textKey(name);
     if (!key || seen.has(key)) {
       return false;
     }
@@ -407,11 +408,11 @@ export function spellListProblems(
   options: { bookAllowance?: boolean; freeCantrips?: string[]; freeCantripCount?: number; freeSpells?: string[] } = {},
 ): string[] {
   const problems: string[] = [];
-  const free = new Set((options.freeCantrips ?? []).map(lower).filter(Boolean));
+  const free = new Set((options.freeCantrips ?? []).map(textKey).filter(Boolean));
   // Spells a feat teaches (Fey Touched's misty step) are known on top of
   // the class's own and from any list, so they are left out of the count
   // and the level cap alike.
-  const freeSpells = new Set((options.freeSpells ?? []).map(lower).filter(Boolean));
+  const freeSpells = new Set((options.freeSpells ?? []).map(textKey).filter(Boolean));
   // A sheet in play does not say which cantrip the race gave, only that it
   // gave one: `freeCantripCount` is that many, whichever they are, and they
   // sit with the first caster's.
@@ -419,14 +420,14 @@ export function spellListProblems(
   for (const view of casterViewsOf(sheet)) {
     const label = `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
     const cantripCap = cantripCapOf(view);
-    const named = dedupeNames(view.cantrips).filter((name) => !free.has(lower(name)));
+    const named = dedupeNames(view.cantrips).filter((name) => !free.has(textKey(name)));
     const cantrips = named.slice(0, Math.max(0, named.length - freeCount));
     freeCount = 0;
     if (cantripCap !== null && cantrips.length > cantripCap) {
       problems.push(`A ${label} knows ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}; that list has ${cantrips.length}.`);
     }
     const granted = grantedSpellsOf(view);
-    const held = dedupeNames([...heldSpells(view), ...view.pending]).filter((name) => !isCantripName(name) && !freeSpells.has(lower(name)));
+    const held = dedupeNames([...heldSpells(view), ...view.pending]).filter((name) => !isCantripName(name) && !freeSpells.has(textKey(name)));
     const cap = spellCapOf(view, sheet.abilities);
     const counted = spellsAgainstLimit(held, granted);
     if (cap && counted > cap.count) {
@@ -440,7 +441,7 @@ export function spellListProblems(
       }
     }
     const top = Math.max(maxSpellLevelOf(view), arcanumTop(view));
-    for (const name of dedupeNames([...held, ...view.spellbook]).filter((name) => !freeSpells.has(lower(name)))) {
+    for (const name of dedupeNames([...held, ...view.spellbook]).filter((name) => !freeSpells.has(textKey(name)))) {
       const spellLevel = spellLevelOf(name);
       if (spellLevel !== null && spellLevel > top) {
         problems.push(

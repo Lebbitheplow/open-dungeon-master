@@ -145,6 +145,21 @@ await test("An aside is asked only when the gate says so; its sentences leave th
   assert.equal(withoutAsides(plan, [{ kind: "aside", quote: "The quay is not on the map yet. I will set the landing first." }]), "", "a quote over two sentences cuts both");
 });
 
+// Gemma4 e4b, whose reader (the same small model) quoted none of these, sent
+// its reply to a correction and its echo of a player's line to the table.
+await test("What a small model writes about the turn is cut without the reader; speech and fiction about tools are not.", () => {
+  const meta =
+    "It appears I made an unwarranted assumption about the combat sequence. Since you declared an action that resulted in damage without a tool call, I will correct this by calling the necessary tool to resolve the attack properly, and then narrate the results based on the tool's output.";
+  assert.equal(withoutAsides(meta, []), "");
+  assert.equal(withoutAsides("Bram | attempt to ask the merchant about the coffer's contents.", []), "", "the player's line echoed in its input format");
+  assert.equal(withoutAsides("[Avery | attempt] I search the reeds.\nThe reeds hide nothing but a heron.", []), "The reeds hide nothing but a heron.");
+  assert.equal(withoutAsides("Rain lashes the ford.\n[Table note] Bandit 2 attacks Avery.", []).trim(), "Rain lashes the ford.");
+  const speech = 'The innkeeper scowls. "I\'ll call the guards if you touch that tool chest." What do you do?';
+  assert.equal(withoutAsides(speech, []), speech, "a quoted line is speech");
+  const tools = "Avery pulls out her thieves' tools and calls softly to Bram. The lock clicks.";
+  assert.equal(withoutAsides(tools, []), tools);
+});
+
 await test("A claim of a kind not asked, about a creature the engine does not know, or by someone outside the party never acts.", () => {
   const text = "The ogre falls. The dragon dies. Mira casts Fireball. Vex casts Fireball.";
   const ctx = context(text, ["dies", "cast"]);
@@ -153,7 +168,7 @@ await test("A claim of a kind not asked, about a creature the engine does not kn
   assert.deepEqual(checkClaims([{ kind: "dies", target: "ogre", quote: "The ogre falls." }], ctx).length, 1);
   assert.deepEqual(checkClaims([{ kind: "cast", caster: "vex", spell: "Fireball", quote: "Vex casts Fireball." }], ctx), [], "an enemy caster");
   const [fireball] = checkClaims([{ kind: "cast", caster: mira.id, spell: "Fireball (3rd level)", quote: "Mira casts Fireball." }], ctx);
-  assert.deepEqual(fireball, { kind: "cast", caster: "Mira", spell: "fireball", quote: "Mira casts Fireball." });
+  assert.deepEqual(fireball, { kind: "cast", caster: "Mira", spell: "Fireball (3rd level)", quote: "Mira casts Fireball." });
 });
 
 await test("A cast tied to something its own caster spent this turn is that spend, not a spell; tied to anything else it is still a cast.", () => {
@@ -166,7 +181,7 @@ await test("A cast tied to something its own caster spent this turn is that spen
   assert.equal(checkClaims([{ ...hold, spent: "s9" }], ctx).length, 1, "a spend the turn never made");
   // A reader that fills the field it leaves empty with null.
   assert.equal(checkClaims([{ ...hold, spent: null }], ctx).length, 1, "no spend, written as null");
-  assert.deepEqual(checkClaims([{ ...bane, spent: "s1" }, hold], ctx), [{ kind: "cast", caster: "Mira", spell: "hold person", quote: hold.quote }]);
+  assert.deepEqual(checkClaims([{ ...bane, spent: "s1" }, hold], ctx), [{ kind: "cast", caster: "Mira", spell: "Hold Person", quote: hold.quote }]);
 });
 
 await test("A cantrip cast, an unknown skill or a save with no ability is dropped; a malformed claim drops alone.", () => {

@@ -1,5 +1,5 @@
 import type { Stub } from "./model.ts";
-import { commonWords, compareNames, foldName } from "../language/text-logic.ts";
+import { commonWords, compareNames, namesPattern, textKey, WORD_CHAR, words } from "../language/text-logic.ts";
 
 // Mentions and the names still to be written, after WorldForge's mentions
 // and stubs modules (by Smoebo). Pure.
@@ -29,13 +29,13 @@ export function mentionSegments(text: string, named: Named[], selfRef = ""): Seg
   if (!handles.length) return [{ text }];
   handles.sort((a, b) => b.handle.length - a.handle.length);
   const byHandle = new Map<string, string>();
-  for (const { handle, ref } of handles) if (!byHandle.has(handle)) byHandle.set(handle, ref);
-  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${[...byHandle.keys()].map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\p{L}\\p{N}_])`, "gu");
+  for (const { handle, ref } of handles) if (!byHandle.has(textKey(handle))) byHandle.set(textKey(handle), ref);
+  const pattern = namesPattern(handles.map((entry) => entry.handle), "gu");
   const out: Segment[] = [];
   let last = 0;
   for (const match of text.matchAll(pattern)) {
     if (match.index! > last) out.push({ text: text.slice(last, match.index) });
-    out.push({ text: match[0], ref: byHandle.get(match[0]) });
+    out.push({ text: match[0], ref: byHandle.get(textKey(match[0])) });
     last = match.index! + match[0].length;
   }
   if (last < text.length) out.push({ text: text.slice(last) });
@@ -60,9 +60,9 @@ export function mentionSegments(text: string, named: Named[], selfRef = ""): Seg
 // "von") once the world writes it between two different pairs of them, its
 // own names included.
 
-const CAPITAL = "\\p{Lu}[\\p{L}\\p{M}\\p{N}'\u2019-]*";
-const capital = new RegExp(`(?<![\\p{L}\\p{N}])${CAPITAL}`, "gu");
-const LINKED = new RegExp(`(?<![\\p{L}\\p{N}])(${CAPITAL}) (\\p{Ll}[\\p{L}\\p{M}]*) (?=(${CAPITAL}))`, "gu");
+const CAPITAL = `\\p{Lu}[${WORD_CHAR}'\u2019-]*`;
+const capital = new RegExp(`(?<![${WORD_CHAR}])${CAPITAL}`, "gu");
+const LINKED = new RegExp(`(?<![${WORD_CHAR}])(${CAPITAL}) (\\p{Ll}[${WORD_CHAR}]*) (?=(${CAPITAL}))`, "gu");
 
 // The lower-case words the world writes between two different pairs of
 // capitalised words.
@@ -89,16 +89,16 @@ function atSentenceStart(text: string, index: number): boolean {
 }
 
 const handlesOf = (named: Named[]) =>
-  named.flatMap((entry) => [entry.name, ...entry.aliases]).map(foldName).filter(Boolean);
+  named.flatMap((entry) => [entry.name, ...entry.aliases]).map(textKey).filter(Boolean);
 const wordSubset = (container: string, part: string) => ` ${container} `.includes(` ${part} `);
 
 export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<{ name: string; count: number }> {
   const handles = handlesOf(named);
-  const known = new Set([...handles, ...stubs.map((stub) => foldName(stub.name))]);
+  const known = new Set([...handles, ...stubs.map((stub) => textKey(stub.name))]);
   const common = commonWords(texts);
   const connectors = connectorsIn([...texts, ...named.flatMap((entry) => [entry.name, ...entry.aliases]), ...stubs.map((stub) => stub.name)]);
   const joiner = connectors.size ? `(?: (?:${[...connectors].join("|")}))?` : "";
-  const run = new RegExp(`(?<![\\p{L}\\p{N}])${CAPITAL}(?:${joiner} ${CAPITAL})*`, "gu");
+  const run = new RegExp(`(?<![${WORD_CHAR}])${CAPITAL}(?:${joiner} ${CAPITAL})*`, "gu");
   const midCapitals = new Set(
     texts.flatMap((text) => [...text.matchAll(capital)].filter((match) => !atSentenceStart(text, match.index)).map((match) => match[0])),
   );
@@ -118,7 +118,7 @@ export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<
       }
       const name = parts.join(" ");
       if (!name) continue;
-      const low = foldName(name);
+      const low = textKey(name);
       const seen = tally.get(low) ?? { name, count: 0, mid: false };
       seen.count += 1;
       if (stripped || !atStart) seen.mid = true;
@@ -127,9 +127,9 @@ export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<
   }
   const out: Array<{ name: string; count: number }> = [];
   for (const [low, seen] of tally) {
-    const words = low.split(" ").filter((word) => !connectors.has(word));
-    if (words.length <= 1) {
-      const word = words[0] ?? "";
+    const own = words(seen.name).map(textKey).filter((word) => !connectors.has(word));
+    if (own.length <= 1) {
+      const word = own[0] ?? "";
       if (word.length < 3 || common.has(word) || seen.count < 2 || !seen.mid) continue;
     }
     if (known.has(low) || handles.some((handle) => wordSubset(handle, low) || wordSubset(low, handle))) continue;
@@ -141,6 +141,6 @@ export function stubScan(texts: string[], named: Named[], stubs: Stub[]): Array<
 // The entry that now answers to a stub's name, if one does: the stub is
 // done and can be cleared.
 export function stubResolved(stub: Stub, named: Named[]): Named | null {
-  const low = foldName(stub.name);
-  return named.find((entry) => [entry.name, ...entry.aliases].some((handle) => foldName(handle) === low)) ?? null;
+  const low = textKey(stub.name);
+  return named.find((entry) => [entry.name, ...entry.aliases].some((handle) => textKey(handle) === low)) ?? null;
 }

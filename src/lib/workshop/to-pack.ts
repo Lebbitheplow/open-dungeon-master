@@ -1,4 +1,5 @@
 import type { WorkshopBundle } from "@/lib/workshop/bundle";
+import { asciiSlugOf } from "@/lib/language/text-logic";
 
 // Compiling a workshop into a world pack, and saying plainly what does not
 // travel.
@@ -73,10 +74,7 @@ function clip(text: string, max: number): string {
 // says so in its own comment). So this derives a SAFE id and falls back to a
 // fixed one rather than ever emitting something that might not match.
 export function packIdFrom(name: string): string {
-  const slug = (name ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
+  const slug = asciiSlugOf(name ?? "")
     .replace(/^[^a-z]+/, "")
     .slice(0, 50);
   return /^[a-z][a-z0-9_]{2,49}$/.test(slug) ? slug : "my_world";
@@ -185,6 +183,7 @@ export function compileToPack(bundle: WorkshopBundle): CompiledPack {
     dmFlavor: "",
     mapStyle: "",
     portraitStyle: "",
+    sceneStyle: "",
     nameHints: "",
     raceHint: "",
     companionRaces: [],

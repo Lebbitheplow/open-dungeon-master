@@ -39,6 +39,7 @@ import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
@@ -51,7 +52,7 @@ export function srdFeatureSpend(
   resourceName: string,
   args: SrdSpendArgs,
 ): Record<string, unknown> | null {
-  const name = lower(resourceName);
+  const name = textKey(resourceName);
   const sheet = getSheetById(stale.id) ?? stale;
   if (name === "peerless skill") return peerlessSkill(campaign, sheet);
   if (name === "quivering palm") return quiveringPalm(campaign, turnId, sheet, args.targetEnemyId);

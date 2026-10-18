@@ -41,10 +41,10 @@ export function TypesView({ api, world }: { api: WorldApi; world: WorldState }) 
         </KitButton>
       </div>
       {editing && !doc.types.some((type) => type.id === editing.id) ? <TypeForm type={editing} isNew onSave={save} onCancel={() => setEditing(null)} /> : null}
-      <ul className="grid gap-2 md:grid-cols-2">
+      <ul className="grid gap-2 @2xl:grid-cols-2">
         {doc.types.map((type, index) =>
           editing?.id === type.id ? (
-            <li key={type.id} className="md:col-span-2">
+            <li key={type.id} className="@2xl:col-span-2">
               <TypeForm type={editing} isNew={false} onSave={save} onCancel={() => setEditing(null)} />
             </li>
           ) : (
@@ -93,7 +93,7 @@ function TypeForm({ type, isNew, onSave, onCancel }: { type: WorldType; isNew: b
   const setField = (id: string, patch: Partial<FieldDef>) => setDraft((current) => ({ ...current, fields: current.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)) }));
   return (
     <form className="panel motion-pop flex flex-col gap-2.5 rounded-lg p-3" onSubmit={(event) => { event.preventDefault(); if (draft.name.trim()) onSave({ ...draft, name: draft.name.trim(), fields: draft.fields.filter((field) => field.name.trim()) }); }}>
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-2 @lg:grid-cols-[1fr_auto]">
         <input className={ui.input} placeholder="Deity, Ship, Noble House" aria-label="Type name" maxLength={40} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoFocus />
         <div className="flex items-center gap-1" role="radiogroup" aria-label="Colour">
           {TYPE_COLORS.map((color) => (
@@ -119,7 +119,7 @@ function TypeForm({ type, isNew, onSave, onCancel }: { type: WorldType; isNew: b
       <div className="flex flex-col gap-1.5">
         <span className="eyebrow text-[10px] text-stone-500">Fields</span>
         {draft.fields.map((field) => (
-          <div key={field.id} className="motion-pop grid items-center gap-1.5 sm:grid-cols-[1fr_9rem_auto_auto_auto]">
+          <div key={field.id} className="motion-pop grid items-center gap-1.5 @lg:grid-cols-[1fr_9rem_auto_auto_auto]">
             <input className={cn(ui.input, "py-1 text-xs")} placeholder="Field name" aria-label="Field name" maxLength={60} value={field.name} onChange={(event) => setField(field.id, { name: event.target.value })} />
             <Select label="Kind" size="sm" value={field.kind} onChange={(kind) => setField(field.id, { kind, role: kind === "year" ? field.role : "" })} options={FIELD_KINDS.map((kind) => ({ value: kind, label: FIELD_KIND_LABELS[kind] }))} />
             {field.kind === "year" ? (
@@ -136,7 +136,7 @@ function TypeForm({ type, isNew, onSave, onCancel }: { type: WorldType; isNew: b
             </KitButton>
             {field.kind === "select" ? (
               <input
-                className={cn(ui.input, "py-1 text-xs sm:col-span-5")}
+                className={cn(ui.input, "py-1 text-xs @lg:col-span-5")}
                 placeholder="The choices, separated by commas"
                 aria-label={`${field.name} choices`}
                 value={field.options.join(", ")}

@@ -999,6 +999,7 @@ export function BattleMapPanel({
         {addonView && !drawActive ? (
           <div className="absolute inset-0 z-[15] rounded-lg bg-[#0d0b1c]">
             <AddonBoardView
+              genre={genre}
               view={view}
               boardView={addonView}
               canDirect={canDirect}

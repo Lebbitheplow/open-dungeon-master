@@ -58,6 +58,8 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   dm_draft_reset: TABLE,
   dm_draft_seq: TABLE,
   dm_status: TABLE,
+  // What the DM's job is doing and since when (src/lib/dm/queue.ts).
+  dm_job: TABLE,
   dm_intent_queued: TABLE,
   dm_seat_changed: TABLE,
   utility_calls: TABLE,

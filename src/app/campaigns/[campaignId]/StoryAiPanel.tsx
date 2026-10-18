@@ -2,8 +2,10 @@
 
 import { AlignLeft, Bot, Image as ImageIcon, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ART_STYLE_LABELS, ART_STYLE_NOTES } from "@/lib/art-direction";
 import { cn } from "@/lib/cn";
 import { ImagesNote } from "@/app/campaigns/[campaignId]/NarrationNote";
+import { commitValue, draftsFrom, editDraft, followSaved, inStep } from "@/app/campaigns/[campaignId]/settingDrafts";
 import { ModelNote } from "@/components/ModelNote";
 import { Select } from "@/components/ui/Select";
 import type { MaskedStorySettings } from "@/lib/db/settings";
@@ -12,7 +14,10 @@ import { endpointKind } from "@/lib/dm/sampling-logic";
 import { shellHost } from "@/lib/shell-host";
 import type { TextProvider } from "@/lib/text-models";
 import {
+  ART_STYLE_TEXT_MAX,
+  ART_STYLES,
   PROSE_SIZE_VALUES,
+  type ArtStyle,
   type ImageBackend,
   type StorySettings,
 } from "@/lib/types";
@@ -21,6 +26,9 @@ import {
 // as is" and the field is simply omitted from the PATCH. Same contract as the
 // admin settings panel.
 const SECRET_KEPT = "\u0000keep";
+
+// The text settings typed in place.
+type TextField = "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel" | "artStyleMap" | "artStyleScene";
 
 const PROVIDER_LABELS: Record<TextProvider, string> = {
   local: "Local (Ollama)",
@@ -81,14 +89,24 @@ export function StoryAiPanel({
   // the answer lands, so the choice never flashes on and off.
   const [harness, setHarness] = useState<HarnessOffer | null>(null);
   // Text fields commit on blur or Enter, so a half-typed URL never PATCHes.
-  const [drafts, setDrafts] = useState({
+  // Each follows the saved settings until the player types into it
+  // (settingDrafts.ts): a change saved in another window shows here, and a
+  // field that still showed the old value is not saved back over it.
+  const savedText: Record<TextField, string> = {
     customBaseUrl: settings.customBaseUrl,
     customModel: settings.customModel,
-    customApiKey: SECRET_KEPT,
     utilityBaseUrl: settings.utilityBaseUrl,
     utilityModel: settings.utilityModel,
-    utilityApiKey: SECRET_KEPT,
-  });
+    artStyleMap: settings.artStyleMap,
+    artStyleScene: settings.artStyleScene,
+  };
+  const [text, setText] = useState(() => draftsFrom(savedText));
+  if (!inStep(text, savedText)) {
+    setText(followSaved(text, savedText));
+  }
+  const setDraft = (field: TextField, value: string) => setText((prev) => editDraft(prev, field, value));
+  const [keys, setKeys] = useState({ customApiKey: SECRET_KEPT, utilityApiKey: SECRET_KEPT });
+  const drafts = { ...text.drafts, ...keys };
 
   useEffect(() => {
     if (!steersStory) {
@@ -163,10 +181,10 @@ export function StoryAiPanel({
         setHarness(data.harness);
       }
       if (update.customApiKey !== undefined) {
-        setDrafts((prev) => ({ ...prev, customApiKey: SECRET_KEPT }));
+        setKeys((prev) => ({ ...prev, customApiKey: SECRET_KEPT }));
       }
       if (update.utilityApiKey !== undefined) {
-        setDrafts((prev) => ({ ...prev, utilityApiKey: SECRET_KEPT }));
+        setKeys((prev) => ({ ...prev, utilityApiKey: SECRET_KEPT }));
       }
     } catch {
       setError("Could not reach the server.");
@@ -175,9 +193,9 @@ export function StoryAiPanel({
     }
   }
 
-  function commitText(field: "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel") {
-    const value = drafts[field].trim();
-    if (value !== settings[field]) {
+  function commitText(field: TextField) {
+    const value = commitValue(text, savedText, field);
+    if (value !== null) {
       void patch({ [field]: value });
     }
   }
@@ -202,7 +220,9 @@ export function StoryAiPanel({
         ? harnessName
         : PROVIDER_LABELS[settings.textProvider];
   const imagesSummary = settings.imageGenerationEnabled
-    ? `${BACKEND_LABELS[settings.imageBackend]}${settings.autoImages ? ", automatic" : ""}`
+    ? `${BACKEND_LABELS[settings.imageBackend]}${settings.autoImages ? ", automatic" : ""}${
+        settings.artStyle === "setting" ? "" : `, ${ART_STYLE_LABELS[settings.artStyle].toLowerCase()} style`
+      }`
     : "off";
 
   if (!steersStory) {
@@ -323,7 +343,7 @@ export function StoryAiPanel({
                   <input
                     value={drafts.customModel}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
+                      setDraft("customModel", event.target.value)
                     }
                     onBlur={() => commitText("customModel")}
                     onKeyDown={blurOnEnter}
@@ -345,7 +365,7 @@ export function StoryAiPanel({
                   <input
                     value={drafts.customBaseUrl}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customBaseUrl: event.target.value }))
+                      setDraft("customBaseUrl", event.target.value)
                     }
                     onBlur={() => commitText("customBaseUrl")}
                     onKeyDown={blurOnEnter}
@@ -358,7 +378,7 @@ export function StoryAiPanel({
                   <input
                     value={drafts.customModel}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
+                      setDraft("customModel", event.target.value)
                     }
                     onBlur={() => commitText("customModel")}
                     onKeyDown={blurOnEnter}
@@ -372,7 +392,7 @@ export function StoryAiPanel({
                     type="password"
                     value={drafts.customApiKey === SECRET_KEPT ? "" : drafts.customApiKey}
                     onChange={(event) =>
-                      setDrafts((prev) => ({ ...prev, customApiKey: event.target.value }))
+                      setKeys((prev) => ({ ...prev, customApiKey: event.target.value }))
                     }
                     onBlur={() => commitKey("customApiKey")}
                     onKeyDown={blurOnEnter}
@@ -405,7 +425,7 @@ export function StoryAiPanel({
               <input
                 value={drafts.utilityModel}
                 onChange={(event) =>
-                  setDrafts((prev) => ({ ...prev, utilityModel: event.target.value }))
+                  setDraft("utilityModel", event.target.value)
                 }
                 onBlur={() => commitText("utilityModel")}
                 onKeyDown={blurOnEnter}
@@ -422,7 +442,7 @@ export function StoryAiPanel({
                 <input
                   value={drafts.utilityBaseUrl}
                   onChange={(event) =>
-                    setDrafts((prev) => ({ ...prev, utilityBaseUrl: event.target.value }))
+                    setDraft("utilityBaseUrl", event.target.value)
                   }
                   onBlur={() => commitText("utilityBaseUrl")}
                   onKeyDown={blurOnEnter}
@@ -433,7 +453,7 @@ export function StoryAiPanel({
                   type="password"
                   value={drafts.utilityApiKey === SECRET_KEPT ? "" : drafts.utilityApiKey}
                   onChange={(event) =>
-                    setDrafts((prev) => ({ ...prev, utilityApiKey: event.target.value }))
+                    setKeys((prev) => ({ ...prev, utilityApiKey: event.target.value }))
                   }
                   onBlur={() => commitKey("utilityApiKey")}
                   onKeyDown={blurOnEnter}
@@ -545,6 +565,53 @@ export function StoryAiPanel({
           </p>
         ) : settings.imageGenerationEnabled && !deviceManaged ? (
           <ImagesNote backend={settings.imageBackend} />
+        ) : null}
+        {settings.imageGenerationEnabled ? (
+          <div className="reveal space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={labelClass}>Art style</span>
+              <Select<ArtStyle>
+                value={settings.artStyle}
+                onChange={(artStyle) => patch({ artStyle })}
+                options={ART_STYLES.map((style) => ({ value: style, label: ART_STYLE_LABELS[style] }))}
+                label="Art style"
+                size="sm"
+              />
+              <span key={settings.artStyle} className="reveal text-stone-500">
+                {ART_STYLE_NOTES[settings.artStyle]}
+              </span>
+            </div>
+            {settings.artStyle === "custom" ? (
+              <div className="reveal space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Maps</span>
+                  <input
+                    value={drafts.artStyleMap}
+                    onChange={(event) => setDraft("artStyleMap", event.target.value)}
+                    onBlur={() => commitText("artStyleMap")}
+                    onKeyDown={blurOnEnter}
+                    maxLength={ART_STYLE_TEXT_MAX}
+                    placeholder="Realistic terrain from above, clear paths"
+                    aria-label="Map style"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Scenes</span>
+                  <input
+                    value={drafts.artStyleScene}
+                    onChange={(event) => setDraft("artStyleScene", event.target.value)}
+                    onBlur={() => commitText("artStyleScene")}
+                    onKeyDown={blurOnEnter}
+                    maxLength={ART_STYLE_TEXT_MAX}
+                    placeholder="Photorealistic, cinematic light"
+                    aria-label="Scene style"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">

@@ -6,6 +6,7 @@
 import { featTwinOf, holdsFeat } from "@/lib/srd/feat-effects";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type FeatHolder = { feats?: string[]; features?: Array<{ name: string }> };
 type ChoiceHolder = FeatHolder & { featChoices?: Record<string, { damageType?: string } | undefined> | null };
@@ -154,7 +155,7 @@ export const CRUSHER_USED = "crusher:used";
 const POLEARMS = ["glaive", "halberd", "pike", "quarterstaff", "spear"];
 
 export function isPolearm(weapon: string | undefined): boolean {
-  const name = (weapon ?? "").trim().toLowerCase();
+  const name = textKey(weapon ?? "");
   return POLEARMS.some((polearm) => name.includes(polearm));
 }
 
@@ -204,7 +205,7 @@ export function evadesOpportunityAttacksAfterMelee(sheet: FeatHolder): string | 
   if (holdsFeat(sheet, "Mobile")) {
     return "Mobile";
   }
-  return (sheet.feats ?? []).some((feat) => feat.trim().toLowerCase() === "skirmisher") ? "Skirmisher" : null;
+  return (sheet.feats ?? []).some((feat) => textKey(feat) === "skirmisher") ? "Skirmisher" : null;
 }
 
 // Sentinel (and Level Up's Guarded Warrior): an opportunity attack that
@@ -543,12 +544,11 @@ export function defensiveDuelistBonus(
   if (!holdsFeat(sheet, "Defensive Duelist")) {
     return null;
   }
-  const lower = (value: string) => value.trim().toLowerCase();
   const wielded = (sheet.equipment ?? []).some((item) => {
     if (item.equipped !== true) {
       return false;
     }
-    const weapon = SRD_WEAPONS.find((entry) => lower(item.name).includes(lower(entry.name)));
+    const weapon = SRD_WEAPONS.find((entry) => textKey(item.name).includes(textKey(entry.name)));
     return Boolean(weapon?.properties?.includes("finesse"));
   });
   return wielded ? proficiencyBonus : null;

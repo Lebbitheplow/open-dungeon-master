@@ -1,5 +1,6 @@
 import type { SqliteDatabase } from "./driver.ts";
 import type { TableFeat } from "@/lib/srd/feat-effects";
+import { textKey } from "@/lib/language/text-logic";
 
 // The workshop feats a table plays with: its owner's and its DMs' (the same
 // authors src/lib/db/homebrew.ts tableAuthors reads), by lower-case name,
@@ -30,7 +31,7 @@ export function tableFeatsFrom(db: SqliteDatabase, campaignId: string): Readonly
         .prepare(`SELECT name, data_json FROM homebrew_entries WHERE user_id = ? AND kind = 'feat'`)
         .all(author) as Array<{ name: string; data_json: string }>;
       for (const row of rows) {
-        const key = row.name.trim().toLowerCase().replace(/\s+/g, " ");
+        const key = textKey(row.name);
         if (feats.has(key)) {
           continue;
         }

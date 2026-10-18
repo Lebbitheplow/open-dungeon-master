@@ -8,11 +8,13 @@
 // prices a purchase by (src/lib/characters/catalog.ts, "a name the pack
 // lists as mundane gear is mundane"), so a pick and its price check read
 // the same row. Otherwise the first row wins, as before.
+import { textKey } from "../../../lib/language/text-logic.ts";
+
 export function uniqueByName<T extends { name: string; kind?: string }>(rows: T[]): T[] {
   const kept = new Map<string, T>();
   const order: string[] = [];
   for (const entry of rows) {
-    const key = entry.name.trim().toLowerCase();
+    const key = textKey(entry.name);
     const held = kept.get(key);
     if (!held) {
       kept.set(key, entry);

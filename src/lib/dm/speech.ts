@@ -21,7 +21,7 @@
 // pronouns as the one exception (src/lib/dm/speech-prose.ts). Pure.
 
 import { genderMark, type Gender, type GenderMark } from "@/lib/gender";
-import { commonWords } from "@/lib/language/text-logic";
+import { commonWords, textKey } from "@/lib/language/text-logic";
 import {
   aboutSubject,
   genderOf,
@@ -373,8 +373,8 @@ export function speakersIn(segments: SpeechSegment[]): Speaker[] {
   const seen = new Set<string>();
   const out: Speaker[] = [];
   for (const segment of segments) {
-    if (segment.kind === "speech" && !seen.has(segment.speaker.name.toLowerCase())) {
-      seen.add(segment.speaker.name.toLowerCase());
+    if (segment.kind === "speech" && !seen.has(textKey(segment.speaker.name))) {
+      seen.add(textKey(segment.speaker.name));
       out.push(segment.speaker);
     }
   }

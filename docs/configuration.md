@@ -46,10 +46,14 @@ falls through to the env var.
 | `TTS_VOICE` | `af_heart`, or `alloy` on OpenAI | Voice used when a campaign names one the server does not have |
 | `TTS_CONCURRENCY` | `2` | Speech requests sent to the narration server at once, across every table (1 to 8). A passage with character voices is several short requests; two at a time was the fastest on a CPU Kokoro, a hosted API can take more |
 | `ODM_UPDATE_CHECK` | on | `off` stops the server asking GitHub whether a newer release exists (one anonymous request every six hours at most; the answer is shown in the account menu's About dialog) |
+| `ODM_UPDATE_CHANNEL` | `stable` | `beta` has the About dialog compare against the newest release of any kind, the nightly betas included, instead of the latest stable release ([releases.md](releases.md)) |
 | `ODM_MODEL_CATALOG` | on | `off` stops the server fetching the model catalog from [models.dev](https://models.dev) (one anonymous request a day at most). The bundled snapshot and the cached copy still serve the model pickers; see [text-backends.md](text-backends.md#choosing-a-model-the-catalog-and-discovery) |
 | `ODM_MODEL_CATALOG_PATH` | `data/model-catalog.json` (beside the database) | Where the fetched catalog is cached |
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
-| `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
+| `DM_TOOL_PROFILE` | per model | Which tool set the DM is offered: `full`, `lean` (trimmed) or `compact` (the core actions for exploring or fighting, groups the table state or the player's words call for, and a `more_tools` call that opens the rest, each group's rules arriving with it). Unset, the full set is used when it leaves at least 32K tokens of the window for the story, the trimmed set when that leaves at least 24K, and compact below that (the Context panel says which). Wins over `DM_LEAN_TOOLS` |
+| `DM_LEAN_TOOLS` | per model | Unset, the profile is chosen as `DM_TOOL_PROFILE` describes, and the trimmed set is also used when the model catalog says the model takes no tool calls. `1` always trims, `0` never does |
+| `DM_HISTORY_MAX_TOKENS` | `8192` | The most transcript a turn's prompt carries, however large the window (at least 512). The shares the rules, state and chapters leave unused pass to the transcript up to this ceiling; older play is what the chapter summaries and `recall_story` are for |
+| `DM_THINKING` | per model | Unset, tool-deciding calls ask for thinking unless the model catalog says the model does not reason. `0` never asks, `1` always does |
 | `DM_MOMENT_AFTER_HISTORY` | — | `1` sends the turn-to-turn part of GAME STATE (the fight, recent rolls, retrieved lore) after the transcript instead of in the system message, so a server that caches the prompt's start (llama-server) reuses the whole history between turns. Off by default: the default local model then skipped rolls it should have asked for |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
 | `DM_CHAPTER_MIN` | `16` | Non-system messages (players included) a chapter must hold before beats can close it |
@@ -64,7 +68,7 @@ falls through to the env var.
 | `DISCORD_CLIENT_ID` | — | Discord OAuth application id for "Sign in with Discord" (or set in `/admin`) |
 | `DISCORD_CLIENT_SECRET` | — | Discord OAuth client secret. Belongs in `.env.server` (or set in `/admin`) |
 | `APP_PUBLIC_URL` | forwarded headers / request origin | Public URL players use (e.g. `https://dungeon.example.org`); needed for OAuth redirect URIs when the reverse proxy doesn't send `X-Forwarded-Host`/`X-Forwarded-Proto` |
-| `WORLD_REGISTRY_URL` | the built-in registry | https JSON index of downloadable campaign plugins, browsable under Admin, Campaign plugins (or set there). Set it to `off` to browse none. The packs any registry lists are third-party content this project neither ships nor vets, and nothing installs without an admin doing it. See [worlds.md](worlds.md) |
+| `WORLD_REGISTRY_URL` | none | https JSON index of downloadable campaign plugins, browsable under Admin, Campaign plugins (or set there; the Admin field wins, and `off` there browses none). No registry is built in. The packs any registry lists are third-party content this project neither ships nor vets, and nothing installs without an admin doing it. See [worlds.md](worlds.md) |
 | `WORLD_PACKS_DIR` | `data/worlds` | Where installed campaign plugins are written. Gitignored, and not covered by the app's MIT license |
 | `ADDON_REGISTRY_URL` | the Open Dungeon Master list | https address of the addon list browsed under Admin, Addons (or set there). `off` browses none. See [addons.md](addons.md) |
 | `ADDON_GITHUB_API_BASE`, `ADDON_GITHUB_RAW_BASE` | `https://api.github.com`, `https://raw.githubusercontent.com` | Where an addon's files are listed and fetched from, for trying a list without GitHub. Leave unset |

@@ -22,6 +22,11 @@ Back to the [README](../README.md). Prefer containers? See
     Pick it in **Admin > Agent program**. Works for a server started with npm or
     systemd, not inside the Docker image
     ([agent-harness.md](agent-harness.md)).
+
+  A local model needs a context window of at least 16K tokens to narrate and
+  24K to run fights; 32K or more is recommended
+  ([text-backends.md](text-backends.md#context-window)). Hosted models and
+  agent programs have far more.
 - **Optional services** (each feature simply stays off, or falls back to a
   placeholder, without it):
   - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for character
@@ -35,20 +40,22 @@ Back to the [README](../README.md). Prefer containers? See
 ## Quick start
 
 ```bash
-git clone --depth 1 https://github.com/Lebbitheplow/open-dungeon-master.git
+git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
 cd open-dungeon-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
 npm run start:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 ```
 
-`--depth 1` fetches only the newest commit of `main`, and `git pull` keeps it current
-(see [Updating](#updating)). To go back to an earlier release, take a
-[backup](backup-restore.md) first, since an older version re-derives every character
-sheet by its own rules when it starts. Then fetch the release's tag with
-`git fetch --depth 1 origin tag vX.Y.Z`, run `git checkout vX.Y.Z`, and install and build
-as for an update; `git checkout main` returns to the newest. For the full history and
-every branch, run `git remote set-branches origin '*'`, then `git fetch --unshallow`.
+`-b stable --depth 1` fetches only the latest stable release, and `git pull` keeps it on
+the stable releases (see [Updating](#updating)). Leave out `-b stable` to follow `main`,
+every commit as it lands, instead; the channels are in [releases.md](releases.md). To go
+back to an earlier release, take a [backup](backup-restore.md) first, since an older
+version re-derives every character sheet by its own rules when it starts. Then fetch the
+release's tag with `git fetch --depth 1 origin tag vX.Y.Z`, run `git checkout vX.Y.Z`, and
+install and build as for an update; `git checkout stable` returns to the latest stable
+release. For the full history and every branch, run `git remote set-branches origin '*'`,
+then `git fetch --unshallow`.
 
 When it starts, the server prints a link with a one-time setup code. Open it in a
 browser on the same computer, create the admin account, and the **guided setup**
@@ -162,6 +169,22 @@ npm install
 npm run build
 npm run start:lan
 ```
+
+On the `stable` branch, `git pull` moves only when a release is promoted to stable. A
+copy cloned from `main` (every install before the stable branch existed) keeps getting
+every commit; to move it onto the stable releases:
+
+```bash
+git remote set-branches --add origin stable
+git fetch --depth 1 origin stable
+git switch stable
+```
+
+The switch puts the latest stable release's files in place, which are usually older than
+the `main` build that is running. Keep running that build, without `npm run build`, until
+a `git pull` on `stable` brings a version newer than the one in the About dialog:
+building the older files would be a downgrade, which an upgraded database refuses
+([backup-restore.md](backup-restore.md#upgrading-and-going-back)).
 
 ## Tests
 

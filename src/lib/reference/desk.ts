@@ -152,7 +152,7 @@ export async function runRulesDesk(
           ].join("\n\n"),
         },
       ],
-      { timeoutMs: arcTextTimeoutMs() },
+      { meta: { task: "rules_desk" }, timeoutMs: arcTextTimeoutMs() },
     );
     if (error) {
       return;

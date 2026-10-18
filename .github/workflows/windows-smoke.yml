@@ -17,7 +17,7 @@ jobs:
     # minutes on this runner and the build another 1.5, so 20 left no room:
     # main already ran at 18.5 of them, and the next suites tipped a run
     # into a cancelled build with every check passed.
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
 

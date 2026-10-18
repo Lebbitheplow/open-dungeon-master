@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
@@ -16,7 +17,7 @@ import {
   type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
 import { hasQuotedLine, type Speaker } from "@/lib/dm/speech";
-import { foldName } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import {
   checkClaims,
   claimKindsFor,
@@ -83,10 +84,11 @@ export function guardGate(
   campaign: Campaign,
   outcomes: ResolvedOutcomes,
   sheets: readonly CharacterSheet[],
-): Pick<ReaderGate, "guard" | "attacks" | "creatures" | "numbers" | "party"> {
+): Pick<ReaderGate, "guard" | "attacks" | "fight" | "creatures" | "numbers" | "party"> {
   return {
     guard: campaign.gameSettings.narrationGuard,
     attacks: outcomes.attacks.size > 0,
+    fight: Boolean(outcomes.liveFight),
     creatures: outcomes.creatures.size > 0,
     numbers: outcomes.numbers.size > 0 || Boolean(outcomes.liveFight),
     party: sheets.length > 0,
@@ -112,9 +114,9 @@ export function speakerRoster(
   for (const npc of npcs) {
     roster.set(npc.id, { kind: "npc", id: npc.id, name: npc.name, aliases: npc.aliases, gender: npc.gender });
   }
-  const taken = new Set(npcs.map((npc) => foldName(npc.name)));
+  const taken = new Set(npcs.map((npc) => textKey(npc.name)));
   for (const sheet of sheets) {
-    if (!sheet.summon && !taken.has(foldName(sheet.name))) {
+    if (!sheet.summon && !taken.has(textKey(sheet.name))) {
       roster.set(sheet.id, { kind: "pc", id: sheet.id, name: sheet.name, gender: sheet.gender });
     }
   }
@@ -122,11 +124,36 @@ export function speakerRoster(
     roster.set(ref, { kind: "monster", id: "", name: display });
   }
   for (const name of registering) {
-    if (!taken.has(foldName(name))) {
+    if (!taken.has(textKey(name))) {
       roster.set(`new:${name}`, { kind: "npc", id: "", name });
     }
   }
   return roster;
+}
+
+// Readings kept for a few minutes, a bounded handful (see readClaims).
+const READING_TTL_MS = 10 * 60_000;
+const READINGS_KEPT = 64;
+
+declare global {
+  var __odmReaderReplies: Map<string, { at: number; reply: string }> | undefined;
+}
+
+function readings() {
+  return (globalThis.__odmReaderReplies ??= new Map());
+}
+
+function rememberedReading(key: string): string | null {
+  const known = readings().get(key);
+  return known && Date.now() - known.at < READING_TTL_MS ? known.reply : null;
+}
+
+function rememberReading(key: string, reply: string) {
+  const map = readings();
+  map.set(key, { at: Date.now(), reply });
+  if (map.size > READINGS_KEPT) {
+    map.delete(map.keys().next().value as string);
+  }
 }
 
 export async function readClaims(
@@ -167,31 +194,62 @@ export async function readClaims(
   if (!kinds.length) {
     return [];
   }
-  const { message, error } = await requestUtilityMessage(
-    campaign.settings,
-    [
-      { role: "system", content: readerSystem(SKILL_IDS, kinds.includes("speaker"), kinds.length > 1) },
-      {
-        role: "user",
-        content: renderReaderInput(
-          kinds,
-          {
-            creatures: [...creatures].map(([ref, display]) => ({ ref, display })),
-            party: [...party].map(([ref, name]) => ({ ref, name })),
-            speakers: [...named].map(([ref, speaker]) => ({ ref, name: speaker.name, aliases: speaker.aliases })),
-            spent,
-          },
-          input.text,
-        ),
-      },
-    ],
-    { timeoutMs: arcTextTimeoutMs(), thinking: false, temperature: 0 },
-  );
-  if (error) {
-    console.error(`[claims] ${input.label}: the reader call failed; the passage counts as claiming nothing`);
-    return [];
+  const reading = [
+    { role: "system" as const, content: readerSystem(SKILL_IDS, kinds.includes("speaker"), kinds.length > 1) },
+    {
+      role: "user" as const,
+      content: renderReaderInput(
+        kinds,
+        {
+          creatures: [...creatures].map(([ref, display]) => ({ ref, display })),
+          party: [...party].map(([ref, name]) => ({ ref, name })),
+          speakers: [...named].map(([ref, speaker]) => ({ ref, name: speaker.name, aliases: speaker.aliases })),
+          spent,
+        },
+        input.text,
+      ),
+    },
+  ];
+  // The same passage read for the same things against the same grounding is
+  // answered from the last reading (a retried or resumed turn reads its kept
+  // narration again); the key is the whole request, so any change reads anew
+  // (the context audit's F10).
+  // The model that read it is part of the request: another backend reads anew.
+  const route = campaign.settings;
+  const key = createHash("sha1")
+    .update(
+      JSON.stringify([
+        campaign.id,
+        route.textProvider,
+        route.customBaseUrl,
+        route.customModel,
+        route.localTextModel,
+        route.utilityProvider,
+        route.utilityBaseUrl,
+        route.utilityModel,
+        reading,
+      ]),
+    )
+    .digest("hex");
+  let reply = rememberedReading(key);
+  if (reply === null) {
+    const { message, error } = await requestUtilityMessage(campaign.settings, reading, {
+      meta: { task: "claims" },
+      timeoutMs: arcTextTimeoutMs(),
+      thinking: false,
+      temperature: 0,
+    });
+    if (error) {
+      console.error(`[claims] ${input.label}: the reader call failed; the passage counts as claiming nothing`);
+      return [];
+    }
+    reply = String(message?.content ?? "");
   }
-  const raw = parseReaderReply(stripReasoningArtifacts(String(message?.content ?? "")));
+  const raw = parseReaderReply(stripReasoningArtifacts(reply));
+  // Only a reading that parsed is kept: an unreadable one is worth asking again.
+  if (raw) {
+    rememberReading(key, reply);
+  }
   if (!raw) {
     console.error(`[claims] ${input.label}: the reader's reply was unreadable; the passage counts as claiming nothing`);
     return [];
@@ -245,7 +303,7 @@ export async function readReply(
   turn: Pick<DmTurn, "id" | "conversation">,
   text: string,
   state: { inEncounter: boolean; encounterNudged: boolean; damageNudged: boolean; registering: readonly string[] },
-): Promise<PartRead> {
+): Promise<PartRead & { outcomes: ResolvedOutcomes }> {
   const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
   const kinds = claimKindsFor({
     ...guardGate(campaign, outcomes, sheets),
@@ -258,6 +316,7 @@ export async function readReply(
   return {
     kinds,
     claims: await readClaims(campaign, { label: `turn ${turn.id}`, text, kinds, outcomes, sheets, registering: state.registering }),
+    outcomes,
   };
 }
 

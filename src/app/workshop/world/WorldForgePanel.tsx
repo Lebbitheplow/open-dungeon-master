@@ -3,6 +3,7 @@
 import { BookOpenText, Download, Hourglass, Lock, Map as MapIcon, MessageCircleQuestion, Network, PenLine, Shapes, Sparkles, Upload } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 import { workshopHref } from "@/lib/workshop/links";
 import { mayLeaveDrafts } from "@/app/workshop/unsaved";
 import { IconRail, type IconRailItem } from "@/components/ui/IconRail";
@@ -20,13 +21,13 @@ import { ForgeView } from "./ForgeView";
 import { AskView } from "./AskView";
 import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 
-// WorldForge in the workshop. WorldForge is Smoebo's world-building app,
-// built in with their blessing: a wiki of typed entries, the web of links
-// between them, calendars and a timeline, an atlas of maps inside maps,
-// secrets and who keeps them, and the names still to be written. Every
-// entry is a record the table plays with (src/lib/worldforge/model.ts), so
-// what is written here is what the Cast, the Region, Factions and Lore hold
-// and what the AI DM is told.
+// WorldForge in the workshop, and at the play table as the World tab.
+// WorldForge is Smoebo's world-building app, built in with their blessing:
+// a wiki of typed entries, the web of links between them, calendars and a
+// timeline, an atlas of maps inside maps, secrets and who keeps them, and
+// the names still to be written. Every entry is a record the table plays
+// with (src/lib/worldforge/model.ts), so what is written here is what the
+// Cast, the Region, Factions and Lore hold and what the AI DM is told.
 
 type View = "wiki" | "web" | "timeline" | "atlas" | "secrets" | "stubs" | "types" | "forge" | "ask";
 
@@ -69,14 +70,47 @@ type Held = { text: string; losses: string[]; notes: string[] };
 // World entry to come back to (src/lib/workshop/links.ts).
 export type OpenSystem = (system: string, record?: { id: string; from: string }) => void;
 
+// Where the World tab was at this table, kept for this browser tab only: the
+// campaign page has no address for it, and the tab's panel is drawn again
+// each time it is opened. A browser with no storage starts on the wiki.
+type Place = { view: View; entry: string | null };
+const placeKey = (campaignId: string) => `odm:world-place:${campaignId}`;
+function readPlace(campaignId: string): Place {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(placeKey(campaignId)) ?? "null") as Partial<Place> | null;
+    const view = VIEWS.some((entry) => entry.value === raw?.view) ? (raw!.view as View) : "wiki";
+    return { view, entry: typeof raw?.entry === "string" ? raw.entry : null };
+  } catch {
+    return { view: "wiki", entry: null };
+  }
+}
+function keepPlace(campaignId: string, place: Place) {
+  try {
+    sessionStorage.setItem(placeKey(campaignId), JSON.stringify(place));
+  } catch {
+    // The place is a convenience; without storage the tab opens on the wiki.
+  }
+}
+
 export function WorldForgePanel({
   campaignId,
+  at = "workshop",
+  canShowHandouts = false,
   onOpenSystem,
   onCreate,
   refreshKey = 0,
 }: {
   campaignId: string;
-  onOpenSystem: OpenSystem;
+  // The workshop, whose address holds the view and entry and which brings
+  // files in and out; or the play table's World tab (audit WF-10), where the
+  // world is the campaign's own copy, read and written through the routes
+  // that answer only story authority, with no files and no Create.
+  at?: "workshop" | "table";
+  // The DM seat at the table, who may put a revealed secret on every screen
+  // as a handout ("Show this now" is theirs alone).
+  canShowHandouts?: boolean;
+  // A record's own workshop tool. The table has none to open.
+  onOpenSystem?: OpenSystem;
   // The workshop's Create chooser, offered while the world is empty.
   onCreate?: () => void;
   // Bumped when any record changed elsewhere (useWorkshopVersions).
@@ -88,23 +122,28 @@ export function WorldForgePanel({
   const canPaint = offersImages(capabilities);
   // The view and the open entry live in the URL, so refresh and Back land
   // where the author was and an entry can be linked to (audit WF-11).
+  // At the table the panel keeps them itself (readPlace).
+  const atTable = at === "table";
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const askedView = params.get("view");
+  const [tablePlace, setTablePlace] = useState<Place>(() => (atTable ? readPlace(campaignId) : { view: "wiki", entry: null }));
+  const askedView = atTable ? tablePlace.view : params.get("view");
   const chosenView: View = VIEWS.some((entry) => entry.value === askedView) ? (askedView as View) : "wiki";
   const view: View = !canWrite && AI_VIEWS.has(chosenView) ? "wiki" : chosenView;
-  const focus = params.get("entry");
+  const focus = atTable ? tablePlace.entry : params.get("entry");
   // A move to another entry or view closes an open editor, so it asks first
   // when the editor has changes (src/app/workshop/unsaved.ts); a tour's
   // moves do not ask.
   async function go(next: { view?: View; entry?: string | null }, how: "push" | "replace" = "push") {
     if (how === "push" && !(await mayLeaveDrafts())) return;
-    const href = workshopHref(pathname, {
-      system: "world",
-      view: next.view ?? chosenView,
-      entry: next.entry === undefined ? focus : next.entry,
-    });
+    const place: Place = { view: next.view ?? chosenView, entry: next.entry === undefined ? focus : next.entry };
+    if (atTable) {
+      setTablePlace(place);
+      keepPlace(campaignId, place);
+      return;
+    }
+    const href = workshopHref(pathname, { system: "world", ...place });
     if (how === "replace") router.replace(href, { scroll: false });
     else router.push(href, { scroll: false });
   }
@@ -165,7 +204,14 @@ export function WorldForgePanel({
     : {};
 
   return (
-    <section className="flex flex-col gap-3" aria-label="WorldForge">
+    // A container: every view lays out by the width the panel has, not the
+    // window's, so the table's side column gets the narrow layouts.
+    <section className="@container flex flex-col gap-3" aria-label="WorldForge" data-world-at={at}>
+      {atTable ? (
+        <p className="text-xs text-stone-500" data-testid="world-table-note">
+          <span className="text-amber-200/90">This campaign&apos;s world.</span> What came in from a workshop is this campaign&apos;s own copy: a change here stays at this table and leaves the workshop as it was. Only whoever runs the story sees this tab.
+        </p>
+      ) : (
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-stone-500">
           <span className="text-amber-200/90">WorldForge</span>, by Smoebo, built into the workshop. Every entry is a Cast member, place, faction or lore entry here.
@@ -180,6 +226,7 @@ export function WorldForgePanel({
           </a>
         </span>
       </div>
+      )}
       {held ? (
         <div className="motion-pop flex flex-col gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-100" role="alert" data-testid="world-import-losses">
           <span>This file would not come in whole. Nothing has been brought in yet.</span>
@@ -238,20 +285,23 @@ export function WorldForgePanel({
         value={view}
         onChange={setView}
         orientation="horizontal"
-        className="border-b border-stone-800/80 pb-1"
+        // The table's side column is narrow: every view stays in sight on
+        // a second row rather than behind a sideways scroll, and the mark
+        // follows the chosen view down a row (chip-rail, menus.css).
+        className={cn("border-b border-stone-800/80 pb-1", atTable && "chip-rail flex-wrap")}
       />
 
       <Listed loaded={api.loaded} error={api.loadError} onRetry={api.refresh} loading="Reading the world" rows={4}>
         {world ? (
           // Keyed by view so the incoming one rises in instead of cutting.
           <div key={view} className="motion-tab">
-            {view === "wiki" ? <WikiView campaignId={campaignId} api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} onCreate={onCreate} canWrite={canWrite} canPaint={canPaint} /> : null}
+            {view === "wiki" ? <WikiView campaignId={campaignId} api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} onCreate={onCreate} atTable={atTable} canWrite={canWrite} canPaint={canPaint} /> : null}
             {view === "forge" ? <ForgeView api={api} world={world} onOpen={open} /> : null}
             {view === "ask" ? <AskView api={api} world={world} onOpen={open} /> : null}
             {view === "web" ? <WebView world={world} focus={focus} onOpen={open} /> : null}
             {view === "timeline" ? <TimelineView api={api} world={world} onOpen={open} /> : null}
             {view === "atlas" ? <AtlasView api={api} world={world} onOpen={open} /> : null}
-            {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} /> : null}
+            {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} atTable={atTable} canShowHandouts={canShowHandouts} /> : null}
             {view === "stubs" ? <StubsView api={api} world={world} onOpen={open} /> : null}
             {view === "types" ? <TypesView api={api} world={world} /> : null}
             {api.error && !["wiki", "forge", "ask"].includes(view) ? <PanelError className="mt-2">{api.error}</PanelError> : null}

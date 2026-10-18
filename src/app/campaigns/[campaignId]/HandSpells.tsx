@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { spellKey, spellsToLookUp, type SpellFact } from "@/lib/battlemap/hand";
+import { spellsToLookUp, type SpellFact } from "@/lib/battlemap/hand";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import { factsFromRow } from "@/lib/srd/spell-facts";
 import { scopeQuery } from "@/lib/content-scope";
+import { textKey } from "@/lib/language/text-logic";
 
 // What the content pack says about the spells on a sheet, for the Hand's
 // spell cards: level, casting time, range and the prose the mechanics are
@@ -69,9 +70,9 @@ async function lookUp(name: string, campaignId: string | null): Promise<SpellFac
   const response = await fetch(`/api/content/spells?q=${encodeURIComponent(name)}&limit=8${scopeQuery(campaignId, "&")}`);
   if (!response.ok) return null;
   const body = (await response.json()) as { results?: SpellResult[] };
-  const wanted = spellKey(name);
+  const wanted = textKey(name);
   const exact = (body.results ?? []).filter(
-    (entry) => spellKey(entry.name) === wanted || (entry.aliases ?? []).some((alias) => spellKey(alias) === wanted),
+    (entry) => textKey(entry.name) === wanted || (entry.aliases ?? []).some((alias) => textKey(alias) === wanted),
   );
   // The SRD's own wording is what the engine's parsers were written against.
   const best = exact.find((entry) => entry.documentSlug !== "a5e") ?? exact[0];
@@ -80,7 +81,7 @@ async function lookUp(name: string, campaignId: string | null): Promise<SpellFac
 
 export function useHandSpells(sheet: CharacterSheet | null): Record<string, SpellFact> {
   const names = useMemo(() => (sheet ? spellsToLookUp(sheet) : []), [sheet]);
-  const wanted = names.map(spellKey).join("|");
+  const wanted = names.map(textKey).join("|");
   // Cached per table: two tables may each have a spell of the same name.
   const campaignId = sheet?.campaignId ?? null;
   const scope = campaignId ?? "library";

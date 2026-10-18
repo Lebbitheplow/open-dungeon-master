@@ -9,7 +9,7 @@ import { contentSlug, describeContentEntry, spellRowConcentrates, spellSummary }
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { replayAnimation } from "@/lib/motion/replay";
 import { spellSupportFor, spellSupportWord } from "@/lib/srd/spell-support";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // The spell book: one tab per spell level (cantrips first), every spell a
 // tile that says at a glance whether it is ready, waiting for a long rest,
@@ -135,7 +135,14 @@ export function SpellBook({
   writingBook?: boolean;
 }) {
   const [filter, setFilter] = useState("");
-  const needle = filter.trim().toLowerCase();
+  // The last text note, kept to hold the note's room after it clears (see
+  // the note below). Set while rendering, React's pattern for state that
+  // follows a prop; only strings, which compare by value.
+  const [heldNotice, setHeldNotice] = useState("");
+  if (typeof notice === "string" && notice && notice !== heldNotice) {
+    setHeldNotice(notice);
+  }
+  const needle = textKey(filter);
   // The level row says which level is chosen only once mounted. The travelling
   // pill (src/lib/motion/pill.ts) decorates every pill group that has a chosen
   // button as soon as the page loads, and a pill appended to server-rendered
@@ -171,7 +178,7 @@ export function SpellBook({
   const shown = needle
     ? keys.flatMap((key) =>
         (byLevel.get(key) ?? []).filter((tile) =>
-          (tile.label ?? tile.name).toLowerCase().includes(needle),
+          textKey(tile.label ?? tile.name).includes(needle),
         ),
       )
     : (byLevel.get(active) ?? []);
@@ -275,20 +282,23 @@ export function SpellBook({
         />
       </div>
 
-      {/* One line, always: a note that wrapped on a phone pushed the tiles
-          down under the finger, the very jump issue 66 was about. The whole
-          note is its tooltip; the full counter shakes with the tile. */}
-      <p className="mt-2 mb-1.5 flex h-4 min-w-0 items-center gap-2">
+      {/* The whole note, wrapped as far as it needs: cut to one line, its
+          count's working was only in a tooltip that touch and screen
+          readers never reach. Once a note has shown, its room stays held
+          (the last note, invisible) so a tile is not pulled out from under
+          the finger when the note clears, the jump issue 66 was about. The
+          full counter shakes with the tile. */}
+      <p className="mt-2 mb-1.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="eyebrow shrink-0 text-[10px] leading-4 text-stone-500">
           {needle ? `Matching "${filter.trim()}"` : levelLabel(active)}
         </span>
-        {notice ? (
+        {notice || heldNotice ? (
           <span
             role="status"
-            title={typeof notice === "string" ? notice : undefined}
-            className="reveal min-w-0 truncate text-xs leading-4 text-amber-300"
+            aria-hidden={notice ? undefined : true}
+            className={cn("reveal min-w-0 text-xs leading-4", notice ? "text-amber-300" : "invisible")}
           >
-            {notice}
+            {notice || heldNotice}
           </span>
         ) : null}
       </p>

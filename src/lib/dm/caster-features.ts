@@ -20,13 +20,12 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
 import { rollCard } from "@/lib/dm/roll-card";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type Featured = Pick<CharacterSheet, "features">;
 
 const holds = (sheet: Featured, name: string) =>
-  sheet.features.some((feature) => feature.name.trim().toLowerCase().startsWith(name));
-
-const keyOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  sheet.features.some((feature) => textKey(feature.name).startsWith(name));
 
 // ---- Sculpt Spells ----
 
@@ -106,8 +105,8 @@ export function signatureCounter(
   const chosen = sheet.features
     .map((feature) => SIGNATURE.exec(feature.name.trim())?.[1] ?? null)
     .find((list): list is string => Boolean(list));
-  const spells = (chosen ?? "").split(/,|\band\b/).map(keyOf).filter(Boolean);
-  const index = spells.indexOf(keyOf(facts.name));
+  const spells = (chosen ?? "").split(/,|\band\b/).map(textKey).filter(Boolean);
+  const index = spells.indexOf(textKey(facts.name));
   if (index < 0 || index > 1) {
     return null;
   }

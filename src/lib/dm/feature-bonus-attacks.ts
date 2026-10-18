@@ -27,6 +27,7 @@ import { classLevelFor } from "@/lib/srd/multiclass";
 import { matchWeapon } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The condition a marked creature's damage to someone else leaves on its
 // marker: the bonus attack is open against that creature on the marker's
@@ -55,10 +56,7 @@ export type FeatureBonusAttack = {
 };
 
 const holds = (sheet: CharacterSheet, name: string) =>
-  sheet.features.some((feature) => {
-    const lowered = feature.name.trim().toLowerCase();
-    return lowered === name || lowered.startsWith(`${name} (`);
-  });
+  sheet.features.some((feature) => [feature.name, feature.name.replace(/\s*\(.*$/, "")].some((held) => textKey(held) === name));
 
 const usesLeft = (sheet: CharacterSheet, id: string) => {
   const counter = sheet.resources?.[id];

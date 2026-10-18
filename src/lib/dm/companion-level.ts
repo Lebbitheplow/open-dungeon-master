@@ -37,6 +37,7 @@ import { classListFor } from "@/lib/srd/multiclass";
 import { checklistSpellsOn } from "@/lib/srd/spell-lists";
 import { casterViewsOf, spellStyleFor, type CasterView } from "@/lib/srd/spell-prep";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // A companion's sheet is made and levelled by the same rules as a player's:
 // the legality check at the door (src/lib/characters/admit.ts, the "engine"
@@ -111,7 +112,7 @@ export function legalCompanionSheet(draft: CompanionDraft): CompanionSheet {
       wanted: draft.wantedSpells.map((name) => spellOf(name)?.name ?? name),
     });
     const passed = draft.wantedSpells.filter(
-      (name) => !picks.some((pick) => lower(pick) === lower(spellOf(name)?.name ?? name)),
+      (name) => !picks.some((pick) => textKey(pick) === textKey(spellOf(name)?.name ?? name)),
     );
     if (passed.length) {
       notes.push(

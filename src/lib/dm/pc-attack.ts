@@ -2,7 +2,7 @@ import { spendFeatureUse } from "@/lib/dm/attack-onhit";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, saveEncounter } from "@/lib/db/encounters";
-import { invisibilityEndedByAction, writeMarks } from "@/lib/dm/attack-marks";
+import { endInvisibilityOnCast, writeMarks } from "@/lib/dm/attack-marks";
 import { sanctuaryEndedByAttack } from "@/lib/dm/spell-defenses";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -28,7 +28,7 @@ import { spendInspirationCounter } from "@/lib/dm/roll-riders";
 import { spendLuckCounter } from "@/lib/srd/class-resources";
 import { moteBurst, moteOf } from "@/lib/dm/authored-mote";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { attacksLeft } from "@/lib/dm/action-budget";
 
 // Re-exported for the callers that learned them here.
@@ -300,7 +300,12 @@ export function handlePcAttack(
   // A Creation bard's mote rides the inspiration die the roll spends
   // (src/lib/dm/authored-mote.ts); it bursts once the attack is rolled.
   const mote = moteOf(sheet, plan.attackRiders.spent);
-  spendPcAttack(plan);
+  const countered = spendPcAttack(plan);
+  // Counterspell stopped the spell after it was paid for: no roll follows,
+  // parked or digital.
+  if (countered) {
+    return countered;
+  }
   // An attack the rules make and miss (pc-attack-plan.ts missesBecause):
   // spent above, with no roll to make.
   if (plan.missesBecause) {
@@ -328,8 +333,9 @@ export function handlePcAttack(
 
 // What the attack costs, paid now that nothing can refuse it: the turn
 // budget, the cast or the reaction, the round from the quiver, Precision
-// Attack's die, and the conditions this roll uses up.
-function spendPcAttack(plan: AttackPlan) {
+// Attack's die, and the conditions this roll uses up. Returns the refusal of
+// a spell Counterspell stopped (spent, and nothing else follows), or null.
+function spendPcAttack(plan: AttackPlan): ToolError | null {
   const { campaign, turn, encounter, sheet, sheets, sheetsById, budget, ammo, context } = plan;
   if (budget) {
     storeBudget(encounter, budget);
@@ -348,7 +354,10 @@ function spendPcAttack(plan: AttackPlan) {
     }
   }
   if (plan.castsSpell) {
-    castAttackSpell(plan);
+    const countered = castAttackSpell(plan);
+    if (countered) {
+      return countered;
+    }
   } else if (!budget) {
     markReactionUsed(encounter, sheet.id);
     // The readied action (or the Giant Killer answer) this attack is spends
@@ -407,15 +416,13 @@ function spendPcAttack(plan: AttackPlan) {
   }
 
   // Striking from hiding spends the hiding (the attack gives them away
-  // whether it lands or not), an attack ends Invisibility (not Greater
-  // Invisibility, attack-marks.ts), and one-shot riders like True Strike and
-  // a held Help are spent by this roll: clear them all together.
+  // whether it lands or not), and one-shot riders like True Strike and a
+  // held Help are spent by this roll: clear them all together.
   // Skulker keeps the hiding through a ranged attack's roll; a hit spends it
   // (pc-attack-plan.ts hitSpent).
   const keepsHiding = plan.hitSpent.includes("hidden");
   const spentConditions = [
     ...(!keepsHiding && sheet.conditions.some((entry) => entry.toLowerCase() === "hidden") ? ["hidden"] : []),
-    ...invisibilityEndedByAction(sheet),
     // An attack ends the attacker's own Sanctuary (spell-defenses.ts).
     ...sanctuaryEndedByAttack(sheet),
     ...(plan.helped ? [plan.helped] : []),
@@ -431,6 +438,9 @@ function spendPcAttack(plan: AttackPlan) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: revealed });
     }
   }
+  // An attack ends Invisibility, each source but Greater Invisibility's
+  // (attack-marks.ts); a spell attack's cast has already done it.
+  endInvisibilityOnCast(campaign.id, sheet.id);
   // A luck point spent on this roll (Lucky).
   if (plan.extras.luck) {
     const fresh = getSheetById(sheet.id) ?? sheet;
@@ -461,6 +471,7 @@ function spendPcAttack(plan: AttackPlan) {
       publishEncounter(campaign.id);
     }
   }
+  return null;
 }
 
 // What a feature option leaves on the attacker once the attack is paid for:

@@ -22,11 +22,11 @@ const {
   ritualProblem,
   slotPlan,
   spellHeldProblem,
-  spellKeyOf,
   turnCharge,
   withOpenCast,
 } = await import("../src/lib/dm/cast-rules.ts");
 const { copyCost, learnProblem } = await import("../src/lib/dm/learn-rules.ts");
+const { textKey } = await import("../src/lib/language/text-logic.ts");
 const { bundledSpellFacts } = await import("../src/lib/srd/spell-facts.ts");
 const { freshBudget } = await import("../src/lib/dm/action-budget.ts");
 const { spellSupportFor, spellSupportLine } = await import("../src/lib/srd/spell-support.ts");
@@ -86,8 +86,8 @@ function caster(overrides = {}) {
 // ---- names ----
 
 test("a name is compared whole, whatever its case or spacing", () => {
-  assert.equal(spellKeyOf("  Hold  PERSON "), "hold person");
-  assert.equal(spellKeyOf("Hunter's Mark"), spellKeyOf("hunters mark").replace("hunters", "hunter s"));
+  assert.equal(textKey("  Hold  PERSON "), "hold person");
+  assert.equal(textKey("Hunter’s Mark"), textKey("hunter's mark"));
 });
 
 // ---- who holds the spell ----

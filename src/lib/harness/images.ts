@@ -21,6 +21,7 @@ import { childPath } from "./discover.ts";
 import { adapterFor, ADAPTERS, harnessConfig, resolveHarnessBinary } from "./status.ts";
 import { isHarnessId } from "./types.ts";
 import { recordMediaFile } from "@/lib/media-access";
+import { asciiSlugOf } from "@/lib/language/text-logic";
 
 export const MAX_HARNESS_IMAGE_BYTES = 8 * 1024 * 1024;
 const PICTURE_TIMEOUT_MS = 5 * 60_000;
@@ -100,15 +101,6 @@ export function noPictureMessage(label: string, said: string): string {
     : `${label} finished without a picture ODM could use.`;
 }
 
-function slug(prompt: string): string {
-  return (
-    prompt
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 50) || "image"
-  );
-}
 
 export async function generateHarnessImage(options: {
   prompt: string;
@@ -217,7 +209,7 @@ export async function generateHarnessImage(options: {
   }
   const generatedDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
-  const filename = `${Date.now()}-harness-${slug(options.prompt)}.${accepted.ext}`;
+  const filename = `${[Date.now(), "harness", asciiSlugOf(options.prompt).slice(0, 50)].filter((part) => part !== "").join("-")}.${accepted.ext}`;
   const saved = path.join(/*turbopackIgnore: true*/ generatedDir, filename);
   writeFileSync(saved, accepted.bytes);
   scheduleImageVariants(saved);

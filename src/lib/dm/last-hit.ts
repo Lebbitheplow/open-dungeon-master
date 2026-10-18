@@ -45,6 +45,8 @@ export type SwingRecord = {
   // swing was ranged. Absent type and ranged read the record's own.
   raw: number;
   type?: string;
+  // A blow of several types, part by part as sent (enemy-hit.ts blowByType).
+  parts?: Array<{ amount: number; type: string }>;
   ranged?: boolean;
 };
 
@@ -219,6 +221,7 @@ export function openLastHit(campaignId: string, characterId: string) {
         raw: number;
         advantage: Advantage;
         type?: string;
+        parts?: Array<{ amount: number; type: string }>;
         ranged?: boolean;
       },
     ) {
@@ -232,6 +235,7 @@ export function openLastHit(campaignId: string, characterId: string) {
         crit: result.crit,
         raw: result.hit ? Math.max(0, result.raw) : 0,
         ...(result.type !== undefined ? { type: result.type } : {}),
+        ...(result.hit && result.parts?.length ? { parts: result.parts } : {}),
         ...(result.ranged !== undefined ? { ranged: result.ranged } : {}),
       });
     },

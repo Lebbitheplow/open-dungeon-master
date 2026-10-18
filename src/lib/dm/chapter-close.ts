@@ -6,7 +6,14 @@ import { describeInstant } from "@/lib/dm/calendar";
 import { listFactions } from "@/lib/db/factions";
 import { advanceFactionGoals } from "@/lib/dm/faction-logic";
 import { shiftFactionPower } from "@/lib/dm/faction-tools";
-import { campaignSeats, getCampaignById, latestSeq, setCampaignSummaryState, allocateSeq } from "@/lib/db/campaigns";
+import {
+  campaignSeats,
+  getCampaignById,
+  getCampaignSummaryState,
+  latestSeq,
+  setCampaignSummaryState,
+  allocateSeq,
+} from "@/lib/db/campaigns";
 import {
   closeChapterRow,
   ensureOpenChapter,
@@ -18,6 +25,7 @@ import {
   countMessagesUpToSeq,
   insertCampaignMessage,
   listMessagesInSeqRange,
+  listMessagesPage,
 } from "@/lib/db/messages";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import {
@@ -47,7 +55,18 @@ import {
 import { activeBeat, beatGated } from "@/lib/dm/waypoint-logic";
 import { judgeWaypoints } from "@/lib/dm/waypoint-tick";
 import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
-import { arcTextTimeoutMs } from "@/lib/model-client";
+import { arcTextTimeoutMs, utilityContextTokens } from "@/lib/model-client";
+import { estimateTokens } from "@/lib/dm/context-budget";
+import {
+  CHAPTER_REPLY_TOKENS,
+  chunkLines,
+  extractiveChapterSummary,
+  SPAN_REPLY_TOKENS,
+  spanTokensFor,
+  transcriptBudgetTokens,
+} from "@/lib/dm/chapter-summary-logic";
+import { protectedMoments, stripMilestoneBlock } from "@/lib/dm/compaction";
+import { extractStoryText } from "@/lib/story-prompt";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { isStageEnabled } from "@/lib/dm/stages";
@@ -151,25 +170,97 @@ function pacingFor(campaignId: string): ChapterPacing {
 // beat the story left behind.
 const CHAPTER_MAX = Number(process.env.DM_CHAPTER_MAX || 120);
 const MANUAL_MIN = 5;
-const TRANSCRIPT_CHAR_BUDGET = 24_000;
-
-function chapterTranscript(campaignId: string, chapter: Chapter, seqEnd: number): string {
+// The chapter's play, one line per message, with what was said aloud at a
+// transcribed table (docs/vtt-parity-implementation-plan.md 13.3), so a
+// chapter the DM narrated out loud still closes with a summary of what
+// happened.
+function chapterPlay(campaignId: string, chapter: Chapter, seqEnd: number, fromSeq = chapter.seqStart) {
   const messages = listMessagesInSeqRange(campaignId, chapter.seqStart, seqEnd).filter(
     (message) => message.authorType !== "system",
   );
-  const lines = messages.map(
-    (message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`,
-  );
-  // A transcribed table (docs/vtt-parity-implementation-plan.md 13.3) adds
-  // what was said aloud since the chapter's first line, so a chapter the DM
-  // narrated out loud still closes with a summary of what happened.
+  const lines = messages
+    .filter((message) => message.seq >= fromSeq)
+    .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`);
   const openedAt = messages[0]?.createdAt ?? "";
   const spoken = openedAt ? renderTranscript(listTranscriptSince(campaignId, openedAt, 400), 12_000) : "";
-  let transcript = lines.join("\n\n") + (spoken ? `\n\nSaid aloud at the table:\n${spoken}` : "");
-  if (transcript.length > TRANSCRIPT_CHAR_BUDGET) {
-    transcript = transcript.slice(-TRANSCRIPT_CHAR_BUDGET);
+  if (spoken) {
+    lines.push(`Said aloud at the table:\n${spoken}`);
   }
-  return transcript;
+  return { messages, lines };
+}
+
+const CHAPTER_SYSTEM =
+  'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.';
+
+const SPAN_SYSTEM =
+  "You condense one part of a chapter of an ongoing D&D 5e campaign into a short past-tense account of at most 180 words. Keep every named person and place, promises and debts, loot, injuries and deaths, and the decisions the party made. Output only the account.";
+
+// The closing chapter's summary, written against the utility model's window
+// (chapter-summary-logic.ts): the running summary stands in for the play it
+// already covers, a chapter longer than one call can read is condensed span
+// by span first, and the closing call reads the condensed spans and the end
+// of the chapter whole. Null reply when the model gave nothing usable.
+async function writeChapterSummary(
+  campaign: NonNullable<ReturnType<typeof getCampaignById>>,
+  chapter: Chapter,
+  seqEnd: number,
+  previous: string,
+  onFile: { text: string; shown: unknown[] },
+): Promise<{ reply: string; parsed: ReturnType<typeof parseChapterJson> }> {
+  const campaignId = campaign.id;
+  const language = campaign.gameSettings.tableLanguage;
+  const system = withLanguage(CHAPTER_SYSTEM + (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""), language);
+  const { summary: runningRaw, coveredCount } = getCampaignSummaryState(campaignId);
+  const coveredSeq = coveredCount ? (listMessagesPage(campaignId, coveredCount - 1, 1)[0]?.seq ?? 0) : 0;
+  // The running summary covers this chapter's start only when its mark is
+  // inside the chapter; otherwise the whole chapter is read as play.
+  const running = runningRaw && coveredSeq >= chapter.seqStart ? runningRaw : "";
+  const play = chapterPlay(campaignId, chapter, seqEnd, running ? coveredSeq + 1 : chapter.seqStart);
+  const context = [
+    previous ? `Previous chapters for continuity:\n${previous}` : "",
+    onFile.text ? `Facts already on file:\n${onFile.text}` : "",
+    running ? `What came before in this chapter (the running summary):\n${running}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const window = await utilityContextTokens(campaign.settings);
+  const budget = transcriptBudgetTokens(window, estimateTokens(system) + estimateTokens(context) + 64, CHAPTER_REPLY_TOKENS);
+  const total = play.lines.reduce((sum, line) => sum + estimateTokens(line) + 1, 0);
+  const spans = chunkLines(play.lines, spanTokensFor(total, budget));
+  const earlier = spans.slice(0, -1);
+  const last = spans.at(-1) ?? [];
+  const condensed: string[] = [];
+  for (const [index, span] of earlier.entries()) {
+    const { message, error } = await requestUtilityMessage(
+      campaign.settings,
+      [
+        { role: "system", content: withLanguage(SPAN_SYSTEM, language) },
+        { role: "user", content: span.join("\n\n") },
+      ],
+      { timeoutMs: arcTextTimeoutMs(), thinking: false, maxOutputTokens: SPAN_REPLY_TOKENS, meta: { task: "chapter_span" } },
+    );
+    const text = error ? "" : extractStoryText(message?.content).trim();
+    condensed.push(text ? `${index + 1}. ${text}` : `${index + 1}. (This part could not be condensed.)`);
+  }
+  const { message, error } = await requestUtilityMessage(
+    campaign.settings,
+    [
+      { role: "system", content: system },
+      {
+        role: "user",
+        content: [
+          context,
+          condensed.length ? `Earlier in this chapter, condensed in order:\n${condensed.join("\n")}` : "",
+          `Transcript of ${condensed.length || running ? "the rest of " : ""}the closing chapter:\n${last.join("\n\n") || "(quiet chapter with no recorded scenes)"}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
+    ],
+    { timeoutMs: arcTextTimeoutMs(), meta: { task: "chapter_summary" } },
+  );
+  const reply = error ? "" : String(message?.content ?? "");
+  return { reply, parsed: reply ? parseChapterJson(reply, chapter.index) : { title: `Chapter ${chapter.index}`, summary: "", highlights: [], facts: [] } };
 }
 
 function countChapterMessages(campaignId: string, chapter: Chapter): number {
@@ -294,7 +385,10 @@ export async function maybeCloseChapter(
   }
 
   const seqEnd = latestSeq(campaignId);
-  const transcript = chapterTranscript(campaignId, chapter, seqEnd);
+  // The whole chapter's play, for the passes that read it for names (the
+  // witnesses, NPC agency, relationships); the summary is written from
+  // budgeted spans of it below.
+  const transcript = chapterPlay(campaignId, chapter, seqEnd).lines.join("\n\n");
   const previous = previousChapterLines(campaignId, chapter.index);
   // The act this chapter belongs to, read before the refresh moves the arc
   // on; stamped on the row so the story tab and exports can group by act.
@@ -316,11 +410,17 @@ export async function maybeCloseChapter(
   setDmStatus(campaignId, "writing_chapter");
 
   const summariesOn = isStageEnabled(campaign.gameSettings.stages, "chapterSummary");
+  // The facts already on file only sharpen the summary; a failure reading
+  // them closes the chapter without them rather than leaving the table on
+  // "writing the chapter" (issue #383).
   const onFile = summariesOn
     ? await factsOnFileFor(
         campaignId,
         listMessagesInSeqRange(campaignId, chapter.seqStart, seqEnd).filter((message) => message.authorType !== "system"),
-      )
+      ).catch((error: unknown) => {
+        console.error(`[chapter] campaign ${campaignId}: could not read the facts on file; the summary is written without them`, error);
+        return { text: "", shown: [] };
+      })
     : { text: "", shown: [] };
   let reply = "";
   let parsed = {
@@ -332,41 +432,37 @@ export async function maybeCloseChapter(
   try {
     // Skipped when the table turned chapter summaries off; the chapter still
     // closes, it just carries no summary (src/lib/dm/stages.ts).
-    const { message, error } = !summariesOn
-      ? { message: null, error: "chapter summaries disabled" }
-      : await trackUtilityCall(campaign.id, "chapter", () =>
-          requestUtilityMessage(
-            campaign.settings,
-            [
-              {
-                role: "system",
-                content: withLanguage(
-                  'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.' +
-                  (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""),
-                  campaign.gameSettings.tableLanguage,
-                ),
-              },
-              {
-                role: "user",
-                content: [
-                  previous ? `Previous chapters for continuity:\n${previous}` : "",
-                  onFile.text ? `Facts already on file:\n${onFile.text}` : "",
-                  `Transcript of the closing chapter:\n${transcript || "(quiet chapter with no recorded scenes)"}`,
-                ]
-                  .filter(Boolean)
-                  .join("\n\n"),
-              },
-            ],
-            { timeoutMs: arcTextTimeoutMs() },
-          ),
-        );
-    if (!error) {
-      reply = String(message?.content ?? "");
-      parsed = parseChapterJson(reply, chapter.index);
+    if (summariesOn) {
+      ({ reply, parsed } = await trackUtilityCall(campaign.id, "chapter", () =>
+        writeChapterSummary(campaign, chapter, seqEnd, previous, onFile),
+      ));
     }
   } catch {
     // Model unavailable; close with the fallback title so the campaign
     // never wedges on a chapter boundary.
+  }
+  // A summary is what lets the turn leave this chapter's transcript out
+  // (context-budget.ts cutCoveredHistory). Without one the chapter still
+  // closes, but the running summary and its mark stay as they are, so the
+  // next turn still reads the chapter's play (and the running summary of
+  // its start); a failed summary also keeps a bounded record of the chapter
+  // from what the server holds, never an empty one.
+  const summarized = Boolean(parsed.summary.trim());
+  if (!summarized && summariesOn) {
+    const { summary: running } = getCampaignSummaryState(campaignId);
+    const lastNarration =
+      [...listMessagesInSeqRange(campaignId, chapter.seqStart, seqEnd)].reverse().find((message) => message.authorType === "dm")?.content ?? "";
+    parsed = {
+      ...parsed,
+      summary: extractiveChapterSummary({
+        running: stripMilestoneBlock(running),
+        milestones: protectedMoments(campaignId, chapter.seqStart, seqEnd, 8).map((line) => line.replace(/^- /, "")),
+        lastNarration,
+      }),
+    };
+    console.warn(
+      `[chapter] campaign ${campaignId}: chapter ${chapter.index} closed without a model summary; it keeps a record from the server's own, and the running summary and its coverage are left in place`,
+    );
   }
 
   const result = closeChapterRow(chapter.id, {
@@ -422,8 +518,11 @@ export async function maybeCloseChapter(
 
   pacingByCampaign.delete(campaignId);
 
-  // The rolling summary now only covers the new open chapter.
-  setCampaignSummaryState(campaignId, "", countMessagesUpToSeq(campaignId, seqEnd));
+  // The rolling summary now only covers the new open chapter, once the
+  // closed one has a summary that stands for it (see above).
+  if (summarized) {
+    setCampaignSummaryState(campaignId, "", countMessagesUpToSeq(campaignId, seqEnd));
+  }
 
   publishPersisted(campaignId, "chapter_closed", {
     chapter: result.closed,

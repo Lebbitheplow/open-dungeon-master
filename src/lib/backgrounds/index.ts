@@ -6,6 +6,7 @@
 import { SRD_BACKGROUNDS } from "@/lib/srd";
 import type { Genre } from "@/lib/schemas/game-settings";
 import catalogJson from "@/lib/backgrounds/catalog.json";
+import { textKey } from "@/lib/language/text-logic";
 
 export type CustomBackground = {
   id: string;
@@ -51,14 +52,14 @@ export function backgroundFeatureFor(
 // chip and the builder's background line. Covers the SRD list and the
 // setting catalog; a content-pack feature carries its text on its own row.
 export function describeBackgroundFeature(featureName: string): string | null {
-  const wanted = featureName.trim().toLowerCase();
+  const wanted = textKey(featureName);
   if (!wanted) {
     return null;
   }
-  const custom = CUSTOM_BACKGROUNDS.find((entry) => entry.feature.toLowerCase() === wanted);
+  const custom = CUSTOM_BACKGROUNDS.find((entry) => textKey(entry.feature) === wanted);
   if (custom) {
     return custom.featureDesc;
   }
-  const srd = SRD_BACKGROUNDS.find((entry) => entry.feature.toLowerCase() === wanted);
+  const srd = SRD_BACKGROUNDS.find((entry) => textKey(entry.feature) === wanted);
   return srd?.featureDesc ?? null;
 }

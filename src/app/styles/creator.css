@@ -121,6 +121,14 @@
   transition: transform 220ms var(--ease-spring);
 }
 .diamond-button:not(:disabled) { cursor: pointer; }
+/* The tap target reaches 44 px through an invisible ring past the button's
+   edge, so the stepper keeps its spacing. */
+.diamond-button::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+}
 @media (hover: hover) {
   .diamond-button:not(:disabled):hover { transform: scale(1.18); }
 }
@@ -452,6 +460,13 @@ html[data-theme="light"] .step-wipe-ring {
 .creator-help:hover > span,
 .creator-help:focus-visible > span { border-color: rgba(212, 171, 58, 0.9); }
 .creator-help:active { transform: scale(0.86); }
+/* 44 px to the finger, 32 px to the card's layout. */
+.creator-help::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+}
 .creator-selected {
   position: absolute;
   left: -7px;
@@ -702,6 +717,13 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 .method-option[aria-pressed="true"] { color: #2b2008; }
 .method-option[aria-pressed="true"]::before { opacity: 1; scale: 1; }
 .method-option > span { position: relative; }
+/* 30 px drawn, 44 px tall to the finger: the extra reaches over the
+   switch's own padding and a little past it. */
+.method-option::after {
+  content: "";
+  position: absolute;
+  inset: -7px 0;
+}
 
 .slot-button,
 .step-button {

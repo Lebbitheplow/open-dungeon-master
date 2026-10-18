@@ -11,7 +11,8 @@
 import { spellClassFor } from "@/lib/classes";
 import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import type { AbilityScores } from "@/lib/schemas/sheet";
-import { abilityMod, spellSlotsFor } from "@/lib/srd";
+import { abilityMod, formatModifier, spellSlotsFor } from "@/lib/srd";
+import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 import { cantripCapOf, spellCapOf } from "@/lib/srd/spell-prep";
 import { THIRD_CASTER_ABILITY, THIRD_CASTER_LIST, isThirdCaster } from "@/lib/srd/third-caster";
 
@@ -64,7 +65,7 @@ export function builderSpellAdvice(
   subclass: string | undefined | null,
   level: number,
   abilities: AbilityScores,
-): { label: string; count: number } | null {
+): { label: string; count: number; formula?: string } | null {
   if (!casting.casts || !casting.ability) {
     return null;
   }
@@ -85,5 +86,21 @@ export function builderSpellAdvice(
       abilities,
     );
   }
-  return suggestedSpellCount(casting.list, level, abilityMod(abilities[casting.ability]));
+  const mod = abilityMod(abilities[casting.ability]);
+  const advice = suggestedSpellCount(casting.list, level, mod);
+  if (!advice || advice.label !== "spells prepared") {
+    return advice;
+  }
+  return { ...advice, formula: preparedFormula(casting.ability, mod, casting.list, level) };
+}
+
+// How a prepared caster's count is worked out, said in the limit note so the
+// number is not a mystery: "Wisdom modifier (+2) + level (3)". The level part
+// is read back from the engine's own count with a modifier too large to hit
+// the floor of one, so the half casters' rounding is never restated here.
+export function preparedFormula(ability: "int" | "wis" | "cha", mod: number, list: string, level: number): string {
+  const levelPart = (suggestedSpellCount(list, level, 100)?.count ?? 100) - 100;
+  const levelWords = levelPart === level ? `level (${level})` : `half your level, rounded down (${levelPart})`;
+  const sum = `${ABILITY_NAMES[ability]} modifier (${formatModifier(mod)}) + ${levelWords}`;
+  return mod + levelPart < 1 ? `${sum}, and never fewer than 1` : sum;
 }

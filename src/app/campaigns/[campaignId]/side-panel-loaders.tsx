@@ -27,6 +27,8 @@ export const panels = {
   StoryPanel: preloadable(() => import("@/app/campaigns/[campaignId]/StoryPanel").then((module) => module.StoryPanel)),
   QuestsPanel: preloadable(() => import("@/app/campaigns/[campaignId]/QuestsPanel").then((module) => module.QuestsPanel)),
   TimelinePanel: preloadable(() => import("@/app/campaigns/[campaignId]/TimelinePanel").then((module) => module.TimelinePanel)),
+  // The campaign's world, the workshop's WorldForge at the table (World tab).
+  WorldForgePanel: preloadable(() => import("@/app/workshop/world/WorldForgePanel").then((module) => module.WorldForgePanel)),
 };
 
 export function preloadSidePanels(): void {

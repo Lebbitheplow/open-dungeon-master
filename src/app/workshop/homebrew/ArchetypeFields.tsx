@@ -12,6 +12,7 @@ import { CLASS_IDS } from "@/app/workshop/homebrew/types";
 import { engineRunsFeature, subclassFeatureCatalog, type CatalogFeature } from "@/lib/workshop/feature-catalog";
 import { addChip, rowIcon } from "@/app/workshop/kit";
 import type { Data } from "@/app/workshop/homebrew/draft";
+import { textKey } from "@/lib/language/text-logic";
 
 // A subclass: its class, its features by level and the always-prepared
 // spells it hands out (a domain's, an oath's). A character who takes it is
@@ -28,10 +29,10 @@ function BorrowFeature({ onPick, taken }: { onPick: (feature: CatalogFeature) =>
   const [query, setQuery] = useState("");
   const all = subclassFeatureCatalog();
   const results = useMemo(() => {
-    const wanted = query.trim().toLowerCase();
+    const wanted = textKey(query);
     if (wanted.length < 2) return [];
     return all
-      .filter((entry) => entry.name.toLowerCase().includes(wanted) || entry.subclass.toLowerCase().includes(wanted))
+      .filter((entry) => textKey(entry.name).includes(wanted) || textKey(entry.subclass).includes(wanted))
       .slice(0, 24);
   }, [all, query]);
   return (
@@ -50,7 +51,7 @@ function BorrowFeature({ onPick, taken }: { onPick: (feature: CatalogFeature) =>
         <ul className="reveal stagger-up max-h-64 space-y-1 overflow-y-auto rounded-lg border border-stone-800 bg-stone-950/60 p-1.5">
           {results.map((entry) => {
             const key = `${entry.classId}/${entry.subclass}/${entry.name}`;
-            const done = taken.has(entry.name.toLowerCase());
+            const done = taken.has(textKey(entry.name));
             return (
               <li key={key} className="flex items-start gap-2">
                 <button
@@ -118,7 +119,7 @@ function SpellLists({ data, set }: { data: Data; set: (patch: Data) => void }) {
           className="min-w-48 flex-1"
           onPick={(entry) => {
             const list = spells[String(level)] ?? [];
-            if (list.some((name) => name.toLowerCase() === entry.name.toLowerCase())) return;
+            if (list.some((name) => textKey(name) === textKey(entry.name))) return;
             put({ ...spells, [String(level)]: [...list, entry.name] });
           }}
         />
@@ -141,7 +142,7 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
     }
     set({ levels: grouped });
   };
-  const taken = new Set(flat.map((row) => row.feature.n.trim().toLowerCase()));
+  const taken = new Set(flat.map((row) => textKey(row.feature.n)));
 
   return (
     <div className="space-y-3">

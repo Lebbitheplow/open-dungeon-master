@@ -19,7 +19,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
@@ -30,12 +30,13 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 type Resolution = ToolError | { result: Record<string, unknown> };
 
 // Whether the sheet knows this maneuver ("Maneuver: Rally").
 export function knowsManeuver(sheet: CharacterSheet, name: string): boolean {
-  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && feature.name.toLowerCase().replace(/[’`]/g, "'").includes(name));
+  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && textKey(feature.name).includes(textKey(name)));
 }
 
 function companion(sheet: CharacterSheet, targetId: string | undefined, label: string): CharacterSheet | ToolError {
@@ -88,7 +89,7 @@ export function commandersStrikeCharge(campaign: Campaign, sheet: CharacterSheet
   if (!able.ok) {
     return toolError(able);
   }
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   if (!budget) {
     return { error: `Commander's Strike is taken on ${sheet.name}'s own turn, as part of the Attack action. What they declared waits for their turn. Nothing was spent.`, refused: "rules" };
   }

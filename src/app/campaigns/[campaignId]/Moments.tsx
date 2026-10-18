@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PortraitMedallion } from "@/components/sheet/SheetParts";
 import { FxSprite } from "@/components/ui/FxSprite";
 import { GameIcon } from "@/components/ui/GameIcon";
 import type { AuditEntry, CampaignLocation } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
+import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { CharacterPortrait } from "@/lib/ui";
@@ -56,29 +57,43 @@ function useEscapeToSkip(active: boolean, onSkip: () => void) {
 const LEVEL_UP_MS = 2600;
 
 export function LevelUpMoment({ sheet, level, onDone }: { sheet: CharacterSheet; level: number; onDone: () => void }) {
+  // Under reduced motion or low effects the flourish is a still card that
+  // waits for its Dismiss button: a moment that closed itself after 900 ms
+  // was gone before it could be read. With motion it plays out and moves on.
+  const lowEffects = useLowEffects();
+  const [still] = useState(() => lowEffects || prefersReducedMotion());
+  const dismiss = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const timer = window.setTimeout(onDone, still ? 900 : LEVEL_UP_MS);
+    dismiss.current?.focus({ preventScroll: true });
+  }, []);
+  useEffect(() => {
+    if (still) return;
+    const timer = window.setTimeout(onDone, LEVEL_UP_MS);
     return () => window.clearTimeout(timer);
-  }, [onDone]);
+  }, [onDone, still]);
   useEscapeToSkip(true, onDone);
 
   return (
-    <div className="moment-stage" role="status" onClick={onDone}>
+    <div className="moment-stage" data-still={still || undefined}>
       <div className="moment-levelup">
-        <FxSprite sheetId="burst-radiant" className="moment-levelup-burst" />
+        {still ? null : <FxSprite sheetId="burst-radiant" className="moment-levelup-burst" />}
         <span className="moment-ring" aria-hidden="true" />
         <span className="moment-ring moment-ring-late" aria-hidden="true" />
         <PortraitMedallion classId={sheet.class} className="moment-levelup-medallion">
           <Face sheet={sheet} />
         </PortraitMedallion>
       </div>
-      <p className="moment-kicker">
-        <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-7" /> Level up
-      </p>
-      <p className="gold-title moment-title">
-        {sheet.name} reaches level {level}
-      </p>
+      <div role="status">
+        <p className="moment-kicker">
+          <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-7" /> Level up
+        </p>
+        <p className="gold-title moment-title">
+          {sheet.name} reaches level {level}
+        </p>
+      </div>
+      <button ref={dismiss} type="button" className="moment-dismiss" onClick={onDone}>
+        Dismiss
+      </button>
     </div>
   );
 }

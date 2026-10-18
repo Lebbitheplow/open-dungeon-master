@@ -5,7 +5,8 @@ import { createCampaign, listCampaignsForUser, publicCampaign, type Campaign } f
 import { playingAsByCampaign } from "@/lib/db/sheets";
 import { homeGlanceFor, partyFacesByCampaign } from "@/lib/db/home-glance";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
-import { capabilitiesSnapshot, narrationAvailable } from "@/lib/capabilities";
+import { capabilitiesSnapshot, narrationAvailable, NO_STORYTELLER_MESSAGE, storytellerConfigured } from "@/lib/capabilities";
+import { narratorIsAi } from "@/lib/dm/viewer";
 import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
 
 export const runtime = "nodejs";
@@ -92,6 +93,23 @@ export async function POST(request: Request) {
   const gameSettings = { ...parsed.data.gameSettings };
   if (gameSettings.ttsEnabled === undefined) {
     gameSettings.ttsEnabled = await narrationAvailable();
+  }
+  // No storyteller, no AI seat: the creator hides the AI seats when the
+  // server says so, and this holds the same line for every other caller (a
+  // shell, a script, a creator whose capability check never answered). A
+  // seat the caller did not name follows the server: the AI where there is
+  // one, a person where there is none, rather than a table that fails on
+  // its first turn.
+  // Read off the raw body: zod fills the seat's default through .partial(),
+  // so parsed.data cannot tell a caller who said "ai" from one who said
+  // nothing.
+  const namedSeat =
+    typeof raw === "object" && raw !== null && typeof raw.gameSettings === "object" && raw.gameSettings !== null && "dmMode" in raw.gameSettings;
+  const storyteller = await storytellerConfigured();
+  if (!namedSeat) {
+    gameSettings.dmMode = storyteller ? "ai" : "human";
+  } else if (narratorIsAi(gameSettings.dmMode ?? "ai") && !storyteller) {
+    return Response.json({ error: NO_STORYTELLER_MESSAGE, reason: "no_storyteller" }, { status: 409 });
   }
   const campaign = createCampaign(user.id, { ...parsed.data, gameSettings });
   return Response.json({ campaign: publicCampaign(campaign) }, { status: 201 });

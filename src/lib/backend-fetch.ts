@@ -40,6 +40,45 @@ export function connectionDropped(error: unknown): boolean {
   return false;
 }
 
+// Why a request never got an answer, in the words the table and the
+// server log can use. The error undici throws is "fetch failed" with the
+// real cause buried under it, so every branch here walks the cause chain.
+// `code` is the bare Node/undici code for the log; `reason` is a sentence
+// for the notice that never quotes the error itself (an error can name
+// internal hosts).
+export interface TransportFailure {
+  code: string;
+  reason: string;
+}
+
+const TRANSPORT_REASONS: Array<[RegExp, string]> = [
+  [/^ECONNREFUSED$/, "Nothing is listening at that address (connection refused)."],
+  [/^(ENOTFOUND|EAI_AGAIN|EAI_FAIL|EAI_NONAME)$/, "The host name could not be resolved (DNS)."],
+  [/^(UND_ERR_CONNECT_TIMEOUT|ETIMEDOUT)$/, "The connection attempt timed out before the server answered."],
+  [/^(ECONNRESET|EPIPE|UND_ERR_SOCKET)$/, "The connection was closed before the server answered."],
+  [/^(EHOSTUNREACH|ENETUNREACH|ENETDOWN)$/, "The network route to that host is down."],
+  [/^(CERT_|ERR_TLS_|UNABLE_TO_|SELF_SIGNED|DEPTH_ZERO|ERR_SSL_|EPROTO$)/, "The TLS certificate or handshake was rejected."],
+  [/^ERR_INVALID_URL$/, "The URL is not valid."],
+];
+
+export function describeTransportFailure(error: unknown): TransportFailure {
+  let current: unknown = error;
+  let code = "";
+  let sawTls = false;
+  for (let depth = 0; current && depth < 6; depth += 1) {
+    const { code: found, message, cause } = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (typeof found === "string" && found && !code) code = found;
+    if (typeof message === "string" && /certificate|tls|ssl/i.test(message)) sawTls = true;
+    current = cause;
+  }
+  if (!code && sawTls) code = "TLS";
+  for (const [pattern, reason] of TRANSPORT_REASONS) {
+    if (pattern.test(code)) return { code, reason };
+  }
+  if (sawTls) return { code: code || "TLS", reason: "The TLS certificate or handshake was rejected." };
+  return { code: code || "unknown", reason: "" };
+}
+
 export async function fetchBackend(url: string, init: RequestInit): Promise<Response> {
   let current = new URL(url);
   let retried = false;
@@ -105,11 +144,15 @@ export async function readBody(response: Response, max: number): Promise<{ text:
 // Reads an upstream streaming body line by line with an idle timeout that
 // resets on every chunk, so a stalled model server can't hold the turn open
 // forever while a slow-but-alive one is given all the time it needs.
+// `onChunk` hears every chunk too: the DM queue's watchdog counts a stream
+// that is still arriving (reasoning included) as progress
+// (src/lib/dm/job-control.ts).
 export async function forEachStreamLine(
   upstream: Response,
   idleMs: number,
   onIdleAbort: () => void,
   onLine: (line: string) => void,
+  onChunk?: () => void,
 ) {
   const reader = upstream.body!.getReader();
   const decoder = new TextDecoder();
@@ -129,6 +172,7 @@ export async function forEachStreamLine(
         break;
       }
       resetIdle();
+      onChunk?.();
       total += value.byteLength;
       if (total > MAX_BACKEND_STREAM_BYTES) {
         await reader.cancel().catch(() => {});

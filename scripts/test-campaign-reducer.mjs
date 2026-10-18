@@ -210,6 +210,29 @@ test("issue 214: a sheet change redraws a board that is up, and only then", () =
   assert.equal(next.sheets.find((entry) => entry.id === "s1"), sheet);
 });
 
+test("a change to the world reads the World tab again (WF-10)", () => {
+  // Both are sent only to the seats holding the story's secrets, the same
+  // seats that have the World tab (src/lib/event-audience.ts).
+  const streamed = new Set(STREAMED_EVENTS);
+  let state = loaded;
+  for (const type of ["world_updated", "records_changed"]) {
+    assert.ok(streamed.has(type), `the stream listens for ${type}`);
+    assert.deepEqual(EVENT_AUDIENCE[type], { kind: "dm", right: "secretStory" }, `${type} stays with story authority`);
+    const next = campaignReducer(state, event(type, { at: 1 }));
+    assert.equal(next.worldVersion, state.worldVersion + 1, type);
+    state = next;
+  }
+});
+
+test("a secret revealed to the party reads every seat's lore again (WF-10)", () => {
+  // The ping carries nothing and goes to the whole table: each seat's lore
+  // list asks GET /lore, which answers for that seat.
+  assert.ok(new Set(STREAMED_EVENTS).has("lore_updated"), "the stream listens for lore_updated");
+  assert.deepEqual(EVENT_AUDIENCE.lore_updated, { kind: "table" });
+  const next = campaignReducer(loaded, event("lore_updated", { at: 1 }));
+  assert.equal(next.loreVersion, loaded.loreVersion + 1);
+});
+
 test("every table event the reducer handles is one the stream listens for", () => {
   // A case for a type the EventSource never subscribes to is dead: the
   // travel formation (issue 230) saved but showed nothing until a reload.

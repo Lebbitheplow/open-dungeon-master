@@ -53,6 +53,7 @@ import {
   type CreateSheetInput,
 } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -514,10 +515,10 @@ export function handleDismissCompanion(
   } catch {
     return { error: "Invalid arguments: dismiss_companion needs characterId.", retry: true };
   }
-  const needle = args.characterId.trim().toLowerCase();
+  const needle = textKey(args.characterId);
   const sheet =
     sheets.find((candidate) => candidate.id === args.characterId) ??
-    sheets.find((candidate) => candidate.name.toLowerCase() === needle) ??
+    sheets.find((candidate) => textKey(candidate.name) === needle) ??
     null;
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE.", retry: true };

@@ -62,7 +62,7 @@ export function StubsView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   const dismissed = doc.stubs.filter((stub) => stub.status === "dismissed");
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 @4xl:grid-cols-2">
       <section className="flex flex-col gap-2" aria-label="Scan">
         <div className="flex items-center justify-between">
           <h3 className="eyebrow text-[10px] text-amber-400/80">Names with no entry</h3>

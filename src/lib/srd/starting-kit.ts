@@ -16,6 +16,7 @@ import {
   type KitSlot,
 } from "@/lib/srd/starting-kit-data";
 import { SRD_WEAPONS, defaultLoadout } from "@/lib/srd/weapons";
+import { textKey } from "@/lib/language/text-logic";
 
 export type { ClassKit, KitItem, KitLine, KitOption, KitSlot } from "@/lib/srd/starting-kit-data";
 
@@ -104,7 +105,7 @@ export type ResolvedKit = {
 export function mergeItems(into: KitItem[], items: KitItem[]): KitItem[] {
   const out = into.map((item) => ({ ...item }));
   for (const item of items) {
-    const held = out.find((entry) => lower(entry.name) === lower(item.name));
+    const held = out.find((entry) => textKey(entry.name) === textKey(item.name));
     if (held) {
       held.qty += item.qty;
     } else {
@@ -150,7 +151,7 @@ export function resolveKit(
     for (const slot of option.slots ?? []) {
       const named = (sentPicks[picks.length] ?? "").trim();
       const allowed = slotChoices(slot);
-      const match = named ? allowed.find((name) => lower(name) === lower(named)) : slot.default;
+      const match = named ? allowed.find((name) => textKey(name) === textKey(named)) : slot.default;
       if (!match) {
         problems.push(
           `${named} is not ${describeSlot(slot)}, which is what the ${className}'s "${option.label}" gives; choose one from the weapon table.`,

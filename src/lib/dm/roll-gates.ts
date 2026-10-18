@@ -24,6 +24,7 @@ import { resolveMonster } from "@/lib/bestiary";
 import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import { mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { effectOutcome } from "@/lib/dm/effect-tools";
 import { redactRoll } from "@/lib/dm/viewer";
 import { findSkill } from "@/lib/srd";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -81,7 +82,7 @@ export function creatureCheckMod(stats: EnemyStats, skill: string | null, abilit
   return ability === "dex" ? stats.dexMod ?? 0 : 0;
 }
 
-export type Opponent = { name: string; stats: EnemyStats; conditions: string[] };
+export type Opponent = { name: string; stats: EnemyStats; conditions: string[]; enemyId?: string };
 
 // The creature a contest names: an enemy of the running fight, or a monster
 // by name from the bestiary when there is no fight to find it in.
@@ -98,7 +99,7 @@ export function contestOpponent(
     if (enemy.status !== "alive") {
       return { error: `${enemy.displayName} is ${enemy.status} and contests nothing.`, retry: true };
     }
-    return { name: enemy.displayName, stats: enemy.stats, conditions: enemy.conditions };
+    return { name: enemy.displayName, stats: enemy.stats, conditions: enemy.conditions, enemyId: enemy.id };
   }
   const monster = resolveMonster(ref.monster ?? "", campaign.gameSettings, { userIds: spellAuthorsFor(campaign) });
   if (!monster) {
@@ -125,8 +126,15 @@ export function rollContest(
   // Exhaustion's first level costs every ability check disadvantage, a
   // creature's as a character's (src/lib/dm/monster-abilities.ts).
   const worn = enemyExhaustion(opponent.conditions) >= 1;
-  const advantage = mergeAdvantage([derivation.advantage, ...(worn ? ["disadvantage" as const] : [])]);
-  const modifier = creatureCheckMod(opponent.stats, theirs, ability);
+  // A check effect set on an enemy of the fight (set_effect) rides its side.
+  const effect = opponent.enemyId ? effectOutcome(campaign.id, { kind: "enemy", id: opponent.enemyId }, "check") : null;
+  const advantage = mergeAdvantage([
+    ...derivation.sources,
+    ...(worn ? ["disadvantage" as const] : []),
+    ...(effect?.advantage ? ["advantage" as const] : []),
+    ...(effect?.disadvantage ? ["disadvantage" as const] : []),
+  ]);
+  const modifier = creatureCheckMod(opponent.stats, theirs, ability) + (effect?.bonus ?? 0);
   const outcome = derivation.autoFail ? null : rollExpression(d20Expression(modifier, advantage));
   const total = outcome?.total ?? 0;
   const label = theirs ? (findSkill(theirs)?.name ?? theirs) : ability.toUpperCase();

@@ -194,7 +194,7 @@ export function EntityEditor({
           <p className="text-xs text-amber-200/80">Save keeps yours for any field you leave as it is.</p>
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @lg:grid-cols-2">
         {field("Name", <input className={ui.input} maxLength={80} value={draft.name} onChange={(event) => set("name", event.target.value)} required />)}
         {field(
           "Type",
@@ -277,13 +277,13 @@ export function EntityEditor({
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @lg:grid-cols-2">
         {field("Also called", <input className={ui.input} placeholder="another name, a title" value={draft.aliases} onChange={(event) => set("aliases", event.target.value)} />, "Separated by commas.")}
         {field("Tags", <input className={ui.input} placeholder="harbour, smugglers" value={draft.tags} onChange={(event) => set("tags", event.target.value)} />, "Separated by commas.")}
       </div>
 
       {chosenType.fields.length ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 @lg:grid-cols-2">
           {chosenType.fields.map((def) => (
             <FieldInput key={def.id} def={def} doc={doc} value={draft.fields[def.id]} onChange={(value) => setField(def, value)} />
           ))}
@@ -292,7 +292,7 @@ export function EntityEditor({
 
       {field("Picture", <LoreImageField imagePath={draft.portrait} onChange={(path) => set("portrait", path)} />)}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @lg:grid-cols-2">
         {field(
           "Hidden truth (yours alone)",
           <textarea className={cn(ui.input, "min-h-20 border-red-900/50")} maxLength={4_000} value={draft.hiddenTruth} onChange={(event) => set("hiddenTruth", event.target.value)} />,

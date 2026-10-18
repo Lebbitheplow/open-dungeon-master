@@ -14,6 +14,8 @@
 // can load it directly. A match never fires an event: the render still says
 // these are opportunities, and the DM decides.
 
+import { textKey } from "../language/text-logic.ts";
+
 export type SceneCues = {
   location?: string;
   scene?: string;
@@ -63,11 +65,8 @@ const STOP_WORDS = new Set(
 );
 
 function words(text: string | undefined): string[] {
-  return (text ?? "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}']+/gu, " ")
+  return textKey(text ?? "")
     .split(" ")
-    .map((word) => word.replace(/'s$/, ""))
     .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
 }
 
@@ -76,7 +75,7 @@ function words(text: string | undefined): string[] {
 // "road".
 export function cueTerms(cues: SceneCues): { phrases: string[]; words: Set<string> } {
   const phrases = [cues.location ?? "", ...(cues.npcs ?? []), ...(cues.enemies ?? [])]
-    .map((phrase) => phrase.trim().toLowerCase())
+    .map((phrase) => textKey(phrase))
     .filter((phrase) => phrase.length >= 3);
   const loose = new Set<string>();
   for (const source of [cues.location, cues.scene, cues.recent, ...(cues.npcs ?? []), ...(cues.enemies ?? [])]) {
@@ -88,7 +87,7 @@ export function cueTerms(cues: SceneCues): { phrases: string[]; words: Set<strin
 }
 
 export function scoreEvent(event: EventLike, terms: { phrases: string[]; words: Set<string> }): { score: number; matched: string[] } {
-  const text = `${event.name} ${event.trigger} ${event.detail} ${event.castName ?? ""}`.toLowerCase();
+  const text = textKey(`${event.name} ${event.trigger} ${event.detail} ${event.castName ?? ""}`);
   const matched: string[] = [];
   let score = 0;
   for (const phrase of terms.phrases) {

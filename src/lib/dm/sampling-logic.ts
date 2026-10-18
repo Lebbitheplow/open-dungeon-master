@@ -161,6 +161,9 @@ const DROPPABLE_PARAMS = new Set([
   // Sent as "none" on the GPT-6 models whose tools need it; a model the
   // table is wrong about names it in its 400 and loses it here.
   "reasoning_effort",
+  // The Responses API's encrypted reasoning, asked for on every call there
+  // (src/lib/openai-responses.ts); a model without it names the field.
+  "include",
 ]);
 
 // Pulls the offending field name out of a 4xx body so the caller can drop it

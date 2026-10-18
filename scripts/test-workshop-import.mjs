@@ -19,6 +19,7 @@ const {
   planImport,
   planSummary,
 } = await import("../src/lib/workshop/import.ts");
+const { textKey } = await import("../src/lib/language/text-logic.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -66,7 +67,7 @@ test("a colliding name is numbered, not rejected", () => {
 });
 
 test("numbering keeps climbing past an existing numbered copy", () => {
-  const taken = new Set(["inn", "inn (2)"]);
+  const taken = new Set(["Inn", "Inn (2)"].map(textKey));
   assert.equal(dedupeName("Inn", taken), "Inn (3)");
 });
 

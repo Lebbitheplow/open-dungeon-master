@@ -37,8 +37,11 @@ const master = world.addHero({
   spellcasting: { ability: "int", slots: {}, prepared: [], known: [], cantrips: ["Fire Bolt"] },
 });
 const made = world.sheet(master.id);
+// The subclass grants its own features ("battle_master" names the Battle
+// Master); the fighter without them is the sheet less those.
+const BASE = made.features.filter((feature) => !["Combat Superiority", "Maneuvers"].includes(feature.name));
 const FEATURES = [
-  ...made.features,
+  ...BASE,
   { name: "Combat Superiority", source: "subclass" },
   ...PICKS.map((name) => ({ name: `Maneuver: ${name}`, source: "choice" })),
 ];
@@ -169,7 +172,7 @@ await test("a maneuver the character never learned is refused and costs nothing"
 await test("a fighter with no maneuvers has none to use", async () => {
   const enemy = await stage();
   // Without the feature the sheet drops the counter with it.
-  world.patch(master.id, { features: made.features });
+  world.patch(master.id, { features: BASE });
   assert.equal(dice(), undefined);
   const out = await swing(enemy, [15, 4, 5, 2], { maneuver: "Trip Attack" });
   assert.equal(out.ok, false);

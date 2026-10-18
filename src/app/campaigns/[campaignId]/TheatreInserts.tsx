@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { CastMember } from "@/lib/dm/cast";
 import type { Speaker } from "@/lib/dm/speech";
+import { textKey } from "@/lib/language/text-logic";
 
 // Theatre inserts (docs/vtt-parity-implementation-plan.md 8.3): when the
 // latest passage carries attributed speech, the speakers' portraits slide
@@ -31,7 +32,7 @@ export function TheatreInserts({ speakers, cast, messageId }: { speakers: Speake
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between px-2 pb-1">
       {shown.map((speaker, index) => {
-        const face = cast.find((member) => member.id === speaker.id || member.name.toLowerCase() === speaker.name.toLowerCase())?.portraitUrl;
+        const face = cast.find((member) => member.id === speaker.id || textKey(member.name) === textKey(speaker.name))?.portraitUrl;
         return (
           <figure
             key={speaker.name}

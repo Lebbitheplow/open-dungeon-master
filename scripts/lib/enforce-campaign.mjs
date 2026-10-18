@@ -23,6 +23,8 @@ globalThis.__odmCapabilityProbes = new Map(
   ].map((url) => [url, { probedAt: Date.now() + 86_400_000, reachable: false }]),
 );
 
+export { standInStoryteller } from "./stand-in-storyteller.mjs";
+
 // One request to a route module, answered as { status, json }. A body that
 // is already a string is sent as written, so a test can post broken JSON.
 export async function call(mod, method, body, params = {}, url = "http://test/") {

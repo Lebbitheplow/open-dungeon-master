@@ -1,5 +1,6 @@
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { usageOverview } from "@/lib/usage/ledger";
+import { summarizeModelCalls } from "@/lib/usage/model-calls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,5 +13,8 @@ export async function GET() {
   if (isErrorResponse(admin)) {
     return admin;
   }
-  return Response.json(usageOverview());
+  // And how the model calls behaved over the last week, by what they were
+  // for (src/lib/usage/model-calls.ts).
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  return Response.json({ ...usageOverview(), modelCalls: summarizeModelCalls(since) });
 }

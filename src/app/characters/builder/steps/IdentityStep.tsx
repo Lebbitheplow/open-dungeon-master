@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Select } from "@/components/ui/Select";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
@@ -24,12 +23,10 @@ import { GENDERS, type Gender } from "@/lib/gender";
 // How many tools a background's open grant leaves to the player, in words.
 const COUNT_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three" };
 
-export type BuilderRole = "pc" | "companion";
-
 // Step 1: for a new character, how they want to play (the class step opens
-// on the same answer), then the name, who plays them, gender (the cards'
-// art follows it), level and background. Alignment changes no number and
-// waits for the finishing touches. The setting notices live here too, so the first thing a player
+// on the same answer), then the name, gender (the cards' art follows it),
+// level and background. Alignment changes no number, and who plays them
+// changes nothing on the sheet; both wait for the Finish step. The setting notices live here too, so the first thing a player
 // sees under a world pack is whose names they are about to choose from.
 export type IdentityPlaystyle = {
   value: PlaystyleId | null;
@@ -45,7 +42,7 @@ export function IdentityStep({
   pack,
   packInstalled,
   fixedLevel,
-  role,
+  levelNote,
   playstyle,
   backgroundGroups,
   background,
@@ -54,9 +51,8 @@ export function IdentityStep({
   pack: WorldPack | null;
   packInstalled: boolean;
   fixedLevel?: number;
-  // Offered by the library page only: a campaign already knows which door
-  // the character comes through.
-  role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
+  // Why the level select opened where it did (door.ts).
+  levelNote?: string;
   // Offered to a new character only; an edit keeps its class.
   playstyle?: IdentityPlaystyle;
   backgroundGroups: PickerGroup[];
@@ -161,26 +157,6 @@ export function IdentityStep({
             ))}
           </span>
         ) : null}
-        {role ? (
-          <div className="mt-4">
-            <span className="mb-1.5 block text-xs text-stone-400">Their place at the table</span>
-            <SegmentedControl
-              label="Role"
-              value={role.value}
-              onChange={role.onChange}
-              options={[
-                { value: "pc", label: "A character I play" },
-                { value: "companion", label: "An ally the DM plays" },
-              ]}
-              className="w-full"
-            />
-            <p className="mt-1.5 text-xs text-stone-500">
-              {role.value === "companion"
-                ? "Companions are offered when a party adds one, at whatever level that table plays at. Nobody has to roll them up again."
-                : "Joins a campaign as yours to control."}
-            </p>
-          </div>
-        ) : null}
       </StepPanel>
 
       <StepPanel title="Details">
@@ -224,6 +200,8 @@ export function IdentityStep({
                   <span className="mt-1 block text-xs text-stone-500">
                     Improvements taken in play are in their scores, so they stay level {state.levelFloor} or higher.
                   </span>
+                ) : levelNote ? (
+                  <span className="mt-1 block text-xs text-stone-500">{levelNote}</span>
                 ) : null}
               </>
             )}
@@ -306,7 +284,7 @@ export function IdentityStep({
               // tools") is picked on the class step, under the class's own;
               // said here like the languages (issue #117 follow-up).
               <span className="mt-1 block text-xs text-stone-500">
-                On the Calling step you will pick{" "}
+                On the Class step you will pick{" "}
                 {splitToolGrants(background.tools)
                   .choices.map((choice) => `${COUNT_WORDS[choice.count] ?? choice.count} ${choice.label}${choice.count === 1 || choice.label.endsWith("s") ? "" : "s"}`)
                   .join(" and ")}{" "}

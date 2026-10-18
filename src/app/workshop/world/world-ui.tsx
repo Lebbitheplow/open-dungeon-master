@@ -7,6 +7,7 @@ import { ui } from "@/lib/ui";
 import type { Shelf, WorldDoc, WorldType } from "@/lib/worldforge/model";
 import { typeFor } from "@/lib/worldforge/model";
 import type { WorldEntity } from "@/lib/db/world-forge";
+import { textKey } from "@/lib/language/text-logic";
 
 // Small shared pieces of the WorldForge section.
 
@@ -76,11 +77,11 @@ export function EntityPicker({
 }) {
   const [query, setQuery] = useState("");
   const groups = useMemo(() => {
-    const words = query.trim().toLowerCase();
+    const words = textKey(query);
     const shown = entities.filter(
       (entity) =>
         !exclude.includes(entity.ref) &&
-        (!words || [entity.name, ...entity.aliases].some((name) => name.toLowerCase().includes(words))),
+        (!words || [entity.name, ...entity.aliases].some((name) => textKey(name).includes(words))),
     );
     return doc.types
       .map((type) => ({ type, rows: shown.filter((entity) => typeOf(doc, entity).id === type.id) }))

@@ -22,11 +22,11 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { spellFactsFor } from "@/lib/content";
 import { actingCombatantId, canAct } from "@/lib/dm/can-act";
-import { spellKeyOf } from "@/lib/dm/cast-rules";
 import { breakConcentration, setConcentration } from "@/lib/dm/concentration";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 const READIED = "readied";
 
@@ -76,7 +76,7 @@ export function readySpell(
   const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : null;
   // Holding the spell is concentration, whatever the spell itself needs.
   const held = getSheetById(sheet.id) ?? sheet;
-  if (spellKeyOf(held.concentratingOn ?? "") !== spellKeyOf(name)) {
+  if (textKey(held.concentratingOn ?? "") !== textKey(name)) {
     setConcentration(campaign, turn.id, sheet.id, name);
   }
   const fresh = getSheetById(sheet.id) ?? sheet;
@@ -106,7 +106,7 @@ export function readiedRelease(sheet: CharacterSheet, encounter: Encounter | nul
   if (!held || !encounter || actingCombatantId(encounter) === sheet.id) {
     return null;
   }
-  return spellKeyOf(held.spell) === spellKeyOf(spell) ? held : null;
+  return textKey(held.spell) === textKey(spell) ? held : null;
 }
 
 // The release: the reaction, no slot, no material. A broken concentration
@@ -125,7 +125,7 @@ export function releaseReadied(
   if (encounter.reactionsUsed.includes(sheet.id)) {
     return { error: `${sheet.name} has already used their reaction, so the readied ${held.spell} cannot be released; it is lost when their turn starts.`, refused: "rules" };
   }
-  if (spellKeyOf(sheet.concentratingOn ?? "") !== spellKeyOf(held.spell)) {
+  if (textKey(sheet.concentratingOn ?? "") !== textKey(held.spell)) {
     if (!dryRun) {
       dropReadied(campaign, sheet.id);
     }

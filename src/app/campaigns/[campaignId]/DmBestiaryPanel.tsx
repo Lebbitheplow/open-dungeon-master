@@ -19,6 +19,7 @@ import { MonsterBuildControls } from "@/app/workshop/bestiary/MonsterBuildContro
 import { MonsterEditor } from "@/app/workshop/bestiary/MonsterEditor";
 import { MonsterRows } from "@/app/workshop/bestiary/MonsterRows";
 import type { Found, Monster } from "@/app/workshop/bestiary/types";
+import { textKey } from "@/lib/language/text-logic";
 
 // The bestiary forge: build a monster, and see what it is actually worth.
 //
@@ -118,7 +119,7 @@ export function DmBestiaryPanel({
       const body = (await fetch(`/api/content/monsters?${new URLSearchParams({ q: wanted, limit: "20" })}`).then((response) => (response.ok ? response.json() : null))) as
         | { results?: Array<{ slug: string; name: string; documentSlug?: string; source?: string }> }
         | null;
-      const rows = (body?.results ?? []).filter((entry) => entry.source !== "homebrew" && entry.name.toLowerCase() === wanted.toLowerCase());
+      const rows = (body?.results ?? []).filter((entry) => entry.source !== "homebrew" && textKey(entry.name) === textKey(wanted));
       const row = rows.find((entry) => entry.documentSlug === "wotc-srd") ?? rows[0];
       if (!live) return;
       if (row) {

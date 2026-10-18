@@ -1,4 +1,5 @@
 import { segmentsOf, type Speaker, type SpokenLine } from "@/lib/dm/speech";
+import { textKey, words } from "@/lib/language/text-logic";
 
 // Which voice reads which part of a message (docs/vtt-parity-
 // implementation-plan.md section 8.2, issue 97). Prose is the narrator's; a
@@ -43,14 +44,14 @@ export function planSpeech(
   const byName = new Map<string, CastVoice>();
   for (const entry of options.cast) {
     for (const name of [entry.name, ...(entry.aliases ?? [])]) {
-      if (!byName.has(name.toLowerCase())) {
-        byName.set(name.toLowerCase(), entry);
+      if (!byName.has(textKey(name))) {
+        byName.set(textKey(name), entry);
       }
     }
   }
   const narrator = { voice: options.narratorVoice, speed: clampSpeed(options.narratorSpeed ?? 1) };
   const voiceFor = (name: string) => {
-    const own = byName.get(name.toLowerCase()) ?? byName.get(baseCreatureName(name).toLowerCase());
+    const own = byName.get(textKey(name)) ?? byName.get(textKey(baseCreatureName(name)));
     return own?.voiceId ? { voice: own.voiceId, speed: own.speed } : narrator;
   };
   // The text keeps its line breaks for reading who said what; the speech
@@ -125,7 +126,7 @@ export function speechRequests(plan: SpeechPlan): SpeechRequest[] {
   const requests: SpeechRequest[] = [];
   for (const part of plan) {
     for (const text of chunkSentences(part.text, requests.length ? CHUNK_CHARS : FIRST_CHUNK_CHARS)) {
-      if (/[\p{L}\p{N}]/u.test(text)) {
+      if (words(text).length) {
         requests.push({ text, voice: part.voice, speed: part.speed });
       }
     }

@@ -9,6 +9,8 @@
 //
 // Pure and dependency-free so scripts/test-roll-tables.mjs can import it.
 
+import { textKey } from "../language/text-logic.ts";
+
 export type RollTableEntry = {
   // Inclusive range of die results this row covers.
   min: number;
@@ -181,15 +183,15 @@ export function followTableRefs(
   roll: (sides: number) => number,
 ): RollStep[] {
   const chain: RollStep[] = [first];
-  const visited = new Set<string>([first.table.toLowerCase()]);
+  const visited = new Set<string>([textKey(first.table)]);
   let current = first;
   while (chain.length < MAX_NESTED_ROLLS + 1) {
     const ref = current.entry?.ref;
     if (!ref || ref.kind !== "table") {
       break;
     }
-    const wanted = ref.name.trim().toLowerCase();
-    const next = tables.find((table) => table.name.trim().toLowerCase() === wanted);
+    const wanted = textKey(ref.name);
+    const next = tables.find((table) => textKey(table.name) === wanted);
     if (!next || visited.has(wanted)) {
       chain.push({ table: ref.name, die: 0, total: 0, entry: null });
       break;

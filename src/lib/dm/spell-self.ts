@@ -18,6 +18,7 @@ import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard } from "@/lib/dm/roll-card";
+import { textKey } from "@/lib/language/text-logic";
 
 export const INSANE = "insane (contact other plane)";
 
@@ -25,7 +26,7 @@ export const INSANE = "insane (contact other plane)";
 // `spell` is the published spell it runs as; `named` the name it was cast
 // under, a workshop copy's own.
 export function casterCost(campaign: Campaign, sheet: CharacterSheet, spell: string, named: string = spell): { casterCost?: string } {
-  if (spell.trim().toLowerCase() !== "contact other plane") {
+  if (textKey(spell) !== "contact other plane") {
     return {};
   }
   const turn = createDmTurn(campaign.id, [], "human_dm");

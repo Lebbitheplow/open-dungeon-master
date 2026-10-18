@@ -10,27 +10,37 @@ import { chosenResistances, featureDamageImmunities } from "@/lib/srd/trait-rule
 import { authoredResistances } from "@/lib/srd/authored-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 import { DAMAGE_TYPES, PHYSICAL_TYPES, rageApplies, resistsAllDamage } from "@/lib/dm/damage-logic";
+import { formSees } from "@/lib/srd/shape-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 // Damage types a character's features make them immune to (Purity of Body:
 // poison), as a keyword string damageAdjust can match against.
-export function pcImmunities(sheet: { features: Array<{ name: string }>; conditions?: string[] }): string {
+export function pcImmunities(input: { features: Array<{ name: string }>; conditions?: string[]; wildShape?: WildShapeView }): string {
+  // A Polymorph's beast has none of the character's own (shape-rules.ts).
+  const sheet = formSees(input);
   // A spell's immunity too (Heroes' Feast: poison).
   return [...featureDamageImmunities(sheet), ...conditionDamageImmunities(sheet.conditions ?? [])].join(", ");
 }
 
+type WildShapeView = { kind?: "wildshape" | "polymorph"; keepsTraining?: boolean } | null;
+
 // Racial, feature, and condition-derived damage resistances a sheet
 // carries, as a keyword string damageAdjust can match against.
 // Conservative: only unambiguous SRD grants are recognized.
-export function pcResistances(sheet: {
+export function pcResistances(input: {
   race: string;
   features: Array<{ name: string }>;
   conditions?: string[];
   equipment?: Array<{ name: string; attuned?: boolean; equipped?: boolean }>;
   class?: string;
   level?: number;
+  wildShape?: WildShapeView;
 }, options?: { magical?: boolean; spell?: boolean }): string {
+  // A Polymorph's beast has none of the character's lineage, features or
+  // gear; the effects laid on the creature still hold (shape-rules.ts).
+  const sheet = formSees(input);
   const out: string[] = [];
-  const race = sheet.race.toLowerCase();
+  const race = textKey(sheet.race);
   // The authored subclass features' resistances (Soul of the Forge, a
   // raging bear totem, Spell Resistance against a spell's damage).
   out.push(...authoredResistances(sheet, options));
@@ -61,7 +71,7 @@ export function pcResistances(sheet: {
   if (resistsAllDamage(sheet.conditions)) {
     out.push(...DAMAGE_TYPES);
   }
-  const featureNames = sheet.features.map((feature) => feature.name.toLowerCase());
+  const featureNames = sheet.features.map((feature) => textKey(feature.name));
   const hasFeature = (fragment: string) =>
     featureNames.some((name) => name.includes(fragment));
   if (race.includes("dwarf") || hasFeature("dwarven resilience")) {

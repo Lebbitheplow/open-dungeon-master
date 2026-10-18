@@ -118,4 +118,7 @@ It prints a link with a one-time setup code. Open it in a browser on this
 computer, make the admin account, and the guided setup takes it from there:
 the storyteller (a local model, an API key or an agent program), pictures,
 voice, who may join, and your own agent.
+
+A local model needs a context window of at least 16K tokens to narrate and
+24K to run fights; 32K or more is recommended ${dim("(llama-server -c 32768)")}.
 `);

@@ -9,6 +9,7 @@ import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
+import { newCharacterHref } from "@/app/characters/builder/door";
 import { ListHead, useListHead } from "@/app/workshop/ListHead";
 import { rowIcon } from "@/app/workshop/kit";
 import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
@@ -221,7 +222,9 @@ export function PartyPanel({
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Add it
           </button>
-          <Link href="/characters/new" className={ui.btnSecondary}>
+          {/* A pregen is a player character, built at the party's level: the
+              builder starts there instead of asking. */}
+          <Link href={newCharacterHref({ role: "pc", level: targetParty.level, from: "party" })} className={ui.btnSecondary}>
             Build a new one
           </Link>
         </div>

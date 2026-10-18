@@ -56,7 +56,41 @@ type Embedder = (
   options: { pooling: "mean"; normalize: boolean },
 ) => Promise<{ tolist(): number[][] }>;
 
-type EmbedTask = { run: () => Promise<void> };
+// `dropped`: the caller stopped waiting before the task began, so it is
+// skipped rather than run for nobody.
+type EmbedTask = { run: () => Promise<void>; dropped?: boolean };
+
+// A foreground embed (a turn's search query, search_lore, recall) waits this
+// long, then the caller's keyword fallback carries on (issue #383: an
+// embedder that never answered held the turn, and every turn after it,
+// forever). Background indexing waits as long as it takes.
+const FOREGROUND_EMBED_TIMEOUT_MS = 20_000;
+// One task holding the serial queue longer than this has hung; the queue
+// moves on and the embedder is treated as failed (the load backoff below).
+const EMBED_TASK_CEILING_MS = 5 * 60_000;
+
+declare global {
+  var __odmEmbedTimeouts: { foregroundMs: number; ceilingMs: number } | undefined;
+}
+
+function embedTimeouts() {
+  return (globalThis.__odmEmbedTimeouts ??= {
+    foregroundMs: FOREGROUND_EMBED_TIMEOUT_MS,
+    ceilingMs: EMBED_TASK_CEILING_MS,
+  });
+}
+
+// Tests run the deadlines fast.
+export function configureEmbedTimeouts(settings: { foregroundMs?: number; ceilingMs?: number }): void {
+  Object.assign(embedTimeouts(), Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)));
+}
+
+export class EmbedTimeout extends Error {
+  constructor(ms: number) {
+    super(`The embedding model did not answer within ${ms < 1000 ? `${ms} ms` : `${Math.round(ms / 1000)} s`}.`);
+    this.name = "EmbedTimeout";
+  }
+}
 
 // A load that failed, and when: the next attempt waits out a backoff
 // instead of every embed call either retrying a broken download at once or,
@@ -148,41 +182,170 @@ function pumpEmbedTasks() {
   if (tasks.running) {
     return;
   }
-  const next = tasks.foreground.shift() ?? tasks.background.shift();
+  let next = tasks.foreground.shift() ?? tasks.background.shift();
+  while (next?.dropped) {
+    next = tasks.foreground.shift() ?? tasks.background.shift();
+  }
   if (!next) {
     return;
   }
   tasks.running = true;
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      tasks.running = false;
+      pumpEmbedTasks();
+    }
+  };
+  // A task that never settles (a model load that hung) would hold every
+  // later embed behind it, in every campaign, for the life of the process.
+  const ceiling = setTimeout(() => {
+    console.error(
+      `[embeddings] an embed ran past ${Math.round(embedTimeouts().ceilingMs / 60_000)} minutes; the embedder is treated as failed and keyword search stands in until it loads again`,
+    );
+    globalThis.__odmEmbedderPromise = undefined;
+    const failures = (globalThis.__odmEmbedderFailure?.failures ?? 0) + 1;
+    globalThis.__odmEmbedderFailure = { at: Date.now(), failures, permanent: false, error: new Error("The embedding model stopped answering.") };
+    release();
+  }, embedTimeouts().ceilingMs);
+  ceiling.unref?.();
   void next.run().finally(() => {
-    tasks.running = false;
+    clearTimeout(ceiling);
+    release();
+  });
+}
+
+// One task on the serial queue: the embedder over exactly these texts.
+function queueEmbed(texts: string[], background: boolean): Promise<Float32Array[]> {
+  return new Promise<Float32Array[]>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const task: EmbedTask = {
+      run: async () => {
+        try {
+          const embedder = await embedderPromise();
+          const output = await embedder(texts, { pooling: "mean", normalize: true });
+          resolve(output.tolist().map((vector) => Float32Array.from(vector)));
+        } catch (error) {
+          reject(error);
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+    };
+    if (!background) {
+      const ms = embedTimeouts().foregroundMs;
+      timer = setTimeout(() => {
+        task.dropped = true;
+        reject(new EmbedTimeout(ms));
+      }, ms);
+      timer.unref?.();
+    }
+    embedTasks()[background ? "background" : "foreground"].push(task);
     pumpEmbedTasks();
   });
+}
+
+// Background indexing goes in batches this small, so a turn's query waits
+// behind at most one of them, never a whole re-index (the context audit's
+// F12: the queue puts the foreground first, but cannot stop a batch that has
+// already begun).
+export const BACKGROUND_EMBED_BATCH = 8;
+
+// A turn's query, search_lore's and recall's are often the same text twice
+// in a row (a retry, a resume, the scene line alone): its vector is kept, by
+// model and exact text, and two callers asking at once share one embed.
+const QUERY_CACHE_MAX = 256;
+
+// Only query-sized calls are kept: a few short texts. Indexing a document
+// embeds it once and stores the vector, so caching it here would only push
+// the queries out.
+const QUERY_CACHE_TEXTS = 4;
+const QUERY_CACHE_CHARS = 4_000;
+
+declare global {
+  var __odmQueryVectors:
+    | { done: Map<string, Float32Array>; pending: Map<string, Promise<Float32Array>>; owner: unknown }
+    | undefined;
+}
+
+// The vectors belong to the embedder that made them: a reload (or another
+// model) starts the cache afresh.
+function queryVectors() {
+  const cache = (globalThis.__odmQueryVectors ??= { done: new Map(), pending: new Map(), owner: undefined });
+  if (cache.owner !== globalThis.__odmEmbedderPromise) {
+    cache.done.clear();
+    cache.owner = globalThis.__odmEmbedderPromise;
+  }
+  return cache;
+}
+
+function remember(key: string, vector: Float32Array) {
+  const { done } = queryVectors();
+  done.delete(key);
+  done.set(key, vector);
+  if (done.size > QUERY_CACHE_MAX) {
+    done.delete(done.keys().next().value as string);
+  }
 }
 
 // Embeds a batch of texts into unit-normalized Float32Array(384) vectors.
 // Serialized: concurrent callers wait their turn rather than competing.
 // `background` marks indexing work (a re-embed, a backfill) that may wait
-// for anything a player is waiting on.
+// for anything a player is waiting on. A foreground caller waits at most
+// FOREGROUND_EMBED_TIMEOUT_MS and then rejects with EmbedTimeout, which
+// every caller already treats as "no embedder": keyword search carries on.
 export async function embed(
   texts: string[],
-  options: { background?: boolean } = {},
+  // `query`: a search query (a turn's moment, search_lore, recall), whose
+  // vector is kept for the next time the same words are asked; indexing a
+  // document embeds it once and stores it, so it never passes through here.
+  options: { background?: boolean; query?: boolean } = {},
 ): Promise<Float32Array[]> {
   if (!texts.length) {
     return [];
   }
-  return new Promise<Float32Array[]>((resolve, reject) => {
-    const run = async () => {
-      try {
-        const embedder = await embedderPromise();
-        const output = await embedder(texts, { pooling: "mean", normalize: true });
-        resolve(output.tolist().map((vector) => Float32Array.from(vector)));
-      } catch (error) {
-        reject(error);
-      }
-    };
-    embedTasks()[options.background ? "background" : "foreground"].push({ run });
-    pumpEmbedTasks();
-  });
+  if (options.background) {
+    const vectors: Float32Array[] = [];
+    for (let start = 0; start < texts.length; start += BACKGROUND_EMBED_BATCH) {
+      vectors.push(...(await queueEmbed(texts.slice(start, start + BACKGROUND_EMBED_BATCH), true)));
+    }
+    return vectors;
+  }
+  if (!options.query || texts.length > QUERY_CACHE_TEXTS || texts.some((text) => text.length > QUERY_CACHE_CHARS)) {
+    return queueEmbed(texts, false);
+  }
+  const cache = queryVectors();
+  const keys = texts.map((text) => `${EMBEDDING_KEY}\u0000${text}`);
+  const missing = [...new Set(keys.filter((key) => !cache.done.has(key) && !cache.pending.has(key)))];
+  if (missing.length) {
+    const batch = queueEmbed(
+      missing.map((key) => key.slice(key.indexOf("\u0000") + 1)),
+      false,
+    );
+    for (const [index, key] of missing.entries()) {
+      const one = batch.then((vectors) => {
+        remember(key, vectors[index]);
+        return vectors[index];
+      });
+      cache.pending.set(key, one);
+      void one.then(
+        () => cache.pending.delete(key),
+        () => cache.pending.delete(key),
+      );
+    }
+  }
+  return Promise.all(
+    keys.map((key) => {
+      const known = cache.done.get(key);
+      return known ? Promise.resolve(known) : (cache.pending.get(key) as Promise<Float32Array>);
+    }),
+  );
+}
+
+// Forgets every query vector: the model or its weights changed.
+export function clearQueryVectorCache(): void {
+  queryVectors().done.clear();
 }
 
 // Vectors are unit-normalized, so cosine is a plain dot product.

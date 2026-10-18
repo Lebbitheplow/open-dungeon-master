@@ -20,6 +20,7 @@ import type { TableRulesState } from "../useTableRules";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { StepPanel, inputClass } from "./shared";
+import { textKey } from "@/lib/language/text-logic";
 
 const noSubscribe = () => () => {};
 
@@ -132,6 +133,8 @@ function SpellsSection({
   const cantripCap = cantripAdvice;
   const spellCap = spellAdvice?.count ?? null;
   const bookCap = spellbookAdvice;
+  // The working behind a prepared caster's count, said with the limit.
+  const limitWhy = spellAdvice?.formula ? `: ${spellAdvice.formula}` : "";
   const wizard = spellStyle === "spellbook";
   // A wizard fills the book first, then prepares from it.
   const [phase, setPhase] = useState<"book" | "prepare">("book");
@@ -144,21 +147,20 @@ function SpellsSection({
   // still finds its level.
   const lookups = useSpellLookups([...cantrips, ...spells]);
 
-  const lower = (name: string) => name.toLowerCase();
-  const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
+  const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
   const isGranted = (name: string) => has(subclassSpells, name);
   // Known from the race, on top of the class's count (issue #118).
   const isRacial = (name: string) => has(racialCantrips, name);
   // Known from a feat (Fey Touched's misty step, Spell Sniper's cantrip),
   // on top of the class's count too.
   const isFeat = (name: string) => has([...featSpells.cantrips, ...featSpells.spells], name);
-  const poolByName = new Map(pool.map((row) => [lower(row.name), row]));
+  const poolByName = new Map(pool.map((row) => [textKey(row.name), row]));
   // An Eldritch Knight's or Arcane Trickster's two schools, as the server
   // judges the sheet (src/lib/srd/third-caster.ts). Null when the spell is
   // fine or the class has no school rule.
   const schoolOf = (spell: string) => ({
     name: spell,
-    school: poolByName.get(lower(spell))?.data?.school ?? bundledSpellSchool(spell),
+    school: poolByName.get(textKey(spell))?.data?.school ?? bundledSpellSchool(spell),
   });
   const offSchool = (name: string) =>
     thirdCasterSchoolProblem({
@@ -168,12 +170,12 @@ function SpellsSection({
       spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf),
     });
   const suggested = new Set(
-    [...(starters?.cantrips ?? []), ...(starters?.spells ?? [])].map((entry) => lower(entry.n)),
+    [...(starters?.cantrips ?? []), ...(starters?.spells ?? [])].map((entry) => textKey(entry.n)),
   );
 
   function toggleCantrip(name: string) {
     if (has(cantrips, name)) {
-      setCantrips((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      setCantrips((current) => current.filter((entry) => textKey(entry) !== textKey(name)));
       return;
     }
     if (cantripCap !== null && chosenCantrips.length >= cantripCap) {
@@ -186,8 +188,8 @@ function SpellsSection({
   }
   function toggleSpell(name: string) {
     if (has(spells, name)) {
-      setSpells((current) => current.filter((entry) => lower(entry) !== lower(name)));
-      setBookPrepared((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      setSpells((current) => current.filter((entry) => textKey(entry) !== textKey(name)));
+      setBookPrepared((current) => current.filter((entry) => textKey(entry) !== textKey(name)));
       return;
     }
     // A full list first, as the tile says (blockedFor below), then the
@@ -197,7 +199,7 @@ function SpellsSection({
       setLimitNote(
         wizard
           ? `Your spellbook starts with ${cap} spells. Remove one to write in ${name}.`
-          : `You already have ${cap} ${spellAdvice?.label ?? "spells"}. Remove one to choose ${name}.`,
+          : `You already have ${cap} ${spellAdvice?.label ?? "spells"}${limitWhy}. Remove one to choose ${name}.`,
       );
       return;
     }
@@ -210,11 +212,11 @@ function SpellsSection({
   }
   function togglePrepared(name: string) {
     if (has(bookPrepared, name)) {
-      setBookPrepared((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      setBookPrepared((current) => current.filter((entry) => textKey(entry) !== textKey(name)));
       return;
     }
     if (spellCap !== null && chosenPrepared.length >= spellCap) {
-      setLimitNote(`You can prepare ${spellCap} spells. Unprepare one to prepare ${name}.`);
+      setLimitNote(`You can prepare ${spellCap} spells${limitWhy}. Unprepare one to prepare ${name}.`);
       return;
     }
     setBookPrepared((current) => [...current, name]);
@@ -297,9 +299,9 @@ function SpellsSection({
     ...featSpells.spells,
     ...(starters?.cantrips ?? []).map((entry) => entry.n),
     ...(starters?.spells ?? []).map((entry) => entry.n),
-  ].filter((name, index, all) => all.findIndex((other) => lower(other) === lower(name)) === index);
+  ].filter((name, index, all) => all.findIndex((other) => textKey(other) === textKey(name)) === index);
   const tiles: SpellTile[] = names.flatMap((name): SpellTile[] => {
-    const row = poolByName.get(lower(name)) ?? lookups.get(lower(name));
+    const row = poolByName.get(textKey(name)) ?? lookups.get(textKey(name));
     const level = row?.level ?? spellLevelOf(name) ?? (has(cantrips, name) ? 0 : null);
     if ((level === 0 && cantripAdvice === null) || (level !== null && level > maxSpellLevel)) {
       return [];
@@ -322,7 +324,7 @@ function SpellsSection({
         name,
         level,
         state: tileState,
-        suggested: suggested.has(lower(name)) && !(level === 0 && isRacial(name)) && !isFeat(name),
+        suggested: suggested.has(textKey(name)) && !(level === 0 && isRacial(name)) && !isFeat(name),
         blocked: blockedFor(name, level, tileState),
         label: displayName(pack, "spells", name),
         data: row?.data,

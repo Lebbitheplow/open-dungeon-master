@@ -108,6 +108,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     saveFlatAbility: "dex",
     speedMultiplier: 0.5,
     noReactions: true,
+    actionOrBonus: true,
   },
   {
     id: "blade_ward",
@@ -1054,17 +1055,34 @@ export function conditionSpeed(conditions: string[], baseSpeed: number): number 
   if (set.length) {
     return Math.min(...set);
   }
+  // The strongest boost and the strongest slowdown, each counted once (two
+  // sources of one spell do not combine), multiply: Haste and Slow together
+  // leave the speed it was, in whichever order they were laid.
+  let faster = 1;
+  let slower = 1;
   for (const { row } of activeConditionEffects(conditions)) {
     if (row.speedBonus) {
       speed += row.speedBonus;
     }
     if (row.speedMultiplier !== undefined) {
-      multiplier = row.speedMultiplier < 1
-        ? Math.min(multiplier, row.speedMultiplier)
-        : Math.max(multiplier, row.speedMultiplier);
+      faster = Math.max(faster, row.speedMultiplier);
+      slower = Math.min(slower, row.speedMultiplier);
     }
   }
+  multiplier = faster * slower;
   return Math.max(0, Math.floor(speed * multiplier));
+}
+
+// What the holder's conditions make of a turn: Haste's extra action, and
+// Slow's one attack and an action OR a bonus action (SRD 5.1). The turn
+// budget reads it every time it is asked (src/lib/dm/turn-budget.ts), so an
+// effect that lands mid-turn counts on that turn.
+export type TurnShape = { extraActions: number; slowed: boolean };
+export function conditionTurnShape(conditions: string[]): TurnShape {
+  return {
+    extraActions: conditionExtraActions(conditions),
+    slowed: activeConditionEffects(conditions).some(({ row }) => row.actionOrBonus === true),
+  };
 }
 
 // Extra actions per turn the holder's conditions grant (haste: 1).

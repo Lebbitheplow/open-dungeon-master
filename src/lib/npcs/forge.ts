@@ -34,6 +34,7 @@ import {
   type NpcRelation,
 } from "@/lib/dm/npc-logic";
 import { storedGender, type Gender } from "@/lib/gender";
+import { textKey } from "@/lib/language/text-logic";
 
 export const ATTITUDES = ["hostile", "indifferent", "friendly"] as const;
 export type Attitude = (typeof ATTITUDES)[number];
@@ -139,7 +140,7 @@ export function setRelation(
     ...(trimmedNote ? { note: trimmedNote } : {}),
   };
   const existing = relations.findIndex(
-    (relation) => relation.npcName.toLowerCase() === name.toLowerCase(),
+    (relation) => textKey(relation.npcName) === textKey(name),
   );
   if (existing >= 0) {
     const next = [...relations];
@@ -151,7 +152,7 @@ export function setRelation(
 
 export function removeRelation(relations: NpcRelation[], npcName: string): NpcRelation[] {
   return relations.filter(
-    (relation) => relation.npcName.toLowerCase() !== npcName.trim().toLowerCase(),
+    (relation) => textKey(relation.npcName) !== textKey(npcName),
   );
 }
 
@@ -179,28 +180,28 @@ export type RelationGraph = { nodes: GraphNode[]; edges: GraphEdge[] };
 export function relationGraph(
   roster: Array<{ name: string; relations: NpcRelation[] }>,
 ): RelationGraph {
-  const byName = new Map(roster.map((npc) => [npc.name.toLowerCase(), npc]));
+  const byName = new Map(roster.map((npc) => [textKey(npc.name), npc]));
   const nodes: GraphNode[] = roster.map((npc) => ({ name: npc.name, known: true }));
-  const seenNode = new Set(roster.map((npc) => npc.name.toLowerCase()));
+  const seenNode = new Set(roster.map((npc) => textKey(npc.name)));
   const edges: GraphEdge[] = [];
   const seenPair = new Set<string>();
 
   for (const npc of roster) {
     for (const relation of npc.relations) {
-      const targetKey = relation.npcName.toLowerCase();
+      const targetKey = textKey(relation.npcName);
       const target = byName.get(targetKey);
       if (!target && !seenNode.has(targetKey)) {
         seenNode.add(targetKey);
         nodes.push({ name: relation.npcName, known: false });
       }
       // One entry per pair, whichever direction is walked first.
-      const pairKey = [npc.name.toLowerCase(), targetKey].sort().join("\u0000");
+      const pairKey = [textKey(npc.name), targetKey].sort().join("\u0000");
       if (seenPair.has(pairKey)) {
         continue;
       }
       seenPair.add(pairKey);
       const back = target?.relations.find(
-        (entry) => entry.npcName.toLowerCase() === npc.name.toLowerCase(),
+        (entry) => textKey(entry.npcName) === textKey(npc.name),
       );
       edges.push({
         from: npc.name,
@@ -322,8 +323,8 @@ function cleanList(input: unknown, max: number, length: number): string[] {
   const out: string[] = [];
   for (const entry of input) {
     const value = String(entry ?? "").trim().slice(0, length);
-    if (value && !seen.has(value.toLowerCase())) {
-      seen.add(value.toLowerCase());
+    if (value && !seen.has(textKey(value))) {
+      seen.add(textKey(value));
       out.push(value);
     }
     if (out.length >= max) {
@@ -349,7 +350,7 @@ export function normalizeNpcDraft(input: unknown): DraftOutcome {
   // An alias that repeats the name is not an alias, and it would make the
   // entity resolver do redundant work on every mention.
   const aliases = cleanList(raw.aliases, 8, 80).filter(
-    (alias) => alias.toLowerCase() !== name.toLowerCase(),
+    (alias) => textKey(alias) !== textKey(name),
   );
 
   const goalsRaw = (raw.goals ?? {}) as Record<string, unknown>;

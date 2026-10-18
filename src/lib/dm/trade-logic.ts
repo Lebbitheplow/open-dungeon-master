@@ -1,6 +1,7 @@
 import { removeItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper, purseCopper } from "@/lib/srd/currency";
+import { textKey } from "@/lib/language/text-logic";
 
 // Player-to-player trade (docs/vtt-parity-implementation-plan.md 11.2),
 // the pure half: what an offer is, what it reads as, and the two patches
@@ -97,7 +98,7 @@ function handedOver(row: Row, qty: number): Row {
 }
 
 const sameThing = (a: Row, b: Row) =>
-  a.name.toLowerCase() === b.name.toLowerCase() &&
+  textKey(a.name) === textKey(b.name) &&
   (a.identified === false) === (b.identified === false) &&
   (a.slug ?? "") === (b.slug ?? "");
 
@@ -108,7 +109,7 @@ function moveItem(
   taker: Row[],
   line: TradeLine,
 ): { giver: Row[]; taker: Row[] } | null {
-  const held = giver.find((item) => item.name.toLowerCase() === line.name.toLowerCase());
+  const held = giver.find((item) => textKey(item.name) === textKey(line.name));
   const removal = removeItemMath(giver, line.name, line.qty);
   if (!held || !removal || removal.removed < line.qty) {
     return null;

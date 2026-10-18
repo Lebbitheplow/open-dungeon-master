@@ -26,7 +26,7 @@ import { authoredOnHit } from "@/lib/dm/authored-hooks";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { gearCritRiders } from "@/lib/dm/gear-attack";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
-import { applyHitDamage, type strikeDamage } from "@/lib/dm/pc-attack-damage";
+import { applyHitDamage, claimHitRiders, type strikeDamage } from "@/lib/dm/pc-attack-damage";
 import type { AttackPlan, ManeuverPick } from "@/lib/dm/pc-attack-plan";
 import {
   applyRiderCondition,
@@ -149,6 +149,10 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
       });
   const hit = adjudicated.hit || (rescued !== null && payRescue(plan, rescued));
   const crit = adjudicated.crit || (hit && context.autoCrit);
+  // Sneak Attack and the other once-a-turn riders are spent by the hit.
+  if (hit) {
+    claimHitRiders(encounter, budget, plan.hitClaims);
+  }
   // Foe Slayer not needed on the roll rides the hit's damage.
   if (adjudicated.hit && plan.extras.foeSlayer > 0) {
     claimFoeSlayer(plan);

@@ -171,8 +171,10 @@ await test("effects, the clock, the party purse, parked rolls and the table's ru
     name: "Bless",
     field: "save",
     modifiers: [{ field: "save", mode: "add", value: 2 }],
-    duration: "rounds",
-    remaining: 10,
+    // Long enough to outlast the hour and a half below: a round-based effect
+    // counts down on the road too (test-enforce-effect-contract.mjs).
+    duration: "minutes",
+    remaining: 120,
   });
   assert.equal(blessed.ok, true, blessed.error);
   assert.equal((await world.invoke("pass_time", { amount: 90, unit: "minutes" })).ok, true);

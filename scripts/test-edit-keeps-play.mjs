@@ -17,6 +17,12 @@ import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
 import { removeTempDir } from "./lib/remove-temp-dir.mjs";
+import { standInStoryteller } from "./lib/stand-in-storyteller.mjs";
+
+// An AI-run table through the routes needs a storyteller set up (the routes
+// refuse one otherwise, and seat a person when none is named); this one never
+// answers.
+standInStoryteller();
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-edit-keeps-play-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -356,7 +362,7 @@ await test("a lobby replacement keeps the new sheet selected when the player own
   updateGameSettings(campaignId, { multiCharacter: "all_active" });
   const oldSelected = getSheetForUser(campaignId, player.id);
   const siblingLibrary = createCharacter(player.id, 8, { ...PLAYED, name: "Older sibling" });
-  const sibling = createSheet(campaignId, player.id, 8, siblingLibrary.sheet, siblingLibrary.id);
+  createSheet(campaignId, player.id, 8, siblingLibrary.sheet, siblingLibrary.id);
   setMemberActiveCharacter(campaignId, player.id, oldSelected.id);
 
   const result = builderEdit(getCharacter(library.id).sheet, 8);
@@ -446,7 +452,7 @@ await test("improvements a hero took in play are not asked for again", () => {
   assert.equal(abilitiesBlocker(derived), null);
   assert.equal(
     abilitiesBlocker({ ...derived, asiTakenInPlay: [true, false] })?.message,
-    "Resolve your level 8 ability score improvement first.",
+    "Choose what your hero gains at level 8: higher scores or a feat (ability score improvement).",
   );
   // Nothing is added for them: the scores that already carry them are kept.
   const sheet = builderEdit(PLAYED, 8).sheet;

@@ -28,9 +28,12 @@ export function HaltedTurnBanner({
 }) {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
-  const reason = content.startsWith(DM_HALTED_PREFIX)
+  // The reason follows "The DM ran into a problem: " in the transcript, so
+  // some start lower case; standing alone here it starts a sentence.
+  const stated = content.startsWith(DM_HALTED_PREFIX)
     ? content.slice(DM_HALTED_PREFIX.length)
     : content;
+  const reason = stated.charAt(0).toUpperCase() + stated.slice(1);
 
   async function retry() {
     if (retrying) {

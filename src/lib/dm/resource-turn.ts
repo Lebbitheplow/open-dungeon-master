@@ -14,7 +14,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { matchResource, type ResourceAction } from "@/lib/srd/class-resources";
 import { spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
@@ -28,6 +28,7 @@ import {
   storeBudget,
 } from "@/lib/dm/turn-budget";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type ResourceCharge =
   | ToolError
@@ -65,7 +66,7 @@ export function prepareResourceCharge(
   // Combat Wild Shape (Circle of the Moon) makes the change a bonus action.
   const action =
     def.effect.kind === "wild_shape" &&
-    sheet.features.some((feature) => feature.name.toLowerCase().includes("combat wild shape"))
+    sheet.features.some((feature) => textKey(feature.name).includes("combat wild shape"))
       ? "bonus"
       : def.action;
   if (action === "reaction") {
@@ -99,7 +100,7 @@ export function prepareResourceCharge(
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
-    conditionExtraActions(sheet.conditions),
+    conditionTurnShape(sheet.conditions),
   );
   if (!budget) {
     return FREE;

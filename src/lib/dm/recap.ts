@@ -80,7 +80,7 @@ export async function runResumeRecap(campaignId: string) {
     ],
     // Prose only, said as the other narration calls say it, so a recap that
     // loops keeps its first copy (src/lib/model-client.ts cutWholeReply).
-    { toolChoice: "none" },
+    { toolChoice: "none", meta: { task: "recap" } },
   );
   if (error) {
     return;

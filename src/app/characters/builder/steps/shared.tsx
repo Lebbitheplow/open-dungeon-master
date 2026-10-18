@@ -143,7 +143,9 @@ export function Chip({
         <button
           type="button"
           onClick={onRemove}
-          className="text-stone-500 hover:text-red-400"
+          // A 12 px cross with a 44 px reach: the ring past the edge takes
+          // the tap without making the chip any taller.
+          className="relative text-stone-500 after:absolute after:-inset-4 after:rounded-full after:content-[''] hover:text-red-400"
           aria-label={`Remove ${label}`}
         >
           <X className="size-3" />

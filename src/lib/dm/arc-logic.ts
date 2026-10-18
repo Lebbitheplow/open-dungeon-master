@@ -6,6 +6,7 @@ import {
   type WorldArcUpdate,
 } from "./world-arc-logic.ts";
 import { RENDER_EVENT_CHARS, selectPendingEvents, type ArcTrace, type SceneCues } from "./arc-relevance.ts";
+import { textKey } from "../language/text-logic.ts";
 
 // Pure story-arc logic, kept free of alias imports so node test scripts
 // (scripts/test-arc.mjs) can load it directly. The arc is the DM's secret
@@ -1620,8 +1621,8 @@ export function applyArcDelta(arc: StoryArc, delta: ArcDelta): StoryArc {
 // Cast counterpart to appendEvents: same duplicate-name guard, same cap.
 function appendCast(arc: StoryArc, raws: Array<Omit<ArcNpc, "id" | "status">>) {
   for (const raw of raws) {
-    const key = raw.name.trim().toLowerCase();
-    if (arc.cast.length >= MAX_CAST || arc.cast.some((npc) => npc.name.trim().toLowerCase() === key)) {
+    const key = textKey(raw.name);
+    if (arc.cast.length >= MAX_CAST || arc.cast.some((npc) => textKey(npc.name) === key)) {
       continue;
     }
     arc.cast.push({ ...raw, id: nextId("np", arc.cast), status: "active" });
@@ -1641,8 +1642,8 @@ function appendCast(arc: StoryArc, raws: Array<Omit<ArcNpc, "id" | "status">>) {
 function appendEvents(arc: StoryArc, raws: Array<Omit<ArcEvent, "id" | "status">>): number {
   let added = 0;
   for (const raw of raws) {
-    const key = raw.name.trim().toLowerCase();
-    if (arc.events.some((event) => event.name.trim().toLowerCase() === key)) {
+    const key = textKey(raw.name);
+    if (arc.events.some((event) => textKey(event.name) === key)) {
       continue;
     }
     if (arc.events.length >= MAX_EVENTS) {
@@ -1715,10 +1716,10 @@ export function appendBoardAct(
   events: Array<Omit<ArcEvent, "id" | "status">>,
   title = "",
 ): { arc: StoryArc; added: number; eventsAdded: number } {
-  const known = new Set(arc.beats.map((beat) => beat.text.trim().toLowerCase()));
+  const known = new Set(arc.beats.map((beat) => textKey(beat.text)));
   const fresh = beats
     .map((beat) => ({ ...beat, text: str(beat.text, BEAT_CAP) }))
-    .filter((beat) => beat.text && !known.has(beat.text.toLowerCase()));
+    .filter((beat) => beat.text && !known.has(textKey(beat.text)));
   const { room, actRoom } = arcRoom(arc);
   if (!fresh.length || !actRoom || !room) {
     return { arc, added: 0, eventsAdded: 0 };
@@ -1916,8 +1917,8 @@ export function applySagaChain(oldArc: StoryArc, newArc: StoryArc, resolution: s
     if (subArc.status !== "active" && subArc.status !== "pending") {
       continue;
     }
-    const key = subArc.name.trim().toLowerCase();
-    if (next.subArcs.some((entry) => entry.name.trim().toLowerCase() === key)) {
+    const key = textKey(subArc.name);
+    if (next.subArcs.some((entry) => textKey(entry.name) === key)) {
       continue;
     }
     next.subArcs.push({ ...subArc, id: nextId("sa", next.subArcs) });

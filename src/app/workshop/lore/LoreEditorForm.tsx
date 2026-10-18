@@ -16,6 +16,7 @@ import { LoreImageField, VisibilitySelect } from "@/app/workshop/lore/LoreFields
 import { CATEGORY_LABELS, type LoreDraft } from "@/app/workshop/lore/types";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
+import { textKey } from "@/lib/language/text-logic";
 
 // The binder's author form (docs/vtt-parity-implementation-plan.md
 // sections 5.1 to 5.6): who reads it, how it is dressed, the picture and
@@ -95,8 +96,8 @@ export function LoreEditorForm({
     if (!complete) {
       return [];
     }
-    const needle = complete.query.toLowerCase();
-    return linkable.filter((option) => option.value.toLowerCase().includes(needle)).slice(0, 8);
+    const needle = textKey(complete.query);
+    return linkable.filter((option) => textKey(option.value).includes(needle)).slice(0, 8);
   }, [complete, linkable]);
 
   async function uploadPdf(file: File) {

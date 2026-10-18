@@ -160,30 +160,36 @@ test("advantage does not stack, and one of each cancels", () => {
   assert.equal(cancels.disadvantage, false);
 });
 
-test("a round passing counts down only round-scoped effects", () => {
-  const result = tickRound([
+test("a round passing counts down round-scoped effects, and a minute's worth the minute ones", () => {
+  const effects = [
     effect({ id: "a", duration: "rounds", remaining: 2 }),
     effect({ id: "b", duration: "rounds", remaining: 1 }),
     effect({ id: "c", duration: "minutes", remaining: 60 }),
     effect({ id: "d", duration: "manual" }),
-  ]);
+  ];
+  const result = tickRound(effects);
   assert.deepEqual(result.expired.map((entry) => entry.id), ["b"]);
   assert.equal(result.kept.find((entry) => entry.id === "a").remaining, 1);
   assert.equal(result.kept.find((entry) => entry.id === "c").remaining, 60);
+  const tenth = tickRound(effects, true);
+  assert.equal(tenth.kept.find((entry) => entry.id === "c").remaining, 59);
+  assert.equal(tenth.kept.find((entry) => entry.id === "d").remaining, effects[3].remaining);
 });
 
-test("minutes passing counts down only minute-scoped effects", () => {
+test("minutes passing count down minute effects, and round effects ten rounds to the minute", () => {
   const result = tickMinutes(
     [
       effect({ id: "a", duration: "minutes", remaining: 60 }),
       effect({ id: "b", duration: "minutes", remaining: 10 }),
       effect({ id: "c", duration: "rounds", remaining: 3 }),
+      effect({ id: "d", duration: "rounds", remaining: 600 }),
     ],
     30,
+    10,
   );
-  assert.deepEqual(result.expired.map((entry) => entry.id), ["b"]);
+  assert.deepEqual(result.expired.map((entry) => entry.id), ["b", "c"]);
   assert.equal(result.kept.find((entry) => entry.id === "a").remaining, 30);
-  assert.equal(result.kept.find((entry) => entry.id === "c").remaining, 3);
+  assert.equal(result.kept.find((entry) => entry.id === "d").remaining, 300);
 });
 
 test("the fight ending takes its own effects with it", () => {

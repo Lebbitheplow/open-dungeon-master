@@ -8,6 +8,7 @@ import { RAGING } from "@/lib/srd/class-resources";
 import { conditionIncomingAttackState, conditionSpeed } from "@/lib/srd/condition-effects";
 import { conditionSeesInvisible } from "@/lib/srd/condition-effect-queries";
 import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
+import { textKey } from "@/lib/language/text-logic";
 
 export {
   DAMAGE_TYPES,
@@ -68,6 +69,9 @@ export type ConditionMeta = {
   // Ends when the creature finishes a long rest (a succubus's Draining Kiss,
   // a wight's Life Drain): src/lib/dm/rest-logic.ts.
   untilLongRest?: boolean;
+  // The temporary hit points this effect granted, which go when it ends
+  // (False Life, Heroism): src/lib/db/sheets.ts patchSheet.
+  tempHp?: number;
   // Further sources of the same condition. SRD 5.1: the effects of the same
   // spell (or the same condition) don't combine, but each keeps its own
   // source and lifetime, so ending one leaves the others holding. Each entry
@@ -112,6 +116,40 @@ export function maxHpRiders(
   return { bonus: [...strongest.values()].reduce((sum, value) => sum + value, 0), drain };
 }
 
+// ---- temporary hit points an effect holds ----
+
+// How many instances claim the temporary hit points as theirs.
+export function tempHpClaims(conditions: string[], meta: ConditionMetaMap | undefined): number {
+  return conditions.reduce((sum, name) => sum + instancesOf(meta?.[name]).filter((entry) => entry.tempHp).length, 0);
+}
+
+// The instance of `name` that `spell` (cast by `source`) laid now claims the
+// pool it granted, so the pool goes when that instance ends.
+export function withTempHpClaim(meta: ConditionMetaMap, name: string, owner: { spell: string; source: string }, amount: number): ConditionMetaMap {
+  const entry = meta[name];
+  if (!entry) {
+    return meta;
+  }
+  const mine = (instance: ConditionMeta) => textKey(instance.spell ?? "") === textKey(owner.spell) && instance.source === owner.source;
+  const list = instancesOf(entry).map((instance) => (mine(instance) ? { ...instance, tempHp: amount } : instance));
+  return { ...meta, [name]: packInstances(list) ?? entry };
+}
+
+// No instance claims the pool any more: a new pool from elsewhere took its
+// place, and an effect's ending is no longer what takes it away.
+export function withoutTempHpClaims(meta: ConditionMetaMap): ConditionMetaMap {
+  return Object.fromEntries(
+    Object.entries(meta).map(([name, entry]) => [
+      name,
+      packInstances(instancesOf(entry).map((instance) => {
+        const copy = { ...instance };
+        delete copy.tempHp;
+        return copy;
+      })) ?? {},
+    ]),
+  );
+}
+
 // ---- one condition, several sources ----
 
 // Every instance of a condition: the entry itself and its others. A held
@@ -140,7 +178,7 @@ export function packInstances(list: ConditionMeta[]): ConditionMeta | undefined 
 // What makes two instances the same one: the same spell (or effect) from the
 // same source. A recast by the same caster refreshes its instance.
 export function instanceIdentity(entry: ConditionMeta): string {
-  return `${(entry.spell ?? "").toLowerCase()}|${entry.source ?? ""}`;
+  return `${textKey(entry.spell ?? "")}|${entry.source ?? ""}`;
 }
 
 // Lays one instance of a condition. A condition not yet held is simply
@@ -302,7 +340,10 @@ export function attackContext(input: {
   requested: AdvantageState;
   // An enemy attacker's creature type (Protection from Evil and Good).
   attackerType?: string;
-}): { advantage: AdvantageState; autoCrit: boolean; notes: string[] } {
+}): { advantage: AdvantageState; sources: AdvantageState[]; autoCrit: boolean; notes: string[] } {
+  // Every source is kept for the caller to merge with its own: advantage
+  // and disadvantage cancel once, over all of them (SRD 5.1), so a
+  // collapsed answer must never be merged again.
   const sources: AdvantageState[] = [input.requested];
   const notes: string[] = [];
 
@@ -362,7 +403,7 @@ export function attackContext(input: {
   if (autoCrit) {
     notes.push(`target is ${critName}: any hit within 5 ft is a critical hit`);
   }
-  return { advantage: mergeAdvantage(sources), autoCrit, notes };
+  return { advantage: mergeAdvantage(sources), sources, autoCrit, notes };
 }
 
 // Condition effects on a requested d20 roll (skill/ability checks, saves,
@@ -375,7 +416,8 @@ export function rollDerivation(
   // What the conditions alone cannot say: a raging barbarian in heavy armor
   // gets none of the rage's benefits (the caller knows what is worn).
   options?: { rageSuppressed?: boolean },
-): { advantage: AdvantageState; autoFail: boolean; notes: string[] } {
+): { advantage: AdvantageState; sources: AdvantageState[]; autoFail: boolean; notes: string[] } {
+  // Kept for the caller's one merge, as attackContext keeps its own.
   const sources: AdvantageState[] = [];
   const notes: string[] = [];
   if (kind === "saving_throw") {
@@ -383,6 +425,7 @@ export function rollDerivation(
       const name = has(conditions, AUTO_FAIL_STR_DEX);
       return {
         advantage: "none",
+        sources: [],
         autoFail: true,
         notes: [`${name}: automatically fails ${ability?.toUpperCase()} saves`],
       };
@@ -414,7 +457,7 @@ export function rollDerivation(
     sources.push("advantage");
     notes.push("raging: advantage on Strength checks and saves");
   }
-  return { advantage: mergeAdvantage(sources), autoFail: false, notes };
+  return { advantage: mergeAdvantage(sources), sources, autoFail: false, notes };
 }
 
 // A round is six seconds, so in-world minutes convert to the one duration

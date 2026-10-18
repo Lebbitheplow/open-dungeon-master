@@ -3,8 +3,10 @@ import { resolveMonster } from "@/lib/bestiary";
 import { createHomebrewMonster, listHomebrewMonsters, type HomebrewMonster } from "@/lib/bestiary/homebrew-monsters";
 import { draftFromData } from "@/lib/bestiary/monster-draft";
 import { getCampaignById } from "@/lib/db/campaigns";
-import { getAuthorsHomebrew, tableAuthors, type HomebrewEntry } from "@/lib/db/homebrew";
+import { createHomebrew, getAuthorsHomebrew, listHomebrew, tableAuthors, type HomebrewEntry } from "@/lib/db/homebrew";
+import { getWorldDoc, hasWorldDoc, saveWorldDoc } from "@/lib/db/world-forge";
 import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
+import { textKey } from "@/lib/language/text-logic";
 
 // Hand-built monsters across a campaign import between different authors
 // (audit finding WF-07). A Cast member's stat block and a fight's roster
@@ -17,7 +19,6 @@ import { rosterMonsters } from "@/lib/db/workshop-bundle-shelf";
 // import from the source may see what its rows fight as.
 
 const HOMEBREW = "homebrew:";
-const lower = (text: string) => text.trim().toLowerCase();
 // A stat block's rules, the same whatever order their keys were saved in.
 const stable = (value: unknown): string =>
   Array.isArray(value)
@@ -61,28 +62,61 @@ export function foreignMonsters(sourceId: string, campaignId: string, refs: stri
   return out;
 }
 
-// After the copy: the monsters the copied NPCs and fights need, brought into
-// the target owner's bestiary, and the copied rows pointed at them.
+// The author's own records a campaign's World entries link to, of one kind
+// (src/lib/worldforge/model.ts Binding).
+export function boundRefsOf(campaignId: string, kind: "monster" | "item"): string[] {
+  if (!hasWorldDoc(campaignId)) return [];
+  const refs = Object.values(getWorldDoc(campaignId).entries)
+    .flatMap((entry) => entry.bindings)
+    .filter((binding) => binding.kind === kind && homebrewRef(binding.ref))
+    .map((binding) => binding.ref.trim());
+  return [...new Set(refs)];
+}
+
+// A World entry's links, of one kind, moved to the records that arrived.
+function relink(campaignId: string, kind: "monster" | "item", moved: Map<string, string>) {
+  if (!moved.size || !hasWorldDoc(campaignId)) return;
+  const doc = getWorldDoc(campaignId);
+  let changed = false;
+  for (const entry of Object.values(doc.entries)) {
+    entry.bindings = entry.bindings.map((binding) => {
+      const to = binding.kind === kind ? moved.get(binding.ref.trim()) : undefined;
+      if (!to) return binding;
+      changed = true;
+      return { ...binding, ref: to };
+    });
+  }
+  if (changed) saveWorldDoc(campaignId, doc);
+}
+
+// After the copy: the monsters the copied NPCs and fights need, and the
+// ones the copied World entries link to (`world`), brought into the target
+// owner's bestiary, and the copied rows and links pointed at them.
 export function bringMonsters(
   sourceId: string,
   campaignId: string,
   copied: { npcs: string[]; encounters: string[] },
+  world = false,
 ): { brought: string[]; reused: string[] } {
   const target = getCampaignById(campaignId);
   const source = getCampaignById(sourceId);
-  if (!target || !source || (!copied.npcs.length && !copied.encounters.length)) return { brought: [], reused: [] };
-  const foreign = foreignMonsters(sourceId, campaignId, monsterRefsOf(campaignId, { npcs: true, encounters: true }, copied));
+  if (!target || !source) return { brought: [], reused: [] };
+  const refs = [
+    ...(copied.npcs.length || copied.encounters.length ? monsterRefsOf(campaignId, { npcs: true, encounters: true }, copied) : []),
+    ...(world ? boundRefsOf(campaignId, "monster") : []),
+  ];
+  const foreign = foreignMonsters(sourceId, campaignId, refs);
   if (!foreign.length) return { brought: [], reused: [] };
 
   const owner = target.ownerUserId;
-  const mine = new Map<string, HomebrewMonster>(listHomebrewMonsters(owner).map((monster) => [lower(monster.draft.name), monster]));
+  const mine = new Map<string, HomebrewMonster>(listHomebrewMonsters(owner).map((monster) => [textKey(monster.draft.name), monster]));
   const moved = new Map<string, string>();
   const brought: string[] = [];
   const reused: string[] = [];
   for (const { ref, entry } of foreign) {
     const draft = draftFromData(entry.name, entry.data);
     const desc = typeof (entry.data as { desc?: unknown }).desc === "string" ? String((entry.data as { desc?: unknown }).desc) : "";
-    const held = mine.get(lower(entry.name));
+    const held = mine.get(textKey(entry.name));
     if (held && stable(held.draft.stats) === stable(draft.stats)) {
       moved.set(ref, held.slug);
       reused.push(entry.name);
@@ -94,10 +128,10 @@ export function bringMonsters(
     if (held) {
       const base = `${entry.name} [${source.title}]`.slice(0, 80);
       name = base;
-      for (let attempt = 2; mine.has(lower(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
+      for (let attempt = 2; mine.has(textKey(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
     }
     const made = createHomebrewMonster(owner, { ...draft, name }, desc);
-    mine.set(lower(name), made);
+    mine.set(textKey(name), made);
     moved.set(ref, made.slug);
     brought.push(name);
   }
@@ -124,5 +158,58 @@ export function bringMonsters(
     });
     if (changed) setRoster.run(JSON.stringify(next), id, campaignId);
   }
+  if (world) relink(campaignId, "monster", moved);
+  return { brought, reused };
+}
+
+// Hand-built items a World entry links to that the target table's authors
+// do not have, with the item each names at the source.
+export function foreignItems(sourceId: string, campaignId: string, refs: string[]): Array<{ ref: string; entry: HomebrewEntry }> {
+  const targetAuthors = tableAuthors(campaignId);
+  const sourceAuthors = tableAuthors(sourceId);
+  const out: Array<{ ref: string; entry: HomebrewEntry }> = [];
+  for (const ref of new Set(refs)) {
+    const id = ref.slice(HOMEBREW.length);
+    if (getAuthorsHomebrew(targetAuthors, id)?.kind === "item") continue;
+    const entry = getAuthorsHomebrew(sourceAuthors, id);
+    if (entry && entry.kind === "item") out.push({ ref, entry });
+  }
+  return out;
+}
+
+// After a world's copy: the items its entries link to, brought into the
+// target owner's Homebrew the way monsters are (an identical one reused,
+// one of the same name with other rules kept beside it), and the links
+// pointed at them. Shops and inventories then find them as this table's.
+export function bringItems(sourceId: string, campaignId: string): { brought: string[]; reused: string[] } {
+  const target = getCampaignById(campaignId);
+  const source = getCampaignById(sourceId);
+  if (!target || !source) return { brought: [], reused: [] };
+  const foreign = foreignItems(sourceId, campaignId, boundRefsOf(campaignId, "item"));
+  if (!foreign.length) return { brought: [], reused: [] };
+  const owner = target.ownerUserId;
+  const mine = new Map<string, HomebrewEntry>(listHomebrew(owner, "item").map((item) => [textKey(item.name), item]));
+  const moved = new Map<string, string>();
+  const brought: string[] = [];
+  const reused: string[] = [];
+  for (const { ref, entry } of foreign) {
+    const held = mine.get(textKey(entry.name));
+    if (held && stable(held.data) === stable(entry.data)) {
+      moved.set(ref, `${HOMEBREW}${held.id}`);
+      reused.push(entry.name);
+      continue;
+    }
+    let name = entry.name;
+    if (held) {
+      const base = `${entry.name} [${source.title}]`.slice(0, 80);
+      name = base;
+      for (let attempt = 2; mine.has(textKey(name)); attempt += 1) name = `${base.slice(0, 74)} ${attempt}`;
+    }
+    const made = createHomebrew(owner, { kind: "item", name, data: { desc: "", ...entry.data } as Parameters<typeof createHomebrew>[1]["data"] });
+    mine.set(textKey(name), made);
+    moved.set(ref, `${HOMEBREW}${made.id}`);
+    brought.push(name);
+  }
+  relink(campaignId, "item", moved);
   return { brought, reused };
 }

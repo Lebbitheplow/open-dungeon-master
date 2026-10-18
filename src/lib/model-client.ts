@@ -1,6 +1,7 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import {
   BackendRefusal,
+  describeTransportFailure,
   fetchBackend,
   forEachStreamLine,
   MAX_BACKEND_BODY_BYTES,
@@ -30,14 +31,16 @@ import {
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
 import { isPrivateBackendHost } from "@/lib/backend-host";
-import { chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
+import { chatTimings, chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { apiSpeedEligibility } from "@/lib/speed-tier";
 import { noteSpeed } from "@/lib/speed-status";
 import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow } from "@/lib/text-models";
-import { catalogContextWindow, hostedContextWindow } from "@/lib/model-registry/catalog";
-import { ollamaModelInfo, soleListedModel } from "@/lib/model-registry/discovery";
+import { catalogContextWindow, hostedCatalogModel, hostedContextWindow } from "@/lib/model-registry/catalog";
+import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
+import { currentJobSignal, jobStopReason, noteJobProgress, withJobStage } from "@/lib/dm/job-control";
+import { MODEL_STAGE_GRACE_MS } from "@/lib/dm/job-stage-logic";
 import {
   createStreamRepetitionGuard,
   cutRepetition,
@@ -77,6 +80,11 @@ export type ChatMessage = {
   content: string | Array<TextContentPart | ImageContentPart>;
   tool_calls?: unknown;
   tool_call_id?: string;
+  // A provider's own continuation items that rode with this assistant turn
+  // (the Responses API's encrypted reasoning, src/lib/openai-responses.ts):
+  // replayed to that transport on the next step of the same DM turn, never
+  // shown, never sent to any other backend.
+  provider_items?: unknown[];
 };
 
 export type StreamDeltaHandler = (text: string) => void;
@@ -90,6 +98,8 @@ export type StreamedToolCall = {
 export type UpstreamChatMessage = {
   content?: unknown;
   tool_calls?: unknown;
+  // See ChatMessage.provider_items.
+  provider_items?: unknown[];
 };
 
 export type UpstreamResult = {
@@ -107,9 +117,7 @@ export type UpstreamResult = {
   usage?: UpstreamUsage;
 };
 
-export type UpstreamUsage = {
-  inputTokens: number;
-  outputTokens: number;
+export type UpstreamUsage = TokenUsage & {
   model: string;
   backend: "local" | "custom" | "openai" | "openrouter" | "harness";
   // Sent with a key.
@@ -137,6 +145,14 @@ export type ChatRequestOptions = {
   // wants none (the final narration) would think anyway. Left unset, the
   // server's default stands.
   thinking?: boolean;
+  // The most this call's reply may run to: what the window leaves after the
+  // prompt (src/lib/dm/request-fit.ts), or what the task needs. The backend's
+  // own cap still applies when it is smaller. Unset keeps that cap alone.
+  maxOutputTokens?: number;
+  // What the call is for and where it sits, for the usage record
+  // (src/lib/usage/model-calls.ts): "turn", "claims", "compaction"... Never
+  // sent to the backend.
+  meta?: { task?: string; turnId?: string; callIndex?: number };
   // Body fields a previous attempt was rejected for, omitted on the retry.
   // Set only by requestCustomMessage's own unsupported-parameter path; no
   // caller outside this module should populate it.
@@ -158,6 +174,23 @@ export type ChatRequestOptions = {
     turn?: boolean;
   };
 };
+
+// The reply cap a request to this hosted model goes out with: the
+// configured cap, or the model's own when the catalog says it writes less
+// (issue #383). A strict API refuses a max_tokens above the model's limit.
+// A server on this machine or the LAN caps its own replies to its window.
+export function maxOutputTokensFor(baseUrl: string, model: string): number {
+  const configured = configuredMaxOutputTokens();
+  const own = hostedCatalogModel(baseUrl, model)?.outputTokens ?? 0;
+  return own > 0 && own < configured ? own : configured;
+}
+
+// The cap a call goes out with: the backend's, or the call's own when that
+// is smaller (what the window leaves, or what the task needs).
+function callOutputCap(backendCap: number, options: ChatRequestOptions): number {
+  const asked = options.maxOutputTokens;
+  return typeof asked === "number" && Number.isFinite(asked) && asked > 0 ? Math.max(16, Math.min(backendCap, Math.floor(asked))) : backendCap;
+}
 
 export function configuredMaxOutputTokens() {
   const raw = serverEnv("OPENROUTER_MAX_TOKENS");
@@ -244,7 +277,7 @@ export function storyContextTokens(settings: {
   }
   const probed = probedContextWindows.get(
     contextCacheKey(settings.customBaseUrl ?? "", settings.customModel ?? ""),
-  );
+  )?.window;
   if (probed) {
     return Math.max(2_048, probed);
   }
@@ -255,21 +288,89 @@ export function storyContextTokens(settings: {
   return hosted ? Math.min(Math.max(2_048, hosted), OPENAI_CONTEXT_TOKENS) : DEFAULT_CUSTOM_CONTEXT_TOKENS;
 }
 
+// Whether the story window above is only the conservative stand-in: a custom
+// endpoint nobody configured, that answered no probe and that the catalog
+// does not know. The request fitter treats such a window as advice, not a
+// wall (src/lib/dm/model.ts): the real server may well have more room, and
+// a turn it would have answered is never refused on a guess.
+export function storyWindowAssumed(settings: {
+  textProvider: string;
+  customBaseUrl?: string;
+  customModel?: string;
+}): boolean {
+  if (settings.textProvider === "local" || settings.textProvider === "harness") {
+    return false;
+  }
+  if (Number.parseInt(serverEnv("OPENAI_COMPAT_CONTEXT"), 10) > 0 || endpointKind(settings.customBaseUrl ?? "") === "openai") {
+    return false;
+  }
+  if (probedContextWindows.get(contextCacheKey(settings.customBaseUrl ?? "", settings.customModel ?? ""))?.window) {
+    return false;
+  }
+  return !hostedContextWindow(settings.customBaseUrl ?? "", settings.customModel ?? "");
+}
+
+// The same for a table's own utility model on a custom endpoint.
+export function utilityWindowAssumed(settings: { utilityProvider: string; utilityModel: string; utilityBaseUrl: string }): boolean {
+  if (settings.utilityProvider === "local" || endpointKind(settings.utilityBaseUrl) === "openai") {
+    return false;
+  }
+  return !probedContextWindows.get(contextCacheKey(settings.utilityBaseUrl, settings.utilityModel.trim()))?.window;
+}
+
 function openAiWindow(baseUrl: string, model: string): number {
   const known = hostedContextWindow(baseUrl, model);
   return known ? Math.min(Math.max(2_048, known), OPENAI_CONTEXT_TOKENS) : OPENAI_CONTEXT_TOKENS;
 }
 
-// Windows learned from an endpoint's own /props, keyed by base URL. Probed
-// once and cached for the process: llama.cpp cannot change n_ctx without a
-// restart, and a restart restarts ODM's own process in every deployment we
-// ship.
-const probedContextWindows = new Map<string, number>();
+// Windows learned from an endpoint's own /props (or from its refusal of a
+// request too big for it), keyed by base URL and model. A window is kept for
+// a while, not for the life of the process: llama-server can be restarted
+// with another -c while ODM runs on, and a probe that failed at startup
+// (the server still loading) must not leave the default in place until ODM
+// restarts. A miss is retried sooner than a hit, and probes of one endpoint
+// that overlap share one request.
+type ProbedWindow = { window: number; at: number };
+const PROBE_HIT_TTL_MS = 30 * 60_000;
+const PROBE_MISS_TTL_MS = 2 * 60_000;
+const probedContextWindows = new Map<string, ProbedWindow>();
+const probesInFlight = new Map<string, Promise<number | null>>();
+
+// A refusal that named the server's real window teaches it; one that did
+// not forgets what was known, so the next turn probes again.
+export function learnContextWindow(baseUrl: string, model: string, window: number | null): void {
+  const key = contextCacheKey(baseUrl, model);
+  if (window && window > 0) {
+    probedContextWindows.set(key, { window: Math.floor(window), at: Date.now() });
+  } else {
+    probedContextWindows.delete(key);
+  }
+}
+
+// Every window learned so far is dropped; the admin's text settings changed.
+export function forgetContextWindows(): void {
+  probedContextWindows.clear();
+}
+
+// What a backend's refusal says of its window, when the request was too big
+// for it: llama-server names n_ctx, vLLM and OpenAI the maximum context
+// length. Null when the refusal was about something else; 0 when it was
+// about the window but named no size.
+export function contextOverflowWindow(text: string): number | null {
+  if (!/exceed(?:s|ed)? the available context|context[_ ]length[_ ]exceeded|maximum context length|context window|exceed_context_size|too many tokens|prompt is too long/i.test(text)) {
+    return null;
+  }
+  const named =
+    /"n_ctx"\s*:\s*(\d+)/.exec(text) ??
+    /maximum context length is (\d+)/i.exec(text) ??
+    /context (?:window|length) of (\d+)/i.exec(text);
+  return named ? Number.parseInt(named[1], 10) : 0;
+}
 
 // What a backend taught us about a model, keyed like the windows above and
-// kept for the process for the same reason: the route its tools run on
-// when its 400 named one (issue #129), and the body fields it refused, so
-// the next call omits them instead of paying the 400 again.
+// kept for the process: the route its tools run on when its 400 named one
+// (issue #129), and the body fields it refused, so the next call omits them
+// instead of paying the 400 again.
 const learnedToolRoutes = new Map<string, OpenAiToolRoute>();
 const rememberedDrops = new Map<string, Set<string>>();
 
@@ -291,31 +392,48 @@ export async function probeCustomContextWindow(
   // several models from one port, each launched with its own -c.
   const cacheKey = contextCacheKey(baseUrl, model);
   const cached = probedContextWindows.get(cacheKey);
-  if (cached !== undefined) {
-    return cached || null;
+  if (cached && Date.now() - cached.at < (cached.window ? PROBE_HIT_TTL_MS : PROBE_MISS_TTL_MS)) {
+    return cached.window || null;
   }
-  try {
-    // Never redirected (the URL is a campaign's; see fetchBackend), and
-    // read under a ceiling: the window is one number in a small object.
-    const response = await fetch(url, {
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
-      signal: AbortSignal.timeout(2_000),
-      redirect: "error",
-    });
-    if (!response.ok) {
-      probedContextWindows.set(cacheKey, 0);
-      return null;
+  const running = probesInFlight.get(cacheKey);
+  if (running) {
+    return running;
+  }
+  // The key the chat call itself goes out with (resolveCustomKey): a table
+  // on the server's own backend names no key of its own, and a keyed
+  // llama-server refuses /props without one, so every such table was packed
+  // against the 16K default on a 64K server.
+  const trimmedBase = baseUrl.trim();
+  const key = resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey;
+  const probe = (async () => {
+    try {
+      // Never redirected (the URL is a campaign's; see fetchBackend), and
+      // read under a ceiling: the window is one number in a small object.
+      const response = await fetch(url, {
+        headers: key ? { Authorization: `Bearer ${key}` } : undefined,
+        signal: AbortSignal.timeout(2_000),
+        redirect: "error",
+      });
+      if (!response.ok) {
+        probedContextWindows.set(cacheKey, { window: cached?.window ?? 0, at: Date.now() });
+        return cached?.window || null;
+      }
+      const body = await readBody(response, MAX_BACKEND_ERROR_BYTES);
+      const window = (body.complete ? readContextWindow(JSON.parse(body.text)) : null) ?? 0;
+      probedContextWindows.set(cacheKey, { window, at: Date.now() });
+      return window || null;
+    } catch {
+      // Unreachable, not llama.cpp, or too slow. The miss is remembered for
+      // a short while so a turn does not pay the timeout again; a window
+      // learned before stays until a probe says otherwise.
+      probedContextWindows.set(cacheKey, { window: cached?.window ?? 0, at: Date.now() });
+      return cached?.window || null;
+    } finally {
+      probesInFlight.delete(cacheKey);
     }
-    const body = await readBody(response, MAX_BACKEND_ERROR_BYTES);
-    const window = (body.complete ? readContextWindow(JSON.parse(body.text)) : null) ?? 0;
-    probedContextWindows.set(cacheKey, window);
-    return window || null;
-  } catch {
-    // Unreachable, not llama.cpp, or too slow. Cache the miss so a turn does
-    // not pay the timeout again.
-    probedContextWindows.set(cacheKey, 0);
-    return null;
-  }
+  })();
+  probesInFlight.set(cacheKey, probe);
+  return probe;
 }
 
 // The context window of the model a utility call (Ask, the lore check) runs
@@ -344,14 +462,27 @@ export async function utilityContextTokens(settings: {
   if (!model) {
     return story;
   }
+  return Math.min(await utilityModelContextTokens(settings), story);
+}
+
+// The utility model's own window, for a table that names one: what a call
+// on it is fitted to before any fallback (src/lib/dm/model.ts), where
+// utilityContextTokens above answers the smaller of it and the story's.
+export async function utilityModelContextTokens(settings: {
+  utilityProvider: string;
+  utilityModel: string;
+  utilityBaseUrl: string;
+  utilityApiKey: string;
+}): Promise<number> {
+  const model = settings.utilityModel.trim();
   if (settings.utilityProvider === "local") {
-    return Math.min(localContextTokens(model), story);
+    return localContextTokens(model);
   }
   if (endpointKind(settings.utilityBaseUrl) === "openai") {
-    return Math.min(openAiWindow(settings.utilityBaseUrl, model), story);
+    return openAiWindow(settings.utilityBaseUrl, model);
   }
   const probed = await probeCustomContextWindow(settings.utilityBaseUrl, settings.utilityApiKey, model);
-  return Math.min(probed ? Math.max(2_048, probed) : DEFAULT_CUSTOM_CONTEXT_TOKENS, story);
+  return probed ? Math.max(2_048, probed) : DEFAULT_CUSTOM_CONTEXT_TOKENS;
 }
 
 export function resolveTextTimeoutMs(
@@ -392,13 +523,30 @@ function createRequestTimeout(ms: number) {
     controller.abort();
   };
   const timeoutId = setTimeout(abortNow, ms);
+  // The DM job this call runs in may be stopped (the lead's Stop, a rewind,
+  // the queue's watchdog: src/lib/dm/job-control.ts). The request goes with
+  // it, headers or stream, and says so rather than blaming the backend.
+  const job = currentJobSignal();
+  if (job?.aborted) {
+    controller.abort();
+  } else {
+    job?.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   return {
     signal: controller.signal,
     clear: () => clearTimeout(timeoutId),
     timedOut: () => timedOut,
+    stopped: () => job?.aborted === true && !timedOut,
     abortNow,
     cancel: () => controller.abort(),
+  };
+}
+
+// A call cut short because its DM job was stopped, in the stop's own words.
+function stoppedResult(): UpstreamResult {
+  return {
+    error: Response.json({ error: jobStopReason() ?? "the turn was stopped.", code: "stopped" }, { status: 499 }),
   };
 }
 
@@ -489,13 +637,37 @@ type OllamaChatMessage = {
   tool_calls?: unknown;
 };
 
+// Ollama takes a call's arguments as an object and refuses a JSON string with
+// a 400. The calls it returned itself are objects already; a call the turn
+// salvaged from a reply's text (a small model writing its call as JSON:
+// src/lib/dm/json-salvage.ts) is echoed in the OpenAI shape, a string, and
+// sank the next request of the turn.
+function ollamaToolCalls(calls: unknown): unknown {
+  if (!Array.isArray(calls)) {
+    return calls;
+  }
+  return calls.map((call) => {
+    const fn = (call as { function?: { name?: unknown; arguments?: unknown } })?.function;
+    if (!fn || typeof fn.arguments !== "string") {
+      return call;
+    }
+    let args: unknown = {};
+    try {
+      args = JSON.parse(fn.arguments || "{}");
+    } catch {
+      // A model's malformed arguments: the call already failed on its own.
+    }
+    return { function: { name: fn.name, arguments: args && typeof args === "object" && !Array.isArray(args) ? args : {} } };
+  });
+}
+
 function toOllamaMessages(messages: ChatMessage[]): OllamaChatMessage[] {
   return messages.map((message) => {
     if (typeof message.content === "string") {
       return {
         role: message.role,
         content: message.content,
-        ...(message.tool_calls ? { tool_calls: message.tool_calls } : {}),
+        ...(message.tool_calls ? { tool_calls: ollamaToolCalls(message.tool_calls) } : {}),
       };
     }
 
@@ -608,7 +780,23 @@ export function customBackendIsPaid(baseUrl: string, apiKey: string): boolean {
   return resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey !== "";
 }
 
-export async function requestCustomMessage(
+// Every model call says it is waiting on the model while it runs, with a
+// deadline past its own timeout, so the DM queue's watchdog shows the stage
+// and never stops a call its own timeout would still answer.
+export function requestCustomMessage(
+  baseUrl: string,
+  model: string,
+  apiKey: string,
+  messages: ChatMessage[],
+  options: ChatRequestOptions = {},
+): Promise<UpstreamResult> {
+  const timeoutMs = resolveTextTimeoutMs(options.timeoutMs, "CUSTOM_TEXT_TIMEOUT_MS", DEFAULT_CUSTOM_TEXT_TIMEOUT_MS);
+  return withJobStage("waiting_model", timeoutMs + MODEL_STAGE_GRACE_MS, () =>
+    requestCustomMessageNow(baseUrl, model, apiKey, messages, options),
+  );
+}
+
+async function requestCustomMessageNow(
   baseUrl: string,
   model: string,
   apiKey: string,
@@ -656,23 +844,35 @@ export async function requestCustomMessage(
   const isOpenRouter = caps.kind === "openrouter";
   // Nothing is named in code: a blank setting runs the one chat model the
   // server lists, when it lists exactly one (src/lib/model-registry).
-  const resolvedModel =
+  let resolvedModel =
     (model || "").trim() ||
     globalText.customModel ||
     serverEnv("OPENAI_COMPAT_MODEL") ||
-    (isOpenRouter ? serverEnv("OPENROUTER_MODEL") : "") ||
-    (await soleListedModel({ provider: "custom", baseUrl: trimmedBase, apiKey: resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey }));
+    (isOpenRouter ? serverEnv("OPENROUTER_MODEL") : "");
 
   if (!resolvedModel) {
-    return {
-      error: Response.json(
-        {
-          error:
-            "No model name set, and the server lists more than one. Pick the model in Text Model settings.",
-        },
-        { status: 400 },
-      ),
-    };
+    const listing = await soleModelListing({ provider: "custom", baseUrl: trimmedBase, apiKey: resolveCustomKey(trimmedBase, apiKey, customChatEndpoint(trimmedBase)).resolvedKey });
+    resolvedModel = listing.id;
+    if (!resolvedModel) {
+      // A server that never answered the listing is down or misaddressed;
+      // only one that answered with several models needs a pick.
+      return {
+        error: listing.answered
+          ? Response.json(
+              {
+                error:
+                  "No model name set, and the server lists more than one. Pick the model in Text Model settings.",
+              },
+              { status: 400 },
+            )
+          : Response.json(
+              {
+                error: `Could not reach the backend at ${trimmedBase} to list its models. Check the URL and that your server is running.`,
+              },
+              { status: 502 },
+            ),
+      };
+    }
   }
 
   // How this model runs its tools: Chat Completions until its first refusal
@@ -722,14 +922,21 @@ export async function requestCustomMessage(
         model: resolvedModel,
         messages,
         sampling,
-        maxOutputTokens: configuredMaxOutputTokens(),
+        maxOutputTokens: callOutputCap(maxOutputTokensFor(trimmedBase, resolvedModel), options),
         stream: Boolean(onDelta),
         tools,
         toolChoice,
       })
     : {
         model: resolvedModel,
-        messages,
+        // A Responses turn's reasoning items are that API's own; Chat
+        // Completions would refuse the unknown field.
+        messages: messages.map((message) => {
+          if (!message.provider_items) return message;
+          const rest = { ...message };
+          delete rest.provider_items;
+          return rest;
+        }),
         ...sampling,
         // Explicit 0 so a server-side sampler preset cannot override it: a
         // positive presence penalty over the long DM prompt suppresses the
@@ -759,7 +966,7 @@ export async function requestCustomMessage(
         ? "max_completion_tokens"
         : "max_tokens";
     if (!dropped.has(maxTokensField)) {
-      requestPayload[maxTokensField] = configuredMaxOutputTokens();
+      requestPayload[maxTokensField] = callOutputCap(maxOutputTokensFor(trimmedBase, resolvedModel), options);
     }
     if (tools?.length) {
       requestPayload.tools = tools;
@@ -814,6 +1021,9 @@ export async function requestCustomMessage(
     if (error instanceof BackendRefusal) {
       return { error: Response.json({ error: error.message }, { status: 502 }) };
     }
+    if (requestTimeout.stopped()) {
+      return stoppedResult();
+    }
     if (requestTimeout.timedOut()) {
       return {
         error: Response.json(
@@ -825,10 +1035,15 @@ export async function requestCustomMessage(
       };
     }
 
+    // Connection refused, DNS, TLS and a connect timeout all land here and
+    // used to read alike; the reason tells a server that is down from a
+    // wrong address or a certificate, and the code goes to the log.
+    const failure = describeTransportFailure(error);
     return {
       error: Response.json(
         {
-          error: `Could not reach the backend at ${endpoint}. Check the URL and that your server is running.`,
+          error: `Could not reach the backend at ${endpoint}.${failure.reason ? ` ${failure.reason}` : ""} Check the URL and that your server is running.`,
+          detail: `transport ${failure.code}`,
         },
         { status: 502 },
       ),
@@ -851,6 +1066,28 @@ export async function requestCustomMessage(
         stripImageParts(messages),
         options,
       );
+    }
+
+    // A request bigger than the server's window. The refusal often names
+    // the real window (llama-server's n_ctx, vLLM's maximum context length),
+    // which is kept for the next sizing; one that names none drops what was
+    // known so the next turn probes again. Answered as the fitter's own
+    // capacity refusal, so the caller can refit once and the table reads
+    // what to change rather than a bare 400.
+    const overflow = contextOverflowWindow(text);
+    if (overflow !== null) {
+      learnContextWindow(trimmedBase, model, overflow || null);
+      return {
+        error: Response.json(
+          {
+            error: `The request was larger than the model's context window${overflow ? ` (${overflow.toLocaleString("en-US")} tokens, as the backend reports)` : ""}.`,
+            code: "context_capacity",
+            learnedWindow: overflow || null,
+            detail: text.slice(0, 300),
+          },
+          { status: 413 },
+        ),
+      };
     }
 
     // OpenAI's GPT-6 line refuses function tools on Chat Completions and
@@ -929,6 +1166,9 @@ export async function requestCustomMessage(
     if (error instanceof BackendRefusal) {
       return { error: Response.json({ error: error.message }, { status: 502 }) };
     }
+    if (requestTimeout.stopped()) {
+      return stoppedResult();
+    }
     return {
       error: Response.json(
         {
@@ -962,6 +1202,7 @@ export async function requestCustomMessage(
         onReasoningDelta: guardedReasoning,
         idleMs: timeoutMs,
         onIdleAbort: requestTimeout.abortNow,
+        onChunk: noteJobProgress,
       });
       if ("failure" in reply) {
         return {
@@ -990,6 +1231,9 @@ export async function requestCustomMessage(
     // OpenAI-compatible SSE: "data: {...}" lines carrying content and
     // tool-call fragments, terminated by "data: [DONE]".
     let streamUsage = null as TokenUsage | null;
+    // llama-server's timings ride on the last chunk, which need not be the
+    // one with the usage; merged in at the end.
+    let streamTimings: Partial<TokenUsage> = {};
     let serviceTier = "";
     const contentParts: string[] = [];
     const toolCalls: Array<StreamedToolCall | undefined> = [];
@@ -1034,6 +1278,7 @@ export async function requestCustomMessage(
           finishReason = reason;
         }
         streamUsage = chatUsage(record) ?? streamUsage;
+        streamTimings = { ...streamTimings, ...chatTimings(record) };
         const delta = record.choices?.[0]?.delta;
         // llama.cpp and DeepSeek name the reasoning reasoning_content;
         // OpenRouter and newer vLLM name it reasoning. One of them, so a
@@ -1074,7 +1319,7 @@ export async function requestCustomMessage(
             }
           }
         }
-      });
+      }, noteJobProgress);
     } catch (error) {
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       return readFailure(error);
@@ -1102,7 +1347,7 @@ export async function requestCustomMessage(
         ...(completedToolCalls.length ? { tool_calls: completedToolCalls } : {}),
       },
       ...(finishReason ? { finishReason } : {}),
-      ...tagged(streamUsage),
+      ...tagged(streamUsage ? { ...streamTimings, ...streamUsage } : null),
     };
   }
 
@@ -1136,13 +1381,34 @@ export async function requestCustomMessage(
   );
 }
 
-export async function requestLocalMessage(
+export function requestLocalMessage(
   requestedModel: string,
   messages: ChatMessage[],
-  options: ChatRequestOptions & { disableThinking?: boolean } = {},
+  options: ChatRequestOptions & { omitThink?: boolean } = {},
 ): Promise<UpstreamResult> {
-  const { tools, temperature, onDelta } = options;
-  const disableThinking = options.disableThinking ?? true;
+  const timeoutMs = resolveTextTimeoutMs(options.timeoutMs, "LOCAL_TEXT_TIMEOUT_MS", DEFAULT_LOCAL_TEXT_TIMEOUT_MS);
+  return withJobStage("waiting_model", timeoutMs + MODEL_STAGE_GRACE_MS, () =>
+    requestLocalMessageNow(requestedModel, messages, options),
+  );
+}
+
+async function requestLocalMessageNow(
+  requestedModel: string,
+  messages: ChatMessage[],
+  options: ChatRequestOptions & { omitThink?: boolean } = {},
+): Promise<UpstreamResult> {
+  const { temperature, onDelta } = options;
+  // A call that may only narrate (toolChoice "none") goes without its
+  // tools: Ollama has no tool_choice, so a tool list sent with the forced
+  // last call left the model free to call one anyway.
+  const tools = options.toolChoice === "none" ? undefined : options.tools;
+  // The call's own thinking request wins (the turn asks for it on the calls
+  // that choose tools, as it does on every other backend); left unset,
+  // thinking stays off: Gemma 4 is a hybrid reasoning model and without
+  // this spends most of the token budget on a hidden channel before any
+  // story text. A model with no thinking channel refuses the field, and the
+  // retry sends none (omitThink).
+  const think = options.omitThink ? null : options.thinking === true;
   const baseUrl = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").replace(/\/$/, "");
   // A blank setting runs the one chat model Ollama has, when it has exactly
   // one; the model's own window is learned before the prompt is packed.
@@ -1156,6 +1422,22 @@ export async function requestLocalMessage(
     };
   }
   await ollamaModelInfo(model, baseUrl);
+  // The admin's per-role sampling, resolved as the custom backend resolves
+  // it (src/lib/dm/sampling-logic.ts); Ollama takes every sampler field in
+  // its options. A per-call temperature still wins, and an unconfigured
+  // install keeps 0.9 where the resolver leaves the temperature unset.
+  const globalSampling = getGlobalConfig().sampling;
+  const role = options.role ?? "story";
+  const sampling = resolveSampling({
+    role,
+    configured: {
+      ...(role === "utility" ? globalSampling.utility : globalSampling.story),
+      ...(temperature !== undefined ? { temperature } : {}),
+    },
+    profile: profileById(globalSampling.profile || "default"),
+    allowLocalOnly: true,
+    thinking: think === true,
+  });
   const requestPayload: Record<string, unknown> = {
     model,
     messages: toOllamaMessages(messages),
@@ -1163,16 +1445,15 @@ export async function requestLocalMessage(
     // Keep the model (and the story's prompt cache) resident between turns.
     keep_alive: "30m",
     options: {
-      temperature: temperature ?? 0.9,
-      num_predict: localMaxOutputTokens(),
+      ...sampling,
+      temperature: sampling.temperature ?? 0.9,
+      num_predict: callOutputCap(localMaxOutputTokens(), options),
       num_ctx: localContextTokens(model),
     },
   };
 
-  // Gemma 4 is a hybrid reasoning model; without this it spends most of the
-  // token budget on a hidden "thinking" channel before any story text.
-  if (disableThinking) {
-    requestPayload.think = false;
+  if (think !== null) {
+    requestPayload.think = think;
   }
 
   if (tools?.length) {
@@ -1195,7 +1476,10 @@ export async function requestLocalMessage(
       body: JSON.stringify(requestPayload),
       signal: requestTimeout.signal,
     });
-  } catch {
+  } catch (error) {
+    if (requestTimeout.stopped()) {
+      return stoppedResult();
+    }
     if (requestTimeout.timedOut()) {
       return {
         error: Response.json(
@@ -1207,10 +1491,12 @@ export async function requestLocalMessage(
       };
     }
 
+    const failure = describeTransportFailure(error);
     return {
       error: Response.json(
         {
-          error: `Could not reach Ollama at ${baseUrl}. Start the Ollama app (or \`ollama serve\`), pull the model with \`ollama pull ${model}\`, or switch this chat to a custom backend (LM Studio, llama.cpp, OpenRouter, ...) in Text Model settings.`,
+          error: `Could not reach Ollama at ${baseUrl}.${failure.reason ? ` ${failure.reason}` : ""} Start the Ollama app (or \`ollama serve\`), pull the model with \`ollama pull ${model}\`, or switch this chat to a custom backend (LM Studio, llama.cpp, OpenRouter, ...) in Text Model settings.`,
+          detail: `transport ${failure.code}`,
         },
         { status: 502 },
       ),
@@ -1228,8 +1514,8 @@ export async function requestLocalMessage(
     }
 
     // Models without a thinking channel reject the think parameter; retry without it.
-    if (disableThinking && /does not support think/i.test(text)) {
-      return requestLocalMessage(model, messages, { ...options, disableThinking: false });
+    if (think !== null && /does not support think/i.test(text)) {
+      return requestLocalMessage(model, messages, { ...options, omitThink: true });
     }
 
     const hint = /not found/i.test(text)
@@ -1253,6 +1539,7 @@ export async function requestLocalMessage(
     const contentParts: string[] = [];
     const toolCalls: unknown[] = [];
     let upstreamError = "";
+    let doneReason = "";
 
     try {
       await forEachStreamLine(upstream, timeoutMs, requestTimeout.abortNow, (line) => {
@@ -1265,7 +1552,11 @@ export async function requestLocalMessage(
         const record = parsed as {
           message?: { content?: unknown; tool_calls?: unknown; thinking?: unknown };
           error?: unknown;
+          done_reason?: unknown;
         };
+        if (typeof record.done_reason === "string" && record.done_reason) {
+          doneReason = record.done_reason;
+        }
         if (record.error) {
           upstreamError = String(record.error);
           return;
@@ -1281,9 +1572,12 @@ export async function requestLocalMessage(
           toolCalls.push(...record.message.tool_calls);
         }
         localUsage = ollamaUsage(record) ?? localUsage;
-      });
+      }, noteJobProgress);
     } catch (error) {
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
+      if (requestTimeout.stopped()) {
+        return stoppedResult();
+      }
       return {
         error: Response.json(
           {
@@ -1313,11 +1607,12 @@ export async function requestLocalMessage(
         content: contentParts.join(""),
         ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
       },
+      ...(doneReason ? { finishReason: ollamaFinish(doneReason, toolCalls.length > 0) } : {}),
       ...(localUsage ? { usage: { ...localUsage, model, backend: "local" as const, keyed: false, paid: false } } : {}),
     };
   }
 
-  let data: { message?: UpstreamChatMessage };
+  let data: { message?: UpstreamChatMessage; done_reason?: unknown };
   try {
     data = (await upstream.json()) as typeof data;
   } catch {
@@ -1329,8 +1624,23 @@ export async function requestLocalMessage(
     };
   }
   const usage = ollamaUsage(data);
+  const doneReason = typeof data?.done_reason === "string" ? data.done_reason : "";
+  const wholeCalls = data?.message?.tool_calls;
   return cutWholeReply(
-    { message: data?.message, ...(usage ? { usage: { ...usage, model, backend: "local" as const, keyed: false, paid: false } } : {}) },
+    {
+      message: data?.message,
+      ...(doneReason ? { finishReason: ollamaFinish(doneReason, Array.isArray(wholeCalls) && wholeCalls.length > 0) } : {}),
+      ...(usage ? { usage: { ...usage, model, backend: "local" as const, keyed: false, paid: false } } : {}),
+    },
     options,
   );
+}
+
+// Ollama's done_reason in the Chat Completions words the turn reads: a reply
+// cut at num_predict is "length" either way (issue #120's empty-reply note).
+function ollamaFinish(doneReason: string, calledTools: boolean): string {
+  if (doneReason === "stop" && calledTools) {
+    return "tool_calls";
+  }
+  return doneReason;
 }

@@ -5,7 +5,7 @@
 // caret. No "@/" imports and no DOM, so scripts/test-tours.mjs can load it
 // straight from disk.
 
-import { compareNames } from "../language/text-logic.ts";
+import { compareNames, textKey } from "../language/text-logic.ts";
 
 // The SRD's standard and exotic languages, in the order a stat block
 // prints them.
@@ -65,9 +65,9 @@ export function appendTerm(current: string, term: string): string {
   if (!trimmed) return current;
   const have = current
     .split(",")
-    .map((entry) => entry.trim().toLowerCase())
+    .map((entry) => textKey(entry))
     .filter(Boolean);
-  if (have.includes(trimmed.toLowerCase())) return current;
+  if (have.includes(textKey(trimmed))) return current;
   const base = current.trim().replace(/,\s*$/, "");
   return base ? `${base}, ${trimmed}` : trimmed;
 }
@@ -95,7 +95,7 @@ export function collectTags(entries: ReadonlyArray<{ tags?: readonly string[] }>
   const seen = new Map<string, string>();
   for (const entry of entries) {
     for (const tag of entry.tags ?? []) {
-      const key = tag.trim().toLowerCase();
+      const key = textKey(tag);
       if (key && !seen.has(key)) seen.set(key, tag.trim());
     }
   }

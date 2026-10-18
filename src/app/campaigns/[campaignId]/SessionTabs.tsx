@@ -107,6 +107,11 @@ const TAB_PRESENTATION: Record<PanelTab, [string, LucideIcon, string]> = {
   ],
   notes: ["Notes", RAIL_ICONS.notes, "Suggest story notes; the party lead approves them."],
   chat: ["Chat", RAIL_ICONS.chat, "Side chat between players. The DM does not see it."],
+  world: [
+    "World",
+    RAIL_ICONS.world,
+    "This campaign's own copy of its world: the wiki, the web of links, the timeline, the atlas and its secrets. Players never see it.",
+  ],
   context: [
     "Context",
     RAIL_ICONS.context,

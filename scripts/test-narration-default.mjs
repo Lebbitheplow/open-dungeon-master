@@ -10,6 +10,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
+import { standInStoryteller } from "./lib/stand-in-storyteller.mjs";
+
+// An AI-run table through the routes needs a storyteller set up (the routes
+// refuse one otherwise, and seat a person when none is named); this one never
+// answers.
+standInStoryteller();
 
 const world = await openWorld();
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");

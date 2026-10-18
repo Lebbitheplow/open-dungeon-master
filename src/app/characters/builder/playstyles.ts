@@ -1,4 +1,5 @@
 import type { ClassRole } from "@/lib/srd/class-roles";
+import { textKey } from "@/lib/language/text-logic";
 
 // "How do you want to play?", for someone who does not yet know a class by
 // its name: each answer is a job at the table in plain words, the class
@@ -53,7 +54,7 @@ export function playstyleBackgrounds(
 ): Array<{ id: string; name: string }> {
   const style = PLAYSTYLES.find((entry) => entry.id === playstyle);
   if (!style) return [];
-  const key = (value: string) => value.toLowerCase().replace(/[^a-z]/g, "");
+  const key = (value: string) => textKey(value).replace(/[^\p{L}\p{M}]/gu, "");
   return style.backgrounds.flatMap((wanted) => {
     const found = offered.find((entry) => key(entry.id) === key(wanted) || key(entry.name) === key(wanted));
     return found ? [found] : [];

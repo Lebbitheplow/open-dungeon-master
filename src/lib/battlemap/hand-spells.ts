@@ -28,7 +28,6 @@ import {
   primaryClass,
   signed,
   slotLine,
-  spellKey,
   standingGate,
   type Gate,
   type HandCard,
@@ -40,8 +39,8 @@ import {
   type HandTurn,
   type SpellFact,
 } from "@/lib/battlemap/hand-core";
-import { compareNames } from "@/lib/language/text-logic";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // ---- spells ----
 
@@ -54,7 +53,7 @@ export function spellNames(sheet: CharacterSheet): string[] {
   ];
   const seen = new Set<string>();
   return all.filter((name) => {
-    const key = spellKey(name);
+    const key = textKey(name);
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -62,7 +61,7 @@ export function spellNames(sheet: CharacterSheet): string[] {
 }
 
 function factFor(name: string, options: HandOptions): SpellFact | null {
-  const fetched = options.spells?.[spellKey(name)];
+  const fetched = options.spells?.[textKey(name)];
   if (fetched) return fetched;
   const row = authoredSpellRow(name);
   if (!row) return null;
@@ -196,7 +195,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     damage = healing ? addFlat(healing, /spellcasting ability modifier|spellcasting modifier/i.test(fact.desc) ? abilityMod : 0) : null;
   }
   // Agonizing Blast and its kin ride one named cantrip.
-  const rider = riders.cantripAbilityRiders.find((entry) => spellKey(entry.spell) === spellKey(name));
+  const rider = riders.cantripAbilityRiders.find((entry) => textKey(entry.spell) === textKey(name));
   if (rider && damage) {
     damage = addFlat(damage, derived.abilityMods[rider.ability as keyof typeof derived.abilityMods] ?? 0);
   }
@@ -230,7 +229,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const roll =
     toHit !== null ? `${signed(toHit)} to hit` : save ? (typed ? `DC ${save.dc}${mech.halfOnSave ? ", half on a save" : ""}` : "no attack") : "no roll";
   const notes: string[] = [];
-  if (fact.concentration && sheet.concentratingOn && spellKey(sheet.concentratingOn) !== spellKey(name)) {
+  if (fact.concentration && sheet.concentratingOn && textKey(sheet.concentratingOn) !== textKey(name)) {
     notes.push(`Ends your concentration on ${sheet.concentratingOn}.`);
   }
   if (mech.note) notes.push(mech.note);
@@ -260,7 +259,7 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   // A feature that moves the spell to the bonus action shows it there.
   const shownCost: HandCost = !("error" in charge) && charge.kind === "budget" && charge.cost === "bonus action" ? "bonus" : cost;
   const card: HandCard = {
-    id: `spell:${spellKey(name)}`,
+    id: `spell:${textKey(name)}`,
     type,
     name,
     cost: shownCost,

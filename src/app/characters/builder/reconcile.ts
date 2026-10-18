@@ -7,6 +7,7 @@ import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { builderCasting } from "./casting";
 import { bonusLanguageCount, type BlockerTarget } from "./submit";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
+import { textKey } from "@/lib/language/text-logic";
 
 // Every pick the player makes in the builder depends on an earlier choice:
 // class skills on the class, and on what the background and race already
@@ -54,12 +55,11 @@ export type ReconcileContext = {
 // list was computed and then thrown away).
 export type DroppedPick = { label: string; value: string; target: BlockerTarget };
 
-const lower = (value: string) => value.trim().toLowerCase();
 
 function unique<T extends string>(list: T[]): T[] {
   const seen = new Set<string>();
   return list.filter((entry) => {
-    const key = lower(entry);
+    const key = textKey(entry);
     if (!key || seen.has(key)) {
       return false;
     }
@@ -73,10 +73,10 @@ function unique<T extends string>(list: T[]): T[] {
 function slotted<T extends string>(list: T[], count: number, valid: (entry: T, index: number) => boolean): T[] {
   const seen = new Set<string>();
   return list.slice(0, count).map((entry, index) => {
-    if (!entry || !valid(entry, index) || seen.has(lower(entry))) {
+    if (!entry || !valid(entry, index) || seen.has(textKey(entry))) {
       return "" as T;
     }
-    seen.add(lower(entry));
+    seen.add(textKey(entry));
     return entry;
   });
 }
@@ -99,12 +99,12 @@ export function grantedSkillSources(input: {
   const sources = new Map<string, SkillGrantSource>();
   for (const skill of [...(input.background?.skills ?? []), ...(input.backgroundSkills ?? [])]) {
     if (skill) {
-      sources.set(lower(skill), "background");
+      sources.set(skill.trim().toLowerCase(), "background");
     }
   }
   for (const skill of [...(input.race?.skills ?? []), ...(input.racialSkills ?? [])]) {
-    if (skill && !sources.has(lower(skill))) {
-      sources.set(lower(skill), "race");
+    if (skill && !sources.has(skill.trim().toLowerCase())) {
+      sources.set(skill.trim().toLowerCase(), "race");
     }
   }
   return sources;
@@ -152,9 +152,9 @@ export function reconcilePicks(
   };
   const drops: DroppedPick[] = [];
   const note = (label: string, target: BlockerTarget, before: string[], after: string[]) => {
-    const kept = new Set(after.filter(Boolean).map(lower));
+    const kept = new Set(after.filter(Boolean).map(textKey));
     for (const entry of before) {
-      if (entry && !kept.has(lower(entry))) {
+      if (entry && !kept.has(textKey(entry))) {
         drops.push({ label, value: entry, target });
       }
     }
@@ -162,7 +162,7 @@ export function reconcilePicks(
 
   // Skills the background and race hand over outright are not picks, and a
   // pick that duplicates one is a wasted slot the player never sees.
-  const granted = new Set([...(background?.skills ?? []), ...(race?.skills ?? [])].map(lower));
+  const granted = new Set([...(background?.skills ?? []), ...(race?.skills ?? [])].map(textKey));
 
   // A background's skill pick comes first: its list is the narrowest, and
   // the class and racial picks below treat it as taken.
@@ -171,23 +171,23 @@ export function reconcilePicks(
     ? slotted(
         picks.backgroundSkills,
         backgroundChoice.count,
-        (skill) => !granted.has(lower(skill)) && backgroundChoice.from.some((entry) => lower(entry) === lower(skill)),
+        (skill) => !granted.has(textKey(skill)) && backgroundChoice.from.some((entry) => textKey(entry) === textKey(skill)),
       )
     : [];
   note("background skill", "backgroundSkills", picks.backgroundSkills, backgroundSkills);
-  const backgroundPicked = new Set(backgroundSkills.filter(Boolean).map(lower));
+  const backgroundPicked = new Set(backgroundSkills.filter(Boolean).map(textKey));
 
   const skillChoices = klass?.skillChoices;
-  const skillPool = skillChoices?.from.length ? new Set(skillChoices.from.map(lower)) : null;
+  const skillPool = skillChoices?.from.length ? new Set(skillChoices.from.map(textKey)) : null;
   const chosenSkills = klass
-    ? unique(picks.chosenSkills.filter((skill) => !granted.has(lower(skill)) && !backgroundPicked.has(lower(skill)) && (!skillPool || skillPool.has(lower(skill)))))
+    ? unique(picks.chosenSkills.filter((skill) => !granted.has(textKey(skill)) && !backgroundPicked.has(textKey(skill)) && (!skillPool || skillPool.has(textKey(skill)))))
         .slice(0, skillChoices?.count ?? picks.chosenSkills.length)
     : [];
   note("class skill", "classSkills", picks.chosenSkills, chosenSkills);
 
-  const classPicked = new Set(chosenSkills.map(lower));
+  const classPicked = new Set(chosenSkills.map(textKey));
   const racialSkills = race?.skillChoice
-    ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(lower(skill)) && !classPicked.has(lower(skill)) && !backgroundPicked.has(lower(skill)))
+    ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(textKey(skill)) && !classPicked.has(textKey(skill)) && !backgroundPicked.has(textKey(skill)))
     : [];
   note("racial skill", "racialSkills", picks.racialSkills, racialSkills);
 
@@ -208,7 +208,7 @@ export function reconcilePicks(
   note("racial ability bump", "racialAsi", picks.racialAsi, racialAsi);
 
   const racialTool =
-    race?.toolChoice && race.toolChoice.from.some((tool) => lower(tool) === lower(picks.racialTool))
+    race?.toolChoice && race.toolChoice.from.some((tool) => textKey(tool) === textKey(picks.racialTool))
       ? picks.racialTool
       : "";
   note("racial tool", "racialTool", [picks.racialTool], [racialTool]);
@@ -220,15 +220,15 @@ export function reconcilePicks(
   // Undercommon") only from it; no more slots than the race and background
   // offer together.
   const spoken = new Set(
-    [...(race?.languages ?? []), ...(klass?.languages ?? []), ...(background?.knownLanguages ?? [])].map(lower),
+    [...(race?.languages ?? []), ...(klass?.languages ?? []), ...(background?.knownLanguages ?? [])].map(textKey),
   );
   const choice = race?.languageChoice;
   const bonusLanguages = slotted(
     picks.bonusLanguages,
     bonusLanguageCount(race, background),
     (language, index) =>
-      !spoken.has(lower(language)) &&
-      (!choice || index >= choice.count || choice.from.some((entry) => lower(entry) === lower(language))),
+      !spoken.has(textKey(language)) &&
+      (!choice || index >= choice.count || choice.from.some((entry) => textKey(entry) === textKey(language))),
   );
   note("bonus language", "languages", picks.bonusLanguages, bonusLanguages);
 
@@ -236,9 +236,9 @@ export function reconcilePicks(
   const subclass = klass && (pickLevel === null || level >= pickLevel) ? picks.subclass : "";
   note("subclass", "subclass", [picks.subclass], [subclass]);
 
-  const proficient = new Set([...chosenSkills, ...racialSkills, ...backgroundSkills, ...granted].filter(Boolean).map(lower));
+  const proficient = new Set([...chosenSkills, ...racialSkills, ...backgroundSkills, ...granted].filter(Boolean).map(textKey));
   const expertisePicks = klass
-    ? unique(picks.expertisePicks.filter((skill) => proficient.has(lower(skill)))).slice(0, expertiseSlotsFor(klass.id, level))
+    ? unique(picks.expertisePicks.filter((skill) => proficient.has(textKey(skill)))).slice(0, expertiseSlotsFor(klass.id, level))
     : [];
   note("expertise", "expertise", picks.expertisePicks, expertisePicks);
 
@@ -270,9 +270,9 @@ export function reconcilePicks(
   // the class's (submit.ts finalCantrips), and read back they would count
   // against the class's allowance (issue #118).
   const racialKnown = new Set(
-    [racialCantrip, ...innateCantripsFor(race?.id ?? "", level)].filter(Boolean).map(lower),
+    [racialCantrip, ...innateCantripsFor(race?.id ?? "", level)].filter(Boolean).map(textKey),
   );
-  const classCantrips = unique(picks.cantrips).filter((name) => !racialKnown.has(lower(name)));
+  const classCantrips = unique(picks.cantrips).filter((name) => !racialKnown.has(textKey(name)));
   const cantrips = casts && cantripCap !== null ? classCantrips : [];
   note("cantrip", "spells", classCantrips, cantrips);
   const spells = casts
@@ -282,8 +282,8 @@ export function reconcilePicks(
       })
     : [];
   note("spell", "spells", picks.spells, spells);
-  const book = new Set(spells.map(lower));
-  const bookPrepared = unique(picks.bookPrepared).filter((name) => book.has(lower(name)));
+  const book = new Set(spells.map(textKey));
+  const bookPrepared = unique(picks.bookPrepared).filter((name) => book.has(textKey(name)));
   note("prepared", "spells", picks.bookPrepared, bookPrepared);
 
   return {
