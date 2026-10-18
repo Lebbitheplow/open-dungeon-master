@@ -9,7 +9,6 @@
 // callback.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import type { DmTurn } from "@/lib/db/dm-turns";
 import { buildPet, handleSummonPet } from "@/lib/dm/pet-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -19,7 +18,6 @@ export const isFindFamiliar = (spell: string) => textKey(spell) === "find famili
 
 export function castFindFamiliar(
   campaign: Campaign,
-  turn: DmTurn,
   // `castAs`: the name it is cast under, a table's workshop copy's own.
   input: { caster: CharacterSheet; castAs?: string; variant?: string; level?: number; reason?: string; sheets: CharacterSheet[]; sheetsById: Map<string, CharacterSheet> },
   cast: (args: Record<string, unknown>) => Record<string, unknown>,
@@ -35,7 +33,7 @@ export function castFindFamiliar(
   if ("error" in spent) {
     return spent;
   }
-  const bound = handleSummonPet(campaign, turn, JSON.stringify({ characterId: caster.id, kind: "familiar", form }), input.sheets, input.sheetsById);
+  const bound = handleSummonPet(campaign, JSON.stringify({ characterId: caster.id, kind: "familiar", form }), input.sheets, input.sheetsById);
   if ("error" in bound) {
     return bound;
   }

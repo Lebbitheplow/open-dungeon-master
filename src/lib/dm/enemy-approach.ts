@@ -145,7 +145,7 @@ export function approachTarget(
   const sightFrom = (at: XY) => {
     const to = nearestFootprintTile(target, theirs, at);
     const from = nearestFootprintTile(at, mine, to);
-    return hasLineOfSight(map.terrain, map.width, map.height, from.x, from.y, to.x, to.y);
+    return hasLineOfSight(map.terrain, map.width, from.x, from.y, to.x, to.y);
   };
   const reachesFrom = (at: XY) => {
     const distance = apart(at);

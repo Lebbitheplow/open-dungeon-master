@@ -337,7 +337,6 @@ export function buildPet(
 
 export function handleSummonPet(
   campaign: Campaign,
-  turn: DmTurn,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,

@@ -58,7 +58,7 @@ export function wallBetween(encounterId: string, refA: string, refB: string): bo
     return false;
   }
   const line = nearestSquares(a, b);
-  return !hasLineOfSight(map.terrain, map.width, map.height, line.from.x, line.from.y, line.to.x, line.to.y);
+  return !hasLineOfSight(map.terrain, map.width, line.from.x, line.from.y, line.to.x, line.to.y);
 }
 
 

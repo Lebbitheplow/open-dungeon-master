@@ -847,7 +847,6 @@ export function checkPcAttackRange(
   const sighted = hasLineOfSight(
     map.terrain,
     map.width,
-    map.height,
     line.from.x,
     line.from.y,
     line.to.x,

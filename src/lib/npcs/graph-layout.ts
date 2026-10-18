@@ -55,7 +55,7 @@ export function layoutGraph(input: LayoutInput): LayoutNode[] {
   const count = ids.length;
   const xs = new Float64Array(count);
   const ys = new Float64Array(count);
-  ids.forEach((id, index) => {
+  ids.forEach((_, index) => {
     const angle = (index / count) * Math.PI * 2 + random() * 0.4;
     xs[index] = width / 2 + Math.cos(angle) * radius * (0.7 + random() * 0.3);
     ys[index] = height / 2 + Math.sin(angle) * radius * (0.7 + random() * 0.3);

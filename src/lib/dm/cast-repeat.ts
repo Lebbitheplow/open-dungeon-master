@@ -4,7 +4,6 @@
 // cast-guard.ts, which sends a repeat here before any refusal of a new
 // casting is asked.
 
-import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
@@ -21,7 +20,6 @@ import { toolError } from "@/lib/dm/tool-errors";
 // spell says; the slot level is the one the casting was made from, read
 // from the audit trail, so an upcast bolt stays upcast.
 export function repeatSpell(
-  campaign: Campaign,
   sheet: CharacterSheet,
   // The encounter when a fight with turns is running, null otherwise.
   fight: Encounter | null,

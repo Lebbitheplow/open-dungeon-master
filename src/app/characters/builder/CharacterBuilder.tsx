@@ -406,7 +406,7 @@ function CharacterBuilderForm({
       ...abilitiesBlocks(derived, state, featJudge),
       ...racialFeatBlock(unmetFeatMessage(featJudge, state.feats.slice(0, race ? racialFeatCount(race.id) : 0))),
     ],
-    spells: [...spellsBlocks(state, derived, klass), ...(gear ? [gear] : [])],
+    spells: [...spellsBlocks(derived, klass), ...(gear ? [gear] : [])],
   };
   const blockers = {
     identity: owed.identity[0] ?? null,

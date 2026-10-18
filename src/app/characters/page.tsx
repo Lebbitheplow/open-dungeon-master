@@ -62,7 +62,7 @@ export default function CharactersPage() {
   const [authed, setAuthed] = useState(true);
   // A refused or failed read is shown in the server's words with a way to
   // ask again, never as "nothing here yet" (issue 140).
-  const { loaded, loadError, settle } = useLoadStatus();
+  const { loadError, settle } = useLoadStatus();
   const [reloads, setReloads] = useState(0);
   const [croppingId, setCroppingId] = useState("");
   const [cloningId, setCloningId] = useState("");

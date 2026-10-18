@@ -68,7 +68,7 @@ export function buildSeats(
   // a wall" means exactly what "cannot see through" means elsewhere.
   const blocked = map
     ? (ax: number, ay: number, bx: number, by: number) =>
-        !hasLineOfSight(map.terrain, map.width, map.height, ax, ay, bx, by)
+        !hasLineOfSight(map.terrain, map.width, ax, ay, bx, by)
     : undefined;
 
   return { seats, blocked };

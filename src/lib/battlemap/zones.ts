@@ -323,7 +323,7 @@ export function zoneStepCost(
 
 // The engine's terrain with every spell wall turned to rock, and every
 // passage a Passwall cut turned to floor.
-export function withZoneWalls(terrain: string, width: number, zones: SpellZone[]): string {
+export function withZoneWalls(terrain: string, zones: SpellZone[]): string {
   const shaping = zones.filter((zone) => rowOf(zone)?.blocks || rowOf(zone)?.opens);
   if (!shaping.length) {
     return terrain;
