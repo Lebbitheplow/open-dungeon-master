@@ -395,6 +395,49 @@ for (const viewport of ["desktop", "laptop", "phone"]) {
 for (const user of [world.owner, player, ...tourAccounts]) {
   setUserPassword(user.id, await hashPassword(PASSWORD), false);
 }
+// A variant human fighter whose stored Dexterity, 8, no longer meets the
+// two feats it holds (Skulker on the race, Defensive Duelist on its 4th
+// level improvement, both Dexterity 13): an edit keeps a feat the stored
+// character held, so one taken off can be put back (PR 381 follow-up).
+const HELD_FEATS_NAME = "Sable Quickstep";
+const sable = createCharacter(world.owner.id, 4, {
+  name: HELD_FEATS_NAME,
+  race: "variant_human",
+  class: "fighter",
+  subclass: "Champion",
+  background: "soldier",
+  alignment: "N",
+  // The standard array, Dexterity 8, and the race's +1 to Strength and Constitution.
+  abilities: { str: 16, dex: 8, con: 14, int: 12, wis: 14, cha: 10 },
+  maxHp: 36,
+  ac: 19,
+  acOverride: false,
+  speed: 30,
+  hitDice: { die: "d10", total: 4, spent: 0 },
+  proficiencies: {
+    saves: ["str", "con"],
+    skills: ["athletics", "intimidation", "perception", "survival", "stealth"],
+    expertise: [],
+    languages: ["Common", "Dwarvish"],
+    tools: ["dice set", "vehicles (land)"],
+    armor: ["light", "medium", "heavy", "shields"],
+    weapons: ["simple", "martial"],
+  },
+  equipment: [
+    { name: "Longsword", qty: 1, equipped: true },
+    { name: "Chain mail", qty: 1, equipped: true },
+    { name: "Shield", qty: 1, equipped: true },
+  ],
+  gold: 10,
+  copper: 0,
+  feats: ["Skulker", "Defensive Duelist"],
+  features: [{ name: "Fighting Style: Defense", source: "choice" }],
+  asiChoices: [{ mode: "feat", feat: "Defensive Duelist" }],
+  racialChoices: { asi: ["str", "con"], skills: ["stealth"] },
+  spellcasting: null,
+  notes: "",
+});
+
 // The lead runs the server too, for the admin settings (issue 255).
 setUserAdmin(world.owner.id, true);
 
@@ -416,6 +459,8 @@ const ids = {
   libraryName: LIBRARY_NAME,
   lifeCleric: wren.id,
   lifeClericName: LIFE_NAME,
+  heldFeats: sable.id,
+  heldFeatsName: HELD_FEATS_NAME,
   offerId: offer.id,
   offerSummary: offer.summary,
   quietId: quiet.id,

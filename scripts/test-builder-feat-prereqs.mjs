@@ -19,12 +19,12 @@ const { useBuilderDerived } = await import("../src/app/characters/builder/useBui
 const { srdRaceOptions, srdClassOptions, srdBackgroundOptions } = await import(
   "../src/app/characters/builder/useBuilderOptions.ts"
 );
-const { builderFeatJudge, judgeEntry, unmetFeatMessage } = await import(
+const { builderFeatCandidate, builderFeatJudge, judgeEntry, unmetFeatMessage } = await import(
   "../src/app/characters/builder/featPrereqs.ts"
 );
 const { abilitiesBlocker, ancestryBlocker } = await import("../src/app/characters/builder/submit.ts");
 const { SelectedPrerequisite } = await import("../src/app/characters/builder/AsiFeatEditor.tsx");
-const { checkPrerequisite, unmetPrerequisite } = await import("../src/lib/srd/legality/features.ts");
+const { checkPrerequisite, judgeFeats, unmetPrerequisite } = await import("../src/lib/srd/legality/features.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -175,6 +175,38 @@ test("a picked feat is rechecked when a score it depends on changes, flagged and
   const card = renderToStaticMarkup(createElement(SelectedPrerequisite, { id: "note", check }));
   assert.match(card, /id="note"/);
   assert.match(card, /Requirement not met: Needs Dexterity 13, you have 10/);
+});
+
+test("a feat held before an edit, taken off, can be put back from the pickers, as the save allows; a new one is still judged", () => {
+  // A stored variant human fighter holding Skulker, its Dexterity now 8.
+  const low = { str: 15, dex: 8, con: 13, int: 12, wis: 14, cha: 10 };
+  const fighter4 = [...withScores(low), (state) => state.changeLevel(4)];
+  // Skulker taken off the card: the race's feat slot is open again.
+  const { state, derived, race, klass, background } = runBuilder(fighter4);
+  assert.deepEqual(state.feats, []);
+  const facts = { state, derived, race, klass, background };
+  const editJudge = builderFeatJudge(facts, {}, ["Skulker", "Defensive Duelist"]);
+  const fresh = builderFeatJudge(facts, {});
+  for (const [name, needs] of [["Skulker", "Dexterity 13"], ["Defensive Duelist", "Dexterity 13"]]) {
+    // Search and browse both read judgeEntry; the race's picker and an
+    // improvement's (forSlot).
+    for (const forSlot of [false, true]) {
+      assert.equal(judgeEntry(editJudge, row(name), forSlot), null, `${name} held: offered again${forSlot ? " for an improvement" : ""}`);
+      assert.deepEqual(judgeEntry(fresh, row(name), forSlot), { blocked: true, note: `Needs ${needs}, you have 8` }, `${name} new: still refused`);
+    }
+  }
+  // A feat the character never held is judged on the edit too: Charisma 10
+  // and the open improvement's +2 still fall short of 13.
+  assert.equal(judgeEntry(editJudge, row("Inspiring Leader"))?.blocked, true);
+  assert.equal(judgeEntry(editJudge, row("Elven Accuracy"))?.blocked, true);
+  assert.equal(editJudge.held("skulker "), true, "held is read by name, as the save reads it");
+
+  // The save agrees: held, nothing to answer; new, refused.
+  const who = builderFeatCandidate(facts).who;
+  const featOf = () => ({ name: "Skulker", prerequisite: "Dexterity 13 or higher", desc: "" });
+  const server = (held) => judgeFeats({ sent: ["Skulker"], recorded: [], held, racialFeats: 1, unrecordedSlots: 0, featOf, who }).problems;
+  assert.deepEqual(server(["Skulker"]), []);
+  assert.equal(server([]).length, 1);
 });
 
 test("an improvement's feat is rechecked at the Abilities step's Continue", () => {
