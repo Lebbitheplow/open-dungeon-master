@@ -16,10 +16,12 @@ import {
   grantAction,
   type TurnBudget,
 } from "@/lib/dm/action-budget";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape, type TurnShape } from "@/lib/srd/condition-effects";
 import { combatRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { summonAttacksPerTurn } from "@/lib/dm/summon-rules";
+import { BEAST_FORMS } from "@/lib/srd/beast-forms";
+import { formSees } from "@/lib/srd/shape-rules";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 
 // The combatant the initiative pointer is currently on, or null out of
@@ -43,22 +45,33 @@ export function budgetFor(
   encounter: Encounter | null,
   ownerId: string,
   attacksAllowed: number,
-  // Extra actions per turn from effect conditions (Haste); only seeds a
-  // FRESH budget so spending one mid-turn sticks.
-  extraActions = 0,
+  // What the owner's conditions make of the turn (conditionTurnShape):
+  // Haste's extra action and Slow's limits, or a bare count of extra actions.
+  shape: number | TurnShape = 0,
 ): TurnBudget | null {
   if (!encounter || currentCombatantId(encounter) !== ownerId) {
     return null;
   }
+  const { extraActions, slowed } = typeof shape === "number" ? { extraActions: shape, slowed: false } : shape;
+  // Slow: one attack a turn, whatever Extra Attack would give.
+  const allowed = slowed ? 1 : attacksAllowed;
   if (budgetApplies(encounter.turnBudget, ownerId, encounter.round)) {
-    // attacksAllowed can change mid-turn (a level-up, a lead correction);
-    // the higher of the two is the fair reading.
+    const held = encounter.turnBudget;
+    // Haste landing mid-turn gives its action on this turn; one already
+    // given is not given again, and one spent stays spent. (A budget stored
+    // before the count was kept was seeded with it if it carries the field.)
+    const given = held.hasteGranted ?? (held.extraActions !== undefined ? extraActions : 0);
+    const gained = Math.max(0, extraActions - given);
     return {
-      ...encounter.turnBudget,
-      attacksAllowed: Math.max(encounter.turnBudget.attacksAllowed, attacksAllowed),
+      ...held,
+      // attacksAllowed can change mid-turn (a level-up, a lead correction);
+      // the higher of the two is the fair reading, unless Slow caps it.
+      attacksAllowed: slowed ? 1 : Math.max(held.attacksAllowed, allowed),
+      ...(gained ? { extraActions: (held.extraActions ?? 0) + gained, hasteGranted: extraActions } : {}),
+      ...(slowed ? { slowed: true } : {}),
     };
   }
-  return freshBudget({ ownerId, round: encounter.round, attacksAllowed, extraActions });
+  return freshBudget({ ownerId, round: encounter.round, attacksAllowed: allowed, extraActions, slowed });
 }
 
 export function storeBudget(encounter: Encounter, budget: TurnBudget) {
@@ -121,7 +134,15 @@ export function prepareReaction(
 // Attacks the Attack action grants this character: 1 plus Extra Attack.
 export function attacksAllowedFor(sheet: CharacterSheet): number {
   // A summoned creature's Attack action is its Multiattack (summon-rules.ts).
-  return summonAttacksPerTurn(sheet) ?? 1 + combatRiders(sheet).extraAttacks;
+  const summoned = summonAttacksPerTurn(sheet);
+  if (summoned !== null) {
+    return summoned;
+  }
+  // A beast form attacks as its Multiattack lets it; a Polymorph's beast
+  // has no Extra Attack of the character's (shape-rules.ts formSees).
+  const form = sheet.wildShape ? BEAST_FORMS.find((entry) => entry.name.toLowerCase() === sheet.wildShape?.form.toLowerCase()) : null;
+  const own = 1 + combatRiders(formSees(sheet)).extraAttacks;
+  return form ? Math.max(form.attacksPerTurn ?? 1, own) : own;
 }
 
 // Action Surge: one additional action on the turn it is used. Called by
@@ -134,7 +155,7 @@ export function grantActionSurge(campaignId: string, sheet: CharacterSheet): str
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
-    conditionExtraActions(sheet.conditions),
+    conditionTurnShape(sheet.conditions),
   );
   if (!encounter || !budget) {
     return null;

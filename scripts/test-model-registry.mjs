@@ -153,9 +153,9 @@ try {
     assert.equal(story("gpt-5.6", "openai").fit, "ok");
     assert.match(story("gpt-5.6", "openai").summary, /1\.1M context · tool calls · reasoning · sees pictures · \$4 in \/ \$20 out per M tokens/);
     const old = story("gpt-4", "openai");
-    assert.equal(old.fit, "warn");
+    assert.equal(old.fit, "unfit", "an 8K window cannot hold the DM's instructions");
     assert.match(old.warnings[0], /Deprecated/);
-    assert.match(old.warnings[1], /8K window is small/);
+    assert.match(old.warnings[1], /8K window is too small to narrate.*16K tokens to narrate and 24K to run fights/);
     const picture = story("gpt-image-1", "openai");
     assert.equal(picture.fit, "unfit");
     assert.match(picture.warnings.join(" "), /Does not write text/);
@@ -165,7 +165,9 @@ try {
     const utility = logic.assessModel({ role: "utility", id: "sao10k/l3-lunaris-8b", catalog: providers.openrouter.models["sao10k/l3-lunaris-8b"], listed: true });
     assert.equal(utility.fit, "warn", "the utility role only warns about tools");
     const local = logic.assessModel({ role: "story", id: "gpt-4", catalog: providers.openai.models["gpt-4"], listed: true, local: true });
-    assert.deepEqual(local.warnings, ["A 8K window is small for a campaign; the table will forget recent turns often."], "weights on the admin's disk are nobody's to retire");
+    assert.equal(local.fit, "warn", "a local row is a loose match for the weights, so a short window only warns");
+    assert.equal(local.warnings.length, 1, "weights on the admin's disk are nobody's to retire");
+    assert.match(local.warnings[0], /^An 8K window is too small to narrate/);
     assert.equal(local.summary, "8K context · tool calls", "and carry no hosting price");
     const doubt = logic.assessModel({ role: "story", id: "x", catalog: providers.openrouter.models["sao10k/l3-lunaris-8b"], listed: true, local: true });
     assert.equal(doubt.fit, "warn", "a loosely matched row without tools is a doubt for local weights");
@@ -452,7 +454,7 @@ try {
     assert.deepEqual(choices.models.map((model) => model.id), ["gpt-5.6", "gpt-4"], "the images and speech rows were left out");
     const old = choices.models[1];
     assert.equal(old.selected, true);
-    assert.equal(old.verdict.fit, "warn");
+    assert.equal(old.verdict.fit, "unfit", "its 8K window cannot narrate");
     assert.match(old.verdict.warnings[0], /Deprecated/);
     assert.equal(choices.models[0].catalog?.name, "GPT-5.6", "a private address still finds the row by id");
   });
@@ -532,14 +534,21 @@ try {
     const refused = await requestCustomMessage(compatUrl, "", "sk-test", [{ role: "user", content: "hi" }], {});
     assert.equal(refused.error?.status, 400);
     assert.match((await refused.error.json()).error, /lists more than one/);
+    // A blank model against a server that is down used to read as "lists
+    // more than one"; nothing was listed, so the table hears what happened.
+    const down = await requestCustomMessage("http://127.0.0.1:9/v1", "", "", [{ role: "user", content: "hi" }], {});
+    assert.equal(down.error?.status, 502);
+    assert.match((await down.error.json()).error, /Could not reach the backend at http:\/\/127\.0\.0\.1:9\/v1 to list its models/);
   });
 
   await test("the wizard's list is kept to the models that can narrate, led by the catalog's pick, with no name in code", () => {
     const listed = (ids) => ids.map((id) => ({ id, label: id }));
     const fit = store.fitListedModels("https://api.openai.com/v1", listed(["gpt-image-1", "gpt-5.6", "gpt-4", "my-finetune"]));
-    assert.deepEqual(fit.map((model) => model.id), ["gpt-5.6", "gpt-4", "my-finetune"], "the picture model is out; the unknown one stays");
-    assert.equal(fit[1].label, "gpt-4 (deprecated)");
+    assert.deepEqual(fit.map((model) => model.id), ["gpt-5.6", "my-finetune"], "the picture model and the 8K one are out; the unknown one stays");
     assert.equal(fit[0].context, 1_050_000);
+    const served = store.fitListedModels("https://api.openai.com/v1", [{ id: "gpt-4", label: "gpt-4", context: 32_768 }]);
+    assert.deepEqual(served.map((model) => model.id), ["gpt-4"], "a window the server reports outranks the catalog's");
+    assert.equal(served[0].label, "gpt-4 (deprecated)");
     assert.equal(store.recommendListed("https://api.openai.com/v1", fit), "gpt-5.6", "current, tools, reasoning, newest");
     assert.equal(store.recommendListed("https://openrouter.ai/api/v1", listed(["sao10k/l3-lunaris-8b", "google/gemini-3.5-flash"])), "google/gemini-3.5-flash");
     assert.equal(store.recommendListed("http://127.0.0.1:8001/v1", listed(["alpha-local", "beta-local"])), "alpha-local", "nothing known: the server's order");

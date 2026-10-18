@@ -3,7 +3,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { publicCampaign } from "@/lib/db/campaigns";
 import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
 import { createStarterCampaign, STARTER_ONE_SHOT } from "@/lib/starter/one-shot";
-import { narrationAvailable } from "@/lib/capabilities";
+import { narrationAvailable, NO_STORYTELLER_MESSAGE, storytellerConfigured } from "@/lib/capabilities";
 import { pregenSummaries } from "@/lib/starter/pregens";
 
 export const runtime = "nodejs";
@@ -45,6 +45,11 @@ export async function POST(request: Request) {
   const parsed = startSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+  // The one-shot is the AI's to run: without a storyteller there is nothing
+  // to start (the shells hide Quick start on the same answer, offersStory).
+  if (!(await storytellerConfigured())) {
+    return Response.json({ error: NO_STORYTELLER_MESSAGE, reason: "no_storyteller" }, { status: 409 });
   }
   // Narration starts on only where the server can read aloud (issue 275).
   const campaign = createStarterCampaign(user.id, { solo: parsed.data.solo, narration: await narrationAvailable() });

@@ -12,6 +12,7 @@ import { BLOCK_LIMITS, SAVE_ABILITY_IDS } from "@/lib/bestiary/block-check";
 import type { MonsterDraft } from "@/lib/bestiary/monster-draft";
 import type { MonsterSpell, MonsterSpellcasting } from "@/lib/dm/monster-abilities";
 import { Field, OptionalStepper, rowIcon } from "@/app/workshop/kit";
+import { textKey } from "@/lib/language/text-logic";
 
 // A monster's Spellcasting or Innate Spellcasting trait as the numbers the
 // engine casts with (src/lib/dm/enemy-casting.ts): the save DC and attack
@@ -154,7 +155,7 @@ export function SpellcastingEditor({ draft, onChange }: Props) {
                 label="Find a spell in the catalogue to add"
                 placeholder="Add a spell from the books..."
                 onPick={(entry) => {
-                  if (casting.spells.some((known) => known.name.toLowerCase() === entry.name.toLowerCase())) return;
+                  if (casting.spells.some((known) => textKey(known.name) === textKey(entry.name))) return;
                   const level = typeof entry.level === "number" ? entry.level : null;
                   set({ ...casting, spells: [...casting.spells, { name: entry.name, level }] });
                 }}

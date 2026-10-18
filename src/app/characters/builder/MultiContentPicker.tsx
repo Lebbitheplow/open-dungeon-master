@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "./useContentSearch";
+import { textKey } from "@/lib/language/text-logic";
 
 // `level` rides along for spells, so a cantrip picked here lands in the
 // cantrip list rather than among the levelled spells.
@@ -50,21 +51,21 @@ export default function MultiContentPicker({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [setOpen]);
 
-  const selectedLower = new Set(selectedNames.map((name) => name.trim().toLowerCase()));
-  const pendingLower = new Set(pending.map((pick) => pick.name.trim().toLowerCase()));
+  const selectedLower = new Set(selectedNames.map((name) => textKey(name)));
+  const pendingLower = new Set(pending.map((pick) => textKey(pick.name)));
   const trimmedQuery = query.trim();
 
   function togglePending(entry: PickerEntry) {
-    const key = entry.name.trim().toLowerCase();
+    const key = textKey(entry.name);
     setPending((picks) =>
-      picks.some((pick) => pick.name.trim().toLowerCase() === key)
-        ? picks.filter((pick) => pick.name.trim().toLowerCase() !== key)
+      picks.some((pick) => textKey(pick.name) === key)
+        ? picks.filter((pick) => textKey(pick.name) !== key)
         : [...picks, { name: entry.name, slug: entry.slug, level: entry.level }],
     );
   }
 
   function addCustom() {
-    const key = trimmedQuery.toLowerCase();
+    const key = textKey(trimmedQuery);
     if (!key || selectedLower.has(key) || pendingLower.has(key)) {
       return;
     }
@@ -102,7 +103,7 @@ export default function MultiContentPicker({
       {open && (results.length || trimmedQuery || unavailable) ? (
         <ul className="mt-1 max-h-48 overflow-y-auto rounded-lg panel panel-smoke">
           {results.map((entry) => {
-            const key = entry.name.trim().toLowerCase();
+            const key = textKey(entry.name);
             const alreadyOn = selectedLower.has(key);
             const picked = pendingLower.has(key);
             return (
@@ -147,8 +148,8 @@ export default function MultiContentPicker({
             );
           })}
           {trimmedQuery &&
-          !selectedLower.has(trimmedQuery.toLowerCase()) &&
-          !results.some((entry) => entry.name.trim().toLowerCase() === trimmedQuery.toLowerCase()) ? (
+          !selectedLower.has(textKey(trimmedQuery)) &&
+          !results.some((entry) => textKey(entry.name) === textKey(trimmedQuery)) ? (
             <li className="border-t border-stone-800">
               <button
                 type="button"

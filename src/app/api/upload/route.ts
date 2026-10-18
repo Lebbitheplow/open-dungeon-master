@@ -9,7 +9,12 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   dataUrl: z.string().regex(/^data:(image\/|application\/pdf)/),
-  name: z.string().min(1),
+  // The file's own name, echoed back for the sheet or handout that stores
+  // the upload: clipped to what a sheet's portrait holds.
+  name: z
+    .string()
+    .min(1)
+    .transform((value) => value.slice(0, 120)),
   type: z.string().min(1),
 });
 

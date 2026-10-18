@@ -37,6 +37,7 @@ import type { CameraEvent, HandoutShown, SceneState, TitleCard } from "@/lib/sce
 import type { MapPing } from "@/lib/dm/board-logic";
 import { capsForRole, type ViewerCaps } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { DmJobView } from "@/lib/dm/job-stage-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
@@ -206,6 +207,13 @@ export type CampaignState = {
   questsVersion: number;
   // Bumped on factions_updated so the Factions panel refetches.
   factionsVersion: number;
+  // Bumped when the campaign's world or a record it describes changed
+  // (world_updated, records_changed: both reach only the seats holding the
+  // story's secrets), so the World tab reads it again.
+  worldVersion: number;
+  // Bumped on lore_updated (a secret revealed to the party, WF-10), so the
+  // lore list reads itself again for this seat.
+  loreVersion: number;
   // Bumped on shops_updated so the market refetches (11.1).
   shopsVersion: number;
   // The last coin movement, for the purse FX.
@@ -261,6 +269,9 @@ export type CampaignState = {
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   lastSeq: number;
   dmStatus: DmStatus;
+  // The DM's job in flight: the step it is on and since when, for the
+  // status line and the lead's Stop (issue #383).
+  dmJob: DmJobView | null;
   // Background utility work in flight (compaction, chapter seal, world tick,
   // lore check, Ask). Separate from dmStatus, which describes the TURN: these
   // run outside one, several can overlap, and each carries its own label.
@@ -344,6 +355,8 @@ const initialState: CampaignState = {
   facts: [],
   relationshipsVersion: 0,
   factionsVersion: 0,
+  worldVersion: 0,
+  loreVersion: 0,
   shopsVersion: 0,
   coins: null,
   questsVersion: 0,
@@ -368,6 +381,7 @@ const initialState: CampaignState = {
   latestRoll: null,
   lastSeq: 0,
   dmStatus: "idle",
+  dmJob: null,
   utilityCalls: [],
   directorArm: null,
   mediaStatus: {},
@@ -691,6 +705,13 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "factions_updated":
           next.factionsVersion = state.factionsVersion + 1;
           return next;
+        case "world_updated":
+        case "records_changed":
+          next.worldVersion = state.worldVersion + 1;
+          return next;
+        case "lore_updated":
+          next.loreVersion = state.loreVersion + 1;
+          return next;
         case "calendar_updated":
           next.questsVersion = state.questsVersion + 1;
           return next;
@@ -930,6 +951,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "dm_status":
           next.dmStatus = payload.state as DmStatus;
           return next;
+        case "dm_job":
+          next.dmJob = (payload.job as DmJobView | null) ?? null;
+          return next;
         case "utility_calls":
           // The server sends the whole in-flight set each time, so a dropped
           // event self-heals on the next one rather than leaving a stuck chip.
@@ -1052,6 +1076,7 @@ const EPHEMERAL_EVENTS = [
   "cast_updated",
   "tts_stream",
   "dm_status",
+  "dm_job",
   "utility_calls",
   "dm_delta",
   // The turn withheld text it had streamed: the draft shows what it kept.
@@ -1090,6 +1115,14 @@ const EPHEMERAL_EVENTS = [
   // Prep came in from a workshop mid-campaign. Contentless: the handler
   // reloads the snapshot, and a reconnect resyncs anyway.
   "prep_imported",
+  // The campaign's world or a record it describes changed. Contentless, and
+  // sent only to the seats holding the story's secrets: the World tab reads
+  // the world again.
+  "world_updated",
+  "records_changed",
+  // Lore the table reads changed (a secret revealed to the party).
+  // Contentless, to every seat: each lore list asks for its own view.
+  "lore_updated",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 // Every type the stream listens for; an event outside it never reaches the
@@ -1221,6 +1254,7 @@ export function useCampaignStream(campaignId: string) {
             ? queuedIntents(data.messages ?? [], (data.beats ?? []).map((beat: { messageId: string }) => beat.messageId))
             : [],
           dmStatus: data.dmStatus ?? "idle",
+          dmJob: data.dmJob ?? null,
           utilityCalls: sortCalls(data.utilityCalls ?? []),
           narrationAudio: data.narrationAudio ?? {},
           ambience: data.ambience ?? EMPTY_AMBIENCE,

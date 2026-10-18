@@ -46,8 +46,7 @@
 // is company it did not earn.
 
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
-import { stemWord, stopWordsFor } from "../language/language.ts";
-import { words } from "../language/text-logic.ts";
+import { stemmerWords, stemWord, stopWordsFor } from "../language/language.ts";
 import { CHARS_PER_TOKEN } from "./context-budget.ts";
 import { computeIdf, fuseRRF, lexicalScore, rankByFusion, tokenize } from "./fusion-logic.ts";
 
@@ -59,17 +58,24 @@ export const CLOSE_SHARE = 0.5;
 const MIN_CORPUS = 3;
 
 // The lore block's room, measured from the prompt window rather than fixed:
-// the retrieval share (context-budget.ts computeBudgets) less what the house
-// rules took of it. Never under LORE_BUDGET_MIN, so a small window still
-// carries an entry or two (the old fixed 1,600 characters sat between the
-// two bounds), and never over LORE_BUDGET_MAX: six entries at the full
-// excerpt with a few pinned beside them, about 1,500 tokens.
+// the retrieval share (context-budget.ts computeBudgets), never under
+// LORE_BUDGET_MIN, so a small window still carries an entry or two (the old
+// fixed 1,600 characters sat between the two bounds), and never over
+// LORE_BUDGET_MAX: six entries at the full excerpt with a few pinned beside
+// them, about 1,500 tokens. What the house rules took comes off after the
+// floor, so lore and house rules together never pass the retrieval share's
+// room: house rules that spent all of it leave lore none (the context
+// audit's F12).
 export const LORE_BUDGET_MIN = 800;
 export const LORE_BUDGET_MAX = 6_000;
 
 export function loreBudgetChars(retrievalTokens: number, houseRulesChars: number): number {
-  const share = Math.floor((Number.isFinite(retrievalTokens) ? retrievalTokens : 0) * CHARS_PER_TOKEN) - Math.max(0, houseRulesChars);
-  return Math.max(LORE_BUDGET_MIN, Math.min(LORE_BUDGET_MAX, share));
+  const share = Math.floor((Number.isFinite(retrievalTokens) ? retrievalTokens : 0) * CHARS_PER_TOKEN);
+  const rules = Math.max(0, houseRulesChars);
+  // The room lore would have with no house rules, and what the share (or the
+  // floor, on a window too small for even that) leaves after them.
+  const alone = Math.max(LORE_BUDGET_MIN, Math.min(LORE_BUDGET_MAX, share));
+  return Math.min(alone, Math.max(0, Math.max(share, LORE_BUDGET_MIN) - rules));
 }
 
 export type LoreCandidate = {
@@ -151,8 +157,7 @@ function namedByAsk(candidates: LoreCandidate[], ask: string, language: TableLan
   const holders = new Map<string, { word: string; ids: string[] }>();
   for (const candidate of candidates) {
     const counted = new Set<string>();
-    for (const raw of words(`${candidate.title} ${candidate.tags.join(" ")}`.normalize("NFC"))) {
-      const word = raw.toLowerCase();
+    for (const word of stemmerWords(`${candidate.title} ${candidate.tags.join(" ")}`)) {
       const stem = stop.has(word) ? "" : stemWord(word, language);
       if (stem.length <= 2 || !asked.has(stem) || counted.has(stem)) {
         continue;

@@ -4,6 +4,7 @@
 // src/lib/db/prep-cards.ts; the tool is src/lib/dm/prep-card-tool.ts.
 
 import type { StoryArc } from "./arc-logic.ts";
+import { textKey } from "../language/text-logic.ts";
 
 export const PREP_ROLES = ["beat", "moment", "lore", "quest", "fight", "secret", "unplaced"] as const;
 export type PrepRole = (typeof PREP_ROLES)[number];
@@ -79,11 +80,11 @@ export function resolvePrepRef(arc: StoryArc | null, cards: PrepCard[], ref: str
     const beat = arc?.beats[Number(wanted) - 1];
     return beat ? byCardId(beat.cardId) : null;
   }
-  const lower = wanted.toLowerCase();
+  const lower = textKey(wanted);
   return (
-    cards.find((card) => card.title.trim().toLowerCase() === lower) ??
+    cards.find((card) => textKey(card.title) === lower) ??
     cards.find((card) => card.cardId === wanted) ??
-    cards.find((card) => card.title.toLowerCase().includes(lower)) ??
+    cards.find((card) => textKey(card.title).includes(lower)) ??
     null
   );
 }

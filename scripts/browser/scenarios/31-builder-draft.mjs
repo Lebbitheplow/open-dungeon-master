@@ -29,6 +29,9 @@ export default {
     const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
     await name.waitFor({ state: "visible", timeout: 30_000 });
     await name.fill(hero);
+    // No background is picked for the player, and the first step owes one.
+    await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
+    await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
     await t.tap(visible(page, root, /^Continue/).first());
     await sleep(900);
     // The first lineage card on the Ancestry step.

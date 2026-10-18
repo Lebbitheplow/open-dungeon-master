@@ -23,6 +23,7 @@ import {
 } from "@/lib/dm/effects-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Applying and lifting active effects, and the one helper every engine that
 // wants a modified number calls.
@@ -62,14 +63,14 @@ export const effectTools: ToolDef[] = [
               properties: {
                 field: { type: "string", enum: [...EFFECT_FIELDS] },
                 mode: { type: "string", enum: [...EFFECT_MODES] },
-                value: { type: "integer", description: "For add and override." },
+                value: { type: "integer", description: "For add and override. Override (a set-to value) is for ac and speed only; advantage and disadvantage for attack, save, check and initiative." },
               },
               required: ["field"],
             },
           },
           duration: { type: "string", enum: [...EFFECT_DURATIONS] },
           remaining: { type: "integer", minimum: 1, description: "Rounds or minutes it lasts." },
-          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"] },
+          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off: the target rolls it at the end of each of its turns (once per stretch of time outside a fight), and a success ends the effect." },
           saveDc: { type: "integer", minimum: 1, maximum: 30 },
           visible: { type: "boolean", description: "True when the party can tell it is there." },
           auraFeet: {
@@ -153,9 +154,10 @@ function resolveTarget(
   sheetsById: Map<string, CharacterSheet>,
 ): { kind: EffectTargetKind; id: string; name: string } | null {
   if (args.characterId) {
+    const wanted = textKey(args.characterId);
     const sheet =
       sheetsById.get(args.characterId) ??
-      sheets.find((entry) => entry.name.toLowerCase() === args.characterId?.toLowerCase());
+      sheets.find((entry) => textKey(entry.name) === wanted);
     if (sheet) {
       return { kind: "character", id: sheet.id, name: sheet.name };
     }
@@ -164,10 +166,11 @@ function resolveTarget(
     const encounter = getActiveEncounter(campaign.id);
     if (encounter) {
       const enemies = listEnemies(encounter.id);
+      const wanted = textKey(args.enemyId);
       const enemy =
         enemies.find((entry) => entry.id === args.enemyId) ??
         enemies.find(
-          (entry) => entry.displayName.toLowerCase() === args.enemyId?.toLowerCase(),
+          (entry) => textKey(entry.displayName) === wanted,
         );
       if (enemy) {
         return { kind: "enemy", id: enemy.id, name: enemy.displayName };
@@ -208,6 +211,7 @@ export function handleSetEffect(
     saveAbility: args.saveAbility,
     saveDc: args.saveDc,
     visible: args.visible,
+    targetKind: target.kind,
   });
   if ("error" in checked) {
     return checked;

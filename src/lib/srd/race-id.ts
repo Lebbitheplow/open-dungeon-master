@@ -5,6 +5,8 @@
 // HP rule in src/lib/srd/index.ts and src/lib/content/race-options.ts can all
 // share it without a cycle.
 
+import { textKey } from "@/lib/language/text-logic";
+
 // The SRD names its halfling subrace "lightfoot"; the bundled row, like the
 // expanded pack's, is "lightfoot_halfling".
 const ALIASES: Record<string, string> = { lightfoot: "lightfoot_halfling" };
@@ -72,10 +74,10 @@ export function speciesRulesFor(raceId: string, given?: SpeciesRules | null): Sp
 // Whether the species holds a trait of this name ("Dwarven Toughness" also
 // as the bundled list's "+1 HP per level (Dwarven Toughness)").
 export function speciesHoldsTrait(rules: SpeciesRules | null, name: string): boolean {
-  const wanted = name.toLowerCase();
+  const wanted = textKey(name);
   return (rules?.traitNames ?? []).some((trait) => {
-    const held = trait.toLowerCase();
-    return held === wanted || held.startsWith(`${wanted} (`) || held.endsWith(`(${wanted})`);
+    const note = /\(([^()]*)\)\s*$/.exec(trait)?.[1] ?? "";
+    return [trait, trait.replace(/\s*\(.*$/, ""), note].some((form) => textKey(form) === wanted);
   });
 }
 

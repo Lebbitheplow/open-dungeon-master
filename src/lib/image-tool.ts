@@ -18,7 +18,7 @@ export const generateImageTool = {
         prompt: {
           type: "string",
           description:
-            "Detailed visual prompt. Include subject, environment, composition, lighting, camera style, mood, and avoid text overlays. For established characters, describe visible physical features and whether each person is a man or woman; do not rely on character names inside the prompt.",
+            "Detailed visual prompt: subject, environment, composition, lighting and mood. Leave out the art style and medium (painting, photo, anime and the like): the campaign sets the look of every picture. No text overlays. For established characters, describe visible physical features and whether each person is a man or woman; do not rely on character names inside the prompt.",
         },
         reason: {
           type: "string",

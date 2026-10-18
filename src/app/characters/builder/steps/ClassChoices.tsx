@@ -11,6 +11,7 @@ import type { ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { PickPill, StepPanel } from "./shared";
+import { textKey } from "@/lib/language/text-logic";
 
 const optionCard = (selected: boolean) =>
   cn(
@@ -208,7 +209,7 @@ export function ClassChoices({
           <div className="grid gap-1.5 sm:grid-cols-2">
             {slot.options.map((option) => {
               const selected = slot.chosen.some(
-                (chosenName) => chosenName.toLowerCase() === option.n.toLowerCase(),
+                (chosenName) => textKey(chosenName) === textKey(option.n),
               );
               return (
                 <div key={option.n} className={cn(optionCard(selected), "flex items-start gap-1")}>

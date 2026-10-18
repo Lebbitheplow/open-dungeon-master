@@ -29,7 +29,7 @@ process.env.OPENAI_COMPAT_CONTEXT = String(WINDOW);
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { estimateTokens, responseReserveTokens, computeBudgets, promptWindowTokens } = await import("../src/lib/dm/context-budget.ts");
+const { estimateTokens, responseReserveTokens, computeBudgets, promptWindowTokens, HISTORY_MAX_TOKENS } = await import("../src/lib/dm/context-budget.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, setCampaignStatus, updateStorySettings, allocateSeq } =
   await import("../src/lib/db/campaigns.ts");
@@ -37,7 +37,7 @@ const { createSheet } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
-const { startDmTurn, dmTurnToolTokens, dmTurnTools, dmTurnToolCatalogue } = await import("../src/lib/dm/turn.ts");
+const { startDmTurn, dmTurnToolTokens, dmTurnTools, dmTurnToolCatalogue, dmTurnTuning } = await import("../src/lib/dm/turn.ts");
 const { toMcpTools } = await import("../src/lib/harness/render.ts");
 
 let mode = "narrate";
@@ -137,9 +137,11 @@ function table(title, lines) {
   );
   // The transcript was cut to the share of the reduced window, not the whole one.
   const kept = request.messages.filter((m) => /^Line \d+\./.test(String(m.content ?? "").replace(/^\[[^\]]*\] /, ""))).length;
-  const historyBudget = computeBudgets(promptWindowTokens(WINDOW, toolTokens)).history;
+  // Its share, plus what the rules and state left of theirs, up to the
+  // ceiling (context-budget.ts historyAllowanceTokens).
+  const historyBudget = Math.max(computeBudgets(promptWindowTokens(WINDOW, toolTokens)).history, HISTORY_MAX_TOKENS);
   const perLine = estimateTokens(`[Bram | attempt] Line 0. ${"The ford runs cold and the reeds whisper of bandits on the far bank. ".repeat(12)}`);
-  assert.ok(kept <= Math.floor(historyBudget / perLine) + 1, `kept ${kept} lines against a ${historyBudget}-token transcript share`);
+  assert.ok(kept <= Math.floor(historyBudget / perLine) + 1, `kept ${kept} lines against a ${historyBudget}-token transcript allowance`);
   assert.ok(kept < 81, "older lines were dropped");
   // The trace shows the tools and counts them in both figures.
   const trace = turn.contextTrace;
@@ -179,11 +181,15 @@ server.close();
   const harness = { ...chat, settings: { ...chat.settings, textProvider: "harness" } };
   const imageEnabled = chat.settings.imageGenerationEnabled && chat.settings.autoImages;
   const chatTokens = dmTurnToolTokens(chat);
+  // The set this window offers: on this test's window the full set would
+  // crowd the story, so the trimmed one is offered and charged (issue 383,
+  // src/lib/dm/model-tuning-logic.ts).
+  const lean = dmTurnTuning(chat).leanTools;
   assert.equal(
     chatTokens,
     Math.max(
-      estimateTokens(JSON.stringify(dmTurnTools(chat, false, imageEnabled, false))),
-      estimateTokens(JSON.stringify(dmTurnTools(chat, true, imageEnabled, false))),
+      estimateTokens(JSON.stringify(dmTurnTools(chat, false, imageEnabled, lean))),
+      estimateTokens(JSON.stringify(dmTurnTools(chat, true, imageEnabled, lean))),
     ),
     "a chat table is still charged the larger of its two sets",
   );

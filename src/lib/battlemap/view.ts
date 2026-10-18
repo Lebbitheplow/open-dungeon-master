@@ -7,6 +7,7 @@ import { breakDown } from "@/lib/dm/calendar";
 import { effectiveAmbient } from "@/lib/battlemap/daylight";
 import { weatherObscurementTiles } from "@/lib/srd/weather";
 import { listEffects } from "@/lib/db/active-effects";
+import { applyField, resolveField } from "@/lib/dm/effects-logic";
 import { getActiveBoard, getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
 import { speedFor } from "@/lib/srd";
 import { getMounts } from "@/lib/db/mounts";
@@ -119,7 +120,9 @@ export function pcMoveBudget(
     : flying ?? speedFor(sheet, {
         encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
       });
-  const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
+  // An active effect on their speed (set_effect) moves the base first.
+  const moved = Math.max(0, applyField(base, resolveField(listEffects(campaignId, { kind: "character", id: sheet.id }), "speed")));
+  const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, moved));
   // A scene has no rounds, so there is no per-round budget to spend: the
   // party walks the board while the DM describes it.
   if (encounter.kind === "scene") {

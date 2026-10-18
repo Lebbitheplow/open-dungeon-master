@@ -8,9 +8,13 @@
 //
 // Nothing is stored on OpenAI's side (store: false): the table keeps its own
 // transcript and sends it whole each call, as it does on Chat Completions.
-// The model's reasoning items are therefore not handed back between a call
-// and its result; it reasons afresh over the result, which OpenAI allows
-// and which costs nothing a Chat Completions table did not already pay.
+// The model's reasoning comes back encrypted (include
+// reasoning.encrypted_content) and rides on the assistant message as opaque
+// provider items, which go back ahead of that turn's calls on the next step,
+// so a tool loop keeps its train of thought without stored responses
+// (docs/agent-context-efficiency-audit-2026-10-17.md F14). They live only in
+// the DM turn's own conversation: the next turn is rebuilt from the
+// transcript, and no other backend ever sees them.
 import {
   BackendRefusal,
   forEachStreamLine,
@@ -94,6 +98,12 @@ export function toResponsesInput(messages: ChatMessage[]): ResponsesItem[] {
       continue;
     }
     if (message.role === "assistant") {
+      // The reasoning that led to this turn's calls, as the API returned it.
+      for (const item of Array.isArray(message.provider_items) ? message.provider_items : []) {
+        if (item && typeof item === "object" && (item as { type?: unknown }).type === "reasoning") {
+          items.push(item as ResponsesItem);
+        }
+      }
       const text = contentText(message.content);
       if (text) {
         items.push({ role: "assistant", content: text });
@@ -141,7 +151,13 @@ export function toResponsesInput(messages: ChatMessage[]): ResponsesItem[] {
 export function fromResponsesOutput(output: unknown): UpstreamChatMessage {
   const texts: string[] = [];
   const toolCalls: StreamedToolCall[] = [];
+  const reasoning: unknown[] = [];
   for (const raw of Array.isArray(output) ? output : []) {
+    // Kept whole and unread: the API's own item, handed back as it came.
+    if ((raw as { type?: unknown } | null)?.type === "reasoning") {
+      reasoning.push(raw);
+      continue;
+    }
     const item = raw as {
       type?: unknown;
       content?: unknown;
@@ -180,6 +196,7 @@ export function fromResponsesOutput(output: unknown): UpstreamChatMessage {
   return {
     content: texts.join(""),
     ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+    ...(reasoning.length ? { provider_items: reasoning } : {}),
   };
 }
 
@@ -198,6 +215,7 @@ export function responsesPayload(input: {
     ...input.sampling,
     max_output_tokens: input.maxOutputTokens,
     store: false,
+    include: ["reasoning.encrypted_content"],
     ...(input.stream ? { stream: true } : {}),
     ...(input.tools?.length
       ? { tools: toResponsesTools(input.tools), tool_choice: input.toolChoice ?? "auto" }
@@ -235,6 +253,7 @@ export async function readResponsesReply(
     onReasoningDelta?: StreamDeltaHandler;
     idleMs: number;
     onIdleAbort: () => void;
+    onChunk?: () => void;
   },
 ): Promise<ResponsesReply> {
   const { onDelta } = options;
@@ -315,7 +334,7 @@ export async function readResponsesReply(
         default:
           break;
       }
-    });
+    }, options.onChunk);
     if (failure) {
       return { failure };
     }

@@ -5,6 +5,7 @@
 // src/lib/db/item-proposals.ts plus the turn.ts interception.
 
 import type { ToolError } from "./tool-errors.ts";
+import { textKey } from "../language/text-logic.ts";
 
 export const PROPOSAL_TOOL_NAMES = new Set([
   "grant_item",
@@ -187,8 +188,8 @@ export type OfferSheet = {
 // The first row by that name, as removeItemMath takes it (an unidentified
 // twin sits in its own row and is not touched by a removal of the first).
 function heldQty(sheet: OfferSheet, name: string): number {
-  const wanted = name.trim().toLowerCase();
-  const row = sheet.equipment.find((item) => item.name.trim().toLowerCase() === wanted);
+  const wanted = textKey(name);
+  const row = sheet.equipment.find((item) => textKey(item.name) === wanted);
   return row ? Math.max(0, Number(row.qty) || 0) : 0;
 }
 
@@ -251,11 +252,11 @@ export function offerKey(toolName: string, args: OfferArgs): string | null {
   switch (toolName) {
     case "grant_item":
     case "remove_item":
-      return `${toolName}|${String(args.name ?? "").trim().toLowerCase()}|${qty}|${args.unidentified ? 1 : 0}`;
+      return `${toolName}|${textKey(String(args.name ?? ""))}|${qty}|${args.unidentified ? 1 : 0}`;
     case "modify_gold":
       return `${toolName}|${Number(args.delta ?? 0) || 0}|${String(args.coins ?? "").trim().toLowerCase()}`;
     case "purchase":
-      return `${toolName}|${args.action}|${String(args.item ?? args.name ?? "").trim().toLowerCase()}|${qty}|${Number(args.price ?? 0) || 0}`;
+      return `${toolName}|${args.action}|${textKey(String(args.item ?? args.name ?? ""))}|${qty}|${Number(args.price ?? 0) || 0}`;
     default:
       return null;
   }

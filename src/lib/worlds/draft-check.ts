@@ -19,6 +19,7 @@ import { findClass, findRace, SRD_BACKGROUNDS } from "@/lib/srd";
 import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { MAX_PACK_ART_BYTES, packArtSlots } from "@/lib/worlds/art";
 import { finishDraft, type WorldPackDraft } from "@/lib/worlds/draft";
+import { textKey } from "@/lib/language/text-logic";
 
 export type DraftCheck = {
   // Blocks export.
@@ -129,9 +130,9 @@ export function checkDraft(draft: WorldPackDraft): DraftCheck {
       if (entry.name.toLowerCase() === entry.id.toLowerCase()) {
         problems.push(`In ${key}, "${entry.id}" is renamed to its own id.`);
       }
-      if (names.has(entry.name.toLowerCase())) problems.push(`Two ${key} are both called "${entry.name}".`);
+      if (names.has(textKey(entry.name))) problems.push(`Two ${key} are both called "${entry.name}".`);
       if (ids.has(entry.id)) problems.push(`"${entry.id}" is reskinned twice in ${key}; only one would show.`);
-      names.add(entry.name.toLowerCase());
+      names.add(textKey(entry.name));
       ids.add(entry.id);
     }
   }
@@ -145,13 +146,13 @@ export function checkDraft(draft: WorldPackDraft): DraftCheck {
     const names = new Set<string>();
     const sources = new Set<string>();
     for (const entry of list) {
-      if (entry.name.toLowerCase() === entry.from.toLowerCase()) {
+      if (textKey(entry.name) === textKey(entry.from)) {
         problems.push(`In ${key}, "${entry.from}" is renamed to itself.`);
       }
-      if (names.has(entry.name.toLowerCase())) problems.push(`Two ${key} are both called "${entry.name}".`);
-      if (sources.has(entry.from.toLowerCase())) problems.push(`"${entry.from}" is reskinned twice in ${key}.`);
-      names.add(entry.name.toLowerCase());
-      sources.add(entry.from.toLowerCase());
+      if (names.has(textKey(entry.name))) problems.push(`Two ${key} are both called "${entry.name}".`);
+      if (sources.has(textKey(entry.from))) problems.push(`"${entry.from}" is reskinned twice in ${key}.`);
+      names.add(textKey(entry.name));
+      sources.add(textKey(entry.from));
     }
   }
 

@@ -70,6 +70,9 @@ export type BoardSnapshot = {
   terrain: string;
   legend: Record<string, string>;
   theme: string;
+  // Optional public visual binding; older board views can ignore it.
+  skin?: PlayerMapView["skin"];
+  genre?: string | null;
   ambient: string;
   outdoors: boolean;
   visible: number[];
@@ -92,7 +95,7 @@ export type BoardSnapshot = {
   // boardViews[].options), normalized to the fields, defaults filled in.
   options: OptionValues;
   viewer: { canDirect: boolean };
-  appearance: { theme: "night" | "day"; reducedMotion: boolean };
+  appearance: { theme: "night" | "day"; reducedMotion: boolean; audio?: { muted: boolean; volume: number } };
   round: number;
   turnName: string;
   // Spell areas on the squares this viewer has explored: how each is drawn
@@ -126,6 +129,7 @@ export function boardSnapshot(
   addonId: string,
   options: {
     canDirect: boolean;
+    genre?: string | null;
     appearance: BoardSnapshot["appearance"];
     looks?: Map<string, BoardLook>;
     intents?: TokenIntent[] | null;
@@ -144,6 +148,8 @@ export function boardSnapshot(
     terrain: view.terrain,
     legend: LEGEND,
     theme: view.theme,
+    skin: view.skin,
+    genre: options.genre ?? null,
     ambient: view.ambient,
     outdoors: view.outdoors,
     visible: view.visible,

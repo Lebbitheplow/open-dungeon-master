@@ -24,16 +24,31 @@ import { factsOnFileFor } from "@/lib/dm/fact-consolidation";
 import type { ChunkableMessage } from "@/lib/dm/scene-logic";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
+import { utilityContextTokens } from "@/lib/model-client";
+import { estimateTokens } from "@/lib/dm/context-budget";
+import { transcriptBudgetTokens } from "@/lib/dm/chapter-summary-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 // Rolling-summary compaction, mirroring the solo narrator: once the log
 // grows past a threshold, fold the oldest passages into the campaign summary.
+// It also runs as soon as the turn's prompt starts leaving uncovered lines
+// out (the context audit's F05): on a small window that happens long before
+// the threshold, and the lines that fell out were in no summary until then.
 const COMPACT_THRESHOLD = Number(process.env.DM_COMPACT_THRESHOLD || 120);
 const COMPACT_BATCH = 40;
+// Lines a turn may leave out before they are folded: a few exchanges, so a
+// table on a small window does not pay a utility call for every line.
+const EVICTION_MIN = 8;
+// The most one run folds, however many fell out: the batch is also bounded
+// by what the utility model's window holds (transcriptBudgetTokens).
+const COMPACT_BATCH_MAX = 80;
+const SUMMARY_REPLY_TOKENS = 900;
 
 // Recorded milestones in a seq range: the kinds a table would still be
 // talking about a month later. Routine item pickups are exactly what
-// compaction is for and are left out.
-function protectedMoments(
+// compaction is for and are left out. Chapter close reads them too, for the
+// record it keeps when no summary could be written.
+export function protectedMoments(
   campaignId: string,
   seqStart: number,
   seqEnd: number,
@@ -57,6 +72,9 @@ function protectedMoments(
 }
 
 const SUMMARY_MAX_CHARS = 8_000;
+
+const COMPACTION_SYSTEM =
+  "You maintain the canonical campaign memory for an ongoing D&D 5e game. Merge the existing summary with the new passages into one updated summary. Preserve plot threads, NPCs met, promises, injuries, loot, locations, and party decisions. Compact past-tense prose, at most 500 words. Output only the summary.";
 const MILESTONE_BLOCK_MAX = 1_500;
 const MILESTONE_HEADING = "Recorded milestones (verbatim from the server's record):";
 
@@ -64,7 +82,7 @@ const MILESTONE_HEADING = "Recorded milestones (verbatim from the server's recor
 // back in as "existing summary" on the next compaction, and without this the
 // model would fold the block into prose and then have a freshly rebuilt one
 // appended after it, saying the same thing twice and growing every round.
-function stripMilestoneBlock(summary: string): string {
+export function stripMilestoneBlock(summary: string): string {
   const index = summary.indexOf(MILESTONE_HEADING);
   return index < 0 ? summary : summary.slice(0, index).trimEnd();
 }
@@ -116,15 +134,17 @@ function compactionState(campaignId: string): CompactionState {
 // `now` are injectable for scripts/test-compaction-background.mjs.
 export function compactHistoryInBackground(
   campaignId: string,
-  run: (campaignId: string) => Promise<boolean> = maybeCompactHistory,
+  run: (campaignId: string, options?: { evicted?: number }) => Promise<boolean> = maybeCompactHistory,
   now = Date.now(),
+  // Uncovered lines the latest turn's prompt left out (ContextTrace.historyEvicted).
+  options: { evicted?: number } = {},
 ): boolean {
   const state = compactionState(campaignId);
   if (state.inFlight || now - state.failedAt < COMPACT_RETRY_MS) {
     return false;
   }
   state.inFlight = true;
-  void run(campaignId)
+  void run(campaignId, options)
     .then((ok) => {
       state.failedAt = ok ? 0 : Date.now();
     })
@@ -141,21 +161,41 @@ export function compactHistoryInBackground(
 // Folds the oldest uncovered passages into the summary when the log is
 // long enough. False only when the model gave nothing back; a log that is
 // still short is not a failure.
-export async function maybeCompactHistory(campaignId: string): Promise<boolean> {
+export async function maybeCompactHistory(campaignId: string, options: { evicted?: number } = {}): Promise<boolean> {
   const campaign = getCampaignById(campaignId);
-  const total = campaign ? countMessages(campaignId) : 0;
-  if (!campaign || total < COMPACT_THRESHOLD) {
+  if (!campaign) {
     return true;
   }
+  const total = countMessages(campaignId);
   const { summary, coveredCount } = getCampaignSummaryState(campaignId);
-  if (total - coveredCount < COMPACT_THRESHOLD) {
+  const evicted = Math.max(0, Math.floor(options.evicted ?? 0));
+  const overThreshold = total >= COMPACT_THRESHOLD && total - coveredCount >= COMPACT_THRESHOLD;
+  if (!overThreshold && evicted < EVICTION_MIN) {
     return true;
   }
 
-  const batch = listMessagesPage(campaignId, coveredCount, COMPACT_BATCH);
-  const transcript = batch
-    .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
-    .join("\n\n");
+  // As many as fell out (or the usual batch at the threshold), bounded by
+  // what the utility model can read in one call beside the summary.
+  const wanted = Math.min(COMPACT_BATCH_MAX, overThreshold ? Math.max(COMPACT_BATCH, evicted) : evicted);
+  const page = listMessagesPage(campaignId, coveredCount, wanted);
+  const existing = stripMilestoneBlock(summary);
+  const window = await utilityContextTokens(campaign.settings);
+  const budget = transcriptBudgetTokens(window, estimateTokens(COMPACTION_SYSTEM) + estimateTokens(existing) + 450, SUMMARY_REPLY_TOKENS);
+  const line = (message: (typeof page)[number]) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`;
+  const batch: typeof page = [];
+  let spent = 0;
+  for (const message of page) {
+    const cost = estimateTokens(line(message)) + 1;
+    if (batch.length && spent + cost > budget) {
+      break;
+    }
+    batch.push(message);
+    spent += cost;
+  }
+  if (!batch.length) {
+    return true;
+  }
+  const transcript = batch.map(line).join("\n\n");
 
   // Compaction is lossy by design, so tell the summarizer which moments the
   // server already knows were memorable. These come off the record
@@ -175,15 +215,12 @@ export async function maybeCompactHistory(campaignId: string): Promise<boolean> 
       [
         {
           role: "system",
-          content: withLanguage(
-            "You maintain the canonical campaign memory for an ongoing D&D 5e game. Merge the existing summary with the new passages into one updated summary. Preserve plot threads, NPCs met, promises, injuries, loot, locations, and party decisions. Compact past-tense prose, at most 500 words. Output only the summary.",
-            campaign.gameSettings.tableLanguage,
-          ),
+          content: withLanguage(COMPACTION_SYSTEM, campaign.gameSettings.tableLanguage),
         },
         {
           role: "user",
           content: [
-            `Existing summary:\n${stripMilestoneBlock(summary) || "(none yet)"}`,
+            `Existing summary:\n${existing || "(none yet)"}`,
             mustKeep
               ? `These moments are recorded milestones and MUST appear in the updated summary, named explicitly:\n${mustKeep}`
               : "",
@@ -193,7 +230,7 @@ export async function maybeCompactHistory(campaignId: string): Promise<boolean> 
             .join("\n\n"),
         },
       ],
-      {},
+      { meta: { task: "compaction" } },
     ),
   );
 
@@ -246,7 +283,7 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string, ba
           }\n\nTranscript:\n${transcript}`,
         },
       ],
-      {},
+      { meta: { task: "facts" } },
     ),
   );
   if (error) {
@@ -309,8 +346,8 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string, ba
     console.error("[facts] compaction consolidation failed", factError);
   }
   for (const entry of parsed.slice(0, 10)) {
-    const name = String(entry.characterName ?? "").trim().toLowerCase();
-    const sheet = sheets.find((candidate) => candidate.name.toLowerCase() === name);
+    const name = textKey(String(entry.characterName ?? ""));
+    const sheet = sheets.find((candidate) => textKey(candidate.name) === name);
     const kind = String(entry.kind ?? "story") as CharacterEventKind;
     const summary = String(entry.summary ?? "").trim().slice(0, 300);
     if (!sheet || !summary || !CHARACTER_EVENT_KINDS.includes(kind)) {

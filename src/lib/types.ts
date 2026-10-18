@@ -35,6 +35,21 @@ export function isProseSize(value: unknown): value is ProseSize {
   return typeof value === "string" && PROSE_SIZE_VALUES.includes(value as ProseSize);
 }
 
+// The look of a campaign's generated maps and scene pictures
+// (src/lib/art-direction.ts). "setting" follows the genre or world pack.
+export const ART_STYLES = ["setting", "painted", "ink", "realistic", "comic", "custom"] as const;
+
+export type ArtStyle = (typeof ART_STYLES)[number];
+
+export function isArtStyle(value: unknown): value is ArtStyle {
+  return typeof value === "string" && (ART_STYLES as readonly string[]).includes(value);
+}
+
+// A custom style's words go first in every prompt, and the CLIP encoders
+// most local models use read only about 77 tokens, so a long style would
+// push the place or the scene out of what the model sees.
+export const ART_STYLE_TEXT_MAX = 200;
+
 export type Attachment = {
   id: string;
   name: string;
@@ -114,6 +129,11 @@ export type StorySettings = {
   aspect: AspectPreset;
   imageGenerationEnabled: boolean;
   autoImages: boolean;
+  // How the maps and scene pictures look. "custom" reads the two texts; an
+  // empty one keeps the setting's style for that kind of picture.
+  artStyle: ArtStyle;
+  artStyleMap: string;
+  artStyleScene: string;
   proseSize: ProseSize;
 };
 

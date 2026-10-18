@@ -4,6 +4,8 @@
 // scripts/test-rules-chunk.mjs can load it directly; the impure rim is
 // src/lib/db/rules.ts.
 
+import { textKey } from "../language/text-logic.ts";
+
 export const HOUSE_RULES_MAX = 20_000;
 const CHUNK_MIN = 300;
 const CHUNK_MAX = 900;
@@ -108,7 +110,7 @@ export function chunkHouseRules(text: string): RuleChunkDraft[] {
 }
 
 function fingerprint(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, " ").slice(0, 80);
+  return textKey(text).slice(0, 80);
 }
 
 // Carries enabled/pinned flags across a re-chunk: a chunk keeps its flags
@@ -138,14 +140,13 @@ export function carryChunkFlags(
 }
 
 export function scoreRuleByKeywords(query: string, chunk: RuleChunkDraft): number {
-  const words = query
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
+  const words = textKey(query)
+    .split(" ")
     .filter((word) => word.length > 2);
   if (!words.length) {
     return 0;
   }
-  const haystack = `${chunk.heading} ${chunk.text}`.toLowerCase();
+  const haystack = textKey(`${chunk.heading} ${chunk.text}`);
   let hits = 0;
   for (const word of words) {
     if (haystack.includes(word)) {
@@ -205,13 +206,20 @@ export function renderVariantRules(variant: VariantRules): string {
 }
 
 // The HOUSE RULES prompt block: pinned enabled chunks first, then the
-// retrieved ones, cut off at the character budget.
-export function renderHouseRules(
+// retrieved ones, inside the character budget. The budget is the one the
+// selector decided with (context-retrieval.ts passes the retrieval share), so
+// a document chosen to ride whole is rendered whole; a fixed 1,200 used to
+// cut it to its first sections (the context audit's F12). A section that does
+// not fit is skipped and later, shorter ones still try; the ones left out are
+// named at the end so the model knows they exist.
+export function renderHouseRulesWithTrace(
   pinned: RuleChunkDraft[],
   retrieved: RuleChunkDraft[],
   budget = 1_200,
-): string {
+): { text: string; shown: string[]; omitted: string[] } {
   const lines: string[] = [];
+  const shown: string[] = [];
+  const omitted: string[] = [];
   let used = 0;
   let retrievedShown = false;
   const seen = new Set<string>();
@@ -221,20 +229,38 @@ export function renderHouseRules(
       continue;
     }
     seen.add(key);
+    const label = chunk.heading || chunk.text.slice(0, 40);
     const line = `- ${chunk.heading ? `${chunk.heading}: ` : ""}${chunk.text}`;
     if (used + line.length > budget) {
-      break;
+      // Only what the table set to always ride, or what this moment named,
+      // is worth naming when left out; a retrieved near-match simply waits.
+      if (index < pinned.length) {
+        omitted.push(label);
+      }
+      continue;
     }
     lines.push(line);
+    shown.push(label);
     used += line.length;
     retrievedShown ||= index >= pinned.length;
   }
-  if (!lines.length) {
-    return "";
+  if (!lines.length && !omitted.length) {
+    return { text: "", shown, omitted };
   }
   // Retrieval has no relevance cut-off (fusion-logic.ts).
   const picked = retrievedShown
     ? ". The sections picked for this moment are the nearest matches, nearest first; apply only those that bear on it"
     : "";
-  return `HOUSE RULES (set by the party lead; they override the standard rules${picked}):\n${lines.join("\n")}`;
+  const left = omitted.length
+    ? `\n(Also in effect, left out here for room: ${omitted.slice(0, 8).join("; ")}${omitted.length > 8 ? `; and ${omitted.length - 8} more` : ""}.)`
+    : "";
+  return {
+    text: `HOUSE RULES (set by the party lead; they override the standard rules${picked}):\n${lines.join("\n")}${left}`,
+    shown,
+    omitted,
+  };
+}
+
+export function renderHouseRules(pinned: RuleChunkDraft[], retrieved: RuleChunkDraft[], budget = 1_200): string {
+  return renderHouseRulesWithTrace(pinned, retrieved, budget).text;
 }

@@ -28,6 +28,7 @@ import type { StreamedToolCall } from "@/lib/model-client";
 import { senseCheckFailure } from "@/lib/srd/sense-checks";
 import { sightRotPenalty } from "@/lib/srd/afflictions";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export { rollArgsSchema, rollDcFor, type RollArgs } from "@/lib/dm/roll-args";
 
@@ -344,7 +345,7 @@ export function resolveRollExpression(
       ? rollDerivation(sheet.conditions, derivationKind, derivationAbility, {
           rageSuppressed: wearsHeavyArmor(sheet.equipment),
         })
-      : { advantage: "none" as const, autoFail: false, notes: [] };
+      : { advantage: "none" as const, sources: [], autoFail: false, notes: [] };
   if (derivation.autoFail) {
     return { autoFail: true, detail: args.ability ?? "", notes: derivation.notes };
   }
@@ -438,7 +439,7 @@ export function resolveRollExpression(
     args.advantage ?? "none",
     ...(extras?.effectAdvantage ? ["advantage" as const] : []),
     ...(extras?.effectDisadvantage ? ["disadvantage" as const] : []),
-    derivation.advantage,
+    ...derivation.sources,
     exhaustion.advantage,
     ...effects.advantageSources,
     ...(helped ? ["advantage" as const] : []),
@@ -695,7 +696,7 @@ export function resolveSheetRef(
   }
   return (
     sheetsById.get(trimmed) ??
-    sheets.find((entry) => entry.name.toLowerCase() === trimmed.toLowerCase()) ??
+    sheets.find((entry) => textKey(entry.name) === textKey(trimmed)) ??
     null
   );
 }

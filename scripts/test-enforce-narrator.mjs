@@ -711,29 +711,71 @@ await test("Every call tells the server whether to reason: the tool decisions do
   assert.ok(model.readerRequests.every((body) => thinking(body) === false), "the claims reader reasons");
 });
 
-await test("Prose read before the turn's attack resolved is read again by the guard for what that attack lets it check.", async () => {
+// The default local model, asked to stab a bandit, wrote the stab landing
+// and a second character's blow with no tool behind either. In a fight a hit
+// or a miss is asked of every reply from the start, and one on an enemy no
+// tool touched this turn is held back once while the model rolls it.
+await test("In a fight, a reply that ends the turn on a blow no tool rolled is held back, and the attack is rolled before the narration.", async () => {
+  const enemy = await karaUp();
+  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
+  world.clearDice();
+  world.dice(2, 10, 10);
+  model.script([
+    reply({ text: "Kara's blade bites into the goblin." }),
+    reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, weapon: "Longsword" })] }),
+    reply({ text: "Kara's swing goes wide, and the goblin snarls." }),
+  ]);
+  model.claims([[{ kind: "hit", target, quote: "Kara's blade bites into the goblin." }], [], []]);
+  const message = await model.turn(world, "I attack the goblin.", kara.id);
+  world.clearDice();
+  assert.match(model.readerRequests[0]?.messages.at(-1)?.content ?? "", /Ask: hit, miss/, "the reply was not asked about blows");
+  assert.match(JSON.stringify(model.requests[1].messages), /resolves an attack that no tool rolled this turn/, "the blow was not held back");
+  assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "the rolled swing missed");
+  const text = message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim() ?? "";
+  assert.doesNotMatch(text, /bites into the goblin/, "the unrolled blow reached the table");
+  assert.match(text, /goes wide/);
+});
+
+// Beside another call the turn goes on, so the prose stays until the guard
+// rules on it: here against the swing the turn went on to roll.
+await test("A blow written beside another call is ruled by the guard against the attack the turn then rolled.", async () => {
   const enemy = await karaUp();
   const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
   const rewrite = "Kara's blade whistles past the goblin, and the creature snarls as it circles back toward her with its club raised, looking for an opening.";
   world.clearDice();
   world.dice(2, 10, 10);
   model.script([
-    // Read at once, when no attack had resolved: nobody asked it about hits.
     reply({ text: "Kara's blade bites into the goblin.", calls: [call("search_lore", { query: "goblin" })] }),
     reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, weapon: "Longsword" })] }),
     reply({ text: "The goblin snarls." }),
     reply({ text: rewrite }),
   ]);
-  // The two replies' own reads find nothing they were asked; the guard's
-  // read of the first reply, now asked about the miss, finds the hit.
-  model.claims([[], [], [{ kind: "hit", target, quote: "Kara's blade bites into the goblin." }]]);
+  model.claims([[{ kind: "hit", target, quote: "Kara's blade bites into the goblin." }], [], []]);
   const message = await model.turn(world, "I attack the goblin.", kara.id);
   world.clearDice();
   assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "the swing was meant to miss");
-  const guardRead = model.readerRequests[2]?.messages.at(-1)?.content ?? "";
-  assert.match(guardRead, /Ask: hit, miss/, "the guard never asked about the attack");
-  assert.match(guardRead, /bites into the goblin/, "the guard did not read the first reply again");
+  assert.match(JSON.stringify(model.requests.at(-1).messages), /MISSED, but the narration lands it/, "the guard did not rule on it");
   assert.equal(message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim(), rewrite);
+});
+
+await test("A second blow written past the held-back one is ruled at the end of the turn and rewritten from the real results.", async () => {
+  const enemy = await karaUp();
+  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
+  const rewrite = "Kara closes on the goblin, blade raised, and it bares its teeth at her. What does she do?";
+  model.script([
+    reply({ text: "Kara's blade bites into the goblin." }),
+    reply({ text: "Kara's sword cuts the goblin deep." }),
+    reply({ text: rewrite }),
+  ]);
+  model.claims([
+    [{ kind: "hit", target, quote: "Kara's blade bites into the goblin." }],
+    [{ kind: "hit", target, quote: "Kara's sword cuts the goblin deep." }],
+    [],
+  ]);
+  const message = await model.turn(world, "I attack the goblin.", kara.id);
+  assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "nothing was rolled, so nothing changed");
+  assert.match(JSON.stringify(model.requests.at(-1).messages), /no attack on .* was rolled this turn, but the narration resolves one/, "the guard did not rule on it");
+  assert.equal(message?.content.trim(), rewrite);
 });
 
 // ---- the Hand's intent ----

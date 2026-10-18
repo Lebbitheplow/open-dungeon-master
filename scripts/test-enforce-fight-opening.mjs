@@ -25,7 +25,7 @@ import { caster } from "./lib/enforce-spell-kit.mjs";
 const { test, finish } = suite("test-enforce-fight-opening");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
 const kit = await combatKit(world);
-const { unrolledFigure, unrolledDamagePrompt } = await import("../src/lib/dm/engine-boundary.ts");
+const { normalizeCreatureName, resolveOutcomes, ruleClaims, unrolledBlow, unrolledFigure, unrolledDamagePrompt } = await import("../src/lib/dm/engine-boundary.ts");
 const { THIS_MOMENT_HEADING } = await import("../src/lib/prompt-boundary.ts");
 const { getBattleMapForEncounter, listTokens } = await import("../src/lib/db/battle-maps.ts");
 const { runAsk } = await import("../src/lib/dm/ask.ts");
@@ -57,6 +57,26 @@ await test("A damage figure no tool rolled is found; no claim, or a figure alrea
   // A chat model reads the game state's turn-to-turn part as a user message; its numbers are still no table note.
   const moment = [...input, { role: "user", content: `${THIS_MOMENT_HEADING}\nRecent rolls:\n- Alden Veyr: damage rolled 8\n\n=== END GAME STATE ===` }];
   assert.equal(unrolledFigure([EIGHT], moment), "8 damage.");
+});
+
+// In a fight, a hit or a miss on an enemy no tool touched this turn was
+// resolved by the prose alone; one the turn did touch (an area's save, a
+// swing) is the guard's to check against what it rolled.
+await test("A blow on a live enemy no tool touched is found, numbered twins included; a touched one, or no fight, is not.", () => {
+  const live = { enemies: [{ id: "e1", name: "Bandit 1", hp: 11, maxHp: 11, status: "alive" }, { id: "e2", name: "Bandit 2", hp: 11, maxHp: 11, status: "alive" }] };
+  const target = normalizeCreatureName("Bandit 1");
+  const hit = { kind: "hit", target, quote: "your shortsword finds its mark in his ribs" };
+  const untouched = resolveOutcomes([], live);
+  assert.equal(unrolledBlow([hit], untouched), hit.quote);
+  assert.match(ruleClaims([hit], untouched)[0]?.detail ?? "", /no attack on Bandit 1 was rolled this turn/);
+  // An area spell's row names the bandit: its save was rolled.
+  const area = resolveOutcomes([{ name: "aoe_damage", arguments: "{}", result: { results: [{ target: "Bandit 1", hp: "4/11" }] } }], live);
+  assert.equal(unrolledBlow([hit], area), null);
+  assert.deepEqual(ruleClaims([hit], area), []);
+  assert.equal(unrolledBlow([hit], resolveOutcomes([], null)), null, "no fight runs");
+  // Bandit 1 and Bandit 2 key alike: with neither touched, a blow on either was unrolled.
+  const swungAtTwo = resolveOutcomes([{ name: "pc_attack", arguments: "{}", result: { hit: true, target: "Bandit 2", targetHp: "5/11" } }], live);
+  assert.equal(unrolledBlow([hit], swungAtTwo), null, "a swing at Bandit 2 may be the one the prose means");
 });
 
 // ---- the turn loop ----

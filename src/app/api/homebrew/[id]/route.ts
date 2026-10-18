@@ -6,6 +6,7 @@ import { patchHomebrewSchema } from "@/lib/schemas/homebrew";
 import { forgetSpeciesRules } from "@/lib/characters/species-rules";
 import { forgetTableFeats } from "@/lib/db/table-feats";
 import { forgetTableHazards } from "@/lib/db/table-hazards";
+import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export async function PATCH(
   }
   // A rename to a published name is refused; an entry saved under one before
   // the rule keeps its name (and the editor says what that means).
-  const renamed = parsed.data.name !== undefined && parsed.data.name.trim().toLowerCase() !== existing.name.trim().toLowerCase();
+  const renamed = parsed.data.name !== undefined && textKey(parsed.data.name) !== textKey(existing.name);
   const published = renamed ? serverPublishedNameProblem(existing.kind, parsed.data.name ?? "") : null;
   if (published) {
     return Response.json({ error: published }, { status: 400 });

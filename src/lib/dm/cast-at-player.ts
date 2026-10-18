@@ -34,6 +34,7 @@ import { sanctuaryWard } from "@/lib/dm/enemy-conditions";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { outOfReach } from "@/lib/dm/spell-planes";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // cast_at_player: a save forced on ONE character, by an enemy's spell or
 // ability or by a hazard (SRD 5.1, Saving Throws). The mirror of
@@ -85,7 +86,7 @@ export function trackEnemyConcentration(
   if (!resolved?.concentration) {
     return null;
   }
-  if (enemy.concentration && enemy.concentration.toLowerCase() !== resolved.name.toLowerCase()) {
+  if (enemy.concentration && textKey(enemy.concentration) !== textKey(resolved.name)) {
     clearSpellConditionsByName(campaign, enemy.concentration, undefined, enemy.id);
   }
   setEnemyConcentration(enemy.id, resolved.name, concentrationRoundsFor(resolved.name));
@@ -124,13 +125,17 @@ export function layEnemyCondition(
 ): Record<string, unknown> {
   const fresh = getSheetById(sheet.id) ?? sheet;
   if (use?.spellCondition) {
-    return handleSetCondition(campaign, turn.id, fresh, { condition }, reason, {
-      spellEffect: spellConditionMeta(
-        use.spellCondition,
-        { spell: use.name, casterId: use.enemy.id, slotLevel: use.slotLevel },
-        { ability: save.ability, dc: save.dc },
-      ),
-    });
+    // The whole of what the spell lays, as a character's spell lays it on a
+    // monster: Hypnotic Pattern's charmed creature is incapacitated too.
+    const spellEffect = spellConditionMeta(
+      use.spellCondition,
+      { spell: use.name, casterId: use.enemy.id, slotLevel: use.slotLevel },
+      { ability: save.ability, dc: save.dc },
+    );
+    const first = handleSetCondition(campaign, turn.id, fresh, { condition }, reason, { spellEffect });
+    const also = (use.spellCondition.also ?? []).filter((name) => name.toLowerCase() !== condition.toLowerCase());
+    const landed = also.filter((name) => !("error" in handleSetCondition(campaign, turn.id, getSheetById(sheet.id) ?? fresh, { condition: name }, reason, { spellEffect })));
+    return landed.length && !("error" in first) ? { ...first, alsoApplied: landed } : first;
   }
   // The block's own words for how long it lasts (monster-abilities.ts): a
   // count, a repeat save, a long rest, or a cure. Only a condition the block
@@ -397,7 +402,7 @@ export function handleCastAtPlayer(
       sheetsById,
     );
     if (!("error" in applied)) {
-      base.conditionApplied = condition;
+      base.conditionApplied = [condition, ...(Array.isArray(applied.alsoApplied) ? applied.alsoApplied : [])].join(", ");
       base.duration = rounds
         ? `${rounds} round${rounds === 1 ? "" : "s"}${saveEnds ? `, or until a successful ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns` : ""}`
         : `until they succeed on a ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns`;

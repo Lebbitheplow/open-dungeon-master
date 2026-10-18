@@ -12,7 +12,7 @@ import { navigateTo } from "@/lib/navigation";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import CharacterBuilder, { type BuilderResult } from "@/app/characters/builder/CharacterBuilder";
-import type { BuilderRole } from "@/app/characters/builder/steps/IdentityStep";
+import type { BuilderRole } from "@/app/characters/builder/steps/FinishStep";
 import { refusalText } from "@/app/characters/builder/refusal";
 
 type LibraryCharacter = {

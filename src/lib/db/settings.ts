@@ -3,7 +3,7 @@ import { openAiImagesConfigured, openAiImagesNeedModel } from "@/lib/openai-imag
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { isDeviceWorld } from "@/lib/server-env";
 import { isLocalTextModelId, isTextProvider } from "@/lib/text-models";
-import { isImageBackend, isProseSize } from "@/lib/types";
+import { ART_STYLE_TEXT_MAX, isArtStyle, isImageBackend, isProseSize } from "@/lib/types";
 import type { StorySettings } from "@/lib/types";
 
 // Merge stored campaign StorySettings over the env-configured defaults and
@@ -70,6 +70,14 @@ export function normalizeSettings(
   if (typeof merged.autoImages !== "boolean") {
     merged.autoImages = defaultSettings.autoImages;
   }
+
+  if (!isArtStyle(merged.artStyle)) {
+    merged.artStyle = defaultSettings.artStyle;
+  }
+  merged.artStyleMap =
+    typeof merged.artStyleMap === "string" ? merged.artStyleMap.trim().slice(0, ART_STYLE_TEXT_MAX) : "";
+  merged.artStyleScene =
+    typeof merged.artStyleScene === "string" ? merged.artStyleScene.trim().slice(0, ART_STYLE_TEXT_MAX) : "";
 
   if (!isProseSize(merged.proseSize)) {
     merged.proseSize = defaultSettings.proseSize;

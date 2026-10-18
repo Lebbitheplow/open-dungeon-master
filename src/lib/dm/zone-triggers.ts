@@ -40,7 +40,7 @@ import { saveDamageTaken } from "@/lib/srd/trait-rules";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { laySpellConditionsOnEnemy } from "@/lib/dm/spell-effects";
-import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -143,15 +143,18 @@ function strike(
     if (!enemy || enemy.status !== "alive") {
       return [];
     }
-    if (trigger.condition && holds(enemy.conditions, trigger.condition) && !dice) {
+    // Already held by what the area lays and nothing more to roll: only a
+    // concentration save is left to ask.
+    const held = Boolean(trigger.condition && holds(enemy.conditions, trigger.condition) && !dice);
+    if (held && !trigger.concentrationSave) {
       return [];
     }
     const immune = trigger.immuneSucceeds && new RegExp(`\\b${trigger.immuneSucceeds}\\b`, "i").test(enemy.stats.immune ?? "");
-    const save = trigger.save && !immune
+    const save = trigger.save && !immune && !held
       ? rollEnemySave(campaign.id, enemy, trigger.save, dc, { magical: true, resist: Boolean(trigger.condition) && bindsWorthResisting([trigger.condition ?? ""]), record: { detail: `${enemy.displayName}: ${trigger.save.toUpperCase()} save against ${zone.spell}` } })
       : null;
-    const failed = trigger.save ? !immune && !save?.success : true;
-    if (trigger.save) {
+    const failed = !held && (trigger.save ? !immune && !save?.success : true);
+    if (trigger.save && !held) {
       lines.push(`${enemy.displayName} ${failed ? "fails" : "makes"} its ${trigger.save.toUpperCase()} save against ${zone.spell} (DC ${dc}).`);
     }
     let dealt = 0;
@@ -167,7 +170,18 @@ function strike(
     zone.dealt = (zone.dealt ?? 0) + dealt;
     const standing = getEnemy(enemy.id);
     if (failed && standing?.status === "alive") {
-      lines.push(...afterFailOnEnemy(campaign, map, zone, trigger, standing, dc));
+      lines.push(...afterFailOnEnemy(campaign, map, zone, trigger, standing));
+    }
+    // Sleet Storm's concentration save is its own, whatever the DEX save did.
+    const holding = getEnemy(enemy.id);
+    if (trigger.concentrationSave && holding?.status === "alive" && holding.concentration) {
+      const kept = rollEnemySave(campaign.id, holding, "con", dc, { magical: true, record: { detail: `${holding.displayName}: CON save to keep concentration in ${zone.spell}` } });
+      if (!kept.success) {
+        const spell = holding.concentration;
+        setEnemyConcentration(holding.id, null);
+        clearSpellConditionsByName(campaign, spell, undefined, holding.id);
+        lines.push(`${holding.displayName} loses its concentration on ${spell}.`);
+      }
     }
     return lines;
   }
@@ -175,15 +189,16 @@ function strike(
   if (!sheet || sheet.deathSaves?.dead) {
     return [];
   }
-  if (trigger.condition && holds(sheet.conditions, trigger.condition) && !dice) {
+  const held = Boolean(trigger.condition && holds(sheet.conditions, trigger.condition) && !dice);
+  if (held && !trigger.concentrationSave) {
     return [];
   }
   return withZoneTurn(campaign.id, (turn) => {
-    const save = trigger.save
+    const save = trigger.save && !held
       ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, [trigger.type, "spell"].filter(Boolean).join(" "))
       : null;
-    const failed = trigger.save ? !save?.success : true;
-    if (trigger.save) {
+    const failed = !held && (trigger.save ? !save?.success : true);
+    if (trigger.save && !held) {
       lines.push(`${sheet.name} ${failed ? "fails" : "makes"} the ${trigger.save.toUpperCase()} save against ${zone.spell} (DC ${dc}).`);
     }
     if (dice && (failed || (trigger.half && !trigger.damageOnFail))) {
@@ -211,7 +226,18 @@ function strike(
     }
     const standing = getSheetById(sheet.id);
     if (failed && standing && !standing.deathSaves?.dead) {
-      lines.push(...afterFailOnCharacter(campaign, turn, map, zone, trigger, standing, dc));
+      lines.push(...afterFailOnCharacter(campaign, turn, map, zone, trigger, standing));
+    }
+    // Sleet Storm's concentration save is its own, whatever the DEX save did.
+    const holding = getSheetById(sheet.id);
+    if (trigger.concentrationSave && holding?.concentratingOn && !holding.deathSaves?.dead) {
+      const kept = rollCharacterSave(campaign, turn, holding, "con", dc, `CON save to keep concentration in ${zone.spell}`);
+      if (!kept.success) {
+        const spell = breakConcentration(campaign, turn.id, holding.id, `lost in ${zone.spell}`);
+        if (spell) {
+          lines.push(`${holding.name} loses their concentration on ${spell}.`);
+        }
+      }
     }
     return lines;
   });
@@ -219,8 +245,8 @@ function strike(
 
 // What a failed save lays on an enemy: a condition (restrained is the
 // spell's and ends with it; prone is the ground's and stays), a lost
-// action, a lost concentration, a push.
-function afterFailOnEnemy(campaign: Campaign, map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, enemy: EncounterEnemy, dc: number): string[] {
+// action, a push. (A concentration save is asked whatever the save did.)
+function afterFailOnEnemy(campaign: Campaign, map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, enemy: EncounterEnemy): string[] {
   const lines: string[] = [];
   if (trigger.condition) {
     const meta = trigger.condition === "prone" ? {} : { spell: zone.spell, source: zone.casterId, ...(zone.slotLevel ? { slotLevel: zone.slotLevel } : {}) };
@@ -233,15 +259,6 @@ function afterFailOnEnemy(campaign: Campaign, map: BattleMap, zone: SpellZone, t
     patchEnemyConditions(enemy.id, [...enemy.conditions, "retching"], meta);
     lines.push(`${enemy.displayName} spends its action this turn retching.`);
   }
-  if (trigger.concentrationSave && enemy.concentration) {
-    const kept = rollEnemySave(campaign.id, enemy, "con", dc, { magical: true, record: { detail: `${enemy.displayName}: CON save to keep concentration in ${zone.spell}` } });
-    if (!kept.success) {
-      const spell = enemy.concentration;
-      setEnemyConcentration(enemy.id, null);
-      clearSpellConditionsByName(campaign, spell, undefined, enemy.id);
-      lines.push(`${enemy.displayName} loses its concentration on ${spell}.`);
-    }
-  }
   if (trigger.pushFeet) {
     const token = listTokens(map.id).find((entry) => entry.refId === enemy.id);
     const at = token ? pushAlong(map, zone, token, trigger.pushFeet) : null;
@@ -252,10 +269,10 @@ function afterFailOnEnemy(campaign: Campaign, map: BattleMap, zone: SpellZone, t
   return lines;
 }
 
-function afterFailOnCharacter(campaign: Campaign, turn: DmTurn, map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, sheet: CharacterSheet, dc: number): string[] {
+function afterFailOnCharacter(campaign: Campaign, turn: DmTurn, map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, sheet: CharacterSheet): string[] {
   const lines: string[] = [];
   if (trigger.condition && !holds(sheet.conditions, trigger.condition)) {
-    const spellEffect = trigger.condition === "prone" ? undefined : { spell: zone.spell, source: zone.casterId };
+    const spellEffect = trigger.condition === "prone" ? undefined : { spell: zone.spell, source: zone.casterId, ...(zone.slotLevel ? { slotLevel: zone.slotLevel } : {}) };
     const laid = handleSetCondition(campaign, turn.id, sheet, { condition: trigger.condition }, `${zone.spell}`, spellEffect ? { spellEffect } : undefined);
     if (!("error" in laid)) {
       lines.push(`${sheet.name} is ${trigger.condition} by ${zone.spell}.`);
@@ -270,15 +287,6 @@ function afterFailOnCharacter(campaign: Campaign, turn: DmTurn, map: BattleMap, 
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
     }
     lines.push(`${sheet.name} spends their action this turn retching.`);
-  }
-  if (trigger.concentrationSave && sheet.concentratingOn) {
-    const kept = rollCharacterSave(campaign, turn, sheet, "con", dc, `CON save to keep concentration in ${zone.spell}`);
-    if (!kept.success) {
-      const spell = breakConcentration(campaign, turn.id, sheet.id, `lost in ${zone.spell}`);
-      if (spell) {
-        lines.push(`${sheet.name} loses their concentration on ${spell}.`);
-      }
-    }
   }
   if (trigger.pushFeet) {
     const token = listTokens(map.id).find((entry) => entry.refId === sheet.id);
@@ -373,6 +381,15 @@ export function zonesAfterMove(
   }
   settle(campaign, map, zones);
   return lines;
+}
+
+// Whether this area's own casting restrains the creature (its instance of
+// restrained names the spell and its caster).
+function heldByZone(victim: Victim, zone: SpellZone): boolean {
+  const holder = victim.kind === "enemy" ? getEnemy(victim.id) : getSheetById(victim.id);
+  const held = holder?.conditions.find((entry) => entry.toLowerCase() === "restrained");
+  const spells = [zone.spell, zone.heldBy ?? ""].map((name) => name.toLowerCase()).filter(Boolean);
+  return Boolean(held && instancesOf((holder?.conditionMeta as ConditionMetaMap | undefined)?.[held]).some((entry) => entry.source === zone.casterId && spells.includes((entry.spell ?? "").toLowerCase())));
 }
 
 function stillHeld(victim: Victim): boolean {
@@ -489,9 +506,11 @@ function momentFor(
         }
         zone.struck = { ...(zone.struck ?? {}), [`${id}:end`]: begun };
       }
-      // Black Tentacles' hold crushes what it already restrains at the start
-      // of its turn on its own (src/lib/dm/spell-aura.ts); it saves no more.
-      if (!inArea || (trigger.condition === "restrained" && trigger.dice && stillHeld(victim))) {
+      // Black Tentacles' hold crushes what THIS casting already restrains at
+      // the start of its turn on its own (src/lib/dm/spell-aura.ts, either
+      // kind of creature); it saves no more. Another restraint is no hold of
+      // this area's.
+      if (!inArea || (trigger.condition === "restrained" && trigger.dice && heldByZone(victim, zone))) {
         continue;
       }
       if (trigger.once) {
@@ -499,6 +518,11 @@ function momentFor(
           continue;
         }
         zone.struck = { ...(zone.struck ?? {}), [`${id}:once`]: turnKey(encounter) };
+      }
+      // The turn's start is this turn's event: an explicit call for the same
+      // area in this turn finds it spent (src/lib/dm/area-casting.ts).
+      if (moment === "start") {
+        zone.struck = { ...(zone.struck ?? {}), [`${id}:start`]: turnKey(encounter) };
       }
       lines.push(...strike(campaign, encounter, map, zone, victim, moment));
     }

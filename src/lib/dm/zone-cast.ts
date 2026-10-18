@@ -130,9 +130,13 @@ export function placeSpellZone(campaign: Campaign, cast: ZoneCast): string | nul
   };
   // A concentration spell the server cannot see held (a homebrew caster, a
   // row the checklist lacks) runs for its duration instead of vanishing.
-  const zone = row.concentration && !casterHolds(probe) ? { ...probe, concentration: false } : probe;
-  const wanted = zoneOwnKey(zone);
+  const held = row.concentration && !casterHolds(probe) ? { ...probe, concentration: false } : probe;
+  const wanted = zoneOwnKey(held);
   const before = liveZones(map, encounter);
+  // The same casting moved (Moonbeam's beam) keeps who it has struck this
+  // turn, so moving it is not a second strike (area-casting.ts).
+  const moved = before.find((other) => other.casterId === held.casterId && zoneOwnKey(other) === wanted);
+  const zone: SpellZone = moved?.struck ? { ...held, struck: moved.struck } : held;
   // The same casting laid again moves; a caster concentrates on one spell.
   const kept = before.filter(
     (other) =>

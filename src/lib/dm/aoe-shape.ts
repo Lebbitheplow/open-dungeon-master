@@ -17,6 +17,7 @@ import { templateTiles, type TemplateShape } from "@/lib/battlemap/template";
 import { footprintForSize, footprintTiles } from "@/lib/battlemap/footprint";
 import { chebyshev, tileIndex, type XY } from "@/lib/battlemap/types";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type AreaShape = {
   shape: "sphere" | "cube" | "cone" | "line" | "cylinder";
@@ -81,7 +82,7 @@ export function spellAreaShape(spell: string, authors?: string | string[]): Area
     }
   }
   const authored = authoredSpellRow(spell);
-  return (authored ? areaShapeFromText(authored.desc) : null) ?? SRD_AREAS[spell.trim().toLowerCase()] ?? null;
+  return (authored ? areaShapeFromText(authored.desc) : null) ?? SRD_AREAS[textKey(spell)] ?? null;
 }
 
 // A monster's area ability, read from the line its block prints.

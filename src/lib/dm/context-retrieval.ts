@@ -2,15 +2,18 @@ import type { TableLanguage } from "@/lib/schemas/game-settings";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { CampaignMessage } from "@/lib/db/messages";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
+import { canonAdmits } from "@/lib/worldforge/canon";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
 import { probeCustomContextWindow, storyContextTokens } from "@/lib/model-client";
 import { loreExcerpt, renderLoreBlock, type LoreTrace, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { loreBudgetChars, selectLore, type LoreMoment } from "@/lib/dm/lore-selection";
-import { computeBudgets, promptWindowTokens } from "@/lib/dm/context-budget";
+import { CHARS_PER_TOKEN, computeBudgets, promptWindowTokens } from "@/lib/dm/context-budget";
 import { selectRuleChunks } from "@/lib/dm/rules-activation-logic";
 import { isNarration } from "@/lib/dm/ooc-question";
-import { renderHouseRules, renderVariantRules } from "@/lib/dm/rules-logic";
+import { renderHouseRulesWithTrace, renderVariantRules } from "@/lib/dm/rules-logic";
+import { clipKeepingEnds } from "@/lib/dm/ask-logic";
+import { createHash } from "node:crypto";
 import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 
 // Per-turn retrieval for the DM prompt: one local embed of the current
@@ -39,26 +42,69 @@ export type TurnRetrieval = {
   // What the lore block kept and held back, and why; absent when the
   // campaign has no lore.
   loreTrace?: LoreTrace;
+  // The house-rule sections the block shows, and the always-on ones it left
+  // out for room; absent when the table has no house rules.
+  rulesTrace?: { shown: string[]; omitted: string[] };
 };
 
 // The moment to retrieve against: the newest player messages this turn is
 // answering, grounded by the current scene label. The players' words alone
 // are the ask, which names the lore they are asking about (lore-selection.ts).
-function buildMoment(campaign: Campaign, history: CampaignMessage[]): LoreMoment {
+//
+// A long move keeps both its ends: what it ends on (the question, the name
+// it asks after) is what retrieval most needs, and a cut at the first 400
+// characters lost it (the context audit's F12). The newest move gets the most
+// room; the bound is kept by giving older moves less, never by cutting the
+// newest one's end off.
+const MOMENT_NEWEST_CHARS = 900;
+const MOMENT_OLDER_CHARS = 300;
+const MOMENT_SCENE_CHARS = 200;
+
+export function buildMoment(campaign: Pick<Campaign, "scene">, history: Pick<CampaignMessage, "authorType" | "content" | "speech">[]): LoreMoment {
   const playerLines: string[] = [];
   for (let index = history.length - 1; index >= 0 && playerLines.length < 3; index -= 1) {
     const message = history[index];
     if (message.authorType === "player") {
-      playerLines.unshift(message.content.slice(0, 400));
-    } else if (isNarration(message) && playerLines.length) {
+      const room = playerLines.length ? MOMENT_OLDER_CHARS : MOMENT_NEWEST_CHARS;
+      playerLines.unshift(clipKeepingEnds(message.content, room, Math.round(room * 0.4), () => " "));
+    } else if (isNarration(message as CampaignMessage) && playerLines.length) {
       break;
     }
   }
+  const scene = clipKeepingEnds(campaign.scene ?? "", MOMENT_SCENE_CHARS, MOMENT_SCENE_CHARS, () => "");
   return {
     scene: campaign.scene ?? "",
     ask: playerLines.join("\n"),
-    query: [campaign.scene, ...playerLines].filter(Boolean).join("\n").slice(0, 1_200),
+    query: [scene, ...playerLines].filter(Boolean).join("\n"),
   };
+}
+
+// IDF over a corpus, kept while the corpus is unchanged: the same lore and
+// rules are ranked on every turn, and only an edit, a new entry or another
+// language changes the weights. Keyed by the documents' own content.
+const IDF_CACHE_MAX = 32;
+declare global {
+  var __odmIdfCache: Map<string, Map<string, number>> | undefined;
+}
+function cachedIdf(documents: string[], language: TableLanguage): Map<string, number> {
+  const cache = (globalThis.__odmIdfCache ??= new Map());
+  const hash = createHash("sha1");
+  hash.update(language);
+  for (const document of documents) {
+    hash.update("\u0000");
+    hash.update(document);
+  }
+  const key = hash.digest("hex");
+  const known = cache.get(key);
+  if (known) {
+    return known;
+  }
+  const idf = computeIdf(documents, language);
+  cache.set(key, idf);
+  if (cache.size > IDF_CACHE_MAX) {
+    cache.delete(cache.keys().next().value as string);
+  }
+  return idf;
 }
 
 // Fuses one corpus and returns the picked entries in fused order.
@@ -74,7 +120,7 @@ function pickFused<T>(
   }
   // IDF is computed over this corpus, so "dragon" is rare in a campaign that
   // never mentions dragons and unremarkable in one about nothing else.
-  const idf = computeIdf(entries.map((entry) => entry.text), language);
+  const idf = cachedIdf(entries.map((entry) => entry.text), language);
   const byId = new Map(entries.map((entry) => [entry.id, entry.value]));
   const picked = fuseRanked(
     entries.map((entry) => ({
@@ -89,6 +135,17 @@ function pickFused<T>(
     .filter((value): value is T => value !== undefined);
 }
 
+// Ask the story endpoint what window it was launched with before anything is
+// budgeted against it: the tool profile, the reply reserve and every block
+// read it. llama.cpp and llama-swap report their -c on /props; anything else
+// misses quietly and the configured or default value stands. Cached per base
+// URL and model, so this costs one request per process.
+export async function probeStoryWindow(settings: Campaign["settings"]): Promise<void> {
+  if (settings.textProvider !== "local") {
+    await probeCustomContextWindow(settings.customBaseUrl, settings.customApiKey, settings.customModel);
+  }
+}
+
 export async function buildTurnRetrieval(
   campaign: Campaign,
   history: CampaignMessage[],
@@ -98,47 +155,24 @@ export async function buildTurnRetrieval(
 ): Promise<TurnRetrieval> {
   // Resolved from the campaign's own provider and model rather than assuming
   // a default window, so the rules budget matches what the backend will
-  // actually accept.
-  // Ask the endpoint what window it was launched with before budgeting
-  // against it. llama.cpp and llama-swap report their -c on /props; anything
-  // else misses quietly and the configured or default value stands. Cached
-  // per base URL, so this costs one request per process.
-  if (campaign.settings.textProvider !== "local") {
-    await probeCustomContextWindow(
-      campaign.settings.customBaseUrl,
-      campaign.settings.customApiKey,
-      campaign.settings.customModel,
-    );
-  }
+  // actually accept (the turn has asked already; this is the cached answer).
+  await probeStoryWindow(campaign.settings);
   const contextLimitTokens = promptWindowTokens(storyContextTokens(campaign.settings), toolTokens);
   const variantRulesBlock = renderVariantRules(campaign.gameSettings.variantRules);
   let houseRulesBlock = "";
   let loreBlock = "";
   let loreTrace: LoreTrace | undefined;
+  let rulesTrace: TurnRetrieval["rulesTrace"];
   try {
     const rules = listRuleChunksWithEmbeddings(campaign.id).filter(
       (entry) => entry.chunk.enabled,
     );
-    const lore = listLoreWithEmbeddings(campaign.id);
+    // A retired WorldForge entry is left out of the narrator's lore, by the
+    // canon policy every model path shares (src/lib/worldforge/canon.ts).
+    const lore = listLoreWithEmbeddings(campaign.id).filter(({ entry }) => !entry.canon || canonAdmits(entry.canon, "play"));
     if (rules.length || lore.length) {
       const moment = buildMoment(campaign, history);
       const { query } = moment;
-      let queryVector: Float32Array | null = null;
-      // The players' words alone, for the lore's second meaning check
-      // (lore-selection.ts); embedded in the same call.
-      let askVector: Float32Array | null = null;
-      const anyEmbedding =
-        rules.some((entry) => entry.embedding) || lore.some((entry) => entry.embedding);
-      if (query && anyEmbedding) {
-        try {
-          const askToo = moment.ask && lore.some((entry) => entry.embedding);
-          [queryVector, askVector = null] = await embed(askToo ? [query, moment.ask] : [query]);
-        } catch (error) {
-          // Embedder unavailable; keyword fallback carries the turn.
-          console.error("[context-retrieval] embedding failed", error);
-        }
-      }
-
       // Pinned chunks and any whose trigger keyword appears in the query are
       // admitted outright; only what is left competes for the retrieval
       // slots. A small enough rules document rides whole and skips retrieval
@@ -150,24 +184,48 @@ export async function buildTurnRetrieval(
         retrievalTokens,
       );
       const forcedIds = new Set(activation.forced.map((chunk) => chunk.id));
+      const rankedRules = activation.verbatim ? [] : rules.filter((entry) => !forcedIds.has(entry.chunk.id));
+      const unpinnedLore = lore.filter(({ entry }) => !entry.pinned);
+
+      // The moment is embedded only when something is left to rank by
+      // meaning: rules that compete for a slot, or lore that is not pinned.
+      // A table whose whole rules document rides and whose lore is all
+      // pinned waits on no embedder (the context audit's F12).
+      let queryVector: Float32Array | null = null;
+      // The players' words alone, for the lore's second meaning check
+      // (lore-selection.ts); embedded in the same call.
+      let askVector: Float32Array | null = null;
+      const anyEmbedding =
+        rankedRules.some((entry) => entry.embedding) || unpinnedLore.some((entry) => entry.embedding);
+      if (query && anyEmbedding) {
+        try {
+          const askToo = moment.ask && unpinnedLore.some((entry) => entry.embedding);
+          [queryVector, askVector = null] = await embed(askToo ? [query, moment.ask] : [query], { query: true });
+        } catch (error) {
+          // Embedder unavailable; keyword fallback carries the turn.
+          console.error("[context-retrieval] embedding failed", error);
+        }
+      }
+
       const pinnedRules = activation.forced;
       const retrievedRules = activation.verbatim
         ? []
         : pickFused(
-        rules
-          .filter((entry) => !forcedIds.has(entry.chunk.id))
-          .map((entry) => ({
-            id: entry.chunk.id,
-            text: `${entry.chunk.heading} ${entry.chunk.text}`,
-            embedding: entry.embedding,
-            value: entry.chunk,
-          })),
-        query,
-        queryVector,
-        RULES_TOP,
-        campaign.gameSettings.tableLanguage,
-      );
-      houseRulesBlock = renderHouseRules(pinnedRules, retrievedRules);
+            rankedRules.map((entry) => ({
+              id: entry.chunk.id,
+              text: `${entry.chunk.heading} ${entry.chunk.text}`,
+              embedding: entry.embedding,
+              value: entry.chunk,
+            })),
+            query,
+            queryVector,
+            RULES_TOP,
+            campaign.gameSettings.tableLanguage,
+          );
+      // Rendered against the same share the selector judged it by.
+      const house = renderHouseRulesWithTrace(pinnedRules, retrievedRules, retrievalTokens * CHARS_PER_TOKEN);
+      houseRulesBlock = house.text;
+      rulesTrace = { shown: house.shown, omitted: house.omitted };
 
       if (lore.length) {
         const language = campaign.gameSettings.tableLanguage;
@@ -205,5 +263,5 @@ export async function buildTurnRetrieval(
   } catch (error) {
     console.error("[context-retrieval] failed", error);
   }
-  return { variantRulesBlock, houseRulesBlock, loreBlock, ...(loreTrace ? { loreTrace } : {}) };
+  return { variantRulesBlock, houseRulesBlock, loreBlock, ...(loreTrace ? { loreTrace } : {}), ...(rulesTrace ? { rulesTrace } : {}) };
 }

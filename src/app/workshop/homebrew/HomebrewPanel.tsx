@@ -30,6 +30,7 @@ import {
   type EditorKind,
   type HomebrewEntryView,
 } from "@/app/workshop/homebrew/types";
+import { textKey } from "@/lib/language/text-logic";
 
 // The Homebrew system: the user's items, spells and character options, one
 // kind at a time, with the editor in a sheet. User-scoped like the bestiary,
@@ -143,8 +144,8 @@ export function HomebrewPanel({
       const rows = body?.results ?? [];
       const row =
         rows.find((entry) => entry.rulebook === pageId) ??
-        rows.find((entry) => entry.name.toLowerCase() === wanted.toLowerCase() && (entry.documentSlug === "wotc-srd" || entry.source === "srd")) ??
-        rows.find((entry) => entry.name.toLowerCase() === wanted.toLowerCase());
+        rows.find((entry) => textKey(entry.name) === textKey(wanted) && (entry.documentSlug === "wotc-srd" || entry.source === "srd")) ??
+        rows.find((entry) => textKey(entry.name) === textKey(wanted));
       if (!live) return;
       if (row) {
         setEditing({ id: null, draft: draftFromCatalog(editorKind, { ...row, rulebook: row.rulebook ?? pageId }) });
@@ -159,12 +160,12 @@ export function HomebrewPanel({
   }, [start]);
 
   const ofKind = entries.filter((entry) => entry.kind === kind);
-  const needle = query.trim().toLowerCase();
+  const needle = textKey(query);
   const shown = sortRows(
     needle
       ? ofKind.filter((entry) =>
           [entry.name, String(entry.data.desc ?? ""), describeHomebrew(entry.kind, entry.data)].some((text) =>
-            text.toLowerCase().includes(needle),
+            textKey(text).includes(needle),
           ),
         )
       : ofKind,

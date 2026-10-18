@@ -1,6 +1,7 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { campaignSeats, setDmMode, updateGameSettings } from "@/lib/db/campaigns";
-import { isPrimaryDm } from "@/lib/dm/viewer";
+import { isPrimaryDm, narratorIsAi } from "@/lib/dm/viewer";
+import { NO_STORYTELLER_MESSAGE, storyConfigured, storytellerConfigured } from "@/lib/capabilities";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { layOver } from "@/lib/schemas/parse-keeping-valid";
 import { publishPersisted } from "@/lib/events";
@@ -51,6 +52,16 @@ export async function PATCH(
         { error: "Only the Dungeon Master can hand the game to someone else or to the AI." },
         { status: 403 },
       );
+    }
+    // Handing the table to the AI needs a storyteller: this campaign's own
+    // (a key or address its lead set in Story AI) or the server's.
+    if (
+      narratorIsAi(dmMode) &&
+      !narratorIsAi(campaign.gameSettings.dmMode) &&
+      !storyConfigured(campaign.settings) &&
+      !(await storytellerConfigured())
+    ) {
+      return Response.json({ error: NO_STORYTELLER_MESSAGE, reason: "no_storyteller" }, { status: 409 });
     }
     const changed = setDmMode(campaignId, dmMode, context.user.id);
     if (!changed) {

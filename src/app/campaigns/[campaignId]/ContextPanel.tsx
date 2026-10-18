@@ -137,6 +137,81 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
             </div>
           </div>
 
+          {trace.tuning?.length ? (
+            <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="tuning-trace">
+              <span className="whitespace-nowrap font-medium text-amber-200">Fitted to this model</span>
+              <ul className="mt-1 space-y-0.5">
+                {trace.tuning.map((line) => (
+                  <li key={line} className="text-[11px] text-stone-400">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {trace.profile && trace.profile.name !== "full" ? (
+            <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="profile-trace">
+              <span className="whitespace-nowrap font-medium text-amber-200">
+                {trace.profile.name === "compact" ? "Compact tool set" : "Trimmed tool set"}
+              </span>
+              {trace.profile.name === "compact" ? (
+                <p className="mt-0.5 text-[11px] text-stone-400">
+                  Groups offered: {trace.profile.groups?.length ? trace.profile.groups.join(", ") : "the core only"}
+                  {trace.profile.opened?.length ? `; opened during the turn: ${trace.profile.opened.join(", ")}` : ""}. The rest are one more_tools call away.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {trace.calls?.length ? (
+            <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="calls-trace">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <span className="whitespace-nowrap font-medium text-amber-200">Calls</span>
+                {trace.prefix ? (
+                  <span className="shrink-0 font-mono text-[11px] text-stone-400" title="How much of this turn's prompt matched the last turn's from its start: the most a prompt cache could reuse.">
+                    {trace.prefix.sharedTokens.toLocaleString()}/{trace.prefix.promptTokens.toLocaleString()} shared with the last turn
+                  </span>
+                ) : null}
+              </div>
+              <ul className="mt-1 space-y-0.5">
+                {trace.calls.map((call, index) => (
+                  <li key={`${index}-${call.task}`} className={cn("text-[11px]", call.error ? "text-red-300/90" : "text-stone-400")}>
+                    <span className="font-mono text-stone-500">{call.task}</span>{" "}
+                    {call.windowTokens
+                      ? call.windowAssumed
+                        ? `about ${call.promptTokens.toLocaleString()} sent past an assumed ${call.windowTokens.toLocaleString()} window (the endpoint reports none), reply uncapped`
+                        : `${call.promptTokens.toLocaleString()}/${call.windowTokens.toLocaleString()} sent`
+                      : "sent unmeasured"}
+                    {call.toolCount ? `, ${call.toolCount} tools` : ""}
+                    {call.windowTokens && !call.windowAssumed ? `, reply up to ${call.outputTokens.toLocaleString()}` : ""}
+                    {call.reportedInputTokens !== undefined ? `; backend counted ${call.reportedInputTokens.toLocaleString()} in` : ""}
+                    {call.cachedInputTokens !== undefined ? ` (${call.cachedInputTokens.toLocaleString()} cached)` : ""}
+                    {call.outputTokensUsed !== undefined ? `, ${call.outputTokensUsed.toLocaleString()} out` : ""}
+                    {call.reasoningTokens !== undefined ? ` (${call.reasoningTokens.toLocaleString()} reasoning)` : ""}
+                    {call.durationMs !== undefined ? `, ${(call.durationMs / 1000).toFixed(1)}s` : ""}
+                    {call.firstTokenMs !== undefined ? ` (first words ${(call.firstTokenMs / 1000).toFixed(1)}s)` : ""}
+                    {call.dropped || call.clipped ? `; fitted: ${call.dropped} older line(s) left out, ${call.clipped} cut short` : ""}
+                    {call.finishReason && call.finishReason !== "stop" && call.finishReason !== "tool_calls" ? `; ended: ${call.finishReason}` : ""}
+                    {call.error ? `; failed: ${call.error}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {trace.houseRules ? (
+            <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="house-rules-trace">
+              <span className="whitespace-nowrap font-medium text-amber-200">House rules</span>
+              <p className="mt-0.5 text-[11px] text-stone-400">
+                {trace.houseRules.shown.length ? `Shown: ${trace.houseRules.shown.join("; ")}.` : "None shown."}
+              </p>
+              {trace.houseRules.omitted.length ? (
+                <p className="mt-0.5 text-[11px] text-red-300/90">Left out for room (named to the DM): {trace.houseRules.omitted.join("; ")}.</p>
+              ) : null}
+            </div>
+          ) : null}
+
           {trace.arc ? (
             <div className="panel rounded-lg px-2.5 py-1.5 text-xs" data-testid="arc-trace">
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">

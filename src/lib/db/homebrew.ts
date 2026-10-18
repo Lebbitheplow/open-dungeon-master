@@ -8,6 +8,7 @@ import { matchGear } from "@/lib/srd/adventuring-gear";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { CreateHomebrewInput, HomebrewKind } from "@/lib/schemas/homebrew";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
+import { slugOf, textKey } from "@/lib/language/text-logic";
 
 export type HomebrewEntry = {
   id: string;
@@ -74,13 +75,7 @@ function withRepairedWeight(name: string, data: Record<string, unknown>): Record
 }
 
 function slugify(value: string) {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60) || "entry"
-  );
+  return slugOf(value).slice(0, 60) || "entry";
 }
 
 // A user's shelf. `archived`: false (the default) leaves forgotten entries
@@ -188,17 +183,13 @@ export function updateHomebrew(
 
 // ---- homebrew gear on a sheet ----
 
-function nameKey(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[+-]\d+/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+function gearKey(value: string): string {
+  return textKey(value.replace(/[+-]\d+/g, " "));
 }
 
 let packItemNames: Set<string> | null = null;
 
-// Every item name the content pack publishes, keyed like nameKey. Read once;
+// Every item name the content pack publishes, keyed like gearKey. Read once;
 // an install without the pack has only the bundled tables to go by.
 function publishedPackNames(): Set<string> {
   if (packItemNames) {
@@ -208,7 +199,7 @@ function publishedPackNames(): Set<string> {
   const db = getContentDb();
   if (db) {
     for (const row of db.prepare(`SELECT name FROM items`).all() as Array<{ name: string }>) {
-      names.add(nameKey(row.name));
+      names.add(gearKey(row.name));
     }
   }
   packItemNames = names;
@@ -220,13 +211,13 @@ function publishedPackNames(): Set<string> {
 // entry may share such a name in the workshop, and it never changes what the
 // published thing does on a sheet: a dagger is 1d4 at every table.
 export function isPublishedGearName(name: string): boolean {
-  const key = nameKey(name);
+  const key = gearKey(name);
   if (!key) {
     return false;
   }
   return (
-    SRD_WEAPONS.some((weapon) => nameKey(weapon.name) === key) ||
-    SRD_ARMOR.some((armor) => nameKey(armor.name) === key) ||
+    SRD_WEAPONS.some((weapon) => gearKey(weapon.name) === key) ||
+    SRD_ARMOR.some((armor) => gearKey(armor.name) === key) ||
     matchMagicItem(name) !== null ||
     publishedPackNames().has(key)
   );
@@ -240,7 +231,7 @@ export function isTableGearName(campaignId: string, name: string): boolean {
   return (
     isPublishedGearName(name) ||
     matchGear(name) !== null ||
-    findHomebrewBySlug(tableAuthors(campaignId), "item", slugify(name)) !== null
+    tableAuthors(campaignId).some((author) => listHomebrew(author, "item", { archived: true }).some((entry) => textKey(entry.name) === textKey(name)))
   );
 }
 
@@ -308,12 +299,12 @@ export function hydrateHomebrewGear(
     ));
   return equipment.map((item) => {
     const slugId = item.slug?.startsWith("homebrew:") ? item.slug.slice("homebrew:".length) : null;
-    const wanted = item.name.trim().toLowerCase();
+    const wanted = textKey(item.name);
     const entry = slugId
       ? load().find((candidate) => candidate.id === slugId)
       : isPublishedGearName(item.name)
         ? undefined
-        : load().find((candidate) => candidate.name.trim().toLowerCase() === wanted);
+        : load().find((candidate) => textKey(candidate.name) === wanted);
     const gear = entry ? gearFromHomebrewData(entry.name, entry.data) : null;
     if (!gear) {
       if (item.gear === undefined) {

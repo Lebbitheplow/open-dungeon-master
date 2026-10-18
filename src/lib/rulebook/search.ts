@@ -12,15 +12,15 @@
 // browser never stems anything.
 import { blockText, parseBook, stripInline, type BookBlock } from "./markdown";
 import type { RulebookKind, RulebookPage, SearchHit } from "./types";
-import { stemWord, stopWordsFor } from "../language/language";
-import { compareNames, words as textWords } from "../language/text-logic";
+import { stemmerWords, stemWord, stopWordsFor } from "../language/language";
+import { compareNames, splitWords, textKey, words as textWords } from "../language/text-logic";
 
 export function stem(word: string): string {
   return stemWord(word.toLowerCase(), "english");
 }
 
 export function words(text: string): string[] {
-  return textWords(text).map((word) => word.toLowerCase());
+  return stemmerWords(text);
 }
 
 // The query as the stems it will be matched by, stop words dropped unless
@@ -73,7 +73,7 @@ function passage(page: RulebookPage, heading: string | undefined, at: string | u
     heading,
     at,
     text,
-    lower: text.toLowerCase(),
+    lower: textKey(text),
     counts: countStems(`${heading ?? ""} ${text}`),
     headingStems: new Set(words(heading ?? "").map(stem)),
   };
@@ -119,7 +119,7 @@ function indexPage(page: RulebookPage) {
     page,
     wordStems,
     titleStems: new Set(words(page.title).map(stem)),
-    titleLower: page.title.toLowerCase(),
+    titleLower: textKey(page.title),
     passages,
   };
 }
@@ -173,14 +173,14 @@ function countTerm(counts: Map<string, number>, term: string, prefix: boolean): 
 // About 200 characters around the first matching word, cut at word edges.
 export function snippetFor(text: string, terms: string[], width = 200): string {
   let first = -1;
-  const pattern = /[a-z0-9]+(?:['’][a-z]+)?/gi;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    const key = stem(match[0]);
-    if (terms.some((term) => key === term || key.startsWith(term))) {
-      first = match.index;
+  let at = 0;
+  for (const [index, part] of splitWords(text).entries()) {
+    const keys = index % 2 ? [part, ...textKey(part).split(" ")].map(stem) : [];
+    if (keys.some((key) => terms.some((term) => key === term || key.startsWith(term)))) {
+      first = at;
       break;
     }
+    at += part.length;
   }
   if (text.length <= width) return text;
   if (first < 0) first = 0;
@@ -200,9 +200,9 @@ export function snippetFor(text: string, terms: string[], width = 200): string {
 export function searchRulebook(index: RulebookIndex, query: string, limit = 40): SearchHit[] {
   const terms = queryTerms(query);
   if (!terms.length) return [];
-  const phrase = query.trim().toLowerCase();
+  const phrase = textKey(query);
   // The last word may still be being typed.
-  const typed = /[a-z0-9]$/i.test(query.trim());
+  const typed = textWords([...query.trim()].at(-1) ?? "").length > 0;
   const isPrefix = (position: number) => typed && position === terms.length - 1;
   const matching = (key: string) =>
     terms.some((term, position) => key === term || (isPrefix(position) && term.length >= 2 && key.startsWith(term)));
@@ -213,7 +213,7 @@ export function searchRulebook(index: RulebookIndex, query: string, limit = 40):
     const chapter = index.chapters.get(page.chapter);
     const pageHits: SearchHit[] = [];
     let marked: string[] | null = null;
-    const pageWords = () => (marked ??= [...entry.wordStems].filter(([, key]) => matching(key)).map(([word]) => word));
+    const pageWords = () => (marked ??= [...entry.wordStems].filter(([, key]) => matching(key)).map(([word]) => textKey(word)));
     const titleAll = terms.every((term, position) => hasTerm(entry.titleStems, term, isPrefix(position)));
     entry.passages.forEach((item, passageIndex) => {
       const matches = terms.every(
@@ -232,7 +232,7 @@ export function searchRulebook(index: RulebookIndex, query: string, limit = 40):
         if (hasTerm(item.headingStems, term, isPrefix(position))) score += 30;
         score += Math.min(countTerm(item.counts, term, isPrefix(position)), 6) * 2;
       });
-      const headingLower = item.heading?.toLowerCase();
+      const headingLower = item.heading ? textKey(item.heading) : undefined;
       if (headingLower === phrase) score += 600;
       else if (item.heading && terms.every((term, position) => hasTerm(item.headingStems, term, isPrefix(position)))) score += 160;
       if (phrase.length > 3 && item.lower.includes(phrase)) score += 40;

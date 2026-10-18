@@ -90,6 +90,7 @@ export const worldPackSchema = z.object({
   dmFlavor: z.string().max(1400).default(""),
   mapStyle: z.string().max(300).default(""),
   portraitStyle: z.string().max(300).default(""),
+  sceneStyle: z.string().max(300).default(""),
   nameHints: z.string().max(300).default(""),
   raceHint: z.string().max(300).default(""),
   companionRaces: z.array(z.string()).default([]),
@@ -182,6 +183,13 @@ export {
   type WorldPackSummary,
 } from "@/lib/worlds/summary";
 
+// A small 16:9 picture for the plugin browser, which build-world-registry.mjs
+// lists for every pack with a file in thumbnails/. The server fetches it and
+// serves it from /api/worlds/registry/thumbnail/..., so a browser never
+// contacts the registry's host, and it holds the address to the same https
+// rule as a download.
+const registryThumbnailSchema = z.string().url().startsWith("https://").max(500).optional();
+
 // One entry in a remote registry index. It is deliberately NOT the pack: a
 // browser listing must be cheap, and the manifest is only downloaded when
 // somebody installs it.
@@ -202,6 +210,7 @@ export const registryEntrySchema = z.object({
   // https only: an admin-configured registry is trusted to name hosts, but
   // never trusted to downgrade the transport.
   downloadUrl: z.string().url().startsWith("https://").max(500),
+  thumbnail: registryThumbnailSchema,
 });
 
 // A prepared world (docs/vtt-parity-implementation-plan.md 12.3): a
@@ -216,6 +225,7 @@ export const registryBundleSchema = z.object({
   inspiredBy: z.string().max(200).default(""),
   rightsHolder: z.string().trim().max(120).default(""),
   downloadUrl: z.string().url().startsWith("https://").max(500),
+  thumbnail: registryThumbnailSchema,
 });
 export type RegistryBundle = z.infer<typeof registryBundleSchema>;
 

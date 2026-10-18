@@ -18,6 +18,7 @@ import {
   authoredSaveAdvantages,
   authoredSaveProficiencies,
 } from "@/lib/srd/authored-effects";
+import { textKey } from "@/lib/language/text-logic";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 type FeatureLike = { name: string; source?: string; classId?: string };
@@ -39,12 +40,9 @@ const lower = (value: string | undefined) => (value ?? "").trim().toLowerCase();
 // these names. Racial traits carry their gist in brackets ("Brave (adv. vs
 // frightened)"), so the start of the name is what identifies them.
 export function holdsFeature(sheet: TraitSheet, ...names: string[]): boolean {
-  const wanted = names.map(lower);
-  return [...(sheet.features ?? []).map((feature) => feature.name), ...(sheet.feats ?? [])].some(
-    (name) => {
-      const held = lower(name);
-      return wanted.some((term) => held === term || held.startsWith(`${term} (`) || held.startsWith(`${term}:`));
-    },
+  const wanted = names.map(textKey);
+  return [...(sheet.features ?? []).map((feature) => feature.name), ...(sheet.feats ?? [])].some((name) =>
+    [name, name.replace(/\s*\(.*$/, ""), name.replace(/\s*:.*$/, "")].some((held) => wanted.includes(textKey(held))),
   );
 }
 
@@ -128,7 +126,7 @@ export function traitSaveAdvantages(
 // Brave, as the builder writes it or as a race-sourced trait of that name.
 function holdsBrave(sheet: TraitSheet): boolean {
   return (sheet.features ?? []).some((feature) => {
-    const name = lower(feature.name);
+    const name = textKey(feature.name);
     return name.includes("brave") && (feature.source === "race" || name.includes("frighten"));
   });
 }

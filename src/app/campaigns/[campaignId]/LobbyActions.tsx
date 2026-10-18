@@ -23,20 +23,22 @@ function CharacterActions({
   busy: boolean;
   onRemove: () => void;
 }) {
+  // Edit and Switch sit together; Remove stands apart at the far end, so
+  // a slip off Switch cannot land on it. Each is 44 px tall to the finger.
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-3 text-xs">
       <span className="text-stone-500">{sheet.name}:</span>
-      <Link href={`/campaigns/${campaignId}/character?mode=edit`} className={ui.btnSmall}>
+      <Link href={`/campaigns/${campaignId}/character?mode=edit`} className={cn(ui.btnSmall, "min-h-11")}>
         <Pencil className="size-3" /> Edit
       </Link>
-      <Link href={`/campaigns/${campaignId}/character?mode=replace`} className={ui.btnSmall}>
+      <Link href={`/campaigns/${campaignId}/character?mode=replace`} className={cn(ui.btnSmall, "min-h-11")}>
         <UserRound className="size-3" /> Switch
       </Link>
       <button
         type="button"
         onClick={onRemove}
         disabled={busy}
-        className={cn(ui.btnSmall, "text-red-300")}
+        className={cn(ui.btnSmall, "ml-6 min-h-11 text-red-300")}
       >
         <Trash2 className="size-3" /> Remove
       </button>

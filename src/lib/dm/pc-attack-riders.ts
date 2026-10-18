@@ -4,6 +4,7 @@
 // decides the attack these belong to.
 
 import { CURVING_SHOT } from "@/lib/srd/authored-economy";
+import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -14,7 +15,7 @@ import { resourceLeft } from "@/lib/dm/attack-rules";
 import type { ManeuverPick } from "@/lib/dm/pc-attack-plan";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
-import { removeConditions, type ConditionMeta } from "@/lib/dm/condition-logic";
+import { isIncapacitated, removeConditions, type ConditionMeta } from "@/lib/dm/condition-logic";
 import { sizeRank } from "@/lib/bestiary/statblock";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { applyDmMutation } from "@/lib/dm/mutations";
@@ -22,6 +23,7 @@ import { GRAPPLING_STRIKE, MANEUVERED, maneuverDieFor, maneuverUse, offSwingRefu
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { optionsOfKind } from "@/lib/srd/options";
+import { textKey } from "@/lib/language/text-logic";
 
 export { superiorityDie, maneuverDieFor } from "@/lib/dm/maneuver-rules";
 
@@ -50,10 +52,10 @@ export function pickManeuver(
   const term = asked.trim().toLowerCase();
   const picks = sheet.features
     .map((feature) => feature.name)
-    .filter((name) => name.toLowerCase().startsWith("maneuver"));
+    .filter((name) => textKey(name).startsWith("maneuver"));
   const known = picks.some((name) => {
-    const bare = name.toLowerCase().replace(/^maneuver:\s*/, "");
-    return bare.includes(term) || term.includes(bare);
+    const bare = textKey(name.replace(/^maneuver:\s*/i, ""));
+    return bare.includes(textKey(asked)) || textKey(asked).includes(bare);
   });
   if (!known) {
     const theirs = picks.length ? ` Their maneuvers: ${picks.join(", ")}.` : " They have no maneuver picks.";
@@ -61,7 +63,7 @@ export function pickManeuver(
     // can still make; a name nobody knows is the call's to fix, from their
     // picks.
     return {
-      refused: optionsOfKind("maneuver").some((option) => option.n.toLowerCase() === term.replace(/^maneuver:\s*/, ""))
+      refused: optionsOfKind("maneuver").some((option) => textKey(option.n) === textKey(asked.replace(/^maneuver:\s*/i, "")))
         ? { error: `${sheet.name} knows no maneuver "${asked}".${theirs} They can make the attack without it.`, retry: true }
         : { error: `No maneuver called "${asked}" is known.${theirs} Send the one meant, by the name on the sheet.`, retry: true },
     };
@@ -116,6 +118,8 @@ export type ParkedAttack = PendingAttack & {
   onHit?: OnHitSpends;
   nonlethal?: boolean;
   hitSpent?: string[];
+  // The once-per-turn riders the hit spends (Sneak Attack): pc-attack-damage.ts claimHitRiders.
+  hitClaims?: string[];
   spell?: string;
   // A melee attack, which a monster's Parry answers (enemy-reactions.ts).
   melee?: boolean;
@@ -236,7 +240,7 @@ function markAttacker(campaign: Campaign, characterId: string, condition: string
 // An Arcane Archer's arrow missed: Curving Shot may reroll it at another
 // creature with the bonus action, this turn (authored-economy.ts).
 export function openCurvingShot(campaignId: string, sheet: CharacterSheet, enemyId: string, weapon: string): string | null {
-  const holds = sheet.features.some((feature) => feature.name.trim().toLowerCase() === "curving shot");
+  const holds = sheet.features.some((feature) => textKey(feature.name) === "curving shot");
   if (!holds || !/bow\b/i.test(weapon)) {
     return null;
   }
@@ -294,6 +298,8 @@ export function stunningStrikeSave(
       ...fresh.conditionMeta,
       stunned: untilTurnEnd(monkId, { source: monkId }),
     });
+    // Stunned is out of action: its concentration and grapples end.
+    settleEnemyIncapacitation(fresh.id, isIncapacitated(fresh.conditions));
     publishEncounter(campaign.id);
   }
   return `Stunning Strike: ${fresh.displayName} fails the CON save (${save.autoFailed ? "automatic" : save.total} vs DC ${dc}) and is stunned until the end of the monk's next turn.`;

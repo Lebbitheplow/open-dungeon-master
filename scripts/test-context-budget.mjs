@@ -22,6 +22,10 @@ import {
   MAX_RESPONSE_RESERVE_TOKENS,
   promptWindowTokens,
   responseReserveTokens,
+  historyAllowanceTokens,
+  HISTORY_MAX_TOKENS,
+  NEWEST_LINE_FLOOR_CHARS,
+  clipLine,
 } from "../src/lib/dm/context-budget.ts";
 
 let passed = 0;
@@ -41,8 +45,10 @@ check("token estimation is a chars/4 proxy and handles empty text", () => {
 check("usable budget reserves room for the reply", () => {
   assert.equal(usableTokens(32_000), 32_000 - RESPONSE_RESERVE_TOKENS);
   assert.equal(usableTokens(null), DEFAULT_CONTEXT_TOKENS - RESPONSE_RESERVE_TOKENS);
-  assert.equal(usableTokens(0), DEFAULT_CONTEXT_TOKENS - RESPONSE_RESERVE_TOKENS);
-  assert.ok(usableTokens(100) >= 1_024, "never goes below a workable floor");
+  // A limit of 0 is a window with no room left (the tools took it all), not
+  // a missing one: no floor pretends otherwise (the context audit's F01).
+  assert.equal(usableTokens(0), 0);
+  assert.equal(usableTokens(100), 0, "never negative, and no nominal floor");
 });
 
 check("shares are floored and sum to less than the usable budget", () => {
@@ -265,12 +271,47 @@ check("history is trimmed oldest-first and reports what it cut", () => {
   assert.equal(fit.tokens, 20);
 });
 
-check("history keeps the newest message even when it alone busts the budget", () => {
-  // A prompt with no transcript is useless; better to hand the model one
-  // over-long message than nothing at all.
-  const fit = fitHistory([{ id: "only", text: filler(9_999) }], 10);
+check("history keeps the newest message, cut to fit with both ends, when it alone busts the budget", () => {
+  // A prompt with no transcript is useless, and one over-long move sent whole
+  // overflows the window: it is kept, clipped at its middle, and says so.
+  const long = `START ${filler(9_999)} the question is: who holds the key?`;
+  const fit = fitHistory([{ id: "older", text: filler(5) }, { id: "only", text: long }], 10);
   assert.equal(fit.kept.length, 1);
-  assert.equal(fit.dropped, 0);
+  assert.equal(fit.dropped, 1);
+  assert.equal(fit.clipped, true);
+  assert.ok(fit.kept[0].text.length <= NEWEST_LINE_FLOOR_CHARS, `clipped to the floor (${fit.kept[0].text.length})`);
+  assert.match(fit.kept[0].text, /^START /, "the head is kept");
+  assert.match(fit.kept[0].text, /who holds the key\?$/, "the end it asks is kept");
+  assert.match(fit.kept[0].text, /characters left out to fit the model's window/, "the cut is marked");
+  // Room for it whole: untouched.
+  const whole = fitHistory([{ id: "only", text: "short line" }], 10);
+  assert.equal(whole.clipped, false);
+  assert.equal(whole.kept[0].text, "short line");
+});
+
+check("history takes the shares the fixed blocks left, up to the ceiling, never past the window", () => {
+  const limit = usableTokens(40_000) + RESPONSE_RESERVE_TOKENS;
+  const budgets = computeBudgets(limit);
+  // Fixed blocks that used little of their shares donate the rest.
+  const light = historyAllowanceTokens(limit, 1_000);
+  assert.ok(light > budgets.history, `a quiet table's transcript gets more than its share (${light} > ${budgets.history})`);
+  assert.ok(light <= Math.max(budgets.history, HISTORY_MAX_TOKENS), "never past the ceiling");
+  // Fixed blocks past their shares: the transcript keeps no more than its share.
+  assert.equal(historyAllowanceTokens(limit, budgets.rules + budgets.state + budgets.chapters + 5_000), budgets.history);
+  // Fixed blocks that fill the window: nothing is left.
+  assert.equal(historyAllowanceTokens(limit, usableTokens(limit)), 0);
+  // A huge window keeps its whole share: the ceiling never takes away.
+  const huge = computeBudgets(400_000);
+  assert.equal(historyAllowanceTokens(400_000, 1_000), huge.history);
+});
+
+check("a clipped line keeps both ends and states the gap", () => {
+  const text = `${"a".repeat(3_000)}MIDDLE${"b".repeat(3_000)}`;
+  const clipped = clipLine(text, 1_000);
+  assert.ok(clipped.length <= 1_000, `within the bound (${clipped.length})`);
+  assert.ok(clipped.startsWith("aaa") && clipped.endsWith("bbb"));
+  assert.ok(!clipped.includes("MIDDLE"));
+  assert.equal(clipLine("short", 1_000), "short");
 });
 
 check("empty inputs are handled without special-casing at the call site", () => {
@@ -357,8 +398,10 @@ check("the packing window takes the tool definitions and the grown reserve off t
   // A 16K window keeps the base reserve, so with no tools it packs exactly as before.
   assert.equal(promptWindowTokens(16_384, 0), 16_384);
   assert.equal(usableTokens(promptWindowTokens(16_384, 0)), usableTokens(16_384));
-  // Tools larger than the window: the floor keeps usableTokens on its own floor rather than going negative.
-  assert.equal(usableTokens(promptWindowTokens(16_384, 27_246)), 1_024);
+  // Tools larger than the window: no room at all, said plainly, so the
+  // whole-request fit refuses the call with the real numbers.
+  assert.equal(promptWindowTokens(16_384, 27_246), 0);
+  assert.equal(usableTokens(promptWindowTokens(16_384, 27_246)), 0);
   assert.equal(promptWindowTokens(Number.NaN, Number.NaN), promptWindowTokens(DEFAULT_CONTEXT_TOKENS, 0), "bad inputs fall back");
 });
 

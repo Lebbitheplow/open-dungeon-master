@@ -39,6 +39,8 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-reach";
 import { landSpellDamage } from "@/lib/dm/cast-at-enemy-damage";
 import { spellConditionMeta } from "@/lib/dm/spell-effects";
+import { textKey } from "@/lib/language/text-logic";
+import { areaShareProblem, markRepeatStruck, openAreaCast, recordAreaShare, repeatStrikeProblem } from "@/lib/dm/area-casting";
 // What the spell does beyond damage and condition (src/lib/dm/spell-riders.ts).
 import { afterEnemySave, chosenCondition, conditionMetaFor, heatMetalGrip } from "@/lib/dm/spell-riders";
 import { layOnEnemy, spellAutoSave, spellSaveOptions, turnEndMark } from "@/lib/dm/spell-riders";
@@ -276,6 +278,17 @@ export function handleCastAtEnemy(
     return reach;
   }
   const ward = spellWardOn({ encounterId: encounter.id, casterId: sheet.id, targetId: enemy.id, targetName: enemy.displayName, facts });
+  // A concentration area coming again strikes a creature once a turn, on an
+  // event; another creature of one area casting fits its one placement
+  // (src/lib/dm/area-casting.ts).
+  const target = { id: enemy.id, name: enemy.displayName };
+  const repeating = mech?.repeat === "free" && textKey(sheet.concentratingOn ?? "") === textKey(spellName);
+  const area = repeating
+    ? repeatStrikeProblem(encounter, { spell: spellName, casterId: sheet.id, target })
+    : areaShareProblem({ encounter, caster: sheet, spell: spellName, authors, rangeFeet: facts?.range.kind === "feet" ? facts.range.feet : null, rangeSelf: facts?.range.kind === "self", target, ...(args.atX !== undefined && args.atY !== undefined ? { at: { x: args.atX, y: args.atY } } : {}) });
+  if (area) {
+    return area;
+  }
 
   // The cast itself, through the one guard (src/lib/dm/cast-guard.ts): who
   // may cast, what they hold, the slot of the spell's own level when none is
@@ -395,7 +408,9 @@ export function handleCastAtEnemy(
 
   const hpBefore = enemy.currentHp;
   // The dice, the riders, the save's share and the kill (cast-at-enemy-damage.ts).
-  const damageDealt = damageExpression
+  // A later creature of one area casting takes its one roll.
+  const sharedRoll = cast.continuing ? openAreaCast(getActiveEncounter(campaign.id) ?? encounter, sheet.id, spellName)?.roll : undefined;
+  const landed = damageExpression
     ? landSpellDamage({
         campaign,
         turn,
@@ -416,8 +431,10 @@ export function handleCastAtEnemy(
         base,
         sheets,
         sheetsById,
+        ...(sharedRoll !== undefined ? { sharedRoll } : {}),
       })
-    : 0;
+    : null;
+  const damageDealt = landed?.dealt ?? 0;
 
   // The beam and burst on the board, coloured by the damage type, and the
   // target line for the round. Nothing to draw without a board.
@@ -514,8 +531,16 @@ export function handleCastAtEnemy(
   }
   // A spell that stays on the ground is laid around its target (src/lib/dm/zone-cast.ts).
   // A later share of the same casting (a second creature in the web) leaves it where it is.
-  const area = cast.continuing ? null : placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], ...zonePlacement(args) });
-  return { ok: true, ...base, ...(area ? { area } : {}) };
+  // A free repeat is the caster moving the area over the creature it names
+  // (Moonbeam's beam), keeping who it struck this turn.
+  const zone = cast.continuing ? null : placeSpellZone(campaign, { spell: spellName, runsAs: resolvedMech?.runsAs ?? facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel: slotLevel ?? null, dc, caught: [enemy.id], ...zonePlacement(args) });
+  // What the next call of this casting must agree with: who the area has
+  // caught and its one roll; a recurring area's strike for this turn.
+  recordAreaShare(campaign.id, sheet.id, spellName, enemy.id, landed?.rolled ?? null);
+  if (mech?.repeat === "free") {
+    markRepeatStruck(campaign, spellName, sheet.id, [enemy.id]);
+  }
+  return { ok: true, ...base, ...(zone ? { area: zone } : {}) };
 }
 
 // A creature's Hit Dice, as its block is built: hit points over the average

@@ -43,6 +43,7 @@ test("a pack's non-empty overrides win and its empty ones inherit", () => {
   assert.equal(merged.name, sample.name);
   assert.equal(merged.mapStyle, sample.mapStyle || base.mapStyle);
   assert.equal(merged.portraitStyle, sample.portraitStyle || base.portraitStyle);
+  assert.equal(merged.sceneStyle, sample.sceneStyle || base.sceneStyle);
   assert.equal(merged.nameHints, sample.nameHints || base.nameHints);
   assert.equal(
     merged.companionRaces,
@@ -163,6 +164,7 @@ test("an all-defaults pack renders nothing rather than empty headers", () => {
     dmFlavor: "",
     mapStyle: "",
     portraitStyle: "",
+    sceneStyle: "",
     nameHints: "",
     raceHint: "",
     companionRaces: [],

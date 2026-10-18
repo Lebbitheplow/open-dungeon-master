@@ -58,10 +58,12 @@ export function promptWindowTokens(contextWindowTokens: number, toolTokens: numb
   const window = Number.isFinite(contextWindowTokens) && contextWindowTokens > 0 ? contextWindowTokens : DEFAULT_CONTEXT_TOKENS;
   const tools = Number.isFinite(toolTokens) && toolTokens > 0 ? toolTokens : 0;
   const reserveAboveBase = responseReserveTokens(window) - RESPONSE_RESERVE_TOKENS;
-  // Floored so usableTokens still lands on its own 1,024 floor: a window
-  // smaller than its tool set (the 16K default with the full set) packs the
-  // contract, the rules and the newest line, and nothing else.
-  return Math.max(1_024 + RESPONSE_RESERVE_TOKENS, window - tools - reserveAboveBase);
+  // No floor: a window smaller than its tool set has no room for the
+  // blocks, and saying so here is what lets the whole-request fit
+  // (src/lib/dm/request-fit.ts) refuse it with the real numbers. A floor
+  // used to grant a nominal allowance the window did not have, so the trace
+  // showed a limit larger than the window itself (the context audit's F01).
+  return Math.max(0, window - tools - reserveAboveBase);
 }
 
 // What a block is for. Drives both the packing order and how the inspector
@@ -117,6 +119,62 @@ export type ContextTrace = {
   // for each and the block's measured budget (issue #305). Absent on turns
   // taken before it was recorded and on campaigns without lore.
   lore?: LoreTrace;
+  // The house-rule sections the prompt showed, and the always-on ones it
+  // left out for room (src/lib/dm/rules-logic.ts renderHouseRulesWithTrace).
+  houseRules?: { shown: string[]; omitted: string[] };
+  // What the turn changed for the table's model, one line each (issue #383,
+  // src/lib/dm/model-tuning-logic.ts). Absent when nothing was changed.
+  tuning?: string[];
+  // Where the transcript sits in the turn's messages: lines [historyStart,
+  // historyEnd) may be dropped oldest first when a later call must be fitted
+  // again, and the turn's own calls and results start at promptMessages
+  // (src/lib/dm/request-fit.ts). Absent on turns taken before it was kept.
+  shape?: { historyStart: number; historyEnd: number; promptMessages: number };
+  // Which tools the turn's calls were offered (src/lib/dm/tool-profiles.ts):
+  // for the compact profile, the groups the players' words opened when the
+  // turn began, all the groups offered then, and those more_tools opened.
+  profile?: { name: "full" | "lean" | "compact"; intent?: string[]; groups?: string[]; opened?: string[] };
+  // How much of this turn's opening prompt matches the previous turn's from
+  // the first token on (src/lib/dm/request-fit.ts sharedPrefixTokens): the
+  // most a server's prompt cache could reuse. Compare with the cached input
+  // the backend reports on the calls.
+  prefix?: { sharedTokens: number; promptTokens: number };
+  // Lines no summary covers that the prompt left out for want of room: the
+  // rolling compaction folds them next (src/lib/dm/compaction.ts), so play
+  // that fell out of the window is in a summary rather than in nothing.
+  historyEvicted?: number;
+  // Every model call the turn made, as it was sized and as the backend
+  // reported it (the context audit's F09): the prompt grows call by call as
+  // tool results come back, and this is where that shows.
+  calls?: CallTrace[];
+};
+
+export type CallTrace = {
+  index: number;
+  // What the call was for: the turn's own calls, or the guard's rewrite, the
+  // whisper backstop, the tools-closed rescue...
+  task: string;
+  windowTokens: number;
+  // The fitted request by the estimate, tools included, and the tools alone.
+  promptTokens: number;
+  toolTokens: number;
+  toolCount: number;
+  // The reply cap it went out with.
+  outputTokens: number;
+  // Lines left out and messages cut short to fit, when any were.
+  dropped: number;
+  clipped: number;
+  // What the backend reported; absent when it said nothing.
+  reportedInputTokens?: number;
+  cachedInputTokens?: number;
+  outputTokensUsed?: number;
+  // Sent past a window the endpoint never reported, uncapped (model.ts).
+  windowAssumed?: true;
+  reasoningTokens?: number;
+  durationMs?: number;
+  firstTokenMs?: number;
+  finishReason?: string;
+  error?: string;
 };
 
 // Allocation ported from NarrativeEngine-P's computeBudgets
@@ -182,12 +240,37 @@ export const PACK_ORDER: BlockKind[] = [
   "history",
 ];
 
+// A limit of 0 is a window with no room left (promptWindowTokens); only an
+// absent one falls back to the default.
 export function usableTokens(contextLimitTokens?: number | null): number {
   const limit =
-    typeof contextLimitTokens === "number" && contextLimitTokens > 0
+    typeof contextLimitTokens === "number" && Number.isFinite(contextLimitTokens) && contextLimitTokens >= 0
       ? contextLimitTokens
       : DEFAULT_CONTEXT_TOKENS;
-  return Math.max(1_024, limit - RESPONSE_RESERVE_TOKENS);
+  return Math.max(0, limit - RESPONSE_RESERVE_TOKENS);
+}
+
+// The most transcript a turn's prompt carries, however large the window.
+// History is the residual (the shares the rules and the state did not use
+// pass to it, as packBlocks donates), but a 128K window is not filled with
+// transcript just because it could be: every token is prefilled again on
+// every turn, and a smaller deliberate prompt answers sooner. Older play is
+// what the summaries and recall_story are for. DM_HISTORY_MAX_TOKENS sets it.
+export const HISTORY_MAX_TOKENS = 8_192;
+
+export function historyCeilingTokens(): number {
+  const raw = Number.parseInt(process.env.DM_HISTORY_MAX_TOKENS ?? "", 10);
+  return Number.isFinite(raw) && raw >= 512 ? raw : HISTORY_MAX_TOKENS;
+}
+
+// What the transcript may take: its own share, plus what the always-included
+// rules, state and chapter shares left unused, never past what the window
+// leaves after those blocks, and never past the ceiling above.
+export function historyAllowanceTokens(contextLimitTokens: number | null | undefined, fixedTokens: number): number {
+  const budgets = computeBudgets(contextLimitTokens);
+  const unclaimed = Math.max(0, budgets.rules + budgets.state + budgets.chapters - fixedTokens);
+  const room = usableTokens(contextLimitTokens) - fixedTokens;
+  return Math.max(0, Math.min(room, Math.max(budgets.history, Math.min(budgets.history + unclaimed, historyCeilingTokens()))));
 }
 
 export function computeBudgets(contextLimitTokens?: number | null): Record<BlockKind, number> {
@@ -343,20 +426,47 @@ export function cutCoveredHistory<T extends { seq: number }>(
   return { kept: entries.slice(cut), cut };
 }
 
-export function fitHistory(entries: HistoryEntry[], allowanceTokens: number): HistoryFit {
+// The least of the newest line a prompt keeps, in characters, however
+// little room is left: under this a move says nothing usable.
+export const NEWEST_LINE_FLOOR_CHARS = 1_200;
+
+// Cuts a line to `maxChars`, keeping both ends with a marked gap: what a long
+// move ends on (the question, the name) is what the turn answers.
+export function clipLine(text: string, maxChars: number): string {
+  const clean = text.trim();
+  if (clean.length <= maxChars) {
+    return clean;
+  }
+  const marker = (skipped: number) => ` [... ${skipped.toLocaleString("en-US")} characters left out to fit the model's window ...] `;
+  const room = Math.max(0, maxChars - marker(clean.length).length);
+  const head = Math.round(room * 0.3);
+  const tail = room - head;
+  const skipped = clean.length - head - tail;
+  return `${clean.slice(0, head).trimEnd()}${marker(skipped)}${clean.slice(clean.length - tail).trimStart()}`;
+}
+
+export function fitHistory(entries: HistoryEntry[], allowanceTokens: number): HistoryFit & { clipped: boolean } {
   const kept: HistoryEntry[] = [];
   let tokens = 0;
+  let clipped = false;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     const cost = estimateTokens(entry.text);
-    // Always keep at least the newest entry: a prompt with no transcript at
-    // all is useless, and a single over-long message should be truncated by
-    // the model rather than silently vanish.
-    if (tokens + cost > allowanceTokens && kept.length > 0) {
+    if (tokens + cost > allowanceTokens) {
+      // The newest line is always kept: a prompt with no transcript answers
+      // nothing. When it alone is over the allowance it is cut to fit,
+      // keeping its ends and saying so, rather than sent whole past the
+      // window (the context audit's F01).
+      if (!kept.length) {
+        const text = clipLine(entry.text, Math.max(NEWEST_LINE_FLOOR_CHARS, allowanceTokens * CHARS_PER_TOKEN));
+        clipped = text !== entry.text.trim();
+        kept.unshift({ ...entry, text });
+        tokens += estimateTokens(text);
+      }
       break;
     }
     kept.unshift(entry);
     tokens += cost;
   }
-  return { kept, dropped: entries.length - kept.length, tokens };
+  return { kept, dropped: entries.length - kept.length, tokens, clipped };
 }

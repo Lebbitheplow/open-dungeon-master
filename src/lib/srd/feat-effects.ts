@@ -8,6 +8,7 @@
 // point rule and the speed rule each read the same answer.
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import type { Ability } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 const ABILITIES: Ability[] = ["str", "dex", "con", "int", "wis", "cha"];
 const ABILITY_WORDS: Record<string, Ability> = {
@@ -22,11 +23,9 @@ const ABILITY_WORDS: Record<string, Ability> = {
 type AuthoredFeat = { name: string; prerequisite?: string; desc: string };
 const FEATS = (authoredFeatsJson as { feats: AuthoredFeat[] }).feats;
 
-const key = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
-
 function featRow(name: string): AuthoredFeat | null {
-  const wanted = key(name);
-  return FEATS.find((feat) => key(feat.name) === wanted) ?? null;
+  const wanted = textKey(name);
+  return FEATS.find((feat) => textKey(feat.name) === wanted) ?? null;
 }
 
 // A content pack feat with the same rules as one of ODM's, under another
@@ -36,40 +35,43 @@ function featRow(name: string): AuthoredFeat | null {
 // twin (Battle Caster's expertise die, Powerful Attacker's disadvantage)
 // stays its own feat, and so does one whose name a class feature shares
 // (Level Up's Skirmisher is Mobile, but the Scout ranger's feature is
-// named Skirmisher and this table reads features too).
-export const FEAT_TWINS: Record<string, string> = {
-  attentive: "alert",
-  intuitive: "observant",
-  "hardy adventurer": "tough",
-  "crossbow expertise": "crossbow expert",
-  "power caster": "spell sniper",
-  dungeoneer: "dungeon delver",
-  "heavy armor expertise": "heavy armor master",
-  tenacious: "resilient",
-  "street fighter": "tavern brawler",
-  "dual-wielding expert": "dual wielder",
-  "rite master": "ritual caster",
-  deflector: "defensive duelist",
-  "primordial caster": "elemental adept",
-  "stealth expert": "skulker",
-  "shield focus": "shield master",
-  "polearm savant": "polearm master",
-  "guarded warrior": "sentinel",
-  "rallying speaker": "inspiring leader",
-  "keen intellect": "keen mind",
-  thespian: "actor",
-  athletic: "athlete",
-  "mounted warrior": "mounted combatant",
-  "medium armor expert": "medium armor master",
-  "linguistics expert": "linguist",
-  "heavily outfitted": "heavily armored",
-  "moderately outfitted": "moderately armored",
-  "lightly outfitted": "lightly armored",
-  "weapons specialist": "weapon master",
-  fortunate: "lucky",
-  "mystical talent": "magic initiate",
-  skillful: "skilled",
-};
+// named Skirmisher and this table reads features too). Keyed by textKey,
+// as every reader looks a name up.
+export const FEAT_TWINS: Record<string, string> = Object.fromEntries(
+  Object.entries({
+    attentive: "alert",
+    intuitive: "observant",
+    "hardy adventurer": "tough",
+    "crossbow expertise": "crossbow expert",
+    "power caster": "spell sniper",
+    dungeoneer: "dungeon delver",
+    "heavy armor expertise": "heavy armor master",
+    tenacious: "resilient",
+    "street fighter": "tavern brawler",
+    "dual-wielding expert": "dual wielder",
+    "rite master": "ritual caster",
+    deflector: "defensive duelist",
+    "primordial caster": "elemental adept",
+    "stealth expert": "skulker",
+    "shield focus": "shield master",
+    "polearm savant": "polearm master",
+    "guarded warrior": "sentinel",
+    "rallying speaker": "inspiring leader",
+    "keen intellect": "keen mind",
+    thespian: "actor",
+    athletic: "athlete",
+    "mounted warrior": "mounted combatant",
+    "medium armor expert": "medium armor master",
+    "linguistics expert": "linguist",
+    "heavily outfitted": "heavily armored",
+    "moderately outfitted": "moderately armored",
+    "lightly outfitted": "lightly armored",
+    "weapons specialist": "weapon master",
+    fortunate: "lucky",
+    "mystical talent": "magic initiate",
+    skillful: "skilled",
+  }).map(([name, twin]) => [textKey(name), twin]),
+);
 
 // ---- a table's workshop feats ----
 
@@ -113,9 +115,9 @@ export function registerBrowserTableFeats(
   const held = options.replace ? new Map<string, TableFeat>() : (browserFeats.get(scope) ?? new Map<string, TableFeat>());
   for (const [name, feat] of Object.entries(feats ?? {})) {
     if (feat) {
-      held.set(key(name), feat);
+      held.set(textKey(name), feat);
     } else {
-      held.delete(key(name));
+      held.delete(textKey(name));
     }
   }
   browserFeats.set(scope, held);
@@ -127,7 +129,7 @@ export function forgetBrowserTableFeats(): void {
   browserFeats.clear();
 }
 
-const KNOWN_FEATS = new Set(FEATS.map((feat) => key(feat.name)));
+const KNOWN_FEATS = new Set(FEATS.map((feat) => textKey(feat.name)));
 
 export function engineFeatNames(): string[] {
   return FEATS.map((feat) => feat.name);
@@ -140,7 +142,7 @@ export function engineFeatNamed(name: string): string | null {
 }
 
 export function tableFeat(name: string, campaignId?: string | null): TableFeat | null {
-  const own = key(name);
+  const own = textKey(name);
   if (!own || KNOWN_FEATS.has(own) || FEAT_TWINS[own]) {
     return null;
   }
@@ -158,9 +160,9 @@ export function featsAsRun(feats: string[] | undefined, campaignId?: string | nu
 // The feat the engines know a name as: the published feat a table's
 // workshop feat runs as, its twin's, or its own, lower case.
 export function featTwinOf(name: string, campaignId?: string | null): string {
-  const own = key(name);
+  const own = textKey(name);
   const runsAs = tableFeat(name, campaignId)?.runsAs;
-  if (runsAs && key(runsAs) !== own) {
+  if (runsAs && textKey(runsAs) !== own) {
     return featTwinOf(runsAs);
   }
   return FEAT_TWINS[own] ?? own;
@@ -173,7 +175,7 @@ export function holdsFeat(
   sheet: { feats?: string[]; features?: Array<{ name: string }>; campaignId?: string },
   name: string,
 ): boolean {
-  const wanted = key(name);
+  const wanted = textKey(name);
   return (
     (sheet.feats ?? []).some((feat) => featTwinOf(feat, sheet.campaignId) === wanted) ||
     (sheet.features ?? []).some((feature) => featTwinOf(feature.name, sheet.campaignId) === wanted)
@@ -185,6 +187,13 @@ export function holdsFeat(
 // a content pack's feat, whose text the pack serves.
 export function authoredFeatDesc(name: string): string | null {
   return featRow(name)?.desc ?? null;
+}
+
+// The prerequisite of one of ODM's own feats ("" for none); null for a
+// content pack's feat, whose row carries its own.
+export function authoredFeatPrerequisite(name: string): string | null {
+  const row = featRow(name);
+  return row ? (row.prerequisite ?? "") : null;
 }
 
 // ---- the half-feats ----

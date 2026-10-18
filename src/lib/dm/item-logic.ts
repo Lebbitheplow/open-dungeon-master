@@ -2,6 +2,7 @@ import type { EquipmentItem } from "@/lib/schemas/sheet";
 import { matchArmor } from "@/lib/srd/armor";
 import { matchWeapon } from "@/lib/srd/weapons";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // Pure consumable knowledge for the use_item tool: healing potion tiers,
 // generic consumable detection, and ammunition lookup. Database-free so
@@ -34,20 +35,20 @@ export function consumableEffect(name: string): ConsumableEffect {
 
 // Finds a carried item by fuzzy name (containment either way).
 export function findCarriedItem(equipment: EquipmentItem[], term: string): EquipmentItem | null {
-  const wanted = term.trim().toLowerCase();
+  const wanted = textKey(term);
   if (!wanted) {
     return null;
   }
   return (
-    equipment.find((item) => item.name.toLowerCase() === wanted) ??
+    equipment.find((item) => textKey(item.name) === wanted) ??
     equipment.find(
       (item) =>
-        item.name.toLowerCase().includes(wanted) || wanted.includes(item.name.toLowerCase()),
+        textKey(item.name).includes(wanted) || wanted.includes(textKey(item.name)),
     ) ??
     // Token fallback so "healing potion" still finds "Potion of Healing".
     equipment.find((item) => {
-      const name = item.name.toLowerCase();
-      const tokens = wanted.split(/\s+/).filter((token) => token.length > 2);
+      const name = textKey(item.name);
+      const tokens = wanted.split(" ").filter((token) => token.length > 2);
       return tokens.length > 0 && tokens.every((token) => name.includes(token));
     }) ??
     null
@@ -59,17 +60,17 @@ export function findCarriedItem(equipment: EquipmentItem[], term: string): Equip
 // one means the name is ambiguous (src/lib/dm/item-use.ts refuses to spend a
 // charged item on a guess).
 export function carriedItemsMatching(equipment: EquipmentItem[], term: string): EquipmentItem[] {
-  const wanted = term.trim().toLowerCase();
+  const wanted = textKey(term);
   if (!wanted) {
     return [];
   }
-  const exact = equipment.filter((item) => item.name.toLowerCase() === wanted);
+  const exact = equipment.filter((item) => textKey(item.name) === wanted);
   if (exact.length) {
     return exact;
   }
-  const tokens = wanted.split(/\s+/).filter((token) => token.length > 2);
+  const tokens = wanted.split(" ").filter((token) => token.length > 2);
   return equipment.filter((item) => {
-    const name = item.name.toLowerCase();
+    const name = textKey(item.name);
     return (
       name.includes(wanted) ||
       wanted.includes(name) ||

@@ -1,4 +1,5 @@
 import { TTS_VOICES } from "@/lib/tts-voices";
+import { textKey } from "@/lib/language/text-logic";
 
 // Casting voices (issue 97): which of the server's voices suits a speaker
 // nobody has chosen one for. Pure and deterministic, so the same table is
@@ -79,5 +80,5 @@ export function pickVoice(name: string, gender: VoiceGender, pool: string[], tak
   const curated = new Set<string>(TTS_VOICES.map((voice) => voice.id));
   const named = free.filter((id) => curated.has(id));
   const from = named.length ? named : free;
-  return from[hash(name.trim().toLowerCase()) % from.length];
+  return from[hash(textKey(name)) % from.length];
 }

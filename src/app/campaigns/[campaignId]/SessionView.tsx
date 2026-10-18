@@ -885,6 +885,8 @@ export function SessionView({
     refreshBattleMap,
     relationshipsVersion: state.relationshipsVersion,
     factionsVersion: state.factionsVersion,
+    worldVersion: state.worldVersion,
+    loreVersion: state.loreVersion,
     shopsVersion: state.shopsVersion,
     coins: state.coins,
     activeSheetId: state.activeSheetId,
@@ -1070,6 +1072,7 @@ export function SessionView({
                     inputBlocked={gate.inputBlocked || silenced}
                     placeholder={silenced ? silencedPlaceholder : gate.placeholder}
                     dmStatus={dmStatus}
+                    dmJob={state.dmJob}
                     pendingRolls={pendingRolls}
                     members={state.members}
                     floor={floor}

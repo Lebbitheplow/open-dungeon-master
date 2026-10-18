@@ -3,7 +3,8 @@
 // - a reply that is a call's arguments as bare JSON ('{"characterIds":[...],
 //   "prompt":"..."}'), alone or glued to the prose, runs as that call and
 //   never reaches the table;
-// - a reply with no text and no tool call is asked again once, outside the
+// - a reply with no text and no tool call (or only JSON no offered tool
+//   takes) is asked again once, outside the
 //   call budget, and a turn whose last reply stays empty gets the
 //   tools-closed narration call;
 // - a reply of calls that need no follow-up (a tool that does not exist,
@@ -150,6 +151,9 @@ const server = http.createServer((req, res) => {
       sse(res, []);
     } else if (reply === "json-ask") {
       sse(res, [{ content: askJson() }]);
+    } else if (reply === "stray-json") {
+      // Arguments with no name and a key no offered tool has (Gemma4 e4b).
+      sse(res, [{ content: '{\n"characterId": "Avery",\n"kind": "investigation",\n"summary": "Avery scans the ford.",\n"waypoint": 1\n}' }]);
     } else if (reply === "narrate-json-ask") {
       sse(res, [{ content: `${NARRATION} What will you do?` }, { content: askJson() }]);
     } else if (reply === "unknown-tool") {
@@ -249,6 +253,13 @@ assert.equal(empty.calls, 2);
 assert.deepEqual(empty.requests[1].messages, empty.requests[0].messages, "the retry asks the same thing again");
 assert.notEqual(empty.requests[1].tool_choice, "none", "the retry did not spend the call budget");
 console.log("ok: an empty reply is asked again once");
+
+// A reply that is only JSON no offered tool takes is as empty as no reply.
+const stray = await run("Stray JSON only", ["stray-json", "narrate"]);
+assert.equal(stray.text, NARRATION, `expected narration after a retry, got: ${stray.text}`);
+assert.equal(stray.calls, 2);
+assert.deepEqual(stray.requests[1].messages, stray.requests[0].messages, "the retry asks the same thing again");
+console.log("ok: a reply of JSON no tool takes is asked again, like an empty one");
 
 // Empty twice: the tools-closed call narrates.
 const twice = await run("Empty twice", ["empty", "empty", "narrate"]);

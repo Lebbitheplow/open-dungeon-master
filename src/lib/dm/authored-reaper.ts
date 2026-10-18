@@ -12,7 +12,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
 import { authoredTwinSpell } from "@/lib/srd/authored-effects-more";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { withinFeet } from "@/lib/dm/authored-saves";
 import { handleCastAtEnemy } from "@/lib/dm/cast-at-enemy";
 import { openCastOf, withOpenCast } from "@/lib/dm/cast-rules";
@@ -74,7 +74,7 @@ export function handleReaperCast(
   if (!withinFeet(encounter.id, first.id, second.id, 5)) {
     return { error: `${second.displayName} is not within 5 feet of ${first.displayName}; Improved Reaper's second target must be. Ask the player for another target, or whether to cast it at one creature. Nothing was spent.`, retry: true };
   }
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   if (!budget) {
     return { error: `Improved Reaper doubles a spell ${sheet.name} casts on their own turn. Ask the player whether to cast it at one creature. Nothing was spent.`, retry: true };
   }
@@ -84,7 +84,7 @@ export function handleReaperCast(
   }
   // One more share of the same casting, for the second creature.
   const live = getActiveEncounter(campaign.id);
-  const liveBudget = live ? budgetFor(live, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions)) : null;
+  const liveBudget = live ? budgetFor(live, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions)) : null;
   const name = facts?.name ?? spell;
   if (live && liveBudget) {
     const open = openCastOf(liveBudget, name);

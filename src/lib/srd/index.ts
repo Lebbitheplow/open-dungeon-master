@@ -1,5 +1,6 @@
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { FEAT_ONLY_SPEED } from "@/lib/srd/feature-effects";
+import { formSees } from "@/lib/srd/shape-rules";
 import { hasMediumArmorMaster } from "@/lib/srd/feat-combat";
 import backgroundsJson from "@/lib/srd/backgrounds.json";
 import classesJson from "@/lib/srd/classes.json";
@@ -26,6 +27,7 @@ import type {
 import { itemCastNumbers } from "@/lib/srd/item-cast-credit";
 
 import type { SrdBackground, SrdClass, SrdRace, SrdSkill } from "@/lib/srd/srd-types";
+import { textKey } from "@/lib/language/text-logic";
 
 export type { SrdBackground, SrdClass, SrdRace, SrdSkill } from "@/lib/srd/srd-types";
 
@@ -244,19 +246,20 @@ export function effectiveAcFor(
     abilities?: AbilityScores;
   },
 ): number {
-  if (sheet.wildShape?.beastAc !== undefined && sheet.wildShape?.beastAc !== null) {
-    return sheet.wildShape.beastAc;
-  }
-  if (!sheet.acOverride || !sheet.conditions?.length) {
+  // A form's own AC is the base the ongoing effects ride (Shield of Faith,
+  // Haste, Slow, Barkskin's floor); the stored AC already carries them.
+  const formAc = sheet.wildShape?.beastAc ?? null;
+  if (formAc === null && (!sheet.acOverride || !sheet.conditions?.length)) {
     return sheet.ac;
   }
-  const mods = sheet.abilities
+  const scores = sheet.abilities ? { ...sheet.abilities, ...(sheet.wildShape?.abilities ?? {}) } : undefined;
+  const mods = scores
     ? Object.fromEntries(
-        Object.entries(sheet.abilities).map(([ability, score]) => [ability, abilityMod(score)]),
+        Object.entries(scores).map(([ability, score]) => [ability, abilityMod(score)]),
       )
     : undefined;
-  const riders = conditionAcRiders(sheet.conditions, mods);
-  const raised = sheet.ac + riders.bonus;
+  const riders = conditionAcRiders(sheet.conditions ?? [], mods);
+  const raised = (formAc ?? sheet.ac) + riders.bonus;
   return riders.floor ? Math.max(raised, riders.floor) : raised;
 }
 
@@ -285,7 +288,7 @@ export function speedFor(
   // Test doubles and half-built sheets may lack these lists. A feat that
   // moves speed (Mobile) is read from sheet.feats as a feature by its name.
   const featNames = (source.feats ?? []).filter(
-    (feat) => !(source.features ?? []).some((feature) => feature.name.toLowerCase() === feat.toLowerCase()),
+    (feat) => !(source.features ?? []).some((feature) => textKey(feature.name) === textKey(feat)),
   );
   const features = [...(source.features ?? []), ...featNames.map((name) => ({ name }))];
   const equipment = source.equipment ?? [];
@@ -311,7 +314,7 @@ export function speedFor(
   }
   // A feat whose name a class feature shares is read from sheet.feats alone
   // (feature-effects.ts FEAT_ONLY_SPEED: Level Up's Skirmisher).
-  const featOnly = (source.feats ?? []).reduce((sum, feat) => sum + (FEAT_ONLY_SPEED[feat.trim().toLowerCase()] ?? 0), 0);
+  const featOnly = (source.feats ?? []).reduce((sum, feat) => sum + (FEAT_ONLY_SPEED[textKey(feat)] ?? 0), 0);
   const bonus = [...bySource.values()].reduce((sum, amount) => sum + amount, 0) + featOnly;
   const carried = source.abilities
     ? encumbranceFor({
@@ -396,6 +399,9 @@ export function computeSheetDerived(
     campaignId?: string;
   },
 ): SheetDerived {
+  // A Polymorph's beast is its own creature: none of the character's
+  // proficiencies, features, feats or gear (shape-rules.ts formSees).
+  sheet = formSees(sheet);
   const pb = proficiencyBonus(sheet.level);
   // Ability-setting magic items raise the scores every other number reads.
   const withItems = sheet.equipment
@@ -545,26 +551,26 @@ function casterEntryForSpell(
   // domain's, an oath's, a circle's), which no list on the sheet names.
   classes: Array<{ id: string; subclass?: string; level: number }> = [],
 ): NonNullable<NonNullable<CharacterSheet["spellcasting"]>["casters"]>[number] | null {
-  const wanted = spellName.trim().toLowerCase();
+  const wanted = textKey(spellName);
   if (!wanted || !spellcasting.casters?.length) {
     return null;
   }
   const listed = spellcasting.casters.find((caster) =>
     allSpellNames(caster).some(
-      (entry) => entry.trim().toLowerCase() === wanted,
+      (entry) => textKey(entry) === wanted,
     ),
   );
   if (listed) {
     return listed;
   }
   const granter = classes.find(
-    (entry) => entry.subclass && subclassSpellsFor(entry.id, entry.subclass, entry.level).some((name) => name.trim().toLowerCase() === wanted),
+    (entry) => entry.subclass && subclassSpellsFor(entry.id, entry.subclass, entry.level).some((name) => textKey(name) === wanted),
   );
   if (granter) {
     return spellcasting.casters.find((caster) => caster.classId.toLowerCase() === granter.id.toLowerCase()) ?? null;
   }
   // A ritual read from a wizard's book, prepared or not, is the wizard's.
-  return spellcasting.casters.find((caster) => (caster.spellbook ?? []).some((entry) => entry.trim().toLowerCase() === wanted)) ?? null;
+  return spellcasting.casters.find((caster) => (caster.spellbook ?? []).some((entry) => textKey(entry) === wanted)) ?? null;
 }
 
 type DerivedSheet = Parameters<typeof computeSheetDerived>[0];

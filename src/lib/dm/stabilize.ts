@@ -8,6 +8,7 @@
 // point after 1d4 hours (src/lib/dm/death.ts rollStableTimer).
 //
 // This module must not import mutations.ts (which imports it).
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { patchSheet } from "@/lib/db/sheets";
@@ -33,6 +34,7 @@ import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget"
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
 import { STABILIZE_DC, SUFFOCATING, stabilizeMethod } from "@/lib/dm/vitals-logic";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // A healer's kit holds ten uses (SRD 5.1, Adventuring Gear). The count lives
 // on the row's `charges`; a row with none recorded is a full kit, so every
@@ -131,7 +133,7 @@ export function handleStabilize(
   }
   // The healer spends their action on it, so they must have one to spend;
   // Field Surgeon and Triage make it a bonus action (issue 233).
-  const quick = ["Field Surgeon", "Triage"].find((name) => healer.features.some((feature) => feature.name.trim().toLowerCase() === name.toLowerCase())) ?? null;
+  const quick = ["Field Surgeon", "Triage"].find((name) => healer.features.some((feature) => textKey(feature.name) === textKey(name))) ?? null;
   const encounter = getActiveEncounter(campaign.id);
   // Off their turn, a healer who readied this: their reaction (readied-release.ts).
   const readied = readiedReleaseFor(healer, encounter, "stabilize");
@@ -151,7 +153,7 @@ export function handleStabilize(
   // The action (or bonus action) before the method: asking whether to try
   // the check instead is moot when it cannot be paid for.
   const budget = encounter && !readied
-    ? budgetFor(encounter, healer.id, attacksAllowedFor(healer))
+    ? budgetFor(encounter, healer.id, attacksAllowedFor(healer), conditionTurnShape(healer.conditions))
     : null;
   const spent = budget ? spendAction(budget, quick ? "bonus" : "action", quick ? `Stabilizing a creature (${quick})` : "Stabilizing a creature", healer.name) : null;
   if (spent && !spent.ok) {
@@ -174,7 +176,7 @@ export function handleStabilize(
   } else if (method === "spell") {
     const knows = healer.spellcasting
       ? allSpellNames(healer.spellcasting).some(
-          (entry) => entry.trim().toLowerCase() === "spare the dying",
+          (entry) => textKey(entry) === "spare the dying",
         )
       : false;
     if (!knows) {
@@ -317,7 +319,7 @@ export function healerKitUse(
     if (far && healer.id !== target.id) {
       return far;
     }
-    const budget = budgetFor(encounter, healer.id, attacksAllowedFor(healer));
+    const budget = budgetFor(encounter, healer.id, attacksAllowedFor(healer), conditionTurnShape(healer.conditions));
     if (budget) {
       const spent = spendAction(budget, "action", "the healer's kit", healer.name);
       if (!spent.ok) {

@@ -14,6 +14,7 @@
 
 import { BEAST_FORMS, type BeastForm } from "@/lib/srd/beast-forms";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type ShapeRule = {
   spell: string;
@@ -23,6 +24,9 @@ export type ShapeRule = {
   maxSize?: BeastForm["size"];
   // The target keeps its own Intelligence, Wisdom and Charisma.
   keepsMind: boolean;
+  // The target keeps its proficiencies, class features and lineage
+  // (Shapechange); otherwise the beast's statistics replace them.
+  keepsTraining?: boolean;
 };
 
 const SIZES: Array<BeastForm["size"]> = ["Tiny", "Small", "Medium", "Large", "Huge"];
@@ -30,11 +34,11 @@ const SIZES: Array<BeastForm["size"]> = ["Tiny", "Small", "Medium", "Large", "Hu
 const RULES: Record<string, ShapeRule> = {
   polymorph: { spell: "Polymorph", crCap: (target) => target, keepsMind: false },
   "animal shapes": { spell: "Animal Shapes", crCap: () => 4, maxSize: "Large", keepsMind: true },
-  shapechange: { spell: "Shapechange", crCap: (_target, caster) => caster, keepsMind: true },
+  shapechange: { spell: "Shapechange", crCap: (_target, caster) => caster, keepsMind: true, keepsTraining: true },
 };
 
 export function shapeRuleFor(spell: string): ShapeRule {
-  return RULES[spell.trim().toLowerCase()] ?? RULES.polymorph;
+  return RULES[textKey(spell)] ?? RULES.polymorph;
 }
 
 // Why this form is not allowed for this target, or null.
@@ -52,6 +56,32 @@ export function shapeProblem(rule: ShapeRule, form: BeastForm, target: { name: s
 // The forms the spell may give this target.
 export function shapeForms(rule: ShapeRule, target: { name: string; level: number }, casterLevel: number): BeastForm[] {
   return BEAST_FORMS.filter((form) => !shapeProblem(rule, form, target, casterLevel));
+}
+
+// The creature a transformed character is, for every number read from the
+// sheet (SRD 5.1): Polymorph's and Animal Shapes' beast has none of the
+// character's proficiencies, features, feats or lineage, and its gear has
+// melded into the form; Wild Shape and Shapechange keep them. The scores and
+// the AC come from the form itself (wildShape), read where they are read.
+export function formSees<T extends {
+  wildShape?: { kind?: "wildshape" | "polymorph"; keepsTraining?: boolean } | null;
+  features?: Array<{ name: string }>;
+  feats?: string[];
+  race?: string;
+  equipment?: unknown[];
+  proficiencies?: { saves: string[]; skills: string[]; expertise?: string[] };
+}>(sheet: T): T {
+  if (sheet.wildShape?.kind !== "polymorph" || sheet.wildShape.keepsTraining) {
+    return sheet;
+  }
+  return {
+    ...sheet,
+    ...(sheet.features ? { features: [] } : {}),
+    ...(sheet.feats ? { feats: [] } : {}),
+    ...(sheet.race !== undefined ? { race: "beast" } : {}),
+    ...(sheet.equipment ? { equipment: [] } : {}),
+    ...(sheet.proficiencies ? { proficiencies: { ...sheet.proficiencies, saves: [], skills: [], expertise: [] } } : {}),
+  };
 }
 
 // The ability scores the form gives: the beast's, with the target's own

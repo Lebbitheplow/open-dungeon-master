@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { MonsterTile } from "@/lib/ui";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import { addToRoster, formatRoster, parseRoster } from "@/lib/dm/encounter-template-logic";
+import { textKey } from "@/lib/language/text-logic";
 
 const input =
   "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
@@ -71,7 +72,7 @@ export function MonsterRosterPicker({
             // the one they came looking for.
             const mine = payload.monsters
               .filter((monster) =>
-                monster.draft.name.toLowerCase().includes(term.toLowerCase()),
+                textKey(monster.draft.name).includes(textKey(term)),
               )
               .map((monster) => ({
                 slug: monster.slug,

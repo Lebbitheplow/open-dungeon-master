@@ -101,6 +101,9 @@ export type HarnessConfig = {
   model: string;
   utilityModel: string;
   effort: "" | HarnessEffort;
+  // The bookkeeping model's effort (summaries, compaction, the reader,
+  // Ask). Blank = the story's effort, as it was before there were two.
+  utilityEffort: "" | HarnessEffort;
   speed: "" | "fast";
   utilitySpeed: "" | "fast";
   images: "off" | "native";

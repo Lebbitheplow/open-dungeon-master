@@ -81,6 +81,33 @@
 }
 .moment-ring-late { animation-delay: 800ms; }
 
+/* The level-up's way out: a named button, not a click on the backdrop. */
+.moment-stage:has(.moment-dismiss) { cursor: default; }
+.moment-dismiss {
+  margin-top: 1.25rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 1.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 171, 58, 0.55);
+  background: rgba(20, 12, 40, 0.7);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-amber-100);
+  cursor: pointer;
+  animation: item-in 520ms var(--ease-spring, ease-out) 600ms both;
+}
+.moment-dismiss:hover { border-color: rgba(236, 210, 135, 0.9); }
+.moment-dismiss:focus-visible { outline: 2px solid var(--color-amber-300); outline-offset: 3px; }
+/* The still card, under reduced motion or low effects (LevelUpMoment): the
+   medallion and the words, already in place, until Dismiss. */
+.moment-stage[data-still],
+.moment-stage[data-still] .moment-kicker,
+.moment-stage[data-still] .moment-title,
+.moment-stage[data-still] .moment-levelup-medallion,
+.moment-stage[data-still] .moment-dismiss { animation: none; }
+.moment-stage[data-still] .moment-ring { display: none; }
+
 /* ---- rest ---- */
 .moment-rest {
   position: relative;
@@ -237,6 +264,10 @@ html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter:
   100% { opacity: 0; transform: perspective(900px) translateY(-22px) rotateY(0) scale(0.96); }
 }
 [data-effects="low"] .moment-loot-rays { display: none; }
+/* The two loops left: the fire's glow rests lit and the loading sigil
+   holds still (it sits under aria-busy, so the wait is still announced). */
+[data-effects="low"] .moment-rest-glow,
+[data-effects="low"] .moment-sigil { animation: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .moment-loot-card { animation: overlay-soft 300ms ease-out both; }
@@ -249,6 +280,7 @@ html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter:
   .moment-levelup-medallion,
   .moment-rest-seat,
   .moment-rest-glow,
-  .moment-sigil { animation: none; }
+  .moment-sigil,
+  .moment-dismiss { animation: none; }
   .moment-ring { display: none; }
 }

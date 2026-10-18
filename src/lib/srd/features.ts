@@ -10,6 +10,7 @@ import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
+import { textKey } from "@/lib/language/text-logic";
 
 export type SubclassTable = {
   name: string;
@@ -45,8 +46,8 @@ type RawSubclass = Omit<SubclassTable, "levels"> & {
 // last domain's text for all of them.
 const SUBCLASS_FEATURE_TEXT: Record<string, string> = {};
 
-function textKey(classId: string, subclassName: string, featureName: string) {
-  return `${classId}::${subclassName.trim().toLowerCase()}::${featureName.trim().toLowerCase()}`;
+function subclassTextKey(classId: string, subclassName: string, featureName: string) {
+  return `${classId}::${textKey(subclassName)}::${textKey(featureName)}`;
 }
 
 // The SRD table carries each class's base levels and its one SRD subclass;
@@ -61,7 +62,7 @@ const AUTHORED_SUBCLASSES: Record<string, SubclassTable[]> = Object.fromEntries(
         for (const [level, features] of Object.entries(entry.levels)) {
           levels[level] = features.map((feature) => feature.n);
           for (const feature of features) {
-            SUBCLASS_FEATURE_TEXT[textKey(classId, entry.name, feature.n)] = feature.d;
+            SUBCLASS_FEATURE_TEXT[subclassTextKey(classId, entry.name, feature.n)] = feature.d;
           }
         }
         return {
@@ -79,15 +80,15 @@ const AUTHORED_SUBCLASSES: Record<string, SubclassTable[]> = Object.fromEntries(
 // dialog: the SRD table's own line or the authored entry's. Null for a
 // subclass only the content pack knows, whose row carries its own text.
 export function subclassBlurb(classId: string, subclass: string): string | null {
-  const wanted = subclass.trim().toLowerCase();
+  const wanted = textKey(subclass);
   const srd = SRD_CLASS_FEATURES[classId]?.subclasses.find(
-    (entry) => entry.name.toLowerCase() === wanted && entry.desc,
+    (entry) => textKey(entry.name) === wanted && entry.desc,
   );
   if (srd?.desc) {
     return srd.desc;
   }
   const authored = AUTHORED_SUBCLASS_ENTRIES[classId]?.find(
-    (entry) => entry.name.toLowerCase() === wanted || (entry.aliases ?? []).some((alias) => alias.toLowerCase() === wanted),
+    (entry) => textKey(entry.name) === wanted || (entry.aliases ?? []).some((alias) => textKey(alias) === wanted),
   );
   return authored?.desc ?? null;
 }
@@ -108,16 +109,16 @@ export function subclassFeatureDescription(
   if (!chosen) {
     // A workshop or pack subclass carries its features' own text.
     const extra = extraSubclassNamed(classId, subclass, extras);
-    const wanted = featureName.trim().toLowerCase();
+    const wanted = textKey(featureName);
     for (const rows of Object.values(extra?.levels ?? {})) {
-      const row = rows.find((entry) => entry.n.trim().toLowerCase() === wanted);
+      const row = rows.find((entry) => textKey(entry.n) === wanted);
       if (row?.d) {
         return row.d;
       }
     }
     return null;
   }
-  return SUBCLASS_FEATURE_TEXT[textKey(classId, chosen.name, featureName)] ?? null;
+  return SUBCLASS_FEATURE_TEXT[subclassTextKey(classId, chosen.name, featureName)] ?? null;
 }
 
 // The player-facing blurb for each authored subclass, for the pickers and
@@ -211,8 +212,6 @@ function leveledNames(levels: Record<string, string[]>, level: number): SheetFea
   return granted.sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
 }
 
-const normalizeName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
-
 // The subclass a sheet's free-text string means, or null: the exact name, an
 // alias, or either with its title stripped on both sides and compared
 // whole. A string that is merely part of a name matches nothing, so a
@@ -268,14 +267,14 @@ function findSubclass(table: ClassFeatureTable, stored: string): SubclassTable |
 // the loose match above would answer yes to half a name.
 export function bundledSubclassName(classId: string, subclass: string): string | null {
   const table = CLASS_FEATURES[classId];
-  const wanted = normalizeName(subclass);
+  const wanted = textKey(subclass);
   if (!table || !wanted) {
     return null;
   }
   const found = table.subclasses.find(
     (entry) =>
-      normalizeName(entry.name) === wanted ||
-      (entry.aliases ?? []).some((alias) => normalizeName(alias) === wanted),
+      textKey(entry.name) === wanted ||
+      (entry.aliases ?? []).some((alias) => textKey(alias) === wanted),
   );
   return found?.name ?? null;
 }
@@ -284,7 +283,7 @@ export function bundledSubclassName(classId: string, subclass: string): string |
 // their subclasses and the lineages' traits, plus the option picks. A name
 // here is one the rules know, whoever holds it.
 let publishedFeatureNames: Set<string> | null = null;
-const featureKey = (name: string) => name.replace(/\s*\([^)]*\)\s*$/, "").trim().toLowerCase();
+const featureKey = (name: string) => textKey(name.replace(/\s*\([^)]*\)\s*$/, ""));
 
 export function isPublishedFeatureName(name: string): boolean {
   if (!publishedFeatureNames) {
@@ -399,10 +398,10 @@ export function populateFeaturesForClasses(
   // A race the bundled data doesn't describe (a content-pack Catfolk) has its
   // trait names written by the builder; they are the only copy there is.
   const keepsRaceNames = racialTraits.length === 0;
-  const grantedNames = new Set(granted.map((feature) => feature.name.toLowerCase()));
+  const grantedNames = new Set(granted.map((feature) => textKey(feature.name)));
   const kept = pruneChoiceFeatures(
     existing.filter(
-      (feature, feats) =>
+      (feature) =>
         (feature.source === "feat" ||
           feature.source === "story" ||
           feature.source === "choice" ||
@@ -411,14 +410,14 @@ export function populateFeaturesForClasses(
           // A dragonborn's chosen ancestry is a race feature only the
           // player's pick names; the regrant keeps it.
           (feature.source === "race" && takesDraconicAncestry(raceId) && ancestryOf([feature]) !== null)) &&
-        !grantedNames.has(feature.name.toLowerCase()),
+        !grantedNames.has(textKey(feature.name)),
     ),
     classes,
     granted,
   );
   const seen = new Set<string>();
   return [...granted, ...kept].filter((feature) => {
-    const key = feature.name.toLowerCase();
+    const key = textKey(feature.name);
     if (seen.has(key)) {
       return false;
     }
@@ -441,7 +440,7 @@ function pruneChoiceFeatures(
   feats?: string[],
 ): SheetFeature[] {
   const styleSlots = fightingStyleSlots(granted);
-  const styles = new Set(chosenFightingStyles(features).map((name) => name.toLowerCase()));
+  const styles = new Set(chosenFightingStyles(features).map((name) => textKey(name)));
   let stylesKept = 0;
   const perKind = new Map<string, number>();
   return features.filter((feature) => {
@@ -461,7 +460,7 @@ function pruneChoiceFeatures(
       return true;
     }
     const bare = chosenFightingStyles([feature])[0];
-    if (bare !== undefined && styles.has(bare.toLowerCase())) {
+    if (bare !== undefined && styles.has(textKey(bare))) {
       if (stylesKept >= styleSlots) {
         return false;
       }

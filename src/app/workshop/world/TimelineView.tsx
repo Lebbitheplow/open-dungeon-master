@@ -149,12 +149,12 @@ export function TimelineView({ api, world, onOpen }: { api: WorldApi; world: Wor
 function CalendarForm({ calendar, onSave, onCancel }: { calendar: Calendar; onSave: (calendar: Calendar) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(calendar);
   return (
-    <form className="panel motion-pop grid gap-2 rounded-lg p-3 sm:grid-cols-[1fr_6rem_8rem]" onSubmit={(event) => { event.preventDefault(); if (draft.name.trim()) onSave(draft); }}>
+    <form className="panel motion-pop grid gap-2 rounded-lg p-3 @lg:grid-cols-[1fr_6rem_8rem]" onSubmit={(event) => { event.preventDefault(); if (draft.name.trim()) onSave(draft); }}>
       <input className={ui.input} placeholder="Reckoning of Tides" aria-label="Calendar name" maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoFocus />
       <input className={ui.input} placeholder="RT" aria-label="Abbreviation" maxLength={12} value={draft.abbrev} onChange={(event) => setDraft({ ...draft, abbrev: event.target.value })} />
       <input className={ui.input} type="number" aria-label="Where its year 0 falls" value={draft.epochOffset} onChange={(event) => setDraft({ ...draft, epochOffset: Math.round(Number(event.target.value) || 0) })} />
-      <p className="text-[11px] text-stone-500 sm:col-span-3">The last box places this calendar&apos;s year 0 on the shared line: give the first calendar 0, and a later reckoning that began 1240 years after it 1240.</p>
-      <div className="flex justify-end gap-1.5 sm:col-span-3">
+      <p className="text-[11px] text-stone-500 @lg:col-span-3">The last box places this calendar&apos;s year 0 on the shared line: give the first calendar 0, and a later reckoning that began 1240 years after it 1240.</p>
+      <div className="flex justify-end gap-1.5 @lg:col-span-3">
         <KitButton tone="small" onClick={onCancel}><X className="size-3.5" /> Cancel</KitButton>
         <KitButton tone="primary" type="submit" disabled={!draft.name.trim()}><Check className="size-3.5" /> Save</KitButton>
       </div>
@@ -169,7 +169,7 @@ function EventForm({ event, world, eras, onSave, onCancel }: { event: WorldEvent
   const toggle = (ref: string) => setDraft((current) => ({ ...current, refs: current.refs.includes(ref) ? current.refs.filter((entry) => entry !== ref) : [...current.refs, ref] }));
   return (
     <form className="panel motion-pop flex flex-col gap-2 rounded-lg p-3" onSubmit={(submit) => { submit.preventDefault(); if (draft.title.trim()) onSave(draft); }}>
-      <div className="grid gap-2 sm:grid-cols-[1fr_7rem_9rem]">
+      <div className="grid gap-2 @lg:grid-cols-[1fr_7rem_9rem]">
         <input className={ui.input} placeholder="The Wall Breaks" aria-label="What happened" maxLength={120} value={draft.title} onChange={(change) => setDraft({ ...draft, title: change.target.value })} autoFocus />
         <input className={ui.input} type="number" aria-label="Year" placeholder="Year" value={draft.when.yearNum ?? ""} onChange={(change) => setDraft({ ...draft, when: { ...draft.when, yearNum: change.target.value === "" ? null : Math.round(Number(change.target.value)) } })} />
         {doc.calendars.length ? (

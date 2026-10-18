@@ -5,7 +5,7 @@ import { deleteFaction, getFaction, insertFaction, listFactions, updateFaction }
 import { deleteLoreEntry, getLoreEntry, insertLoreEntry, listLoreEntries, updateLoreEntry } from "@/lib/db/lore";
 import { draftFrom, normalizeNpcDraft } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
-import { LORE_BODY_MAX } from "@/lib/dm/world-lore-logic";
+import { LORE_BODY_MAX, type WorldLoreCategory, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { applyRowOps, type DocOps } from "@/lib/worldforge/ops";
 import {
   SLICES,
@@ -20,15 +20,16 @@ import {
   typeFor,
   type Binding,
   type Entry,
+  type Secret,
   type Shelf,
   type Slice,
   type WorldDoc,
   type WorldType,
 } from "@/lib/worldforge/model";
-import { byName, foldName } from "@/lib/language/text-logic";
 import { playAdapters, playLink, type PlayAdapter, type PlayField } from "@/lib/worldforge/play-fields";
 import { editableOf, mergeAgainst, type Editable, type EntryConflict } from "@/lib/worldforge/entry-merge";
 import { entriesBoundTo, resolveBinding, type BoundRecord } from "@/lib/db/world-bindings";
+import { byName, textKey } from "@/lib/language/text-logic";
 
 // The workshop's WorldForge: one document beside the records it describes
 // (src/lib/worldforge/model.ts says why). Everything that writes a record
@@ -126,7 +127,7 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
       ref, shelf: "npc", id: npc.id, name: npc.name, tagline: npc.trait, text: "", aliases: npc.aliases, tags: own.tags, portrait: npc.portraitUrl, entry: own, createdAt: npc.createdAt,
       table: { attitude: npc.attitude, statBlock: npc.statBlock, role: npc.role, home: npc.location, faction: factionNames.get(npc.factionId) ?? "", archived: npc.archived },
     });
-    const home = npc.location ? places.find((place) => foldName(place.name) === foldName(npc.location)) : undefined;
+    const home = npc.location ? places.find((place) => textKey(place.name) === textKey(npc.location)) : undefined;
     held.set(ref, {
       faction: npc.factionId && factionNames.has(npc.factionId) ? { ref: refOf("faction", npc.factionId), name: factionNames.get(npc.factionId)! } : null,
       home: npc.location ? { ref: home ? refOf("location", home.id) : "", name: npc.location } : null,
@@ -211,7 +212,7 @@ export function createRecord(campaignId: string, type: WorldType, input: { name?
   const name = clean(input.name, 80) ?? "";
   if (!name) return { error: "An entry needs a name." };
   if (type.shelf === "npc") {
-    if (listNpcs(campaignId).some((npc) => npc.name.toLowerCase() === name.toLowerCase())) return { error: `The Cast already has someone called ${name}.`, status: 409 };
+    if (listNpcs(campaignId).some((npc) => textKey(npc.name) === textKey(name))) return { error: `The Cast already has someone called ${name}.`, status: 409 };
     const outcome = normalizeNpcDraft({ name, trait: clean(input.tagline, 200) ?? "" });
     if ("error" in outcome) return { error: outcome.error };
     return { ref: refOf("npc", createNpcFromDraft(campaignId, outcome.draft).id) };
@@ -240,12 +241,12 @@ export function writeRecord(campaignId: string, ref: string, patch: EntityPatch,
   const portrait = patch.portrait === undefined ? undefined : isUploadedImagePath(patch.portrait) ? patch.portrait : "";
   if (shelf === "npc") {
     const npc = getNpcById(id)!;
-    if (name && name.toLowerCase() !== npc.name.toLowerCase() && listNpcs(campaignId).some((other) => other.name.toLowerCase() === name.toLowerCase())) {
+    if (name && textKey(name) !== textKey(npc.name) && listNpcs(campaignId).some((other) => textKey(other.name) === textKey(name))) {
       return { error: `The Cast already has someone called ${name}.`, status: 409 };
     }
     if (name || aliases) {
       const called = name || npc.name;
-      renameNpc(id, called, (aliases ?? npc.aliases).filter((alias) => alias.toLowerCase() !== called.toLowerCase()));
+      renameNpc(id, called, (aliases ?? npc.aliases).filter((alias) => textKey(alias) !== textKey(called)));
     }
     if (patch.tagline !== undefined) {
       const outcome = normalizeNpcDraft({ ...draftFrom(getNpcById(id)! as Parameters<typeof draftFrom>[0]), trait: clean(patch.tagline, 200) ?? "" });
@@ -467,4 +468,29 @@ export function deleteWorldEntity(campaignId: string, ref: string): boolean {
 export function worldCounts(campaignId: string): { entries: number; links: number; events: number; secrets: number; maps: number } {
   const { doc, entities } = worldView(campaignId);
   return { entries: entities.length, links: doc.links.length, events: doc.events.length, secrets: doc.secrets.length, maps: doc.maps.length };
+}
+
+// ---- a secret told to the party ----
+
+// "Reveal to the party" at a table (audit WF-10): the words the story
+// authority chose become a lore entry the whole table reads, and the secret
+// is marked learned with the record of when and where it was told. All of it
+// is this campaign's own copy: a world brought in from a workshop was copied
+// (src/lib/db/content-import.ts), so the workshop's secret is not touched.
+// One reveal per secret; a second is refused with the first entry named.
+export function revealSecret(
+  campaignId: string,
+  secretId: string,
+  told: { title: string; body: string; category?: WorldLoreCategory },
+): { secret: Secret; entry: WorldLoreEntry } | Failure {
+  const doc = getWorldDoc(campaignId);
+  const secret = doc.secrets.find((entry) => entry.id === secretId);
+  if (!secret) return { error: "No such secret in this world.", status: 404 };
+  if (secret.revealedAs && getLoreEntry(parseRef(secret.revealedAs)?.id ?? "")?.campaignId === campaignId) {
+    return { error: "The party has already been told this one.", status: 409 };
+  }
+  const entry = insertLoreEntry({ campaignId, category: told.category ?? "other", title: told.title, body: told.body, tags: [], visibility: "party" });
+  const revealed: Secret = { ...secret, partyKnows: true, revealedAt: new Date().toISOString(), revealedAs: refOf("lore", entry.id) };
+  saveWorldDoc(campaignId, { ...doc, secrets: doc.secrets.map((row) => (row.id === secretId ? revealed : row)) });
+  return { secret: revealed, entry };
 }

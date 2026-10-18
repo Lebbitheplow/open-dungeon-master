@@ -32,6 +32,7 @@ import {
   type WorldRecordKind,
 } from "./import-kinds.ts";
 import { planBoard } from "./import-board.ts";
+import { textKey } from "../language/text-logic.ts";
 
 export * from "./import-kinds.ts";
 
@@ -45,21 +46,21 @@ export * from "./import-kinds.ts";
 // COLLATE NOCASE.
 export function dedupeName(name: string, taken: Set<string>): string {
   const trimmed = name.trim() || "Untitled";
-  if (!taken.has(trimmed.toLowerCase())) {
-    taken.add(trimmed.toLowerCase());
+  if (!taken.has(textKey(trimmed))) {
+    taken.add(textKey(trimmed));
     return trimmed;
   }
   for (let attempt = 2; attempt < 1000; attempt += 1) {
     const candidate = `${trimmed} (${attempt})`;
-    if (!taken.has(candidate.toLowerCase())) {
-      taken.add(candidate.toLowerCase());
+    if (!taken.has(textKey(candidate))) {
+      taken.add(textKey(candidate));
       return candidate;
     }
   }
   // A thousand copies of one name is not a real table; fall back to
   // something unique rather than looping or throwing.
   const fallback = `${trimmed} (${Date.now()})`;
-  taken.add(fallback.toLowerCase());
+  taken.add(textKey(fallback));
   return fallback;
 }
 
@@ -93,6 +94,9 @@ export type PlanInput = {
   // authors do not have: copied into its bestiary on import (WF-07). Absent
   // when the caller did not look, and the old warning stands.
   foreignMonsters?: string[];
+  // Hand-built items the travelling World entries link to that this table's
+  // authors do not have: copied into its Homebrew on import.
+  foreignItems?: string[];
 };
 
 export function planImport(input: PlanInput): ImportPlan {
@@ -201,7 +205,7 @@ export function planImport(input: PlanInput): ImportPlan {
       continue;
     }
 
-    const taken = new Set((input.existing[kind] ?? []).map((name) => name.trim().toLowerCase()));
+    const taken = new Set((input.existing[kind] ?? []).map((name) => textKey(name)));
     let renamedCount = 0;
     let keptCount = 0;
     for (const row of rows) {
@@ -291,6 +295,13 @@ export function planImport(input: PlanInput): ImportPlan {
   // Hand-built monsters this table's authors do not have travel with the
   // NPCs and fights that name them (WF-07): said before, so nothing about
   // the bestiary changes unannounced.
+  if (input.foreignItems?.length) {
+    const names = [...new Set(input.foreignItems)];
+    notes.push({
+      kind: "world",
+      message: `${names.length} hand-built item${names.length === 1 ? "" : "s"} (${names.join(", ")}) ${names.length === 1 ? "is" : "are"} copied into this table's Homebrew, so the World entries that link to ${names.length === 1 ? "it" : "them"} keep their links.`,
+    });
+  }
   if (input.foreignMonsters?.length) {
     const names = [...new Set(input.foreignMonsters)];
     notes.push({

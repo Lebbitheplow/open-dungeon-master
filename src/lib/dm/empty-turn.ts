@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/lib/model-client";
+import { textKey } from "@/lib/language/text-logic";
 
 // What the table reads when a DM turn ends with no narration at all.
 //
@@ -94,10 +95,10 @@ function lastActionRefusal(conversation: ChatMessage[]): string | null {
 // now, and its slot level. No word list reads the message, so every table
 // language gets the same hint.
 function explainLooseAction(player: EmptyTurnPlayer): string {
-  const lower = player.text.trim().toLowerCase();
+  const lower = textKey(player.text);
   const named = [...player.spells]
     .sort((a, b) => b.length - a.length)
-    .find((spell) => lower.includes(spell.trim().toLowerCase()));
+    .find((spell) => lower.includes(textKey(spell)));
   if (!named) {
     return `The DM had no answer to that. Try again saying plainly what your character does, and to whom or what; for a spell, its name as it is on your sheet, the slot level and the target. ${CARDS_HINT}`;
   }

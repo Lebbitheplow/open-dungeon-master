@@ -21,7 +21,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import { authoredFlurryStrikes } from "@/lib/srd/authored-economy";
 import { spendAction } from "@/lib/dm/action-budget";
@@ -35,6 +35,7 @@ import { chosenOptions } from "@/lib/srd/options";
 // bonus-routes.ts, so the Hand can ask it too.
 import { holdsFeature as holds, kiLeft, usesLeft } from "@/lib/dm/bonus-routes";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 export { bonusRouteFor, kiLeft, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
 
 // The resources patch that spends `points` ki, or an error when the
@@ -112,7 +113,7 @@ export function spendKiTechnique(
     return toolError(allowed);
   }
   const budget = inFight
-    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions))
+    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions))
     : null;
   if (technique === "flurry" && (!budget || !encounter)) {
     return { error: `Flurry of Blows is made in a fight, right after the Attack action on ${sheet.name}'s own turn.`, refused: "rules" };
@@ -180,14 +181,14 @@ export function spendQuickenedSpell(
   sheet: CharacterSheet,
   state: { max: number; used: number },
 ): { patch: FullPatchSheetInput; result: Record<string, unknown> } | ToolError {
-  const known = chosenOptions(sheet.features, "metamagic").some((name) => name.trim().toLowerCase() === "quickened spell");
+  const known = chosenOptions(sheet.features, "metamagic").some((name) => textKey(name) === "quickened spell");
   if (!known) {
     return { error: `${sheet.name} has not learned the Quickened Spell Metamagic option. Ask the player whether to cast it without Quickened Spell. Nothing was spent.`, retry: true };
   }
   const encounter = getActiveEncounter(campaign.id);
   const inFight = encounter !== null && (encounter.kind ?? "fight") === "fight";
   const budget = inFight
-    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions))
+    ? budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions))
     : null;
   if (!budget || !encounter) {
     return inFight

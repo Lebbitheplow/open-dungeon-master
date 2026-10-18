@@ -9,6 +9,7 @@ import { serverEnv } from "@/lib/server-env";
 import type { AspectPreset, GeneratedImage, ImageMode, StorySettings } from "@/lib/types";
 import { recordMediaFile } from "@/lib/media-access";
 import { FIRST_SIZES, pickImageSize, readSupportedSizes, type ImageSize } from "@/lib/openai-image-size-logic";
+import { asciiSlugOf } from "@/lib/language/text-logic";
 
 // OpenAI Images backend: the paid escape hatch for a server (or an app-only
 // host) whose hardware cannot run a local image model. The key is the server
@@ -116,15 +117,6 @@ function sizeFor(aspect: AspectPreset, sizesKey: string): ImageSize | null {
   return listed ? pickImageSize(aspect, listed) : FIRST_SIZES[aspect];
 }
 
-function promptSlug(prompt: string) {
-  return (
-    prompt
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 50) || "image"
-  );
-}
 
 export async function generateOpenAiImage(
   options: {
@@ -274,7 +266,7 @@ export async function generateOpenAiImage(
   // Named by what came back, not what was asked for: a proxy may answer
   // a WebP request with PNG, and the file must open under its own name.
   const extension = sniffImage(bytes)?.ext ?? "png";
-  const filename = `${Date.now()}-openai-${promptSlug(options.prompt)}.${extension}`;
+  const filename = `${[Date.now(), "openai", asciiSlugOf(options.prompt).slice(0, 50)].filter((part) => part !== "").join("-")}.${extension}`;
   const saved = path.join(/*turbopackIgnore: true*/ generatedDir, filename);
   writeFileSync(saved, bytes);
   scheduleImageVariants(saved);

@@ -1,5 +1,9 @@
-import { foldName } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { shiftEnemyMaxHp } from "@/lib/db/encounters";
+import { publishPersisted } from "@/lib/events";
+import { ROUNDS_PER_MINUTE } from "@/lib/dm/condition-logic";
 import {
   endEncounterEffects,
   normalizeAura,
@@ -74,6 +78,50 @@ export function listEffects(
   return rows.map(mapRow);
 }
 
+// ---- maximum hit points ----
+
+// What the "add" maxHp modifiers come to, per target ("kind|id").
+function maxHpBonuses(campaignId: string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const effect of listEffects(campaignId)) {
+    const bonus = effect.modifiers.filter((modifier) => modifier.field === "maxHp" && modifier.mode === "add").reduce((sum, modifier) => sum + modifier.value, 0);
+    if (bonus) {
+      const key = `${effect.targetKind}|${effect.targetId}`;
+      out.set(key, (out.get(key) ?? 0) + bonus);
+    }
+  }
+  return out;
+}
+
+// Runs a change to the effects and moves each target's stored maximum by
+// what its maxHp modifiers moved, as Aid moves it (sheets.ts maxHpRiders): by
+// exact deltas, so lifting an effect gives back what it gave and no more,
+// and a raise lifts the current hit points with it.
+function followingMaxHp<T>(campaignId: string, change: () => T): T {
+  const before = maxHpBonuses(campaignId);
+  const out = change();
+  const after = maxHpBonuses(campaignId);
+  for (const key of new Set([...before.keys(), ...after.keys()])) {
+    const delta = (after.get(key) ?? 0) - (before.get(key) ?? 0);
+    const [kind, id] = key.split("|");
+    if (!delta) {
+      continue;
+    }
+    if (kind === "enemy") {
+      shiftEnemyMaxHp(id, delta);
+      continue;
+    }
+    const sheet = getSheetById(id);
+    const updated = sheet
+      ? patchSheet(id, { maxHp: sheet.maxHp + delta, currentHp: delta > 0 ? sheet.currentHp + delta : Math.min(sheet.currentHp, sheet.maxHp + delta) })
+      : null;
+    if (updated) {
+      publishPersisted(campaignId, "sheet_updated", { sheet: updated });
+    }
+  }
+  return out;
+}
+
 export function insertEffect(input: {
   campaignId: string;
   targetKind: EffectTargetKind;
@@ -90,7 +138,7 @@ export function insertEffect(input: {
 }): ActiveEffect {
   const id = crypto.randomUUID();
   const now = nowIso();
-  getDatabase()
+  followingMaxHp(input.campaignId, () => getDatabase()
     .prepare(
       `INSERT INTO active_effects
         (id, campaign_id, target_kind, target_id, name, source, modifiers_json,
@@ -112,14 +160,14 @@ export function insertEffect(input: {
       input.visible ? 1 : 0,
       now,
       input.aura ? JSON.stringify(input.aura) : null,
-    );
+    ));
   return { id, createdAt: now, ...input };
 }
 
 export function deleteEffect(campaignId: string, effectId: string): boolean {
-  const result = getDatabase()
+  const result = followingMaxHp(campaignId, () => getDatabase()
     .prepare(`DELETE FROM active_effects WHERE campaign_id = ? AND id = ?`)
-    .run(campaignId, effectId);
+    .run(campaignId, effectId));
   return result.changes > 0;
 }
 
@@ -132,20 +180,20 @@ export function deleteEffectsByName(
   name: string,
 ): number {
   const db = getDatabase();
-  const wanted = foldName(name);
+  const wanted = textKey(name);
   const ids = (
     db
       .prepare(`SELECT id, name FROM active_effects WHERE campaign_id = ? AND target_kind = ? AND target_id = ?`)
       .all(campaignId, target.kind, target.id) as Array<{ id: string; name: string }>
   )
-    .filter((row) => foldName(row.name) === wanted)
+    .filter((row) => textKey(row.name) === wanted)
     .map((row) => row.id);
   const remove = db.prepare(`DELETE FROM active_effects WHERE campaign_id = ? AND id = ?`);
-  db.transaction(() => {
+  followingMaxHp(campaignId, () => db.transaction(() => {
     for (const id of ids) {
       remove.run(campaignId, id);
     }
-  })();
+  })());
   return ids.length;
 }
 
@@ -164,21 +212,23 @@ function persistTick(
       remove.run(effect.id);
     }
   });
-  run();
+  followingMaxHp(campaignId, run);
   return result.expired;
 }
 
-// One combat round passing. Called from the same place condition durations
-// tick, so an effect and a condition applied together end together.
-export function tickEffectRound(campaignId: string): ActiveEffect[] {
-  return persistTick(campaignId, tickRound(listEffects(campaignId)));
+// One combat round passing, the fight's `round` the one now starting. Called
+// from the same place condition durations tick, so an effect and a condition
+// applied together end together; every tenth round is a minute gone.
+export function tickEffectRound(campaignId: string, round: number): ActiveEffect[] {
+  const minutePassed = round > 1 && (round - 1) % ROUNDS_PER_MINUTE === 0;
+  return persistTick(campaignId, tickRound(listEffects(campaignId), minutePassed));
 }
 
-// In-world minutes passing: travel, a rest, pass_time. This is what the
-// campaign clock bought, and the reason "for an hour" is now a thing an
-// effect can say.
+// In-world minutes passing outside a fight: travel, a rest, pass_time. Inside
+// one the round wrap owns every lifetime (tickEffectRound), as it owns timed
+// conditions, so the same time is never counted twice.
 export function tickEffectMinutes(campaignId: string, minutes: number): ActiveEffect[] {
-  return persistTick(campaignId, tickMinutes(listEffects(campaignId), minutes));
+  return persistTick(campaignId, tickMinutes(listEffects(campaignId), minutes, ROUNDS_PER_MINUTE));
 }
 
 // The fight ending takes its own effects with it.

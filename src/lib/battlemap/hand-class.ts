@@ -28,19 +28,16 @@ import {
   costGate,
   gated,
   signed,
-  spellKey,
   standingGate,
   type Gate,
   type HandAttackOption,
   type HandCard,
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
+import { textKey } from "@/lib/language/text-logic";
 
 const holds = (sheet: CharacterSheet, name: string) =>
-  sheet.features.some((feature) => {
-    const lowered = feature.name.trim().toLowerCase();
-    return lowered === name || lowered.startsWith(`${name} (`);
-  });
+  sheet.features.some((feature) => [feature.name, feature.name.replace(/\s*\(.*$/, "")].some((held) => textKey(held) === name));
 
 type OptionArgs = { stunningStrike?: boolean; reckless?: boolean; nonlethal?: boolean; bonusAttack?: AnyBonusAttack };
 
@@ -212,7 +209,7 @@ export function bonusStrikeCards(
     );
     const refused = optionRefusal(sheet, turn, profile, derived, { bonusAttack });
     const card: HandCard = {
-      id: `attack:${spellKey(weapon)}:${bonusAttack.replace(/\s+/g, "-")}${key ? `:${key}` : ""}`,
+      id: `attack:${textKey(weapon)}:${bonusAttack.replace(/\s+/g, "-")}${key ? `:${key}` : ""}`,
       type: "attack",
       name,
       cost: "bonus",
@@ -305,7 +302,7 @@ export function bonusStrikeCards(
   }
   for (const entry of own) {
     cards.push(
-      strike("feature", entry.weapon?.name ?? "Unarmed strike", entry.weapon?.srd ?? null, `${entry.feature} attack`, entry.rules, spellKey(entry.feature).replace(/\s+/g, "-")),
+      strike("feature", entry.weapon?.name ?? "Unarmed strike", entry.weapon?.srd ?? null, `${entry.feature} attack`, entry.rules, textKey(entry.feature).replace(/\s+/g, "-")),
     );
   }
   return cards;

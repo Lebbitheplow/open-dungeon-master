@@ -134,7 +134,7 @@ function resumeOrphanedParkedTurns(): { resumed: number; closed: number } {
       continue;
     }
     if (turn.conversation.length && getLatestAiTurnId(orphan.campaignId) === orphan.id) {
-      enqueueDmJob(orphan.campaignId, () => resumeDmTurn(orphan.campaignId, orphan.id));
+      enqueueDmJob(orphan.campaignId, () => resumeDmTurn(orphan.campaignId, orphan.id), { kind: "turn" });
       resumed += 1;
       continue;
     }

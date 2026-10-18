@@ -5,7 +5,7 @@
 // stabilize.ts, rest-tools.ts) all decide from one place.
 import {
   effectiveMaxHp,
-  removeConditions,
+  removeConditionInstances,
   ROUNDS_PER_MINUTE,
   type ConditionMetaMap,
 } from "@/lib/dm/condition-logic";
@@ -64,10 +64,21 @@ export function holdsOn(sheet: { conditions: string[]; deathSaves?: { dead: bool
 }
 
 // Hit points are back: the creature wakes and is still on the ground.
-// Standing up is its own to do.
+// Standing up is its own to do. A spell's slumber is no dying and holds on
+// (Sleep's unconsciousness ends on damage, not on healing).
 export function wakeConditions(held: Held): { conditions: string[]; conditionMeta: ConditionMetaMap } {
-  const cleared = removeConditions(held.conditions, held.conditionMeta, [UNCONSCIOUS]);
+  const cleared = removeConditionInstances(held.conditions, held.conditionMeta, UNCONSCIOUS, (entry) => !entry.spell);
   return { conditions: cleared.conditions, conditionMeta: cleared.meta };
+}
+
+// What keeps a creature from regaining hit points now, or null: Chill
+// Touch's grip until its caster's next turn, or no air at 0 hit points.
+export function regainBlockedBy(sheet: { conditions: string[]; currentHp: number }): string | null {
+  const held = sheet.conditions.map((entry) => entry.trim().toLowerCase());
+  if (held.includes("chill touch")) {
+    return "chill touch";
+  }
+  return sheet.currentHp <= 0 && held.includes(SUFFOCATING) ? SUFFOCATING : null;
 }
 
 // A stable creature regains 1 hit point after 1d4 hours (SRD 5.1,

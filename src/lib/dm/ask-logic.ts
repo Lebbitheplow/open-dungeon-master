@@ -6,6 +6,8 @@
 // read Draconic?", "how does grappling work?". Before this the only options
 // were a `do` that derailed the scene or an `ooc` the DM never answers.
 
+import { textKey } from "../language/text-logic.ts";
+
 export const ASK_SCOPES = ["story", "rules", "sheet"] as const;
 export type AskScope = (typeof ASK_SCOPES)[number];
 
@@ -225,15 +227,15 @@ export function transcriptPassages(
 ): string[] {
   const limit = options.limit ?? 3;
   const window = options.window ?? 700;
-  const words = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}']{3,}/gu) ?? [])].filter(
-    (word) => !STOP_WORDS.has(word),
+  const words = [...new Set(textKey(query).split(" "))].filter(
+    (word) => word.length >= 3 && !STOP_WORDS.has(word),
   );
   if (!words.length) {
     return [];
   }
   const scored = lines
     .map((line) => {
-      const lower = line.content.toLowerCase();
+      const lower = textKey(line.content);
       const hits = words.filter((word) => lower.includes(word));
       const first = hits.length ? Math.min(...hits.map((word) => lower.indexOf(word))) : -1;
       return { line, score: hits.length, first };

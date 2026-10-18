@@ -13,7 +13,7 @@ import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-workshop-worldforge-ai");
-const { replyJson, readForgeReply, paintPrompt, worldDigest } = await import("../src/lib/worldforge/forge.ts");
+const { replyJson, paintPrompt, worldDigest } = await import("../src/lib/worldforge/forge.ts");
 const { forgeFromNotes, askTheWorld, draftEntry } = await import("../src/lib/dm/world-ai.ts");
 const { applyForge, importWorldForge } = await import("../src/lib/db/world-forge-io.ts");
 const { worldView } = await import("../src/lib/db/world-forge.ts");
@@ -156,7 +156,8 @@ await test("The digest keeps to its budget, the asked entries first; paint promp
   const { doc, entities } = worldView(workshop.id);
   const digest = worldDigest(doc, entities, "Tell me about Mira Fenn", 600);
   assert.ok(digest.length <= 700);
-  assert.ok(digest.startsWith("## Mira Fenn"));
+  // A line explaining the canon tags may come first; the asked entry leads the entries.
+  assert.ok(digest.split("\n\n").find((part) => part.startsWith("## ")).startsWith("## Mira Fenn"));
   const prompt = paintPrompt("faction", "Faction", "A guild of salt-runners.", "oil painting");
   assert.match(prompt, /Heraldic sigil/);
   assert.doesNotMatch(paintPrompt("npc", "Character", "A warden.", ""), /Ivo/);

@@ -63,6 +63,8 @@ const conditionInstanceSchema = z.object({
     escapeDc: z.number().int().min(1).max(40).optional(),
     // Ends when the creature finishes a long rest (Life Drain, Draining Kiss).
     untilLongRest: z.boolean().optional(),
+    // The temporary hit points the effect granted, gone when it ends.
+    tempHp: z.number().int().min(1).max(500).optional(),
 });
 
 // Duration/save metadata for active conditions, keyed by condition name.

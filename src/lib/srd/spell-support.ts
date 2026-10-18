@@ -12,6 +12,8 @@
 //
 // Pure data, safe for the client. Keys are lowercased SRD names.
 
+import { textKey } from "@/lib/language/text-logic";
+
 export type SpellSupport = { kind: "partial" | "narrated"; manual: string };
 
 const PARTIAL = (manual: string): SpellSupport => ({ kind: "partial", manual });
@@ -49,7 +51,7 @@ const ROWS: Record<string, SpellSupport> = {
 };
 
 export function spellSupportFor(name: string): SpellSupport | null {
-  const key = name.trim().toLowerCase().replace(/^[a-z]+'s\s+/, "");
+  const key = textKey(name.trim().replace(/^[a-z]+'s\s+/i, ""));
   return ROWS[key] ?? null;
 }
 

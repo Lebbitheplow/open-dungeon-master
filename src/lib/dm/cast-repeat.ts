@@ -8,7 +8,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { canAct } from "@/lib/dm/can-act";
 import type { CastInput, CastResult } from "@/lib/dm/cast-guard";
 import { turnCharge } from "@/lib/dm/cast-rules";
@@ -44,7 +44,7 @@ export function repeatSpell(
   if (!able.ok) {
     return toolError(able);
   }
-  const budget = budgetFor(fight, sheet.id, attacksAllowedFor(sheet), conditionExtraActions(sheet.conditions));
+  const budget = budgetFor(fight, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
   // Not a casting: the bonus-action spell rule and the levelled spell mark
   // do not apply, so the charge is made as for a cantrip of that time.
   const charge = turnCharge({

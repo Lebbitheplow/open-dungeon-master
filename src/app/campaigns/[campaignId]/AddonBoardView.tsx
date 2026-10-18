@@ -18,6 +18,7 @@ import type { PlayerMapView } from "@/lib/battlemap/view-types";
 import type { MapPing } from "@/lib/dm/board-logic";
 import type { CameraEvent } from "@/lib/scene/state";
 import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
+import { AUDIO_PREF_FIELDS } from "@/lib/audio-prefs";
 import { pageOrigin } from "@/lib/navigation";
 import { useThemePrefs } from "@/lib/theme-mode";
 
@@ -44,6 +45,7 @@ export function AddonBoardView({
   view,
   boardView,
   canDirect,
+  genre = null,
   onTile,
   onToken,
   onHover,
@@ -59,6 +61,7 @@ export function AddonBoardView({
   view: PlayerMapView;
   boardView: OfferedBoardView;
   canDirect: boolean;
+  genre?: string | null;
   onTile: (x: number, y: number) => void;
   onToken: (tokenId: string) => void;
   onHover: (x: number | null, y: number | null) => void;
@@ -82,9 +85,24 @@ export function AddonBoardView({
   const [problem, setProblem] = useState("");
   const { mode } = useThemePrefs();
   const lowEffects = useLowEffects();
+  const [audio, setAudio] = useState({ muted: true, volume: 0 });
+  useEffect(() => {
+    const read = () => {
+      try {
+        const muted = localStorage.getItem(AUDIO_PREF_FIELDS.ambienceMuted.key) === "1" || localStorage.getItem(AUDIO_PREF_FIELDS.chimeMuted.key) === "1";
+        const raw = localStorage.getItem(AUDIO_PREF_FIELDS.ambienceVolume.key);
+        const n = raw === null ? 0.6 : Number(raw);
+        setAudio({ muted, volume: Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.6 });
+      } catch { setAudio({ muted: true, volume: 0 }); }
+    };
+    read();
+    const events = [AUDIO_PREF_FIELDS.ambienceMuted.event, AUDIO_PREF_FIELDS.chimeMuted.event, "storage"];
+    events.forEach(name => window.addEventListener(name, read));
+    return () => events.forEach(name => window.removeEventListener(name, read));
+  }, []);
   const appearance = useMemo(
-    () => ({ theme: mode === "light" ? ("day" as const) : ("night" as const), reducedMotion: lowEffects || prefersReducedMotion() }),
-    [mode, lowEffects],
+    () => ({ theme: mode === "light" ? ("day" as const) : ("night" as const), reducedMotion: lowEffects || prefersReducedMotion(), audio }),
+    [mode, lowEffects, audio],
   );
   const src = `${pageOrigin()}${boardView.url}`;
   const assetsUrl = `${pageOrigin()}/api/addons/${encodeURIComponent(boardView.addonId)}/assets/`;
@@ -102,6 +120,7 @@ export function AddonBoardView({
         type: "snapshot",
         snapshot: boardSnapshot(view, boardView.addonId, {
           canDirect,
+          genre,
           appearance,
           looks,
           intents,
@@ -110,7 +129,7 @@ export function AddonBoardView({
         }),
       });
     }
-  }, [readyAt, view, canDirect, appearance, boardView.addonId, boardView.options, looks, intents, assetsUrl, viewOptions]);
+  }, [readyAt, view, canDirect, genre, appearance, boardView.addonId, boardView.options, looks, intents, assetsUrl, viewOptions]);
 
   // The moments, each sent once: effects by id, a ping and a camera move by
   // when they happened. A frame that loads late hears only what follows.

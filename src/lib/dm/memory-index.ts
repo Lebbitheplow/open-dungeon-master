@@ -266,7 +266,7 @@ export async function searchScenes(
   // it drops the search to lexical-only rather than losing the whole recall.
   let queryVector: Float32Array | null = null;
   try {
-    [queryVector] = await embed([trimmed]);
+    [queryVector] = await embed([trimmed], { query: true });
   } catch (error) {
     // embedder unavailable; lexical ranking carries the search
     console.error("[memory-index] embedding failed", error);

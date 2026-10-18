@@ -10,6 +10,7 @@ import { CheckField, NumberField, SelectField, TextField, ToggleChips } from "@/
 import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";
 import { MechGroup, list, num, sub, type Mech } from "@/app/workshop/homebrew/MechGroup";
 import { addChip, rowIcon } from "@/app/workshop/kit";
+import { textKey } from "@/lib/language/text-logic";
 
 // The rest of a magic item's magic, in the words the engines read the SRD's
 // by (src/lib/homebrew/item-magic-schema.ts): what a magic weapon adds to a
@@ -137,7 +138,7 @@ export function ItemSpellsBlock({ data, set }: Props) {
           label="Find a spell the item casts"
           placeholder="Add a spell it casts..."
           onPick={(entry) => {
-            if (spells.some((row) => String(row.spell).toLowerCase() === entry.name.toLowerCase())) return;
+            if (spells.some((row) => textKey(String(row.spell)) === textKey(entry.name))) return;
             put([...spells, { spell: entry.name, charges: 1, level: typeof entry.level === "number" ? entry.level : 1 }]);
           }}
         />

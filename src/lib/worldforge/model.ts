@@ -139,7 +139,20 @@ export function linkFingerprint(link: Pick<WorldLink, "from" | "to" | "label" | 
 export type Folder = { id: string; name: string; parentId: string };
 export type Calendar = { id: string; name: string; abbrev: string; epochOffset: number; notes: string };
 export type WorldEvent = { id: string; title: string; body: string; era: string; when: YearValue; refs: string[]; canon: Canon };
-export type Secret = { id: string; title: string; subject: string; notes: string; knownBy: string[]; partyKnows: boolean };
+export type Secret = {
+  id: string;
+  title: string;
+  subject: string;
+  notes: string;
+  knownBy: string[];
+  partyKnows: boolean;
+  // Set by "Reveal to the party" at a table (audit WF-10): when the party was
+  // told, and the lore entry ("lore:<id>") the players read it in. A secret
+  // only marked learned has neither. A copy keeps them only while that entry
+  // came along (remapDoc), and a file never carries them.
+  revealedAt?: string;
+  revealedAs?: string;
+};
 export type Stub = { id: string; name: string; note: string; source: "scan" | "manual" | "import"; status: "open" | "dismissed" };
 export type XY = { x: number; y: number };
 export type Region = { id: string; name: string; points: XY[]; color: string; ref: string; notes: string };
@@ -265,6 +278,7 @@ const unit = (value: unknown) => Math.min(1, Math.max(0, num(value, 0.5)));
 const oneOf = <T extends string>(value: unknown, options: readonly T[], fallback: T): T => (options.includes(value as T) ? (value as T) : fallback);
 const idOf = (value: unknown) => str(value, 80).replace(/[^\w:.-]/g, "");
 const ref = (value: unknown) => (parseRef(value) ? (value as string) : "");
+const readRevealedAt = (value: unknown) => (typeof value === "string" && value.length <= 40 && Number.isFinite(Date.parse(value)) ? value : "");
 const color = (value: unknown, fallback = "#7a6e54") => (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback);
 const uniqueById = <T extends { id: string }>(rows: T[]): T[] => {
   const seen = new Set<string>();
@@ -391,7 +405,19 @@ const readers: { [K in Exclude<Slice, "entries" | "types">]: (value: unknown) =>
     const raw = rec(value);
     const title = str(raw.title, LIMITS.name);
     return title
-      ? { id: idOf(raw.id) || newId("sec"), title, subject: ref(raw.subject), notes: str(raw.notes, LIMITS.note), knownBy: [...new Set(list(raw.knownBy, LIMITS.refs).map(ref).filter(Boolean))], partyKnows: raw.partyKnows === true }
+      ? {
+          id: idOf(raw.id) || newId("sec"),
+          title,
+          subject: ref(raw.subject),
+          notes: str(raw.notes, LIMITS.note),
+          knownBy: [...new Set(list(raw.knownBy, LIMITS.refs).map(ref).filter(Boolean))],
+          partyKnows: raw.partyKnows === true,
+          // The reveal's record, kept only when whole: a time that reads as
+          // one, and the entry it went to. A secret never revealed has
+          // neither field, so its row reads as it always has.
+          ...(readRevealedAt(raw.revealedAt) ? { revealedAt: readRevealedAt(raw.revealedAt) } : {}),
+          ...(ref(raw.revealedAs) ? { revealedAs: ref(raw.revealedAs) } : {}),
+        }
       : null;
   },
   stubs: (value) => {
@@ -511,7 +537,11 @@ export function remapDoc(doc: WorldDoc, map: (ref: string) => string | null): Wo
       return from && to ? [{ ...link, from, to }] : [];
     }),
     events: doc.events.map((event) => ({ ...event, refs: many(event.refs) })),
-    secrets: doc.secrets.map((secret) => ({ ...secret, subject: one(secret.subject), knownBy: many(secret.knownBy) })),
+    secrets: doc.secrets.map((secret) => {
+      const { revealedAs, ...rest } = secret;
+      const told = revealedAs ? one(revealedAs) : "";
+      return { ...rest, subject: one(secret.subject), knownBy: many(secret.knownBy), ...(told ? { revealedAs: told } : {}) };
+    }),
     maps: doc.maps.map((atlas) => ({ ...atlas, regions: atlas.regions.map((region) => ({ ...region, ref: one(region.ref) })) })),
     pins: doc.pins.map((pin) => ({ ...pin, ref: one(pin.ref) })),
   };

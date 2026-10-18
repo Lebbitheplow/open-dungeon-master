@@ -37,7 +37,7 @@ import { getDatabase } from "@/lib/db/core";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker, narratorIsAi } from "@/lib/dm/viewer";
 import { sheetForViewer } from "@/lib/dm/sheet-view";
-import { enqueueDmJob } from "@/lib/dm/queue";
+import { enqueueDmJob, runningDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
 import { getDmStatus } from "@/lib/dm/status";
@@ -172,6 +172,8 @@ export async function GET(
     caps,
     // In-memory status so a reload mid-turn still shows the DM at work.
     dmStatus: getDmStatus(campaignId),
+    // And the step it is on, for the status line's stage and the lead's Stop.
+    dmJob: runningDmJob(campaignId),
     // Same reason, for background work: utility_calls is ephemeral, so a
     // client that reloads mid-compaction would otherwise see an empty strip.
     utilityCalls: listUtilityCalls(campaignId),

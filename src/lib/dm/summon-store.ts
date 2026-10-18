@@ -46,6 +46,7 @@ import { createSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import type { SummonForm } from "@/lib/srd/summon-forms";
 import { enemyStatsFromSummon, SUMMONED } from "@/lib/dm/summon-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 
@@ -308,12 +309,12 @@ function turnHostile(campaign: Campaign, sheet: CharacterSheet): string | null {
 // spell ends, or turned hostile where the spell says so. Returns a line for
 // each for the table.
 export function endSpellSummons(campaign: Campaign, spell: string, casterId?: string): string[] {
-  const wanted = spell.trim().toLowerCase();
+  const wanted = textKey(spell);
   const lines: string[] = [];
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
     const summon = sheet.summon;
-    if (!summon || summon.spell.trim().toLowerCase() !== wanted || (casterId && summon.casterId !== casterId)) {
+    if (!summon || textKey(summon.spell) !== wanted || (casterId && summon.casterId !== casterId)) {
       continue;
     }
     if (summon.hostileOnBreak && summon.concentration) {
@@ -392,6 +393,6 @@ export function summonsOf(campaignId: string, casterId: string, spell?: string):
   return listSheets(campaignId).filter(
     (sheet) =>
       sheet.summon?.casterId === casterId &&
-      (!spell || sheet.summon.spell.trim().toLowerCase() === spell.trim().toLowerCase()),
+      (!spell || textKey(sheet.summon.spell) === textKey(spell)),
   );
 }

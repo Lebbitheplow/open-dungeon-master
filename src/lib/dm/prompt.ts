@@ -49,13 +49,17 @@ import { formatCopper } from "@/lib/srd/currency";
 import { coverPromptBlock } from "@/lib/dm/delegation";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
 import { normalizeGm, normalizeSafety, renderGmBlock, renderSafetyBlock } from "@/lib/dm/safety-logic";
+import { renderNarrationStyle } from "@/lib/dm/narration-style-logic";
 import { renderChapterLod } from "@/lib/dm/chapter-lod";
 import { buildPinnedMemoriesBlock } from "@/lib/dm/pin-logic";
+import { NPC_PROMPT_MAX, rankNpcsForPrompt } from "@/lib/dm/npc-rank-logic";
 import {
   computeBudgets,
   cutCoveredHistory,
   estimateTokens,
   fitHistory,
+  historyAllowanceTokens,
+  responseReserveTokens,
   usableTokens,
   type BlockKind,
   type ContextTrace,
@@ -64,13 +68,14 @@ import type { ChatMessage } from "@/lib/model-client";
 import { describeIntent } from "@/lib/dm/intent-logic";
 import { describeEquipmentItem } from "@/lib/dm/equipment-line";
 import { summonStateLine } from "@/lib/dm/summon-rules";
-import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/prompt-rules";
+import { dmSystemText, encounterRulesText, tracksAmmunition, type RuleContext } from "@/lib/dm/prompt-rules";
 import { rollerName } from "@/lib/roll-labels";
 import { tableHazards } from "@/lib/srd/table-hazards";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
+import { textKey } from "@/lib/language/text-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -79,7 +84,13 @@ export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/
 // with the campaign's settings (real dice, companions, relationships): they
 // join the rules above the turn heading, which the Claude Code harness caches
 // (src/lib/prompt-boundary.ts).
-export function buildDmSystem(campaign: Campaign, settingsRules: readonly string[]): string {
+export function buildDmSystem(
+  campaign: Campaign,
+  settingsRules: readonly string[],
+  // A compact call's rules: only the lines its tools and party need
+  // (src/lib/dm/prompt-rules.ts). Absent: every rule, as always.
+  ruleContext: RuleContext | null = null,
+): string {
   const preset = presetFor(campaign.gameSettings);
   // The engine-boundary contract leads: one labelled statement of which facts
   // the runtime owns, which the numbered rules below it then apply tool by
@@ -92,11 +103,15 @@ export function buildDmSystem(campaign: Campaign, settingsRules: readonly string
     campaign.gameSettings.narrationGuard
       ? `${ENGINE_BOUNDARY_RULES}${ENGINE_BOUNDARY_CHECK}`
       : ENGINE_BOUNDARY_RULES,
-    dmSystemText(tracksAmmunition(campaign)),
+    dmSystemText(tracksAmmunition(campaign), ruleContext),
   ];
   const gmBlock = renderGmBlock(normalizeGm(campaign.gameSettings.gm));
   if (gmBlock) {
     parts.push(gmBlock);
+  }
+  const styleBlock = renderNarrationStyle(campaign.gameSettings.narrationLength, campaign.gameSettings.styleNotes);
+  if (styleBlock) {
+    parts.push(styleBlock);
   }
   if (preset.dmFlavor) {
     parts.push(preset.dmFlavor);
@@ -257,6 +272,9 @@ export type DmGameState = {
   // section 15).
   skyLine?: string;
   questsBlock?: string;
+  // The pinned memories as rendered, costed on their own in the trace: they
+  // are never dropped, so a small window shows what they hold of it.
+  pinsBlock?: string;
   // A one-turn steer the party lead armed (src/lib/dm/director-logic.ts).
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
@@ -270,8 +288,17 @@ export type DmGameState = {
   // contextLimitTokens; recorded so the Context panel shows them beside the
   // blocks rather than as missing room.
   toolTokens?: number;
+  // The model's whole window, for the limit the trace shows: the window less
+  // the reply reserve, never a nominal figure larger than the window.
+  windowTokens?: number;
+  // Set for a compact call (src/lib/dm/tool-profiles.ts): the rules carry
+  // only the lines its tools, party and moment need.
+  ruleContext?: RuleContext | null;
   // Excerpts the table pinned; injected unconditionally, no relevance filter.
   pins?: Array<{ text: string }>;
+  // The newest lines, for which tracked NPCs the roster lists first when it
+  // cannot list them all (src/lib/dm/npc-rank-logic.ts).
+  npcMomentText?: string;
   // The newest player line, for the arc render's scene cues (issue #301):
   // what the party just said it is doing names the event it is walking
   // toward before the location changes.
@@ -282,6 +309,8 @@ export type DmGameState = {
   // What the world lore block kept and held back, and why (issue #305):
   // built with the block by buildTurnRetrieval, copied onto contextTrace.
   loreTrace?: LoreTrace;
+  // The house rules shown and left out, copied onto contextTrace likewise.
+  rulesTrace?: { shown: string[]; omitted: string[] };
   // Filled in by buildDmMessages: what each block cost and what was dropped.
   // Mutable on purpose, so the caller can persist it on the dm_turns row
   // without buildDmMessages changing its return type.
@@ -379,10 +408,10 @@ function spellListLabel(lists: {
 }): string {
   const cantrips = lists.cantrips ?? [];
   const spells = [...lists.known, ...lists.prepared];
-  const ready = new Set([...spells, ...cantrips].map((name) => name.toLowerCase()));
+  const ready = new Set([...spells, ...cantrips].map((name) => textKey(name)));
   const pending = lists.pending ?? [];
   const bookOnly = (lists.spellbook ?? []).filter(
-    (name) => !ready.has(name.toLowerCase()) && !pending.some((entry) => entry.toLowerCase() === name.toLowerCase()),
+    (name) => !ready.has(textKey(name)) && !pending.some((entry) => textKey(entry) === textKey(name)),
   );
   const parts = [
     cantrips.length ? `cantrips (no slot): ${cantrips.join(", ")}` : "",
@@ -685,7 +714,7 @@ export function buildGameStateBlock(state: DmGameState): string {
       location,
       scene: campaign.scene ?? "",
       npcs: (state.npcs ?? [])
-        .filter((npc) => !location || !npc.location || npc.location.toLowerCase() === location.toLowerCase())
+        .filter((npc) => !location || !npc.location || textKey(npc.location) === textKey(location))
         .map((npc) => npc.name)
         .slice(0, 12),
       enemies: (state.encounter?.enemies ?? []).map((enemy) => enemy.name).slice(0, 12),
@@ -779,7 +808,7 @@ export function buildGameStateBlock(state: DmGameState): string {
       lines.push(`Exits/known routes: ${location.connections.join(", ")}`);
     }
     const others = (state.visitedLocationNames ?? []).filter(
-      (name) => name.toLowerCase() !== location.name.toLowerCase(),
+      (name) => textKey(name) !== textKey(location.name),
     );
     if (others.length) {
       lines.push(`Previously visited: ${others.join(", ")}`);
@@ -929,14 +958,20 @@ export function buildGameStateBlock(state: DmGameState): string {
     }
   }
   if (state.npcs?.length) {
+    // The ones here and the ones just named first (src/lib/dm/npc-rank-logic.ts).
+    const ranked = rankNpcsForPrompt(state.npcs, {
+      location: state.currentLocation?.name ?? "",
+      text: [campaign.scene ?? "", state.npcMomentText ?? ""].join("\n"),
+    });
+    const left = ranked.length - NPC_PROMPT_MAX;
     sections.push(
-      `Tracked NPCs (attitude is server-authoritative; it drives social_check DCs and persists across sessions, so narrate each NPC true to how they currently feel):\n${state.npcs
-        .slice(0, 20)
+      `Tracked NPCs (attitude is server-authoritative; it drives social_check DCs and persists across sessions, so narrate each NPC true to how they currently feel):\n${ranked
+        .slice(0, NPC_PROMPT_MAX)
         .map(
           (npc) =>
             `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
         )
-        .join("\n")}`,
+        .join("\n")}${left > 0 ? `\n(${left} more tracked NPC${left === 1 ? "" : "s"} elsewhere, not listed here; naming one brings their entry back, and recall_story finds what happened with them.)` : ""}`,
     );
   }
   if (state.shopsBlock) {
@@ -1033,7 +1068,8 @@ export function buildGameStateBlock(state: DmGameState): string {
     // Unconditional and unfiltered by design: the table asked for these to be
     // in front of the DM every turn. The cap that makes that safe is enforced
     // when a pin is created (src/lib/dm/pin-logic.ts), not here.
-    sections.push(buildPinnedMemoriesBlock(state.pins));
+    state.pinsBlock = buildPinnedMemoriesBlock(state.pins);
+    sections.push(state.pinsBlock);
   }
   if (state.chapters?.length) {
     // Level-of-detail rather than a flat list: recent and high-importance
@@ -1448,18 +1484,26 @@ export function buildDmMessages(
   if (anyPhysicalDice) {
     settingsRules.push(REAL_DICE_RULE);
   }
+  // A compact call carries the companion and relationship rules only when
+  // they bear on the table now (a companion at the table, bonds on record,
+  // the group opened); more_tools hands them over with their tools otherwise
+  // (src/lib/dm/turn.ts handleMoreTools).
+  const compactRules = state.ruleContext ?? null;
   const mode = companionMode(state.campaign);
-  if (mode !== "off") {
+  if (mode !== "off" && (!compactRules || compactRules.groups.has("companions") || state.sheets.some((sheet) => sheet.isCompanion))) {
     settingsRules.push(companionRules(state.campaign, mode));
   }
-  if (state.campaign.gameSettings.relationships !== "off") {
+  if (
+    state.campaign.gameSettings.relationships !== "off" &&
+    (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
+  ) {
     settingsRules.push(
       relationshipRules(state.campaign.gameSettings.romance !== "off"),
     );
   }
-  const systemParts = [buildDmSystem(state.campaign, settingsRules)];
+  const systemParts = [buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null)];
   if (state.encounter) {
-    systemParts.push(encounterRulesText(tracksAmmunition(state.campaign)));
+    systemParts.push(encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null));
   }
   if (state.pendingPlayerWhispers?.length) {
     systemParts.push(PLAYER_WHISPER_RULES);
@@ -1467,25 +1511,24 @@ export function buildDmMessages(
   const gameStateBlock = buildGameStateBlock(state);
   systemParts.push(gameStateBlock);
 
-  // The transcript takes its share of the window, and never more than what
-  // the rules, the game state and the director's note leave of it: those
-  // blocks are not dropped, so when they run past their shares (a table
-  // whose heroes carry many feats, say) the history gives way, and the
-  // packed prompt stays inside the limit the trace reports.
-  const budgets = computeBudgets(state.contextLimitTokens);
+  // The transcript takes its share of the window plus what the rules, the
+  // game state and the director's note left of theirs, up to a ceiling
+  // (context-budget.ts historyAllowanceTokens), and never more than those
+  // blocks leave of the window: they are not dropped, so when they run past
+  // their shares (a table whose heroes carry many feats, say) the history
+  // gives way. The newest line is always kept, cut to fit when it alone is
+  // over. Whatever this estimate misses, the whole request is fitted again
+  // before every call (src/lib/dm/request-fit.ts).
   const fixedTokens =
     estimateTokens(systemParts.join("\n\n")) + estimateTokens(state.directorBlock ?? "");
-  const historyAllowance = Math.max(
-    0,
-    Math.min(budgets.history, usableTokens(state.contextLimitTokens) - fixedTokens),
-  );
+  const historyAllowance = historyAllowanceTokens(state.contextLimitTokens, fixedTokens);
   const fitted = fitHistory(uncovered.kept, historyAllowance);
-  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
+  const keptText = new Map(fitted.kept.map((entry) => [entry.id, entry.text]));
   const historyMessages: ChatMessage[] = uncovered.kept
-    .filter((entry) => keptIds.has(entry.id))
+    .filter((entry) => keptText.has(entry.id))
     .map((entry) => ({
       role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
-      content: entry.text,
+      content: keptText.get(entry.id) ?? entry.text,
     }));
 
   // Record what this prompt cost, block by block. Nothing here is dropped:
@@ -1497,10 +1540,19 @@ export function buildDmMessages(
   // both figures: the limit is the packing window with them added back, the
   // prompt is the messages with them added on.
   const toolTokens = state.toolTokens ?? 0;
+  const safetyTokens = estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety)));
   state.contextTrace = {
     ...(state.arcTrace ? { arc: state.arcTrace } : {}),
     ...(state.loreTrace ? { lore: state.loreTrace } : {}),
-    limitTokens: usableTokens(state.contextLimitTokens) + toolTokens,
+    ...(state.rulesTrace && (state.rulesTrace.shown.length || state.rulesTrace.omitted.length) ? { houseRules: state.rulesTrace } : {}),
+    // Where the transcript sits in the messages, so every later call of the
+    // turn can be fitted again (src/lib/dm/request-fit.ts): the oldest lines
+    // go first, and the turn's own calls and results from promptMessages on
+    // are never dropped.
+    shape: { historyStart: 1, historyEnd: 1 + historyMessages.length, promptMessages: 0 },
+    limitTokens: state.windowTokens
+      ? Math.max(0, state.windowTokens - responseReserveTokens(state.windowTokens))
+      : usableTokens(state.contextLimitTokens) + toolTokens,
     promptTokens:
       estimateTokens(systemParts.join("\n\n")) +
       fitted.tokens +
@@ -1509,17 +1561,23 @@ export function buildDmMessages(
     blocks: [
       // The table's lines stand at the head of the first system part; they
       // are costed on their own so the inspector shows what the limit costs.
+      // Costed on its own and taken out of the first rules row, which holds
+      // it, so the rows add up to the prompt instead of counting it twice.
       {
         id: "safety",
         kind: "safety" as BlockKind,
-        tokens: estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety))),
+        tokens: safetyTokens,
         included: true,
         reason: "always included; ordered first so it is cached",
         position: 0,
       },
       ...systemParts.map((text, index) => {
         const last = index === systemParts.length - 1;
-        const carved = last ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0) : 0;
+        const carved = last
+          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock, state.pinsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0)
+          : index === 0
+            ? safetyTokens
+            : 0;
         return {
           id: last ? "game-state" : `rules-${index}`,
           kind: (last ? "state" : "rules") as BlockKind,
@@ -1548,17 +1606,33 @@ export function buildDmMessages(
           reason: kind === "shop" ? "only while a shop is open here" : "inside the game state, under its own floor",
           position: systemParts.length + 1 + index,
         })),
+      // What the table pinned rides whole on every turn, at most PIN_TOKEN_CAP
+      // (src/lib/dm/pin-logic.ts): shown on its own so a small window says
+      // what it costs there.
+      ...(state.pinsBlock
+        ? [
+            {
+              id: "pins",
+              kind: "state" as BlockKind,
+              tokens: estimateTokens(state.pinsBlock),
+              included: true,
+              reason: "pinned memories: always kept, never dropped for room; unpin one to free it",
+              position: systemParts.length + 5,
+            },
+          ]
+        : []),
       {
         id: "history",
         kind: "history" as BlockKind,
         tokens: fitted.tokens,
         included: true,
         reason:
-          uncovered.cut || fitted.dropped
+          uncovered.cut || fitted.dropped || fitted.clipped
             ? [
                 `kept ${fitted.kept.length} of ${rendered.length} messages`,
                 ...(uncovered.cut ? [`${uncovered.cut} covered by the summaries left out`] : []),
                 ...(fitted.dropped ? [`${fitted.dropped} older dropped over the history budget`] : []),
+                ...(fitted.clipped ? ["the newest cut to fit, both ends kept"] : []),
               ].join("; ")
             : `all ${fitted.kept.length} messages fit`,
         position: systemParts.length + 1,
@@ -1582,7 +1656,8 @@ export function buildDmMessages(
               kind: "tools" as BlockKind,
               tokens: toolTokens,
               included: true,
-              reason: "offered on every call; taken off the window before the blocks are packed",
+              reason:
+                "reserved for the larger of the turn's tool sets (a fight can start mid-turn); what each call actually sent is under Calls",
               position: systemParts.length + 3,
             },
           ]
@@ -1592,7 +1667,7 @@ export function buildDmMessages(
 
   const system = systemParts.join("\n\n");
   const { standing, moment } = state.momentAfterHistory ? splitAtMoment(system) : { standing: system, moment: "" };
-  return [
+  const messages: ChatMessage[] = [
     { role: "system", content: standing },
     ...historyMessages,
     // The state, then the instruction to take the turn, so the newest player
@@ -1604,6 +1679,9 @@ export function buildDmMessages(
       ? [{ role: "user" as const, content: state.directorBlock }]
       : []),
   ];
+  state.contextTrace.shape = { historyStart: 1, historyEnd: 1 + historyMessages.length, promptMessages: messages.length };
+  state.contextTrace.historyEvicted = fitted.dropped;
+  return messages;
 }
 
 
@@ -1615,7 +1693,7 @@ export function buildDmMessages(
 function featPromptLine(feat: string, ownerUserId: string | string[] | undefined, campaignId?: string): string {
   const tag = featEngineTag(feat, campaignId);
   const twin = featTwinOf(feat, campaignId);
-  const known = twin !== feat.trim().toLowerCase() ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";
+  const known = twin !== textKey(feat) ? ` (${twin.replace(/\b[a-z]/g, (letter) => letter.toUpperCase())}'s rules)` : "";
   const text = (featFactsFor(feat, ownerUserId)?.desc ?? "").replace(/\s+/g, " ").trim();
   const cut = text.length <= 360 ? text : `${text.slice(0, 360).replace(/\s+\S*$/, "")}...`;
   return `${feat}${known}${tag ? ` ${tag}` : ""}${cut ? `: ${cut}` : ""}`;

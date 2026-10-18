@@ -16,6 +16,8 @@
 // Pure, so scripts/test-reference-desk.mjs drives the ranking and the
 // citation check directly. The impure half is src/lib/reference/desk.ts.
 
+import { textKey } from "../language/text-logic.ts";
+
 export const DESK_QUESTION_MAX = 400;
 
 // What kinds of thing the desk can cite. "ruling" and "variant" are the
@@ -92,10 +94,10 @@ const STOPWORDS = new Set([
 export function deskTerms(question: string): string[] {
   const terms: string[] = [];
   const remainder = question.replace(/"([^"]{2,60})"/g, (_match, phrase: string) => {
-    terms.push(phrase.trim().toLowerCase());
+    terms.push(textKey(phrase));
     return " ";
   });
-  for (const word of remainder.toLowerCase().split(/[^a-z0-9'-]+/)) {
+  for (const word of textKey(remainder).split(" ")) {
     if (word.length > 2 && !STOPWORDS.has(word)) {
       terms.push(word);
     }
@@ -110,8 +112,8 @@ export function scoreSource(terms: string[], source: DeskSource): number {
   if (!terms.length) {
     return 0;
   }
-  const name = source.name.toLowerCase();
-  const haystack = `${name} ${source.text}`.toLowerCase();
+  const name = textKey(source.name);
+  const haystack = textKey(`${name} ${source.text}`);
   let score = 0;
   for (const term of terms) {
     if (name.includes(term)) {

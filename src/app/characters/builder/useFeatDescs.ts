@@ -11,10 +11,18 @@ import { registerFeatRules } from "@/lib/srd/feature-effects";
 // grants (src/lib/srd/feat-grants.ts). ODM's own feats are bundled; a
 // content pack's is fetched once from the content API and kept.
 export function useFeatDescs(names: string[]): Record<string, string> {
+  return useFeatTexts(names).descs;
+}
+
+// The same fetch, with each feat's prerequisite beside its text, by
+// lower-case name, for the feat pickers' check (src/lib/srd/legality/
+// features.ts checkPrerequisite). ODM's own are bundled and not here.
+export function useFeatTexts(names: string[]): { descs: Record<string, string>; prerequisites: Record<string, string> } {
   // The table the character is built for: its DMs' workshop feats, read the
   // way that table reads them (src/lib/content/scope.ts).
   const campaignId = useContentCampaign();
   const [fetched, setFetched] = useState<Record<string, string>>({});
+  const [prerequisites, setPrerequisites] = useState<Record<string, string>>({});
   const wanted = names
     .map((name) => name.trim())
     .filter((name) => name && !authoredFeatDesc(name) && fetched[name.toLowerCase()] === undefined);
@@ -54,7 +62,8 @@ export function useFeatDescs(names: string[]): Record<string, string> {
           // reads it (src/lib/srd/feat-text.ts). An unknown feat is
           // remembered as empty, so it is asked for once.
           const data = body?.entry?.data;
-          const desc = data ? packFeatText(data).desc : "";
+          const text = data ? packFeatText(data) : { desc: "", prerequisite: "" };
+          const desc = text.desc;
           // The builder's own numbers (speed, initiative, passive scores)
           // read the feat through the same table the server does.
           if (body?.entry?.source === "homebrew") {
@@ -70,6 +79,7 @@ export function useFeatDescs(names: string[]): Record<string, string> {
             }
           }
           setFetched((current) => ({ ...current, [name]: desc }));
+          setPrerequisites((current) => ({ ...current, [name]: text.prerequisite }));
         })
         .catch(() => {
           if (!stale()) {
@@ -79,5 +89,5 @@ export function useFeatDescs(names: string[]): Record<string, string> {
         .finally(() => inFlight.current.delete(flight));
     }
   }, [key, campaignId]);
-  return fetched;
+  return { descs: fetched, prerequisites };
 }

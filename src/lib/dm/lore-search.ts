@@ -9,7 +9,9 @@ import { listPrepCards } from "@/lib/db/prep-cards";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { bestPassage } from "@/lib/dm/passage";
 import { placementOf } from "@/lib/dm/prep-logic";
-import { typeFor } from "@/lib/worldforge/model";
+import { parseRef, typeFor } from "@/lib/worldforge/model";
+import { canonAdmits, canonMeaning, eventLine, secretStanding } from "@/lib/worldforge/canon";
+import { fieldLines } from "@/lib/worldforge/time";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { accountOf } from "@/lib/worldforge/account";
 
@@ -23,6 +25,12 @@ import { accountOf } from "@/lib/worldforge/account";
 // A long body answers with the passage nearest the query rather than its
 // opening (issue #302, src/lib/dm/passage.ts); the whole entry is still one
 // read_card or one lore page away.
+//
+// WorldForge's records follow the canon policy every model path shares
+// (src/lib/worldforge/canon.ts, audit WF-14): a retired entry or event is left
+// out, and a draft or alternate one answers with a canon line saying what it
+// is, so the DM never takes another telling for history. Secrets answer too,
+// each saying whether the party has learned it.
 
 export const searchLoreTool = {
   type: "function",
@@ -91,6 +99,9 @@ type LoreCandidate = {
   embedding: Buffer | null;
   // Pre-computed similarity for sources that already did the cosine work.
   similarity?: number | null;
+  // What a WorldForge record that is not canon is (canonMeaning), shown with
+  // the result.
+  canon?: string;
 };
 
 export async function handleSearchLore(
@@ -111,7 +122,7 @@ export async function handleSearchLore(
 
   let queryVector: Float32Array | null = null;
   try {
-    [queryVector] = await embed([query]);
+    [queryVector] = await embed([query], { query: true });
   } catch (error) {
     // Keyword fallback carries the search.
     console.error("[lore-search] embedding failed", error);
@@ -132,7 +143,7 @@ export async function handleSearchLore(
     ["geography", "factions", "history", "magic", "culture", "religion"].includes(category)
   ) {
     for (const { entry, embedding } of listLoreWithEmbeddings(campaignId)) {
-      if (category !== "any" && entry.category !== category) {
+      if ((category !== "any" && entry.category !== category) || (entry.canon && !canonAdmits(entry.canon, "play"))) {
         continue;
       }
       candidates.push({
@@ -142,6 +153,7 @@ export async function handleSearchLore(
         text: passage(entry.body),
         haystack: `${entry.title} ${entry.tags.join(" ")} ${entry.body}`,
         embedding,
+        ...(entry.canon ? { canon: canonMeaning(entry.canon) } : {}),
       });
     }
   }
@@ -268,7 +280,7 @@ export async function handleSearchLore(
   )
     .map((id) => byId.get(id))
     .filter((candidate): candidate is LoreCandidate => candidate !== undefined)
-    .map(({ source, ref, text }) => ({ source, ref, text }));
+    .map(({ source, ref, text, canon }) => ({ source, ref, text, ...(canon ? { canon } : {}) }));
   if (!results.length) {
     return {
       results: [],
@@ -278,7 +290,7 @@ export async function handleSearchLore(
   return {
     results,
     // Retrieval has no relevance cut-off (fusion-logic.ts).
-    note: "These are established canon, nearest to your query first; some may not concern it. Stay strictly consistent with every one that does. If none does, this detail is not established and you may invent it, consistent with what you do know.",
+    note: "These are established canon, nearest to your query first; some may not concern it. Stay strictly consistent with every one that does. One with a canon line is not established: follow what that line says. If none does, this detail is not established and you may invent it, consistent with what you do know.",
   };
 }
 
@@ -295,17 +307,14 @@ function worldForgeCandidates(campaignId: string, category: string): LoreCandida
   }
   const { doc, entities } = worldView(campaignId);
   const out: LoreCandidate[] = [];
+  const inCategory = (shelf: string) => category === "any" || (SHELF_CATEGORY[shelf] ?? []).includes(category);
   for (const entity of entities) {
-    if (entity.entry.canon === "retired" || (category !== "any" && !(SHELF_CATEGORY[entity.shelf] ?? []).includes(category))) {
+    if (!canonAdmits(entity.entry.canon, "play") || !inCategory(entity.shelf)) {
       continue;
     }
     const type = typeFor(doc, entity.shelf, entity.entry.typeId);
-    const fields = type.fields
-      .filter((def) => !def.authorOnly && entity.entry.fields[def.id] !== undefined)
-      .map((def) => {
-        const value = entity.entry.fields[def.id];
-        return `${def.name}: ${typeof value === "object" && value ? value.year : String(value)}`;
-      })
+    const fields = fieldLines(type, entity.entry, doc.calendars, false)
+      .map(({ def, text }) => `${def.name}: ${text}`)
       .join("; ");
     const article = accountOf(entity);
     const body = [article, fields, entity.entry.hiddenTruth ? `(secretly: ${entity.entry.hiddenTruth})` : ""].filter(Boolean).join(" ");
@@ -314,26 +323,46 @@ function worldForgeCandidates(campaignId: string, category: string): LoreCandida
     }
     out.push({
       id: `world:${entity.ref}`,
-      source: entity.entry.canon === "canon" ? "worldforge" : `worldforge (${entity.entry.canon})`,
+      source: "worldforge",
       ref: `${type.name}: ${entity.name}`,
       text: body.slice(0, TEXT_CLIP),
       haystack: `${entity.name} ${entity.aliases.join(" ")} ${entity.entry.aliases.join(" ")} ${entity.tags.join(" ")} ${body}`,
       embedding: null,
+      ...(entity.entry.canon !== "canon" ? { canon: canonMeaning(entity.entry.canon) } : {}),
     });
   }
+  const nameOf = new Map(entities.filter((entity) => canonAdmits(entity.entry.canon, "play")).map((entity) => [entity.ref, entity.name]));
   if (category === "any" || category === "history") {
-    const nameOf = new Map(entities.map((entity) => [entity.ref, entity.name]));
-    for (const event of doc.events.filter((entry) => entry.canon !== "retired")) {
+    for (const event of doc.events.filter((entry) => canonAdmits(entry.canon, "play"))) {
       const names = event.refs.map((ref) => nameOf.get(ref)).filter(Boolean).join(", ");
       out.push({
         id: `world-event:${event.id}`,
         source: "worldforge timeline",
-        ref: `${event.when.year ? `${event.when.year}: ` : ""}${event.title}`,
+        ref: eventLine(event, doc.calendars, true),
         text: `${event.body}${names ? ` (involves ${names})` : ""}`.slice(0, TEXT_CLIP),
         haystack: `${event.title} ${event.era} ${event.body} ${names}`,
         embedding: null,
+        ...(event.canon !== "canon" ? { canon: canonMeaning(event.canon) } : {}),
       });
     }
+  }
+  // Secrets, each saying where it stands with the party: one it has learned
+  // is established for it, the rest are the DM's alone.
+  for (const secret of doc.secrets) {
+    const subject = parseRef(secret.subject);
+    if (category !== "any" && !(subject && inCategory(subject.shelf))) {
+      continue;
+    }
+    const about = nameOf.get(secret.subject) ?? "";
+    const knowers = secret.knownBy.map((ref) => nameOf.get(ref)).filter(Boolean).join(", ");
+    out.push({
+      id: `world-secret:${secret.id}`,
+      source: "worldforge secret",
+      ref: `${secret.title}${about ? ` (about ${about})` : ""}`,
+      text: `${secretStanding(secret)}.${secret.notes ? ` ${secret.notes}` : ""}${knowers ? ` Known by ${knowers}.` : ""}`.slice(0, TEXT_CLIP),
+      haystack: `${secret.title} ${about} ${secret.notes} ${knowers}`,
+      embedding: null,
+    });
   }
   return out;
 }

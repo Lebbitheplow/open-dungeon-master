@@ -11,6 +11,7 @@
 // wielder's own spell save DC (the staffs say "using your spell save DC").
 
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type ItemSpell = {
   spell: string;
@@ -103,10 +104,6 @@ const ROWS: ItemSpellRow[] = [
   ] },
 ];
 
-function key(text: string): string {
-  return text.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 // The spells an item casts, or an empty list for one the table does not
 // know.
 export function itemSpellsOf(itemName: string): ItemSpell[] {
@@ -133,8 +130,8 @@ export function itemSpellCast(
   if (!spells.length) {
     return { error: `${itemName} casts no spell the server knows; spend its charges without a spell and resolve what it does with the tool for it.`, retry: true };
   }
-  const wanted = key(spell);
-  const row = spells.find((entry) => key(entry.spell) === wanted);
+  const wanted = textKey(spell);
+  const row = spells.find((entry) => textKey(entry.spell) === wanted);
   if (!row) {
     return { error: `${itemName} casts ${spells.map((entry) => `${entry.spell} (${entry.charges} charge${entry.charges === 1 ? "" : "s"})`).join(", ")}, not ${spell}.`, retry: true };
   }

@@ -11,6 +11,10 @@ export type GenrePreset = {
   mapStyle: string;
   // Art-style fragment for AI companion portraits.
   portraitStyle: string;
+  // Art-style fragment for scene illustrations, led into every picture the
+  // DM asks for unless the campaign picks another look
+  // (src/lib/art-direction.ts).
+  sceneStyle: string;
   // SRD race ids that belong in this world; empty means no restriction. An
   // AI companion asked for anything else falls back to human (unless a
   // player character already plays that race).
@@ -44,6 +48,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "Tone: classic high fantasy. Wonder, heroism, and clear stakes. Magic is known and woven into daily life. Kingdoms, guilds, ancient ruins, and old gods.",
     mapStyle: "hand-drawn parchment fantasy cartography, ink and watercolor, warm tones",
     portraitStyle: "high fantasy, cloak and steel, painted heroic lighting",
+    sceneStyle: "painterly high fantasy illustration, rich color, warm heroic light",
     companionRaces: [],
     raceHint: "Any SRD race fits this world.",
     nameHints: "Evocative medieval-fantasy names (Thornhollow, the Gilded Reach).",
@@ -58,6 +63,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "Tone: dark fantasy. Grim, morally gray, low on mercy. Corruption creeps through institutions and flesh alike. Victories are real but always cost something. Keep horror grounded, not gratuitous.",
     mapStyle: "dark inked gothic map, heavy shadows, muted desaturated palette, weathered parchment",
     portraitStyle: "grim dark fantasy, worn armor and scars, candlelight and deep shadow",
+    sceneStyle: "grim dark fantasy concept art, desaturated palette, candlelight and deep shadow",
     companionRaces: [],
     raceHint: "Any SRD race fits this world, worn down by it.",
     nameHints: "Bleak, heavy names (Mourngate, the Ashen Fen).",
@@ -70,8 +76,9 @@ export const GENRE_PRESETS: GenrePreset[] = [
     blurb: "Clues, suspects, and secrets behind every door.",
     dmFlavor:
       "Tone: investigative mystery. Structure scenes around clues, motives, and unreliable witnesses. Track what the party knows versus suspects. Let deduction, not luck, crack the case; reward Investigation and Insight.",
-    mapStyle: "vintage detective case map, sepia town plan with labeled buildings and streets",
+    mapStyle: "vintage detective case map, sepia town plan of buildings and streets",
     portraitStyle: "period noir portrait, overcoat and hat, muted sepia lighting",
+    sceneStyle: "period noir illustration, muted sepia tones, low lamplight and long shadows",
     companionRaces: ["human"],
     raceHint:
       "Everyone in this world is human; put their profession, bearing, and secrets in the personality brief instead of a fantasy species.",
@@ -87,6 +94,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "Tone: horror. Build dread through pacing, sound, and what is NOT shown. Isolation, dwindling resources, and the unknown. Use fear and sanity beats narratively; give players agency even while terrified.",
     mapStyle: "unsettling hand-sketched map, charcoal and ash tones, fog-obscured edges",
     portraitStyle: "horror portrait, drained colors, harsh lantern light, haunted expression",
+    sceneStyle: "horror illustration, drained colors, harsh lantern light, fog and deep shadow",
     companionRaces: ["human"],
     raceHint:
       "Everyone in this world is human; whatever is not human is a monster, not a companion.",
@@ -102,6 +110,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "Tone: cyberpunk. Reskin 5e fiction: spells are cyberware, nanotech, or psionics; gold is credits; deities are megacorps and rogue AIs; dungeons are arcologies, server farms, and undercity warrens. Keep all 5e mechanics unchanged, only the skin differs.",
     mapStyle: "neon blueprint schematic, top-down cyberpunk city block, dark background with glowing cyan and magenta lines",
     portraitStyle: "neon-lit cyberpunk, chrome augments and synthetic skin, rain-slick city glow",
+    sceneStyle: "neon-lit cyberpunk concept art, rain-slick streets, cyan and magenta glow",
     companionRaces: ["human"],
     raceHint:
       "Everyone in this world is human; put the chrome, augments, and street identity in the personality brief instead of a fantasy species.",
@@ -117,6 +126,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "Tone: steampunk. Reskin 5e fiction: magic is aether-tech, clockwork, and alchemy; airships and difference engines abound; guilds and inventors drive intrigue. Keep all 5e mechanics unchanged, only the skin differs.",
     mapStyle: "brass-and-blueprint Victorian schematic map, engraved linework, sepia and copper tones",
     portraitStyle: "steampunk portrait, brass goggles and clockwork prosthetics, gaslight and copper tones",
+    sceneStyle: "steampunk illustration, brass and copper tones, gaslight haze",
     companionRaces: [],
     raceHint: "Any SRD race fits this world; gnomes and dwarves run the workshops.",
     nameHints: "Victorian-industrial names (Cogsworth Yards, the Aetherium Exchange).",
@@ -131,6 +141,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "Tone: post-apocalyptic. Reskin 5e fiction: magic is mutation, salvaged tech, or old-world science; gold is barter scrip; monsters are mutants and machines. Scarcity matters: track water, ammo-like resources, and shelter narratively. Keep all 5e mechanics unchanged.",
     mapStyle: "scavenger's hand-drawn survival map on scrap paper, rust and dust tones, marked ruins and hazards",
     portraitStyle: "post-apocalyptic portrait, salvaged gear and dust-caked skin, harsh sunlight",
+    sceneStyle: "post-apocalyptic concept art, sun-bleached dusty palette, harsh light",
     companionRaces: ["human", "half_orc"],
     raceHint:
       "People here are human survivors, or mutants (use half_orc for a mutant); describe the mutation in the personality brief.",
@@ -145,6 +156,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
     dmFlavor: "",
     mapStyle: "hand-drawn game map, clean linework, warm tones",
     portraitStyle: "",
+    sceneStyle: "",
     companionRaces: [],
     raceHint: "Match the race to the world the table described.",
     nameHints: "",

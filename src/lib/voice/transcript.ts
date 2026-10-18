@@ -36,7 +36,7 @@ export function labelLines(rawText: string, speaker: string, startedAt: string, 
   if (!cleaned) {
     return [];
   }
-  const parts = cleaned.split(/(?<=[.!?])\s+(?=[A-Z"'])/).map((part) => part.trim()).filter(Boolean);
+  const parts = cleaned.split(/(?<=[.!?])\s+(?=[\p{Lu}"'])/u).map((part) => part.trim()).filter(Boolean);
   return parts.map((text) => ({ speaker, text: text.slice(0, 600), startedAt, clockLabel }));
 }
 

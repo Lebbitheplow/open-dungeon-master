@@ -7,6 +7,8 @@
 // that wording as a pick, so the builder can offer it and the server can
 // check it, and a sheet stored with the sentence still reads.
 
+import { textKey } from "@/lib/language/text-logic";
+
 // SRD 5.1, Equipment, Tools.
 export const ARTISANS_TOOLS = [
   "alchemist's supplies",
@@ -104,8 +106,8 @@ export function splitToolGrants(tools: string[]): { fixed: string[]; choices: To
 // whether anything is owed (a character made here must name its tools).
 export function toolPicksOwed(choices: ToolChoice[], tools: string[]): string | null {
   const left = choices.map((choice) => choice.count);
-  for (const tool of tools.map((entry) => entry.trim().toLowerCase())) {
-    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.includes(tool));
+  for (const tool of tools.map(textKey)) {
+    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.some((entry) => textKey(entry) === tool));
     if (slot >= 0) {
       left[slot] -= 1;
     }
@@ -125,7 +127,7 @@ export function toolPickProblem(choices: ToolChoice[], picks: string[]): string 
   const left = choices.map((choice) => choice.count);
   const wanted = picks.map((pick) => pick.trim().toLowerCase()).filter(Boolean);
   for (const pick of wanted) {
-    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.includes(pick));
+    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.some((entry) => textKey(entry) === textKey(pick)));
     if (slot < 0) {
       return `${pick} is not a tool this character may choose; the choices are ${choices.map((choice) => `${choice.count} ${choice.label}`).join(" and ")}.`;
     }

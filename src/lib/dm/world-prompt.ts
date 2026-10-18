@@ -1,7 +1,9 @@
 import { hasWorldDoc, worldView, type WorldEntity } from "@/lib/db/world-forge";
-import { typeFor, type FieldValue, type WorldDoc } from "@/lib/worldforge/model";
+import { typeFor, type Canon, type WorldDoc } from "@/lib/worldforge/model";
+import { canonAdmits, canonLegend, canonTag, eventLine, pickEvents } from "@/lib/worldforge/canon";
+import { fieldLines } from "@/lib/worldforge/time";
 import { accountOf } from "@/lib/worldforge/account";
-import { foldName, wordPositions } from "@/lib/language/text-logic";
+import { phraseOffsets, textKey } from "@/lib/language/text-logic";
 
 // What the AI DM is told from the table's WorldForge (src/lib/worldforge/
 // model.ts), kept small: the prompt window is shared with everything else
@@ -15,8 +17,12 @@ import { foldName, wordPositions } from "@/lib/language/text-logic";
 // relevance, so an entry made last week is found as surely as the first;
 // then the secrets the party has not learned and the hidden truths of places
 // and factions, the relevant ones first. Hidden truths and secrets are the
-// DM's: told never to state them outright. An entry that is not canon yet
-// (a draft, an alternate) is marked as such; a retired one is left out.
+// DM's: told never to state them outright. The secrets the party has learned
+// come last, as what the party now knows. Canon follows the one policy every
+// model path shares (src/lib/worldforge/canon.ts): a draft or an alternate
+// entry or event is tagged and the tags explained once, a retired one is left
+// out, and an entry's history is its settled events, latest first, read in
+// the world's own calendar.
 //
 // WorldForge's calendars date the world's history; the table's in-game
 // clock (src/lib/db/clock.ts) runs on its own, and nothing here moves it.
@@ -32,25 +38,12 @@ export type WorldPromptContext = {
   text?: string;
 };
 
-function valueText(value: FieldValue): string {
-  if (typeof value === "object" && value) {
-    return value.year || (value.yearNum !== null ? String(value.yearNum) : "");
-  }
-  return String(value ?? "").trim();
-}
-
-// "Rank: Captain; Born: 1203": the entry's fields with something in them,
+// "Rank: Captain; Born: 61 TR": the entry's fields with something in them,
 // less those its type keeps for the author alone.
 function fieldsLine(doc: WorldDoc, entity: WorldEntity): string {
   const type = typeFor(doc, entity.shelf, entity.entry.typeId);
-  return type.fields
-    .filter((def) => !def.authorOnly)
-    .map((def) => {
-      const value = entity.entry.fields[def.id];
-      const text = value === undefined ? "" : valueText(value);
-      return text ? `${def.name}: ${cut(text, 80)}` : "";
-    })
-    .filter(Boolean)
+  return fieldLines(type, entity.entry, doc.calendars, false)
+    .map(({ def, text }) => `${def.name}: ${cut(text, 80)}`)
     .join("; ");
 }
 
@@ -63,7 +56,7 @@ function mentionScore(entity: WorldEntity, text: string): number {
   for (const name of [entity.name, ...entity.aliases, ...entity.entry.aliases]) {
     const clean = name.trim();
     if (clean.length < 3) continue;
-    for (const at of wordPositions(text, clean)) {
+    for (const at of phraseOffsets(text, clean)) {
       score += 1 + at / Math.max(1, text.length);
     }
   }
@@ -77,17 +70,21 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   }
   const { doc, entities: all } = worldView(campaignId);
   // A retired entry is history the world no longer holds to.
-  const entities = all.filter((entity) => entity.entry.canon !== "retired");
+  const entities = all.filter((entity) => canonAdmits(entity.entry.canon, "play"));
   const byRef = new Map(entities.map((entity) => [entity.ref, entity]));
   const nameOf = (ref: string) => byRef.get(ref)?.name ?? "";
   const open = doc.secrets.filter((secret) => !secret.partyKnows);
+  const learned = doc.secrets.filter((secret) => secret.partyKnows);
   const text = context.text ?? "";
+  // The states the block's tags use, for the one line that explains them.
+  const tagged: Canon[] = [];
 
   for (const entity of entities.filter((entry) => entry.shelf === "npc")) {
     const parts: string[] = [];
     if (entity.entry.hiddenTruth) parts.push(`secretly: ${cut(entity.entry.hiddenTruth, 140)}`);
+    // A tie to a retired entry is left out with the entry.
     const ties = doc.links
-      .filter((link) => link.from === entity.ref || (link.to === entity.ref && !link.oneway))
+      .filter((link) => (link.from === entity.ref && byRef.has(link.to)) || (link.to === entity.ref && !link.oneway && byRef.has(link.from)))
       .slice(0, 4)
       .map((link) => {
         const other = nameOf(link.from === entity.ref ? link.to : link.from);
@@ -106,7 +103,7 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   const here = entities.find((entity) => entity.shelf === "location" && entity.table.here === true);
   const present = new Set<string>([
     ...(here ? [here.ref] : []),
-    ...entities.filter((entity) => entity.shelf === "npc" && here && foldName(String(entity.table.home ?? "")) === foldName(here.name)).map((entity) => entity.ref),
+    ...entities.filter((entity) => entity.shelf === "npc" && here && textKey(String(entity.table.home ?? "")) === textKey(here.name)).map((entity) => entity.ref),
   ]);
   const scored = entities
     .map((entity) => ({ entity, score: mentionScore(entity, text) * 2 + (present.has(entity.ref) ? 1 : 0) }))
@@ -118,11 +115,9 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   for (const { entity } of scored.slice(0, RELEVANT_MAX)) {
     const article = accountOf(entity);
     const fields = fieldsLine(doc, entity);
-    const events = doc.events
-      .filter((event) => event.refs.includes(entity.ref) && event.canon !== "retired")
-      .slice(-2)
-      .map((event) => `${event.when.year ? `${event.when.year}: ` : ""}${event.title}${event.body ? ` (${cut(event.body, 100)})` : ""}`);
-    const status = entity.entry.canon === "canon" ? "" : ` [${entity.entry.canon}: not canon yet, use only if it fits]`;
+    const picked = pickEvents(doc.events.filter((event) => event.refs.includes(entity.ref)), doc.calendars, "play", 2);
+    const events = picked.map((event) => `${eventLine(event, doc.calendars)}${event.body ? ` (${cut(event.body, 100)})` : ""}`);
+    const status = canonTag(entity.entry.canon);
     const parts = [
       article ? cut(article.replace(/\s+/g, " "), ARTICLE_MAX) : "",
       fields,
@@ -131,6 +126,7 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
     ].filter(Boolean);
     if (parts.length) {
       inPlay.push(`- ${entity.name}${status}: ${parts.join(" | ")}`);
+      tagged.push(entity.entry.canon, ...picked.map((event) => event.canon));
     }
   }
 
@@ -147,9 +143,20 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
     .filter((entry) => entry.shelf !== "npc" && entry.entry.hiddenTruth && !scored.slice(0, RELEVANT_MAX).some((row) => row.entity.ref === entry.ref))
     .sort((a, b) => Number(relevant.has(b.ref)) - Number(relevant.has(a.ref)));
   for (const entity of truths.slice(0, 6)) {
-    lines.push(`- ${entity.name}: ${cut(entity.entry.hiddenTruth, 140)}`);
+    lines.push(`- ${entity.name}${canonTag(entity.entry.canon)}: ${cut(entity.entry.hiddenTruth, 140)}`);
+    tagged.push(entity.entry.canon);
   }
-  if (!inPlay.length && !lines.length) {
+  // What the party has found out is theirs now: the narrator keeps to it and
+  // lets the characters speak of it, rather than forgetting it was ever a
+  // secret. The ones about what is in play first.
+  const known = [...learned]
+    .sort((a, b) => Number(aboutPlay([b.subject, ...b.knownBy])) - Number(aboutPlay([a.subject, ...a.knownBy])))
+    .slice(0, 4)
+    .map((secret) => {
+      const about = secret.subject && nameOf(secret.subject) ? ` (about ${nameOf(secret.subject)})` : "";
+      return `- Learned: ${secret.title}${about}${secret.notes ? `: ${cut(secret.notes, 140)}` : ""}`;
+    });
+  if (!inPlay.length && !lines.length && !known.length) {
     return { npcNotes, block: "" };
   }
   let block = "";
@@ -158,6 +165,8 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
     block = block ? `${block}\n${line}` : line;
     return true;
   };
+  const legend = canonLegend(tagged);
+  if (legend) add(legend);
   if (inPlay.length) {
     add("From the world's WorldForge, about who and what is in play now (the article is what the world knows and may surface as the party learns it; anything marked secretly is the DM's):");
     for (const line of inPlay) if (!add(line)) break;
@@ -165,6 +174,10 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   if (lines.length) {
     add("From the world's WorldForge (DM-only; the party has not learned these, so let them surface through play and never state them outright):");
     for (const line of lines) if (!add(line)) break;
+  }
+  if (known.length) {
+    add("From the world's WorldForge, secrets the party has learned (established for them now: keep to them, and the characters may speak of them):");
+    for (const line of known) if (!add(line)) break;
   }
   return { npcNotes, block };
 }

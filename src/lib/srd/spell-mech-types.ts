@@ -238,6 +238,12 @@ export type SpellMech = {
   // bonus, with no spellcasting modifier added (4d8 + 15).
   regainEachTurn?: number;
   healNoModifier?: boolean;
+  // A longer lifetime from a higher slot, for the concentration clock and
+  // the conditions the spell lays (Hunter's Mark: 8 hours from a 3rd-level
+  // slot, 24 from a 5th): [slot level, rounds or null for "until
+  // dispelled"], ascending. Without it the spell's own higher-level text is
+  // read (src/lib/srd/spell-duration.ts).
+  durationBySlot?: Array<[number, number | null]>;
   // One line the tool result hands the model for the parts no engine covers.
   note?: string;
 };

@@ -9,7 +9,8 @@ import {
 } from "@/lib/db/snapshots";
 import { rollbackWarnings, type RollbackScope } from "@/lib/dm/rollback-logic";
 import { resetChapterMemory } from "@/lib/dm/chapter-close";
-import { enqueueDmJob } from "@/lib/dm/queue";
+import { enqueueDmJob, stopDmJob } from "@/lib/dm/queue";
+import { REWOUND_REASON } from "@/lib/dm/job-stage-logic";
 import { setDmStatus } from "@/lib/dm/status";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
@@ -106,6 +107,11 @@ export async function performRollback(
     ok: false,
     error: "The rewind did not run.",
   };
+  // The lead confirmed the rewind knowing a turn was in flight (the scope's
+  // inFlightTurn warning). That turn would be undone anyway, and one that is
+  // stuck would hold the rewind behind it forever (issue #383), so it is
+  // stopped first.
+  stopDmJob(campaignId, REWOUND_REASON);
   await enqueueDmJob(campaignId, async () => {
     result = rollbackNow(campaignId, targetChapterIndex);
   });

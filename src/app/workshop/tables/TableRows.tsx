@@ -11,6 +11,7 @@ import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
 import { GlyphPlate, RowMenu } from "@/app/workshop/kit";
 import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
 import type { RollTable } from "@/lib/db/roll-tables";
+import { textKey } from "@/lib/language/text-logic";
 
 // The workshop's view of the DM's tables: one full-width row per table with
 // the die it rolls, how many rows it has and whether every face of that die
@@ -100,10 +101,10 @@ export function TableRows({
   onDelete,
 }: RowsProps) {
   const [query, setQuery] = useState("");
-  const needle = query.trim().toLowerCase();
+  const needle = textKey(query);
   const [sort, setSort] = useState<RowSort>("made");
   const shown = sortRows(
-    needle ? tables.filter((table) => table.name.toLowerCase().includes(needle)) : tables,
+    needle ? tables.filter((table) => textKey(table.name).includes(needle)) : tables,
     sort,
     (table) => table.name,
   );

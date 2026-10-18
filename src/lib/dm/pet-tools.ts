@@ -9,7 +9,7 @@ import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { proficiencyBonus } from "@/lib/srd";
 import { findBeastForm } from "@/lib/srd/beast-forms";
-import { findNamed } from "@/lib/language/text-logic";
+import { findNamed, textKey } from "@/lib/language/text-logic";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { petAttackCost } from "@/lib/dm/pet-attack-cost";
@@ -152,8 +152,8 @@ const dismissSchema = z.object({
 
 function featureNames(sheet: CharacterSheet): string[] {
   return [
-    ...sheet.features.map((feature) => feature.name.toLowerCase()),
-    ...sheet.feats.map((feat) => feat.toLowerCase()),
+    ...sheet.features.map((feature) => textKey(feature.name)),
+    ...sheet.feats.map((feat) => textKey(feat)),
   ];
 }
 
@@ -162,7 +162,7 @@ function knowsFindFamiliar(sheet: CharacterSheet): boolean {
     ? allSpellNames(sheet.spellcasting)
     : [];
   return (
-    spellList.some((entry) => entry.toLowerCase().includes("find familiar")) ||
+    spellList.some((entry) => textKey(entry).includes("find familiar")) ||
     featureNames(sheet).some((name) => name.includes("find familiar"))
   );
 }
@@ -175,7 +175,7 @@ function hasBeastCompanionFeature(sheet: CharacterSheet): boolean {
   return (
     /beast\s*master/i.test(sheet.subclass ?? "") ||
     featureNames(sheet).some(
-      (name) => name.includes("ranger's companion") || name.includes("animal companion"),
+      (name) => name.includes("ranger s companion") || name.includes("animal companion"),
     )
   );
 }
@@ -200,16 +200,16 @@ function noPet(sheet: CharacterSheet, petName?: string): ToolError {
 }
 
 function findPet(sheet: CharacterSheet, petName?: string): SheetPet | null {
-  const wanted = (petName ?? "").trim().toLowerCase();
+  const wanted = textKey(petName ?? "");
   if (!wanted) {
     return sheet.pets[0] ?? null;
   }
   return (
     sheet.pets.find(
       (pet) =>
-        pet.name.toLowerCase().includes(wanted) ||
-        wanted.includes(pet.name.toLowerCase()) ||
-        pet.form.toLowerCase().includes(wanted),
+        textKey(pet.name).includes(wanted) ||
+        wanted.includes(textKey(pet.name)) ||
+        textKey(pet.form).includes(wanted),
     ) ?? null
   );
 }
@@ -425,13 +425,13 @@ export function handlePetAttack(
   if ("error" in charge) {
     return toolError(charge);
   }
-  const wantedAttack = (args.attack ?? "").trim().toLowerCase();
+  const wantedAttack = textKey(args.attack ?? "");
   const attack =
     pet.attacks.find(
       (entry) =>
         wantedAttack &&
-        (entry.name.toLowerCase().includes(wantedAttack) ||
-          wantedAttack.includes(entry.name.toLowerCase())),
+        (textKey(entry.name).includes(wantedAttack) ||
+          wantedAttack.includes(textKey(entry.name))),
     ) ?? pet.attacks[0];
 
   const hitOutcome = rollExpression(d20Expression(attack.toHit));

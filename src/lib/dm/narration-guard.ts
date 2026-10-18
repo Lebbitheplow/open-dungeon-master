@@ -1,3 +1,4 @@
+import { noteTurnCall, turnCallOptions } from "@/lib/dm/turn-fit";
 import { buildLinePrompt } from "@/lib/dm/safety-logic";
 import { lineViolations } from "@/lib/dm/safety-lines-logic";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -121,7 +122,7 @@ export async function enforceEngineBoundary(
   // narration call never pushed that assistant message into the conversation,
   // so without this the model would be asked to rewrite prose it cannot see and
   // would invent a fresh scene instead.
-  const { message, error } = await requestDmMessage(
+  const rewrite = await requestDmMessage(
     campaign.settings,
     [
       ...turn.conversation,
@@ -136,8 +137,10 @@ export async function enforceEngineBoundary(
     // No tools: this call exists to rewrite prose, and a tool call here would
     // resolve mechanics a second time. It is the reserved call, so it is
     // made whatever the turn's budget has left.
-    { tools: [], toolChoice: "none", thinking: false },
+    { tools: [], toolChoice: "none", thinking: false, ...turnCallOptions(campaign, turn, "guard_rewrite") },
   );
+  noteTurnCall(turn, "guard_rewrite", [], rewrite);
+  const { message, error } = rewrite;
   turn.callIndex += 1;
   if (error) {
     console.warn(`[engine-boundary] turn ${turn.id}: correction call failed (${summary})`);

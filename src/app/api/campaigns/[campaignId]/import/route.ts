@@ -139,5 +139,7 @@ export async function POST(
     ...(result.unresolved?.length ? { unresolved: result.unresolved } : {}),
     ...(result.monstersBrought?.length ? { monstersBrought: result.monstersBrought } : {}),
     ...(result.monstersReused?.length ? { monstersReused: result.monstersReused } : {}),
+    ...(result.itemsBrought?.length ? { itemsBrought: result.itemsBrought } : {}),
+    ...(result.itemsReused?.length ? { itemsReused: result.itemsReused } : {}),
   });
 }

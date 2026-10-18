@@ -13,7 +13,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
 import type { ItemCast } from "@/lib/srd/item-cast-credit";
-import { clearSpellConditionsByName, setConcentration } from "@/lib/dm/concentration";
+import { droppedLine, setConcentration } from "@/lib/dm/concentration";
 import { endInvisibilityOnCast } from "@/lib/dm/attack-marks";
 
 export function castFromItem(
@@ -41,11 +41,10 @@ export function castFromItem(
     ...numbers,
   };
   if (input.concentration === true || facts?.concentration === true) {
-    const { displaced } = setConcentration(campaign, turnId, sheet.id, name);
+    const { displaced } = setConcentration(campaign, turnId, sheet.id, name, cast.level);
     result.concentration = true;
     if (displaced) {
-      clearSpellConditionsByName(campaign, displaced, sheet.userId, sheet.id);
-      result.droppedConcentration = `${displaced} ended when ${name} was cast; its effects are gone.`;
+      result.droppedConcentration = droppedLine(displaced, name);
     }
   }
   // Casting a spell from an item is casting a spell: Invisibility ends.

@@ -23,6 +23,7 @@ import { DeskPanel } from "@/app/reference/DeskPanel";
 import { CategoryRail } from "@/app/reference/CategoryRail";
 import { ResultBadges, type BadgeRow } from "@/app/reference/ResultBadges";
 import { MAX_COMPARE, type CompareKind } from "@/lib/reference/compare";
+import { textKey } from "@/lib/language/text-logic";
 
 // Which painted icon set a reference category draws from (src/lib/icons.ts).
 const REFERENCE_ICON_KIND: Record<string, IconKind | undefined> = {
@@ -127,13 +128,13 @@ export default function ReferencePage() {
 
   const terms = glossaryTerms();
   const filteredTerms = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = textKey(query);
     if (!needle) {
       return terms;
     }
     return terms.filter(
       (term) =>
-        term.term.toLowerCase().includes(needle) || term.short.toLowerCase().includes(needle),
+        textKey(term.term).includes(needle) || textKey(term.short).includes(needle),
     );
   }, [terms, query]);
 

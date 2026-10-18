@@ -16,6 +16,12 @@ import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
 import { removeTempDir } from "./lib/remove-temp-dir.mjs";
+import { standInStoryteller } from "./lib/stand-in-storyteller.mjs";
+
+// An AI-run table through the routes needs a storyteller set up (the routes
+// refuse one otherwise, and seat a person when none is named); this one never
+// answers.
+standInStoryteller();
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-partial-updates-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");

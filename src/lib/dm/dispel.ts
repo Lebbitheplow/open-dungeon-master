@@ -19,12 +19,12 @@ import { spellFactsFor, spellMechanicsFor } from "@/lib/content";
 import { MECH_OVERRIDES } from "@/lib/srd/spell-mechanics";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { instancesOf, removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { spellKey } from "@/lib/dm/spell-effects";
 import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-reach";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 const SRD_CONDITIONS = new Set([
   "blinded", "charmed", "deafened", "frightened", "grappled", "incapacitated",
@@ -58,7 +58,7 @@ type Held = { spell: string; key: string; conditions: string[] };
 // One casting's key on a condition instance: the spell and its caster.
 function castingKey(condition: string, instance: ConditionMeta): string | null {
   const spell = instance.spell ?? legacySpellOf(condition);
-  return spell ? `${spellKey(spell)}|${instance.source ?? ""}` : null;
+  return spell ? `${textKey(spell)}|${instance.source ?? ""}` : null;
 }
 
 // The spells on a creature, each casting with the conditions it holds
@@ -121,9 +121,9 @@ export function handleDispelMagic(
   if (!holder) {
     return { error: "Unknown target for Dispel Magic; use an id from GAME STATE.", retry: true };
   }
-  const wanted = input.endSpell ? spellKey(input.endSpell) : null;
+  const wanted = input.endSpell ? textKey(input.endSpell) : null;
   const held = spellsOn(holder.conditions, holder.meta).filter(
-    (entry) => !wanted || spellKey(entry.spell) === wanted,
+    (entry) => !wanted || textKey(entry.spell) === wanted,
   );
   const authors = spellAuthorsFor(campaign);
   const encounter = getActiveEncounter(campaign.id);

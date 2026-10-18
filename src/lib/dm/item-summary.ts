@@ -11,6 +11,7 @@ import { armorOfRow } from "@/lib/srd/armor";
 import { gearDefOfRow } from "@/lib/srd/magic-gear";
 import { matchMagicItem, type MagicItemEffect } from "@/lib/srd/magic-items";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 function effectWords(effect: MagicItemEffect): string {
   switch (effect.kind) {
@@ -29,9 +30,9 @@ function effectWords(effect: MagicItemEffect): string {
 
 // The pack's first sentence for a magic item the engine does not hold.
 function packSentence(name: string): string | null {
-  const wanted = name.trim().toLowerCase();
+  const wanted = textKey(name);
   const row = searchItems({ q: name.trim(), kind: "magic_item", limit: 5 }).find(
-    (item) => item.name.trim().toLowerCase() === wanted,
+    (item) => textKey(item.name) === wanted,
   );
   const desc = String(row?.data?.desc ?? "").replace(/\s+/g, " ").trim();
   if (!desc) {

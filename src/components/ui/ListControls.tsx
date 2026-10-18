@@ -3,7 +3,7 @@
 import { ArrowDownAZ, Clock, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 // Search, tag filter and a sort for every workshop list (docs/vtt-parity-
 // implementation-plan.md section 10.9). The list hands over its items with
@@ -28,10 +28,10 @@ export function useListControls<T extends Listed>(items: T[]) {
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || compareNames(a[0], b[0])).map(([name]) => name);
   }, [items]);
   const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = textKey(query);
     const filtered = items.filter(
       (item) =>
-        (!needle || item.name.toLowerCase().includes(needle)) && (!tag || (item.tags ?? []).includes(tag)),
+        (!needle || textKey(item.name).includes(needle)) && (!tag || (item.tags ?? []).includes(tag)),
     );
     return [...filtered].sort((a, b) =>
       sort === "name"

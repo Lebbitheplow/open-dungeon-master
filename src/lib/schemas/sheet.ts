@@ -29,9 +29,11 @@ export type HitDice = z.infer<typeof hitDiceSchema>;
 // scalar class/subclass/level fields and an empty `classes` array; the
 // multiclass helpers (src/lib/srd/multiclass.ts) derive a one-entry list
 // from the scalars so consumers never branch on which shape they hold.
+// A subclass is stored by name, and a workshop subclass's name may run to
+// 80 characters (src/lib/schemas/homebrew.ts).
 export const classEntrySchema = z.object({
   id: z.string().trim().min(1).max(60),
-  subclass: z.string().trim().max(60).default(""),
+  subclass: z.string().trim().max(80).default(""),
   level: z.number().int().min(1).max(20),
 });
 export type ClassEntry = z.infer<typeof classEntrySchema>;
@@ -61,10 +63,57 @@ export const deathSavesSchema = z
   .nullable();
 export type DeathSaves = z.infer<typeof deathSavesSchema>;
 
-const trainingName = z
-  .string()
-  .max(300)
-  .transform((value) => value.slice(0, 40));
+// The longest language, tool, and armor or weapon name a sheet holds.
+export const LANGUAGE_NAME_MAX = 40;
+export const TOOL_NAME_MAX = 60;
+export const TRAINING_NAME_MAX = 40;
+
+// A name within `max`, cut at a word with an ellipsis when it runs longer.
+// The same text always comes to the same name and a fitted name fits to
+// itself, so a name the sheet clipped still matches the grant it was cut
+// from (src/lib/srd/legality/proficiencies.ts compares them this way).
+export function fitName(text: string, max: number): string {
+  const name = text.trim().replace(/\s+/g, " ");
+  if (name.length <= max) {
+    return name;
+  }
+  const cut = name.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.-]+$/, "")}…`;
+}
+
+// A name written from a content row's text rather than typed, fitted to
+// `max` rather than refused: a content pack or a workshop entry can say more
+// than a sheet holds, and the server writes these from the row itself.
+const clippedName = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(300)
+    .transform((value) => fitName(value, max));
+const trainingName = clippedName(TRAINING_NAME_MAX);
+
+// The longest item name a sheet holds.
+export const ITEM_NAME_MAX = 80;
+
+// An item name within ITEM_NAME_MAX. A background's kit line the catalog has
+// no item for is carried as the book wrote it, and a few books write more
+// than a name ("A writing kit (small pouch with a quill, ink, folded
+// parchment, and a small penknife)"). The bracketed detail goes first, then
+// every alternative of an "or" line but the book's first (what an unanswered
+// kit choice comes to), then the words past the cap.
+export function fitItemName(text: string): string {
+  const name = text.trim().replace(/\s+/g, " ");
+  if (name.length <= ITEM_NAME_MAX) {
+    return name;
+  }
+  const bare = name.replace(/\s*\([^)]*\)/g, "").trim() || name;
+  if (bare.length <= ITEM_NAME_MAX) {
+    return bare;
+  }
+  const first = bare.split(/,?\s+or\s+/i)[0].trim() || bare;
+  return fitName(first, ITEM_NAME_MAX);
+}
 
 const featPicksSchema = z.object({
   languages: z.array(z.string().trim().max(40)).max(6).optional(),
@@ -91,18 +140,25 @@ export const proficienciesSchema = z.object({
   // Skills with doubled proficiency (rogue/bard expertise). The .default
   // heals rows stored before the field existed.
   expertise: z.array(z.string().max(40)).max(6).default([]),
-  languages: z.array(z.string().max(40)).max(12),
-  tools: z.array(z.string().max(60)).max(12),
-  // Clipped rather than refused: the server writes the training itself
-  // (src/lib/srd/legality/proficiencies.ts), and an app built before the
-  // builder read it from the bundled class sends the content pack's sentence.
+  // Languages, tools, armor and weapons are clipped rather than refused: the
+  // server writes the training itself from the race, class and background
+  // rows (src/lib/srd/legality/proficiencies.ts), whose text a content pack
+  // or a workshop entry wrote (a workshop background's tool may run to 120
+  // characters, a tool grant left unanswered is kept in its own words), and
+  // an app built before the builder read the bundled class's training sends
+  // the content pack's sentence.
+  languages: z.array(clippedName(LANGUAGE_NAME_MAX)).max(12),
+  tools: z.array(clippedName(TOOL_NAME_MAX)).max(12),
   armor: z.array(trainingName).max(8),
   weapons: z.array(trainingName).max(16),
 });
 export type Proficiencies = z.infer<typeof proficienciesSchema>;
 
 export const equipmentItemSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  // Fitted rather than refused: the builder and the server fit a long kit
+  // line the same way (src/lib/srd/gear-choices.ts), and an app built before
+  // they did sends the line whole.
+  name: z.string().trim().min(1).max(300).transform(fitItemName),
   qty: z.number().int().min(1).max(999).default(1),
   // Optional link to a content-db entry (Open5e slug or "homebrew:<id>");
   // free-text items stay valid.
@@ -174,7 +230,12 @@ export type SheetFeature = z.infer<typeof sheetFeatureSchema>;
 // sheet can never point the party's browsers at an external host.
 export const attachmentSchema = z.object({
   id: z.string().max(80).optional(),
-  name: z.string().max(120).optional(),
+  // The uploaded file's own name, which nothing caps: clipped, not refused.
+  name: z
+    .string()
+    .max(1000)
+    .transform((value) => value.slice(0, 120))
+    .optional(),
   type: z.string().max(60).optional(),
   url: z.string().max(300).startsWith("/uploads/"),
 });
@@ -265,7 +326,7 @@ export const createSheetSchema = z.object({
   name: z.string().trim().min(1).max(60),
   race: z.string().trim().min(1).max(60),
   class: z.string().trim().min(1).max(60),
-  subclass: z.string().trim().max(60).default(""),
+  subclass: z.string().trim().max(80).default(""),
   background: z.string().trim().max(60).default(""),
   alignment: z.string().trim().max(30).default(""),
   gender: z.enum(["", ...GENDERS]).default(""),
@@ -332,7 +393,9 @@ export const createSheetSchema = z.object({
       // ("a dagger or light hammer"), by its words, or the tool's name where
       // the alternative is a kind ("one instrument"), in kit order
       // (src/lib/srd/gear-choices.ts). Absent or short: the book's first.
-      gear: z.array(z.string().trim().max(80)).max(8).default([]),
+      // Matched by its words, so roomy rather than clipped: a workshop kit
+      // line runs to 200 characters (src/lib/homebrew/background-data.ts).
+      gear: z.array(z.string().trim().max(200)).max(8).default([]),
     })
     .optional(),
   // The either-or choices of the class's starting equipment
@@ -393,7 +456,7 @@ export const patchSheetSchema = z.object({
   // Level-up expertise picks (rogue/bard); the server keeps only skills the
   // sheet is actually proficient in.
   expertise: z.array(z.string().max(40)).max(6).optional(),
-  subclass: z.string().trim().max(60).optional(),
+  subclass: z.string().trim().max(80).optional(),
   // Which class takes the new level (existing or a new multiclass). The
   // server validates prerequisites, builds the classes array itself, and
   // applies the multiclass proficiency grants; the client never writes the
@@ -455,6 +518,10 @@ export const wildShapeSchema = z
     // "wildshape" keeps the character's mental stats; "polymorph" replaces
     // every score the form carries. Missing = "wildshape".
     kind: z.enum(["wildshape", "polymorph"]).optional(),
+    // A "polymorph" whose spell keeps the target's proficiencies, features
+    // and lineage (Shapechange). Polymorph and Animal Shapes replace them
+    // with the beast's (src/lib/srd/shape-rules.ts formSees).
+    keepsTraining: z.boolean().optional(),
     // The form's ability scores, overriding the sheet's while transformed.
     // Wild Shape stores only STR/DEX/CON; Polymorph stores all six.
     abilities: z

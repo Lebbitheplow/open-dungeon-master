@@ -1,4 +1,4 @@
-import { byName, foldName } from "@/lib/language/text-logic";
+import { byName, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { clampPower, normalizeFactionAttitude, type Faction, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -55,8 +55,8 @@ export function getFaction(factionId: string): Faction | null {
 // case (src/lib/language), never SQLite's ASCII-only NOCASE.
 export function findFactionByName(campaignId: string, name: string): Faction | null {
   const factions = listFactions(campaignId);
-  const wanted = foldName(name);
-  const exact = factions.find((faction) => foldName(faction.name) === wanted);
+  const wanted = textKey(name);
+  const exact = factions.find((faction) => textKey(faction.name) === wanted);
   if (exact) {
     return exact;
   }
@@ -64,7 +64,7 @@ export function findFactionByName(campaignId: string, name: string): Faction | n
     return null;
   }
   const candidates = factions.filter((faction) => {
-    const own = foldName(faction.name);
+    const own = textKey(faction.name);
     return own.includes(wanted) || wanted.includes(own);
   });
   return candidates.length === 1 ? candidates[0] : null;

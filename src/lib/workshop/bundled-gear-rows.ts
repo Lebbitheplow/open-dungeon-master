@@ -2,6 +2,7 @@ import { SRD_ARMOR } from "@/lib/srd/armor";
 import { SRD_GEAR } from "@/lib/srd/adventuring-gear";
 import { bundledPriceCopper } from "@/lib/srd/starting-wealth";
 import { SRD_WEAPONS, SRD_WEAPON_WEIGHT_LB } from "@/lib/srd/weapons";
+import { textKey } from "@/lib/language/text-logic";
 
 // SRD 5.1's mundane equipment with no content pack installed: the Weapons,
 // Armor and Adventuring Gear tables ODM bundles (src/lib/srd/weapons.ts,
@@ -81,8 +82,8 @@ function allRows(): BundledGearRow[] {
 }
 
 export function bundledGearRows(q = "", kind?: string): BundledGearRow[] {
-  const wanted = q.trim().toLowerCase();
-  return allRows().filter((entry) => (!kind || entry.kind === kind) && (!wanted || entry.name.toLowerCase().includes(wanted)));
+  const wanted = textKey(q);
+  return allRows().filter((entry) => (!kind || entry.kind === kind) && (!wanted || textKey(entry.name).includes(wanted)));
 }
 
 export function bundledGearRow(slug: string): BundledGearRow | null {

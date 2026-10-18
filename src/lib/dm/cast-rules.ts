@@ -22,6 +22,7 @@ import { matchWeapon } from "@/lib/srd/weapons";
 import { spendAction, spendCastAttack, type TurnBudget } from "@/lib/dm/action-budget";
 import { masteredSpell, pactLevelFor } from "@/lib/dm/cast-slot-choice";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type CastRefusal = ToolError;
 
@@ -44,24 +45,18 @@ type Caster = Pick<
   | "copper"
 >;
 
-// Names are compared as a person hears them: case, spacing and an apostrophe
-// make no difference, but a part of a name is not the name.
-export function spellKeyOf(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 function namesOf(spell: string, facts: SpellFacts | null): Set<string> {
-  return new Set([spell, facts?.name ?? "", ...(facts?.aliases ?? [])].map(spellKeyOf).filter(Boolean));
+  return new Set([spell, facts?.name ?? "", ...(facts?.aliases ?? [])].map(textKey).filter(Boolean));
 }
 
 const hasName = (list: string[] | undefined, names: Set<string>) =>
-  (list ?? []).some((entry) => names.has(spellKeyOf(entry)));
+  (list ?? []).some((entry) => names.has(textKey(entry)));
 
 // A content pack twin of the feat (Level Up's Rite Master is Ritual
 // Caster) counts as the feat (src/lib/srd/feat-effects.ts).
 const hasFeat = (sheet: Pick<Caster, "feats" | "features"> & { campaignId?: string }, feat: string) =>
   [...(sheet.feats ?? []), ...(sheet.features ?? []).map((feature) => feature.name)].some(
-    (entry) => entry.toLowerCase().includes(feat) || featTwinOf(entry, sheet.campaignId).includes(feat),
+    (entry) => textKey(entry).includes(feat) || featTwinOf(entry, sheet.campaignId).includes(feat),
   );
 
 // ---- who holds the spell ----
@@ -175,7 +170,7 @@ export function casterStateProblem(sheet: Caster): ToolError | null {
     const polymorphed = sheet.wildShape.kind === "polymorph";
     const beastSpells =
       !polymorphed &&
-      sheet.features.some((feature) => feature.name.toLowerCase().includes("beast spells"));
+      sheet.features.some((feature) => textKey(feature.name).includes("beast spells"));
     if (!beastSpells) {
       return { error: polymorphed
         ? `${sheet.name} is polymorphed into a ${sheet.wildShape.form} and cannot cast spells; the form has no capacity for it. The spell waits until the transformation ends.`
@@ -456,10 +451,10 @@ export function bonusCastOf(
   }
   // Only a use of the surge leaves its mark, so a cantrip asks the mark.
   if (facts.level === 0) {
-    const surge = sheet.features.find((feature) => SURGE_FEATURES.includes(feature.name.trim().toLowerCase()));
+    const surge = sheet.features.find((feature) => SURGE_FEATURES.includes(textKey(feature.name)));
     return { feature: surge?.name.trim() ?? "The surge", mode: "mark", mark: SURGE_MARK, afterLevelled: true };
   }
-  const embodies = sheet.features.some((feature) => feature.name.trim().toLowerCase() === "embodiment of the law");
+  const embodies = sheet.features.some((feature) => textKey(feature.name) === "embodiment of the law");
   if (embodies && facts.level >= 1 && school === "enchantment") {
     return { feature: "Embodiment of the Law", mode: "mark", mark: EMBODIMENT_MARK };
   }
@@ -469,22 +464,31 @@ const SHARES = "cast-shares";
 
 // A casting whose attack rolls, darts or targets are resolved one call at a
 // time (Eldritch Blast's beams, Scorching Ray, Bane on three creatures): how
-// many the casting still holds, and the slot it was cast from.
-export type OpenCast = { spell: string; slotLevel: number | null; left: number };
+// many the casting still holds, and the slot it was cast from. An area
+// resolved a creature per call keeps who it has caught and its one damage
+// roll (cast-at-enemy.ts), so every call is the same placement and the same
+// dice.
+export type OpenCast = { spell: string; slotLevel: number | null; left: number; caught?: string[]; roll?: number };
 
 export function openCastOf(budget: TurnBudget | null, spell: string): OpenCast | null {
-  const wanted = spellKeyOf(spell);
+  const wanted = textKey(spell);
   for (const entry of budget?.oncePerTurn ?? []) {
-    const [tag, name, slot, left] = entry.split("|");
+    const [tag, name, slot, left, caught, roll] = entry.split("|");
     if (tag === SHARES && name === wanted && Number(left) > 0) {
-      return { spell: wanted, slotLevel: slot === "-" ? null : Number(slot), left: Number(left) };
+      return {
+        spell: wanted,
+        slotLevel: slot === "-" ? null : Number(slot),
+        left: Number(left),
+        ...(caught ? { caught: caught.split(",") } : {}),
+        ...(roll && roll !== "-" ? { roll: Number(roll) } : {}),
+      };
     }
   }
   return null;
 }
 
 export function withOpenCast(budget: TurnBudget, open: OpenCast): TurnBudget {
-  const wanted = spellKeyOf(open.spell);
+  const wanted = textKey(open.spell);
   const kept = budget.oncePerTurn.filter((entry) => {
     const [tag, name] = entry.split("|");
     return !(tag === SHARES && name === wanted);
@@ -493,7 +497,7 @@ export function withOpenCast(budget: TurnBudget, open: OpenCast): TurnBudget {
     ...budget,
     oncePerTurn:
       open.left > 0
-        ? [...kept, [SHARES, wanted, open.slotLevel ?? "-", open.left].join("|")]
+        ? [...kept, [SHARES, wanted, open.slotLevel ?? "-", open.left, (open.caught ?? []).join(","), open.roll ?? "-"].join("|")]
         : kept,
   };
 }

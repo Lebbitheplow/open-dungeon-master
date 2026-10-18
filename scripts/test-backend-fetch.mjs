@@ -7,7 +7,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { connectionDropped, fetchBackend } = await import("../src/lib/backend-fetch.ts");
+const { connectionDropped, describeTransportFailure, fetchBackend } = await import("../src/lib/backend-fetch.ts");
 
 let passed = 0;
 async function test(name, fn) {
@@ -72,6 +72,25 @@ await test("only a dropped connection counts, however deep undici buried it", ()
   assert.equal(connectionDropped(new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:1"), { code: "ECONNREFUSED" }) })), false, "a server that is down is down");
   assert.equal(connectionDropped(new DOMException("This operation was aborted", "AbortError")), false);
   assert.equal(connectionDropped(null), false);
+});
+
+await test("a failed connection is told apart by its cause: refused, DNS, TLS, a connect timeout, a reset", () => {
+  const undici = (code, message = code) => new TypeError("fetch failed", { cause: Object.assign(new Error(message), { code }) });
+  assert.deepEqual(describeTransportFailure(undici("ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:8001")), {
+    code: "ECONNREFUSED",
+    reason: "Nothing is listening at that address (connection refused).",
+  });
+  assert.match(describeTransportFailure(undici("ENOTFOUND", "getaddrinfo ENOTFOUND models.example")).reason, /resolved \(DNS\)/);
+  assert.match(describeTransportFailure(undici("EAI_AGAIN")).reason, /DNS/);
+  assert.match(describeTransportFailure(undici("UND_ERR_CONNECT_TIMEOUT")).reason, /timed out/);
+  assert.match(describeTransportFailure(undici("ECONNRESET", "read ECONNRESET")).reason, /closed before/);
+  assert.match(describeTransportFailure(undici("CERT_HAS_EXPIRED", "certificate has expired")).reason, /certificate/);
+  assert.match(describeTransportFailure(undici("ERR_TLS_CERT_ALTNAME_INVALID")).reason, /certificate/);
+  // A TLS failure with no code still names TLS from its message.
+  assert.match(describeTransportFailure(new TypeError("fetch failed", { cause: new Error("unable to verify the first certificate") })).reason, /certificate/);
+  // Nothing recognisable keeps the sentence short rather than guessing.
+  assert.deepEqual(describeTransportFailure(new TypeError("fetch failed")), { code: "unknown", reason: "" });
+  assert.deepEqual(describeTransportFailure(null), { code: "unknown", reason: "" });
 });
 
 console.log(`backend fetch: ${passed} tests passed`);

@@ -23,7 +23,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { spendAction } from "@/lib/dm/action-budget";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { canAct } from "@/lib/dm/can-act";
@@ -87,7 +87,7 @@ export function prepareUseItem(
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
-    conditionExtraActions(sheet.conditions),
+    conditionTurnShape(sheet.conditions),
   );
   if (!budget || !encounter) {
     return { commit: () => ({}) };

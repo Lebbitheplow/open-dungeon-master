@@ -15,7 +15,8 @@ import { publishPersisted } from "@/lib/events";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { setDmStatus } from "@/lib/dm/status";
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
-import { MAX_MODEL_CALLS, reenterDmTurn } from "@/lib/dm/turn";
+import { MAX_MODEL_CALLS, reenterDmTurn, startDmTurn } from "@/lib/dm/turn";
+import { isUnbuiltTurn } from "@/lib/dm/turn-halt";
 import {
   assistantTextOf,
   checkRetryEligible,
@@ -118,6 +119,17 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
     }
   }
 
+  // A turn that stopped before it had a prompt (src/lib/dm/turn-halt.ts) has
+  // nothing to replay: the retry is the turn started over, which reads the
+  // transcript afresh. Its row is closed; the new run makes its own.
+  if (isUnbuiltTurn(claimed)) {
+    claimed.status = "done";
+    saveDmTurn(claimed);
+    setDmStatus(campaignId, "thinking");
+    enqueueDmJob(campaignId, () => startDmTurn(campaignId), { kind: "turn" });
+    return { ok: true, turnId };
+  }
+
   // Undo the model call the crash swallowed: its narration never reached the
   // conversation, so the retried model would otherwise write that beat twice.
   const rewind = rewindHaltedCall({
@@ -187,7 +199,7 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
       console.error("[dm-retry] re-entry failed", error);
       abandonRetry(campaignId, turnId);
     }
-  });
+  }, { kind: "turn" });
 
   return { ok: true, turnId };
 }

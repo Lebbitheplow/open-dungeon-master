@@ -10,14 +10,16 @@ import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { findSpellByName, spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { conditionConcentrationFloor } from "@/lib/srd/condition-effects";
-import { removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { heldBySpell, spellDurationRounds, spellKey } from "@/lib/dm/spell-effects";
+import { addConditionInstance, instancesOf, removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { fullDurationRule } from "@/lib/srd/full-duration";
+import { heldBySpell, spellDurationRounds } from "@/lib/dm/spell-effects";
 import { publishPersisted } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { endSpellZones } from "@/lib/dm/zone-store";
 import { endSpellSummons } from "@/lib/dm/summon-store";
 import { authoredConcentrationGuard } from "@/lib/srd/authored-effects-more";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
+import { textKey } from "@/lib/language/text-logic";
 
 // Server-tracked concentration: casting a concentration spell sets it (and
 // breaks the previous one), taking damage forces the CON save server-side,
@@ -38,12 +40,13 @@ function writeConcentration(
   sheet: CharacterSheet,
   concentratingOn: string | null,
   reason: string,
+  slotLevel?: number | null,
 ) {
-  // A new spell starts its clock: the spell's own duration, counted down by
-  // src/lib/dm/concentration-clock.ts.
+  // A new spell starts its clock: the spell's own duration from the slot it
+  // was cast from, counted down by src/lib/dm/concentration-clock.ts.
   const patch = {
     concentratingOn,
-    ...(concentratingOn ? { concentrationRounds: concentrationRoundsFor(concentratingOn, sheet.userId) } : {}),
+    ...(concentratingOn ? { concentrationRounds: concentrationRoundsFor(concentratingOn, sheet.userId, slotLevel) } : {}),
   };
   const updated = patchSheet(sheet.id, patch);
   const entry = insertSheetAudit({
@@ -63,29 +66,45 @@ function writeConcentration(
   }
 }
 
-// The rounds a concentration spell lasts at most, or null when the facts do
-// not say (an authored spell with no duration, a name nobody published).
-export function concentrationRoundsFor(spell: string, authors?: string | string[]): number | null {
-  return spellDurationRounds(spell, authors);
+// The rounds a concentration spell lasts at most from the slot it was cast
+// from, or null when the facts do not say (an authored spell with no
+// duration, a name nobody published).
+export function concentrationRoundsFor(spell: string, authors?: string | string[], slotLevel?: number | null): number | null {
+  return spellDurationRounds(spell, authors, slotLevel);
 }
 
-// Sets concentration on a newly cast spell; returns the spell it displaced,
-// if any. Caller has already verified the spell requires concentration.
+// Sets concentration on a newly cast spell (or a feature held the same way,
+// Draconic Presence) and ends what it displaces, with every effect that
+// casting held in place: the spell held before, or an earlier casting of the
+// same spell (a second Hold Person ends the first one's hold; more targets
+// of ONE casting never come here, cast-guard.ts open casts). Returns the
+// spell it ended, if any. Caller has already verified the spell requires
+// concentration, and lays the new casting's effects after this.
 export function setConcentration(
   campaign: Campaign,
   turnId: string,
   sheetId: string,
   spell: string,
+  // The slot it was cast from: a higher one can hold it longer (Hex).
+  slotLevel?: number | null,
 ): { displaced: string | null } {
   const sheet = getSheetById(sheetId);
   if (!sheet) {
     return { displaced: null };
   }
-  const displaced = sheet.concentratingOn && sheet.concentratingOn !== spell
-    ? sheet.concentratingOn
-    : null;
-  writeConcentration(campaign, turnId, sheet, spell, `casting ${spell}`);
+  const displaced = sheet.concentratingOn ?? null;
+  writeConcentration(campaign, turnId, sheet, spell, `casting ${spell}`, slotLevel);
+  if (displaced) {
+    clearSpellConditionsByName(campaign, displaced, sheet.userId, sheet.id);
+  }
   return { displaced };
+}
+
+// The line a cast's result carries for the concentration it ended.
+export function droppedLine(displaced: string, spell: string): string {
+  return displaced.trim().toLowerCase() === spell.trim().toLowerCase()
+    ? `The earlier casting of ${spell} ended when it was cast again; its effects are gone.`
+    : `${displaced} ended when ${spell} was cast; its effects are gone.`;
 }
 
 export function breakConcentration(
@@ -112,9 +131,21 @@ export function breakConcentration(
 // (src/lib/dm/turn-end.ts untilTurnEndOf), so a target walked past while
 // lethargic loses exactly the one turn.
 export const LETHARGY = "incapacitated";
+// ...and no movement either: "lethargic" holds the speed at 0 for as long.
+export const LETHARGIC = "lethargic";
 
 export function lethargyMeta(combatantId: string): ConditionMeta {
   return { untilTurnEndOf: combatantId, source: "haste" };
+}
+
+// Lays Haste's lethargy, both halves with one lifetime, beside whatever else
+// already holds the creature (another source's incapacitation keeps its own).
+export function withLethargy(conditions: string[], meta: ConditionMetaMap, lifetime: ConditionMeta): { conditions: string[]; meta: ConditionMetaMap } {
+  let next = { conditions, meta };
+  for (const name of [LETHARGY, LETHARGIC]) {
+    next = addConditionInstance(next.conditions, next.meta, name, lifetime);
+  }
+  return next;
 }
 
 // Removes the effect conditions a broken concentration spell was holding in
@@ -124,7 +155,8 @@ export function lethargyMeta(combatantId: string): ConditionMeta {
 // goblin a ghoul paralyzed stays paralyzed when the wizard's Hold Person
 // ends. `casterId` is the one whose spell ended; without it any caster's
 // casting of the spell ends (an enemy's concentration, a legacy call).
-// Best effort: an unknown/homebrew spell simply clears nothing.
+// A name with no mechanics row (a feature held like a spell, Draconic
+// Presence) ends the conditions that carry its name.
 // Shared by PC concentration (above) and enemy concentration breaks
 // (src/lib/dm/enemy-damage.ts), which have no caster userId.
 export function clearSpellConditionsByName(
@@ -143,23 +175,21 @@ export function clearSpellConditionsByName(
   }
   // The table's spells, whoever's sheet the caster is (spell-authors.ts).
   const resolved = spellMechanicsFor({ spell, userIds: [...spellAuthorsFor(campaign), ...(userId ? [userId] : [])] });
-  if (!resolved) {
-    return;
-  }
+  const mech = resolved?.mech;
   const conditionNames = new Set(
     [
-      resolved.mech.buff?.condition,
-      ...(resolved.mech.buff?.variants ?? []),
-      ...(resolved.mech.buff?.bySlot ?? []).map(([, name]) => name),
-      resolved.mech.condition?.name,
-      ...(resolved.mech.condition?.also ?? []),
-      ...(resolved.mech.condition?.variants ?? []),
-      resolved.mech.hitPointPool?.condition,
+      mech?.buff?.condition,
+      ...(mech?.buff?.variants ?? []),
+      ...(mech?.buff?.bySlot ?? []).map(([, name]) => name),
+      mech?.condition?.name,
+      ...(mech?.condition?.also ?? []),
+      ...(mech?.condition?.variants ?? []),
+      mech?.hitPointPool?.condition,
     ]
       .filter((name): name is string => Boolean(name))
       .map((name) => name.toLowerCase()),
   );
-  const spellNames = new Set([spellKey(spell), spellKey(resolved.name)]);
+  const spellNames = new Set([textKey(spell), ...(resolved ? [textKey(resolved.name)] : [])]);
   const encounter = getActiveEncounter(campaign.id);
   for (const target of listSheets(campaign.id)) {
     // Only this casting's instances go: a condition another source still
@@ -175,9 +205,8 @@ export function clearSpellConditionsByName(
     // SRD 5.1, Haste: when the spell ends the target cannot move or take
     // actions until after its next turn.
     const lethargy = held.some((condition) => condition.toLowerCase() === "hasted");
-    if (lethargy && !cleared.conditions.includes(LETHARGY)) {
-      cleared.conditions = [...cleared.conditions, LETHARGY];
-      cleared.meta = { ...cleared.meta, [LETHARGY]: lethargyMeta(target.id) };
+    if (lethargy) {
+      Object.assign(cleared, withLethargy(cleared.conditions, cleared.meta, lethargyMeta(target.id)));
     }
     const updated = patchSheet(target.id, {
       conditions: cleared.conditions,
@@ -200,16 +229,62 @@ export function clearSpellConditionsByName(
     if (cleared.changed) {
       // Haste's lethargy falls on a hasted enemy exactly as on a character.
       const hasteEnded = held.some((condition) => condition.toLowerCase() === "hasted");
-      if (hasteEnded && !cleared.conditions.includes(LETHARGY)) {
-        cleared.conditions = [...cleared.conditions, LETHARGY];
-        cleared.meta = {
-          ...cleared.meta,
-          [LETHARGY]: lethargyMeta(enemy.id),
-        };
+      if (hasteEnded) {
+        Object.assign(cleared, withLethargy(cleared.conditions, cleared.meta, lethargyMeta(enemy.id)));
       }
       patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
     }
   }
+}
+
+// A spell held for its whole duration whose result then outlasts it
+// (src/lib/srd/full-duration.ts): the instances the casting holds are taken
+// from the spell, so its end no longer reaches them (Flesh to Stone's creature
+// turned to stone first). Called as the clock runs out, before the
+// concentration ends (concentration-clock.ts). Returns lines for the table.
+export function settleFullDuration(campaign: Campaign, spell: string, casterId: string): string[] {
+  const resolved = spellMechanicsFor({ spell, userIds: spellAuthorsFor(campaign) });
+  const rule = fullDurationRule(resolved?.runsAs ?? resolved?.name ?? spell) ?? fullDurationRule(spell);
+  if (!rule) {
+    return [];
+  }
+  const names = new Set([textKey(spell), ...(resolved ? [textKey(resolved.name)] : [])]);
+  const ours = (entry: ConditionMeta) => Boolean(entry.spell && names.has(textKey(entry.spell))) && entry.source === casterId;
+  const settle = (conditions: string[], meta: ConditionMetaMap) => {
+    let next = { conditions, meta };
+    let touched = false;
+    for (const name of conditions) {
+      if (!instancesOf(meta[name]).some(ours)) {
+        continue;
+      }
+      touched = true;
+      const result = removeConditionInstances(next.conditions, next.meta, name, ours);
+      next = { conditions: result.conditions, meta: result.meta };
+      if (!rule.becomes) {
+        next = addConditionInstance(next.conditions, next.meta, name, { source: casterId });
+      }
+    }
+    return touched ? (rule.becomes ? addConditionInstance(next.conditions, next.meta, rule.becomes, { source: casterId }) : next) : null;
+  };
+  const lines: string[] = [];
+  const outcome = rule.becomes ? `is ${rule.becomes} for good` : "stays as it is, no longer held by the spell";
+  for (const target of listSheets(campaign.id)) {
+    const settled = settle(target.conditions, target.conditionMeta as ConditionMetaMap);
+    const updated = settled ? patchSheet(target.id, { conditions: settled.conditions, conditionMeta: settled.meta }) : null;
+    if (updated) {
+      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      lines.push(`${target.name} ${outcome}: ${spell} was held for its whole duration.`);
+    }
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  for (const enemy of encounter ? listEnemies(encounter.id) : []) {
+    const settled = enemy.status === "alive" ? settle(enemy.conditions, enemy.conditionMeta as ConditionMetaMap) : null;
+    if (settled) {
+      patchEnemyConditions(enemy.id, settled.conditions, settled.meta);
+      lines.push(`${enemy.displayName} ${outcome}: ${spell} was held for its whole duration.`);
+    }
+  }
+  return lines;
 }
 
 // One casting's instances taken off a creature's conditions: the names

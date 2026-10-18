@@ -25,7 +25,9 @@
 // The claims reader (src/lib/dm/claims.ts) is answered apart from the
 // script: each of its calls takes the next entry of model.claims([...]) (a
 // list of claims, as the reader would reply), or none once those run out, so
-// a scripted turn's replies are never spent on it.
+// a scripted turn's replies are never spent on it. A new script also forgets
+// the readings the server kept (src/lib/dm/claims.ts answers a passage it has
+// read before from memory), so every passage a script holds is read.
 import http from "node:http";
 import { answerReader, isReaderRequest } from "./claims-reader.mjs";
 
@@ -200,12 +202,14 @@ export async function fakeModel() {
     claims: (entries) => {
       readerScript = [...entries];
       readerRequests.length = 0;
+      globalThis.__odmReaderReplies?.clear();
     },
     served: () => served,
     script: (entries) => {
       script = entries;
       served = 0;
       requests.length = 0;
+      globalThis.__odmReaderReplies?.clear();
     },
     // The world's campaign talks to this server, with no pictures to draw.
     pointAt: (world) => {

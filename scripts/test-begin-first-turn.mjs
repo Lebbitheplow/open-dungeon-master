@@ -16,6 +16,12 @@ import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
+import { standInStoryteller } from "./lib/stand-in-storyteller.mjs";
+
+// An AI-run table through the routes needs a storyteller set up (the routes
+// refuse one otherwise, and seat a person when none is named); this one never
+// answers.
+standInStoryteller();
 
 const { test, finish } = suite("test-begin-first-turn");
 

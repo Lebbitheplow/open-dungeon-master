@@ -201,6 +201,9 @@ export const globalConfigSchema = z.object({
       // the story model.
       utilityModel: z.string().trim().max(200).default(""),
       effort: z.enum(["", ...HARNESS_EFFORTS]).default(""),
+      // The bookkeeping model's effort; blank = the story's (the context
+      // audit's F11: a short extraction needs less reasoning than a turn).
+      utilityEffort: z.enum(["", ...HARNESS_EFFORTS]).default(""),
       // Processing speed for the story and bookkeeping models (issue 255).
       speed: z.enum(["", "fast"]).default(""),
       utilitySpeed: z.enum(["", "fast"]).default(""),

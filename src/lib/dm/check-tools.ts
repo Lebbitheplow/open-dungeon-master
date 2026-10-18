@@ -338,7 +338,7 @@ function passiveModifier(
   // Items that ride checks (Eyes of the Eagle, a Stone of Good Luck).
   const items = itemCheckRiders(sheet.equipment, sense);
   const state = mergeAdvantage([
-    rollDerivation(sheet.conditions, "skill_check", ability).advantage,
+    ...rollDerivation(sheet.conditions, "skill_check", ability).sources,
     exhaustionRollState(sheet.exhaustion ?? 0, "skill_check").advantage,
     ...conditionRollRiders(sheet.conditions, "check", ability).advantageSources,
     ...(effect.effectAdvantage ? ["advantage" as const] : []),

@@ -29,6 +29,7 @@ import {
 } from "@/lib/worldforge/import-merge";
 import { mergeImportedLinks } from "@/lib/db/world-link-merge";
 import { recordMediaFile } from "@/lib/media-access";
+import { textKey } from "@/lib/language/text-logic";
 
 // A WorldForge file into a workshop, and a workshop out as one. Importing
 // into a workshop that already has a world adds to it: a type or a field of
@@ -78,7 +79,7 @@ function mergeTypes(doc: WorldDoc, incoming: WorldType[]) {
   const types = new Map<string, string>();
   const fields = new Map<string, Map<string, string>>();
   for (const type of incoming) {
-    let target = doc.types.find((own) => own.shelf === type.shelf && own.name.toLowerCase() === type.name.toLowerCase());
+    let target = doc.types.find((own) => own.shelf === type.shelf && textKey(own.name) === textKey(type.name));
     if (!target && doc.types.length < LIMITS.types) {
       target = { ...type, id: doc.types.some((own) => own.id === type.id) ? newId("t") : type.id, fields: [] };
       doc.types.push(target);
@@ -86,7 +87,7 @@ function mergeTypes(doc: WorldDoc, incoming: WorldType[]) {
     target ??= doc.types.find((own) => own.shelf === type.shelf) ?? doc.types[0];
     const map = new Map<string, string>();
     for (const field of type.fields) {
-      let own = target.fields.find((entry) => entry.kind === field.kind && entry.name.toLowerCase() === field.name.toLowerCase());
+      let own = target.fields.find((entry) => entry.kind === field.kind && textKey(entry.name) === textKey(field.name));
       if (!own && target.fields.length < LIMITS.fieldsPerType) {
         own = { ...field, id: target.fields.some((entry) => entry.id === field.id) ? newId("f") : field.id };
         target.fields.push(own);
@@ -232,7 +233,7 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
       const byWfId = new Map(
         existing.filter((entity) => entity.entry.wfId && !origins[originKey("entries", entity.ref)]).map((entity) => [`${entity.shelf}|${entity.entry.wfId}`, entity.ref]),
       );
-      const byName = new Map(existing.map((entity) => [`${entity.shelf}|${entity.name.toLowerCase()}`, entity.ref]));
+      const byName = new Map(existing.map((entity) => [`${entity.shelf}|${textKey(entity.name)}`, entity.ref]));
       const refMap = new Map<string, string>();
       const fresh = new Set<string>();
       const skipped: string[] = [];
@@ -251,7 +252,7 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
         if (!ref) {
           // The same name here, the author's own or another world's: one
           // entry, said aloud so the author can check it is the same one.
-          ref = byName.get(`${record.shelf}|${record.name.toLowerCase()}`) ?? "";
+          ref = byName.get(`${record.shelf}|${textKey(record.name)}`) ?? "";
           if (ref) matched.push(record.name);
         }
         const fieldIds = typeMap.fields.get(record.entry.typeId) ?? new Map<string, string>();
@@ -361,13 +362,13 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
       }
 
       // The file's scenes, as storyboard cards in each story's order.
-      const titles = new Set(listBeats(campaignId).map((beat) => beat.title.toLowerCase()));
+      const titles = new Set(listBeats(campaignId).map((beat) => textKey(beat.title)));
       const stories = [...new Set(parsed.beats.map((beat) => beat.story))];
       let beats = 0;
       for (const [row, story] of stories.entries()) {
         const ids: string[] = [];
         for (const beat of parsed.beats.filter((entry) => entry.story === story)) {
-          if (titles.has(beat.title.toLowerCase())) continue;
+          if (titles.has(textKey(beat.title))) continue;
           const pov = parseRef(refMap.get(beat.pov));
           const place = parseRef(refMap.get(beat.place));
           const made = insertBeat(campaignId, {
@@ -590,12 +591,12 @@ export function applyForge(
     doc.links.push({ id: newId("l"), from, to, label, veracity: "known", oneway: false, rank: "" });
     linked += 1;
   }
-  const names = new Set(doc.stubs.map((stub) => stub.name.toLowerCase()));
+  const names = new Set(doc.stubs.map((stub) => textKey(stub.name)));
   let stubs = 0;
   for (const raw of (Array.isArray(input.stubs) ? input.stubs : []).slice(0, 60)) {
     const name = text(raw, 120);
-    if (!name || names.has(name.toLowerCase()) || doc.stubs.length >= LIMITS.stubs) continue;
-    names.add(name.toLowerCase());
+    if (!name || names.has(textKey(name)) || doc.stubs.length >= LIMITS.stubs) continue;
+    names.add(textKey(name));
     doc.stubs.push({ id: newId("stub"), name, note: "", source: "scan", status: "open" });
     stubs += 1;
   }

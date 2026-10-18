@@ -14,6 +14,7 @@
   "dmFlavor": "Tone: waterlogged dark fantasy on a coast that is losing. The sea is rising a hand's width a year and nobody can stop it, so every settlement is temporary and everyone knows it. Magic here is tidal and borrowed: it works better at high water, it always wants something back, and a caster who takes too much starts to smell of brine. Keep the horror quiet and material. Rot, salt, debt, a bell ringing in a town that drowned a decade ago. Threats are rarely evil so much as hungry or owed. Never present a clean victory over the water itself; the party can save people, buy time, and settle debts, but the tide is not a villain to be defeated. Reward preparation, local knowledge, and treating the drowned with respect.",
   "mapStyle": "weathered nautical chart, salt-stained vellum, depth soundings and tide marks, muted blue-grey and rust ink",
   "portraitStyle": "damp coastal portrait, oilskin and rope, grey overcast light, salt-cracked skin",
+  "sceneStyle": "salt-washed coastal illustration, grey overcast light, muted blue-grey and rust palette",
   "nameHints": "Wet, consonant-heavy coastal names (Brackwater, Old Fennow, the Gullet, Marrow Quay).",
   "raceHint": "The marsh peoples are mostly human, marsh-kin, and the reptilian folk of the deep channels. Describe someone by their town and their trade before their blood.",
   "companionRaces": ["human", "variant_human", "lizardfolk", "tortle", "stout_halfling", "half_orc", "water_genasi", "firbolg"],

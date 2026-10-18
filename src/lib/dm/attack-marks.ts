@@ -19,10 +19,11 @@ import { getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import type { TurnBudget } from "@/lib/dm/action-budget";
-import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { removeConditionInstances, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { isKnockedOut } from "@/lib/dm/knockout";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 export type MarkPlan = {
   // Mark conditions whose die rides this attack.
@@ -52,9 +53,9 @@ export function planMarks(input: {
     }
     let quarry = meta[condition]?.quarry ?? null;
     if (!quarry) {
-      const named = /\(([^)]+)\)/.exec(condition)?.[1]?.trim().toLowerCase();
+      const named = textKey(/\(([^)]+)\)/.exec(condition)?.[1] ?? "");
       const found = named
-        ? input.encounterEnemies.find((entry) => entry.displayName.toLowerCase() === named)
+        ? input.encounterEnemies.find((entry) => textKey(entry.displayName) === named)
         : undefined;
       quarry = found?.id ?? null;
     }
@@ -101,29 +102,32 @@ export function writeMarks(campaignId: string, sheetId: string, assign: MarkPlan
   }
 }
 
-// The invisibility an attack or a cast ends: every "invisible" on the sheet
-// but one Greater Invisibility laid down.
-export function invisibilityEndedByAction(sheet: Pick<CharacterSheet, "conditions" | "conditionMeta">): string[] {
-  const meta = sheet.conditionMeta as ConditionMetaMap;
-  return sheet.conditions.filter(
-    (entry) =>
-      entry.trim().toLowerCase() === "invisible" &&
-      !/greater invisibility/i.test(`${meta[entry]?.spell ?? ""} ${meta[entry]?.source ?? ""}`),
-  );
+// The invisibility an attack or a cast ends, each source on its own: every
+// instance of "invisible" but Greater Invisibility's (condition-logic.ts
+// instances), so a creature holding both stays invisible by the greater one.
+export function withoutActionInvisibility(
+  conditions: string[],
+  meta: ConditionMetaMap,
+): { conditions: string[]; meta: ConditionMetaMap; removed: number } {
+  const held = conditions.find((entry) => entry.trim().toLowerCase() === "invisible");
+  if (!held) {
+    return { conditions, meta, removed: 0 };
+  }
+  return removeConditionInstances(conditions, meta, held, (entry) => !/greater invisibility/i.test(`${entry.spell ?? ""} ${entry.source ?? ""}`));
 }
 
-// Ends a character's invisibility because they cast a spell (the cast guard
-// calls this once a cast has gone through). Returns a line for the result.
+// Ends a character's invisibility because they cast a spell or attacked (the
+// cast guard and the attack spends call this once the act has gone through).
+// Returns a line for the result.
 export function endInvisibilityOnCast(campaignId: string, sheetId: string): string | null {
   const sheet = getSheetById(sheetId);
   if (!sheet) {
     return null;
   }
-  const ending = invisibilityEndedByAction(sheet);
-  if (!ending.length) {
+  const cleared = withoutActionInvisibility(sheet.conditions, sheet.conditionMeta as ConditionMetaMap);
+  if (!cleared.removed) {
     return null;
   }
-  const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ending);
   const updated = patchSheet(sheetId, { conditions: cleared.conditions, conditionMeta: cleared.meta });
   if (updated) {
     publishPersisted(campaignId, "sheet_updated", { sheet: updated });
