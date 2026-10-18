@@ -17,6 +17,7 @@ import {
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { reconcilePicks } from "./reconcile";
 import { builderCasting } from "./casting";
+import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState, EquipmentItem } from "./useBuilderState";
@@ -64,6 +65,8 @@ type SubmitInput = {
   background: BackgroundOption | undefined;
   // The stored sheet an edit starts from; absent when creating.
   initial?: CreateSheetInput;
+  // The feat pickers' prerequisite check, for a feat a later choice broke.
+  featJudge?: FeatJudge;
 };
 
 // Everything the wizard's per-step Continue buttons gate on, so a player
@@ -122,6 +125,7 @@ export function ancestryBlocks(
   race: RaceOption | undefined,
   background?: BackgroundOption,
   derived?: Pick<BuilderDerived, "featSpecOf">,
+  featJudge?: FeatJudge,
 ): StepBlock[] {
   if (!race) {
     return [block("race", "Pick a race.")];
@@ -157,6 +161,11 @@ export function ancestryBlocks(
   if (featPicks) {
     owed.push(block("racialFeat", featPicks));
   }
+  // A feat whose prerequisite a later choice broke: flagged, never dropped.
+  const racialUnmet = unmetFeatMessage(featJudge, (state.feats ?? []).slice(0, racialFeatCount(race.id)));
+  if (racialUnmet) {
+    owed.push(block("racialFeat", racialUnmet));
+  }
   if (takesDraconicAncestry(race.id) && !findDraconicAncestry(state.racialAncestry ?? "")) {
     owed.push(block("ancestry", `Pick your ${race.name}'s draconic ancestry first.`));
   }
@@ -172,8 +181,9 @@ export function ancestryBlocker(
   race: RaceOption | undefined,
   background?: BackgroundOption,
   derived?: Pick<BuilderDerived, "featSpecOf">,
+  featJudge?: FeatJudge,
 ): StepBlock | null {
-  return ancestryBlocks(state, race, background, derived)[0] ?? null;
+  return ancestryBlocks(state, race, background, derived, featJudge)[0] ?? null;
 }
 
 // Whether the counts the SRD gives are rules for this class or only advice.
@@ -322,6 +332,7 @@ const sameNumbers = (left: number[], right: number[]) =>
 export function abilitiesBlocks(
   derived: BuilderDerived,
   state?: Pick<BuilderState, "method" | "scores"> & Partial<Pick<BuilderState, "rollPool" | "featChoices">>,
+  featJudge?: FeatJudge,
 ): StepBlock[] {
   if (!derived.abilities) {
     return [block("scores", "Assign all six ability scores first.")];
@@ -359,14 +370,20 @@ export function abilitiesBlocks(
   if (featPicks) {
     owed.push(block("asi", featPicks));
   }
+  // A feat whose prerequisite a later choice broke: flagged, never dropped.
+  const asiUnmet = unmetFeatMessage(featJudge, asiFeats);
+  if (asiUnmet) {
+    owed.push(block("asi", asiUnmet));
+  }
   return owed;
 }
 
 export function abilitiesBlocker(
   derived: BuilderDerived,
   state?: Pick<BuilderState, "method" | "scores"> & Partial<Pick<BuilderState, "rollPool" | "featChoices">>,
+  featJudge?: FeatJudge,
 ): StepBlock | null {
-  return abilitiesBlocks(derived, state)[0] ?? null;
+  return abilitiesBlocks(derived, state, featJudge)[0] ?? null;
 }
 
 // The pack: what it costs against the coin the character starts with.
@@ -416,8 +433,8 @@ export function validateBuilder(
   const state: BuilderState = { ...input.state, ...picks };
   const blocked =
     identityBlocker(state, background) ??
-    abilitiesBlocker(derived, state) ??
-    ancestryBlocker(state, race, background, derived) ??
+    abilitiesBlocker(derived, state, input.featJudge) ??
+    ancestryBlocker(state, race, background, derived, input.featJudge) ??
     callingBlocker(klass, state, derived) ??
     spellsBlocker(state, derived, klass) ??
     gearBlocker(derived);
