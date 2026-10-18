@@ -33,7 +33,6 @@ const { spellTurnStart } = await import("../src/lib/dm/spell-aura.ts");
 const { beginTurns, endTurns } = await import("../src/lib/dm/turn-end.ts");
 const { tickConcentrationClocks } = await import("../src/lib/dm/concentration-clock.ts");
 
-const SLINGER = { spellcasting: { dc: 16, ability: "int", casterLevel: 9, slots: { 3: 2, 5: 2 } } };
 
 await test("F07: Hold Person on a concentrating monster ends its concentration", async () => {
   const { world, sheets: [mage], enemies: [foe] } = await table([caster("wizard", "int", ["Hold Person"])]);

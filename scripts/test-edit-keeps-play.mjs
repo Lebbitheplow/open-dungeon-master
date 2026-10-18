@@ -356,7 +356,7 @@ await test("a lobby replacement keeps the new sheet selected when the player own
   updateGameSettings(campaignId, { multiCharacter: "all_active" });
   const oldSelected = getSheetForUser(campaignId, player.id);
   const siblingLibrary = createCharacter(player.id, 8, { ...PLAYED, name: "Older sibling" });
-  const sibling = createSheet(campaignId, player.id, 8, siblingLibrary.sheet, siblingLibrary.id);
+  createSheet(campaignId, player.id, 8, siblingLibrary.sheet, siblingLibrary.id);
   setMemberActiveCharacter(campaignId, player.id, oldSelected.id);
 
   const result = builderEdit(getCharacter(library.id).sheet, 8);

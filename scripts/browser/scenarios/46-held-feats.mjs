@@ -76,7 +76,7 @@ export default {
     await t.shot("racial-feat");
 
     // The improvement's feat.
-    await goTo("Ability scores");
+    await goTo("Abilities");
     const improvement = page.locator(root ? root.trim() : "body").first();
     await putBack(improvement, "Defensive Duelist", "Defensive", "Inspiring Leader", "Inspiring");
     await t.shot("improvement-feat");

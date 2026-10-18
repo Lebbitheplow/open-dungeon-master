@@ -401,7 +401,7 @@ export function populateFeaturesForClasses(
   const grantedNames = new Set(granted.map((feature) => textKey(feature.name)));
   const kept = pruneChoiceFeatures(
     existing.filter(
-      (feature, feats) =>
+      (feature) =>
         (feature.source === "feat" ||
           feature.source === "story" ||
           feature.source === "choice" ||

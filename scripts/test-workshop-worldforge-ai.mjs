@@ -13,7 +13,7 @@ import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-workshop-worldforge-ai");
-const { replyJson, readForgeReply, paintPrompt, worldDigest } = await import("../src/lib/worldforge/forge.ts");
+const { replyJson, paintPrompt, worldDigest } = await import("../src/lib/worldforge/forge.ts");
 const { forgeFromNotes, askTheWorld, draftEntry } = await import("../src/lib/dm/world-ai.ts");
 const { applyForge, importWorldForge } = await import("../src/lib/db/world-forge-io.ts");
 const { worldView } = await import("../src/lib/db/world-forge.ts");
