@@ -76,6 +76,7 @@ import {
   useNarrationReplay,
   useNarrationStatus,
 } from "@/app/campaigns/[campaignId]/NarrationFailureBanner";
+import { AudioWaitingBanner } from "@/app/campaigns/[campaignId]/AudioWaitingBanner";
 import { turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
 
 import { TabPane, useDocked } from "@/app/campaigns/[campaignId]/SidePanel";
@@ -308,9 +309,35 @@ export function SessionView({
   const narrationStatus = useNarrationStatus(narration, state.narrationStatus);
   const replayNarration = useNarrationReplay(campaign?.id ?? "", narration, state.narrationAudio);
   const messageIds = useMemo(() => state.messages.map((message) => message.id), [state.messages]);
+  // Sound the browser is holding until this tab is clicked, named above the
+  // composer so a seat that only watches knows to click (AudioWaitingBanner).
+  // A phone on another view has no composer on screen; it gets the same
+  // banner over the bottom tabs.
+  const ttsOn = Boolean(campaign?.gameSettings?.ttsEnabled);
+  const narrationHeld = ttsOn && !narration.muted ? narration.held : 0;
+  const { unlock: unlockNarration } = narration;
+  const { unlock: unlockAmbience, waiting: ambienceWaiting } = ambience;
+  const audioWaiting = useMemo(
+    () => (
+      <AudioWaitingBanner
+        narrationHeld={narrationHeld}
+        ambienceWaiting={ambienceWaiting}
+        onListen={() => {
+          unlockNarration();
+          unlockAmbience();
+        }}
+      />
+    ),
+    [narrationHeld, ambienceWaiting, unlockNarration, unlockAmbience],
+  );
   const narrationNotice = useMemo(
-    () => <NarrationFailureBanner messageIds={messageIds} status={narrationStatus} onRetry={replayNarration} />,
-    [messageIds, narrationStatus, replayNarration],
+    () => (
+      <>
+        {audioWaiting}
+        <NarrationFailureBanner messageIds={messageIds} status={narrationStatus} onRetry={replayNarration} />
+      </>
+    ),
+    [audioWaiting, messageIds, narrationStatus, replayNarration],
   );
   // Chime on new private messages (side chats + DM whispers). The loaded
   // flags keep the page-load backlog silent.
@@ -1128,6 +1155,9 @@ export function SessionView({
 
       <RollToast latestRoll={state.latestRoll} sheets={sheets} />
 
+      {mobileView !== "chat" && (narrationHeld > 0 || ambienceWaiting) ? (
+        <div className="px-2 pb-1 lg:hidden">{audioWaiting}</div>
+      ) : null}
       <BottomTabBar
         tabs={panelTabs}
         mobileView={mobileView}
