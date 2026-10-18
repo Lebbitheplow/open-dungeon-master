@@ -9,16 +9,16 @@
 //
 // Dependency-free so scripts/test-npc-rank.mjs can drive it.
 
-import { containsPhrase } from "../language/text-logic.ts";
+import { containsPhrase, textKey } from "../language/text-logic.ts";
 
 export const NPC_PROMPT_MAX = 20;
 
 export type RankableNpc = { name: string; location: string; aliases?: string[] };
 
 export function rankNpcsForPrompt<T extends RankableNpc>(npcs: readonly T[], moment: { location: string; text: string }): T[] {
-  const here = moment.location.trim().toLowerCase();
+  const here = textKey(moment.location);
   const tier = (npc: T): number => {
-    if (here && npc.location && npc.location.trim().toLowerCase() === here) {
+    if (here && npc.location && textKey(npc.location) === here) {
       return 0;
     }
     if (moment.text && [npc.name, ...(npc.aliases ?? [])].some((name) => name && containsPhrase(moment.text, name))) {

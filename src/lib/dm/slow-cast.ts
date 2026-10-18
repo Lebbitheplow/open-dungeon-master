@@ -10,6 +10,7 @@
 // turn completes it for the turn's action and no slot.
 
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { textKey } from "@/lib/language/text-logic";
 import { insertRoll } from "@/lib/db/rolls";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { rollExpression } from "@/lib/dice";
@@ -19,7 +20,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export const SLOWED_CASTING = "slowed casting";
 
-const sameSpell = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameSpell = (a: string, b: string) => textKey(a) === textKey(b);
 
 // The casting Slow held back that this call completes, or null. Only on the
 // caster's next turn: the mark's turn has begun.

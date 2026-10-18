@@ -130,7 +130,7 @@ export function withTempHpClaim(meta: ConditionMetaMap, name: string, owner: { s
   if (!entry) {
     return meta;
   }
-  const mine = (instance: ConditionMeta) => (instance.spell ?? "").toLowerCase() === owner.spell.toLowerCase() && instance.source === owner.source;
+  const mine = (instance: ConditionMeta) => textKey(instance.spell ?? "") === textKey(owner.spell) && instance.source === owner.source;
   const list = instancesOf(entry).map((instance) => (mine(instance) ? { ...instance, tempHp: amount } : instance));
   return { ...meta, [name]: packInstances(list) ?? entry };
 }

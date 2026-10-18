@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, Download, Search } from "lucide-react";
+import { textKey } from "@/lib/language/text-logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
 import { EmptyState } from "@/components/EmptyState";
@@ -91,11 +92,11 @@ export function AdminServerLogPanel() {
   }, [follow, pull]);
 
   const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = textKey(query);
     return entries.filter(
       (entry) =>
         (filter === "all" || entry.level === "error" || (filter === "warn" && entry.level === "warn")) &&
-        (!needle || entry.text.toLowerCase().includes(needle)),
+        (!needle || textKey(entry.text).includes(needle)),
     );
   }, [entries, filter, query]);
 
