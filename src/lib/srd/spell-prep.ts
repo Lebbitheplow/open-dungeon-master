@@ -54,6 +54,7 @@ export function spellbookAllowance(level: number): number {
 type Ability = "int" | "wis" | "cha";
 
 export type CasterLists = {
+  progression?: "third-caster";
   known: string[];
   prepared: string[];
   cantrips?: string[];
@@ -65,6 +66,7 @@ export type CasterLists = {
 // single-class character, or one `casters` entry on a multiclass one.
 export type CasterView = {
   classId: string;
+  progression?: "third-caster";
   ability: Ability;
   level: number;
   subclass: string;
@@ -105,11 +107,12 @@ function viewOf(
 ): CasterView {
   return {
     classId,
+    ...(lists.progression ? { progression: lists.progression } : {}),
     ability,
     level,
     subclass,
     // An Eldritch Knight or Arcane Trickster knows its spells, as a sorcerer does.
-    style: isThirdCaster(classId, subclass) ? "known" : spellStyleFor(classId),
+    style: isThirdCaster(classId, subclass, lists.progression) ? "known" : spellStyleFor(classId),
     known: [...(lists.known ?? [])],
     prepared: [...(lists.prepared ?? [])],
     cantrips: [...(lists.cantrips ?? [])],
@@ -146,6 +149,7 @@ export function withCasterViews(
     const union = (pick: (view: CasterView) => string[]) => dedupeNames(views.flatMap(pick));
     const mirror: CasterView = {
       ...views[0],
+      progression: views.length === 1 ? views[0].progression : undefined,
       // A spellbook anywhere keeps the mirror's.
       style: views.some((view) => view.style === "spellbook") ? "spellbook" : "prepared",
       known: union((view) => view.known).slice(0, 80),
@@ -173,6 +177,9 @@ function writeLists<T extends CasterLists>(target: T, view: CasterView): T {
   };
   if (!view.pending.length) {
     delete next.pending;
+  }
+  if (!view.progression) {
+    delete next.progression;
   }
   if (view.style !== "spellbook" && !view.spellbook.length) {
     delete next.spellbook;
@@ -204,9 +211,9 @@ export function grantedSpellsOf(view: CasterView): string[] {
 
 // The highest spell level this class can prepare or learn at its own level.
 export function maxSpellLevelOf(
-  view: Pick<CasterView, "classId" | "level"> & { subclass?: string },
+  view: Pick<CasterView, "classId" | "level" | "progression"> & { subclass?: string },
 ): number {
-  return Object.keys(spellSlotsFor(view.classId, view.level, view.subclass)).reduce(
+  return Object.keys(spellSlotsFor(view.classId, view.level, view.subclass, view.progression)).reduce(
     (top, slotLevel) => Math.max(top, Number(slotLevel)),
     0,
   );
@@ -219,7 +226,7 @@ export function spellCapOf(
   view: CasterView,
   abilities: CharacterSheet["abilities"],
 ): { label: string; count: number } | null {
-  if (isThirdCaster(view.classId, view.subclass)) {
+  if (isThirdCaster(view.classId, view.subclass, view.progression)) {
     return view.level >= 3
       ? { label: "spells known", count: thirdCasterSpellsKnown(view.level) }
       : null;
@@ -372,9 +379,9 @@ function casterTypeOf(classId: string) {
 
 // Cantrips this class knows at its level, or null when it has none.
 export function cantripCapOf(
-  view: Pick<CasterView, "classId" | "level"> & { subclass?: string },
+  view: Pick<CasterView, "classId" | "level" | "progression"> & { subclass?: string },
 ): number | null {
-  if (isThirdCaster(view.classId, view.subclass)) {
+  if (isThirdCaster(view.classId, view.subclass, view.progression)) {
     return view.level >= 3 ? thirdCasterCantrips(view.classId, view.level) : null;
   }
   return suggestedCantripCount(spellClassFor(view.classId), view.level, casterTypeOf(view.classId));

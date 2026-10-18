@@ -15,6 +15,7 @@ import { abilityMod, formatModifier, spellSlotsFor } from "@/lib/srd";
 import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 import { cantripCapOf, spellCapOf } from "@/lib/srd/spell-prep";
 import { THIRD_CASTER_ABILITY, THIRD_CASTER_LIST, isThirdCaster } from "@/lib/srd/third-caster";
+import { subclassCastingProfileFor } from "@/lib/srd/features";
 
 type CastingClass = {
   id: string;
@@ -42,17 +43,18 @@ export function builderCasting(
   if (!klass) {
     return { third: false, ability: null, list: "", maxSpellLevel: 0, cantripCap: null, casts: false };
   }
-  const third = isThirdCaster(klass.id, subclass);
+  const profile = subclassCastingProfileFor(klass.id, subclass ?? "");
+  const third = isThirdCaster(klass.id, subclass, profile);
   const ability = (third ? THIRD_CASTER_ABILITY : klass.spellAbility || null) as BuilderCasting["ability"];
   const list = third ? THIRD_CASTER_LIST : spellClassFor(klass.id);
   const maxSpellLevel =
     third || klass.casterType !== "none"
-      ? Object.keys(spellSlotsFor(klass.id, level, subclass)).reduce((top, slot) => Math.max(top, Number(slot)), 0)
+      ? Object.keys(spellSlotsFor(klass.id, level, subclass, profile)).reduce((top, slot) => Math.max(top, Number(slot)), 0)
       : 0;
   const cantripCap = !ability
     ? null
     : third
-      ? cantripCapOf({ classId: klass.id, level, subclass: subclass ?? "" })
+      ? cantripCapOf({ classId: klass.id, level, subclass: subclass ?? "", progression: profile })
       : suggestedCantripCount(list, level, klass.casterType as Parameters<typeof suggestedCantripCount>[2]);
   const casts = Boolean(ability) && (maxSpellLevel > 0 || cantripCap !== null);
   return { third, ability, list, maxSpellLevel, cantripCap: casts ? cantripCap : null, casts };
@@ -76,6 +78,7 @@ export function builderSpellAdvice(
         ability: casting.ability,
         level,
         subclass: subclass ?? "",
+        progression: casting.third ? "third-caster" : undefined,
         style: "known",
         known: [],
         prepared: [],

@@ -154,6 +154,21 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
         className="w-56"
         hint="The builder offers it under this class."
       />
+      {classId === "fighter" || classId === "rogue" ? (
+        <SelectField
+          label="Spellcasting progression"
+          value={data.castingProfile === "third-caster" ? "third-caster" : "none"}
+          options={[
+            { value: "none", label: "No subclass spellcasting" },
+            {
+              value: "third-caster",
+              label: classId === "fighter" ? "Eldritch Knight rules (one-third caster)" : "Arcane Trickster rules (one-third caster)",
+            },
+          ]}
+          onChange={(value) => set({ castingProfile: value === "third-caster" ? value : undefined })}
+          hint={classId === "fighter" ? "Intelligence, wizard spells, and the Eldritch Knight spell progression." : "Intelligence, wizard spells, and the Arcane Trickster spell progression."}
+        />
+      ) : null}
       <div className="space-y-1.5 text-sm">
         <SectionHead title="Features by level" glyph="rest-level-up" className="mb-1" />
         {flat.map((row, index) => {

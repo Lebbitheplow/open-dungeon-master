@@ -18,6 +18,7 @@ export type ExtraSubclass = {
   levels: Record<string, SubclassFeatureRow[]>;
   // Always-prepared spells by class level (a domain's, an oath's).
   spells?: Record<string, string[]>;
+  castingProfile?: "third-caster";
   source: "homebrew" | "pack";
 };
 
@@ -82,10 +83,11 @@ export function extraSubclassOf(row: Row, defaultLevel = 3): ExtraSubclass | nul
   const homebrew = row.source === "homebrew";
   const levels = homebrew ? homebrewLevels(row.data.levels) : subclassLevelsFromProse(String(row.data.desc ?? ""), defaultLevel);
   const spells = homebrew ? spellLevels(row.data.spells) : undefined;
+  const castingProfile = homebrew && row.data.castingProfile === "third-caster" ? "third-caster" : undefined;
   if (!Object.keys(levels).length && !spells) {
-    return null;
+    if (!castingProfile) return null;
   }
-  return { name: row.name, levels, ...(spells ? { spells } : {}), source: homebrew ? "homebrew" : "pack" };
+  return { name: row.name, levels, ...(spells ? { spells } : {}), ...(castingProfile ? { castingProfile } : {}), source: homebrew ? "homebrew" : "pack" };
 }
 
 // Rows of one class, the homebrew first so a workshop subclass named like a

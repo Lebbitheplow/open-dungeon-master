@@ -87,7 +87,7 @@ export function longRestPatch(
     // Multiclass sheets clamp against the SHARED multiclass table instead.
     const table = isMulticlass(sheet)
       ? slotTableFor(sheet)
-      : spellSlotsFor(sheet.class, sheet.level);
+      : spellSlotsFor(sheet.class, sheet.level, sheet.subclass, sheet.spellcasting?.progression);
     const hasTable = Object.keys(table).length > 0;
     // With a table the character wakes with exactly its slots: a sheet that
     // arrived short (an older client, a level-up that sent none) is made

@@ -24,9 +24,9 @@ const THIRD_SPELLS_KNOWN = [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 1
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 
 // Whether this class and subclass cast as a third caster.
-export function isThirdCaster(classId: string, subclass: string | undefined | null): boolean {
+export function isThirdCaster(classId: string, subclass: string | undefined | null, profile?: string | null): boolean {
   const wanted = THIRD_CASTERS[normalize(classId)];
-  return Boolean(wanted) && textKey(subclass ?? "") === wanted;
+  return Boolean(wanted) && (textKey(subclass ?? "") === wanted || profile === "third-caster");
 }
 
 // Spell slots {level: max} at a class level; empty below 3rd.
@@ -102,11 +102,12 @@ export function thirdCasterOutside(classId: string, spells: Array<{ school: unkn
 export function thirdCasterSchoolProblem(input: {
   classId: string;
   subclass: string | null | undefined;
+  profile?: string | null;
   level: number;
   spells: Array<{ name: string; school: unknown }>;
   heldOutside?: number;
 }): string | null {
-  if (!isThirdCaster(input.classId, input.subclass)) {
+  if (!isThirdCaster(input.classId, input.subclass, input.profile)) {
     return null;
   }
   const schools = THIRD_CASTER_SCHOOLS[normalize(input.classId)];
