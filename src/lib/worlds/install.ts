@@ -29,31 +29,22 @@ export { MAX_MANIFEST_BYTES };
 const FETCH_TIMEOUT_MS = 20_000;
 const MAX_REDIRECTS = 5;
 
-// The registry every deployment browses unless its operator says otherwise.
-//
-// The packs it lists are community works built on other people's settings:
-// they are not distributed with this app, are not covered by its MIT license,
-// and nothing here installs on its own. Listing them is not endorsing them,
-// which is why UnofficialPackNotice.tsx exists and why installing is still an
-// explicit, admin-only act.
-//
-// Google Drive throttles heavily-downloaded public files, so if this registry
-// ever gets busy the index and the manifests want a plain static host. That is
-// a change to this constant plus a re-upload; nothing else knows the URL.
-export const DEFAULT_WORLD_REGISTRY_URL =
-  "https://drive.google.com/uc?export=download&id=1Bnt-kefuVgV0dQ3uiv6rzL1TWI-xgt1c";
+// No registry is built in. Packs built on other people's settings are
+// community works this project does not distribute, so a server browses one
+// only when its operator names it, and otherwise installs packs from a file.
+// The plugin browser links to the guide for making one
+// (https://opendungeonmaster.com/guide/dm/make-a-campaign-plugin/).
 
-// The opt-out. Blank has to keep meaning "fall through to the next source",
-// or an operator could never express "no registry at all" once there is a
-// built-in default to fall back to.
+// "Browse nothing", for an admin who wants to switch off a registry the
+// environment names. Blank keeps meaning "fall through to the next source".
 export const REGISTRY_DISABLED = "off";
 
-// Which registry is in force: admin setting, then environment, then the
-// built-in default. Kept pure and separate from the settings lookup so both
+// Which registry is in force: the admin setting, then the environment, and
+// otherwise none. Kept pure and separate from the settings lookup so both
 // routes share one precedence rule, and so it can be tested without a
 // database.
 export function pickRegistryUrl(configured: string | undefined, fromEnv: string | undefined): string {
-  const chosen = (configured || "").trim() || (fromEnv || "").trim() || DEFAULT_WORLD_REGISTRY_URL;
+  const chosen = (configured || "").trim() || (fromEnv || "").trim();
   return chosen.toLowerCase() === REGISTRY_DISABLED ? "" : chosen;
 }
 
@@ -133,8 +124,13 @@ export async function removeWorldPack(id: string): Promise<RemoveResult> {
 
 // Reads a remote body with a hard ceiling, rather than trusting
 // Content-Length or buffering whatever arrives. A registry is admin-supplied
-// and therefore semi-trusted, but semi-trusted is not trusted.
-async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown } | { ok: false; error: string }> {
+// and therefore semi-trusted, but semi-trusted is not trusted. Manifests,
+// indexes and the browser's thumbnails all come through here, each with its
+// own ceiling.
+export async function fetchBytesCapped(
+  url: string,
+  { maxBytes, accept, tooLarge }: { maxBytes: number; accept: string; tooLarge: string },
+): Promise<{ ok: true; bytes: Buffer } | { ok: false; error: string }> {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
@@ -157,7 +153,7 @@ async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown 
       response = await fetch(current, {
         signal: controller.signal,
         redirect: "manual",
-        headers: { accept: "application/json" },
+        headers: { accept },
       });
       const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
       if (!location) {
@@ -189,21 +185,13 @@ async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown 
         break;
       }
       total += value.byteLength;
-      if (total > MAX_MANIFEST_BYTES) {
+      if (total > maxBytes) {
         await reader.cancel();
-        return {
-          ok: false,
-          error: `That file is larger than ${MAX_MANIFEST_BYTES / 1024 / 1024}MB, so it is not a world pack.`,
-        };
+        return { ok: false, error: tooLarge };
       }
       chunks.push(value);
     }
-    const text = Buffer.concat(chunks).toString("utf8");
-    try {
-      return { ok: true, value: JSON.parse(text) };
-    } catch {
-      return { ok: false, error: "The source did not return JSON." };
-    }
+    return { ok: true, bytes: Buffer.concat(chunks) };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { ok: false, error: "The source timed out." };
@@ -211,6 +199,22 @@ async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown 
     return { ok: false, error: "Could not reach the source." };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown } | { ok: false; error: string }> {
+  const fetched = await fetchBytesCapped(url, {
+    maxBytes: MAX_MANIFEST_BYTES,
+    accept: "application/json",
+    tooLarge: `That file is larger than ${MAX_MANIFEST_BYTES / 1024 / 1024}MB, so it is not a world pack.`,
+  });
+  if (!fetched.ok) {
+    return fetched;
+  }
+  try {
+    return { ok: true, value: JSON.parse(fetched.bytes.toString("utf8")) };
+  } catch {
+    return { ok: false, error: "The source did not return JSON." };
   }
 }
 

@@ -1,17 +1,20 @@
 "use client";
 
-import { Download, Loader2, Trash2, Upload } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Loader2, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
-import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
+import { filterPlugins, genresOf, isFiltering, NO_PLUGIN_FILTER, type PluginFilter } from "@/lib/worlds/plugin-filter";
 import type { RegistryBundle, RegistryEntry, WorldPackSummary } from "@/lib/worlds/types";
 import { forgetPackArt } from "@/lib/worlds/use-pack-art";
+import { AvailablePluginCard, InstalledPluginRow } from "./PluginCards";
+import { PluginFilterBar } from "./PluginFilterBar";
+import { PluginThumb } from "./PluginThumb";
 
 // The campaign plugin browser.
 //
@@ -20,9 +23,14 @@ import { forgetPackArt } from "@/lib/worlds/use-pack-art";
 // and tells the DM how that setting sounds. It changes no rules.
 //
 // Packs built on somebody else's universe are NOT shipped with this app and
-// are not covered by its MIT license. They are downloaded from whatever
-// registry the operator configured, or added by hand from a file, and they
-// carry an explicit non-affiliation notice wherever they appear.
+// are not covered by its MIT license. No registry is built in: they are
+// downloaded from whatever registry the operator configured, or added by hand
+// from a file, and they carry an explicit non-affiliation notice wherever
+// they appear.
+//
+// The guide on the project site walks through making one in the workshop's
+// Plugin tool, from a world built in WorldForge, or by hand.
+const PLUGIN_GUIDE_URL = "https://opendungeonmaster.com/guide/dm/make-a-campaign-plugin/";
 // The same ceiling as MAX_MANIFEST_BYTES in src/lib/worlds/install.ts, which
 // this client component cannot import: a pack with its thumbnails aboard is a
 // few megabytes, and anything near this is not one.
@@ -42,6 +50,7 @@ export function AdminWorldsPanel() {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [filter, setFilter] = useState<PluginFilter>(NO_PLUGIN_FILTER);
   const fileInput = useRef<HTMLInputElement>(null);
   // Uncontrolled, seeded from whatever registry is in force and re-keyed when
   // that changes, so an admin edits the live value rather than typing over a
@@ -202,16 +211,36 @@ export function AdminWorldsPanel() {
     await install({ pack: parsed }, "upload");
   }
 
+  // An installed pack lives in the "Installed" section below (with its own
+  // update control), so it is kept out of the download list rather than
+  // showing a second, redundant tile for it there. One filter narrows both.
+  const lists = useMemo(() => {
+    const installed = state?.installed ?? [];
+    const installedIds = new Set(installed.map((pack) => pack.id));
+    const available = (state?.packs ?? []).filter((entry) => !installedIds.has(entry.id));
+    return {
+      available,
+      shownAvailable: filterPlugins(available, filter),
+      shownInstalled: filterPlugins(installed, filter),
+      genres: genresOf([...available, ...installed]),
+    };
+  }, [state, filter]);
+
   if (!state) {
     return <PageSkeleton kind="flat" className="px-0 py-2" />;
   }
 
-  const installedIds = new Map(state.installed.map((pack) => [pack.id, pack]));
   const registryById = new Map(state.packs.map((entry) => [entry.id, entry]));
-  // An installed pack lives in the "Installed" section below (with its own
-  // update control), so keep it out of the download list rather than showing a
-  // second, redundant tile for it here.
-  const available = state.packs.filter((entry) => !installedIds.has(entry.id));
+  const { available, shownAvailable, shownInstalled, genres } = lists;
+  const filtering = isFiltering(filter);
+  // A filter row over a list of one is clutter; it appears once there is a
+  // choice to narrow.
+  const showFilter = available.length + state.installed.length > 1;
+  const clearFilter = (
+    <button type="button" onClick={() => setFilter(NO_PLUGIN_FILTER)} className={cn(ui.btnSmall, "text-xs")}>
+      Clear the filter
+    </button>
+  );
 
   return (
     <div className="space-y-4 text-sm">
@@ -228,6 +257,18 @@ export function AdminWorldsPanel() {
           rights holders of the settings they reference. Installing one is your decision as the
           operator of this server.
         </p>
+        <p className="mt-2 text-xs leading-5 text-stone-400">
+          Make your own in a workshop&apos;s Plugin tool, or from a world you built in WorldForge:{" "}
+          <a
+            href={PLUGIN_GUIDE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-amber-200 underline decoration-amber-500/40 underline-offset-2 hover:text-amber-400"
+          >
+            how to make a campaign plugin
+          </a>{" "}
+          on opendungeonmaster.com.
+        </p>
       </section>
 
       {error ? <p role="alert" className="motion-shake text-xs text-red-400">{error}</p> : null}
@@ -242,6 +283,7 @@ export function AdminWorldsPanel() {
           <ul className="stagger-up grid gap-2 sm:grid-cols-2">
             {state.bundles.map((bundle) => (
               <li key={bundle.id} className="plate-row" data-layout="stack">
+                <PluginThumb src={bundle.thumbnail} seed={bundle.id} className="w-full" />
                 <p className="font-display text-sm text-amber-100">{bundle.name}</p>
                 <p className="text-[11px] leading-4 text-stone-400">{bundle.blurb}</p>
                 <p className="text-[10px] text-stone-500">
@@ -306,7 +348,7 @@ export function AdminWorldsPanel() {
             key={state.url ?? ""}
             ref={registryInput}
             defaultValue={state.url ?? ""}
-            placeholder="Blank uses the built-in registry"
+            placeholder="https://example.org/worlds/index.json"
             aria-label="Registry URL"
             className={cn(ui.input, "min-w-0 flex-1 text-xs")}
           />
@@ -321,24 +363,40 @@ export function AdminWorldsPanel() {
           </button>
         </div>
         <p className="mt-1 text-[11px] leading-4 text-stone-500">
-          A JSON index of downloadable campaigns, over https. Blank falls through to the
+          A JSON index of downloadable campaigns, over https. None is built in. Blank falls
+          through to the
           <span className="font-mono"> WORLD_REGISTRY_URL </span>
-          environment variable, and then to the registry built into this app. Point it somewhere
-          else to run your own, or set it to
+          environment variable, and
           <span className="font-mono"> off </span>
-          to browse nothing at all. Whatever a registry lists is third-party content this project
-          neither ships nor vets, and nothing installs until you install it.
+          browses nothing even when that is set. Whatever a registry lists is third-party content
+          this project neither ships nor vets, and nothing installs until you install it.
         </p>
       </section>
 
+      {showFilter ? (
+        <section className={cn(ui.card, "texture-noise p-3")}>
+          <PluginFilterBar filter={filter} onChange={setFilter} genres={genres} />
+        </section>
+      ) : null}
+
       <section className={cn(ui.card, "texture-noise p-5")}>
-        <SectionHead title="Available to download" glyph="system-share" aside={available.length ? <span className="tabular-nums">{available.length}</span> : undefined} />
+        <SectionHead
+          title="Available to download"
+          glyph="system-share"
+          aside={
+            available.length ? (
+              <span className="tabular-nums">
+                {filtering ? `${shownAvailable.length} of ${available.length}` : available.length}
+              </span>
+            ) : undefined
+          }
+        />
         {!state.configured ? (
           <EmptyState
             art="scrolls"
             size="sm"
-            title="This server's registry is turned off."
-            hint="Clear the field above to go back to the built-in one, point it at your own, or install a pack from a file."
+            title="No registry is set."
+            hint="Paste a registry's URL above to browse its campaigns, or install a pack from a file."
           />
         ) : state.error ? (
           <p role="alert" className="motion-shake rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
@@ -348,124 +406,48 @@ export function AdminWorldsPanel() {
           <EmptyState art="scrolls" size="sm" title="That registry lists no campaigns." />
         ) : !available.length ? (
           <EmptyState art="chest" size="sm" title="Everything this registry offers is already installed." />
+        ) : !shownAvailable.length ? (
+          <EmptyState art="scrolls" size="sm" title="Nothing to download matches that filter." action={clearFilter} />
         ) : (
-          <ul className="stagger space-y-2">
-            {available.map((entry) => (
-              <li key={entry.id} className="plate-row" data-layout="stack">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-2 font-display text-amber-100">
-                    <GameIcon icon={{ kind: "glyph", key: "system-plugin" }} size="size-6" />
-                    {entry.name}
-                  </span>
-                  <span className="text-[11px] text-stone-500">
-                    v{entry.version}
-                    {entry.author ? ` · ${entry.author}` : ""}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-stone-400">{entry.blurb}</p>
-                <UnofficialPackNotice
-                  rightsHolder={entry.rightsHolder}
-                  inspiredBy={entry.inspiredBy}
-                  variant="inline"
-                  className="mt-1"
-                />
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => install({ packId: entry.id }, entry.id)}
-                    disabled={busyId === entry.id}
-                    className={cn(ui.btnSmall, "text-xs")}
-                  >
-                    {busyId === entry.id ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Download className="size-3.5" />
-                    )}
-                    Install
-                  </button>
-                </div>
-              </li>
+          <ul className="stagger grid gap-3 sm:grid-cols-2">
+            {shownAvailable.map((entry) => (
+              <AvailablePluginCard
+                key={entry.id}
+                entry={entry}
+                busy={busyId === entry.id}
+                onInstall={() => install({ packId: entry.id }, entry.id)}
+              />
             ))}
           </ul>
         )}
       </section>
 
       <section className={cn(ui.card, "texture-noise p-5")}>
-        <SectionHead title="Installed" glyph="system-homebrew" aside={<span className="tabular-nums">{state.installed.length}</span>} />
+        <SectionHead
+          title="Installed"
+          glyph="system-homebrew"
+          aside={
+            <span className="tabular-nums">
+              {filtering ? `${shownInstalled.length} of ${state.installed.length}` : state.installed.length}
+            </span>
+          }
+        />
         {!state.installed.length ? (
           <EmptyState art="map" size="sm" title="No world packs yet. Campaigns run on the built-in settings." />
+        ) : !shownInstalled.length ? (
+          <EmptyState art="map" size="sm" title="No installed pack matches that filter." action={clearFilter} />
         ) : (
           <ul className="stagger space-y-2">
-            {state.installed.map((pack) => {
-              const update = registryById.get(pack.id);
-              const outdated = Boolean(update && update.version !== pack.version);
-              return (
-                <li key={pack.id} className="plate-row" data-layout="stack">
-                  {pack.cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={pack.cover}
-                      alt=""
-                      className="mb-2 h-24 w-full rounded-md border border-amber-500/20 object-cover"
-                    />
-                  ) : null}
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-2 font-display text-amber-100">
-                      <GameIcon icon={{ kind: "glyph", key: "system-plugin" }} size="size-6" />
-                      {pack.name}
-                    </span>
-                    <span className="text-[11px] text-stone-500">
-                      v{pack.version}
-                      {pack.author ? ` · ${pack.author}` : ""}
-                      {pack.source === "bundled" ? " · bundled" : ""}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-stone-400">{pack.blurb}</p>
-                  <UnofficialPackNotice
-                    rightsHolder={pack.rightsHolder}
-                    inspiredBy={pack.inspiredBy}
-                    variant="inline"
-                    className="mt-1"
-                  />
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {outdated ? (
-                      <button
-                        type="button"
-                        onClick={() => install({ packId: pack.id }, pack.id)}
-                        disabled={busyId === pack.id}
-                        className={cn(ui.btnSmall, "text-xs")}
-                      >
-                        {busyId === pack.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Download className="size-3.5" />
-                        )}
-                        Update to v{update?.version}
-                      </button>
-                    ) : null}
-                    {pack.source === "installed" ? (
-                      <button
-                        type="button"
-                        onClick={() => remove(pack)}
-                        disabled={busyId === pack.id}
-                        className={cn(ui.btnSmall, "text-xs hover:border-red-500/50 hover:text-red-400")}
-                      >
-                        {busyId === pack.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="size-3.5" />
-                        )}
-                        Remove
-                      </button>
-                    ) : outdated ? null : (
-                      <p className="text-[11px] text-stone-500">
-                        Ships with the app and cannot be removed.
-                      </p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
+            {shownInstalled.map((pack) => (
+              <InstalledPluginRow
+                key={pack.id}
+                pack={pack}
+                update={registryById.get(pack.id)}
+                busy={busyId === pack.id}
+                onUpdate={() => install({ packId: pack.id }, pack.id)}
+                onRemove={() => remove(pack)}
+              />
+            ))}
           </ul>
         )}
       </section>

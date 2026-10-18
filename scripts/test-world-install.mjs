@@ -32,9 +32,9 @@ const {
   installFromUrl,
   removeWorldPack,
   pickRegistryUrl,
-  DEFAULT_WORLD_REGISTRY_URL,
   REGISTRY_DISABLED,
 } = await import("../src/lib/worlds/install.ts");
+const installModule = await import("../src/lib/worlds/install.ts");
 
 let passed = 0;
 async function test(name, fn) {
@@ -353,41 +353,23 @@ await test("plugin metadata defaults so an older manifest still parses", () => {
   assert.equal(parsed.homepage, "");
 });
 
-await test("the registry URL falls through admin, then env, then the built-in default", () => {
+await test("the registry URL falls through admin, then env, and otherwise none is built in", () => {
   assert.equal(pickRegistryUrl("https://admin.invalid/i.json", "https://env.invalid/i.json"),
     "https://admin.invalid/i.json");
   assert.equal(pickRegistryUrl("", "https://env.invalid/i.json"), "https://env.invalid/i.json");
-  assert.equal(pickRegistryUrl(undefined, undefined), DEFAULT_WORLD_REGISTRY_URL);
-  assert.equal(pickRegistryUrl("", ""), DEFAULT_WORLD_REGISTRY_URL);
+  // Community packs are not this project's to distribute, so a server
+  // browses a registry only when its operator names one.
+  assert.equal(pickRegistryUrl(undefined, undefined), "");
+  assert.equal(pickRegistryUrl("", ""), "");
   // Whitespace is not a configuration choice; it has to fall through rather
   // than be fetched as a URL.
-  assert.equal(pickRegistryUrl("   ", "  "), DEFAULT_WORLD_REGISTRY_URL);
+  assert.equal(pickRegistryUrl("   ", "  "), "");
+  assert.ok(!("DEFAULT_WORLD_REGISTRY_URL" in installModule), "a built-in registry came back");
 
-  // Blank means "next source", so turning the registry off needs a word of its
-  // own, at whichever layer the operator reaches for.
+  // "off" lets an admin switch off a registry the environment names.
   assert.equal(pickRegistryUrl(REGISTRY_DISABLED, "https://env.invalid/i.json"), "");
   assert.equal(pickRegistryUrl("", REGISTRY_DISABLED), "");
   assert.equal(pickRegistryUrl("OFF", ""), "");
-});
-
-await test("the built-in registry URL is one the installer would accept", () => {
-  // It is fetched by the same code path as any operator-supplied registry, so
-  // shipping a default that the schema rejects would be a dead browser on a
-  // fresh install.
-  const parsed = registryIndexSchema.safeParse({
-    packs: [
-      {
-        id: "test_world",
-        name: "Test World",
-        blurb: "b",
-        inspiredBy: "i",
-        franchise: "Test",
-        baseGenre: "high_fantasy",
-        downloadUrl: DEFAULT_WORLD_REGISTRY_URL,
-      },
-    ],
-  });
-  assert.ok(parsed.success, "the default registry URL fails the schema the installer uses");
 });
 
 await test("both world routes resolve the registry through the one helper", () => {
