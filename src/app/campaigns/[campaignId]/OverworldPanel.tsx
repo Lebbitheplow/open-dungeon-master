@@ -48,6 +48,10 @@ import { useOverworldView } from "@/app/campaigns/[campaignId]/useOverworldView"
 // (OverworldAuthoring). Everything else is read-only.
 
 type Stranded = Array<{ id: string; name: string }>;
+// A place dragged here that took its bound Atlas pin along (WorldForge's
+// Atlas, src/lib/db/atlas-region.ts followAnchor): the pins that moved, and
+// where the place stood, so the move can be undone.
+type PinsFollowed = { locationId: string; name: string; pins: string[]; before: XY | null };
 
 export function OverworldPanel({
   campaignId,
@@ -89,6 +93,7 @@ export function OverworldPanel({
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState("");
   const [error, setError] = useState("");
+  const [followed, setFollowed] = useState<PinsFollowed | null>(null);
   const pulseRef = useRef(0);
   const sizeRef = useRef("");
   const { view, fit, down, move, up, zoomBy } = useOverworldView(canvasRef, !loading);
@@ -247,7 +252,7 @@ export function OverworldPanel({
       return null;
     }
     setData(payload);
-    return payload as OverworldData & { stranded?: Stranded };
+    return payload as OverworldData & { stranded?: Stranded; atlas?: Array<{ pin: string; name: string }> };
   }
 
   // Canvas pixels to map tiles, or null outside the grid.
@@ -319,7 +324,10 @@ export function OverworldPanel({
       case "place":
         // First tap picks a marker up, second puts it down.
         if (held) {
-          await patch({ anchor: { locationId: held, x: at.x, y: at.y } });
+          const place = data.locations.find((entry) => entry.id === held);
+          const answer = await patch({ anchor: { locationId: held, x: at.x, y: at.y } });
+          const pins = (answer?.atlas ?? []).map((move) => move.pin || move.name);
+          setFollowed(pins.length ? { locationId: held, name: place?.name ?? "", pins, before: place?.anchor ?? null } : null);
           setHeld(null);
           return;
         }
@@ -543,6 +551,24 @@ export function OverworldPanel({
             <p className="reveal flex flex-wrap items-center gap-2 text-xs text-amber-200">
               Holding {heldName}. Tap where it belongs.
               <KitButton onClick={() => setAsking({ kind: "rename", locationId: held })}>Rename it</KitButton>
+            </p>
+          ) : null}
+          {followed ? (
+            <p role="status" className="reveal flex flex-wrap items-center gap-2 text-xs text-emerald-200" data-testid="region-pin-followed">
+              {followed.pins.length === 1 ? `${followed.name}'s pin on the Atlas moved with it.` : `${followed.pins.length} Atlas pins moved with ${followed.name}.`}
+              {followed.before ? (
+                <KitButton
+                  onClick={() => {
+                    // Back where it stood; the pin follows it back.
+                    const back = followed;
+                    setFollowed(null);
+                    void patch({ anchor: { locationId: back.locationId, x: back.before!.x, y: back.before!.y } });
+                  }}
+                >
+                  Undo
+                </KitButton>
+              ) : null}
+              <KitButton onClick={() => setFollowed(null)}>Dismiss</KitButton>
             </p>
           ) : null}
           {mode === "paint" && skin ? (

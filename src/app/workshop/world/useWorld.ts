@@ -7,6 +7,7 @@ import type { WorldEntity } from "@/lib/db/world-forge";
 import { applyRowOps, docOps, type DocOps } from "@/lib/worldforge/ops";
 import { byName } from "@/lib/language/text-logic";
 import type { Editable, EntryConflict } from "@/lib/worldforge/entry-merge";
+import type { Placement, RegionBridge } from "@/lib/db/atlas-region";
 
 // The workshop's WorldForge on the client: one load of the document and the
 // records it describes, slice saves that show at once and settle when the
@@ -90,8 +91,13 @@ export function useWorld(campaignId: string) {
 
   // Changes slices: shown at once, saved in order as the rows it changed
   // against `world`, the document the caller computed its slices from.
+  // `onRegion` hears of each Region marker a bound Atlas pin took with it
+  // (src/lib/db/atlas-region.ts followPins), with where it stood before.
   const patch = useCallback(
-    async (slices: Partial<Pick<WorldDoc, Exclude<Slice, "entries">>> & { moveFolder?: { from: string; to: string } }) => {
+    async (
+      slices: Partial<Pick<WorldDoc, Exclude<Slice, "entries">>> & { moveFolder?: { from: string; to: string } },
+      options?: { onRegion?: (moves: Placement[]) => void },
+    ) => {
       const seen = world;
       if (!seen) return false;
       const rest: Partial<Pick<WorldDoc, Exclude<Slice, "entries">>> = { ...slices };
@@ -108,9 +114,10 @@ export function useWorld(campaignId: string) {
           const payload = await send(base, { method: "PATCH", body: JSON.stringify({ ops, ...(move ? { moveFolder: move } : {}) }) });
           pending.current = pending.current.filter((other) => other !== entry);
           if (payload) {
-            const fresh = payload as unknown as WorldState & { conflicts?: string[] };
+            const fresh = payload as unknown as WorldState & { conflicts?: string[]; region?: Placement[] };
             setWorld(withPending({ doc: fresh.doc, entities: fresh.entities }));
             if (fresh.conflicts?.length) setError(fresh.conflicts.join(" "));
+            if (fresh.region?.length) options?.onRegion?.(fresh.region);
             return !fresh.conflicts?.length;
           }
           // Refused or unreachable: this save's rows go back to what the
@@ -211,7 +218,25 @@ export function useWorld(campaignId: string) {
     [base, send, withPending],
   );
 
-  return { world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, clearError: () => setError("") };
+  // The Atlas's Region steps (world/region, src/lib/db/atlas-region.ts).
+  // `readRegion` says where things stand, quietly: it is read again after
+  // every change, and a failed read shows nothing rather than an error. The
+  // steps answer with their review, or with what they did once applied, and
+  // a step that changed anything reads the world again.
+  const readRegion = useCallback(
+    () => fetch(`${base}/region`).then((response) => (response.ok ? (response.json() as Promise<RegionBridge>) : null)).catch(() => null),
+    [base],
+  );
+  const region = useCallback(
+    async (method: "POST" | "DELETE", step: "backdrop" | "places", body?: Record<string, unknown>, query = "") => {
+      const payload = await send(`${base}/region/${step}${query}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
+      if (payload && (method === "DELETE" || payload.applied)) refresh();
+      return payload;
+    },
+    [base, send, refresh],
+  );
+
+  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;
