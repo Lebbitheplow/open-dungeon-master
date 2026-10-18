@@ -36,7 +36,9 @@ export function BoundRecords({
   api: WorldApi;
   // An artifact with no item linked: lore the table cannot hold yet.
   loreOnly: boolean;
-  onOpenSystem: OpenSystem;
+  // Absent at the play table (WikiView): a fight added to is said here
+  // instead of opened in the workshop's Encounters.
+  onOpenSystem?: OpenSystem;
 }) {
   const [adding, setAdding] = useState<BindingKind | null>(null);
   const [own, setOwn] = useState<Own[]>([]);
@@ -45,6 +47,7 @@ export function BoundRecords({
   const [fighting, setFighting] = useState<string | null>(null);
   const [fights, setFights] = useState<Array<{ id: string; name: string }>>([]);
   const [fight, setFight] = useState("__new");
+  const [added, setAdded] = useState("");
   const bindings = entity.entry.bindings;
   const full = bindings.length >= BINDINGS_MAX;
 
@@ -135,7 +138,8 @@ export function BoundRecords({
       return;
     }
     setFighting(null);
-    onOpenSystem("encounters", { id: data.templateId, from: entity.ref });
+    if (onOpenSystem) onOpenSystem("encounters", { id: data.templateId, from: entity.ref });
+    else setAdded(fight === "__new" ? `A new fight, ${entity.name}, is with this campaign's prepared fights.` : `Added to ${fights.find((entry) => entry.id === fight)?.name ?? "the fight"}.`);
   }
 
   // Every WorldForge page is the DM's (requireStoryAuthority): linking needs
@@ -166,7 +170,7 @@ export function BoundRecords({
             <span className="text-amber-300">Not found at this table any more</span>
           )}
           <span className="ml-auto flex flex-wrap gap-1">
-            {record.found && record.ownId ? (
+            {record.found && record.ownId && onOpenSystem ? (
               <KitButton tone="small" onClick={() => onOpenSystem(WORDS[record.kind].system, { id: record.ownId, from: entity.ref })} title={`Open it in the ${WORDS[record.kind].tool}`}>
                 Open
               </KitButton>
@@ -235,6 +239,7 @@ export function BoundRecords({
           </span>
         )
       ) : null}
+      {added ? <p className="text-xs text-emerald-300" role="status">{added}</p> : null}
       {error ? <PanelError>{error}</PanelError> : null}
     </section>
   );

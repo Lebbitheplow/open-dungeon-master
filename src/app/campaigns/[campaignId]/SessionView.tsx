@@ -885,6 +885,7 @@ export function SessionView({
     refreshBattleMap,
     relationshipsVersion: state.relationshipsVersion,
     factionsVersion: state.factionsVersion,
+    worldVersion: state.worldVersion,
     shopsVersion: state.shopsVersion,
     coins: state.coins,
     activeSheetId: state.activeSheetId,

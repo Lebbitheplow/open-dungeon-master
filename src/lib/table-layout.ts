@@ -23,7 +23,8 @@ import type { TableTabId } from "./dm/table-tabs";
 
 export const TABLE_LAYOUT_VERSION = 1;
 
-// Every side-panel tab, in the rail's order (src/lib/dm/table-tabs.ts).
+// Every side-panel tab, in the rail's order (src/lib/dm/table-tabs.ts
+// TABLE_TAB_IDS; scripts/test-table-tabs.mjs keeps the two the same).
 export const TAB_IDS: readonly TableTabId[] = [
   "dm",
   "lead",
@@ -33,6 +34,7 @@ export const TAB_IDS: readonly TableTabId[] = [
   "story",
   "notes",
   "chat",
+  "world",
   "context",
   "settings",
 ];

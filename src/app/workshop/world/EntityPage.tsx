@@ -63,7 +63,8 @@ export function EntityPage({
   entity: WorldEntity;
   onFocus: (ref: string) => void;
   onBack: () => void;
-  onOpenSystem: OpenSystem;
+  // Absent at the play table (WikiView).
+  onOpenSystem?: OpenSystem;
   canWrite: boolean;
   canPaint: boolean;
 }) {
@@ -185,11 +186,11 @@ export function EntityPage({
   return (
     <article className="flex flex-col gap-4 animate-fade-up" data-tour="world-entry">
       <header className="flex flex-wrap items-start gap-3">
-        <button type="button" onClick={onBack} className="md:hidden" aria-label="Back to the list">
+        <button type="button" onClick={onBack} className="@2xl:hidden" aria-label="Back to the list">
           <ArrowLeft className="size-5 text-stone-400" />
         </button>
         <span key={entity.portrait} className="motion-pop">
-          <EntityAvatar entity={entity} type={type} size="size-12 sm:size-16" />
+          <EntityAvatar entity={entity} type={type} size="size-12 @lg:size-16" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -201,7 +202,7 @@ export function EntityPage({
           {folders.length ? <p className="text-[11px] text-stone-500">{folders.map((folder) => folder.name).join(" / ")}</p> : null}
           {lifeLine ? <p className="text-xs text-stone-400">{lifeLine}</p> : null}
         </div>
-        <div className="flex basis-full flex-wrap gap-1.5 sm:basis-auto">
+        <div className="flex basis-full flex-wrap gap-1.5 @lg:basis-auto">
           <KitButton tone="small" onClick={() => setEditing(true)} data-tour="world-edit">
             <Pencil className="size-3.5" /> Edit
           </KitButton>
@@ -218,9 +219,11 @@ export function EntityPage({
               {isPainting ? null : <Brush className="size-3.5" />} {isPainting ? "Painting" : "Paint"}
             </KitButton>
           ) : null}
-          <KitButton tone="small" onClick={() => onOpenSystem(home.system, { id: entity.id, from: entity.ref })} title={`Open ${entity.name}'s own tool`}>
-            <ExternalLink className="size-3.5" /> {home.label}
-          </KitButton>
+          {onOpenSystem ? (
+            <KitButton tone="small" onClick={() => onOpenSystem(home.system, { id: entity.id, from: entity.ref })} title={`Open ${entity.name}'s own tool`}>
+              <ExternalLink className="size-3.5" /> {home.label}
+            </KitButton>
+          ) : null}
           <KitButton tone="iconDanger" always aria-label={`Delete ${entity.name}`} onClick={remove}>
             <Trash2 className="size-4" />
           </KitButton>
@@ -273,7 +276,7 @@ export function EntityPage({
       />
 
       {fieldLines(type, entity.entry, doc.calendars, true).length ? (
-        <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+        <dl className="grid gap-x-4 gap-y-1 text-sm @lg:grid-cols-2">
           {fieldLines(type, entity.entry, doc.calendars, true).map(({ def, text }) => (
             <div key={def.id} className={cn("flex gap-2", def.authorOnly && "text-red-300")}>
               <dt className="text-stone-500">{def.name}</dt>
