@@ -2,7 +2,9 @@
 // use_item, applied by the engine.
 //
 // SRD 5.1, Potions: Vitality removes all exhaustion and cures poison and
-// disease (it restores no hit points of its own); Heroism grants 10
+// disease (it restores no hit points of its own); Elixir of Health cures
+// disease and removes the blinded, deafened, paralyzed and poisoned
+// conditions, and leaves exhaustion alone; Heroism grants 10
 // temporary hit points and the bless spell for an hour; Giant Strength sets
 // Strength to the giant's score for an hour; Invisibility makes the drinker
 // invisible for an hour; Resistance grants resistance to one damage type
@@ -36,6 +38,18 @@ await test("A Potion of Vitality removes every level of exhaustion and cures poi
   assert.equal(world.clearDice(), 2, "the potion rolled healing dice");
   assert.equal(sheet().exhaustion, 0);
   assert.equal(sheet().conditions.includes("poisoned"), false);
+  assert.equal(sheet().currentHp, 30);
+});
+
+await test("An Elixir of Health removes blinded, deafened, paralyzed and poisoned, and leaves exhaustion and other conditions alone.", async () => {
+  // Paralyzed, the drinker cannot take an action: an ally pours it.
+  const ally = world.addHero({ class: "cleric", level: 5 });
+  world.patch(drinker.id, { currentHp: 30, exhaustion: 2, conditions: ["blinded", "deafened", "paralyzed", "poisoned", "frightened"], conditionMeta: {} });
+  world.patch(ally.id, { equipment: [{ name: "Elixir of Health", qty: 1 }] });
+  const out = await world.invoke("use_item", { characterId: ally.id, item: "Elixir of Health", targetCharacterId: drinker.id });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(sheet().conditions, ["frightened"]);
+  assert.equal(sheet().exhaustion, 2);
   assert.equal(sheet().currentHp, 30);
 });
 

@@ -5,6 +5,7 @@
 // cast engines ask these and apply the answers.
 import { featTwinOf, holdsFeat } from "@/lib/srd/feat-effects";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { armorOfRow } from "@/lib/srd/armor";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
@@ -154,11 +155,11 @@ export const PIERCER_USED = "piercer:used";
 export const SLASHER_USED = "slasher:used";
 export const CRUSHER_USED = "crusher:used";
 
-const POLEARMS = ["glaive", "halberd", "pike", "quarterstaff", "spear"];
+// By the SRD weapon row's name (AttackProfile's base).
+const POLEARMS = ["Glaive", "Halberd", "Pike", "Quarterstaff", "Spear"];
 
-export function isPolearm(weapon: string | undefined): boolean {
-  const name = textKey(weapon ?? "");
-  return POLEARMS.some((polearm) => name.includes(polearm));
+export function isPolearm(base: string | undefined): boolean {
+  return Boolean(base && POLEARMS.includes(base));
 }
 
 // Which feat grants this bonus-action weapon attack now, or null: Polearm
@@ -168,6 +169,7 @@ export function isPolearm(weapon: string | undefined): boolean {
 export function featBonusAttack(
   sheet: FeatHolder,
   budget: { oncePerTurn: string[]; dashed: boolean },
+  // weapon: the SRD weapon it is (AttackProfile's base).
   attack: { weaponAttack: boolean; melee: boolean; weapon: string | undefined },
 ): string | null {
   if (!attack.weaponAttack) {
@@ -176,7 +178,7 @@ export function featBonusAttack(
   if (attack.melee && holdsFeat(sheet, "Polearm Master") && budget.oncePerTurn.includes(POLEARM_READY) && isPolearm(attack.weapon)) {
     return "Polearm Master";
   }
-  if (holdsFeat(sheet, "Crossbow Expert") && budget.oncePerTurn.includes(ONE_HANDED_ATTACKED) && /hand crossbow/i.test(attack.weapon ?? "")) {
+  if (holdsFeat(sheet, "Crossbow Expert") && budget.oncePerTurn.includes(ONE_HANDED_ATTACKED) && attack.weapon === "Hand Crossbow") {
     return "Crossbow Expert";
   }
   if (attack.melee && holdsFeat(sheet, "Charger") && budget.dashed) {
@@ -219,8 +221,8 @@ export function hasSentinel(sheet: FeatHolder): boolean {
 
 // Polearm Master: a creature entering the reach of the polearm provokes an
 // opportunity attack too.
-export function polearmReachOpportunity(sheet: FeatHolder, weapon: string | undefined): boolean {
-  return holdsFeat(sheet, "Polearm Master") && isPolearm(weapon);
+export function polearmReachOpportunity(sheet: FeatHolder, base: string | undefined): boolean {
+  return holdsFeat(sheet, "Polearm Master") && isPolearm(base);
 }
 
 // Brutal Attack (Level Up): once a turn, a melee weapon's damage is rolled
@@ -419,7 +421,7 @@ export function shieldMasterSaveBonus(sheet: FeatHolder & { equipment?: Array<{ 
   if (!holdsFeat(sheet, "Shield Master")) {
     return 0;
   }
-  const worn = (sheet.equipment ?? []).some((item) => /\bshield\b/i.test(item.name) && item.equipped !== false);
+  const worn = (sheet.equipment ?? []).some((item) => armorOfRow(item)?.armor.category === "shield" && item.equipped !== false);
   return worn ? 2 : 0;
 }
 

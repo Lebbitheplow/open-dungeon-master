@@ -393,7 +393,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   },
   "artificer::Arcane Firearm": {
     subclass: "Artillerist",
-    effects: [{ kind: "spell_rider", dice: "1d8", classes: ["artificer"], item: "\\b(wand|staff|rod)\\b" }],
+    effects: [{ kind: "spell_rider", dice: "1d8", classes: ["artificer"], items: ["wand", "staff", "rod"] }],
   },
   // Eldritch Cannon (TCoE): "As an action, you can magically create a Small
   // or Tiny eldritch cannon" (once a long rest, or for a spell slot), and

@@ -20,6 +20,7 @@
 import magicItemsJson from "@/lib/classes/magic-items.json";
 import { ATTUNEMENT_SLOTS, attunementSlotsFor, isWorn } from "@/lib/srd/armor";
 import type { Ability } from "@/lib/schemas/sheet";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 import { textKey } from "@/lib/language/text-logic";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
@@ -34,7 +35,7 @@ export type WornMagicItem = {
   attuned?: boolean;
   // Waiting on the short rest attuning takes; holds one of the three places.
   attuning?: boolean;
-  gear?: { magic?: { requiresAttunement: boolean; effects: MagicItemEffect[] } };
+  gear?: { magic?: { requiresAttunement: boolean; effects: MagicItemEffect[] }; tags?: readonly ItemTag[] };
 };
 
 export type MagicItemEffect =

@@ -3,6 +3,7 @@
 // encounter-tools.ts, which dispatches to it and whose auto-act fallback
 // calls it for the enemies a turn skipped. Must not import encounter-tools.
 
+import { matchWeapon } from "@/lib/srd/weapons";
 import { readiedHolder } from "@/lib/dm/readied-release";
 import { martialAdvantageDice, surpriseAttackDice } from "@/lib/dm/monster-traits";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
@@ -270,7 +271,7 @@ export function handleEnemyAttack(
     // Under the water (underwater.ts): a shot past normal range misses, and
     // weapons not made for the water swing at disadvantage.
     const underwater = attackerSubmerged
-      ? underwaterSwing({ weapon: attack.name, melee: !ranged, swims: swimsFrom(standing.stats.speed), beyondNormal: mode.longRange, spell: attack.spellAttack })
+      ? underwaterSwing({ weapon: attack.name, base: matchWeapon(attack.name)?.name, melee: !ranged, swims: swimsFrom(standing.stats.speed), beyondNormal: mode.longRange, spell: attack.spellAttack })
       : null;
     if (underwater?.misses) {
       swings.push({ attack: attack.name, skipped: underwater.note });

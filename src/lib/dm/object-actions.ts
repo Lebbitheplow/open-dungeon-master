@@ -34,6 +34,7 @@ import { READIED, READIED_WORDS, RELEASE_TOOLS, readiedHeld, type Readiable } fr
 import { dropReadied, readiedReleaseFor } from "@/lib/dm/readied-release";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 // Haste's extra action names this use by these words (action-budget.ts).
 const USE_AN_OBJECT = "use an object";
@@ -54,7 +55,7 @@ export function prepareUseItem(
   itemName: string,
 ): ToolError | { commit: () => ToolResult } {
   const carried = findCarriedItem(sheet.equipment, itemName);
-  const problem = carried ? itemUseProblem(carried.name) : null;
+  const problem = carried ? itemUseProblem(carried) : null;
   if (problem) {
     return { ...problem, error: `${sheet.name} does not use up ${carried?.name ?? itemName}: ${problem.error}` };
   }
@@ -95,11 +96,10 @@ export function prepareUseItem(
   // Rapid Drinker drinks a potion as a bonus action; Poisoner coats a
   // weapon as one (src/lib/srd/feat-combat.ts).
   const name = carried?.name ?? itemName;
-  const asBonus =
-    (drinksAsBonusAction(sheet) && /\b(?:potion|elixir|philter)\b/i.test(name)) ||
-    (coatsAsBonusAction(sheet) && isBasicPoison(name, sheet.campaignId));
+  const drinking = drinksAsBonusAction(sheet) && Boolean(carried && hasItemTag(carried, "potion"));
+  const asBonus = drinking || (coatsAsBonusAction(sheet) && isBasicPoison(name, sheet.campaignId));
   const price = asBonus
-    ? spendAction(budget, "bonus", `${drinksAsBonusAction(sheet) && /\b(?:potion|elixir|philter)\b/i.test(name) ? "Rapid Drinker" : "Poisoner"} (${USE_AN_OBJECT})`, sheet.name)
+    ? spendAction(budget, "bonus", `${drinking ? "Rapid Drinker" : "Poisoner"} (${USE_AN_OBJECT})`, sheet.name)
     : spendAction(budget, "action", USE_AN_OBJECT, sheet.name);
   if (!price.ok) {
     return toolError(price);
@@ -132,7 +132,7 @@ export function objectAction(
   cost = "their action",
 ): ToolResult {
   const carried = item ? findCarriedItem(sheet.equipment, item) : null;
-  if (carried && !itemUseProblem(carried.name)) {
+  if (carried && !itemUseProblem(carried)) {
     return {
       error: `${carried.name} is used up when it is used: call use_item for it, which spends ${sheet.name}'s action (Use an Object) itself.`,
       retry: true,

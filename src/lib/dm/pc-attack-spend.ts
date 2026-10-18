@@ -157,7 +157,7 @@ export function spendAttackEconomy(input: {
     if (usesAttackAction) {
       // Polearm Master's butt-end strike and Crossbow Expert's hand crossbow
       // shot follow the Attack action (pc-attack-options.ts).
-      if (holdsFeat(sheet, "Polearm Master") && isPolearm(profile.weapon) && !budget.oncePerTurn.includes(POLEARM_READY)) {
+      if (holdsFeat(sheet, "Polearm Master") && isPolearm(profile.base) && !budget.oncePerTurn.includes(POLEARM_READY)) {
         budget = { ...budget, oncePerTurn: [...budget.oncePerTurn, POLEARM_READY] };
       }
       if (holdsFeat(sheet, "Crossbow Expert") && !profile.twoHanded && !budget.oncePerTurn.includes(ONE_HANDED_ATTACKED)) {

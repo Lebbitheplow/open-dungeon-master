@@ -3,6 +3,7 @@
 // so both data files and every reader import the same words without a cycle.
 
 import type { CheckAbout, SaveAgainstValue } from "@/lib/dm/roll-about";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 export type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -167,7 +168,9 @@ export type AuthoredEffect = Base &
         damageTypes?: string[];
         healing?: boolean;
         classes?: string[];
-        item?: string;
+        // Cast through a carried item that is one of these
+        // (src/lib/srd/item-tags.ts).
+        items?: ItemTag[];
       }
     // Casting the spell gives temporary hit points, and damage never breaks
     // the concentration on it (Grasping Tentacles).

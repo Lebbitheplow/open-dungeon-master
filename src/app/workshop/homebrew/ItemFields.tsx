@@ -13,6 +13,7 @@ import {
   type ItemKind,
 } from "@/lib/homebrew/gear";
 import { SRD_ARMOR } from "@/lib/srd/armor";
+import { ITEM_TAGS, type ItemTag } from "@/lib/schemas/item-tags";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import {
@@ -61,6 +62,9 @@ function joinDamage(dice: string, type: string): string {
 // A weapon's block is an SRD weapon; an armour's an SRD armour; a magic
 // item's the effects magic-items.json speaks. The "start from" rows offer
 // the SRD tables themselves, because a +1 longsword is a longsword first.
+
+// Each tag in words (src/lib/srd/item-tags.ts).
+const TAG_LABELS: Partial<Record<ItemTag, string>> = Object.fromEntries(ITEM_TAGS.map((tag) => [tag, tag.replace(/_/g, " ")]));
 
 const KIND_LABELS: Record<ItemKind, string> = {
   weapon: "Weapon",
@@ -389,6 +393,17 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
           onChange={(weight) => set({ weight: weight === "" ? undefined : weight })}
         />
       </div>
+      <Field
+        label="The table reads it as"
+        hint="A potion, a torch, a focus, a ration, treasure: what the rules ask of it, whatever its name says in your language."
+      >
+        <ToggleChips
+          options={ITEM_TAGS}
+          selected={Array.isArray(data.tags) ? (data.tags as string[]) : []}
+          onChange={(next) => set({ tags: next.length ? next : undefined })}
+          labels={TAG_LABELS}
+        />
+      </Field>
 
       {itemKind === "weapon" ? <WeaponBlock weapon={weapon} onChange={(next) => set({ weapon: next })} /> : null}
       {itemKind === "armor" ? <ArmorBlock armor={armor} onChange={(next) => set({ armor: next })} /> : null}

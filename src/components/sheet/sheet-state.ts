@@ -30,6 +30,7 @@ import { gearDefFor } from "@/lib/srd/magic-gear";
 import { matchArmor } from "@/lib/srd/armor";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { conditionNote, conditionNoteLine } from "@/lib/battlemap/condition-notes";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 // ---- hit points ----
 
@@ -222,12 +223,11 @@ export function otherSpeedsLine(speeds: { fly?: number; swim?: number } | undefi
 
 // Whether a gear row is worn (armor, a shield, a ring, a cloak, boots) or
 // wielded (a weapon), and so offers the wear toggle. A wand, a rod, a staff,
-// a potion or a scroll is held or carried and never "worn"; an item whose
-// own text asks only that it be on the person works from the pack.
-const CARRIED_ONLY = /\b(wand|rod|staff|potion|philter|elixir|scroll|oil|dust|ammunition|arrows?|bolts?|bag|pouch|deck|figurine|horn|pipes|drum|lute|harp|candle|orb|stone|feather token|bead)\b/i;
-
-export function isWornGear(item: Pick<EquipmentItem, "name" | "slug">): boolean {
+// a potion or a scroll is held or carried and never "worn" (its "carried"
+// tag, src/lib/srd/item-tags.ts); an item whose own text asks only that it
+// be on the person works from the pack.
+export function isWornGear(item: Pick<EquipmentItem, "name" | "slug" | "tags" | "gear" | "identified">): boolean {
   if (matchArmor(item.name) !== null) return true;
-  if (CARRIED_ONLY.test(item.name)) return false;
+  if (hasItemTag(item, "carried")) return false;
   return matchMagicItem(item.name, item.slug)?.carried !== true;
 }

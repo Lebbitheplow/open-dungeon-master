@@ -11,6 +11,8 @@
 // Diminution, enlarge or reduce for 1d4 hours; Vitality, all exhaustion gone
 // and cured of disease and poison; Poison, 3d6 poison and a DC 13
 // Constitution save against being poisoned for an hour.
+// SRD 5.1, Elixir of Health: cures any disease and removes the blinded,
+// deafened, paralyzed and poisoned conditions.
 // Spell Scroll: a spell on your class's list can be read; one of a higher
 // level than you can cast needs an ability check with your spellcasting
 // ability, DC 10 + the spell's level, and a failure wastes the scroll; a
@@ -34,12 +36,15 @@ import { afflictCondition, afflictionConditionsFor } from "@/lib/dm/afflictions"
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard } from "@/lib/dm/roll-card";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
+import { hasItemTag, itemRow, type TaggedItem } from "@/lib/srd/item-tags";
 
-const GIANTS: Record<string, number> = { hill: 21, frost: 23, stone: 23, fire: 25, cloud: 27, storm: 29 };
-const DAMAGE_TYPES = ["acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"];
+// Sight rot's cure, by the names the SRD gives it (Diseases, Sight Rot).
+const EYEBRIGHT = new Set(["eyebright", "eyebright ointment"]);
 
 type PotionPlan =
   | { kind: "vitality" }
+  | { kind: "health" }
   | { kind: "heroism" }
   | { kind: "giant"; score: number }
   // `hoursDice`: the duration is rolled when the potion is drunk, as a card.
@@ -47,44 +52,34 @@ type PotionPlan =
   | { kind: "poison" }
   | { kind: "narrated" };
 
-// What a potion's name says it does, or null for anything that is not one
-// the engine maps (a healing potion keeps its own path).
-export function potionPlan(name: string): PotionPlan | null {
-  const lowered = name.toLowerCase();
-  if (!/\b(potion|elixir|philter|oil)\b/.test(lowered)) {
-    return null;
+// The SRD potions the engines hold the effect of, by the row's name; the
+// kinds with a table (a giant's Strength, a resistance) are read from the
+// row (src/lib/srd/item-tags.ts).
+const POTION_PLANS: Record<string, PotionPlan> = {
+  "potion of vitality": { kind: "vitality" },
+  "elixir of health": { kind: "health" },
+  "potion of heroism": { kind: "heroism" },
+  "potion of invisibility": { kind: "condition", condition: "invisible", minutes: 60 },
+  "potion of speed": { kind: "condition", condition: "hasted", minutes: 1 },
+  "potion of growth": { kind: "condition", condition: "enlarged", minutes: 0, hoursDice: "1d4" },
+  "potion of diminution": { kind: "condition", condition: "reduced", minutes: 0, hoursDice: "1d4" },
+  "potion of poison": { kind: "poison" },
+};
+
+// What a potion does, from the row it names, or null for anything that is
+// not a potion (a healing potion keeps its own path). A potion whose effect
+// the engines do not hold is narrated.
+export function potionPlan(item: TaggedItem): PotionPlan | null {
+  const row = itemRow(item);
+  if (row?.potion?.strength) {
+    return { kind: "giant", score: row.potion.strength };
   }
-  if (/vitality|elixir of health/.test(lowered)) {
-    return { kind: "vitality" };
-  }
-  if (/heroism/.test(lowered)) {
-    return { kind: "heroism" };
-  }
-  const giant = /(hill|frost|stone|fire|cloud|storm) giant strength/.exec(lowered);
-  if (giant) {
-    return { kind: "giant", score: GIANTS[giant[1]] };
-  }
-  if (/invisibility/.test(lowered)) {
-    return { kind: "condition", condition: "invisible", minutes: 60 };
-  }
-  if (/\bspeed\b/.test(lowered)) {
-    return { kind: "condition", condition: "hasted", minutes: 1 };
-  }
-  if (/growth/.test(lowered)) {
-    return { kind: "condition", condition: "enlarged", minutes: 0, hoursDice: "1d4" };
-  }
-  if (/diminution/.test(lowered)) {
-    return { kind: "condition", condition: "reduced", minutes: 0, hoursDice: "1d4" };
-  }
-  const resisted = DAMAGE_TYPES.find((type) => lowered.includes(type));
-  if (/resistance/.test(lowered) && resisted) {
+  if (row?.potion?.resists) {
     // The engine's timed resistance to one type (paramResistance).
-    return { kind: "condition", condition: `protection from energy (${resisted})`, minutes: 60 };
+    return { kind: "condition", condition: `protection from energy (${row.potion.resists})`, minutes: 60 };
   }
-  if (/potion of poison/.test(lowered)) {
-    return { kind: "poison" };
-  }
-  return /potion/.test(lowered) ? { kind: "narrated" } : null;
+  const plan = row ? POTION_PLANS[textKey(row.name)] : undefined;
+  return plan ?? (hasItemTag(item, "potion") ? { kind: "narrated" } : null);
 }
 
 // The spell a scroll holds: "Spell Scroll (Fireball)", "Scroll of Fireball".
@@ -173,8 +168,9 @@ export function applyConsumable(
   turnId: string,
   user: CharacterSheet,
   target: CharacterSheet,
-  itemName: string,
+  item: TaggedItem,
 ): Record<string, unknown> | null {
+  const itemName = item.name;
   const reason = itemName;
   const spell = scrollSpell(itemName);
   if (spell) {
@@ -186,21 +182,27 @@ export function applyConsumable(
   }
   // Eyebright ointment on the eyes before a long rest keeps sight rot from
   // worsening; three doses cure it (src/lib/dm/afflictions.ts).
-  if (/\beyebright\b/i.test(itemName)) {
+  if (EYEBRIGHT.has(textKey(itemName))) {
     afflictCondition(campaign, turnId, target.id, "eyebright ointment", { source: "Eyebright ointment" });
     return { effect: `${target.name}'s eyes are dressed with Eyebright: their sight rot does not worsen after the next long rest.` };
   }
-  const plan = potionPlan(itemName);
+  const plan = potionPlan(item);
   if (!plan) {
     return null;
   }
   const sheet = getSheetById(target.id) ?? target;
+  // Every disease the engine holds (src/lib/dm/afflictions.ts).
+  const diseases = ["diseased", "disease", ...afflictionConditionsFor(campaign.id, sheet, "disease")];
   switch (plan.kind) {
     case "vitality": {
-      // Every disease the engine holds goes too (src/lib/dm/afflictions.ts).
-      const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ["poisoned", "diseased", "disease", ...afflictionConditionsFor(campaign.id, sheet, "disease")]);
+      const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ["poisoned", ...diseases]);
       write(campaign, sheet, { exhaustion: 0, conditions: cleared.conditions, conditionMeta: cleared.meta });
       return { effect: `${sheet.name}'s exhaustion is gone, and any poison or disease with it.` };
+    }
+    case "health": {
+      const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ["blinded", "deafened", "paralyzed", "poisoned", ...diseases]);
+      write(campaign, sheet, { conditions: cleared.conditions, conditionMeta: cleared.meta });
+      return { effect: `${sheet.name} is cured of any disease, and no longer blinded, deafened, paralyzed or poisoned.` };
     }
     case "heroism": {
       write(campaign, sheet, { tempHp: Math.max(sheet.tempHp ?? 0, 10) });

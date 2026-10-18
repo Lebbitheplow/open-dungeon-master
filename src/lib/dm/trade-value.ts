@@ -8,8 +8,8 @@
 // were coin." Trade goods, likewise, are "as good as cash".
 //
 // The list price comes from the content pack; a gem or art object named with
-// its value ("Ruby (1000 gp)", "a silver chalice worth 25 gp") carries it in
-// its name, which is how treasure is granted. Only treasure does: a value
+// its value ("Ruby (1000 gp)", "Silver chalice - 25 gp") carries it in its
+// name, which is how treasure is granted. Only treasure does: a value
 // written into the name of anything else ("Plate Armor (1 gp)") is not a
 // price, or the model could set any price by naming the item.
 
@@ -17,10 +17,11 @@ import { searchItems } from "@/lib/content";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { parseCoins } from "@/lib/srd/currency";
 import { textKey } from "@/lib/language/text-logic";
+import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 const VALUE_PATTERNS = [
   /\(\s*([\d,]+\s*(?:pp|gp|ep|sp|cp))\s*\)/i,
-  /\bworth\s+([\d,]+\s*(?:pp|gp|ep|sp|cp))\b/i,
   /[-:]\s*([\d,]+\s*(?:pp|gp|ep|sp|cp))\s*$/i,
 ];
 
@@ -47,22 +48,6 @@ export function nameWithoutValue(name: string): string {
   return bare.replace(/\s+/g, " ").trim();
 }
 
-const GEMS =
-  /\b(gem|gems|gemstone|jewel|jewels|jewelry|jewellery|ruby|rubies|sapphire|emerald|diamond|pearl|opal|topaz|garnet|amethyst|jade|jasper|onyx|agate|quartz|citrine|carnelian|chrysoberyl|chrysoprase|chalcedony|coral|jet|tourmaline|zircon|spinel|peridot|obsidian|bloodstone|moonstone|alexandrite|aquamarine|azurite|hematite|lapis lazuli|malachite|turquoise|tiger eye|sardonyx|jacinth|sard)\b/i;
-// Signet rings and reliquaries are adventuring gear with a price of their
-// own (5 gp each), so they are not here.
-const ART =
-  /\b(art object|statuette|idol|chalice|goblet|necklace|bracelet|brooch|circlet|crown|tiara|scepter|sceptre|tapestry|painting|figurine of gold|gold ring|silver ring|anklet|locket|mask of gold|icon)\b/i;
-const TRADE_GOODS =
-  /\b(ingot|bar of (?:gold|silver|platinum|iron|copper)|(?:gold|silver|platinum) bars?|trade goods?|bolt of (?:silk|linen|cloth|canvas)|pound of (?:saffron|cinnamon|pepper|cloves|ginger|salt)|lb\.? of (?:saffron|cinnamon|pepper|cloves|ginger|salt|silk|iron|copper|silver|gold|platinum))\b/i;
-
-// A jewel or ornament named for what it does rather than what it is made of
-// ("Necklace of Fireballs", "Crown of Stars") is a magic item even where no
-// table knows it; one named for its material ("a necklace of pearls") is
-// jewelry.
-const MAGIC_NAMED =
-  /\b(?:necklace|brooch|circlet|crown|tiara|scepter|sceptre|bracelet|amulet|ring|gem|pearl|stone|figurine|idol|chalice|goblet|mask|locket|icon) of (?!(?:gold|silver|platinum|electrum|copper|brass|bronze|iron|ivory|jade|pearls?|rubies|emeralds|sapphires|diamonds|gems|jewels|amber|coral|bone|obsidian|onyx|crystal|glass|wood|feathers|beads|teeth|shells?|the\s+\w+\s+(?:guild|house|family|temple))\b)[a-z]/i;
-
 // A magic item is never treasure-by-weight, whatever it is made of: a Pearl
 // of Power, a Gem of Seeing, a Necklace of Fireballs. Known from the
 // bundled magic item table, and from the pack's magic items when it is here.
@@ -71,7 +56,7 @@ function isMagicItem(name: string): boolean {
   if (!bare) {
     return false;
   }
-  if (matchMagicItem(bare) || MAGIC_NAMED.test(bare)) {
+  if (matchMagicItem(bare)) {
     return true;
   }
   const wanted = textKey(bare);
@@ -115,26 +100,27 @@ function isPricedGear(name: string): boolean {
 }
 
 // Whether a thing is treasure that keeps its value: a gem, a piece of
-// jewelry or art, a trade good, and not a magic item or priced gear.
-function isTreasure(name: string): boolean {
-  const bare = nameWithoutValue(name);
-  if (!(GEMS.test(bare) || ART.test(bare) || TRADE_GOODS.test(bare))) {
+// jewelry or art, a trade good (src/lib/srd/item-tags.ts), and not a magic
+// item or priced gear.
+const TREASURE: ItemTag[] = ["gem", "art_object", "trade_good"];
+function isTreasure(item: TaggedItem): boolean {
+  if (!TREASURE.some((tag) => hasItemTag(item, tag))) {
     return false;
   }
-  return !isMagicItem(name) && !isPricedGear(name);
+  return !isMagicItem(item.name) && !isPricedGear(item.name);
 }
 
-// The value written into a treasure's name, in copper: "(50 gp)", "worth
-// 25 gp", "- 750 gp". Null for anything that is not treasure, and for a
-// name that names no value.
-export function valueInName(name: string): number | null {
-  const written = writtenValue(name);
-  return written !== null && isTreasure(name) ? written : null;
+// The value written into a treasure's name, in copper: "(50 gp)",
+// "- 750 gp". Null for anything that is not treasure, and for a name that
+// names no value.
+export function valueInName(item: TaggedItem): number | null {
+  const written = writtenValue(item.name);
+  return written !== null && isTreasure(item) ? written : null;
 }
 
 // Gems, jewelry, art objects and trade goods keep their full value.
-export function keepsFullValue(name: string): boolean {
-  return isTreasure(name);
+export function keepsFullValue(item: TaggedItem): boolean {
+  return isTreasure(item);
 }
 
 // The pack's list price for exactly this item, in copper, or null. A value
@@ -152,12 +138,12 @@ export function packListCp(name: string): number | null {
 
 // The list price the table holds for a thing: the pack's price when it knows
 // the item, else the value in a treasure's name. Null when neither knows it.
-export function listPriceCp(name: string): number | null {
-  return packListCp(name) ?? valueInName(name);
+export function listPriceCp(item: TaggedItem): number | null {
+  return packListCp(item.name) ?? valueInName(item);
 }
 
 // What a seller is paid for one, from its list price: full for gems, art
 // and trade goods, half for everything else.
-export function saleValueCp(name: string, listCp: number): number {
-  return keepsFullValue(name) ? listCp : Math.max(1, Math.floor(listCp / 2));
+export function saleValueCp(item: TaggedItem, listCp: number): number {
+  return keepsFullValue(item) ? listCp : Math.max(1, Math.floor(listCp / 2));
 }

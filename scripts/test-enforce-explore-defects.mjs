@@ -94,7 +94,7 @@ await test("Armor of Invulnerability halves nonmagical damage of every type (fir
 // ---- what things are worth ----
 
 await test("A value written into an item's name prices it only when it is a gem, art object or trade good: \"Plate Armor (1 gp)\" is plate armor at its list price.", async () => {
-  assert.equal(tv.listPriceCp("Plate Armor (1 gp)") === 100, false, "the name set plate armor's price to 1 gp");
+  assert.equal(tv.listPriceCp({ name: "Plate Armor (1 gp)" }) === 100, false, "the name set plate armor's price to 1 gp");
   const buyer = world.addHero({ class: "fighter", level: 1 });
   world.patch(buyer.id, { gold: 100, equipment: [] });
   await world.invoke("purchase", { characterId: buyer.id, item: "Plate Armor (1 gp)", price: 1500, qty: 1, action: "buy" });
@@ -104,18 +104,18 @@ await test("A value written into an item's name prices it only when it is a gem,
 
 await test("Only gems, jewelry, art objects and trade goods sell at full value: a magic item or a priced piece of gear does not.", async () => {
   for (const name of ["Pearl of Power", "Brooch of Shielding", "Necklace of Fireballs", "Gem of Seeing", "Circlet of Blasting", "Crown of Stars", "Figurine of Wondrous Power (Onyx Dog)", "Signet Ring", "Reliquary"]) {
-    assert.equal(tv.keepsFullValue(name), false, `${name} kept full value`);
+    assert.equal(tv.keepsFullValue({ name }), false, `${name} kept full value`);
   }
-  assert.equal(tv.keepsFullValue("Ruby (1000 gp)"), true);
-  assert.equal(tv.keepsFullValue("Silver chalice worth 25 gp"), true);
-  assert.equal(tv.keepsFullValue("Gold bar"), true);
+  assert.equal(tv.keepsFullValue({ name: "Ruby (1000 gp)", tags: ["gem"] }), true);
+  assert.equal(tv.keepsFullValue({ name: "Silver Chalice (25 gp)", tags: ["art_object"] }), true);
+  assert.equal(tv.keepsFullValue({ name: "Gold bar", tags: ["trade_good"] }), true);
 });
 
 if (world.hasPack) {
   await test("An item's list price is found by its exact name however many longer names share its letters: a Shield is 10 gp.", async () => {
     // "Shield" shares its letters with a page of magic shields that sort
     // before it; the list price is the plain Shield's, 10 gp.
-    assert.equal(tv.listPriceCp("Shield"), 1000, "the Shield's 10 gp list price was not found");
+    assert.equal(tv.listPriceCp({ name: "Shield" }), 1000, "the Shield's 10 gp list price was not found");
     assert.equal(tv.packListCp("shield"), 1000);
   });
 }
@@ -134,10 +134,10 @@ await test("A shop pays at most 100,000 gp a unit for a thing the table has no p
 // ---- what use_item uses up ----
 
 await test("use_item never destroys a waterskin or a Necklace of Prayer Beads; a Bead of Force and a day's rations are used up.", async () => {
-  assert.notEqual(itemUseProblem("Waterskin"), null, "a waterskin counted as used up");
-  assert.notEqual(itemUseProblem("Necklace of Prayer Beads"), null, "prayer beads counted as used up");
-  assert.equal(itemUseProblem("Bead of Force"), null);
-  assert.equal(itemUseProblem("Rations (1 day)"), null);
+  assert.notEqual(itemUseProblem({ name: "Waterskin" }), null, "a waterskin counted as used up");
+  assert.notEqual(itemUseProblem({ name: "Necklace of Prayer Beads" }), null, "prayer beads counted as used up");
+  assert.equal(itemUseProblem({ name: "Bead of Force" }), null);
+  assert.equal(itemUseProblem({ name: "Rations (1 day)" }), null);
   const drinker = world.addHero({ class: "fighter", level: 2, equipment: [{ name: "Waterskin", qty: 1 }] });
   await world.invoke("use_item", { characterId: drinker.id, item: "Waterskin" });
   assert.equal(carries(drinker.id, "Waterskin"), true, "the waterskin was destroyed");

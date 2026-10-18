@@ -3,6 +3,7 @@
 
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "../language/text-logic.ts";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 export type SlotState = { max: number; used: number };
 export type EquipmentRow = {
@@ -141,10 +142,13 @@ export function grantItemMath(
   equipment: EquipmentRow[],
   name: string,
   qty: number,
-  options: { identified?: boolean } = {},
+  // What the item is, when no English row says it (src/lib/srd/item-tags.ts);
+  // never written on an unidentified one, whose secret stays off the sheet.
+  options: { identified?: boolean; tags?: ItemTag[] } = {},
 ) {
   const amount = Math.max(1, Math.floor(qty));
   const known = options.identified !== false;
+  const tags = known && options.tags?.length ? { tags: options.tags } : {};
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known,
   );
@@ -152,7 +156,7 @@ export function grantItemMath(
     return {
       equipment: [
         ...equipment,
-        known ? { name, qty: amount } : { name, qty: amount, identified: false },
+        known ? { name, qty: amount, ...tags } : { name, qty: amount, identified: false },
       ],
     };
   }
@@ -172,6 +176,7 @@ export function revealItemMath(
   equipment: EquipmentRow[],
   name: string,
   revealedName?: string,
+  tags?: ItemTag[],
 ): { equipment: EquipmentRow[]; from: string; to: string } | null {
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name) && !isIdentified(item),
@@ -186,7 +191,7 @@ export function revealItemMath(
   // and one representation for "identified" is one fewer thing to disagree.
   const rest = { ...next[index] };
   delete rest.identified;
-  next[index] = { ...rest, name: to };
+  next[index] = { ...rest, name: to, ...(tags?.length ? { tags } : {}) };
   return { equipment: next, from, to };
 }
 

@@ -20,6 +20,8 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { COPPER_PER_GOLD, purseCopper } from "@/lib/srd/currency";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { hasItemTag } from "@/lib/srd/item-tags";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 export type MaterialComponent = {
   // The words a carried line must share.
@@ -216,13 +218,13 @@ export function materialPlan(sheet: Holder, facts: SpellFacts | null, ctx: Mater
 
 // ---- a focus or a component pouch ----
 
-const POUCH = /component pouch/i;
-const FOCI: Record<string, RegExp> = {
-  arcane: /arcane focus|\bcrystal\b|\borb\b|\brod\b|\bstaff\b|\bwand\b/i,
-  holy: /holy symbol|\bamulet\b|\bemblem\b|\breliquary\b/i,
-  druidic: /druidic focus|mistletoe|\btotem\b|yew wand|wooden staff|\bstaff\b/i,
-  instrument: /\blute\b|\blyre\b|\bflute\b|\bdrum\b|\bhorn\b|bagpipes|dulcimer|shawm|\bviol\b|instrument/i,
-  tools: /thieves'? tools|artisan'?s? tools|\btools\b|infused/i,
+// What each focus is (src/lib/srd/item-tags.ts).
+const FOCI: Record<string, ItemTag> = {
+  arcane: "arcane_focus",
+  holy: "holy_symbol",
+  druidic: "druidic_focus",
+  instrument: "instrument",
+  tools: "tools",
 };
 const CLASS_FOCUS: Record<string, string[]> = {
   wizard: ["arcane"],
@@ -242,8 +244,7 @@ export function focusProblem(sheet: Pick<CharacterSheet, "name" | "class" | "cla
   if (!facts?.material || materialComponents(facts).length) {
     return null;
   }
-  const carried = sheet.equipment.map((item) => item.name);
-  if (carried.some((name) => POUCH.test(name))) {
+  if (sheet.equipment.some((item) => hasItemTag(item, "component_pouch"))) {
     return null;
   }
   const classIds = [sheet.class, ...(sheet.classes ?? []).map((entry) => entry.id)].map((id) => (id ?? "").trim().toLowerCase());
@@ -251,7 +252,7 @@ export function focusProblem(sheet: Pick<CharacterSheet, "name" | "class" | "cla
   // A caster whose class names no focus (a ranger, a fighter's Eldritch
   // Knight reads an arcane one) may use any.
   const allowed = kinds.length ? kinds : Object.keys(FOCI);
-  if (carried.some((name) => allowed.some((kind) => FOCI[kind].test(name)))) {
+  if (sheet.equipment.some((item) => allowed.some((kind) => hasItemTag(item, FOCI[kind])))) {
     return null;
   }
   const what = kinds.length ? kinds.map((kind) => (kind === "arcane" ? "an arcane focus" : kind === "holy" ? "a holy symbol" : kind === "druidic" ? "a druidic focus" : kind === "instrument" ? "a musical instrument" : "artisan's tools")).join(" or ") : "a spellcasting focus";

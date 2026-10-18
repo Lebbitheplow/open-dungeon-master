@@ -99,7 +99,7 @@ export type LoadLine = {
 // A stamped weight of 0 means "the source did not say" rather than
 // "weightless", which is why it falls through to the other lookups.
 export function loadLine(item: CarriedItem, index = 0): LoadLine {
-  const ammo = ammoKindForItem(item.name);
+  const ammo = ammoKindForItem(item);
   if (ammo) {
     // An ammunition line's count lives in its name or its qty and moves as
     // rounds are spent, so it is weighed per round rather than per line.

@@ -105,12 +105,15 @@ test("the English forms of an armour stay on its row: Plate Armor, Shields, a ma
   assert.equal(bundledPriceCopper("Plate"), 150_000);
 });
 
-test("a weapon's tail and its plural reach the item sheet, and SRD weapon names in a name read under water", () => {
+test("a weapon's tail and its plural reach the item sheet, and under water a weapon is the SRD row it swings as", () => {
   assert.equal(buildItemSheet("+1 Longswords", [])?.weapon?.damage, "1d8 + 1");
   assert.equal(buildItemSheet("Silvered Dagger", [])?.weapon?.damage, "1d4");
-  assert.equal(underwaterSwing({ weapon: "Javelins", melee: true, swims: false, beyondNormal: false }).disadvantage, false);
-  assert.equal(underwaterSwing({ weapon: "+1 Heavy Crossbow", melee: false, swims: false, beyondNormal: false }).disadvantage, false);
-  assert.equal(underwaterSwing({ weapon: "Longsword", melee: true, swims: false, beyondNormal: false }).disadvantage, true);
+  for (const weapon of ["Javelins", "Giavellotto", "Javeline", "Jabalina", "Wurfspeer"]) {
+    assert.equal(underwaterSwing({ weapon, base: "Javelin", melee: true, swims: false, beyondNormal: false }).disadvantage, false, weapon);
+  }
+  assert.equal(underwaterSwing({ weapon: "+1 Heavy Crossbow", base: "Heavy Crossbow", melee: false, swims: false, beyondNormal: false }).disadvantage, false);
+  assert.equal(underwaterSwing({ weapon: "Longsword", base: "Longsword", melee: true, swims: false, beyondNormal: false }).disadvantage, true);
+  assert.equal(underwaterSwing({ weapon: "Spear of the Deep", base: "Longsword", melee: true, swims: false, beyondNormal: false }).disadvantage, true, "a word in the name is no weapon");
 });
 
 test("a name in each table language is compared as written: it finds no English row, and loses no letter", () => {

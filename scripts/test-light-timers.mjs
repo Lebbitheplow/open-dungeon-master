@@ -45,7 +45,7 @@ test("a torch burns an hour, a lantern six on a flask of oil, an everburning thi
   // SRD 5.1: a lantern burns for 6 hours on a flask of oil; with none it is dark.
   assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }, { name: "Flask of Oil" }] }), { radius: 6, minutes: 360 });
   assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }] }), { radius: 0, minutes: 0 });
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Everburning torch" }] }), { radius: 4, minutes: 0 });
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Everburning torch", tags: ["everburning_light"] }] }), { radius: 4, minutes: 0 });
   assert.deepEqual(carriedLight({ equipment: [{ name: "Rope" }] }), { radius: 0, minutes: 0 });
 });
 

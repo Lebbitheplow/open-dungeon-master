@@ -36,6 +36,7 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { nameTerms } from "@/lib/language/language";
 import { campaignLanguage } from "@/lib/db/campaigns";
+import { weaponMaterial } from "@/lib/dm/damage-logic";
 
 export type AttackKind = "weapon" | "spell" | "natural" | "granted";
 
@@ -306,8 +307,9 @@ export function buildAttackProfile(
     // Shillelagh: a club or quarterstaff swings with the spellcasting
     // ability and a d8, and is magical (src/lib/dm/attack-features.ts).
     const shillelagh = shillelaghSwing(sheet, resolved, derived);
-    const swing = (twoHanded: boolean) =>
-      weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
+    const material = weaponMaterial(sheet.equipment.find((item) => item.name === resolved.displayName));
+    const swing = (twoHanded: boolean) => ({
+      ...weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
         riders,
         martialArts: martialArtsApplies(sheet),
         brawler: brawlerUnarmed(sheet),
@@ -318,7 +320,9 @@ export function buildAttackProfile(
           weapon: resolved.displayName,
           shieldName,
         }),
-      });
+      }),
+      material,
+    });
     profile = swing(hands.twoHanded);
     let handsNote = hands.note;
     // SRD 5.1 Versatile: the bigger die is for a melee attack. A spear thrown

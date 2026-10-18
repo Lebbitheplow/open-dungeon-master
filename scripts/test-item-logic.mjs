@@ -15,17 +15,18 @@ function test(name, fn) {
 }
 
 test("healing potion tiers", () => {
-  assert.deepEqual(consumableEffect("Potion of Healing"), { kind: "healing", expression: "2d4+2" });
-  assert.deepEqual(consumableEffect("Potion of Greater Healing"), { kind: "healing", expression: "4d4+4" });
-  assert.deepEqual(consumableEffect("Superior Healing Potion"), { kind: "healing", expression: "8d4+8" });
-  assert.deepEqual(consumableEffect("potion of supreme healing"), { kind: "healing", expression: "10d4+20" });
-  assert.deepEqual(consumableEffect("Healing Draught"), { kind: "healing", expression: "2d4+2" });
+  assert.deepEqual(consumableEffect({ name: "Potion of Healing" }), { kind: "healing", expression: "2d4+2" });
+  assert.deepEqual(consumableEffect({ name: "Potion of Greater Healing" }), { kind: "healing", expression: "4d4+4" });
+  assert.deepEqual(consumableEffect({ name: "Potion of Superior Healing" }), { kind: "healing", expression: "8d4+8" });
+  assert.deepEqual(consumableEffect({ name: "potion of supreme healing" }), { kind: "healing", expression: "10d4+20" });
+  // A healing potion no row names heals as a plain Potion of Healing.
+  assert.deepEqual(consumableEffect({ name: "Healing Draught", tags: ["consumable", "potion", "healing_potion"] }), { kind: "healing", expression: "2d4+2" });
 });
 
 test("non-healing consumables are generic", () => {
-  assert.deepEqual(consumableEffect("Torch"), { kind: "generic" });
-  assert.deepEqual(consumableEffect("Potion of Invisibility"), { kind: "generic" });
-  assert.deepEqual(consumableEffect("Alchemist's Fire"), { kind: "generic" });
+  assert.deepEqual(consumableEffect({ name: "Torch" }), { kind: "generic" });
+  assert.deepEqual(consumableEffect({ name: "Potion of Invisibility" }), { kind: "generic" });
+  assert.deepEqual(consumableEffect({ name: "Alchemist's Fire" }), { kind: "generic" });
 });
 
 const pack = [

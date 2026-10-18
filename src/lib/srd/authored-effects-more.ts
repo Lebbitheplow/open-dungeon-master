@@ -24,6 +24,7 @@ import { activeAuthored, resolveFormula, type AuthoredSheet } from "@/lib/srd/au
 import type { NaturalWeapon } from "@/lib/srd/authored-effects-types";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
@@ -155,9 +156,9 @@ export function authoredSpellDice(
     // is the caster's (a spell list is shared by several classes).
     const casterClasses = [lower(sheet.class), ...(sheet.classes ?? []).map((entry) => lower(entry.id))];
     const listed = !effect.classes || casterClasses.some((entry) => effect.classes!.includes(entry));
-    const pattern = effect.item ? new RegExp(effect.item, "i") : null;
-    const item = pattern ? (sheet.equipment ?? []).find((entry) => pattern.test(entry.name)) : null;
-    if (!typed || !listed || (pattern && !item)) {
+    const wanted = effect.items;
+    const item = wanted ? (sheet.equipment ?? []).find((entry) => wanted.some((tag) => hasItemTag(entry, tag))) : null;
+    if (!typed || !listed || (wanted && !item)) {
       continue;
     }
     const rolled = resolveFormula(effect.dice, held.level, mods);

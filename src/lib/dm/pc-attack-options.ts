@@ -139,7 +139,7 @@ export function checkAttackOptions(input: {
       const greatWeapon =
         meleeWeapon && holdsFeat(sheet, "Great Weapon Master") && budget.oncePerTurn.includes(GREAT_WEAPON_MASTER_READY);
       // Polearm Master, Crossbow Expert, Charger (src/lib/srd/feat-combat.ts).
-      const featBonus = greatWeapon ? "Great Weapon Master" : featBonusAttack(sheet, budget, { weaponAttack, melee: meleeWeapon, weapon: profile.weapon });
+      const featBonus = greatWeapon ? "Great Weapon Master" : featBonusAttack(sheet, budget, { weaponAttack, melee: meleeWeapon, weapon: profile.base });
       // Battle Magic, War Magic, Sudden Strike, Telekinetic Master...
       // (src/lib/srd/authored-effects.ts).
       const authored = featBonus ? { ok: true } : authoredBonusAttackProblem(sheet, budget);

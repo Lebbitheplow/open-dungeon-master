@@ -1,5 +1,7 @@
 import { isValidExpression } from "@/lib/dice";
 import { normalizeSentience, type Sentience } from "@/lib/homebrew/sentience";
+import { listedItemTags, type ItemTag } from "@/lib/schemas/item-tags";
+import { itemTags } from "@/lib/srd/item-tags";
 import type { SrdArmor } from "@/lib/srd/armor";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
@@ -85,6 +87,9 @@ export type HomebrewGear = {
   weight?: number;
   // A sentient item's mind (src/lib/homebrew/sentience.ts).
   sentience?: Sentience;
+  // What the item is (src/lib/srd/item-tags.ts): the author's tags, else
+  // those of the SRD item it was copied from.
+  tags?: ItemTag[];
 };
 
 // What a stored entry's data blob looks like after normalization: whatever
@@ -243,6 +248,10 @@ export function normalizeItemData(raw: unknown, name: string): Outcome<HomebrewD
   if (weight !== null && weight >= 0) {
     data.weight = Math.min(GEAR_LIMITS.weightMax, Math.round(weight * 100) / 100);
   }
+  const tags = listedItemTags(source.tags);
+  if (tags.length) {
+    data.tags = tags;
+  }
   if (itemKind === "weapon") {
     const weapon = normalizeWeapon(source.weapon, name);
     if ("error" in weapon) {
@@ -350,6 +359,12 @@ export function gearFromHomebrewData(name: string, data: unknown): HomebrewGear 
   const sentience = normalizeSentience(source.sentience);
   if (sentience) {
     gear.sentience = sentience;
+  }
+  const authored = listedItemTags(source.tags);
+  const copied = (source.copiedFrom as { name?: unknown } | undefined)?.name;
+  const tags = authored.length ? authored : typeof copied === "string" ? [...itemTags({ name: copied })] : [];
+  if (tags.length) {
+    gear.tags = tags;
   }
   return Object.keys(gear).length ? gear : null;
 }

@@ -193,8 +193,8 @@ export function planPcAttack(input: {
   // attack, not a missed one. Only looked at here; the round leaves the
   // quiver in pc-attack.ts, once nothing else can refuse the shot.
   const ammo =
-    campaign.gameSettings.variantRules.ammunition && profile.weapon
-      ? spendAmmo(sheet.equipment, profile.weapon, sheet.name)
+    campaign.gameSettings.variantRules.ammunition && profile.base
+      ? spendAmmo(sheet.equipment, { base: profile.base, name: profile.weapon }, sheet.name)
       : null;
   if (ammo && !ammo.ok) {
     return { refused: toolError(ammo) };

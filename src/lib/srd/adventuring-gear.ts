@@ -230,7 +230,7 @@ const armorByKey = spellingIndex(SRD_ARMOR, (armor) => [gearKey(armor.name), gea
 // only with `armor` set: a phrase read whole or as the head of a clause,
 // never after its adjectives are dropped, so "work leathers" never becomes
 // Leather (issue #113).
-function catalogName(phrase: string, armor = true): string | null {
+export function catalogName(phrase: string, armor = true): string | null {
   const key = gearKey(phrase);
   if (!key) {
     return null;

@@ -8,6 +8,7 @@
 // point after 1d4 hours (src/lib/dm/death.ts rollStableTimer).
 //
 // This module must not import mutations.ts (which imports it).
+import { catalogName } from "@/lib/srd/adventuring-gear";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -296,10 +297,11 @@ export function healerKitUse(
   target: CharacterSheet,
   itemName: string,
 ): ToolError | { ok: true; amount: number; note: string } | null {
-  if (!/healer'?s kit/i.test(itemName) || !holdsFeat(healer, "Healer")) {
+  // The SRD's Healer's Kit, by its row (src/lib/srd/adventuring-gear.ts).
+  if (catalogName(itemName) !== "Healer's Kit" || !holdsFeat(healer, "Healer")) {
     return null;
   }
-  const kit = findCarriedItem(healer.equipment, "healer's kit");
+  const kit = findCarriedItem(healer.equipment, itemName);
   if (!kit || (kit.charges ?? HEALERS_KIT_USES) <= 0) {
     return { error: `${healer.name} carries no healer's kit with a use left. Nothing was spent.`, refused: "rules" };
   }

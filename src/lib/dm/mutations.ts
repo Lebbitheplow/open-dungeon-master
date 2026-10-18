@@ -100,6 +100,7 @@ import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -132,6 +133,15 @@ type ToolDef = {
 const characterProperty = {
   characterId: { type: "string", description: "Exact characterId from GAME STATE." },
   reason: { type: "string", description: "Short in-fiction cause." },
+};
+
+// What an item is, for an item whose name is not an SRD or pack item's
+// English name (src/lib/srd/item-tags.ts).
+const ITEM_TAGS_PROPERTY = {
+  type: "array",
+  items: { type: "string", enum: [...ITEM_TAGS] },
+  description:
+    "What the item is, when its name is not an SRD or pack item's English name (loot you invent, a name in the table's language): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. Omit for an SRD item, and while it is unidentified.",
 };
 
 function tool(name: string, description: string, extra: Record<string, unknown>, required: string[]): ToolDef {
@@ -250,6 +260,7 @@ export const mutationTools: ToolDef[] = [
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
     additional: { type: "boolean", description: "Only when a player just accepted this same item and this is truly another one from a different source." },
+    tags: ITEM_TAGS_PROPERTY,
   }, ["name"]),
   tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, use use_item; for sales, use purchase.", {
     name: { type: "string" },
@@ -258,6 +269,7 @@ export const mutationTools: ToolDef[] = [
   tool("reveal_item", "Name an item the party has been carrying without knowing what it is. Only for items granted unidentified; an ordinary item needs no revealing.", {
     name: { type: "string", description: "The description they have been calling it by, as on the sheet now ('an ornate silver ring')." },
     revealedName: { type: "string", description: "What it truly is ('Ring of Protection')." },
+    tags: ITEM_TAGS_PROPERTY,
   }, ["name"]),
   ...resourceTools,
   tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Always give a duration when the fiction has one, because only timed conditions ever expire on their own: rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.", {
@@ -441,6 +453,8 @@ const argsSchema = z.object({
   unidentified: z.coerce.boolean().optional(),
   // reveal_item: what it actually turns out to be.
   revealedName: z.string().optional(),
+  // grant_item, reveal_item: what the item is (src/lib/srd/item-tags.ts).
+  tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
   qty: z.coerce.number().int().optional(),
   // use_item / purchase / use_resource.
   item: z.string().optional(),
@@ -957,7 +971,7 @@ export function applyDmMutation(
       if (badQty) {
         return { result: badQty };
       }
-      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known });
+      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, tags: args.tags });
       const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name) ?? capacityProblem(sheet, math.equipment, name);
       if (noRoom) {
         return { result: noRoom };
@@ -982,7 +996,7 @@ export function applyDmMutation(
       if (!name) {
         return { result: { error: "reveal_item needs the description the sheet carries now.", retry: true } };
       }
-      const math = revealItemMath(sheet.equipment, name, args.revealedName);
+      const math = revealItemMath(sheet.equipment, name, args.revealedName, args.tags);
       if (!math) {
         return {
           result: {
@@ -1079,7 +1093,8 @@ export function applyDmMutation(
       patchSheet(sheet.id, outcome.patch);
       Object.assign(outcome.result, objectCharge.commit());
       // What the potion or scroll does, applied by the engine.
-      Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, String(outcome.result.used ?? itemName)) ?? {});
+      const used = String(outcome.result.used ?? itemName);
+      Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, sheet.equipment.find((item) => item.name === used) ?? { name: used }) ?? {});
       audit(campaign, turnId, sheet, "use_item", { item: itemName }, reason, outcome.patch);
       publishSheet(campaign, sheet.id);
       // Potion healing rides the standard heal mutation so the death engine

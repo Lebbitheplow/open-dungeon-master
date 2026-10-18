@@ -70,6 +70,7 @@ const TEXT = {
   objective: "Find the harbourmaster's key",
   condition: "poisoned",
   reason: "the test asks",
+  tags: "potion",
   summary: "A plain line for the table.",
   note: "A plain line for the table.",
   text: "A plain line for the table.",

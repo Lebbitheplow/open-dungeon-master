@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
@@ -193,6 +194,9 @@ export const equipmentItemSchema = z.object({
   // the secret was never written to the sheet. The DM's reveal action renames
   // the row and flips this flag in one step.
   identified: z.boolean().optional(),
+  // What the item is, when no English row says it (loot the model invents,
+  // an item named in the table's language): src/lib/srd/item-tags.ts.
+  tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
   // A homebrew item's mechanics, snapshotted from the entry so the armour,
   // attack and magic-item engines read it exactly as they read SRD gear
   // (src/lib/homebrew/gear.ts). Refreshed on every sheet read; absent for

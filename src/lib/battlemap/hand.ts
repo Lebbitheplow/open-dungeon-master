@@ -167,7 +167,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
     if (held?.properties?.includes("versatile") && !profile.twoHanded && !shieldName && !offHand) {
       notes.push(profile.thrown ? "Versatile: say two hands in melee for the bigger die." : "Versatile: say two hands for the bigger die.");
     }
-    const ammoKind = srd?.properties?.includes("ammunition") ? ammoKindForWeapon(name) ?? ammoKindForWeapon(srd.name) : null;
+    const ammoKind = srd?.properties?.includes("ammunition") ? ammoKindForWeapon(srd.name) : null;
     const ammo = ammoKind ? findAmmo(sheet.equipment, ammoKind) : null;
     const empty = ammoKind !== null && ammo === null;
     const card: HandCard = {

@@ -15,7 +15,7 @@ import type { TypedRider } from "@/lib/dm/damage-parts";
 import type { GearDice } from "@/lib/srd/magic-gear";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { rageDamageBonus } from "@/lib/srd/class-resources";
-import { rageApplies } from "@/lib/dm/damage-logic";
+import { rageApplies, type WeaponMaterial } from "@/lib/dm/damage-logic";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import type { SheetDerived } from "@/lib/srd";
 import { textKey } from "@/lib/language/text-logic";
@@ -44,6 +44,14 @@ export type ResolvedWeapon = {
 
 export type AttackProfile = {
   weapon: string;
+  // The SRD weapon it swings as, by its row's name (a Flame Tongue is a
+  // Longsword): what the ammunition and the feats keyed to a weapon read,
+  // never the name it is carried under. Absent for an unarmed strike or an
+  // improvised weapon.
+  base?: string;
+  // The wielded item's material, for the resistances that name it
+  // (damage-logic.ts weaponMaterial).
+  material?: WeaponMaterial;
   toHit: number;
   damageExpression: string;
   damageType: string;
@@ -385,6 +393,7 @@ export function weaponAttackProfile(
 
   return {
     weapon: resolved.displayName,
+    base: srd.name,
     toHit: mod + magicBonus + toHitBonus + (proficient ? derived.proficiencyBonus : 0),
     damageExpression: `${withModifier(damageDice, abilityToDamage + magicBonus + damageBonus)}${gearParts.suffix}`,
     damageType: type,

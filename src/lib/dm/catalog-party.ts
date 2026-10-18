@@ -2,7 +2,8 @@
 // resources, conditions and rests. Names match the tool names the AI DM is
 // offered exactly, because both callers reach the same engine
 // (src/lib/dm/invoke.ts).
-import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import type { CatalogEntry, CatalogField } from "@/lib/dm/catalog-types";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { UPDATE_SHEET_FIELDS } from "@/lib/dm/update-sheet-args";
 import { DRACONIC_ANCESTRIES } from "@/lib/srd/racial-grants";
 import { GENDER_FIELD } from "@/lib/dm/catalog-world";
@@ -13,6 +14,16 @@ import {
   conditionField,
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
+
+// What an item is, for one whose name is not an SRD or pack item's English
+// name (src/lib/srd/item-tags.ts), typed as the tags the server takes.
+const ITEM_TAGS_FIELD: CatalogField = {
+  name: "tags",
+  label: "What it is",
+  kind: "list",
+  placeholder: "potion, healing_potion",
+  help: `For an item named in the table's language or invented, comma separated, from: ${ITEM_TAGS.join(", ")}.`,
+};
 
 export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
   {
@@ -168,6 +179,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         kind: "boolean",
         help: "With item offers on, the same item again within ten minutes of an accepted offer is refused unless it is truly another from a different source.",
       },
+      ITEM_TAGS_FIELD,
       REASON,
     ],
   },
@@ -180,6 +192,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "name", label: "Called on the sheet", kind: "text", required: true },
       { name: "revealedName", label: "Actually", kind: "text", placeholder: "Ring of Protection" },
+      ITEM_TAGS_FIELD,
       REASON,
     ],
   },

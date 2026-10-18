@@ -96,7 +96,7 @@ export function computeUseItem(
   if (!removal) {
     return notCarried(sheet.name, sheet.equipment.map((item) => item.name), itemName, isTableGearName(campaign.id, itemName));
   }
-  const effect = consumableEffect(carried.name);
+  const effect = consumableEffect(carried);
   const base: Outcome = {
     patch: { equipment: removal.equipment },
     result: {

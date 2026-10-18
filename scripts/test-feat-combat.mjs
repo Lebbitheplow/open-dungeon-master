@@ -10,7 +10,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const {
   defensiveDuelistBonus, dungeonDelverNotices, elementalAdeptApplies, elementalAdeptType, featEngineTag, floorDamageDice,
-  powerAttackFeat, shootsFreelyInMelee, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover, spellRangeFactor,
+  featBonusAttack, isPolearm, ONE_HANDED_ATTACKED, powerAttackFeat, shootsFreelyInMelee, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover, spellRangeFactor,
 } = await import("../src/lib/srd/feat-combat.ts");
 const { featGrantSpec, featPicksOwed, applyFeatGrants } = await import("../src/lib/srd/feat-grants.ts");
 const { authoredFeatDesc } = await import("../src/lib/srd/feat-effects.ts");
@@ -95,6 +95,19 @@ test("the prompt tags the feats the server applies", () => {
   // Actor's advantage is the check engine's now (issue #147); Keen Mind stays the DM's.
   assert.equal(featEngineTag("Actor"), "[server]");
   assert.equal(featEngineTag("Keen Mind"), null);
+});
+
+// A weapon is the SRD row it swings as (AttackProfile's base), never the name
+// it is carried under: an "Oathbow" or a "Balestra a mano" is what its row is.
+test("Polearm Master and Crossbow Expert read the SRD weapon, not the carried name", () => {
+  assert.equal(isPolearm("Glaive"), true);
+  assert.equal(isPolearm("Spear of the Dark Sun"), false, "a carried name is no base");
+  assert.equal(isPolearm(undefined), false);
+  const budget = { oncePerTurn: [ONE_HANDED_ATTACKED], dashed: false };
+  const expert = sheet(["Crossbow Expert"]);
+  assert.equal(featBonusAttack(expert, budget, { weaponAttack: true, melee: false, weapon: "Hand Crossbow" }), "Crossbow Expert");
+  assert.equal(featBonusAttack(expert, budget, { weaponAttack: true, melee: false, weapon: "Light Crossbow" }), null);
+  assert.equal(featBonusAttack(expert, budget, { weaponAttack: true, melee: false, weapon: undefined }), null);
 });
 
 console.log(`${passed} checks passed`);
