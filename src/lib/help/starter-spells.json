@@ -134,11 +134,11 @@
       ]
     },
     "arcane-trickster": {
-      "why": "You know a few wizard spells, almost all enchantment or illusion, and cast them with Intelligence. Mage Hand comes free; you learn new spells as you level, with no spellbook to prepare from.",
+      "why": "You know a few wizard spells, almost all enchantment or illusion, and cast them with Intelligence. Mage Hand is always one of your cantrips; you learn new spells as you level, with no spellbook to prepare from.",
       "cantrips": [
+        { "n": "Mage Hand", "d": "Your Spellcasting teaches it: an invisible hand for pockets, locks and traps." },
         { "n": "Minor Illusion", "d": "A crate to hide behind or a noise down the hall, as often as you like." },
-        { "n": "Friends", "d": "Advantage on the Charisma check that talks you past a guard." },
-        { "n": "Fire Bolt", "d": "Ranged damage on the turns you cannot find a sneak attack." }
+        { "n": "Friends", "d": "Advantage on the Charisma check that talks you past a guard." }
       ],
       "spells": [
         { "n": "Disguise Self", "d": "Walk in looking like someone who belongs there." },
@@ -162,11 +162,11 @@
       ]
     },
     "underfoot": {
-      "why": "You know a few druid spells, almost all divination or transmutation, and cast them with Wisdom. Shillelagh comes free; you learn new spells as you level instead of preparing them each day.",
+      "why": "You know a few druid spells, almost all divination or transmutation, and cast them with Wisdom. Shillelagh is always one of your cantrips; you learn new spells as you level instead of preparing them each day.",
       "cantrips": [
+        { "n": "Shillelagh", "d": "Your Spellcasting teaches it: a club or staff that hits with Wisdom." },
         { "n": "Guidance", "d": "A d4 on the ability check that matters, yours or a friend's." },
-        { "n": "Produce Flame", "d": "Light in your hand, and ranged fire damage when you need it." },
-        { "n": "Druidcraft", "d": "Small nature tricks that sell a disguise or a distraction." }
+        { "n": "Produce Flame", "d": "Light in your hand, and ranged fire damage when you need it." }
       ],
       "spells": [
         { "n": "Longstrider", "d": "Ten more feet of speed for an hour: in and out before anyone reacts." },

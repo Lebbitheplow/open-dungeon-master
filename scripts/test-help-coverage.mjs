@@ -226,6 +226,11 @@ test("a third caster's suggested spells are its own: real spells, from its two s
     for (const pick of [...starter.cantrips, ...starter.spells]) {
       assert.ok(bundledSpellSchool(pick.n), `${key}: ${pick.n} is not a spell the tables know`);
     }
+    // The cantrip each Spellcasting teaches comes first, so a fill keeps it.
+    const required = { "arcane-trickster": "Mage Hand", underfoot: "Shillelagh" }[key];
+    if (required) {
+      assert.equal(starter.cantrips[0]?.n, required, `${key}: ${required} is not suggested first`);
+    }
     const problem = thirdCasterSchoolProblem({
       classId,
       subclass,
