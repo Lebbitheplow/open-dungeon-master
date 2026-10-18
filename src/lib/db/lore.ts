@@ -10,7 +10,8 @@ import {
   type WorldLoreEntry,
 } from "@/lib/dm/world-lore-logic";
 import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
-import { heldBackLoreIds } from "@/lib/db/world-publication";
+import { heldBackLore } from "@/lib/db/world-publication";
+import type { Canon } from "@/lib/worldforge/model";
 
 // World lore builder storage (lore_entries): lead-authored world bible
 // entries the DM prompt samples from and search_lore queries. Embeddings
@@ -58,6 +59,14 @@ function mapEntry(row: LoreRow): WorldLoreEntry {
   };
 }
 
+// An entry WorldForge holds back (src/lib/db/world-publication.ts), marked
+// unpublished for the readers and with the canon state that holds it back for
+// the model paths.
+function withCanon(entry: WorldLoreEntry, held: Map<string, Exclude<Canon, "canon">>): WorldLoreEntry {
+  const canon = held.get(entry.id);
+  return canon ? { ...entry, unpublished: true, canon } : entry;
+}
+
 export function listLoreEntries(campaignId: string): WorldLoreEntry[] {
   const rows = getDatabase()
     .prepare(
@@ -65,11 +74,8 @@ export function listLoreEntries(campaignId: string): WorldLoreEntry[] {
        WHERE campaign_id = ? ORDER BY category ASC, created_at ASC`,
     )
     .all(campaignId) as LoreRow[];
-  const held = heldBackLoreIds(campaignId);
-  return rows.map((row) => {
-    const entry = mapEntry(row);
-    return held.has(entry.id) ? { ...entry, unpublished: true } : entry;
-  });
+  const held = heldBackLore(campaignId);
+  return rows.map((row) => withCanon(mapEntry(row), held));
 }
 
 // Every entry carrying a PDF, across campaigns; the startup re-read in
@@ -92,8 +98,7 @@ export function getLoreEntry(entryId: string): WorldLoreEntry | null {
   if (!row) {
     return null;
   }
-  const entry = mapEntry(row);
-  return heldBackLoreIds(row.campaign_id).has(entry.id) ? { ...entry, unpublished: true } : entry;
+  return withCanon(mapEntry(row), heldBackLore(row.campaign_id));
 }
 
 export function insertLoreEntry(input: {
@@ -204,14 +209,16 @@ export function deleteLoreEntry(entryId: string) {
 }
 
 // Retrieval view: entries with their embedding buffers (NULL = not yet
-// indexed; callers fall back to keyword scoring).
+// indexed; callers fall back to keyword scoring), each marked with the canon
+// state WorldForge holds it back by.
 export function listLoreWithEmbeddings(
   campaignId: string,
 ): Array<{ entry: WorldLoreEntry; embedding: Buffer | null }> {
   const rows = getDatabase()
     .prepare(`SELECT ${LORE_COLUMNS}, embedding FROM lore_entries WHERE campaign_id = ?`)
     .all(campaignId) as Array<LoreRow & { embedding: Buffer | null }>;
-  return rows.map((row) => ({ entry: mapEntry(row), embedding: row.embedding }));
+  const held = heldBackLore(campaignId);
+  return rows.map((row) => ({ entry: withCanon(mapEntry(row), held), embedding: row.embedding }));
 }
 
 // Background pass over every entry in a campaign that still has no vector.

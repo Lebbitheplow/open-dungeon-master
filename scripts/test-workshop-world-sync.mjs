@@ -88,7 +88,8 @@ await test("F14: a draft entry is marked as not canon yet, and a retired one is 
   make({ typeId: "t_other", name: "The Pale Tithe", article: "A tax paid in salt.", canon: "draft" });
   make({ typeId: "t_other", name: "The Old Tithe", article: "A tax long abolished.", canon: "retired" });
   const block = worldForPrompt(workshopId, { text: "The Pale Tithe and the Old Tithe come up." }).block;
-  assert.match(block, /The Pale Tithe \[draft: not canon yet/);
+  assert.match(block, /The Pale Tithe \[draft\]/);
+  assert.match(block, /\[draft\] not settled yet; use it only if it fits/, "the draft tag was not explained");
   assert.doesNotMatch(block, /long abolished/);
 });
 
