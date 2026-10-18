@@ -41,6 +41,8 @@ import type { DmJobView } from "@/lib/dm/job-stage-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
+import { registerBrowserSubclassExtras } from "@/lib/srd/features";
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 
 export type DmStatus =
@@ -1221,6 +1223,11 @@ export function useCampaignStream(campaignId: string) {
       const data = await response.json();
       const lastSeq = data.latestSeq ?? 0;
       registerBrowserSpecies(data.species);
+      // The workshop and pack subclasses the table's sheets hold: their
+      // feature text and always-prepared spells (src/lib/srd/features.ts).
+      for (const [classId, tables] of Object.entries((data.subclasses ?? {}) as SubclassExtras)) {
+        registerBrowserSubclassExtras(classId, tables);
+      }
       // The table's whole list: a feat its DM forgot leaves with it.
       registerBrowserTableFeats(data.feats ?? {}, campaignId, { replace: true });
       dispatch({

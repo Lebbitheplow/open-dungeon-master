@@ -1,6 +1,6 @@
 "use client";
 
-import { isThievesTools, subclassCastingProfileFor, THIEVES_TOOLS } from "@/lib/srd/features";
+import { classFeaturesFor, isThievesTools, subclassCastingProfileFor, THIEVES_TOOLS } from "@/lib/srd/features";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Dices, Loader2, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -215,7 +215,10 @@ export function LevelUpDialog({
     setOptionPicks((current) =>
       current.filter((pick) => {
         const option = findOptionByFeatureName(pick);
-        return option !== null && optionSlotsFor(classChoice, name, classLevelAfter, option.k) > 0;
+        return (
+          option !== null &&
+          optionSlotsFor(classChoice, name, classLevelAfter, option.k, classFeaturesFor(classChoice, name, classLevelAfter)) > 0
+        );
       }),
     );
   }
@@ -309,11 +312,18 @@ export function LevelUpDialog({
     }
   }
 
+  // What the class grants at its new level, the subclass picked here
+  // included: a workshop subclass's Combat Superiority opens its maneuvers
+  // before the sheet holds it.
+  const grantedAfter = classFeaturesFor(classChoice, subclassChoice || entrySubclass, classLevelAfter).map((feature) => ({
+    ...feature,
+    classId: classChoice,
+  }));
   const openSlots = openOptionSlots({
     classId: classChoice,
     subclass: subclassChoice || entrySubclass,
     level: classLevelAfter,
-    features: [...sheet.features, ...optionPicks.map((name) => ({ name }))],
+    features: [...sheet.features, ...grantedAfter, ...optionPicks.map((name) => ({ name }))],
     feats: [...sheet.feats, ...featsPicked],
   });
   const needsOptions = openSlots.some((slot) => slot.remaining > 0);

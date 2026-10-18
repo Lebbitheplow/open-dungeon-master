@@ -352,9 +352,9 @@ export function usePickerGroups({
   }, [classTier, rawClasses, pack]);
 
   // The subclasses we have real feature tables for, offered once the chosen
-  // level reaches the class's subclass level. Content-pack archetypes are
-  // listed after them: those are prose only, so a player picking one gets no
-  // features, and these should be the obvious choice.
+  // level reaches the class's subclass level. The workshop's subclasses come
+  // next, granted feature by feature as their author wrote them; the content
+  // pack's archetypes last, granted what their prose names.
   // Below the class's subclass level nothing is offered, the pack's
   // archetypes included: reconcile drops a subclass picked early, so a menu
   // that listed them took a pick and showed "None yet" (issue #109). The
@@ -407,10 +407,22 @@ export function usePickerGroups({
         }),
       });
     }
-    if (packOnlyArchetypes.length) {
+    const workshopArchetypes = packOnlyArchetypes.filter((entry) => entry.workshop);
+    if (workshopArchetypes.length) {
+      groups.push({
+        label: "From the workshop",
+        options: workshopArchetypes.map((entry) => ({
+          id: entry.name,
+          name: entry.name,
+          infoText: [entry.desc, entry.features].filter(Boolean).join("\n\n") || undefined,
+        })),
+      });
+    }
+    const packArchetypes = packOnlyArchetypes.filter((entry) => !entry.workshop);
+    if (packArchetypes.length) {
       groups.push({
         label: "From the content pack",
-        options: packOnlyArchetypes.map((entry) => ({
+        options: packArchetypes.map((entry) => ({
           id: entry.name,
           name: entry.name,
           infoText: entry.desc,

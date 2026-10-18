@@ -11,6 +11,8 @@
 // builds them for whoever runs the table, src/lib/characters/
 // subclass-extras.ts; the builder from the rows it fetched). Pure.
 
+import { isThirdCasterFeature } from "@/lib/srd/third-caster";
+
 export type SubclassFeatureRow = { n: string; d: string };
 
 export type ExtraSubclass = {
@@ -18,6 +20,8 @@ export type ExtraSubclass = {
   levels: Record<string, SubclassFeatureRow[]>;
   // Always-prepared spells by class level (a domain's, an oath's).
   spells?: Record<string, string[]>;
+  // Casts as an Eldritch Knight or Arcane Trickster does (src/lib/srd/
+  // third-caster.ts), on a fighter or rogue subclass.
   castingProfile?: "third-caster";
   source: "homebrew" | "pack";
 };
@@ -77,13 +81,28 @@ function spellLevels(raw: unknown): Record<string, string[]> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+// A workshop subclass casts as a third caster when its author said so, or,
+// when they said nothing, when it holds the Eldritch Knight's or Arcane
+// Trickster's Spellcasting feature: a copy of either, or a subclass that
+// borrowed the feature, casts without a second setting to find. "none" is
+// the author turning that off.
+function castingProfileOf(data: Record<string, unknown>, levels: Record<string, SubclassFeatureRow[]>): "third-caster" | undefined {
+  if (data.castingProfile === "third-caster") {
+    return "third-caster";
+  }
+  if (data.castingProfile === "none") {
+    return undefined;
+  }
+  return Object.values(levels).some((rows) => rows.some((row) => isThirdCasterFeature(row.n))) ? "third-caster" : undefined;
+}
+
 // One fetched archetype row as a table, or null when it says nothing a
 // grant could use.
 export function extraSubclassOf(row: Row, defaultLevel = 3): ExtraSubclass | null {
   const homebrew = row.source === "homebrew";
   const levels = homebrew ? homebrewLevels(row.data.levels) : subclassLevelsFromProse(String(row.data.desc ?? ""), defaultLevel);
   const spells = homebrew ? spellLevels(row.data.spells) : undefined;
-  const castingProfile = homebrew && row.data.castingProfile === "third-caster" ? "third-caster" : undefined;
+  const castingProfile = homebrew ? castingProfileOf(row.data, levels) : undefined;
   if (!Object.keys(levels).length && !spells) {
     if (!castingProfile) return null;
   }

@@ -94,4 +94,124 @@ await test("A workshop subclass is its author's: another table's DM does not gra
   assert.equal((theirs.fighter ?? []).some((table) => table.name === "Champion of Ash"), false);
 });
 
+// ---- what a workshop subclass casts and picks ----
+// A workshop subclass built like the Eldritch Knight casts like one; one
+// that borrowed Combat Superiority picks maneuvers; a homebrew domain's
+// always-prepared spells are free at the table as they are in the builder.
+// Before, all three were keyed to the published subclass's name, so the
+// player's copy got no spells, no maneuvers, and its domain spells counted
+// against the cap (and could be unprepared).
+
+const { judgeSpellcasting } = await import("../src/lib/srd/legality/spells.ts");
+const { classGrantsFor, spellFactsFor } = await import("../src/lib/characters/catalog.ts");
+const { optionFeatureName, openOptionSlots } = await import("../src/lib/srd/options.ts");
+const { engineRunsFeature } = await import("../src/lib/workshop/feature-catalog.ts");
+const { tableAuthors } = await import("../src/lib/db/homebrew.ts");
+
+const extrasNow = () => subclassExtrasForTable(world.campaignId, world.owner.id);
+const tableOf = (classId, name) => (extrasNow()[classId] ?? []).find((table) => table.name === name);
+
+function eldritchCopy() {
+  const table = archetypeMechanicsOf({ name: "Eldritch Knight", source: "open5e", data: { desc: "" } }, "fighter");
+  assert.ok(table, "the Eldritch Knight's table was not offered to copy");
+  return draftFromCatalog("archetype", { name: "Eldritch Knight", data: { desc: "" }, table }, { classSlug: "fighter" }).data;
+}
+
+async function call(path, method, body, user = world.owner) {
+  world.signIn(user);
+  const mod = await world.route(path);
+  const response = await mod[method](
+    new Request("http://test/", { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  return { status: response.status, json: await response.json() };
+}
+
+await test("The workshop keeps a subclass's spellcasting setting through a save.", async () => {
+  const entry = await brew("Hedge Knight", {
+    desc: "",
+    classSlug: "fighter",
+    castingProfile: "third-caster",
+    levels: { 3: [{ n: "Hedge Ward", d: "A small ward." }] },
+  });
+  assert.equal(entry.data.castingProfile, "third-caster", "the save dropped the setting");
+  assert.equal(tableOf("fighter", "Hedge Knight")?.castingProfile, "third-caster");
+});
+
+await test("A copy of the Eldritch Knight casts like one without a second setting, and turning it off sticks.", async () => {
+  await brew("Spellblade", eldritchCopy());
+  assert.equal(tableOf("fighter", "Spellblade")?.castingProfile, "third-caster", "the copy does not cast");
+  await brew("Hexless Blade", { ...eldritchCopy(), castingProfile: "none" });
+  assert.equal(tableOf("fighter", "Hexless Blade")?.castingProfile, undefined, "turning it off did not stick");
+  assert.equal(engineRunsFeature("fighter", "Spellcasting (Eldritch Knight)"), "[spell slots]");
+});
+
+await test("The server accepts a level 3 Spellblade's spells and hands it a third caster's slots.", async () => {
+  const verdict = judgeSpellcasting({
+    sent: { ability: "int", slots: {}, prepared: [], known: ["Shield", "Magic Missile", "Burning Hands"], cantrips: ["Fire Bolt", "Light"] },
+    classes: [{ id: "fighter", subclass: "Spellblade", level: 3 }],
+    classOf: classGrantsFor,
+    subclassExtras: extrasNow(),
+    abilities: { str: 16, dex: 10, con: 14, int: 14, wis: 10, cha: 8 },
+    spellOf: (name) => spellFactsFor(name, tableAuthors(world.campaignId)),
+    racialCantrip: null,
+    judgeLists: true,
+  });
+  assert.deepEqual(verdict.problems, []);
+  assert.deepEqual(verdict.spellcasting?.slots, { 1: { max: 2, used: 0 } });
+});
+
+await test("A workshop subclass that borrowed Combat Superiority picks maneuvers, and a write keeps them.", async () => {
+  await brew("Tactician", {
+    desc: "",
+    classSlug: "fighter",
+    levels: { 3: [{ n: "Combat Superiority", d: "You learn maneuvers fueled by superiority dice." }] },
+  });
+  const granted = classFeaturesFor("fighter", "Tactician", 3, extrasNow());
+  const [slot] = openOptionSlots({ classId: "fighter", subclass: "Tactician", level: 3, features: granted }).filter(
+    (entry) => entry.kind === "maneuver",
+  );
+  assert.equal(slot?.total, 3, "no maneuver picks were opened");
+  const picks = ["Trip Attack", "Riposte", "Parry"].map((name) => ({ name: optionFeatureName("maneuver", name), source: "choice" }));
+  const hero = world.addHero({ name: "Vex", class: "fighter", subclass: "Tactician", level: 3, proficiencies: TRAINED, features: picks });
+  const held = world.sheet(hero.id).features.map((feature) => feature.name);
+  for (const pick of picks) {
+    assert.ok(held.includes(pick.name), `the write pruned ${pick.name}: ${held.join(", ")}`);
+  }
+  assert.equal(engineRunsFeature("fighter", "Combat Superiority"), "[opens Maneuver picks]");
+});
+
+await test("A homebrew domain's always-prepared spells are free at the table: legal off the class list, and never unprepared.", async () => {
+  const verdict = judgeSpellcasting({
+    sent: { ability: "wis", slots: {}, prepared: ["Burning Hands", "Faerie Fire", "Bless"], known: [], cantrips: ["Sacred Flame", "Guidance", "Light"] },
+    classes: [{ id: "cleric", subclass: "Domain of Embers", level: 1 }],
+    classOf: classGrantsFor,
+    subclassExtras: extrasNow(),
+    abilities: { str: 10, dex: 10, con: 14, int: 10, wis: 16, cha: 10 },
+    spellOf: (name) => spellFactsFor(name, tableAuthors(world.campaignId)),
+    racialCantrip: null,
+    judgeLists: true,
+  });
+  assert.deepEqual(verdict.problems.filter((problem) => /Burning Hands|Faerie Fire/.test(problem)), []);
+  const player = world.addUser("ember-player");
+  world.addHero({
+    user: player,
+    name: "Ash",
+    class: "cleric",
+    subclass: "Domain of Embers",
+    level: 1,
+    abilities: { wis: 16 },
+    spellcasting: { ability: "wis", slots: { 1: { max: 2, used: 0 } }, prepared: ["Burning Hands", "Faerie Fire", "Bless"], known: [], cantrips: [] },
+  });
+  const dropped = await call("campaigns/[campaignId]/sheet/spells", "POST", { action: "unprepare", spell: "Burning Hands" }, player);
+  assert.equal(dropped.status, 400, `a domain spell was unprepared: ${JSON.stringify(dropped.json)}`);
+});
+
+await test("The campaign snapshot carries the table's workshop subclasses, so the sheet reads their words.", async () => {
+  const snapshot = await call("campaigns/[campaignId]", "GET");
+  assert.equal(snapshot.status, 200, JSON.stringify(snapshot.json).slice(0, 300));
+  const names = Object.values(snapshot.json.subclasses ?? {}).flat().map((table) => table.name);
+  assert.ok(names.includes("Domain of Embers"), `the snapshot carried ${names.join(", ") || "nothing"}`);
+});
+
 finish();

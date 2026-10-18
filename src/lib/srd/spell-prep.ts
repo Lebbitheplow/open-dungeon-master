@@ -3,6 +3,7 @@ import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechan
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, abilityMod, spellSlotsFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { isCantripName, spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import {
   isThirdCaster,
@@ -76,6 +77,10 @@ export type CasterView = {
   cantrips: string[];
   pending: string[];
   spellbook: string[];
+  // The table's workshop and pack subclasses (src/lib/db/subclass-extras.ts),
+  // for the always-prepared spells of a subclass the bundled tables do not
+  // carry. Read, never written back to the sheet.
+  extras?: SubclassExtras;
 };
 
 type SheetLike = Pick<CharacterSheet, "class" | "level" | "subclass" | "classes" | "abilities"> & {
@@ -104,9 +109,11 @@ function viewOf(
   ability: Ability,
   level: number,
   subclass: string,
+  extras?: SubclassExtras,
 ): CasterView {
   return {
     classId,
+    ...(extras ? { extras } : {}),
     ...(lists.progression ? { progression: lists.progression } : {}),
     ability,
     level,
@@ -121,7 +128,9 @@ function viewOf(
   };
 }
 
-export function casterViewsOf(sheet: SheetLike): CasterView[] {
+// `extras`: the table's subclasses, where the server reads a sheet (the
+// browser's registered ones answer when it is left out).
+export function casterViewsOf(sheet: SheetLike, extras?: SubclassExtras): CasterView[] {
   const casting = sheet.spellcasting;
   if (!casting) {
     return [];
@@ -129,10 +138,10 @@ export function casterViewsOf(sheet: SheetLike): CasterView[] {
   if (casting.casters?.length) {
     return casting.casters.map((caster) => {
       const entry = (sheet.classes ?? []).find((row) => lower(row.id) === lower(caster.classId));
-      return viewOf(caster, caster.classId, caster.ability, entry?.level ?? sheet.level, entry?.subclass ?? "");
+      return viewOf(caster, caster.classId, caster.ability, entry?.level ?? sheet.level, entry?.subclass ?? "", extras);
     });
   }
-  return [viewOf(casting, sheet.class, casting.ability, sheet.level, sheet.subclass ?? "")];
+  return [viewOf(casting, sheet.class, casting.ability, sheet.level, sheet.subclass ?? "", extras)];
 }
 
 // Writes views back: onto `casters` (with the top-level lists kept as their
@@ -206,7 +215,7 @@ export function spellbookOf(view: Pick<CasterView, "spellbook" | "prepared" | "p
 }
 
 export function grantedSpellsOf(view: CasterView): string[] {
-  return subclassSpellsFor(view.classId, view.subclass, view.level);
+  return subclassSpellsFor(view.classId, view.subclass, view.level, view.extras);
 }
 
 // The highest spell level this class can prepare or learn at its own level.
@@ -412,7 +421,14 @@ function arcanumTop(view: Pick<CasterView, "classId" | "level">): number {
 // are left out of the count.
 export function spellListProblems(
   sheet: SheetLike & { abilities: CharacterSheet["abilities"] },
-  options: { bookAllowance?: boolean; freeCantrips?: string[]; freeCantripCount?: number; freeSpells?: string[] } = {},
+  options: {
+    bookAllowance?: boolean;
+    freeCantrips?: string[];
+    freeCantripCount?: number;
+    freeSpells?: string[];
+    // The table's subclasses, for a workshop subclass's always-prepared spells.
+    extras?: SubclassExtras;
+  } = {},
 ): string[] {
   const problems: string[] = [];
   const free = new Set((options.freeCantrips ?? []).map(textKey).filter(Boolean));
@@ -424,7 +440,7 @@ export function spellListProblems(
   // gave one: `freeCantripCount` is that many, whichever they are, and they
   // sit with the first caster's.
   let freeCount = options.freeCantripCount ?? 0;
-  for (const view of casterViewsOf(sheet)) {
+  for (const view of casterViewsOf(sheet, options.extras)) {
     const label = `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
     const cantripCap = cantripCapOf(view);
     const named = dedupeNames(view.cantrips).filter((name) => !free.has(textKey(name)));

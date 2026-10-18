@@ -315,7 +315,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
     abilities: input.abilities,
     spellcasting: shaped,
   };
-  let views = casterViewsOf(sheetLike);
+  let views = casterViewsOf(sheetLike, input.subclassExtras);
   // An older sheet filed a known caster's spells under prepared.
   views = views.map((view) =>
     view.style === "known" && !view.known.length && view.prepared.length
@@ -419,6 +419,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
           bookAllowance: input.bookAllowance,
           freeCantrips: [...(racial?.name ? [racial.name] : []), ...innate, ...taught.cantrips],
           freeSpells: taught.spells,
+          extras: input.subclassExtras,
         },
       ),
     );

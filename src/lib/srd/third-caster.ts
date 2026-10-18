@@ -23,6 +23,17 @@ const THIRD_SPELLS_KNOWN = [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 1
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 
+// The two subclasses' Spellcasting features, by the names the bundled
+// tables and the workshop's feature catalog give them. A workshop subclass
+// that holds one (borrowed, or copied from the published subclass) casts by
+// these rules unless its author turned that off (src/lib/srd/
+// subclass-tables.ts castingProfileOf).
+const THIRD_CASTER_FEATURES = new Set(["Spellcasting (Eldritch Knight)", "Spellcasting (Arcane Trickster)"].map(textKey));
+
+export function isThirdCasterFeature(name: string): boolean {
+  return THIRD_CASTER_FEATURES.has(textKey(name));
+}
+
 // Whether this class and subclass cast as a third caster.
 export function isThirdCaster(classId: string, subclass: string | undefined | null, profile?: string | null): boolean {
   const wanted = THIRD_CASTERS[normalize(classId)];

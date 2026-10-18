@@ -804,7 +804,7 @@
     "lib/srd/magic-items.ts#\\b": [["rules",1,"pack item names and SRD feature names"]],
     "lib/srd/magic-items.ts#toLowerCase": [["key",2,"pack slug; condition labels and SRD names"]],
     "lib/srd/mounts.ts#toLowerCase": [["key",1,"a custom mount's stored ref, never compared"],["rules",2,"SRD mount and vehicle names (lookup)"]],
-    "lib/srd/multiclass.ts#toLowerCase": [["key",6,"class ids"]],
+    "lib/srd/multiclass.ts#toLowerCase": [["key",10,"class ids"]],
     "lib/srd/options.ts#toLowerCase": [["rules",1,"SRD option names"]],
     "lib/srd/owed-choices.ts#toLowerCase": [["key",1,"skill ids"]],
     "lib/srd/race-id.ts#[a-z]": [["key",1,"race id from a race name"]],

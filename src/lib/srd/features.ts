@@ -454,7 +454,20 @@ function pruneChoiceFeatures(
     const option = findOptionByFeatureName(feature.name);
     if (option) {
       const total =
-        classes.reduce((sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k), 0) +
+        classes.reduce(
+          (sum, entry) =>
+            sum +
+            optionSlotsFor(
+              entry.id,
+              entry.subclass,
+              entry.level,
+              option.k,
+              // The features this class granted: a workshop subclass's
+              // borrowed Combat Superiority keeps its maneuvers.
+              granted.filter((held) => held.classId === entry.id),
+            ),
+          0,
+        ) +
         featOptionSlots(feats, option.k);
       const taken = perKind.get(option.k) ?? 0;
       if (taken >= total) {

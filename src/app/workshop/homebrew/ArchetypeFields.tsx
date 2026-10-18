@@ -13,6 +13,7 @@ import { engineRunsFeature, subclassFeatureCatalog, type CatalogFeature } from "
 import { addChip, rowIcon } from "@/app/workshop/kit";
 import type { Data } from "@/app/workshop/homebrew/draft";
 import { textKey } from "@/lib/language/text-logic";
+import { isThirdCasterFeature } from "@/lib/srd/third-caster";
 
 // A subclass: its class, its features by level and the always-prepared
 // spells it hands out (a domain's, an oath's). A character who takes it is
@@ -143,6 +144,13 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
     set({ levels: grouped });
   };
   const taken = new Set(flat.map((row) => textKey(row.feature.n)));
+  // A copy of the Eldritch Knight or Arcane Trickster, or a subclass that
+  // borrowed their Spellcasting, casts by their rules until turned off
+  // (src/lib/srd/subclass-tables.ts castingProfileOf).
+  const spellcastingFeature = flat.find((row) => isThirdCasterFeature(row.feature.n))?.feature.n.trim() ?? "";
+  const casting =
+    data.castingProfile === "third-caster" || (data.castingProfile !== "none" && spellcastingFeature) ? "third-caster" : "none";
+  const rulesName = classId === "fighter" ? "Eldritch Knight" : "Arcane Trickster";
 
   return (
     <div className="space-y-3">
@@ -157,16 +165,22 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
       {classId === "fighter" || classId === "rogue" ? (
         <SelectField
           label="Spellcasting progression"
-          value={data.castingProfile === "third-caster" ? "third-caster" : "none"}
+          value={casting}
           options={[
             { value: "none", label: "No subclass spellcasting" },
             {
               value: "third-caster",
-              label: classId === "fighter" ? "Eldritch Knight rules (one-third caster)" : "Arcane Trickster rules (one-third caster)",
+              label: `${rulesName} rules (one-third caster)`,
             },
           ]}
-          onChange={(value) => set({ castingProfile: value === "third-caster" ? value : undefined })}
-          hint={classId === "fighter" ? "Intelligence, wizard spells, and the Eldritch Knight spell progression." : "Intelligence, wizard spells, and the Arcane Trickster spell progression."}
+          onChange={(value) =>
+            set({ castingProfile: value === "third-caster" ? value : spellcastingFeature ? "none" : undefined })
+          }
+          hint={
+            casting === "third-caster" && spellcastingFeature && data.castingProfile !== "third-caster"
+              ? `On because the subclass has ${spellcastingFeature}: Intelligence, wizard spells, and the ${rulesName} spell progression.`
+              : `Intelligence, wizard spells, and the ${rulesName} spell progression.`
+          }
         />
       ) : null}
       <div className="space-y-1.5 text-sm">

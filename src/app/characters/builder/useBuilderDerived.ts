@@ -561,11 +561,13 @@ export function useBuilderDerived({
             classId: klass.id,
             subclass,
             level: effectiveLevel,
-            features: optionPicks.map((optionName) => ({ name: optionName })),
+            // The class's own features too: a workshop subclass that
+            // borrowed Combat Superiority opens maneuvers by it.
+            features: [...grantedFeatures, ...optionPicks.map((optionName) => ({ name: optionName }))],
             feats: featNames,
           })
         : [],
-    [klass, subclass, effectiveLevel, optionPicks, featNames],
+    [klass, subclass, effectiveLevel, grantedFeatures, optionPicks, featNames],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog

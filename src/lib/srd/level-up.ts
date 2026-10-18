@@ -514,7 +514,7 @@ export function buildLevelUp(
     // The lists as the sheet holds them. A sheet with no per-class entries
     // keeps one list, and it belongs to the first of its classes that casts.
     const owner = castingClassesOf(before, context.classOf, context.subclassExtras, sheet.spellcasting)[0]?.entry;
-    const views = (sheet.spellcasting ? casterViewsOf(sheet) : [])
+    const views = (sheet.spellcasting ? casterViewsOf(sheet, context.subclassExtras) : [])
       .map((view) =>
         sheet.spellcasting?.casters?.length || !owner
           ? view
@@ -547,7 +547,15 @@ export function buildLevelUp(
           ? { kind: "lists", lists: request.spellcasting }
           : null;
       const learned = levelUpSpells({
-        before: { ...held, ability: mine.ability, level: leveled.level - 1, subclass: leveled.subclass, ...(mine.progression ? { progression: mine.progression } : {}) },
+        before: {
+          ...held,
+          ability: mine.ability,
+          level: leveled.level - 1,
+          subclass: leveled.subclass,
+          ...(mine.progression ? { progression: mine.progression } : {}),
+          // A workshop subclass's always-prepared spells, free of the count.
+          ...(context.subclassExtras ? { extras: context.subclassExtras } : {}),
+        },
         level: leveled.level,
         subclass: leveled.subclass,
         list: mine.list,

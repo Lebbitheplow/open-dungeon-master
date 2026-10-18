@@ -157,6 +157,12 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
       if (Object.keys(spells).length) {
         data.spells = spells;
       }
+      // Whether it casts as an Eldritch Knight or Arcane Trickster does:
+      // "third-caster" on, "none" off, nothing to follow its features
+      // (src/lib/srd/subclass-tables.ts castingProfileOf).
+      if (source.castingProfile === "third-caster" || source.castingProfile === "none") {
+        data.castingProfile = source.castingProfile;
+      }
       break;
     }
     default:
