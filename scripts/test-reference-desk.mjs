@@ -17,6 +17,9 @@ const { CALCULATORS, calculatorById, runCalculator } = await import(
   "../src/lib/reference/calculators.ts"
 );
 const { buildCompare, MAX_COMPARE } = await import("../src/lib/reference/compare.ts");
+const { stopWordsFor } = await import("../src/lib/language/language.ts");
+// The desk reads a question against the English rulebook (src/lib/reference/desk.ts).
+const EN = stopWordsFor("english");
 const {
   checkCitations,
   clampDeskQuestion,
@@ -377,22 +380,23 @@ test("a question is clamped to a length and collapsed to one line", () => {
   assert.equal(clampDeskQuestion("   "), "");
 });
 
-test("search terms drop stopwords and keep the 5e ones", () => {
-  const terms = deskTerms("How does the grapple save work with cover?");
+test("search terms drop Snowball's English stop words and keep the 5e ones", () => {
+  const terms = deskTerms("How does the grapple save work with cover against the other ones?", EN);
   assert.ok(terms.includes("grapple"));
   assert.ok(terms.includes("save"), "save is a 5e word, not a stopword");
   assert.ok(terms.includes("cover"), "cover is a 5e word, not a stopword");
   assert.ok(!terms.includes("the"));
   assert.ok(!terms.includes("does"));
+  assert.ok(!terms.includes("against") && !terms.includes("other"), "Snowball's list, not a hand-written one");
 });
 
 test("a quoted phrase survives as one term", () => {
-  const terms = deskTerms('what triggers an "opportunity attack"');
+  const terms = deskTerms('what triggers an "opportunity attack"', EN);
   assert.ok(terms.includes("opportunity attack"));
 });
 
 test("a name match outscores a body match", () => {
-  const terms = deskTerms("what does fireball do");
+  const terms = deskTerms("what does fireball do", EN);
   const named = scoreSource(terms, source({ name: "Fireball", text: "a bright streak" }));
   const mentioned = scoreSource(terms, source({ name: "Scorching Ray", text: "unlike fireball" }));
   assert.ok(named > mentioned);
@@ -401,7 +405,7 @@ test("a name match outscores a body match", () => {
 test("evidence with nothing in common with the question is dropped entirely", () => {
   const picked = selectEvidence("how does grappling work", [
     source({ ref: "spell:fireball", name: "Fireball", text: "a bright streak of flame" }),
-  ]);
+  ], EN);
   assert.equal(picked.length, 0);
 });
 
@@ -410,7 +414,7 @@ test("a house rule outranks an SRD row that scores the same", () => {
   const picked = selectEvidence("does flanking grant advantage", [
     source({ kind: "glossary", ref: "glossary:flanking", name: "Flanking", text }),
     source({ kind: "ruling", ref: "ruling:abc-0", name: "Flanking", text, origin: "your house rules" }),
-  ]);
+  ], EN);
   assert.equal(picked[0].kind, "ruling", "the table's own rule governs at the table");
 });
 

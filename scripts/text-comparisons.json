@@ -1840,7 +1840,7 @@
     "lib/reference/compare.ts#toLowerCase": [["display",3,"school, classes, size and abbreviations shown"]],
     "lib/reference/compare.ts#toUpperCase": [["display",2,"school, classes, size and abbreviations shown"]],
     "lib/reference/desk-logic.ts#re-word": [["key",1,"desk source kinds and code fence markup"]],
-    "lib/reference/desk-logic.ts#str-list": [["key",1,"desk source kinds and code fence markup"],["table-language",1,"stop list: English stop words dropped from a reference-desk question before it is matched (STOPWORDS), while stopWordsFor(language) exists"]],
+    "lib/reference/desk-logic.ts#str-list": [["key",1,"desk source kinds and code fence markup"]],
     "lib/reply-json-logic.ts#re-word": [["key",1,"Markdown code fence language tag"]],
     "lib/roll-labels.ts#str-key": [["key",1,"roll kind ids"]],
     "lib/rulebook/catalog-rows.ts#RegExp i": [["english-source",1,"the bundled SRD rulebook's own Markdown (bundled data)"]],

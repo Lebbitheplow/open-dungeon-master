@@ -16,7 +16,7 @@
 // Pure, so scripts/test-reference-desk.mjs drives the ranking and the
 // citation check directly. The impure half is src/lib/reference/desk.ts.
 
-import { textKey } from "../language/text-logic.ts";
+import { searchWords, textKey } from "../language/text-logic.ts";
 
 export const DESK_QUESTION_MAX = 400;
 
@@ -78,31 +78,17 @@ export function clampDeskQuestion(question: string): string {
   return (question ?? "").replace(/\s+/g, " ").trim().slice(0, DESK_QUESTION_MAX);
 }
 
-// Words too common to tell one rules row from another. Shorter than a real
-// stoplist on purpose: "save", "attack" and "cover" are stopword-shaped in
-// English and load-bearing in 5e.
-const STOPWORDS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "do", "does",
-  "for", "from", "get", "has", "have", "how", "if", "in", "into", "is", "it",
-  "its", "me", "my", "of", "on", "or", "our", "so", "that", "the", "their",
-  "them", "then", "there", "this", "to", "up", "was", "were", "what", "when",
-  "where", "which", "who", "why", "will", "with", "would", "you", "your",
-]);
-
-// The words worth searching for. Quoted phrases survive whole, because a DM
-// who typed "opportunity attack" in quotes meant the phrase.
-export function deskTerms(question: string): string[] {
+// The words worth searching for: the question's search words, less the
+// stop list the caller gives (desk.ts: Snowball's English list, the
+// rulebook's language). Quoted phrases survive whole, because a DM who typed
+// "opportunity attack" in quotes meant the phrase.
+export function deskTerms(question: string, stopWords: ReadonlySet<string>): string[] {
   const terms: string[] = [];
   const remainder = question.replace(/"([^"]{2,60})"/g, (_match, phrase: string) => {
     terms.push(textKey(phrase));
     return " ";
   });
-  for (const word of textKey(remainder).split(" ")) {
-    if (word.length > 2 && !STOPWORDS.has(word)) {
-      terms.push(word);
-    }
-  }
-  return [...new Set(terms)];
+  return [...new Set([...terms, ...searchWords(remainder, stopWords)])];
 }
 
 // How well one source answers this question: the share of the question's
@@ -134,9 +120,10 @@ const RULING_WEIGHT = 1.35;
 export function selectEvidence(
   question: string,
   sources: DeskSource[],
+  stopWords: ReadonlySet<string>,
   limit = MAX_EVIDENCE,
 ): DeskSource[] {
-  const terms = deskTerms(question);
+  const terms = deskTerms(question, stopWords);
   return sources
     .map((source) => ({
       source,

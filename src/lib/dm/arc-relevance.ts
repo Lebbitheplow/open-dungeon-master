@@ -14,7 +14,7 @@
 // can load it directly. A match never fires an event: the render still says
 // these are opportunities, and the DM decides.
 
-import { textKey } from "../language/text-logic.ts";
+import { searchWords, textKey } from "../language/text-logic.ts";
 
 export type SceneCues = {
   location?: string;
@@ -63,12 +63,6 @@ export type ArcTrace = {
 export const RENDER_EVENT_CHARS = 1_200;
 export const RENDER_EVENTS_MAX = 6;
 
-function words(text: string | undefined, stopWords: ReadonlySet<string>): string[] {
-  return textKey(text ?? "")
-    .split(" ")
-    .filter((word) => word.length >= 3 && !stopWords.has(word));
-}
-
 type CueTerms = { phrases: string[]; words: Set<string>; stopWords: ReadonlySet<string> };
 
 // The scene as search terms: whole names (a place or a person) count more
@@ -80,7 +74,7 @@ export function cueTerms(cues: SceneCues): CueTerms {
     .filter((phrase) => phrase.length >= 3);
   const loose = new Set<string>();
   for (const source of [cues.location, cues.scene, cues.recent, ...(cues.npcs ?? []), ...(cues.enemies ?? [])]) {
-    for (const word of words(source, cues.stopWords)) {
+    for (const word of searchWords(source ?? "", cues.stopWords)) {
       loose.add(word);
     }
   }
@@ -97,8 +91,8 @@ export function scoreEvent(event: EventLike, terms: CueTerms): { score: number; 
       matched.push(phrase);
     }
   }
-  const seen = new Set(matched.flatMap((phrase) => words(phrase, terms.stopWords)));
-  for (const word of new Set(words(text, terms.stopWords))) {
+  const seen = new Set(matched.flatMap((phrase) => searchWords(phrase, terms.stopWords)));
+  for (const word of new Set(searchWords(text, terms.stopWords))) {
     if (terms.words.has(word) && !seen.has(word)) {
       score += 1;
       matched.push(word);

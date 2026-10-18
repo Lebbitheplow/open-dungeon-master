@@ -216,7 +216,7 @@ test("the words a person types are searched by Unicode words, not ASCII runs", (
   const terms = cueTerms({ stopWords: stopWordsFor("italian"), location: "Città Vecchia", npcs: ["Niccolò"] });
   assert.ok(scoreEvent({ name: "Agguato", trigger: decomposed("Niccolò arriva in CITTÀ VECCHIA"), detail: "" }, terms).score > 0);
   assert.equal(scoreRuleByKeywords("Überraschung", { heading: "Überraschung", text: "" }), 1);
-  assert.deepEqual(deskTerms("Qu'est-ce que l'épée"), ["est", "que", "épée"]);
+  assert.deepEqual(deskTerms("Qu'est-ce que l'épée", stopWordsFor("english")), ["est", "que", "épée"]);
   assert.ok(fuzzyScore("öl", "Ölmühle öffnen") !== null);
   assert.deepEqual(
     filterGroups([{ label: "Elfi", options: [{ name: "Elfo dei Boschi", meta: "Città" }] }], "città elfo").map((group) => group.options.length),

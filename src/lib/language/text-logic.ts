@@ -111,6 +111,16 @@ export function commonWords(texts: readonly string[]): Set<string> {
   return common;
 }
 
+// The words a search looks for in a text: its keyed words of three letters
+// or more, less the stop words given (src/lib/language/language.ts
+// stopWordsFor, passed in so a browser module never loads the stemmers). In
+// order, repeats kept.
+export function searchWords(text: string, stopWords: ReadonlySet<string>): string[] {
+  return textKey(text)
+    .split(" ")
+    .filter((word) => word.length >= 3 && !stopWords.has(word));
+}
+
 // A name made into an id or a file name: its key's words joined by "_", a
 // number's sign dropped, in any script, so two names never share one only
 // because neither has an ASCII letter. Empty when the name has no letter or

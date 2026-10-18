@@ -6,7 +6,7 @@
 // read Draconic?", "how does grappling work?". Before this the only options
 // were a `do` that derailed the scene or an `ooc` the DM never answers.
 
-import { textKey } from "../language/text-logic.ts";
+import { searchWords, textKey } from "../language/text-logic.ts";
 
 export const ASK_SCOPES = ["story", "rules", "sheet"] as const;
 export type AskScope = (typeof ASK_SCOPES)[number];
@@ -231,7 +231,7 @@ export function transcriptPassages(
 ): string[] {
   const limit = options.limit ?? 3;
   const window = options.window ?? 700;
-  const words = [...new Set(textKey(query).split(" "))].filter((word) => word.length >= 3 && !stopWords.has(word));
+  const words = [...new Set(searchWords(query, stopWords))];
   if (!words.length) {
     return [];
   }
