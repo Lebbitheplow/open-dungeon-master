@@ -128,6 +128,10 @@ export default {
     for (const condition of conditions) {
       await page.emulateMedia({ reducedMotion: null, forcedColors: null, ...condition.media });
       if (condition.zoom && size) await page.setViewportSize({ width: Math.round(size.width / 2), height: Math.round(size.height / 2) });
+      // In the app, opening the route already on screen is no fresh load:
+      // the walk would start on the last condition's final step. Leave
+      // first, as a player would.
+      if (condition !== conditions[0]) await t.open("/characters");
       await t.open(`/characters/${ids.library}/edit`);
       await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
       for (let step = 1; step <= 6; step += 1) {

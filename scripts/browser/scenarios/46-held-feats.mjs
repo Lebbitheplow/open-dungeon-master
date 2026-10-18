@@ -89,7 +89,7 @@ export default {
     await eventually(async () => {
       const response = await api.get(`${base}/api/characters/${ids.heldFeats}`);
       const sheet = (await response.json()).character?.sheet;
-      return sheet && sheet.feats.includes("Skulker") && sheet.feats.includes("Defensive Duelist") && sheet.abilities.dex === 8 && (await page.url()).includes(`/characters/${ids.heldFeats}`) && !(await page.url()).includes("/edit");
+      return sheet && sheet.feats.includes("Skulker") && sheet.feats.includes("Defensive Duelist") && sheet.abilities.dex === 8 && (await t.url()).pathname.includes(`/characters/${ids.heldFeats}`) && !(await page.url()).includes("/edit");
     }, { timeoutMs: 30_000, label: "the edit saved with both held feats" });
   },
 };
