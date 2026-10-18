@@ -22,6 +22,8 @@ const {
   starterSpellsFor,
 } = await import("../src/lib/help/index.ts");
 const { SRD_CLASSES } = await import("../src/lib/srd/index.ts");
+const { bundledSpellSchool } = await import("../src/lib/srd/spell-facts.ts");
+const { thirdCasterSchoolProblem } = await import("../src/lib/srd/third-caster.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -208,6 +210,31 @@ test("every suggested spell is a real spell in the manifest", () => {
     }
   }
   assert.deepEqual(bogus, []);
+});
+
+test("a third caster's suggested spells are its own: real spells, from its two schools", () => {
+  // The Eldritch Knight and Arcane Trickster were offered the wizard's
+  // picks (Sleep, Minor Illusion) and the wizard's "prepare from your
+  // spellbook", and "Fill with the suggested spells" chose spells their
+  // school rule then refused (src/lib/srd/third-caster.ts).
+  for (const [key, classId, subclass] of [
+    ["eldritch-knight", "fighter", "Eldritch Knight"],
+    ["arcane-trickster", "rogue", "Arcane Trickster"],
+  ]) {
+    const starter = starterSpellsFor(key);
+    assert.ok(starter, `${key} has no suggestions`);
+    assert.doesNotMatch(starter.why, /spellbook to prepare from$|prepare fresh each day/);
+    for (const pick of [...starter.cantrips, ...starter.spells]) {
+      assert.ok(bundledSpellSchool(pick.n), `${key}: ${pick.n} is not a spell the tables know`);
+    }
+    const problem = thirdCasterSchoolProblem({
+      classId,
+      subclass,
+      level: 3,
+      spells: starter.spells.map((pick) => ({ name: pick.n, school: bundledSpellSchool(pick.n) })),
+    });
+    assert.equal(problem, null, `${key}: ${problem}`);
+  }
 });
 
 test("classes that teach a secret language grant it", () => {

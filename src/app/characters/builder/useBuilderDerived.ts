@@ -588,9 +588,13 @@ export function useBuilderDerived({
       ? builderSpellAdvice(casting, klass, subclass, effectiveLevel, shownAbilities)
       : null;
   // Opening suggestions, so a player who has never seen a 5e spell list is
-  // not left staring at an empty search box.
+  // not left staring at an empty search box. A third caster gets picks from
+  // its own two schools, not the wizard's, which its school rule would refuse.
   const starters = useMemo(
-    () => (casts && klass ? starterSpellsFor(casting.third ? casting.list : klass.id) : null),
+    () =>
+      casts && klass
+        ? starterSpellsFor(casting.third ? (klass.id === "rogue" ? "arcane-trickster" : "eldritch-knight") : klass.id)
+        : null,
     [klass, casts, casting],
   );
   // Domain, circle, oath and patron spells: always prepared, free, and worth
