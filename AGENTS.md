@@ -59,3 +59,13 @@ issue or pull request that asks for one:
    mockup of the proposed control, where it lives, and its default (the
    feature request and pull request templates ask for it). Without one, ask
    for it before building; do not invent the control yourself.
+
+## Releases
+
+Before cutting, promoting or fixing a release of the server or the apps, read
+[docs/releases.md](docs/releases.md). Versions are plain `x.y.z`; whether a
+release is a beta or stable is only its GitHub prerelease flag. Once betas
+have started (the client repository's `PUBLISH_AS_BETA` variable is `true`),
+publish every server release with `--prerelease`, never `--latest`, and make
+a release stable only by promoting a beta that meets the doc's checks. Never
+promote a release, or set that variable, unless the maintainer asks for it.

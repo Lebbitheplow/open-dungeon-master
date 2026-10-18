@@ -6,7 +6,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { compareVersions, describeBuild, parseLatestRelease, updateStatus, REPOSITORY_URL } = await import("../src/lib/build-info.ts");
+const { compareVersions, describeBuild, newestRelease, parseLatestRelease, parseUpdateChannel, updateStatus, REPOSITORY_URL } = await import("../src/lib/build-info.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -61,8 +61,8 @@ test("versions compare by number, not by letter", () => {
 
 test("GitHub's latest release is read, and anything else is not a release", () => {
   const release = parseLatestRelease({ tag_name: "v0.24.7", html_url: `${REPOSITORY_URL}/releases/tag/v0.24.7`, published_at: "2026-10-06T10:00:00Z", name: "v0.24.7 - voices" });
-  assert.deepEqual(release, { version: "0.24.7", url: `${REPOSITORY_URL}/releases/tag/v0.24.7`, publishedAt: "2026-10-06T10:00:00Z", name: "v0.24.7 - voices" });
-  assert.equal(parseLatestRelease({ tag_name: "v0.25.0", prerelease: true }), null);
+  assert.deepEqual(release, { version: "0.24.7", url: `${REPOSITORY_URL}/releases/tag/v0.24.7`, publishedAt: "2026-10-06T10:00:00Z", name: "v0.24.7 - voices", prerelease: false });
+  assert.equal(parseLatestRelease({ tag_name: "v0.25.0", prerelease: true }), null, "a beta is not offered on the stable channel");
   assert.equal(parseLatestRelease({ tag_name: "v0.25.0", draft: true }), null);
   assert.equal(parseLatestRelease({ tag_name: "nightly" }), null);
   assert.equal(parseLatestRelease({ message: "API rate limit exceeded" }), null);
@@ -76,7 +76,31 @@ test("a build is behind, level with, or ahead of the newest release", () => {
   assert.equal(updateStatus({ version: "0.24.6" }, latest, "t").state, "available");
   assert.equal(updateStatus({ version: "0.24.7" }, latest, "t").state, "current");
   assert.equal(updateStatus({ version: "0.25.0" }, latest, "t").state, "ahead", "a development checkout is not out of date");
-  assert.deepEqual(updateStatus({ version: "0.24.6" }, null, "t"), { state: "unknown", checkedAt: "t" });
+  assert.deepEqual(updateStatus({ version: "0.24.6" }, null, "t"), { state: "unknown", channel: "stable", checkedAt: "t" });
+});
+
+test("the update channel is stable unless beta is asked for", () => {
+  assert.equal(parseUpdateChannel(""), "stable");
+  assert.equal(parseUpdateChannel(" Beta "), "beta");
+  assert.equal(parseUpdateChannel("nightly"), "stable", "an unknown channel never opts a server into betas");
+});
+
+test("the beta channel takes the highest version of any published release", () => {
+  const list = [
+    // A fix to the stable line, published after the newer beta.
+    { tag_name: "v0.29.7", prerelease: false, published_at: "2026-10-20T10:00:00Z" },
+    { tag_name: "v0.30.2", prerelease: true, published_at: "2026-10-19T10:00:00Z" },
+    { tag_name: "v0.30.3", draft: true },
+    { tag_name: "v0.29.6", prerelease: false },
+  ];
+  const beta = newestRelease(list, "beta");
+  assert.deepEqual([beta.version, beta.prerelease], ["0.30.2", true]);
+  assert.equal(newestRelease(list, "stable").version, "0.29.7", "a beta never reaches the stable channel");
+  assert.equal(newestRelease({ message: "Not Found" }, "beta"), null);
+  assert.equal(newestRelease([], "beta"), null);
+  assert.equal(updateStatus({ version: "0.30.1" }, beta, "t", "beta").state, "available");
+  assert.equal(updateStatus({ version: "0.30.2" }, newestRelease(list, "stable"), "t", "stable").state, "ahead", "a beta build on the stable channel waits for a stable release past it");
+  assert.equal(updateStatus({ version: "0.30.2" }, beta, "t", "beta").channel, "beta");
 });
 
 console.log(`test-build-info: ${passed} passed`);

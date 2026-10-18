@@ -1,8 +1,19 @@
 name: Publish Docker image
 
-# Publishes the single-image install whenever a GitHub release is published.
-# Also runnable by hand against any tag or branch, which is the way to retry a
-# failed publish without cutting a new release.
+# Publishes the single-image install for every GitHub release, by channel
+# (docs/releases.md):
+#
+#   a beta (a prerelease) builds :0.29.6, and moves :beta when it is the
+#     newest release of any kind;
+#   a promotion to stable (the prerelease flag cleared) builds nothing: the
+#     beta's own image is tagged :latest, :stable and :0.29, so stable users
+#     run the bits the beta testers ran;
+#   a release published straight as stable, with no beta image to promote,
+#     is built with all of those tags.
+#
+# A failed release run is retried with "Re-run jobs", which replays its
+# release event and so its channel. Also runnable by hand against any tag or
+# branch, which publishes that version's tag (or :edge) and nothing else.
 #
 # GHCR needs no setup: it authenticates with the built-in GITHUB_TOKEN.
 #
@@ -16,7 +27,10 @@ name: Publish Docker image
 
 on:
   release:
-    types: [published]
+    # prereleased: a beta was published. released: a release is stable,
+    # published that way or promoted from a beta. Each publish fires exactly
+    # one of the two.
+    types: [prereleased, released]
   workflow_dispatch:
     inputs:
       tag:
@@ -26,6 +40,12 @@ on:
 
 env:
   DOCKERHUB_IMAGE: lebbi/open-dungeon-master
+
+# A beta promoted while its own image is still building waits for that build,
+# then finds the image and retags it instead of building it a second time.
+concurrency:
+  group: docker-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -77,27 +97,82 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Work out the channel
+        id: channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          TAG: ${{ github.event.release.tag_name }}
+          IMAGES: ${{ steps.registries.outputs.images }}
+        run: |
+          if [ "$EVENT" != "release" ]; then
+            echo "mode=build" >> "$GITHUB_OUTPUT"
+            echo "beta=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # :beta is the newest release of either kind. Versions are plain
+          # x.y.z, so sort -V orders them; a fix to the stable line published
+          # after a newer beta does not take :beta back.
+          newest=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 --json tagName --jq '.[].tagName' | sort -V | tail -1)
+          echo "beta=$([ "$newest" = "$TAG" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          mode=build
+          if [ "$ACTION" = "released" ]; then
+            # Promoted from a beta: its image is in every registry already.
+            mode=retag
+            while read -r image; do
+              if ! docker buildx imagetools inspect "$image:${TAG#v}" > /dev/null 2>&1; then
+                echo "::notice::$image:${TAG#v} was never published as a beta; building it."
+                mode=build
+              fi
+            done <<< "$IMAGES"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "$TAG ($ACTION): $mode, newest release $newest"
+
       - name: Work out the tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.registries.outputs.images }}
-          # A release tagged v0.10.1 publishes 0.10.1, 0.10 and latest.
-          # Pre-releases publish their version but never move latest.
+          # A beta v0.29.6 publishes 0.29.6 (and beta when it is the newest).
+          # The same release made stable adds 0.29, stable and latest.
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event.action == 'released' }}
+            type=raw,value=stable,enable=${{ github.event.action == 'released' }}
+            type=raw,value=beta,enable=${{ steps.channel.outputs.beta == 'true' }}
             type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
             # A manual run from a branch has no version to derive; publish :edge
             # rather than failing with no tags at all.
             type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag == '' && !startsWith(github.ref, 'refs/tags/') }}
           flavor: |
-            latest=${{ github.event_name == 'release' && !github.event.release.prerelease }}
+            latest=${{ github.event.action == 'released' }}
           labels: |
             org.opencontainers.image.title=Open Dungeon Master
             org.opencontainers.image.description=Self-hosted multiplayer D&D 5e platform with an AI Dungeon Master
 
+      - name: Promote the beta's image
+        if: ${{ steps.channel.outputs.mode == 'retag' }}
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          IMAGES: ${{ steps.registries.outputs.images }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          VERSION="${TAG#v}"
+          # Each registry's new tags point at that registry's own copy of the
+          # beta image: a new manifest list, no layers pushed.
+          while read -r image; do
+            args=()
+            while read -r ref; do
+              case "$ref" in "$image:"*) args+=(-t "$ref") ;; esac
+            done <<< "$TAGS"
+            echo "$image:$VERSION -> ${args[*]}"
+            docker buildx imagetools create "${args[@]}" "$image:$VERSION"
+          done <<< "$IMAGES"
+
       - name: Describe the build
+        if: ${{ steps.channel.outputs.mode == 'build' }}
         id: build
         run: |
           # `git describe` in the shape the app reads: a release tag is that
@@ -110,6 +185,7 @@ jobs:
           fi
 
       - name: Build and push
+        if: ${{ steps.channel.outputs.mode == 'build' }}
         uses: docker/build-push-action@v6
         with:
           context: .
