@@ -35,6 +35,7 @@ import {
   formatPurse,
   fromCopper,
   parseCoins,
+  unreadCoins,
   purseCopper,
 } from "@/lib/srd/currency";
 import { healDeathHook } from "@/lib/dm/death";
@@ -275,7 +276,7 @@ export const mutationTools: ToolDef[] = [
   },
   tool("modify_gold", "Add or remove money (negative delta = spend/lose). Floors at 0.", {
     delta: { type: "integer", minimum: -100000, maximum: 100000 },
-    coins: { type: "string", description: "For anything under a gold piece, or a price quoted in another coin: the amount in denominations ('340 silver', '2 pp 5 sp'). Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
+    coins: { type: "string", description: "For anything under a gold piece, or a price quoted in another coin: the amount in the coins' codes pp, gp, ep, sp and cp ('340 sp', '2 pp 5 sp'), whatever the table's language. Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
     additional: { type: "boolean", description: "Only when a player just accepted this same amount and this is truly another, separate sum from a different source." },
   }, ["delta"]),
   tool("grant_item", "Give a character an item (loot, purchase, gift), only one the fiction actually put in their hands.", {
@@ -474,7 +475,7 @@ const argsSchema = z.object({
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
   delta: z.coerce.number().int().optional(),
-  // modify_gold / purchase in denominations: "340 silver", "2 pp 5 sp".
+  // modify_gold / purchase in the coins' codes: "340 sp", "2 pp 5 sp".
   // Parsed to copper by src/lib/srd/currency.ts, and it wins over `delta`
   // when both are sent, because it is the more specific of the two.
   coins: z.string().max(60).optional(),
@@ -953,11 +954,15 @@ export function applyDmMutation(
       const delta = args.delta ?? 0;
       // A coin string is signed by the delta's sign when one is given, so
       // "delta: -1, coins: 5 sp" spends five silver rather than earning it.
-      const parsedCoins = args.coins ? parseCoins(args.coins) : null;
+      const parsedCoins = args.coins?.trim() ? parseCoins(args.coins) : null;
+      // Coins sent and unread are asked for again, never taken as the delta.
+      if (args.coins?.trim() && parsedCoins === null) {
+        return { result: { error: `modify_gold: ${unreadCoins(args.coins)}. Nothing changed.`, retry: true } };
+      }
       const coinDelta =
         parsedCoins === null ? null : (delta < 0 ? -parsedCoins : parsedCoins);
       if (!delta && coinDelta === null) {
-        return { result: { error: "modify_gold needs a nonzero delta, or coins like \"340 silver\".", retry: true } };
+        return { result: { error: "modify_gold needs a nonzero delta, or coins like \"340 sp\".", retry: true } };
       }
       const moved = coinDelta ?? delta * COPPER_PER_GOLD;
       const tooMuch = goldProblem(moved / COPPER_PER_GOLD, "modify_gold");
@@ -973,7 +978,7 @@ export function applyDmMutation(
         };
       }
       // Denominations win over the plain gold delta when both are sent: a
-      // model that says "coins: 340 silver, delta: 34" meant the coins, and
+      // model that says "coins: 340 sp, delta: 34" meant the coins, and
       // the two are the same number only by accident.
       const change = addCopper({ gold: sheet.gold, copper: sheet.copper }, moved);
       patchSheet(sheet.id, { gold: change.purse.gold, copper: change.purse.copper });

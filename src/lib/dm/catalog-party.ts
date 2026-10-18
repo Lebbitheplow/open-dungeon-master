@@ -176,7 +176,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "coins",
         label: "Or in coins",
         kind: "text",
-        placeholder: "340 silver",
+        placeholder: "340 sp",
         help: "Overrides the amount above; the sign of the change still says gain or spend.",
       },
       {
