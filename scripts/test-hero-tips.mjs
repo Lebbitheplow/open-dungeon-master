@@ -126,6 +126,13 @@ await test("the fresh play sheet starts with every use in hand", () => {
   assert.equal(sheet.currentHp, sheet.maxHp);
 });
 
+await test("a sheet stored before some fields existed still deals its tips", () => {
+  const older = { ...fighter.sheet };
+  for (const field of ["classes", "hitDicePools", "feats"]) delete older[field];
+  const tips = threeThingsToTry(freshPlaySheet({ ...fighter, sheet: { ...older, proficiencies: { ...older.proficiencies, expertise: undefined } } }), FACTS);
+  assert.equal(tips[0].text, "Swing your Longsword: +5 to hit, 1d8+5");
+});
+
 // ---- F26: the reveal line ----
 
 await test("the reveal line names an AC of 18 or more first", () => {

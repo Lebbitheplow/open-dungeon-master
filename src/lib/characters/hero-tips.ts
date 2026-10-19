@@ -38,8 +38,34 @@ export type HeroTip = {
 // The saved library sheet as a fresh table sheet: full hit points, every
 // slot and use in hand, nothing spent. This is the sheet the character
 // sits down with, so the Hand's cards read as they will on the first turn.
+// A sheet stored before a field existed comes back without it, so every
+// list falls back to empty here rather than in each reader.
 export function freshPlaySheet(hero: LibraryHero): CharacterSheet {
-  const sheet = hero.sheet;
+  const stored = hero.sheet;
+  const sheet = {
+    ...stored,
+    classes: stored.classes ?? [],
+    hitDicePools: stored.hitDicePools ?? null,
+    equipment: stored.equipment ?? [],
+    feats: stored.feats ?? [],
+    features: stored.features ?? [],
+    speed: stored.speed ?? 30,
+    gold: stored.gold ?? 0,
+    copper: stored.copper ?? 0,
+    spellcasting: stored.spellcasting ?? null,
+    portrait: stored.portrait ?? null,
+    backstory: stored.backstory ?? "",
+    proficiencies: {
+      ...stored.proficiencies,
+      saves: stored.proficiencies?.saves ?? [],
+      skills: stored.proficiencies?.skills ?? [],
+      expertise: stored.proficiencies?.expertise ?? [],
+      languages: stored.proficiencies?.languages ?? [],
+      tools: stored.proficiencies?.tools ?? [],
+      armor: stored.proficiencies?.armor ?? [],
+      weapons: stored.proficiencies?.weapons ?? [],
+    },
+  };
   const level = hero.level;
   const abilityMods = computeSheetDerived({ ...sheet, level }).abilityMods;
   return {
