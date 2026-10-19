@@ -52,6 +52,12 @@ export const MIN_LEAN_ROOM_TOKENS = 24_000;
 // the 27B and 35B the docs recommend sit well above the line, and the 7B to
 // 14B models that fit an 8 to 16 GB card sit below it.
 export const SMALL_MODEL_PARAMS = 16e9;
+// The most a small model may think before a tool-deciding call is asked
+// again without thinking (model-client.ts reasoningBudgetChars): about 1,500
+// tokens, between the 1,024 to 2,048 the docs ask a server to cap. Qwen3.5 9B
+// on Ollama, which has no budget, thought 18,700 characters and answered
+// nothing; its useful thoughts ran 1,000 to 2,500.
+export const SMALL_MODEL_REASONING_CHARS = 6_000;
 
 function envSwitch(value: string | undefined): boolean | null {
   const raw = (value ?? "").trim();

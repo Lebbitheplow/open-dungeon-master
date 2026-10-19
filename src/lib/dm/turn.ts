@@ -54,7 +54,7 @@ import { getMounts } from "@/lib/db/mounts";
 import { peakImportanceByChapter } from "@/lib/db/scene-chunks";
 import { getSceneTracker } from "@/lib/db/scene-tracker";
 import { listQuests } from "@/lib/db/quests";
-import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
+import { SMALL_MODEL_REASONING_CHARS, type ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
@@ -1296,6 +1296,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // with it, rolls and encounters fire reliably. The forced-narration
       // final call skips it to keep turns snappy. DM_THINKING=0 disables.
       thinking: !finalCall && tuning.thinking,
+      // A small model's thought is cut and the call asked again without it
+      // when it runs long, on a server that sets no budget of its own.
+      ...(tuning.briefRules ? { reasoningBudgetChars: SMALL_MODEL_REASONING_CHARS } : {}),
       onDelta: (text) => {
         const visible = filter.push(text);
         if (visible) {

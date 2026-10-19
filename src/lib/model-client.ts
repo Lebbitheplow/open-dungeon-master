@@ -38,6 +38,7 @@ import { chatTimings, chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usag
 import { apiSpeedEligibility } from "@/lib/speed-tier";
 import { noteSpeed } from "@/lib/speed-status";
 import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow, knownLocalModelParams } from "@/lib/text-models";
+import { SMALL_MODEL_PARAMS } from "@/lib/dm/model-tuning-logic";
 import { catalogContextWindow, hostedCatalogModel, hostedContextWindow } from "@/lib/model-registry/catalog";
 import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
@@ -65,6 +66,7 @@ const DEFAULT_LOCAL_TEXT_TIMEOUT_MS = 6 * 60 * 1000;
 const MIN_TEXT_TIMEOUT_MS = 30 * 1000;
 const MAX_TEXT_TIMEOUT_MS = 30 * 60 * 1000;
 const WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS = 65_536;
+const SMALL_MODEL_LOCAL_CONTEXT_TOKENS = 32_768;
 
 export type TextContentPart = {
   type: "text";
@@ -150,6 +152,12 @@ export type ChatRequestOptions = {
   // the whole 4,096-token reply of the campaign's setup call thinking and
   // wrote no JSON.
   thinking?: boolean;
+  // The most reasoning this call may stream, in characters, before it is cut
+  // and the same call asked again without thinking. Unset, no limit: the
+  // server's own budget (llama-server --reasoning-budget) applies. Ollama has
+  // none, and Qwen3.5 9B there thought 18,700 characters to the reply cap
+  // and wrote nothing.
+  reasoningBudgetChars?: number;
   // The most this call's reply may run to: what the window leaves after the
   // prompt (src/lib/dm/request-fit.ts), or what the task needs. The backend's
   // own cap still applies when it is smaller. Unset keeps that cap alone.
@@ -223,13 +231,20 @@ export function localMaxOutputTokens() {
 // limiting factor. LOCAL_TEXT_CONTEXT can cap it to bound worst-case
 // prefill time on very long stories. The window comes from the documented
 // table, then what Ollama said of the model, then the catalog's row for the
-// same weights, then the 128K most current models share.
+// same weights, then the 128K most current models share. A small model
+// (model-tuning-logic.ts SMALL_MODEL_PARAMS) plays on the short rules, whose
+// prompts stay near 20K, so it asks for 32K: Qwen3.5 9B's native 262K is a
+// cache of about 8.6 GB, which pushed most of the model off a 4 GB card.
 export function localContextTokens(model: string) {
   const native = knownLocalContextWindow(model) ?? catalogContextWindow(model) ?? DEFAULT_LOCAL_CONTEXT_TOKENS;
   const raw = serverEnv("LOCAL_TEXT_CONTEXT");
   const parsed = Number.parseInt(raw, 10);
 
   if (!Number.isFinite(parsed)) {
+    const params = knownLocalModelParams(model) ?? paramsFromModelName(model);
+    if (params && params < SMALL_MODEL_PARAMS) {
+      return Math.min(native, SMALL_MODEL_LOCAL_CONTEXT_TOKENS);
+    }
     return onWindows()
       ? Math.min(native, WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS)
       : native;
@@ -655,18 +670,38 @@ function guardStreamDelta(onDelta: StreamDeltaHandler | undefined, cancel: () =>
   };
 }
 
+// Reasoning past the call's budget (ChatRequestOptions.reasoningBudgetChars).
+class ReasoningBudgetError extends Error {
+  constructor() {
+    super("The model's reasoning ran past its budget.");
+  }
+}
+
 // The reasoning channel loops too, and on a server with no reasoning budget
-// it runs to the output cap before any story text. Read only for that; it
-// never reaches the table.
-function guardReasoningDelta(streaming: boolean, cancel: () => void) {
+// it runs to the output cap before any story text. Read only for that, and
+// for the call's own budget; it never reaches the table.
+function guardReasoningDelta(streaming: boolean, cancel: () => void, budgetChars?: number) {
   if (!streaming) return undefined;
   const guard = createStreamRepetitionGuard();
+  let length = 0;
   return (text: string) => {
+    length += text.length;
+    if (budgetChars && length > budgetChars) {
+      cancel();
+      throw new ReasoningBudgetError();
+    }
     if (guard.push(text)) {
       cancel();
       throw new StreamRepetitionError(null);
     }
   };
+}
+
+// The same call asked again without thinking, once its reasoning ran past
+// the budget: an answer decided at once beats none after minutes.
+function withoutThinking(options: ChatRequestOptions): ChatRequestOptions {
+  console.warn("[model] the reasoning ran past its budget; the call is asked again without thinking");
+  return { ...options, thinking: false, reasoningBudgetChars: undefined };
 }
 
 // A reply that arrived whole cannot be stopped early, but one that may only
@@ -1057,7 +1092,7 @@ async function requestCustomMessageNow(
   );
   const requestTimeout = createRequestTimeout(timeoutMs);
   const guardedDelta = guardStreamDelta(onDelta, requestTimeout.cancel);
-  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel);
+  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel, options.reasoningBudgetChars);
   let upstream: Response;
   try {
     upstream = await fetchBackend(endpoint, {
@@ -1280,6 +1315,7 @@ async function requestCustomMessageNow(
       };
       return onDelta ? result : cutWholeReply(result, options);
     } catch (error) {
+      if (error instanceof ReasoningBudgetError) return requestCustomMessageNow(baseUrl, model, apiKey, messages, withoutThinking(options));
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       return readFailure(error);
     }
@@ -1379,6 +1415,7 @@ async function requestCustomMessageNow(
         }
       }, noteJobProgress);
     } catch (error) {
+      if (error instanceof ReasoningBudgetError) return requestCustomMessageNow(baseUrl, model, apiKey, messages, withoutThinking(options));
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       return readFailure(error);
     }
@@ -1505,6 +1542,10 @@ async function requestLocalMessageNow(
     options: {
       ...sampling,
       temperature: sampling.temperature ?? 0.9,
+      // Pinned as on the OpenAI-compatible path (requestCustomMessage): a
+      // positive presence penalty suppresses tool calls, and Ollama's own
+      // qwen3.5:9b ships with 1.5 in its parameters.
+      presence_penalty: 0,
       num_predict: callOutputCap(localMaxOutputTokens(), options),
       num_ctx: localContextTokens(model),
     },
@@ -1525,7 +1566,7 @@ async function requestLocalMessageNow(
   );
   const requestTimeout = createRequestTimeout(timeoutMs);
   const guardedDelta = guardStreamDelta(onDelta, requestTimeout.cancel);
-  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel);
+  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel, options.reasoningBudgetChars);
   let upstream: Response;
   try {
     upstream = await fetchBackend(`${baseUrl}/api/chat`, {
@@ -1632,6 +1673,7 @@ async function requestLocalMessageNow(
         localUsage = ollamaUsage(record) ?? localUsage;
       }, noteJobProgress);
     } catch (error) {
+      if (error instanceof ReasoningBudgetError) return requestLocalMessageNow(requestedModel, messages, withoutThinking(options));
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       if (requestTimeout.stopped()) {
         return stoppedResult();

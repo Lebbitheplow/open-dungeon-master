@@ -683,6 +683,18 @@ try {
     assert.equal(localContextTokens("my-merge:latest"), 65_536, "what Ollama said of it");
     assert.equal(localContextTokens("never-heard-of"), 131_072);
     delete process.env.LOCAL_TEXT_CONTEXT;
+    // A small model asks Ollama for 32K, not its native 262K: the short
+    // rules never need more, and the cache would not fit a 4 GB card.
+    textModels.rememberLocalContextWindow("qwen3.5:9b", 262_144);
+    assert.equal(localContextTokens("qwen3.5:9b"), 32_768, "a small model by its name");
+    textModels.rememberLocalContextWindow("my-small-merge", 131_072);
+    textModels.rememberLocalModelParams("my-small-merge", 8_000_000_000);
+    assert.equal(localContextTokens("my-small-merge"), 32_768, "a small model by what Ollama said of it");
+    textModels.rememberLocalContextWindow("tiny-ctx:7b", 8_192);
+    assert.equal(localContextTokens("tiny-ctx:7b"), 8_192, "never more than the model has");
+    process.env.LOCAL_TEXT_CONTEXT = "65536";
+    assert.equal(localContextTokens("qwen3.5:9b"), 65_536, "LOCAL_TEXT_CONTEXT still decides when set");
+    delete process.env.LOCAL_TEXT_CONTEXT;
   });
 
   ollama.close();

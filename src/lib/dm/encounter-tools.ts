@@ -187,8 +187,11 @@ const hasAlert = (sheet: CharacterSheet) =>
 const startArgsSchema = z.object({
   enemies: z.array(enemyRequestSchema).min(1).max(8),
   summary: z.string().optional(),
-  surprised: z.enum(["none", "enemies", "party"]).optional(),
-  ambush: z.enum(["enemies", "party"]).optional(),
+  // A side that is not one of these ("none", "both" from a weak caller) is
+  // the same as none given: Qwen3.5 9B sent ambush "none" twice and the
+  // whole fight was refused.
+  surprised: z.preprocess((value) => (value === "none" || value === "enemies" || value === "party" ? value : undefined), z.enum(["none", "enemies", "party"]).optional()),
+  ambush: z.preprocess((value) => (value === "enemies" || value === "party" ? value : undefined), z.enum(["enemies", "party"]).optional()),
   scene: z.string().max(40).optional(),
   // Feet between the party and the nearest enemy as the fight opens. A
   // value that is no distance (null, "", 0 from a weak tool caller) is the
@@ -205,28 +208,31 @@ const startArgsSchema = z.object({
 });
 
 // Accepts the documented {enemies:[...]} shape, or flat monster/name/count
-// keys (the textual-salvage path cannot produce arrays).
-function parseStartArgs(rawArguments: string): z.infer<typeof startArgsSchema> | null {
+// keys (the textual-salvage path cannot produce arrays). A refusal names the
+// fields the documented shape rejected, so the next call can fix them.
+function parseStartArgs(rawArguments: string): { args: z.infer<typeof startArgsSchema> } | { fields: string[] } {
   let raw: unknown;
   try {
     raw = JSON.parse(rawArguments || "{}");
   } catch {
-    return null;
+    return { fields: [] };
   }
   const nested = startArgsSchema.safeParse(raw);
   if (nested.success) {
-    return nested.data;
+    return { args: nested.data };
   }
   const flat = enemyRequestSchema
     .extend({ summary: z.string().optional() })
     .safeParse(raw);
   if (flat.success) {
     return {
-      enemies: [{ monster: flat.data.monster, name: flat.data.name, count: flat.data.count, cr: flat.data.cr }],
-      summary: flat.data.summary,
+      args: {
+        enemies: [{ monster: flat.data.monster, name: flat.data.name, count: flat.data.count, cr: flat.data.cr }],
+        summary: flat.data.summary,
+      },
     };
   }
-  return null;
+  return { fields: [...new Set(nested.error.issues.map((issue) => issue.path.join(".")).filter(Boolean))] };
 }
 
 function suggestionLines(campaign: Campaign, sheets: CharacterSheet[]): string {
@@ -244,14 +250,14 @@ function handleStartEncounter(
   // console's façade (src/lib/dm/initiative-ask.ts), on the person's turn.
   actor: DmTurn["actor"] = "human_dm",
 ): ToolResult {
-  const args = parseStartArgs(rawArguments);
-  if (!args) {
+  const parsed = parseStartArgs(rawArguments);
+  if (!("args" in parsed)) {
     return {
-      error:
-        'Invalid start_encounter arguments. Send {"enemies":[{"monster":"goblin","count":3}],"summary":"..."}.',
+      error: `Invalid start_encounter arguments${parsed.fields.length ? ` (fix or leave out: ${parsed.fields.join(", ")})` : ""}. Send {"enemies":[{"monster":"goblin","count":3}],"summary":"..."}.`,
       retry: true,
     };
   }
+  const args = parsed.args;
   if (args.scene !== undefined && !sceneIds().includes(args.scene)) {
     return { error: `Unknown scene "${args.scene}"; use one of: ${sceneIds().join(", ")}.`, retry: true };
   }
