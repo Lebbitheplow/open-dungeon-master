@@ -727,10 +727,29 @@ function spreadByLevel(names: string[], room: number, levelOf: Map<string, numbe
 // subclass opens, and a spare.
 export const FILL_ROUNDS = 6;
 
-// Fields the read-back's Undo restores and the fill may write: every draft
-// field. A field the fill wrote is one that was blank before it.
+// The fields a fill wrote: those that differ between the builder before it
+// began and as it finished. Each was blank before.
 export function changedFields(before: BuilderDraftFields, after: BuilderDraftFields): Array<keyof BuilderDraftFields> {
   return (Object.keys(after) as Array<keyof BuilderDraftFields>).filter(
     (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
   );
+}
+
+// What the read-back's Undo puts back: each field the fill wrote, as it was
+// before the fill, but only while it still holds what the fill wrote. The
+// panel can be reopened long after the fill, and a pick the player has
+// changed since is theirs, so Undo leaves it alone. Right after a fill this
+// is every field the fill wrote.
+export function undoFill(
+  before: BuilderDraftFields,
+  after: BuilderDraftFields,
+  now: BuilderDraftFields,
+): Partial<BuilderDraftFields> {
+  const undo: Partial<BuilderDraftFields> = {};
+  for (const key of changedFields(before, after)) {
+    if (JSON.stringify(now[key]) === JSON.stringify(after[key])) {
+      (undo as Record<string, unknown>)[key] = before[key];
+    }
+  }
+  return undo;
 }

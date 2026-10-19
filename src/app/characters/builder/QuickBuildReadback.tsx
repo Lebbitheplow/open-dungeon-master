@@ -37,7 +37,8 @@ export function QuickBuildReadback({
     >
       <p role="status" className="mb-1.5 text-sky-100">
         <Sparkles className="mr-1 inline size-3.5 text-sky-300" aria-hidden="true" />
-        {lead}. Nothing you had chosen was changed. Change any of them, or undo them all.
+        {lead}. Nothing you had chosen was changed. Change any of them, or undo them all. Undo leaves any you have
+        changed since.
         {stillOwed ? ` ${stillOwed === 1 ? "One choice is" : `${stillOwed} choices are`} still yours to make.` : ""}
       </p>
       <ul className="max-h-40 space-y-1 overflow-y-auto pr-1">

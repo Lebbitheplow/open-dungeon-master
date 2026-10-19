@@ -81,6 +81,13 @@ export default {
     const text = await readback.first().innerText();
     check(!/Name:/.test(text), "the name is not read back as picked");
     await t.shot("fill-left");
+    // "Keep them" closes the panel; "Show what was picked" brings it back.
+    await t.tap(visible(page, root, /^Keep them$/).first());
+    const kept = page.locator(`${root}[data-quick-kept]`).locator("visible=true");
+    await eventually(() => kept.count(), { timeoutMs: 10_000, label: "the Show what was picked line" });
+    check((await readback.count()) === 0, "the panel closes");
+    await t.tap(visible(page, root, /^Show what was picked$/).first());
+    await eventually(() => readback.count(), { timeoutMs: 10_000, label: "the panel back" });
     await t.tap(visible(page, root, /^Undo all of these$/).first());
     await sleep(300);
     check((await name.inputValue()) === hero, "Undo keeps the typed name too");

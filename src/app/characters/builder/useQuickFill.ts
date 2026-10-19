@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FILL_ROUNDS, fillRound, type BuildSeed, type FilledPick, type QuizAnswers } from "./quickBuild";
+import { FILL_ROUNDS, fillRound, undoFill, type BuildSeed, type FilledPick, type QuizAnswers } from "./quickBuild";
 import type { BlockerTarget } from "./submit";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -9,8 +9,9 @@ import type { BuilderDraftFields, BuilderState } from "./useBuilderState";
 
 // A quick-build fill in the wizard (quickBuild.ts): the rounds run one per
 // render, each reading what useBuilderDerived made of the last, until a
-// round fills nothing. What it wrote is read back once, with one Undo that
-// puts every field back as it was before the fill began.
+// round fills nothing. What it wrote is read back once, with one Undo. "Keep
+// them" closes the panel, and "Show what was picked" opens it again until
+// the character is saved (the builder unmounts) or another fill starts.
 
 export type FillRequest = {
   // Only these slots ("Pick for me" on one card).
@@ -23,6 +24,9 @@ export type FillRequest = {
 export type FillReadback = {
   filled: FilledPick[];
   snapshot: BuilderDraftFields;
+  // The builder as the fill left it, so a later Undo can tell a pick still
+  // as filled from one the player has changed since (undoFill).
+  after: BuilderDraftFields;
   // Where it started: a quiz character, the whole of what was left, or one
   // card.
   from: "quiz" | "fill" | "card";
@@ -54,9 +58,12 @@ export function useQuickFill({
 }) {
   const [run, setRun] = useState<Run | null>(null);
   const [readback, setReadback] = useState<FillReadback | null>(null);
+  // Whether the panel shows: "Keep them" closes it and keeps it to reopen.
+  const [shown, setShown] = useState(true);
 
   function start(request: FillRequest = {}) {
     setReadback(null);
+    setShown(true);
     setRun({ ...request, snapshot: state.draftFields, filled: [], round: 0 });
   }
 
@@ -103,6 +110,7 @@ export function useQuickFill({
         const done: FillReadback = {
           filled: run.filled,
           snapshot: run.snapshot,
+          after: fields,
           from: run.seed ? "quiz" : run.only ? "card" : "fill",
         };
         setRun(null);
@@ -122,15 +130,18 @@ export function useQuickFill({
     if (!readback) {
       return;
     }
-    state.restoreDraft(readback.snapshot);
+    state.restoreDraft(undoFill(readback.snapshot, readback.after, state.draftFields));
     setReadback(null);
   }
 
   return {
     start,
     running: Boolean(run),
-    readback,
+    // The panel, while it shows; the fill it would reopen, while it does not.
+    readback: shown ? readback : null,
+    kept: shown ? null : readback,
     undo,
-    dismiss: () => setReadback(null),
+    dismiss: () => setShown(false),
+    reopen: () => setShown(true),
   };
 }

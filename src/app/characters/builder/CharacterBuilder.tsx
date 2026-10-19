@@ -710,6 +710,17 @@ function CharacterBuilderForm({
           }}
           onDismiss={fill.dismiss}
         />
+      ) : fill.kept ? (
+        // What was picked stays a tap away after "Keep them", until the
+        // character is saved or another fill starts.
+        <p data-quick-kept="" className="mb-3 flex shrink-0 flex-wrap items-center gap-2 rounded-lg border border-stone-800 px-3 py-1.5 text-xs text-stone-400">
+          <span className="min-w-0 flex-1">
+            {fill.kept.filled.length} {fill.kept.filled.length === 1 ? "choice was" : "choices were"} picked for you.
+          </span>
+          <button type="button" onClick={fill.reopen} className="text-sky-300 underline-offset-2 hover:underline">
+            Show what was picked
+          </button>
+        </p>
       ) : null}
       {quiz ? (
         <QuickBuildQuiz

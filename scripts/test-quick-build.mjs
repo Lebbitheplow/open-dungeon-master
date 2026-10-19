@@ -254,6 +254,21 @@ await test("Undo puts back exactly what was there", async () => {
   }
 });
 
+await test("Undo from a reopened read-back leaves a pick changed since", async () => {
+  const before = fresh({ level: 1, classId: "fighter" });
+  const { fields: after } = await runFill(before);
+  // The player keeps the fill, then changes the race and the class skills.
+  const now = { ...after, raceId: "halfling", chosenSkills: ["acrobatics", "history"] };
+  const undo = quick.undoFill(before, after, now);
+  assert.ok(!("raceId" in undo), "the race the player chose stays");
+  assert.ok(!("chosenSkills" in undo), "the skills the player chose stay");
+  assert.equal(undo.backgroundId, "", "the background the fill picked goes");
+  assert.equal(undo.name, "", "the name the fill rolled goes");
+  assert.ok(!("classId" in undo), "the class was the player's before the fill");
+  // Straight after a fill, Undo is the whole of it.
+  assert.deepEqual({ ...after, ...quick.undoFill(before, after, after) }, before);
+});
+
 await test("Pick for me on the subclass card fills only the subclass", async () => {
   const start = fresh({ level: 3, classId: "fighter", raceId: "human", backgroundId: "soldier" });
   const { fields, filled } = await runFill(start, { only: ["subclass"] });

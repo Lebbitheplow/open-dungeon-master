@@ -620,7 +620,7 @@ export function useBuilderState({
   // it was, without the reconcile a change runs: they were checked against
   // each other when they were made. The table's level wins over the
   // draft's.
-  function restoreDraft(draft: BuilderDraftFields) {
+  function restoreDraft(draft: Partial<BuilderDraftFields>) {
     setFields(draft);
   }
 
