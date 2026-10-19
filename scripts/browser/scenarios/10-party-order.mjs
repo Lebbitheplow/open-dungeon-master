@@ -68,12 +68,27 @@ export default {
     const grip = await taviGrip.boundingBox();
     const target = await breeCard.boundingBox();
     check(Boolean(grip && target), "the grip and the other card are on screen");
-    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(grip.x + grip.width / 2, target.y + 8, { steps: 6 });
-    // A slow runner can take longer than a frame or two to draw the line:
-    // look for it a few times while the button is still held.
-    await eventually(async () => (await page.locator(`${root}[data-party-card="${ids.bree}"][data-drop="before"]`).count()) === 1, { timeoutMs: 3_000, every: 100, label: "the drop line shows above Bree while dragging" });
+    // On a slow runner a redraw mid-drag can swallow the moves that draw the
+    // line. So the pointer keeps nudging while the test looks, and a drag
+    // that never took is let go over Tavi's own card (which moves nothing)
+    // and made again, up to three times.
+    const dropLine = page.locator(`${root}[data-party-card="${ids.bree}"][data-drop="before"]`);
+    let lineShown = false;
+    for (let attempt = 0; attempt < 3 && !lineShown; attempt += 1) {
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(grip.x + grip.width / 2, target.y + 8, { steps: 6 });
+      for (let look = 0; look < 15 && !lineShown; look += 1) {
+        await sleep(100);
+        await page.mouse.move(grip.x + grip.width / 2, target.y + 8 + (look % 2), { steps: 1 });
+        lineShown = (await dropLine.count()) === 1;
+      }
+      if (!lineShown) {
+        await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2, { steps: 4 });
+        await page.mouse.up();
+      }
+    }
+    check(lineShown, "the drop line shows above Bree while dragging");
     await page.mouse.move(grip.x + grip.width / 2, target.y + 6, { steps: 2 });
     await page.mouse.up();
     await eventually(async () => (await shown())[0] === ids.tavi, { label: "Tavi first after the drag" });
