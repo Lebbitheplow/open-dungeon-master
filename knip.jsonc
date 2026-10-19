@@ -1,0 +1,38 @@
+// Knip's config for `npm run dead-code`. Its Next.js and Vitest plugins find the App Router files and the
+// scripts/test-*.mjs suites on their own; what follows is what Knip cannot see: programs started by path or from
+// outside this repo.
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    // Every top-level script is a program (`node scripts/<name>.mjs`, npm scripts, the docs).
+    "scripts/*.{mjs,js,ts}",
+    // Spawned by path, not imported: scripts/browser/run.mjs, test-boot-resync.mjs, lib/enforce-spell-kit.mjs.
+    "scripts/browser/seed.mjs",
+    "scripts/lib/boot-db.mjs",
+    "scripts/lib/enforce-spell-nopack.mjs",
+    // Imported from a directory listing by scripts/browser/run.mjs.
+    "scripts/browser/scenarios/*.mjs",
+    // wrangler.toml's `main`, and each worker's own test.
+    "workers/*/src/index.js",
+    "workers/*/test.mjs",
+    // An addon's server entry (addon.json `runtime.entry`) and the scripts its UI pages load.
+    "examples/addons/*/server/main.mjs",
+    "examples/addons/*/ui/*.js",
+    // The trailer's recording scripts, run by hand (trailer/README.md).
+    "trailer/*.mjs",
+    // The desktop and Android apps (Lebbitheplow/open-dungeon-master-client) build this repo's src into their renderer:
+    // besides the pages, src/renderer/game/index.tsx imports DeviceSettings for the apps' own Settings screen, and
+    // scripts/build-renderer.mjs folds this sheet into theirs.
+    "src/components/DeviceSettings.tsx",
+    "src/app/styles/component-sheets.css"
+  ],
+  // Resolved by name at run time (createRequire().resolve), which no import graph sees: src/lib/image-variants.ts and
+  // scripts/browser/lib.mjs.
+  "ignoreDependencies": ["@jsquash/.+", "axe-core"],
+  // An export its own file uses is live code with a needless `export`, not dead code.
+  "ignoreExportsUsedInFile": true,
+  // Two names for one function on purpose: scripts/import-open5e.mjs normalizes conditions with the feats' shape.
+  "ignoreIssues": { "scripts/lib/open5e-normalize.mjs": ["duplicates"] },
+  // Missing manifests and system binaries (magick, ffmpeg) are not dead code.
+  "rules": { "unlisted": "off", "binaries": "off" }
+}
