@@ -84,6 +84,12 @@ await test("every item's place comes from its row, never from words in its name"
   }
   // A workshop suit is armor whatever its name says.
   assert.equal(wearSlotOf(row("Mistweave", { gear: { armor: { name: "Mistweave", category: "light", baseAc: 12, weightLb: 4 } } })), "armor");
+  // The same Italian cloak named by its SRD row (srdName, #408) has the
+  // row's place, so a second cloak beside it is counted as one.
+  const mantello = row("Mantello di protezione", { srdName: "Cloak of Protection", equipped: true, attuned: true });
+  assert.equal(wearSlotOf(mantello), "cloak");
+  const spare = row("Cloak of Protection", { equipped: true });
+  assert.equal(countedWorn([mantello, spare]).size, 1, "two cloaks both counted at an Italian table");
 });
 
 await test("two cloaks worn and attuned: one cloak's magic, not both (the issue's example)", () => {
