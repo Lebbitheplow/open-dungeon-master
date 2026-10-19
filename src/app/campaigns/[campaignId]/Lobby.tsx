@@ -30,6 +30,7 @@ import {
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { navigateTo } from "@/lib/navigation";
 import { SceneBackdrop } from "@/app/campaigns/[campaignId]/CinematicParts";
+import { ArrivalBanner } from "@/app/campaigns/[campaignId]/ArrivalBanner";
 import { StorySetupNotice } from "@/components/StorySetupNotice";
 import {
   STORY_SETUP_WARNING,
@@ -445,6 +446,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       {/* The lobby under the same sky as the table: the cover art behind
           the panels, dimmed, so the door and the room read as one place. */}
       <SceneBackdrop messages={EMPTY_MESSAGES} cover={campaign.cover} genre={campaign.genre} seed={campaign.id} />
+      {/* A player taking a seat, for everyone here (F27). */}
+      <ArrivalBanner sheets={sheets} />
       <Link
         href="/"
         className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"

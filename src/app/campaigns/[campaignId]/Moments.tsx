@@ -9,21 +9,12 @@ import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { matchMagicItem } from "@/lib/srd/magic-items";
-import { CharacterPortrait } from "@/lib/ui";
+import { Face, useEscapeToSkip } from "@/app/campaigns/[campaignId]/moment-parts";
 
 // The table's set pieces (docs/visual-overhaul-plan.md 8c.6): the level-up
 // flourish that plays before the level-up dialog opens, and the rest by the
 // fire that plays when the party rests. Both are pictures over what the
 // engine already did; neither changes a number. Styles: styles/moments.css.
-
-function Face({ sheet }: { sheet: CharacterSheet }) {
-  return sheet.portrait ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={sheet.portrait.url} alt={sheet.name} />
-  ) : (
-    <CharacterPortrait look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }} alt={sheet.name} size="size-full" />
-  );
-}
 
 // A veil with the turning sigil: what holds the screen while a moment's
 // dialog is still loading its code.
@@ -34,24 +25,6 @@ export function MomentVeil() {
       <img src="/assets/ui/sigil-loading.webp" alt="" className="moment-sigil" />
     </div>
   );
-}
-
-// A set piece covers the table, and its only way out was a click on the
-// stage itself, which a keyboard cannot reach: Escape skips it too. Taken in
-// the capture phase and stopped there, so a dialog under the moment does not
-// close with it.
-function useEscapeToSkip(active: boolean, onSkip: () => void) {
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onSkip();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [active, onSkip]);
 }
 
 const LEVEL_UP_MS = 2600;
