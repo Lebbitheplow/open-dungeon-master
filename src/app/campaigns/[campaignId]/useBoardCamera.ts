@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TILE } from "@/app/campaigns/[campaignId]/battleMapCells";
 import { prefersReducedMotion } from "@/lib/effects-mode";
 import { clampZoomTo, fitCamera, minZoomFor } from "@/lib/battlemap/camera-fit";
@@ -30,6 +30,7 @@ export function useBoardCamera(
   boardWidth: number,
   boardHeight: number,
   options: {
+    enabled?: boolean;
     followTurn: boolean;
     turnTile: { x: number; y: number } | null;
     remote: CameraEvent | null;
@@ -39,6 +40,8 @@ export function useBoardCamera(
   },
 ) {
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const enabledRef = useRef(options.enabled !== false);
+  useLayoutEffect(() => { enabledRef.current = options.enabled !== false; }, [options.enabled]);
   // The frame as state too, so the native listeners below follow it when
   // the board moves between the side panel and the enlarged view (a new
   // element each time).
@@ -66,7 +69,7 @@ export function useBoardCamera(
   const cameraRef = useRef(camera);
   useEffect(() => {
     cameraRef.current = camera;
-    if (frameRef.current) {
+    if (frameRef.current && enabledRef.current) {
       remembered.current.set(frameRef.current, camera);
     }
   }, [camera]);
@@ -76,6 +79,8 @@ export function useBoardCamera(
 
 
     setFrameEl(element);
+    // A session renderer's dialog must not replace the saved flat-board camera.
+    if (!enabledRef.current) return;
     // The observer below reads a fresh frame's width for itself.
     frameWidth.current = 0;
     if (!element) {
@@ -210,7 +215,7 @@ export function useBoardCamera(
       return;
     }
     const frame = requestAnimationFrame(() => {
-      if (isOffScreen(turnTile, cameraRef.current)) {
+      if (enabledRef.current && isOffScreen(turnTile, cameraRef.current)) {
         centreOn(turnTile);
       }
     });
@@ -232,7 +237,7 @@ export function useBoardCamera(
           setLocked(false);
           setCanRelease(false);
         } else if (typeof remote.x === "number" && typeof remote.y === "number") {
-          centreOn({ x: remote.x, y: remote.y }, remote.zoom);
+          if (enabledRef.current) centreOn({ x: remote.x, y: remote.y }, remote.zoom);
           if (remote.mode === "lock") {
             setLocked(true);
             setCanRelease(false);
@@ -256,7 +261,7 @@ export function useBoardCamera(
   // the panel scrolling under the zoom, nor a trackpad pinch or Ctrl+wheel
   // zooming the whole page along with the board (issue 67).
   useEffect(() => {
-    if (!frameEl || locked) {
+    if (!frameEl || locked || options.enabled === false) {
       return;
     }
     const onWheel = (event: WheelEvent) => {
@@ -276,7 +281,7 @@ export function useBoardCamera(
     };
     frameEl.addEventListener("wheel", onWheel, { passive: false });
     return () => frameEl.removeEventListener("wheel", onWheel);
-  }, [frameEl, locked, clampZoom]);
+  }, [frameEl, locked, clampZoom, options.enabled]);
 
   // The pan is held in the frame's pixels and the board fills the frame's
   // width, so when the frame changes width (browser zoom, a resized window,
@@ -288,10 +293,11 @@ export function useBoardCamera(
   // (issue 87).
   useEffect(() => {
 
-    if (!frameEl) {
+    if (!frameEl || options.enabled === false) {
       return;
     }
     const observer = new ResizeObserver(() => {
+      if (!enabledRef.current) return;
       const width = frameEl.clientWidth;
       if (!width) {
         return;
@@ -317,7 +323,7 @@ export function useBoardCamera(
     });
     observer.observe(frameEl);
     return () => observer.disconnect();
-  }, [frameEl, fit]);
+  }, [frameEl, fit, options.enabled]);
 
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const onPointerDown = useCallback((event: React.PointerEvent) => {
