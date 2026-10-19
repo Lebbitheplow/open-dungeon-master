@@ -127,7 +127,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   midGameJoinOpen: false,
   holdSubmissions: false,
   waitForTable: false,
-  waitForTableSeconds: 120,
+  waitForTableSeconds: 300,
   narrationGuard: true,
   safety: { xCard: true, lines: [], veils: [], boundaries: "standard" },
   gm: { strictness: "standard", tone: [] },

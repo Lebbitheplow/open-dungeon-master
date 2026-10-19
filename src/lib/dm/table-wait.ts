@@ -117,12 +117,15 @@ function decisionFor(campaignId: string, now: number): TableWaitDecision | null 
   }));
   const passes = (
     db
-      .prepare(`SELECT payload_json AS payload FROM campaign_events WHERE campaign_id = ? AND type = 'table_pass' AND seq > ? ORDER BY seq ASC`)
-      .all(campaignId, window.since) as Array<{ payload: string }>
+      .prepare(`SELECT payload_json AS payload, created_at AS createdAt FROM campaign_events WHERE campaign_id = ? AND type = 'table_pass' AND seq > ? ORDER BY seq ASC`)
+      .all(campaignId, window.since) as Array<{ payload: string; createdAt: string }>
   )
-    .map((row) => String((JSON.parse(row.payload) as { userId?: unknown }).userId ?? ""))
-    .filter(Boolean)
-    .map((userId) => ({ userId, name: names.get(userId) ?? "A player" }));
+    .map((row) => ({
+      userId: String((JSON.parse(row.payload) as { userId?: unknown }).userId ?? ""),
+      at: new Date(row.createdAt).getTime(),
+    }))
+    .filter((pass) => pass.userId)
+    .map((pass) => ({ ...pass, name: names.get(pass.userId) ?? "A player" }));
   const here = new Set([...onlineUserIds(campaignId), ...agentUserIds(campaignId)]);
   return decideTableWait({
     present: seats.filter((seat) => here.has(seat.userId)),

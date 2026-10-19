@@ -36,15 +36,16 @@ const B = { userId: "b", name: "Kalanis" };
 const T0 = 1_000_000;
 const base = { present: [A, B], posts: [], passes: [], openedAt: T0, seconds: 120, now: T0 };
 
-await test("the setting defaults off, with a two-minute wait, so solo tables keep the old pace", () => {
+await test("the setting defaults off, with a five-minute wait, so solo tables keep the old pace", () => {
   const settings = normalizeGameSettings({});
   assert.equal(settings.waitForTable, false);
-  assert.equal(settings.waitForTableSeconds, 120);
-  assert.equal(TABLE_WAIT_DEFAULT_SECONDS, 120);
-  assert.equal(normalizeGameSettings({ waitForTable: true, waitForTableSeconds: 5 }).waitForTableSeconds, 120, "out of range falls back");
+  assert.equal(settings.waitForTableSeconds, 300);
+  assert.equal(TABLE_WAIT_DEFAULT_SECONDS, 300);
+  assert.equal(normalizeGameSettings({ waitForTable: true, waitForTableSeconds: 5 }).waitForTableSeconds, 300, "out of range falls back");
+  assert.equal(normalizeGameSettings({ waitForTable: true, waitForTableSeconds: 600 }).waitForTableSeconds, 600, "ten minutes is allowed");
   assert.equal(clampWaitSeconds(5), 15);
   assert.equal(clampWaitSeconds(10_000), 900);
-  assert.equal(clampWaitSeconds("x"), 120);
+  assert.equal(clampWaitSeconds("x"), 300);
 });
 
 await test("an untouched beat waits on everyone present and has no clock yet", () => {
@@ -55,7 +56,7 @@ await test("an untouched beat waits on everyone present and has no clock yet", (
   assert.deepEqual(d.view.waitingOn, [A, B]);
 });
 
-await test("the first post starts the clock and leaves the others waited on", () => {
+await test("a post starts the clock and leaves the others waited on", () => {
   const d = decideTableWait({ ...base, posts: [{ ...A, at: T0 + 5_000 }], now: T0 + 6_000 });
   assert.equal(d.fire, false);
   assert.equal(d.deadline, T0 + 5_000 + 120_000);
@@ -67,19 +68,19 @@ await test("the last present player acting or passing fires the one turn", () =>
   const acted = decideTableWait({ ...base, posts: [{ ...A, at: T0 }, { ...B, at: T0 + 1 }, { ...A, at: T0 + 2 }] });
   assert.equal(acted.fire, true);
   assert.equal(acted.view.answered.length, 2, "two posts from one player are one answer");
-  const pass = decideTableWait({ ...base, posts: [{ ...A, at: T0 }], passes: [B] });
+  const pass = decideTableWait({ ...base, posts: [{ ...A, at: T0 }], passes: [{ ...B, at: T0 + 1 }] });
   assert.equal(pass.fire, true);
   assert.deepEqual(pass.view.answered.at(-1), { ...B, passed: true });
 });
 
 await test("passes alone never fire: there is nothing for the DM to answer", () => {
-  const d = decideTableWait({ ...base, passes: [A, B] });
+  const d = decideTableWait({ ...base, passes: [{ ...A, at: T0 }, { ...B, at: T0 }] });
   assert.equal(d.fire, false);
   assert.deepEqual(d.view.waitingOn, []);
 });
 
 await test("a pass after a post does not take the post back", () => {
-  const d = decideTableWait({ ...base, posts: [{ ...A, at: T0 }], passes: [A] });
+  const d = decideTableWait({ ...base, posts: [{ ...A, at: T0 }], passes: [{ ...A, at: T0 + 1 }] });
   assert.deepEqual(d.view.answered, [{ ...A, passed: false }]);
   assert.deepEqual(d.view.waitingOn, [B]);
 });
@@ -88,6 +89,32 @@ await test("the time running out fires with whoever answered", () => {
   const at = T0 + 1_000;
   assert.equal(decideTableWait({ ...base, posts: [{ ...A, at }], now: at + 119_999 }).fire, false);
   assert.equal(decideTableWait({ ...base, posts: [{ ...A, at }], now: at + 120_000 }).fire, true);
+});
+
+await test("every answer restarts the clock: a table still talking is not cut off", () => {
+  const C = { userId: "c", name: "Mira" };
+  const three = { ...base, present: [A, B, C] };
+  // Arden posts, then Kalanis answers him 100 seconds later.
+  const posts = [{ ...A, at: T0 + 10_000 }, { ...B, at: T0 + 110_000 }];
+  const d = decideTableWait({ ...three, posts, now: T0 + 10_000 + 120_000 });
+  assert.equal(d.deadline, T0 + 110_000 + 120_000, "the deadline runs from Kalanis's post, not Arden's");
+  assert.equal(d.fire, false, "two minutes after the first post, Mira still has time");
+  assert.deepEqual(d.view.waitingOn, [C]);
+  assert.equal(decideTableWait({ ...three, posts, now: T0 + 110_000 + 120_000 }).fire, true, "only quiet ends it");
+  // A second post from someone who already answered restarts it too.
+  const again = decideTableWait({ ...three, posts: [...posts, { ...A, at: T0 + 200_000 }], now: T0 + 230_000 });
+  assert.equal(again.deadline, T0 + 200_000 + 120_000);
+  // So does a pass.
+  const pass = decideTableWait({ ...three, posts: posts.slice(0, 1), passes: [{ ...B, at: T0 + 50_000 }] });
+  assert.equal(pass.deadline, T0 + 50_000 + 120_000);
+});
+
+await test("a pass before anyone posts starts no clock, and counts once a post lands", () => {
+  const C = { userId: "c", name: "Mira" };
+  const early = decideTableWait({ ...base, present: [A, B, C], passes: [{ ...B, at: T0 + 5_000 }] });
+  assert.equal(early.deadline, null);
+  const later = decideTableWait({ ...base, present: [A, B, C], passes: [{ ...B, at: T0 + 5_000 }], posts: [{ ...A, at: T0 + 9_000 }] });
+  assert.equal(later.deadline, T0 + 9_000 + 120_000, "the clock runs from the latest answer");
 });
 
 await test("a post made while the DM was still writing does not start a clock that already ran", () => {
@@ -154,7 +181,7 @@ try {
     assert.equal(settleTableWait(campaign.id), false, "held: Kalanis has not answered");
     const view = currentTableWait(campaign.id);
     assert.deepEqual(view.waitingOn.map((seat) => seat.name), ["Kalanis"]);
-    assert.ok(view.deadline, "the clock runs from the first post");
+    assert.ok(view.deadline, "the clock runs from the latest answer");
     assert.ok(globalThis.__odmTableWait.get(campaign.id).timer, "a timer is armed for the deadline");
   });
 

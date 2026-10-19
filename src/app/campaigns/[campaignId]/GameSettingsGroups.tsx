@@ -540,7 +540,7 @@ export function BondsGroup({ settings, patch }: Base) {
 }
 
 // Wait for the table's timeout choices, in seconds (15 to 900 allowed).
-const WAIT_CHOICES = [30, 60, 120, 180, 300, 600];
+const WAIT_CHOICES = [30, 60, 120, 180, 300, 600, 900];
 function waitOption(seconds: number) {
   return { value: String(seconds), label: seconds % 60 ? `waits ${seconds}s` : `waits ${seconds / 60} min` };
 }
@@ -563,16 +563,16 @@ export function PlayersGroup({ settings, patch }: Base) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="pk-rowlabel">Pacing</span>
-        <Tooltip content="After each narration, the AI DM waits until every player at the table has acted or passed, or the time runs out after the first answer, then answers everyone in one turn. Off: the first post wakes the DM, which suits a solo table.">
+        <Tooltip content="After each narration, the AI DM waits until every player at the table has acted or passed, or nobody has answered for the chosen time (each post or pass restarts the clock), then answers everyone in one turn. Off: the first post wakes the DM, which suits a solo table.">
           <SettingToggle on={settings.waitForTable} onToggle={() => patch({ waitForTable: !settings.waitForTable })}>
             Wait for the table {settings.waitForTable ? "on" : "off"}
           </SettingToggle>
         </Tooltip>
         {settings.waitForTable ? (
-          <span className="inline-flex min-w-0 max-w-full" title="How long the DM waits after the first answer">
+          <span className="inline-flex min-w-0 max-w-full" title="How long the DM waits after the latest answer">
             <Select
               size="sm"
-              label="How long the DM waits after the first answer"
+              label="How long the DM waits after the latest answer"
               value={String(settings.waitForTableSeconds)}
               onChange={(value) => patch({ waitForTableSeconds: Number(value) })}
               options={WAIT_CHOICES.includes(settings.waitForTableSeconds)

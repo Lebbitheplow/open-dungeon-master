@@ -542,8 +542,9 @@ started while developing this feature.
 
 A campaign can turn on **Wait for the table** (Settings, Players, Pacing).
 After each narration on an open floor, the AI DM then waits until every
-present player has acted or passed, or until the table's timeout has run
-since the first answer, and answers them all in one turn. A player with a
+present player has acted or passed, or until nobody has answered for the
+table's timeout (five minutes unless the lead changes it; every post or
+pass restarts the clock), and answers them all in one turn. A player with a
 live webhook or poll link counts as present even with no tab open.
 
 While the table gathers, the DM stays idle, so a `response_requested`
