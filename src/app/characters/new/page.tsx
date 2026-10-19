@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { GoldTitle } from "@/components/ui/GoldTitle";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
@@ -11,6 +11,7 @@ import { navigateTo } from "@/lib/navigation";
 import { refusalText } from "@/app/characters/builder/refusal";
 import { builderDraftKey, clearBuilderDraft } from "@/app/characters/builder/builderDraft";
 import { readBuilderDoor } from "@/app/characters/builder/door";
+import { afterFirstSave } from "@/lib/characters/hero-tips";
 
 const DRAFT_KEY = builderDraftKey("library");
 
@@ -27,6 +28,21 @@ function NewCharacterInner() {
   // a player character; the Finish step holds the toggle, unless the door
   // already said which.
   const [role, setRole] = useState<"pc" | "companion">(door.role ?? "pc");
+  // Whether the player asked never to see the hero page again, read from
+  // the account once while they build. Unknown or unreachable means show it.
+  const skipHeroPage = useRef(false);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/profile", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (live) skipHeroPage.current = data?.settings?.skipHeroPage === true;
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
 
   async function submit(result: BuilderResult) {
     setBusy(true);
@@ -43,7 +59,10 @@ function NewCharacterInner() {
         return;
       }
       clearBuilderDraft(DRAFT_KEY);
-      navigateTo("/characters");
+      // A new character's first save lands on its hero page (F23); the
+      // roster when the player turned that off, or the reply had no id.
+      const id = typeof data?.character?.id === "string" ? data.character.id : "";
+      navigateTo(id ? afterFirstSave(id, skipHeroPage.current) : "/characters");
     } catch {
       setError("Could not reach the server.");
     } finally {
