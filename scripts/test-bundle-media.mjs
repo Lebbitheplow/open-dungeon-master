@@ -6,6 +6,7 @@
 // that is malformed, a picture that does not match its name, or a name the
 // list does not carry refuses the bundle before anything is written.
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { openWorld } from "./lib/enforce-world.mjs";
@@ -14,6 +15,7 @@ import { suite } from "./lib/enforce-harness.mjs";
 const { test, finish } = suite("test-bundle-media");
 const { readBundle } = await import("../src/lib/workshop/bundle.ts");
 const { packMedia, mediaId } = await import("../src/lib/workshop/bundle-media.ts");
+const { sha256Hex } = await import("../src/lib/sha256.ts");
 const { exportWorkshopBundle, importWorkshopBundle } = await import("../src/lib/db/workshop-bundle.ts");
 const { worldView, createWorldEntity, getWorldDoc, saveWorldDoc } = await import("../src/lib/db/world-forge.ts");
 const { getOverworld, setOverworldBackdrop } = await import("../src/lib/db/overworld.ts");
@@ -53,6 +55,16 @@ function landed(workshopId) {
     place: view.entities.find((entity) => entity.name === "Gullhaven")?.portrait ?? "",
   };
 }
+
+await test("A picture's name is the SHA-256 of its data URL, worked out without node:crypto so the browser and the apps read the same names.", () => {
+  const { createHash, randomBytes } = crypto;
+  const samples = ["", "abc", "a".repeat(55), "a".repeat(56), "a".repeat(64), "héllo ✓ 龍", `data:image/png;base64,${randomBytes(300_000).toString("base64")}`];
+  for (const text of samples) {
+    assert.equal(sha256Hex(text), createHash("sha256").update(text).digest("hex"), `${text.length} characters`);
+  }
+  assert.equal(mediaId(samples[6]), createHash("sha256").update(samples[6]).digest("hex").slice(0, 32));
+  assert.doesNotMatch(fs.readFileSync(new URL("../src/lib/workshop/bundle-media.ts", import.meta.url), "utf8"), /from "node:/);
+});
 
 await test("A bundle this build writes still carries each picture inline, so an older build can open it.", () => {
   assert.equal(out.bundle.media, undefined);

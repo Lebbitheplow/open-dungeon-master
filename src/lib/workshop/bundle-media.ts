@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../sha256.ts";
 import { IMAGE_DATA_URL, MAX_IMAGE_DATA_URL_CHARS } from "./bundle-schema.ts";
 
 // One picture list for a whole bundle (the plan's "one portable media
@@ -13,14 +13,16 @@ import { IMAGE_DATA_URL, MAX_IMAGE_DATA_URL_CHARS } from "./bundle-schema.ts";
 // servers have this reader (packMedia is that writer, used by the tests).
 // The format version does not move, as for every addition before it.
 //
-// Pure: node:crypto only, so the format's tests need no database.
+// Pure, with no imports beyond its own: the workshop's import preview and
+// the DM's share panel read bundles in the browser and in the apps, where
+// node:crypto does not exist; the format's tests need no database.
 
 export const MEDIA_REF = /^media:([a-f0-9]{32})$/;
 const MEDIA_ID = /^[a-f0-9]{32}$/;
 export const MEDIA_MAX = 2_000;
 
 export function mediaId(dataUrl: string): string {
-  return createHash("sha256").update(dataUrl).digest("hex").slice(0, 32);
+  return sha256Hex(dataUrl).slice(0, 32);
 }
 
 function mapStrings(value: unknown, change: (text: string) => string): unknown {
