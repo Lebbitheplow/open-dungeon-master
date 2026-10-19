@@ -97,21 +97,37 @@ async function arrayKeys(page) {
   // it if the build used another.
   await page.keyboard.press("Home");
   if ((await active()).pressed !== "true") await page.keyboard.press("Enter");
-  const row = '[data-builder-root] section[data-active] [role="group"][aria-label="Strength score"] button';
-  await eventually(async () => (await page.locator(row).locator("visible=true").count()) === 6, { timeoutMs: 5_000, label: "the Strength row of the standard array" });
-  if ((await stops(row)) !== 1) problems.push(`the Strength row has ${await stops(row)} tab stops, not 1`);
-  await page.locator(row).locator("visible=true").and(page.locator('[tabindex="0"]')).first().focus();
-  await page.keyboard.press("End");
-  if ((await active()).label?.startsWith("Strength 8") !== true) problems.push(`End went to ${(await active()).label}, not Strength 8`);
-  await page.keyboard.press("Home");
-  if ((await active()).label?.startsWith("Strength 15") !== true) problems.push(`Home went to ${(await active()).label}, not Strength 15`);
-  await page.keyboard.press("ArrowLeft");
-  if ((await active()).label?.startsWith("Strength 8") !== true) problems.push(`Arrow Left from the first did not wrap to the last: ${(await active()).label}`);
-  await page.keyboard.press("Enter");
-  await sleep(150);
-  if ((await active()).pressed !== "true") problems.push("Enter did not assign the focused value");
-  await page.keyboard.press("Tab");
-  if ((await active()).inStrength) problems.push("Tab stayed inside the Strength row");
+  // Every row from the keyboard, Strength 15 down to Charisma 8, which also
+  // leaves the build a full array, so the later steps stay open.
+  const abilities = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
+  const values = [15, 14, 13, 12, 10, 8];
+  for (const [at, ability] of abilities.entries()) {
+    const row = `[data-builder-root] section[data-active] [role="group"][aria-label="${ability} score"] button`;
+    await eventually(async () => (await page.locator(row).locator("visible=true").count()) === 6, { timeoutMs: 5_000, label: `the ${ability} row of the standard array` });
+    if ((await stops(row)) !== 1) problems.push(`the ${ability} row has ${await stops(row)} tab stops, not 1`);
+    await page.locator(row).locator("visible=true").and(page.locator('[tabindex="0"]')).first().focus();
+    const named = async (value) => (await active()).label?.startsWith(`${ability} ${value}`) === true;
+    if (at === 0) {
+      await page.keyboard.press("End");
+      if (!(await named(8))) problems.push(`End went to ${(await active()).label}, not ${ability} 8`);
+      await page.keyboard.press("ArrowRight");
+      if (!(await named(15))) problems.push(`Arrow Right from the last did not wrap to the first: ${(await active()).label}`);
+      await page.keyboard.press("ArrowLeft");
+      if (!(await named(8))) problems.push(`Arrow Left from the first did not wrap to the last: ${(await active()).label}`);
+    }
+    await page.keyboard.press("Home");
+    if (!(await named(15))) problems.push(`Home went to ${(await active()).label}, not ${ability} 15`);
+    for (let step = 0; step < at; step += 1) await page.keyboard.press("ArrowRight");
+    // Enter on the value already held takes it back, so press it twice then.
+    if ((await active()).pressed === "true") await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await sleep(150);
+    if (!(await named(values[at])) || (await active()).pressed !== "true") problems.push(`Enter did not give ${ability} ${values[at]}: ${(await active()).label}`);
+    if (at === 0) {
+      await page.keyboard.press("Tab");
+      if ((await active()).inStrength) problems.push("Tab stayed inside the Strength row");
+    }
+  }
   return problems;
 }
 
