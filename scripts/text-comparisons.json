@@ -450,7 +450,7 @@
     "app/workshop/maps/forge.ts#toLowerCase": [["display",4,"labels in sentences"]],
     "app/workshop/party/PartyPanel.tsx#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/workshop/plugin/PluginPanel.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
-    "app/workshop/plugin/PublishSection.tsx#str-eq": [["key",3,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/workshop/plugin/PublishSection.tsx#str-eq": [["key",4,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/workshop/plugin/ReskinSection.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/workshop/plugin/fields.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/workshop/storyboard/beat-fields.ts#str-list": [["key",4,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
