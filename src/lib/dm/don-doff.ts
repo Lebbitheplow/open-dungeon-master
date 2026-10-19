@@ -9,7 +9,7 @@
 // of an attunement still pending (it never took hold) costs nothing.
 // Pure: the usage route moves the clock by what this returns.
 
-import { armorOfRow } from "@/lib/srd/armor";
+import { armorOfRow, isWorn } from "@/lib/srd/armor";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 
 const MINUTES: Record<"light" | "medium" | "heavy", { don: number; doff: number }> = {
@@ -27,7 +27,6 @@ export function armorChangeMinutes(
   equipment: EquipmentItem[],
   gear: Record<string, { equipped?: boolean; attuned?: boolean }>,
 ): { minutes: number; lines: string[] } {
-  const anyExplicit = equipment.some((item) => item.equipped);
   let minutes = 0;
   const lines: string[] = [];
   for (const item of equipment) {
@@ -39,7 +38,7 @@ export function armorChangeMinutes(
     if (!entry || entry.equipped === undefined) {
       continue;
     }
-    const worn = item.equipped ?? !anyExplicit;
+    const worn = isWorn(item, equipment);
     if (entry.equipped === worn) {
       continue;
     }

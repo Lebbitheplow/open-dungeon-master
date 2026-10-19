@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
+import { useClassFeatureText } from "@/lib/classes/use-feature-text";
 import {
   findOptionByFeatureName,
   openOptionSlots,
@@ -159,6 +160,8 @@ export function LevelUpDialog({
   // single-class characters keep their one-click flow.
   const classList = useMemo(() => classListFor(sheet), [sheet]);
   const [classChoice, setClassChoice] = useState(classList[0].id);
+  // A genre class's feature text arrives on demand (issue 411).
+  useClassFeatureText([classChoice]);
   const [skillPick, setSkillPick] = useState("");
 
   const levelsGained = 1;

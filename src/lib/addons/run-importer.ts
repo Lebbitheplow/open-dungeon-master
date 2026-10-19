@@ -14,6 +14,7 @@ import { callAddonTool } from "@/lib/addons/runtime";
 import { createTask, finishTask, inputDir, outputDir, reportProgress, type AddonTask } from "@/lib/addons/tasks";
 import { claimUpload, type PendingUpload } from "@/lib/addons/uploads";
 import { withManifestDefaults } from "@/lib/addons/import-defaults";
+import { sniffImage } from "@/lib/addons/sniff";
 import { bundleCounts, encodeBundleImage, readBundle } from "@/lib/workshop/bundle";
 import { MAX_ADDON_BUNDLE_BYTES, MAX_BUNDLE_BYTES, MAX_BUNDLE_IMAGE_BYTES } from "@/lib/workshop/bundle-schema";
 
@@ -53,7 +54,15 @@ async function fileAsDataUrl(dir: string, ref: string, picture: boolean): Promis
   }
   const type = VIEW_FILE_TYPES[path.extname(file).toLowerCase()];
   if (!type) throw new Error(`${name} is not a .glb model or a picture.`);
-  return `data:${type};base64,${bytes.toString("base64")}`;
+  // Held to its bytes here, as a map generator's files are (run-map.ts):
+  // the import checks them again and would drop a bad one without a word.
+  if (type === "model/gltf-binary") {
+    if (bytes.subarray(0, 4).toString("latin1") !== "glTF") throw new Error(`${name} is not a binary glTF file.`);
+    return `data:${type};base64,${bytes.toString("base64")}`;
+  }
+  const sniffed = sniffImage(bytes);
+  if (!sniffed) throw new Error(`${name} is not a PNG, JPEG or WebP picture.`);
+  return `data:${sniffed};base64,${bytes.toString("base64")}`;
 }
 
 // Swaps every "file:<name>" in a picture field (and in a map's board view

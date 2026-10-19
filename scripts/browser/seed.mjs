@@ -417,6 +417,47 @@ for (const viewport of ["desktop", "phone"]) {
   stopTables[viewport] = table.id;
 }
 
+// A table per viewport for the wardrobe (issues 411 and 412): the lead's
+// netrunner, a genre class whose features explain themselves only once the
+// cyberpunk catalog has been fetched, wears one magic cloak and carries a
+// second.
+const wardrobe = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `Wardrobe (${viewport})`,
+    description: "A safehouse with a rack of coats by the door.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({
+      name: "Vex Halloran",
+      class: "netrunner",
+      level: 3,
+      equipment: [
+        { name: "Leather", qty: 1, equipped: true },
+        { name: "Cloak of Protection", qty: 1, equipped: true, attuned: true },
+        { name: "Cloak of Elvenkind", qty: 1, equipped: false, attuned: true },
+      ],
+    }),
+  );
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "Rain ticks on the safehouse window. Two cloaks hang by the door.",
+  });
+  wardrobe[viewport] = table.id;
+}
+
 for (const user of [world.owner, player, ...tourAccounts]) {
   setUserPassword(user.id, await hashPassword(PASSWORD), false);
 }
@@ -501,6 +542,7 @@ const ids = {
   prepSourceTitle: PREP_SOURCE_TITLE,
   closing,
   stopTables,
+  wardrobe,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [world.campaignId]: TITLE,
@@ -511,6 +553,7 @@ const ids = {
     [prepSource.id]: PREP_SOURCE_TITLE,
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
   },
   systemLine,
   oocQuestion,

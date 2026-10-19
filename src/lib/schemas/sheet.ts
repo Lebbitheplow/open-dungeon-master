@@ -167,6 +167,11 @@ export const equipmentItemSchema = z.object({
   // Optional so rows written before the field keep validating; when NO item
   // on a sheet carries it, the AC engine treats everything as worn.
   equipped: z.boolean().optional(),
+  // Worn beside another item of its kind on the DM's say (SRD 5.1, Multiple
+  // Items of the Same Kind: "a circlet under a helmet", "two cloaks"). Only
+  // the DM or the party lead sets it; a place's limit (src/lib/srd/
+  // wear-slots.ts) never counts it out. Absent on every other row.
+  layered: z.boolean().optional(),
   // Magic item currently attuned. Capped at 3 per character by patchSheet.
   attuned: z.boolean().optional(),
   // Asked to attune and waiting for the short rest that attuning takes

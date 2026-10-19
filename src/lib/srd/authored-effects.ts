@@ -21,7 +21,7 @@
 //
 // Pure and database-free, like the rest of src/lib/srd.
 
-import { matchArmor } from "@/lib/srd/armor";
+import { isWorn, matchArmor } from "@/lib/srd/armor";
 import { AUTHORED_DATA_A } from "@/lib/srd/authored-effects-data";
 import { AUTHORED_DATA_A2 } from "@/lib/srd/authored-effects-data-b";
 import { AUTHORED_DATA_B } from "@/lib/srd/authored-effects-data2";
@@ -170,17 +170,15 @@ export function hasCondition(sheet: AuthoredSheet, name: string): boolean {
   });
 }
 
-// Heavy armor on the body, read the way the rage rule reads it: the items
-// marked worn when any are, otherwise everything carried.
+// Heavy armor on the body, read the way the armor engine reads "worn"
+// (src/lib/srd/armor.ts isWorn): the rows as marked once any row says, so a
+// character who took the last piece off wears none; everything carried on a
+// sheet that never said.
 export function wearsHeavy(sheet: AuthoredSheet): boolean {
   const items = sheet.equipment ?? [];
-  const anyExplicit = items.some((item) => item.equipped);
-  return items.some((item) => {
-    if (anyExplicit && !item.equipped) {
-      return false;
-    }
-    return (item.gear?.armor?.category ?? matchArmor(item.name)?.category) === "heavy";
-  });
+  return items.some(
+    (item) => isWorn(item, items) && (item.gear?.armor?.category ?? matchArmor(item.name)?.category) === "heavy",
+  );
 }
 
 export function gateHolds(gate: Gate | undefined, sheet: AuthoredSheet, held: HeldAuthored): boolean {

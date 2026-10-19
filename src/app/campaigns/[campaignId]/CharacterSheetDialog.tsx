@@ -17,9 +17,10 @@ import {
   sizeForRace,
   type DerivedPart,
 } from "@/lib/srd";
-import { attunementSlotsFor, matchArmor } from "@/lib/srd/armor";
+import { attunementSlotsFor } from "@/lib/srd/armor";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
-import { matchMagicItem, magicItemRiders } from "@/lib/srd/magic-items";
+import { magicItemRiders } from "@/lib/srd/magic-items";
+import type { WearConflict } from "@/lib/srd/wear-slots";
 import { RESOURCE_DEFS } from "@/lib/srd/class-resources";
 import { GameTerm } from "@/components/ui/GameTerm";
 import {
@@ -36,9 +37,9 @@ import {
 import { SheetSpells } from "@/components/sheet/SheetSpells";
 import { DefensesLine, HitDiceSpend, StateTags } from "@/components/sheet/SheetState";
 import { SheetBetween } from "@/components/sheet/SheetBetween";
-import { conditionDetail, hitDiceLine, itemStatus, maxHpView, otherSpeedsLine, speedView } from "@/components/sheet/sheet-state";
+import { conditionDetail, hitDiceLine, itemStatus, maxHpView, otherSpeedsLine, speedView, wearableGear } from "@/components/sheet/sheet-state";
 import { FeatureChoicePicker, OtherSpeeds } from "@/components/sheet/SheetChoices";
-import { SheetGearRow } from "@/components/sheet/SheetGearRow";
+import { SheetGearRows, type PendingWear } from "@/components/sheet/SheetGearRow";
 import { LoadBreakdown } from "@/components/sheet/LoadBreakdown";
 import { ResourceRow, SlotRow, STEP_BUTTON } from "@/components/sheet/SheetCounters";
 import { namesLookup } from "@/lib/battlemap/condition-notes";
@@ -107,14 +108,9 @@ export function CharacterSheetDialog({
   const derived = computeSheetDerived(sheet);
   const armor = acBreakdownFor(sheet);
   const attunedCount = sheet.equipment.filter((item) => item.attuned).length;
-  // Only gear worth a toggle: armor and shields can be worn, and anything
-  // whose name declares a magic bonus can be attuned.
-  const wearable = sheet.equipment.filter(
-    (item) =>
-      matchArmor(item.name) !== null ||
-      /\+[123]\b/.test(item.name) ||
-      matchMagicItem(item.name) !== null,
-  );
+  // Only gear worth a toggle: armor, shields, magic and anything with a
+  // place on the body (src/components/sheet/sheet-state.ts wearableGear).
+  const wearable = wearableGear(sheet.equipment);
   const magic = magicItemRiders(sheet.equipment, sheet);
   // Carried weight is always worth showing once the pack has weights on it;
   // the thresholds and their penalties only mean something when the table
@@ -138,7 +134,6 @@ export function CharacterSheetDialog({
     size: sizeForRace(sheet.race),
     wearer: sheet,
   });
-  const anyEquipped = sheet.equipment.some((item) => item.equipped);
   const speedNote = speedState.notes.length ? speedState.notes.join(" ") : "Their walking speed.";
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -152,6 +147,9 @@ export function CharacterSheetDialog({
   // The route's line after armor went on or off outside a fight: the minutes
   // it took, already on the clock.
   const [timeNote, setTimeNote] = useState<string | null>(null);
+  // Putting on what fills a full place (a second cloak) asks first: the swap,
+  // or for the DM and the lead the SRD's exception (issue 412).
+  const [pendingWear, setPendingWear] = useState<PendingWear | null>(null);
   const spends = mine || corrects;
   // The usage route's own refusal for a dead character's spend.
   const deadNote = dead && !corrects ? `${sheet.name} is dead and spends nothing.` : null;
@@ -179,7 +177,11 @@ export function CharacterSheetDialog({
         body: JSON.stringify({ ...body, characterId: sheet.id }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) {
+      const conflict = data?.wearConflict as WearConflict | undefined;
+      if (!response.ok && conflict?.item) {
+        // The server saw a fuller place than this sheet did: ask the same way.
+        setPendingWear({ name: conflict.item, conflict, change: { equipped: true } });
+      } else if (!response.ok) {
         setRefusal({ text: typeof data?.error === "string" ? data.error : "That change was refused.", at });
       } else if (typeof data?.timePassed === "string") {
         // Out of a fight armor takes minutes to put on or take off, and the
@@ -517,10 +519,10 @@ export function CharacterSheetDialog({
                   return item ? itemStatus(sheet, item).charges : null;
                 }}
               />
-              {mine && wearable.length ? (
+              {(mine || corrects) && wearable.length ? (
                 <div className="reveal mt-2 space-y-1">
                   <p className="text-[11px] text-stone-500">
-                    Worn gear sets your AC ({sheet.acOverride ? "pinned by hand" : armor.parts.join(" + ")}
+                    Worn gear sets {mine ? "your" : "their"} AC ({sheet.acOverride ? "pinned by hand" : armor.parts.join(" + ")}
                     ). Attuned {attunedCount}/{attunementSlotsFor(sheet)}.
                   </p>
                   {magic.sources.length ? (
@@ -538,19 +540,19 @@ export function CharacterSheetDialog({
                         .join(" \u00b7 ") || "worn"}
                     </p>
                   ) : null}
-                  {wearable.map((item) => (
-                    <SheetGearRow
-                      key={item.name}
-                      sheet={sheet}
-                      item={item}
-                      worn={item.equipped ?? !anyEquipped}
-                      inCombat={inCombat}
-                      myTurn={myTurn}
-                      dead={dead}
-                      busy={busy}
-                      onGear={(change) => adjustUsage({ gear: { [item.name]: change } }, "gear")}
-                    />
-                  ))}
+                  <SheetGearRows
+                    sheet={sheet}
+                    items={wearable}
+                    armor={armor}
+                    corrects={corrects}
+                    inCombat={inCombat}
+                    myTurn={myTurn}
+                    dead={dead}
+                    busy={busy}
+                    pending={pendingWear}
+                    onPending={setPendingWear}
+                    onGear={(gear) => void adjustUsage({ gear }, "gear")}
+                  />
                   {refusal?.at === "gear" ? (
                     <p role="alert" className="reveal text-[11px] text-amber-300">
                       {refusal.text}

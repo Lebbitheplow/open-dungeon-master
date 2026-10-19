@@ -24,7 +24,7 @@ export {
 // now keeps.
 export function ItemFlags({ item }: { item: EquipmentItem }) {
   const flags = [
-    item.equipped ? "worn" : null,
+    item.equipped ? (item.layered ? "worn beside another (DM's call)" : "worn") : null,
     item.attuned ? "attuned" : item.attuning ? "attunes at the next rest" : null,
     item.identified === false ? "unidentified" : null,
     item.charges !== undefined ? `${item.charges} charges` : null,

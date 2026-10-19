@@ -5,7 +5,7 @@
 // re-exports everything here for the callers that have always found it
 // there.
 import { RAGING } from "@/lib/srd/class-resources";
-import { matchArmor, type SrdArmor } from "@/lib/srd/armor";
+import { isWorn, matchArmor, type SrdArmor } from "@/lib/srd/armor";
 import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
 
 function has(conditions: string[], names: string[]): string | null {
@@ -120,20 +120,15 @@ export function resistsAllDamage(conditions: string[] | undefined): boolean {
   return has(conditions ?? [], ["petrified"]) !== null;
 }
 
-// Body armor of the heavy category, worn. The same reading of "worn" the
-// armor engine uses: until a sheet has its first explicit toggle, everything
-// carried counts.
+// Body armor of the heavy category, worn. The armor engine's own reading of
+// "worn" (src/lib/srd/armor.ts isWorn): until a sheet has its first explicit
+// toggle everything carried counts, and after it only the rows marked worn,
+// so a barbarian who took the plate off rages again.
 export function wearsHeavyArmor(
   equipment: Array<{ name: string; equipped?: boolean; gear?: { armor?: SrdArmor } }> | undefined,
 ): boolean {
   const items = equipment ?? [];
-  const anyExplicit = items.some((item) => item.equipped);
-  return items.some((item) => {
-    if (anyExplicit && !item.equipped) {
-      return false;
-    }
-    return (item.gear?.armor ?? matchArmor(item.name))?.category === "heavy";
-  });
+  return items.some((item) => isWorn(item, items) && (item.gear?.armor ?? matchArmor(item.name))?.category === "heavy");
 }
 
 // Rage gives its benefits only to a barbarian who is not wearing heavy armor.

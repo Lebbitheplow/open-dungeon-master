@@ -12,6 +12,7 @@ import { engineFeatNamed } from "@/lib/srd/feat-effects";
 import { engineSpellNamed, truthy } from "@/lib/srd/spell-facts";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 import { defaultThirdCasterProfile, isThirdCasterProfile } from "@/lib/srd/third-caster";
+import { WORN_PLACE_WORDS, isWornPlace } from "@/lib/srd/worn-places";
 
 // What a homebrew entry means to the engine.
 //
@@ -276,6 +277,9 @@ export function describeHomebrew(kind: HomebrewKind, data: Raw): string {
     const spells = Array.isArray(data.spells) ? (data.spells as Array<{ spell: string }>) : [];
     if (spells.length) {
       parts.push(`casts ${spells.map((entry) => entry.spell).join(", ")}`);
+    }
+    if (!weapon && !armor && isWornPlace(data.wornOn)) {
+      parts.push(`worn on the ${WORN_PLACE_WORDS[data.wornOn]}`);
     }
     if (data.requiresAttunement) {
       parts.push("attunement");

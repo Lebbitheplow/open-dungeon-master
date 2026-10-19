@@ -19,6 +19,7 @@ import { register, syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { removeTempDir } from "./remove-temp-dir.mjs";
+import { standInStoryteller } from "./stand-in-storyteller.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 const packPath = path.join(repoRoot, "data", "content", "open5e.sqlite");
@@ -51,6 +52,16 @@ globalThis.__odmEmbedderPromise = Promise.resolve((texts) =>
 // audio on a machine that runs one. A provider set in the environment, or
 // saved in the admin settings by a suite, still wins.
 process.env.TTS_PROVIDER ??= "off";
+// Nor a storyteller dialled by accident (issue 414): with nothing named, a
+// campaign copies the shipped default backend, the llama-server address
+// 127.0.0.1:8001, so a suite that queued a DM turn without a fake model of
+// its own (enforce-narrator.mjs fakeModel) sent it to whatever this machine
+// runs there. The stand-in is set up but never answers. A provider set in
+// the environment, enforce-campaign.mjs's "none", or a fake model pointed at
+// the world still wins.
+if (!process.env.DEFAULT_TEXT_PROVIDER) {
+  standInStoryteller();
+}
 
 // ---- dice ----
 //

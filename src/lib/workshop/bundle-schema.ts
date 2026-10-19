@@ -5,6 +5,7 @@ import { GENRES } from "@/lib/schemas/game-settings";
 import { BEAT_KINDS, BODY_MAX, ROUTE_KINDS, ROUTE_LABEL_MAX } from "@/lib/workshop/board";
 import { LORE_BODY_MAX } from "@/lib/dm/world-lore-logic";
 import { worldPackDraftSchema } from "@/lib/worlds/draft";
+import { viewDataProblem } from "@/lib/addons/view-data";
 
 // The shape of a workshop bundle: every field, its length and its ceiling.
 // Split from src/lib/workshop/bundle.ts (which re-exports all of it) to keep
@@ -224,11 +225,19 @@ const mapSchema = z.object({
   // its data, and its files (a .glb model, textures) inline as data URLs so
   // the map arrives whole. Null for a map no addon made, and in bundles from
   // builds before addons. Checked again, file by file, on import
-  // (src/lib/db/map-addon-view-bundle.ts).
+  // (src/lib/db/map-addon-view-bundle.ts). The data is held to the map
+  // generator's own cap here, so an importer addon or a hand-made bundle
+  // hears it is too large instead of the view quietly arriving empty.
   addonView: z
     .object({
       addonId: z.string().trim().max(60),
-      data: z.unknown().optional(),
+      data: z
+        .unknown()
+        .optional()
+        .superRefine((data, context) => {
+          const problem = viewDataProblem(data);
+          if (problem) context.addIssue({ code: "custom", message: problem });
+        }),
       files: z
         .array(
           z.object({

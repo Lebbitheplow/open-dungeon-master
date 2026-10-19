@@ -15,7 +15,7 @@ import type { EquipmentItem } from "@/lib/schemas/sheet";
 // engine treats everything as worn, and so does the line.
 export function describeEquipmentItem(item: EquipmentItem, equipment: readonly EquipmentItem[]): string {
   const count = item.qty > 1 ? ` x${item.qty}` : "";
-  const magic = magicItemLine(item, !equipment.some((entry) => entry.equipped !== undefined));
+  const magic = magicItemLine(item, equipment);
   // A sentient item is an NPC the DM runs (src/lib/homebrew/sentience.ts).
   const mind = item.gear?.sentience ? `; ${sentienceLine(item.gear.sentience)}` : "";
   // Bracketed: the line lists items with commas, and a magic item's own
