@@ -7,7 +7,7 @@
 // says so, carried), attuned if it asks for attunement, and a second copy
 // adds nothing.
 
-import { isWorn } from "@/lib/srd/armor";
+import { countsAsWorn } from "@/lib/srd/wear-slots";
 import { textKey } from "@/lib/language/text-logic";
 
 type Skill = string;
@@ -155,7 +155,9 @@ export function itemCheckRiders(
     if (!row || counted.has(row) || [...counted].some((seen) => seen.names[0] === row.names[0] && seen.effect === row.effect)) {
       continue;
     }
-    if (!row.carried && !isWorn(item, equipment ?? [])) {
+    // Worn, and in a place that lets it count: a second cloak's advantage
+    // is not a first cloak's (src/lib/srd/wear-slots.ts).
+    if (!row.carried && !countsAsWorn(item, equipment ?? [])) {
       continue;
     }
     if (row.requiresAttunement && !item.attuned) {

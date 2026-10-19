@@ -12,14 +12,18 @@
 //   - the row IS that item: its name or its pack slug, never a fragment of
 //     one ("Pouch" is not a Pouch of Runestones);
 //   - it is worn or held, unless its own text says it works from the pack
-//     ("while the sword is on your person");
+//     ("while the sword is on your person"), and its place on the body lets
+//     it count: one cloak, one pair of boots, one pair of bracers at a time
+//     (src/lib/srd/wear-slots.ts, issue 412);
 //   - if it asks for attunement, the wearer is attuned to it, and is someone
 //     its text lets attune (a Staff of Power: a sorcerer, warlock or wizard);
 //   - a second copy of the same item adds nothing.
 
 import magicItemsJson from "@/lib/classes/magic-items.json";
-import { ATTUNEMENT_SLOTS, attunementSlotsFor, isWorn } from "@/lib/srd/armor";
+import { ATTUNEMENT_SLOTS, attunementSlotsFor } from "@/lib/srd/armor";
+import { countsAsWorn } from "@/lib/srd/wear-slots";
 import type { Ability } from "@/lib/schemas/sheet";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 import { textKey } from "@/lib/language/text-logic";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
@@ -34,7 +38,7 @@ export type WornMagicItem = {
   attuned?: boolean;
   // Waiting on the short rest attuning takes; holds one of the three places.
   attuning?: boolean;
-  gear?: { magic?: { requiresAttunement: boolean; effects: MagicItemEffect[] } };
+  gear?: { magic?: { requiresAttunement: boolean; effects: MagicItemEffect[] }; tags?: readonly ItemTag[] };
 };
 
 export type MagicItemEffect =
@@ -186,7 +190,7 @@ function itemActive(
   equipment: WornMagicItem[],
   wearer: Wearer | undefined,
 ): boolean {
-  if (!def.carried && !isWorn(item, equipment)) {
+  if (!def.carried && !countsAsWorn(item, equipment)) {
     return false;
   }
   if (!def.requiresAttunement) {

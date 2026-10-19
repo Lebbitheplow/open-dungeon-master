@@ -8,7 +8,6 @@ import { Select } from "@/components/ui/Select";
 import { CONDITION_BLURBS, DAMAGE_TYPE_BLURBS, glossaryFor } from "@/lib/help/terms";
 import {
   MAX_ATTACKS,
-  MAX_TRAITS,
   SAVE_ABILITIES,
   SIZES,
   type MonsterDraft,
@@ -238,55 +237,6 @@ export function SaveEditor({
           />
         </div>
       ))}
-    </div>
-  );
-}
-
-// Traits are one-line rules text, which is what the engine surfaces to
-// whoever is running the monster. Legendary and lair actions go here too:
-// the engine has no separate turn for them, so a line a DM will read at the
-// table is worth more than a field nothing acts on.
-export function TraitEditor({
-  draft,
-  onChange,
-}: {
-  draft: MonsterDraft;
-  onChange: (draft: MonsterDraft) => void;
-}) {
-  const traits = draft.stats.traits;
-  const setTraits = (next: string[]) =>
-    onChange({ ...draft, stats: { ...draft.stats, traits: next } });
-  return (
-    <div className="flex flex-col gap-1">
-      {traits.map((trait, index) => (
-        <div key={index} className="flex items-center gap-1.5">
-          <input
-            value={trait}
-            onChange={(event) =>
-              setTraits(traits.map((row, at) => (at === index ? event.target.value : row)))
-            }
-            placeholder="Fire Breath (Recharge 5-6): DC 15 Dex save, 6d6 fire, half on a success"
-            className={cn(input, "flex-1")}
-          />
-          <button
-            type="button"
-            onClick={() => setTraits(traits.filter((_, at) => at !== index))}
-            className="text-stone-600 hover:text-red-300"
-            aria-label="Remove trait"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
-      ))}
-      {traits.length < MAX_TRAITS ? (
-        <button
-          type="button"
-          onClick={() => setTraits([...traits, ""])}
-          className="inline-flex w-fit items-center gap-1 rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-amber-100"
-        >
-          <Plus className="size-3" /> Trait, legendary action or lair action
-        </button>
-      ) : null}
     </div>
   );
 }

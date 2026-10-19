@@ -179,9 +179,3 @@ export function mayReadMedia(reader: Reader, url: string): boolean {
   }
   return false;
 }
-
-// For tests and the restore path: forget every set.
-export function forgetMediaSets(): void {
-  cache.clear();
-  tables = null;
-}

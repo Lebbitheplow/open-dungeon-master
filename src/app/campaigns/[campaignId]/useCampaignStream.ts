@@ -41,6 +41,7 @@ import type { DmJobView } from "@/lib/dm/job-stage-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
+import { registerBrowserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 
 export type DmStatus =
@@ -707,6 +708,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "world_updated":
         case "records_changed":
+        case "party_atlas_updated":
           next.worldVersion = state.worldVersion + 1;
           return next;
         case "lore_updated":
@@ -1120,6 +1122,9 @@ const EPHEMERAL_EVENTS = [
   // the world again.
   "world_updated",
   "records_changed",
+  // The maps shown to the party changed. Contentless, to every seat: the
+  // party's Atlas in the Map tab asks for its own view.
+  "party_atlas_updated",
   // Lore the table reads changed (a secret revealed to the party).
   // Contentless, to every seat: each lore list asks for its own view.
   "lore_updated",
@@ -1221,6 +1226,11 @@ export function useCampaignStream(campaignId: string) {
       const data = await response.json();
       const lastSeq = data.latestSeq ?? 0;
       registerBrowserSpecies(data.species);
+      // The workshop and pack subclasses the table's sheets hold: their
+      // feature text and always-prepared spells (src/lib/srd/features.ts).
+      for (const [classId, tables] of Object.entries((data.subclasses ?? {}) as SubclassExtras)) {
+        registerBrowserSubclassExtras(classId, tables);
+      }
       // The table's whole list: a feat its DM forgot leaves with it.
       registerBrowserTableFeats(data.feats ?? {}, campaignId, { replace: true });
       dispatch({

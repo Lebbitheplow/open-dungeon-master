@@ -33,7 +33,7 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
       {
         kind: "check_adv",
         abilities: ["str"],
-        reason: "push|pull|lift|break|shove|drag|carry|haul|force|bend|heave",
+        about: "push_pull_lift_break",
         gate: { choice: "bear" },
         note: "Eagle's sight and Wolf's tracking pace are narrated.",
       },

@@ -69,9 +69,12 @@ export async function POST(request: Request) {
     recordLoginFailure(throttle);
     return Response.json(
       {
-        error: setupCode
-          ? "That setup code is not right. Copy it from the server log."
-          : "This server has no accounts yet. Enter the setup code from the server log to create the admin account.",
+        // A device world's code never reaches a log: its app holds it.
+        error: deviceWorld
+          ? "The app that hosts this world makes its first account. Open the app and choose Enter my world."
+          : setupCode
+            ? "That setup code is not right. Copy it from the server log."
+            : "This server has no accounts yet. Enter the setup code from the server log to create the admin account.",
         needsSetup: true,
       },
       { status: 403 },

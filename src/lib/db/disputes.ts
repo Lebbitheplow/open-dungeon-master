@@ -133,5 +133,3 @@ export function publicDispute(dispute: RulingDispute) {
     createdAt: dispute.createdAt,
   };
 }
-
-export type PublicDispute = ReturnType<typeof publicDispute>;

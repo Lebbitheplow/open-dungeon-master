@@ -252,7 +252,7 @@ await test("A reply is read once at the boundary: fences and stray prose are tol
 
 // ---- the rim ----
 
-const outcomes = guardOutcomes([], null);
+const outcomes = guardOutcomes([], null, "english");
 const read = (kinds, text = "Mira strides in.") =>
   readClaims(world.campaign(), { label: "turn test", text, kinds, outcomes, sheets: world.sheets() });
 

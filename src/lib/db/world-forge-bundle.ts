@@ -57,12 +57,19 @@ export function worldForBundle(
 
 // Returns how many entries, links and events it brought, for the count.
 // `arrived` names the id a monster or item of the bundle's shelf landed as
-// here (src/lib/db/workshop-bundle-shelf.ts), for an entry's links.
+// here (src/lib/db/workshop-bundle-shelf.ts), for an entry's links, and
+// `rows` the ids the bundle's battle maps and encounters landed as, in the
+// bundle's order, for a place's.
 export function worldFromBundle(
   workshopId: string,
   world: BundleWorld,
   ids: Record<Shelf, string[]>,
   arrived: (kind: string, name: string) => string | null = () => null,
+  rows: { maps: string[]; encounters: string[] } = { maps: [], encounters: [] },
+  // Writes one picture and answers its path. The bundle import passes its
+  // own, which writes each distinct picture once and cleans up after a
+  // failed import (src/lib/db/workshop-bundle.ts).
+  save?: (dataUrl: string | undefined) => string,
 ): number {
   const land = (ref: string) => {
     const parsed = parseRef(ref);
@@ -72,7 +79,7 @@ export function worldFromBundle(
   };
   const doc = remapDoc(readDoc(world.doc), land);
   const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
-  const write = (url: string | undefined) => {
+  const write = save ?? ((url: string | undefined) => {
     const image = decodeBundleImage(url ?? "");
     if (!image) return "";
     mkdirSync(dir, { recursive: true });
@@ -80,13 +87,20 @@ export function worldFromBundle(
     writeFileSync(path.join(/*turbopackIgnore: true*/ dir, filename), image.bytes);
     recordMediaFile(`/uploads/${filename}`);
     return `/uploads/${filename}`;
-  };
+  });
   doc.maps = doc.maps.map((atlas) => ({ ...atlas, image: write(world.images[atlas.id]) }));
   // A path from the other server names nothing here: an entry keeps a
   // picture only if the bundle carried its bytes.
   // A link travels by name and lands on the arrived copy; a link to a record
   // that did not travel is dropped, and a rulebook link stays as it is.
   const landBinding = (binding: Binding): Binding | null => {
+    if (binding.kind === "map" || binding.kind === "encounter") {
+      // Only a row the bundle carried: an id from the other server names
+      // nothing here, or worse, another table's row.
+      const index = /^@(map|encounter):#(\d+)$/.exec(binding.ref);
+      const id = index && index[1] === binding.kind ? (binding.kind === "map" ? rows.maps : rows.encounters)[Number(index[2])] : undefined;
+      return id ? { kind: binding.kind, ref: id } : null;
+    }
     const portable = /^homebrew:@(monster|item):(.+)$/.exec(binding.ref);
     if (portable) {
       const id = arrived(portable[1], portable[2]);

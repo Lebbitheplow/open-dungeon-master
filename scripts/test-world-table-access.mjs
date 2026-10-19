@@ -6,6 +6,12 @@
 // runs, the party lead of an AI campaign, and nobody else. Every route
 // under world/ is found on disk and asked by every other seat, so a route
 // added later is held to the same rule without this file changing.
+//
+// One route is the players' on purpose: the party's Atlas (GET
+// world/atlas/party, src/lib/worldforge/party-atlas.ts) answers every
+// member with the maps the DM has shown. It is named here, so no other
+// route can join it by accident, and it is still asked: it must answer a
+// member and never say a secret.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -44,6 +50,8 @@ const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"];
 // A body for the methods that take one; a GET goes without.
 const bodyFor = (method, body) => (method === "GET" ? undefined : body);
 const routes = [];
+const PARTY_READS = new Set(["campaigns/[campaignId]/world/atlas/party GET"]);
+const forParty = (route) => PARTY_READS.has(`${route.name} ${route.method}`);
 for (const name of routeNames(worldDir)) {
   const mod = await human.route(name);
   for (const method of METHODS) {
@@ -76,7 +84,7 @@ await test("a player at a human-run table is refused by every world route, and n
     for (const route of routes) {
       human.signIn(user);
       const answer = await call(route.mod, route.method, bodyFor(route.method, { secrets: [], name: "Leak", typeId: "t_other" }), params(human.campaignId));
-      assert.equal(answer.status, 403, `${user.username} ${route.method} ${route.name}: ${answer.status}`);
+      assert.equal(answer.status, forParty(route) ? 200 : 403, `${user.username} ${route.method} ${route.name}: ${answer.status}`);
       assert.doesNotMatch(JSON.stringify(answer.json), /sold the codes|smugglers/, `${route.method} ${route.name} said the secret`);
     }
   }
@@ -113,7 +121,7 @@ await test("the lead of an AI campaign reads and writes its world; a player ther
   ai.signIn(aiPlayer);
   for (const route of routes) {
     const answer = await call(route.mod, route.method, bodyFor(route.method, {}), { campaignId: ai.campaignId, ref: wrote.json.entity.ref });
-    assert.equal(answer.status, 403, `AI-table player ${route.method} ${route.name}: ${answer.status}`);
+    assert.equal(answer.status, forParty(route) ? 200 : 403, `AI-table player ${route.method} ${route.name}: ${answer.status}`);
   }
 });
 

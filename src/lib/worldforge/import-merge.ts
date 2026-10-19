@@ -210,7 +210,11 @@ export function remapEntryIds(entry: Entry, plan: IdPlan): Entry {
 
 // ---- rows ----
 
-const withoutId = (row: Row): Record<string, unknown> => Object.fromEntries(Object.entries(row).filter(([key]) => key !== "id"));
+// A map's Region role and frame and a pin's Region binding are this
+// campaign's own (src/lib/db/atlas-region.ts): a new row brings them, and a
+// later import neither compares nor overwrites them.
+const LOCAL_ONLY = new Set(["id", "role", "frame", "regionLink"]);
+const withoutId = (row: Row): Record<string, unknown> => Object.fromEntries(Object.entries(row).filter(([key]) => !LOCAL_ONLY.has(key)));
 
 export type RowMerge = { added: number; updated: number; conflicts: string[]; pending: Array<{ origin: string; key: string; source: string }> };
 

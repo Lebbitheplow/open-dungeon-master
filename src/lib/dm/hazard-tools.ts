@@ -32,6 +32,7 @@ import { springTrapOn } from "@/lib/dm/trap-run";
 import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import { hazardNamesAt, trapAt } from "@/lib/srd/table-hazards";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 // Traps and environmental hazards used to be pure narration routed through the
 // generic damage_enemy call, so a "dart trap" or a "40-foot fall" dealt
@@ -458,7 +459,7 @@ function exposureShrug(sheet: CharacterSheet, cold: boolean): string | null {
   if (pcResistances(sheet).includes(wanted)) {
     return `${wanted} resistance: unaffected by the ${cold ? "cold" : "heat"}`;
   }
-  if (cold && sheet.equipment.some((item) => /cold[- ]weather gear|winter (?:clothes|clothing|gear)|fur cloak/i.test(item.name))) {
+  if (cold && sheet.equipment.some((item) => hasItemTag(item, "cold_weather_gear"))) {
     return "dressed for the cold: unaffected";
   }
   return null;
@@ -471,7 +472,7 @@ function heatHampers(sheet: CharacterSheet): boolean {
   return (
     category === "medium" ||
     category === "heavy" ||
-    sheet.equipment.some((item) => /heavy clothing|cold[- ]weather gear|fur cloak/i.test(item.name))
+    sheet.equipment.some((item) => hasItemTag(item, "heavy_clothing") || hasItemTag(item, "cold_weather_gear"))
   );
 }
 

@@ -437,7 +437,7 @@ export function resolvePcOpportunityAttacks(
       continue;
     }
     // Polearm Master: a creature entering the polearm's reach provokes too.
-    const entering = polearmReachOpportunity(sheet, resolved.displayName) ? entersReachAt(steps, token, profile.reachTiles, 1, moverFootprint) : null;
+    const entering = polearmReachOpportunity(sheet, resolved.srd?.name) ? entersReachAt(steps, token, profile.reachTiles, 1, moverFootprint) : null;
     if (!leavesReachAt(steps, token, profile.reachTiles, 1, moverFootprint) && !entering) {
 
       continue;

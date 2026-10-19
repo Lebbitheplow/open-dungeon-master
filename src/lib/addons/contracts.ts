@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TERRAIN } from "@/lib/battlemap/types";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
 import { BACKDROP_LIMITS } from "@/lib/battlemap/backdrop";
+import { viewDataProblem } from "@/lib/addons/view-data";
 
 // The contract of each extension point: the arguments the server sends an
 // addon's MCP tool, and the result it accepts back (docs/addons/
@@ -61,8 +62,6 @@ export const importerResultSchema = z
     message: "Return either bundleFile or bundle, not both and not neither.",
   });
 
-export type ImporterResult = z.infer<typeof importerResultSchema>;
-
 // ---- map generators ----
 
 // The library's own limits: the board renderer, fog and pathfinding are
@@ -90,7 +89,6 @@ export type MapGeneratorArguments = {
   host: HostInfo;
 };
 
-export const MAX_VIEW_DATA_BYTES = 256 * 1024;
 export const MAX_VIEW_FILES = 8;
 export const MAX_VIEW_FILE_BYTES = 64 * 1024 * 1024;
 // Pictures under the grid go through the upload pipeline's own cap.
@@ -178,6 +176,11 @@ export const mapResultSchema = z
         context.addIssue({ code: "custom", path: ["map", "lights"], message: `A light at ${light.x},${light.y} is off the map.` });
         return;
       }
+    }
+    const dataProblem = value.view ? viewDataProblem(value.view.data) : null;
+    if (dataProblem) {
+      context.addIssue({ code: "custom", path: ["view", "data"], message: dataProblem });
+      return;
     }
     for (const file of value.view?.files ?? []) {
       if (!viewFileType(file)) {

@@ -10,6 +10,7 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { proficiencyBonus } from "@/lib/srd";
 import { findBeastForm } from "@/lib/srd/beast-forms";
 import { findNamed, textKey } from "@/lib/language/text-logic";
+import { creatureSpellings } from "@/lib/srd/name-forms";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { petAttackCost } from "@/lib/dm/pet-attack-cost";
@@ -241,7 +242,7 @@ export function buildPet(
         refused: "rules",
       };
     }
-    const form = findNamed(FAMILIAR_FORMS, args.form, (entry) => entry.form);
+    const form = findNamed(FAMILIAR_FORMS, [args.form], (entry) => creatureSpellings(entry.form));
     if (!form) {
       const offer = familiarOffer(hasPactOfTheChain(sheet));
       return {
@@ -337,7 +338,6 @@ export function buildPet(
 
 export function handleSummonPet(
   campaign: Campaign,
-  turn: DmTurn,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,

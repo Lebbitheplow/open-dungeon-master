@@ -11,6 +11,14 @@
 // builds them for whoever runs the table, src/lib/characters/
 // subclass-extras.ts; the builder from the rows it fetched). Pure.
 
+import {
+  defaultThirdCasterProfile,
+  isThirdCasterProfile,
+  thirdCasterProfileForFeature,
+  thirdCasterProfileForPackSubclass,
+  type ThirdCasterProfile,
+} from "@/lib/srd/third-caster";
+
 export type SubclassFeatureRow = { n: string; d: string };
 
 export type ExtraSubclass = {
@@ -18,11 +26,36 @@ export type ExtraSubclass = {
   levels: Record<string, SubclassFeatureRow[]>;
   // Always-prepared spells by class level (a domain's, an oath's).
   spells?: Record<string, string[]>;
+  // Casts as an Eldritch Knight or Arcane Trickster does (src/lib/srd/
+  // third-caster.ts). Read only for a class that casts nothing of its own
+  // (src/lib/srd/features.ts subclassCastingProfileFor).
+  castingProfile?: ThirdCasterProfile;
   source: "homebrew" | "pack";
 };
 
 // By class id.
 export type SubclassExtras = Record<string, ExtraSubclass[]>;
+
+// The subclasses the browser fetched or was sent for this person: the
+// builder's and the level-up dialog's archetype rows (src/app/characters/
+// builder/useBuilderOptions.ts useArchetypes) and the campaign snapshot's
+// (useCampaignStream). src/lib/srd/features.ts reads them when a caller
+// passes no extras of its own. Set only in the browser, where everything
+// fetched is this one person's to see. Kept here, apart from features.ts,
+// so the campaign page registers them without loading the class tables
+// into its first load (scripts/bundle-budget.json).
+const browserExtras: SubclassExtras = {};
+
+export function registerBrowserSubclassExtras(classId: string, tables: SubclassExtras[string]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  browserExtras[classId] = tables;
+}
+
+export function browserSubclassExtras(): SubclassExtras {
+  return browserExtras;
+}
 
 const ORDINAL = /\b(?:at|beginning at|starting at|when you reach|by|upon reaching|once you reach)\s+(\d{1,2})(?:st|nd|rd|th)\s+level/i;
 const LEVEL_ANYWHERE = /\b(\d{1,2})(?:st|nd|rd|th)[- ]level\b/i;
@@ -76,24 +109,44 @@ function spellLevels(raw: unknown): Record<string, string[]> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+// A workshop subclass casts as a third caster when its author said so (the
+// Eldritch Knight's rules or the Arcane Trickster's), or, when they said
+// nothing, when it holds either one's Spellcasting feature: a copy of
+// either, or a subclass that borrowed the feature, casts without a second
+// setting to find. "none" is the author turning that off; "third-caster"
+// is the first spelling, the class's own.
+function castingProfileOf(data: Record<string, unknown>, levels: Record<string, SubclassFeatureRow[]>): ThirdCasterProfile | undefined {
+  if (isThirdCasterProfile(data.castingProfile)) {
+    return data.castingProfile;
+  }
+  if (data.castingProfile === "third-caster") {
+    return defaultThirdCasterProfile(String(data.classSlug ?? ""));
+  }
+  if (data.castingProfile === "none") {
+    return undefined;
+  }
+  for (const rows of Object.values(levels)) {
+    for (const row of rows) {
+      const profile = thirdCasterProfileForFeature(row.n);
+      if (profile) {
+        return profile;
+      }
+    }
+  }
+  return undefined;
+}
+
 // One fetched archetype row as a table, or null when it says nothing a
 // grant could use.
 export function extraSubclassOf(row: Row, defaultLevel = 3): ExtraSubclass | null {
   const homebrew = row.source === "homebrew";
   const levels = homebrew ? homebrewLevels(row.data.levels) : subclassLevelsFromProse(String(row.data.desc ?? ""), defaultLevel);
   const spells = homebrew ? spellLevels(row.data.spells) : undefined;
+  const castingProfile = homebrew ? castingProfileOf(row.data, levels) : (thirdCasterProfileForPackSubclass(row.name) ?? undefined);
   if (!Object.keys(levels).length && !spells) {
-    return null;
+    if (!castingProfile) return null;
   }
-  return { name: row.name, levels, ...(spells ? { spells } : {}), source: homebrew ? "homebrew" : "pack" };
-}
-
-// Rows of one class, the homebrew first so a workshop subclass named like a
-// pack one is the table's.
-export function subclassExtrasFrom(classId: string, rows: Row[], defaultLevel = 3): SubclassExtras {
-  const ordered = [...rows.filter((row) => row.source === "homebrew"), ...rows.filter((row) => row.source !== "homebrew")];
-  const tables = ordered.map((row) => extraSubclassOf(row, defaultLevel)).filter((table): table is ExtraSubclass => table !== null);
-  return tables.length ? { [classId]: tables } : {};
+  return { name: row.name, levels, ...(spells ? { spells } : {}), ...(castingProfile ? { castingProfile } : {}), source: homebrew ? "homebrew" : "pack" };
 }
 
 export function mergeExtras(...sets: SubclassExtras[]): SubclassExtras {

@@ -315,7 +315,7 @@ await test("The AI's advantage on an enemy's attack needs a named circumstance t
   const bare = await attack({ advantage: "advantage" });
   assert.equal(bare.out.ok, true, bare.out.error);
   assert.equal(bare.roll.advantage, "none");
-  const ruled = await attack({ advantage: "advantage", advantageReason: "the fighter slipped on the ice" });
+  const ruled = await attack({ advantage: "advantage", advantageSource: "other", advantageReason: "the fighter slipped on the ice" });
   assert.equal(ruled.out.ok, true, ruled.out.error);
   assert.equal(ruled.roll.advantage, "advantage");
 });

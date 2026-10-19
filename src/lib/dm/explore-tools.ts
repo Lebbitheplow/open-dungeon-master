@@ -22,7 +22,8 @@ import { LIFESTYLE_COST_CP, downtimeProblem, spendDowntime, type DowntimeEntry }
 import { infectDisease, infectWorkshopDisease, inflictMadness } from "@/lib/dm/afflictions";
 import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
-import { DISEASES, POISONS, findDisease } from "@/lib/srd/afflictions";
+import { DISEASES, MADNESS_KINDS, POISONS, findDisease } from "@/lib/srd/afflictions";
+import { textKey } from "@/lib/language/text-logic";
 import { formatCopper } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -343,7 +344,7 @@ export function handleExploreCall(
       return { error: `The server knows the SRD diseases ${Object.values(DISEASES).map((entry) => entry.name).join(", ")}${table.length ? ` and this table's ${table.join(", ")}` : ""}; "${args.name}" is not one. A story illness is set_condition with a duration.`, retry: true };
     }
     if (args.kind === "madness") {
-      const kind = /indef/i.test(args.name) ? "indefinite" : /long/i.test(args.name) ? "long" : /short/i.test(args.name) ? "short" : null;
+      const kind = MADNESS_KINDS.find((entry) => entry === textKey(args.name));
       if (!kind) {
         return { error: "Madness is short, long or indefinite: pass that as name.", retry: true };
       }

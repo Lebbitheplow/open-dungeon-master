@@ -308,7 +308,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     );
   }
   const unrecorded = Math.max(0, earned - recorded.length);
-  const casts = castingClassesOf(classes, context.classOf).length > 0;
+  const casts = castingClassesOf(classes, context.classOf, context.subclassExtras, input.spellcasting).length > 0;
   const feats = policy.trustsHeld
     ? { problems: [], feats: input.feats ?? [], slotsUsed: 0 }
     : judgeFeats({
@@ -556,6 +556,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     sent: input.spellcasting ?? null,
     classes,
     classOf: context.classOf,
+    subclassExtras: context.subclassExtras,
     abilities,
     spellOf: context.spellOf,
     racialCantrip: casts ? racialCantrip : null,
@@ -768,11 +769,6 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     sheet,
     ...(rolledHp ? { rolled: { hp: rolledHp } } : {}),
   };
-}
-
-// The check alone, for callers that only want to know.
-export function sheetProblems(input: CreateSheetInput, context: LegalityContext): string[] {
-  return legalizeSheet(input, context).problems;
 }
 
 // A stored sheet's features with the free casts its feats call for today:

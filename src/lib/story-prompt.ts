@@ -1,5 +1,3 @@
-import type { AspectPreset, ImageMode, StoryMessage } from "@/lib/types";
-
 export type StoryModelResult = {
   storyText: string;
   image: {
@@ -9,39 +7,6 @@ export type StoryModelResult = {
     characterIds?: string[];
   };
 };
-
-// Evicting history one message at a time would change the start of the prompt
-// every turn and invalidate the model server's prompt cache, forcing a full
-// re-prefill of the whole story. Dropping in blocks keeps the prefix stable
-// for long stretches, so most turns only pay for the newly added tokens.
-const HISTORY_EVICTION_BLOCK = 16;
-
-export function packStoryHistory(
-  messages: StoryMessage[],
-  charBudget: number,
-): { recent: StoryMessage[]; evicted: StoryMessage[] } {
-  let used = 0;
-  let keep = 0;
-
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const cost = messages[i].content.length + 80;
-    if (keep > 0 && used + cost > charBudget) {
-      break;
-    }
-    used += cost;
-    keep += 1;
-  }
-
-  let dropped = messages.length - keep;
-  if (dropped > 0) {
-    dropped = Math.min(
-      messages.length - 1,
-      Math.ceil(dropped / HISTORY_EVICTION_BLOCK) * HISTORY_EVICTION_BLOCK,
-    );
-  }
-
-  return { recent: messages.slice(dropped), evicted: messages.slice(0, dropped) };
-}
 
 export function parseStoryModelResult(raw: string): StoryModelResult {
   const trimmed = raw.trim();
@@ -355,18 +320,4 @@ export function extractStoryText(raw: unknown): string {
   }
 
   return "";
-}
-
-export function dimensionsForImage(mode: ImageMode, aspect: AspectPreset) {
-  const longSide = mode === "slow" ? 2048 : 1024;
-
-  if (aspect === "portrait") {
-    return { width: Math.round(longSide * 0.75), height: longSide };
-  }
-
-  if (aspect === "landscape") {
-    return { width: longSide, height: Math.round(longSide * 0.75) };
-  }
-
-  return { width: longSide, height: longSide };
 }

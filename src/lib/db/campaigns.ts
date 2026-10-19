@@ -624,15 +624,6 @@ export function setMemberReady(campaignId: string, userId: string, ready: boolea
   touchCampaign(campaignId);
 }
 
-export function allMembersReady(campaignId: string) {
-  const row = getDatabase()
-    .prepare(
-      `SELECT COUNT(*) AS total, SUM(ready) AS ready FROM campaign_members WHERE campaign_id = ?`,
-    )
-    .get(campaignId) as { total: number; ready: number | null };
-  return row.total > 0 && Number(row.ready ?? 0) === row.total;
-}
-
 export function setCampaignStatus(campaignId: string, status: CampaignStatus) {
   getDatabase()
     .prepare(`UPDATE campaigns SET status = ?, updated_at = ? WHERE id = ?`)

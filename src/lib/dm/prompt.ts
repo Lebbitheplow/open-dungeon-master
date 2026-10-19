@@ -9,6 +9,9 @@ import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
+// The genre catalogs' rules text, all of it: the model reads it beside a
+// custom feature (src/lib/classes/feature-text.ts).
+import "@/lib/classes/feature-text-all";
 import { resourceDef } from "@/lib/srd/class-resources";
 import { featEngineTag } from "@/lib/srd/feat-combat";
 import { featFactsFor } from "@/lib/characters/catalog";
@@ -17,6 +20,8 @@ import { featTwinOf } from "@/lib/srd/feat-effects";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { authoredFeatureTags } from "@/lib/srd/authored-effects";
+import { rollKeyCue } from "@/lib/srd/roll-keys";
+import { heldRollKeys } from "@/lib/dm/roll-feature-riders";
 import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { presetFor, packFor } from "@/lib/worlds/preset";
@@ -75,7 +80,11 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
+import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
+import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -521,6 +530,12 @@ export function describeSheet(
   if (loadLine) {
     lines.push(loadLine);
   }
+  // The fields of a roll their traits read (src/lib/srd/roll-keys.ts), so
+  // the call names them at once rather than being asked.
+  const keyCue = rollKeyCue(heldRollKeys(sheet));
+  if (keyCue) {
+    lines.push(`  Their traits read these fields of request_roll and group_check (name them, or 'none'): ${keyCue}`);
+  }
   const customClass = findCustomClass(sheet.class);
   if (customClass) {
     const casting = customClass.spellListFrom
@@ -711,6 +726,7 @@ export function buildGameStateBlock(state: DmGameState): string {
     // the block; the cues only reorder a bounded list.
     const location = state.currentLocation?.name ?? "";
     const arc = renderArcPrompt(campaign.storyArc, {
+      stopWords: stopWordsFor(campaign.gameSettings.tableLanguage),
       location,
       scene: campaign.scene ?? "",
       npcs: (state.npcs ?? [])
@@ -1191,12 +1207,18 @@ export const requestRollTool = {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
           description:
-            "Only for a circumstance the server cannot see, named in advantageReason. It already applies conditions, exhaustion, armor the character is untrained in, Help, spell and item effects, and the traits on the sheet; Inspiration is useInspiration, never this.",
+            "Only for a circumstance the server cannot see: advantageSource 'other', named in advantageReason. It already applies conditions, exhaustion, armor the character is untrained in, Help, spell and item effects, and the traits on the sheet; Inspiration is useInspiration, never this.",
+        },
+        advantageSource: {
+          type: "string",
+          enum: [...ADVANTAGE_SOURCES],
+          description:
+            "Where the advantage or disadvantage comes from. Only 'other', a circumstance of the fiction the server cannot see (named in advantageReason), counts: the server applies conditions, cover, light, range, Help, flanking, spells, Inspiration and features itself.",
         },
         advantageReason: {
           type: "string",
           description:
-            "The circumstance behind the advantage or disadvantage you claim, one the server cannot see itself. Without one, or naming a condition, cover, light, Help or a feature, the server sets the claim aside.",
+            "The circumstance behind the advantage or disadvantage you claim, one the server cannot see itself. Without one, the server sets the claim aside.",
         },
         targetEnemyId: {
           type: "string",
@@ -1205,13 +1227,23 @@ export const requestRollTool = {
         },
         reason: {
           type: "string",
-          description:
-            "Short private note on what this roll resolves, naming what a check is about (\"tracking the undead\", \"the stonework of the gate\"): the server reads it for the features keyed to it.",
+          description: "Short private note on what this roll resolves.",
         },
+        ...CHECK_KEY_PROPERTIES,
         against: {
           type: "string",
+          enum: [...SAVE_AGAINST, NONE],
           description:
-            "saving_throw only: what the save resists: a condition (frightened, charmed, poisoned), a damage type, or 'spell' for a magical effect, with its caster's type when known ('spell cast by a fiend'). The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Gnome Cunning, Countercharm and Holy Nimbus from it.",
+            "saving_throw only: what the save resists: a condition (frightened, charmed, poisoned), a damage type (fire, poison), disease, dismount for being thrown from a mount, or 'none'. The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Countercharm and the subclass traits from it.",
+        },
+        magical: {
+          type: "boolean",
+          description: "saving_throw only: the effect is a spell or other magic (Gnome Cunning, Spell Resistance).",
+        },
+        casterType: {
+          type: "string",
+          enum: [...CREATURE_TYPES],
+          description: "saving_throw against a spell: the caster's creature type, when known (Holy Nimbus).",
         },
         tool: {
           type: "string",

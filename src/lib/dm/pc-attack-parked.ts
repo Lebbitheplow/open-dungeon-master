@@ -79,6 +79,7 @@ export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: strin
     ...(critExtraDice ? { critExtraDice } : {}),
     attacker: sheet.name,
     weapon: profile.weapon,
+    ...(profile.material ? { material: profile.material } : {}),
     targetEnemyId: enemy.id,
     targetAc: plan.effectiveAc,
     damageExpression: profile.damageExpression,

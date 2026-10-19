@@ -15,7 +15,6 @@ import {
   shortRestResourcePatch,
 } from "@/lib/dm/rest-logic";
 import { resolveSheetRef } from "@/lib/dm/rolls";
-import { normalizeRestKind } from "@/lib/dm/arg-coerce";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import { advanceClock, getClock, openShortRestWindow, recordLongRests, setTravelPace } from "@/lib/db/clock";
 import { getDmTurn } from "@/lib/db/dm-turns";
@@ -40,8 +39,6 @@ import type { ToolResult } from "@/lib/dm/tool-errors";
 // The rest engine: short rests spend hit dice with real server rolls, long
 // rests restore HP, slots, and half the hit dice. Every sheet write is
 // audited (kinds rest_short / rest_long) so the party lead can undo it.
-
-export const REST_TOOL_NAMES = ["take_rest"] as const;
 
 type ToolDef = {
   type: "function";
@@ -82,7 +79,7 @@ export const takeRestTool: ToolDef = {
 export const restTools: ToolDef[] = [takeRestTool];
 
 const restArgsSchema = z.object({
-  kind: z.preprocess(normalizeRestKind, z.enum(["short", "long"])),
+  kind: z.enum(["short", "long"]),
   spend: z
     .array(z.object({ characterId: z.string(), dice: z.number().int().min(1).max(20) }))
     .optional(),
@@ -110,7 +107,7 @@ function parseRestArgs(rawArguments: string): z.infer<typeof restArgsSchema> | n
   }
   const flat = z
     .object({
-      kind: z.preprocess(normalizeRestKind, z.enum(["short", "long"])),
+      kind: z.enum(["short", "long"]),
       characterId: z.string().optional(),
       dice: z.coerce.number().int().min(1).max(20).optional(),
       reason: z.string().optional(),

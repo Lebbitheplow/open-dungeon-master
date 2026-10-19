@@ -8,37 +8,7 @@
 // render static markup and never see a missing label, a name a screen reader
 // cannot hear or a contrast below 4.5:1; the next art pass could add any of
 // them unseen.
-import fs from "node:fs";
-import { createRequire } from "node:module";
-import { check, eventually, sleep } from "../lib.mjs";
-
-const axeSource = fs.readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
-
-async function axeViolations(page, selector) {
-  if (!(await page.evaluate(() => Boolean(window.axe)))) {
-    await page.addScriptTag({ content: axeSource });
-  }
-  return page.evaluate(async (scope) => {
-    const root = document.querySelector(scope);
-    if (!root) return [{ id: "missing-root", impact: "critical", help: `no ${scope}`, nodes: [] }];
-    const result = await window.axe.run(root, {
-      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
-    });
-    // A run that checked nothing passes nothing either: say so, rather than
-    // pass in silence.
-    if (!result.passes.length) {
-      return [{ id: "nothing-checked", impact: "critical", help: "axe checked no rule here", nodes: [scope] }];
-    }
-    return result.violations
-      .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
-      .map((violation) => ({
-        id: violation.id,
-        impact: violation.impact,
-        help: violation.help,
-        nodes: violation.nodes.slice(0, 3).map((node) => node.target.join(" ")),
-      }));
-  }, selector);
-}
+import { axeViolations, check, eventually, sleep } from "../lib.mjs";
 
 // What axe does not catch: a field caption that names nothing, a tab with no
 // panel, or a score summary laid out as loose spans.

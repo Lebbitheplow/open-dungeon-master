@@ -23,6 +23,8 @@ import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { consumableEffect, findCarriedItem, notCarried } from "@/lib/dm/item-logic";
 import { kiTechnique, spendKiTechnique, spendQuickenedSpell } from "@/lib/dm/bonus-actions";
 import { removeItemMath } from "@/lib/dm/mutation-math";
+import { textKey } from "@/lib/language/text-logic";
+import { optionsOfKind } from "@/lib/srd/options";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { holdsMote } from "@/lib/srd/authored-effects-more";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
@@ -37,8 +39,6 @@ export { computePurchase } from "@/lib/dm/purchase-math";
 // the sheet resolution, audit, and publish plumbing; these helpers compute
 // the patch + result so mutations.ts only grows dispatch lines. Must not
 // import mutations.ts (the import points the other way).
-
-export { RESOURCE_TOOL_NAMES, resourceTools } from "@/lib/dm/resource-tool-defs";
 
 export type Outcome = {
   patch: FullPatchSheetInput;
@@ -88,13 +88,14 @@ export function computeUseItem(
 ): Outcome | ToolError {
   const carried = findCarriedItem(sheet.equipment, itemName);
   if (!carried) {
-    return notCarried(sheet.name, sheet.equipment.map((item) => item.name), itemName, isTableGearName(campaign.id, itemName));
+    const refusal = notCarried(sheet.name, sheet.equipment.map((item) => item.name), itemName, isTableGearName(campaign.id, itemName));
+    return { ...refusal, error: `${refusal.error} One taken in this same action is given with grant_item first, then used.` };
   }
   const removal = removeItemMath(sheet.equipment, carried.name, 1);
   if (!removal) {
     return notCarried(sheet.name, sheet.equipment.map((item) => item.name), itemName, isTableGearName(campaign.id, itemName));
   }
-  const effect = consumableEffect(carried.name);
+  const effect = consumableEffect(carried);
   const base: Outcome = {
     patch: { equipment: removal.equipment },
     result: {
@@ -130,31 +131,26 @@ const INSPIRATION_ROUNDS = 100;
 // created. The reverse direction refunds points equal to the slot's level.
 const FONT_SLOT_COST: Record<number, number> = { 1: 2, 2: 3, 3: 5, 4: 6, 5: 7 };
 
-// What a use_resource variant on Sorcery Points asks for, or null for a
-// plain Metamagic spend. Direction is read from word order: whichever of
-// "slot"/"point" comes later is the product ("points into a slot" creates
-// a slot; "slot into points" refunds points).
-export function parseFontOfMagic(
-  variant?: string,
-): { direction: "create_slot" | "recover_points"; level: number } | null {
-  const text = (variant ?? "").toLowerCase();
-  if (!text.includes("slot")) {
-    return null;
-  }
-  const levelMatch = /([1-9])(?:st|nd|rd|th)?[\s-]*level|level[\s-]*([1-9])/.exec(text);
-  const level = Number(levelMatch?.[1] ?? levelMatch?.[2] ?? 1);
-  const direction =
-    text.includes("point") && text.lastIndexOf("point") > text.lastIndexOf("slot")
-      ? ("recover_points" as const)
-      : ("create_slot" as const);
-  return { direction, level };
+type FontDirection = "create_slot" | "recover_points";
+
+// The two conversions by the variant the Sorcery Points guidance names (a
+// fixed choice, src/lib/srd/class-resources.ts); the slot level is the call's
+// amount, as Primeval Awareness takes it. Any other variant is a plain
+// Metamagic spend (null).
+const FONT_OF_MAGIC = new Map<string, FontDirection>([
+  ["create slot", "create_slot"],
+  ["convert slot", "recover_points"],
+]);
+
+export function fontOfMagicDirection(variant: string | undefined): FontDirection | null {
+  return FONT_OF_MAGIC.get(textKey(variant ?? "")) ?? null;
 }
 
 function computeFontOfMagic(
   sheet: CharacterSheet,
   displayName: string,
   state: { max: number; used: number },
-  conversion: { direction: "create_slot" | "recover_points"; level: number },
+  conversion: { direction: FontDirection; level: number },
 ): Outcome | ToolError {
   const { direction, level } = conversion;
   if (!sheet.spellcasting) {
@@ -324,17 +320,25 @@ export function computeUseResource(
     }
   }
 
-  // Font of Magic: sorcery points convert into a spell slot and back. The
-  // variant carries the direction and slot level ("create a 2nd-level slot",
-  // "convert my 3rd-level slot into points"); a plain spend (Metamagic)
-  // passes no variant and falls through to the generic path below.
+  // Font of Magic: sorcery points convert into a spell slot and back, the
+  // direction in the variant and the slot level in amount; a plain spend
+  // (Metamagic) falls through to the generic path below.
   if (def.id === "sorcery_points") {
-    if (/quicken/i.test(variant ?? "")) {
+    // The variant as its rules text lists it (class-resources.ts).
+    if (textKey(variant ?? "") === "quickened spell") {
       return spendQuickenedSpell(campaign, sheet, state);
     }
-    const conversion = parseFontOfMagic(variant);
-    if (conversion) {
-      return computeFontOfMagic(sheet, def.displayName, state, conversion);
+    const direction = fontOfMagicDirection(variant);
+    if (direction) {
+      return computeFontOfMagic(sheet, def.displayName, state, { direction, level: amount });
+    }
+    // Any other variant is a value off the list, never a spend: a plain
+    // Metamagic spend names no variant, or the option it pays for.
+    if (variant?.trim() && !optionsOfKind("metamagic").some((option) => textKey(option.n) === textKey(variant))) {
+      return {
+        error: `${def.displayName} takes variant 'create slot' or 'convert slot' (Font of Magic, the slot's level in amount), 'Quickened Spell', or a Metamagic option by its name; "${variant}" is none of them. For a Metamagic spend give the points in amount. Nothing was spent.`,
+        retry: true,
+      };
     }
   }
 

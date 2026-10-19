@@ -1,5 +1,6 @@
 import { packSubclassExtras } from "@/lib/content/archetype-tables";
 import { listHomebrew, tableAuthors } from "@/lib/db/homebrew";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 
 // The subclasses the bundled tables do not carry, for the feature grants
@@ -24,4 +25,34 @@ export function subclassExtrasFor(userIds: string[]): SubclassExtras {
 // campaign (a library character) the owner's own.
 export function subclassExtrasForTable(campaignId: string | null | undefined, ownerUserId: string): SubclassExtras {
   return subclassExtrasFor(campaignId ? tableAuthors(campaignId) : [ownerUserId]);
+}
+
+// The table's subclasses its sheets hold, for the campaign snapshot: the
+// browser reads a workshop subclass's feature text and always-prepared
+// spells from these as the server does (src/lib/srd/features.ts
+// registerBrowserSubclassExtras). Only the ones in play, so the snapshot
+// stays small.
+export function subclassExtrasAtTable(
+  campaignId: string,
+  sheets: Array<{ class: string; subclass?: string; classes?: Array<{ id: string; subclass?: string }> }>,
+): SubclassExtras {
+  const held = sheets.flatMap((sheet) =>
+    sheet.classes?.length ? sheet.classes : [{ id: sheet.class, subclass: sheet.subclass }],
+  );
+  const wanted = held.filter((entry) => (entry.subclass ?? "").trim());
+  if (!wanted.length) {
+    return {};
+  }
+  const all = subclassExtrasFor(tableAuthors(campaignId));
+  const out: SubclassExtras = {};
+  for (const entry of wanted) {
+    // By the id as the sheet holds it, as every other reader of these looks
+    // it up (src/lib/srd/features.ts classFeaturesFor).
+    const classId = entry.id;
+    const table = (all[classId] ?? []).find((candidate) => subclassNamed(entry.subclass ?? "", candidate.name));
+    if (table && !(out[classId] ?? []).includes(table)) {
+      (out[classId] ??= []).push(table);
+    }
+  }
+  return out;
 }

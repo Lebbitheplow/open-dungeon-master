@@ -27,9 +27,13 @@ import { speedFor } from "@/lib/srd";
 import { UNLIMITED_USES, resourceDef } from "@/lib/srd/class-resources";
 import { chargeMax, chargeRuleOf, chargesLeft } from "@/lib/srd/item-charge-rules";
 import { gearDefFor } from "@/lib/srd/magic-gear";
-import { matchArmor } from "@/lib/srd/armor";
 import { matchMagicItem } from "@/lib/srd/magic-items";
+import { oneOfKind, wearSlotOf, wornButIdle } from "@/lib/srd/wear-slots";
+import { isWorn, matchArmor, wearingIsExplicit } from "@/lib/srd/armor";
 import { conditionNote, conditionNoteLine } from "@/lib/battlemap/condition-notes";
+import { matchWeapon } from "@/lib/srd/weapons";
+import { checkRidersOf } from "@/lib/srd/item-check-riders";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 // ---- hit points ----
 
@@ -220,14 +224,76 @@ export function otherSpeedsLine(speeds: { fly?: number; swim?: number } | undefi
 
 // ---- worn or carried ----
 
-// Whether a gear row is worn (armor, a shield, a ring, a cloak, boots) or
-// wielded (a weapon), and so offers the wear toggle. A wand, a rod, a staff,
-// a potion or a scroll is held or carried and never "worn"; an item whose
-// own text asks only that it be on the person works from the pack.
-const CARRIED_ONLY = /\b(wand|rod|staff|potion|philter|elixir|scroll|oil|dust|ammunition|arrows?|bolts?|bag|pouch|deck|figurine|horn|pipes|drum|lute|harp|candle|orb|stone|feather token|bead)\b/i;
+// Whether a gear row offers the wear toggle: only where wearing or holding
+// it is something the engines read (a place on the body in
+// src/lib/srd/wear-slots.ts, issue 412; isWorn in src/lib/srd/armor.ts; the
+// hands in src/lib/dm/cast-rules.ts). Armor or a shield, a weapon, a magic
+// item whose effect or check rider works only while worn, and a staff, rod
+// or wand held as a focus, known by the rows the sheet already loads (under
+// the item's SRD name when it has one) and its stored tags, never by the
+// words of its name; a rope, an arrow or a key has nowhere to be worn. The
+// item tag table stays on the server: it would double the sheet's share of
+// the table page's first load for this one question.
+const HELD_FOCI: readonly ItemTag[] = ["staff", "rod", "wand"];
 
-export function isWornGear(item: Pick<EquipmentItem, "name" | "slug">): boolean {
-  if (matchArmor(item.name) !== null) return true;
-  if (CARRIED_ONLY.test(item.name)) return false;
-  return matchMagicItem(item.name, item.slug)?.carried !== true;
+export function isWornGear(item: Pick<EquipmentItem, "name" | "slug" | "srdName" | "tags" | "gear" | "identified">): boolean {
+  if (wearSlotOf(item) !== null) {
+    return true;
+  }
+  const name = item.srdName ?? item.name;
+  if (item.gear?.armor || item.gear?.weapon || matchArmor(name) || matchWeapon(name) || gearDefFor(name, item.slug)?.base) {
+    return true;
+  }
+  const magic = item.gear?.magic ?? matchMagicItem(name, item.slug);
+  const riders = item.gear?.checks ? { carried: item.gear.magic?.carried === true } : checkRidersOf(name);
+  if ((magic && !magic.carried) || (riders && !riders.carried)) {
+    return true;
+  }
+  const tags = item.identified === false ? [] : (item.tags ?? item.gear?.tags ?? []);
+  return tags.some((tag) => HELD_FOCI.includes(tag));
+}
+
+// The rows the sheet offers the wear toggle on: armor and shields, gear whose
+// name declares a magic bonus, the magic items, and anything with a place on
+// the body (a Cloak of Elvenkind only the check riders know, a workshop
+// cloak), so an item's place decides it as much as its magic does.
+export function wearableGear(equipment: EquipmentItem[]): EquipmentItem[] {
+  return equipment.filter(
+    (item) =>
+      matchArmor(item.name) !== null ||
+      /\+[123]\b/.test(item.name) ||
+      matchMagicItem(item.name) !== null ||
+      Boolean(item.gear?.magic) ||
+      wearSlotOf(item) !== null,
+  );
+}
+
+// A gear row as the sheet shows it: worn the armor engine's way, and, when
+// it is worn but its place is full, the kind that is "one at a time". The
+// suit and the shield that count are the ones the armor class counted.
+export function gearWornState(
+  item: EquipmentItem,
+  equipment: EquipmentItem[],
+  armor: { armorName: string | null; shieldName: string | null },
+): { worn: boolean; idle: string | null } {
+  const worn = isWorn(item, equipment);
+  const slot = wearSlotOf(item);
+  if (!worn || !slot) {
+    return { worn, idle: null };
+  }
+  if (slot === "armor" || slot === "shield") {
+    const counted = slot === "armor" ? armor.armorName : armor.shieldName;
+    return { worn, idle: counted !== null && counted !== item.name ? oneOfKind(slot) : null };
+  }
+  const idle = wornButIdle(item, equipment);
+  return { worn, idle: idle ? oneOfKind(idle) : null };
+}
+
+// Whether a change puts the row on: a wear press, or attuning on a sheet that
+// says what it wears (the route wears an item it attunes there).
+export function changeWears(item: EquipmentItem, equipment: EquipmentItem[], change: { equipped?: boolean; attuned?: boolean }): boolean {
+  if (change.equipped !== undefined) {
+    return change.equipped && !isWorn(item, equipment);
+  }
+  return change.attuned === true && wearingIsExplicit(equipment) && !isWorn(item, equipment);
 }

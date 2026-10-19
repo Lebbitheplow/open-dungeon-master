@@ -9,6 +9,7 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { legalizeSheet } = await import("../src/lib/srd/sheet-legality.ts");
+const { judgeSpellcasting } = await import("../src/lib/srd/legality/spells.ts");
 const options = await import("../src/lib/characters/options.ts");
 const { bundledPrices } = await import("../src/lib/srd/starting-wealth.ts");
 const { checklistSpell } = await import("../src/lib/srd/spell-lists.ts");
@@ -273,6 +274,36 @@ test("third casters have a third of the slots", () => {
     slotTableFor({ class: "fighter", classes: [{ id: "fighter", subclass: "Eldritch Knight", level: 6 }, { id: "wizard", subclass: "", level: 1 }] }),
     { 1: 4, 2: 2 },
   );
+});
+
+test("a Workshop casting profile is derived only from the selected fighter or rogue archetype", () => {
+  const extras = { fighter: [{ name: "Test Mage", levels: {}, castingProfile: "third-caster", source: "homebrew" }] };
+  const sent = { ability: "int", slots: {}, prepared: [], known: ["Shield"], cantrips: ["Fire Bolt"] };
+  const accepted = judgeSpellcasting({
+    sent,
+    classes: [{ id: "fighter", subclass: "Test Mage", level: 3 }],
+    classOf: (id) => classes.find((entry) => entry.id === id) ?? null,
+    subclassExtras: extras,
+    abilities: { str: 10, dex: 10, con: 10, int: 14, wis: 10, cha: 10 },
+    spellOf: (name) => ({ name, level: name === "Fire Bolt" ? 0 : 1, school: "abjuration", list: "wizard" }),
+    racialCantrip: null,
+    judgeLists: false,
+  });
+  assert.deepEqual(accepted.problems, []);
+  // Stored by the rules it names: the fighter's own, the Eldritch Knight's.
+  assert.equal(accepted.spellcasting.progression, "eldritch-knight");
+  assert.deepEqual(accepted.spellcasting.slots, { 1: { max: 2, used: 0 } });
+
+  const rejected = judgeSpellcasting({
+    sent: { ...sent, progression: "third-caster" },
+    classes: [{ id: "fighter", subclass: "Champion", level: 3 }],
+    classOf: (id) => classes.find((entry) => entry.id === id) ?? null,
+    abilities: { str: 10, dex: 10, con: 10, int: 14, wis: 10, cha: 10 },
+    spellOf: (name) => ({ name, level: 1, school: "abjuration", list: "wizard" }),
+    racialCantrip: null,
+    judgeLists: false,
+  });
+  assert.ok(rejected.problems.some((problem) => problem.includes("not configured")));
 });
 
 test("a new character's gear is the kit, or bought from the purse", () => {

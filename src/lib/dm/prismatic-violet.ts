@@ -59,7 +59,7 @@ export function violetRayTurnStart(campaign: Campaign, combatantIds: string[]): 
         );
       }
       for (const sheet of heldSheets.filter((entry) => (entry.conditionMeta as ConditionMetaMap)[VIOLET_MARK]?.source === caster.id)) {
-        const save = rollCharacterSave(campaign, turn, sheet, "wis", dc, "WIS save against Prismatic Spray's violet ray", "spell");
+        const save = rollCharacterSave(campaign, turn, sheet, "wis", dc, "WIS save against Prismatic Spray's violet ray", { magical: true });
         const cleared = withoutViolet(sheet.conditions, sheet.conditionMeta as ConditionMetaMap);
         const updated = patchSheet(sheet.id, {
           conditions: save.success ? cleared.conditions : [...cleared.conditions, "banished"],

@@ -1,5 +1,5 @@
 import { spellSlotsFor } from "@/lib/srd";
-import { slotTableFor } from "@/lib/srd/multiclass";
+import { progressionForClass, slotTableFor } from "@/lib/srd/multiclass";
 import { earnedAsiCountFor, removeAsiChoices } from "@/lib/srd/asi";
 import { legacyAsiTaken, readAsiLedger, withAsiLedger } from "@/lib/srd/asi-ledger";
 import { derivedMaxHp, hpBonusPerLevelFor } from "@/lib/srd/hit-points";
@@ -12,11 +12,10 @@ import {
   withoutPrimalChampion,
 } from "@/lib/srd/trait-rules";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
-import { suggestedCantripCount } from "@/lib/content/mechanics";
-import { spellClassFor } from "@/lib/classes";
 import { findClass } from "@/lib/srd";
 import { spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import {
+  cantripCapOf,
   casterViewsOf,
   dedupeNames,
   grantedSpellsOf,
@@ -173,7 +172,7 @@ export function adaptSheetToLevel(
       const klass = findClass(entry.id);
       return klass
         ? (klass.casterType !== "none" && Boolean(klass.spellAbility)) ||
-            (isThirdCaster(entry.id, entry.subclass) && entry.level >= 3)
+            (isThirdCaster(entry.id, entry.subclass, progressionForClass(sheet, entry.id)) && entry.level >= 3)
         : true;
     });
     if (!casts) {
@@ -185,8 +184,8 @@ export function adaptSheetToLevel(
   if (sheet.spellcasting) {
     const slots =
       (sheet.classes ?? []).length > 1
-        ? slotTableFor({ class: sheet.class, classes: sheet.classes })
-        : spellSlotsFor(sheet.class, level, sheet.subclass);
+        ? slotTableFor({ class: sheet.class, classes: sheet.classes, spellcasting: sheet.spellcasting })
+        : spellSlotsFor(sheet.class, level, sheet.subclass, sheet.spellcasting.progression);
     // Always the table's row, an empty one included. A class the tables do
     // not know keeps the slots it was stored with.
     if (Object.keys(slots).length || findClass(sheet.class)) {
@@ -269,11 +268,9 @@ function trimToLevel(view: CasterView, abilities: CreateSheetInput["abilities"])
       return room >= 0;
     });
   };
-  const cantripCap = suggestedCantripCount(
-    spellClassFor(view.classId),
-    view.level,
-    findClass(view.classId)?.casterType,
-  );
+  // A third caster's count (an Eldritch Knight's two) as much as a
+  // class's own.
+  const cantripCap = cantripCapOf(view);
   const cap = spellCapOf(view, abilities)?.count ?? null;
   const cantrips = cantripCap === null ? view.cantrips : view.cantrips.slice(0, cantripCap);
   const known = capList(castable(view.known), cap);

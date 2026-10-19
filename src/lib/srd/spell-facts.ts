@@ -148,13 +148,6 @@ export function rangeFrom(text: unknown): SpellRange {
   return { kind: "special" };
 }
 
-export function describeRange(range: SpellRange): string {
-  if (range.kind === "self" && range.areaFeet) {
-    return `self (${range.areaFeet} feet)`;
-  }
-  return range.kind === "feet" ? `${range.feet} feet` : range.kind;
-}
-
 // A row in the shape the pack and the authored file share.
 export type SpellRowLike = {
   name: string;
@@ -304,6 +297,15 @@ const MANIFEST = new Map(
     [spell.n, ...(spell.a ?? [])].map((name) => [textKey(name), spell] as const),
   ),
 );
+
+// Every name the checklist prints a spell under, the given one first: "Tasha's
+// Hideous Laughter" is also "Hideous Laughter", "Bigby's Hand" "Arcane Hand".
+// For the tables keyed by one of those names; a name the checklist does not
+// carry is only itself.
+export function spellNamesOf(name: string): string[] {
+  const listed = MANIFEST.get(textKey(name));
+  return [...new Set([name, ...(listed ? [listed.n, ...(listed.a ?? [])] : [])])];
+}
 
 function manifestRange(value: ManifestSpell["d"]): SpellRange {
   if (typeof value === "number") {

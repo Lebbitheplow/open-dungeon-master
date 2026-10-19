@@ -173,7 +173,8 @@ await test("request_roll offers advantageReason, which the engine reads, and nam
   assert.ok(roll.advantageReason, "request_roll's schema has no advantageReason");
   assert.match(roll.advantageReason.description, /sets the claim aside/);
   assert.match(roll.advantage.description, /advantageReason/);
-  assert.match(roll.against.description, /spell cast by a fiend/);
+  assert.match(roll.casterType.description, /Holy Nimbus/);
+  assert.ok(roll.casterType.enum.includes("fiend") && roll.casterType.enum.includes("undead"));
   assert.match(systemText(), /gives the paladin advantage on saves against spells cast by fiends or undead/);
 });
 

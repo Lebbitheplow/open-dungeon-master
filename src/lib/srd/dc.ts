@@ -42,31 +42,13 @@ export function difficultyOfDc(dc: number): DifficultyTier {
   return best;
 }
 
-// Maps the model's loose spellings onto a tier: "very hard", "veryHard",
-// "very-hard" all reach very_hard; a few common synonyms are folded in
-// (trivial -> very_easy, medium -> moderate, impossible -> nearly_impossible).
-// Returns null when the value is not a difficulty word so callers can fall
-// back to a raw dc.
+// A tier as the model may space it: "very hard" and "very-hard" are
+// very_hard. Returns null when the value is not one of the tiers, so callers
+// can fall back to a raw dc or refuse it with the tiers listed.
 export function normalizeDifficulty(value: unknown): DifficultyTier | null {
   if (typeof value !== "string") {
     return null;
   }
   const key = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-  if (!key) {
-    return null;
-  }
-  if ((DIFFICULTY_TIERS as readonly string[]).includes(key)) {
-    return key as DifficultyTier;
-  }
-  const synonyms: Record<string, DifficultyTier> = {
-    trivial: "very_easy",
-    veryeasy: "very_easy",
-    medium: "moderate",
-    normal: "moderate",
-    average: "moderate",
-    veryhard: "very_hard",
-    impossible: "nearly_impossible",
-    nearlyimpossible: "nearly_impossible",
-  };
-  return synonyms[key.replace(/_/g, "")] ?? null;
+  return DIFFICULTY_TIERS.find((tier) => tier === key) ?? null;
 }

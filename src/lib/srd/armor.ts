@@ -1,6 +1,7 @@
 import { gearDefFor, gearDefOfRow, gearRidersActive } from "@/lib/srd/magic-gear";
 import { speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
 import { textKey } from "@/lib/language/text-logic";
+import { pluralForms } from "@/lib/srd/name-forms";
 
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
@@ -59,21 +60,37 @@ export const SRD_ARMOR: SrdArmor[] = [
   { name: "Ballistic Shield", category: "shield", baseAc: 2, weightLb: 8, genres: ["cyberpunk", "post_apocalyptic"] },
 ];
 
-const byName = new Map(SRD_ARMOR.map((armor) => [normalize(armor.name), armor]));
-
-// "+1 Plate", "Plate Armor", "Chain Mail, +2" -> a lookup key. The magic
-// bonus, punctuation, and the noise word "armor" go; a trailing plural too
-// ("Shields" is a shield). `written` keeps the plural, for the tail rule
-// below: "work leathers" is clothing, not Leather (issue #113).
-function written(term: string) {
+// "+1 Plate", "Chain Mail, +2" -> a lookup key: the magic bonus is notation,
+// not part of the name, and goes.
+function armorKey(term: string) {
   return textKey(term)
     .split(" ")
-    .filter((part) => !/^[+-]/.test(part) && part !== "armor" && part !== "armour")
+    .filter((part) => !/^[+-]/.test(part))
     .join(" ");
 }
 
-function normalize(term: string) {
-  return written(term).replace(/s$/, "");
+// The English ways an armour's row is written, onto the row: its name, with
+// "armor"/"armour" before or after it ("Plate Armor"), and the plurals of
+// those ("Shields"). `names` are the singular ones the tail rule reads: a Guild
+// Engineer's "work leathers" is clothing, not Leather (issue #113).
+const FORMS = SRD_ARMOR.map((armor) => {
+  const key = armorKey(armor.name);
+  const around = (core: string) => [core, `${core} armor`, `${core} armour`, `armor ${core}`, `armour ${core}`];
+  return { armor, names: [key, `${key} armor`, `${key} armour`], spellings: pluralForms(key).flatMap(around) };
+});
+
+// Every spelling to its armour; a name as the table writes it before any
+// plural, so no plural shadows another armour's name.
+const byName = new Map<string, SrdArmor>();
+for (const pass of ["names", "spellings"] as const) {
+  for (const forms of FORMS) {
+    const armor = forms.armor;
+    for (const form of forms[pass]) {
+      if (!byName.has(form)) {
+        byName.set(form, armor);
+      }
+    }
+  }
 }
 
 // The bonus a magic item's name declares: "+1 Longsword", "Plate +2",
@@ -91,7 +108,7 @@ export function magicItemBonus(name: string): number {
 // "chain mail" never lands on "Chain Shirt" and "Studded Leather" beats
 // "Leather".
 export function matchArmor(term: string): SrdArmor | null {
-  const wanted = normalize(term);
+  const wanted = armorKey(term);
   if (!wanted) {
     return null;
   }
@@ -101,8 +118,7 @@ export function matchArmor(term: string): SrdArmor | null {
   }
   // The tail must be the armor's name as written, singular: a "+1 Studded
   // Leather" is one, a Guild Engineer's "work leathers" is not.
-  const tail = written(term);
-  const candidates = SRD_ARMOR.filter((armor) => tail.endsWith(` ${normalize(armor.name)}`));
+  const candidates = FORMS.filter((forms) => forms.names.some((name) => wanted.endsWith(` ${name}`))).map((forms) => forms.armor);
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
 }
@@ -112,8 +128,11 @@ export function matchArmor(term: string): SrdArmor | null {
 // the magic armor such a name is (armorOfRow), never as armor on its own, so
 // a "Leather Backpack" stays a backpack.
 export function armorInside(term: string): SrdArmor | null {
-  const wanted = ` ${normalize(term)} `;
-  const candidates = SRD_ARMOR.filter((armor) => wanted.includes(` ${normalize(armor.name)} `));
+  const wanted = ` ${armorKey(term)} `;
+  // A plural only at the end: "padded leathers of resistance" is padded.
+  const candidates = FORMS.filter(
+    (forms) => forms.names.some((name) => wanted.includes(` ${name} `)) || forms.spellings.some((form) => wanted.endsWith(` ${form} `)),
+  ).map((forms) => forms.armor);
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
 }
@@ -154,7 +173,7 @@ export function armorOfRow(item: WornItem): WornArmor | null {
   if (!def || (def.base?.kind !== "armor" && !namesSuit)) {
     return tail ? { armor: tail, bonus: named, proficientAnyway: false } : null;
   }
-  const base = inside ?? (def.base ? byName.get(normalize(def.base.name)) : null) ?? null;
+  const base = inside ?? (def.base ? byName.get(armorKey(def.base.name)) : null) ?? null;
   if (!base) {
     return null;
   }
@@ -243,13 +262,13 @@ export type WornItem = {
 // row is read as it is marked, so a character who took the last piece off
 // stands unarmored. A sheet that has never said wears what it carries, which
 // keeps sheets written before the toggle working.
-export function wearingIsExplicit(equipment: Array<{ equipped?: boolean }>): boolean {
+export function wearingIsExplicit(equipment: ReadonlyArray<{ equipped?: boolean }>): boolean {
   return equipment.some((item) => item.equipped !== undefined);
 }
 
 export function isWorn(
   item: { equipped?: boolean },
-  equipment: Array<{ equipped?: boolean }>,
+  equipment: ReadonlyArray<{ equipped?: boolean }>,
 ): boolean {
   return wearingIsExplicit(equipment) ? item.equipped === true : true;
 }
@@ -496,11 +515,11 @@ export function computeArmorClass(input: {
 // The SRD's metal armor. A druid's training reads "(nonmetal)": druids will
 // not wear armor or use shields made of metal (SRD 5.1, Druid).
 const METAL_ARMOR = new Set(
-  ["Chain Shirt", "Scale Mail", "Breastplate", "Half Plate", "Ring Mail", "Chain Mail", "Splint", "Plate"].map(normalize),
+  ["Chain Shirt", "Scale Mail", "Breastplate", "Half Plate", "Ring Mail", "Chain Mail", "Splint", "Plate"].map(armorKey),
 );
 
 export function isMetalArmor(armor: Pick<SrdArmor, "name">): boolean {
-  return METAL_ARMOR.has(normalize(armor.name));
+  return METAL_ARMOR.has(armorKey(armor.name));
 }
 
 function wearsNoMetal(armorProfs: string[]): boolean {
@@ -546,7 +565,7 @@ export function suggestArmor(armorProfs: string[], genres?: readonly string[]): 
 }
 
 function get(name: string) {
-  const armor = byName.get(normalize(name));
+  const armor = byName.get(armorKey(name));
   if (!armor) {
     throw new Error(`Unknown SRD armor: ${name}`);
   }

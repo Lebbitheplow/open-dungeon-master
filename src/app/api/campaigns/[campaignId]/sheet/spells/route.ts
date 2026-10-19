@@ -5,6 +5,7 @@ import { searchSpells, spellNameMatches } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getSheetById, getSheetForUser, patchSheet } from "@/lib/db/sheets";
+import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { publishPersisted } from "@/lib/events";
 import type { FullPatchSheetInput } from "@/lib/schemas/sheet";
@@ -82,7 +83,9 @@ async function changeSpell(
     return Response.json({ error: `${sheet.name} does not cast spells.` }, { status: 403 });
   }
 
-  const views = casterViewsOf(sheet);
+  // The table's workshop subclasses: a homebrew domain's always-prepared
+  // spells are free here as they are in the builder.
+  const views = casterViewsOf(sheet, subclassExtrasForTable(context.campaign.id, sheet.userId));
   const view = classId
     ? views.find((entry) => entry.classId.toLowerCase() === classId.toLowerCase())
     : (views.find((entry) => entry.style !== "known") ?? views[0]);

@@ -29,8 +29,6 @@ const MULTIPLIERS = {
   double: 2,
 } as const;
 
-export type DamageShare = keyof typeof MULTIPLIERS;
-
 const targetSchema = z.object({
   enemyId: z.string().optional(),
   characterId: z.string().optional(),

@@ -81,7 +81,8 @@ export function findDisease(text: string): Disease | null {
 
 // ---- madness ----
 
-export type MadnessKind = "short" | "long" | "indefinite";
+export const MADNESS_KINDS = ["short", "long", "indefinite"] as const;
+export type MadnessKind = (typeof MADNESS_KINDS)[number];
 
 export type MadnessEffect = {
   low: number;
@@ -203,26 +204,29 @@ export const POISONS: Poison[] = [
   { id: "wyvern_poison", name: "Wyvern Poison", type: "injury", priceGp: 1200, dc: 15, damage: "7d6", halfOnSave: true, summary: "DC 15 CON: 7d6 poison, half on a success." },
 ];
 
-// A name as a vial's label might say it ("Vial of Serpent Venom", "dose of
-// Malice"), and the book's names read the same way: "Essence of Ether" and
-// "Oil of Taggit" were never found by their own names, because the asked
-// name lost its "of" and the book's kept it.
-const poisonKey = (text: string) =>
-  textKey(text.replace(/\(.*\)/g, "").replace(/[^\p{L}\p{M}]+/gu, " "))
+// The ways a poison's row is written, onto the row: its name, and its name
+// without the words a vial's label adds ("Essence Ether" for Essence of
+// Ether), generated from the English names. What a table writes is compared
+// as written, whole or holding a row's spelling ("Vial of Serpent Venom",
+// "a dose of Malice").
+const POISON_SPELLINGS = POISONS.map((poison) => {
+  const key = textKey(poison.name);
+  const bare = key
     .split(" ")
     .filter((word) => !["vial", "dose", "of"].includes(word))
     .join(" ");
+  return { poison, spellings: [...new Set([key, bare])] };
+});
 
 export function findPoison(text: string): Poison | null {
-  const key = poisonKey(text);
+  const key = textKey(text.replace(/\(.*\)/g, " "));
   if (!key) {
     return null;
   }
-  return (
-    POISONS.find((poison) => poisonKey(poison.name) === key) ??
-    POISONS.find((poison) => key.includes(poisonKey(poison.name))) ??
-    null
-  );
+  const found =
+    POISON_SPELLINGS.find((entry) => entry.spellings.includes(key)) ??
+    POISON_SPELLINGS.find((entry) => entry.spellings.some((spelling) => key.includes(spelling)));
+  return found?.poison ?? null;
 }
 
 // Sight rot's penalty to ability checks that rely on sight (and to attack

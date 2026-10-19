@@ -17,6 +17,7 @@ import { handleSetCondition } from "@/lib/dm/set-condition";
 import type { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { defenseRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { saveAgainst } from "@/lib/dm/roll-about";
 
 export function aoeOnCharacters(input: {
   campaign: Campaign;
@@ -57,11 +58,13 @@ export function aoeOnCharacters(input: {
       input.dc,
       `${ability.toUpperCase()} save vs area effect`,
       // What the save resists, so a trait keyed to it applies (a dwarf
-      // against poison, a gnome against a spell).
-      // An enemy's spell names its caster's type (Holy Nimbus).
-      [input.type, input.spell ? "spell" : "", input.spell && enemyUse ? `spell cast by ${enemyUse.enemy.stats.type ?? ""}` : ""]
-        .filter(Boolean)
-        .join(" ") || undefined,
+      // against poison, a gnome against a spell); an enemy's spell names its
+      // caster's type (Holy Nimbus).
+      saveAgainst({
+        damageType: input.type,
+        magical: Boolean(input.spell),
+        spellBy: input.spell && enemyUse ? enemyUse.enemy.stats.type : undefined,
+      }),
       enemyUse?.enemy ?? null,
     );
     // An automatic failure (a paralyzed creature's DEX save) is settled as

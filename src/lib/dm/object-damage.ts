@@ -33,6 +33,8 @@ export const OBJECT_SIZES: ObjectSize[] = ["tiny", "small", "medium", "large"];
 
 const objectSchema = z.object({
   name: z.string().trim().min(1).max(60).optional(),
+  // A sectioned wall's section (src/lib/dm/zone-walls.ts).
+  section: z.coerce.number().int().min(1).max(99).optional(),
   material: z.enum(OBJECT_MATERIALS as [ObjectMaterial, ...ObjectMaterial[]]).optional(),
   size: z.enum(OBJECT_SIZES as [ObjectSize, ...ObjectSize[]]).optional(),
   fragile: z.coerce.boolean().optional(),
@@ -85,14 +87,16 @@ export function damageObject(
     return { error: "Invalid arguments for damage_object.", retry: true };
   }
   // A section of a Wall of Ice has its own numbers (src/lib/dm/zone-walls.ts).
-  const section = campaign && args.name ? wallSectionFor(campaign.id, args.name) : null;
+  const section = campaign && args.name ? wallSectionFor(campaign.id, args.name, args.section) : null;
   if (section && "error" in section) {
     return section;
   }
+  // Each section keeps its own damage between blows.
+  const kept = section ? `${section.zoneId} ${section.section}` : args.name;
   const profile = objectProfile(args.material ?? "wood", args.size ?? "medium", args.fragile);
   const ac = section?.ac ?? args.ac ?? profile.ac;
   const hp = section?.hp ?? args.hp ?? profile.hp;
-  const already = campaign && args.name ? objectDamageTaken(campaign.id, args.name) : 0;
+  const already = campaign && kept ? objectDamageTaken(campaign.id, kept) : 0;
 
   let dealt: number | null = null;
   let type = (args.damageType ?? "").trim().toLowerCase();
@@ -154,8 +158,8 @@ export function damageObject(
   }
   const taken = already + (dealt ?? 0);
   const broken = dealt !== null && taken >= hp;
-  if (campaign && args.name && dealt !== null) {
-    recordObjectDamage(campaign.id, args.name, taken, broken);
+  if (campaign && kept && dealt !== null) {
+    recordObjectDamage(campaign.id, kept, taken, broken);
   }
   if (campaign && section && broken) {
     notes.push(breakWallSection(campaign, section));

@@ -111,6 +111,16 @@ export function commonWords(texts: readonly string[]): Set<string> {
   return common;
 }
 
+// The words a search looks for in a text: its keyed words of three letters
+// or more, less the stop words given (src/lib/language/language.ts
+// stopWordsFor, passed in so a browser module never loads the stemmers). In
+// order, repeats kept.
+export function searchWords(text: string, stopWords: ReadonlySet<string>): string[] {
+  return textKey(text)
+    .split(" ")
+    .filter((word) => word.length >= 3 && !stopWords.has(word));
+}
+
 // A name made into an id or a file name: its key's words joined by "_", a
 // number's sign dropped, in any script, so two names never share one only
 // because neither has an ASCII letter. Empty when the name has no letter or
@@ -129,22 +139,26 @@ export function asciiSlugOf(name: string): string {
   return ascii.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-// A record by the name a caller gives (a creature, a battle-map token): the
-// name itself, an article or a trailing "form" aside ("a wolf", "brown bear
-// form"), or a part of one name only ("rex"). Anything else is none, never
-// the record whose name sits inside it: a giant elk is no Elk, a werewolf no
-// Wolf. Names are compared by textKey, so "giant_spider" and "Giant-Spider"
-// are the Giant Spider and an accented name matches.
-export function findNamed<T>(list: readonly T[], term: string, nameOf: (entry: T) => string): T | null {
-  const wanted = textKey(term).replace(/^(an?|the) /, "").replace(/ (form|shape)$/, "");
-  if (!wanted) {
+// A record by the name a caller gives: one of the record's spellings, or a
+// part of one record's name only ("rex"). Anything else is none, never the
+// record whose name sits inside it: a giant elk is no Elk, a werewolf no
+// Wolf. `terms` are the ways to read what was written (the name as written,
+// then without its article); a record's first spelling is its name, the only
+// one a part is looked for in. Compared by textKey, so "giant_spider" and
+// "Giant-Spider" are the Giant Spider and an accented name matches.
+export function findNamed<T>(list: readonly T[], terms: readonly string[], spellingsOf: (entry: T) => readonly [string, ...string[]]): T | null {
+  const wanted = [...new Set(terms.map(textKey).filter(Boolean))];
+  if (!wanted.length) {
     return null;
   }
-  const exact = list.find((entry) => textKey(nameOf(entry)) === wanted);
+  const exact = list.find((entry) => spellingsOf(entry).some((spelling) => wanted.includes(textKey(spelling))));
   if (exact) {
     return exact;
   }
-  const parts = list.filter((entry) => ` ${textKey(nameOf(entry))} `.includes(` ${wanted} `));
+  const parts = list.filter((entry) => {
+    const name = ` ${textKey(spellingsOf(entry)[0])} `;
+    return wanted.some((term) => name.includes(` ${term} `));
+  });
   return parts.length === 1 ? parts[0] : null;
 }
 

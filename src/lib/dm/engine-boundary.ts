@@ -15,6 +15,8 @@
 import type { NarrationClaim } from "./claims-logic.ts";
 import { THIS_MOMENT_HEADING } from "../prompt-boundary.ts";
 import { textKey, WORD_CHAR } from "../language/text-logic.ts";
+import { withoutLeadingStopWords } from "../language/language.ts";
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
 
 // ---------------------------------------------------------------------------
 // Part 1: the contract block
@@ -185,14 +187,14 @@ export function collectExchanges(conversation: readonly GuardMessage[]): ToolExc
 }
 
 // "Goblin 2" and "the Goblin" are the same creature to prose; the trailing
-// designator and any article are dropped so the matchers can look for the word
-// a narrator would actually write.
-export function normalizeCreatureName(raw: string): string {
-  return textKey(raw)
-    .replace(/^the\s+/, "")
+// designator and any article (the table language's) are dropped so the
+// matchers can look for the word a narrator would actually write.
+export function normalizeCreatureName(raw: string, language: TableLanguage): string {
+  const key = textKey(raw)
     .replace(/\s+(?:#\s*\d+|\d+|[a-z])$/i, "")
     .replace(/\s+/g, " ")
     .trim();
+  return withoutLeadingStopWords(key, language);
 }
 
 // Models decorate spell names freely ("Hunter's Mark" with a curly apostrophe,
@@ -256,8 +258,9 @@ function recordCreature(
   creatures: Map<string, CreatureFact>,
   display: string,
   update: { hp?: number | null; maxHp?: number | null; dead?: boolean; downed?: boolean },
+  language: TableLanguage,
 ) {
-  const key = normalizeCreatureName(display);
+  const key = normalizeCreatureName(display, language);
   if (key.length < 3) {
     return;
   }
@@ -290,10 +293,10 @@ function recordCreature(
 
 // Creature state hides in nested payloads too (aoe_damage lists a row per
 // target), so this walks the whole result rather than the top level only.
-function walkCreatures(value: unknown, creatures: Map<string, CreatureFact>) {
+function walkCreatures(value: unknown, creatures: Map<string, CreatureFact>, language: TableLanguage) {
   if (Array.isArray(value)) {
     for (const entry of value) {
-      walkCreatures(entry, creatures);
+      walkCreatures(entry, creatures, language);
     }
     return;
   }
@@ -318,7 +321,7 @@ function walkCreatures(value: unknown, creatures: Map<string, CreatureFact>) {
       // A `dropped` flag next to a `name` belongs to that name only when no
       // separate target is named in the same payload.
       downed: downed && !target,
-    });
+    }, language);
   }
   if (target && (targetHp || downed)) {
     recordCreature(creatures, target, {
@@ -326,11 +329,11 @@ function walkCreatures(value: unknown, creatures: Map<string, CreatureFact>) {
       maxHp: targetHp?.maxHp ?? null,
       dead: dead && !name,
       downed,
-    });
+    }, language);
   }
   for (const entry of Object.values(record)) {
     if (entry && typeof entry === "object") {
-      walkCreatures(entry, creatures);
+      walkCreatures(entry, creatures, language);
     }
   }
 }
@@ -363,7 +366,8 @@ const ATTACK_TOOLS = new Set(["pc_attack", "cast_at_enemy", "pet_attack"]);
 
 export function resolveOutcomes(
   exchanges: readonly ToolExchange[],
-  live: LiveState | null = null,
+  live: LiveState | null,
+  language: TableLanguage,
 ): ResolvedOutcomes {
   const attacks = new Map<string, AttackFact>();
   const creatures = new Map<string, CreatureFact>();
@@ -405,7 +409,7 @@ export function resolveOutcomes(
       spends.push({ characterId: args.characterId, name: spent });
     }
     walkNumbers(result, numbers, damageNumbers);
-    walkCreatures(result, creatures);
+    walkCreatures(result, creatures, language);
 
     if (typeof result.hit === "boolean") {
       const display =
@@ -414,7 +418,7 @@ export function resolveOutcomes(
           : typeof result.name === "string"
             ? result.name
             : "";
-      const key = normalizeCreatureName(display);
+      const key = normalizeCreatureName(display, language);
       if (key.length >= 3) {
         // A Multiattack routine resolves several swings inside one call; when
         // they disagree, no single clause about "the blow" can be checked.
@@ -449,7 +453,7 @@ export function resolveOutcomes(
     // goblins make "the goblin" nobody in particular.
     const perKey = new Map<string, number>();
     for (const enemy of live.enemies) {
-      const key = normalizeCreatureName(enemy.name);
+      const key = normalizeCreatureName(enemy.name, language);
       perKey.set(key, (perKey.get(key) ?? 0) + 1);
     }
     // A refused attack landed nothing. It is a fact about the target only
@@ -457,7 +461,7 @@ export function resolveOutcomes(
     // hit is the truth then).
     for (const id of refusedTargets) {
       const enemy = live.enemies.find((entry) => entry.id === id);
-      const key = enemy ? normalizeCreatureName(enemy.name) : "";
+      const key = enemy ? normalizeCreatureName(enemy.name, language) : "";
       if (enemy && key.length >= 3) {
         touched.add(key);
       }
@@ -475,7 +479,7 @@ export function resolveOutcomes(
         hp: enemy.hp,
         maxHp: enemy.maxHp,
         dead: enemy.status === "dead",
-      });
+      }, language);
     }
   }
 
@@ -633,8 +637,8 @@ export function ruleClaims(claims: readonly NarrationClaim[], outcomes: Resolved
 
 // The ground truth the claims are ruled against: the turn's tool exchanges
 // and the encounter as it stands.
-export function guardOutcomes(conversation: readonly GuardMessage[], live: LiveState | null): ResolvedOutcomes {
-  return resolveOutcomes(collectExchanges(conversation), live);
+export function guardOutcomes(conversation: readonly GuardMessage[], live: LiveState | null, language: TableLanguage): ResolvedOutcomes {
+  return resolveOutcomes(collectExchanges(conversation), live, language);
 }
 
 // The correction the model is asked to make. Kept here so the wording is
@@ -686,8 +690,8 @@ const BARE_NUMBER = new RegExp(`(?<![${WORD_CHAR}_.-])\\d{1,3}(?![${WORD_CHAR}_-
 // healing figure on a turn whose tools rolled none, that nothing the model
 // was shown carries either (a table note for a blow the server dealt itself,
 // an earlier line being recalled). Returns the claim's quote, or null.
-export function unrolledFigure(claims: readonly NarrationClaim[], conversation: readonly GuardMessage[]): string | null {
-  const outcomes = resolveOutcomes(collectExchanges(conversation));
+export function unrolledFigure(claims: readonly NarrationClaim[], conversation: readonly GuardMessage[], language: TableLanguage): string | null {
+  const outcomes = resolveOutcomes(collectExchanges(conversation), null, language);
   // The turn rolled damage: a figure that misquotes it is the rewrite's to
   // fix, and sending the model back to the tools would land the blow twice.
   if (outcomes.damageNumbers.length) {

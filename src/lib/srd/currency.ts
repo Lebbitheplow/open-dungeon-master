@@ -29,24 +29,6 @@ export const DENOMINATION_COPPER: Record<Denomination, number> = {
   pp: 1000,
 };
 
-export const DENOMINATION_NAMES: Record<Denomination, string> = {
-  cp: "copper",
-  sp: "silver",
-  ep: "electrum",
-  gp: "gold",
-  pp: "platinum",
-};
-
-// The words a person types, mapped to the code. Longest first is not needed
-// here because lookup is exact after normalizing.
-const WORD_TO_DENOMINATION: Record<string, Denomination> = {
-  cp: "cp", copper: "cp", coppers: "cp", "copper piece": "cp", "copper pieces": "cp",
-  sp: "sp", silver: "sp", silvers: "sp", "silver piece": "sp", "silver pieces": "sp",
-  ep: "ep", electrum: "ep", "electrum piece": "ep", "electrum pieces": "ep",
-  gp: "gp", gold: "gp", golds: "gp", "gold piece": "gp", "gold pieces": "gp", coin: "gp", coins: "gp",
-  pp: "pp", platinum: "pp", "platinum piece": "pp", "platinum pieces": "pp",
-};
-
 // What a sheet stores. `gold` is the whole gold pieces and stays the field
 // every other module already reads; `copper` is the remainder beneath it and
 // is always 0 to 99 once normalized.
@@ -99,38 +81,37 @@ export function formatPurse(purse: Purse): string {
   return formatCopper(purseCopper(purse));
 }
 
-// "340 silver", "12gp", "2 pp 5 sp", "17" (bare numbers are gold, which is
-// what every existing price in the content pack means). Returns null when
-// there is no number in it at all, so a caller can tell "nothing was said"
-// from "nothing was worth anything".
+// An amount in the coins' codes, the SRD's notation, which formatCopper
+// writes and the content pack's costs use: "12gp", "2 pp 5 sp", "17" (a bare
+// number is gold, which is what every existing price in the pack means). The
+// codes are the same at every table, so no language's coin words are read:
+// anything but numbers and codes ("340 silver", "50 mo", "5 arrows") is
+// null, never a guess that would silently charge for it, and so is a text
+// with no number at all, so a caller can tell "nothing was said" from
+// "nothing was worth anything".
 export function parseCoins(text: string): number | null {
-  const normalized = String(text ?? "")
+  const parts = String(text ?? "")
     .toLowerCase()
     .replace(/,/g, "")
-    .trim();
-  if (!normalized) {
-    return null;
-  }
-  const pattern = /(\d+(?:\.\d+)?)\s*([a-z]+(?:\s+pieces?)?)?/g;
+    .match(/\d+(?:\.\d+)?|[^\s\d.-]+/g) ?? [];
   let total = 0;
-  let matched = false;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(normalized)) !== null) {
-    const amount = Number(match[1]);
+  for (let index = 0; index < parts.length; index += 1) {
+    const amount = Number(parts[index]);
     if (!Number.isFinite(amount)) {
-      continue;
+      return null;
     }
-    const word = (match[2] ?? "").trim();
-    const denomination = word ? WORD_TO_DENOMINATION[word] : "gp";
-    if (word && !denomination) {
-      // A number followed by a word that is not a coin ("5 arrows") is not a
-      // price, and guessing gold would silently charge for it.
-      continue;
+    const denomination = DENOMINATIONS.find((code) => code === parts[index + 1]);
+    if (denomination) {
+      index += 1;
     }
-    matched = true;
     total += amount * DENOMINATION_COPPER[denomination ?? "gp"];
   }
-  return matched ? Math.round(total) : null;
+  return parts.length ? Math.round(total) : null;
+}
+
+// Why a coin amount cannot be read, for the refusal that asks for it again.
+export function unreadCoins(text: string): string {
+  return `"${text}" is not an amount in the coins' codes: write it with pp, gp, ep, sp and cp, like "3 gp 4 sp"`;
 }
 
 export type PurseChange = {

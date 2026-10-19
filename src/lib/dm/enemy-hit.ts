@@ -16,6 +16,7 @@ import { damageParts } from "@/lib/dm/damage-parts";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { saveAgainst } from "@/lib/dm/roll-about";
 
 // What an enemy's hit does once it lands (SRD 5.1): each damage type in the
 // blow meets the target's resistances on its own ("piercing plus fire"
@@ -123,7 +124,7 @@ export function resolveOnHit(
       rider.save,
       rider.dc,
       `${target.name}: ${rider.save.toUpperCase()} save vs ${enemy.displayName}'s ${attack.name}`,
-      rider.condition ?? rider.damageType,
+      saveAgainst({ condition: rider.condition, damageType: rider.damageType }),
     );
     saved = save.success;
     out.riderSave = save.total === null ? "failed automatically" : `${save.total} vs DC ${rider.dc}`;

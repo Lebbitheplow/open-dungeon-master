@@ -2,7 +2,8 @@
 // resources, conditions and rests. Names match the tool names the AI DM is
 // offered exactly, because both callers reach the same engine
 // (src/lib/dm/invoke.ts).
-import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import type { CatalogEntry, CatalogField } from "@/lib/dm/catalog-types";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { UPDATE_SHEET_FIELDS } from "@/lib/dm/update-sheet-args";
 import { DRACONIC_ANCESTRIES } from "@/lib/srd/racial-grants";
 import { GENDER_FIELD } from "@/lib/dm/catalog-world";
@@ -13,6 +14,46 @@ import {
   conditionField,
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
+
+// What an item is, for one no SRD or pack item is (src/lib/srd/item-tags.ts),
+// typed as the tags the server takes.
+const ITEM_TAGS_FIELD: CatalogField = {
+  name: "tags",
+  label: "What it is",
+  kind: "list",
+  placeholder: "potion, healing_potion",
+  help: `For an item no SRD or pack list has, comma separated, from: ${ITEM_TAGS.join(", ")}.`,
+};
+
+// The SRD or pack item an item named in the table's language is
+// (src/lib/srd/item-tags.ts itemRow).
+const ITEM_SRD_NAME_FIELD: CatalogField = {
+  name: "srdName",
+  label: "SRD item it is",
+  kind: "text",
+  placeholder: "Elixir of Health",
+  help: "For an item named in the table's language: the SRD or pack item it is, by its English name, so it works as that item does.",
+};
+
+// What one is worth, for a thing the content pack does not price
+// (src/lib/dm/trade-value.ts).
+const ITEM_WORTH_FIELD: CatalogField = {
+  name: "worth",
+  label: "Worth (gp each)",
+  kind: "number",
+  min: 0.01,
+  max: 100000,
+  help: "For a gem, an art object or anything the book does not price: its sale and a spell's costly material read it. Leave the worth out of the name.",
+};
+
+// The spell a spell scroll holds (src/lib/dm/consumables.ts).
+const ITEM_SPELL_FIELD: CatalogField = {
+  name: "spell",
+  label: "Spell on the scroll",
+  kind: "text",
+  placeholder: "Fireball",
+  help: "A spell scroll only, tagged scroll: the spell reading it casts, by its name in the spell lists, whatever the scroll is called.",
+};
 
 export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
   {
@@ -135,7 +176,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "coins",
         label: "Or in coins",
         kind: "text",
-        placeholder: "340 silver",
+        placeholder: "340 sp",
         help: "Overrides the amount above; the sign of the change still says gain or spend.",
       },
       {
@@ -168,6 +209,10 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         kind: "boolean",
         help: "With item offers on, the same item again within ten minutes of an accepted offer is refused unless it is truly another from a different source.",
       },
+      ITEM_SRD_NAME_FIELD,
+      ITEM_TAGS_FIELD,
+      ITEM_WORTH_FIELD,
+      ITEM_SPELL_FIELD,
       REASON,
     ],
   },
@@ -180,6 +225,10 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "name", label: "Called on the sheet", kind: "text", required: true },
       { name: "revealedName", label: "Actually", kind: "text", placeholder: "Ring of Protection" },
+      ITEM_SRD_NAME_FIELD,
+      ITEM_TAGS_FIELD,
+      ITEM_WORTH_FIELD,
+      ITEM_SPELL_FIELD,
       REASON,
     ],
   },
@@ -274,6 +323,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         help: "Who they are frightened of, charmed or grappled by; it ends when that enemy falls.",
       },
       { name: "sourceCharacterId", label: "Or by character", kind: "character" },
+      { name: "magical", label: "From magic", kind: "boolean", help: "A creature's magical sleep, an enchanted trap: traits that resist magic apply." },
       REASON,
     ],
   },
@@ -432,7 +482,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "value",
         label: "Becomes",
         kind: "text",
-        help: "A whole number for a number. Conditions as a list (poisoned, prone), or none to clear them.",
+        help: "A whole number for a number. Conditions as a list (poisoned, prone), or left empty to clear them.",
       },
       REASON,
     ],

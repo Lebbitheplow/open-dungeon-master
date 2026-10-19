@@ -3,11 +3,15 @@ import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechan
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, abilityMod, spellSlotsFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { isCantripName, spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import {
   isThirdCaster,
   thirdCasterCantrips,
+  thirdCasterList,
+  thirdCasterProfileOf,
   thirdCasterSpellsKnown,
+  type ThirdCasterSetting,
 } from "@/lib/srd/third-caster";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
@@ -54,6 +58,7 @@ export function spellbookAllowance(level: number): number {
 type Ability = "int" | "wis" | "cha";
 
 export type CasterLists = {
+  progression?: ThirdCasterSetting;
   known: string[];
   prepared: string[];
   cantrips?: string[];
@@ -65,6 +70,7 @@ export type CasterLists = {
 // single-class character, or one `casters` entry on a multiclass one.
 export type CasterView = {
   classId: string;
+  progression?: ThirdCasterSetting;
   ability: Ability;
   level: number;
   subclass: string;
@@ -74,6 +80,10 @@ export type CasterView = {
   cantrips: string[];
   pending: string[];
   spellbook: string[];
+  // The table's workshop and pack subclasses (src/lib/db/subclass-extras.ts),
+  // for the always-prepared spells of a subclass the bundled tables do not
+  // carry. Read, never written back to the sheet.
+  extras?: SubclassExtras;
 };
 
 type SheetLike = Pick<CharacterSheet, "class" | "level" | "subclass" | "classes" | "abilities"> & {
@@ -102,14 +112,17 @@ function viewOf(
   ability: Ability,
   level: number,
   subclass: string,
+  extras?: SubclassExtras,
 ): CasterView {
   return {
     classId,
+    ...(extras ? { extras } : {}),
+    ...(lists.progression ? { progression: lists.progression } : {}),
     ability,
     level,
     subclass,
     // An Eldritch Knight or Arcane Trickster knows its spells, as a sorcerer does.
-    style: isThirdCaster(classId, subclass) ? "known" : spellStyleFor(classId),
+    style: isThirdCaster(classId, subclass, lists.progression) ? "known" : spellStyleFor(classId),
     known: [...(lists.known ?? [])],
     prepared: [...(lists.prepared ?? [])],
     cantrips: [...(lists.cantrips ?? [])],
@@ -118,7 +131,9 @@ function viewOf(
   };
 }
 
-export function casterViewsOf(sheet: SheetLike): CasterView[] {
+// `extras`: the table's subclasses, where the server reads a sheet (the
+// browser's registered ones answer when it is left out).
+export function casterViewsOf(sheet: SheetLike, extras?: SubclassExtras): CasterView[] {
   const casting = sheet.spellcasting;
   if (!casting) {
     return [];
@@ -126,10 +141,10 @@ export function casterViewsOf(sheet: SheetLike): CasterView[] {
   if (casting.casters?.length) {
     return casting.casters.map((caster) => {
       const entry = (sheet.classes ?? []).find((row) => lower(row.id) === lower(caster.classId));
-      return viewOf(caster, caster.classId, caster.ability, entry?.level ?? sheet.level, entry?.subclass ?? "");
+      return viewOf(caster, caster.classId, caster.ability, entry?.level ?? sheet.level, entry?.subclass ?? "", extras);
     });
   }
-  return [viewOf(casting, sheet.class, casting.ability, sheet.level, sheet.subclass ?? "")];
+  return [viewOf(casting, sheet.class, casting.ability, sheet.level, sheet.subclass ?? "", extras)];
 }
 
 // Writes views back: onto `casters` (with the top-level lists kept as their
@@ -146,6 +161,7 @@ export function withCasterViews(
     const union = (pick: (view: CasterView) => string[]) => dedupeNames(views.flatMap(pick));
     const mirror: CasterView = {
       ...views[0],
+      progression: views.length === 1 ? views[0].progression : undefined,
       // A spellbook anywhere keeps the mirror's.
       style: views.some((view) => view.style === "spellbook") ? "spellbook" : "prepared",
       known: union((view) => view.known).slice(0, 80),
@@ -174,6 +190,9 @@ function writeLists<T extends CasterLists>(target: T, view: CasterView): T {
   if (!view.pending.length) {
     delete next.pending;
   }
+  if (!view.progression) {
+    delete next.progression;
+  }
   if (view.style !== "spellbook" && !view.spellbook.length) {
     delete next.spellbook;
   }
@@ -199,14 +218,14 @@ export function spellbookOf(view: Pick<CasterView, "spellbook" | "prepared" | "p
 }
 
 export function grantedSpellsOf(view: CasterView): string[] {
-  return subclassSpellsFor(view.classId, view.subclass, view.level);
+  return subclassSpellsFor(view.classId, view.subclass, view.level, view.extras);
 }
 
 // The highest spell level this class can prepare or learn at its own level.
 export function maxSpellLevelOf(
-  view: Pick<CasterView, "classId" | "level"> & { subclass?: string },
+  view: Pick<CasterView, "classId" | "level" | "progression"> & { subclass?: string },
 ): number {
-  return Object.keys(spellSlotsFor(view.classId, view.level, view.subclass)).reduce(
+  return Object.keys(spellSlotsFor(view.classId, view.level, view.subclass, view.progression)).reduce(
     (top, slotLevel) => Math.max(top, Number(slotLevel)),
     0,
   );
@@ -219,7 +238,7 @@ export function spellCapOf(
   view: CasterView,
   abilities: CharacterSheet["abilities"],
 ): { label: string; count: number } | null {
-  if (isThirdCaster(view.classId, view.subclass)) {
+  if (isThirdCaster(view.classId, view.subclass, view.progression)) {
     return view.level >= 3
       ? { label: "spells known", count: thirdCasterSpellsKnown(view.level) }
       : null;
@@ -370,12 +389,21 @@ function casterTypeOf(classId: string) {
   return findCustomClass(id)?.casterType ?? SRD_CLASSES.find((entry) => entry.id === id)?.casterType ?? "none";
 }
 
+// The class list a caster learns from: a third caster's profile list (an
+// Eldritch Knight learns wizard spells, a Soulspy cleric ones), else its
+// class's own.
+export function casterListOf(view: Pick<CasterView, "classId" | "subclass" | "progression">): string {
+  const profile =
+    casterTypeOf(view.classId) === "none" ? thirdCasterProfileOf(view.classId, view.subclass, view.progression) : null;
+  return profile ? thirdCasterList(profile) : spellClassFor(view.classId);
+}
+
 // Cantrips this class knows at its level, or null when it has none.
 export function cantripCapOf(
-  view: Pick<CasterView, "classId" | "level"> & { subclass?: string },
+  view: Pick<CasterView, "classId" | "level" | "progression"> & { subclass?: string },
 ): number | null {
-  if (isThirdCaster(view.classId, view.subclass)) {
-    return view.level >= 3 ? thirdCasterCantrips(view.classId, view.level) : null;
+  if (isThirdCaster(view.classId, view.subclass, view.progression)) {
+    return view.level >= 3 ? thirdCasterCantrips(view.classId, view.level, view.progression) : null;
   }
   return suggestedCantripCount(spellClassFor(view.classId), view.level, casterTypeOf(view.classId));
 }
@@ -405,7 +433,14 @@ function arcanumTop(view: Pick<CasterView, "classId" | "level">): number {
 // are left out of the count.
 export function spellListProblems(
   sheet: SheetLike & { abilities: CharacterSheet["abilities"] },
-  options: { bookAllowance?: boolean; freeCantrips?: string[]; freeCantripCount?: number; freeSpells?: string[] } = {},
+  options: {
+    bookAllowance?: boolean;
+    freeCantrips?: string[];
+    freeCantripCount?: number;
+    freeSpells?: string[];
+    // The table's subclasses, for a workshop subclass's always-prepared spells.
+    extras?: SubclassExtras;
+  } = {},
 ): string[] {
   const problems: string[] = [];
   const free = new Set((options.freeCantrips ?? []).map(textKey).filter(Boolean));
@@ -417,7 +452,7 @@ export function spellListProblems(
   // gave one: `freeCantripCount` is that many, whichever they are, and they
   // sit with the first caster's.
   let freeCount = options.freeCantripCount ?? 0;
-  for (const view of casterViewsOf(sheet)) {
+  for (const view of casterViewsOf(sheet, options.extras)) {
     const label = `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
     const cantripCap = cantripCapOf(view);
     const named = dedupeNames(view.cantrips).filter((name) => !free.has(textKey(name)));

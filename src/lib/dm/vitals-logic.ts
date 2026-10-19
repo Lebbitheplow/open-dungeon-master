@@ -142,18 +142,7 @@ export function namesExhaustion(condition: string): boolean {
   return /^exhaust/.test(condition.trim().toLowerCase());
 }
 
-export type StabilizeMethod = "check" | "kit" | "spell";
-
-// How the healer is going about it, from whatever the caller wrote.
-export function stabilizeMethod(raw: string | undefined): StabilizeMethod {
-  const text = (raw ?? "").toLowerCase();
-  if (/kit/.test(text)) {
-    return "kit";
-  }
-  if (/spare|spell|cantrip/.test(text)) {
-    return "spell";
-  }
-  return "check";
-}
+export const STABILIZE_METHODS = ["check", "kit", "spell"] as const;
+export type StabilizeMethod = (typeof STABILIZE_METHODS)[number];
 
 export const STABILIZE_DC = 10;

@@ -292,9 +292,6 @@ export async function layMap(world, rows, positions) {
   return map;
 }
 
-export const enemyNamed = (world, name) =>
-  world.enemies().find((enemy) => enemy.displayName === name) ?? null;
-
 // What a refused call must leave behind: the same sheet.
 export const castingState = (sheet) =>
   JSON.stringify({

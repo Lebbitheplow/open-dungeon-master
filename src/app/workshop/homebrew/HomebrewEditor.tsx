@@ -22,6 +22,11 @@ import { CopySource } from "@/app/workshop/homebrew/CopySource";
 // A spell draft that already names its classes searches that class's list
 // first; the catalogue is otherwise the whole book.
 function catalogScope(draft: HomebrewDraft): Record<string, string> {
+  // A subclass starts from its own class's subclasses.
+  if (draft.kind === "archetype") {
+    const classSlug = String(draft.data.classSlug ?? "");
+    return classSlug ? { class: classSlug } : {};
+  }
   if (draft.kind !== "spell") return {};
   const classes = Array.isArray(draft.data.classes) ? (draft.data.classes as string[]) : [];
   return classes.length ? { class: String(classes[0]).toLowerCase() } : {};

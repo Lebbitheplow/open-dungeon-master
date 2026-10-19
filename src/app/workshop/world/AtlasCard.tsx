@@ -10,6 +10,7 @@ import type { Pin, Region } from "@/lib/worldforge/model";
 import { mapWouldLoop, REGION_COLORS } from "@/lib/worldforge/tree";
 import type { WorldState } from "./useWorld";
 import { EntityAvatar, EntityPicker, typeOf } from "./world-ui";
+import { NotSaved } from "./AtlasEdit";
 
 // What a pin or a region on the atlas is: its name, the entry it stands for,
 // notes, and for a pin the map it opens (a map made inside it, or a jump to
@@ -21,6 +22,9 @@ export function AtlasCard({
   region,
   making,
   subMapForm,
+  regionActions,
+  battleMaps,
+  position,
   onMakeSubMap,
   onOpenMap,
   onOpenEntry,
@@ -35,12 +39,21 @@ export function AtlasCard({
   region: Region | null;
   making: { name: string; image: string } | null;
   subMapForm: ReactNode;
+  // For a pin naming a place: placing it on the Region, or releasing it
+  // (AtlasRegion's PinRegionActions).
+  regionActions?: ReactNode;
+  // For a pin naming a place: its battle maps and encounters
+  // (PlaceBattleMaps), or a line on how to get them.
+  battleMaps?: ReactNode;
+  // Where it stands, as numbers: a pin's two, a region's corners (AtlasEdit).
+  position?: ReactNode;
   onMakeSubMap: () => void;
   onOpenMap: (id: string) => void;
   onOpenEntry: (ref: string) => void;
-  onSavePin: (pin: Pin) => void;
+  // Each resolves false when the save was refused.
+  onSavePin: (pin: Pin) => Promise<boolean> | void;
   onDeletePin: (pin: Pin) => void;
-  onSaveRegion: (region: Region) => void;
+  onSaveRegion: (region: Region) => Promise<boolean> | void;
   onDeleteRegion: (region: Region) => void;
   onClose: () => void;
 }) {
@@ -49,9 +62,12 @@ export function AtlasCard({
   const [picking, setPicking] = useState(false);
   const ref = pin?.ref ?? region?.ref ?? "";
   const entity = entities.find((entry) => entry.ref === ref);
-  const save = (patch: Partial<Pin & Region>) => {
-    if (pin) onSavePin({ ...pin, ...draft, ...patch } as Pin);
-    if (region) onSaveRegion({ ...region, ...draft, ...patch } as Region);
+  // A refused save keeps the draft in the fields, with a way to try again
+  // (audit WF-20); the row itself goes back to what the server holds.
+  const [failed, setFailed] = useState<Partial<Pin & Region> | null>(null);
+  const save = async (patch: Partial<Pin & Region>) => {
+    const ok = pin ? await onSavePin({ ...pin, ...draft, ...patch } as Pin) : region ? await onSaveRegion({ ...region, ...draft, ...patch } as Region) : true;
+    setFailed(ok === false ? patch : null);
   };
   const linked = pin?.linkedMapId ? doc.maps.find((atlas) => atlas.id === pin.linkedMapId) : null;
   const portals = pin ? doc.maps.filter((atlas) => atlas.id !== pin.mapId && !mapWouldLoop(doc.maps, doc.pins, pin, atlas.id)) : [];
@@ -61,13 +77,20 @@ export function AtlasCard({
       <div className="flex items-center gap-2">
         <span className="eyebrow text-[10px] text-amber-400/80">{pin ? "Pin" : "Region"}</span>
         <input className={cn(ui.input, "py-1 text-sm")} aria-label="Name" maxLength={80} placeholder={entity?.name ?? "A name"} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onBlur={() => save({})} />
-        <KitButton tone="iconDanger" always aria-label="Delete" onClick={() => (pin ? onDeletePin(pin) : region && onDeleteRegion(region))}>
+        <KitButton tone="iconDanger" always aria-label="Delete" onClick={() => (pin ? onDeletePin(pin) : region && onDeleteRegion(region))} data-testid="atlas-card-delete">
           <Trash2 className="size-4" />
         </KitButton>
         <KitButton tone="icon" always aria-label="Close" onClick={onClose}>
           <X className="size-4" />
         </KitButton>
       </div>
+      {failed ? <NotSaved onRetry={() => void save(failed)} what="Your words" /> : null}
+      <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
+        <input type="checkbox" checked={Boolean((pin ?? region)?.hidden)} onChange={(event) => void save({ hidden: event.target.checked ? true : undefined })} data-testid="atlas-card-hidden" />
+        Hidden from the party
+        <span className="text-stone-600">(players see a map only once you show it to them)</span>
+      </label>
+      {position}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] text-stone-500">Stands for</span>
         {entity ? (
@@ -110,6 +133,8 @@ export function AtlasCard({
         </div>
       ) : null}
       {pin && making ? subMapForm : null}
+      {pin ? regionActions : null}
+      {pin ? battleMaps : null}
     </div>
   );
 }

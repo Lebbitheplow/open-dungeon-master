@@ -43,8 +43,6 @@ type ToolDef = {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 };
 
-export const LEGENDARY_TOOL_NAMES = ["legendary_action", "legendary_resist", "lair_action"] as const;
-
 export const legendaryTools: ToolDef[] = [
   {
     type: "function",

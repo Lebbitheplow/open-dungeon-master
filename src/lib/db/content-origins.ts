@@ -86,36 +86,3 @@ export function bundleRefOf(campaignId: string, kind: OriginKind, rowId: string)
     .get(campaignId, kind, rowId, BUNDLE_ORIGIN) as { ref: string } | undefined;
   return row?.ref ?? null;
 }
-
-// Rows anywhere in `campaignIds` that arrived under one of `refs`, as
-// `kind:ref` -> {campaignId, rowId}. Live rows only, as above.
-export function rowsByBundleRef(
-  campaignIds: string[],
-  kind: OriginKind,
-  refs: string[],
-): Map<string, { campaignId: string; rowId: string }> {
-  const found = new Map<string, { campaignId: string; rowId: string }>();
-  if (!campaignIds.length || !refs.length) {
-    return found;
-  }
-  const table = ORIGIN_TABLES[kind];
-  const wanted = new Set(refs);
-  const statement = getDatabase().prepare(
-    `SELECT o.campaign_id AS campaignId, o.row_id AS rowId, o.origin_row_id AS ref
-       FROM content_origins o
-       JOIN ${table} t ON t.id = o.row_id AND t.campaign_id = o.campaign_id
-      WHERE o.campaign_id = ? AND o.kind = ? AND o.origin_id = ?`,
-  );
-  for (const campaignId of campaignIds) {
-    for (const row of statement.all(campaignId, kind, BUNDLE_ORIGIN) as Array<{
-      campaignId: string;
-      rowId: string;
-      ref: string;
-    }>) {
-      if (wanted.has(row.ref) && !found.has(`${kind}:${row.ref}`)) {
-        found.set(`${kind}:${row.ref}`, { campaignId: row.campaignId, rowId: row.rowId });
-      }
-    }
-  }
-  return found;
-}

@@ -23,6 +23,11 @@ export const DAMAGE_TYPE_VALUES = [
   "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
 ] as const;
 
+// A fixed list's values as options, each labelled by its own words.
+export function optionsOf(values: readonly string[]): Option[] {
+  return values.map((value) => ({ value, label: titled(value.replace(/_/g, " ")) }));
+}
+
 export const DAMAGE_TYPE_OPTIONS: Option[] = DAMAGE_TYPE_VALUES.map((value) => ({
   value,
   label: titled(value),

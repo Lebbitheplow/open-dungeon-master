@@ -261,6 +261,19 @@ export default function AuthForm({
     );
   }
 
+  // A world one of the apps hosts that nobody owns yet, opened outside the
+  // app (a browser at its address): its app makes the first account itself,
+  // with a code only the app holds, so this page has nothing to offer but
+  // the way back.
+  if (deviceWorld && needsSetup && !seatJoin) {
+    return (
+      <p className="reveal text-sm text-stone-400" role="status">
+        This world runs inside the Open Dungeon Master app on this device, and the app makes its
+        first account itself. Open the app and choose Enter my world; there is no code to type.
+      </p>
+    );
+  }
+
   // A closed server has one mode only, so the switch is hidden rather than
   // shown with a dead option; a device world's join page has no modes at all.
   const canRegister = signupMode !== "closed" && !seatJoin;

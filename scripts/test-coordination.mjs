@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
+import { fakeModel, settleQueue } from "./lib/enforce-narrator.mjs";
 import { fitSequence, joinPrevious, moveEarlier, moveLater, moveTo, normalizeSequence, ownStep } from "../src/lib/dm/plan-order.ts";
 import {
   coordinationBlock,
@@ -125,6 +126,10 @@ await test("An ordered plan: the steps every seat reads, the DM's block step by 
 });
 
 const world = await openWorld();
+// Each resolve queues a real DM turn; a scripted model answers it, so none
+// reaches the default endpoint (issue 414).
+const model = await fakeModel();
+model.pointAt(world);
 const route = await world.route("campaigns/[campaignId]/coordination");
 const actions = await world.route("campaigns/[campaignId]/actions");
 const { countMessages, listRecentMessages } = await import("../src/lib/db/messages.ts");
@@ -287,5 +292,11 @@ await test("A fight that begins sets an unresolved plan aside, saying what did n
   assert.equal((await post(world.owner, { action: "open" })).status, 409, "no plan while initiative runs");
 });
 
+await test("Each resolve's DM turn went to the scripted model and ended before the file did.", async () => {
+  await settleQueue(world.campaignId);
+  assert.ok(model.requests.length > 0, "the resolves' turns reached the fake model");
+});
+
+model.close();
 world.close();
 finish();

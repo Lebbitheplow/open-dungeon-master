@@ -324,7 +324,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
   },
   "paladin::Unyielding Spirit": {
     subclass: "Oath of the Crown",
-    effects: [{ kind: "save_adv", against: "paraly|stun" }],
+    effects: [{ kind: "save_adv", against: ["paralyzed", "stunned"] }],
   },
   "paladin::Exalted Champion": {
     subclass: "Oath of the Crown",
@@ -385,7 +385,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
   },
   "ranger::Beguiling Twist": {
     subclass: "Fey Wanderer",
-    effects: [{ kind: "save_adv", against: "charm|frighten|fear", note: "Redirecting the charm is narrated." }],
+    effects: [{ kind: "save_adv", against: ["charmed", "frightened"], note: "Redirecting the charm is narrated." }],
   },
   "ranger::Gathered Swarm": {
     subclass: "Swarmkeeper",

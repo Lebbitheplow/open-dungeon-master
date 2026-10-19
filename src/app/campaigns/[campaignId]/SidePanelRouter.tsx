@@ -51,7 +51,7 @@ import { PanelLoading, panels } from "@/app/campaigns/[campaignId]/side-panel-lo
 // behind its own Suspense, so a section's tabs stay put while it arrives.
 const {
   BattleMapPanel, BondsPanel, ContextPanel, DmConsolePanel, DmInboxPanel, DmWhisperPanel, EventLog, FactionsPanel,
-  FactsPanel, LeadPanel, LorePanel, MapPanel, MarketPanel, NotesPanel, OverworldPanel, PinsPanel, QuestsPanel,
+  FactsPanel, LeadPanel, LorePanel, MapPanel, MarketPanel, NotesPanel, OverworldPanel, PartyAtlasPanel, PinsPanel, QuestsPanel,
   SessionSettings, SideChatPanel, StoryPanel, TimelinePanel, WorldForgePanel,
 } = panels;
 
@@ -544,6 +544,8 @@ export function SidePanelRouter({
           scene={scene ?? null}
           inserts={theatreInserts}
         />
+        {/* The Atlas maps the DM has shown to the party (WorldForge). */}
+        <PartyAtlasPanel campaignId={campaignId} refreshKey={worldVersion} />
       </div>
       </Suspense>
     );

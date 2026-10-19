@@ -45,9 +45,9 @@ import { healthState } from "@/lib/bestiary/health";
 import {
   advanceOrder,
   buildOrder,
-  coerceEncounterOutcome,
   nameArrivals,
   pickEnemyTarget,
+  resolveEncounterOutcome,
   spliceIntoOrder,
   withoutReflexTurns,
   withReflexTurns,
@@ -59,7 +59,7 @@ import {
   markEnemyActed,
   oweEnemiesAnAction,
 } from "@/lib/dm/can-act";
-import { acWithEffects, enemyAcWithEffects } from "@/lib/dm/ac-effects";
+import { acWithEffects } from "@/lib/dm/ac-effects";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import {
@@ -466,7 +466,7 @@ function nextTurn(
 
 // Armor Class with every active effect folded in lives in
 // src/lib/dm/ac-effects.ts; re-exported for the callers that learned it here.
-export { acWithEffects, enemyAcWithEffects };
+export { acWithEffects };
 
 // Exported for src/lib/dm/initiative.ts: a DM editing the order moves the
 // pointer without going through advancePointer, and the floor has to follow
@@ -841,7 +841,8 @@ function handleDamageEnemy(
 
 // Outcome is deliberately a free string: a rejected end_encounter used to
 // leave the fight stuck open while the narration declared it over.
-// coerceEncounterOutcome maps synonyms and infers from the roster.
+// resolveEncounterOutcome takes a listed value and reads anything else off
+// the roster.
 const endArgsSchema = z.object({
   outcome: z.string().max(80).optional(),
   reason: z.string().optional(),
@@ -879,7 +880,7 @@ function handleEndEncounter(
     args = { outcome: undefined };
   }
   const statuses = listEnemies(encounter.id).map((enemy) => enemy.status);
-  const { outcome, inferred } = coerceEncounterOutcome(args.outcome, statuses);
+  const { outcome, inferred } = resolveEncounterOutcome(args.outcome, statuses);
   return {
     ok: true,
     ...(inferred

@@ -32,7 +32,7 @@ import { ABILITY_SCORE_CAP, applyAsiChoices, earnedAsiCountFor } from "@/lib/srd
 import { applySubclassTraining, autoSubclassPicks, subclassGrants } from "@/lib/srd/subclass-training";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { asiTaken, withAsiLedger } from "@/lib/srd/asi-ledger";
-import { applyFeatIncrease, featSaveProficiency } from "@/lib/srd/feat-effects";
+import { applyFeatIncrease, featSaveProficiency, featsAsRun } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec } from "@/lib/srd/feat-grants";
 import { elementalAdeptFeatureName } from "@/lib/srd/feat-combat";
 import { featSpellGrants, freeCastFeatures, withFeatSpells } from "@/lib/srd/feat-spells";
@@ -177,9 +177,10 @@ export function applyChoices(scores: AbilityScores, choices: AsiChoice[]): Abili
   return next;
 }
 
-function emptyView(classId: string, ability: CasterView["ability"], style: CasterView["style"]): CasterView {
+function emptyView(classId: string, ability: CasterView["ability"], style: CasterView["style"], progression?: CasterView["progression"]): CasterView {
   return {
     classId,
+    ...(progression ? { progression } : {}),
     ability,
     level: 0,
     subclass: "",
@@ -290,7 +291,7 @@ export function buildLevelUp(
   // A half-feat's point (Actor's Charisma, Resilient's chosen score) and
   // Resilient's saving throw come with the feat.
   const featSaves: AbilityScoresKey[] = [];
-  const casts = castingClassesOf(classes, context.classOf).length > 0;
+  const casts = castingClassesOf(classes, context.classOf, context.subclassExtras, sheet.spellcasting).length > 0;
   for (const choice of asked.choices) {
     if (choice.mode !== "feat") {
       continue;
@@ -499,21 +500,24 @@ export function buildLevelUp(
     return spec.damageTypes.length && spec.damageTypes.includes(picked) ? [elementalAdeptFeatureName(picked)] : [];
   });
   const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks].map((name) => ({ name: name.slice(0, 80), source: "story" as const }));
-  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race, feats);
+  // A table's workshop copy of Martial Adept opens its slots as the feat it
+  // runs as.
+  const featsRun = featsAsRun(feats, sheet.campaignId);
+  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race, featsRun);
   const takenAfter = taken + asked.choices.length;
   if (target >= 4 || takenAfter > 0) {
     features = withAsiLedger(features, takenAfter);
   }
 
   // ---- spells ----
-  const casting = castingClassesOf(classes, context.classOf);
+  const casting = castingClassesOf(classes, context.classOf, context.subclassExtras, sheet.spellcasting);
   const mine = casting.find((entry) => entry.entry.id.toLowerCase() === classId);
   let spellcasting: Spellcasting = sheet.spellcasting;
   if (casting.length && (mine || sheet.spellcasting)) {
     // The lists as the sheet holds them. A sheet with no per-class entries
     // keeps one list, and it belongs to the first of its classes that casts.
-    const owner = castingClassesOf(before, context.classOf)[0]?.entry;
-    const views = (sheet.spellcasting ? casterViewsOf(sheet) : [])
+    const owner = castingClassesOf(before, context.classOf, context.subclassExtras, sheet.spellcasting)[0]?.entry;
+    const views = (sheet.spellcasting ? casterViewsOf(sheet, context.subclassExtras) : [])
       .map((view) =>
         sheet.spellcasting?.casters?.length || !owner
           ? view
@@ -528,6 +532,7 @@ export function buildLevelUp(
       prepared: [],
       known: [],
       cantrips: [],
+      ...(casting[0].progression ? { progression: casting[0].progression } : {}),
     };
     let nextViews = views;
     if (mine) {
@@ -536,7 +541,8 @@ export function buildLevelUp(
         emptyView(
           klass.id,
           mine.ability,
-          isThirdCaster(klass.id, leveled.subclass) ? "known" : emptyStyle(klass.id),
+          isThirdCaster(klass.id, leveled.subclass, mine.progression) ? "known" : emptyStyle(klass.id),
+          mine.progression,
         );
       const picks: SpellPicks | null = request.levelUpSpells?.length || request.levelUpForget
         ? { kind: "picks", spells: request.levelUpSpells ?? [], forget: request.levelUpForget }
@@ -544,7 +550,15 @@ export function buildLevelUp(
           ? { kind: "lists", lists: request.spellcasting }
           : null;
       const learned = levelUpSpells({
-        before: { ...held, ability: mine.ability, level: leveled.level - 1, subclass: leveled.subclass },
+        before: {
+          ...held,
+          ability: mine.ability,
+          level: leveled.level - 1,
+          subclass: leveled.subclass,
+          ...(mine.progression ? { progression: mine.progression } : {}),
+          // A workshop subclass's always-prepared spells, free of the count.
+          ...(context.subclassExtras ? { extras: context.subclassExtras } : {}),
+        },
         level: leveled.level,
         subclass: leveled.subclass,
         list: mine.list,
@@ -569,6 +583,7 @@ export function buildLevelUp(
         casters: nextViews.map((view) => ({
           classId: view.classId,
           ability: casting.find((entry) => lower(entry.entry.id) === lower(view.classId))?.ability ?? view.ability,
+          ...(view.progression ? { progression: view.progression } : {}),
           known: view.known,
           prepared: view.prepared,
           cantrips: view.cantrips,
@@ -587,12 +602,14 @@ export function buildLevelUp(
         xp: sheet.xp,
         classes: multiclass ? classes : [],
         features,
+        feats: featsRun,
         hitDice: sheet.hitDice,
         hitDicePools: sheet.hitDicePools,
         spellcasting: { ...written, ability: casting[0].ability },
         loneClassBefore: sheet.classes.length ? null : sheet.class,
       },
       classes,
+      context.subclassExtras,
     );
   }
 

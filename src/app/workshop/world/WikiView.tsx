@@ -13,6 +13,7 @@ import type { WorldApi, WorldState } from "./useWorld";
 import { EntityPage } from "./EntityPage";
 import { EntityAvatar, tint, typeOf } from "./world-ui";
 import type { OpenSystem } from "./WorldForgePanel";
+import type { OpenPrep } from "./PlaceBattleMaps";
 import { CreateButton } from "@/app/workshop/[workshopId]/CreateChooser";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -26,6 +27,7 @@ export function WikiView({
   focus,
   onFocus,
   onOpenSystem,
+  onOpenPrep,
   onCreate,
   atTable = false,
   canWrite,
@@ -39,6 +41,7 @@ export function WikiView({
   // The workshop's way to a record's own tool; absent at the play table,
   // which has no workshop tools to open.
   onOpenSystem?: OpenSystem;
+  onOpenPrep?: OpenPrep;
   onCreate?: () => void;
   // The play table's World tab: the campaign's world, with no files to open.
   atTable?: boolean;
@@ -224,7 +227,7 @@ export function WikiView({
 
       <div className={cn("min-w-0", !open && "hidden @2xl:block")}>
         {open ? (
-          <EntityPage key={open.ref} campaignId={campaignId} api={api} world={world} entity={open} onFocus={onFocus} onBack={() => onFocus(null)} onOpenSystem={onOpenSystem} canWrite={canWrite} canPaint={canPaint} />
+          <EntityPage key={open.ref} campaignId={campaignId} api={api} world={world} entity={open} onFocus={onFocus} onBack={() => onFocus(null)} onOpenSystem={onOpenSystem} onOpenPrep={onOpenPrep} canWrite={canWrite} canPaint={canPaint} />
         ) : (
           <div className="panel flex min-h-48 flex-col items-center justify-center gap-2 rounded-xl p-6 text-center animate-fade-up">
             <p className="font-display text-lg text-amber-100">The world, entry by entry</p>

@@ -1,13 +1,12 @@
 "use client";
 
-import { Box, Eye, EyeOff, Hand, MapPin, Pencil, Ruler, Trash2, UserPlus } from "lucide-react";
+import { Box, Hand, MapPin, Pencil, Ruler } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Slider } from "@/components/ui/Slider";
 import { ADHOC_LABELS, ADHOC_HINTS, ADHOC_NAME_MAX } from "@/lib/dm/board-logic";
 import { SHAPE_LABELS, SHAPE_MEASURES, TEMPLATE_SHAPES } from "@/lib/battlemap/template";
 import type { TemplateShape } from "@/lib/battlemap/template";
 import type { AdhocTokenKind } from "@/lib/battlemap/types";
-import type { PlayerMapView } from "@/lib/battlemap/view";
 
 // The DM's rail above the tactical board, and the small card that opens on a
 // token. Presentational only: BattleMapPanel owns the state and does the
@@ -197,97 +196,6 @@ export function MeasureControls({
           </button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-// The card that opens on a token: what it is, how it is doing, and the three
-// things a DM does to a piece mid-fight.
-export function TokenCard({
-  token,
-  hp,
-  held,
-  busy,
-  onHold,
-  onVisibility,
-  onRemove,
-  onClose,
-}: {
-  token: PlayerMapView["tokens"][number];
-  hp?: { current: number; max: number };
-  held: boolean;
-  busy: boolean;
-  onHold: () => void;
-  onVisibility: (hidden: boolean) => void;
-  onRemove: () => void;
-  onClose: () => void;
-}) {
-  const adhoc = token.kind === "npc" || token.kind === "prop";
-  return (
-    <div className="space-y-1.5 rounded-lg border border-amber-900/60 bg-stone-950/90 px-2.5 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-xs font-medium text-stone-200">{token.name}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-[11px] text-stone-500 hover:text-stone-300"
-        >
-          Close
-        </button>
-      </div>
-      <p className="text-[11px] text-stone-500">
-        {token.kind === "pc"
-          ? "Player character"
-          : token.kind === "enemy"
-            ? "Enemy"
-            : ADHOC_LABELS[token.kind as AdhocTokenKind]}
-        {hp ? ` · ${hp.current} / ${hp.max} HP` : ""}
-        {token.hidden ? " · hidden from the party" : ""}
-      </p>
-      <div className="flex flex-wrap gap-1">
-        <button
-          type="button"
-          disabled={busy} aria-busy={busy}
-          onClick={onHold}
-          className={cn(
-            "flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-40",
-            held
-              ? "border-amber-700 bg-amber-950/50 text-amber-100"
-              : "border-stone-700 text-stone-400 hover:text-stone-200",
-          )}
-        >
-          <Hand className="size-3.5" />
-          {held ? "Put it back down" : "Pick it up"}
-        </button>
-        {token.kind === "pc" ? null : (
-          <button
-            type="button"
-            disabled={busy} aria-busy={busy}
-            onClick={() => onVisibility(!token.hidden)}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200 disabled:opacity-40"
-          >
-            {token.hidden ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            {token.hidden ? "Reveal" : "Hide"}
-          </button>
-        )}
-        {adhoc ? (
-          <button
-            type="button"
-            disabled={busy} aria-busy={busy}
-            onClick={onRemove}
-            className="flex items-center gap-1 rounded-md border border-red-900/60 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-40"
-          >
-            <Trash2 className="size-3.5" />
-            Take off
-          </button>
-        ) : null}
-      </div>
-      {token.kind !== "pc" && !adhoc ? (
-        <p className="flex items-center gap-1 text-[11px] text-stone-600">
-          <UserPlus className="size-3" />
-          Enemies leave the board when they die.
-        </p>
-      ) : null}
     </div>
   );
 }

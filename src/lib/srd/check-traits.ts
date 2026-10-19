@@ -1,6 +1,7 @@
 // The class features and racial traits that ride an ability check because of
 // what the check is about (SRD 5.1), read by the roll resolver
-// (src/lib/dm/rolls.ts resolveRollExpression) from the roll's reason:
+// (src/lib/dm/rolls.ts resolveRollExpression) from the roll's fixed choices
+// (src/lib/dm/roll-about.ts: about, creature, terrain):
 //
 //   Favored Enemy (ranger 1): advantage on Wisdom (Survival) checks to track
 //     the favored enemies and on Intelligence checks to recall information
@@ -22,13 +23,19 @@
 // Pure: the sheet and what the check is come in as values.
 
 import { holdsFeature, type TraitSheet } from "@/lib/srd/trait-rules";
+import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
+import type { CheckAbout, NaturalTerrain } from "@/lib/dm/roll-about";
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
 export type CheckInput = {
   ability?: string;
   skill?: string;
-  reason?: string;
+  about?: CheckAbout;
+  // The creature the check is about, by its rules name: a type ("undead") or
+  // a humanoid race ("orc").
+  creature?: string;
+  terrain?: NaturalTerrain;
   proficiencyBonus: number;
   // The check already carries proficiency (a proficient skill).
   proficient: boolean;
@@ -56,51 +63,56 @@ function namedPicks(sheet: TraitSheet, feature: RegExp): string[] {
   return out;
 }
 
-const mentions = (reason: string, word: string) => new RegExp(`\\b${word}s?\\b`, "i").test(reason);
+// The check traits the sheet holds, each as the roll it rides and the values
+// it reads (src/lib/srd/roll-keys.ts), with what it gives: advantage, or the
+// proficiency bonus brought to twice. The roll applies the ones its fields
+// fit (traitCheckRiders), and a model's call that leaves one of those fields
+// unnamed is asked for it from the same list.
+export type CheckTrait = RollKey & { gives: "advantage" | "double"; note: (input: CheckInput) => string };
+export function heldCheckTraits(sheet: TraitSheet & { race?: string }): CheckTrait[] {
+  const race = lower(sheet.race);
+  const out: CheckTrait[] = [];
+  const favored = namedPicks(sheet, /^favored enemy(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i);
+  if (favored.length) {
+    const note = (input: CheckInput) => `Favored Enemy: advantage on this check about ${input.creature}`;
+    out.push({ roll: "check", skills: ["survival"], about: "tracking", creatures: favored, gives: "advantage", note });
+    out.push({ roll: "check", abilities: ["int"], creatures: favored, gives: "advantage", note });
+  }
+  const terrains = namedPicks(sheet, /^natural explorer(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i);
+  if (terrains.length) {
+    out.push({ roll: "check", abilities: ["int", "wis"], proficient: true, terrains, gives: "double", note: (input) => `Natural Explorer: double proficiency in the ${input.terrain}` });
+  }
+  if (holdsFeature(sheet, "stonecunning") || /dwarf/.test(race)) {
+    out.push({ roll: "check", skills: ["history"], about: "stonework", gives: "double", note: () => "Stonecunning: double proficiency on History about stonework" });
+  }
+  if (holdsFeature(sheet, "artificer's lore") || race === "rock gnome" || race === "rock_gnome") {
+    out.push({ roll: "check", skills: ["history"], about: "devices", gives: "double", note: () => "Artificer's Lore: twice the proficiency bonus on History about magic items and devices" });
+  }
+  if (holdsFeature(sheet, "stone camouflage") || /deep gnome|deep_gnome|svirfneblin/.test(race)) {
+    out.push({ roll: "check", skills: ["stealth"], about: "rocky_terrain", gives: "advantage", note: () => "Stone Camouflage: advantage on Stealth in rocky terrain" });
+  }
+  return out;
+}
 
 export function traitCheckRiders(sheet: TraitSheet & { race?: string }, input: CheckInput): CheckTraits {
   const out: CheckTraits = { advantage: [], bonus: 0, notes: [] };
-  const reason = lower(input.reason);
   const skill = lower(input.skill);
-  const ability = lower(input.ability);
-  const race = lower(sheet.race);
-
-  const favored = namedPicks(sheet, /^favored enemy(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i);
-  const aboutFavored = favored.find((type) => mentions(reason, type));
-  if (aboutFavored && (skill === "survival" && /track|trail|follow|hunt/.test(reason) || ability === "int")) {
-    out.advantage.push(`Favored Enemy: advantage on this check about ${aboutFavored}`);
-  }
-
-  const terrains = namedPicks(sheet, /^natural explorer(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i);
-  const inTerrain = terrains.find((terrain) => mentions(reason, terrain));
+  const roll = { roll: "check" as const, skill, ability: lower(input.ability), proficient: input.proficient, about: input.about, creature: input.creature, terrain: input.terrain };
   // What brings the check to twice the bonus from what it carries.
   const doubled = Math.max(0, 2 * input.proficiencyBonus - (input.applied ?? (input.proficient ? input.proficiencyBonus : 0)));
-  if (inTerrain && input.proficient && (ability === "int" || ability === "wis") && doubled > 0) {
-    out.bonus += doubled;
-    out.notes.push(`Natural Explorer: double proficiency in the ${inTerrain}`);
-  }
-
-  if (skill === "history") {
-    const stonework = /\b(stone|stonework|masonry|rock|carved|tunnel|dwarven)\b/.test(reason);
-    if (stonework && (holdsFeature(sheet, "stonecunning") || /dwarf/.test(race)) && doubled > 0) {
-      out.bonus += doubled;
-      out.notes.push("Stonecunning: double proficiency on History about stonework");
+  for (const trait of heldCheckTraits(sheet)) {
+    if (!keyFits(trait, roll)) {
+      continue;
     }
-    const device = /\b(magic|magical|wand|staff|rod|potion|alchemical|alchemy|device|devices|mechanism|clockwork|artifact|ring|amulet)\b/.test(reason);
-    if (device && (holdsFeature(sheet, "artificer's lore") || race === "rock gnome" || race === "rock_gnome") && doubled > 0) {
+    if (trait.gives === "advantage") {
+      out.advantage.push(trait.note(input));
+    } else if (doubled > 0 && out.bonus === 0) {
       out.bonus += doubled;
-      out.notes.push("Artificer's Lore: twice the proficiency bonus on History about magic items and devices");
+      out.notes.push(trait.note(input));
     }
   }
-
-  if (skill === "stealth") {
-    const rocky = /\b(rock|rocks|rocky|stone|stones|cave|caves|cavern|underground|mountain|boulder|boulders|rubble)\b/.test(reason);
-    if (rocky && (holdsFeature(sheet, "stone camouflage") || /deep gnome|deep_gnome|svirfneblin/.test(race))) {
-      out.advantage.push("Stone Camouflage: advantage on Stealth in rocky terrain");
-    }
-    if (input.movedLittle && holdsFeature(sheet, "supreme sneak")) {
-      out.advantage.push("Supreme Sneak: advantage on Stealth after moving no more than half their speed");
-    }
+  if (skill === "stealth" && input.movedLittle && holdsFeature(sheet, "supreme sneak")) {
+    out.advantage.push("Supreme Sneak: advantage on Stealth after moving no more than half their speed");
   }
   return out;
 }

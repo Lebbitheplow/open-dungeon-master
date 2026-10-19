@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
-export { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
+export type { ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export const abilityScoresSchema = z.object({
   str: z.number().int().min(1).max(30),
@@ -132,7 +133,6 @@ const featPicksSchema = z.object({
   damageType: z.string().trim().max(20).optional(),
 });
 export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema);
-export type FeatChoicesInput = z.infer<typeof featChoicesSchema>;
 
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),
@@ -167,6 +167,11 @@ export const equipmentItemSchema = z.object({
   // Optional so rows written before the field keep validating; when NO item
   // on a sheet carries it, the AC engine treats everything as worn.
   equipped: z.boolean().optional(),
+  // Worn beside another item of its kind on the DM's say (SRD 5.1, Multiple
+  // Items of the Same Kind: "a circlet under a helmet", "two cloaks"). Only
+  // the DM or the party lead sets it; a place's limit (src/lib/srd/
+  // wear-slots.ts) never counts it out. Absent on every other row.
+  layered: z.boolean().optional(),
   // Magic item currently attuned. Capped at 3 per character by patchSheet.
   attuned: z.boolean().optional(),
   // Asked to attune and waiting for the short rest that attuning takes
@@ -193,6 +198,20 @@ export const equipmentItemSchema = z.object({
   // the secret was never written to the sheet. The DM's reveal action renames
   // the row and flips this flag in one step.
   identified: z.boolean().optional(),
+  // The SRD or pack item this is, by the row's English name, when its own
+  // name is the table's ("Elixir of Health" for "Elisir di salute"): the
+  // engines read its row through this (src/lib/srd/item-tags.ts itemRow).
+  srdName: z.string().trim().min(1).max(80).optional(),
+  // What the item is, when no English row says it (loot the model invents,
+  // an item named in the table's language): src/lib/srd/item-tags.ts.
+  tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
+  // What one is worth in gold pieces, for a thing the content pack does not
+  // price (a gem, an art object, loot the model invents): its sale and a
+  // material component read it (src/lib/dm/trade-value.ts).
+  worth: z.number().positive().max(100000).optional(),
+  // The spell a spell scroll holds, by the name the spell lists use; what
+  // reading it casts (src/lib/dm/consumables.ts).
+  spell: z.string().trim().min(1).max(80).optional(),
   // A homebrew item's mechanics, snapshotted from the entry so the armour,
   // attack and magic-item engines read it exactly as they read SRD gear
   // (src/lib/homebrew/gear.ts). Refreshed on every sheet read; absent for
@@ -249,6 +268,9 @@ export const spellSlotSchema = z.object({
 export const spellcastingSchema = z
   .object({
     ability: z.enum(["int", "wis", "cha"]),
+    // Casts as an Eldritch Knight or Arcane Trickster does (src/lib/srd/
+    // third-caster.ts); "third-caster" is the first spelling, the class's own.
+    progression: z.enum(["eldritch-knight", "arcane-trickster", "soulspy", "underfoot", "third-caster"]).optional(),
     slots: z.record(z.string().regex(/^[1-9]$/), spellSlotSchema),
     prepared: z.array(z.string().trim().min(1).max(80)).max(60),
     // Spells known (for known-casters); prepared casters leave this empty
@@ -275,6 +297,7 @@ export const spellcastingSchema = z
         z.object({
           classId: z.string().trim().min(1).max(60),
           ability: z.enum(["int", "wis", "cha"]),
+          progression: z.enum(["eldritch-knight", "arcane-trickster", "soulspy", "underfoot", "third-caster"]).optional(),
           known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
           prepared: z.array(z.string().trim().min(1).max(80)).max(60).default([]),
           cantrips: z.array(z.string().trim().min(1).max(80)).max(40).default([]),

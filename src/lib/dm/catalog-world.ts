@@ -1,6 +1,7 @@
 // The world, the people in it, and the story: what a DM does outside a
 // fight and outside the party's own sheets. Names match the tool names the
 // AI DM is offered exactly.
+import { CHECK_KEY_FORM } from "@/lib/dm/catalog-roll";
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
@@ -283,7 +284,8 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
     category: "world",
     summary: "Doors, chests and chains with real AC and hit points for their material.",
     fields: [
-      { name: "name", label: "The object", kind: "text", placeholder: "the oak door", help: "Named, it keeps its damage between blows. A Wall of Ice is struck a section at a time: \"Wall of Ice section 2\", the numbers on the board." },
+      { name: "name", label: "The object", kind: "text", placeholder: "the oak door", help: "Named, it keeps its damage between blows." },
+      { name: "section", label: "Section", kind: "number", min: 1, max: 99, help: "A Wall of Ice is struck a section at a time: the numbers on the board." },
       { name: "material", label: "Material", kind: "select", options: OBJECT_MATERIAL_OPTIONS },
       { name: "size", label: "Size", kind: "select", options: OBJECT_SIZE_OPTIONS },
       { name: "characterId", label: "Struck by", kind: "character", help: "The server rolls their weapon attack against its AC and their damage." },
@@ -308,6 +310,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "difficulty", label: "Difficulty", kind: "select", options: DIFFICULTIES },
       { name: "dc", label: "Or an exact DC", kind: "number", min: 1, max: 30 },
       { name: "characterIds", label: "Who rolls", kind: "characters" },
+      ...CHECK_KEY_FORM,
       REASON,
     ],
   },
@@ -353,6 +356,12 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "againstEnemyId", label: "Hiding (enemy)", kind: "enemy", help: "The server rolls its Stealth (or Deception for Insight) as the DC." },
       { name: "againstMonster", label: "Hiding (stat block)", kind: "text", placeholder: "goblin", help: "Out of a fight: the creature's stat block by name." },
       { name: "characterIds", label: "Who might notice", kind: "characters" },
+      {
+        name: "about",
+        label: "A trap or secret door",
+        kind: "select",
+        options: [{ value: "traps_and_secret_doors", label: "Yes (Dungeon Delver notices it more easily)" }],
+      },
       REASON,
     ],
   },

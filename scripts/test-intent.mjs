@@ -46,20 +46,26 @@ function test(name, fn) {
 const wightStats = {
   speed: "30 ft.",
   attacks: [
-    { name: "Longsword", toHit: 4, damage: "1d8+2", type: "slashing" },
-    { name: "Longbow", toHit: 4, damage: "1d8+2", type: "piercing" },
+    { name: "Longsword", toHit: 4, damage: "1d8+2", type: "slashing", mode: "melee" },
+    { name: "Longbow", toHit: 4, damage: "1d8+2", type: "piercing", mode: "ranged" },
   ],
 };
 
-test("an attack's kind is read from its name", () => {
-  assert.equal(attackVerbKind({ name: "Longsword" }), "melee");
-  assert.equal(attackVerbKind({ name: "Light Crossbow" }), "ranged");
-  assert.equal(attackVerbKind({ name: "Fire Bolt" }), "spell");
-  assert.equal(attackVerbKind({ name: "Frost Breath" }), "spell");
+test("an attack's kind is read from its stat block, and a declared verb's from the kind the call names", () => {
+  assert.equal(attackVerbKind({ name: "Longsword", toHit: 4, damage: "1d8+2", type: "slashing", mode: "melee" }), "melee");
+  assert.equal(attackVerbKind({ name: "Balestra leggera", toHit: 4, damage: "1d8+2", type: "piercing", mode: "ranged" }), "ranged");
+  assert.equal(attackVerbKind({ name: "Javelin", toHit: 4, damage: "1d6+2", type: "piercing", mode: "both" }), "ranged");
+  assert.equal(attackVerbKind({ name: "Raggio di fuoco", toHit: 5, damage: "2d10", type: "fire", spellAttack: true }), "spell");
+  // A block written by hand, with no mode: the engine's own reach reading.
+  assert.equal(attackVerbKind({ name: "Light Crossbow", toHit: 4, damage: "1d8+2", type: "piercing" }), "ranged");
   assert.equal(attackVerbKind(null), "other");
-  assert.equal(declaredVerbKind("Retreat to the stairs", wightStats.attacks), "move");
-  assert.equal(declaredVerbKind("longbow", wightStats.attacks), "ranged");
-  assert.equal(declaredVerbKind("Gloat", wightStats.attacks), "other");
+  assert.equal(declaredVerbKind("longbow", wightStats.attacks, undefined), "ranged");
+  // A verb not on the block is the kind the call names, in any language.
+  for (const verb of ["Retreat to the stairs", "Ritirarsi sulle scale", "Reculer vers l'escalier", "Retirarse a la escalera", "Zur Treppe zurückweichen"]) {
+    assert.equal(declaredVerbKind(verb, wightStats.attacks, "move"), "move", verb);
+    assert.equal(declaredVerbKind(verb, wightStats.attacks, undefined), "other", verb);
+  }
+  assert.equal(declaredVerbKind("Gloat", wightStats.attacks, undefined), "other");
 });
 
 test("expected damage is the average, or nothing when it does not parse", () => {

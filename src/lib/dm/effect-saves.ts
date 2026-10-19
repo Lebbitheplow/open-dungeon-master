@@ -45,7 +45,7 @@ export function rollEffectSaves(
       if (!sheet || sheet.campaignId !== campaign.id) {
         continue;
       }
-      const save = rollCharacterSave(campaign, null, sheet, ability, effect.saveDc, label, effect.visible ? effect.name : undefined);
+      const save = rollCharacterSave(campaign, null, sheet, ability, effect.saveDc, label);
       who = sheet.name;
       success = save.success;
       shown = save.total === null ? "an automatic failure" : String(save.total);

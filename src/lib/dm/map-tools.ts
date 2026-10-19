@@ -1,8 +1,8 @@
 import { readiedHeld } from "@/lib/dm/readied-kinds";
-import { findNamed } from "@/lib/language/text-logic";
+import { nameTerms } from "@/lib/language/language";
 import { carriedLight, lightPlacement } from "@/lib/dm/light-timers";
 import { getClock } from "@/lib/db/clock";
-import type { Campaign } from "@/lib/db/campaigns";
+import { campaignLanguage, type Campaign } from "@/lib/db/campaigns";
 import {
   getActiveBoard,
   getActiveEncounter,
@@ -62,7 +62,7 @@ import { zoneCoverBetween } from "@/lib/dm/zone-rules";
 import { dragLandings, enemyDrag } from "@/lib/dm/drag-move";
 import { flightOf, markSqueezing } from "@/lib/dm/token-state";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { findNamed, textKey } from "@/lib/language/text-logic";
 
 export { landTheFlightless } from "@/lib/dm/token-state";
 
@@ -79,11 +79,6 @@ type ToolDef = {
 // secret, so clients re-fetch their own filtered projection.
 export function publishBattleMapUpdate(campaignId: string) {
   publishEphemeral(campaignId, "battle_map_updated", {});
-}
-
-// A carried light matters only in dim/dark maps; inferred from equipment.
-export function carriedLightRadius(sheet: CharacterSheet): number {
-  return carriedLight(sheet).radius;
 }
 
 // The token fields for that light, lit as the party steps onto the board.
@@ -250,7 +245,7 @@ function resolveAnyToken(
       .filter((token) => token.kind !== "pc" && token.kind !== "enemy")
       .map((token) => ({ name: token.name, token: () => token })),
   ];
-  return findNamed(named, trimmed, (entry) => entry.name)?.token() ?? null;
+  return findNamed(named, nameTerms(trimmed, campaignLanguage(map.campaignId)), (entry) => [entry.name])?.token() ?? null;
 }
 
 // A name the board holds no single token for: the names it does hold.
@@ -852,7 +847,6 @@ export function checkPcAttackRange(
   const sighted = hasLineOfSight(
     map.terrain,
     map.width,
-    map.height,
     line.from.x,
     line.from.y,
     line.to.x,
@@ -878,10 +872,3 @@ export function checkPcAttackRange(
   }
   return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`, retry: true };
 }
-
-// ---- spatial checks for enemy_attack ----
-
-// An enemy's reach, range and walk-in live in src/lib/dm/enemy-profile.ts and
-// src/lib/dm/enemy-approach.ts; the name reading is re-exported here for the
-// callers that learned it from this module.
-export { isRangedAttackName } from "@/lib/dm/enemy-profile";

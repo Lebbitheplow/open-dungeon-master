@@ -35,14 +35,14 @@ await test("A Cast member with one of the DM's own stat blocks starts a fight as
   assert.equal(enemy.displayName, "Captain Vey");
   assert.equal(enemy.stats.maxHp, 47);
   assert.equal(enemy.stats.ac, 15);
-  await world.invoke("end_encounter", { outcome: "fled" });
+  await world.invoke("end_encounter", { outcome: "enemies_fled" });
 });
 
 await test("An alias reaches the same stat block.", async () => {
   const out = await world.invoke("start_encounter", { enemies: [{ monster: "Vey" }] });
   assert.equal(out.ok, true, out.error ?? JSON.stringify(out.result));
   assert.equal(world.enemies()[0].stats.maxHp, 47);
-  await world.invoke("end_encounter", { outcome: "fled" });
+  await world.invoke("end_encounter", { outcome: "enemies_fled" });
 });
 
 await test("The DM is told what each Cast member fights as.", () => {
@@ -59,7 +59,7 @@ await test("An SRD stat block from the Nonplayer Characters appendix: the Vetera
   assert.equal(enemy.displayName, "Sergeant Holt");
   assert.equal(enemy.stats.maxHp, 58, "the SRD Veteran has 58 hit points");
   assert.equal(enemy.stats.ac, 17);
-  await world.invoke("end_encounter", { outcome: "fled" });
+  await world.invoke("end_encounter", { outcome: "enemies_fled" });
 });
 
 await test("A generated settlement's townsfolk fight as the SRD's stat blocks for their trade.", () => {

@@ -887,7 +887,6 @@ export function BattleMapPanel({
     // The same engine questions the Hand asks (src/lib/battlemap/hand-hud.ts),
     // so a sigil the engine would refuse says so instead of composing.
     return playerActions(
-      hudToken,
       (text) => {
         onCompose?.(text);
         setHudTokenId(null);

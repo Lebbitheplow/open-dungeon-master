@@ -56,7 +56,7 @@ import { getSceneTracker } from "@/lib/db/scene-tracker";
 import { listQuests } from "@/lib/db/quests";
 import type { ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
-import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
+import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
 import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
@@ -158,7 +158,6 @@ import {
   insertCharacterEvent,
   listRecentEventsForCampaign,
   CHARACTER_EVENT_KINDS,
-  type CharacterEventKind,
 } from "@/lib/db/character-events";
 import { enqueueLocationMap } from "@/lib/dm/maps";
 import {
@@ -1799,7 +1798,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // 91). Hold it back and send the model to the tool that resolves it.
       const unrolled =
         !finalCall && !damageNudged && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
-          ? unrolledFigure(claims, turn.conversation)
+          ? unrolledFigure(claims, turn.conversation, campaign.gameSettings.tableLanguage)
           : null;
       if (unrolled) {
         damageNudged = true;
@@ -2009,10 +2008,11 @@ async function resolveModelCall(
   // "false" sent as a string is false (src/lib/dm/arg-coerce.ts).
   const rawArguments = strictBooleanArgs(toolCall.rawArguments);
   // The model's damage, healing and binding conditions are the server's to
-  // roll (src/lib/dm/ai-gate.ts). The encounter and mutation calls below run
-  // their handlers directly, so they are held to it here, once a call is
-  // past its cap (the gate may roll dice or a save the table sees); the rest
-  // reach the gate in dispatchAdjudication, and are not gated twice.
+  // roll (src/lib/dm/ai-gate.ts). The encounter and mutation calls and
+  // request_roll below run their handlers directly, so they are held to it
+  // here, a capped call once it is past its cap (the gate may roll dice or a
+  // save the table sees); the rest reach the gate in dispatchAdjudication,
+  // and are not gated twice.
   const gate = () => gateAiCall(name, rawArguments, { campaign, turn, sheetsById });
   if (ENCOUNTER_NAMES.has(name)) {
     if (turn.encounterCount >= ENCOUNTER_CAP_PER_TURN) {
@@ -2068,9 +2068,14 @@ async function resolveModelCall(
     return result;
   }
   // One request_roll for both callers (src/lib/dm/invoke-roll.ts); the
-  // model's parks remember the call they answer.
+  // model's parks remember the call they answer. Held to the gate here, as
+  // dispatchAdjudication holds the console's path.
   if (name === "request_roll") {
-    const result = handleRequestRoll(campaign, turn, rawArguments, sheets, sheetsById, realDiceUserIds, {
+    const gated = gate();
+    if ("result" in gated) {
+      return gated.result;
+    }
+    const result = handleRequestRoll(campaign, turn, gated.args, sheets, sheetsById, realDiceUserIds, {
       toolCallId: toolCall.id ?? null,
     });
     if (result.parked) {
@@ -2377,9 +2382,9 @@ export function handleRecordEvent(
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
   }
-  // Unknown kinds fall back to "story" instead of erroring: a milestone is
-  // always worth recording under some kind.
-  const kind = normalizeEventKind(args.kind, CHARACTER_EVENT_KINDS) as CharacterEventKind;
+  // A kind off the list is "story", never an error: a milestone is always
+  // worth recording under some kind. Its words are not read for one.
+  const kind = CHARACTER_EVENT_KINDS.find((entry) => entry === args.kind) ?? "story";
   const summary = String(args.summary ?? "").trim().slice(0, 300);
   if (!summary) {
     return { error: "record_event needs a one-sentence summary.", retry: true };

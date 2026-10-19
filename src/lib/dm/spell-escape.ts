@@ -102,7 +102,7 @@ export function characterSpellEscape(
   }
   spend();
   if (hold.save) {
-    const save = rollCharacterSave(campaign, turn, sheet, hold.save, hold.dc, `${hold.save.toUpperCase()} save against ${hold.spell}`, "spell");
+    const save = rollCharacterSave(campaign, turn, sheet, hold.save, hold.dc, `${hold.save.toUpperCase()} save against ${hold.spell}`, { magical: true });
     if (save.success) {
       const fresh = getSheetById(sheet.id) ?? sheet;
       const cleared = removeConditions(fresh.conditions, fresh.conditionMeta, [hold.name]);

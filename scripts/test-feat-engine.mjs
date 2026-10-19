@@ -60,19 +60,19 @@ test("the bonus attacks the Attack action opens, and the routes the feats open f
   assert.equal(combat.evadesOpportunityAttacksAfterMelee(sheet("Alert")), null);
 });
 
-test("the check riders: Tome of Heroes' advantages and Level Up's expertise dice, read from the skill and the reason", () => {
-  assert.equal(combat.featCheckRider(sheet("Stalker"), "survival", "tracking the wolf's prints")?.advantage, true);
-  assert.equal(combat.featCheckRider(sheet("Stalker"), "survival", "foraging for food"), null);
-  assert.equal(combat.featCheckRider(sheet("Combat Thievery"), "sleight_of_hand", undefined)?.die, "1d4");
-  assert.equal(combat.featCheckRider(sheet("Empathic"), "insight", "is the merchant lying")?.die, "1d4");
-  assert.equal(combat.featCheckRider(sheet("Surgical Combatant"), "medicine", "treat the arrow wound")?.die, "1d4");
-  assert.equal(combat.featCheckRider(sheet("Surgical Combatant"), "medicine", "is this herb poisonous"), null);
-  assert.equal(combat.featCheckRider(sheet("Monster Hunter"), "arcana", "what are the legends about this creature")?.die, "1d4");
-  assert.equal(combat.featCheckRider(sheet("Giant Foe"), "history", "the origins of the hill giants")?.expertise, true);
-  assert.equal(combat.featCheckRider(sheet("Forest Denizen"), "athletics", "escape the vines that grappled them")?.advantage, true);
-  assert.equal(combat.featCheckRider(sheet("Floriographer"), "investigation", "a hidden message in the bouquet")?.advantage, true);
-  assert.equal(combat.actorAdvantage(sheet("Actor"), "deception", "passing himself off as the duke's steward"), true);
-  assert.equal(combat.actorAdvantage(sheet("Actor"), "deception", "haggling over the price"), false);
+test("the check riders: Tome of Heroes' advantages and Level Up's expertise dice, read from the skill and what the check is about", () => {
+  assert.equal(combat.featCheckRider(sheet("Stalker"), "survival", { about: "tracking" })?.advantage, true);
+  assert.equal(combat.featCheckRider(sheet("Stalker"), "survival", {}), null);
+  assert.equal(combat.featCheckRider(sheet("Combat Thievery"), "sleight_of_hand", {})?.die, "1d4");
+  assert.equal(combat.featCheckRider(sheet("Empathic"), "insight", {})?.die, "1d4");
+  assert.equal(combat.featCheckRider(sheet("Surgical Combatant"), "medicine", { about: "wounds" })?.die, "1d4");
+  assert.equal(combat.featCheckRider(sheet("Surgical Combatant"), "medicine", {}), null);
+  assert.equal(combat.featCheckRider(sheet("Monster Hunter"), "arcana", { about: "creature_lore" })?.die, "1d4");
+  assert.equal(combat.featCheckRider(sheet("Giant Foe"), "history", { creature: "giants" })?.expertise, true);
+  assert.equal(combat.featCheckRider(sheet("Forest Denizen"), "athletics", { about: "escape_plants_or_beast" })?.advantage, true);
+  assert.equal(combat.featCheckRider(sheet("Floriographer"), "investigation", { about: "hidden_message" })?.advantage, true);
+  assert.equal(combat.featCheckRider(sheet("Actor"), "deception", { about: "disguise" })?.advantage, true);
+  assert.equal(combat.featCheckRider(sheet("Actor"), "deception", {}), null);
 });
 
 test("dying, resting, concentration and saves", () => {
@@ -90,7 +90,7 @@ test("dying, resting, concentration and saves", () => {
   assert.equal(combat.damageShakesConcentration(sheet("Mage Slayer"), { weaponAttack: true, melee: false, withinFiveFeet: false }), null);
   assert.deepEqual(combat.spellSaveAdvantageReach(sheet("Spellbreaker")), { feat: "Spellbreaker", tiles: 6 });
   assert.deepEqual(combat.spellSaveAdvantageReach(sheet("Mage Slayer")), { feat: "Mage Slayer", tiles: 1 });
-  assert.equal(combat.diehardSaveAdvantage(sheet("Diehard"), "CON save vs a day without water (exhaustion)"), true);
+  assert.equal(combat.diehardSaveAdvantage(sheet("Diehard"), "exhaustion"), true);
   assert.equal(combat.shieldMasterSaveBonus({ feats: ["Shield Master"], features: [], equipment: [{ name: "Shield", equipped: true }] }), 2);
   assert.equal(combat.shieldMasterSaveBonus({ feats: ["Shield Master"], features: [], equipment: [] }), 0);
   assert.equal(combat.helpReachTiles(sheet("Tactical Support")), 6);

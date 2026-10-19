@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { bundledSpellSchool } from "@/lib/srd/spell-facts";
 import { thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
+import { subclassCastingProfileFor } from "@/lib/srd/features";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import { armorClassLine, purseViewFor } from "../derivedReasons";
@@ -166,6 +167,7 @@ function SpellsSection({
     thirdCasterSchoolProblem({
       classId: klass.id,
       subclass: state.subclass,
+      profile: subclassCastingProfileFor(klass.id, state.subclass),
       level: state.level,
       spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf),
     });

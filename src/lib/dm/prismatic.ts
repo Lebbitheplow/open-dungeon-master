@@ -37,10 +37,6 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { VIOLET, VIOLET_MARK } from "@/lib/dm/prismatic-violet";
 import { textKey } from "@/lib/language/text-logic";
 
-// The turn-start save lives in its own module so condition-tick.ts can reach it
-// without loading the mutation dispatcher (an import cycle through the clock).
-export { VIOLET, violetRayTurnStart } from "@/lib/dm/prismatic-violet";
-
 export const PRISMATIC_SPRAY = "prismatic spray";
 export const INDIGO = "Indigo Ray";
 
@@ -146,7 +142,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
     if (sheet.deathSaves?.dead) {
       continue;
     }
-    const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", "spell");
+    const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", { magical: true });
     const rays = rollRays(rayDie(input, sheet.id, sheet.name));
     const notes: string[] = [];
     for (const ray of rays) {

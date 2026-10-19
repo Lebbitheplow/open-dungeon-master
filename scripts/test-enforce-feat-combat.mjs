@@ -295,10 +295,10 @@ await test("Dungeon Delver saves against a trap at advantage and takes half its 
   assert.equal(d20Faces(kit.lastRolls(8).find((roll) => roll.kind === "saving_throw" && roll.characterId === delver.id)).length, 2, "the save rolled two d20s");
   // Passive Perception 10 + 0: a DC 13 trap is missed without the feat and
   // noticed with it.
-  const missed = await world.invoke("check_notice", { sense: "perception", dc: 13, characterIds: [careless.id], reason: "a pressure plate trap under the rug" });
+  const missed = await world.invoke("check_notice", { sense: "perception", dc: 13, characterIds: [careless.id], about: "traps_and_secret_doors", reason: "a pressure plate trap under the rug" });
   assert.equal(missed.ok, true, missed.error);
   assert.deepEqual(missed.result.noticedBy, []);
-  const found = await world.invoke("check_notice", { sense: "perception", dc: 13, characterIds: [delver.id], reason: "a pressure plate trap under the rug" });
+  const found = await world.invoke("check_notice", { sense: "perception", dc: 13, characterIds: [delver.id], about: "traps_and_secret_doors", reason: "a pressure plate trap under the rug" });
   assert.equal(found.ok, true, found.error);
   assert.deepEqual(found.result.noticedBy, [world.sheet(delver.id).name]);
   const ambush = await world.invoke("check_notice", { sense: "perception", dc: 13, characterIds: [delver.id], reason: "an archer in the rafters" });

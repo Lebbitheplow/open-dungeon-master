@@ -11,7 +11,7 @@ import type { Advantage, RollResult } from "@/lib/dice";
 import { claimOncePerTurn, type TurnBudget } from "@/lib/dm/action-budget";
 import { ragingMeleeBonus, type AttackProfile } from "@/lib/dm/attack-logic";
 import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
-import { damageAdjust, resistsAllDamage, weaponMaterial } from "@/lib/dm/damage-logic";
+import { damageAdjust, resistsAllDamage } from "@/lib/dm/damage-logic";
 import { resistLineFor } from "@/lib/dm/underwater";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
@@ -444,7 +444,7 @@ export function landBlow(input: {
 }): Record<string, unknown> {
   const { campaign, turn, encounter, enemy, sheets, sheetsById, profile, damageOutcome, dealt, crit, critExtraDice, magical } = input;
   // A silvered or adamantine weapon passes the resistances that name it.
-  const material = weaponMaterial(profile.weapon);
+  const material = profile.material ?? {};
   const nonlethal = input.nonlethal === true;
   const holdVictory = input.holdVictory === true;
   const unharmed = {

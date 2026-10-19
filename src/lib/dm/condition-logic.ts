@@ -13,7 +13,6 @@ import { textKey } from "@/lib/language/text-logic";
 export {
   DAMAGE_TYPES,
   damageAdjust,
-  rageApplies,
   resistsAllDamage,
   wearsHeavyArmor,
 } from "@/lib/dm/damage-logic";
@@ -523,9 +522,9 @@ export function describeConditionDuration(rounds: number): string {
 // saves and removes successes via removeConditions.
 //
 // A condition bound to a turn (untilTurnOf) is not counted in rounds: in a
-// fight the pointer ends it (turnBoundConditionsEnding). Time passing with no
-// fight running has no turns left to wait for, so the clock passes
-// endTurnBound and they end with it.
+// fight the pointer ends it (condition-tick.ts endInstancesBoundTo). Time
+// passing with no fight running has no turns left to wait for, so the clock
+// passes endTurnBound and they end with it.
 //
 // Each instance of a condition (instancesOf) counts on its own: the
 // condition expires when its last instance does, and every save-ends
@@ -602,21 +601,6 @@ export function tickConditions(
     expired,
     savesDue,
   };
-}
-
-// The conditions that end because these combatants' turns are starting:
-// Dodge and Shield on the combatant itself, Protection on the ally a
-// protector covered.
-export function turnBoundConditionsEnding(
-  conditions: string[],
-  meta: ConditionMetaMap | undefined,
-  combatantIds: string[],
-): string[] {
-  const starting = new Set(combatantIds);
-  return conditions.filter((name) => {
-    const bound = meta?.[name]?.untilTurnOf;
-    return bound !== undefined && starting.has(bound);
-  });
 }
 
 // Removes named conditions and their metadata together.

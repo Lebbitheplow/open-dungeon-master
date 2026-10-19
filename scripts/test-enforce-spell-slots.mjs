@@ -154,6 +154,18 @@ await test(
   },
 );
 
+await test("a Workshop fighter or rogue can opt into the same third-caster slot progression", () => {
+  for (const classId of ["fighter", "rogue"]) {
+    assert.deepEqual(spellSlotsFor(classId, 7, "Custom Test Subclass", "third-caster"), rowToTable(THIRD_CASTER_SLOTS[6]));
+  }
+  assert.deepEqual(spellSlotsFor("fighter", 7, "Custom Test Subclass"), {});
+  assert.deepEqual(spellSlotsFor("wizard", 7, "Custom Test Subclass", "third-caster"), rowToTable(FULL_CASTER_SLOTS[6]));
+  assert.deepEqual(
+    slotTableFor({ class: "fighter", subclass: "Custom Test Subclass", level: 7, classes: [], spellcasting: { progression: "third-caster" } }),
+    rowToTable(THIRD_CASTER_SLOTS[6]),
+  );
+});
+
 // ---- what a sheet carries ----
 
 const sheetRoute = await world.route("campaigns/[campaignId]/sheet");

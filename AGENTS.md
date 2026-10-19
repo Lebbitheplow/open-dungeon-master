@@ -36,10 +36,12 @@ Regenerate `docs/addons/addon.schema.json` with
 
 ## Settings, options and toggles
 
-Every setting is paid for by every player who sets up a campaign. Before
-adding a setting, option, toggle or picker anywhere (the campaign creator, a
-campaign's panels, the admin console, the workshop), and when reviewing an
-issue or pull request that asks for one:
+Every control is paid for by everyone who meets it: a setting by every
+player who sets up a campaign, a field by every author who fills the form.
+Add one when the feature needs it, and earn its place first. Before adding a
+setting, option, toggle, picker, button or field anywhere (the campaign
+creator, a campaign's panels, the sheet, the admin console, the workshop),
+and when reviewing an issue or pull request that asks for one:
 
 1. Ship a good default first. If one default serves most tables, the feature
    needs no setting. A default that is only "off" or "same as before" means
@@ -55,10 +57,26 @@ issue or pull request that asks for one:
 5. Someone who always customizes the same way saves it once as their
    personal defaults (`src/app/create-campaign/defaults.ts`); that is not a
    reason for another toggle.
-6. A request or pull request that needs a new setting carries a screenshot or
-   mockup of the proposed control, where it lives, and its default (the
-   feature request and pull request templates ask for it). Without one, ask
-   for it before building; do not invent the control yourself.
+6. Stop and justify it before building. Write down what goes wrong without
+   the control, why a good default or a control that already exists cannot
+   cover it, and who will use it. If that holds, build it; if it does not,
+   the feature needs no control. The pull request carries the justification
+   and a screenshot of the control where it lives, with its default (the
+   feature request and pull request templates ask for these).
+7. Make it accessible and easy to understand:
+   - a visible label in plain words that says what it does, and a short
+     hint or an ⓘ glossary where the choice or its terms are not obvious;
+   - named for screen readers (a real label, `aria-label` on an icon-only
+     button, a group or dialog role for a question it asks), reachable and
+     usable by keyboard with a visible focus ring, never only on hover;
+   - a finger-sized target on phones (at least 40px, the size of the kit's
+     own controls), readable at phone width, and legible in the day and
+     night themes;
+   - moving and placed like the controls around it, so it looks like it
+     belongs there;
+   - checked on the website and in the app shells (`--app` in the browser
+     harness), with axe where a page has a scenario for it
+     (`32-builder-a11y`).
 
 ## Releases
 

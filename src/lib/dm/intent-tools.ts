@@ -4,6 +4,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { recordEncounterIntent } from "@/lib/db/encounter-intents";
 import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { declaredVerbKind, expectedDamage } from "@/lib/dm/intent";
+import { INTENT_VERB_KINDS } from "@/lib/battlemap/intent";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -33,6 +34,11 @@ export const declareIntentTool: ToolDef = {
       properties: {
         actor: { type: "string", description: "Exact enemyId from GAME STATE, or the enemy's name." },
         verb: { type: "string", description: "What it plans, as the table would say it ('Longsword', 'Fire Breath', 'Retreat')." },
+        kind: {
+          type: "string",
+          enum: [...INTENT_VERB_KINDS],
+          description: "For a verb that is not one of its attacks: what kind of act it is (move for a retreat or a dash), which picks the board's badge.",
+        },
         target: { type: "string", description: "Its mark: exact characterId from GAME STATE, or the character's name. Omit when there is no single mark." },
         expected: { type: "number", description: "Expected damage. Omit to use the named attack's average." },
       },
@@ -44,6 +50,7 @@ export const declareIntentTool: ToolDef = {
 const declareIntentArgsSchema = z.object({
   actor: z.string().min(1),
   verb: z.string().trim().min(1).max(60),
+  kind: z.enum(INTENT_VERB_KINDS).optional(),
   target: z.string().optional(),
   expected: z.coerce.number().min(0).max(9999).optional(),
 });
@@ -85,7 +92,7 @@ export function handleDeclareIntent(
     args.expected !== undefined ? Math.round(args.expected) : expectedDamage(attack?.damage);
   recordEncounterIntent(encounter.id, encounter.round, enemy.id, {
     verb: args.verb,
-    verbKind: declaredVerbKind(args.verb, enemy.stats.attacks),
+    verbKind: declaredVerbKind(args.verb, enemy.stats.attacks, args.kind),
     targetRef: target?.id ?? null,
     expected,
   });

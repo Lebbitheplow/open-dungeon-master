@@ -3,7 +3,7 @@
 // The rule this file guards: a pick is only kept while the choice it hangs
 // off still offers it. Changing the background, race, class, subclass or
 // level re-checks every dependent pick (reconcile.ts), and the server drops
-// "choice" features no class on the sheet has slots for. Before this a sheet
+// "choice" features no class or feat on the sheet has slots for. Before this a sheet
 // could carry Battle Master maneuvers under a Champion, an acolyte's two
 // languages under a criminal, and four expertise skills at level 1 (issue #37).
 import assert from "node:assert/strict";
@@ -22,6 +22,7 @@ const { srdRaceOptions, srdClassOptions, srdBackgroundOptions } = await import(
   "../src/app/characters/builder/useBuilderOptions.ts"
 );
 const { populateFeaturesForClasses } = await import("../src/lib/srd/features.ts");
+const { settleLevelChange } = await import("../src/lib/srd/level-change.ts");
 const { backgroundMechanics } = await import("../src/lib/content/mechanics.ts");
 const { packRaceOptions } = await import("../src/lib/content/race-options.ts");
 
@@ -200,6 +201,34 @@ test("the server's regrant drops choice features no class on the sheet has slots
   assert.ok(names.includes("Boon of the Mountain"));
   const battle = populateFeaturesForClasses(stored, [{ id: "fighter", subclass: "Battle Master", level: 3 }], "human");
   assert.ok(battle.map((feature) => feature.name).includes("Maneuver: Riposte"));
+});
+
+test("the regrant keeps the choices a feat opens slots for, where no class opens them", () => {
+  const stored = [
+    { name: "Maneuver: Riposte", source: "choice" },
+    { name: "Maneuver: Trip Attack", source: "choice" },
+    { name: "Maneuver: Parry", source: "choice" },
+  ];
+  const champion = [{ id: "fighter", subclass: "Champion", level: 3 }];
+  const adept = populateFeaturesForClasses(stored, champion, "human", ["Martial Adept"]);
+  assert.equal(adept.filter((feature) => feature.name.startsWith("Maneuver:")).length, 2);
+  const invocation = [{ name: "Invocation: Devil's Sight", source: "choice" }];
+  const wizard = populateFeaturesForClasses(invocation, [{ id: "wizard", subclass: "", level: 4 }], "human", ["Eldritch Adept"]);
+  assert.ok(wizard.some((feature) => feature.name === "Invocation: Devil's Sight"));
+  const settled = settleLevelChange({
+    class: "fighter",
+    subclass: "Champion",
+    race: "human",
+    level: 4,
+    xp: 0,
+    classes: [],
+    features: stored,
+    feats: ["Martial Adept"],
+    hitDice: { die: "d10", total: 3, spent: 0 },
+    hitDicePools: null,
+    spellcasting: { ability: "int", slots: {}, known: [], prepared: [] },
+  });
+  assert.equal(settled.features.filter((feature) => feature.name.startsWith("Maneuver:")).length, 2);
 });
 
 test("a warlock adapted down to level 1 keeps no invocations, and at 2 keeps two", () => {

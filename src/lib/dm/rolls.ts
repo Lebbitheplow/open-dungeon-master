@@ -1,6 +1,7 @@
+import { named } from "@/lib/dm/roll-about";
 import { LUCK_SPEND } from "@/lib/dm/roll-riders";
 import { luckPointsLeft } from "@/lib/srd/class-resources";
-import { actorAdvantage, featCheckRider, hasSkulker } from "@/lib/srd/feat-combat";
+import { featCheckRider, hasSkulker } from "@/lib/srd/feat-combat";
 import { d20Expression, type Advantage } from "@/lib/dice";
 import {
   exhaustionRollState,
@@ -350,7 +351,7 @@ export function resolveRollExpression(
     return { autoFail: true, detail: args.ability ?? "", notes: derivation.notes };
   }
   // Blinded or deafened: a check that needs the lost sense fails (srd/sense-checks.ts).
-  const senseless = sheet && (derivationKind === "skill_check" || derivationKind === "ability_check") ? senseCheckFailure(sheet.conditions, { reason: args.reason }) : null;
+  const senseless = sheet && (derivationKind === "skill_check" || derivationKind === "ability_check") ? senseCheckFailure(sheet.conditions, { by: named(args.by) }) : null;
   if (senseless) {
     return { autoFail: true, detail: args.skill ?? args.ability ?? "", notes: [senseless] };
   }
@@ -504,16 +505,13 @@ export function resolveRollExpression(
     // Skulker: dim light costs their Perception nothing (feat-combat.ts).
     const veiledBy = skill.id === "perception" ? (extras?.obscured ?? null) : null;
     const veiled = veiledBy && hasSkulker(sheet) && /dim light/i.test(veiledBy) ? null : veiledBy;
-    // Actor: advantage on Deception and Performance while passing as
-    // someone else, read from the check's reason.
-    const acting = actorAdvantage(sheet, skill.id, args.reason);
-    // The other feats' check riders: an expertise die, an advantage, a
-    // doubled proficiency (src/lib/srd/feat-combat.ts).
-    const featRider = featCheckRider(sheet, skill.id, args.reason);
+    // The feats' check riders: an expertise die, an advantage, a doubled
+    // proficiency (src/lib/srd/feat-combat.ts).
+    const featRider = featCheckRider(sheet, skill.id, { about: named(args.about), creature: named(args.creature) });
     const finalAdvantage = mergeAdvantage([
       advantage,
       ...(armorStealth || sunlit || veiled ? ["disadvantage" as const] : []),
-      ...(acting || featRider?.advantage ? ["advantage" as const] : []),
+      ...(featRider?.advantage ? ["advantage" as const] : []),
     ]);
     // A skill check is an ability check: a lasting effect on checks counts,
     // and so does an item that rides checks.
@@ -550,7 +548,6 @@ export function resolveRollExpression(
       ...(checkAbility !== skill.ability ? [`a ${checkAbility.toUpperCase()} (${skill.name}) check: ${checkAbility.toUpperCase()} in place of ${skill.ability.toUpperCase()}, the skill's proficiency kept`] : []),
       ...(reliable ? ["Reliable Talent: a d20 face below 10 counts as 10"] : []),
       ...(armorStealth ? ["their armor imposes disadvantage on Stealth"] : []),
-      ...(acting ? ["Actor: advantage while passing as someone else"] : []),
       ...(featRider ? [featRider.note] : []),
       ...(veiledBy && !veiled ? ["Skulker: dim light costs their Perception nothing"] : []),
       ...(sunlit ? ["Sunlight Sensitivity: disadvantage on Perception in direct sunlight"] : []),

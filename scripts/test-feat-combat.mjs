@@ -10,7 +10,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const {
   defensiveDuelistBonus, dungeonDelverNotices, elementalAdeptApplies, elementalAdeptType, featEngineTag, floorDamageDice,
-  powerAttackFeat, shootsFreelyInMelee, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover, spellRangeFactor,
+  featBonusAttack, isPolearm, ONE_HANDED_ATTACKED, powerAttackFeat, shootsFreelyInMelee, shotIgnoresCover, shotIgnoresLongRange, spellIgnoresCover, spellRangeFactor,
 } = await import("../src/lib/srd/feat-combat.ts");
 const { featGrantSpec, featPicksOwed, applyFeatGrants } = await import("../src/lib/srd/feat-grants.ts");
 const { authoredFeatDesc } = await import("../src/lib/srd/feat-effects.ts");
@@ -77,11 +77,9 @@ test("Elemental Adept names its type on the sheet, and floors the dice of that t
 
 test("Dungeon Delver notices traps and secret doors; Defensive Duelist needs the feat and a finesse weapon in hand", () => {
   const delver = sheet(["Dungeon Delver"]);
-  assert.equal(dungeonDelverNotices(delver, "a pressure plate trap under the rug"), true);
-  assert.equal(dungeonDelverNotices(delver, "the secret door behind the tapestry"), true);
-  assert.equal(dungeonDelverNotices(delver, "a concealed passage"), true);
-  assert.equal(dungeonDelverNotices(delver, "an ambusher in the rafters"), false);
-  assert.equal(dungeonDelverNotices(sheet([]), "a trap"), false);
+  assert.equal(dungeonDelverNotices(delver, "traps_and_secret_doors"), true);
+  assert.equal(dungeonDelverNotices(delver, undefined), false);
+  assert.equal(dungeonDelverNotices(sheet([]), "traps_and_secret_doors"), false);
   const duelist = sheet(["Defensive Duelist"], { equipment: [{ name: "Rapier", qty: 1, equipped: true }] });
   assert.equal(defensiveDuelistBonus(duelist, 3), 3);
   assert.equal(defensiveDuelistBonus(sheet(["Defensive Duelist"], { equipment: [{ name: "Rapier", qty: 1 }] }), 3), null, "not in hand");
@@ -97,6 +95,19 @@ test("the prompt tags the feats the server applies", () => {
   // Actor's advantage is the check engine's now (issue #147); Keen Mind stays the DM's.
   assert.equal(featEngineTag("Actor"), "[server]");
   assert.equal(featEngineTag("Keen Mind"), null);
+});
+
+// A weapon is the SRD row it swings as (AttackProfile's base), never the name
+// it is carried under: an "Oathbow" or a "Balestra a mano" is what its row is.
+test("Polearm Master and Crossbow Expert read the SRD weapon, not the carried name", () => {
+  assert.equal(isPolearm("Glaive"), true);
+  assert.equal(isPolearm("Spear of the Dark Sun"), false, "a carried name is no base");
+  assert.equal(isPolearm(undefined), false);
+  const budget = { oncePerTurn: [ONE_HANDED_ATTACKED], dashed: false };
+  const expert = sheet(["Crossbow Expert"]);
+  assert.equal(featBonusAttack(expert, budget, { weaponAttack: true, melee: false, weapon: "Hand Crossbow" }), "Crossbow Expert");
+  assert.equal(featBonusAttack(expert, budget, { weaponAttack: true, melee: false, weapon: "Light Crossbow" }), null);
+  assert.equal(featBonusAttack(expert, budget, { weaponAttack: true, melee: false, weapon: undefined }), null);
 });
 
 console.log(`${passed} checks passed`);

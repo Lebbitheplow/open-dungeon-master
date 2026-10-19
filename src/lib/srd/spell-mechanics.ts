@@ -25,11 +25,12 @@ import {
   halfOnSaveFor,
   saveAbilityFor,
 } from "@/lib/srd/spell-scaling";
+import { spellNamesOf } from "@/lib/srd/spell-facts";
 import { MECH_OVERRIDES } from "@/lib/srd/spell-mech-overrides";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { textKey } from "@/lib/language/text-logic";
 
-export type { SpellAura, SpellCondition, SpellMech } from "@/lib/srd/spell-mech-types";
+export type { SpellMech } from "@/lib/srd/spell-mech-types";
 export { MECH_OVERRIDES };
 
 type AuthoredSpellRow = {
@@ -64,9 +65,8 @@ const OVERRIDES_BY_KEY = new Map(Object.entries(MECH_OVERRIDES).map(([name, mech
 // names, or null. Callers pass the canonical name plus aliases.
 export function spellMechFor(names: string[]): SpellMech | null {
   // The SRD's names drop the wizard who wrote the spell ("Evard's Black
-  // Tentacles" is "Black Tentacles"); a name kept with it finds the same row.
-  const bare = names.map((name) => name.replace(/^\s*[a-z]+'s\s+/i, ""));
-  for (const name of [...names, ...bare]) {
+  // Tentacles" is "Black Tentacles"); the checklist's other names find the row.
+  for (const name of [...new Set(names.flatMap(spellNamesOf))]) {
     const wanted = textKey(name);
     const authored = AUTHORED_MECH.get(wanted);
     if (authored) {

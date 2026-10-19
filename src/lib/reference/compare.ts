@@ -57,10 +57,6 @@ export type CompareTable = {
   differingRows: number;
 };
 
-export function isCompareKind(value: unknown): value is CompareKind {
-  return typeof value === "string" && (COMPARE_KINDS as readonly string[]).includes(value);
-}
-
 function text(value: unknown, fallback = "not stated"): string {
   if (value === null || value === undefined) {
     return fallback;

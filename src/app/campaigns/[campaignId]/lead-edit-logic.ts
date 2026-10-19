@@ -2,7 +2,7 @@
 // pickers may offer and how an item row keeps everything it stores.
 // Database-free and JSX-free so scripts/test-lead-edit.mjs drives it.
 import { spellClassFor } from "@/lib/classes";
-import { THIRD_CASTER_LIST, isThirdCaster } from "@/lib/srd/third-caster";
+import { thirdCasterList, thirdCasterProfileOf } from "@/lib/srd/third-caster";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 
 // The highest spell level this sheet can actually cast, read from the slots
@@ -24,8 +24,9 @@ export function highestStoredSlot(spellcasting: CharacterSheet["spellcasting"]):
 
 // The class list the pickers search: an Eldritch Knight or Arcane Trickster
 // learns from the wizard's.
-export function spellListOf(sheet: Pick<CharacterSheet, "class" | "subclass">): string {
-  return isThirdCaster(sheet.class, sheet.subclass) ? THIRD_CASTER_LIST : spellClassFor(sheet.class);
+export function spellListOf(sheet: Pick<CharacterSheet, "class" | "subclass" | "spellcasting">): string {
+  const profile = thirdCasterProfileOf(sheet.class, sheet.subclass, sheet.spellcasting?.progression);
+  return profile ? thirdCasterList(profile) : spellClassFor(sheet.class);
 }
 
 // Round and clamp shared slot edits before the Adjust dialog sends them. A

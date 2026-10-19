@@ -32,6 +32,7 @@ import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { speciesAtTable } from "@/lib/characters/species-rules";
+import { subclassExtrasAtTable } from "@/lib/db/subclass-extras";
 import { tableFeatsFrom } from "@/lib/db/table-feats";
 import { getDatabase } from "@/lib/db/core";
 import { requestDmTurn } from "@/lib/dm/loop";
@@ -127,6 +128,9 @@ export async function GET(
     // The pack and workshop species at the table, read by id in the browser
     // as on the server (size, Dwarven Toughness; src/lib/srd/race-id.ts).
     species: speciesAtTable(sheets.map((sheet) => sheet.race)),
+    // The workshop and pack subclasses its sheets hold: their feature text
+    // and always-prepared spells, read in the browser as on the server.
+    subclasses: subclassExtrasAtTable(campaignId, sheets),
     // The table's workshop feats: what each runs as, and its text.
     feats: Object.fromEntries(tableFeatsFrom(getDatabase(), campaignId)),
     // The character this user is playing when they have several (11.3).

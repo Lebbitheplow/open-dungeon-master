@@ -41,7 +41,7 @@ export function SheetSpells({
   // A character whose class casts nothing may still hold a feat's spells
   // (Fey Touched's misty step, Ritual Caster's book, src/lib/srd/feat-spells.ts):
   // one book, read as spells known, with no slots to prepare from.
-  const classCasts = (view: CasterView) => Object.keys(spellSlotsFor(view.classId, 20, view.subclass)).length > 0;
+  const classCasts = (view: CasterView) => Object.keys(spellSlotsFor(view.classId, 20, view.subclass, view.progression)).length > 0;
   let views = casterViewsOf(sheet).map((view) =>
     classCasts(view)
       ? view

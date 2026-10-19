@@ -384,11 +384,19 @@ await test("The AI's advantage on a player's attack needs a named circumstance t
   assert.equal(bare.out.ok, true, bare.out.error);
   assert.equal(bare.roll.advantage, "none");
   kit.freshTurn();
-  const claimed = await aiSwing(fighter.id, enemy.id, [15, 4, 4], { weapon: "Longsword", advantage: "advantage", advantageReason: "the goblin is prone" });
+  const claimed = await aiSwing(fighter.id, enemy.id, [15, 4, 4], { weapon: "Longsword", advantage: "advantage", advantageSource: "condition", advantageReason: "the goblin is prone" });
   assert.equal(claimed.roll.advantage, "none", "prone is the engine's to decide");
   kit.freshTurn();
-  const ruled = await aiSwing(fighter.id, enemy.id, [15, 4, 4], { weapon: "Longsword", advantage: "advantage", advantageReason: "the goblin slips on the wet deck" });
+  const ruled = await aiSwing(fighter.id, enemy.id, [15, 4, 4], { weapon: "Longsword", advantage: "advantage", advantageSource: "other", advantageReason: "the goblin slips on the wet deck" });
   assert.equal(ruled.roll.advantage, "advantage");
+  // The source decides, not the reason's words: a claim in Italian stands or
+  // falls the same way.
+  kit.freshTurn();
+  const prone = await aiSwing(fighter.id, enemy.id, [15, 4, 4], { weapon: "Longsword", advantage: "advantage", advantageSource: "condition", advantageReason: "il goblin è a terra" });
+  assert.equal(prone.roll.advantage, "none");
+  kit.freshTurn();
+  const slipped = await aiSwing(fighter.id, enemy.id, [15, 4, 4], { weapon: "Longsword", advantage: "advantage", advantageSource: "other", advantageReason: "il goblin scivola sul ponte bagnato" });
+  assert.equal(slipped.roll.advantage, "advantage");
 });
 
 await test("the human DM's advantage still stands as a ruling", async () => {

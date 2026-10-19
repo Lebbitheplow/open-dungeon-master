@@ -1,4 +1,6 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { followPins } from "@/lib/db/atlas-region";
+import { partyAtlasChanged } from "@/lib/db/party-atlas";
 import { patchWorldDoc, worldCounts, worldView } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { recordsChanged } from "@/lib/workshop/record-events";
@@ -25,7 +27,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ camp
 // maps, pins) by row operations, or replaces whole ones, each read through
 // its floor (src/lib/db/world-forge.ts patchWorldDoc); entries change one at
 // a time through /world/entities. Rows changed by someone else since the
-// editor saw them come back in `conflicts`, untouched.
+// editor saw them come back in `conflicts`, untouched. A pin bound to a
+// place on the Region (src/lib/db/atlas-region.ts) that moved takes the
+// place's Region marker with it; `region` names each marker that moved and
+// where it stood before.
 export async function PATCH(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
   const context = await requireStoryAuthority(campaignId);
@@ -36,8 +41,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return Response.json({ error: "Expected the slices to change." }, { status: 400 });
   }
-  const { conflicts } = patchWorldDoc(campaignId, raw as Record<string, unknown>);
+  const { conflicts, before, doc } = patchWorldDoc(campaignId, raw as Record<string, unknown>);
+  const region = followPins(campaignId, before, doc);
+  partyAtlasChanged(campaignId, before);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, "world");
-  return Response.json({ ...worldView(campaignId), ...(conflicts.length ? { conflicts } : {}) });
+  return Response.json({ ...worldView(campaignId), ...(conflicts.length ? { conflicts } : {}), ...(region.length ? { region } : {}) });
 }

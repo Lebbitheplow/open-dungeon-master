@@ -11,6 +11,7 @@
 //     takes 10d10 psychic damage. Its return is a turn-end hook
 //     (src/lib/dm/turn-end.ts).
 
+import { catalogName } from "@/lib/srd/adventuring-gear";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
@@ -29,7 +30,6 @@ import { untilTurnEnd } from "@/lib/dm/turn-end";
 import {
   HURLED,
   HURL_THROUGH_HELL,
-  OPEN_HAND_CHOICES,
   OPEN_HAND_REELING,
   hasOpenHandTechnique,
   hurlProblem,
@@ -39,6 +39,7 @@ import { matchWeapon } from "@/lib/srd/weapons";
 import { poisonAt } from "@/lib/srd/table-hazards";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 const lower = (value: string) => value.trim().toLowerCase();
 
@@ -94,14 +95,14 @@ export function spendFeatureUse(campaign: Campaign, sheetId: string, resourceId:
 // ---- basic poison, and the SRD's injury poisons ----
 
 export const POISON_COAT = "poisoned weapon";
-const BASIC_POISON = /\bpoison\b.*\bbasic\b|\bbasic\b.*\bpoison\b/i;
 
 // What a vial coats a blade with: basic poison (DC 10, 1d4, no half), or an
 // injury poison from the SRD list (Drow Poison, Serpent Venom, Purple Worm
 // Poison, Wyvern Poison: src/lib/srd/afflictions.ts) or the table's workshop
 // (src/lib/srd/table-hazards.ts). Null for anything else.
 function coatOf(itemName: string, campaignId?: string): { name: string; dc: number; damage?: string; halfOnSave?: boolean; conditions?: string[]; minutes?: number; unconsciousIfFailBy?: number } | null {
-  if (BASIC_POISON.test(itemName)) {
+  // The SRD's basic poison, by its row (src/lib/srd/adventuring-gear.ts).
+  if (catalogName(itemName) === "Poison, Basic (vial)") {
     return { name: "basic poison", dc: 10, damage: "1d4" };
   }
   const poison = poisonAt(itemName, campaignId);
@@ -123,7 +124,7 @@ export function poisonCoatRefusal(sheet: CharacterSheet, itemName: string): Tool
   }
   const coatable = sheet.equipment.some((item) => {
     const weapon = matchWeapon(item.name);
-    return Boolean(weapon && slashesOrPierces(weapon.damage)) || /\b(arrows?|bolts?|needles?)\b/i.test(item.name);
+    return Boolean(weapon && slashesOrPierces(weapon.damage)) || (["arrows", "bolts", "needles"] as const).some((kind) => hasItemTag(item, kind));
   });
   return coatable
     ? null
@@ -223,7 +224,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
 
 // Who may declare it, and the words it writes, are pure and shared with the
 // player's Hand (src/lib/dm/attack-choice-rules.ts).
-export { OPEN_HAND_CHOICES, OPEN_HAND_REELING, hasOpenHandTechnique, type OpenHandChoice };
+export { OPEN_HAND_REELING, hasOpenHandTechnique, type OpenHandChoice };
 
 export function openHandOnHit(
   campaign: Campaign,

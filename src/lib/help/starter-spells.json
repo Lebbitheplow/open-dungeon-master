@@ -118,6 +118,62 @@
         { "n": "Faerie Fire", "d": "Advantage on attacks against everything it catches." },
         { "n": "Absorb Elements", "d": "A reaction that halves elemental damage." }
       ]
+    },
+    "eldritch-knight": {
+      "why": "You know a few wizard spells, almost all abjuration or evocation, and cast them with Intelligence. You learn new ones as you level; there is no spellbook to prepare from.",
+      "cantrips": [
+        { "n": "Fire Bolt", "d": "Ranged damage for when you cannot reach the fight." },
+        { "n": "Shocking Grasp", "d": "Hits harder against armored foes and stops opportunity attacks as you step away." },
+        { "n": "Light", "d": "No torch to hold, so your shield hand stays free." }
+      ],
+      "spells": [
+        { "n": "Shield", "d": "A reaction for +5 AC. On top of heavy armor it turns hits into misses." },
+        { "n": "Magic Missile", "d": "Damage that always lands, for the flier you cannot reach." },
+        { "n": "Thunderwave", "d": "Pushes a crowd off you and hurts every one of them." },
+        { "n": "Protection from Evil and Good", "d": "Shuts down charm, fear and possession from the creatures that use them." }
+      ]
+    },
+    "arcane-trickster": {
+      "why": "You know a few wizard spells, almost all enchantment or illusion, and cast them with Intelligence. Mage Hand is always one of your cantrips; you learn new spells as you level, with no spellbook to prepare from.",
+      "cantrips": [
+        { "n": "Mage Hand", "d": "Your Spellcasting teaches it: an invisible hand for pockets, locks and traps." },
+        { "n": "Minor Illusion", "d": "A crate to hide behind or a noise down the hall, as often as you like." },
+        { "n": "Friends", "d": "Advantage on the Charisma check that talks you past a guard." }
+      ],
+      "spells": [
+        { "n": "Disguise Self", "d": "Walk in looking like someone who belongs there." },
+        { "n": "Sleep", "d": "Ends a low-level fight before it starts, with no saving throw." },
+        { "n": "Silent Image", "d": "A wall, a guard, a closed door: whatever you need them to see." },
+        { "n": "Charm Person", "d": "Turns a hostile guard into a friendly one for an hour." }
+      ]
+    },
+    "soulspy": {
+      "why": "You know a few cleric spells, almost all abjuration or necromancy, and cast them with Wisdom. You learn new ones as you level instead of preparing them each day.",
+      "cantrips": [
+        { "n": "Sacred Flame", "d": "Radiant damage that ignores cover, for when you cannot get close." },
+        { "n": "Guidance", "d": "A d4 on the ability check that matters, yours or a friend's." },
+        { "n": "Light", "d": "No torch to hold, so both hands stay free for your work." }
+      ],
+      "spells": [
+        { "n": "Inflict Wounds", "d": "A huge burst of necrotic damage when you get in close." },
+        { "n": "Sanctuary", "d": "Makes you or a friend hard to attack while you slip away." },
+        { "n": "Protection from Evil and Good", "d": "Shuts down charm, fear and possession from the creatures that use them." },
+        { "n": "Shield of Faith", "d": "Two more AC for ten minutes, on you or the friend taking the hits." }
+      ]
+    },
+    "underfoot": {
+      "why": "You know a few druid spells, almost all divination or transmutation, and cast them with Wisdom. Shillelagh is always one of your cantrips; you learn new spells as you level instead of preparing them each day.",
+      "cantrips": [
+        { "n": "Shillelagh", "d": "Your Spellcasting teaches it: a club or staff that hits with Wisdom." },
+        { "n": "Guidance", "d": "A d4 on the ability check that matters, yours or a friend's." },
+        { "n": "Produce Flame", "d": "Light in your hand, and ranged fire damage when you need it." }
+      ],
+      "spells": [
+        { "n": "Longstrider", "d": "Ten more feet of speed for an hour: in and out before anyone reacts." },
+        { "n": "Jump", "d": "Triples your jump, over walls and gaps nobody else can cross." },
+        { "n": "Detect Magic", "d": "A ritual, so it costs you nothing to cast, and it finds the trapped chest." },
+        { "n": "Speak with Animals", "d": "The guard dog and the stable cat have seen everything." }
+      ]
     }
   }
 }

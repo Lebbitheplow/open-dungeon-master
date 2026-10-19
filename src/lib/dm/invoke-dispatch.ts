@@ -139,13 +139,13 @@ export async function dispatchAdjudication(
     case "group_check":
       return handleGroupCheck(campaign, turn, rawArguments, sheets, sheetsById);
     case "check_notice":
-      return handleCheckNotice(campaign, rawArguments, sheets, sheetsById);
+      return handleCheckNotice(campaign, turn, rawArguments, sheets, sheetsById);
     case "split_damage":
       return handleSplitDamage(campaign, turn, rawArguments, sheets, sheetsById);
     case "apply_hazard":
       return handleApplyHazard(campaign, turn, rawArguments, sheets, sheetsById);
     case "summon_pet":
-      return handleSummonPet(campaign, turn, rawArguments, sheets, sheetsById);
+      return handleSummonPet(campaign, rawArguments, sheets, sheetsById);
     case "pet_attack": {
       const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
       return unasked ? unasked : handlePetAttack(campaign, turn, rawArguments, sheets, sheetsById);

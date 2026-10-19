@@ -35,6 +35,7 @@ const { sizeForRace } = await import("../src/lib/srd/index.ts");
 const { hpBonusPerLevel } = await import("../src/lib/srd/race-id.ts");
 const { innateSpellsFor, takesDraconicAncestry } = await import("../src/lib/srd/racial-grants.ts");
 const { ignoresHeavyArmorSpeedPenalty } = await import("../src/lib/srd/armor.ts");
+const { wearSlotOf } = await import("../src/lib/srd/wear-slots.ts");
 const { classFeaturesFor, subclassNamesFor, subclassSpellsFor } = await import("../src/lib/srd/features.ts");
 const { extraSubclassOf } = await import("../src/lib/srd/subclass-tables.ts");
 const { packSubclassExtras } = await import("../src/lib/content/archetype-tables.ts");
@@ -244,6 +245,8 @@ function engineView(row) {
     spells: itemSpellsOfRow(row),
     cursed: Boolean(gearDefOfRow(row)?.cursed),
     attunes: attunementProblem({ ...row, attuned: false }, [], { ...WEARER, class: "fighter", spellcasting: null }) === null,
+    // Where it is worn, so a renamed copy keeps one-cloak-at-a-time.
+    slot: wearSlotOf(row),
   };
 }
 

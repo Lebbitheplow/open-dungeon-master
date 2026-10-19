@@ -15,10 +15,12 @@ import {
   authoredConditionImmunities,
   authoredDamageImmunities,
   authoredInitiativeAdvantage,
-  authoredSaveAdvantages,
+  authoredSaveTraits,
   authoredSaveProficiencies,
 } from "@/lib/srd/authored-effects";
 import { textKey } from "@/lib/language/text-logic";
+import type { SaveAgainst } from "@/lib/dm/roll-about";
+import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 type FeatureLike = { name: string; source?: string; classId?: string };
@@ -63,63 +65,61 @@ function hasCondition(sheet: TraitSheet, ...names: string[]): boolean {
 
 // ---- saving throws ----
 
-const MAGIC_WORDS = /\b(spell|spells|magic|magical|cantrip|enchantment|ritual)\b/i;
-
-// Advantage a trait gives on one save, with the line that says why. `against`
-// is what the save resists as the caller named it: a condition ("charmed"),
-// a damage type ("poison"), or a word saying the effect is magic ("spell:
-// Hold Person"). A save with nothing named gets only the traits that cover
-// every save of an ability (Danger Sense).
-export function traitSaveAdvantages(
-  sheet: TraitSheet,
-  ability: Ability | undefined,
-  against: string | undefined,
-): string[] {
-  const text = lower(against);
-  const notes: string[] = [];
-  if (text && /frighten|fear/.test(text) && holdsBrave(sheet)) {
-    notes.push("Brave: advantage on saves against being frightened");
+// The save traits the sheet holds that key on what a save resists, each as
+// the roll it rides and the values it reads (src/lib/srd/roll-keys.ts) with
+// the line that says why: the roll applies the ones its fields fit, and a
+// model's call that leaves one of those fields unnamed is asked for it from
+// the same list. The authored subclass features' own (Unyielding Spirit,
+// Beguiling Twist, Spell Resistance...) come from
+// src/lib/srd/authored-effects.ts.
+export type SaveTrait = RollKey & { note: string };
+export function heldSaveTraits(sheet: TraitSheet): SaveTrait[] {
+  const out: SaveTrait[] = [];
+  if (holdsBrave(sheet)) {
+    out.push({ roll: "save", against: ["frightened"], note: "Brave: advantage on saves against being frightened" });
   }
   // Steel Will (a Hunter ranger's Defensive Tactics pick).
-  if (text && /frighten|fear/.test(text) && holdsFeature(sheet, "steel will", "defensive tactics: steel will", "defensive tactics (steel will)")) {
-    notes.push("Steel Will: advantage on saves against being frightened");
+  if (holdsFeature(sheet, "steel will", "defensive tactics: steel will", "defensive tactics (steel will)")) {
+    out.push({ roll: "save", against: ["frightened"], note: "Steel Will: advantage on saves against being frightened" });
   }
-  if (text && /charm/.test(text) && holdsFeature(sheet, "fey ancestry")) {
-    notes.push("Fey Ancestry: advantage on saves against being charmed");
+  if (holdsFeature(sheet, "fey ancestry")) {
+    out.push({ roll: "save", against: ["charmed"], note: "Fey Ancestry: advantage on saves against being charmed" });
   }
-  if (
-    text &&
-    /poison/.test(text) &&
-    (holdsFeature(sheet, "dwarven resilience", "stout resilience", "duergar resilience") ||
-      /dwarf/.test(lower(sheet.race)))
-  ) {
-    notes.push("advantage on saves against poison (resilience)");
+  if (holdsFeature(sheet, "dwarven resilience", "stout resilience", "duergar resilience") || /dwarf/.test(lower(sheet.race))) {
+    out.push({ roll: "save", against: ["poison", "poisoned"], note: "advantage on saves against poison (resilience)" });
   }
-  if (
-    text &&
-    (ability === "int" || ability === "wis" || ability === "cha") &&
-    MAGIC_WORDS.test(text) &&
-    holdsFeature(sheet, "gnome cunning")
-  ) {
-    notes.push("Gnome Cunning: advantage on INT, WIS and CHA saves against magic");
+  if (holdsFeature(sheet, "gnome cunning")) {
+    out.push({ roll: "save", abilities: ["int", "wis", "cha"], magical: true, note: "Gnome Cunning: advantage on INT, WIS and CHA saves against magic" });
   }
   // Countercharm (bard 6): allies hearing the performance have advantage on
   // saves against being frightened or charmed while the condition lasts.
-  if (text && /charm|frighten|fear/.test(text) && hasCondition(sheet, "countercharm")) {
-    notes.push("Countercharm: advantage on saves against being charmed or frightened");
+  if (hasCondition(sheet, "countercharm")) {
+    out.push({ roll: "save", against: ["charmed", "frightened"], note: "Countercharm: advantage on saves against being charmed or frightened" });
   }
   // Holy Nimbus (Oath of Devotion 20): while it shines, advantage on saves
-  // against spells cast by fiends or undead. The save's `against` names the
-  // caster's type (cast-at-player.ts saveAgainst, aoe-damage.ts).
-  if (text && /\bspell\b/.test(text) && /\b(fiend|undead)\b/.test(text) && hasCondition(sheet, "holy nimbus")) {
-    notes.push("Holy Nimbus: advantage on saves against spells cast by fiends or undead");
+  // against spells cast by fiends or undead (cast-at-player.ts saveAgainst
+  // names the caster's type).
+  if (hasCondition(sheet, "holy nimbus")) {
+    out.push({ roll: "save", magical: true, casterTypes: ["fiend", "undead"], note: "Holy Nimbus: advantage on saves against spells cast by fiends or undead" });
   }
+  return [...out, ...authoredSaveTraits(sheet)];
+}
+
+// Advantage a trait gives on one save, with the line that says why, keyed to
+// what the save resists as the caller named it (src/lib/dm/roll-about.ts): a
+// condition, a damage type, whether it is magic, a spell's caster's type. A
+// save with nothing named gets only the traits that cover every save of an
+// ability (Danger Sense).
+export function traitSaveAdvantages(
+  sheet: TraitSheet,
+  ability: Ability | undefined,
+  versus: SaveAgainst,
+): string[] {
+  const roll = { roll: "save" as const, ability, ...versus };
+  const notes = heldSaveTraits(sheet).filter((trait) => keyFits(trait, roll)).map((trait) => trait.note);
   if (ability === "dex" && dangerSenseWorks(sheet)) {
     notes.push("Danger Sense: advantage on DEX saves");
   }
-  // The authored subclass features' own (Unyielding Spirit, Beguiling
-  // Twist, Spell Resistance...): src/lib/srd/authored-effects.ts.
-  notes.push(...authoredSaveAdvantages(sheet, ability, against));
   return notes;
 }
 

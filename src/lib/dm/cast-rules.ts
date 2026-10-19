@@ -23,6 +23,7 @@ import { spendAction, spendCastAttack, type TurnBudget } from "@/lib/dm/action-b
 import { masteredSpell, pactLevelFor } from "@/lib/dm/cast-slot-choice";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 export type CastRefusal = ToolError;
 
@@ -234,7 +235,9 @@ export function componentProblem(sheet: Caster, facts: SpellFacts | null): ToolE
   const emblem =
     Boolean(acBreakdownFor(sheet).shieldName) &&
     classIds.some((id) => EMBLEM_BEARERS.has(id.trim().toLowerCase()));
-  const focusInHand = sheet.equipment.some((item) => item.equipped === true && /\b(?:staff|rod|wand)\b/i.test(item.name));
+  const focusInHand = sheet.equipment.some(
+    (item) => item.equipped === true && (hasItemTag(item, "staff") || hasItemTag(item, "rod") || hasItemTag(item, "wand")),
+  );
   if (emblem || focusInHand) {
     return null;
   }
@@ -244,7 +247,7 @@ export function componentProblem(sheet: Caster, facts: SpellFacts | null): ToolE
 // ---- a material that costs ----
 
 // Structured components, carried worth and the purse (src/lib/dm/cast-materials.ts).
-export { focusProblem, materialComponents, materialPlan, type MaterialPlan } from "@/lib/dm/cast-materials";
+export { focusProblem, materialComponents, materialPlan } from "@/lib/dm/cast-materials";
 
 // ---- the slot ----
 

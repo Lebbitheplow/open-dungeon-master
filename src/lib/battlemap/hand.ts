@@ -167,7 +167,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
     if (held?.properties?.includes("versatile") && !profile.twoHanded && !shieldName && !offHand) {
       notes.push(profile.thrown ? "Versatile: say two hands in melee for the bigger die." : "Versatile: say two hands for the bigger die.");
     }
-    const ammoKind = srd?.properties?.includes("ammunition") ? ammoKindForWeapon(name) ?? ammoKindForWeapon(srd.name) : null;
+    const ammoKind = srd?.properties?.includes("ammunition") ? ammoKindForWeapon(srd.name) : null;
     const ammo = ammoKind ? findAmmo(sheet.equipment, ammoKind) : null;
     const empty = ammoKind !== null && ammo === null;
     const card: HandCard = {
@@ -225,7 +225,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
   for (const weapon of carried) cards.push(build(weapon.name, weapon.srd, false, weapon.gear));
   // A lineage's bite or claws (src/lib/srd/racial-weapons.ts), proficient.
   for (const term of ["bite", "claws"]) {
-    const natural = racialNaturalWeapon(sheet.features, term);
+    const natural = racialNaturalWeapon(sheet.features, [term]);
     if (natural && !carried.some((weapon) => textKey(weapon.name) === textKey(natural.srd.name))) {
       cards.push(build(natural.srd.name, natural.srd, false, null, true));
     }

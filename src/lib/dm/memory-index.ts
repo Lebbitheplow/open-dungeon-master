@@ -3,7 +3,6 @@ import {
   getChapter,
   listChapterEmbeddings,
   setChapterEmbedding,
-  type Chapter,
 } from "@/lib/db/chapters";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import {
@@ -336,15 +335,6 @@ export async function searchScenes(
       witnesses: scene.witnesses,
     };
   });
-}
-
-// Convenience for the backfill script and chapter close.
-export async function indexClosedChapters(campaignId: string, chapters: Chapter[]) {
-  for (const chapter of chapters) {
-    if (chapter.status === "closed") {
-      await indexChapter(campaignId, chapter.id);
-    }
-  }
 }
 
 // Embeds every active fact that lacks a vector. Facts are written without

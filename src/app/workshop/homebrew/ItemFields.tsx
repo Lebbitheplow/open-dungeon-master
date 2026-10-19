@@ -13,8 +13,10 @@ import {
   type ItemKind,
 } from "@/lib/homebrew/gear";
 import { SRD_ARMOR } from "@/lib/srd/armor";
+import { ITEM_TAGS, type ItemTag } from "@/lib/schemas/item-tags";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
+import { WORN_PLACES, WORN_PLACE_BLURBS, WORN_PLACE_LABELS, isWornPlace } from "@/lib/srd/worn-places";
 import {
   CheckField,
   Field,
@@ -61,6 +63,9 @@ function joinDamage(dice: string, type: string): string {
 // A weapon's block is an SRD weapon; an armour's an SRD armour; a magic
 // item's the effects magic-items.json speaks. The "start from" rows offer
 // the SRD tables themselves, because a +1 longsword is a longsword first.
+
+// Each tag in words (src/lib/srd/item-tags.ts).
+const TAG_LABELS: Partial<Record<ItemTag, string>> = Object.fromEntries(ITEM_TAGS.map((tag) => [tag, tag.replace(/_/g, " ")]));
 
 const KIND_LABELS: Record<ItemKind, string> = {
   weapon: "Weapon",
@@ -388,7 +393,38 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
           step={0.5}
           onChange={(weight) => set({ weight: weight === "" ? undefined : weight })}
         />
+        {/* Where it is worn, so a homebrew cloak keeps the one-cloak rule
+            with the published ones (src/lib/srd/wear-slots.ts). A weapon
+            is held, and armour places itself. */}
+        {(itemKind === "gear" || itemKind === "magic_item") && !data.armor && !data.weapon ? (
+          <SelectField
+            label="Worn on"
+            value={isWornPlace(data.wornOn) ? data.wornOn : ""}
+            options={[
+              { value: "", label: "Not worn (carried or held)" },
+              ...WORN_PLACES.map((value) => ({ value, label: WORN_PLACE_LABELS[value] })),
+            ]}
+            onChange={(wornOn) => set({ wornOn: wornOn || undefined })}
+            hint="One cloak, hat, pair of boots, gloves or bracers counts at a time."
+            glossary={{
+              title: "Places on the body",
+              entries: WORN_PLACES.map((value) => ({ name: WORN_PLACE_LABELS[value], blurb: WORN_PLACE_BLURBS[value] })),
+            }}
+            className="col-span-2"
+          />
+        ) : null}
       </div>
+      <Field
+        label="The table reads it as"
+        hint="A potion, a torch, a focus, a ration, treasure: what the rules ask of it, whatever its name says in your language."
+      >
+        <ToggleChips
+          options={ITEM_TAGS}
+          selected={Array.isArray(data.tags) ? (data.tags as string[]) : []}
+          onChange={(next) => set({ tags: next.length ? next : undefined })}
+          labels={TAG_LABELS}
+        />
+      </Field>
 
       {itemKind === "weapon" ? <WeaponBlock weapon={weapon} onChange={(next) => set({ weapon: next })} /> : null}
       {itemKind === "armor" ? <ArmorBlock armor={armor} onChange={(next) => set({ armor: next })} /> : null}

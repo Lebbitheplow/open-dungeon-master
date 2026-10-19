@@ -8,7 +8,9 @@
 //
 // Deliberately absent, on every scope: backend URLs and API keys (the story
 // settings route), accounts and passwords, the admin panel, backup and
-// restore, and raw sheet edits. Those stay in the browser.
+// restore, and raw sheet edits. Those stay in the browser. A level-up is
+// not a raw edit: odm_level_up sends the player's choices and the server
+// builds the level from them (src/lib/srd/level-up.ts).
 
 import { listAssignmentsForCharacter } from "@/lib/db/characters";
 import { WORLD_LORE_CATEGORIES, type WorldLoreCategory } from "@/lib/dm/world-lore-logic";
@@ -147,6 +149,28 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     required: ["campaignId"],
     method: "GET",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/sheet`,
+  },
+  {
+    name: "odm_level_up_options",
+    scope: "read",
+    description: "What your active character's next level offers, before odm_level_up takes it: whether the experience has earned it (ready, notReady), the hit points it adds, and under choices every pick it opens with the exact names to send back: asiChoices, subclass, expertise, featurePicks (fighting styles, invocations, maneuvers), levelUpSkill, training (featChoices) and spells. owedFromEarlierLevels lists picks earlier levels left open, which the next level-up takes. Pass levelUpClass to ask about a level in another class (otherClasses lists them), and subclass to see what a subclass the level owes would open with it (a Battle Master's maneuvers, an Eldritch Knight's spells).",
+    properties: {
+      ...campaignIdProp,
+      levelUpClass: { type: "string", description: "A class id from otherClasses; leave out for the first class." },
+      subclass: { type: "string", maxLength: 80, description: "One of choices.subclass.options, to count the picks it opens." },
+    },
+    required: ["campaignId"],
+    method: "GET",
+    path: (a) => {
+      const query = new URLSearchParams();
+      if (a.levelUpClass !== undefined) {
+        query.set("class", decodeURIComponent(seg(a.levelUpClass)));
+      }
+      if (a.subclass !== undefined) {
+        query.set("subclass", String(a.subclass).slice(0, 80));
+      }
+      return `/api/campaigns/${seg(a.campaignId)}/sheet/level-up${query.size ? `?${query}` : ""}`;
+    },
   },
   {
     name: "odm_get_whispers",
@@ -290,6 +314,50 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/encounter/end-turn`,
     body: () => ({}),
+  },
+  {
+    name: "odm_level_up",
+    scope: "play",
+    description: "Take your active character's next level, as the level-up dialog does: read odm_level_up_options first and send its nextLevel with the picks it lists. The server builds the level from these choices alone (hit points by the table's method, features, slots) and refuses an unearned level or an illegal pick with the reason. A pick left out stays owed for the next level-up. The answer is the new sheet with hpGained.",
+    properties: {
+      ...campaignIdProp,
+      level: { type: "integer", minimum: 2, maximum: 20, description: "The next level (nextLevel from odm_level_up_options): one level at a time." },
+      levelUpClass: { type: "string", description: "The class taking the level; leave out for the first class." },
+      hpChoice: { type: "string", enum: ["roll", "average"], description: "Only where the table rolls hit points: average takes the fixed value instead of the server's roll." },
+      asiChoices: {
+        type: "array",
+        maxItems: 7,
+        description: 'Up to choices.asiChoices.count: { mode: "plus2", ability }, { mode: "plus1x2", abilities: [a, b] } or { mode: "feat", feat, ability? }. Abilities are str, dex, con, int, wis, cha.',
+        items: { type: "object" },
+      },
+      featChoices: {
+        type: "object",
+        description: "The picks a feat taken now or a subclass's training leaves open, keyed by its lowercased name: { languages, skills, expertise, weapons, tools, armor, cantrips, spells, damageType } as the refusal or choices.training names them.",
+      },
+      subclass: { type: "string", description: "One of choices.subclass.options." },
+      expertise: { type: "array", items: { type: "string" }, maxItems: 6, description: "Skills from choices.expertise.options." },
+      featurePicks: {
+        type: "array",
+        items: { type: "string", maxLength: 80 },
+        maxItems: 20,
+        description: "Feature names from choices.featurePicks options, exactly as listed (\"Fighting Style: Defense\", \"Invocation: Agonizing Blast\").",
+      },
+      levelUpSkill: { type: "string", description: "One of choices.levelUpSkill.options (a new class's skill)." },
+      levelUpSpells: { type: "array", items: { type: "string" }, maxItems: 20, description: "New cantrips and spells by name, within choices.spells." },
+      levelUpForget: { type: "string", description: "A spell a known caster gives up for one of levelUpSpells (choices.spells.mayReplaceOne)." },
+    },
+    required: ["campaignId", "level"],
+    method: "PATCH",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/sheet`,
+    // The level-up's fields and nothing else: the route takes a cosmetic
+    // edit on this PATCH too, which this tool does not offer.
+    body: (a) => ({
+      ...pick(a, ["level", "levelUpClass", "hpChoice", "asiChoices", "featChoices", "subclass", "expertise", "levelUpSkill", "levelUpSpells", "levelUpForget"]),
+      ...(Array.isArray(a.featurePicks) && a.featurePicks.length
+        ? { features: a.featurePicks.map((name) => ({ name: String(name), source: "choice" })) }
+        : {}),
+    }),
+    check: (a) => (Number.isSafeInteger(a.level) ? null : "Name the next level (nextLevel from odm_level_up_options)."),
   },
   // characters
   {

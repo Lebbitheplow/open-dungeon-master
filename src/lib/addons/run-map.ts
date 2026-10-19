@@ -13,7 +13,7 @@ import {
   type MapResult,
 } from "@/lib/addons/contracts";
 import { hostFacts, readyAddon } from "@/lib/addons/installed";
-import { MAX_VIEW_DATA_CHARS, type MapAddonFile, type MapAddonView } from "@/lib/addons/map-view";
+import type { MapAddonFile, MapAddonView } from "@/lib/addons/map-view";
 import { resolveInside } from "@/lib/addons/paths";
 import { callAddonTool } from "@/lib/addons/runtime";
 import { createTask, finishTask, outputDir, reportProgress, type AddonTask } from "@/lib/addons/tasks";
@@ -56,11 +56,9 @@ async function writeModel(bytes: Buffer): Promise<string> {
   return url;
 }
 
+// The data's size was held to the cap by the contract (mapResultSchema).
 async function landView(task: AddonTask, view: NonNullable<MapResult["view"]>): Promise<MapAddonView> {
   const data: unknown = view.data ?? null;
-  if (JSON.stringify(data ?? null).length > MAX_VIEW_DATA_CHARS) {
-    throw new Error(`A board view's data may be ${MAX_VIEW_DATA_CHARS / 1024} KB as JSON; put anything larger in a file.`);
-  }
   const files: MapAddonFile[] = [];
   for (const name of view.files) {
     const type = viewFileType(name) ?? "";

@@ -153,7 +153,7 @@ await test("The AI's advantage on request_roll counts only with a named circumst
   world.clearDice();
   assert.equal(d20s(world.diceLog()), 1, "no reason named: a straight roll");
   world.dice(10, 10);
-  await invokeAsAi(world, "request_roll", { characterId: fighter.id, kind: "skill_check", skill: "athletics", dc: 13, advantage: "advantage", advantageReason: "a rope tied off to the post above" });
+  await invokeAsAi(world, "request_roll", { characterId: fighter.id, kind: "skill_check", skill: "athletics", dc: 13, advantage: "advantage", advantageSource: "other", advantageReason: "a rope tied off to the post above" });
   world.clearDice();
   assert.equal(d20s(world.diceLog()), 2);
   world.dice(10, 10);

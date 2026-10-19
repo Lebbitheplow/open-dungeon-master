@@ -1,5 +1,5 @@
 {
-  "note": "First-load JavaScript and CSS per route, gzip KiB, from the production build's own manifests (scripts/check-bundle-budget.mjs). Each budget sits about 5% above the size measured when it was set (2026-10-11); raise one only in the change that needs it, with the reason. CSS raised 2026-10-17 (85 -> 90, rulebook 92 -> 97): release 0.28.0 lands the usability pass (#369: settings groups, phone table menu, first-turn tour, builder steps) and the addon framework (#371: admin addons, board view switch) together; each fit alone, together the shared stylesheet is 86 KiB (rulebook 92.6).",
+  "note": "First-load JavaScript and CSS per route, gzip KiB, from the production build's own manifests (scripts/check-bundle-budget.mjs). Each budget sits about 5% above the size measured when it was set (2026-10-11); raise one only in the change that needs it, with the reason. CSS raised 2026-10-17 (85 -> 90, rulebook 92 -> 97): release 0.28.0 lands the usability pass (#369: settings groups, phone table menu, first-turn tour, builder steps) and the addon framework (#371: admin addons, board view switch) together; each fit alone, together the shared stylesheet is 86 KiB (rulebook 92.6). Table JS raised 2026-10-18 (838 -> 900): the board reads what an item is (the ammunition a weapon fires, the focus an effect asks for) from its row in the item tag table (src/lib/classes/item-tags.json, about 30 KiB gzip) instead of English words in its name, so an item named in any table language is read the same; the table page measured 859.7 KiB.",
   "routes": {
     "page": {
       "jsGzipKiB": 526,
@@ -10,7 +10,7 @@
       "cssGzipKiB": 90
     },
     "campaigns/[campaignId]/table/page": {
-      "jsGzipKiB": 838,
+      "jsGzipKiB": 900,
       "cssGzipKiB": 90
     },
     "workshop/page": {

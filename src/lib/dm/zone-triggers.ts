@@ -43,6 +43,7 @@ import { laySpellConditionsOnEnemy } from "@/lib/dm/spell-effects";
 import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { saveAgainst } from "@/lib/dm/roll-about";
 
 // A turn for a character's saves and damage, closed once used, as an
 // opportunity attack's is (src/lib/dm/opportunity-strike.ts).
@@ -170,7 +171,7 @@ function strike(
     zone.dealt = (zone.dealt ?? 0) + dealt;
     const standing = getEnemy(enemy.id);
     if (failed && standing?.status === "alive") {
-      lines.push(...afterFailOnEnemy(campaign, map, zone, trigger, standing));
+      lines.push(...afterFailOnEnemy(map, zone, trigger, standing));
     }
     // Sleet Storm's concentration save is its own, whatever the DEX save did.
     const holding = getEnemy(enemy.id);
@@ -195,7 +196,7 @@ function strike(
   }
   return withZoneTurn(campaign.id, (turn) => {
     const save = trigger.save && !held
-      ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, [trigger.type, "spell"].filter(Boolean).join(" "))
+      ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, saveAgainst({ damageType: trigger.type, magical: true }))
       : null;
     const failed = !held && (trigger.save ? !save?.success : true);
     if (trigger.save && !held) {
@@ -246,7 +247,7 @@ function strike(
 // What a failed save lays on an enemy: a condition (restrained is the
 // spell's and ends with it; prone is the ground's and stays), a lost
 // action, a push. (A concentration save is asked whatever the save did.)
-function afterFailOnEnemy(campaign: Campaign, map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, enemy: EncounterEnemy): string[] {
+function afterFailOnEnemy(map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, enemy: EncounterEnemy): string[] {
   const lines: string[] = [];
   if (trigger.condition) {
     const meta = trigger.condition === "prone" ? {} : { spell: zone.spell, source: zone.casterId, ...(zone.slotLevel ? { slotLevel: zone.slotLevel } : {}) };

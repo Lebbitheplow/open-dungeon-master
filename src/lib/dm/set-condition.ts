@@ -190,7 +190,8 @@ export function conditionImmunity(
   campaign: Campaign,
   sheet: CharacterSheet,
   condition: string,
-  reason: string,
+  // The condition comes from a spell or other magic.
+  magical: boolean,
   sourceEnemyId?: string,
 ): string | null {
   const wanted = condition.trim().toLowerCase();
@@ -210,7 +211,7 @@ export function conditionImmunity(
   if (held) {
     return `${held.because} makes them immune`;
   }
-  if (wanted === "unconscious" && own.magicalSleep && /\bsleep|slumber/i.test(reason)) {
+  if (wanted === "unconscious" && own.magicalSleep && magical) {
     return `${own.magicalSleep}: magic cannot put them to sleep`;
   }
   const aura = allyConditionAura(campaign.id, sheet, wanted);
@@ -251,6 +252,8 @@ export type SetConditionArgs = {
   saveDc?: number;
   sourceEnemyId?: string;
   sourceCharacterId?: string;
+  // From magic: Fey Ancestry's "magic can't put you to sleep".
+  magical?: boolean;
 };
 
 export function handleSetCondition(
@@ -290,7 +293,7 @@ export function handleSetCondition(
   if (unpaid) {
     return unpaid;
   }
-  const immune = conditionImmunity(campaign, sheet, normalized, reason, args.sourceEnemyId);
+  const immune = conditionImmunity(campaign, sheet, normalized, Boolean(options?.spellEffect || args.magical), args.sourceEnemyId);
   if (immune) {
     return {
       error: `${sheet.name} cannot be ${normalized}: ${immune}. The condition was not applied; narrate them shrugging it off.`,

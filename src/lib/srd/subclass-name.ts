@@ -1,22 +1,27 @@
 // Whether the free-text subclass on a sheet names a given subclass. One rule
 // for every reader (the feature grants in features.ts, the option slots in
-// options.ts): the exact name or an alias, or either with its title taken off
-// on both sides and compared whole. A string that is merely part of a name
-// matches nothing, so a paladin whose subclass reads "Oath" is granted no
-// oath's features, and a fighter whose subclass reads "Master" opens no
-// maneuvers.
+// options.ts): the exact name or an alias, or one of the name's other English
+// spellings, compared whole. A string that is merely part of a name matches
+// nothing, so a paladin whose subclass reads "Oath" is granted no oath's
+// features, and a fighter whose subclass reads "Master" opens no maneuvers.
 
 import { textKey } from "@/lib/language/text-logic";
 
-// A subclass name with its title taken off, so a sheet that stores the short
-// form ("Evocation", "Devotion") still names the subclass it means. Only a
-// whole title comes off: "Oath", "Domain" and "School" are titles with
-// nothing left, and name no subclass.
-const SUBCLASS_TITLES =
-  /^(oath of the|oath of|circle of the|circle of|college of|school of|path of the|path of|way of the|way of|the)\s+/;
+// The titles a published subclass is printed with. A sheet may store the
+// short form ("Evocation", "Devotion") or another title ("Path of Berserker"),
+// so a name is also spelled without its title, with any title, and with
+// "Domain" after it. The spellings are written from the subclass's names; the
+// stored value is compared as written.
+const TITLES = ["oath of the", "oath of", "circle of the", "circle of", "college of", "school of", "path of the", "path of", "way of the", "way of", "the"];
 
-export function strippedSubclassName(value: string): string {
-  return textKey(value).replace(SUBCLASS_TITLES, "").replace(/\s+domain$/, "").trim();
+function spellingsOf(name: string): string[] {
+  const key = textKey(name);
+  const title = TITLES.find((entry) => key.startsWith(`${entry} `));
+  const bare = (title ? key.slice(title.length + 1) : key).replace(/ domain$/, "");
+  if (!bare) {
+    return [key];
+  }
+  return [key, bare, `${bare} domain`, ...TITLES.flatMap((entry) => [`${entry} ${bare}`, `${entry} ${bare} domain`])];
 }
 
 // Exact name or alias.
@@ -28,10 +33,10 @@ export function subclassNamedExactly(stored: string, name: string, aliases: stri
   );
 }
 
-// The same, with the titles off on both sides.
+// The same, through the names' other spellings.
 export function subclassNamedBare(stored: string, name: string, aliases: string[] = []): boolean {
-  const bare = strippedSubclassName(stored);
-  return Boolean(bare) && [name, ...aliases].some((candidate) => strippedSubclassName(candidate) === bare);
+  const wanted = textKey(stored);
+  return Boolean(wanted) && [name, ...aliases].some((candidate) => spellingsOf(candidate).includes(wanted));
 }
 
 export function subclassNamed(stored: string, name: string, aliases: string[] = []): boolean {

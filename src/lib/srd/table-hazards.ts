@@ -6,7 +6,7 @@
 // src/lib/db/core.ts); the SRD's own come first, so a workshop "Wyvern
 // Poison" never shadows the book's.
 
-import { POISONS, findDisease, findPoison, type DiseaseSpec, type Poison } from "@/lib/srd/afflictions";
+import { findDisease, findPoison, type DiseaseSpec, type Poison } from "@/lib/srd/afflictions";
 import { findSampleTrap, type TrapSpec } from "@/lib/srd/trap-specs";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -74,5 +74,3 @@ export function hazardNamesAt(campaignId: string | null | undefined): Record<Haz
     disease: own.filter((entry) => entry.hazardKind === "disease").map((entry) => entry.name),
   };
 }
-
-export const SRD_POISON_NAMES = POISONS.map((poison) => poison.name);

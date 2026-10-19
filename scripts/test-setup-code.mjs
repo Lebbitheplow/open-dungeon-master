@@ -165,6 +165,33 @@ test("a device world whose app chose a code takes it for the host's account, and
   }
 });
 
+test("a device world's register door sends a stranger to the app, never to a log that has no code", () => {
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "odm-setup-code-door-"));
+  try {
+    const script = `
+      const { register } = await import("node:module");
+      register("./lib/register-alias.mjs", ${JSON.stringify(new URL(".", import.meta.url).href)});
+      const { POST } = await import(${JSON.stringify(new URL("../src/app/api/auth/register/route.ts", import.meta.url).href)});
+      const response = await POST(new Request("http://127.0.0.1:3210/api/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "stranger", password: "long-enough-1" }),
+      }));
+      const body = await response.json();
+      console.log(JSON.stringify({ status: response.status, needsSetup: body.needsSetup, log: /log/.test(body.error), app: /Enter my world/.test(body.error) }));
+    `;
+    const output = spawnNode(script, {
+      SQLITE_DB_PATH: path.join(fresh, "device.sqlite"),
+      DB_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
+      ODM_DEVICE_WORLD: "1",
+      ODM_SETUP_CODE: "shell-made-secret",
+    });
+    assert.deepEqual(JSON.parse(output), { status: 403, needsSetup: true, log: false, app: true });
+  } finally {
+    removeTempDir(fresh);
+  }
+});
+
 // A second process for each environment, since the database path and the
 // device-world flag are read once per process.
 function spawnNode(script, env) {

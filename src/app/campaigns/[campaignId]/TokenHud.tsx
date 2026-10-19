@@ -41,7 +41,6 @@ export type HudAction = {
 };
 
 export function playerActions(
-  token: StageToken,
   compose: (text: string) => void,
   pickTarget: (mode: "attack" | "cast") => void,
   // hudGates (src/lib/battlemap/hand-hud.ts): canAct, the turn's spends and

@@ -1,3 +1,4 @@
+import { keepPartyFields } from "@/lib/worldforge/party-atlas";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createNpcFromDraft, deleteNpc, getNpcById, listNpcs, renameNpc, setNpcPlace, setNpcPortrait, updateNpcFromDraft } from "@/lib/db/npcs";
 import { getLocation, getLocationByName, insertKnownLocation, listLocations, renameLocation, setLocationLayout } from "@/lib/db/locations";
@@ -7,6 +8,7 @@ import { draftFrom, normalizeNpcDraft } from "@/lib/npcs/forge";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { LORE_BODY_MAX, type WorldLoreCategory, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { applyRowOps, type DocOps } from "@/lib/worldforge/ops";
+import { keepRegionFields } from "@/lib/worldforge/atlas-frame";
 import {
   SLICES,
   emptyDoc,
@@ -18,6 +20,8 @@ import {
   readSlice,
   refOf,
   typeFor,
+  isPlaceBinding,
+  BINDINGS_MAX,
   type Binding,
   type Entry,
   type Secret,
@@ -89,7 +93,8 @@ export function saveWorldDoc(campaignId: string, doc: WorldDoc) {
 // other's work and a row changed under them is named in `conflicts`. A
 // whole slice is still taken (an older client, a script), and replaces the
 // stored one. `moveFolder` re-homes the entries of a deleted folder.
-export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>): { doc: WorldDoc; conflicts: string[] } {
+export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>): { doc: WorldDoc; conflicts: string[]; before: WorldDoc } {
+  const before = getWorldDoc(campaignId);
   let doc = getWorldDoc(campaignId);
   let conflicts: string[] = [];
   if (patch.ops && typeof patch.ops === "object" && !Array.isArray(patch.ops)) {
@@ -107,8 +112,14 @@ export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>
     const to = typeof move.to === "string" && doc.folders.some((folder) => folder.id === move.to) ? move.to : "";
     for (const entry of Object.values(doc.entries)) if (entry.folderId === move.from) entry.folderId = to;
   }
+  // A map's Region role and a pin's binding are set by the Region steps
+  // alone (src/lib/db/atlas-region.ts).
+  doc = keepRegionFields(before, doc);
+  // And whether a map is on the party's Atlas is shown only by its own
+  // reviewed step (src/lib/db/party-atlas.ts); a save may still hide one.
+  doc = keepPartyFields(before, doc);
   saveWorldDoc(campaignId, doc);
-  return { doc, conflicts };
+  return { doc, conflicts, before };
 }
 
 // ---- the records, as entries ----
@@ -307,22 +318,28 @@ export function nextEntry(doc: WorldDoc, ref: string, patch: EntityPatch): Entry
     tags: shelf === "npc" || shelf === "location" ? cleanList(patch.tags, 8, 40) ?? before.tags : [],
     image: shelf === "location" && portrait !== undefined ? portrait : before.image,
     // A Cast member's stat block is its own row's (Npc.statBlock): it takes
-    // no links of its own.
-    bindings: shelf === "npc" ? [] : patch.bindings === undefined ? before.bindings : readBindings(patch.bindings),
+    // no links of its own. Battle maps and encounters are a place's alone.
+    bindings: shelf === "npc" ? [] : (patch.bindings === undefined ? before.bindings : readBindings(patch.bindings)).filter((binding) => shelf === "location" || !isPlaceBinding(binding.kind)),
   });
 }
 
 // A link added by this patch must name a record this table can use: the
-// author's own, or the rulebook's. Links the entry already had are kept as
-// they are, found or not, so a record removed later never blocks a save.
-function unusableLink(campaignId: string, before: Entry | undefined, patch: EntityPatch): Failure | null {
+// author's own, or the rulebook's; for a place's battle map or encounter, a
+// row of this same campaign. Links the entry already had are kept as they
+// are, found or not, so a record removed later never blocks a save.
+const UNUSABLE: Record<Binding["kind"], string> = {
+  monster: "That stat block is not one this table can use.",
+  item: "That item is not one this table can use.",
+  map: "That battle map is not one of this table's prepared maps.",
+  encounter: "That encounter is not one of this table's prepared encounters.",
+};
+function unusableLink(campaignId: string, shelf: Shelf | undefined, before: Entry | undefined, patch: EntityPatch): Failure | null {
   if (patch.bindings === undefined) return null;
   const had = new Set((before?.bindings ?? []).map((binding) => `${binding.kind}|${binding.ref}`));
   for (const binding of readBindings(patch.bindings)) {
     if (had.has(`${binding.kind}|${binding.ref}`)) continue;
-    if (!resolveBinding(campaignId, binding).found) {
-      return { error: binding.kind === "monster" ? "That stat block is not one this table can use." : "That item is not one this table can use.", status: 400 };
-    }
+    if (isPlaceBinding(binding.kind) && shelf !== "location") return { error: "Only a place has battle maps and encounters.", status: 400 };
+    if (!resolveBinding(campaignId, binding).found) return { error: UNUSABLE[binding.kind], status: 400 };
   }
   return null;
 }
@@ -337,7 +354,7 @@ export function createWorldEntity(campaignId: string, sent: { typeId?: unknown; 
   const doc = getWorldDoc(campaignId);
   const type = doc.types.find((entry) => entry.id === sent.typeId) ?? doc.types[0];
   const input = oneLoreText(type.shelf, sent);
-  const refused = unusableLink(campaignId, undefined, input);
+  const refused = unusableLink(campaignId, type.shelf, undefined, input);
   if (refused) return refused;
   const made = createRecord(campaignId, type, input);
   if ("error" in made) return made;
@@ -405,6 +422,19 @@ export function createEntryForRecord(campaignId: string, binding: Binding): Enti
   return createWorldEntity(campaignId, { typeId: type.id, name: resolved.name, bindings: [{ kind: binding.kind, ref: binding.ref }] });
 }
 
+// One more battle map or encounter for a place (M4): the link added to what
+// the place has now, read from the stored document rather than from what a
+// page opened with, since the record was made a moment ago by the same
+// request (src/app/api/campaigns/[campaignId]/world/entities/[ref]/battle-maps).
+export function linkToPlace(campaignId: string, ref: string, binding: Binding): EntityResult {
+  if (parseRef(ref)?.shelf !== "location" || !isPlaceBinding(binding.kind)) return { error: "Only a place has battle maps and encounters.", status: 400 };
+  if (!ownedBy(campaignId, ref)) return { error: "No such place in this world.", status: 404 };
+  const had = getWorldDoc(campaignId).entries[ref]?.bindings ?? [];
+  if (had.some((entry) => entry.kind === binding.kind && entry.ref === binding.ref)) return entityOf(campaignId, getWorldDoc(campaignId), ref);
+  if (had.length >= BINDINGS_MAX) return { error: `A place links to ${BINDINGS_MAX} records at most. Unlink one first.`, status: 400 };
+  return updateWorldEntity(campaignId, ref, { bindings: [...had, binding] });
+}
+
 // A lore entry's account is its body (src/lib/worldforge/account.ts): an
 // article sent for one, with no body beside it, is written as the body. An
 // article sent with a body, or an empty one, is kept as sent, which is how
@@ -437,7 +467,7 @@ export function updateWorldEntity(campaignId: string, ref: string, input: Entity
     }
     patch = oneLoreText(shelf, merged.patch as EntityPatch);
   }
-  const refused = unusableLink(campaignId, doc.entries[ref], patch);
+  const refused = unusableLink(campaignId, shelf, doc.entries[ref], patch);
   if (refused) return refused;
   const lore = patch.typeId ? doc.types.find((type) => type.id === patch.typeId && type.shelf === "lore") : undefined;
   const failed = writeRecord(campaignId, ref, patch, lore);

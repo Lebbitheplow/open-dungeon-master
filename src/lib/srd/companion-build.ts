@@ -82,12 +82,6 @@ export function abilityPriority(klass: {
   return ["dex", "con", "wis", "str", "int", "cha"];
 }
 
-// A priority for a class nobody described: the scores as they stand, best
-// first, which is where whoever built the sheet put the character's weight.
-export function priorityFromScores(scores: AbilityScores): Ability[] {
-  return (Object.keys(scores) as Ability[]).sort((a, b) => scores[b] - scores[a]);
-}
-
 // Spells an adventuring ally is glad to have, tried before the rest of a
 // class's list. Names the checklist does not carry are simply never offered.
 const STAPLES = [

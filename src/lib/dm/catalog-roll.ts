@@ -3,12 +3,30 @@
 // Split from catalog-world.ts, whose story entries it leads.
 
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
 import {
   ABILITY_OPTIONS as ABILITIES,
   DIFFICULTY_OPTIONS,
   SKILL_OPTIONS,
   damageTypeField,
+  optionsOf,
 } from "@/lib/dm/catalog-vocab";
+import { CHECK_ABOUT, CHECK_SENSES, NATURAL_TERRAINS, SAVE_AGAINST } from "@/lib/dm/roll-about";
+
+// What a check is about, on the forms of both check tools (request_roll,
+// group_check).
+export const CHECK_KEY_FORM: CatalogEntry["fields"] = [
+  {
+    name: "about",
+    label: "The check is about",
+    kind: "select",
+    options: optionsOf(CHECK_ABOUT),
+    help: "So a feature keyed to it is applied (Favored Enemy, Stonecunning, Actor...).",
+  },
+  { name: "creature", label: "About the creature", kind: "text", placeholder: "undead, orc", help: "Its type or humanoid race, for Favored Enemy and Giant Foe." },
+  { name: "terrain", label: "In the terrain", kind: "select", options: optionsOf(NATURAL_TERRAINS), help: "For Natural Explorer." },
+  { name: "by", label: "Needs", kind: "select", options: optionsOf(CHECK_SENSES), help: "A blinded or deafened character fails it." },
+];
 
 export const REQUEST_ROLL_ADJUDICATION: CatalogEntry = {
     name: "request_roll",
@@ -84,13 +102,16 @@ export const REQUEST_ROLL_ADJUDICATION: CatalogEntry = {
         kind: "enemy",
         help: "For a damage roll in a fight: the server applies the total to this enemy.",
       },
+      ...CHECK_KEY_FORM,
       {
         name: "against",
         label: "The save resists",
-        kind: "text",
-        placeholder: "frightened, poison, a fireball",
+        kind: "select",
+        options: optionsOf(SAVE_AGAINST),
         help: "So a trait that helps against it is applied.",
       },
+      { name: "magical", label: "Against magic", kind: "boolean", help: "A spell or other magic (Gnome Cunning, Spell Resistance)." },
+      { name: "casterType", label: "Cast by a", kind: "select", options: optionsOf(CREATURE_TYPES), help: "A spell's caster, for Holy Nimbus." },
       { name: "reason", label: "What they are trying", kind: "text" },
     ],
   };

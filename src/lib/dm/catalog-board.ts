@@ -163,6 +163,19 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "actor", label: "Enemy", kind: "enemy", required: true },
       { name: "verb", label: "Plans to", kind: "text", required: true, placeholder: "Longsword" },
+      {
+        name: "kind",
+        label: "Kind",
+        kind: "select",
+        options: [
+          { value: "melee", label: "A melee attack" },
+          { value: "ranged", label: "A ranged attack" },
+          { value: "spell", label: "A spell" },
+          { value: "move", label: "A move" },
+          { value: "other", label: "Something else" },
+        ],
+        help: "When the plan is not one of its attacks; picks the badge.",
+      },
       { name: "target", label: "Mark", kind: "character", help: "Leave empty when there is no single mark." },
       { name: "expected", label: "Expected damage", kind: "number", min: 0, max: 9999, help: "Empty uses the named attack's average. Only seats that see enemy numbers are shown it." },
     ],

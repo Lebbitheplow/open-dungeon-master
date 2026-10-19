@@ -31,5 +31,3 @@ export const calendarDefinitionSchema = z.object({
   moons: z.array(calendarMoonSchema).max(6).default([]),
   festivals: z.array(calendarFestivalSchema).max(40).default([]),
 });
-
-export type CalendarDefinitionInput = z.infer<typeof calendarDefinitionSchema>;

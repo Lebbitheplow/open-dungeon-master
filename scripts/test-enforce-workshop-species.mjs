@@ -134,7 +134,7 @@ await test("A workshop copy of the Dwarf keeps its speed in heavy armor too heav
 
 await test("A workshop copy of the Dwarf has Dwarven Resilience: advantage on saves against poison.", async () => {
   const dwarf = become(stonefolk);
-  assert.ok(traitSaveAdvantages(dwarf, "con", "poisoned").length > 0);
+  assert.ok(traitSaveAdvantages(dwarf, "con", { against: "poisoned" }).length > 0);
 });
 
 await test("A workshop copy of the Hill Dwarf gains Dwarven Toughness's extra hit point with every level.", async () => {

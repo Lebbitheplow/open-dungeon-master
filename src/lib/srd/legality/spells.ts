@@ -13,6 +13,8 @@ import type { AbilityScores, ClassEntry, Spellcasting } from "@/lib/schemas/shee
 import { spellSlotsFor } from "@/lib/srd";
 import { pactSlotsFor, slotTableFor } from "@/lib/srd/multiclass";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
+import { subclassCastingProfileFor } from "@/lib/srd/features";
+import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import {
   casterViewsOf,
   dedupeNames,
@@ -24,18 +26,19 @@ import {
   type CasterView,
 } from "@/lib/srd/spell-prep";
 import {
-  THIRD_CASTER_ABILITY,
-  THIRD_CASTER_LIST,
-  isThirdCaster,
+  thirdCasterAbility,
+  thirdCasterList,
   thirdCasterOutside,
+  thirdCasterProfileOf,
   thirdCasterSchoolProblem,
+  type ThirdCasterProfile,
 } from "@/lib/srd/third-caster";
 import { lower, type ClassGrants, type SpellFacts } from "@/lib/srd/legality/types";
 
 type Casting = NonNullable<Spellcasting>;
 type CastingAbility = Casting["ability"];
 
-export type CastingClass = { entry: ClassEntry; ability: CastingAbility; list: string };
+export type CastingClass = { entry: ClassEntry; ability: CastingAbility; list: string; progression?: ThirdCasterProfile };
 
 // The classes on a sheet that cast, each with its ability and the spell list
 // it draws from. A class with a casting ability and no slots yet (a paladin
@@ -43,18 +46,29 @@ export type CastingClass = { entry: ClassEntry; ability: CastingAbility; list: s
 export function castingClassesOf(
   classes: ClassEntry[],
   classOf: (classId: string) => ClassGrants | null,
+  extras?: SubclassExtras,
+  sent?: Spellcasting,
 ): CastingClass[] {
   const out: CastingClass[] = [];
   for (const entry of classes) {
     const klass = classOf(entry.id);
+    const stored = sent?.casters?.find((caster) => lower(caster.classId) === lower(entry.id))?.progression ??
+      (classes.length === 1 ? sent?.progression : undefined);
+    // The server's own reading: the table's workshop subclass, else the
+    // published subclass by name. A stored setting is kept only for the
+    // published one, where it can only say the same thing.
+    const customProfile = subclassCastingProfileFor(entry.id, entry.subclass, extras);
+    const bundled = thirdCasterProfileOf(entry.id, entry.subclass);
+    const profile = customProfile ?? bundled;
+    const progression = customProfile ?? (bundled && stored ? bundled : undefined);
     if (klass && klass.casterType !== "none" && klass.spellAbility) {
       out.push({
         entry,
         ability: klass.spellAbility,
         list: lower(klass.spellListFrom ?? spellClassFor(entry.id)),
       });
-    } else if (isThirdCaster(entry.id, entry.subclass) && entry.level >= 3) {
-      out.push({ entry, ability: THIRD_CASTER_ABILITY, list: THIRD_CASTER_LIST });
+    } else if (profile && entry.level >= 3) {
+      out.push({ entry, ability: thirdCasterAbility(profile), list: thirdCasterList(profile), ...(progression ? { progression } : {}) });
     }
   }
   return out;
@@ -67,14 +81,15 @@ export function derivedSlots(
   classes: ClassEntry[],
   classOf: (classId: string) => ClassGrants | null,
   used: (slotLevel: string) => number = () => 0,
+  profileFor: (entry: ClassEntry) => string | undefined = () => undefined,
 ): Pick<Casting, "slots" | "pact"> {
   const [first] = classes;
   const multiclass = classes.length > 1;
   // A lone class keeps its own table, a warlock's pact slots included; the
   // shared table is for a class list.
   const table = multiclass
-    ? slotTableFor({ class: first.id, classes })
-    : spellSlotsFor(first.id, first.level, first.subclass);
+    ? slotTableFor({ class: first.id, classes }, profileFor)
+    : spellSlotsFor(first.id, first.level, first.subclass, profileFor(first));
   const slots = Object.fromEntries(
     Object.entries(table).map(([slotLevel, max]) => [
       slotLevel,
@@ -177,6 +192,7 @@ export type SpellcastingInput = {
   sent: Spellcasting;
   classes: ClassEntry[];
   classOf: (classId: string) => ClassGrants | null;
+  subclassExtras?: SubclassExtras;
   abilities: AbilityScores;
   spellOf: (name: string) => SpellFacts | null;
   // The race's cantrip pick, with the list it comes from.
@@ -228,7 +244,16 @@ function withoutEmptyBooks(casting: Casting): Casting {
 }
 
 export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict {
-  const casting = castingClassesOf(input.classes, input.classOf);
+  const casting = castingClassesOf(input.classes, input.classOf, input.subclassExtras, input.sent);
+  const invalidProfile = input.classes.some((entry) => {
+    const stored = input.sent?.casters?.find((caster) => lower(caster.classId) === lower(entry.id))?.progression ??
+      (input.classes.length === 1 ? input.sent?.progression : undefined);
+    // A sheet that says it casts as a third caster when nothing on the
+    // server says so: a subclass whose author turned it off, or a crafted
+    // request. A profile that differs is not refused, only overwritten.
+    return Boolean(stored) && !thirdCasterProfileOf(entry.id, entry.subclass) &&
+      !subclassCastingProfileFor(entry.id, entry.subclass, input.subclassExtras);
+  });
   const [first] = input.classes;
   const level = input.classes.reduce((sum, entry) => sum + entry.level, 0);
   if (!casting.length) {
@@ -240,12 +265,12 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
     );
     const names = dedupeNames(namesOf(input.sent)).filter((name) => !allowed.has(lower(name)));
     return {
-      problems:
-        names.length && input.judgeLists
-          ? [
-              `A ${first.id.replace(/[_-]+/g, " ")} has no Spellcasting feature, so ${names.slice(0, 3).join(", ")} cannot be on the sheet.`,
-            ]
-          : [],
+      problems: [
+        ...(invalidProfile ? ["This subclass is not configured to use the third-caster spellcasting progression."] : []),
+        ...(names.length && input.judgeLists
+          ? [`A ${first.id.replace(/[_-]+/g, " ")} has no Spellcasting feature, so ${names.slice(0, 3).join(", ")} cannot be on the sheet.`]
+          : []),
+      ],
       spellcasting: taught,
     };
   }
@@ -265,27 +290,29 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
     const legacyOwner = existing.length ? null : casting[0].entry.id;
     shaped = {
       ...shaped,
-      casters: casting.map(({ entry, ability }) => {
+      casters: casting.map(({ entry, ability, progression }) => {
         const mine = existing.find((caster) => lower(caster.classId) === lower(entry.id));
         if (mine) {
-          return { ...mine, ability };
+          return { ...mine, ability, ...(progression ? { progression } : {}) };
         }
         return lower(entry.id) === lower(legacyOwner ?? "")
           ? {
               classId: entry.id,
               ability,
+              ...(progression ? { progression } : {}),
               known: sent.known,
               prepared: sent.prepared,
               cantrips: sent.cantrips ?? [],
               ...(sent.pending ? { pending: sent.pending } : {}),
               ...(sent.spellbook ? { spellbook: sent.spellbook } : {}),
             }
-          : { classId: entry.id, ability, known: [], prepared: [], cantrips: [] };
+          : { classId: entry.id, ability, ...(progression ? { progression } : {}), known: [], prepared: [], cantrips: [] };
       }),
     };
   } else {
     delete shaped.casters;
     delete shaped.pact;
+    if (casting[0].progression) shaped.progression = casting[0].progression;
   }
 
   const sheetLike = {
@@ -296,7 +323,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
     abilities: input.abilities,
     spellcasting: shaped,
   };
-  let views = casterViewsOf(sheetLike);
+  let views = casterViewsOf(sheetLike, input.subclassExtras);
   // An older sheet filed a known caster's spells under prepared.
   views = views.map((view) =>
     view.style === "known" && !view.known.length && view.prepared.length
@@ -356,6 +383,9 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
   const free = [...innate, ...taught.cantrips, ...taught.spells];
 
   const problems: string[] = [];
+  if (invalidProfile) {
+    problems.push("This subclass is not configured to use the third-caster spellcasting progression.");
+  }
   if (input.judgeLists) {
     const held = new Set([...namesOf(input.held ?? null), ...free].map(lower));
     for (const view of views) {
@@ -378,9 +408,10 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
       const schools = thirdCasterSchoolProblem({
         classId: view.classId,
         subclass: casting.find((entry) => lower(entry.entry.id) === lower(view.classId))?.entry.subclass,
+        profile: view.progression,
         level: view.level,
         spells: levelled((view.known.length ? view.known : view.prepared).filter((name) => !taught.spells.some((entry) => lower(entry) === lower(name)))),
-        heldOutside: thirdCasterOutside(view.classId, levelled(heldNames)),
+        heldOutside: thirdCasterOutside(view.classId, levelled(heldNames), view.progression),
       });
       if (schools) {
         problems.push(schools);
@@ -396,6 +427,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
           bookAllowance: input.bookAllowance,
           freeCantrips: [...(racial?.name ? [racial.name] : []), ...innate, ...taught.cantrips],
           freeSpells: taught.spells,
+          extras: input.subclassExtras,
         },
       ),
     );
@@ -403,7 +435,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
   const spellcasting: Casting = {
     ...written,
     ability: casting[0].ability,
-    ...derivedSlots(input.classes, input.classOf),
+    ...derivedSlots(input.classes, input.classOf, () => 0, (entry) => casting.find((caster) => lower(caster.entry.id) === lower(entry.id))?.progression),
   };
   if (!multiclass) {
     delete spellcasting.pact;

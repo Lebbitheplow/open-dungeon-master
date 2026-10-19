@@ -3,26 +3,38 @@
 // three and resolves the roll itself.
 
 import { z } from "zod";
-import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
+import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
+import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CHECK_ABOUT, CHECK_SENSES, NATURAL_TERRAINS, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
+
+// A check: what it is about, for the features keyed to it (Favored Enemy,
+// Stonecunning, Stone Camouflage, Actor, Dungeon Delver...): the
+// circumstance, the creature by its rules name (a type, or a humanoid race),
+// the terrain, and the sense it needs (a blinded or deafened character fails
+// it). src/lib/dm/roll-about.ts. request_roll's and group_check's.
+export const CHECK_KEY_FIELDS = {
+  about: z.enum([...CHECK_ABOUT, NONE]).optional(),
+  creature: z.string().trim().max(40).optional(),
+  terrain: z.enum([...NATURAL_TERRAINS, NONE]).optional(),
+  by: z.enum([...CHECK_SENSES, NONE]).optional(),
+};
 
 export const rollArgsSchema = z.object({
   // Who may read the result. Only a human DM sets anything but "public";
   // the AI DM is never offered it (src/lib/dm/viewer.ts).
   visibility: z.enum(["public", "dm", "blind", "self"]).optional(),
   characterId: z.string().optional(),
-  kind: z.preprocess(
-    normalizeRollKind,
-    z.enum([
-      "skill_check",
-      "saving_throw",
-      "ability_check",
-      "attack",
-      "damage",
-      "initiative",
-      "custom",
-    ]),
-  ),
+  kind: z.enum([
+    "skill_check",
+    "saving_throw",
+    "ability_check",
+    "attack",
+    "damage",
+    "initiative",
+    "custom",
+  ]),
   skill: z.string().optional(),
   ability: z.preprocess(
     normalizeAbility,
@@ -32,19 +44,17 @@ export const rollArgsSchema = z.object({
   // A difficulty tier the server turns into the canonical DC (very_easy 5 ..
   // nearly_impossible 30). When both are sent, an explicit dc wins.
   difficulty: z.preprocess(
-    (value) => normalizeDifficulty(value) ?? undefined,
+    (value) => normalizeDifficulty(value) ?? value,
     z
       .enum(["very_easy", "easy", "moderate", "hard", "very_hard", "nearly_impossible"])
       .optional(),
   ),
   expression: z.string().max(60).optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
+  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
   // The circumstance behind an advantage or disadvantage the AI claims; with
   // none, or one the server decides itself, the claim is set aside
   // (src/lib/dm/pc-attack-options.ts claimedAdvantage).
+  advantageSource: z.enum(ADVANTAGE_SOURCES).optional(),
   advantageReason: z.string().max(120).optional(),
   // kind=damage only: the enemy this damage strikes; the server applies the
   // rolled total to that enemy the moment the dice resolve.
@@ -52,11 +62,14 @@ export const rollArgsSchema = z.object({
   // kind=damage only: damage type, so resistances and immunities apply.
   damageType: z.string().optional(),
   reason: z.string().optional(),
-  // kind=saving_throw only: what the save resists (a condition, a damage
-  // type, or "spell"/"magic" for a magical effect), so defensive traits apply
-  // server-side: Brave (frightened), Fey Ancestry (charmed), Dwarven and
-  // Stout Resilience (poison), Gnome Cunning (magic, INT/WIS/CHA).
-  against: z.string().max(60).optional(),
+  ...CHECK_KEY_FIELDS,
+  // kind=saving_throw only: what the save resists, whether it is magic, and
+  // a spell's caster's type, so defensive traits apply server-side: Brave
+  // (frightened), Fey Ancestry (charmed), Dwarven and Stout Resilience
+  // (poison), Gnome Cunning (magic, INT/WIS/CHA), Holy Nimbus.
+  against: z.enum([...SAVE_AGAINST, NONE]).optional(),
+  magical: z.boolean().optional(),
+  casterType: z.enum(CREATURE_TYPES).optional(),
   // kind=ability_check only: the tool the check is made with ("thieves'
   // tools"); a character proficient in it adds their proficiency bonus.
   tool: z.string().max(40).optional(),

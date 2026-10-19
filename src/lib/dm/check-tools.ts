@@ -1,4 +1,7 @@
-import { dungeonDelverNotices } from "@/lib/srd/feat-combat";
+import { dungeonDelverNotices, hasDungeonDelver } from "@/lib/srd/feat-combat";
+import { CHECK_KEY_PROPERTIES, named, NONE } from "@/lib/dm/roll-about";
+import { CHECK_KEY_FIELDS } from "@/lib/dm/roll-args";
+import { askedFields, unnamedTraitFields } from "@/lib/dm/roll-feature-riders";
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
@@ -88,6 +91,7 @@ export const checkTools: ToolDef[] = [
           },
           dc: { type: "integer", description: "An exact DC, only when a specific number is called for." },
           reason: { type: "string", description: "Short note on what the group is attempting." },
+          ...CHECK_KEY_PROPERTIES,
         },
         required: [],
       },
@@ -136,6 +140,11 @@ export const checkTools: ToolDef[] = [
             description: "How hard the thing is to spot; the server sets the DC. Prefer this over dc.",
           },
           dc: { type: "integer", description: "An exact spot DC, only when a specific number is called for." },
+          about: {
+            type: "string",
+            enum: ["traps_and_secret_doors", NONE],
+            description: "Perception or investigation: the hidden thing is a trap or a secret door (Dungeon Delver notices it more easily), or 'none'; asked for when a character tested holds Dungeon Delver.",
+          },
           characterIds: {
             type: "array",
             items: { type: "string" },
@@ -194,6 +203,7 @@ function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
 // ---- group_check ----
 
 const groupCheckSchema = z.object({
+  ...CHECK_KEY_FIELDS,
   skill: z.string().optional(),
   ability: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
   characterIds: z.array(z.string()).optional(),
@@ -231,14 +241,32 @@ export function handleGroupCheck(
   if (!targets.length) {
     return { error: "No valid characters for the group check; use characterIds from GAME STATE.", retry: true };
   }
+  const kind = args.skill ? "skill_check" : "ability_check";
+  // A trait a participant holds that a field the model left unnamed would
+  // call on, asked for before anyone rolls, as request_roll asks
+  // (src/lib/srd/roll-keys.ts).
+  if (turn.actor === "ai") {
+    const keyed = { kind, skill: args.skill, ability: args.ability, about: args.about, creature: args.creature, terrain: args.terrain, by: args.by } as RollArgs;
+    const holders = targets.map((sheet) => ({ sheet, gaps: unnamedTraitFields(getSheetById(sheet.id) ?? sheet, keyed) })).filter((entry) => entry.gaps.length);
+    if (holders.length) {
+      return {
+        error: `${holders.map((entry) => entry.sheet.name).join(" and ")} ${holders.length > 1 ? "hold" : "holds"} a trait this check can call on. Name ${askedFields(holders.flatMap((entry) => entry.gaps))}, as the fiction is, and send the check again. Nothing was rolled.`,
+        retry: true,
+      };
+    }
+  }
 
   const results: Array<{ name: string; total: number; success: boolean }> = [];
   for (const stale of targets) {
     const sheet = getSheetById(stale.id) ?? stale;
     const rollArgs = {
-      kind: args.skill ? "skill_check" : "ability_check",
+      kind,
       skill: args.skill,
       ability: args.ability,
+      about: args.about,
+      creature: args.creature,
+      terrain: args.terrain,
+      by: args.by,
     } as unknown as RollArgs;
     // The dead take no part, and count as a failure for the group.
     if (sheet.deathSaves?.dead) {
@@ -263,7 +291,7 @@ export function handleGroupCheck(
       campaignId: campaign.id,
       characterId: sheet.id,
       requestedBy: "dm",
-      kind: args.skill ? "skill_check" : "ability_check",
+      kind,
       detail: `${sheet.name}: group ${args.skill ?? args.ability} check`,
       dc: dc.dc,
       result: rolled,
@@ -301,6 +329,7 @@ const checkNoticeSchema = z.object({
   difficulty: z.unknown().optional(),
   dc: z.unknown().optional(),
   characterIds: z.array(z.string()).optional(),
+  about: z.enum(["traps_and_secret_doors", NONE]).optional(),
   reason: z.string().optional(),
 });
 
@@ -354,6 +383,7 @@ function passiveModifier(
 
 export function handleCheckNotice(
   campaign: Campaign,
+  turn: DmTurn,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
@@ -368,6 +398,17 @@ export function handleCheckNotice(
   const targets = resolveTargets(args.characterIds, sheets, sheetsById);
   if (!targets.length) {
     return { error: "No valid characters to test; use characterIds from GAME STATE.", retry: true };
+  }
+  // Dungeon Delver reads what the hidden thing is: a model's call that leaves
+  // it unnamed while a character tested holds the feat is asked for it, so
+  // the feat is never lost to an omission (as request_roll's fields are,
+  // src/lib/srd/roll-keys.ts).
+  const delvers = turn.actor === "ai" && sense !== "insight" && args.about === undefined ? targets.filter((sheet) => hasDungeonDelver(sheet)) : [];
+  if (delvers.length) {
+    return {
+      error: `${delvers.map((sheet) => sheet.name).join(" and ")} ${delvers.length > 1 ? "hold" : "holds"} a trait this check can call on. Name about: 'traps_and_secret_doors' or 'none', as the fiction is, and send the check again. Nothing was rolled.`,
+      retry: true,
+    };
   }
   // A creature that hides or lies sets the DC with its own roll (SRD 5.1,
   // Contests; src/lib/dm/roll-gates.ts); a tie goes to the one noticing.
@@ -463,7 +504,7 @@ export function handleCheckNotice(
       shifts.push(`${sheet.name}: ${veiled}`);
     }
     // Dungeon Delver: advantage (+5 passive) to notice a trap or a secret door.
-    const delver = sense !== "insight" && dungeonDelverNotices(fresh, typeof args.reason === "string" ? args.reason : undefined) ? 5 : 0;
+    const delver = sense !== "insight" && dungeonDelverNotices(fresh, named(args.about)) ? 5 : 0;
     if (delver) {
       shifts.push(`${sheet.name}: Dungeon Delver, +5`);
     }

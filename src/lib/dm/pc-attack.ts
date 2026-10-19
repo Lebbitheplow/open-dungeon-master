@@ -8,12 +8,11 @@ import { publishEncounter } from "@/lib/dm/enemy-damage";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
-import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { strikeDamage } from "@/lib/dm/pc-attack-damage";
 import { FRENZIED } from "@/lib/dm/frenzy";
-import { BONUS_ATTACKS, RECKLESS } from "@/lib/dm/pc-attack-options";
+import { ADVANTAGE_SOURCES, BONUS_ATTACKS, RECKLESS } from "@/lib/dm/pc-attack-options";
 import { parkPcAttack } from "@/lib/dm/pc-attack-parked";
 import { planPcAttack, type AttackPlan } from "@/lib/dm/pc-attack-plan";
 import { rollPcAttack, strikeToHit } from "@/lib/dm/pc-attack-resolve";
@@ -28,11 +27,10 @@ import { spendInspirationCounter } from "@/lib/dm/roll-riders";
 import { spendLuckCounter } from "@/lib/srd/class-resources";
 import { moteBurst, moteOf } from "@/lib/dm/authored-mote";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { attacksLeft } from "@/lib/dm/action-budget";
 
-// Re-exported for the callers that learned them here.
-export { superiorityDie } from "@/lib/dm/pc-attack-riders";
+// Re-exported for the callers that learned it here.
 export { resolvePendingPcAttack } from "@/lib/dm/pc-attack-parked";
 
 // The pc_attack engine: full server resolution of player attacks. The
@@ -72,7 +70,7 @@ export const pcAttackTool: ToolDef = {
         weapon: {
           type: "string",
           description:
-            "Weapon they attack with, from their equipment. Omit to use their best carried weapon. A weapon a subclass feature makes is named here too: a raging Path of the Beast barbarian's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second blade), a Sun Soul monk's 'radiant sun bolt'.",
+            "Weapon they attack with, from their equipment, or 'unarmed strike'. Omit to use their best carried weapon. A weapon a subclass feature makes is named here too: a raging Path of the Beast barbarian's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second blade), a Sun Soul monk's 'radiant sun bolt'.",
         },
         spell: {
           type: "string",
@@ -88,7 +86,13 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
           description:
-            "Situational advantage or disadvantage from the fiction that the server cannot see. It counts only with advantageReason. The server already applies conditions (prone, invisible, hidden, restrained...), cover, light and darkness, range, Help, flanking, Reckless Attack and every feature: never claim those.",
+            "Situational advantage or disadvantage from the fiction that the server cannot see. It counts only with advantageSource 'other' and advantageReason. The server already applies conditions (prone, invisible, hidden, restrained...), cover, light and darkness, range, Help, flanking, Reckless Attack and every feature: never claim those.",
+        },
+        advantageSource: {
+          type: "string",
+          enum: [...ADVANTAGE_SOURCES],
+          description:
+            "Where the advantage or disadvantage comes from. Only 'other', a circumstance of the fiction the server cannot see (named in advantageReason), counts: the server applies conditions, cover, light, range, Help, flanking, spells, Inspiration and features itself.",
         },
         advantageReason: {
           type: "string",
@@ -217,14 +221,12 @@ const pcAttackArgsSchema = z.object({
   spell: z.string().max(80).optional(),
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
+  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
   twoHanded: z.coerce.boolean().optional(),
   offHand: z.coerce.boolean().optional(),
   smite: z.coerce.number().int().min(1).max(9).optional(),
   maneuver: z.string().max(60).optional(),
+  advantageSource: z.enum(ADVANTAGE_SOURCES).optional(),
   advantageReason: z.string().max(200).optional(),
   bonusAttack: z.preprocess(
     (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
@@ -275,12 +277,17 @@ export function handlePcAttack(
   if (!encounter) {
     return { error: "No active encounter. Call start_encounter first.", retry: true };
   }
-  let args: PcAttackArgs;
+  let raw: unknown;
   try {
-    args = pcAttackArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments: pc_attack needs characterId and targetEnemyId.", retry: true };
   }
+  const parsed = pcAttackArgsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return invalidArguments("Invalid arguments: pc_attack needs characterId and targetEnemyId.", parsed.error);
+  }
+  const args: PcAttackArgs = parsed.data;
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {

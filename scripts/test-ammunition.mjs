@@ -31,6 +31,16 @@ test("every ammunition weapon maps to a kind", () => {
   assert.equal(ammoKindForWeapon("Blowgun"), "needles");
 });
 
+test("a weapon is known by the SRD row it swings as, never by the name it is carried under", () => {
+  assert.equal(ammoKindForWeapon("Oathbow"), null);
+  assert.equal(ammoKindForWeapon(undefined), null);
+  for (const name of ["Longbow", "Arco lungo", "Arc long", "Arco largo", "Langbogen"]) {
+    const spend = spendAmmo([{ name: "Arrows (20)", qty: 1 }], { base: "Longbow", name }, "Kara");
+    assert.equal(spend.kind, "arrows", name);
+    assert.match(spendAmmo([], { base: "Longbow", name }, "Kara").error, new RegExp(name), name);
+  }
+});
+
 test("melee weapons draw on nothing", () => {
   assert.equal(ammoKindForWeapon("Longsword"), null);
   assert.equal(ammoKindForWeapon("Greataxe"), null);
@@ -64,21 +74,21 @@ test("a word inside another word does not count as ammunition", () => {
 
 test("firing spends one and reports the remainder", () => {
   const kit = [{ name: "Arrows (20)", qty: 1 }];
-  const spend = spendAmmo(kit, "Longbow", "Kara");
+  const spend = spendAmmo(kit, { base: "Longbow", name: "Longbow" }, "Kara");
   assert.equal(spend.ok, true);
   assert.equal(spend.remaining, 19);
   assert.equal(spend.kind, "arrows");
 });
 
 test("an empty quiver refuses the shot by name", () => {
-  const spend = spendAmmo([{ name: "Longbow", qty: 1 }], "Longbow", "Kara");
+  const spend = spendAmmo([{ name: "Longbow", qty: 1 }], { base: "Longbow", name: "Longbow" }, "Kara");
   assert.equal(spend.ok, false);
   assert.match(spend.error, /Kara is out of arrows/);
   assert.match(spend.error, /Longbow/);
 });
 
 test("a melee swing is not an ammunition question at all", () => {
-  assert.equal(spendAmmo([], "Longsword", "Brom"), null);
+  assert.equal(spendAmmo([], { base: "Longsword", name: "Longsword" }, "Brom"), null);
 });
 
 test("the rewritten line keeps name and qty agreeing", () => {

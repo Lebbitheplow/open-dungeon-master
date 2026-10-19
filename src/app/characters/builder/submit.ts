@@ -272,7 +272,6 @@ export function callingBlocker(
 // give them at this level. A setting class borrows an SRD class's list and
 // its counts with it, the same counts the server holds a level-up to.
 export function spellsBlocks(
-  state: BuilderState,
   derived: BuilderDerived,
   klass: ClassOption | undefined,
 ): StepBlock[] {
@@ -320,11 +319,10 @@ export function spellsBlocks(
 }
 
 export function spellsBlocker(
-  state: BuilderState,
   derived: BuilderDerived,
   klass: ClassOption | undefined,
 ): StepBlock | null {
-  return spellsBlocks(state, derived, klass)[0] ?? null;
+  return spellsBlocks(derived, klass)[0] ?? null;
 }
 
 const sameNumbers = (left: number[], right: number[]) =>
@@ -442,7 +440,7 @@ export function validateBuilder(
     abilitiesBlocker(derived, state, input.featJudge) ??
     ancestryBlocker(state, race, background, derived, input.featJudge) ??
     callingBlocker(klass, state, derived) ??
-    spellsBlocker(state, derived, klass) ??
+    spellsBlocker(derived, klass) ??
     gearBlocker(derived);
   if (blocked) {
     return { kind: "error", message: blocked.message, target: blocked.target };
@@ -488,7 +486,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // Trickster with Intelligence and a third caster's slots (./casting.ts).
   const casting = builderCasting(klass, state.subclass, effectiveLevel);
   const slots = Object.fromEntries(
-    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass)).map(([slotLevel, max]) => [
+    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass, casting.profile)).map(([slotLevel, max]) => [
       slotLevel,
       { max, used: 0 },
     ]),
@@ -649,6 +647,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       spellcasting: casting.ability
         ? {
             ability: casting.ability,
+            ...(casting.profile ? { progression: casting.profile } : {}),
             slots,
             prepared: isKnownCaster ? [] : isWizard ? picks.bookPrepared : finalSpells,
             known: isKnownCaster ? finalSpells : [],

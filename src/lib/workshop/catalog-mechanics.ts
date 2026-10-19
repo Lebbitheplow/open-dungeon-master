@@ -5,6 +5,8 @@ import { checkRidersOf } from "@/lib/srd/item-check-riders";
 import { itemSpellsOf } from "@/lib/srd/item-spells";
 import { gearBaseName, gearDefFor } from "@/lib/srd/magic-gear";
 import { matchMagicItem } from "@/lib/srd/magic-items";
+import { rowSlot } from "@/lib/srd/wear-slots";
+import { isWornPlace } from "@/lib/srd/worn-places";
 import { matchWeapon, SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { subclassFeatureDescription, subclassLevelFor, subclassTableFor } from "@/lib/srd/features";
@@ -17,6 +19,7 @@ import { bundledRaceTraitText, rulebookPageIdFor } from "@/lib/rulebook/catalog-
 import { traitParagraphs } from "@/lib/workshop/species-traits";
 import type { RulebookPage } from "@/lib/rulebook/types";
 import { textKey } from "@/lib/language/text-logic";
+import { thirdCasterProfileForPackSubclass } from "@/lib/srd/third-caster";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -116,6 +119,12 @@ export function itemMechanicsOf(row: Row): Record<string, unknown> | null {
   if (spells.length) {
     out.spells = spells;
   }
+  // Where the published item is worn, so the copy starts in its place
+  // ("Worn on" in the item form).
+  const place = !weapon && !armor ? rowSlot(name) : null;
+  if (isWornPlace(place)) {
+    out.wornOn = place;
+  }
   return out.itemKind === "gear" && !magic ? null : out;
 }
 
@@ -136,7 +145,12 @@ export function archetypeMechanicsOf(row: Row, classId: string): Record<string, 
   }
   const bundled = subclassTableFor(classId, row.name);
   if (!bundled) {
-    return Object.keys(prose).length ? { classSlug: classId, levels: prose } : null;
+    // A pack subclass that casts as a third caster (the Soulspy) keeps
+    // doing so in the copy; its prose headings alone would cast nothing.
+    const castingProfile = thirdCasterProfileForPackSubclass(row.name);
+    return Object.keys(prose).length || castingProfile
+      ? { classSlug: classId, levels: prose, ...(castingProfile ? { castingProfile } : {}) }
+      : null;
   }
   const levels: Record<string, SubclassFeatureRow[]> = {};
   for (const [level, names] of Object.entries(bundled.levels)) {

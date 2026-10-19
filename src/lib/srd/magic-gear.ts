@@ -160,8 +160,3 @@ export function gearDefOfRow(
   }
   return gearDefFor(item.name, item.slug, baseInName);
 }
-
-// Every magic item the table knows by name, for callers that list them.
-export function gearDefs(): readonly GearDef[] {
-  return ROWS;
-}

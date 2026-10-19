@@ -111,14 +111,6 @@ export function offerPriceCp(listCp: number): number {
   return Math.max(1, Math.floor(listCp / 2));
 }
 
-export function formatPriceCp(cp: number): string {
-  return formatCopper(cp);
-}
-
-export function goldFromCopper(cp: number): number {
-  return Math.round((cp / COPPER_PER_GOLD) * 100) / 100;
-}
-
 // Find a stock line by name, loosely: exact first, then a line that
 // contains the words asked for.
 export function findStockLine(stock: StockLine[], name: string): StockLine | null {

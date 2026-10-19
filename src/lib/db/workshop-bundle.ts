@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { getDatabase, nowIso } from "@/lib/db/core";
@@ -38,7 +39,7 @@ import { decodeBundleAddonView, landAddonView } from "@/lib/db/map-addon-view-bu
 import { writeMapAddonView } from "@/lib/db/map-addon-view";
 import type { MapAddonView } from "@/lib/addons/map-view";
 
-export { exportWorkshopBundle, type ExportResult } from "@/lib/db/workshop-bundle-export";
+export { exportWorkshopBundle } from "@/lib/db/workshop-bundle-export";
 
 // Writing a stranger's bundle back in as a new workshop. The export half is
 // src/lib/db/workshop-bundle-export.ts, re-exported from here.
@@ -74,15 +75,26 @@ export type BundleImportResult =
 // shape /api/upload produces, so isUploadedImagePath accepts it everywhere
 // else, and notes the path in `written`. Returns "" when there was no image
 // or it did not survive decoding.
-function saveBundleImage(image: BundleImage | null, uploadDir: string, written: string[]): string {
+//
+// Within one import a picture is written once, however many records carry
+// it (an Atlas map's art and the Region's backdrop, one portrait on two
+// cards): `seen` remembers each picture's path by its bytes, so the records
+// on this side share one file as they shared one on the other.
+function saveBundleImage(image: BundleImage | null, uploadDir: string, written: string[], seen?: Map<string, string>): string {
   if (!image) {
     return "";
+  }
+  const key = seen ? createHash("sha256").update(image.bytes).digest("hex") : "";
+  const known = seen?.get(key);
+  if (known) {
+    return known;
   }
   const filename = `${crypto.randomUUID()}.${image.ext}`;
   writeFileSync(path.join(/*turbopackIgnore: true*/ uploadDir, filename), image.bytes);
   const url = `/uploads/${filename}`;
   recordMediaFile(url);
   written.push(url);
+  seen?.set(key, url);
   return url;
 }
 
@@ -95,6 +107,8 @@ type BundleArtPaths = {
   regionBackdrop: string;
   // What a map addon left on each map, its files already written.
   mapAddonViews: Array<MapAddonView | null>;
+  // Writes one of the world's pictures, sharing files with the art above.
+  saveWorldImage: (dataUrl: string | undefined) => string;
 };
 
 export type BundleImportOptions = {
@@ -125,9 +139,12 @@ export function importWorkshopBundle(
     region: [bundle.overworld ? decodeBundleImage(bundle.overworld.backdrop) : null],
     world: [...Object.values(bundle.world?.images ?? {}), ...Object.values(bundle.world?.entryImages ?? {})].map((image) => decodeBundleImage(image)),
   };
-  const images = Object.values(art)
-    .flat()
-    .filter((image): image is BundleImage => image !== null);
+  // Each distinct picture once: that is what lands on disk.
+  const distinct = new Map<string, BundleImage>();
+  for (const image of Object.values(art).flat()) {
+    if (image) distinct.set(createHash("sha256").update(image.bytes).digest("hex"), image);
+  }
+  const images = [...distinct.values()];
   // A map addon's model and textures count against the same budget.
   const addonViews = bundle.maps.map((map) => decodeBundleAddonView(map.addonView));
   const addonFiles = addonViews.flatMap((view) => view?.files ?? []);
@@ -147,15 +164,18 @@ export function importWorkshopBundle(
   const uploadDir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
   mkdirSync(uploadDir, { recursive: true });
   const written: string[] = [];
+  const seen = new Map<string, string>();
+  const save = (image: BundleImage | null) => saveBundleImage(image, uploadDir, written, seen);
   try {
     const paths: BundleArtPaths = {
-      npcPortraits: art.npcs.map((image) => saveBundleImage(image, uploadDir, written)),
-      mapBackdrops: art.maps.map((image) => saveBundleImage(image, uploadDir, written)),
-      mapOverlays: art.overlays.map((image) => saveBundleImage(image, uploadDir, written)),
-      loreImages: art.lore.map((image) => saveBundleImage(image, uploadDir, written)),
-      factionPortraits: art.factions.map((image) => saveBundleImage(image, uploadDir, written)),
-      regionBackdrop: saveBundleImage(art.region[0], uploadDir, written),
+      npcPortraits: art.npcs.map(save),
+      mapBackdrops: art.maps.map(save),
+      mapOverlays: art.overlays.map(save),
+      loreImages: art.lore.map(save),
+      factionPortraits: art.factions.map(save),
+      regionBackdrop: save(art.region[0]),
       mapAddonViews: addonViews.map((view) => landAddonView(view, uploadDir, written)),
+      saveWorldImage: (dataUrl) => save(decodeBundleImage(dataUrl ?? "")),
     };
     return writeBundleRows(userId, bundle, paths, options.sharedWorkshopId ?? "");
   } catch (error) {
@@ -169,7 +189,7 @@ const AMBIENTS = ["bright", "dim", "dark"];
 function writeBundleRows(
   userId: string,
   bundle: WorkshopBundle,
-  { npcPortraits, mapBackdrops, mapOverlays, loreImages, factionPortraits, regionBackdrop, mapAddonViews }: BundleArtPaths,
+  { npcPortraits, mapBackdrops, mapOverlays, loreImages, factionPortraits, regionBackdrop, mapAddonViews, saveWorldImage }: BundleArtPaths,
   sharedWorkshopId: string,
 ): BundleImportResult {
   const workshop = createCampaign(userId, {
@@ -519,7 +539,7 @@ function writeBundleRows(
   const shelf = writeBundleShelf(userId, workshop.id, bundle);
   copied += shelf.copied;
   if (bundle.world) {
-    copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore }, shelf.entryFor);
+    copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore }, shelf.entryFor, { maps: ids.maps, encounters: ids.encounters }, saveWorldImage);
   }
 
   return { workshopId: workshop.id, copied, linkedShared, droppedLinks, shelf: { reused: shelf.reused, renamed: shelf.renamed } };

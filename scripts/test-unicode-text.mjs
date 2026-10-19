@@ -39,7 +39,7 @@ const { attachmentDisposition } = await import("../src/lib/serve-file.ts");
 const { exportFilename } = await import("../src/lib/export/story-document.ts");
 const { bundledGearRows } = await import("../src/lib/workshop/bundled-gear-rows.ts");
 const { plannedSwings } = await import("../src/lib/dm/enemy-profile.ts");
-const { stopWordsFor } = await import("../src/lib/language/language.ts");
+const { nameTerms, stopWordsFor } = await import("../src/lib/language/language.ts");
 const { bundledRaceRows } = await import("../src/lib/workshop/catalog-mechanics.ts");
 
 let passed = 0;
@@ -113,8 +113,8 @@ test("a name keys the same however a model marks it, as spells, tools and gear a
   assert.ok(toolProficiencyBonus(rogue, "Thieves’ tools (lockpicks)", 2));
   // A creature or a form by the name a model writes.
   const spider = { name: "Giant Spider" };
-  assert.equal(findNamed([spider, { name: "Spider" }], "giant_spider", (entry) => entry.name), spider);
-  assert.equal(findNamed([spider], "a Giant-Spider", (entry) => entry.name), spider);
+  assert.equal(findNamed([spider, { name: "Spider" }], ["giant_spider"], (entry) => [entry.name]), spider);
+  assert.equal(findNamed([spider], nameTerms("a Giant-Spider", "english"), (entry) => [entry.name]), spider);
   // A possessive or an elision shares its word with the bare one.
   assert.equal(factSimilarity("Marla's sword gleams", "the sword of Marla gleams"), 1);
 });
@@ -210,13 +210,13 @@ test("names found in text people write, across case and form", () => {
 test("the words a person types are searched by Unicode words, not ASCII runs", () => {
   assert.equal(pickLairOption(["Il soffitto crolla sui nemici.", "La nebbia avvolge la città."], "nebbia città"), "La nebbia avvolge la città.");
   const lines = [{ speaker: "dm", content: "Олег ушёл в лес." }, { speaker: "dm", content: "Nothing here." }];
-  const found = transcriptPassages(lines, "куда ушёл Олег");
+  const found = transcriptPassages(lines, "куда ушёл Олег", stopWordsFor("russian"));
   assert.equal(found.length, 1);
   assert.match(found[0], /Олег ушёл в лес\./);
-  const terms = cueTerms({ location: "Città Vecchia", npcs: ["Niccolò"] });
+  const terms = cueTerms({ stopWords: stopWordsFor("italian"), location: "Città Vecchia", npcs: ["Niccolò"] });
   assert.ok(scoreEvent({ name: "Agguato", trigger: decomposed("Niccolò arriva in CITTÀ VECCHIA"), detail: "" }, terms).score > 0);
   assert.equal(scoreRuleByKeywords("Überraschung", { heading: "Überraschung", text: "" }), 1);
-  assert.deepEqual(deskTerms("Qu'est-ce que l'épée"), ["est", "que", "épée"]);
+  assert.deepEqual(deskTerms("Qu'est-ce que l'épée", stopWordsFor("english")), ["est", "que", "épée"]);
   assert.ok(fuzzyScore("öl", "Ölmühle öffnen") !== null);
   assert.deepEqual(
     filterGroups([{ label: "Elfi", options: [{ name: "Elfo dei Boschi", meta: "Città" }] }], "città elfo").map((group) => group.options.length),

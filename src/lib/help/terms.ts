@@ -68,15 +68,6 @@ export const DAMAGE_TYPE_BLURBS: Record<string, string> = {
   thunder: "Concussive sound: thunderwave, shatter, a giant's shout.",
 };
 
-export const SIZE_BLURBS: Record<string, string> = {
-  tiny: "About the size of a cat or smaller; occupies a 2.5 foot square.",
-  small: "Halfling-sized; fills a 5 foot square but wields heavy weapons badly.",
-  medium: "Human-sized; the default 5 foot square.",
-  large: "Horse or ogre sized; fills a 10 foot square.",
-  huge: "Giant or young dragon sized; fills a 15 foot square.",
-  gargantuan: "Ancient dragons, krakens; 20 feet or more on a side.",
-};
-
 // One entry per name, in the order a list shows them; names the table
 // does not know get no blurb rather than a wrong one.
 export function glossaryFor(

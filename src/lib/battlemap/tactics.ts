@@ -26,7 +26,7 @@ export function bestFiringPosition(
     if (chebyshev(x, y, target.x, target.y) > rangeTiles) {
       continue;
     }
-    if (!hasLineOfSight(terrain, width, height, x, y, target.x, target.y)) {
+    if (!hasLineOfSight(terrain, width, x, y, target.x, target.y)) {
       continue;
     }
     if (

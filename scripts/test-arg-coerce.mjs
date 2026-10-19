@@ -1,18 +1,14 @@
-// Forgiving normalizers for model-supplied tool-call enums: synonyms map to
-// canonical values, genuinely wrong input passes through for zod to reject.
+// Model-supplied tool arguments: an ability's rules name reaches its id; a
+// fixed choice's other values are refused with the listed values, never
+// guessed from English words ("adv", "save", "trivial", "vantaggio" alike).
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const {
-  normalizeAbility,
-  normalizeAdvantage,
-  normalizeEventKind,
-  normalizeListAction,
-  normalizeRestKind,
-  normalizeRollKind,
-} = await import("../src/lib/dm/arg-coerce.ts");
+const { normalizeAbility } = await import("../src/lib/dm/arg-coerce.ts");
+const { rollArgsSchema } = await import("../src/lib/dm/roll-args.ts");
+const { invalidArguments } = await import("../src/lib/dm/tool-errors.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -30,63 +26,33 @@ test("normalizeAbility: full names, punctuation, phrases", () => {
   assert.equal(normalizeAbility(3), 3);
 });
 
-test("normalizeAdvantage: abbreviations and phrases", () => {
-  assert.equal(normalizeAdvantage("adv"), "advantage");
-  assert.equal(normalizeAdvantage("with advantage"), "advantage");
-  assert.equal(normalizeAdvantage("disadv"), "disadvantage");
-  assert.equal(normalizeAdvantage("Disadvantage"), "disadvantage");
-  assert.equal(normalizeAdvantage("normal"), "none");
-  assert.equal(normalizeAdvantage("straight roll"), "none");
-  assert.equal(normalizeAdvantage("none"), "none");
-  assert.equal(normalizeAdvantage("banana"), "banana");
+test("a fixed choice takes its listed values only, in any table language", () => {
+  const refusal = (args) => {
+    const parsed = rollArgsSchema.safeParse(args);
+    assert.ok(!parsed.success, JSON.stringify(args));
+    return invalidArguments("Invalid request_roll arguments.", parsed.error).error;
+  };
+  for (const kind of ["save", "saving throw", "tiro salvezza", "jet de sauvegarde", "Rettungswurf"]) {
+    assert.match(refusal({ kind }), /^Invalid request_roll arguments\. \(kind: Invalid option: expected one of "skill_check"\|"saving_throw"/);
+  }
+  for (const advantage of ["adv", "with advantage", "vantaggio", "avantage", "ventaja", "Vorteil"]) {
+    assert.match(refusal({ kind: "attack", advantage }), /advantage: Invalid option: expected one of "none"\|"advantage"\|"disadvantage"/);
+  }
+  for (const difficulty of ["trivial", "medium", "impossible", "difficile", "schwer"]) {
+    assert.match(refusal({ kind: "skill_check", skill: "athletics", difficulty }), /difficulty: Invalid option: expected one of "very_easy"/);
+  }
+  assert.equal(rollArgsSchema.parse({ kind: "saving_throw", ability: "dex", advantage: "advantage" }).advantage, "advantage");
+  // A tier spaced or hyphenated is still that tier.
+  assert.equal(rollArgsSchema.parse({ kind: "skill_check", skill: "athletics", difficulty: "very hard" }).dc, 25);
+  assert.equal(rollArgsSchema.parse({ kind: "skill_check", skill: "athletics", difficulty: "nearly-impossible" }).dc, 30);
 });
 
-test("normalizeRollKind: spaces, hyphens, shorthand", () => {
-  assert.equal(normalizeRollKind("saving throw"), "saving_throw");
-  assert.equal(normalizeRollKind("save"), "saving_throw");
-  assert.equal(normalizeRollKind("skill-check"), "skill_check");
-  assert.equal(normalizeRollKind("skill"), "skill_check");
-  assert.equal(normalizeRollKind("check"), "skill_check");
-  assert.equal(normalizeRollKind("init"), "initiative");
-  assert.equal(normalizeRollKind("ability"), "ability_check");
-  assert.equal(normalizeRollKind("attack roll"), "attack");
-  assert.equal(normalizeRollKind("dmg"), "damage");
-  assert.equal(normalizeRollKind("custom"), "custom");
-});
-
-test("normalizeRestKind: phrasings", () => {
-  assert.equal(normalizeRestKind("short_rest"), "short");
-  assert.equal(normalizeRestKind("a long rest"), "long");
-  assert.equal(normalizeRestKind("night's sleep"), "long");
-  assert.equal(normalizeRestKind("breather"), "short");
-  assert.equal(normalizeRestKind("nap"), "nap");
-});
-
-test("normalizeListAction: learn/forget/buying/selling", () => {
-  assert.equal(normalizeListAction("learn"), "add");
-  assert.equal(normalizeListAction("teach"), "add");
-  assert.equal(normalizeListAction("forget"), "remove");
-  assert.equal(normalizeListAction("unlearn"), "remove");
-  assert.equal(normalizeListAction("purchase"), "buy");
-  assert.equal(normalizeListAction("buying"), "buy");
-  assert.equal(normalizeListAction("selling"), "sell");
-  assert.equal(normalizeListAction("sale"), "sell");
-  assert.equal(normalizeListAction("add"), "add");
-  assert.equal(normalizeListAction("steal"), "steal");
-});
-
-const KINDS = ["achievement", "item", "relationship", "death", "level_up", "story"];
-
-test("normalizeEventKind: exact, fuzzy, semantic, fallback", () => {
-  assert.equal(normalizeEventKind("story", KINDS), "story");
-  assert.equal(normalizeEventKind("Level Up", KINDS), "level_up");
-  assert.equal(normalizeEventKind("achievements", KINDS), "achievement");
-  assert.equal(normalizeEventKind("bond formed", KINDS), "relationship");
-  assert.equal(normalizeEventKind("loot", KINDS), "item");
-  assert.equal(normalizeEventKind("quest complete", KINDS), "achievement");
-  assert.equal(normalizeEventKind("died", KINDS), "death");
-  assert.equal(normalizeEventKind("plot twist", KINDS), "story");
-  assert.equal(normalizeEventKind(undefined, KINDS), "story");
+test("every refused field is named, each with zod's reason", () => {
+  const parsed = rollArgsSchema.safeParse({ kind: "attack roll", advantage: "adv" });
+  assert.ok(!parsed.success);
+  const { error, retry } = invalidArguments("Invalid request_roll arguments.", parsed.error);
+  assert.equal(retry, true);
+  assert.match(error, /kind: Invalid option[^;]*; advantage: Invalid option/);
 });
 
 console.log(`test-arg-coerce: ${passed} tests passed`);

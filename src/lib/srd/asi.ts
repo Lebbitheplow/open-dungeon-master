@@ -13,10 +13,6 @@ const CLASS_ASI_LEVELS: Record<string, readonly number[]> = {
 
 export const ABILITY_SCORE_CAP = 20;
 
-// The most improvements any one class earns (the fighter's seven); what the
-// sheet schema sizes its list of recorded choices by.
-export const MAX_ASI_CHOICES = 7;
-
 // The levels of this class that grant an improvement. With no class named
 // the answer is the common five, which is what callers from before the
 // per-class tables still ask for.

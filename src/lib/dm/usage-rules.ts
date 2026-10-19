@@ -8,16 +8,19 @@
 //
 // Database-free like the other *-logic modules, so the route stays a thin
 // shell and scripts can exercise every branch.
-import { armorOfRow } from "@/lib/srd/armor";
+import { armorOfRow, isWorn, wearingIsExplicit } from "@/lib/srd/armor";
 import { gearDefOfRow } from "@/lib/srd/magic-gear";
 import { attunementProblem } from "@/lib/srd/magic-items";
-import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { countedWorn, firstWearConflict, wearConflictText, wearSlotOf, type WearConflict } from "@/lib/srd/wear-slots";
+import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
+
+export type GearAsk = { equipped?: boolean; attuned?: boolean; layered?: boolean };
 
 export type UsageAsk = {
   slots?: Record<string, number>;
   hitDiceSpent?: number;
   resources?: Record<string, number>;
-  gear?: Record<string, { equipped?: boolean; attuned?: boolean }>;
+  gear?: Record<string, GearAsk>;
 };
 
 type CounterSheet = Pick<CharacterSheet, "spellcasting" | "hitDice" | "resources">;
@@ -60,7 +63,6 @@ export function gearChanges(
   sheet: Pick<CharacterSheet, "equipment">,
   gear: NonNullable<UsageAsk["gear"]>,
 ): GearChanges {
-  const anyExplicit = sheet.equipment.some((item) => item.equipped);
   const changes: GearChanges = { armor: [], shields: [], attunement: [] };
   for (const item of sheet.equipment) {
     const entry = gear[item.name];
@@ -70,7 +72,7 @@ export function gearChanges(
     if (entry.attuned !== undefined && entry.attuned !== Boolean(item.attuned)) {
       changes.attunement.push(item.name);
     }
-    const worn = item.equipped ?? !anyExplicit;
+    const worn = isWorn(item, sheet.equipment);
     if (entry.equipped === undefined || entry.equipped === worn) {
       continue;
     }
@@ -121,4 +123,101 @@ export function attunementRefusal(
     pack = pack.map((entry, at) => (at === index ? { ...entry, attuned: true } : entry));
   }
   return null;
+}
+
+// What a sheet wore the moment its first wear toggle is pressed. Until then
+// the armor engine reads every carried row as worn, and the route used to
+// mark every row it was not asked about as taken off, which stripped the
+// armor off a character who put on a ring. Now what was worn stays on: the
+// suit and the shield the armor class counted, and in every other place on
+// the body the rows whose magic counted there (src/lib/srd/wear-slots.ts).
+// Weapons and rows with no place on the body come off as before: a weapon
+// marked worn is a weapon in hand.
+export function implicitlyWorn(
+  equipment: readonly EquipmentItem[],
+  armor: { armorName: string | null; shieldName: string | null },
+): Set<EquipmentItem> {
+  const counted = countedWorn(equipment);
+  const kept = new Set<EquipmentItem>();
+  let suit = false;
+  let shield = false;
+  for (const item of equipment) {
+    const slot = wearSlotOf(item);
+    if (slot === "armor") {
+      if (!suit && item.name === armor.armorName) {
+        kept.add(item);
+        suit = true;
+      }
+    } else if (slot === "shield") {
+      if (!shield && item.name === armor.shieldName) {
+        kept.add(item);
+        shield = true;
+      }
+    } else if (slot && counted.has(item)) {
+      kept.add(item);
+    }
+  }
+  return kept;
+}
+
+export type GearPatch =
+  | { equipment: EquipmentItem[] }
+  | { status: 403; error: string }
+  | { status: 409; error: string; conflict: WearConflict };
+
+// The pack after a gear request, or why it is refused. Wearing a row into a
+// place already full (a second cloak, a second pair of boots) is refused with
+// the rows to take off, which the sheet turns into a swap; the DM and the
+// party lead may let a row stand beside another (`layered`), the SRD's
+// "circlet under a helmet". Attuning on a sheet that says what it wears puts
+// the item on, and attuning waits on a short rest (src/lib/dm/rest-tools.ts).
+export function gearPatch(
+  sheet: Pick<CharacterSheet, "name" | "equipment">,
+  gear: NonNullable<UsageAsk["gear"]>,
+  options: { corrects: boolean; armor: { armorName: string | null; shieldName: string | null } },
+): GearPatch {
+  if (!options.corrects && Object.values(gear).some((entry) => entry.layered)) {
+    return {
+      status: 403,
+      error: `Wearing two of a kind at once is the DM's exception to make: the DM or the party lead can let ${sheet.name} wear both.`,
+    };
+  }
+  const wasExplicit = wearingIsExplicit(sheet.equipment);
+  const explicit = wasExplicit || Object.values(gear).some((entry) => entry.equipped !== undefined);
+  const stillWorn = !wasExplicit && explicit ? implicitlyWorn(sheet.equipment, options.armor) : null;
+  const equipment = sheet.equipment.map((item) => {
+    const entry = gear[item.name];
+    // An attuned item works only while worn.
+    const wornByAttuning = explicit && entry?.attuned === true && entry.equipped === undefined;
+    const equipped = wornByAttuning
+      ? true
+      : (entry?.equipped ?? item.equipped ?? (explicit ? (stillWorn?.has(item) ?? false) : undefined));
+    // Attuning takes a short rest spent with the item (SRD 5.1, Attunement):
+    // asked for here, the row waits as `attuning` until the next rest.
+    // Letting go ends it at once, pending or not.
+    const asks = entry?.attuned === true && !item.attuned;
+    const lets = entry?.attuned === false;
+    const attuned = asks ? item.attuned : (entry?.attuned ?? item.attuned);
+    const attuning = asks ? true : lets ? undefined : item.attuning;
+    // A row taken off is no longer the DM's exception.
+    const layered = equipped === false ? undefined : entry?.layered === true ? true : item.layered;
+    const { attuning: _pending, layered: _layered, ...rest } = item;
+    void _pending;
+    void _layered;
+    return {
+      ...rest,
+      ...(equipped === undefined ? {} : { equipped }),
+      ...(attuned === undefined ? {} : { attuned }),
+      ...(attuning ? { attuning } : {}),
+      ...(layered ? { layered } : {}),
+    };
+  });
+  // Judged against what was worn, the implicit pack read as the step above
+  // keeps it, so a row the request puts on is the one blamed.
+  const before = stillWorn ? sheet.equipment.map((item) => ({ ...item, equipped: stillWorn.has(item) })) : sheet.equipment;
+  const conflict = firstWearConflict(before, equipment);
+  if (conflict) {
+    return { status: 409, error: wearConflictText(conflict, sheet.name), conflict };
+  }
+  return { equipment };
 }

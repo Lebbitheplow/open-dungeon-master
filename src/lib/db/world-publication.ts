@@ -11,11 +11,7 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { parseRef, readDoc, type Canon } from "@/lib/worldforge/model";
 
-export function heldBackLoreIds(campaignId: string): Set<string> {
-  return new Set(heldBackLore(campaignId).keys());
-}
-
-// The same rows with the state that holds each back, for the paths that hand
+// Those rows with the state that holds each back, for the paths that hand
 // lore to a model: they follow the canon policy (src/lib/worldforge/canon.ts,
 // WF-14), so a draft is marked, an alternate marked as another telling, and a
 // retired entry left out.

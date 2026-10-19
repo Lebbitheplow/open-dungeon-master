@@ -13,6 +13,7 @@ import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { resolveRollExpression, type RollArgs } from "@/lib/dm/rolls";
+import type { SaveAgainstValue } from "@/lib/dm/roll-about";
 import type { Affliction, DowntimeProgress, Lifestyle } from "@/lib/dm/between-state";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -95,7 +96,7 @@ export type SaveOutcome = { success: boolean; total: number; failBy: number; aut
 export function characterSave(
   campaign: Campaign,
   sheet: CharacterSheet,
-  input: { ability: Ability; dc: number; detail: string; against?: string; advantage?: boolean },
+  input: { ability: Ability; dc: number; detail: string; against?: SaveAgainstValue; advantage?: boolean },
 ): SaveOutcome {
   const args = {
     kind: "saving_throw",

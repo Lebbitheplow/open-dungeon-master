@@ -2,6 +2,9 @@
 // (src/lib/srd/authored-effects.ts). Kept apart from the data and the readers
 // so both data files and every reader import the same words without a cycle.
 
+import type { CheckAbout, SaveAgainstValue } from "@/lib/dm/roll-about";
+import type { ItemTag } from "@/lib/schemas/item-tags";
+
 export type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
 // A number or dice that grow with the level of the class that granted the
@@ -39,9 +42,9 @@ export type AuthoredEffect = Base &
     | { kind: "resist"; types: string[] | "all"; except?: string[]; nonmagical?: boolean; spells?: boolean }
     | { kind: "immune_damage"; types: string[] }
     | { kind: "immune_condition"; conditions: string[] }
-    // Advantage on a save: against what the save resists (a pattern over
-    // the roll's `against`), or every save of an ability.
-    | { kind: "save_adv"; against?: string; ability?: Ability }
+    // Advantage on a save: against what the save resists (one of the
+    // roll's `against` values, or magic), or every save of an ability.
+    | { kind: "save_adv"; against?: SaveAgainstValue[]; magical?: true; ability?: Ability }
     | { kind: "save_prof"; abilities: Ability[] }
     | { kind: "save_bonus"; amount: number }
     // A save of one ability uses another ability's modifier when higher.
@@ -53,9 +56,9 @@ export type AuthoredEffect = Base &
     | { kind: "move"; fly?: number | "walk"; swim?: number | "walk" }
     | { kind: "init_adv" }
     | { kind: "init_ability"; ability: Ability }
-    // Advantage on checks: named skills, or checks of an ability whose
-    // reason matches a pattern ("push|pull|lift").
-    | { kind: "check_adv"; skills?: string[]; abilities?: Ability[]; reason?: string }
+    // Advantage on checks: named skills, or checks of an ability about one
+    // circumstance (the roll's `about`).
+    | { kind: "check_adv"; skills?: string[]; abilities?: Ability[]; about?: CheckAbout }
     // A critical hit against the holder is a normal hit.
     | { kind: "crit_immune" }
     // The holder's damage of these types ignores resistance.
@@ -165,7 +168,9 @@ export type AuthoredEffect = Base &
         damageTypes?: string[];
         healing?: boolean;
         classes?: string[];
-        item?: string;
+        // Cast through a carried item that is one of these
+        // (src/lib/srd/item-tags.ts).
+        items?: ItemTag[];
       }
     // Casting the spell gives temporary hit points, and damage never breaks
     // the concentration on it (Grasping Tentacles).

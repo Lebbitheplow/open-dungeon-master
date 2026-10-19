@@ -35,6 +35,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { outOfReach } from "@/lib/dm/spell-planes";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { saveAgainst } from "@/lib/dm/roll-about";
 
 // cast_at_player: a save forced on ONE character, by an enemy's spell or
 // ability or by a hazard (SRD 5.1, Saving Throws). The mirror of
@@ -91,20 +92,6 @@ export function trackEnemyConcentration(
   }
   setEnemyConcentration(enemy.id, resolved.name, concentrationRoundsFor(resolved.name));
   return `${enemy.displayName} is now concentrating on ${resolved.name}; damage to it forces a CON save and a break ends the effect.`;
-}
-
-// What the save is against, for the traits keyed to it: Brave against fear,
-// a dwarf against poison, Gnome Cunning against magic.
-// `spellBy` is the creature type of a spell's caster, for Holy Nimbus
-// (advantage against spells cast by fiends or undead).
-export function saveAgainst(parts: { condition?: string; damageType?: string; magical?: boolean; spellBy?: string }): string | undefined {
-  const words = [
-    parts.condition,
-    parts.damageType,
-    parts.magical ? "spell magic" : "",
-    parts.spellBy ? `spell cast by ${parts.spellBy}` : "",
-  ].filter(Boolean);
-  return words.length ? words.join(" ") : undefined;
 }
 
 // What an enemy's effect lays on a character who failed the save: tied to

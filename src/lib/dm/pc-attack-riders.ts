@@ -24,8 +24,8 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { optionsOfKind } from "@/lib/srd/options";
 import { textKey } from "@/lib/language/text-logic";
-
-export { superiorityDie, maneuverDieFor } from "@/lib/dm/maneuver-rules";
+import type { WeaponMaterial } from "@/lib/dm/damage-logic";
+import { ammoKindForWeapon } from "@/lib/srd/ammunition";
 
 // The condition a maneuver's rider save decides, when it has one.
 export const MANEUVER_RIDERS: Array<{ match: RegExp; condition: string; save: "str" | "wis" }> = [
@@ -115,6 +115,8 @@ export type OnHitSpends = {
 // `hitSpent`: the attacker's conditions the hit uses up (the smites);
 // `spell`: an attack spell whose rider lands on the hit.
 export type ParkedAttack = PendingAttack & {
+  // The wielded item's material (damage-logic.ts weaponMaterial).
+  material?: WeaponMaterial;
   onHit?: OnHitSpends;
   nonlethal?: boolean;
   hitSpent?: string[];
@@ -239,9 +241,10 @@ function markAttacker(campaign: Campaign, characterId: string, condition: string
 
 // An Arcane Archer's arrow missed: Curving Shot may reroll it at another
 // creature with the bonus action, this turn (authored-economy.ts).
-export function openCurvingShot(campaignId: string, sheet: CharacterSheet, enemyId: string, weapon: string): string | null {
+export function openCurvingShot(campaignId: string, sheet: CharacterSheet, enemyId: string, base: string | undefined): string | null {
   const holds = sheet.features.some((feature) => textKey(feature.name) === "curving shot");
-  if (!holds || !/bow\b/i.test(weapon)) {
+  // A bow is a weapon that fires arrows (src/lib/srd/ammunition.ts).
+  if (!holds || ammoKindForWeapon(base) !== "arrows") {
     return null;
   }
   const encounter = getActiveEncounter(campaignId);

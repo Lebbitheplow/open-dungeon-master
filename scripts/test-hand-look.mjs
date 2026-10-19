@@ -238,12 +238,24 @@ test("a player sees a darkness area whole when they cast it, stand in it, or see
 
 // ---- 15: only worn gear offers the wear toggle ----
 
-test("a wand or a potion offers no wear toggle; armor, a ring and a magic weapon do", () => {
-  assert.equal(isWornGear({ name: "Wand of Magic Missiles" }), false);
+test("a potion offers no wear toggle; armor, a ring, a magic weapon and a wand held to use it do", () => {
+  // Held, and a held wand is a focus in hand (src/lib/dm/cast-rules.ts).
+  assert.equal(isWornGear({ name: "Wand of Magic Missiles" }), true);
   assert.equal(isWornGear({ name: "Potion of Healing" }), false);
   assert.equal(isWornGear({ name: "Chain Mail" }), true);
   assert.equal(isWornGear({ name: "Ring of Protection" }), true);
   assert.equal(isWornGear({ name: "Berserker Axe" }), true);
+});
+
+test("only gear with somewhere to be worn or held offers it, in any language: a weapon, a staff held as a focus; never a rope, arrows or a key", () => {
+  assert.equal(isWornGear({ name: "Longsword" }), true);
+  assert.equal(isWornGear({ name: "Spada lunga", srdName: "Longsword" }), true);
+  assert.equal(isWornGear({ name: "Cotta di maglia", srdName: "Chain Mail" }), true);
+  assert.equal(isWornGear({ name: "Bastone", tags: ["staff"] }), true);
+  for (const name of ["Rope, hempen (50 feet)", "Arrows (20)", "Frecce", "Rusty key", "Chiave arrugginita", "Bag", "Candle"]) {
+    assert.equal(isWornGear({ name }), false, name);
+  }
+  assert.equal(isWornGear({ name: "a sealed vial", tags: ["staff"], identified: false }), false, "an unidentified item tells nothing");
 });
 
 // ---- 16: spell card previews are the engine's dice ----

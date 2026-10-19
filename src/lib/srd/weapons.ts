@@ -6,6 +6,7 @@
 // any genre. No runtime dependencies so test scripts can import directly.
 
 import { textKey } from "@/lib/language/text-logic";
+import { pluralForms, spellingIndex } from "@/lib/srd/name-forms";
 
 export type SrdWeapon = {
   name: string;
@@ -129,24 +130,26 @@ const ALIAS_TERMS: Record<string, string[]> = {
   occult: ["Silvered Stake", "Censer Mace", "Dagger", "Hurled Vial"],
 };
 
-const byName = new Map(SRD_WEAPONS.map((weapon) => [normalize(weapon.name), weapon]));
+// Each weapon's English spellings, onto its row: its name and the plurals
+// ("Longswords", "quarterstaffs", "Hand crossbows"). A name the table writes
+// is compared as written.
+const FORMS = SRD_WEAPONS.map((weapon) => ({ weapon, spellings: pluralForms(textKey(weapon.name)) }));
 
-// "Longswords" / "quarterstaffs" / "Hand crossbows" -> canonical lookup key.
-function normalize(term: string) {
-  return textKey(term).replace(/s$/, "");
-}
+const byName = spellingIndex(SRD_WEAPONS, (weapon) => [textKey(weapon.name)]);
+
+const aliasTerms = new Map(Object.entries(ALIAS_TERMS).flatMap(([term, names]) => pluralForms(term).map((form) => [form, names] as const)));
 
 // Adventuring gear whose name sits inside a weapon's: the hammer of a
 // dungeoneer's pack is a tool, not a light hammer, and a priest's censer is
-// not a censer mace. Keys as normalize() writes them.
-const GEAR_NOT_WEAPONS = new Set(["hammer", "censer"]);
+// not a censer mace.
+const GEAR_NOT_WEAPONS = new Set(["hammer", "censer"].flatMap(pluralForms));
 
-// Finds the weapon a free-text reference points at: exact normalized name,
+// Finds the weapon a free-text reference points at: its name or plural,
 // then containment either way so "Longsword of the Dawn" and "long sword"
 // both land on the Longsword. Longer names win so "hand crossbow" never
 // matches a plain crossbow entry first.
 export function matchWeapon(term: string): SrdWeapon | null {
-  const wanted = normalize(term);
+  const wanted = textKey(term);
   if (!wanted) {
     return null;
   }
@@ -157,10 +160,9 @@ export function matchWeapon(term: string): SrdWeapon | null {
   if (GEAR_NOT_WEAPONS.has(wanted)) {
     return null;
   }
-  const candidates = SRD_WEAPONS.filter((weapon) => {
-    const name = normalize(weapon.name);
-    return wanted.includes(name) || name.includes(wanted);
-  });
+  const candidates = FORMS.filter(({ spellings }) => spellings.some((form) => wanted.includes(form) || form.includes(wanted))).map(
+    ({ weapon }) => weapon,
+  );
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
 }
@@ -199,14 +201,14 @@ function parseProfs(weaponProfs: string[]) {
       exotic = true;
       continue;
     }
-    const alias = ALIAS_TERMS[normalize(term)];
+    const alias = aliasTerms.get(textKey(term));
     if (alias) {
       for (const name of alias) {
-        addSpecific(byName.get(normalize(name)));
+        addSpecific(byName.get(textKey(name)));
       }
       continue;
     }
-    addSpecific(byName.get(normalize(term)));
+    addSpecific(byName.get(textKey(term)));
   }
   return { simple, martial, firearm, exotic, specific };
 }
@@ -249,7 +251,7 @@ function bestOf(weapons: SrdWeapon[]) {
 }
 
 function get(name: string) {
-  const weapon = byName.get(normalize(name));
+  const weapon = byName.get(textKey(name));
   if (!weapon) {
     throw new Error(`Unknown SRD weapon: ${name}`);
   }

@@ -114,7 +114,7 @@ export function handleCastBuff(
   }
   // Find Familiar binds a pet once the casting is paid (familiar-cast.ts).
   if (isFindFamiliar(engine)) {
-    return castFindFamiliar(campaign, turn, { caster: sheet, castAs, variant: args.variant, level: args.level, reason: args.reason, sheets, sheetsById }, (cast) =>
+    return castFindFamiliar(campaign, { caster: sheet, castAs, variant: args.variant, level: args.level, reason: args.reason, sheets, sheetsById }, (cast) =>
       applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result,
     );
   }

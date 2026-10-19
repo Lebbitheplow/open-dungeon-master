@@ -12,6 +12,7 @@ import { enqueueDmJob } from "@/lib/dm/queue";
 import { describeContentEntry, glossaryTerms } from "@/lib/help";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { rulingSources } from "@/lib/reference/rulings";
+import { stopWordsFor } from "@/lib/language/language";
 import {
   DESK_SYSTEM,
   checkCitations,
@@ -45,6 +46,11 @@ const DESK_QUEUE = "reference-desk";
 // evidence, and a hundred candidates only makes it slower to be wrong.
 const PER_KIND = 4;
 const MAX_TERMS = 6;
+
+// The desk belongs to no table, so it has no table language: a question is
+// read against the rulebook, which is English, with Snowball's English stop
+// list (src/lib/language/language.ts).
+const DESK_STOP_WORDS = stopWordsFor("english");
 
 function entrySource(
   kind: DeskSource["kind"],
@@ -94,7 +100,7 @@ function gatherSources(userId: string, question: string): DeskSource[] {
     add(entrySource("condition", entry, "SRD condition"));
   }
 
-  for (const term of deskTerms(question).slice(0, MAX_TERMS)) {
+  for (const term of deskTerms(question, DESK_STOP_WORDS).slice(0, MAX_TERMS)) {
     const options = { q: term, userId, limit: PER_KIND };
     for (const entry of searchSpells(options)) {
       add(entrySource("spell", entry, "SRD spell"));
@@ -129,7 +135,7 @@ export async function runRulesDesk(
     return { error: "Ask a question first." };
   }
 
-  const evidence = selectEvidence(question, gatherSources(request.userId, question));
+  const evidence = selectEvidence(question, gatherSources(request.userId, question), DESK_STOP_WORDS);
   let result: DeskAnswer | { error: string } = {
     error: "The model is unavailable; try again shortly.",
   };
@@ -176,7 +182,7 @@ export function previewSources(userId: string, question: string) {
   if (!clamped) {
     return [];
   }
-  return selectEvidence(clamped, gatherSources(userId, clamped)).map((source) => ({
+  return selectEvidence(clamped, gatherSources(userId, clamped), DESK_STOP_WORDS).map((source) => ({
     kind: source.kind,
     ref: source.ref,
     name: source.name,

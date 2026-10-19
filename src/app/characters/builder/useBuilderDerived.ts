@@ -561,11 +561,13 @@ export function useBuilderDerived({
             classId: klass.id,
             subclass,
             level: effectiveLevel,
-            features: optionPicks.map((optionName) => ({ name: optionName })),
+            // The class's own features too: a workshop subclass that
+            // borrowed Combat Superiority opens maneuvers by it.
+            features: [...grantedFeatures, ...optionPicks.map((optionName) => ({ name: optionName }))],
             feats: featNames,
           })
         : [],
-    [klass, subclass, effectiveLevel, optionPicks, featNames],
+    [klass, subclass, effectiveLevel, grantedFeatures, optionPicks, featNames],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog
@@ -586,9 +588,13 @@ export function useBuilderDerived({
       ? builderSpellAdvice(casting, klass, subclass, effectiveLevel, shownAbilities)
       : null;
   // Opening suggestions, so a player who has never seen a 5e spell list is
-  // not left staring at an empty search box.
+  // not left staring at an empty search box. A third caster gets picks from
+  // its own two schools, not the wizard's, which its school rule would refuse.
   const starters = useMemo(
-    () => (casts && klass ? starterSpellsFor(casting.third ? casting.list : klass.id) : null),
+    () =>
+      casts && klass
+        ? starterSpellsFor(casting.profile ?? klass.id)
+        : null,
     [klass, casts, casting],
   );
   // Domain, circle, oath and patron spells: always prepared, free, and worth

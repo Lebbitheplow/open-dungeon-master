@@ -11,6 +11,8 @@ import { checkSpellMech } from "@/lib/homebrew/spell-mech-schema";
 import { engineFeatNamed } from "@/lib/srd/feat-effects";
 import { engineSpellNamed, truthy } from "@/lib/srd/spell-facts";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
+import { defaultThirdCasterProfile, isThirdCasterProfile } from "@/lib/srd/third-caster";
+import { WORN_PLACE_WORDS, isWornPlace } from "@/lib/srd/worn-places";
 
 // What a homebrew entry means to the engine.
 //
@@ -157,6 +159,15 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
       if (Object.keys(spells).length) {
         data.spells = spells;
       }
+      // Whether it casts as an Eldritch Knight or Arcane Trickster does:
+      // either profile on, "none" off, nothing to follow its features
+      // (src/lib/srd/subclass-tables.ts castingProfileOf). The first
+      // spelling, "third-caster", is stored as the class's own.
+      if (isThirdCasterProfile(source.castingProfile) || source.castingProfile === "none") {
+        data.castingProfile = source.castingProfile;
+      } else if (source.castingProfile === "third-caster") {
+        data.castingProfile = defaultThirdCasterProfile(String(data.classSlug));
+      }
       break;
     }
     default:
@@ -266,6 +277,9 @@ export function describeHomebrew(kind: HomebrewKind, data: Raw): string {
     const spells = Array.isArray(data.spells) ? (data.spells as Array<{ spell: string }>) : [];
     if (spells.length) {
       parts.push(`casts ${spells.map((entry) => entry.spell).join(", ")}`);
+    }
+    if (!weapon && !armor && isWornPlace(data.wornOn)) {
+      parts.push(`worn on the ${WORN_PLACE_WORDS[data.wornOn]}`);
     }
     if (data.requiresAttunement) {
       parts.push("attunement");

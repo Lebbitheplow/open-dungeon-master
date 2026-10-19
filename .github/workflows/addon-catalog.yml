@@ -42,12 +42,61 @@ jobs:
 
       - name: Derive each changed entry from its repository
         run: |
+          mkdir -p "$RUNNER_TEMP/addons"
+          touch "$RUNNER_TEMP/addons/.derived"
           node scripts/addon-catalog.mjs verify \
             --changed "origin/${{ github.base_ref }}" \
             --out-dir "$RUNNER_TEMP/addons" \
             --summary "$GITHUB_STEP_SUMMARY"
 
-      - name: Check and start each changed addon
+      - name: Check each changed addon's package
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for dir in "$RUNNER_TEMP"/addons/*/; do
+            node scripts/check-addon.mjs "$dir"
+          done
+
+      - name: Keep the derived folders for the start checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: derived-addons
+          path: ${{ runner.temp }}/addons
+          include-hidden-files: true
+          retention-days: 3
+
+  # Each addon is started on a runner of every platform, and on the ones its
+  # manifest does not name it is reported as not started rather than failed:
+  # an addon for Windows alone is started on Windows.
+  start:
+    needs: audit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Take the derived folders
+        uses: actions/download-artifact@v4
+        with:
+          name: derived-addons
+          path: ${{ runner.temp }}/addons
+
+      - name: Start each changed addon where it runs
+        shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob

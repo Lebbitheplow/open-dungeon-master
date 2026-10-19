@@ -14,6 +14,7 @@ import type { WorldEntity } from "@/lib/db/world-forge";
 import type { WorldApi, WorldState } from "./useWorld";
 import { EntityEditor } from "./EntityEditor";
 import { BoundRecords } from "./BoundRecords";
+import { PlaceBattleMaps, type OpenPrep } from "./PlaceBattleMaps";
 import { PlayFields } from "./PlayFields";
 import type { OpenSystem } from "./WorldForgePanel";
 import { LinkEditor } from "./LinkEditor";
@@ -53,6 +54,7 @@ export function EntityPage({
   onFocus,
   onBack,
   onOpenSystem,
+  onOpenPrep,
   canWrite,
   canPaint,
   campaignId,
@@ -65,6 +67,9 @@ export function EntityPage({
   onBack: () => void;
   // Absent at the play table (WikiView).
   onOpenSystem?: OpenSystem;
+  // A place's battle map or encounter, opened in the workshop's tool or in a
+  // sheet at the table (PlaceBattleMaps).
+  onOpenPrep?: OpenPrep;
   canWrite: boolean;
   canPaint: boolean;
 }) {
@@ -274,6 +279,7 @@ export function EntityPage({
         loreOnly={entity.shelf === "lore" && type.loreCategory === "magic" && !entity.bound.some((record) => record.kind === "item" && record.found)}
         onOpenSystem={onOpenSystem}
       />
+      {entity.shelf === "location" && onOpenPrep ? <PlaceBattleMaps campaignId={campaignId} entity={entity} api={api} onOpenPrep={onOpenPrep} /> : null}
 
       {fieldLines(type, entity.entry, doc.calendars, true).length ? (
         <dl className="grid gap-x-4 gap-y-1 text-sm @lg:grid-cols-2">

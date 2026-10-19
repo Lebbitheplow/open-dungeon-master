@@ -256,14 +256,25 @@ withFeatures(tracker, "Favored Enemy: undead", "Natural Explorer: forest");
 
 await test("Favored Enemy: advantage on Survival checks to track the favored enemy and INT checks to recall lore about it; Natural Explorer: double proficiency on INT and WIS checks tied to the favored terrain.", async () => {
   await kit.endFight();
-  const tracking = await check(tracker, { kind: "skill_check", skill: "survival", reason: "tracking the undead" }, [10, 4]);
+  const tracking = await check(tracker, { kind: "skill_check", skill: "survival", about: "tracking", creature: "undead", reason: "tracking the undead" }, [10, 4]);
   assert.equal(d20Faces(tracking).length, 2, "advantage to track the favored enemy");
-  const deer = await check(tracker, { kind: "skill_check", skill: "survival", reason: "tracking a deer" }, [10, 4]);
+  const deer = await check(tracker, { kind: "skill_check", skill: "survival", about: "tracking", creature: "beast", reason: "tracking a deer" }, [10, 4]);
   assert.equal(d20Faces(deer).length, 1);
   world.patch(tracker.id, { proficiencies: { ...TRAINED, skills: ["survival"] } });
-  const forest = await check(tracker, { kind: "skill_check", skill: "survival", reason: "foraging in the forest" });
+  const forest = await check(tracker, { kind: "skill_check", skill: "survival", terrain: "forest", reason: "foraging in the forest" });
   const town = await check(tracker, { kind: "skill_check", skill: "survival", reason: "foraging in the town" });
   assert.equal(forest.total - town.total, proficiencyBonus(3), "double proficiency in the favored terrain");
+});
+
+await test("What a check is about is its about, creature and terrain, never the words of its reason, in every table language.", async () => {
+  await kit.endFight();
+  const reasons = ["tracking the undead", "seguire le tracce dei non morti", "pister les morts-vivants", "rastrear a los no muertos", "die Untoten verfolgen"];
+  for (const reason of reasons) {
+    const named = await check(tracker, { kind: "skill_check", skill: "survival", about: "tracking", creature: "undead", reason }, [10, 4]);
+    assert.equal(d20Faces(named).length, 2, reason);
+    const unnamed = await check(tracker, { kind: "skill_check", skill: "survival", reason }, [10, 4]);
+    assert.equal(d20Faces(unnamed).length, 1, reason);
+  }
 });
 
 const dwarf = hero({ class: "fighter", level: 5, race: "hill dwarf" });
@@ -272,13 +283,13 @@ const deepGnome = hero({ class: "rogue", level: 5, race: "deep gnome" });
 
 await test("Stonecunning (History on stonework) and Artificer's Lore (History on magic items and devices) add twice the proficiency bonus; Stone Camouflage gives advantage on Stealth in rocky terrain.", async () => {
   await kit.endFight();
-  const stone = await check(dwarf, { kind: "skill_check", skill: "history", reason: "who built this stonework" });
+  const stone = await check(dwarf, { kind: "skill_check", skill: "history", about: "stonework", reason: "who built this stonework" });
   const court = await check(dwarf, { kind: "skill_check", skill: "history", reason: "the old court" });
   assert.equal(stone.total - court.total, 2 * proficiencyBonus(5), "Stonecunning");
-  const wand = await check(gnome, { kind: "skill_check", skill: "history", reason: "the maker of this magic wand" });
+  const wand = await check(gnome, { kind: "skill_check", skill: "history", about: "devices", reason: "the maker of this magic wand" });
   const king = await check(gnome, { kind: "skill_check", skill: "history", reason: "the old king" });
   assert.equal(wand.total - king.total, 2 * proficiencyBonus(5), "Artificer's Lore");
-  const rocks = await check(deepGnome, { kind: "skill_check", skill: "stealth", reason: "among the rocks of the cave" }, [10, 4]);
+  const rocks = await check(deepGnome, { kind: "skill_check", skill: "stealth", about: "rocky_terrain", reason: "among the rocks of the cave" }, [10, 4]);
   assert.equal(d20Faces(rocks).length, 2, "Stone Camouflage");
 });
 
@@ -337,7 +348,7 @@ const { buildDmMessages, requestRollTool } = await import("../src/lib/dm/prompt.
 const { listMembers } = await import("../src/lib/db/campaigns.ts");
 const { dmTurnToolCatalogue } = await import("../src/lib/dm/turn.ts");
 
-await test("The prompt and the tool schemas teach the recount's features: the Multiattack picks, the new reactions and spends, and the check reason the traits read.", () => {
+await test("The prompt and the tool schemas teach the recount's features: the Multiattack picks, the new reactions and spends, and the check fields the traits read.", () => {
   const encounter = { round: 1, orderReady: true, order: [{ name: "Hero", current: true }], awaitingInitiative: [], turnBudget: null, enemies: [], map: null };
   const text = buildDmMessages(
     { campaign: world.campaign(), members: listMembers(world.campaignId), sheets: world.sheets(), encounter, recentRolls: [], storySummary: "" },
@@ -346,8 +357,9 @@ await test("The prompt and the tool schemas teach the recount's features: the Mu
   assert.match(text, /whirlwind or volley is a Hunter's Multiattack, one pc_attack per creature/);
   assert.match(text, /Retaliation \(a Berserker just damaged by a creature within 5 feet\) and Stand Against the Tide/);
   assert.match(text, /Peerless Skill, Quivering Palm \(targetEnemyId; once to set the vibrations after an unarmed hit, again to end them\), Draconic Presence/);
-  assert.match(text, /the server applies Favored Enemy, Natural Explorer, Stonecunning, Artificer's Lore, Stone Camouflage and Supreme Sneak from it/);
-  assert.match(requestRollTool.function.parameters.properties.reason.description, /naming what a check is about/);
+  assert.match(text, /A check names what it is about in about, creature and terrain/);
+  assert.match(text, /the server applies Favored Enemy, Natural Explorer, Stonecunning, Artificer's Lore, Stone Camouflage and Supreme Sneak from them/);
+  assert.ok(requestRollTool.function.parameters.properties.about.enum.includes("tracking"));
   const tools = dmTurnToolCatalogue(world.campaign(), true, false);
   const tool = (name) => tools.find((entry) => entry.function.name === name)?.function;
   const attack = tool("pc_attack").parameters.properties;

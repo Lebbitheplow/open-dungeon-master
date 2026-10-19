@@ -6,7 +6,7 @@
 
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
 import { findClass, spellSlotsFor } from "@/lib/srd";
-import { isThirdCaster } from "@/lib/srd/third-caster";
+import { isThirdCaster, type ThirdCasterSetting } from "@/lib/srd/third-caster";
 import type { Ability, AbilityScores, ClassEntry } from "@/lib/schemas/sheet";
 
 // UI sanity cap: RAW is unbounded, but nobody at this table needs four.
@@ -21,7 +21,14 @@ export type ClassListSource = {
   subclass?: string;
   level?: number;
   classes?: ClassEntry[];
+  spellcasting?: { progression?: ThirdCasterSetting; casters?: Array<{ classId: string; progression?: ThirdCasterSetting }> } | null;
 };
+
+export function progressionForClass(sheet: ClassListSource, classId: string): ThirdCasterSetting | undefined {
+  const perClass = sheet.spellcasting?.casters?.find((caster) => caster.classId.toLowerCase() === classId.toLowerCase());
+  if (perClass) return perClass.progression;
+  return sheet.class.toLowerCase() === classId.toLowerCase() ? sheet.spellcasting?.progression : undefined;
+}
 
 // The sheet's class list. Empty/absent `classes` = legacy single-class:
 // a one-entry list is derived from the scalar fields so consumers never
@@ -54,7 +61,7 @@ export function isMulticlass(sheet: ClassListSource): boolean {
 // level, half casters add half rounded DOWN (artificer rounds up, per its
 // own rule), and warlocks add nothing here because Pact Magic is tracked
 // apart from the shared pool.
-export function casterLevelFor(classList: ClassEntry[]): number {
+export function casterLevelFor(classList: ClassEntry[], progressionFor: (entry: ClassEntry) => string | undefined = () => undefined): number {
   let total = 0;
   for (const entry of classList) {
     const klass = findClass(entry.id);
@@ -67,7 +74,7 @@ export function casterLevelFor(classList: ClassEntry[]): number {
       total += Math.floor(entry.level / 2);
     } else if (klass.casterType === "artificer") {
       total += Math.ceil(entry.level / 2);
-    } else if (isThirdCaster(entry.id, entry.subclass)) {
+    } else if (klass.casterType === "none" && isThirdCaster(entry.id, entry.subclass, progressionFor(entry))) {
       // Eldritch Knight and Arcane Trickster: a third, rounded down.
       total += Math.floor(entry.level / 3);
     }
@@ -77,13 +84,13 @@ export function casterLevelFor(classList: ClassEntry[]): number {
 
 // Whether this class entry has slots in the shared pool: a Spellcasting
 // class, or one of the two third-caster subclasses once it casts (level 3).
-function castsFromSlots(entry: ClassEntry): boolean {
+function castsFromSlots(entry: ClassEntry, progression?: string): boolean {
   const type = findClass(entry.id)?.casterType;
   if (type === undefined || type === "pact") {
     return false;
   }
   if (type === "none") {
-    return isThirdCaster(entry.id, entry.subclass) && entry.level >= 3;
+    return isThirdCaster(entry.id, entry.subclass, progression) && entry.level >= 3;
   }
   return true;
 }
@@ -105,14 +112,15 @@ export function multiclassSlots(casterLevel: number): Record<string, number> {
 // = that class's own table at its class level (RAW: the shared table only
 // kicks in with a second spellcasting class); none = no shared slots
 // (warlock Pact Magic lives in spellcasting.pact, not here).
-export function slotTableFor(sheet: ClassListSource): Record<string, number> {
+export function slotTableFor(sheet: ClassListSource, profileFor?: (entry: ClassEntry) => string | undefined): Record<string, number> {
   const classList = classListFor(sheet);
-  const casters = classList.filter(castsFromSlots);
+  const profile = profileFor ?? ((entry: ClassEntry) => progressionForClass(sheet, entry.id));
+  const casters = classList.filter((entry) => castsFromSlots(entry, profile(entry)));
   if (casters.length >= 2) {
-    return multiclassSlots(casterLevelFor(classList));
+    return multiclassSlots(casterLevelFor(classList, profile));
   }
   if (casters.length === 1) {
-    return spellSlotsFor(casters[0].id, casters[0].level, casters[0].subclass);
+    return spellSlotsFor(casters[0].id, casters[0].level, casters[0].subclass, profile(casters[0]));
   }
   return {};
 }

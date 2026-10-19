@@ -94,9 +94,10 @@ export function spellSlotsFor(
   classId: string,
   level: number,
   subclass?: string | null,
+  progression?: string | null,
 ): Record<string, number> {
   const klass = findClass(classId);
-  if (klass?.casterType === "none" && isThirdCaster(classId, subclass)) {
+  if (klass?.casterType === "none" && isThirdCaster(classId, subclass, progression)) {
     return thirdCasterSlots(level);
   }
   if (!klass || klass.casterType === "none") {

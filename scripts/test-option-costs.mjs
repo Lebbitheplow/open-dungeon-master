@@ -82,11 +82,11 @@ const dice = (hero) => world.sheet(hero.id).resources.sub_superiority_dice?.used
 
 await test("A Font of Magic conversion in a fight is the sorcerer's bonus action.", async () => {
   await stage(sorcerer);
-  const out = await spend(sorcerer, "Sorcery Points", { variant: "create a 1st-level slot" });
+  const out = await spend(sorcerer, "Sorcery Points", { variant: "create slot", amount: 1 });
   assert.equal(out.ok, true, out.error);
   assert.equal(budget().bonusUsed, true);
   assert.equal(budget().actionUsed, false);
-  const again = await spend(sorcerer, "Sorcery Points", { variant: "convert my 1st-level slot into points" });
+  const again = await spend(sorcerer, "Sorcery Points", { variant: "convert slot", amount: 1 });
   assert.equal(again.ok, false, "a second bonus action went through");
 });
 

@@ -53,7 +53,7 @@ function conversationOf(calls) {
 
 // The ruling on what a reader claimed, against these calls' results.
 function rule(claims, calls, live = null) {
-  return ruleClaims(claims, guardOutcomes(conversationOf(calls), live));
+  return ruleClaims(claims, guardOutcomes(conversationOf(calls), live, "english"));
 }
 
 // Claims as the reader returns them once checked (src/lib/dm/claims-logic.ts).
@@ -194,15 +194,15 @@ test("resumed-turn results with no matching call id are still read", () => {
   const conversation = [
     { role: "tool", content: JSON.stringify({ ok: true, name: "Ogre", hp: "47/59" }) },
   ];
-  const outcomes = resolveOutcomes(collectExchanges(conversation));
+  const outcomes = resolveOutcomes(collectExchanges(conversation), null, "english");
   assert.equal(outcomes.creatures.get("ogre").hp, 47);
 });
 
 test("names normalize to what a narrator would actually write", () => {
-  assert.equal(normalizeCreatureName("Goblin 1"), "goblin");
-  assert.equal(normalizeCreatureName("the Ogre"), "ogre");
-  assert.equal(normalizeCreatureName("Goblin A"), "goblin");
-  assert.equal(normalizeCreatureName("Bugbear Chief"), "bugbear chief");
+  assert.equal(normalizeCreatureName("Goblin 1", "english"), "goblin");
+  assert.equal(normalizeCreatureName("the Ogre", "english"), "ogre");
+  assert.equal(normalizeCreatureName("Goblin A", "english"), "goblin");
+  assert.equal(normalizeCreatureName("Bugbear Chief", "english"), "bugbear chief");
 });
 
 test("resolved outcomes carry attacks, hit points, numbers, and spells", () => {
@@ -213,6 +213,8 @@ test("resolved outcomes carry attacks, hit points, numbers, and spells", () => {
         { name: "use_spell_slot", args: { characterId: "c2", level: 3, spell: "Fireball" }, result: { ok: true, slot: "level 3: 1/2 left" } },
       ]),
     ),
+    null,
+    "english",
   );
   assert.equal(outcomes.attacks.get("goblin").hit, true);
   assert.equal(outcomes.creatures.get("goblin").hp, 3);
@@ -229,6 +231,8 @@ test("an errored tool result contributes no ground truth", () => {
         { name: "use_spell_slot", args: { spell: "Fireball", level: 1 }, result: { error: "no slot" } },
       ]),
     ),
+    null,
+    "english",
   );
   assert.equal(outcomes.spells.size, 0);
   assert.equal(outcomes.toolResultCount, 0);
@@ -249,7 +253,7 @@ test("what each character spent is named by any tool's own arguments; refused an
   );
   // A physical-dice attack parked: no result came back.
   exchanges.push({ name: "pc_attack", arguments: JSON.stringify({ characterId: "c3", weapon: "Greataxe" }), result: null });
-  assert.deepEqual(resolveOutcomes(exchanges).spends, [
+  assert.deepEqual(resolveOutcomes(exchanges, null, "english").spends, [
     { characterId: "c1", name: "Hexblade's Curse" },
     { characterId: "c2", name: "Potion of Healing" },
     { characterId: "c2", name: "hide" },
@@ -267,6 +271,8 @@ test("a reaction spell use_reaction cast is accounted; the enemy spell a Counter
         { name: "use_reaction", args: { characterId: "c2", feature: "Hellish Rebuke" }, result: { error: "no reaction left" } },
       ]),
     ),
+    null,
+    "english",
   );
   assert.deepEqual([...outcomes.spells].sort(), ["counterspell", "shield"]);
   assert.deepEqual(ruleClaims([{ kind: "cast", caster: "Mira", spell: "shield", quote: "Mira casts Shield" }], outcomes), []);
@@ -496,13 +502,13 @@ test("the fake-encounter correction says what to call and what not to restate", 
 
 test("a figure no tool rolled and the model was never shown is a blow landed in prose", () => {
   const quiet = conversationOf([]);
-  assert.equal(unrolledFigure([{ ...amount(8), quote: "Hit! 8 damage." }], quiet), "Hit! 8 damage.");
-  assert.equal(unrolledFigure([], quiet), null);
+  assert.equal(unrolledFigure([{ ...amount(8), quote: "Hit! 8 damage." }], quiet, "english"), "Hit! 8 damage.");
+  assert.equal(unrolledFigure([], quiet, "english"), null);
   // A figure the model was shown (a table note, an earlier line) is no blow.
   const noted = [...quiet, { role: "user", content: "[Table] The spikes deal 8 damage to Kara." }];
-  assert.equal(unrolledFigure([amount(8)], noted), null);
+  assert.equal(unrolledFigure([amount(8)], noted, "english"), null);
   // A turn that rolled damage leaves a misquoted figure to the rewrite.
-  assert.equal(unrolledFigure([amount(8)], conversationOf([attackHit])), null);
+  assert.equal(unrolledFigure([amount(8)], conversationOf([attackHit]), "english"), null);
 });
 
 console.log(`engine boundary: ${passed} tests passed`);

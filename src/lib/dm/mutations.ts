@@ -35,6 +35,7 @@ import {
   formatPurse,
   fromCopper,
   parseCoins,
+  unreadCoins,
   purseCopper,
 } from "@/lib/srd/currency";
 import { healDeathHook } from "@/lib/dm/death";
@@ -45,7 +46,7 @@ import { combatFeatureSpend } from "@/lib/dm/combat-features";
 import { srdFeatureSpend } from "@/lib/dm/srd-feature-spends";
 import { handleStabilize } from "@/lib/dm/stabilize";
 import { canonicalCondition, handleSetCondition } from "@/lib/dm/set-condition";
-import { exhaustionPatch, namesExhaustion, PRONE, regainBlockedBy, SUFFOCATING } from "@/lib/dm/vitals-logic";
+import { exhaustionPatch, namesExhaustion, PRONE, regainBlockedBy, STABILIZE_METHODS, SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { castMarkCharge, prepareResourceCharge } from "@/lib/dm/resource-turn";
 import { planCounterReaction } from "@/lib/dm/reaction-counters";
 import { channelOptions, channelOptionsHeld, optionCost } from "@/lib/dm/option-costs";
@@ -53,7 +54,7 @@ import { BONUS_ATTACK_COUNTERS } from "@/lib/dm/feature-bonus-attacks";
 import { matchResource } from "@/lib/srd/class-resources";
 import { prepareUseItem } from "@/lib/dm/object-actions";
 import { chargedItemUse } from "@/lib/dm/item-use";
-import { applyConsumable, consumableRefusal } from "@/lib/dm/consumables";
+import { applyConsumable, consumableRefusal, scrollSpellFor } from "@/lib/dm/consumables";
 import { castSpell } from "@/lib/dm/cast-guard";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import { ZONE_ARGS, zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
@@ -73,14 +74,14 @@ import {
   effectiveMaxHp,
   pruneMeta,
 } from "@/lib/dm/condition-logic";
-import { normalizeAbility, normalizeListAction } from "@/lib/dm/arg-coerce";
+import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { breakConcentration } from "@/lib/dm/concentration";
 import {
   computePurchase,
   computeUseItem,
   computeUseResource,
+  fontOfMagicDirection,
   payForUse,
-  parseFontOfMagic,
   rollHealing,
 } from "@/lib/dm/resource-tools";
 import { resourceTools } from "@/lib/dm/resource-tool-defs";
@@ -92,14 +93,16 @@ import { spellClassFor } from "@/lib/classes";
 import { planHealFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { checklistClassSpell, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
-import { casterViewsOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
+import { casterViewsOf, spellCapOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
-import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { notCarried } from "@/lib/dm/item-logic";
+import { invalidArguments, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { worthProblem } from "@/lib/dm/trade-value";
+import { findCarriedItem, notCarried, sentItemTags, srdNameFor } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -132,6 +135,38 @@ type ToolDef = {
 const characterProperty = {
   characterId: { type: "string", description: "Exact characterId from GAME STATE." },
   reason: { type: "string", description: "Short in-fiction cause." },
+};
+
+// What an item is, for an item whose name is not an SRD or pack item's
+// English name (src/lib/srd/item-tags.ts).
+const ITEM_SRD_NAME_PROPERTY = {
+  type: "string",
+  description:
+    "The SRD or pack item this is, by its English name ('Elixir of Health', 'Potion of Healing', 'Longsword'), when name is the table's own ('Elisir di salute'): the server reads what it does from that item. Omit when name already is that English name, for loot no list has, and while it is unidentified.",
+};
+
+const ITEM_TAGS_PROPERTY = {
+  type: "array",
+  items: { type: "string", enum: [...ITEM_TAGS] },
+  description:
+    "What the item is, when it is no SRD or pack item (loot you invent): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure; [] when none fits. Omit for an SRD or pack item (its name or srdName says it), and while it is unidentified.",
+};
+
+// The spell a spell scroll holds (src/lib/dm/consumables.ts).
+const ITEM_SPELL_PROPERTY = {
+  type: "string",
+  description:
+    "A spell scroll only (tags with scroll): the spell it holds, by the spell's name as the spell lists give it ('Fireball'), whatever the scroll is called. Reading it casts that spell. Omit while it is unidentified.",
+};
+
+// What one is worth, for a thing the content pack does not price
+// (src/lib/dm/trade-value.ts).
+const ITEM_WORTH_PROPERTY = {
+  type: "number",
+  minimum: 0.01,
+  maximum: 100000,
+  description:
+    "What one is worth in gold pieces, for a thing no SRD or pack row prices: a gem (10 to 5,000 gp), an art object (25 to 7,500 gp), a trade good, loot you invent. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write the name without its worth. Omit for an SRD item, and while it is unidentified.",
 };
 
 function tool(name: string, description: string, extra: Record<string, unknown>, required: string[]): ToolDef {
@@ -190,7 +225,7 @@ export const mutationTools: ToolDef[] = [
       healerId: { type: "string", description: "Whoever tends them: exact characterId from GAME STATE." },
       method: {
         type: "string",
-        enum: ["check", "kit", "spell"],
+        enum: [...STABILIZE_METHODS],
         description: "Default 'check'.",
       },
     },
@@ -241,7 +276,7 @@ export const mutationTools: ToolDef[] = [
   },
   tool("modify_gold", "Add or remove money (negative delta = spend/lose). Floors at 0.", {
     delta: { type: "integer", minimum: -100000, maximum: 100000 },
-    coins: { type: "string", description: "For anything under a gold piece, or a price quoted in another coin: the amount in denominations ('340 silver', '2 pp 5 sp'). Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
+    coins: { type: "string", description: "For anything under a gold piece, or a price quoted in another coin: the amount in the coins' codes pp, gp, ep, sp and cp ('340 sp', '2 pp 5 sp'), whatever the table's language. Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
     additional: { type: "boolean", description: "Only when a player just accepted this same amount and this is truly another, separate sum from a different source." },
   }, ["delta"]),
   tool("grant_item", "Give a character an item (loot, purchase, gift), only one the fiction actually put in their hands.", {
@@ -250,6 +285,10 @@ export const mutationTools: ToolDef[] = [
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
     additional: { type: "boolean", description: "Only when a player just accepted this same item and this is truly another one from a different source." },
+    srdName: ITEM_SRD_NAME_PROPERTY,
+    tags: ITEM_TAGS_PROPERTY,
+    worth: ITEM_WORTH_PROPERTY,
+    spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
   tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, use use_item; for sales, use purchase.", {
     name: { type: "string" },
@@ -258,6 +297,10 @@ export const mutationTools: ToolDef[] = [
   tool("reveal_item", "Name an item the party has been carrying without knowing what it is. Only for items granted unidentified; an ordinary item needs no revealing.", {
     name: { type: "string", description: "The description they have been calling it by, as on the sheet now ('an ornate silver ring')." },
     revealedName: { type: "string", description: "What it truly is ('Ring of Protection')." },
+    srdName: ITEM_SRD_NAME_PROPERTY,
+    tags: ITEM_TAGS_PROPERTY,
+    worth: ITEM_WORTH_PROPERTY,
+    spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
   ...resourceTools,
   tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Always give a duration when the fiction has one, because only timed conditions ever expire on their own: rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.", {
@@ -292,6 +335,10 @@ export const mutationTools: ToolDef[] = [
       description: "Save-ends: ability re-saved at the end of each round.",
     },
     saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
+    magical: {
+      type: "boolean",
+      description: "The condition comes from magic (a creature's magical sleep, an enchanted trap): traits that resist magic apply, such as Fey Ancestry against being put to sleep.",
+    },
     sourceEnemyId: {
       type: "string",
       description:
@@ -409,7 +456,7 @@ const argsSchema = z.object({
   magical: z.coerce.boolean().optional(),
   // stabilize: who tends to the dying character, and how.
   healerId: z.string().optional(),
-  method: z.string().max(40).optional(),
+  method: z.enum(STABILIZE_METHODS).optional(),
   // set_condition: who or what the condition is tied to.
   sourceEnemyId: z.string().max(80).optional(),
   sourceCharacterId: z.string().max(80).optional(),
@@ -428,7 +475,7 @@ const argsSchema = z.object({
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
   delta: z.coerce.number().int().optional(),
-  // modify_gold / purchase in denominations: "340 silver", "2 pp 5 sp".
+  // modify_gold / purchase in the coins' codes: "340 sp", "2 pp 5 sp".
   // Parsed to copper by src/lib/srd/currency.ts, and it wins over `delta`
   // when both are sent, because it is the more specific of the two.
   coins: z.string().max(60).optional(),
@@ -437,6 +484,13 @@ const argsSchema = z.object({
   unidentified: z.coerce.boolean().optional(),
   // reveal_item: what it actually turns out to be.
   revealedName: z.string().optional(),
+  // grant_item, reveal_item: the SRD or pack item it is, by its English
+  // name, when its name is the table's (src/lib/srd/item-tags.ts).
+  srdName: z.string().max(80).optional(),
+  // grant_item, reveal_item: what the item is (src/lib/srd/item-tags.ts).
+  tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
+  // grant_item, reveal_item: what one is worth, in gold pieces.
+  worth: z.coerce.number().positive().max(100000).optional(),
   qty: z.coerce.number().int().optional(),
   // use_item / purchase / use_resource.
   item: z.string().optional(),
@@ -472,11 +526,8 @@ const argsSchema = z.object({
   spell: z.string().optional(),
   // heal: who cast the healing spell, when it lands on someone else.
   casterId: z.string().optional(),
-  // learn_spell: add|remove; purchase: buy|sell (synonyms normalized).
-  action: z.preprocess(
-    normalizeListAction,
-    z.enum(["add", "remove", "buy", "sell"]).optional(),
-  ),
+  // learn_spell: add|remove; purchase: buy|sell.
+  action: z.enum(["add", "remove", "buy", "sell"]).optional(),
   reason: z.string().optional(),
 });
 
@@ -551,12 +602,17 @@ export function applyDmMutation(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): MutationOutcome {
-  let args: z.infer<typeof argsSchema>;
+  let raw: unknown;
   try {
-    args = argsSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { result: { error: "Invalid arguments.", retry: true } };
   }
+  const parsed = argsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { result: invalidArguments("Invalid arguments.", parsed.error) };
+  }
+  const args = parsed.data;
   const reason = (args.reason ?? "").slice(0, 200);
 
   // Resolve by id or name, then RE-FETCH from the database: earlier
@@ -898,11 +954,15 @@ export function applyDmMutation(
       const delta = args.delta ?? 0;
       // A coin string is signed by the delta's sign when one is given, so
       // "delta: -1, coins: 5 sp" spends five silver rather than earning it.
-      const parsedCoins = args.coins ? parseCoins(args.coins) : null;
+      const parsedCoins = args.coins?.trim() ? parseCoins(args.coins) : null;
+      // Coins sent and unread are asked for again, never taken as the delta.
+      if (args.coins?.trim() && parsedCoins === null) {
+        return { result: { error: `modify_gold: ${unreadCoins(args.coins)}. Nothing changed.`, retry: true } };
+      }
       const coinDelta =
         parsedCoins === null ? null : (delta < 0 ? -parsedCoins : parsedCoins);
       if (!delta && coinDelta === null) {
-        return { result: { error: "modify_gold needs a nonzero delta, or coins like \"340 silver\".", retry: true } };
+        return { result: { error: "modify_gold needs a nonzero delta, or coins like \"340 sp\".", retry: true } };
       }
       const moved = coinDelta ?? delta * COPPER_PER_GOLD;
       const tooMuch = goldProblem(moved / COPPER_PER_GOLD, "modify_gold");
@@ -918,7 +978,7 @@ export function applyDmMutation(
         };
       }
       // Denominations win over the plain gold delta when both are sent: a
-      // model that says "coins: 340 silver, delta: 34" meant the coins, and
+      // model that says "coins: 340 sp, delta: 34" meant the coins, and
       // the two are the same number only by accident.
       const change = addCopper({ gold: sheet.gold, copper: sheet.copper }, moved);
       patchSheet(sheet.id, { gold: change.purse.gold, copper: change.purse.copper });
@@ -951,7 +1011,20 @@ export function applyDmMutation(
       if (badQty) {
         return { result: badQty };
       }
-      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known });
+      const listed = srdNameFor(args.srdName, "grant_item");
+      if ("error" in listed) {
+        return { result: listed };
+      }
+      const priced = worthProblem(listed.srdName ?? name, args.worth, "grant_item");
+      if (priced) {
+        return { result: priced };
+      }
+      const tags = sentItemTags({ name, ...listed }, args.tags, args.spell);
+      const scroll = scrollSpellFor(campaign, { name, ...listed, tags }, args.spell, "grant_item");
+      if ("error" in scroll) {
+        return { result: scroll };
+      }
+      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known, ...listed, tags, worth: args.worth, ...scroll });
       const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name) ?? capacityProblem(sheet, math.equipment, name);
       if (noRoom) {
         return { result: noRoom };
@@ -976,7 +1049,21 @@ export function applyDmMutation(
       if (!name) {
         return { result: { error: "reveal_item needs the description the sheet carries now.", retry: true } };
       }
-      const math = revealItemMath(sheet.equipment, name, args.revealedName);
+      const revealed = args.revealedName?.trim() || name;
+      const listed = srdNameFor(args.srdName, "reveal_item");
+      if ("error" in listed) {
+        return { result: listed };
+      }
+      const priced = worthProblem(listed.srdName ?? revealed, args.worth, "reveal_item");
+      if (priced) {
+        return { result: priced };
+      }
+      const tags = sentItemTags({ name: revealed, ...listed }, args.tags, args.spell);
+      const scroll = scrollSpellFor(campaign, { name: revealed, ...listed, tags }, args.spell, "reveal_item");
+      if ("error" in scroll) {
+        return { result: scroll };
+      }
+      const math = revealItemMath(sheet.equipment, name, args.revealedName, { ...listed, tags, worth: args.worth, ...scroll });
       if (!math) {
         return {
           result: {
@@ -1062,7 +1149,7 @@ export function applyDmMutation(
         return { result: objectCharge };
       }
       // A scroll off the reader's class list stays unread (consumables.ts).
-      const unreadable = consumableRefusal(sheet, itemName);
+      const unreadable = consumableRefusal(sheet, findCarriedItem(sheet.equipment, itemName) ?? { name: itemName });
       if (unreadable) {
         return { result: unreadable };
       }
@@ -1073,7 +1160,8 @@ export function applyDmMutation(
       patchSheet(sheet.id, outcome.patch);
       Object.assign(outcome.result, objectCharge.commit());
       // What the potion or scroll does, applied by the engine.
-      Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, String(outcome.result.used ?? itemName)) ?? {});
+      const used = String(outcome.result.used ?? itemName);
+      Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, sheet.equipment.find((item) => item.name === used) ?? { name: used }) ?? {});
       audit(campaign, turnId, sheet, "use_item", { item: itemName }, reason, outcome.patch);
       publishSheet(campaign, sheet.id);
       // Potion healing rides the standard heal mutation so the death engine
@@ -1242,7 +1330,7 @@ export function applyDmMutation(
           },
         };
       }
-      const optionCharge = option?.cost ?? (counter?.id === "sorcery_points" && parseFontOfMagic(args.variant) ? "bonus" : undefined);
+      const optionCharge = option?.cost ?? (counter?.id === "sorcery_points" && fontOfMagicDirection(args.variant) ? "bonus" : undefined);
       // Embodiment of the Law and the genre surges move the next spell to
       // the bonus action (src/lib/dm/resource-turn.ts castMarkCharge).
       const castMark = castMarkCharge(campaign, sheet, counter?.id);
@@ -1665,17 +1753,21 @@ export function applyDmMutation(
           };
         }
         let targetCaster: (typeof casters)[number] | null = null;
+        // The ceilings as the sheet's views read them: an Eldritch Knight's
+        // spells known (src/lib/srd/spell-prep.ts spellCapOf), where the
+        // fighter's own count is none at all.
+        const learnerViews = casterViewsOf(sheet, subclassExtrasForTable(campaign.id, sheet.userId));
         if (casters.length) {
           const classLevels = Object.fromEntries(
             (sheet.classes ?? []).map((entry) => [entry.id.toLowerCase(), entry.level]),
           );
-          for (const caster of casters) {
+          // The views come one per caster entry, in its order.
+          for (const [index, caster] of casters.entries()) {
             const level = classLevels[caster.classId.toLowerCase()] ?? sheet.level;
-            const cap = suggestedSpellCount(
-              spellClassFor(caster.classId),
-              level,
-              abilityMod(sheet.abilities[caster.ability]),
-            );
+            const view = learnerViews[index];
+            const cap = view
+              ? spellCapOf(view, sheet.abilities)
+              : suggestedSpellCount(spellClassFor(caster.classId), level, abilityMod(sheet.abilities[caster.ability]));
             const classEntry = (sheet.classes ?? []).find(
               (entry) => entry.id.toLowerCase() === caster.classId.toLowerCase(),
             );
@@ -1697,11 +1789,9 @@ export function applyDmMutation(
             };
           }
         } else {
-          const ceiling = suggestedSpellCount(
-            sheet.class,
-            sheet.level,
-            abilityMod(sheet.abilities[sheet.spellcasting.ability]),
-          );
+          const ceiling = learnerViews[0]
+            ? spellCapOf(learnerViews[0], sheet.abilities)
+            : suggestedSpellCount(sheet.class, sheet.level, abilityMod(sheet.abilities[sheet.spellcasting.ability]));
           const current = spellsAgainstLimit(
             intoKnown ? known : prepared,
             subclassSpellsFor(sheet.class, sheet.subclass, sheet.level, subclassExtrasForTable(campaign.id, sheet.userId)),

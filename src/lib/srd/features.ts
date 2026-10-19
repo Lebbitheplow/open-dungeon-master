@@ -2,14 +2,16 @@ import { ancestryOf, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import classFeaturesJson from "@/lib/srd/class-features.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
 import racesJson from "@/lib/srd/races.json";
-import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
+import classesJson from "@/lib/srd/classes.json";
+import { CUSTOM_CLASS_FEATURES, findCustomClass } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, isOptionName, optionSlotsFor } from "@/lib/srd/options";
 import { featOptionSlots } from "@/lib/srd/feat-combat";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
-import type { SubclassExtras } from "@/lib/srd/subclass-tables";
+import { browserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
+import { thirdCasterProfileOf, type ThirdCasterProfile } from "@/lib/srd/third-caster";
 import { textKey } from "@/lib/language/text-logic";
 
 export type SubclassTable = {
@@ -217,27 +219,48 @@ function leveledNames(levels: Record<string, string[]>, level: number): SheetFea
 // whole. A string that is merely part of a name matches nothing, so a
 // paladin whose subclass reads "Oath" is granted no oath's features.
 // (The rule is src/lib/srd/subclass-name.ts, shared with options.ts.)
-// The archetypes the builder and the level-up dialog fetched for this
-// person (src/app/characters/builder/useBuilderOptions.ts useArchetypes),
-// read when a caller passes no extras of its own. Set only in the browser,
-// from an effect, where everything fetched is this one person's to see; the
+// Without extras of its own a caller reads the browser's registered ones
+// (src/lib/srd/subclass-tables.ts registerBrowserSubclassExtras); the
 // server always passes the table's own (src/lib/db/subclass-extras.ts).
-const browserExtras: SubclassExtras = {};
-
-export function registerBrowserSubclassExtras(classId: string, tables: SubclassExtras[string]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  browserExtras[classId] = tables;
-}
+export { registerBrowserSubclassExtras } from "@/lib/srd/subclass-tables";
 
 function extraSubclassNamed(classId: string, stored: string, extras?: SubclassExtras) {
-  const list = (extras ?? browserExtras)[classId] ?? [];
+  const list = (extras ?? browserSubclassExtras())[classId] ?? [];
   return (
     list.find((entry) => subclassNamedExactly(stored, entry.name)) ??
     list.find((entry) => subclassNamedBare(stored, entry.name)) ??
     null
   );
+}
+
+// Whether a subclass of this class may bring its own Spellcasting: the
+// classes that cast nothing themselves (barbarian, fighter, monk, rogue, and
+// a genre class without a casting ability). A cleric's or a warlock's
+// subclass adds to the class's own casting, never a second one.
+export function subclassMayCast(classId: string): boolean {
+  const custom = findCustomClass(classId);
+  if (custom) {
+    return custom.casterType === "none";
+  }
+  const srd = (classesJson as unknown as { classes: Array<{ id: string; casterType: string }> }).classes.find(
+    (entry) => entry.id === classId,
+  );
+  return srd ? srd.casterType === "none" : false;
+}
+
+// The third-caster rules a workshop or pack subclass casts by, for a class
+// that may bring its own (subclassMayCast); undefined for any other.
+export function subclassCastingProfileFor(
+  classId: string,
+  stored: string,
+  extras?: SubclassExtras,
+): ThirdCasterProfile | undefined {
+  if (!subclassMayCast(classId)) {
+    return undefined;
+  }
+  // Read through the profile names, so a table built from older data
+  // ("third-caster", the first spelling) answers with the class's own.
+  return thirdCasterProfileOf(classId, "", extraSubclassNamed(classId, stored, extras)?.castingProfile) ?? undefined;
 }
 
 // A workshop or pack subclass as the bundled tables' shape: names by level.
@@ -414,6 +437,7 @@ export function populateFeaturesForClasses(
     ),
     classes,
     granted,
+    feats,
   );
   const seen = new Set<string>();
   return [...granted, ...kept].filter((feature) => {
@@ -450,7 +474,20 @@ function pruneChoiceFeatures(
     const option = findOptionByFeatureName(feature.name);
     if (option) {
       const total =
-        classes.reduce((sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k), 0) +
+        classes.reduce(
+          (sum, entry) =>
+            sum +
+            optionSlotsFor(
+              entry.id,
+              entry.subclass,
+              entry.level,
+              option.k,
+              // The features this class granted: a workshop subclass's
+              // borrowed Combat Superiority keeps its maneuvers.
+              granted.filter((held) => held.classId === entry.id),
+            ),
+          0,
+        ) +
         featOptionSlots(feats, option.k);
       const taken = perKind.get(option.k) ?? 0;
       if (taken >= total) {

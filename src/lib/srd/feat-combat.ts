@@ -5,8 +5,11 @@
 // cast engines ask these and apply the answers.
 import { featTwinOf, holdsFeat } from "@/lib/srd/feat-effects";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { armorOfRow, isWorn, type WornItem } from "@/lib/srd/armor";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
+import type { CheckAbout, SaveAgainstValue } from "@/lib/dm/roll-about";
 
 type FeatHolder = { feats?: string[]; features?: Array<{ name: string }> };
 type ChoiceHolder = FeatHolder & { featChoices?: Record<string, { damageType?: string } | undefined> | null };
@@ -152,11 +155,11 @@ export const PIERCER_USED = "piercer:used";
 export const SLASHER_USED = "slasher:used";
 export const CRUSHER_USED = "crusher:used";
 
-const POLEARMS = ["glaive", "halberd", "pike", "quarterstaff", "spear"];
+// By the SRD weapon row's name (AttackProfile's base).
+const POLEARMS = ["Glaive", "Halberd", "Pike", "Quarterstaff", "Spear"];
 
-export function isPolearm(weapon: string | undefined): boolean {
-  const name = textKey(weapon ?? "");
-  return POLEARMS.some((polearm) => name.includes(polearm));
+export function isPolearm(base: string | undefined): boolean {
+  return Boolean(base && POLEARMS.includes(base));
 }
 
 // Which feat grants this bonus-action weapon attack now, or null: Polearm
@@ -166,6 +169,7 @@ export function isPolearm(weapon: string | undefined): boolean {
 export function featBonusAttack(
   sheet: FeatHolder,
   budget: { oncePerTurn: string[]; dashed: boolean },
+  // weapon: the SRD weapon it is (AttackProfile's base).
   attack: { weaponAttack: boolean; melee: boolean; weapon: string | undefined },
 ): string | null {
   if (!attack.weaponAttack) {
@@ -174,7 +178,7 @@ export function featBonusAttack(
   if (attack.melee && holdsFeat(sheet, "Polearm Master") && budget.oncePerTurn.includes(POLEARM_READY) && isPolearm(attack.weapon)) {
     return "Polearm Master";
   }
-  if (holdsFeat(sheet, "Crossbow Expert") && budget.oncePerTurn.includes(ONE_HANDED_ATTACKED) && /hand crossbow/i.test(attack.weapon ?? "")) {
+  if (holdsFeat(sheet, "Crossbow Expert") && budget.oncePerTurn.includes(ONE_HANDED_ATTACKED) && attack.weapon === "Hand Crossbow") {
     return "Crossbow Expert";
   }
   if (attack.melee && holdsFeat(sheet, "Charger") && budget.dashed) {
@@ -217,8 +221,8 @@ export function hasSentinel(sheet: FeatHolder): boolean {
 
 // Polearm Master: a creature entering the reach of the polearm provokes an
 // opportunity attack too.
-export function polearmReachOpportunity(sheet: FeatHolder, weapon: string | undefined): boolean {
-  return holdsFeat(sheet, "Polearm Master") && isPolearm(weapon);
+export function polearmReachOpportunity(sheet: FeatHolder, base: string | undefined): boolean {
+  return holdsFeat(sheet, "Polearm Master") && isPolearm(base);
 }
 
 // Brutal Attack (Level Up): once a turn, a melee weapon's damage is rolled
@@ -289,60 +293,41 @@ export function hasSkulker(sheet: FeatHolder): boolean {
   return holdsFeat(sheet, "Skulker");
 }
 
-// Actor (and Level Up's Thespian): advantage on Deception and Performance
-// checks made while passing as someone else, read from the check's reason.
-export function actorAdvantage(sheet: FeatHolder, skill: string, reason: string | undefined): boolean {
-  return (
-    holdsFeat(sheet, "Actor") &&
-    (skill === "deception" || skill === "performance") &&
-    /\bimperson|\bdisguis|\bpass(?:ing|es)? (?:yourself |themselves |herself |himself )?(?:off )?as\b|\bpretend|\bpos(?:e|ing) as\b|\bmimic|\bin character\b|\bsomeone else\b/i.test(reason ?? "")
-  );
+// What a feat adds to a skill check, read from the skill and what the check
+// is about (src/lib/dm/roll-about.ts): Level Up's expertise die (+1d4) on the
+// checks it names, and Tome of Heroes' and the Actor's advantages. Each is
+// the roll it rides and the values it reads (src/lib/srd/roll-keys.ts), so
+// the ask for a field a model's call leaves unnamed reads the same list.
+export type CheckRider = { feat: string; die?: string; advantage?: boolean; expertise?: boolean; note: string };
+const FEAT_CHECKS: Array<RollKey & CheckRider> = [
+  // Actor (and Level Up's Thespian): passing as someone else.
+  { roll: "check", skills: ["deception", "performance"], about: "disguise", feat: "Actor", advantage: true, note: "Actor: advantage while passing as someone else" },
+  { roll: "check", skills: ["survival"], about: "tracking", feat: "Stalker", advantage: true, note: "Stalker: advantage on Survival to track a creature seen in the last day" },
+  { roll: "check", skills: ["athletics", "acrobatics"], about: "escape_plants_or_beast", feat: "Forest Denizen", advantage: true, note: "Forest Denizen: advantage on escaping vegetation or a beast's hold" },
+  { roll: "check", skills: ["investigation", "insight"], about: "hidden_message", feat: "Floriographer", advantage: true, note: "Floriographer: advantage to notice a hidden message of a visual kind" },
+  { roll: "check", skills: ["sleight_of_hand"], feat: "Combat Thievery", die: "1d4", note: "Combat Thievery: an expertise die (+1d4) on Sleight of Hand" },
+  { roll: "check", skills: ["insight"], feat: "Empathic", die: "1d4", note: "Empathic: an expertise die (+1d4) on Insight against a creature" },
+  { roll: "check", skills: ["medicine"], about: "wounds", feat: "Surgical Combatant", die: "1d4", note: "Surgical Combatant: an expertise die (+1d4) on Medicine to diagnose or treat" },
+  { roll: "check", skills: ["arcana", "nature", "religion", "history", "survival"], about: "creature_lore", feat: "Monster Hunter", die: "1d4", note: "Monster Hunter: an expertise die (+1d4) to learn a creature's legends and lore" },
+  { roll: "check", about: "crafting", feat: "Crafting Expert", die: "1d4", note: "Crafting Expert: an expertise die (+1d4) to craft, maintain or repair" },
+  { roll: "check", about: "vehicles", feat: "Ace Driver", die: "1d4", note: "Ace Driver: an expertise die (+1d4) to drive or pilot a vehicle" },
+  { roll: "check", skills: ["history"], creatures: ["giant"], feat: "Giant Foe", expertise: true, note: "Giant Foe: counts as proficient with doubled proficiency on History about giants" },
+];
+
+// The feat check riders the sheet holds.
+export function heldFeatChecks(sheet: FeatHolder): Array<RollKey & CheckRider> {
+  return FEAT_CHECKS.filter((rider) => holdsFeat(sheet, rider.feat));
 }
 
-// What a feat adds to a skill check, read from the skill and the check's
-// reason: Level Up's expertise die (+1d4) on the checks it names, and
-// Tome of Heroes' advantages. Null when none applies.
-export type CheckRider = { feat: string; die?: string; advantage?: boolean; expertise?: boolean; note: string };
-export function featCheckRider(sheet: FeatHolder, skill: string, reason: string | undefined): CheckRider | null {
-  const why = (reason ?? "").toLowerCase();
-  const says = (pattern: RegExp) => pattern.test(why);
-  if (holdsFeat(sheet, "Stalker") && skill === "survival" && says(/\btrack/)) {
-    return { feat: "Stalker", advantage: true, note: "Stalker: advantage on Survival to track a creature seen in the last day" };
-  }
-  if (holdsFeat(sheet, "Forest Denizen") && (skill === "athletics" || skill === "acrobatics") && says(/\bescap|\bbreak free|\bgrappl|\brestrain/) && says(/\bvine|\bplant|\bvegetat|\broot|\bbeast|\bbranch|\bweb/)) {
-    return { feat: "Forest Denizen", advantage: true, note: "Forest Denizen: advantage on escaping vegetation or a beast's hold" };
-  }
-  if (holdsFeat(sheet, "Floriographer") && (skill === "investigation" || skill === "insight") && says(/\bhidden|\bsecret|\bsubtle|\bsignal|\brune|\bcode|\bcipher|\bmessage/)) {
-    return { feat: "Floriographer", advantage: true, note: "Floriographer: advantage to notice a hidden message of a visual kind" };
-  }
-  if (holdsFeat(sheet, "Combat Thievery") && skill === "sleight_of_hand") {
-    return { feat: "Combat Thievery", die: "1d4", note: "Combat Thievery: an expertise die (+1d4) on Sleight of Hand" };
-  }
-  if (holdsFeat(sheet, "Empathic") && skill === "insight") {
-    return { feat: "Empathic", die: "1d4", note: "Empathic: an expertise die (+1d4) on Insight against a creature" };
-  }
-  if (holdsFeat(sheet, "Surgical Combatant") && skill === "medicine" && says(/\bdiagnos|\btreat|\bwound|\bstabili|\bheal|\binjur/)) {
-    return { feat: "Surgical Combatant", die: "1d4", note: "Surgical Combatant: an expertise die (+1d4) on Medicine to diagnose or treat" };
-  }
-  if (holdsFeat(sheet, "Monster Hunter") && ["arcana", "nature", "religion", "history", "survival"].includes(skill) && says(/\blore|\blegend|\bcreature|\bmonster|\bbeast|\bweakness|\bidentify/)) {
-    return { feat: "Monster Hunter", die: "1d4", note: "Monster Hunter: an expertise die (+1d4) to learn a creature's legends and lore" };
-  }
-  if (holdsFeat(sheet, "Crafting Expert") && says(/\bcraft|\brepair|\bmaintain|\bforge|\bbrew|\bbuild/)) {
-    return { feat: "Crafting Expert", die: "1d4", note: "Crafting Expert: an expertise die (+1d4) to craft, maintain or repair" };
-  }
-  if (holdsFeat(sheet, "Ace Driver") && says(/\bdriv|\bpilot|\bvehicle|\bwagon|\bcart|\bship|\bboat|\bsteer|\bhelm/)) {
-    return { feat: "Ace Driver", die: "1d4", note: "Ace Driver: an expertise die (+1d4) to drive or pilot a vehicle" };
-  }
-  if (holdsFeat(sheet, "Giant Foe") && skill === "history" && says(/\bgiant|\bogre|\btroll|\bettin|\bcyclops|\bfirbolg|\bgoliath/)) {
-    return { feat: "Giant Foe", expertise: true, note: "Giant Foe: counts as proficient with doubled proficiency on History about giants" };
-  }
-  return null;
+// The first held rider the skill check fits; null when none does.
+export function featCheckRider(sheet: FeatHolder, skill: string, check: { about?: CheckAbout; creature?: string }): CheckRider | null {
+  return heldFeatChecks(sheet).find((rider) => keyFits(rider, { roll: "check", skill, about: check.about, creature: check.creature })) ?? null;
 }
 
 // Diehard (Tome of Heroes): advantage on saving throws against effects
-// that cause exhaustion, read from what the save is against.
-export function diehardSaveAdvantage(sheet: FeatHolder, about: string): boolean {
-  return holdsFeat(sheet, "Diehard") && /\bexhaust/i.test(about);
+// that cause exhaustion (the save's `against`).
+export function diehardSaveAdvantage(sheet: FeatHolder, against: SaveAgainstValue | undefined): boolean {
+  return holdsFeat(sheet, "Diehard") && against === "exhaustion";
 }
 
 // Survivor (Level Up): Medicine checks to stabilize them have advantage.
@@ -432,11 +417,14 @@ export function hitDieHealingFloor(sheet: FeatHolder, conMod: number): { feat: s
 // on Dexterity saves against effects that target only the character, and a
 // successful Dexterity save against such an effect costs the reaction to
 // take no damage (cast-at-player.ts).
-export function shieldMasterSaveBonus(sheet: FeatHolder & { equipment?: Array<{ name: string; equipped?: boolean }> }): number {
+export function shieldMasterSaveBonus(sheet: FeatHolder & { equipment?: WornItem[] }): number {
   if (!holdsFeat(sheet, "Shield Master")) {
     return 0;
   }
-  const worn = (sheet.equipment ?? []).some((item) => /\bshield\b/i.test(item.name) && item.equipped !== false);
+  // A shield the armor engine reads as worn (src/lib/srd/armor.ts): not one
+  // carried on a sheet that says it is off, nor a Shield Guardian's amulet.
+  const equipment = sheet.equipment ?? [];
+  const worn = equipment.some((item) => isWorn(item, equipment) && armorOfRow(item)?.armor.category === "shield");
   return worn ? 2 : 0;
 }
 
@@ -528,10 +516,10 @@ export function hasDungeonDelver(sheet: FeatHolder): boolean {
   return holdsFeat(sheet, "Dungeon Delver");
 }
 
-// Dungeon Delver: advantage to notice secret doors and traps, read from
-// what the hidden thing is said to be.
-export function dungeonDelverNotices(sheet: FeatHolder, about: string | undefined): boolean {
-  return hasDungeonDelver(sheet) && /\btraps?\b|\b(?:secret|hidden|concealed) (?:door|passage|panel|compartment)s?\b/i.test(about ?? "");
+// Dungeon Delver: advantage to notice secret doors and traps (check_notice's
+// `about`).
+export function dungeonDelverNotices(sheet: FeatHolder, about: "traps_and_secret_doors" | undefined): boolean {
+  return hasDungeonDelver(sheet) && about === "traps_and_secret_doors";
 }
 
 // Defensive Duelist: wielding a finesse weapon the character is proficient

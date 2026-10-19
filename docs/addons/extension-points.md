@@ -77,9 +77,12 @@ file (up to 256 MB). **Pictures go in files**: anywhere the bundle takes a
 picture (`portrait`, `image`, `backdrop`) or a map's board view file (`data`
 under `addonView.files`), write `"file:<name>"` for a file you wrote to
 `outputDir` (`"file:art/bog-hag.png"`) instead of a data URL. The server reads
-each one in (a picture is PNG, JPEG or WebP up to 8 MB; a view file a `.glb`
-or a picture), so a whole adventure's art comes through without an enormous
-JSON file. The bundle is a workshop bundle exactly as the app exports one: the format is [`src/lib/workshop/bundle-schema.ts`](../../src/lib/workshop/bundle-schema.ts),
+each one in (a picture is PNG, JPEG or WebP up to 8 MB; a view file a binary
+glTF `.glb` or a picture; each is checked by its bytes, and one that is not
+what it says fails the run with its name), so a whole adventure's art comes
+through without an enormous JSON file. A map's `addonView.data` is held to the same 256 KB as a map
+generator's: a bundle with more is refused with the map it is on, not
+imported with the view's data left out. The bundle is a workshop bundle exactly as the app exports one: the format is [`src/lib/workshop/bundle-schema.ts`](../../src/lib/workshop/bundle-schema.ts),
 and the quickest way to learn it is to export a workshop from the app and read
 the file. What a rulebook importer typically fills:
 
@@ -183,9 +186,10 @@ Result:
   handed only to your addon's board view.
 
 The server checks the terrain (alphabet and length), the lights (on the map),
-each picture by its bytes and each model by its glTF header, then adds the map
-to the library, where the DM can edit it, deploy it to the table, or open it
-as a scene.
+the size of the view's data, each picture by its bytes and each model by its
+glTF header, then adds the map to the library, where the DM can edit it,
+deploy it to the table, or open it as a scene. A result that fails any check
+fails the run with the reason, and nothing is added.
 
 **Building a 3D map generator.** Blender runs headless: declare it in
 `requires` (with a `path` setting for the admin), run

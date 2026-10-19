@@ -197,7 +197,7 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
   if (!hit) {
     // Acid Arrow: a miss still deals half the damage.
     const grazed = spellRider?.halfOnMiss && hitOutcome.crit !== "nat1" ? missDamage(plan) : null;
-    const curving = plan.weaponAttack && profile.ranged ? openCurvingShot(campaign.id, sheet, enemy.id, profile.weapon) : null;
+    const curving = plan.weaponAttack && profile.ranged ? openCurvingShot(campaign.id, sheet, enemy.id, profile.base) : null;
     if (curving) {
       context.notes.push(curving);
     }

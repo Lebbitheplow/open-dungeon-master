@@ -35,7 +35,7 @@ body:
     attributes:
       label: The proposed setting
       description: |
-        Required when the answer above is yes. Attach a screenshot or mockup of the control as it would appear: an edited screenshot, a sketch or an HTML mockup are all fine. Say where it lives (the campaign creator, a campaign's panel, the admin console, the workshop) and what it is set to by default. A request that needs a setting and has no picture will be asked for one before work starts.
+        Required when the answer above is yes. Say why a good default, or a control that already exists, cannot do the job. Then attach a screenshot or mockup of the control as it would appear: an edited screenshot, a sketch or an HTML mockup are all fine. Say where it lives (the campaign creator, a campaign's panel, the admin console, the workshop) and what it is set to by default. A request that needs a setting and has no picture will be asked for one before work starts.
       placeholder: Drag an image here, then say where the control lives and what its default is.
   - type: textarea
     id: more

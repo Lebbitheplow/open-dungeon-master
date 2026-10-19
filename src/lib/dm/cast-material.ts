@@ -49,7 +49,7 @@ export function materialPatch(
     if (buy.consume) {
       lines.push(`${buy.qty > 1 ? `${buy.qty} × ` : ""}${buy.name} bought for the spell and consumed by it`);
     } else {
-      equipment = [...equipment, { name: buy.name, qty: buy.qty } as EquipmentItem];
+      equipment = [...equipment, { name: buy.name, qty: buy.qty, worth: buy.gp } as EquipmentItem];
       lines.push(`${buy.qty > 1 ? `${buy.qty} × ` : ""}${buy.name} bought for the spell and kept for the next casting`);
     }
   }
