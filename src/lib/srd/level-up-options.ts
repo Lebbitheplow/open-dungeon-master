@@ -26,7 +26,7 @@ import {
   fightingStyleSlots,
 } from "@/lib/srd/feature-effects";
 import { featPicksOwed } from "@/lib/srd/feat-grants";
-import { isThievesTools, populateFeaturesForClasses, THIEVES_TOOLS } from "@/lib/srd/features";
+import { isThievesTools, populateFeaturesForClasses, subclassCastingProfileFor, THIEVES_TOOLS } from "@/lib/srd/features";
 import type { HpMethod } from "@/lib/srd/hit-points";
 import { MULTICLASS_CAP, canMulticlassInto, classListFor, multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { openOptionSlots, optionFeatureName } from "@/lib/srd/options";
@@ -276,14 +276,23 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
     choices.training = training;
   }
 
+  // The casting this level brings, as the dialog reckons it: a workshop or
+  // pack subclass with third-caster rules casts by its own profile, which
+  // its name alone never shows (src/lib/srd/third-caster.ts).
+  const casterEntry = sheet.spellcasting?.casters?.find((entry) => entry.classId.toLowerCase() === klass.id);
+  const progression =
+    subclassCastingProfileFor(klass.id, subclassNow, context.subclassExtras) ??
+    casterEntry?.progression ??
+    (sheet.spellcasting?.casters?.length ? undefined : sheet.spellcasting?.progression);
   const caster = casterPreview({
     classId: klass.id,
     subclass: subclassNow,
+    progression,
     level: classLevelAfter,
     abilitiesAfter: sheet.abilities,
   });
   if (caster.casts && caster.ability) {
-    const view = casterViewsOf(sheet).find((entry) => entry.classId.toLowerCase() === klass.id);
+    const view = casterViewsOf(sheet, context.subclassExtras).find((entry) => entry.classId.toLowerCase() === klass.id);
     const cantripsHeld = view ? dedupeNames(view.cantrips).length - context.freeCantrips : 0;
     const newCantrips = caster.cantripCap === null ? 0 : Math.max(0, caster.cantripCap - Math.max(0, cantripsHeld));
     let newSpells = 0;

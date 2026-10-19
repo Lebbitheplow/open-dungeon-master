@@ -211,6 +211,9 @@ export function casterPreview(input: {
     cantrips: [],
     pending: [],
     spellbook: [],
+    // The counts read the profile too: a workshop subclass's name names no
+    // third caster, so without it every cap below came out 0.
+    ...(input.progression ? { progression: input.progression } : {}),
   };
   const cantripCap = cantripCapOf(view);
   const spellCap = spellCapOf(view, input.abilitiesAfter);

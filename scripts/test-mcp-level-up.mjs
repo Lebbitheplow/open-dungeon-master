@@ -235,6 +235,52 @@ try {
     world.close();
   });
 
+  await test("A workshop subclass that casts by Eldritch Knight rules is weighed with its spells, as the dialog offers them.", async () => {
+    // The table's DM wrote the subclass; its casting comes from the stored
+    // profile, which its name never shows (src/lib/srd/third-caster.ts).
+    const { world, campaignId, hero, play, sheets, player } = await seated(LEGAL_FIGHTER);
+    const homebrew = await world.route("homebrew");
+    world.signIn(world.owner);
+    const made = await homebrew.POST(
+      new Request("http://test/", {
+        method: "POST",
+        body: JSON.stringify({ kind: "archetype", name: "Hedge Knight", data: { desc: "A spell-touched sellsword.", classSlug: "fighter", castingProfile: "eldritch-knight", levels: {} } }),
+      }),
+    );
+    assert.equal(made.status, 201, JSON.stringify(await made.clone().json()));
+    globalThis.fetch = await routeFetch(world);
+    const out = await world.invoke("award_xp", { characterIds: [hero.id], amount: 900, reason: "the road" });
+    assert.equal(out.ok, true, out.error);
+    const at = async (args) => json(await workbenchCall(play, "odm_level_up_options", { campaignId, ...args }));
+    // Level 2 first, so the next level is the subclass's 3rd.
+    const two = await workbenchCall(play, "odm_level_up", { campaignId, level: 2 });
+    assert.equal(two.isError, false, two.text);
+    const three = await at({});
+    assert.ok(three.choices.subclass?.options.includes("Hedge Knight"), JSON.stringify(three.choices.subclass));
+    const hedge = await at({ subclass: "Hedge Knight" });
+    assert.equal(hedge.countedUnderSubclass, "Hedge Knight");
+    assert.deepEqual(
+      [hedge.choices.spells?.list, hedge.choices.spells?.newCantrips, hedge.choices.spells?.newSpells, hedge.choices.spells?.maxSpellLevel],
+      ["wizard", 2, 3, 1],
+      JSON.stringify(hedge.choices.spells),
+    );
+    // And the engine takes the level with what the read named.
+    const taken = await workbenchCall(play, "odm_level_up", {
+      campaignId,
+      level: 3,
+      subclass: "Hedge Knight",
+      levelUpSpells: ["Shield", "Burning Hands", "Feather Fall", "Fire Bolt", "Light"],
+    });
+    assert.equal(taken.isError, false, taken.text);
+    const after = sheets.getSheetForUser(campaignId, player.id);
+    assert.equal(after.subclass, "Hedge Knight");
+    const held = [...(after.spellcasting?.known ?? []), ...(after.spellcasting?.cantrips ?? [])];
+    for (const spell of ["Shield", "Burning Hands", "Feather Fall", "Fire Bolt", "Light"]) {
+      assert.ok(held.includes(spell), `${spell} did not land: ${JSON.stringify(after.spellcasting)}`);
+    }
+    world.close();
+  });
+
   await test("A malformed class id is refused before any route is called.", async () => {
     const { play, world } = await seated(LEGAL_FIGHTER);
     globalThis.fetch = () => {
