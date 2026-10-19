@@ -14,11 +14,12 @@
 //
 // The place comes from the item's row, never from words read inside a name
 // someone wrote (a table plays in any language): armor and shields from the
-// armor engine (a magic suit is its suit), everything else from its whole
-// name in item-slots.json, which scripts/generate-item-slots.mjs reads from
-// the content pack's English rows once. An item no row places (loot the
-// model invents, a homebrew item, a line typed in another language) has no
-// place and no limit. The DM's exception is a row's `layered` flag: worn
+// armor engine (a magic suit is its suit), a workshop item from the place its
+// author picked ("Worn on" in the item form, carried as `gear.wornOn`),
+// everything else from its whole name in item-slots.json, which
+// scripts/generate-item-slots.mjs reads from the content pack's English rows
+// once. An item nothing places (loot the model invents, a line typed in
+// another language) has no place and no limit. The DM's exception is a row's `layered` flag: worn
 // beside another of its kind on the DM's (or the party lead's) say.
 //
 // Pure and client-safe, like armor.ts: the sheet, the routes and the rules
@@ -26,6 +27,7 @@
 import slotsJson from "@/lib/classes/item-slots.json";
 import { armorOfRow, isWorn, type WornItem } from "@/lib/srd/armor";
 import { textKey } from "@/lib/language/text-logic";
+import { isWornPlace } from "@/lib/srd/worn-places";
 
 export type WearSlot = "armor" | "shield" | "cloak" | "head" | "feet" | "hands" | "wrists" | "neck" | "waist" | "ring" | "eyes" | "robe";
 
@@ -64,7 +66,9 @@ for (const [slot, names] of Object.entries((slotsJson as { slots: Record<string,
   }
 }
 
-function rowSlot(name: string): WearSlot | null {
+// The place the content pack's row of this name has, or null: what a
+// workshop copy of a published item starts with.
+export function rowSlot(name: string): WearSlot | null {
   const bare = name.trim().replace(/^\+\d\s+/, "");
   return BY_NAME.get(textKey(bare)) ?? BY_NAME.get(textKey(bare.replace(/\s*\([^()]*\)\s*$/, ""))) ?? null;
 }
@@ -77,14 +81,16 @@ const slotCache = new WeakMap<object, { key: string; slot: WearSlot | null }>();
 
 // Where this row is worn, or null for an item with no place on the body.
 export function wearSlotOf(item: SlotRow): WearSlot | null {
-  const suit = (item.gear as WornItem["gear"] | undefined)?.armor;
-  const key = `${item.name}\u0000${item.slug ?? ""}\u0000${suit ? JSON.stringify(suit) : ""}`;
+  const gear = item.gear as (WornItem["gear"] & { wornOn?: unknown }) | undefined;
+  const suit = gear?.armor;
+  const own = isWornPlace(gear?.wornOn) ? gear.wornOn : null;
+  const key = `${item.name}\u0000${item.slug ?? ""}\u0000${suit ? JSON.stringify(suit) : ""}\u0000${own ?? ""}`;
   const cached = slotCache.get(item);
   if (cached?.key === key) {
     return cached.slot;
   }
   const armor = armorOfRow(item as WornItem)?.armor ?? null;
-  const slot: WearSlot | null = armor ? (armor.category === "shield" ? "shield" : "armor") : rowSlot(item.name);
+  const slot: WearSlot | null = armor ? (armor.category === "shield" ? "shield" : "armor") : (own ?? rowSlot(item.name));
   slotCache.set(item, { key, slot });
   return slot;
 }

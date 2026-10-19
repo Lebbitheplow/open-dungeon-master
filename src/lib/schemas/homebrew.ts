@@ -4,6 +4,7 @@ import type { HomebrewGearDef } from "@/lib/homebrew/item-data";
 import type { ItemMagic } from "@/lib/homebrew/item-magic-schema";
 import type { ItemSpell } from "@/lib/srd/item-spells";
 import type { AttunementRule } from "@/lib/srd/magic-items";
+import { WORN_PLACES } from "@/lib/srd/worn-places";
 
 export const HOMEBREW_KINDS = [
   "spell",
@@ -72,6 +73,8 @@ export const gearSnapshotShape = z.object({
   weight: z.number().min(0).optional(),
   // A sentient item's mind (src/lib/homebrew/sentience.ts).
   sentience: z.custom<Sentience>().optional(),
+  // Where its author said it is worn (src/lib/srd/worn-places.ts).
+  wornOn: z.enum(WORN_PLACES).optional(),
 });
 export type HomebrewGearSnapshot = z.infer<typeof gearSnapshotShape>;
 

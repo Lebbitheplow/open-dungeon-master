@@ -8,6 +8,7 @@ import { checkItemMagic, type ItemMagic } from "@/lib/homebrew/item-magic-schema
 import type { ArmorRiders, ChargeRule, WeaponRiders } from "@/lib/srd/magic-gear";
 import type { ItemSpell } from "@/lib/srd/item-spells";
 import type { AttunementRule } from "@/lib/srd/magic-items";
+import { isWornPlace, type WornPlace } from "@/lib/srd/worn-places";
 
 // A homebrew item as the engine reads it: its weapon block (an SrdWeapon),
 // its armour block (an SrdArmor), its magic effects (the MagicItemEffect
@@ -85,6 +86,9 @@ export type HomebrewGear = {
   weight?: number;
   // A sentient item's mind (src/lib/homebrew/sentience.ts).
   sentience?: Sentience;
+  // Where it is worn, as its author picked ("Worn on"); a suit or a shield
+  // takes its place from its armour block (src/lib/srd/wear-slots.ts).
+  wornOn?: WornPlace;
 };
 
 // What a stored entry's data blob looks like after normalization: whatever
@@ -290,6 +294,11 @@ export function normalizeItemData(raw: unknown, name: string): Outcome<HomebrewD
   if (sentience) {
     data.sentience = sentience;
   }
+  // Gear and magic items name where they are worn; a weapon is held, and a
+  // suit or a shield is placed by its armour block.
+  if ((itemKind === "gear" || itemKind === "magic_item") && !data.armor && !data.weapon && isWornPlace(source.wornOn)) {
+    data.wornOn = source.wornOn;
+  }
   return { data };
 }
 
@@ -350,6 +359,9 @@ export function gearFromHomebrewData(name: string, data: unknown): HomebrewGear 
   const sentience = normalizeSentience(source.sentience);
   if (sentience) {
     gear.sentience = sentience;
+  }
+  if (!gear.armor && !gear.weapon && isWornPlace(source.wornOn)) {
+    gear.wornOn = source.wornOn;
   }
   return Object.keys(gear).length ? gear : null;
 }

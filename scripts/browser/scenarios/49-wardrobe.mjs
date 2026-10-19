@@ -4,8 +4,11 @@
 // a Cloak of Protection and carries a Cloak of Elvenkind: putting the second
 // on asks to take the first off, the swap goes through in one press, and the
 // lead (who corrects the table) may let both be worn, the SRD's exception
-// (412). Runs on the website and inside the app's own screens.
-import { check, eventually, sleep } from "../lib.mjs";
+// (412). A workshop author says where a homebrew item is worn with the item
+// form's "Worn on" picker, labelled, explained and clean under axe, and gone
+// once the item is armour. Runs on the website and inside the app's own
+// screens.
+import { axeViolations, check, eventually, sleep } from "../lib.mjs";
 
 const PROTECTION = "Cloak of Protection";
 const ELVENKIND = "Cloak of Elvenkind";
@@ -87,5 +90,88 @@ export default {
     }, { label: "both cloaks stored, the second on the DM's say" });
     await eventually(() => rowOf(PROTECTION).getByText("beside another").count(), { label: "the beside-another mark" });
     await t.shot("both");
+
+    // The workshop: a homebrew mantle worn on the shoulders. The shelf is
+    // the user's, shared by every run, so the name is this run's own.
+    const mantle = `Mantle of the Gloaming ${viewport}${t.app ? " app" : ""}`;
+    const made = await api.post(`${base}/api/workshops`, { data: { title: "Wardrobe", description: "" } });
+    check(made.ok(), "a workshop for the item form");
+    const workshopId = (await made.json()).workshop.id;
+    await api.post(`${base}/api/profile/tours`, { data: { finished: [{ id: "workshop-homebrew", version: 1, how: "ended" }] } });
+    try {
+      await t.open(`/workshop/${workshopId}?system=homebrew`);
+      const kinds = page.locator(`${root}[data-tour="homebrew-kinds"]`).locator("visible=true").first();
+      await eventually(() => kinds.count(), { timeoutMs: 30_000, label: "the homebrew shelf" });
+      await t.tap(kinds.getByText(/^Items/).first());
+      await t.tap(page.getByRole("button", { name: /New item/ }).locator("visible=true").first());
+      const name = page.getByRole("textbox", { name: /^Name/ }).locator("visible=true").first();
+      await eventually(() => name.count(), { timeoutMs: 20_000, label: "the item form" });
+      await name.fill(mantle);
+      const wornOn = page.getByRole("button", { name: "Worn on", exact: true }).locator("visible=true").first();
+      await eventually(() => wornOn.count(), { label: "the Worn on picker on plain gear" });
+      check(/Not worn/.test(await wornOn.innerText()), "an item starts not worn");
+      const kind = page.getByRole("button", { name: "Kind", exact: true }).locator("visible=true").first();
+      await t.tap(kind);
+      await t.tap(page.getByRole("menuitemradio", { name: "Magic item" }).locator("visible=true").first());
+      await eventually(() => wornOn.count(), { label: "the Worn on picker on a magic item" });
+      const field = wornOn.locator("xpath=ancestor::div[contains(@class,'flex-col')][1]");
+      check(/One cloak, hat, pair of boots, gloves or bracers counts at a time\./.test(await field.innerText()), "the hint says what the place does");
+      const box = await wornOn.boundingBox();
+      check(box && box.height >= (viewport === "phone" ? 40 : 32), `the picker is big enough to tap (${Math.round(box?.height ?? 0)}px)`);
+
+      // The ⓘ names every place and what the limit there is.
+      await t.tap(page.getByRole("button", { name: "What is Places on the body?" }).locator("visible=true").first());
+      const glossary = page.getByRole("dialog").filter({ hasText: "Shoulders (a cloak or cape)" }).locator("visible=true").first();
+      await eventually(() => glossary.count(), { label: "the places explained" });
+      check(/One cloak counts at a time/.test(await glossary.innerText()), "the glossary says one cloak counts");
+      await sleep(900);
+      await t.shot("worn-on-glossary");
+      await page.keyboard.press("Escape");
+      await eventually(async () => (await glossary.count()) === 0, { label: "the glossary closing" });
+
+      // Picked from the keyboard: focus, open, choose.
+      await wornOn.focus();
+      await page.keyboard.press("Enter");
+      const shoulders = page.getByRole("menuitemradio", { name: "Shoulders (a cloak or cape)" }).locator("visible=true").first();
+      await eventually(() => shoulders.count(), { label: "the places listed from the keyboard" });
+      await t.tap(shoulders);
+      await eventually(async () => /Shoulders/.test(await wornOn.innerText()), { label: "Shoulders picked" });
+      const form = page.locator(`${root}[role="dialog"]`).filter({ has: wornOn }).first();
+      const problems = await axeViolations(page, (await form.count()) ? `[role="dialog"]` : "main");
+      check(problems.length === 0, `the item form passes axe: ${JSON.stringify(problems).slice(0, 400)}`);
+      await wornOn.scrollIntoViewIfNeeded().catch(() => undefined);
+      await sleep(600);
+      await t.shot("worn-on");
+      // Legible in the day theme too: the field alone under axe, contrast included.
+      const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? "");
+      await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+      await field.evaluate((element) => element.setAttribute("data-check", "worn-on"));
+      await sleep(600);
+      const day = await axeViolations(page, '[data-check="worn-on"]');
+      check(day.length === 0, `the picker passes axe in the day theme: ${JSON.stringify(day).slice(0, 400)}`);
+      await t.shot("worn-on-day");
+      await page.evaluate((mode) => (document.documentElement.dataset.theme = mode), theme);
+
+      // Armour places itself, so the picker goes while it is armour.
+      const alsoArmour = page.getByRole("switch", { name: "It is also armour" }).locator("visible=true").first();
+      await alsoArmour.scrollIntoViewIfNeeded().catch(() => undefined);
+      await t.tap(alsoArmour);
+      await eventually(async () => (await wornOn.count()) === 0, { label: "the picker gone while it is armour" });
+      await t.tap(alsoArmour);
+      await eventually(() => wornOn.count(), { label: "the picker back" });
+
+      await t.tap(page.getByRole("button", { name: "Keep it", exact: true }).locator("visible=true").first());
+      const line = page.getByText(/worn on the shoulders/).locator("visible=true").first();
+      await eventually(() => line.count(), { timeoutMs: 20_000, label: "the shelf line saying where it is worn" });
+      const shelf = await (await api.get(`${base}/api/homebrew`)).json();
+      const kept = (shelf.entries ?? []).find((entry) => entry.name === mantle);
+      check(kept?.data?.wornOn === "cloak", `the mantle is stored worn on the shoulders (${JSON.stringify(kept?.data?.wornOn)})`);
+    } finally {
+      const shelf = await (await api.get(`${base}/api/homebrew`)).json().catch(() => ({}));
+      for (const entry of (shelf.entries ?? []).filter((item) => item.name === mantle)) {
+        await api.delete(`${base}/api/homebrew/${entry.id}`);
+      }
+      await api.delete(`${base}/api/workshops/${workshopId}`);
+    }
   },
 };

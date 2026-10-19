@@ -5,6 +5,8 @@ import { checkRidersOf } from "@/lib/srd/item-check-riders";
 import { itemSpellsOf } from "@/lib/srd/item-spells";
 import { gearBaseName, gearDefFor } from "@/lib/srd/magic-gear";
 import { matchMagicItem } from "@/lib/srd/magic-items";
+import { rowSlot } from "@/lib/srd/wear-slots";
+import { isWornPlace } from "@/lib/srd/worn-places";
 import { matchWeapon, SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { subclassFeatureDescription, subclassLevelFor, subclassTableFor } from "@/lib/srd/features";
@@ -115,6 +117,12 @@ export function itemMechanicsOf(row: Row): Record<string, unknown> | null {
   }
   if (spells.length) {
     out.spells = spells;
+  }
+  // Where the published item is worn, so the copy starts in its place
+  // ("Worn on" in the item form).
+  const place = !weapon && !armor ? rowSlot(name) : null;
+  if (isWornPlace(place)) {
+    out.wornOn = place;
   }
   return out.itemKind === "gear" && !magic ? null : out;
 }

@@ -5,7 +5,8 @@
 // You can make exceptions; a character might be able to wear a circlet under
 // a helmet, for example, or to layer two cloaks." Held as tests:
 //
-//   every item has its place from its name (a magic suit is its suit); a
+//   every item has its place from its name (a magic suit is its suit), and a
+//   workshop item from the place its author picked ("Worn on"); a
 //   second cloak's, bracers' or boots' riders do not apply, worn or merely
 //   carried on a sheet that never said; the attuned one counts first; the
 //   DM's exception (`layered`) lets both count; rings, amulets and belts have
@@ -76,7 +77,8 @@ await test("every item's place comes from its row, never from words in its name"
     assert.equal(wearSlotOf(row(name)), place, name);
   }
   // Carried or held, not worn; and a name no row knows (a homebrew cloak, an
-  // Italian table's "Mantello di protezione") has no place to be counted in.
+  // Italian table's "Mantello di protezione") has no place to be counted in
+  // unless its workshop author picked one (the test below).
   for (const name of ["Longsword", "Belt Pouch", "Rope, hempen (50 feet)", "Wand of Magic Missiles", "Hatchet", "Bag of Holding", "Cloak of the Midnight Fox", "Mantello di protezione"]) {
     assert.equal(wearSlotOf(row(name)), null, name);
   }
@@ -221,6 +223,44 @@ await test("the DM's game state says a second cloak is worn but not in effect", 
   const pack = [row("Cloak of Protection", { equipped: true, attuned: true }), row("Cloak of Displacement", { equipped: true })];
   assert.match(magicItemLine(pack[0], pack), /attuned, worn$/);
   assert.match(magicItemLine({ ...pack[1], name: "Cloak of Protection (spare)", attuned: true }, [pack[0], { ...pack[1], name: "Cloak of Protection (spare)", attuned: true }]), /worn, not in effect \(one cloak at a time\)/);
+});
+
+await test("a workshop item's author picks where it is worn, and it keeps the limits with the published ones", async () => {
+  const { normalizeHomebrewData, gearFromHomebrewData, describeHomebrew } = await import("../src/lib/homebrew/gear.ts");
+  const { itemMechanicsOf } = await import("../src/lib/workshop/catalog-mechanics.ts");
+  const stored = normalizeHomebrewData(
+    "item",
+    { itemKind: "magic_item", requiresAttunement: true, effects: [{ kind: "ac_bonus", amount: 2 }], wornOn: "cloak" },
+    "Mantle of the Gloaming",
+  );
+  assert.equal(stored.data.wornOn, "cloak");
+  assert.match(describeHomebrew("item", stored.data), /worn on the shoulders/);
+  const gear = gearFromHomebrewData("Mantle of the Gloaming", stored.data);
+  assert.equal(gear.wornOn, "cloak");
+  const pack = [row("Cloak of Protection", { equipped: true, attuned: true }), row("Mantle of the Gloaming", { equipped: true, attuned: true, gear })];
+  assert.equal(wearSlotOf(pack[1]), "cloak");
+  assert.equal(wornButIdle(pack[1], pack), "cloak");
+  assert.equal(magicItemRiders(pack).acBonus, 1, "the mantle's +2 rode on a second cloak");
+  const sheet = { name: "Tavi", equipment: [pack[0], { ...pack[1], equipped: false }] };
+  const refused = gearPatch(sheet, { "Mantle of the Gloaming": { equipped: true } }, { corrects: false, armor: { armorName: null, shieldName: null } });
+  assert.deepEqual(refused.conflict, { item: "Mantle of the Gloaming", slot: "cloak", wearing: ["Cloak of Protection"] });
+  // Plain gear takes a place too: a homebrew pair of boots is footwear.
+  const boots = normalizeHomebrewData("item", { itemKind: "gear", wornOn: "feet" }, "Mudstompers");
+  assert.equal(gearFromHomebrewData("Mudstompers", boots.data).wornOn, "feet");
+  // A place no one wears things on is dropped, and a weapon is held and a
+  // suit places itself, whatever the data says.
+  const dropped = [
+    normalizeHomebrewData("item", { itemKind: "gear", wornOn: "tail" }, "Tail Ribbon"),
+    normalizeHomebrewData("item", { itemKind: "weapon", weapon: { category: "martial", kind: "melee", damage: "1d8 slashing" }, wornOn: "hands" }, "Fist Blade"),
+    normalizeHomebrewData("item", { itemKind: "armor", armor: { category: "light", baseAc: 12 }, wornOn: "cloak" }, "Mistweave"),
+    normalizeHomebrewData("item", { itemKind: "magic_item", armor: { category: "light", baseAc: 12 }, wornOn: "cloak" }, "Starweave"),
+  ];
+  for (const outcome of dropped) assert.equal(outcome.data.wornOn, undefined);
+  assert.equal(gearFromHomebrewData("Fist Blade", { weapon: { category: "martial", kind: "melee", damage: "1d8 slashing" }, wornOn: "hands" }).wornOn, undefined);
+  // A copy of a published item starts in that item's place.
+  assert.equal(itemMechanicsOf({ name: "Cloak of Elvenkind", source: "srd", kind: "magic_item", data: {} }).wornOn, "cloak");
+  assert.equal(itemMechanicsOf({ name: "Ring of Protection", source: "srd", kind: "magic_item", data: {} }).wornOn, "ring");
+  assert.equal(itemMechanicsOf({ name: "Flame Tongue Longsword", source: "srd", kind: "magic_item", data: {} })?.wornOn, undefined);
 });
 
 // ---- the route ----
