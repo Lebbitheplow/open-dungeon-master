@@ -207,6 +207,15 @@ export type DmGameState = {
   // agent program's rendering (src/lib/harness/render.ts) moves that part
   // itself, so its prompt leaves it in the system message.
   momentAfterHistory?: boolean;
+  // A chat model reads the rules (and a fight's rules) as the system message
+  // and the game state from THIS_TURN_HEADING on as a user message before
+  // the transcript, in the same order as before. llama-server keeps a hybrid
+  // model's cache (Qwen3.5 and 3.6) or a sliding-window one's (Gemma) only
+  // where a message starts, and the state changes every turn: inside the
+  // system message it made each turn read the whole prompt again, 40K
+  // tokens and 140 seconds on a BC-250, where now the tools and rules are
+  // reused. An agent program's rendering splits the prompt itself.
+  stateAfterRules?: boolean;
   currentLocation?: {
     name: string;
     layoutDescription: string;
@@ -1550,15 +1559,11 @@ export function buildDmMessages(
       relationshipRules(state.campaign.gameSettings.romance !== "off"),
     );
   }
-  const systemParts = [buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null)];
-  if (state.encounter) {
-    systemParts.push(encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null));
-  }
-  if (state.pendingPlayerWhispers?.length) {
-    systemParts.push(PLAYER_WHISPER_RULES);
-  }
+  const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);
+  const fightRules = state.encounter ? encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null) : "";
+  const whisperRules = state.pendingPlayerWhispers?.length ? PLAYER_WHISPER_RULES : "";
   const gameStateBlock = buildGameStateBlock(state);
-  systemParts.push(gameStateBlock);
+  const systemParts = [dmSystem, fightRules, whisperRules, gameStateBlock].filter(Boolean);
 
   // The transcript takes its share of the window plus what the rules, the
   // game state and the director's note left of theirs, up to a ceiling
@@ -1714,10 +1719,26 @@ export function buildDmMessages(
     ],
   };
 
-  const system = systemParts.join("\n\n");
-  const { standing, moment } = state.momentAfterHistory ? splitAtMoment(system) : { standing: system, moment: "" };
+  // The fight's rules hold for every turn of the fight, so they stay with
+  // the rules in the system message (stateAfterRules).
+  const turnAt = state.stateAfterRules ? dmSystem.indexOf(THIS_TURN_HEADING) : -1;
+  let rules = systemParts.join("\n\n");
+  let table = "";
+  if (turnAt >= 0) {
+    rules = [dmSystem.slice(0, turnAt).trimEnd(), fightRules].filter(Boolean).join("\n\n");
+    table = [dmSystem.slice(turnAt), whisperRules, gameStateBlock].filter(Boolean).join("\n\n");
+  }
+  let moment = "";
+  if (state.momentAfterHistory) {
+    const split = splitAtMoment(table || rules);
+    if (table) table = split.standing;
+    else rules = split.standing;
+    moment = split.moment;
+  }
+  const historyStart = table ? 2 : 1;
   const messages: ChatMessage[] = [
-    { role: "system", content: standing },
+    { role: "system", content: rules },
+    ...(table ? [{ role: "user" as const, content: table }] : []),
     ...historyMessages,
     // The state, then the instruction to take the turn, so the newest player
     // line is still what the model resolves (src/lib/prompt-boundary.ts).
@@ -1728,7 +1749,7 @@ export function buildDmMessages(
       ? [{ role: "user" as const, content: state.directorBlock }]
       : []),
   ];
-  state.contextTrace.shape = { historyStart: 1, historyEnd: 1 + historyMessages.length, promptMessages: messages.length };
+  state.contextTrace.shape = { historyStart, historyEnd: historyStart + historyMessages.length, promptMessages: messages.length };
   state.contextTrace.historyEvicted = fitted.dropped;
   return messages;
 }

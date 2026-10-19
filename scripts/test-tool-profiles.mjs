@@ -188,6 +188,9 @@ await test("a small model's short rules name the core tools in a few lines, and 
 // ---- a compact turn against a fake backend ---------------------------------------
 const requests = [];
 let script = [];
+// A DM call: tools offered, or the game state in the message after the rules
+// (src/lib/dm/prompt.ts stateAfterRules).
+const isDmCall = (body) => Array.isArray(body.tools) || String(body.messages[1]?.content ?? "").includes("=== GAME STATE");
 const server = http.createServer((req, res) => {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
@@ -210,7 +213,7 @@ const server = http.createServer((req, res) => {
     requests.push(body);
     // The DM's calls carry its game state, tools offered or not; the rest are
     // the claims reader's.
-    const dm = Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE");
+    const dm = isDmCall(body);
     const next = dm ? (script.shift() ?? { content: "The road winds on. What do you do?" }) : { content: "[]" };
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const delta = next.call
@@ -313,7 +316,7 @@ await test("a small model, sized by its server, plays on the short rules: no rul
   await startDmTurn(campaign.id);
   turn = getDmTurn(getLatestDmTurnId(campaign.id));
   assert.equal(turn.status, "done", `the second turn finished (${turn.status}): ${turn.error ?? ""}`);
-  const next = requests.find((body) => Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE"));
+  const next = requests.find((body) => isDmCall(body));
   const state = next.messages.map((message) => String(message.content ?? "")).join("\n");
   assert.match(state, /Goblin[^\n]*\[enemyId=[^\]]+\] healthy/, "the goblin's health in a word");
   assert.ok(!/Goblin[^\n]*\[enemyId=[^\]]+\] HP \d/.test(state), "no hit points for a small model to repeat");
@@ -395,7 +398,7 @@ await test("a follow-up no tool set fits narrates what the turn did with no tool
   await startDmTurn(campaign.id);
   const turn = getDmTurn(getLatestDmTurnId(campaign.id));
   assert.equal(turn.status, "done", `the turn finished (${turn.status}): ${turn.error ?? ""}`);
-  const dmCalls = requests.filter((body) => Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE"));
+  const dmCalls = requests.filter(isDmCall);
   assert.equal(dmCalls.length, 2);
   const echoed = dmCalls[1].messages.filter((message) => message.role === "assistant").map((message) => String(message.content ?? "").length);
   assert.ok(!dmCalls[1].tools?.length, `the follow-up offered no tools (${dmCalls[1].tools?.length} offered; assistant text ${echoed}; window ${process.env.OPENAI_COMPAT_CONTEXT}; sent ${requestTokens(dmCalls[1].messages, dmCalls[1].tools)})`);
@@ -441,7 +444,7 @@ await test("the first turn asks the endpoint for its window before it picks the 
 // docs/agent-context-efficiency-audit-2026-10-17.md.
 const windows = await import("../src/lib/story-window.ts");
 const COMBAT_TOOLS = ["pc_attack", "enemy_attack", "end_turn"];
-const dmBodies = () => requests.filter((body) => Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE"));
+const dmBodies = () => requests.filter((body) => isDmCall(body));
 function allFit(window) {
   for (const body of dmBodies()) {
     const tokens = requestTokens(body.messages, body.tools ?? []);

@@ -649,6 +649,9 @@ async function openTurn(
       // start reuses the whole history from one turn to the next; an agent
       // program moves it itself (src/lib/harness/render.ts).
       momentAfterHistory: campaign.settings.textProvider !== "harness" && process.env.DM_MOMENT_AFTER_HISTORY === "1",
+      // The state keeps its place before the transcript, as its own message
+      // (src/lib/dm/prompt.ts stateAfterRules).
+      stateAfterRules: campaign.settings.textProvider !== "harness",
       currentLocation: currentLocation
         ? {
             name: currentLocation.name,

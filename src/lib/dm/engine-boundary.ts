@@ -13,7 +13,7 @@
 // mutates mechanical state; a detection at most costs one corrective model call.
 
 import type { NarrationClaim } from "./claims-logic.ts";
-import { THIS_MOMENT_HEADING } from "../prompt-boundary.ts";
+import { THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "../prompt-boundary.ts";
 import { textKey, WORD_CHAR } from "../language/text-logic.ts";
 import { withoutLeadingStopWords } from "../language/language.ts";
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
@@ -701,11 +701,12 @@ export function unrolledFigure(claims: readonly NarrationClaim[], conversation: 
   for (const message of conversation) {
     // The game state is no table note: its numbers (hit points, the last
     // rolls) are not figures the turn dealt, wherever a chat model reads it
-    // (src/lib/dm/prompt.ts momentAfterHistory).
+    // (src/lib/dm/prompt.ts momentAfterHistory and stateAfterRules).
     if (
       message.role === "system" ||
       typeof message.content !== "string" ||
-      message.content.startsWith(THIS_MOMENT_HEADING)
+      message.content.startsWith(THIS_MOMENT_HEADING) ||
+      message.content.startsWith(THIS_TURN_HEADING)
     ) {
       continue;
     }
