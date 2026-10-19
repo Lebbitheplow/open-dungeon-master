@@ -132,11 +132,17 @@ const ALIAS_TERMS: Record<string, string[]> = {
 };
 
 // Each weapon's English spellings, onto its row: its name and the plurals
-// ("Longswords", "quarterstaffs", "Hand crossbows"). A name the table writes
-// is compared as written.
-const FORMS = SRD_WEAPONS.map((weapon) => ({ weapon, spellings: pluralForms(textKey(weapon.name)) }));
+// ("Longswords", "quarterstaffs", "Hand crossbows"), without their spaces,
+// so a name written apart ("long sword", "Hand axe") is the same weapon.
+const unspaced = (key: string) => key.replace(/ /g, "");
+const FORMS = SRD_WEAPONS.map((weapon) => ({ weapon, spellings: pluralForms(textKey(weapon.name)).map(unspaced) }));
+const MOST_WORDS = Math.max(...SRD_WEAPONS.map((weapon) => textKey(weapon.name).split(" ").length));
 
-const byName = spellingIndex(SRD_WEAPONS, (weapon) => [textKey(weapon.name)]);
+// Other whole names a weapon goes by: a staff is fought with as a
+// quarterstaff. Read as the whole name only, never inside another one.
+export const WEAPON_ALIASES: Record<string, string[]> = { Quarterstaff: ["staff", "wooden staff", "wood staff"] };
+
+const byName = spellingIndex(SRD_WEAPONS, (weapon) => [textKey(weapon.name), ...(WEAPON_ALIASES[weapon.name] ?? [])]);
 
 const aliasTerms = new Map(Object.entries(ALIAS_TERMS).flatMap(([term, names]) => pluralForms(term).map((form) => [form, names] as const)));
 
@@ -145,10 +151,16 @@ const aliasTerms = new Map(Object.entries(ALIAS_TERMS).flatMap(([term, names]) =
 // not a censer mace.
 const GEAR_NOT_WEAPONS = new Set(["hammer", "censer"].flatMap(pluralForms));
 
+// Ammunition names the weapon that shoots it ("Bullets, Sling (20)",
+// "Blowgun needles"), and is no weapon itself.
+const AMMUNITION_WORDS = new Set(["arrow", "bolt", "bullet", "needle"].flatMap(pluralForms));
+
 // Finds the weapon a free-text reference points at: its name or plural,
-// then containment either way so "Longsword of the Dawn" and "long sword"
-// both land on the Longsword. Longer names win so "hand crossbow" never
-// matches a plain crossbow entry first.
+// then a weapon's name as whole words inside it, so "Longsword of the Dawn"
+// and "+1 long sword" land on the Longsword while "Signet Ring" is no Net
+// and "Tail Spike" no Pike. A name in the book's order ("Crossbow, light")
+// is read both ways. Longer names win so "hand crossbow" never matches a
+// plain crossbow entry first.
 export function weaponNamed(term: string): SrdWeapon | null {
   const wanted = textKey(term);
   if (!wanted) {
@@ -161,9 +173,20 @@ export function weaponNamed(term: string): SrdWeapon | null {
   if (GEAR_NOT_WEAPONS.has(wanted)) {
     return null;
   }
-  const candidates = FORMS.filter(({ spellings }) => spellings.some((form) => wanted.includes(form) || form.includes(wanted))).map(
-    ({ weapon }) => weapon,
+  const inverted = /^([^,(]+),\s*([^,(]+)/.exec(term);
+  const orders = [wanted, ...(inverted ? [textKey(`${inverted[2]} ${inverted[1]}`)] : [])].map((key) => key.split(" "));
+  if (orders[0].some((word) => AMMUNITION_WORDS.has(word))) {
+    return null;
+  }
+  // Every run of words the name holds, written together.
+  const runs = new Set(
+    orders.flatMap((words) =>
+      words.flatMap((_, start) =>
+        Array.from({ length: Math.min(MOST_WORDS, words.length - start) }, (_, size) => words.slice(start, start + size + 1).join("")),
+      ),
+    ),
   );
+  const candidates = FORMS.filter(({ spellings }) => spellings.some((form) => runs.has(form))).map(({ weapon }) => weapon);
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
 }
