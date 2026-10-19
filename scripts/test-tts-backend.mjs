@@ -32,6 +32,9 @@ const {
   effectiveVoice,
   describeSpeechFailure,
   upstreamDetail,
+  speechTimeoutMs,
+  SPEECH_TIMEOUT_FLOOR_MS,
+  SPEECH_TIMEOUT_CEILING_MS,
   synthesizeSpeech,
   narrationModel,
   serverVoices,
@@ -40,7 +43,15 @@ const {
   SpeechEmptyError,
 } = backendLib;
 const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
-const { enqueueNarrationAudio, takeNarrationFailure, narrationAudioPath, voicePreviewName, isPreviewableVoice } = await import("../src/lib/tts.ts");
+const {
+  enqueueNarrationAudio,
+  takeNarrationFailure,
+  narrationAudioPath,
+  voicePreviewName,
+  isPreviewableVoice,
+  narrationOvertaken,
+  setNarrationStaleMsForTests,
+} = await import("../src/lib/tts.ts");
 const { subscribe } = await import("../src/lib/events.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign } = await import("../src/lib/db/campaigns.ts");
@@ -170,10 +181,30 @@ await test("a preview clip is named for the server, the model and the voice", ()
   assert.equal(isPreviewableVoice("x".repeat(121)), false);
 });
 
+await test("a speech request's patience grows with the passage, between a floor and a ceiling", () => {
+  assert.equal(SPEECH_TIMEOUT_FLOOR_MS, 30_000);
+  assert.equal(SPEECH_TIMEOUT_CEILING_MS, 60_000);
+  assert.equal(speechTimeoutMs(0), 30_000);
+  assert.equal(speechTimeoutMs(-5), 30_000);
+  // The longest passage of the 2026-10-19 session took 9 s on OpenAI.
+  assert.ok(speechTimeoutMs(950) > 45_000 && speechTimeoutMs(950) < 60_000);
+  assert.ok(speechTimeoutMs(400) < speechTimeoutMs(800));
+  assert.equal(speechTimeoutMs(100_000), 60_000);
+});
+
+await test("a passage is skipped only when it is stale, overtaken, and nobody asked for it by name", () => {
+  assert.equal(narrationOvertaken(25_000, true, false), true);
+  assert.equal(narrationOvertaken(5_000, true, false), false, "ordinary play reads every passage");
+  assert.equal(narrationOvertaken(25_000, false, false), false, "the newest passage is always read");
+  assert.equal(narrationOvertaken(25_000, true, true), false, "a replay is always read");
+});
+
 // ---- a stand-in speech server ----
 
 const seen = [];
 let mode = "ok";
+// Requests the stand-in is sitting on, dropped at the end.
+const hung = [];
 // What the stand-in lists at /v1/models; null answers 404, as Kokoro does.
 let listedModels = null;
 const server = http.createServer((request, response) => {
@@ -192,6 +223,20 @@ const server = http.createServer((request, response) => {
       return;
     }
     if (request.url === "/v1/audio/speech") {
+      if (mode === "stall" || mode === "stall-once") {
+        if (mode === "stall-once") {
+          mode = "ok";
+        }
+        hung.push(response);
+        return;
+      }
+      if (mode === "slow") {
+        setTimeout(() => {
+          response.writeHead(200, { "Content-Type": "audio/mpeg" });
+          response.end(Buffer.from("ID3-fake-mpeg"));
+        }, 300);
+        return;
+      }
       if (mode === "refuse") {
         response.writeHead(400, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ error: { message: "Voice not found" } }));
@@ -356,6 +401,97 @@ await test("Kokoro still sends its own model name", async () => {
   assert.equal(seen.filter((entry) => entry.url === "/v1/audio/speech").at(-1).body.model, "kokoro");
 });
 
+const speechCalls = () => seen.filter((entry) => entry.url === "/v1/audio/speech").length;
+
+await test("a speech request that stalls is asked once more, and the second answer is used", async () => {
+  mode = "stall-once";
+  const before = speechCalls();
+  const audio = await synthesizeSpeech("The stall clears.", "narrator_one", 1, ttsBackend(), { timeoutMs: 200 });
+  assert.equal(audio.toString(), "ID3-fake-mpeg");
+  assert.equal(speechCalls() - before, 2);
+});
+
+await test("a speech request that stalls twice fails as too slow, after exactly two tries", async () => {
+  mode = "stall";
+  const before = speechCalls();
+  const backend = ttsBackend();
+  await assert.rejects(synthesizeSpeech("Still stuck.", "narrator_one", 1, backend, { timeoutMs: 150 }), (error) => {
+    assert.match(describeSpeechFailure(error, backend), /took too long/);
+    return true;
+  });
+  assert.equal(speechCalls() - before, 2);
+  mode = "ok";
+});
+
+await test("a refusal is not retried", async () => {
+  mode = "refuse";
+  const before = speechCalls();
+  await assert.rejects(synthesizeSpeech("No.", "narrator_one", 1, ttsBackend()), SpeechHttpError);
+  assert.equal(speechCalls() - before, 1);
+  mode = "ok";
+});
+
+await test("a passage whose speech times out twice still tells the table why", async () => {
+  events.length = 0;
+  const realFetch = globalThis.fetch;
+  let asked = 0;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/audio/speech")) {
+      asked += 1;
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    }
+    return realFetch(url, init);
+  };
+  try {
+    await enqueueNarrationAudio(CAMP, "msg-stalled", "The provider is asleep.", [], "narrator_one");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.equal(asked, 2, "one try and one retry");
+  const failed = events.find((event) => event.type === "media_status" && event.payload.targetId === "msg-stalled" && event.payload.state === "failed");
+  assert.ok(failed, "a failed media_status was published");
+  assert.equal(failed.payload.reason, "The speech server took too long to answer.");
+  assert.equal(takeNarrationFailure("msg-stalled"), "The speech server took too long to answer.");
+});
+
+await test("narration that fell behind skips to the newest passage instead of reading the backlog", async () => {
+  mode = "slow";
+  events.length = 0;
+  setNarrationStaleMsForTests(100);
+  try {
+    const first = enqueueNarrationAudio(CAMP, "msg-lag-1", "The first passage, already being read.", [], "narrator_one");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const middle = enqueueNarrationAudio(CAMP, "msg-lag-2", "A passage the story has moved past.", [], "narrator_one");
+    const newest = enqueueNarrationAudio(CAMP, "msg-lag-3", "The scene as it stands now.", [], "narrator_one");
+    await Promise.all([first, middle, newest]);
+  } finally {
+    setNarrationStaleMsForTests(undefined);
+  }
+  assert.ok(fs.existsSync(narrationAudioPath(CAMP, "msg-lag-1")));
+  assert.ok(!fs.existsSync(narrationAudioPath(CAMP, "msg-lag-2")), "the overtaken passage was not rendered");
+  assert.ok(fs.existsSync(narrationAudioPath(CAMP, "msg-lag-3")));
+  const statuses = (id) => events.filter((event) => event.type === "media_status" && event.payload.targetId === id).map((event) => event.payload.state);
+  assert.deepEqual(statuses("msg-lag-2"), ["queued", "skipped"], "a skip is not announced as a failure");
+  assert.ok(events.some((event) => event.type === "tts_ready" && event.payload.messageId === "msg-lag-3"));
+});
+
+await test("a passage asked for by name is read even when narration has fallen behind", async () => {
+  mode = "slow";
+  setNarrationStaleMsForTests(100);
+  try {
+    const first = enqueueNarrationAudio(CAMP, "msg-ask-1", "Someone is talking.", [], "narrator_one");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const asked = enqueueNarrationAudio(CAMP, "msg-ask-2", "Read me again, please.", [], "narrator_one", null, { onDemand: true });
+    const newest = enqueueNarrationAudio(CAMP, "msg-ask-3", "And the story goes on.", [], "narrator_one");
+    await Promise.all([first, asked, newest]);
+  } finally {
+    setNarrationStaleMsForTests(undefined);
+  }
+  assert.ok(fs.existsSync(narrationAudioPath(CAMP, "msg-ask-2")));
+  assert.ok(fs.existsSync(narrationAudioPath(CAMP, "msg-ask-3")));
+  mode = "ok";
+});
+
 await test("a server that is not there says where it was looked for", async () => {
   mode = "ok";
   saveGlobalConfig({ speech: { ttsProvider: "kokoro", kokoroUrl: "http://127.0.0.1:9", ttsModel: "", ttsApiKey: "", ttsVoice: "" } });
@@ -373,6 +509,10 @@ await test("narration switched off asks for nothing and announces nothing", asyn
 });
 
 unsubscribe?.();
+for (const response of hung) {
+  response.destroy();
+}
+server.closeAllConnections?.();
 await new Promise((resolve) => server.close(resolve));
 process.chdir(previousCwd);
 removeTempDir(dir);
