@@ -14,7 +14,7 @@ import {
   type Contradiction,
   type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
-import { claimKindsFor, type ClaimKind, type PartRead } from "@/lib/dm/claims-logic";
+import { claimKindsFor, withoutSentences, type ClaimKind, type PartRead } from "@/lib/dm/claims-logic";
 import { hasQuotedLine, type SpokenLine } from "@/lib/dm/speech";
 import { guardGate, liveStateFor, readClaims } from "@/lib/dm/claims";
 
@@ -93,6 +93,29 @@ async function readNarration(
   };
 }
 
+// When the rewrite cannot be used, the sentences that contradict the results
+// are cut from what the table reads instead: a hit written on a miss, a blow
+// nobody rolled, a death that did not happen. A small model's rewrite often
+// kept the claim (Qwen3.6-35B at Q2 landed a club on a character whose
+// attacker was out of reach, and kept it when asked to fix it). Cut only when
+// enough of the story is left to read; otherwise the original stands, as
+// before.
+function cutContradictions(turn: DmTurn, contradictions: readonly Contradiction[], summary: string): void {
+  const quotes = contradictions.map((entry) => entry.clause).filter(Boolean);
+  if (!quotes.length) {
+    return;
+  }
+  const before = turn.narrationParts.join("\n\n").trim();
+  const parts = turn.narrationParts.map((part) => withoutSentences(part, quotes).trim()).filter(Boolean);
+  const after = parts.join("\n\n");
+  if (after === before || after.length < Math.min(120, Math.floor(before.length / 3))) {
+    return;
+  }
+  turn.narrationParts.length = 0;
+  turn.narrationParts.push(...parts);
+  console.warn(`[engine-boundary] turn ${turn.id}: cut the sentences the correction left contradicting (${summary})`);
+}
+
 export async function enforceEngineBoundary(
   campaign: Campaign,
   turn: DmTurn,
@@ -142,6 +165,7 @@ export async function enforceEngineBoundary(
   turn.callIndex += 1;
   if (error) {
     console.warn(`[engine-boundary] turn ${turn.id}: correction call failed (${summary})`);
+    cutContradictions(turn, contradictions, summary);
     return spoken;
   }
 
@@ -155,6 +179,7 @@ export async function enforceEngineBoundary(
     console.warn(
       `[engine-boundary] turn ${turn.id}: correction came back too short to use (${summary})`,
     );
+    cutContradictions(turn, contradictions, summary);
     return spoken;
   }
   // A rewrite is only an improvement if it actually removes contradictions. A
@@ -166,6 +191,7 @@ export async function enforceEngineBoundary(
     console.warn(
       `[engine-boundary] turn ${turn.id}: correction did not resolve the contradiction (${summary})`,
     );
+    cutContradictions(turn, contradictions, summary);
     return spoken;
   }
   // finalize() renders the turn's dice cards between the last narration part

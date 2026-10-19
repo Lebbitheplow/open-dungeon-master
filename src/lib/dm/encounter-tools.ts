@@ -540,6 +540,20 @@ function describeOrder(encounter: Encounter): string {
     .join(" > ");
 }
 
+// The refusal for an initiative roll by a character already in the fight's
+// order, or null. The engine rolls initiative when the fight begins, and a
+// model that rolled it again (Qwen3.6-35B at Q2 did, every fight) threw dice
+// in front of the table that changed nothing: recordInitiativeRoll keeps the
+// first count.
+export function heldInitiative(campaignId: string, characterId: string): string | null {
+  const encounter = getActiveEncounter(campaignId);
+  const entry = encounter?.order.find((candidate) => candidate.kind === "pc" && candidate.characterId === characterId);
+  if (!encounter || !entry) {
+    return null;
+  }
+  return `${entry.name} already has initiative ${entry.initiative} in this fight, so nothing was rolled. Initiative order: ${describeOrder(encounter)}. Play the turn of whoever is CURRENT.`;
+}
+
 // Records one PC's initiative result. When the last one lands, builds the
 // order, points the turn at the first living PC, and locks the floor.
 // Returns a note for the model when combat begins.

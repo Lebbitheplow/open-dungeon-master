@@ -22,7 +22,7 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { redactRoll } from "@/lib/dm/viewer";
 import { autoApplyDamageRoll } from "@/lib/dm/enemy-damage";
-import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
+import { heldInitiative, recordInitiativeRoll } from "@/lib/dm/encounter-tools";
 import { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import {
   resolveRollExpression,
@@ -115,6 +115,16 @@ export function handleRequestRoll(
         : `${sheet.name}'s damage on an enemy comes from Player attacks or a cast form, which roll the hit first; a bare damage roll does not land on an enemy.`,
       retry: true,
     };
+  }
+
+  // An initiative roll for a character the fight already ordered rolls
+  // nothing (src/lib/dm/encounter-tools.ts heldInitiative): it would change
+  // no count and only throw dice in front of the table.
+  if (args.kind === "initiative" && sheet) {
+    const held = heldInitiative(campaignId, sheet.id);
+    if (held) {
+      return { error: held, refused: "rules" };
+    }
   }
 
   const extras = sheet ? rollExtrasFor(campaign, sheet, args.kind) : { encumbrance: campaign.gameSettings.variantRules.encumbrance };

@@ -1337,6 +1337,8 @@
     "lib/dm/mutations.ts#str-list": [["key",8,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/mutations.ts#str-startsWith": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/mutations.ts#toLowerCase": [["key",6,"condition labels (engine vocabulary, tool argument); class ids"]],
+    "lib/dm/narration-tidy-logic.ts#\\b": [["english-extra",2,"a net for a small model's English fight bookkeeping in bold (COMBAT_HEADING: a turn, a round, the fight, initiative); the cut of a recited order of the fight's own names works in every language, and a heading in another language is only left in the prose"]],
+    "lib/dm/narration-tidy-logic.ts#re-word": [["english-extra",1,"a net for a small model's English fight bookkeeping in bold (COMBAT_HEADING: a turn, a round, the fight, initiative); the cut of a recited order of the fight's own names works in every language, and a heading in another language is only left in the prose"]],
     "lib/dm/notice-logic.ts#\\b": [["key",1,"condition labels (engine vocabulary)"],["table-language",6,"meaning reader: underground, indoor and outdoor words read in a location's name and description (authors and the model write them)"]],
     "lib/dm/notice-logic.ts#re-word": [["table-language",3,"meaning reader: underground, indoor and outdoor words read in a location's name and description (authors and the model write them)"],["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/npc-logic.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],

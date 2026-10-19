@@ -92,6 +92,9 @@ export type AttackFact = {
   // when one call rolled several swings that did not agree (a Multiattack that
   // missed once and hit once).
   ambiguous: boolean;
+  // Whether any call or swing this turn hit a creature under this name; a
+  // blow the prose lands on it is unrolled when none did, ambiguous or not.
+  anyHit?: boolean;
 };
 
 // The encounter as it stands when the narration is checked, read by the rim
@@ -432,15 +435,17 @@ export function resolveOutcomes(
           .filter((value): value is boolean => typeof value === "boolean");
         const mixedSwings =
           swingOutcomes.length > 1 && swingOutcomes.some((value) => value !== swingOutcomes[0]);
+        const landed = result.hit || swingOutcomes.some(Boolean);
         const existing = attacks.get(key);
         if (!existing) {
-          attacks.set(key, { display, hit: result.hit, ambiguous: mixedSwings });
+          attacks.set(key, { display, hit: result.hit, ambiguous: mixedSwings, anyHit: landed });
         } else {
           existing.ambiguous =
             existing.ambiguous ||
             mixedSwings ||
             existing.hit !== result.hit ||
             existing.display !== display;
+          existing.anyHit = Boolean(existing.anyHit) || landed;
         }
       }
     }
@@ -466,7 +471,7 @@ export function resolveOutcomes(
         touched.add(key);
       }
       if (enemy && key.length >= 3 && !attacks.has(key)) {
-        attacks.set(key, { display: enemy.name, hit: false, ambiguous: (perKey.get(key) ?? 0) > 1 });
+        attacks.set(key, { display: enemy.name, hit: false, ambiguous: (perKey.get(key) ?? 0) > 1, anyHit: false });
       }
     }
     // The encounter's own hit points come last, so they win: they are the
@@ -574,6 +579,14 @@ export function ruleClaims(claims: readonly NarrationClaim[], outcomes: Resolved
           break;
         }
         if (attack.ambiguous) {
+          // Two creatures under one name (Bandit 1 and Bandit 2), or swings
+          // that disagree: the clause cannot be pinned to one roll. But when
+          // nothing this turn hit any of them, a blow the prose lands on that
+          // name landed on nobody (Qwen3.6-35B at Q2 wrote a stab home after
+          // its swing was refused as out of reach).
+          if (claim.kind === "hit" && attack.anyHit === false) {
+            add({ kind: "hit", detail: `no attack on ${attack.display} hit this turn, but the narration lands one`, clause: claim.quote });
+          }
           break;
         }
         if (claim.kind === "hit" && !attack.hit) {

@@ -96,6 +96,7 @@ import {
   unrolledDamagePrompt,
 } from "@/lib/dm/engine-boundary";
 import { withoutAsides, type PartRead } from "@/lib/dm/claims-logic";
+import { withoutCombatBookkeeping, withoutRepeatedSentences } from "@/lib/dm/narration-tidy-logic";
 import { readAsides, readReply, registeringNames } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import type { SpokenLine } from "@/lib/dm/speech";
@@ -300,6 +301,15 @@ type TurnContext = {
 
 // Compact snapshot of the active encounter for the GAME STATE block. Exact
 // HP is model-facing only; clients get vague health states elsewhere.
+// Everyone in the running fight by the names the prose would use, or none.
+function fightNames(campaignId: string): string[] {
+  const encounter = getActiveEncounter(campaignId);
+  if (!encounter) {
+    return [];
+  }
+  return [...encounter.order.map((entry) => entry.name), ...listEnemies(encounter.id).map((enemy) => enemy.displayName)];
+}
+
 function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
   const encounter = getActiveEncounter(campaignId);
   if (!encounter) {
@@ -2689,7 +2699,10 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
 
   // Persist the turn: narration segments joined, roll markers appended so
   // the UI renders dice cards inline between narration and interpretation.
-  const narrationParts = turn.narrationParts;
+  // What the table reads keeps the fight's bookkeeping out of the story and
+  // says each sentence once (src/lib/dm/narration-tidy-logic.ts).
+  const combatants = fightNames(campaignId);
+  const narrationParts = withoutRepeatedSentences(turn.narrationParts.map((part) => withoutCombatBookkeeping(part, combatants)));
   let content = narrationParts.join("\n\n").trim();
   if (!content) {
     // A refused player action says why instead of the bare fallback line.
