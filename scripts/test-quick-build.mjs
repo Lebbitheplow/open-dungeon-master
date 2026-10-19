@@ -115,6 +115,20 @@ await test("every quiz path suggests two different characters", () => {
   }
 });
 
+await test("the first question is the playstyle picker's, in its words", async () => {
+  const { PLAYSTYLES } = await import("../src/app/characters/builder/playstyles.ts");
+  assert.deepEqual(QUIZ_ROLES.map((role) => [role.id, role.label]), PLAYSTYLES.map((style) => [style.id, style.label]));
+  assert.deepEqual(QUIZ_ROLES.map((role) => role.label), [
+    "Hold the line, take the hits",
+    "Deal the damage",
+    "Keep everyone alive",
+    "Help the team, control the battlefield",
+    "Scout, sneak, solve problems",
+  ]);
+  // Each with the gamer's word for it, as the design names them.
+  assert.deepEqual(QUIZ_ROLES.map((role) => role.tag), ["Tank", "DPS", "Healer", "Support / Control", "Utility"]);
+});
+
 await test("the answers lead to the class they describe", () => {
   const first = (answers) => suggestBuilds(answers, offered)[0].classId;
   assert.equal(first({ role: "healer", method: "magic", source: "faith", outside: "lore" }), "cleric");

@@ -31,7 +31,8 @@ export type QuizVoice = "player" | "party";
 type Question = {
   key: keyof QuizAnswers;
   title: string;
-  options: ReadonlyArray<{ id: string; label: string }>;
+  // A job's gamer word, printed in bold brackets after it ("(Tank)").
+  options: ReadonlyArray<{ id: string; label: string; tag?: string }>;
 };
 
 function questions(voice: QuizVoice, method: QuizAnswers["method"] | undefined): Question[] {
@@ -59,6 +60,7 @@ export function QuickBuildQuiz({
   races,
   backgrounds,
   recommended,
+  initial,
   onChoose,
   onCancel,
 }: {
@@ -68,13 +70,18 @@ export function QuickBuildQuiz({
   races: RaceOption[];
   backgrounds: BackgroundOption[];
   recommended?: ReadonlySet<string>;
+  // A job already picked on the first step: the quiz opens on question 2.
+  initial?: Partial<QuizAnswers>;
   onChoose: (seed: BuildSeed, answers: QuizAnswers) => void;
   onCancel: () => void;
 }) {
-  const [answers, setAnswers] = useState<Partial<QuizAnswers>>({});
-  const [page, setPage] = useState(0);
+  const [answers, setAnswers] = useState<Partial<QuizAnswers>>(initial ?? {});
+  const [page, setPage] = useState(initial?.role ? 1 : 0);
   const asked = questions(voice, answers.method);
   const done = page >= asked.length;
+  // The source question counts until the second answer rules it out, so
+  // the count never grows partway through.
+  const total = answers.method ? asked.length : asked.length + 1;
   const question = asked[page];
 
   function answer(key: keyof QuizAnswers, id: string) {
@@ -106,7 +113,7 @@ export function QuickBuildQuiz({
         </h2>
         {!done ? (
           <span className="ml-auto text-xs text-stone-500">
-            Question {page + 1} of {asked.length}
+            Question {page + 1} of {total}
           </span>
         ) : null}
       </div>
@@ -129,6 +136,7 @@ export function QuickBuildQuiz({
                   )}
                 >
                   {option.label}
+                  {option.tag ? <strong className="font-semibold"> ({option.tag})</strong> : null}
                 </button>
               );
             })}

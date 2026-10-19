@@ -45,7 +45,9 @@ const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
 // ---- the quiz ----
 
-export type QuizRole = "tank" | "dps" | "healer" | "support" | "utility";
+// The first question's answers are the class step's playstyle picker's
+// (playstyles.ts): one set of words for a job, wherever it is asked.
+export type QuizRole = PlaystyleId;
 export type QuizMethod = "weapons" | "magic" | "mix";
 export type QuizSource = "study" | "faith" | "nature" | "born" | "bargain" | "music";
 export type QuizOutside = "talk" | "explore" | "lore" | "door";
@@ -54,13 +56,7 @@ export type QuizAnswers = { role: QuizRole; method: QuizMethod; source?: QuizSou
 // The four questions, in the words agreed on 2026-10-15
 // (brainstorms/2026-10-14-character-builder/quick-build-design.md). The DM's
 // quick companion asks the first one about the party.
-export const QUIZ_ROLES: ReadonlyArray<{ id: QuizRole; label: string; roles: ClassRole[] }> = [
-  { id: "tank", label: "Hold the line, take the hits", roles: ["Tank"] },
-  { id: "dps", label: "Deal the damage", roles: ["DPS"] },
-  { id: "healer", label: "Keep everyone alive", roles: ["Healer"] },
-  { id: "support", label: "Help the team, control the battlefield", roles: ["Support", "Control"] },
-  { id: "utility", label: "Scout, sneak, solve problems", roles: ["Utility"] },
-];
+export const QUIZ_ROLES: ReadonlyArray<{ id: QuizRole; label: string; tag?: string; roles: ClassRole[] }> = PLAYSTYLES;
 export const QUIZ_METHODS: ReadonlyArray<{ id: QuizMethod; label: string }> = [
   { id: "weapons", label: "Weapons" },
   { id: "magic", label: "Magic" },
@@ -107,14 +103,6 @@ const sameKey = (left: string, right: string) => {
   return key(left) === key(right);
 };
 
-const PLAYSTYLE_OF_ROLE: Record<QuizRole, PlaystyleId> = {
-  tank: "front",
-  dps: "hit",
-  healer: "help",
-  support: "help",
-  utility: "sneak",
-};
-
 // How well a class answers the quiz. The roles are the class's own
 // (src/lib/srd/class-roles.ts); weapons or magic is its caster type; the
 // source is the spell list it casts from.
@@ -140,7 +128,7 @@ function classScore(klass: ClassOption, answers: QuizAnswers, recommended?: Read
   if (EASY_CLASSES.has(klass.id)) score += 0.5;
   // The usual first character for the job, in the playstyle picker's order
   // (playstyles.ts): a fighter before a barbarian for the front line.
-  const usual = PLAYSTYLES.find((style) => style.id === PLAYSTYLE_OF_ROLE[answers.role])?.first ?? [];
+  const usual = PLAYSTYLES.find((style) => style.id === answers.role)?.first ?? [];
   if (usual.includes(klass.id)) score += 0.3 - usual.indexOf(klass.id) * 0.05;
   // Between two that answer alike: the setting's own class at a table that
   // has one, the core book's anywhere else.

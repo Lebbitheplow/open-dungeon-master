@@ -108,16 +108,16 @@ export default {
     await t.shot("help-search");
     await page.keyboard.press("Escape");
 
-    // The character builder: how you want to play comes first, with the
+    // The character builder: your job in a fight comes first, with the
     // backgrounds that suit it, and a line counts the choices left.
     await t.open("/characters/new");
-    const playstyle = page.getByRole("radiogroup", { name: "How do you want to play?" }).locator("visible=true").first();
+    const playstyle = page.getByRole("radiogroup", { name: "In a fight, what's your job?" }).locator("visible=true").first();
     await eventually(() => playstyle.count(), { timeoutMs: 30_000, label: "the playstyle question on step 1" });
     // The builder keeps every step mounted; the active one's line is the one read.
     const owed = page.locator(`${root}[data-active] [data-owed]`).first();
     await eventually(() => owed.count(), { label: "the choices-left line" });
     check(/choice.? left on this step/.test(await owed.innerText()) && /Name/.test(await owed.innerText()), `the line names what is owed ("${await owed.innerText()}")`);
-    await t.tap(playstyle.getByRole("radio", { name: "Stand in front" }));
+    await t.tap(playstyle.getByRole("radio", { name: "Hold the line, take the hits" }));
     const hints = page.locator(`${root}[data-background-hints]`).locator("visible=true").first();
     await eventually(() => hints.count(), { label: "backgrounds that suit the playstyle" });
     await page.getByRole("textbox", { name: "Name" }).locator("visible=true").first().fill("Wren Ashdown");

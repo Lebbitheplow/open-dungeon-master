@@ -307,7 +307,7 @@
     "app/characters/builder/lineage.ts#toUpperCase": [["display",3,"ability abbreviation, capitalised text"]],
     "app/characters/builder/owed.ts#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/playstyles.ts#str-key": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
-    "app/characters/builder/playstyles.ts#str-list": [["key",21,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/characters/builder/playstyles.ts#str-list": [["key",22,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/playstyles.ts#toLowerCase": [["key",1,"skill id"]],
     "app/characters/builder/reconcile.ts#toLowerCase": [["key",3,"skill id, the key a granted skill is looked up by"],["english-source",2,"reference: bundled SRD racial trait names compared with an SRD skill name"]],
     "app/characters/builder/steps/AbilitiesStep.tsx#toLowerCase": [["display",4,"race and class in a sentence"]],

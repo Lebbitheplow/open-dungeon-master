@@ -1,5 +1,6 @@
-// The quick build (F1, F2): "Help me build" on a new character's first step
-// asks four questions, offers a suggested character and a second choice,
+// The quick build (F1, F2): a new character's first step asks the quiz's
+// first question, "In a fight, what's your job?". "Help me build" there
+// asks the other three, offers a suggested character and a second choice,
 // and fills the one chosen; the read-back marks every pick "Picked for
 // you" and one Undo puts the builder back. "Fill what's left" fills only
 // the empty slots and keeps a name the player typed.
@@ -26,11 +27,20 @@ export default {
     const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
     await fresh(t);
 
-    // The door, and the four questions.
+    // The first question on the step, then the other three in the quiz.
+    const job = page.getByRole("radiogroup", { name: "In a fight, what's your job?" }).locator("visible=true").first();
+    await eventually(() => job.count(), { timeoutMs: 15_000, label: "the job question on step 1" });
+    const healer = job.getByRole("radio", { name: "Keep everyone alive" });
+    check(/\(Healer\)/.test(await healer.innerText()), "each job carries its gamer word");
+    await t.tap(healer);
     const door = visible(page, root, /^Help me build$/);
-    await eventually(() => door.count(), { timeoutMs: 15_000, label: "the Help me build door" });
+    await eventually(() => door.count(), { timeoutMs: 15_000, label: "Help me build" });
     await t.tap(door.first());
-    for (const answer of [/^Keep everyone alive$/, /^Magic$/, /^Faith$/, /^Knows the lore$/]) {
+    await eventually(
+      async () => /Question 2 of 4/.test(await page.locator(`${root}[data-quick-quiz]`).first().innerText()),
+      { timeoutMs: 10_000, label: "the quiz opening on question 2" },
+    );
+    for (const answer of [/^Magic$/, /^Faith$/, /^Knows the lore$/]) {
       const option = visible(page, root, answer);
       await eventually(() => option.count(), { timeoutMs: 10_000, label: `the answer ${answer}` });
       await t.tap(option.first());

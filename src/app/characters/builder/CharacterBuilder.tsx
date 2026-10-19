@@ -212,8 +212,8 @@ function CharacterBuilderForm({
   // Where the first step's back arrow leads (the page or dialog it opened
   // from), as every other wizard's does; later steps step back as before.
   onCancel?: () => void;
-  // Whose quick build the "Help me build" door asks about: a player's own
-  // hero, or (the DM's quick companion) what the party needs.
+  // Whose job the first step's question and "Help me build" ask about: a
+  // player's own hero, or (the DM's quick companion) what the party needs.
   quizVoice?: QuizVoice;
   className?: string;
 }) {
@@ -350,8 +350,8 @@ function CharacterBuilderForm({
   // The spell step's own list for this class, so a fill picks what the
   // step would offer (shared with it: one fetch).
   const { pool: spellPool } = useSpellPool(derived.spellSearchClass, derived.maxSpellLevel, derived.casts);
-  const [quiz, setQuiz] = useState(false);
-  const [doorClosed, setDoorClosed] = useState(false);
+  // "Help me build" open, with the job already picked on the first step.
+  const [quiz, setQuiz] = useState<{ role: PlaystyleId | null } | null>(null);
   const fill = useQuickFill({
     state,
     derived,
@@ -488,9 +488,6 @@ function CharacterBuilderForm({
     }
     window.setTimeout(() => locate(target), 350);
   }
-  // "Help me build" waits on the first step of a new character nobody has
-  // started, until it is taken or turned down.
-  const showDoor = !initial && !begun && !quiz && !doorClosed && !draftOffer && step === 0 && !fill.readback && !fill.running;
   const casts = derived.casts;
   // The classes this table offers, as the playstyle answer reads them.
   const playstyleOffered = pickers.classGroups.flatMap((group) =>
@@ -528,6 +525,8 @@ function CharacterBuilderForm({
                     chosenClass: klass?.id ?? "",
                     onChooseClass: state.changeClass,
                     backgrounds: playstyle ? playstyleBackgrounds(playstyle, backgrounds) : [],
+                    question: quizVoice === "party" ? "What does the party need?" : "In a fight, what's your job?",
+                    onHelpMeBuild: (role) => setQuiz({ role }),
                   }
             }
             backgroundGroups={pickers.backgroundGroups}
@@ -698,21 +697,6 @@ function CharacterBuilderForm({
           </button>
         </div>
       ) : null}
-      {showDoor ? (
-        <div data-quick-door="" className="reveal mb-3 flex shrink-0 flex-wrap items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-950/20 px-3 py-2 text-xs text-sky-100">
-          <span className="min-w-0 flex-1">
-            {quizVoice === "party"
-              ? "Need an ally fast? Say what the party needs and get a ready companion. You can change any part before adding them."
-              : "New to this? Answer 4 questions and get a ready character. You can change any part before saving."}
-          </span>
-          <button type="button" onClick={() => setQuiz(true)} className={cn(ui.btnSmall, "border-sky-500/50 text-sky-100")}>
-            Help me build
-          </button>
-          <button type="button" onClick={() => setDoorClosed(true)} className={cn(ui.btnSmall, "text-stone-400")}>
-            Choose everything myself
-          </button>
-        </div>
-      ) : null}
       {fill.readback ? (
         <QuickBuildReadback
           readback={fill.readback}
@@ -734,13 +718,12 @@ function CharacterBuilderForm({
           races={offered.races}
           backgrounds={offered.backgrounds}
           recommended={offered.recommended}
-          onCancel={() => {
-            setQuiz(false);
-            setDoorClosed(true);
-          }}
+          initial={quiz.role ? { role: quiz.role } : undefined}
+          onCancel={() => setQuiz(null)}
           onChoose={(seed, answers) => {
-            setQuiz(false);
-            setDoorClosed(true);
+            setQuiz(null);
+            // The class step's picker opens on the job the quiz was given.
+            setPlaystyle(answers.role);
             startFill({ seed, answers });
           }}
         />
