@@ -11,6 +11,7 @@ import {
   type WorkshopBundle,
 } from "@/lib/workshop/bundle-schema";
 import { isWorldForgeExport, readWorldForge, type WorldImport } from "@/lib/worldforge/format";
+import { unpackMedia } from "./bundle-media.ts";
 
 export * from "@/lib/workshop/bundle-schema";
 
@@ -426,6 +427,15 @@ export function readBundle(text: string, options: { maxBytes?: number } = {}): B
       error: `That bundle is format version ${String(record.version)}; this build reads version ${WORKSHOP_BUNDLE_VERSION}.`,
     };
   }
+  // A workshop bundle's shared picture list is laid back into the fields
+  // that name it (src/lib/workshop/bundle-media.ts), so the rest reads
+  // pictures inline. Only a workshop bundle's: a WorldForge file has a
+  // `media` of its own, read by its own importer above.
+  const unpacked = worldForge ? { value: parsed } : unpackMedia(parsed);
+  if ("error" in unpacked) {
+    return unpacked;
+  }
+  parsed = unpacked.value;
   const result = workshopBundleSchema.safeParse(parsed);
   if (!result.success) {
     const first = result.error.issues[0];
