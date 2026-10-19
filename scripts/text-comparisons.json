@@ -794,6 +794,8 @@
     "lib/characters/options.ts#\\b": [["english-source",1,"ODM's bundled SRD background equipment and race languages (bundled data)"]],
     "lib/characters/options.ts#re-word": [["english-source",2,"ODM's bundled SRD background equipment and race languages (bundled data)"]],
     "lib/characters/options.ts#toLowerCase": [["key",1,"pack slug"]],
+    "lib/chat-roles-logic.ts#re-word": [["english-source",1,"the chat template's own English error message, read to name the refusal"]],
+    "lib/chat-roles-logic.ts#str-eq": [["key",2,"chat message roles"]],
     "lib/classes/feature-text.ts#str-key": [["key",1,"genre ids"]],
     "lib/classes/index.ts#str-key": [["key",1,"SRD class ids and genre tags"]],
     "lib/comfyui.ts#str-eq": [["key",1,"ComfyUI status value"]],

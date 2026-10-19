@@ -45,6 +45,7 @@ import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
 import { currentJobSignal, jobStopReason, noteJobProgress, withJobStage } from "@/lib/dm/job-control";
 import { MODEL_STAGE_GRACE_MS } from "@/lib/dm/job-stage-logic";
+import { rolesMustAlternate, withAlternatingRoles } from "@/lib/chat-roles-logic";
 import {
   createStreamRepetitionGuard,
   cutRepetition,
@@ -393,6 +394,9 @@ export function contextOverflowWindow(text: string): number | null {
 // instead of paying the 400 again.
 const learnedToolRoutes = new Map<string, OpenAiToolRoute>();
 const rememberedDrops = new Map<string, Set<string>>();
+// Models whose chat template refused two user messages in a row
+// (src/lib/chat-roles-logic.ts): sent with neighbours joined from then on.
+const alternatingRoles = new Set<string>();
 
 // llama.cpp and llama-swap expose the real n_ctx the server was launched with
 // (its -c flag) on /props. Nothing else in the OpenAI-compatible ecosystem
@@ -980,6 +984,7 @@ async function requestCustomMessageNow(
     ...(rememberedDrops.get(routeKey) ?? []),
     ...(options.dropParams ?? []),
   ]);
+  const sentMessages = alternatingRoles.has(routeKey) ? withAlternatingRoles(messages) : messages;
   const chatEndpoint = customChatEndpoint(trimmedBase);
   const endpoint = viaResponses ? customResponsesEndpoint(trimmedBase) : chatEndpoint;
   const { isGlobalBackend, isUtilityBackend, resolvedKey } = resolveCustomKey(trimmedBase, apiKey, endpoint);
@@ -1015,7 +1020,7 @@ async function requestCustomMessageNow(
   const requestPayload: Record<string, unknown> = viaResponses
     ? responsesPayload({
         model: resolvedModel,
-        messages,
+        messages: sentMessages,
         sampling,
         maxOutputTokens: callOutputCap(maxOutputTokensFor(trimmedBase, resolvedModel), options),
         stream: Boolean(onDelta),
@@ -1026,7 +1031,7 @@ async function requestCustomMessageNow(
         model: resolvedModel,
         // A Responses turn's reasoning items are that API's own; Chat
         // Completions would refuse the unknown field.
-        messages: messages.map((message) => {
+        messages: sentMessages.map((message) => {
           if (!message.provider_items) return message;
           const rest = { ...message };
           delete rest.provider_items;
@@ -1159,6 +1164,15 @@ async function requestCustomMessageNow(
         stripImageParts(messages),
         options,
       );
+    }
+
+    // A chat template that takes user and assistant only in turn refused two
+    // user messages in a row: the same call again with neighbours joined,
+    // and every later call for this model joined from the start.
+    if (!alternatingRoles.has(routeKey) && rolesMustAlternate(text)) {
+      console.warn(`[model] ${endpoint}: ${resolvedModel}'s chat template takes user and assistant in turn; joining neighbouring messages`);
+      alternatingRoles.add(routeKey);
+      return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, options);
     }
 
     // A request bigger than the server's window. The refusal often names

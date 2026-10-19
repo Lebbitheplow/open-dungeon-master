@@ -54,6 +54,13 @@ const server = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "boom" }));
         return;
       }
+      // Mistral's template, as llama-server reports it: no two user messages in a row.
+      if (mode === "alternate" && body.messages.some((message, index) => index > 0 && message.role === "user" && body.messages[index - 1].role === "user")) {
+        res.writeHead(500, { "Content-Type": "application/json" }).end(
+          JSON.stringify({ error: { code: 500, message: "Error: Jinja Exception: After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results.", type: "server_error" } }),
+        );
+        return;
+      }
       if (mode.startsWith("n_ctx:")) {
         const nCtx = Number(mode.slice(6));
         const size = Math.ceil(JSON.stringify(body.messages).length / 4) + Math.ceil(JSON.stringify(body.tools ?? []).length / 4);
@@ -183,6 +190,31 @@ const lastCalls = (n) =>
   assert.equal(usage.reasoning_tokens, 12);
   assert.equal(usage.role, "utility", "utility work on the story route is still recorded as utility");
   console.log(`ok: fitted to 8K (${sentTokens} tokens sent, reply cap ${sent.max_tokens}) and recorded with its cache and reasoning`);
+}
+
+// ---- 1b. a template that takes user and assistant only in turn ------------------
+{
+  process.env.OPENAI_COMPAT_CONTEXT = "8192";
+  behaviour.set("strict-roles", "alternate");
+  seen.chat.length = 0;
+  const turn = [
+    { role: "system", content: "Rules." },
+    { role: "user", content: "=== THIS TURN ===\nThe state." },
+    { role: "user", content: "[Avery | attempt] I search the cart." },
+  ];
+  const first = await requestDmMessage(settings({ customModel: "strict-roles" }), turn, { onDelta: () => {} });
+  assert.ok(!first.error, "the refused call went through once the messages were joined");
+  assert.equal(seen.chat.length, 2, "refused once, then sent joined");
+  assert.deepEqual(seen.chat[1].messages.map((message) => message.role), ["system", "user"]);
+  assert.equal(seen.chat[1].messages[1].content, "=== THIS TURN ===\nThe state.\n\n[Avery | attempt] I search the cart.");
+  seen.chat.length = 0;
+  const next = await requestDmMessage(settings({ customModel: "strict-roles" }), turn, { onDelta: () => {} });
+  assert.ok(!next.error);
+  assert.equal(seen.chat.length, 1, "the model's next call is joined from the start");
+  seen.chat.length = 0;
+  await requestDmMessage(settings(), turn, { onDelta: () => {} });
+  assert.deepEqual(seen.chat[0].messages.map((message) => message.role), ["system", "user", "user"], "another model is sent the messages as they are");
+  console.log("ok: a template that refuses two user messages in a row is sent them joined, from then on");
 }
 
 // ---- 2. refused before the call on a known window ---------------------------------
