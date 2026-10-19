@@ -1,5 +1,6 @@
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { owedChoices } from "@/lib/srd/owed-choices";
+import { textKey } from "@/lib/language/text-logic";
 
 // What taking a seat does to a hero, in words, for the confirm sheet a
 // player reads before joining (backlog F6, JoinConfirmDialog.tsx). It
@@ -56,7 +57,7 @@ function spellsOf(sheet: Sheet): string[] {
   ];
   const seen = new Map<string, string>();
   for (const name of lists.flat()) {
-    const key = name.trim().toLowerCase();
+    const key = textKey(name);
     if (key && !seen.has(key)) {
       seen.set(key, name.trim());
     }
@@ -107,15 +108,15 @@ export function joinChanges(
 
   const givenBack = (stored.asiChoices ?? []).length - (seated.asiChoices ?? []).length;
   if (givenBack > 0) {
-    const seatedFeats = new Set((seated.feats ?? []).map((feat) => feat.toLowerCase()));
-    const feats = (stored.feats ?? []).filter((feat) => !seatedFeats.has(feat.toLowerCase()));
+    const seatedFeats = new Set((seated.feats ?? []).map(textKey));
+    const feats = (stored.feats ?? []).filter((feat) => !seatedFeats.has(textKey(feat)));
     changes.push(
       `Gives back ${plural(givenBack, "Ability Score Improvement")} this level has not earned${feats.length ? `, with ${feats.join(", ")}` : ""}.`,
     );
   }
 
-  const seatedSpells = new Set(spellsOf(seated).map((name) => name.toLowerCase()));
-  const lostSpells = spellsOf(stored).filter((name) => !seatedSpells.has(name.toLowerCase()));
+  const seatedSpells = new Set(spellsOf(seated).map(textKey));
+  const lostSpells = spellsOf(stored).filter((name) => !seatedSpells.has(textKey(name)));
   if (stored.spellcasting && !seated.spellcasting) {
     changes.push("Loses its spellcasting with the class levels it gives back.");
   } else if (lostSpells.length) {
