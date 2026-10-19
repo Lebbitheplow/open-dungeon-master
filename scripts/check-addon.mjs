@@ -24,7 +24,7 @@ if (!target) {
   process.exit(2);
 }
 
-const { addonManifestSchema, addonFit, CONTRIBUTION_KINDS } = await import("../src/lib/addons/manifest.ts");
+const { addonManifestSchema, addonFit, CONTRIBUTION_KINDS, platformName } = await import("../src/lib/addons/manifest.ts");
 const { readArchiveManifest, unpackArchive } = await import("../src/lib/addons/archive.ts");
 const { resolveInside } = await import("../src/lib/addons/paths.ts");
 
@@ -75,7 +75,14 @@ if (manifest) {
   }
 }
 
-if (manifest && run && !problems.length) {
+// A program is started only where it says it runs: an addon for Windows
+// alone is not failed on a Linux machine. The catalog audit starts it on a
+// runner of every platform (.github/workflows/addon-catalog.yml).
+const hostFit = manifest ? addonFit(manifest, { platform: process.platform, arch: process.arch, serverVersion: "999.0.0" }) : null;
+const runHere = run && hostFit?.ok === true;
+if (run && hostFit && !hostFit.ok) notes.push(`not started on ${platformName(process.platform)}: ${hostFit.reason}`);
+
+if (manifest && runHere && !problems.length) {
   // A throwaway world: the addon runs as a development folder, switched on,
   // with nothing of a real server's around it.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "odm-check-run-"));
@@ -118,5 +125,5 @@ if (problems.length) {
   for (const problem of problems) console.error(`FAIL ${problem}`);
   process.exit(1);
 }
-console.log(`OK ${manifest.id} ${manifest.version}${run ? " (started and checked)" : ""}`);
+console.log(`OK ${manifest.id} ${manifest.version}${runHere ? " (started and checked)" : run ? ` (not started on ${platformName(process.platform)})` : ""}`);
 process.exit(0);
