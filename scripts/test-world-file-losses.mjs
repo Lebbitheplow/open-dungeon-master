@@ -67,11 +67,14 @@ await test("Every loss is named: cut text, a repeated id, an entry with no name,
 const whole = () => {
   const file = fresh();
   delete file.media.entityImages.e_mira;
+  // A scene's cast beyond its point of view does not fit a card (WF-19).
+  for (const scene of file.scenes) scene.castEntityIds = [];
   return file;
 };
 
 await test("A file that comes in whole names no loss, and says the party starts knowing no secret.", () => {
   assert.match(readWorldForge(fresh()).losses.join(" "), /Mira Fenn: its picture is not a PNG/, "the fixture's disguised script is named");
+  assert.deepEqual(readWorldForge(fresh()).sceneLosses, [{ scene: "The Missing Codes", lost: ["its cast beyond its point of view: “Mira Fenn” (a card names one Who)"] }]);
   const read = readWorldForge(whole());
   assert.deepEqual(read.losses, []);
   assert.ok(read.notes.some((note) => /knowing none of it/.test(note)));

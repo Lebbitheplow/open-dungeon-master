@@ -7,9 +7,11 @@ import {
   type Beat,
   type BeatKind,
   type BeatLinks,
+  type BeatOrigin,
   type EdgeRoute,
 } from "@/lib/workshop/board";
 import type { ImportIdMap } from "@/lib/db/content-import";
+import { BUNDLE_ORIGIN, recordOrigin } from "@/lib/db/content-origins";
 
 // Storage for the storyboard. Rows are cards: a kind, a title, some prose,
 // optional links to other things in the same workshop, and the arrows the DM
@@ -50,7 +52,9 @@ function mapBeat(row: BeatRow): Beat {
 
 export function listBeats(campaignId: string): Beat[] {
   const rows = getDatabase()
-    .prepare(`SELECT * FROM workshop_beats WHERE campaign_id = ? ORDER BY created_at`)
+    // rowid breaks a tie: a bundle or a copy writes its cards in one
+    // instant, and they read back in the order they were written.
+    .prepare(`SELECT * FROM workshop_beats WHERE campaign_id = ? ORDER BY created_at, rowid`)
     .all(campaignId) as BeatRow[];
   return rows.map(mapBeat);
 }
@@ -245,7 +249,33 @@ export function copyBeats(
         now,
         now,
       );
+      recordOrigin(targetId, "beats", newIds.get(beat.id)!, sourceId, beat.id);
     }
   })();
   return beats.length;
+}
+
+// Where each card on a board came from (audit WF-19), by card id. A card
+// with no entry was made here. A WorldForge card names the world it came
+// from and its scene, which is how opening that file again finds it.
+export function beatOrigins(campaignId: string): Record<string, BeatOrigin> {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT o.row_id AS id, o.origin_id AS origin, o.origin_row_id AS row, c.title AS title
+         FROM content_origins o
+         JOIN workshop_beats b ON b.id = o.row_id AND b.campaign_id = o.campaign_id
+         LEFT JOIN campaigns c ON c.id = o.origin_id
+        WHERE o.campaign_id = ? AND o.kind = 'beats'`,
+    )
+    .all(campaignId) as Array<{ id: string; origin: string; row: string; title: string | null }>;
+  return Object.fromEntries(
+    rows.map((row): [string, BeatOrigin] => [
+      row.id,
+      row.origin.startsWith("wf:")
+        ? { kind: "worldforge", world: row.origin.slice("wf:".length), scene: row.row }
+        : row.origin === BUNDLE_ORIGIN
+          ? { kind: "bundle", ref: row.row }
+          : { kind: "copy", workshopId: row.origin, title: row.title ?? "" },
+    ]),
+  );
 }

@@ -2,7 +2,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { getDatabase } from "@/lib/db/core";
 import { getCampaignById } from "@/lib/db/campaigns";
-import { getBeat, insertBeat, listBeats, updateBeat } from "@/lib/db/workshop-beats";
+import { landScenes, planBoardExport } from "@/lib/db/world-forge-scenes";
+import { sceneLossLines, type SceneLoss } from "@/lib/worldforge/scenes";
 import { aspectOfBytes, importBridge } from "@/lib/db/atlas-region";
 import { admitUpload, type UploadAccount, type UploadRefusal } from "@/lib/upload-budget";
 import { decodeBundleImage, encodeBundleImage, type BundleImage } from "@/lib/workshop/bundle";
@@ -50,10 +51,14 @@ export type WorldImportResult =
       conflicts: string[];
       // Entries in the file matched to one already here by name alone.
       matched: string[];
+      // Cards made before cards remembered their scene, matched by title.
+      scenesMatched: string[];
       events: number;
       secrets: number;
       maps: number;
+      // Storyboard cards made, and cards an earlier import made updated.
       beats: number;
+      beatsUpdated: number;
       skipped: string[];
       // What the file held that did not come in whole, and what came in
       // differently on purpose (src/lib/worldforge/format.ts).
@@ -201,6 +206,10 @@ export function importWorldForge(campaignId: string, account: UploadAccount, raw
   return "error" in parsed ? parsed : applyWorldImport(campaignId, account, parsed);
 }
 
+// The world a file is: the id an ODM export carries, or else its name, the
+// one thing a WorldForge file says about itself.
+export const worldSource = (parsed: Pick<WorldImport, "worldId" | "worldName">) => (parsed.worldId ? `wf:${parsed.worldId}` : `wf:${parsed.worldName}`);
+
 export function applyWorldImport(campaignId: string, account: UploadAccount, parsed: WorldImport): WorldImportResult {
 
   // Pictures are decoded and weighed against the upload budget first, so a
@@ -211,10 +220,8 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
   const refusal = admitUpload(account, images.reduce((sum, image) => sum + image.bytes.length, 0), images.length);
   if (refusal) return { error: refusal.error, refusal };
 
-  // The world this file is: the id an ODM export carries, or else its name,
-  // the one thing a WorldForge file says about itself.
   const legacySource = `wf:${parsed.worldName}`;
-  const source = parsed.worldId ? `wf:${parsed.worldId}` : legacySource;
+  const source = worldSource(parsed);
 
   const written: string[] = [];
   try {
@@ -346,6 +353,10 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
       settle(doc, [...firstRows.pending, ...rows.pending], (origin, key) => rowValue(doc, origin, key));
       conflicts.push(...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts);
 
+      // The file's scenes, as storyboard cards in each story's order, each
+      // one found again by the scene it came from (world-forge-scenes.ts).
+      const scenes = landScenes(campaignId, doc, source, parsed.beats, refMap);
+
       // The file's top map and the Region map, by the Atlas-to-Region rules
       // (src/lib/db/atlas-region.ts): an undressed Region takes the map, and
       // the places this import made stand where their pins do.
@@ -355,48 +366,22 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
       saveWorldDoc(campaignId, doc);
       bridge.finish();
 
-      // The file's scenes, as storyboard cards in each story's order.
-      const titles = new Set(listBeats(campaignId).map((beat) => textKey(beat.title)));
-      const stories = [...new Set(parsed.beats.map((beat) => beat.story))];
-      let beats = 0;
-      for (const [row, story] of stories.entries()) {
-        const ids: string[] = [];
-        for (const beat of parsed.beats.filter((entry) => entry.story === story)) {
-          if (titles.has(textKey(beat.title))) continue;
-          const pov = parseRef(refMap.get(beat.pov));
-          const place = parseRef(refMap.get(beat.place));
-          const made = insertBeat(campaignId, {
-            kind: "event",
-            title: beat.title,
-            body: beat.body,
-            links: { ...(pov?.shelf === "npc" ? { npcId: pov.id } : {}), ...(place?.shelf === "location" ? { locationId: place.id } : {}) },
-            edges: [],
-            routes: {},
-            x: 40 + ids.length * 280,
-            y: 40 + row * 220,
-          });
-          if ("error" in made) break;
-          ids.push(made.id);
-          beats += 1;
-        }
-        ids.slice(0, -1).forEach((id, at) => {
-          updateBeat(campaignId, id, { ...getBeat(id)!, edges: [ids[at + 1]] });
-        });
-      }
       return {
         created,
         updated,
         links: merged.added,
         linksUpdated: merged.updated,
         linksRemoved: merged.removed,
-        conflicts,
+        conflicts: [...conflicts, ...scenes.conflicts],
         matched,
+        scenesMatched: scenes.matched,
         events: mapped.events.length,
         secrets: mapped.secrets.length,
         maps: mapped.maps.length,
-        beats,
-        skipped,
-        losses: parsed.losses,
+        beats: scenes.created,
+        beatsUpdated: scenes.updated,
+        skipped: [...skipped, ...scenes.skipped],
+        losses: [...parsed.losses, ...sceneLossLines(parsed.sceneLosses)],
         notes: [...parsed.notes, ...bridge.notes],
       };
     })();
@@ -457,7 +442,9 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
     premise: campaign?.description ?? "",
     records,
     doc,
-    beats: listBeats(campaignId).map((beat) => ({
+    // The board in reading order (src/lib/worldforge/scenes.ts): what that
+    // cannot carry is named by checkWorldForgeExport before the download.
+    beats: planBoardExport(campaignId, new Set(records.map((record) => record.ref))).order.map((beat) => ({
       id: beat.id,
       title: beat.title,
       body: beat.body,
@@ -467,6 +454,15 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
     mapImages,
     now: new Date().toISOString(),
   });
+}
+
+// What a WorldForge file of this workshop would not carry, named before it
+// is written (audit WF-19): what each storyboard card loses as a scene. The
+// whole adventure travels in a workshop bundle instead.
+export function checkWorldForgeExport(campaignId: string): { scenes: SceneLoss[]; notes: string[] } {
+  const { entities } = worldView(campaignId);
+  const plan = planBoardExport(campaignId, new Set(entities.map((entity) => entity.ref)));
+  return { scenes: plan.scenes, notes: plan.notes };
 }
 
 // The WorldForge of one campaign copied into another, its refs rewritten to

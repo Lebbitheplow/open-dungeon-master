@@ -499,6 +499,8 @@ function writeBundleRows(
            (id, campaign_id, kind, title, body, links_json, edges_json, x, y, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?)`,
       ).run(beatIds[index], workshop.id, beat.kind, beat.title, beat.body, JSON.stringify(links), beat.x, beat.y, now, now);
+      // Where the card came from (audit WF-19): its key in the bundle.
+      keyed("beats", beatIds[index], beat.ref);
       copied += 1;
     }
     for (const [index, beat] of bundle.storyboard.entries()) {
