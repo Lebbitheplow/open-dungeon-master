@@ -12,6 +12,7 @@ import { racialFeatCount } from "@/lib/srd/race-id";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { halfFeatPicks, scoresWithHalfFeats, settledHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
+  gearNameKey,
   layeredPrice,
   judgeStartingGear,
   type StartingWealthMethod,
@@ -518,7 +519,7 @@ export function useBuilderDerived({
         ...backgroundKit.names.filter((itemName) => !removedAutoNames.includes(itemName)).map((itemName) => ({ name: itemName, qty: 1 })),
       ];
       for (const item of kitted) {
-        const name = item.name.trim().toLowerCase();
+        const name = gearNameKey(item.name);
         preAdded.set(name, (preAdded.get(name) ?? 0) + item.qty);
       }
     }

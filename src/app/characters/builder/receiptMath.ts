@@ -14,7 +14,7 @@ import { magicWeaponOfRow } from "@/lib/dm/gear-attack";
 import type { EquipmentItem as SheetItem } from "@/lib/schemas/sheet";
 import type { SheetDerived } from "@/lib/srd";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
-import type { PriceLookup } from "@/lib/srd/starting-wealth";
+import { gearNameKey, type PriceLookup } from "@/lib/srd/starting-wealth";
 import { matchWeapon } from "@/lib/srd/weapons";
 
 // The most of one item a receipt line takes: a typo of 5000 torches is not a
@@ -53,7 +53,9 @@ export type Receipt = {
   leftCopper: number;
 };
 
-const key = (name: string) => name.trim().toLowerCase();
+// The purse's own key, so a free copy is matched exactly as the purse
+// matches it.
+const key = gearNameKey;
 
 // The receipt for a pack. `equipment` is the merged pack the builder shows
 // (one row per name), `preAdded` how many of each name the kits put there,
