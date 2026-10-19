@@ -20,7 +20,7 @@ import { abilityMod, proficiencyBonus, suite } from "./lib/enforce-harness.mjs";
 import { gearKit, profs } from "./lib/enforce-equipment.mjs";
 
 const { test, finish } = suite("test-enforce-magic-items");
-const { matchMagicItem } = await import("../src/lib/srd/magic-items.ts");
+const { magicItemNamed } = await import("../src/lib/srd/magic-items.ts");
 const { computeSheetDerived, speedFor } = await import("../src/lib/srd/index.ts");
 
 const ac = (amount) => ({ kind: "ac_bonus", amount });
@@ -57,7 +57,7 @@ const BOOK = [
 
 await test("well-known SRD items carry the effects and the attunement the book gives them", () => {
   for (const [name, attunement, effects] of BOOK) {
-    const item = matchMagicItem(name);
+    const item = magicItemNamed(name);
     assert.ok(item, name);
     assert.equal(item.name, name);
     assert.equal(item.requiresAttunement, attunement, `${name} attunement`);

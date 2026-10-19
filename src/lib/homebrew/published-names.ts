@@ -1,6 +1,6 @@
 import { engineFeatNamed, FEAT_TWINS } from "@/lib/srd/feat-effects";
 import { SRD_ARMOR } from "@/lib/srd/armor";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { magicItemNamed } from "@/lib/srd/magic-items";
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
@@ -37,7 +37,7 @@ export function publishedNameProblem(kind: string, name: string, morePublished?:
     const exact =
       SRD_WEAPONS.some((weapon) => key(weapon.name) === wanted) ||
       SRD_ARMOR.some((armor) => key(armor.name) === wanted) ||
-      matchMagicItem(name) !== null ||
+      magicItemNamed(name) !== null ||
       Boolean(morePublished?.(name));
     if (exact) {
       return `${name.trim()} is published gear's name, and on a sheet that name is the published item, whatever this entry says. Give yours a name of its own.`;

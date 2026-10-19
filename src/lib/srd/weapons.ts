@@ -7,6 +7,7 @@
 
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms, spellingIndex } from "@/lib/srd/name-forms";
+import { rowName, type RowItem } from "@/lib/srd/item-row";
 
 export type SrdWeapon = {
   name: string;
@@ -148,7 +149,7 @@ const GEAR_NOT_WEAPONS = new Set(["hammer", "censer"].flatMap(pluralForms));
 // then containment either way so "Longsword of the Dawn" and "long sword"
 // both land on the Longsword. Longer names win so "hand crossbow" never
 // matches a plain crossbow entry first.
-export function matchWeapon(term: string): SrdWeapon | null {
+export function weaponNamed(term: string): SrdWeapon | null {
   const wanted = textKey(term);
   if (!wanted) {
     return null;
@@ -165,6 +166,11 @@ export function matchWeapon(term: string): SrdWeapon | null {
   );
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
+}
+
+// The weapon a carried item is, by its row (src/lib/srd/item-row.ts).
+export function matchWeapon(item: RowItem): SrdWeapon | null {
+  return weaponNamed(rowName(item));
 }
 
 function parseProfs(weaponProfs: string[]) {

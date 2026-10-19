@@ -25,6 +25,7 @@ import { countsAsWorn } from "@/lib/srd/wear-slots";
 import type { Ability } from "@/lib/schemas/sheet";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 import { textKey } from "@/lib/language/text-logic";
+import { rowName, type RowItem } from "@/lib/srd/item-row";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
 // state. The full EquipmentItem satisfies this. `gear.magic` is a homebrew
@@ -34,6 +35,7 @@ import { textKey } from "@/lib/language/text-logic";
 export type WornMagicItem = {
   name: string;
   slug?: string;
+  srdName?: string;
   equipped?: boolean;
   attuned?: boolean;
   // Waiting on the short rest attuning takes; holds one of the three places.
@@ -111,17 +113,23 @@ for (const item of MAGIC_ITEMS) {
   }
 }
 
-// The magic item a sheet entry names, if any: by its pack slug, or by its
-// whole name, case and spacing aside. A "+1" in front and a note in brackets
-// behind ("Ring of Protection (spare)") are the owner's words about the
-// item and not part of its name. Nothing matches on a fragment.
-export function matchMagicItem(name: string, slug?: string | null): MagicItemDef | null {
-  if (slug) {
-    const known = bySlug.get(slug.trim().toLowerCase());
+// The magic item a sheet entry is, if any: by its pack slug, or by its row's
+// name (src/lib/srd/item-row.ts).
+export function matchMagicItem(item: RowItem): MagicItemDef | null {
+  if (item.slug) {
+    const known = bySlug.get(item.slug.trim().toLowerCase());
     if (known) {
       return known;
     }
   }
+  return magicItemNamed(rowName(item));
+}
+
+// The magic item a name names, if any: its whole name, case and spacing
+// aside. A "+1" in front and a note in brackets behind ("Ring of Protection
+// (spare)") are the owner's words about the item and not part of its name.
+// Nothing matches on a fragment.
+export function magicItemNamed(name: string): MagicItemDef | null {
   const bare = name.trim().replace(/^\+\d\s+/, "");
   const whole = byKey.get(textKey(bare));
   if (whole) {
@@ -176,7 +184,7 @@ export function mayAttune(def: Pick<MagicItemDef, "attunedBy">, wearer: Wearer):
 function defOf(item: WornMagicItem): MagicItemDef | null {
   return item.gear?.magic
     ? { name: item.name, match: `homebrew ${textKey(item.name)}`, ...item.gear.magic }
-    : matchMagicItem(item.name, item.slug);
+    : matchMagicItem(item);
 }
 
 // An item's effect counts when the item is worn (or, for the few whose text

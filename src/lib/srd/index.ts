@@ -8,7 +8,7 @@ import racesJson from "@/lib/srd/races.json";
 import skillsJson from "@/lib/srd/skills.json";
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
 import { CUSTOM_CLASSES } from "@/lib/classes";
-import { computeArmorClass, matchArmor, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
+import { computeArmorClass, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
 import { featureSaveProficiencies } from "@/lib/srd/trait-rules";
@@ -301,7 +301,7 @@ export function speedFor(
     campaignId: source.campaignId,
   });
   const breakdown = acBreakdownFor({ ...source, features, equipment });
-  const worn = breakdown.armor ?? (breakdown.armorName ? matchArmor(breakdown.armorName) : null);
+  const worn = breakdown.armor;
   // One feature's tiers replace each other; different features add up.
   const bySource = new Map<object | undefined, number>();
   for (const entry of riders.speedBonuses) {

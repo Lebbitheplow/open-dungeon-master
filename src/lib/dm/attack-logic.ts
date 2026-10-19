@@ -2,6 +2,7 @@ import {
   damageScore,
   isWeaponProficient,
   matchWeapon,
+  weaponNamed,
   type SrdWeapon,
 } from "@/lib/srd/weapons";
 import { magicItemBonus } from "@/lib/srd/armor";
@@ -145,8 +146,8 @@ export function resolveAttackWeapon(
     const srd =
       (magic?.gear ? magic.srd : null) ??
       weaponOf(carriedItem) ??
-      matchWeapon(arg) ??
-      (carriedItem ? matchWeapon(carriedItem.name) : null);
+      weaponNamed(arg) ??
+      (carriedItem ? matchWeapon(carriedItem) : null);
     return {
       displayName: carriedItem?.name ?? srd?.name ?? arg,
       srd,

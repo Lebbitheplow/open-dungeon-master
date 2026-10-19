@@ -2,6 +2,7 @@ import { gearDefFor, gearDefOfRow, gearRidersActive } from "@/lib/srd/magic-gear
 import { speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms } from "@/lib/srd/name-forms";
+import { rowName, type RowItem } from "@/lib/srd/item-row";
 
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
@@ -107,7 +108,7 @@ export function magicItemBonus(name: string): number {
 // gear instead of silently becoming armor. Longest canonical name wins so
 // "chain mail" never lands on "Chain Shirt" and "Studded Leather" beats
 // "Leather".
-export function matchArmor(term: string): SrdArmor | null {
+export function armorNamed(term: string): SrdArmor | null {
   const wanted = armorKey(term);
   if (!wanted) {
     return null;
@@ -121,6 +122,11 @@ export function matchArmor(term: string): SrdArmor | null {
   const candidates = FORMS.filter((forms) => forms.names.some((name) => wanted.endsWith(` ${name}`))).map((forms) => forms.armor);
   candidates.sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
+}
+
+// The armor a carried item is, by its row (src/lib/srd/item-row.ts).
+export function matchArmor(item: RowItem): SrdArmor | null {
+  return armorNamed(rowName(item));
 }
 
 // An SRD armor named anywhere in a free-text name, as whole words, longest
@@ -164,9 +170,9 @@ export function armorOfRow(item: WornItem): WornArmor | null {
       proficientAnyway: riders.proficientAnyway === true,
     };
   }
-  const tail = matchArmor(item.name);
-  const inside = tail ?? armorInside(item.name);
-  const def = gearDefFor(item.name, item.slug, inside?.name ?? null);
+  const tail = matchArmor(item);
+  const inside = tail ?? armorInside(rowName(item));
+  const def = gearDefFor(item, inside?.name ?? null);
   // A row with no base of its own whose name ends in a suit (Animated Chain
   // Mail, a Grasping Shield) is that suit, with its riders.
   const namesSuit = Boolean(!def?.base && inside && def?.armor && Object.keys(def.armor).length);
@@ -198,8 +204,8 @@ export function wornArmorTurnsCrits(equipment: WornItem[]): boolean {
     if (!isWorn(item, equipment)) {
       return false;
     }
-    const def = gearDefOfRow(item, matchArmor(item.name)?.name ?? null);
-    const suit = def?.base?.kind === "armor" || Boolean(!def?.base && (item.gear?.armor || matchArmor(item.name)));
+    const def = gearDefOfRow(item, matchArmor(item)?.name ?? null);
+    const suit = def?.base?.kind === "armor" || Boolean(!def?.base && (item.gear?.armor || matchArmor(item)));
     return Boolean(def && suit && def.armor?.critProof === true && gearRidersActive(def, item));
   });
 }
@@ -253,6 +259,7 @@ export function attunementSlotsFor(holder: { class?: string; level?: number; cla
 export type WornItem = {
   name: string;
   slug?: string;
+  srdName?: string;
   equipped?: boolean;
   attuned?: boolean;
   gear?: { armor?: SrdArmor };
@@ -378,7 +385,7 @@ export type AcBreakdown = {
   armorName: string | null;
   // The suit worn, as the armor engine read it (a magic armor's base, with
   // what its magic changes), for the callers that ask its category.
-  armor?: SrdArmor | null;
+  armor: SrdArmor | null;
   shieldName: string | null;
   stealthDisadvantage: boolean;
   // Heavy armor worn below its Strength requirement.

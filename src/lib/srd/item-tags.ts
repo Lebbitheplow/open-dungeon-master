@@ -15,6 +15,7 @@ import { catalogName } from "@/lib/srd/adventuring-gear";
 import { matchArmor } from "@/lib/srd/armor";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { matchWeapon } from "@/lib/srd/weapons";
+import { rowName } from "@/lib/srd/item-row";
 import { findPoison } from "@/lib/srd/afflictions";
 import itemTagsJson from "@/lib/classes/item-tags.json";
 import { textKey } from "@/lib/language/text-logic";
@@ -84,23 +85,22 @@ function rowNamed(name: string): ItemRow | null {
   return BY_KEY.get(rowKey(name)) ?? BY_KEY.get(rowKey(name.replace(/\s*\([^)]*\)\s*$/, ""))) ?? null;
 }
 
-// The row an item names: by its slug, else by its name as the tables spell
-// it, else by the weapon, armor or poison its name is ("+1 Longsword"). Null
-// for a name no table knows.
+// The row an item names: by its slug, else by its row's name
+// (src/lib/srd/item-row.ts) as the tables spell it, else by the weapon,
+// armor or poison that name is ("+1 Longsword"). Null for a name no table
+// knows.
 export function itemRow(item: Pick<TaggedItem, "name" | "slug" | "srdName">): ItemRow | null {
   const bySlug = item.slug ? BY_SLUG.get(item.slug) : undefined;
   if (bySlug) {
     return bySlug;
   }
-  if (item.srdName) {
-    return itemRow({ name: item.srdName });
-  }
-  const spelled = matchMagicItem(item.name, item.slug)?.name ?? catalogName(item.name) ?? item.name;
-  const found = rowNamed(spelled) ?? rowNamed(item.name);
+  const name = rowName(item);
+  const spelled = matchMagicItem(item)?.name ?? catalogName(name) ?? name;
+  const found = rowNamed(spelled) ?? rowNamed(name);
   if (found) {
     return found;
   }
-  const named = matchWeapon(item.name)?.name ?? matchArmor(item.name)?.name ?? findPoison(item.name)?.name;
+  const named = matchWeapon(item)?.name ?? matchArmor(item)?.name ?? findPoison(name)?.name;
   return named ? (rowNamed(named) ?? { name: named, tags: [] }) : null;
 }
 

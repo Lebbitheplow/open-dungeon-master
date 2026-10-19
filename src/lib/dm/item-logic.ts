@@ -86,7 +86,7 @@ export function itemUseProblem(item: TaggedItem): ToolError | null {
   // A dagger or a javelin is a weapon first: thrown, it is spent by the
   // attack; used here it would vanish for nothing. A potion or an oil the
   // weapon tables also name is the potion.
-  if (matchWeapon(item.name) && !tags.includes("potion") && !tags.includes("scroll")) {
+  if (matchWeapon(item) && !tags.includes("potion") && !tags.includes("scroll")) {
     return { error: tags.includes("consumable")
       ? "it is a weapon; attacks with it go through pc_attack, which tracks thrown and ammunition use."
       : "it is a weapon; attacks with it go through pc_attack.", retry: true };
@@ -94,7 +94,7 @@ export function itemUseProblem(item: TaggedItem): ToolError | null {
   if (tags.includes("consumable")) {
     return null;
   }
-  if (matchArmor(item.name)) {
+  if (matchArmor(item)) {
     return { error: "it is armor, worn rather than used up.", retry: true };
   }
   if (tags.includes("durable")) {

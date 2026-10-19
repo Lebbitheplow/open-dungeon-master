@@ -7,7 +7,7 @@ import { spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { BONUS_SPELL, LEVELLED_SPELL } from "@/lib/dm/cast-rules";
 import { attackContext, mergeAdvantage } from "@/lib/dm/condition-logic";
 import { asPercent, attackOdds, averageDetail } from "@/lib/srd/odds";
-import { matchWeapon } from "@/lib/srd/weapons";
+import { weaponNamed } from "@/lib/srd/weapons";
 import {
   budgetOf,
   type HandAttackOption,
@@ -385,7 +385,7 @@ export function afterCommit(turn: HandTurn, card: HandCard, allowed = 1): HandTu
   // (pc-attack-spend.ts) and the public turn says it: the off-hand card
   // reads it (issue 210).
   if (swing && result?.ok && intent.card === "attack") {
-    const properties = matchWeapon(intent.weapon ?? "")?.properties ?? [];
+    const properties = weaponNamed(intent.weapon ?? "")?.properties ?? [];
     const wielded = card.melee && intent.weapon !== "Unarmed strike";
     next.lightMeleeAttack = Boolean(turn.lightMeleeAttack) || (wielded && properties.includes("light"));
     next.oneHandMeleeAttack = Boolean(turn.oneHandMeleeAttack) || (wielded && !properties.includes("two-handed"));

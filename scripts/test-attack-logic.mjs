@@ -13,7 +13,7 @@ const {
   ragingMeleeBonus,
   splitDamage,
 } = await import("../src/lib/dm/attack-logic.ts");
-const { matchWeapon, isWeaponProficient } = await import("../src/lib/srd/weapons.ts");
+const { weaponNamed, isWeaponProficient } = await import("../src/lib/srd/weapons.ts");
 const { combatRiders } = await import("../src/lib/srd/feature-effects.ts");
 
 const ridersFor = (klass, level, ...names) =>
@@ -34,16 +34,16 @@ const dexDerived = {
   abilityMods: { str: -1, dex: 4, con: 1, int: 1, wis: 2, cha: 0 },
 };
 
-test("matchWeapon: exact, plural, containment both ways", () => {
-  assert.equal(matchWeapon("Longsword")?.name, "Longsword");
-  assert.equal(matchWeapon("longswords")?.name, "Longsword");
-  assert.equal(matchWeapon("Longsword of the Dawn")?.name, "Longsword");
-  assert.equal(matchWeapon("hand crossbow")?.name, "Hand Crossbow");
-  assert.equal(matchWeapon("a rusty pipe"), null);
+test("weaponNamed: exact, plural, containment both ways", () => {
+  assert.equal(weaponNamed("Longsword")?.name, "Longsword");
+  assert.equal(weaponNamed("longswords")?.name, "Longsword");
+  assert.equal(weaponNamed("Longsword of the Dawn")?.name, "Longsword");
+  assert.equal(weaponNamed("hand crossbow")?.name, "Hand Crossbow");
+  assert.equal(weaponNamed("a rusty pipe"), null);
 });
 
 test("isWeaponProficient: category and specific terms", () => {
-  const longbow = matchWeapon("longbow");
+  const longbow = weaponNamed("longbow");
   assert.equal(isWeaponProficient(["martial"], longbow), true);
   assert.equal(isWeaponProficient(["simple"], longbow), false);
   assert.equal(isWeaponProficient(["simple", "longbows"], longbow), true);
@@ -328,13 +328,13 @@ test("the heavy property lands on the profile for the Small-creature rule", () =
   };
   const greataxe = weaponAttackProfile(derived, ["martial"], {
     displayName: "Greataxe",
-    srd: matchWeapon("Greataxe"),
+    srd: weaponNamed("Greataxe"),
     unarmed: false,
   });
   assert.equal(greataxe.heavy, true);
   const shortsword = weaponAttackProfile(derived, ["martial"], {
     displayName: "Shortsword",
-    srd: matchWeapon("Shortsword"),
+    srd: weaponNamed("Shortsword"),
     unarmed: false,
   });
   assert.equal(shortsword.heavy, false);

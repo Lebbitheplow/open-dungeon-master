@@ -51,8 +51,8 @@ export function SheetGearRow({
 }) {
   // Magic gear works only while worn, so every row here can
   // be put on; only body armor is barred in a fight.
-  const isArmor = matchArmor(item.name) !== null;
-  const isShield = matchArmor(item.name)?.category === "shield";
+  const isArmor = matchArmor(item) !== null;
+  const isShield = matchArmor(item)?.category === "shield";
   const armorLocked = inCombat && isArmor && !isShield;
   // A shield takes the action, on the character's own turn.
   const shieldLocked = inCombat && isShield && !myTurn;
@@ -61,7 +61,7 @@ export function SheetGearRow({
   // armor and "+1" gear work without one, and the server
   // refuses the rest (srd/magic-items.ts attunementProblem).
   // One already attuned keeps the control so it can end.
-  const def = matchMagicItem(item.name, item.slug);
+  const def = matchMagicItem(item);
   const attunable =
     Boolean(item.attuned) ||
     Boolean(item.gear?.magic?.requiresAttunement) ||
