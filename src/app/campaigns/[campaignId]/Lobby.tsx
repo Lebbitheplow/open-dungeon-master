@@ -446,8 +446,6 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       {/* The lobby under the same sky as the table: the cover art behind
           the panels, dimmed, so the door and the room read as one place. */}
       <SceneBackdrop messages={EMPTY_MESSAGES} cover={campaign.cover} genre={campaign.genre} seed={campaign.id} />
-      {/* A player taking a seat, for everyone here (F27). */}
-      <ArrivalBanner sheets={sheets} />
       <Link
         href="/"
         className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"
@@ -457,13 +455,19 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
 
       <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-x-8">
         <div className="contents lg:flex lg:min-w-0 lg:flex-col">
-          <LobbyHero
-            campaign={campaign}
-            canEdit={isLead}
-            onEdit={() => setEditing(true)}
-            className="lobby-enter order-1"
-            style={enter(0)}
-          />
+          {/* A player taking a seat, for everyone here (F27): the banner
+              rides on the lobby card's art, so it never covers another
+              card's words. */}
+          <div className="relative order-1">
+            <LobbyHero
+              campaign={campaign}
+              canEdit={isLead}
+              onEdit={() => setEditing(true)}
+              className="lobby-enter"
+              style={enter(0)}
+            />
+            <ArrivalBanner sheets={sheets} />
+          </div>
 
           {!isSolo || showCompanions ? (
             <LobbyParty

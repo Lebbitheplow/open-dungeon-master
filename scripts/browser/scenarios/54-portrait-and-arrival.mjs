@@ -80,6 +80,15 @@ export default {
       const announced = await page.locator('p[role="status"].sr-only').filter({ hasText: "takes a seat" }).count();
       check(announced === 1, `one polite announcement (${announced})`);
       check((await banner.getByRole("button").count()) === 0, "with motion it carries no button");
+      // It covers only the lobby card's art, never another card's words.
+      // Measured once its short slide-in has settled.
+      await sleep(600);
+      const box = await banner.boundingBox();
+      const card = await page.locator(".lobby-hero").first().boundingBox();
+      check(
+        box && card && box.x >= card.x && box.x + box.width <= card.x + card.width && box.y >= card.y && box.y + box.height <= card.y + card.height,
+        `the banner sits inside the lobby card (${JSON.stringify(box)} in ${JSON.stringify(card)})`,
+      );
       await t.shot("arrival-banner");
       await eventually(async () => (await banner.count()) === 0, { timeoutMs: 10_000, label: "the banner leaving on its own" });
 

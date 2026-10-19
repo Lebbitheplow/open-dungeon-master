@@ -112,6 +112,11 @@ await test("one polite announcement, from a region that is always there", () => 
 await test("the lobby raises it from the stream's sheets, with no new channel", () => {
   const lobby = read("src/app/campaigns/[campaignId]/Lobby.tsx");
   assert.match(lobby, /<ArrivalBanner sheets=\{sheets\} \/>/, "fed the sheets the lobby already has");
+  assert.match(
+    lobby,
+    /<div className="relative order-1">\s*<LobbyHero[\s\S]*?\/>\s*<ArrivalBanner sheets=\{sheets\} \/>\s*<\/div>/,
+    "it rides on the lobby card, not over the grid",
+  );
   const stream = read("src/app/campaigns/[campaignId]/useCampaignStream.ts");
   assert.match(stream, /case "sheet_updated": \{[\s\S]*?next\.sheets = upsertBy\(state\.sheets, sheet/, "a seat lands through sheet_updated");
   const banner = read("src/app/campaigns/[campaignId]/ArrivalBanner.tsx");
@@ -122,6 +127,8 @@ await test("the lobby raises it from the stream's sheets, with no new channel", 
   const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
   assert.match(reduced, /\.moment-arrival \{ animation: none;/, "reduced motion: no animation");
   const rule = css.slice(css.indexOf(".moment-arrival {"), css.indexOf("}", css.indexOf(".moment-arrival {")));
+  assert.match(rule, /position: absolute;/, "anchored to the lobby card");
+  assert.match(rule, /max-width: calc\(100% - 1\.5rem\);/, "never wider than the card");
   assert.doesNotMatch(rule, /pointer-events: none/, "it can be held and dismissed");
   assert.match(css, /\.moment-arrival-dismiss \{[^}]*min-height: 44px;/, "a finger-sized Dismiss");
 });

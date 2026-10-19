@@ -199,19 +199,20 @@ html[data-theme="light"] .moment-travel { background: linear-gradient(180deg, #f
 html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter: invert(1) hue-rotate(180deg); }
 
 /* ---- arrival banner (ArrivalBanner.tsx, F27) ----
-   A player taking a seat in the lobby: the travel banner's shape, lower
-   so it clears the lobby's back link, and open to a pointer so it can be
-   held or dismissed. It blocks nothing around it. */
+   A player taking a seat in the lobby: the travel banner's shape, laid on
+   the top of the lobby card's art (Lobby.tsx wraps the card to hold it),
+   so at any width it covers only that picture and never another card's
+   words. Open to a pointer so it can be held or dismissed. */
 .moment-arrival {
-  position: fixed;
+  position: absolute;
   left: 50%;
-  top: 4.5rem;
-  z-index: 56;
+  top: 0.75rem;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   width: max-content;
-  max-width: min(92vw, 34rem);
+  max-width: calc(100% - 1.5rem);
   padding: 0.5rem 0.6rem;
   border-radius: 9999px;
   border: 1px solid rgba(212, 171, 58, 0.55);
@@ -251,6 +252,14 @@ html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter:
   font-weight: 600;
   color: var(--color-amber-100);
   cursor: pointer;
+}
+/* At phone width the card's art is short: a smaller line and button keep
+   the banner on the picture, above the card's own heading. */
+@media (max-width: 639px) {
+  .moment-arrival { top: 0.5rem; gap: 0.5rem; padding: 0.35rem 0.45rem; }
+  .moment-arrival-medallion { width: 2.25rem; height: 2.25rem; }
+  .moment-arrival-name { font-size: 0.9rem; }
+  .moment-arrival-dismiss { padding: 0 0.75rem; }
 }
 .moment-arrival-dismiss:hover { border-color: rgba(236, 210, 135, 0.9); }
 .moment-arrival-dismiss:focus-visible { outline: 2px solid var(--color-amber-300); outline-offset: 3px; }
