@@ -75,8 +75,7 @@ import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
 import { TabletopOrder } from "@/app/campaigns/[campaignId]/CinematicParts";
 import { AddonBoardView } from "@/app/campaigns/[campaignId]/AddonBoardView";
-import { AddonViewSwitch, boardViewKey, useBoardViewChoice, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
-import { useAddons } from "@/lib/addons/use-addons";
+import { AddonViewSwitch, boardViewKey, useBoardView, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
 import type { Anchor, BoardLook } from "@/lib/addons/board-bridge";
 
 // The tactical battle map tab.
@@ -218,10 +217,7 @@ export function BattleMapPanel({
   // An addon's way of drawing the board (AddonBoardView.tsx), when this
   // device chose one: offered for every board, or only on the maps that
   // addon's generator made when it needs their data.
-  const { boardViews } = useAddons();
-  const offeredViews = boardViews.filter((entry) => !entry.needsViewData || view.addonView?.addonId === entry.addonId);
-  const [viewChoice, setViewChoice] = useBoardViewChoice();
-  const addonView = offeredViews.find((entry) => boardViewKey(entry) === viewChoice) ?? null;
+  const { views: offeredViews, active: addonView, choose: setViewChoice } = useBoardView(view.addonView?.addonId);
   const [viewOptions, setViewOption] = useBoardViewOptions();
   // Who each token is, for a view that draws creatures by kind; and where
   // the view drew each figure, so the plate and the action ring sit on it.
@@ -999,6 +995,7 @@ export function BattleMapPanel({
         {addonView && !drawActive ? (
           <div className="absolute inset-0 z-[15] rounded-lg bg-[#0d0b1c]">
             <AddonBoardView
+              key={boardViewKey(addonView)}
               genre={genre}
               view={view}
               boardView={addonView}
@@ -1021,6 +1018,7 @@ export function BattleMapPanel({
               camera={camera}
               onAnchors={setAnchors}
               viewOptions={viewOptions[boardViewKey(addonView)]}
+              onFailure={addonView.sessionLayout ? () => setViewChoice("") : undefined}
             />
           </div>
         ) : null}

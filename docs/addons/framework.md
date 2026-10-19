@@ -120,6 +120,7 @@ The app around it:
 | `src/app/workshop/maps/AddonMapGenerator.tsx` | Build a map with an addon |
 | `src/app/campaigns/[campaignId]/AddonBoardView.tsx`, `AddonViewSwitch.tsx` | The board view frame, the View switch and view options |
 | `BattleMapPanel.tsx`, `TokenHud.tsx`, `BoardChrome.tsx` | Wiring the frame into the board; anchors for the action ring and the plate |
+| `SessionView.tsx`, `SessionChatColumn.tsx`, `SidePanel.tsx`, `TableLayout.tsx`, `styles/table-layout.css` | Optional board-view `sessionLayout: "stage"`; stable native region ownership (including the native Story board), per-device selection and native fallback |
 | `src/lib/db/map-addon-view*.ts`, `addon_view_json` on `prepared_maps` and `battle_maps` | View data stored with maps, carried in bundles |
 | `next.config.ts` | Leaves `ui/` and `assets/` out of the app's framing headers |
 

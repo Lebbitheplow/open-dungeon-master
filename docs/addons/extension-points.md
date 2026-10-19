@@ -201,6 +201,61 @@ grid.
 
 ## Board views
 
+### Optional session stage layout
+
+A board view may declare `"sessionLayout": "stage"`. On a docked desktop
+session, selecting that view uses a host-owned layout: Party above Chronicle
+at left, board in the center, native side controls at right, and the native
+hand/composer under the board. This is structural layout only; addon code,
+styles and assets remain in its sandbox. Older views omit the field and
+retain the original session layout. No arbitrary layout names or CSS are accepted.
+
+Session views must leave `needsViewData` false: they work even without a
+tactical map. The same View control is available above the table when there
+is no map, or while the full transcript covers the board. Selection stays
+per device. The native saved arrangement and stage/story preference are not
+overwritten. Previously detached tabs keep their component owners; Battle
+occupies the center and the remaining detached controls share the right side.
+Narrow screens retain the native responsive layout.
+
+Activation from native Story keeps an already-open board under its existing
+side-panel owner. CSS places it in the center, with native side controls
+alongside it; changing side tabs does not remove that board. Its native
+camera uses the existing resize behavior, and token selection/local controls
+survive activation and return to Story. A quest glance, when present, sits
+below the center controls in this composition.
+
+The native transcript, Chronicle, composer and mapped renderer remain mounted
+while switching story/board within this presentation. Removing a map or
+changing the renderer can recreate the renderer frame; addons reconstruct
+their view from the next bridge message. Native component lifetimes outside
+this opted-in layout retain their original behavior.
+
+After `ready`, a session view without a tactical map receives:
+
+```js
+{ odm: 1, type: "scene", genre, appearance, options, assetsUrl }
+```
+
+`appearance` and `options` have the same meaning as in a board snapshot.
+This message supplies no map, tokens, story text, campaign state, or permissions.
+Tile/token/hover/anchor input is ignored without a map; map-file and portrait
+requests fail. A later mapped frame receives the normal projected snapshot.
+Do not invent mechanical terrain from this message.
+
+An opted-in renderer that reports `error` or fails to send `ready` within
+30 seconds returns this device to the native presentation. Send `ready` once
+the message listener is installed, before loading large assets. A renderer
+that hangs after readiness can be disabled through the native View control;
+there is no post-readiness watchdog. Server-side removal/disable is reflected
+after reload, matching the existing offered-addon cache.
+
+Map models and arbitrary `view.data` are not automatically redacted per viewer.
+Build hidden-map geometry from projected terrain; never ship secret rooms or
+scene descriptions to a restricted viewer and rely on visual fog to hide them.
+
+### Board rendering contract
+
 **Where:** the board's View switch, at the table and in the enlarged
 tabletop, for everyone who opens the board in a browser or the desktop app.
 **Result:** your page draws the board, with every layer the flat board draws

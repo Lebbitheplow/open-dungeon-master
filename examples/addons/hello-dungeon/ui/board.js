@@ -387,7 +387,13 @@
     if (event.source !== window.parent) return;
     const message = event.data;
     if (!message || message.odm !== BRIDGE) return;
-    if (message.type === "snapshot") {
+    if (message.type === "scene") {
+      snapshot = null;
+      layout = null;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      document.body.dataset.theme = message.appearance?.theme === "day" ? "day" : "night";
+      badge.textContent = "No tactical map. Play continues through the native controls.";
+    } else if (message.type === "snapshot") {
       snapshot = message.snapshot;
       document.body.dataset.theme = snapshot.appearance?.theme === "day" ? "day" : "night";
       if (!snapshot.view) badge.textContent = "";

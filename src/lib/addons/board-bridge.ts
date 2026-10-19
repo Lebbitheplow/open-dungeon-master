@@ -236,6 +236,7 @@ export function boardFx(events: FxEvent[]): BoardFx[] {
 // each arrives once, as it happens.
 export type HostMessage =
   | { odm: number; type: "snapshot"; snapshot: BoardSnapshot }
+  | { odm: number; type: "scene"; genre: string | null; appearance: BoardSnapshot["appearance"]; options: BoardSnapshot["options"]; assetsUrl: string }
   | { odm: number; type: "fx"; events: BoardFx[] }
   | { odm: number; type: "ping"; x: number; y: number; focus: boolean; at: number }
   | { odm: number; type: "camera"; mode: "pull" | "lock" | "free"; x: number | null; y: number | null; zoom: number | null }

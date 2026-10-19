@@ -83,7 +83,7 @@ import { LayoutApiContext, ShownContext, useBoxSize, type LayoutApi } from "@/ap
 // else, and the row while arranged, places each slot where tableGeometry
 // says.
 
-export type TablePane = { id: PaneId; node: ReactNode };
+export type TablePane = { id: PaneId; node: ReactNode; available?: boolean };
 
 const FIXED_PANES: Record<"table" | "rail" | "panel", { label: string; glyph: string }> = {
   table: { label: "Table", glyph: TABLE_GLYPH },
@@ -120,11 +120,13 @@ export function TableRow({
   active,
   panes,
   tabs,
+  presentation,
 }: {
   seat: LayoutSeat;
   active: boolean;
-  // Each panel's content, or null where it has none right now (the
-  // portraits while the fight stage holds the row, Battle without a board).
+  presentation?: "stage";
+  // Null has nothing to mount; available:false keeps content mounted but
+  // out of the layout, so temporary absence never loses its state.
   panes: TablePane[];
   // The viewer's side-panel tabs (buildPanelTabs), to name a tab's pane and
   // to offer a pane to the others.
@@ -142,7 +144,7 @@ export function TableRow({
   const size = useBoxSize(rowRef);
 
   const availableKey = panes
-    .filter((pane) => pane.node !== null && pane.node !== undefined && pane.node !== false)
+    .filter((pane) => pane.available !== false && pane.node !== null && pane.node !== undefined && pane.node !== false)
     .map((pane) => pane.id)
     .join(" ");
   const available = useMemo(() => new Set(availableKey.split(" ").filter(Boolean) as PaneId[]), [availableKey]);
@@ -197,14 +199,14 @@ export function TableRow({
       active,
       locked: saved.locked,
       editing,
-      canWiden: savedPanel !== null && !saved.locked,
+      canWiden: !presentation && savedPanel !== null && !saved.locked,
       panelWide: (savedPanel ?? PANEL_WIDTH) >= (PANEL_WIDTH + PANEL_WIDE) / 2,
       setPanelWide,
       chronicle: saved.chronicle,
       previewChronicle,
       commitChronicle,
     }),
-    [active, saved.locked, saved.chronicle, editing, savedPanel, setPanelWide, previewChronicle, commitChronicle],
+    [active, presentation, saved.locked, saved.chronicle, editing, savedPanel, setPanelWide, previewChronicle, commitChronicle],
   );
 
   const flash = session.flash;
@@ -406,6 +408,8 @@ export function TableRow({
   if (layout.chronicle !== null) style["--tlay-chronicle-w"] = `clamp(12.5rem, ${layout.chronicle}px, calc(100% - 320px))`;
 
   const nodes = new Map(panes.map((pane) => [pane.id, pane.node]));
+  // Detached tabs keep their owners; the preset stacks them beside the table.
+  const sidePanes = presentation ? ORDER.filter((id) => available.has(id) && id !== "rail" && id !== "table" && id !== "tab:battle") : [];
   const legacySplits = active && measured && !custom && !locked;
   const drop = dropping?.target ? dropRect(geometry, dropping.target) : null;
 
@@ -429,6 +433,7 @@ export function TableRow({
           ref={rowRef}
           className="cine-row flex min-h-0 flex-1"
           data-tlay={custom ? "custom" : undefined}
+          data-presentation={presentation}
           data-tlay-edit={editing ? "" : undefined}
           data-resizing={resizing ? "" : undefined}
           style={style as CSSProperties}
@@ -453,8 +458,8 @@ export function TableRow({
                 data-floating={custom && floating ? "" : undefined}
                 data-flash={flash?.id === id ? "" : undefined}
                 data-dragging={dropping?.id === id ? "" : undefined}
-                hidden={custom && !rect}
-                style={custom && rect ? { ...box(rect), zIndex: floating ? 10 + floatingIndex : undefined } : undefined}
+                hidden={!available.has(id) || (custom && !rect)}
+                style={presentation && sidePanes.includes(id) ? { "--session-pane-top": `${100 * sidePanes.indexOf(id) / sidePanes.length}%`, "--session-pane-height": `${100 / sidePanes.length}%` } as CSSProperties : custom && rect ? { ...box(rect), zIndex: floating ? 10 + floatingIndex : undefined } : undefined}
                 onPointerDownCapture={
                   custom && floating && floatingIndex !== layout.floating.length - 1
                     ? () => save((current) => raiseFloating(current, id))
