@@ -15,6 +15,7 @@ import {
 import { ensureOpenChapter, listChaptersForSnapshot } from "@/lib/db/chapters";
 import { publicCast } from "@/lib/dm/cast";
 import { currentCoordination } from "@/lib/dm/coordination";
+import { currentTableWait } from "@/lib/dm/table-wait";
 import { getAmbience } from "@/lib/db/ambience";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { listRecentCampaignEvents } from "@/lib/db/character-events";
@@ -114,6 +115,9 @@ export async function GET(
     me: { id: user.id, username: user.username, avatar: user.avatar },
     // The plan the party is coordinating, when it is (issue 254).
     coordination: currentCoordination(campaignId),
+    // Who the DM is waiting on before its next turn, at a table that waits
+    // for everyone (src/lib/dm/table-wait.ts); null when it is not waiting.
+    tableWait: currentTableWait(campaignId),
     members: listMembers(campaignId),
     // Names and faces of the cast, for the transcript's speech lines.
     cast: publicCast(campaignId),

@@ -49,6 +49,10 @@ export function playerOpportunities(s: OpportunityState): PlayerOpportunity[] {
   }
   // This is permission to inspect a settled passage, not an instruction to
   // speak. The agent decides whether that passage actually invites it.
+  // lastPlayerSeq counts a pass as well as a post. At a table that waits for
+  // everyone (src/lib/dm/table-wait.ts) another player's post no longer wakes
+  // the DM, so the DM stays idle and this stays live while the table
+  // gathers, until this player acts or passes.
   return s.narration && s.lastPlayerSeq < s.narration.seq
     ? [{ type: "response_requested", opportunityId: `narration:${s.narration.id}`, characterId: s.characterId }]
     : [];

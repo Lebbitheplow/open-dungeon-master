@@ -235,6 +235,8 @@ import { pcMoveBudget } from "@/lib/battlemap/view";
 import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
 import { suggestEnemies } from "@/lib/bestiary";
 import { extraBlockLines } from "@/lib/bestiary/block-sections";
+import { settleTableWait } from "@/lib/dm/table-wait";
+import { wakeDm } from "@/lib/dm/wake";
 
 const MUTATION_NAMES = new Set<string>(MUTATION_TOOL_NAMES);
 const ENCOUNTER_NAMES = new Set<string>(ENCOUNTER_TOOL_NAMES);
@@ -2729,6 +2731,13 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
       setFloor(campaignId, held);
       publishPersisted(campaignId, "floor_changed", { floor: held });
     }
+  }
+
+  // Wait for the table: the narration opens a new beat, so every seat is told
+  // who the DM now waits on. Posts made while this turn wrote count already,
+  // and if they are the whole table the next turn wakes at once.
+  if (settleTableWait(campaignId)) {
+    wakeDm(campaignId);
   }
 
   if (message.imageRequest && imageProducerReady(context.campaign.settings)) {

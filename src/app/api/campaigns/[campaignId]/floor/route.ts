@@ -6,6 +6,7 @@ import { fightOwnsFloor, floorAfterRelease, skipCurrentTurn } from "@/lib/dm/enc
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { handOnFromBanner } from "@/lib/dm/invoke";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { settleTableWait, tableWaitHasAnswers } from "@/lib/dm/table-wait";
 import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -78,7 +79,16 @@ export async function POST(
     }
     setFloor(campaignId, next);
     publishPersisted(campaignId, "floor_changed", { floor: next });
+    // An open floor at a table that waits for everyone starts a beat.
+    settleTableWait(campaignId);
     return Response.json({ ok: true, floor: next });
+  }
+
+  // An open table waiting for everyone (src/lib/dm/table-wait.ts):
+  // releasing it is "go on now", and the held turn answers whoever has.
+  if (floor.mode === "open" && tableWaitHasAnswers(campaignId)) {
+    requestDmTurn(campaignId);
+    return Response.json({ ok: true });
   }
 
   // In combat, "release" means skip the absent player's turn: the pointer
@@ -104,6 +114,8 @@ export async function POST(
   publishPersisted(campaignId, "floor_changed", { floor: next });
   if (floor.mode === "spotlight" && floor.respondedUserIds.length) {
     requestDmTurn(campaignId);
+  } else {
+    settleTableWait(campaignId);
   }
   return Response.json({ ok: true });
 }

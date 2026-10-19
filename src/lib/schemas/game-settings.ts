@@ -138,6 +138,14 @@ export const gameSettingsSchema = z.object({
   // After each DM narration, block do and say for everyone until the party
   // lead opens responses. OOC and lead directions stay available.
   holdSubmissions: z.boolean().default(false),
+  // Wait for the table (src/lib/dm/table-wait.ts): after a narration on an
+  // open floor, the AI DM's next turn waits until every present player has
+  // acted or passed, or waitForTableSeconds have passed since the first
+  // answer, then one turn reads them all. Off is the original behaviour,
+  // where the first post wakes the DM: right for a solo table, which would
+  // only be slowed by it.
+  waitForTable: z.boolean().default(false),
+  waitForTableSeconds: z.number().int().min(15).max(900).default(120),
   // Human-DM story capture: how much play may pass with nothing written down
   // before the console nudges the DM to record a beat. Two units because a
   // session has two tempos (src/lib/dm/beat-cadence.ts); either one at 0 turns

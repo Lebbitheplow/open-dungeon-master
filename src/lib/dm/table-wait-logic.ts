@@ -1,0 +1,106 @@
+// Wait for the table (gameSettings.waitForTable): the pure half. After a
+// narration on an open floor the DM's next turn is held until every present
+// player has acted or passed, or the table's timeout has run out since the
+// first answer, and then one turn reads every answer that gathered. Without
+// it the first post wakes the DM and the fastest player drives the story.
+//
+// Nothing here reads the database or the clock; src/lib/dm/table-wait.ts
+// gathers the facts and acts on the decision.
+
+export const TABLE_WAIT_MIN_SECONDS = 15;
+export const TABLE_WAIT_MAX_SECONDS = 900;
+export const TABLE_WAIT_DEFAULT_SECONDS = 120;
+
+export type TableSeat = { userId: string; name: string };
+
+// What every seat is shown, and what the snapshot carries for a reload.
+export type TableWaitView = {
+  // Players the DM still waits on, in seat order.
+  waitingOn: TableSeat[];
+  // Players who acted or passed since the narration.
+  answered: Array<TableSeat & { passed: boolean }>;
+  // When the held turn fires regardless, as an ISO time. Null until the
+  // first answer: an untouched table has nothing for the DM to read yet.
+  deadline: string | null;
+};
+
+export type TableWaitInput = {
+  // Present players: a live tab or a live agent subscription. Someone who
+  // answered counts as present whether or not they still are.
+  present: TableSeat[];
+  // In-character posts since the window opened, oldest first.
+  posts: Array<{ userId: string; name: string; at: number }>;
+  // Passes since the window opened.
+  passes: TableSeat[];
+  // When the window opened (the narration landed), so a post made while the
+  // DM was still writing does not start a clock that has mostly run out.
+  openedAt: number;
+  seconds: number;
+  now: number;
+};
+
+export type TableWaitDecision = {
+  view: TableWaitView;
+  // The held turn should run now: there is something to answer, and either
+  // nobody present is left or the time is up.
+  fire: boolean;
+  // Epoch milliseconds, or null while nothing has been posted.
+  deadline: number | null;
+};
+
+export function clampWaitSeconds(seconds: unknown): number {
+  const value = Number(seconds);
+  if (!Number.isFinite(value)) {
+    return TABLE_WAIT_DEFAULT_SECONDS;
+  }
+  return Math.min(TABLE_WAIT_MAX_SECONDS, Math.max(TABLE_WAIT_MIN_SECONDS, Math.round(value)));
+}
+
+export function decideTableWait(input: TableWaitInput): TableWaitDecision {
+  const acted = new Map<string, string>();
+  for (const post of input.posts) {
+    if (!acted.has(post.userId)) {
+      acted.set(post.userId, post.name);
+    }
+  }
+  // A pass after a post does not take the post back.
+  const passed = new Map<string, string>();
+  for (const pass of input.passes) {
+    if (!acted.has(pass.userId) && !passed.has(pass.userId)) {
+      passed.set(pass.userId, pass.name);
+    }
+  }
+  const seen = new Set<string>();
+  const waitingOn: TableSeat[] = [];
+  for (const seat of input.present) {
+    if (seen.has(seat.userId)) {
+      continue;
+    }
+    seen.add(seat.userId);
+    if (!acted.has(seat.userId) && !passed.has(seat.userId)) {
+      waitingOn.push(seat);
+    }
+  }
+  const answered = [
+    ...[...acted].map(([userId, name]) => ({ userId, name, passed: false })),
+    ...[...passed].map(([userId, name]) => ({ userId, name, passed: true })),
+  ];
+  const first = input.posts.length ? Math.min(...input.posts.map((post) => post.at)) : null;
+  const deadline = first === null ? null : Math.max(first, input.openedAt) + clampWaitSeconds(input.seconds) * 1000;
+  const fire = deadline !== null && (waitingOn.length === 0 || input.now >= deadline);
+  return {
+    view: { waitingOn, answered, deadline: deadline === null ? null : new Date(deadline).toISOString() },
+    fire,
+    deadline,
+  };
+}
+
+// The banner's countdown: seconds under a minute, then minutes.
+export function formatLeft(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}

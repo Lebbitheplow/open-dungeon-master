@@ -137,7 +137,7 @@ try {
     assert.ok(outcome.text.length <= MAX_RESULT_CHARS, `${outcome.text.length} characters`);
     view = JSON.parse(outcome.text);
     const keys = Object.keys(view);
-    assert.deepEqual(keys.slice(0, 8), ["campaign", "me", "activeSheetId", "safetyPause", "dmStatus", "floor", "caps", "pendingRolls"]);
+    assert.deepEqual(keys.slice(0, 9), ["campaign", "me", "activeSheetId", "safetyPause", "dmStatus", "floor", "tableWait", "caps", "pendingRolls"]);
     assert.equal(view.safetyPause.reason, "x_card");
     assert.ok(view.dmStatus !== undefined && view.caps && typeof view.caps === "object");
     assert.equal(view.activeSheetId, playerSheet.id);

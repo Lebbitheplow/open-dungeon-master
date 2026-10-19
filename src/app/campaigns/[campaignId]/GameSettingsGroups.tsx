@@ -539,6 +539,12 @@ export function BondsGroup({ settings, patch }: Base) {
   );
 }
 
+// Wait for the table's timeout choices, in seconds (15 to 900 allowed).
+const WAIT_CHOICES = [30, 60, 120, 180, 300, 600];
+function waitOption(seconds: number) {
+  return { value: String(seconds), label: seconds % 60 ? `waits ${seconds}s` : `waits ${seconds / 60} min` };
+}
+
 export function PlayersGroup({ settings, patch }: Base) {
   return (
     <>
@@ -554,6 +560,28 @@ export function PlayersGroup({ settings, patch }: Base) {
             Held responses {settings.holdSubmissions ? "on" : "off"}
           </SettingToggle>
         </Tooltip>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="pk-rowlabel">Pacing</span>
+        <Tooltip content="After each narration, the AI DM waits until every player at the table has acted or passed, or the time runs out after the first answer, then answers everyone in one turn. Off: the first post wakes the DM, which suits a solo table.">
+          <SettingToggle on={settings.waitForTable} onToggle={() => patch({ waitForTable: !settings.waitForTable })}>
+            Wait for the table {settings.waitForTable ? "on" : "off"}
+          </SettingToggle>
+        </Tooltip>
+        {settings.waitForTable ? (
+          <span className="inline-flex min-w-0 max-w-full" title="How long the DM waits after the first answer">
+            <Select
+              size="sm"
+              label="How long the DM waits after the first answer"
+              value={String(settings.waitForTableSeconds)}
+              onChange={(value) => patch({ waitForTableSeconds: Number(value) })}
+              options={WAIT_CHOICES.includes(settings.waitForTableSeconds)
+                ? WAIT_CHOICES.map(waitOption)
+                : [...WAIT_CHOICES, settings.waitForTableSeconds].sort((a, b) => a - b).map(waitOption)}
+              className={selectClass}
+            />
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="pk-rowlabel">Items</span>

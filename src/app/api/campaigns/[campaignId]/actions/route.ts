@@ -18,6 +18,7 @@ import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { floorAfterRelease } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { claimNarrationSeq } from "@/lib/dm/narration-slot";
@@ -289,6 +290,13 @@ export async function POST(
         characterId: sheet.id,
         seq,
       });
+    } else if (kind !== "ooc" && !isFirstAction && floor.mode === "open" && waitsForTable(campaign)) {
+      // Wait for the table (src/lib/dm/table-wait.ts): an open-floor post
+      // joins the gathering beat, and the one turn that answers it runs when
+      // the last present player has acted or passed, or the time runs out.
+      if (settleTableWait(campaignId)) {
+        requestDmTurn(campaignId);
+      }
     } else {
       // Under a running cover, requestDmTurn itself spends one of the DM's
       // handed-over answers per enqueued turn (and none on a coalesced one),

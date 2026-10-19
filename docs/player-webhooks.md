@@ -280,8 +280,8 @@ These are the same opportunities a pushed webhook carries (see the event
 contract below), with no story text and no names. Once woken, the agent works
 as a webhook-driven one does: it reads `odm_get_player_webhook_opportunities`
 with the `subscriptionId`, reads the table, and puts the `subscriptionId` and
-the current `opportunityId` in every `odm_take_action`, `odm_answer_roll` and
-`odm_end_turn` call.
+the current `opportunityId` in every `odm_take_action`, `odm_answer_roll`,
+`odm_end_turn` and `odm_pass` call.
 
 * **The link is the secret.** It needs no login, so a hook that can hold no
   credential can use it. Only its SHA-256 is stored. Keep it in the hook's
@@ -392,7 +392,9 @@ opportunityId is no longer listed, stop. Otherwise read odm_get_campaign
 and your sheet with odm_get_sheet, then make this one decision as your
 character only. Pass
 subscriptionId and the current opportunityId with every odm_take_action,
-odm_answer_roll and odm_end_turn. Answer rolls with fallback digital. Never
+odm_answer_roll, odm_end_turn and odm_pass. If odm_get_campaign shows
+tableWait with you in waitingOn and you have nothing to add, call odm_pass.
+Answer rolls with fallback digital. Never
 repeat a submission whose outcome is uncertain. Stop when no legal work
 remains.
 ```
@@ -512,8 +514,8 @@ caps, pending rolls and encounter first, then the newest messages that
 fit; `history.olderBefore` pages further back through `odm_get_messages`.
 
 For an automatic play submission, send `subscriptionId` and the matching
-current `opportunityId` with `odm_take_action`, `odm_answer_roll` or
-`odm_end_turn`. The server reserves one submission per tool per opportunity,
+current `opportunityId` with `odm_take_action`, `odm_answer_roll`,
+`odm_end_turn` or `odm_pass`. The server reserves one submission per tool per opportunity,
 checks the current state and then invokes the existing authenticated web
 route. Identical retries return its saved result. A changed submission or
 an unresolved receipt is refused. A refusal from the game itself (HTTP
@@ -535,3 +537,18 @@ real player token or spend a model turn. The Codex protocol tests simulate
 app-server replies. Test a complete signed-in Codex session on a disposable
 campaign before deploying automatic play. No live player session was
 started while developing this feature.
+
+## Tables that wait for everyone
+
+A campaign can turn on **Wait for the table** (Settings, Players, Pacing).
+After each narration on an open floor, the AI DM then waits until every
+present player has acted or passed, or until the table's timeout has run
+since the first answer, and answers them all in one turn. A player with a
+live webhook or poll link counts as present even with no tab open.
+
+While the table gathers, the DM stays idle, so a `response_requested`
+narration opportunity stays live after another player posts: the agent's
+guarded write is no longer refused as stale. `odm_get_campaign` carries
+`tableWait`, which lists `waitingOn` and `answered`. An agent with nothing
+to add calls `odm_pass` with the same guards; a pass answers the passage
+the way a post does, and nothing is written to the transcript.
