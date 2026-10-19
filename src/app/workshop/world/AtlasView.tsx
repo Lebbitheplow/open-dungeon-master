@@ -1,20 +1,29 @@
 "use client";
 
-import { ChevronRight, Hexagon, Map as MapIcon, MapPin, MousePointer2, Plus, Trash2, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { ChevronRight, Globe2, Hexagon, Link2, Map as MapIcon, MapPin, MousePointer2, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { KitButton } from "@/app/campaigns/[campaignId]/PanelKit";
 import { LoreImageField } from "@/app/workshop/lore/LoreFields";
 import { newId, type AtlasMap, type Pin, type Region, type XY } from "@/lib/worldforge/model";
 import { mapBreadcrumbs, mapTree, nextRegionColor, polygonCentroid } from "@/lib/worldforge/tree";
+import { frameOf } from "@/lib/worldforge/atlas-frame";
+import type { Placement } from "@/lib/db/atlas-region";
 import type { WorldApi, WorldState } from "./useWorld";
 import { AtlasCard } from "./AtlasCard";
+import { isBound, movedText, OutOfStep, PinRegionActions, RegionBar, RegionNoticeLine, RegionReview, useAtlasRegion } from "./AtlasRegion";
 
 // The atlas, after WorldForge's map tab: pictures of the world with pins on
 // them, each pin bound to an entry, and maps inside maps (a pin opens the
 // city map, the city map's pin opens the tavern's). Regions are named
 // shapes drawn over a map: a kingdom's border, a forest's edge.
+//
+// One map may stand over the campaign's playable Region map (AtlasRegion,
+// audit WF-09): its pins can place their places there, and a bound pin and
+// its place then move together. Each map is drawn in the box its pins were
+// placed in (its frame), so a picture that is not 16:10 keeps its pins and
+// regions where they were put.
 
 type Mode = "look" | "pin" | "region";
 
@@ -29,6 +38,13 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   const surface = useRef<HTMLDivElement>(null);
   const atlas = doc.maps.find((entry) => entry.id === mapId) ?? doc.maps[0] ?? null;
   const pins = atlas ? doc.pins.filter((pin) => pin.mapId === atlas.id) : [];
+  const region = useAtlasRegion(api, world);
+  // An Undo offered after a save runs later, against the world as it is
+  // then: a save computed from an older copy would put back other rows too.
+  const latest = useRef({ api, doc });
+  useEffect(() => {
+    latest.current = { api, doc };
+  });
 
   const pointAt = (event: { clientX: number; clientY: number }): XY => {
     const box = surface.current!.getBoundingClientRect();
@@ -46,8 +62,26 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
     setMapId(made.id);
   }
 
-  async function savePins(next: Pin[]) {
-    await api.patch({ pins: next });
+  async function savePins(next: Pin[], onRegion?: (moves: Placement[]) => void) {
+    await api.patch({ pins: next }, onRegion ? { onRegion } : undefined);
+  }
+
+  // A bound pin moved by hand took its place's Region marker along: say so,
+  // and offer to put the pin back (its place follows it back).
+  function movePin(id: string, to: { x: number; y: number }) {
+    const from = doc.pins.find((pin) => pin.id === id);
+    if (!from) return;
+    void savePins(
+      doc.pins.map((pin) => (pin.id === id ? { ...pin, x: to.x, y: to.y } : pin)),
+      (moves) =>
+        region.setNotice({
+          text: movedText(moves),
+          undo: () => {
+            const now = latest.current;
+            return now.api.patch({ pins: now.doc.pins.map((pin) => (pin.id === id ? { ...pin, x: from.x, y: from.y } : pin)) });
+          },
+        }),
+    );
   }
   async function saveRegions(regions: Region[]) {
     if (!atlas) return;
@@ -101,6 +135,7 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   }
 
   const trail = mapBreadcrumbs(doc.maps, doc.pins, atlas.id);
+  const frame = frameOf(atlas);
   const selectedPin = selected?.kind === "pin" ? doc.pins.find((pin) => pin.id === selected.id) ?? null : null;
   const selectedRegion = selected?.kind === "region" ? atlas.regions.find((region) => region.id === selected.id) ?? null : null;
 
@@ -111,6 +146,7 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
         {mapTree(doc.maps, doc.pins).map(({ map: entry, depth }) => (
           <button key={entry.id} type="button" onClick={() => { setMapId(entry.id); setSelected(null); setDrawing([]); }} className={cn("flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs motion-press", entry.id === atlas.id ? "bg-amber-400/10 text-amber-100" : "text-stone-400 hover:text-stone-200")} style={{ paddingLeft: `${0.375 + depth * 0.75}rem` }}>
             <MapIcon className="size-3.5 shrink-0" /> {entry.name}
+            {entry.role === "region" ? <Globe2 className="ml-auto size-3 shrink-0 text-emerald-300" aria-label="Over the Region" /> : null}
           </button>
         ))}
         {making && !selectedPin ? newMapForm() : <KitButton tone="link" onClick={() => setMaking({ name: "", image: "" })}><Plus className="size-3.5" /> New map</KitButton>}
@@ -144,6 +180,10 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
         ) : mode === "pin" ? (
           <p className="motion-pop text-xs text-stone-400">Click where the pin goes.</p>
         ) : null}
+        <RegionBar region={region} atlas={atlas} pins={pins} />
+        <RegionReview key={region.step ? region.step.kind : "none"} region={region} />
+        <RegionNoticeLine region={region} />
+        <OutOfStep region={region} atlas={atlas} />
 
         <div
           key={atlas.id}
@@ -153,17 +193,19 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
           onPointerUp={() => {
             // A press that did not move is a click, not a move to save.
             const from = drag ? doc.pins.find((pin) => pin.id === drag.id) : null;
-            if (drag && from && Math.hypot(from.x - drag.at.x, from.y - drag.at.y) > 0.004) {
-              void savePins(doc.pins.map((pin) => (pin.id === drag.id ? { ...pin, x: drag.at.x, y: drag.at.y } : pin)));
-            }
+            if (drag && from && Math.hypot(from.x - drag.at.x, from.y - drag.at.y) > 0.004) movePin(drag.id, drag.at);
             setDrag(null);
           }}
-          className={cn("panel animate-fade-up relative aspect-[16/10] w-full select-none overflow-hidden rounded-xl", mode !== "look" && "cursor-crosshair")}
+          className={cn("panel animate-fade-up relative w-full select-none overflow-hidden rounded-xl", mode !== "look" && "cursor-crosshair")}
+          // The box the pins were placed in, and the picture fitted to it
+          // the same way (src/lib/worldforge/atlas-frame.ts).
+          style={{ aspectRatio: String(frame.surface) }}
           data-tour="world-atlas"
+          data-testid="atlas-surface"
         >
           {atlas.image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={atlas.image} alt="" className="absolute inset-0 size-full object-cover" draggable={false} />
+            <img src={atlas.image} alt="" className={cn("absolute inset-0 size-full", frame.fit === "contain" ? "object-contain" : "object-cover")} draggable={false} />
           ) : (
             <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_center,rgba(212,171,58,0.08),transparent_70%)] text-xs text-stone-600">No picture yet: pins still work.</div>
           )}
@@ -190,6 +232,7 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
           {pins.map((pin, index) => {
             const at = drag?.id === pin.id ? drag.at : pin;
             const entity = world.entities.find((entry) => entry.ref === pin.ref);
+            const bound = isBound(pin, atlas);
             return (
               <button
                 key={pin.id}
@@ -198,9 +241,13 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
                 style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, "--i": index } as React.CSSProperties}
                 onClick={(event) => { event.stopPropagation(); setSelected({ kind: "pin", id: pin.id }); }}
                 onPointerDown={(event) => { if (mode === "look") { event.currentTarget.setPointerCapture(event.pointerId); setDrag({ id: pin.id, at: { x: pin.x, y: pin.y } }); } }}
-                aria-label={pin.name || entity?.name || "A pin"}
+                aria-label={`${pin.name || entity?.name || "A pin"}${bound ? ", moves with its place on the Region" : ""}`}
+                data-bound={bound || undefined}
               >
-                <span className={cn("rounded px-1 text-[11px] text-amber-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]", selectedPin?.id === pin.id && "bg-stone-950/80")}>{pin.name || entity?.name}</span>
+                <span className={cn("flex items-center gap-0.5 rounded px-1 text-[11px] text-amber-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]", selectedPin?.id === pin.id && "bg-stone-950/80")}>
+                  {bound ? <Link2 className="size-3 text-emerald-300" aria-hidden="true" /> : null}
+                  {pin.name || entity?.name}
+                </span>
                 <MapPin className={cn("size-6 drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)]", pin.linkedMapId ? "fill-amber-400/80 text-amber-200" : "fill-red-500/80 text-red-200")} />
               </button>
             );
@@ -215,6 +262,7 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
             region={selectedRegion}
             making={making}
             subMapForm={selectedPin ? newMapForm(selectedPin) : null}
+            regionActions={selectedPin ? <PinRegionActions region={region} pin={selectedPin} atlas={atlas} /> : null}
             onMakeSubMap={() => setMaking({ name: "", image: "" })}
             onOpenMap={(id) => { setMapId(id); setSelected(null); }}
             onOpenEntry={onOpen}
