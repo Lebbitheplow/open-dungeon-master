@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenText, ChevronRight, Globe2, Grid3x3, Hexagon, Link2, Map as MapIcon, MapPin, MousePointer2, Plus, Swords, Trash2, X } from "lucide-react";
+import { BookOpenText, ChevronRight, Globe2, Grid3x3, Hexagon, Link2, Map as MapIcon, MapPin, MousePointer2, Plus, Settings2, Swords, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -14,6 +14,7 @@ import type { WorldApi, WorldState } from "./useWorld";
 import { AtlasCard } from "./AtlasCard";
 import { isBound, movedText, OutOfStep, PinRegionActions, RegionBar, RegionNoticeLine, RegionReview, useAtlasRegion } from "./AtlasRegion";
 import { PlaceBattleMaps, type OpenPrep } from "./PlaceBattleMaps";
+import { CornerEditor, DeleteReview, MapSettings, NotSaved, PointFields, useAtlasDelete } from "./AtlasEdit";
 import type { WorldEntity } from "@/lib/db/world-forge";
 
 // The atlas, after WorldForge's map tab: pictures of the world with pins on
@@ -31,6 +32,12 @@ import type { WorldEntity } from "@/lib/db/world-forge";
 // encounters (PlaceBattleMaps), and a map nested in such a pin (the
 // tavern's map inside the city's) opens them from its own view. An Atlas
 // picture is never a battle map: it supplies no walls, doors or light.
+//
+// Everything a pointer does has a keyboard way too (AtlasEdit, audit
+// WF-20): a pin can be added in the middle and moved with the arrow keys or
+// by numbers, a region's corners can be typed, and a map has settings. A
+// save that fails keeps what was typed, and every delete says what it
+// touches first and can be undone.
 
 type Mode = "look" | "pin" | "region";
 
@@ -55,10 +62,13 @@ export function AtlasView({
   const [drawing, setDrawing] = useState<XY[]>([]);
   const [drag, setDrag] = useState<{ id: string; at: XY } | null>(null);
   const [making, setMaking] = useState<{ name: string; image: string } | null>(null);
+  const [makeFailed, setMakeFailed] = useState(false);
+  const [settings, setSettings] = useState(false);
   const surface = useRef<HTMLDivElement>(null);
   const atlas = doc.maps.find((entry) => entry.id === mapId) ?? doc.maps[0] ?? null;
   const pins = atlas ? doc.pins.filter((pin) => pin.mapId === atlas.id) : [];
   const region = useAtlasRegion(api, world);
+  const remover = useAtlasDelete(api, region);
   // An Undo offered after a save runs later, against the world as it is
   // then: a save computed from an older copy would put back other rows too.
   const latest = useRef({ api, doc });
@@ -74,16 +84,19 @@ export function AtlasView({
   async function makeMap(parentPin?: Pin) {
     if (!making?.name.trim()) return;
     const made: AtlasMap = { id: newId("map"), name: making.name.trim(), image: making.image, parentPinId: parentPin?.id ?? "", regions: [] };
-    await api.patch({
+    const ok = await api.patch({
       maps: [...doc.maps, made],
       ...(parentPin ? { pins: doc.pins.map((pin) => (pin.id === parentPin.id ? { ...pin, linkedMapId: made.id } : pin)) } : {}),
     });
+    // A refused map keeps its form, name and picture as typed.
+    setMakeFailed(!ok);
+    if (!ok) return;
     setMaking(null);
     setMapId(made.id);
   }
 
   async function savePins(next: Pin[], onRegion?: (moves: Placement[]) => void) {
-    await api.patch({ pins: next }, onRegion ? { onRegion } : undefined);
+    return api.patch({ pins: next }, onRegion ? { onRegion } : undefined);
   }
 
   // A bound pin moved by hand took its place's Region marker along: say so,
@@ -104,18 +117,34 @@ export function AtlasView({
     );
   }
   async function saveRegions(regions: Region[]) {
+    if (!atlas) return false;
+    return api.patch({ maps: doc.maps.map((entry) => (entry.id === atlas.id ? { ...entry, regions } : entry)) });
+  }
+
+  function addPin(at: XY) {
     if (!atlas) return;
-    await api.patch({ maps: doc.maps.map((entry) => (entry.id === atlas.id ? { ...entry, regions } : entry)) });
+    const pin: Pin = { id: newId("pin"), mapId: atlas.id, x: at.x, y: at.y, name: "", ref: "", linkedMapId: "", notes: "" };
+    void savePins([...doc.pins, pin]);
+    setSelected({ kind: "pin", id: pin.id });
+    setMode("look");
+  }
+
+  // Arrow keys move a focused pin a step, Shift a bigger one.
+  function nudge(event: React.KeyboardEvent, pin: Pin) {
+    const step = event.shiftKey ? 0.05 : 0.01;
+    const by: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    const move = by[event.key];
+    if (!move) return;
+    event.preventDefault();
+    const fit = (value: number) => Math.round(Math.min(1, Math.max(0, value)) * 10_000) / 10_000;
+    movePin(pin.id, { x: fit(pin.x + move[0]), y: fit(pin.y + move[1]) });
   }
 
   function click(event: React.MouseEvent) {
     if (!atlas || !surface.current) return;
     const at = pointAt(event);
     if (mode === "pin") {
-      const pin: Pin = { id: newId("pin"), mapId: atlas.id, x: at.x, y: at.y, name: "", ref: "", linkedMapId: "", notes: "" };
-      void savePins([...doc.pins, pin]);
-      setSelected({ kind: "pin", id: pin.id });
-      setMode("look");
+      addPin(at);
     } else if (mode === "region") {
       setDrawing((points) => [...points, at]);
     } else {
@@ -123,10 +152,11 @@ export function AtlasView({
     }
   }
 
-  async function finishRegion() {
-    if (!atlas || drawing.length < 3) return;
-    const region: Region = { id: newId("rg"), name: "A region", points: drawing, color: nextRegionColor(atlas.regions), ref: "", notes: "" };
-    await saveRegions([...atlas.regions, region]);
+  async function finishRegion(points: XY[] = drawing) {
+    if (!atlas || points.length < 3) return;
+    const region: Region = { id: newId("rg"), name: "A region", points, color: nextRegionColor(atlas.regions), ref: "", notes: "" };
+    // A refused shape keeps its corners, to close again.
+    if (!(await saveRegions([...atlas.regions, region]))) return;
     setDrawing([]);
     setMode("look");
     setSelected({ kind: "region", id: region.id });
@@ -137,8 +167,9 @@ export function AtlasView({
       <form className="panel motion-pop flex flex-col gap-2 rounded-lg p-3" onSubmit={(event) => { event.preventDefault(); void makeMap(parentPin); }}>
         <input className={ui.input} placeholder={parentPin ? `Inside ${parentPin.name || "this pin"}` : "The Saltmarch"} aria-label="Map name" maxLength={80} value={making.name} onChange={(event) => setMaking({ ...making, name: event.target.value })} autoFocus />
         <LoreImageField imagePath={making.image} onChange={(image) => setMaking({ ...making, image })} />
+        {makeFailed ? <NotSaved onRetry={() => void makeMap(parentPin)} what="The name and picture" /> : null}
         <div className="flex justify-end gap-1.5">
-          <KitButton tone="small" onClick={() => setMaking(null)}><X className="size-3.5" /> Cancel</KitButton>
+          <KitButton tone="small" onClick={() => { setMaking(null); setMakeFailed(false); }}><X className="size-3.5" /> Cancel</KitButton>
           <KitButton tone="primary" type="submit" disabled={!making.name.trim()}>Make the map</KitButton>
         </div>
       </form>
@@ -147,6 +178,10 @@ export function AtlasView({
   if (!atlas) {
     return (
       <div className="flex flex-col items-center gap-3 py-6 text-center animate-fade-up" data-tour="world-atlas">
+        {/* The last map deleted: its Undo is still offered here. */}
+        <div className="w-full max-w-md text-left">
+          <RegionNoticeLine region={region} />
+        </div>
         <MapIcon className="size-8 text-amber-400/70" />
         <p className="max-w-md text-sm text-stone-400">The atlas holds pictures of the world, with a pin on each place that matters and maps inside maps. Start with the widest one.</p>
         {making ? <div className="w-full max-w-md text-left">{newMapForm()}</div> : <KitButton tone="primary" onClick={() => setMaking({ name: "", image: "" })}><Plus className="size-3.5" /> First map</KitButton>}
@@ -192,20 +227,45 @@ export function AtlasView({
                 <Icon className="size-3.5" /> {label}
               </button>
             ))}
-            <KitButton tone="iconDanger" always aria-label={`Delete the map ${atlas.name}`} onClick={() => api.patch({ maps: doc.maps.filter((entry) => entry.id !== atlas.id), pins: doc.pins.filter((pin) => pin.mapId !== atlas.id).map((pin) => (pin.linkedMapId === atlas.id ? { ...pin, linkedMapId: "" } : pin)) }).then(() => setMapId(""))}>
+            <KitButton tone="icon" always aria-label={`Settings for the map ${atlas.name}`} aria-expanded={settings} onClick={() => setSettings((open) => !open)} data-testid="atlas-settings-button">
+              <Settings2 className="size-4" />
+            </KitButton>
+            <KitButton tone="iconDanger" always aria-label={`Delete the map ${atlas.name}`} disabled={remover.busy} onClick={() => void remover.review({ kind: "map", mapId: atlas.id })} data-testid="atlas-delete-map">
               <Trash2 className="size-4" />
             </KitButton>
           </div>
         </div>
         {mode === "region" ? (
           <p className="motion-pop text-xs text-stone-400">
-            Click the map to set each corner. {drawing.length >= 3 ? <button type="button" onClick={finishRegion} className="text-amber-200 underline underline-offset-2">Close the shape ({drawing.length} corners)</button> : `${3 - drawing.length} more to make a shape.`}
+            Click the map to set each corner. {drawing.length >= 3 ? <button type="button" onClick={() => void finishRegion()} className="text-amber-200 underline underline-offset-2">Close the shape ({drawing.length} corners)</button> : `${3 - drawing.length} more to make a shape.`}{" "}
+            Or{" "}
+            <button type="button" onClick={() => void finishRegion([{ x: 0.4, y: 0.4 }, { x: 0.6, y: 0.4 }, { x: 0.5, y: 0.6 }])} className="text-amber-200 underline underline-offset-2" data-testid="atlas-region-by-numbers">
+              start with three corners in the middle
+            </button>{" "}
+            and type where each goes.
           </p>
         ) : mode === "pin" ? (
-          <p className="motion-pop text-xs text-stone-400">Click where the pin goes.</p>
+          <p className="motion-pop text-xs text-stone-400">
+            Click where the pin goes. Or{" "}
+            <button type="button" onClick={() => addPin({ x: 0.5, y: 0.5 })} className="text-amber-200 underline underline-offset-2" data-testid="atlas-pin-in-middle">
+              add one in the middle
+            </button>{" "}
+            and move it with the arrow keys or by numbers.
+          </p>
         ) : null}
         <RegionBar region={region} atlas={atlas} pins={pins} />
+        {settings ? <MapSettings key={`settings-${atlas.id}`} api={api} atlas={atlas} region={region} onClose={() => setSettings(false)} /> : null}
         <RegionReview key={region.step ? region.step.kind : "none"} region={region} />
+        <DeleteReview
+          remover={remover}
+          onDeleted={(target) => {
+            if (target.kind === "map") {
+              setMapId("");
+              setSettings(false);
+            }
+            setSelected(null);
+          }}
+        />
         <RegionNoticeLine region={region} />
         <OutOfStep region={region} atlas={atlas} />
         {insidePlace && onOpenPrep ? <InsidePlace place={insidePlace} onOpen={onOpen} onOpenPrep={onOpenPrep} /> : null}
@@ -266,6 +326,8 @@ export function AtlasView({
                 style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%`, "--i": index } as React.CSSProperties}
                 onClick={(event) => { event.stopPropagation(); setSelected({ kind: "pin", id: pin.id }); }}
                 onPointerDown={(event) => { if (mode === "look") { event.currentTarget.setPointerCapture(event.pointerId); setDrag({ id: pin.id, at: { x: pin.x, y: pin.y } }); } }}
+                onKeyDown={(event) => nudge(event, pin)}
+                aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
                 aria-label={`${pin.name || entity?.name || "A pin"}${bound ? ", moves with its place on the Region" : ""}`}
                 data-bound={bound || undefined}
               >
@@ -288,6 +350,13 @@ export function AtlasView({
             making={making}
             subMapForm={selectedPin ? newMapForm(selectedPin) : null}
             regionActions={selectedPin ? <PinRegionActions region={region} pin={selectedPin} atlas={atlas} /> : null}
+            position={
+              selectedPin ? (
+                <PointFields at={selectedPin} label="Pin" onCommit={(to) => movePin(selectedPin.id, to)} />
+              ) : selectedRegion ? (
+                <CornerEditor points={selectedRegion.points} onSave={(points) => void saveRegions(atlas.regions.map((entry) => (entry.id === selectedRegion.id ? { ...entry, points } : entry)))} />
+              ) : null
+            }
             battleMaps={
               selectedPin && onOpenPrep ? (
                 pinEntity?.shelf === "location" ? (
@@ -303,9 +372,9 @@ export function AtlasView({
             onOpenMap={(id) => { setMapId(id); setSelected(null); }}
             onOpenEntry={onOpen}
             onSavePin={(pin) => savePins(doc.pins.map((entry) => (entry.id === pin.id ? pin : entry)))}
-            onDeletePin={(pin) => { setSelected(null); void savePins(doc.pins.filter((entry) => entry.id !== pin.id)); }}
+            onDeletePin={(pin) => void remover.review({ kind: "pin", pinId: pin.id })}
             onSaveRegion={(region) => saveRegions(atlas.regions.map((entry) => (entry.id === region.id ? region : entry)))}
-            onDeleteRegion={(region) => { setSelected(null); void saveRegions(atlas.regions.filter((entry) => entry.id !== region.id)); }}
+            onDeleteRegion={(region) => void remover.review({ kind: "region", mapId: atlas.id, regionId: region.id })}
             onClose={() => setSelected(null)}
           />
         ) : null}

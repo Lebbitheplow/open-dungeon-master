@@ -249,7 +249,22 @@ export function useWorld(campaignId: string) {
     [base, send],
   );
 
-  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, clearError: () => setError("") };
+  // The Atlas's own steps (world/atlas, src/lib/db/atlas-edit.ts): delete
+  // with an undo token, restore by it, and a map's frame. Each answers with
+  // its review, or with what it did; a delete or restore carries the world.
+  const atlasStep = useCallback(
+    async (step: "delete" | "restore" | "frame", body: Record<string, unknown>) => {
+      const payload = await send(`${base}/atlas/${step}`, { method: "POST", body: JSON.stringify(body) });
+      if (payload?.doc) {
+        const fresh = payload as unknown as WorldState;
+        setWorld(withPending({ doc: fresh.doc, entities: fresh.entities }));
+      } else if (payload?.applied) refresh();
+      return payload;
+    },
+    [base, send, refresh, withPending],
+  );
+
+  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, atlasStep, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;
