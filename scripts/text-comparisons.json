@@ -2066,7 +2066,7 @@
     "lib/srd/level-change.ts#toLowerCase": [["key",3,"class ids"]],
     "lib/srd/level-up-options.ts#str-eq": [["key",1,"class ids"]],
     "lib/srd/level-up-options.ts#str-key": [["key",1,"spell preparation styles (fixed choice)"]],
-    "lib/srd/level-up-options.ts#toLowerCase": [["key",6,"class ids"]],
+    "lib/srd/level-up-options.ts#toLowerCase": [["key",7,"class ids"]],
     "lib/srd/level-up-spells.ts#str-eq": [["key",1,"spell list id"]],
     "lib/srd/level-up.ts#str-eq": [["key",1,"class id"]],
     "lib/srd/level-up.ts#toLowerCase": [["key",9,"class ids; skill id"]],
