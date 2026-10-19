@@ -211,7 +211,7 @@ html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter:
   align-items: center;
   gap: 0.75rem;
   width: max-content;
-  max-width: min(92vw, 30rem);
+  max-width: min(92vw, 34rem);
   padding: 0.5rem 0.6rem;
   border-radius: 9999px;
   border: 1px solid rgba(212, 171, 58, 0.55);
@@ -221,14 +221,14 @@ html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter:
   animation: arrival-in 420ms var(--ease-settle, ease-out) both;
 }
 .moment-arrival-medallion { width: 2.75rem; height: 2.75rem; flex-shrink: 0; }
+/* A long name wraps rather than losing "takes a seat". */
 .moment-arrival-name {
   display: block;
-  overflow: hidden;
   padding-right: 0.8rem;
   font-family: var(--font-display, serif);
   font-size: 1.05rem;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .moment-arrival-detail {
   display: block;
@@ -274,13 +274,17 @@ html[data-theme="light"] .moment-arrival-dismiss { background: #fffdf7; color: v
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* Centred at the foot, clear of the corner buttons on either side. */
 .portrait-toast-region {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
   z-index: 56;
-  transform: translateX(-50%);
-  max-width: min(92vw, 26rem);
+  width: max-content;
+  max-width: min(calc(100vw - 7rem), 26rem);
+  margin: 0 auto;
+  text-align: center;
   pointer-events: none;
 }
 .portrait-toast {
