@@ -23,6 +23,8 @@ import {
 
 type Update = (change: (draft: Draft) => Draft) => void;
 
+const SMALL_HARDWARE_GUIDE = "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/text-backends.md#smaller-hardware";
+
 type Listing =
   | { ok: true; baseUrl: string; models: ListedModel[]; recommended: string }
   | { ok: false; baseUrl: string; error: string; needsKey?: boolean };
@@ -322,8 +324,15 @@ function StartHints({ inContainer }: { inContainer: boolean }) {
             label="llama-server command"
           />
         </div>
+        <p>
+          A smaller GPU, 4 to 16 GB?{" "}
+          <a href={SMALL_HARDWARE_GUIDE} target="_blank" rel="noreferrer" className="text-amber-200 underline">
+            The models and commands that fit
+          </a>
+          .
+        </p>
         <div>
-          <span className="mb-1 block">Ollama, with the same settings baked in:</span>
+          <span className="mb-1 block">Ollama, with the same settings baked in (it calls the dice and other tools less reliably than llama.cpp):</span>
           <CopyLine text="ollama pull qwen3.6:35b-a3b-q8_0 && ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile" label="Ollama commands" />
         </div>
         <p>

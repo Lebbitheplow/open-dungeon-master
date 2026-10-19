@@ -37,9 +37,15 @@ on for tool calls. If the server runs with `--api-key`, set
 addresses: a player's campaign always runs on the server's, and only an
 admin's own campaign can set another in its Story AI panel.
 
-Prefer Ollama? The same model is committed as a Modelfile with the context
-and samplers baked in; build it and point the app at
-`http://127.0.0.1:11434/v1`, model `qwen3.6-dm`:
+Use llama.cpp where you can. Ollama renders the chat with its own code
+rather than the model's template, has no reasoning budget, and ships some
+models with a presence penalty that suppresses tool calls (the app now sends
+0). Qwen3.5 9B on Ollama called no tool in the six town turns it finished,
+narrating or writing nothing instead; llama-server, sent the same request
+for the same model at the same Q4_K_M quant, called them. If Ollama is what
+you have, the same 35B model is committed as a Modelfile with the context and
+samplers baked in; build it and point the app at `http://127.0.0.1:11434/v1`,
+model `qwen3.6-dm`:
 
 ```bash
 ollama pull qwen3.6:35b-a3b-q8_0
@@ -104,6 +110,32 @@ Expect the tradeoff: tool-decision calls run about 50-100s and a full turn about
 1.5-3 minutes on a single local GPU. Combat and multi-tool turns sit at the longer
 end.
 
+A small model (below) gets a budget from the app as well, for servers that have
+none: once its thinking passes about 6,000 characters (some 1,500 tokens), the
+call is cut off and asked again without thinking. Qwen3.5 9B on Ollama thought
+18,700 characters on one turn and then answered nothing; its useful thinking ran
+1,000 to 2,500.
+
+### The prompt cache
+
+Most of a turn's prompt is the same as the last turn's: the tool definitions and
+the rules, 36K of the default 40K tokens. The app sends them first and unchanged,
+as the system message, and the game state after them as a message of its own,
+before the transcript. llama-server can then reuse that start from one turn to the
+next, which matters most for Qwen3.5 and 3.6 (hybrid models) and Gemma (sliding
+window): their cache can only be picked up again where a message begins, and while
+the game state sat inside the system message every turn read the whole prompt
+again. llama-server's default checkpoint settings are enough; nothing needs setting.
+
+| First call of a turn | Before | Now |
+|---|---|---|
+| Qwen3.6-35B (the default), prompt reused | none of 40K tokens | 37K of 40K |
+| Qwen3.6-35B at Q2, AMD BC-250 | about 145 s | 14 to 33 s |
+| Qwen3.5 9B at Q4, AMD BC-250 | about 55 s | 13 to 26 s |
+
+A turn that starts a fight still reads it all once, for the fight's own tools and
+rules; every turn of the fight after that reuses them.
+
 ### presence_penalty
 
 Keep `presence_penalty` at 0 for the DM. A meaningful presence penalty under the long
@@ -116,7 +148,50 @@ The pin is written after the per-role sampling settings are applied, and no samp
 profile offers `presence_penalty`, so this cannot be reintroduced from a settings
 screen. Breaking dice rolling should not be one checkbox away.
 
-## Smaller hardware: 7B to 14B models
+## Smaller hardware
+
+Run llama.cpp's `llama-server` on a smaller card: the app fits the turn to the
+model, and the prompt cache above keeps each turn's first call short. What to run,
+by the card's memory, measured on an AMD BC-250 (16 GB shared, Vulkan) with
+`scripts/smoke-local.mjs --scenario town`: eight turns that travel, meet an
+innkeeper, persuade, buy, sneak and fight, each with the tool call it needs.
+
+| Card | Model, window | File | Rules | Town: checks missed, seconds a turn |
+|---|---|---|---|---|
+| 16 GB | Qwen3.6-35B-A3B UD-Q2_K_XL, 64K | 12.3 GB | full | 0 of 8, 130 |
+| 16 GB | the same, with `DM_BRIEF_RULES=1` | 12.3 GB | short | 1 of 8, 66 |
+| 12 GB | Qwen3.5 9B Q8_0, 64K | 9.5 GB | short | 1 and 2 of 8 (two runs), 75 |
+| 8 GB | Qwen3.5 9B Q4_K_M, 64K | 5.7 GB | short | 0 and 1 of 8 (two runs), 61 |
+| 8 GB | Gemma 4 12B QAT UD-Q4_K_XL, 64K | 6.7 GB | short | 1 of 8, 110 |
+| 4 to 6 GB | Qwen3.5 9B UD-IQ3_XXS, 24K, one slot | 4.0 GB | short | 0 of 8 |
+
+The 35B is a mixture of experts with 3B parameters active, so it writes faster than
+the 9B it outweighs; on a 16 GB box the short rules halve its turn for the
+occasional skipped call (here, the innkeeper registered a turn late). Its UD-IQ3_XXS
+file fits the BC-250 only with a 32K window and missed 2 of 8 with the full rules.
+How fast each reads a prompt and writes, from `llama-bench` on the BC-250:
+
+| Model | Prompt, tokens/s | Writing, tokens/s | Writing, 16K in |
+|---|---|---|---|
+| Qwen3.6-35B-A3B UD-Q2_K_XL | 485 | 81 | 68 |
+| Qwen3.6-35B-A3B UD-IQ3_XXS | 449 | 81 | 67 |
+| Gemma 4 26B-A4B UD-Q3_K_XL | 517 | 64 | 54 |
+| Qwen3.5 9B Q8_0 | 416 | 33 | 30 |
+| Qwen3.5 9B Q4_K_M | 385 | 48 | 42 |
+| Gemma 4 12B QAT | 240 | 32 | 29 |
+| Qwen3 14B Q4_K_M | 201 | 30 | 20 |
+| Ministral 3 14B Q4_K_M | 205 | 24 | 20 |
+
+Tried and not recommended: Qwen3 14B (3 of 8 missed at 297 seconds a turn; a dense
+14B writes slowly here and thinks at length) and Qwen3.5 9B at UD-IQ2_M (3 of 8, the
+wrong tools). Gemma 4 26B-A4B at UD-Q3_K_XL (12.9 GB) ran the BC-250 out of memory
+at 64K and at 32K; a 16 GB card that does not share its memory with the system may
+hold it. Ministral 3 14B missed 5 of 8 until the app learned that its chat
+template refuses two messages in a row from the same side, and 1 of 8 at 106 seconds
+a turn once the app joined them; it writes at 24 tokens a second here, so it is no
+faster than Gemma 4 12B, which needs less memory.
+
+### How a small model is played
 
 A model with fewer than 16 billion parameters is played differently, with
 nothing to set. The app reads the size from llama-server's `/v1/models`
@@ -134,45 +209,57 @@ turn:
 
 `DM_BRIEF_RULES=0` in the environment plays a small model like any other, and
 `DM_BRIEF_RULES=1` gives any model the short rules. Thinking stays on for the tool
-calls: on the eight-turn `--scenario town` the 9B missed 3 scripted checks with it
-and 6 without (fights narrated, a sneak decided with no roll), for 75 seconds a
-turn instead of 54.
+calls: on the town the 9B missed 3 checks with it and 6 without (fights narrated, a
+sneak decided with no roll), for 75 seconds a turn instead of 54.
 
-Measured on Qwen3.5 9B (Q8_0) on llama-server, on an AMD BC-250 (16 GB shared,
-Vulkan), with `scripts/smoke-local.mjs`'s five-turn ford:
+On the full rules the same 9B (Q8_0) missed 3 of the ford's 5 checks at 179 seconds
+a turn, and none of them on the short rules, in two runs: a search narrated with no
+roll and a fake dice marker written into the prose, and an attack written as text
+instead of called. A small model is still weakest on the battle map: it attacks out
+of turn and cannot count squares, so an attack out of reach is refused with the
+square to walk to.
 
-| | Full rules and tools | Small-model play |
-|---|---|---|
-| First prompt of a turn | 38K tokens, 75 tools | 13K tokens, 32 tools |
-| Scripted checks missed | 3 of 5 (two turns halted) | 0 of 5 (two runs) |
-| Mean seconds per turn | 179 | 87 and 111 |
+### A card smaller than the model
 
-The eight-turn `--scenario town` missed none of its checks either, at 89
-seconds a turn.
+`-ngl` puts that many of the model's layers on the card and the rest on the CPU.
+Reading the prompt stays fast, since llama.cpp moves that work to the card; writing
+slows. Qwen3.5 9B Q4_K_M on the BC-250 wrote 47 tokens a second with all 32 layers
+on the GPU, 17 with 20 and 13 with 14, and UD-IQ3_XXS wrote 18 with 26; each read
+the prompt at 375 to 390. The BC-250's CPU shares the same fast memory, so a
+desktop's DDR4 or DDR5 makes the CPU's share slower than this.
 
-The misses on the full rules were a search narrated with no roll (and a fake dice
-marker written into the prose), an attack written as text instead of called, and
-a request that overflowed the server's shared cache. A small model is still weakest
-on the battle map: it attacks out of turn and cannot count squares, so an attack
-out of reach is refused with the square to walk to. A llama-server for a 16 GB box:
+The 9B's cache is small: only 8 of its 32 layers keep the whole history, about 17 KB
+a token at `q8_0`, so a 24K window takes 0.4 GB. On a 4 GB card, run UD-IQ3_XXS
+(4.0 GB) with `-c 24576 -np 1` and as many layers as fit. Not measured here: the
+35B on an 8 to 12 GB card with its experts in system memory (`--n-cpu-moe`).
+
+### AMD BC-250
+
+- The 16 GB of GDDR6 is shared by the CPU and the GPU. Set the VRAM carve-out low
+  (512 MB) and let the GPU use the rest as GTT, with the kernel arguments
+  `amdgpu.gttsize=14750 ttm.pages_limit=3776000`.
+- Build llama.cpp for Vulkan: `cmake -B build -DGGML_VULKAN=ON && cmake --build build -j`
+  (on Fedora the build also needs `spirv-headers-devel`). The HIP build failed for
+  this GPU (gfx1013) at llama.cpp ff5a233.
+- Run one model server at a time. A second one, or a service left enabled, runs the
+  box out of memory and the kernel kills one of them.
 
 ```bash
-llama-server -m Qwen3.5-9B-Q8_0.gguf --alias qwen3.5-9b-q8 \
-  -c 65536 -np 2 --kv-unified --jinja \
+llama-server -m Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf --alias qwen3.6-35b-q2 \
+  -c 65536 -np 2 --kv-unified --jinja -ngl 99 \
   --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
-  --reasoning-budget 1024 \
-  --ctx-checkpoints 8 --checkpoint-min-step 4096 \
+  --reasoning-budget 1024 --cache-ram 0 \
   --port 8090
 ```
 
 - With `--kv-unified` the `-c` is shared by both slots, while `/props` reports it
   whole for each: a DM turn and the app's helper call running at once must fit in
-  it together. 80K with a 50K DM prompt overflowed; with the small-model prompt
-  64K leaves plenty.
-- Qwen3.5 is a hybrid model, and llama-server reuses the cached start of a prompt
-  only from a checkpoint. Checkpoints every 4,096 tokens let the next turn reuse
-  the rules and tools: its first call took 11 seconds instead of 49.
-- Q8_0 is the full-quality quant that fits 16 GB; BF16 weights are 18 GB.
+  it together. A fight on the full rules runs to about 52K tokens, so a reply that
+  runs away can fill 64K (the 35B at Q2 did once); the short rules stay under 20K.
+- `--cache-ram 0` keeps llama-server from holding extra prompt cache in system
+  memory, which on this box is the memory the model needs.
+- The same command serves any model above; on a 16 GB discrete card the 35B's
+  UD-IQ3_XXS file also fits at 64K.
 
 ## Local models (legacy "Local" provider, Ollama)
 
@@ -423,4 +510,6 @@ on the 12B), and it only bites when the cache goes cold on a very long story;
 set `LOCAL_TEXT_CONTEXT` to cap the window if you'd rather bound that.
 Windows caps the default local context at 65K tokens for smoother first-run
 behavior, but you can still set `LOCAL_TEXT_CONTEXT` higher if your machine
-has the headroom.
+has the headroom. A model under 16B parameters is capped at 32K: Qwen3.5 9B's
+native 262K window would ask Ollama for about 8 GB of cache, more than the
+weights, on the cards such a model is chosen for.
