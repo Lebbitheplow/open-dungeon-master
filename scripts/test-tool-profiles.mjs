@@ -164,6 +164,27 @@ await test("the full rules are every line, word for word; a compact table's carr
   assert.ok(!coreFor(new Set(["cleric"])).includes("Indomitable rerolls"));
 });
 
+await test("a small model's short rules name the core tools in a few lines, and the moment's lines only", () => {
+  const brief = { inEncounter: false, groups: new Set(["outside"]), caster: false, features: false, classFeatures: false, featSpells: false, dying: false, arc: true, recall: false, map: false, legendary: false, brief: true };
+  const explore = rules.dmSystemText(false, brief);
+  const fight = rules.encounterRulesText(false, { ...brief, inEncounter: true });
+  const full = rules.dmSystemText(false, { ...brief, brief: false });
+  assert.ok(explore.length < full.length / 4, `the short rules (${explore.length} chars) are a fraction of the full (${full.length})`);
+  for (const tool of ["request_roll", "start_encounter", "move_party", "set_npc", "social_check", "complete_beat", "more_tools", "request_player_input"]) {
+    assert.ok(explore.includes(tool), `out of a fight the short rules name ${tool}`);
+  }
+  for (const tool of ["pc_attack", "enemy_attack", "end_turn", "take_action", "aoe_damage"]) {
+    assert.ok(fight.includes(tool), `in a fight they name ${tool}`);
+  }
+  assert.ok(!rules.dmSystemText(false, { ...brief, inEncounter: true }).includes("start_encounter"), "no fight to start in a fight");
+  assert.ok(!explore.includes("cast_at_enemy") && !fight.includes("cast_at_enemy"), "no spell lines without a caster");
+  assert.ok(rules.dmSystemText(false, { ...brief, caster: true }).includes("cast_at_enemy"));
+  assert.ok(rules.dmSystemText(true, brief).includes("Ammunition is tracked"), "the table's variant rule still reaches the short rules");
+  assert.ok(!rules.dmSystemText(false, { ...brief, arc: false }).includes("complete_beat"), "no beat to complete without an arc");
+  // An opened group still brings its full lines.
+  assert.match(rules.groupGuidance("world", false), /roll_treasure/);
+});
+
 // ---- a compact turn against a fake backend ---------------------------------------
 const requests = [];
 let script = [];
@@ -174,6 +195,11 @@ const server = http.createServer((req, res) => {
     // A llama-server launched with -c 65536, for a table that sets no window.
     if (req.url.startsWith("/props")) {
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ default_generation_settings: { n_ctx: 65_536 } }));
+      return;
+    }
+    // Its listing: the tests' model reports no size, a small one does.
+    if (req.url.endsWith("/v1/models")) {
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ data: [{ id: "fake" }, { id: "small-dm", meta: { n_params: 8_953_803_264 } }] }));
       return;
     }
     if (!req.url.endsWith("/chat/completions")) {
@@ -205,15 +231,15 @@ const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, setCampaignStatus, updateStorySettings, allocateSeq } = await import("../src/lib/db/campaigns.ts");
 const { createSheet, listSheets } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
-const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
+const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/db/messages.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
 const { startDmTurn, dmTurnTuning, dmTurnTools } = await import("../src/lib/dm/turn.ts");
 const { forgetContextWindows } = await import("../src/lib/model-client.ts");
 
 const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x", { isAdmin: true });
-function table(line) {
+function table(line, model = "fake") {
   const campaign = createCampaign(lead.id, { title: "Compact", description: "A road.", theme: "a road", maxPlayers: 2, startingLevel: 1, difficulty: "normal", gameSettings: { ttsEnabled: false } });
-  updateStorySettings(campaign.id, { textProvider: "custom", customBaseUrl: baseUrl, customModel: "fake", imageGenerationEnabled: false, autoImages: false });
+  updateStorySettings(campaign.id, { textProvider: "custom", customBaseUrl: baseUrl, customModel: model, imageGenerationEnabled: false, autoImages: false });
   setCampaignStatus(campaign.id, "active");
   const sheet = createSheet(campaign.id, lead.id, 1, createSheetSchema.parse({
     name: "Bram", race: "human", class: "fighter", abilities: { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 }, maxHp: 12, ac: 16,
@@ -256,6 +282,42 @@ await test("a compact turn: the group opens free of the budget, rides from the n
   // A compact system prompt: no spellcasting rules for a fighter alone.
   assert.ok(!String(calls[0].messages[0].content).includes("Every spell is cast through exactly ONE tool"));
   assert.ok(String(calls[0].messages[0].content).includes("NEVER state the result of any die roll"));
+});
+
+await test("a small model, sized by its server, plays on the short rules: no rulebook, enemy health in words, no dice markers in its transcript", async () => {
+  const campaign = table("Goblins leap from the ditch! I raise my shield.", "small-dm");
+  const hero = listSheets(campaign.id)[0];
+  script = [
+    { call: "request_roll", args: { characterId: hero.id, kind: "skill_check", skill: "athletics", difficulty: "easy" } },
+    { call: "start_encounter", args: { enemies: [{ monster: "goblin", count: 1 }] } },
+    { content: "A goblin snarls and circles you. What do you do?" },
+  ];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  let turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the first turn finished (${turn.status}): ${turn.error ?? ""}`);
+  assert.equal(dmTurnTuning(getCampaignById(campaign.id)).briefRules, true, "the 9B the server reported is small");
+  const first = requests.find((body) => Array.isArray(body.tools));
+  const system = String(first.messages[0].content);
+  assert.match(system, /Every reply, in this order/);
+  assert.ok(!system.includes("ENGINE BOUNDARY") && !system.includes("NEVER state the result of any die roll"), "no full rulebook");
+  assert.ok(first.tools.some((tool) => tool.function.name === "more_tools"), "the compact set at a 64K window");
+  // The next turn reads the fight: the goblin's health as a word, its attack
+  // by name, and its own past narration without the dice markers.
+  const sheet = hero;
+  const told = listRecentMessages(campaign.id, 20).filter((message) => message.authorType === "dm").map((message) => message.content).join(" ");
+  assert.match(told, /\[roll:[0-9a-f-]{36}\]/, "the stored narration carries the roll's dice marker");
+  insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "player", userId: lead.id, characterId: sheet.id, content: "I hold my ground." });
+  script = [{ content: "The goblin hesitates. What do you do?" }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  turn = getDmTurn(getLatestDmTurnId(campaign.id));
+  assert.equal(turn.status, "done", `the second turn finished (${turn.status}): ${turn.error ?? ""}`);
+  const next = requests.find((body) => Array.isArray(body.tools) || String(body.messages[0]?.content ?? "").includes("=== GAME STATE"));
+  const state = next.messages.map((message) => String(message.content ?? "")).join("\n");
+  assert.match(state, /Goblin[^\n]*\[enemyId=[^\]]+\] healthy/, "the goblin's health in a word");
+  assert.ok(!/Goblin[^\n]*\[enemyId=[^\]]+\] HP \d/.test(state), "no hit points for a small model to repeat");
+  assert.ok(!/\[roll:[0-9a-f-]{36}\]/.test(state), "no dice markers in the transcript it reads");
 });
 
 await test("a tool never offered still runs when called by name", async () => {

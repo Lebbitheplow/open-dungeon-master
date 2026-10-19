@@ -587,6 +587,20 @@ async function openTurn(
       recall: isStageEnabled(stages, "recall"),
       map: Boolean(encounterNow?.map),
       legendary: Boolean(signals.legendary),
+      brief: tuning.briefRules,
+    });
+  } else if (tuning.briefRules) {
+    // The short rules forced beside a larger tool set: every group is
+    // offered, so every line a group needs rides.
+    ruleContext = ruleContextFor({
+      sheets: context.sheets,
+      inEncounter: Boolean(encounterNow),
+      groups: Object.keys(TOOL_GROUPS),
+      arc: Boolean(campaign.storyArc),
+      recall: isStageEnabled(stages, "recall"),
+      map: Boolean(encounterNow?.map),
+      legendary: true,
+      brief: true,
     });
   }
   const chapterImportance = peakImportanceByChapter(campaignId);

@@ -85,6 +85,10 @@ The app handles this per request, so you do not configure it on the server:
 - It sends `chat_template_kwargs: { enable_thinking: true }` on the **tool-decision**
   model calls only, and keeps the **final narration** call non-thinking so it still
   streams to players smoothly.
+- Every other call (campaign setup, the story arc, the helpers that read a reply)
+  asks for no thinking in so many words. A model that thinks by default (Qwen3.5 on a
+  stock llama-server) otherwise spent the whole 4,096-token reply of the setup call
+  thinking and wrote nothing.
 - A model the catalog says does not reason is not asked to think (it would only sample
   cooler for nothing). The Context panel's "Fitted to this model" lines say when that
   happened.
@@ -111,6 +115,64 @@ set it to 0 there too.
 The pin is written after the per-role sampling settings are applied, and no sampling
 profile offers `presence_penalty`, so this cannot be reintroduced from a settings
 screen. Breaking dice rolling should not be one checkbox away.
+
+## Smaller hardware: 7B to 14B models
+
+A model with fewer than 16 billion parameters is played differently, with
+nothing to set. The app reads the size from llama-server's `/v1/models`
+(`meta.n_params`), from Ollama's `/api/show`, or else from the size the model's
+name states (`qwen3.5-9b`, `gemma4:12b`), hosted or local alike. The Context
+panel's "Fitted to this model" lines say when it applied. For such a model the
+turn:
+
+- carries short rules: a few plain numbered steps naming the core tools (about
+  800 tokens, 330 more in a fight) instead of the full rules (6,000 to 9,000);
+- offers the compact tool set at any window, with the rest one `more_tools` call
+  away;
+- leaves the server's dice markers out of the past narration it reads (a 9B model
+  copied them into its prose instead of rolling).
+
+`DM_BRIEF_RULES=0` in the environment plays a small model like any other, and
+`DM_BRIEF_RULES=1` gives any model the short rules. Thinking stays on for the tool
+calls: on the eight-turn `--scenario town` the 9B missed 3 scripted checks with it
+and 6 without (fights narrated, a sneak decided with no roll), for 75 seconds a
+turn instead of 54.
+
+Measured on Qwen3.5 9B (Q8_0) on llama-server, on an AMD BC-250 (16 GB shared,
+Vulkan), with `scripts/smoke-local.mjs`'s five-turn ford:
+
+| | Full rules and tools | Small-model play |
+|---|---|---|
+| First prompt of a turn | 38K tokens, 75 tools | 13K tokens, 32 tools |
+| Scripted checks missed | 3 of 5 (two turns halted) | 0 of 5 (two runs) |
+| Mean seconds per turn | 179 | 87 and 111 |
+
+The eight-turn `--scenario town` missed none of its checks either, at 89
+seconds a turn.
+
+The misses on the full rules were a search narrated with no roll (and a fake dice
+marker written into the prose), an attack written as text instead of called, and
+a request that overflowed the server's shared cache. A small model is still weakest
+on the battle map: it attacks out of turn and cannot count squares, so an attack
+out of reach is refused with the square to walk to. A llama-server for a 16 GB box:
+
+```bash
+llama-server -m Qwen3.5-9B-Q8_0.gguf --alias qwen3.5-9b-q8 \
+  -c 65536 -np 2 --kv-unified --jinja \
+  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --reasoning-budget 1024 \
+  --ctx-checkpoints 8 --checkpoint-min-step 4096 \
+  --port 8090
+```
+
+- With `--kv-unified` the `-c` is shared by both slots, while `/props` reports it
+  whole for each: a DM turn and the app's helper call running at once must fit in
+  it together. 80K with a 50K DM prompt overflowed; with the small-model prompt
+  64K leaves plenty.
+- Qwen3.5 is a hybrid model, and llama-server reuses the cached start of a prompt
+  only from a checkpoint. Checkpoints every 4,096 tokens let the next turn reuse
+  the rules and tools: its first call took 11 seconds instead of 49.
+- Q8_0 is the full-quality quant that fits 16 GB; BF16 weights are 18 GB.
 
 ## Local models (legacy "Local" provider, Ollama)
 

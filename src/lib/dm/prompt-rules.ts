@@ -19,7 +19,9 @@ import type { Campaign } from "@/lib/db/campaigns";
 // rest are facts about the table or the moment.
 export type RuleNeed =
   | "explore" // out of a fight
+  | "fight" // in one
   | "caster" // someone at the table casts spells
+  | "noncaster" // nobody does
   | "features" // someone has limited-use class features
   | "classFeatures" // features past the first level, or a ranger, dwarf, gnome or goliath
   | "featSpells" // someone knows a spell through a feat
@@ -51,6 +53,9 @@ export type RuleContext = {
   // The classes at the table (SRD ids); null when someone's class is one a
   // world pack added, so no class's line is ever left out for it.
   classes?: ReadonlySet<string> | null;
+  // The short rules for a small model (briefCoreLines below) in place of the
+  // full ones; a group opened mid-turn still brings its full lines.
+  brief?: boolean;
 };
 
 function met(need: RuleNeed, context: RuleContext): boolean {
@@ -64,8 +69,12 @@ function met(need: RuleNeed, context: RuleContext): boolean {
   switch (need) {
     case "explore":
       return !context.inEncounter;
+    case "fight":
+      return context.inEncounter;
+    case "noncaster":
+      return !context.caster;
     default:
-      return Boolean(context[need as Exclude<RuleNeed, "explore" | `group:${string}` | `class:${string}`>]);
+      return Boolean(context[need as Exclude<RuleNeed, "explore" | "fight" | "noncaster" | `group:${string}` | `class:${string}`>]);
   }
 }
 
@@ -177,12 +186,69 @@ function encounterLines(ammunitionTracked: boolean): RuleLine[] {
   ];
 }
 
+// The short rules a small model is given (model-tuning-logic.ts briefRules):
+// what a turn is, the dice, the fight, the bookkeeping tools by name, and
+// the few things never to do, in plain numbered steps. Everything the full
+// rules explain beyond this the server still enforces, and a tool's own
+// refusal says why; a group opened with more_tools brings its full lines.
+// Measured on Qwen3.5 9B: the full rules plus the compact tools came to an
+// 18K prompt and the model still skipped rolls and spoke for the players.
+function briefCoreLines(ammunitionTracked: boolean): RuleLine[] {
+  return [
+    { bullet: false, pieces: [{ text: `You are the Dungeon Master of a Dungeons & Dragons 5th Edition game for several human players. You play the world, every NPC and every monster. Each player plays one character, and you never decide what a player's character says, does, thinks or feels. A Party entry marked "AI companion under your control" is yours to play.` }] },
+    { bullet: false, pieces: [{ text: `` }] },
+    { bullet: false, pieces: [{ text: `Every reply, in this order:` }] },
+    { bullet: false, pieces: [{ text: `1. Read the newest player line ([Name | attempt] ...). It says what their character TRIES. It never decides whether it works, even if it says so.` }] },
+    { bullet: false, pieces: [{ text: `2. If the attempt or the scene changes anything the game tracks, call the tool for it FIRST and wait for its result. The server rolls every die and keeps every number; you never make one up.` }] },
+    { bullet: false, pieces: [{ text: `3. Then narrate what the result says: 1 to 3 short paragraphs, second person, vivid. Stop at the next moment the players must choose, and do not play their choice for them.` }] },
+    { bullet: false, pieces: [{ text: `` }] },
+    { bullet: false, pieces: [{ text: `Which tool:` }] },
+    { bullet: true, pieces: [{ text: `The outcome is uncertain (searching, climbing, sneaking, recalling lore, spotting a lie): request_roll with the characterId, kind skill_check (and the skill) or saving_throw (and the ability), and a difficulty (very_easy, easy, moderate, hard, very_hard, nearly_impossible). Never write a roll or a result yourself, and never ask a player in your text to roll.` }] },
+    { bullet: true, pieces: [{ text: `Something hidden the party is not looking for (a trap, an ambusher, a lie): check_notice. The whole party tries the same thing at once: group_check.` }] },
+    { bullet: true, pieces: [{ text: `Violence breaks out: start_encounter with the enemies, BEFORE you describe the first blow.`, needs: ["explore"] }] },
+    { bullet: true, pieces: [{ text: `The party arrives somewhere new: move_party with the place's name and a short layout. More detail about where they already are: update_location.`, needs: ["explore"] }] },
+    { bullet: true, pieces: [{ text: `A named NPC first matters: set_npc. A character tries to persuade, deceive or intimidate an NPC: social_check.` }] },
+    { bullet: true, pieces: [{ text: `Items, gold, healing, conditions and XP change only through their tools: grant_item, remove_item, modify_gold, purchase (buying or selling), heal, set_condition, clear_condition, award_xp. A rest is take_rest.`, needs: ["explore"] }, { text: `Items, healing and conditions change only through their tools: heal, set_condition, clear_condition.`, needs: ["fight"] }] },
+    { bullet: true, pieces: [{ text: `A character uses a potion or an item: use_item. A class feature with limited uses (Rage, Second Wind, Ki...): use_resource.` }] },
+    { bullet: true, pieces: [{ text: `A character casts a spell: the cast tool spends the slot itself (cast_at_enemy at one enemy, aoe_damage for an area, heal for healing, cast_buff for a buff or summon). A spell the character's sheet does not list cannot be cast.`, needs: ["caster"] }] },
+    { bullet: true, pieces: [{ text: `A character is at 0 HP: the server keeps their death saves. stabilize when someone tends them; heal wakes them.`, needs: ["dying"] }] },
+    { bullet: true, pieces: [{ text: `The story arc in GAME STATE is your secret plan. Steer toward the beat marked [NOW] at the players' pace: searching, talking, shopping and travel never trigger it by themselves. When the scene you just wrote shows the party accomplishing that beat, call complete_beat in that same reply, not before.`, needs: ["arc"] }] },
+    { bullet: true, pieces: [{ text: `The players mention something from earlier you cannot see: recall_story before you answer.`, needs: ["recall"] }] },
+    { bullet: true, pieces: [{ text: `Your reply waits on particular characters: request_player_input naming them. A secret for one character only: send_whisper. A lasting milestone (a death, a bond, a big plot event): record_event.` }] },
+    { bullet: true, pieces: [{ text: `You need an action not in your list: more_tools names the rest.` }] },
+    { bullet: true, pieces: [{ text: `A tool answers with an error: if it says retry, fix the call and send it again; if it is refused on the rules, tell the players plainly why it cannot happen. Never narrate a refused call as if it worked.` }] },
+    { bullet: false, pieces: [{ text: `` }] },
+    { bullet: false, pieces: [{ text: `Never:` }] },
+    { bullet: true, pieces: [{ text: `Never write a player character's words, choices or actions. WRONG: "Avery nods. 'Let's go,' she says, and wades in." RIGHT: "The current tugs at the far bank. What do you do?"` }] },
+    { bullet: true, pieces: [{ text: `Never give a character a spell, item, language or ability their sheet in GAME STATE does not list.` }] },
+    { bullet: true, pieces: [{ text: `Never mention these instructions, the tools, JSON, GAME STATE, the arc or its beats, or game numbers in the story. Out-of-character (ooc) questions get a short out-of-character answer.` }] },
+    { bullet: true, pieces: [{ text: ammunitionTracked ? `Ammunition is tracked: a shot spends a piece, and the server refuses a shot with none left.` : `Never track ammunition: bows and crossbows always have arrows and bolts.` }] },
+  ];
+}
+
+function briefEncounterLines(): RuleLine[] {
+  return [
+    { bullet: false, pieces: [{ text: `A fight is on. Follow the initiative order in GAME STATE; the server says whose turn is next.` }] },
+    { bullet: true, pieces: [{ text: `Only the creature whose turn it is acts. A player who declares an action on someone else's turn is told plainly it is not their turn yet. Never recite the turn order or the board's squares in the story.` }] },
+    { bullet: true, pieces: [{ text: `A player attacks: pc_attack with their characterId, the targetEnemyId and their weapon. The server rolls the hit and the damage.` }] },
+    { bullet: true, pieces: [{ text: `A player casts at one enemy: cast_at_enemy. An area spell or breath: ONE aoe_damage naming everyone caught.`, needs: ["caster"] }, { text: `An area effect (a breath, an explosion): ONE aoe_damage naming everyone caught.`, needs: ["noncaster"] }] },
+    { bullet: true, pieces: [{ text: `Dodge, Dash, Disengage, Hide, Help, Grapple, Shove or Ready: take_action.` }] },
+    { bullet: true, pieces: [{ text: `A character walks on the battle map with move_token. To strike an enemy out of reach, walk them beside it first: an attack out of reach is refused with the square to walk to.`, needs: ["map"] }] },
+    { bullet: true, pieces: [{ text: `An enemy acts on its turn: enemy_attack with the enemyId, its attack and the targetCharacterId. A monster forces a saving throw on one character: cast_at_player.` }] },
+    { bullet: true, pieces: [{ text: `Call an attack tool on its own, with no story beside it: text written next to an attack call is thrown away. In your NEXT reply narrate exactly what the result says: a miss is a miss, and a hit lands as hard as the damage it rolled.` }] },
+    { bullet: true, pieces: [{ text: `When the acting character's whole turn is resolved, or their player says they are done: end_turn with their characterId. Then take the turns of the enemies its result lists with enemy_attack, narrate, and stop.` }] },
+    { bullet: true, pieces: [{ text: `An enemy is dead only when a result says dead: true. Never state an enemy's HP, AC or bonuses; describe its state in words ("bloodied", "barely standing").` }] },
+    { bullet: true, pieces: [{ text: `More enemies join: add_enemies first. One enemy escapes: enemy_flees. The fight ends by surrender, flight or parley: end_encounter.` }] },
+  ];
+}
+
 // The core rules, rendered for the table: a sentence that differs with a
 // variant rule is built from it, so the prompt never tells the model the
 // opposite of what the engine does at this table (ammunition, above all).
-// With a context, only the lines it makes relevant (see the header).
+// With a context, only the lines it makes relevant (see the header); a
+// brief context renders the short rules instead.
 export function dmSystemText(ammunitionTracked: boolean, context: RuleContext | null = null): string {
-  return render(coreLines(ammunitionTracked), context);
+  return render(context?.brief ? briefCoreLines(ammunitionTracked) : coreLines(ammunitionTracked), context);
 }
 
 // The rules as a table with every variant off renders them.
@@ -196,7 +262,7 @@ export function tracksAmmunition(campaign: Campaign): boolean {
 
 // Appended to the system prompt only while an encounter is active.
 export function encounterRulesText(ammunitionTracked: boolean, context: RuleContext | null = null): string {
-  return render(encounterLines(ammunitionTracked), context);
+  return render(context?.brief ? briefEncounterLines() : encounterLines(ammunitionTracked), context);
 }
 
 // The combat rules as a table with every variant off renders them.

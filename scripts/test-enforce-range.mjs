@@ -68,6 +68,22 @@ await test("melee: in reach at 5 feet, diagonals included, refused at 10", async
   }
 });
 
+await test("an attack out of reach names the nearest open square beside the target, and from there it lands", async () => {
+  // Qwen3.5 9B walked a character twice the wrong way when told only to
+  // "move adjacent": the refusal now says where.
+  const enemy = await stage([5, 5], [9, 5]);
+  const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
+  assert.equal(swing.ok, false);
+  const named = /nearest open square beside .+ is \((\d+),(\d+)\): move_token/.exec(swing.error ?? "");
+  assert.ok(named, `no square named: ${swing.error}`);
+  const [x, y] = [Number(named[1]), Number(named[2])];
+  assert.ok(Math.max(Math.abs(x - 9), Math.abs(y - 5)) === 1, `(${x},${y}) is not beside the target`);
+  assert.equal(Math.max(Math.abs(x - 5), Math.abs(y - 5)), 3, `(${x},${y}) is not the nearest such square`);
+  kit.place(hero.id, x, y);
+  const from = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
+  assert.equal(from.result?.hit, true, from.error);
+});
+
 await test("reach against a Large creature is measured to its nearest square (issue #186)", async () => {
   // The dummy at (5,5) fills (5,5) to (6,6). A hero at (7,6) stands against
   // its lower-right square: 5 feet, not the 10 the anchors are apart.

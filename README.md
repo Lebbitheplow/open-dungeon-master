@@ -150,7 +150,9 @@ A local model needs a **context window of at least 16K tokens to narrate and
 24K to run fights; 32K or more is recommended**. The default storyteller runs
 at 64K, and the guided setup's **Test backend** reads the window a server runs
 ([what each size plays](docs/text-backends.md#context-window)). Hosted models
-and agent programs have far more.
+and agent programs have far more. A 7B to 14B model on a 16 GB machine is played
+with short rules and fewer tools, by itself
+([smaller hardware](docs/text-backends.md#smaller-hardware-7b-to-14b-models)).
 
 ```bash
 git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
@@ -183,7 +185,7 @@ Both follow the stable releases. Nightly betas, and how a beta becomes stable:
   - [Backups and moving to another server](docs/backup-restore.md)
   - [Releases and update channels](docs/releases.md): stable, the nightly betas, and how a beta is promoted
 - **The storyteller**
-  - [Text backends](docs/text-backends.md): the recommended DM model and its settings, Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
+  - [Text backends](docs/text-backends.md): the recommended DM model and its settings, smaller hardware (7B to 14B models), Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
   - [Agent programs as the DM](docs/agent-harness.md): Claude Code, Codex, opencode and Grok Build on their own sign-in
 - **Pictures, voice and sound**
   - [Setting up pictures, narration and dictation](docs/media-setup.md): ComfyUI, an OpenAI key, Kokoro, Whisper

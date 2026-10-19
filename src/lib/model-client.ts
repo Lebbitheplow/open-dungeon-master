@@ -26,15 +26,18 @@ import {
 import {
   buildPropsUrl,
   contextCacheKey,
+  normalizeBaseUrl,
   OPENAI_CONTEXT_TOKENS,
+  paramsFromModelName,
   readContextWindow,
+  readModelParams,
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
 import { isPrivateBackendHost } from "@/lib/backend-host";
 import { chatTimings, chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { apiSpeedEligibility } from "@/lib/speed-tier";
 import { noteSpeed } from "@/lib/speed-status";
-import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow } from "@/lib/text-models";
+import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow, knownLocalModelParams } from "@/lib/text-models";
 import { catalogContextWindow, hostedCatalogModel, hostedContextWindow } from "@/lib/model-registry/catalog";
 import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
@@ -142,8 +145,10 @@ export type ChatRequestOptions = {
   // stream parser forwards only delta.content, and reads the reasoning only
   // to stop a loop in it. `false` is sent too, not left to the server:
   // Qwen's and Gemma's chat templates reason by default, so a call that
-  // wants none (the final narration) would think anyway. Left unset, the
-  // server's default stands.
+  // wants none (the final narration) would think anyway. Left unset, it is
+  // off as well, as on Ollama: a stock llama-server running Qwen3.5 9B spent
+  // the whole 4,096-token reply of the campaign's setup call thinking and
+  // wrote no JSON.
   thinking?: boolean;
   // The most this call's reply may run to: what the window leaves after the
   // prompt (src/lib/dm/request-fit.ts), or what the task needs. The backend's
@@ -434,6 +439,61 @@ export async function probeCustomContextWindow(
   })();
   probesInFlight.set(cacheKey, probe);
   return probe;
+}
+
+// How many parameters the model behind a custom endpoint has, from its
+// /v1/models listing (llama-server's meta.n_params), kept like the windows
+// above: a hit for half an hour, a miss for two minutes. Only a server on
+// this machine or the LAN is asked; a vendor API lists no sizes.
+const probedModelParams = new Map<string, { params: number; at: number }>();
+
+export async function probeCustomModelParams(baseUrl: string, apiKey: string, model: string): Promise<number | null> {
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base || endpointKind(baseUrl) !== "local") {
+    return null;
+  }
+  const cacheKey = contextCacheKey(baseUrl, model);
+  const cached = probedModelParams.get(cacheKey);
+  if (cached && Date.now() - cached.at < (cached.params ? PROBE_HIT_TTL_MS : PROBE_MISS_TTL_MS)) {
+    return cached.params || null;
+  }
+  const key = resolveCustomKey(baseUrl.trim(), apiKey, customChatEndpoint(baseUrl.trim())).resolvedKey;
+  let params = 0;
+  try {
+    const response = await fetch(`${base}/v1/models`, {
+      headers: key ? { Authorization: `Bearer ${key}` } : undefined,
+      signal: AbortSignal.timeout(2_000),
+      redirect: "error",
+    });
+    if (response.ok) {
+      const body = await readBody(response, MAX_BACKEND_ERROR_BYTES);
+      params = (body.complete ? readModelParams(JSON.parse(body.text), model) : null) ?? 0;
+    }
+  } catch {
+    // Unreachable or not llama.cpp: the model's name may still say.
+  }
+  probedModelParams.set(cacheKey, { params, at: Date.now() });
+  return params || null;
+}
+
+// The story model's size where anything says it: what the server reported
+// (Ollama's /api/show, llama-server's /v1/models), else the figure its name
+// states. A small model is small wherever it runs, so a hosted one is sized
+// by its name too. Null for an agent program or a name with no size.
+export function storyModelParams(settings: {
+  textProvider: string;
+  localTextModel: string;
+  customBaseUrl?: string;
+  customModel?: string;
+}): number | null {
+  if (settings.textProvider === "harness") {
+    return null;
+  }
+  if (settings.textProvider === "local") {
+    return knownLocalModelParams(settings.localTextModel) ?? paramsFromModelName(settings.localTextModel);
+  }
+  const model = (settings.customModel ?? "").trim() || getGlobalConfig().text.customModel || serverEnv("OPENAI_COMPAT_MODEL");
+  return probedModelParams.get(contextCacheKey(settings.customBaseUrl ?? "", settings.customModel ?? ""))?.params || paramsFromModelName(model);
 }
 
 // The context window of the model a utility call (Ask, the lore check) runs
@@ -946,9 +1006,7 @@ async function requestCustomMessageNow(
         // it from config. Skipped on backends with no preset to override, where
         // 0 is already the default and reasoning models reject the field.
         ...(caps.sendZeroPresencePenalty ? { presence_penalty: 0 } : {}),
-        ...(caps.allowTemplateKwargs && options.thinking !== undefined
-          ? { chat_template_kwargs: { enable_thinking: options.thinking } }
-          : {}),
+        ...(caps.allowTemplateKwargs ? { chat_template_kwargs: { enable_thinking: options.thinking === true } } : {}),
         // The last chunk of a stream carries the token counts only when
         // asked (OpenAI, llama-server, vLLM, LM Studio and OpenRouter all
         // honour it); a backend that rejects the field names it in its 400

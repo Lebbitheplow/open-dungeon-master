@@ -9,7 +9,7 @@
 import { listModels, type ModelListing } from "@/lib/setup/discovery";
 import { modelsUrl, normalizeBaseUrl } from "@/lib/setup/discovery-logic";
 import { serverEnv } from "@/lib/server-env";
-import { rememberLocalContextWindow } from "@/lib/text-models";
+import { rememberLocalContextWindow, rememberLocalModelParams } from "@/lib/text-models";
 import { isImageModelId } from "./catalog-logic";
 import { isOllamaChatModel, readImageModelList, readModelIdList, readOllamaShow, readOllamaTags, type OllamaModel, type OllamaModelInfo } from "./discovery-logic";
 
@@ -69,6 +69,7 @@ export async function ollamaModelInfo(model: string, baseUrl = ollamaBaseUrl()):
   if (info) {
     shown.set(key, info);
     if (info.contextTokens) rememberLocalContextWindow(model, info.contextTokens);
+    if (info.parameters) rememberLocalModelParams(model, info.parameters);
   }
   return info;
 }

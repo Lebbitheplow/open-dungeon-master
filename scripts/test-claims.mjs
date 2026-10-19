@@ -160,6 +160,20 @@ await test("What a small model writes about the turn is cut without the reader; 
   assert.equal(withoutAsides(tools, []), tools);
 });
 
+// Qwen3.5 9B on the short rules copied the game state into the story: the
+// turn order as a list and the board squares it reads.
+await test("The turn order recited and the board's squares quoted are cut without the reader; the scene around them stays.", () => {
+  const order =
+    "The shadows circle, claws drawn.\n\n**Initiative order:**\n1. Shadow Aberration 1 (moves to (7,13))\n2. **Avery (your turn)**\n3. Bram\n\nThe purple mist swirls around the wagons. What do you do?";
+  assert.equal(withoutAsides(order, []), "The shadows circle, claws drawn.\n\nThe purple mist swirls around the wagons. What do you do?");
+  const inline = "**Current Initiative:** 1. Shadow 1 (at 7,13) 2. Avery (your turn)\nThe river roars.";
+  assert.equal(withoutAsides(inline, []).trim(), "The river roars.");
+  const squares = "Avery, you're up. You're currently at (15,1) with the nearest enemy at (7,11). The mist thickens.";
+  assert.equal(withoutAsides(squares, []).trim(), "Avery, you're up. The mist thickens.");
+  const fiction = "The old map marks two wells, a mill and the ford. The order of the watch changes at dusk.\nInitiative wins fights, the old sergeant says.";
+  assert.equal(withoutAsides(fiction, []), fiction, "words like order and numbers in prose stay");
+});
+
 await test("A claim of a kind not asked, about a creature the engine does not know, or by someone outside the party never acts.", () => {
   const text = "The ogre falls. The dragon dies. Mira casts Fireball. Vex casts Fireball.";
   const ctx = context(text, ["dies", "cast"]);

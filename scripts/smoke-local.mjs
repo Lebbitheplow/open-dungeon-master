@@ -17,7 +17,9 @@
 //   node scripts/smoke-local.mjs --url http://127.0.0.1:8000/v1 --model gpt-oss-120b [--runs 6]
 //   node scripts/smoke-local.mjs --provider local --model gemma4:31b-it-qat [--runs 6]
 //       (Ollama native API at OLLAMA_BASE_URL; LOCAL_TEXT_CONTEXT caps num_ctx)
-//   options: --turns N (how many of the five turns to play, default 5)
+//   options: --turns N (how many of the scenario's turns to play, default all)
+//            --scenario ford|town (the ford's five turns, or the town's eight:
+//            arrival, an NPC, persuasion, a purchase, stealth, a fight, attacks)
 //            --label NAME  --out DIR (writes <label>.json)
 //            --context N (the window the prompt packs against; custom provider)
 //            --key KEY (the custom provider's API key, default OPENAI_COMPAT_API_KEY;
@@ -39,7 +41,8 @@ const { values: args, positionals } = parseArgs({
     url: { type: "string", default: process.env.OPENAI_COMPAT_BASE_URL || "http://127.0.0.1:8001/v1" },
     model: { type: "string", default: "" },
     runs: { type: "string", default: "1" },
-    turns: { type: "string", default: "5" },
+    turns: { type: "string", default: "" },
+    scenario: { type: "string", default: "ford" },
     label: { type: "string", default: "" },
     out: { type: "string", default: "" },
     context: { type: "string", default: "" },
@@ -89,7 +92,6 @@ assert.ok(args.model, "--model is required");
 const PROVIDER = args.provider;
 assert.ok(PROVIDER === "custom" || PROVIDER === "local", "--provider is custom or local");
 const RUNS = Math.max(1, Number.parseInt(args.runs, 10) || 1);
-const MAX_TURNS = Math.min(5, Math.max(1, Number.parseInt(args.turns, 10) || 5));
 const LABEL = args.label || args.model;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-smoke-local-"));
@@ -212,7 +214,11 @@ function emptyCause(calls, rescues) {
 }
 
 // ---- one campaign -------------------------------------------------------------
-const TURNS = [
+// Each turn a scripted expectation can miss names the tools that would have
+// met it.
+const called = (turn, names, why) => (turn.tools.some((name) => names.includes(name)) ? null : why);
+
+const FORD = [
   {
     label: "kickoff",
     who: "avery",
@@ -241,6 +247,79 @@ const TURNS = [
     text: "Once the last bandit is down I haul the caravan master over and ask what is really in that coffer, and whether the job pays extra to see it through to the tide-ruin.",
   },
 ];
+
+// --scenario town: one line for each of the core actions a table leans on,
+// so a small model's tool use is measured on more than the ford's search
+// and fight.
+const TOWN = [
+  {
+    label: "arrive",
+    who: "avery",
+    text: "We walk into the village of Thornwick at dusk and head straight for the inn.",
+    expect: (turn) => called(turn, ["move_party", "update_location"], "the party arrived somewhere new and no move_party recorded it"),
+  },
+  {
+    label: "npc",
+    who: "bram",
+    text: "\"Evening. Has a merchant called Oswin come through here?\" I ask the innkeeper.",
+    expect: (turn) => called(turn, ["set_npc", "npc_reaction", "social_check"], "the innkeeper was never registered"),
+  },
+  {
+    label: "persuade",
+    who: "avery",
+    text: "I lean on the bar, praise her stew, and try to talk her into letting us have Oswin's old room for free.",
+    expect: (turn) => (turn.rolls > 0 || turn.tools.includes("social_check") ? null : "a persuasion attempt was decided without dice"),
+  },
+  {
+    label: "buy",
+    who: "bram",
+    text: "I pay for a hot meal and buy a torch.",
+    expect: (turn) => called(turn, ["purchase", "buy_item", "modify_gold", "grant_item"], "money changed hands in prose alone"),
+  },
+  {
+    label: "sneak",
+    who: "avery",
+    text: "Later that night I sneak upstairs and listen at the door of Oswin's old room.",
+    expect: (turn) => (turn.rolls > 0 || turn.tools.some((name) => ["check_notice", "group_check"].includes(name)) ? null : "sneaking and listening were decided without dice"),
+  },
+  {
+    label: "fight",
+    who: "bram",
+    text: "The door bursts open and two masked thugs rush at us with clubs! I draw my shortsword.",
+    expect: (turn) => (turn.encounter ? null : "no encounter started (the fight was narrated instead)"),
+  },
+  {
+    label: "attack",
+    who: "bram",
+    text: "I swing my shortsword at the nearest thug.",
+    expect: (turn) => called(turn, ["pc_attack", "enemy_attack", "end_turn"], "the attack was told in prose with no combat tool"),
+  },
+  {
+    label: "end-turn",
+    who: "avery",
+    text: "I stab the other thug with my shortsword, then I'm done for this turn.",
+    expect: (turn) => called(turn, ["pc_attack", "enemy_attack", "end_turn"], "the turn was told in prose with no combat tool"),
+  },
+];
+
+const SCENARIOS = {
+  ford: {
+    title: "The Salt Road",
+    description: "A one-scene caravan job that goes wrong at the ford.",
+    theme: "low fantasy, coastal trade road",
+    turns: FORD,
+  },
+  town: {
+    title: "The Thornwick Inn",
+    description: "A merchant has vanished from a village inn, and the party asks around.",
+    theme: "low fantasy, a quiet village with a secret",
+    turns: TOWN,
+  },
+};
+const SCENARIO = SCENARIOS[args.scenario];
+assert.ok(SCENARIO, `--scenario is one of ${Object.keys(SCENARIOS).join(", ")}`);
+const TURNS = SCENARIO.turns;
+const MAX_TURNS = Math.min(TURNS.length, Math.max(1, Number.parseInt(args.turns, 10) || TURNS.length));
 
 function sheet(name, cls, abilities) {
   return createSheetSchema.parse({
@@ -298,9 +377,9 @@ async function playRun(runNumber) {
   const lead = createUser(`lead${runNumber}${randomBytes(2).toString("hex")}`, "x", { isAdmin: true });
   const other = createUser(`bram${runNumber}${randomBytes(2).toString("hex")}`, "x");
   const campaign = createCampaign(lead.id, {
-    title: "The Salt Road",
-    description: "A one-scene caravan job that goes wrong at the ford.",
-    theme: "low fantasy, coastal trade road",
+    title: SCENARIO.title,
+    description: SCENARIO.description,
+    theme: SCENARIO.theme,
     maxPlayers: 4,
     startingLevel: 3,
     difficulty: "normal",
@@ -429,7 +508,7 @@ async function playRun(runNumber) {
 }
 
 // ---- the runs -------------------------------------------------------------------
-say(`smoke-local ${VERSION}: ${LABEL} | provider ${PROVIDER} | ${PROVIDER === "custom" ? args.url : process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"} | ${RUNS} run(s) x ${MAX_TURNS} turn(s)`);
+say(`smoke-local ${VERSION}: ${LABEL} | provider ${PROVIDER} | ${PROVIDER === "custom" ? args.url : process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"} | ${args.scenario} | ${RUNS} run(s) x ${MAX_TURNS} turn(s)`);
 const runs = [];
 for (let run = 1; run <= RUNS; run += 1) {
   runs.push(await playRun(run));
@@ -454,6 +533,7 @@ const summary = {
 };
 const report = {
   label: LABEL,
+  scenario: args.scenario,
   version: VERSION,
   provider: PROVIDER,
   model: args.model,

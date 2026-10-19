@@ -74,6 +74,7 @@ import { describeIntent } from "@/lib/dm/intent-logic";
 import { describeEquipmentItem } from "@/lib/dm/equipment-line";
 import { summonStateLine } from "@/lib/dm/summon-rules";
 import { dmSystemText, encounterRulesText, tracksAmmunition, type RuleContext } from "@/lib/dm/prompt-rules";
+import { healthState } from "@/lib/bestiary/health";
 import { rollerName } from "@/lib/roll-labels";
 import { tableHazards } from "@/lib/srd/table-hazards";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
@@ -107,11 +108,13 @@ export function buildDmSystem(
   // The table's safety limits stand first of all (docs/vtt-parity-
   // implementation-plan.md 9.1): they outrank the engine boundary as well
   // as every rule under it.
+  // The short rules say the boundary in their own three steps, so a small
+  // model reads it once rather than twice.
   const parts = [
     renderSafetyBlock(normalizeSafety(campaign.gameSettings.safety)),
-    campaign.gameSettings.narrationGuard
-      ? `${ENGINE_BOUNDARY_RULES}${ENGINE_BOUNDARY_CHECK}`
-      : ENGINE_BOUNDARY_RULES,
+    ...(ruleContext?.brief
+      ? []
+      : [campaign.gameSettings.narrationGuard ? `${ENGINE_BOUNDARY_RULES}${ENGINE_BOUNDARY_CHECK}` : ENGINE_BOUNDARY_RULES]),
     dmSystemText(tracksAmmunition(campaign), ruleContext),
   ];
   const gmBlock = renderGmBlock(normalizeGm(campaign.gameSettings.gm));
@@ -881,13 +884,23 @@ export function buildGameStateBlock(state: DmGameState): string {
         lines.push(`- ${enemy.name} [enemyId=${enemy.enemyId}] ${enemy.status.toUpperCase()}`);
         continue;
       }
-      const parts = [
-        `- ${enemy.name} [enemyId=${enemy.enemyId}] HP ${enemy.hp} AC ${enemy.ac}`,
-        ...enemy.attacks.map(
-          (attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`,
-        ),
-        ...enemy.traits,
-      ];
+      // A small model told the players a thug had "barely three hit points
+      // left": on the short rules it reads how hurt each enemy looks and
+      // what its attacks are called, never a number it could repeat.
+      const [current, max] = enemy.hp.split("/").map(Number);
+      const parts = state.ruleContext?.brief
+        ? [
+            `- ${enemy.name} [enemyId=${enemy.enemyId}] ${healthState(current, max)}`,
+            ...(enemy.attacks.length ? [`attacks: ${enemy.attacks.map((attack) => attack.name).join(", ")}`] : []),
+            ...enemy.traits,
+          ]
+        : [
+            `- ${enemy.name} [enemyId=${enemy.enemyId}] HP ${enemy.hp} AC ${enemy.ac}`,
+            ...enemy.attacks.map(
+              (attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`,
+            ),
+            ...enemy.traits,
+          ];
       if (enemy.resist) {
         parts.push(`resists: ${enemy.resist}`);
       }
@@ -1480,6 +1493,10 @@ export function buildDmMessages(
   history: CampaignMessage[],
 ): ChatMessage[] {
   const sheetsById = new Map(state.sheets.map((sheet) => [sheet.id, sheet]));
+  // A small model reads the server's "[roll:<id>]" markers in its own past
+  // narration as something to write: Qwen3.5 9B wrote "[roll:pc_attack]" in
+  // place of the attack. The short rules leave them out of the transcript.
+  const dmText = (text: string) => (state.ruleContext?.brief ? text.replace(/\[roll:[0-9a-f-]{36}\]\s*/g, "") : text);
 
   const rendered = history.map((message) => {
     const name = message.characterId
@@ -1487,7 +1504,7 @@ export function buildDmMessages(
       : "Unknown";
     const content =
       message.authorType === "dm"
-        ? message.content
+        ? dmText(message.content)
         : message.authorType === "system"
           ? message.content.startsWith(LEAD_NOTE_PREFIX)
             ? `[Authoritative direction from the party lead; weave it into the story now] ${message.content.slice(LEAD_NOTE_PREFIX.length)}`

@@ -424,11 +424,17 @@ export function withoutSentences(text: string, quotes: readonly string[]): strin
 const META_SENTENCE =
   /\btool[ -]?calls?\b|\b(?:the|this|a) tool'?s? (?:output|result)s?\b|\bcalling the (?:necessary |right |appropriate |correct )?tools?\b|\bnarrate the results?\b|\bunwarranted assumption\b|\bmy (?:previous|last|earlier) (?:response|reply|narration|message)\b/i;
 const ECHOED_LINE = /^[ \t]*(?:\[[^\]\n]{1,80}\|\s*attempt\][^\n]*|[^\n|[\]]{1,60}\s\|\s*attempt\b[^\n]*|\[Table note\][^\n]*)$/gim;
+// The game state copied into the story by a small model (Qwen3.5 9B): the
+// turn order recited as a numbered list under its own heading, and the board
+// squares it reads, "(7,13)". The board shows both; the prose never needs
+// them.
+const ORDER_BLOCK = /^[ \t]*\**[ \t]*(?:current[ \t]+)?(?:initiative(?:[ \t]+order)?|turn[ \t]+order)[ \t]*(?::\**|\**[ \t]*:)[^\n]*(?:\n[ \t]*\d+\.[^\n]*)*/gim;
+const GRID_SQUARE = /\(\s*\d{1,3}\s*,\s*\d{1,3}\s*\)/;
 
 export function metaQuotes(text: string): string[] {
   const quotes = [...text.matchAll(ECHOED_LINE)].map((match) => match[0].trim());
   for (const match of text.matchAll(/[^.!?\n]+[.!?]*/g)) {
-    if (META_SENTENCE.test(match[0]) && !/["\u201c\u201d\u00ab\u00bb]/.test(match[0])) {
+    if ((META_SENTENCE.test(match[0]) || GRID_SQUARE.test(match[0])) && !/["\u201c\u201d\u00ab\u00bb]/.test(match[0])) {
       quotes.push(match[0].trim());
     }
   }
@@ -436,10 +442,14 @@ export function metaQuotes(text: string): string[] {
 }
 
 export function withoutAsides(text: string, claims: readonly NarrationClaim[]): string {
-  const quotes = [...claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : [])), ...metaQuotes(text)];
+  // A recited turn order goes whole, heading and list: cut sentence by
+  // sentence, its "3." would match the wrong line.
+  const unlisted = text.replace(ORDER_BLOCK, "").replace(/\n{3,}/g, "\n\n").trim();
+  const source = unlisted === text.trim() ? text : unlisted;
+  const quotes = [...claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : [])), ...metaQuotes(source)];
   if (!quotes.length) {
-    return text;
+    return words(source).length ? source : "";
   }
-  const kept = withoutSentences(text, quotes);
+  const kept = withoutSentences(source, quotes);
   return words(kept).length ? kept : "";
 }
