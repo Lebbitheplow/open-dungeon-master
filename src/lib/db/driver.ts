@@ -77,8 +77,24 @@ function chooseEngine(): Engine {
     resolvedEngine = forced;
     return forced;
   }
-  resolvedEngine = loadNative() ? "native" : "node";
+  resolvedEngine = nativeOpens() ? "native" : "node";
   return resolvedEngine;
+}
+
+// The package can load while its compiled part cannot (installed with
+// --ignore-scripts, or built for another Node): better-sqlite3 looks for its
+// binary only when a database opens, so a loaded module alone proved nothing
+// and such a host crashed on its first open instead of falling back. One
+// database in memory, opened and closed, proves the engine.
+function nativeOpens(): boolean {
+  const Native = loadNative();
+  if (!Native) return false;
+  try {
+    new Native(":memory:").close();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 type NativeModule = typeof import("better-sqlite3-multiple-ciphers");
