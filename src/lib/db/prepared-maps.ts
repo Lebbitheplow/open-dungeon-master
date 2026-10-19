@@ -477,10 +477,3 @@ export function copyPreparedMaps(fromCampaignId: string, toCampaignId: string): 
   })();
   return copied;
 }
-
-export function countPreparedMaps(campaignId: string): number {
-  const row = getDatabase()
-    .prepare(`SELECT COUNT(*) AS n FROM prepared_maps WHERE campaign_id = ?`)
-    .get(campaignId) as { n: number };
-  return row.n;
-}

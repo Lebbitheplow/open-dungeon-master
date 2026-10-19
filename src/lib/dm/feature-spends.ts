@@ -36,7 +36,7 @@ import { fieldedSheets } from "@/lib/dm/roster";
 import { chooseFiendishResilience, stillnessOfMind } from "@/lib/dm/feature-hooks";
 
 // Re-exported for the callers that reached it here first.
-export { applyInitiativeRefills, darkOnesBlessing } from "@/lib/dm/feature-hooks";
+export { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 

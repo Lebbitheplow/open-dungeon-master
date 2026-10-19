@@ -732,6 +732,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
         xp: next.xp,
         classes: next.classes,
         features: next.features,
+        feats: featsAsRun(next.feats, existing.campaignId),
         // A spent count the patch itself carries is the newest word on it.
         hitDice: patch.hitDice ?? existing.hitDice,
         hitDicePools: patch.hitDicePools !== undefined ? patch.hitDicePools : existing.hitDicePools,

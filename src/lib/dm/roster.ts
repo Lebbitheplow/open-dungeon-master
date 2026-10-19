@@ -19,12 +19,6 @@ export function fieldedSheets(campaign: Campaign, sheets: CharacterSheet[] = lis
   return fieldedOf(sheets, "one_active", (userId) => active.get(userId));
 }
 
-// Benched: made by this user, not the one they are playing.
-export function benchedSheetIds(campaign: Campaign, sheets: CharacterSheet[]): Set<string> {
-  const fielded = new Set(fieldedSheets(campaign, sheets).map((sheet) => sheet.id));
-  return new Set(sheets.filter((sheet) => !fielded.has(sheet.id)).map((sheet) => sheet.id));
-}
-
 // The characters a travel formation arranges (issue 230): the ones in play,
 // companions with them. A benched character waits off the road as it waits
 // off the board.

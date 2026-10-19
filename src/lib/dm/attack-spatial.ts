@@ -15,8 +15,7 @@ import { nearestSquares, spotOf, tilesApart, tokenFootprint } from "@/lib/dm/boa
 import { isIncapacitated } from "@/lib/dm/condition-logic";
 
 import { hostileWithinFiveFeet, isFlanking } from "@/lib/dm/attack-rules";
-import { zoneCoverBetween, zoneHidesFrom } from "@/lib/dm/zone-rules";
-import { enemySenses } from "@/lib/dm/attack-light";
+import { zoneCoverBetween } from "@/lib/dm/zone-rules";
 
 const lowered = (conditions: string[]) => conditions.map((entry) => entry.toLowerCase());
 const blind = (conditions: string[]) => lowered(conditions).includes("blinded");
@@ -59,7 +58,7 @@ export function wallBetween(encounterId: string, refA: string, refB: string): bo
     return false;
   }
   const line = nearestSquares(a, b);
-  return !hasLineOfSight(map.terrain, map.width, map.height, line.from.x, line.from.y, line.to.x, line.to.y);
+  return !hasLineOfSight(map.terrain, map.width, line.from.x, line.from.y, line.to.x, line.to.y);
 }
 
 
@@ -226,49 +225,4 @@ export function creatureCover(encounterId: string, attackerRef: string, targetRe
   );
 
   return blocker ? blocker.name : null;
-}
-
-// Whether any enemy that can see has a clear view of the character: a
-// sight line and no cover between them. Hiding needs this to be false.
-export function seenClearlyBy(encounterId: string, characterId: string): string | null {
-  const map = getBattleMapForEncounter(encounterId);
-  const hider = map ? getTokenByRef(map.id, characterId) : null;
-  if (!map || !hider) {
-    return null;
-  }
-  for (const enemy of listEnemies(encounterId)) {
-    if (enemy.status !== "alive" || blind(enemy.conditions)) {
-      continue;
-    }
-    const token = getTokenByRef(map.id, enemy.id);
-    if (!token) {
-      continue;
-    }
-    const line = nearestSquares(token, hider);
-    const sighted = hasLineOfSight(
-      map.terrain,
-      map.width,
-      map.height,
-      line.from.x,
-      line.from.y,
-      line.to.x,
-      line.to.y,
-    );
-    const cover = coverBetween(
-      map.terrain,
-      map.width,
-      map.height,
-      line.from.x,
-      line.from.y,
-      line.to.x,
-      line.to.y,
-    );
-
-    const dark = map.ambient === "dark" && hider.lightRadius <= 0;
-    // A fog cloud or magical darkness between them hides as darkness does.
-    if (sighted && cover === 0 && !dark && !zoneHidesFrom(map, token, hider, enemySenses(enemy))) {
-      return enemy.displayName;
-    }
-  }
-  return null;
 }

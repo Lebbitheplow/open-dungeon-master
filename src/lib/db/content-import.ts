@@ -32,7 +32,6 @@ import { parseRef } from "@/lib/worldforge/model";
 import { copyWorldDoc } from "@/lib/db/world-forge-io";
 import { normalizeStock } from "@/lib/db/shops";
 import {
-  IMPORT_KINDS,
   LINK_KINDS,
   WORLD_RECORD_KINDS,
   emptyExisting,
@@ -590,8 +589,6 @@ export function runContentImport(input: {
     ...(items.reused.length ? { itemsReused: items.reused } : {}),
   };
 }
-
-export { IMPORT_KINDS };
 
 // The monster names this table's Cast and prepared fights use that resolve
 // to nothing here: not a published creature, not a monster any of the

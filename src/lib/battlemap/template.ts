@@ -185,7 +185,7 @@ export function templateTiles(map: TemplateMap, spec: TemplateSpec): number[] {
     if (seen.has(idx) || blocksMove(map.terrain[idx] ?? "#")) {
       continue;
     }
-    if (!hasLineOfSight(map.terrain, map.width, map.height, origin.x, origin.y, x, y)) {
+    if (!hasLineOfSight(map.terrain, map.width, origin.x, origin.y, x, y)) {
       continue;
     }
     seen.add(idx);

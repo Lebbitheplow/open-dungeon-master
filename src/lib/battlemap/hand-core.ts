@@ -17,9 +17,6 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
 import type { HandIntentExtras } from "@/lib/battlemap/hand-intent";
 import type { HandArea } from "@/lib/battlemap/hand-area";
-import { textKey } from "@/lib/language/text-logic";
-
-export type { HandBonusAttack } from "@/lib/battlemap/hand-intent";
 
 export type HandCost = "action" | "bonus" | "reaction" | "rider" | "free";
 export type HandCardType = "attack" | "rider" | "spell" | "control" | "mend" | "ward" | "feature" | "basic";
@@ -240,11 +237,6 @@ export function feet(range: string): string {
   const match = /^(\d+)\s*(feet|foot|ft)/i.exec(range.trim());
   if (match) return `${match[1]} ft`;
   return range.trim() ? range.trim().replace(/^./, (c) => c.toUpperCase()) : "";
-}
-
-export function hasFeature(sheet: CharacterSheet, fragment: string): boolean {
-  const wanted = textKey(fragment);
-  return sheet.features.some((feature) => textKey(feature.name).includes(wanted));
 }
 
 export function primaryClass(sheet: CharacterSheet): string {

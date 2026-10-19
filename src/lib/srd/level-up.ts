@@ -32,7 +32,7 @@ import { ABILITY_SCORE_CAP, applyAsiChoices, earnedAsiCountFor } from "@/lib/srd
 import { applySubclassTraining, autoSubclassPicks, subclassGrants } from "@/lib/srd/subclass-training";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { asiTaken, withAsiLedger } from "@/lib/srd/asi-ledger";
-import { applyFeatIncrease, featSaveProficiency } from "@/lib/srd/feat-effects";
+import { applyFeatIncrease, featSaveProficiency, featsAsRun } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec } from "@/lib/srd/feat-grants";
 import { elementalAdeptFeatureName } from "@/lib/srd/feat-combat";
 import { featSpellGrants, freeCastFeatures, withFeatSpells } from "@/lib/srd/feat-spells";
@@ -499,7 +499,10 @@ export function buildLevelUp(
     return spec.damageTypes.length && spec.damageTypes.includes(picked) ? [elementalAdeptFeatureName(picked)] : [];
   });
   const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks].map((name) => ({ name: name.slice(0, 80), source: "story" as const }));
-  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race, feats);
+  // A table's workshop copy of Martial Adept opens its slots as the feat it
+  // runs as.
+  const featsRun = featsAsRun(feats, sheet.campaignId);
+  let features = populateFeaturesForClasses([...sheet.features, ...picked, ...freeCasts], classes, sheet.race, featsRun);
   const takenAfter = taken + asked.choices.length;
   if (target >= 4 || takenAfter > 0) {
     features = withAsiLedger(features, takenAfter);
@@ -587,6 +590,7 @@ export function buildLevelUp(
         xp: sheet.xp,
         classes: multiclass ? classes : [],
         features,
+        feats: featsRun,
         hitDice: sheet.hitDice,
         hitDicePools: sheet.hitDicePools,
         spellcasting: { ...written, ability: casting[0].ability },

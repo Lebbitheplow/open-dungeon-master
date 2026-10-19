@@ -10,7 +10,6 @@ import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import type { StoryArc } from "@/lib/dm/arc-logic";
 import {
   activeBeat,
-  lexicalMatch,
   matchSignal,
   openWaypoints,
   parseWaypointJudge,
@@ -161,7 +160,3 @@ export async function judgeWaypoints(campaignId: string, sinceSeq: number): Prom
     return [];
   }
 }
-
-// Exported for the lead's own naming of a place or person in a note, and
-// for tests: whether a name reads as a waypoint by words alone.
-export { lexicalMatch };

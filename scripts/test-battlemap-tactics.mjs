@@ -29,16 +29,16 @@ const room = makeMap([
 ]);
 
 test("open line is sighted", () => {
-  assert.ok(hasLineOfSight(room.terrain, room.width, room.height, 1, 1, 7, 1));
+  assert.ok(hasLineOfSight(room.terrain, room.width, 1, 1, 7, 1));
 });
 
 test("wall between blocks sight", () => {
-  assert.ok(!hasLineOfSight(room.terrain, room.width, room.height, 2, 2, 6, 2));
+  assert.ok(!hasLineOfSight(room.terrain, room.width, 2, 2, 6, 2));
 });
 
 test("endpoints never block themselves", () => {
   // Adjacent tiles always see each other, even next to walls.
-  assert.ok(hasLineOfSight(room.terrain, room.width, room.height, 3, 2, 3, 1));
+  assert.ok(hasLineOfSight(room.terrain, room.width, 3, 2, 3, 1));
 });
 
 test("firing position routes around the pillar", () => {
@@ -56,7 +56,7 @@ test("firing position routes around the pillar", () => {
   );
   assert.ok(spot);
   assert.ok(
-    hasLineOfSight(room.terrain, room.width, room.height, spot.at.x, spot.at.y, 6, 2),
+    hasLineOfSight(room.terrain, room.width, spot.at.x, spot.at.y, 6, 2),
   );
   assert.equal(spot.cost, 1);
 });

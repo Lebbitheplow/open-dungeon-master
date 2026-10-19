@@ -41,9 +41,6 @@ export const VISION_SUGGESTIONS = [
   "Truesight 60 ft",
 ] as const;
 
-// When a magic item's charges come back.
-export const RECHARGE_TRIGGERS = ["dawn", "dusk", "short rest", "long rest", "never"] as const;
-
 // The feat prerequisites the builder recognises by ability.
 export const PREREQUISITE_SUGGESTIONS = [
   "Strength 13 or higher",

@@ -40,8 +40,6 @@ import type { ToolResult } from "@/lib/dm/tool-errors";
 // rests restore HP, slots, and half the hit dice. Every sheet write is
 // audited (kinds rest_short / rest_long) so the party lead can undo it.
 
-export const REST_TOOL_NAMES = ["take_rest"] as const;
-
 type ToolDef = {
   type: "function";
   function: { name: string; description: string; parameters: Record<string, unknown> };

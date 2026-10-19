@@ -5,7 +5,7 @@
 // the redaction per viewer through its caps (useCampaignStream.ts).
 import { publishEphemeral } from "@/lib/events";
 import { getActiveBattleMap } from "@/lib/battlemap/view";
-import { getTokenByRef, listTokens } from "@/lib/db/battle-maps";
+import { getTokenByRef } from "@/lib/db/battle-maps";
 import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { XY } from "@/lib/battlemap/types";
 
@@ -33,16 +33,4 @@ export function tokenPosition(
     return null;
   }
   return { at: { x: token.x, y: token.y }, tokenId: token.id, hidden: token.hidden };
-}
-
-export function tokenPositions(campaignId: string): Map<string, { at: XY; tokenId: string }> {
-  const map = getActiveBattleMap(campaignId);
-  const out = new Map<string, { at: XY; tokenId: string }>();
-  if (!map) {
-    return out;
-  }
-  for (const token of listTokens(map.id)) {
-    out.set(token.refId, { at: { x: token.x, y: token.y }, tokenId: token.id });
-  }
-  return out;
 }

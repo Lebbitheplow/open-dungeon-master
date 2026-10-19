@@ -88,14 +88,6 @@ export function extraSubclassOf(row: Row, defaultLevel = 3): ExtraSubclass | nul
   return { name: row.name, levels, ...(spells ? { spells } : {}), source: homebrew ? "homebrew" : "pack" };
 }
 
-// Rows of one class, the homebrew first so a workshop subclass named like a
-// pack one is the table's.
-export function subclassExtrasFrom(classId: string, rows: Row[], defaultLevel = 3): SubclassExtras {
-  const ordered = [...rows.filter((row) => row.source === "homebrew"), ...rows.filter((row) => row.source !== "homebrew")];
-  const tables = ordered.map((row) => extraSubclassOf(row, defaultLevel)).filter((table): table is ExtraSubclass => table !== null);
-  return tables.length ? { [classId]: tables } : {};
-}
-
 export function mergeExtras(...sets: SubclassExtras[]): SubclassExtras {
   const out: SubclassExtras = {};
   for (const set of sets) {

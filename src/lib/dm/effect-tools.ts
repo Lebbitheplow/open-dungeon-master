@@ -16,7 +16,6 @@ import {
   EFFECT_MODES,
   normalizeAura,
   resolveField,
-  type ActiveEffect,
   type EffectField,
   type EffectTargetKind,
   type FieldOutcome,
@@ -312,11 +311,4 @@ export function rollEffectExtras(
     ...(outcome.advantage ? { effectAdvantage: true } : {}),
     ...(outcome.disadvantage ? { effectDisadvantage: true } : {}),
   };
-}
-
-export function effectsOn(
-  campaignId: string,
-  target: { kind: EffectTargetKind; id: string },
-): ActiveEffect[] {
-  return listEffects(campaignId, target);
 }

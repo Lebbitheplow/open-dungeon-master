@@ -11,8 +11,6 @@ import { getActiveEncounter, listEnemies, setEnemyConcentration, setEnemyConcent
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { breakConcentration, clearSpellConditionsByName, settleFullDuration } from "@/lib/dm/concentration";
 
-export { concentrationRoundsFor } from "@/lib/dm/concentration";
-
 // Counts every running concentration clock that `counts` picks down by `by`
 // rounds, ending the ones that run out. Returns the table lines.
 export function tickConcentrationClocks(

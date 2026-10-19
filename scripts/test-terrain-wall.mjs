@@ -62,7 +62,7 @@ test("a walker goes round the fence; a flier goes over it", () => {
 });
 
 test("sight passes over it, and it gives half cover to whoever stands behind it", () => {
-  assert.equal(hasLineOfSight(FIELD, WIDTH, HEIGHT, 2, 1, 6, 1), true);
+  assert.equal(hasLineOfSight(FIELD, WIDTH, 2, 1, 6, 1), true);
   const fov = computeFov(FIELD, WIDTH, HEIGHT, 2, 1, 10);
   assert.ok(fov.has(tileIndex(WIDTH, 6, 1)), "the far side is in view");
   // Attacker at (2,1), target at (5,1): the fence at (4,1) is between them.

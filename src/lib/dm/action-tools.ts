@@ -51,12 +51,6 @@ type ToolDef = {
 
 export const ACTION_TOOL_NAMES = ["take_action", "use_reaction"] as const;
 
-// A held Help works like a held Bardic Inspiration die: a condition on the
-// recipient the roll it helps consumes. Its source says which roll
-// (src/lib/dm/help-logic.ts).
-export { HELPED } from "@/lib/dm/help-logic";
-export { HIDDEN } from "@/lib/dm/combat-actions";
-
 const ACTIONS = [
   "dodge",
   "dash",
@@ -210,13 +204,7 @@ const takeActionSchema = z.object({
 
 // Lives in src/lib/dm/turn-budget.ts; re-exported for the callers that
 // learned it here.
-export {
-  attacksAllowedFor,
-  budgetFor,
-  currentCombatantId,
-  grantActionSurge,
-  storeBudget,
-} from "@/lib/dm/turn-budget";
+export { attacksAllowedFor } from "@/lib/dm/turn-budget";
 export { handleUseReaction } from "@/lib/dm/reaction-tools";
 
 // ---- take_action ----

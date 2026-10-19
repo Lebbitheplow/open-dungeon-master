@@ -417,8 +417,6 @@ export type MapSkin = {
   bind: Partial<Record<SkinChar, string>>;
 };
 
-export const EMPTY_MAP_SKIN: MapSkin = { id: "", bind: {} };
-
 const MATERIAL_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MATERIAL_ID_MAX = 64;
 

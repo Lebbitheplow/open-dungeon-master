@@ -31,23 +31,6 @@ export type SceneState = {
   at: number;
 };
 
-export const DEFAULT_WEATHER: Weather = {
-  sky: "clear",
-  temperature: "mild",
-  wind: "calm",
-  precipitation: 0,
-};
-
-export const DEFAULT_SCENE: SceneState = {
-  hour: 12,
-  dayPart: "day",
-  isDark: false,
-  weather: null,
-  climate: "temperate",
-  summary: "",
-  at: 0,
-};
-
 export type TitleCard = {
   id: string;
   title: string;

@@ -13,7 +13,7 @@
 // not apply to a person. They do apply to the AI's share of an assisted
 // session, which reaches the engine through here with actor.kind "ai": the
 // same two counters the turn loop keeps are kept on its turn.
-import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { listMembers } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
@@ -389,17 +389,4 @@ export function askInitiativeAgain(campaign: Campaign): Record<string, unknown> 
     const ask = askForInitiative(campaign, turn, realDiceUsers(campaign));
     return ask ? describeInitiativeAsk(campaign.id, ask) : null;
   });
-}
-
-// Convenience for routes that already have only the id.
-export async function invokeEngineById(
-  campaignId: string,
-  actor: Actor,
-  call: Adjudication,
-): Promise<InvokeOutcome> {
-  const campaign = getCampaignById(campaignId);
-  if (!campaign) {
-    return { ok: false, error: "Campaign not found." };
-  }
-  return invokeEngine(campaign, actor, call);
 }

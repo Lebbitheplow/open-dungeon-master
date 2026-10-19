@@ -140,7 +140,7 @@ function mapRow(row: MapRow): BattleMap {
     campaignId: row.campaign_id,
     width: row.width,
     height: row.height,
-    terrain: withZoneWalls(effectiveTerrain(row.terrain, row.width, doors), row.width, spellZones),
+    terrain: withZoneWalls(effectiveTerrain(row.terrain, row.width, doors), spellZones),
     drawnTerrain: row.terrain,
     ambient: row.ambient,
     theme: row.theme ?? "field",

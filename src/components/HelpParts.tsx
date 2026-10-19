@@ -114,10 +114,6 @@ const SECTION_WORDS: Record<string, string> = {
   About: "license credits version",
 };
 
-export function helpSectionId(title: string): string {
-  return sectionId(title);
-}
-
 // Whether a section answers the search: every word in its title, its
 // everyday words or its own text on the page.
 export function helpMatches(title: string, query: string, text = ""): boolean {

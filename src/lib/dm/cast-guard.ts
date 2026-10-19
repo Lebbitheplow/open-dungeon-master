@@ -306,7 +306,7 @@ export function castSpell(
     sheet.concentratingOn &&
     textKey(sheet.concentratingOn) === textKey(name)
   ) {
-    return repeatSpell(campaign, sheet, inRunningFight(encounter) ? encounter : null, facts, name, mech.repeat, input);
+    return repeatSpell(sheet, inRunningFight(encounter) ? encounter : null, facts, name, mech.repeat, input);
   }
 
   // A readied spell released off turn: the reaction, no second slot

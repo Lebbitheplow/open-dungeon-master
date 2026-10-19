@@ -121,7 +121,7 @@ export type EnemyStats = {
 };
 
 export type { PrintedAbility, PrintedBlock } from "@/lib/bestiary/printed-block";
-export { normalizePrintedBlock, PRINTED_LIMITS, unrunPrintedAbilities } from "@/lib/bestiary/printed-block";
+export { normalizePrintedBlock, unrunPrintedAbilities } from "@/lib/bestiary/printed-block";
 
 // A polymorphed creature's own form, exactly as the spell found it.
 export type EnemyOwnForm = {

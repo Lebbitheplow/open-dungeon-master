@@ -36,7 +36,7 @@ import { chosenOptions } from "@/lib/srd/options";
 import { holdsFeature as holds, kiLeft, usesLeft } from "@/lib/dm/bonus-routes";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
-export { bonusRouteFor, kiLeft, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
+export { bonusRouteFor, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
 
 // The resources patch that spends `points` ki, or an error when the
 // counter cannot cover it.

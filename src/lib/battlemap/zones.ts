@@ -266,10 +266,6 @@ export function withAnchors(zones: SpellZone[], tokens: Array<Pick<BattleToken, 
 
 const rowOf = (zone: SpellZone) => zoneRowFor(zone);
 
-export function zonesAt(zones: SpellZone[], cell: number): SpellZone[] {
-  return zones.filter((zone) => zone.cells.includes(cell));
-}
-
 // A creature on the other side from the caster: characters and the DM's
 // bystanders against enemies.
 export function hostileTo(zone: SpellZone, moverKind: string): boolean {
@@ -327,7 +323,7 @@ export function zoneStepCost(
 
 // The engine's terrain with every spell wall turned to rock, and every
 // passage a Passwall cut turned to floor.
-export function withZoneWalls(terrain: string, width: number, zones: SpellZone[]): string {
+export function withZoneWalls(terrain: string, zones: SpellZone[]): string {
   const shaping = zones.filter((zone) => rowOf(zone)?.blocks || rowOf(zone)?.opens);
   if (!shaping.length) {
     return terrain;

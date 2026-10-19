@@ -81,11 +81,6 @@ export function publishBattleMapUpdate(campaignId: string) {
   publishEphemeral(campaignId, "battle_map_updated", {});
 }
 
-// A carried light matters only in dim/dark maps; inferred from equipment.
-export function carriedLightRadius(sheet: CharacterSheet): number {
-  return carriedLight(sheet).radius;
-}
-
 // The token fields for that light, lit as the party steps onto the board.
 export function carriedLightFields(campaignId: string, sheet: CharacterSheet) {
   return lightPlacement(carriedLight(sheet), getClock(campaignId).instant);
@@ -852,7 +847,6 @@ export function checkPcAttackRange(
   const sighted = hasLineOfSight(
     map.terrain,
     map.width,
-    map.height,
     line.from.x,
     line.from.y,
     line.to.x,
@@ -878,10 +872,3 @@ export function checkPcAttackRange(
   }
   return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`, retry: true };
 }
-
-// ---- spatial checks for enemy_attack ----
-
-// An enemy's reach, range and walk-in live in src/lib/dm/enemy-profile.ts and
-// src/lib/dm/enemy-approach.ts; the name reading is re-exported here for the
-// callers that learned it from this module.
-export { isRangedAttackName } from "@/lib/dm/enemy-profile";

@@ -42,10 +42,6 @@ type KindMeta = { label: string; prefix: string; grantedBy: string };
 const KINDS = (optionsJson as { kinds: Record<OptionKind, KindMeta> }).kinds;
 const OPTIONS = (optionsJson as { options: OptionDef[] }).options;
 
-export function optionKindMeta(kind: OptionKind): KindMeta {
-  return KINDS[kind];
-}
-
 export function optionsOfKind(kind: OptionKind): OptionDef[] {
   return OPTIONS.filter((option) => option.k === kind);
 }

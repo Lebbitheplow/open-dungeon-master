@@ -4,7 +4,6 @@
 // from what is running on it). Saving turns each step's slice into an admin
 // settings patch (src/lib/setup/patches.ts).
 import {
-  KEY_PROVIDERS,
   normalizeBaseUrl,
   storySourceForUrl,
   type KeyProviderId,
@@ -216,10 +215,6 @@ export function draftWithScan(draft: Draft, scan: ScanResult, storyIsOpenAi: boo
     next.kokoro = { url: scan.kokoro.url, voice: next.kokoro.voice || (scan.kokoro.voices.includes("af_heart") ? "af_heart" : scan.kokoro.voices[0] ?? "") };
   }
   return next;
-}
-
-export function keyProviderLabel(id: KeyProviderId): string {
-  return KEY_PROVIDERS.find((provider) => provider.id === id)?.label ?? "Another provider";
 }
 
 // The storyteller in this draft is OpenAI on a key: its one key can then

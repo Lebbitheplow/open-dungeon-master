@@ -4,13 +4,13 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { GameIcon } from "@/components/ui/GameIcon";
 import type { ListedModel } from "@/lib/setup/discovery-logic";
-import type { FoundTextServer, ScanResult } from "@/lib/setup/discovery";
+import type { ScanResult } from "@/lib/setup/discovery";
 import { Select } from "@/components/ui/Select";
 
 // The furniture every setup step shares: big pick-one cards, the status
 // lamp, the found-on-this-machine rows and a model picker.
 
-export type { FoundTextServer, ListedModel, ScanResult };
+export type { ListedModel, ScanResult };
 
 export type Tone = "ok" | "warn" | "bad" | "off" | "wait";
 

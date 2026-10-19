@@ -291,7 +291,7 @@ export function authoredOnHit(
     }
     if (input.weapon !== false) {
       const melee = input.melee ?? withinFeet(encounter.id, sheet.id, enemy.id, 5);
-      lines.push(...markEnemy(campaign, encounter, sheet, enemy, melee));
+      lines.push(...markEnemy(encounter, sheet, enemy, melee));
     }
   }
   if (input.dead) {
@@ -302,7 +302,7 @@ export function authoredOnHit(
 
 // The marks this character's hit lays on the creature it hit, once a turn
 // where the feature says so.
-function markEnemy(campaign: Campaign, encounter: Encounter, sheet: CharacterSheet, target: EncounterEnemy, melee: boolean): string[] {
+function markEnemy(encounter: Encounter, sheet: CharacterSheet, target: EncounterEnemy, melee: boolean): string[] {
   const lines: string[] = [];
   for (const { effect, held } of activeAuthored(sheet, "mark")) {
     if (effect.melee && !melee) {

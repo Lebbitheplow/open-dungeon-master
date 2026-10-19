@@ -171,7 +171,7 @@ function strike(
     zone.dealt = (zone.dealt ?? 0) + dealt;
     const standing = getEnemy(enemy.id);
     if (failed && standing?.status === "alive") {
-      lines.push(...afterFailOnEnemy(campaign, map, zone, trigger, standing));
+      lines.push(...afterFailOnEnemy(map, zone, trigger, standing));
     }
     // Sleet Storm's concentration save is its own, whatever the DEX save did.
     const holding = getEnemy(enemy.id);
@@ -247,7 +247,7 @@ function strike(
 // What a failed save lays on an enemy: a condition (restrained is the
 // spell's and ends with it; prone is the ground's and stays), a lost
 // action, a push. (A concentration save is asked whatever the save did.)
-function afterFailOnEnemy(campaign: Campaign, map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, enemy: EncounterEnemy): string[] {
+function afterFailOnEnemy(map: BattleMap, zone: SpellZone, trigger: ZoneTrigger, enemy: EncounterEnemy): string[] {
   const lines: string[] = [];
   if (trigger.condition) {
     const meta = trigger.condition === "prone" ? {} : { spell: zone.spell, source: zone.casterId, ...(zone.slotLevel ? { slotLevel: zone.slotLevel } : {}) };

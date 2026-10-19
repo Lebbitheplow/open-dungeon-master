@@ -265,7 +265,3 @@ export function rejoinRelationshipsWithSubject(
   }
   return rejoined;
 }
-
-export function deleteRelationship(id: string): boolean {
-  return getDatabase().prepare(`DELETE FROM relationships WHERE id = ?`).run(id).changes > 0;
-}

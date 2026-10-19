@@ -397,7 +397,7 @@ single-class (multiclassing happens at level-up).
 | Subsystem | State | Where | Suite |
 |---|---|---|---|
 | Speech attribution: quoted lines are matched to the cast conservatively; unmatched lines stay the narrator's | enforced | `dm/speech.ts attributeSpeech`, `dm/tts-segments.ts` | `test-speech-attribution` |
-| Per-NPC voices: a cast member's voice reads their lines, the narrator's voice the rest | enforced | `dm/tts.ts castVoices`, `db/npcs.ts voice_json` | `test-tts-segments` |
+| Per-NPC voices: a cast member's voice reads their lines, the narrator's voice the rest | enforced | `tts-roster.ts voiceRoster` (read when the job runs), `db/npcs.ts voice_json` | `test-tts-segments` |
 | Lines and veils: a line stops the model before it writes; a veil asks it to cut away; both feed the image negatives | enforced | `dm/safety-logic.ts lineViolations, boundaryNegativeTerms`, `dm/narration-guard.ts` | `test-safety` |
 | X-card: the queue pauses, the last narration is withdrawn, rewound or rerolled | enforced | `dm/safety.ts`, `dm/queue.ts`, `/safety/x-card`, `/safety/resume` | `test-safety` |
 | Strictness: lenient, by the book and harsh shift every difficulty DC by two steps; tone biases reactions and the ambience bed | enforced | `srd/dc.ts dcForDifficulty`, `dm/safety-logic.ts strictnessShift, reactionBias, toneBedBias` | `test-strictness` |

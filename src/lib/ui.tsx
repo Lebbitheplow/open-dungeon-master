@@ -50,7 +50,7 @@ export const ui = {
   cardHover:
     "panel ornate rounded-xl hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)] motion-card",
   dialog: "panel rounded-xl p-5",
-  // Quick-action tile: a square-ish panel that lifts on hover (QuickTile).
+  // Quick-action tile: a square-ish panel that lifts on hover.
   tile: "panel ornate flex flex-col items-center justify-center gap-2 rounded-xl p-4 text-center",
   tileHover:
     "hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)] motion-card",
@@ -235,14 +235,3 @@ export function IconChip({
     </span>
   );
 }
-
-// Round user/character portrait with graceful fallback sizes; keeps avatar
-// sizing consistent instead of magic numbers per screen.
-export const AVATAR_SIZES = {
-  chat: "size-6",
-  menu: "size-8",
-  lobby: "size-12",
-  party: "size-12",
-  sheet: "size-14",
-  profile: "size-24",
-} as const;

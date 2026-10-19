@@ -30,7 +30,6 @@ import { untilTurnEnd } from "@/lib/dm/turn-end";
 import {
   HURLED,
   HURL_THROUGH_HELL,
-  OPEN_HAND_CHOICES,
   OPEN_HAND_REELING,
   hasOpenHandTechnique,
   hurlProblem,
@@ -225,7 +224,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
 
 // Who may declare it, and the words it writes, are pure and shared with the
 // player's Hand (src/lib/dm/attack-choice-rules.ts).
-export { OPEN_HAND_CHOICES, OPEN_HAND_REELING, hasOpenHandTechnique, type OpenHandChoice };
+export { OPEN_HAND_REELING, hasOpenHandTechnique, type OpenHandChoice };
 
 export function openHandOnHit(
   campaign: Campaign,

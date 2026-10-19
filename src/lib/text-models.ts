@@ -13,8 +13,6 @@
 // panel (src/lib/harness/); a campaign only says "use the server's agent".
 export type TextProvider = "local" | "custom" | "none" | "harness";
 
-export const TEXT_PROVIDERS: TextProvider[] = ["local", "custom", "none", "harness"];
-
 // No model is named here. The "local" provider runs whatever tag the
 // admin picked from what Ollama lists (src/lib/model-registry), and a
 // server with exactly one chat model runs that one unasked.

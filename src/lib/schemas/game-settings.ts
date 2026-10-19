@@ -12,33 +12,15 @@ import {
 import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 
 // The option lists and their labels live in ./game-settings-options (no
-// zod) so the campaign wizard can draw them without the validator; they
-// are re-exported here because this is where everything else finds them.
+// zod) so the campaign wizard can draw them without the validator; the
+// genres and the setting types are re-exported here, where the schema's
+// readers find them.
 export {
-  CAMPAIGN_LENGTH_LABELS,
-  CAMPAIGN_LENGTHS,
-  COMPANION_LABELS,
-  COMPANION_SETTINGS,
-  DICE_POLICIES,
-  DM_MODE_HINTS,
-  DM_MODE_LABELS,
-  DM_MODES,
   GENRES,
-  HP_METHOD_LABELS,
-  HP_METHODS,
-  STARTING_WEALTH,
-  STARTING_WEALTH_LABELS,
-  TABLE_LANGUAGE_HELP,
-  TABLE_LANGUAGE_LABELS,
-  TABLE_LANGUAGE_NAMES,
-  TABLE_LANGUAGES,
   type CampaignLengthSetting,
-  type CompanionSetting,
   type DicePolicy,
   type DmModeSetting,
   type Genre,
-  type HpMethodSetting,
-  type StartingWealthSetting,
   type TableLanguage,
 } from "@/lib/schemas/game-settings-options";
 

@@ -32,11 +32,6 @@ export const SNAPSHOT_TABLES = [
   // the chapter being unwound must not outlive it.
   "active_effects",
 ] as const;
-export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
-
-// battle_explored has no campaign_id column; it is captured and deleted
-// through its battle_maps parent.
-export const MAP_SCOPED_TABLES: ReadonlySet<string> = new Set(["battle_explored"]);
 
 // Embedding BLOBs are dropped from snapshots: they are bulky and the
 // semantic index refills missing vectors lazily.

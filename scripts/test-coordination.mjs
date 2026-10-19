@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
+import { settleQueue } from "./lib/enforce-narrator.mjs";
 import { fitSequence, joinPrevious, moveEarlier, moveLater, moveTo, normalizeSequence, ownStep } from "../src/lib/dm/plan-order.ts";
 import {
   coordinationBlock,
@@ -130,19 +131,6 @@ const actions = await world.route("campaigns/[campaignId]/actions");
 const { countMessages, listRecentMessages } = await import("../src/lib/db/messages.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { coordinationForPrompt, currentCoordination } = await import("../src/lib/dm/coordination.ts");
-const { dmQueueDepth } = await import("../src/lib/dm/queue.ts");
-
-// The turns the routes queue run off the request; the file waits for them
-// before it closes, so none is still logging when its runner shuts.
-async function settle(ms = 30_000) {
-  const end = Date.now() + ms;
-  while (dmQueueDepth(world.campaignId) > 0) {
-    if (Date.now() > end) {
-      throw new Error("the DM queue never ran dry");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 const tavi = world.addHero({ name: "Tavi", class: "rogue", level: 3 });
 const brann = world.addHero({ name: "Brann", class: "fighter", level: 3 });
@@ -300,6 +288,7 @@ await test("A fight that begins sets an unresolved plan aside, saying what did n
   assert.equal((await post(world.owner, { action: "open" })).status, 409, "no plan while initiative runs");
 });
 
-await settle();
+// Each resolve queued a DM turn; it ends before the file does.
+await settleQueue(world.campaignId);
 world.close();
 finish();

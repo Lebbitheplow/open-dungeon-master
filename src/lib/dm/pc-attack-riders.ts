@@ -27,8 +27,6 @@ import { textKey } from "@/lib/language/text-logic";
 import type { WeaponMaterial } from "@/lib/dm/damage-logic";
 import { ammoKindForWeapon } from "@/lib/srd/ammunition";
 
-export { superiorityDie, maneuverDieFor } from "@/lib/dm/maneuver-rules";
-
 // The condition a maneuver's rider save decides, when it has one.
 export const MANEUVER_RIDERS: Array<{ match: RegExp; condition: string; save: "str" | "wis" }> = [
   { match: /trip/i, condition: "prone", save: "str" },

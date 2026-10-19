@@ -7,7 +7,7 @@ import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
-export { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
+export type { ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export const abilityScoresSchema = z.object({
   str: z.number().int().min(1).max(30),
@@ -133,7 +133,6 @@ const featPicksSchema = z.object({
   damageType: z.string().trim().max(20).optional(),
 });
 export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema);
-export type FeatChoicesInput = z.infer<typeof featChoicesSchema>;
 
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),

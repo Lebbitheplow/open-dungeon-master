@@ -54,8 +54,7 @@ function lightlyObscuredByNature(campaign: Campaign, map: { outdoors?: boolean; 
 }
 
 // The name of a watcher who sees this character clearly and whom no trait
-// of theirs answers, or null when nobody does. Same reading of the board as
-// seenClearlyBy (attack-spatial.ts), watcher by watcher.
+// of theirs answers, or null when nobody does.
 export function seenClearlyDespiteTraits(
   campaign: Campaign,
   encounterId: string,
@@ -99,7 +98,7 @@ export function seenClearlyDespiteTraits(
     if (!token) {
       continue;
     }
-    const sighted = hasLineOfSight(map.terrain, map.width, map.height, token.x, token.y, hider.x, hider.y);
+    const sighted = hasLineOfSight(map.terrain, map.width, token.x, token.y, hider.x, hider.y);
     const cover = coverBetween(map.terrain, map.width, map.height, token.x, token.y, hider.x, hider.y);
     const dark = map.ambient === "dark" && hider.lightRadius <= 0;
     // A fog cloud or magical darkness between them hides as darkness does (zone-rules.ts).

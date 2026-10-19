@@ -30,8 +30,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { invalidArguments, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { attacksLeft } from "@/lib/dm/action-budget";
 
-// Re-exported for the callers that learned them here.
-export { superiorityDie } from "@/lib/dm/pc-attack-riders";
+// Re-exported for the callers that learned it here.
 export { resolvePendingPcAttack } from "@/lib/dm/pc-attack-parked";
 
 // The pc_attack engine: full server resolution of player attacks. The

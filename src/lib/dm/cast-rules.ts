@@ -247,7 +247,7 @@ export function componentProblem(sheet: Caster, facts: SpellFacts | null): ToolE
 // ---- a material that costs ----
 
 // Structured components, carried worth and the purse (src/lib/dm/cast-materials.ts).
-export { focusProblem, materialComponents, materialPlan, type MaterialPlan } from "@/lib/dm/cast-materials";
+export { focusProblem, materialComponents, materialPlan } from "@/lib/dm/cast-materials";
 
 // ---- the slot ----
 

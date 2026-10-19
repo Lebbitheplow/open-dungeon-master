@@ -19,7 +19,7 @@ import { subclassNamed } from "@/lib/srd/subclass-name";
 import { SRD_WEAPONS, defaultLoadout } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 
-export type { ClassKit, KitItem, KitLine, KitOption, KitSlot } from "@/lib/srd/starting-kit-data";
+export type { ClassKit, KitItem, KitOption, KitSlot } from "@/lib/srd/starting-kit-data";
 
 // The choices a request makes, stored on the sheet so the builder reopens
 // with them: for each line of the class's kit, in order, the option taken
@@ -163,12 +163,6 @@ export function resolveKit(
     }
   });
   return { items, choices: { options, picks }, problems };
-}
-
-// The book's first option of every line and every slot's default: what a
-// companion the engine drafts carries.
-export function firstChoicesKit(kit: ClassKit): KitItem[] {
-  return resolveKit(kit, null, { armor: ["heavy"], weapons: ["martial"] }).items;
 }
 
 // The kit a class starts with for a caller that holds a class row: its

@@ -83,5 +83,3 @@ export function holdTurn(world, heroId) {
 
 // The pointer moves on once, as ending the current turn does.
 export const nextTurn = (world) => skipCurrentTurn(world.campaignId);
-
-export const d20s = (log) => log.filter((die) => die.sides === 20).length;

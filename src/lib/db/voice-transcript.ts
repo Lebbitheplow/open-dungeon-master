@@ -27,8 +27,3 @@ export function listTranscriptSince(campaignId: string, sinceIso: string, limit 
     .all(campaignId, sinceIso, limit) as Row[];
   return rows.map((row) => ({ speaker: row.speaker, text: row.text, startedAt: row.started_at, clockLabel: row.clock_label }));
 }
-
-export function countTranscriptLines(campaignId: string): number {
-  const row = getDatabase().prepare(`SELECT COUNT(*) AS n FROM voice_transcript WHERE campaign_id = ?`).get(campaignId) as { n: number };
-  return row.n;
-}

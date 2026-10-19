@@ -60,9 +60,6 @@ const DRAFT_KEYS = [
   "houseRules",
 ] as const satisfies ReadonlyArray<keyof CampaignDraft>;
 
-// Kept to one campaign; listed here so the defaults manager can say so.
-export const CAMPAIGN_ONLY_FIELDS = ["title", "premise", "theme", "world pack", "starting lore", "imported prep"] as const;
-
 const clone = <T>(value: T): T => (typeof value === "object" && value !== null ? structuredClone(value) : value);
 
 export function defaultsFromDraft(draft: CampaignDraft): CampaignDefaultSettings {

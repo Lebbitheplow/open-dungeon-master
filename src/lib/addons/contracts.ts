@@ -61,8 +61,6 @@ export const importerResultSchema = z
     message: "Return either bundleFile or bundle, not both and not neither.",
   });
 
-export type ImporterResult = z.infer<typeof importerResultSchema>;
-
 // ---- map generators ----
 
 // The library's own limits: the board renderer, fog and pathfinding are
@@ -90,7 +88,6 @@ export type MapGeneratorArguments = {
   host: HostInfo;
 };
 
-export const MAX_VIEW_DATA_BYTES = 256 * 1024;
 export const MAX_VIEW_FILES = 8;
 export const MAX_VIEW_FILE_BYTES = 64 * 1024 * 1024;
 // Pictures under the grid go through the upload pipeline's own cap.

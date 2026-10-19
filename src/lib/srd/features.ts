@@ -414,6 +414,7 @@ export function populateFeaturesForClasses(
     ),
     classes,
     granted,
+    feats,
   );
   const seen = new Set<string>();
   return [...granted, ...kept].filter((feature) => {

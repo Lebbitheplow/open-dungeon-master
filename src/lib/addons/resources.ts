@@ -97,8 +97,3 @@ export async function withExclusive<T>(keys: readonly string[], task: AddonTask,
     release(wanted, task.id);
   }
 }
-
-// Who holds what right now, for the admin panel.
-export function heldResources(): Array<{ key: string; addonName: string }> {
-  return [...state().held.entries()].map(([key, holder]) => ({ key, addonName: holder.addonName }));
-}

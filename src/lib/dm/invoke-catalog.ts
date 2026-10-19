@@ -27,7 +27,7 @@ import {
 } from "@/lib/dm/catalog-types";
 
 export type { CatalogEntry, CatalogField, AdjudicationCategory } from "@/lib/dm/catalog-types";
-export { CATEGORY_LABELS, checkArgs } from "@/lib/dm/catalog-types";
+export { checkArgs } from "@/lib/dm/catalog-types";
 
 export const ADJUDICATIONS: CatalogEntry[] = [
   ...COMBAT_ADJUDICATIONS,

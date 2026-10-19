@@ -63,16 +63,6 @@ function castOf(roster: RosterEntry[]): CastVoice[] {
   }));
 }
 
-// The cast's own voices (docs/vtt-parity-implementation-plan.md 8.2, issue
-// 97), read when the job runs so a voice picked a moment ago is heard.
-export function castVoices(campaignId: string): CastVoice[] {
-  try {
-    return castOf(voiceRoster(campaignId)).filter((entry) => entry.voiceId);
-  } catch {
-    return [];
-  }
-}
-
 // Who speaks in this passage without a voice yet: the person it is spoken
 // as, else the speakers stored with its lines.
 export function unvoicedSpeakers(

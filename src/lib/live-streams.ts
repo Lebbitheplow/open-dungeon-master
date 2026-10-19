@@ -98,10 +98,6 @@ export function closeStreamsForCampaign(campaignId: string): number {
   return closeWhere((stream) => stream.campaignId === campaignId);
 }
 
-export function closeStreamsForMember(campaignId: string, userId: string): number {
-  return closeWhere((stream) => stream.campaignId === campaignId && stream.userId === userId);
-}
-
 // Maintenance (src/lib/maintenance.ts): nobody keeps reading a world that
 // is about to be replaced.
 export function closeAllStreams(): number {

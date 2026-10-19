@@ -104,7 +104,6 @@ export function computeFov(
 export function hasLineOfSight(
   terrain: string,
   width: number,
-  height: number,
   fromX: number,
   fromY: number,
   toX: number,

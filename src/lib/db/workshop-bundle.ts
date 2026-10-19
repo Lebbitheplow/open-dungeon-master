@@ -39,7 +39,7 @@ import { decodeBundleAddonView, landAddonView } from "@/lib/db/map-addon-view-bu
 import { writeMapAddonView } from "@/lib/db/map-addon-view";
 import type { MapAddonView } from "@/lib/addons/map-view";
 
-export { exportWorkshopBundle, type ExportResult } from "@/lib/db/workshop-bundle-export";
+export { exportWorkshopBundle } from "@/lib/db/workshop-bundle-export";
 
 // Writing a stranger's bundle back in as a new workshop. The export half is
 // src/lib/db/workshop-bundle-export.ts, re-exported from here.
