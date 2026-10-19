@@ -19,6 +19,9 @@ import { StubsView } from "./StubsView";
 import { TypesView } from "./TypesView";
 import { ForgeView } from "./ForgeView";
 import { AskView } from "./AskView";
+import { TablePrep } from "./TablePrep";
+import type { OpenPrep } from "./PlaceBattleMaps";
+import type { PlaceBindingKind } from "@/lib/worldforge/model";
 import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 
 // WorldForge in the workshop, and at the play table as the World tab.
@@ -174,6 +177,17 @@ export function WorldForgePanel({
 
   const open = (ref: string | null) => void go(ref ? { view: "wiki", entry: ref } : { entry: null });
 
+  // A place's battle map or encounter (PlaceBattleMaps): the workshop's map
+  // library or Encounters, with the way back to the place; at the table, a
+  // sheet over the tab, after which the place's lines are read again (a
+  // map whose walls were just drawn says so).
+  const [tablePrep, setTablePrep] = useState<{ kind: PlaceBindingKind; id: string } | null>(null);
+  const openPrep: OpenPrep | undefined = onOpenSystem
+    ? (kind, id, from) => onOpenSystem(kind === "map" ? "maps" : "encounters", { id, from })
+    : atTable
+      ? (kind, id) => setTablePrep({ kind, id })
+      : undefined;
+
   async function bringIn(text: string, accept: boolean) {
     setReading(true);
     setReport(null);
@@ -295,12 +309,12 @@ export function WorldForgePanel({
         {world ? (
           // Keyed by view so the incoming one rises in instead of cutting.
           <div key={view} className="motion-tab">
-            {view === "wiki" ? <WikiView campaignId={campaignId} api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} onCreate={onCreate} atTable={atTable} canWrite={canWrite} canPaint={canPaint} /> : null}
+            {view === "wiki" ? <WikiView campaignId={campaignId} api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} onOpenPrep={openPrep} onCreate={onCreate} atTable={atTable} canWrite={canWrite} canPaint={canPaint} /> : null}
             {view === "forge" ? <ForgeView api={api} world={world} onOpen={open} /> : null}
             {view === "ask" ? <AskView api={api} world={world} onOpen={open} /> : null}
             {view === "web" ? <WebView world={world} focus={focus} onOpen={open} /> : null}
             {view === "timeline" ? <TimelineView api={api} world={world} onOpen={open} /> : null}
-            {view === "atlas" ? <AtlasView api={api} world={world} onOpen={open} /> : null}
+            {view === "atlas" ? <AtlasView campaignId={campaignId} api={api} world={world} onOpen={open} onOpenPrep={openPrep} /> : null}
             {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} atTable={atTable} canShowHandouts={canShowHandouts} /> : null}
             {view === "stubs" ? <StubsView api={api} world={world} onOpen={open} /> : null}
             {view === "types" ? <TypesView api={api} world={world} /> : null}
@@ -308,6 +322,16 @@ export function WorldForgePanel({
           </div>
         ) : null}
       </Listed>
+      {tablePrep ? (
+        <TablePrep
+          campaignId={campaignId}
+          open={tablePrep}
+          onClose={() => {
+            setTablePrep(null);
+            refresh();
+          }}
+        />
+      ) : null}
     </section>
   );
 }

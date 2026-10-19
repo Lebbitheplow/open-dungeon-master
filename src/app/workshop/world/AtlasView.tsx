@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Globe2, Hexagon, Link2, Map as MapIcon, MapPin, MousePointer2, Plus, Trash2, X } from "lucide-react";
+import { BookOpenText, ChevronRight, Globe2, Grid3x3, Hexagon, Link2, Map as MapIcon, MapPin, MousePointer2, Plus, Swords, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -13,6 +13,8 @@ import type { Placement } from "@/lib/db/atlas-region";
 import type { WorldApi, WorldState } from "./useWorld";
 import { AtlasCard } from "./AtlasCard";
 import { isBound, movedText, OutOfStep, PinRegionActions, RegionBar, RegionNoticeLine, RegionReview, useAtlasRegion } from "./AtlasRegion";
+import { PlaceBattleMaps, type OpenPrep } from "./PlaceBattleMaps";
+import type { WorldEntity } from "@/lib/db/world-forge";
 
 // The atlas, after WorldForge's map tab: pictures of the world with pins on
 // them, each pin bound to an entry, and maps inside maps (a pin opens the
@@ -24,10 +26,28 @@ import { isBound, movedText, OutOfStep, PinRegionActions, RegionBar, RegionNotic
 // its place then move together. Each map is drawn in the box its pins were
 // placed in (its frame), so a picture that is not 16:10 keeps its pins and
 // regions where they were put.
+//
+// A pin that stands for a place offers the place's battle maps and
+// encounters (PlaceBattleMaps), and a map nested in such a pin (the
+// tavern's map inside the city's) opens them from its own view. An Atlas
+// picture is never a battle map: it supplies no walls, doors or light.
 
 type Mode = "look" | "pin" | "region";
 
-export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldState; onOpen: (ref: string) => void }) {
+export function AtlasView({
+  campaignId,
+  api,
+  world,
+  onOpen,
+  onOpenPrep,
+}: {
+  campaignId: string;
+  api: WorldApi;
+  world: WorldState;
+  onOpen: (ref: string) => void;
+  // Opens a place's battle map or encounter; absent where neither can be.
+  onOpenPrep?: OpenPrep;
+}) {
   const { doc } = world;
   const [mapId, setMapId] = useState(doc.maps[0]?.id ?? "");
   const [mode, setMode] = useState<Mode>("look");
@@ -138,6 +158,10 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   const frame = frameOf(atlas);
   const selectedPin = selected?.kind === "pin" ? doc.pins.find((pin) => pin.id === selected.id) ?? null : null;
   const selectedRegion = selected?.kind === "region" ? atlas.regions.find((region) => region.id === selected.id) ?? null : null;
+  const pinEntity = selectedPin ? world.entities.find((entry) => entry.ref === selectedPin.ref) : undefined;
+  // The place this map is drawn inside: the place its parent pin stands for.
+  const parentPin = atlas.parentPinId ? doc.pins.find((pin) => pin.id === atlas.parentPinId) : undefined;
+  const insidePlace = parentPin ? world.entities.find((entry) => entry.ref === parentPin.ref && entry.shelf === "location") : undefined;
 
   return (
     <div className="grid gap-4 @4xl:grid-cols-[14rem_minmax(0,1fr)]">
@@ -184,6 +208,7 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
         <RegionReview key={region.step ? region.step.kind : "none"} region={region} />
         <RegionNoticeLine region={region} />
         <OutOfStep region={region} atlas={atlas} />
+        {insidePlace && onOpenPrep ? <InsidePlace place={insidePlace} onOpen={onOpen} onOpenPrep={onOpenPrep} /> : null}
 
         <div
           key={atlas.id}
@@ -263,6 +288,17 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
             making={making}
             subMapForm={selectedPin ? newMapForm(selectedPin) : null}
             regionActions={selectedPin ? <PinRegionActions region={region} pin={selectedPin} atlas={atlas} /> : null}
+            battleMaps={
+              selectedPin && onOpenPrep ? (
+                pinEntity?.shelf === "location" ? (
+                  <PlaceBattleMaps campaignId={campaignId} entity={pinEntity} api={api} onOpenPrep={onOpenPrep} compact />
+                ) : (
+                  <p className="text-[11px] text-stone-500" data-testid="pin-battle-maps-hint">
+                    {pinEntity ? "Battle maps and encounters belong to places." : "Pick the place this pin stands for to make or link its battle map."}
+                  </p>
+                )
+              ) : null
+            }
             onMakeSubMap={() => setMaking({ name: "", image: "" })}
             onOpenMap={(id) => { setMapId(id); setSelected(null); }}
             onOpenEntry={onOpen}
@@ -274,6 +310,34 @@ export function AtlasView({ api, world, onOpen }: { api: WorldApi; world: WorldS
           />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+// Over a map drawn inside a place's pin: that place's battle maps and
+// encounters, one press away, and a plain word that this picture is not one.
+function InsidePlace({ place, onOpen, onOpenPrep }: { place: WorldEntity; onOpen: (ref: string) => void; onOpenPrep: OpenPrep }) {
+  const records = place.bound.filter((record) => (record.kind === "map" || record.kind === "encounter") && record.found);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-stone-700/60 px-2 py-1.5 text-xs text-stone-300" data-testid="atlas-inside-place">
+      <span>
+        Inside{" "}
+        <button type="button" onClick={() => onOpen(place.ref)} className="text-amber-200 underline underline-offset-2">
+          {place.name}
+        </button>
+        .
+      </span>
+      {records.map((record) => (
+        <KitButton key={`${record.kind}|${record.ref}`} tone="small" onClick={() => onOpenPrep(record.kind as "map" | "encounter", record.ownId, place.ref)}>
+          {record.kind === "map" ? <Grid3x3 className="size-3.5" /> : <Swords className="size-3.5" />} {record.kind === "map" ? "Open battle map" : "Open encounter"}: {record.name}
+        </KitButton>
+      ))}
+      {records.length ? null : (
+        <KitButton tone="small" onClick={() => onOpen(place.ref)}>
+          <BookOpenText className="size-3.5" /> Give {place.name} a battle map
+        </KitButton>
+      )}
+      <span className="w-full text-[11px] text-stone-500">This picture is for finding your way. Walls, doors and light are drawn on a battle map, never read from a picture.</span>
     </div>
   );
 }

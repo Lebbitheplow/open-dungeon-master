@@ -2,7 +2,11 @@ import { resolveMonster } from "@/lib/bestiary/index";
 import { getEntryDetail } from "@/lib/content/index";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
+import { getEncounterTemplate } from "@/lib/db/encounter-templates";
 import { getHomebrew, tableAuthors } from "@/lib/db/homebrew";
+import { getPreparedMap, type PreparedMap } from "@/lib/db/prepared-maps";
+import { TERRAIN } from "@/lib/battlemap/types";
+import { rosterSize } from "@/lib/dm/encounter-template-logic";
 import { parseRef, type Binding, type WorldDoc } from "@/lib/worldforge/model";
 
 // A World entry's links to playable records, read (audit finding WF-17).
@@ -22,11 +26,45 @@ export type BoundRecord = {
   // "" for a rulebook record.
   ownId: string;
   found: boolean;
+  // A battle map's playable ground, as drawn or imported: walls, doors or
+  // low walls inside its edge, and lights placed on it. A picture laid
+  // under the grid is only a picture (src/lib/worldforge/model.ts MapRole):
+  // until someone draws the walls, nothing claims the map has them.
+  geometry?: MapGeometry;
+  // A prepared encounter's battle map, when it is drawn on one.
+  mapId?: string;
 };
+
+export type MapGeometry = { walls: boolean; lights: number; picture: boolean };
+
+// What a prepared map's ground holds. The rim of a blank map is the
+// library's own (src/lib/dm/map-library.ts blankTerrain), so only a wall
+// inside it counts as one somebody drew.
+export function mapGeometry(map: Pick<PreparedMap, "terrain" | "width" | "height" | "lights" | "zones" | "backdrop" | "overlayPath">): MapGeometry {
+  const solid = new Set<string>([TERRAIN.wall, TERRAIN.door, TERRAIN.lowwall]);
+  let walls = false;
+  for (let y = 1; y < map.height - 1 && !walls; y += 1) {
+    for (let x = 1; x < map.width - 1; x += 1) {
+      if (solid.has(map.terrain[y * map.width + x])) {
+        walls = true;
+        break;
+      }
+    }
+  }
+  return { walls, lights: map.lights.length + map.zones.length, picture: Boolean(map.backdrop || map.overlayPath) };
+}
+
+// The words for a map's ground, the same wherever it is listed.
+export function geometryWords(geometry: MapGeometry): string {
+  if (!geometry.walls && !geometry.lights) return geometry.picture ? "a picture only: no walls or light drawn yet" : "no walls or light drawn yet";
+  const lights = geometry.lights ? `${geometry.lights} light${geometry.lights === 1 ? "" : "s"}` : "no light placed";
+  return `${geometry.walls ? "walls drawn" : "no walls drawn"}, ${lights}`;
+}
 
 const HOMEBREW = "homebrew:";
 
 export function resolveBinding(campaignId: string, binding: Binding): BoundRecord {
+  if (binding.kind === "map" || binding.kind === "encounter") return resolvePlaceBinding(campaignId, binding);
   const ownId = binding.ref.startsWith(HOMEBREW) && !binding.ref.startsWith(`${HOMEBREW}@`) ? binding.ref.slice(HOMEBREW.length) : "";
   const missing: BoundRecord = { ...binding, name: "", detail: "", ownId, found: false };
   const campaign = getCampaignById(campaignId);
@@ -53,6 +91,32 @@ export function resolveBinding(campaignId: string, binding: Binding): BoundRecor
     // No content pack on this server: a rulebook item cannot be read.
     return missing;
   }
+}
+
+// A place's battle map or encounter: a row of this same campaign, by id.
+// A ref from somewhere else (another campaign's row, a bundle's "@map:#2"
+// that never landed) finds nothing here.
+function resolvePlaceBinding(campaignId: string, binding: Binding): BoundRecord {
+  const missing: BoundRecord = { ...binding, name: "", detail: "", ownId: binding.ref, found: false };
+  if (binding.ref.startsWith("@")) return { ...missing, ownId: "" };
+  if (binding.kind === "map") {
+    const map = getPreparedMap(campaignId, binding.ref);
+    if (!map) return missing;
+    const geometry = mapGeometry(map);
+    return { ...binding, name: map.name, detail: `${map.width} by ${map.height} squares, ${geometryWords(geometry)}`, ownId: map.id, found: true, geometry };
+  }
+  const template = getEncounterTemplate(binding.ref);
+  if (!template || template.campaignId !== campaignId) return missing;
+  const foes = rosterSize(template.enemies);
+  const map = template.map.mapId ? getPreparedMap(campaignId, template.map.mapId) : null;
+  return {
+    ...binding,
+    name: template.name,
+    detail: `${foes} ${foes === 1 ? "foe" : "foes"}${map ? `, on ${map.name}` : ""}`,
+    ownId: template.id,
+    found: true,
+    ...(map ? { mapId: map.id } : {}),
+  };
 }
 
 // The World entries that link to one record, for the record's own tool:

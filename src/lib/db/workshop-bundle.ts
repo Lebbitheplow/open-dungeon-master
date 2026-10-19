@@ -519,7 +519,7 @@ function writeBundleRows(
   const shelf = writeBundleShelf(userId, workshop.id, bundle);
   copied += shelf.copied;
   if (bundle.world) {
-    copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore }, shelf.entryFor);
+    copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore }, shelf.entryFor, { maps: ids.maps, encounters: ids.encounters });
   }
 
   return { workshopId: workshop.id, copied, linkedShared, droppedLinks, shelf: { reused: shelf.reused, renamed: shelf.renamed } };

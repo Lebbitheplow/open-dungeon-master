@@ -9,7 +9,7 @@ import { decodeBundleImage, encodeBundleImage, type BundleImage } from "@/lib/wo
 import { isUploadedImagePath } from "@/lib/uploads";
 import { createRecord, getWorldDoc, nextEntry, saveWorldDoc, worldEntities, worldView, writeRecord, type WorldEntity } from "@/lib/db/world-forge";
 import { firstSentence, readWorldForge, writeWorldForge, type ExportRecord, type WorldImport } from "@/lib/worldforge/format";
-import { LIMITS, LINK_LABELS, newId, parseRef, readEntry, refOf, remapDoc, type Entry, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
+import { LIMITS, LINK_LABELS, isPlaceBinding, newId, parseRef, readEntry, refOf, remapDoc, type Binding, type Entry, type PlaceBindingKind, type WorldDoc, type WorldType } from "@/lib/worldforge/model";
 import {
   IMPORT_SLICES,
   firstReadings,
@@ -477,11 +477,15 @@ export function exportWorldForge(campaignId: string): Record<string, unknown> {
 // stands. Types merge by name, fields and all, so neither side loses a
 // field; links merge by the source link they came from
 // (world-link-merge.ts). What both sides changed comes back in `conflicts`.
+// A place's battle maps and encounters (Binding "map", "encounter") are
+// rows of the source too: `resolveRecord` names their copies here, and a
+// link whose row did not travel is dropped and counted in `unbound`.
 export function copyWorldDoc(
   sourceId: string,
   targetId: string,
   resolve: (shelf: "npc" | "location" | "faction" | "lore", id: string) => string | null,
-): { count: number; conflicts: string[] } {
+  resolveRecord: (kind: PlaceBindingKind, id: string) => string | null = () => null,
+): { count: number; conflicts: string[]; unbound: number } {
   const source = `campaign:${sourceId}`;
   const sourceDoc = getWorldDoc(sourceId);
   const toCopy = (ref: string) => {
@@ -500,13 +504,25 @@ export function copyWorldDoc(
   const conflicts: string[] = [];
   const pending: Pending[] = [];
   let entries = 0;
+  let unbound = 0;
+  const moveBinding = (binding: Binding): Binding | null => {
+    if (!isPlaceBinding(binding.kind)) return binding;
+    const copy = binding.ref.startsWith("@") ? null : resolveRecord(binding.kind, binding.ref);
+    if (!copy) unbound += 1;
+    return copy ? { kind: binding.kind, ref: copy } : null;
+  };
   for (const [sourceRef, raw] of Object.entries(sourceDoc.entries)) {
     const ref = toCopy(sourceRef);
     if (!ref) continue;
     entries += 1;
     const fieldIds = typeMap.fields.get(raw.typeId) ?? new Map<string, string>();
     const entry = remapEntryIds(
-      { ...raw, typeId: typeMap.types.get(raw.typeId) ?? raw.typeId, fields: Object.fromEntries(Object.entries(raw.fields).map(([id, value]) => [fieldIds.get(id) ?? id, value])) },
+      {
+        ...raw,
+        typeId: typeMap.types.get(raw.typeId) ?? raw.typeId,
+        fields: Object.fromEntries(Object.entries(raw.fields).map(([id, value]) => [fieldIds.get(id) ?? id, value])),
+        bindings: raw.bindings.map(moveBinding).filter((binding): binding is Binding => binding !== null),
+      },
       plan,
     );
     const key = originKey("entries", ref);
@@ -536,6 +552,7 @@ export function copyWorldDoc(
   return {
     count: entries + merged.added + merged.updated + mapped.events.length + mapped.secrets.length,
     conflicts: [...conflicts, ...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts],
+    unbound,
   };
 }
 

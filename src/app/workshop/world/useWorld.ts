@@ -236,7 +236,20 @@ export function useWorld(campaignId: string) {
     [base, send, refresh],
   );
 
-  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, clearError: () => setError("") };
+  // A place's own battle map or encounter, made and linked in one request
+  // (src/app/api/campaigns/[campaignId]/world/entities/[ref]/battle-maps).
+  // Resolves to what was made, or null with the server's reason in `error`.
+  const makeForPlace = useCallback(
+    async (ref: string, body: { make: "map" } | { make: "encounter"; monster: string; mapId?: string }): Promise<{ kind: "map" | "encounter"; id: string } | null> => {
+      const payload = await send(`${base}/entities/${encodeURIComponent(ref)}/battle-maps`, { method: "POST", body: JSON.stringify(body) });
+      const entity = payload?.entity as WorldEntity | undefined;
+      if (entity) placeEntity(entity);
+      return (payload?.made as { kind: "map" | "encounter"; id: string } | undefined) ?? null;
+    },
+    [base, send],
+  );
+
+  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;

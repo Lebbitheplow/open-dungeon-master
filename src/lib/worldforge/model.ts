@@ -86,11 +86,22 @@ export type Entry = {
 // own, a content-pack slug for the rulebook's. Inside a workshop bundle
 // only, a homebrew ref travels by name as "homebrew:@<kind>:<name>" and
 // lands as the arrived copy's id (src/lib/db/world-forge-bundle.ts).
-export const BINDING_KINDS = ["monster", "item"] as const;
+//
+// A place also links to the prepared battle maps and encounters fought
+// there (M4, a place's "Create battle map"): "map" names a prepared map's
+// id and "encounter" a prepared encounter's, both rows of this same
+// campaign or workshop, so a copy or a bundle moves them to the copies
+// that travelled ("@map:#<n>" and "@encounter:#<n>" inside a bundle, by
+// the row's place in the bundle's own list). Only a place takes them.
+export const BINDING_KINDS = ["monster", "item", "map", "encounter"] as const;
 export type BindingKind = (typeof BINDING_KINDS)[number];
 export type Binding = { kind: BindingKind; ref: string };
-export const BINDINGS_MAX = 8;
+export const PLACE_BINDING_KINDS = ["map", "encounter"] as const satisfies readonly BindingKind[];
+export type PlaceBindingKind = (typeof PLACE_BINDING_KINDS)[number];
+export const isPlaceBinding = (kind: BindingKind): kind is PlaceBindingKind => (PLACE_BINDING_KINDS as readonly string[]).includes(kind);
+export const BINDINGS_MAX = 12;
 const BINDING_REF = /^(?:homebrew:[\w-]{1,80}|homebrew:@(?:monster|item):[^:\r\n]{1,80}|[a-z0-9][a-z0-9-]{0,79})$/;
+const PLACE_BINDING_REF = /^(?:[\w-]{1,80}|@(?:map|encounter):#\d{1,4})$/;
 
 export function readBindings(value: unknown): Binding[] {
   const seen = new Set<string>();
@@ -99,7 +110,8 @@ export function readBindings(value: unknown): Binding[] {
     const raw = rec(item);
     const kind = oneOf(raw.kind, BINDING_KINDS, "monster");
     const ref = typeof raw.ref === "string" ? raw.ref.trim() : "";
-    if (raw.kind !== kind || !BINDING_REF.test(ref) || seen.has(`${kind}|${ref}`)) continue;
+    const shape = isPlaceBinding(kind) ? PLACE_BINDING_REF : BINDING_REF;
+    if (raw.kind !== kind || !shape.test(ref) || (ref.startsWith("@") && ref.slice(1, ref.indexOf(":")) !== kind) || seen.has(`${kind}|${ref}`)) continue;
     seen.add(`${kind}|${ref}`);
     out.push({ kind, ref });
     if (out.length >= BINDINGS_MAX) break;

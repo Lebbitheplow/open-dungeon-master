@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { KitButton, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
 import { ContentPick } from "@/components/ui/ContentPick";
 import { Select } from "@/components/ui/Select";
-import { BINDINGS_MAX, type Binding, type BindingKind } from "@/lib/worldforge/model";
+import { BINDINGS_MAX, isPlaceBinding, type Binding, type BindingKind, type PlaceBindingKind } from "@/lib/worldforge/model";
 import type { WorldEntity } from "@/lib/db/world-forge";
 import type { WorldApi } from "./useWorld";
 import type { OpenSystem } from "./WorldForgePanel";
@@ -17,7 +17,9 @@ import type { OpenSystem } from "./WorldForgePanel";
 // into a fight as that exact monster. The entry keeps a link, never a copy
 // (src/lib/worldforge/model.ts Binding).
 
-const WORDS: Record<BindingKind, { one: string; tool: string; system: string }> = {
+// A place's battle maps and encounters are its own section (PlaceBattleMaps).
+type RecordKind = Exclude<BindingKind, PlaceBindingKind>;
+const WORDS: Record<RecordKind, { one: string; tool: string; system: string }> = {
   monster: { one: "stat block", tool: "Bestiary", system: "bestiary" },
   item: { one: "item", tool: "Homebrew", system: "homebrew" },
 };
@@ -40,7 +42,7 @@ export function BoundRecords({
   // instead of opened in the workshop's Encounters.
   onOpenSystem?: OpenSystem;
 }) {
-  const [adding, setAdding] = useState<BindingKind | null>(null);
+  const [adding, setAdding] = useState<RecordKind | null>(null);
   const [own, setOwn] = useState<Own[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -97,7 +99,7 @@ export function BoundRecords({
     return Boolean(outcome && !("conflicts" in outcome));
   }
 
-  async function link(kind: BindingKind, ref: string) {
+  async function link(kind: RecordKind, ref: string) {
     if (bindings.some((binding) => binding.kind === kind && binding.ref === ref)) {
       setAdding(null);
       return;
@@ -106,7 +108,7 @@ export function BoundRecords({
   }
 
   // A new record on the author's shelf, named for the entry, then linked.
-  async function make(kind: BindingKind) {
+  async function make(kind: RecordKind) {
     setBusy(true);
     setError("");
     const response =
@@ -158,7 +160,7 @@ export function BoundRecords({
       </div>
       {loreOnly ? <p className="text-xs text-stone-400">The table cannot hold this yet: link it to an item, or make one, and shops and inventories can offer it.</p> : null}
 
-      {entity.bound.map((record) => (
+      {entity.bound.flatMap((record) => (isPlaceBinding(record.kind) ? [] : [{ ...record, kind: record.kind as RecordKind }])).map((record) => (
         <div key={`${record.kind}|${record.ref}`} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-stone-700/60 px-2 py-1.5 text-sm" data-testid="world-bound-record">
           <span className="text-[10px] uppercase tracking-[0.12em] text-stone-500">{WORDS[record.kind].one}</span>
           {record.found ? (
