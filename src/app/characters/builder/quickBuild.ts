@@ -23,7 +23,7 @@ import type { Ability, AsiChoice } from "@/lib/schemas/sheet";
 import { SRD_SKILLS } from "@/lib/srd";
 import { companionImprovements, preferredSpellOrder } from "@/lib/srd/companion-build";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
-import { featGrantSpec, type FeatChoices, type FeatPicks, type FeatGrantSpec } from "@/lib/srd/feat-grants";
+import type { FeatChoices, FeatPicks, FeatGrantSpec } from "@/lib/srd/feat-grants";
 import { FIGHTING_STYLES, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { expertiseAllowed, expertiseSlotsFor, subclassLevelFor, subclassNamesFor } from "@/lib/srd/features";
 import { optionFeatureName } from "@/lib/srd/options";
@@ -35,6 +35,7 @@ import { spellClassFor } from "@/lib/classes";
 import { abilityPriority, poolSlotsFor, standardFor } from "./classAbilities";
 import { rollHeroName } from "./heroNames";
 import { EASY_CLASSES, PLAYSTYLES, fillClassSkills, type PlaystyleId } from "./playstyles";
+import { TARGET_WORDS } from "./owed";
 import { bonusLanguageCount, srdClass, type BlockerTarget } from "./submit";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -332,7 +333,7 @@ export function fillRound(ctx: FillContext): FillRound {
   const wants = (target: BlockerTarget) => !ctx.only || ctx.only.includes(target);
   const patch: Partial<BuilderDraftFields> = {};
   const filled: FilledPick[] = [];
-  const note = (target: BlockerTarget, label: string, value: string) => filled.push({ target, label, value });
+  const note = (target: BlockerTarget, value: string, label = TARGET_WORDS[target]) => filled.push({ target, label, value });
 
   // The three big choices, in the order they lean on each other: the class
   // decides which species fits, the answers which background.
@@ -341,7 +342,7 @@ export function fillRound(ctx: FillContext): FillRound {
     klass = offered.classes.find((entry) => EASY_CLASSES.has(entry.id)) ?? offered.classes[0];
     if (klass) {
       patch.classId = klass.id;
-      note("class", "Class", klass.name);
+      note("class", klass.name);
     }
   }
   if (!ctx.race && wants("race") && klass) {
@@ -349,14 +350,14 @@ export function fillRound(ctx: FillContext): FillRound {
     const race = bestRace(offered.races, klass, taken);
     if (race) {
       patch.raceId = race.id;
-      note("race", "Species", race.name);
+      note("race", race.name);
     }
   }
   if (!ctx.background && wants("background")) {
     const background = bestBackground(offered.backgrounds, ctx.answers?.outside, klass);
     if (background) {
       patch.backgroundId = background.id;
-      note("background", "Background", background.name);
+      note("background", background.name);
     }
   }
   // Scores are placed by the class's order (#330) once there is a class,
@@ -378,14 +379,14 @@ export function fillRound(ctx: FillContext): FillRound {
       patch.scores = standardFor(klass, STANDARD_ARRAY);
     }
     const order = abilityPriority(klass);
-    note("scores", "Ability scores", `highest in ${ABILITY_WORDS[order[0]]}, then ${ABILITY_WORDS[order[1]]}`);
+    note("scores", `highest in ${ABILITY_WORDS[order[0]]}, then ${ABILITY_WORDS[order[1]]}`);
   }
   if (!fields.name.trim() && wants("name")) {
     const race = ctx.race ?? offered.races.find((entry) => entry.id === patch.raceId);
     if (race) {
       const name = rollHeroName({ raceId: race.id, raceName: race.name, rng: ctx.rng });
       patch.name = name;
-      note("name", "Name", name);
+      note("name", name);
     }
   }
   // Everything else waits for the round after the big three exist, so it
@@ -407,7 +408,7 @@ export function fillRound(ctx: FillContext): FillRound {
     if (added.length) {
       patch.backgroundSkills = next;
       added.forEach((skill) => proficient.add(skill));
-      note("backgroundSkills", "Background skills", added.map(skillName).join(", "));
+      note("backgroundSkills", added.map(skillName).join(", "));
     }
   }
 
@@ -428,7 +429,7 @@ export function fillRound(ctx: FillContext): FillRound {
     }
     if (added.length) {
       patch.bonusLanguages = next;
-      note("languages", "Languages", added.join(", "));
+      note("languages", added.join(", "));
     }
   }
   if (race.asiChoice && wants("racialAsi")) {
@@ -439,7 +440,7 @@ export function fillRound(ctx: FillContext): FillRound {
     const { next, added } = fillSlots(fields.racialAsi, choice.count, candidates);
     if (added.length) {
       patch.racialAsi = next as Array<Ability | "">;
-      note("racialAsi", "Species bonus", added.map((ability) => ABILITY_WORDS[ability as Ability]).join(", "));
+      note("racialAsi", added.map((ability) => ABILITY_WORDS[ability as Ability]).join(", "));
     }
   }
   if (race.skillChoice && wants("racialSkills")) {
@@ -447,14 +448,14 @@ export function fillRound(ctx: FillContext): FillRound {
     if (added.length) {
       patch.racialSkills = next;
       added.forEach((skill) => proficient.add(skill));
-      note("racialSkills", "Species skills", added.map(skillName).join(", "));
+      note("racialSkills", added.map(skillName).join(", "));
     }
   }
   if (race.toolChoice && !fields.racialTool && wants("racialTool")) {
     const pick = race.toolChoice.from.find((tool) => !tools.has(textKey(tool)));
     if (pick) {
       patch.racialTool = pick;
-      note("racialTool", "Species tool", pick);
+      note("racialTool", pick);
     }
   }
   if (race.cantripChoice && !fields.racialCantrip && wants("racialCantrip")) {
@@ -463,20 +464,20 @@ export function fillRound(ctx: FillContext): FillRound {
       .find((spell) => !known.has(textKey(spell.name)));
     if (pick) {
       patch.racialCantrip = pick.name;
-      note("racialCantrip", "Species cantrip", pick.name);
+      note("racialCantrip", pick.name);
     }
   }
   if (takesDraconicAncestry(race.id) && !findDraconicAncestry(fields.racialAncestry) && wants("ancestry")) {
     const pick = DRACONIC_ANCESTRIES[0];
     patch.racialAncestry = pick.id;
-    note("ancestry", "Dragon ancestry", pick.dragon);
+    note("ancestry", pick.dragon);
   }
   const racialFeats = racialFeatCount(race.id);
   if (racialFeats > fields.feats.length && wants("racialFeat")) {
     const pick = PLAIN_FEATS.find((feat) => !has(fields.feats, feat) && authoredFeatDesc(feat));
     if (pick) {
       patch.feats = [...fields.feats, pick];
-      note("racialFeat", "Species feat", pick);
+      note("racialFeat", pick);
     }
   }
   const repeats = repeatedGrants(background.skills, race.skills).length;
@@ -485,7 +486,7 @@ export function fillRound(ctx: FillContext): FillRound {
     if (added.length) {
       patch.repeatSkills = next;
       added.forEach((skill) => proficient.add(skill));
-      note("repeatSkills", "Replacement skill", added.map(skillName).join(", "));
+      note("repeatSkills", added.map(skillName).join(", "));
     }
   }
 
@@ -505,7 +506,7 @@ export function fillRound(ctx: FillContext): FillRound {
     if (added.length) {
       patch.chosenSkills = next;
       added.forEach((skill) => proficient.add(skill));
-      note("classSkills", "Class skills", added.map(skillName).join(", "));
+      note("classSkills", added.map(skillName).join(", "));
     }
   }
   if (wants("tools")) {
@@ -524,7 +525,7 @@ export function fillRound(ctx: FillContext): FillRound {
     });
     if (added.length) {
       patch.toolPicks = picks;
-      note("tools", "Tools", added.join(", "));
+      note("tools", added.join(", "));
     }
   }
   const pickLevel = subclassLevelFor(klass.id);
@@ -532,7 +533,7 @@ export function fillRound(ctx: FillContext): FillRound {
     const pick = (ctx.subclasses ?? []).find(Boolean) ?? subclassNamesFor(klass.id)[0];
     if (pick) {
       patch.subclass = pick;
-      note("subclass", "Subclass", pick);
+      note("subclass", pick);
     }
   }
   // What the subclass's training leaves open (a Lore bard's three skills).
@@ -550,7 +551,7 @@ export function fillRound(ctx: FillContext): FillRound {
     }
     if (added.length) {
       patch.featChoices = featChoices;
-      note("subclass", "Subclass training", added.join(", "));
+      note("subclass", added.join(", "), "Subclass training");
     }
   }
   if (derived.styleSlots > fields.stylePicks.length && wants("styles")) {
@@ -561,7 +562,7 @@ export function fillRound(ctx: FillContext): FillRound {
     const add = candidates.slice(0, derived.styleSlots - fields.stylePicks.length);
     if (add.length) {
       patch.stylePicks = [...fields.stylePicks, ...add];
-      note("styles", "Fighting style", add.map((id) => FIGHTING_STYLES.find((style) => style.id === id)?.name ?? id).join(", "));
+      note("styles", add.map((id) => FIGHTING_STYLES.find((style) => style.id === id)?.name ?? id).join(", "));
     }
   }
   const expertiseSlots = expertiseSlotsFor(klass.id, derived.effectiveLevel);
@@ -571,7 +572,7 @@ export function fillRound(ctx: FillContext): FillRound {
     const add = candidates.slice(0, expertiseSlots - expertiseHeld.length);
     if (add.length) {
       patch.expertisePicks = [...expertiseHeld, ...add];
-      note("expertise", "Expertise", add.map(skillName).join(", "));
+      note("expertise", add.map(skillName).join(", "));
     }
   }
   if (wants("options")) {
@@ -586,7 +587,7 @@ export function fillRound(ctx: FillContext): FillRound {
     }
     if (added.length) {
       patch.optionPicks = picks;
-      note("options", "Class options", added.join(", "));
+      note("options", added.join(", "));
     }
   }
 
@@ -609,7 +610,7 @@ export function fillRound(ctx: FillContext): FillRound {
       if (words.length) {
         for (let index = 0; index < next.length; index += 1) next[index] = next[index] ?? null;
         patch.asiChoices = next;
-        note("asi", "Ability score improvement", words.join("; "));
+        note("asi", words.join("; "));
       }
     }
   }
@@ -620,7 +621,7 @@ export function fillRound(ctx: FillContext): FillRound {
     const spellPatch = fillSpells(ctx);
     if (spellPatch) {
       Object.assign(patch, spellPatch.patch);
-      note("spells", "Spells", spellPatch.words);
+      note("spells", spellPatch.words);
     }
   }
   return { patch, filled };

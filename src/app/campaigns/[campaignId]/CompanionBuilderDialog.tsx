@@ -237,6 +237,9 @@ export function CompanionBuilderDialog({
             // nothing; one changed from the library is not.
             draftKey={tweaking ? undefined : builderDraftKey("companion", campaignId)}
             submitLabel="Add companion"
+            // The quick companion: "Help me build" asks what the party
+            // needs, and fills a legal ally at the table's level.
+            quizVoice="party"
             onSubmit={submit}
             busy={busy}
             error={error}
