@@ -1,6 +1,7 @@
 import { describeContentEntry } from "@/lib/help";
 import { DAMAGE_TYPE_BLURBS, WEAPON_PROPERTY_BLURBS } from "@/lib/help/terms";
-import { magicItemBonus, armorNamed, type SrdArmor } from "@/lib/srd/armor";
+import { armorNamed, type SrdArmor } from "@/lib/srd/armor";
+import { magicItemBonus } from "@/lib/srd/item-row";
 import { SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms } from "@/lib/srd/name-forms";

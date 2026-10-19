@@ -3,7 +3,9 @@ import { matchArmor } from "@/lib/srd/armor";
 import { matchWeapon } from "@/lib/srd/weapons";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
-import { hasItemTag, itemRow, itemTags, type TaggedItem } from "@/lib/srd/item-tags";
+import { hasItemTag, itemRow, itemTags, listedRow, type TaggedItem } from "@/lib/srd/item-tags";
+import { magicItemNamed } from "@/lib/srd/magic-items";
+import { itemNames, lineNamed, magicItemBonus, srdNameWithBonus } from "@/lib/srd/item-row";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 
 // Pure consumable knowledge for the use_item tool: healing potion tiers,
@@ -25,50 +27,56 @@ export function consumableEffect(item: TaggedItem): ConsumableEffect {
   return { kind: "healing", expression: itemRow(item)?.potion?.heals ?? "2d4+2" };
 }
 
-// Finds a carried item by fuzzy name (containment either way).
+// Containment either way, the loose rule both lookups below share.
+function looselyNames(name: string, wanted: string): boolean {
+  const key = textKey(name);
+  return key.includes(wanted) || wanted.includes(key);
+}
+
+// Token fallback so "healing potion" still finds "Potion of Healing".
+function namesEveryWord(name: string, wanted: string): boolean {
+  const key = textKey(name);
+  const tokens = wanted.split(" ").filter((token) => token.length > 2);
+  return tokens.length > 0 && tokens.every((token) => key.includes(token));
+}
+
+// Finds a carried item by fuzzy name: the line the name picks out
+// (src/lib/srd/item-row.ts lineNamed), else the loose rules over its own
+// and its srdName alike, so "healing potion" finds the "Pozione di
+// guarigione" the DM named Potion of Healing.
 export function findCarriedItem(equipment: EquipmentItem[], term: string): EquipmentItem | null {
   const wanted = textKey(term);
   if (!wanted) {
     return null;
   }
   return (
-    equipment.find((item) => textKey(item.name) === wanted) ??
-    equipment.find(
-      (item) =>
-        textKey(item.name).includes(wanted) || wanted.includes(textKey(item.name)),
-    ) ??
-    // Token fallback so "healing potion" still finds "Potion of Healing".
-    equipment.find((item) => {
-      const name = textKey(item.name);
-      const tokens = wanted.split(" ").filter((token) => token.length > 2);
-      return tokens.length > 0 && tokens.every((token) => name.includes(token));
-    }) ??
+    equipment[lineNamed(equipment, term)] ??
+    equipment.find((item) => itemNames(item).some((name) => looselyNames(name, wanted))) ??
+    equipment.find((item) => itemNames(item).some((name) => namesEveryWord(name, wanted))) ??
     null
   );
 }
 
-// Every carried item a use_item name could mean: the exact name alone when
-// one matches, else every item the fuzzy rules above would take. More than
-// one means the name is ambiguous (src/lib/dm/item-use.ts refuses to spend a
-// charged item on a guess).
+// Every carried item a use_item name could mean: the items by that very
+// name, else those whose srdNameWithBonus it is, else every item the fuzzy
+// rules above would take. More than one means the name is ambiguous
+// (src/lib/dm/item-use.ts refuses to spend a charged item on a guess).
 export function carriedItemsMatching(equipment: EquipmentItem[], term: string): EquipmentItem[] {
   const wanted = textKey(term);
   if (!wanted) {
     return [];
   }
-  const exact = equipment.filter((item) => textKey(item.name) === wanted);
-  if (exact.length) {
-    return exact;
+  const own = equipment.filter((item) => textKey(item.name) === wanted);
+  if (own.length) {
+    return own;
   }
-  const tokens = wanted.split(" ").filter((token) => token.length > 2);
-  return equipment.filter((item) => {
-    const name = textKey(item.name);
-    return (
-      name.includes(wanted) ||
-      wanted.includes(name) ||
-      (tokens.length > 0 && tokens.every((token) => name.includes(token)))
-    );
-  });
+  const listed = equipment.filter((item) => textKey(srdNameWithBonus(item)) === wanted);
+  if (listed.length) {
+    return listed;
+  }
+  return equipment.filter((item) =>
+    itemNames(item).some((name) => looselyNames(name, wanted) || namesEveryWord(name, wanted)),
+  );
 }
 
 // Why use_item would not use this item up, or null when it is a
@@ -117,19 +125,34 @@ export function notCarried(who: string, carried: string[], name: string, known: 
       };
 }
 
-// The row a tool names an item by (srdName), as the row spells it, or why it
-// cannot: a name no list holds is asked again rather than stored to mean
-// nothing.
+// The row a tool names an item by (srdName), as the lists spell it, or why
+// it cannot. Only a name a list holds is taken (src/lib/srd/item-tags.ts
+// listedRow, or a magic item's own name): a name no list holds, or one a
+// finder would only guess at ("Sword" is no Greatsword, "Weapon" no
+// weapon), is asked again rather than stored to mean something else. A
+// bonus is asked for in the item's name, the one place the engines read it
+// (src/lib/srd/item-row.ts magicItemBonus): the row stored for "Longsword
+// +1" would be the Longsword, and the +1 lost. A row the lists name with a
+// bonus ("Weapon +1", which a bare "Weapon" finds) is a family of items,
+// not one.
 export function srdNameFor(srdName: string | undefined, what: string): { srdName?: string } | ToolError {
   const listed = srdName?.trim();
   if (!listed) {
     return {};
   }
-  const row = itemRow({ name: listed });
-  if (!row) {
-    return { error: `${what}: no SRD or pack item is called "${listed}". Send srdName as the item lists name it in English, or leave it out and name what it is in tags. Nothing changed.`, retry: true };
+  const bonus = magicItemBonus(listed);
+  if (bonus) {
+    return { error: `${what}: srdName "${listed}" carries a bonus, which belongs in name. Keep "+${bonus}" in name and send srdName as the item without it ("Longsword" for a +1 longsword). Nothing changed.`, retry: true };
   }
-  return { srdName: row.name };
+  const row = magicItemNamed(listed)?.name ?? listedRow(listed)?.name;
+  if (!row) {
+    const nearest = itemRow({ name: listed })?.name;
+    return { error: `${what}: no SRD or pack item is called "${listed}"${nearest ? ` (the nearest is "${nearest}")` : ""}. Send srdName exactly as the item lists name it in English, or leave it out and name what it is in tags. Nothing changed.`, retry: true };
+  }
+  if (magicItemBonus(row)) {
+    return { error: `${what}: srdName "${listed}" is the lists' "${row}", a family of +1 to +3 items rather than one item. Send srdName as the item it is ("Longsword" for a +1 longsword) with the bonus in name, or leave it out and name what it is in tags. Nothing changed.`, retry: true };
+  }
+  return { srdName: row };
 }
 
 // What a tool says a granted item is: the tags it sent, else a spell scroll

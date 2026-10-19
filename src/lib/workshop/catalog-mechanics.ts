@@ -1,6 +1,7 @@
 import { getEntryDetail, spellMechanicsFor } from "@/lib/content";
 import { packRaceOptions } from "@/lib/content/race-options";
-import { armorInside, armorNamed, magicItemBonus, SRD_ARMOR, type SrdArmor } from "@/lib/srd/armor";
+import { armorInside, armorNamed, SRD_ARMOR, type SrdArmor } from "@/lib/srd/armor";
+import { magicItemBonus } from "@/lib/srd/item-row";
 import { checkRidersNamed } from "@/lib/srd/item-check-riders";
 import { itemSpellsOf } from "@/lib/srd/item-spells";
 import { gearBaseName, gearDefNamed } from "@/lib/srd/magic-gear";

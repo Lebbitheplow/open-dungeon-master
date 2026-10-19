@@ -12,11 +12,11 @@ const {
   computeArmorClass,
   defaultArmor,
   isArmorProficient,
-  magicItemBonus,
   armorNamed,
   suggestArmor,
   unarmoredFormulaFor,
 } = await import("../src/lib/srd/armor.ts");
+const { magicItemBonus } = await import("../src/lib/srd/item-row.ts");
 
 let passed = 0;
 function test(name, fn) {

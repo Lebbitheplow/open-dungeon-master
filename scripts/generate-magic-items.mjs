@@ -13,7 +13,7 @@
 // the Bracers-of-Defense unarmored bonus, ability-setting items, and damage
 // resistances). Everything else stays narrative, exactly like the feature
 // long tail. Weapon and armor `+N` are handled by the item NAME elsewhere
-// (srd/armor.ts magicItemBonus), so the flat-AC effect deliberately skips
+// (srd/item-row.ts magicItemBonus), so the flat-AC effect deliberately skips
 // armor and shield categories to avoid double-counting.
 //
 // An effect is read from ONE SENTENCE, and only from a sentence that gives

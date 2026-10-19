@@ -2,7 +2,7 @@ import { gearDefFor, gearDefOfRow, gearRidersActive } from "@/lib/srd/magic-gear
 import { speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms } from "@/lib/srd/name-forms";
-import { rowName, type RowItem } from "@/lib/srd/item-row";
+import { magicItemBonus, rowName, type RowItem } from "@/lib/srd/item-row";
 
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
@@ -92,14 +92,6 @@ for (const pass of ["names", "spellings"] as const) {
       }
     }
   }
-}
-
-// The bonus a magic item's name declares: "+1 Longsword", "Plate +2",
-// "Shield, +3". Shared with the weapon engine (attack-logic.ts) because
-// both sides read the same naming convention off the same equipment list.
-export function magicItemBonus(name: string): number {
-  const match = /(?:^|[\s,(])\+([123])(?![0-9])/.exec(name);
-  return match ? Number(match[1]) : 0;
 }
 
 // Finds the armor a free-text item name points at. The armor name must be

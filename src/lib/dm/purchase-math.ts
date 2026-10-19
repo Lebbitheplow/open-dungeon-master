@@ -10,7 +10,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
-import { textKey } from "@/lib/language/text-logic";
+import { lineNamed } from "@/lib/srd/item-row";
 
 // A purchase or a sale outside a shop. The table prices it, not the model:
 // the content pack's list price (or the worth the item was given) is what a
@@ -23,7 +23,7 @@ export function computePurchase(
   args: { item: string; price: number; qty: number; action: "buy" | "sell" },
 ): Outcome | ToolError {
   // What is sold is the carried line, with what it is (item-tags.ts).
-  const item = (args.action === "sell" ? sheet.equipment.find((entry) => textKey(entry.name) === textKey(args.item)) : undefined) ?? { name: args.item };
+  const item = (args.action === "sell" ? sheet.equipment[lineNamed(sheet.equipment, args.item)] : undefined) ?? { name: args.item };
   const listCp = listPriceCp(item);
   const eachCp =
     listCp === null
@@ -63,7 +63,7 @@ export function computePurchase(
   // A sale pays for what changes hands, so more than is held is no sale.
   if (removal.removed < args.qty) {
     return {
-      error: `${sheet.name} carries ${removal.removed} of ${args.item} and cannot sell ${args.qty}; sell ${removal.removed} or fewer.`,
+      error: `${sheet.name} carries ${removal.removed} of ${removal.item.name} and cannot sell ${args.qty}; sell ${removal.removed} or fewer.`,
       retry: true,
     };
   }
@@ -73,7 +73,7 @@ export function computePurchase(
     patch: { gold: received.gold, copper: received.copper, equipment: removal.equipment },
     result: {
       ok: true,
-      sold: args.item,
+      sold: removal.item.name,
       qty: removal.removed,
       received: formatCopper(totalCp),
       priced,

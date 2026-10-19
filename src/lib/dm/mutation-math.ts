@@ -3,6 +3,7 @@
 
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "../language/text-logic.ts";
+import { lineNamed } from "../srd/item-row.ts";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 
 export type SlotState = { max: number; used: number };
@@ -118,11 +119,11 @@ export function spendSlotMath(slot: SlotState | undefined | null): SlotState | n
 }
 
 // Remove qty of an item; partial removal adjusts, zero removes the row.
-// Returns null when the item is absent.
+// Returns null when the item is absent. The row is the one the name picks
+// out (src/lib/srd/item-row.ts lineNamed): its own name, else its
+// srdNameWithBonus.
 export function removeItemMath<Row extends EquipmentRow>(equipment: Row[], name: string, qty: number) {
-  const index = equipment.findIndex(
-    (item) => textKey(item.name) === textKey(name),
-  );
+  const index = lineNamed(equipment, name);
   if (index < 0) {
     return null;
   }

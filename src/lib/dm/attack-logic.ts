@@ -5,7 +5,7 @@ import {
   weaponNamed,
   type SrdWeapon,
 } from "@/lib/srd/weapons";
-import { magicItemBonus } from "@/lib/srd/armor";
+import { itemNames, lineNamed, magicItemBonus } from "@/lib/srd/item-row";
 import {
   gearProfileParts,
   isMagicWeaponName,
@@ -133,11 +133,12 @@ export function resolveAttackWeapon(
       return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
     }
     // The exact name wins over a name that merely contains it, so a
-    // "Longsword" asked for beside a "Longsword +1" is the plain one.
-    const wanted = textKey(arg);
+    // "Longsword" asked for beside a "Longsword +1" is the plain one. The
+    // line the name picks out comes first (src/lib/srd/item-row.ts
+    // lineNamed): "Longsword" swings the "Spada lunga" the DM named by it.
     const carriedItem =
-      equipment.find((item) => textKey(item.name) === wanted) ??
-      equipment.find((item) => itemMatchesTerm(item.name, arg));
+      equipment[lineNamed(equipment, arg)] ??
+      equipment.find((item) => itemNames(item).some((name) => itemMatchesTerm(name, arg)));
     // A carried homebrew weapon carries its own block (src/lib/homebrew/
     // gear.ts) and wins over a name that happens to resemble an SRD one. A
     // carried magic weapon swings as its base weapon (src/lib/dm/

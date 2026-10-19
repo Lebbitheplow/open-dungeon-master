@@ -85,6 +85,13 @@ function rowNamed(name: string): ItemRow | null {
   return BY_KEY.get(rowKey(name)) ?? BY_KEY.get(rowKey(name.replace(/\s*\([^)]*\)\s*$/, ""))) ?? null;
 }
 
+// The row a name is exactly, as the lists or the SRD tables spell it (their
+// plurals, their aliases, "Plate Armor" for Plate), never a weapon or armor
+// guessed inside it: what an srdName may name (src/lib/dm/item-logic.ts).
+export function listedRow(name: string): ItemRow | null {
+  return rowNamed(catalogName(name) ?? name) ?? rowNamed(name);
+}
+
 // The row an item names: by its slug, else by its row's name
 // (src/lib/srd/item-row.ts) as the tables spell it, else by the weapon,
 // armor or poison that name is ("+1 Longsword"). Null for a name no table
