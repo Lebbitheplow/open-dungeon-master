@@ -2,6 +2,8 @@ import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { restoreToAtlas } from "@/lib/db/atlas-edit";
 import { worldView } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
+import { partyAtlasChanged } from "@/lib/db/party-atlas";
+import { getWorldDoc } from "@/lib/db/world-forge";
 import { recordsChanged } from "@/lib/workshop/record-events";
 
 export const runtime = "nodejs";
@@ -22,11 +24,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if (!token) {
     return Response.json({ error: "Name the delete to undo." }, { status: 400 });
   }
+  const before = getWorldDoc(campaignId);
   const result = restoreToAtlas(campaignId, token);
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: result.status });
   }
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
+  partyAtlasChanged(campaignId, before);
   recordsChanged(campaignId, "world");
   return Response.json({ ...result, ...worldView(campaignId) });
 }

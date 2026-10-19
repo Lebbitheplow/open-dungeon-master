@@ -1,3 +1,4 @@
+import { keepPartyFields } from "@/lib/worldforge/party-atlas";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createNpcFromDraft, deleteNpc, getNpcById, listNpcs, renameNpc, setNpcPlace, setNpcPortrait, updateNpcFromDraft } from "@/lib/db/npcs";
 import { getLocation, getLocationByName, insertKnownLocation, listLocations, renameLocation, setLocationLayout } from "@/lib/db/locations";
@@ -114,6 +115,9 @@ export function patchWorldDoc(campaignId: string, patch: Record<string, unknown>
   // A map's Region role and a pin's binding are set by the Region steps
   // alone (src/lib/db/atlas-region.ts).
   doc = keepRegionFields(before, doc);
+  // And whether a map is on the party's Atlas is shown only by its own
+  // reviewed step (src/lib/db/party-atlas.ts); a save may still hide one.
+  doc = keepPartyFields(before, doc);
   saveWorldDoc(campaignId, doc);
   return { doc, conflicts, before };
 }

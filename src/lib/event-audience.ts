@@ -116,6 +116,10 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   facts_updated: TABLE,
   quests_updated: TABLE,
   lore_updated: TABLE,
+  // The party's Atlas changed (src/lib/db/party-atlas.ts): sent only when
+  // what players see did, and carrying nothing, so each seat asks for its
+  // own view.
+  party_atlas_updated: TABLE,
   factions_updated: TABLE,
   // The table's WorldForge changed (src/lib/worldforge/model.ts). The ping
   // carries nothing, but the document is the DM's, so only DM seats refetch.

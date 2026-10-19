@@ -707,6 +707,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "world_updated":
         case "records_changed":
+        case "party_atlas_updated":
           next.worldVersion = state.worldVersion + 1;
           return next;
         case "lore_updated":
@@ -1120,6 +1121,9 @@ const EPHEMERAL_EVENTS = [
   // the world again.
   "world_updated",
   "records_changed",
+  // The maps shown to the party changed. Contentless, to every seat: the
+  // party's Atlas in the Map tab asks for its own view.
+  "party_atlas_updated",
   // Lore the table reads changed (a secret revealed to the party).
   // Contentless, to every seat: each lore list asks for its own view.
   "lore_updated",
