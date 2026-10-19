@@ -1583,6 +1583,7 @@
     "lib/dm/summon-store.ts#[a-z]": [["key",1,"slug from an SRD summon form"]],
     "lib/dm/summon-store.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/summon-store.ts#toLowerCase": [["key",2,"slug from an SRD summon form; condition label (engine vocabulary)"]],
+    "lib/dm/table-wait.ts#LIKE": [["key",1,"out-of-character marker"]],
     "lib/dm/timeline-logic.ts#str-eq": [["key",4,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/token-rules.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/token-rules.ts#str-key": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],

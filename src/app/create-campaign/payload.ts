@@ -35,6 +35,8 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
     multiclassingEnabled,
     midGameJoinOpen,
     holdSubmissions,
+    waitForTable,
+    waitForTableSeconds,
     narrationGuard,
     safety,
     gm,
@@ -82,6 +84,10 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       multiclassingEnabled,
       midGameJoinOpen,
       holdSubmissions,
+      // A table of one has nobody to wait for, and a person in the DM seat
+      // reads every post as it lands.
+      waitForTable: aiNarrates && !solo && waitForTable,
+      waitForTableSeconds,
       narrationGuard: aiNarrates && narrationGuard,
       safety,
       gm,

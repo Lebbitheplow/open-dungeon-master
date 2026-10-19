@@ -48,6 +48,8 @@ const DRAFT_KEYS = [
   "vitalsApprovals",
   "midGameJoinOpen",
   "holdSubmissions",
+  "waitForTable",
+  "waitForTableSeconds",
   "narrationGuard",
   "safety",
   "gm",

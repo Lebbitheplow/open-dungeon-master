@@ -101,7 +101,7 @@ export function ExperienceStep(props: StepProps & { active: boolean; groups: Gro
           summary={playersSummary(draft, gates)}
         >
           <MultiCharacterField draft={draft} patch={props.patch} />
-          <SheetRows {...rows} keys={["midGameJoinOpen", "holdSubmissions", "inventoryApprovals", "vitalsApprovals"]} />
+          <SheetRows {...rows} keys={["midGameJoinOpen", "holdSubmissions", "waitForTable", "inventoryApprovals", "vitalsApprovals"]} />
         </DetailGroup>
         <DetailGroup {...groupProps(groups, "board")} title="The battle board" glyph="tab-battle" summary={boardSummary(draft)}>
           <SheetRows {...rows} keys={["boardDrawing", "enemyIntent"]} />
