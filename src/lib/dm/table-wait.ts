@@ -170,6 +170,13 @@ function clearTimer(entry: WaitMemory) {
 // means "not back yet" rather than "everyone answered": holdUntilDeadline
 // keeps such a table waiting for its clock.
 export function settleTableWait(campaignId: string, now = Date.now(), holdUntilDeadline = false): boolean {
+  // A turn is already requested or running (a released spotlight's answers,
+  // say): it reads everything so far, and the gather opens again only once
+  // its narration lands, when turn.ts settles the table.
+  if (getDmStatus(campaignId) !== "idle") {
+    publishView(campaignId, null);
+    return false;
+  }
   const decided = decisionFor(campaignId, now);
   const decision =
     decided && decided.fire && holdUntilDeadline && decided.deadline !== null && now < decided.deadline
@@ -224,6 +231,9 @@ export function passTable(campaignId: string, userId: string): PassResult {
   }
   if (campaign.floor.mode !== "open") {
     return { ok: false, status: 409, error: "Only an open table waits for passes." };
+  }
+  if (getDmStatus(campaignId) !== "idle") {
+    return { ok: false, status: 409, error: "The DM is answering now. Pass after the narration if you have nothing to add." };
   }
   const decision = decisionFor(campaignId, Date.now());
   if (!decision) {

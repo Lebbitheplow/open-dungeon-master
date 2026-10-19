@@ -21,9 +21,10 @@ const { createCampaign, setCampaignStatus, setFloor, allocateSeq, joinByInviteCo
 const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { subscribe } = await import("../src/lib/events.ts");
 const { normalizeGameSettings } = await import("../src/lib/schemas/game-settings.ts");
-const { decideTableWait, clampWaitSeconds, formatLeft, TABLE_WAIT_DEFAULT_SECONDS } = await import("../src/lib/dm/table-wait-logic.ts");
+const { decideTableWait, clampWaitSeconds, formatLeft, holdsPostForTable, TABLE_WAIT_DEFAULT_SECONDS } = await import("../src/lib/dm/table-wait-logic.ts");
 const { settleTableWait, passTable, currentTableWait, tableWaitTurnStarted, waitsForTable, tableWaitHasAnswers } = await import("../src/lib/dm/table-wait.ts");
 const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
+const { setDmStatus } = await import("../src/lib/dm/status.ts");
 const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
 const { createPlayerWebhook, playerWebhookState, reserveWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
 
@@ -99,6 +100,16 @@ await test("only present players are waited on: a player alone at the table is a
   const d = decideTableWait({ ...base, present: [A], posts: [{ ...A, at: T0 }] });
   assert.equal(d.fire, true);
   assert.deepEqual(d.view.waitingOn, []);
+});
+
+await test("only an open-floor post gathers: a spotlight answer, table talk and a first action never wait", () => {
+  const post = { floorBefore: "open", kind: "do", isFirstAction: false, waits: true };
+  assert.equal(holdsPostForTable(post), true);
+  assert.equal(holdsPostForTable({ ...post, floorBefore: "spotlight" }), false, "a spotlight takes precedence");
+  assert.equal(holdsPostForTable({ ...post, floorBefore: "initiative" }), false);
+  assert.equal(holdsPostForTable({ ...post, kind: "ooc" }), false);
+  assert.equal(holdsPostForTable({ ...post, isFirstAction: true }), false);
+  assert.equal(holdsPostForTable({ ...post, waits: false }), false);
 });
 
 await test("the banner counts down in seconds, then minutes", () => {
@@ -193,6 +204,39 @@ try {
     setFloor(campaign.id, { mode: "open" });
   });
 
+  await test("a spotlight answered by its named players does not then wait on the rest of the table", () => {
+    // The lead spotlights Arden alone; Kalanis is at the table too.
+    const leaveAgain = subscribe(campaign.id, () => {}, bob.id);
+    tableWaitTurnStarted(campaign.id, db.prepare(`SELECT next_seq - 1 AS seq FROM campaigns WHERE id = ?`).get(campaign.id).seq);
+    narrate();
+    setFloor(campaign.id, { mode: "spotlight", userIds: [alice.id], prompt: "Arden, the guard asks your name.", respondedUserIds: [] });
+    assert.equal(currentTableWait(campaign.id), null, "no banner while the spotlight runs");
+    assert.equal(holdsPostForTable({ floorBefore: "spotlight", kind: "say", isFirstAction: false, waits: waitsForTable(getCampaignById(campaign.id)) }), false,
+      "Arden's answer is a spotlight answer: the route wakes the DM with it rather than gathering");
+    post(alice.id, "wait-sheet-a", "\"Arden of the Vale.\"");
+    // The last answer releases the spotlight to the open floor and requests
+    // the DM's turn, as today (requestDmTurn marks the DM thinking).
+    setFloor(campaign.id, { mode: "open" });
+    setDmStatus(campaign.id, "thinking");
+    // Kalanis posting, or passing, before that turn starts reading does not
+    // open a second wait.
+    post(bob.id, "wait-sheet-b", "I glance at the guard's spear.");
+    assert.equal(settleTableWait(campaign.id), false);
+    assert.equal(globalThis.__odmTableWait.get(campaign.id).timer, undefined, "no gather timer was armed for the spotlight's answer");
+    assert.equal(currentTableWait(campaign.id), null);
+    assert.equal(passTable(campaign.id, bob.id).ok, false, "no pass while the DM is answering");
+    // The coalesced turn reads both and narrates; the gather opens fresh.
+    tableWaitTurnStarted(campaign.id, db.prepare(`SELECT next_seq - 1 AS seq FROM campaigns WHERE id = ?`).get(campaign.id).seq);
+    setDmStatus(campaign.id, "idle");
+    assert.equal(tableWaitHasAnswers(campaign.id), false, "nothing left over for a second wait");
+    narrate();
+    const fresh = currentTableWait(campaign.id);
+    assert.deepEqual(fresh.answered, [], "the next narration starts a fresh beat");
+    assert.equal(fresh.deadline, null);
+    assert.deepEqual(fresh.waitingOn.map((seat) => seat.name), ["Arden", "Kalanis"]);
+    leaveAgain();
+  });
+
   await test("an agent's webhook keeps the narration opportunity live while the table gathers, until it passes", () => {
     const grant = createConnectionGrant({ userId: bob.id, name: "Muse", scopes: ["read", "play"], campaignId: campaign.id }).grant;
     const sub = createPlayerWebhook(grant, { campaignId: campaign.id, characterId: "wait-sheet-b", url: "https://receiver.example/odm" });
@@ -222,7 +266,7 @@ try {
 await test("the routes hold open-floor posts, offer Pass, and re-arm after a restart", () => {
   const read = (file) => fs.readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
   const actions = read("app/api/campaigns/[campaignId]/actions/route.ts");
-  assert.match(actions, /floor\.mode === "open" && waitsForTable\(campaign\)\) \{\s*\/\/[^]*?if \(settleTableWait\(campaignId\)\) \{\s*requestDmTurn\(campaignId\);/);
+  assert.match(actions, /holdsPostForTable\(\{ floorBefore: floor\.mode, kind, isFirstAction, waits: waitsForTable\(campaign\) \}\)\) \{\s*\/\/[^]*?if \(settleTableWait\(campaignId\)\) \{\s*requestDmTurn\(campaignId\);/);
   const pass = read("app/api/campaigns/[campaignId]/pass/route.ts");
   assert.match(pass, /export async function POST/);
   assert.match(pass, /requireVoice/);

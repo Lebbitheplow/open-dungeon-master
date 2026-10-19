@@ -48,6 +48,21 @@ export type TableWaitDecision = {
   deadline: number | null;
 };
 
+// Whether a post joins the gathering beat instead of waking the DM. Only an
+// open floor gathers. A spotlight takes precedence: its named players answer
+// it, the last answer releases it and fires the one coalesced turn as it
+// always has, and nothing then waits a second time on the rest of the table.
+// The gather opens again only after the next narration on an open floor.
+// Table talk, a first action and the setting being off never hold.
+export function holdsPostForTable(input: {
+  floorBefore: "open" | "spotlight" | "initiative" | "hold";
+  kind: "do" | "say" | "ooc";
+  isFirstAction: boolean;
+  waits: boolean;
+}): boolean {
+  return input.waits && input.floorBefore === "open" && input.kind !== "ooc" && !input.isFirstAction;
+}
+
 export function clampWaitSeconds(seconds: unknown): number {
   const value = Number(seconds);
   if (!Number.isFinite(value)) {

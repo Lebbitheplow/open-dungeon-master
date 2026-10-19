@@ -19,6 +19,7 @@ import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { floorAfterRelease } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
+import { holdsPostForTable } from "@/lib/dm/table-wait-logic";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { claimNarrationSeq } from "@/lib/dm/narration-slot";
@@ -290,10 +291,12 @@ export async function POST(
         characterId: sheet.id,
         seq,
       });
-    } else if (kind !== "ooc" && !isFirstAction && floor.mode === "open" && waitsForTable(campaign)) {
+    } else if (holdsPostForTable({ floorBefore: floor.mode, kind, isFirstAction, waits: waitsForTable(campaign) })) {
       // Wait for the table (src/lib/dm/table-wait.ts): an open-floor post
       // joins the gathering beat, and the one turn that answers it runs when
       // the last present player has acted or passed, or the time runs out.
+      // A spotlight answer never lands here: floor is the floor before this
+      // post, so the answer that releases a spotlight wakes the DM below.
       if (settleTableWait(campaignId)) {
         requestDmTurn(campaignId);
       }
