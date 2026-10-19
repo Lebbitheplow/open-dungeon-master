@@ -15,12 +15,13 @@
 //
 // Must not import encounter-tools, map-tools or mutations (they reach here).
 
-import type { Campaign } from "@/lib/db/campaigns";
+import { campaignLanguage, type Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getActiveBoard } from "@/lib/db/encounters";
 import type { SpellZone } from "@/lib/battlemap/zones";
 import { zoneKey, zoneOwnKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
-import { parseSectionName, sectionCells, sectionOf } from "@/lib/battlemap/zones-walls";
+import { sectionCells, sectionOf, wallNamed } from "@/lib/battlemap/zones-walls";
+import { nameTerms } from "@/lib/language/language";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
@@ -33,14 +34,14 @@ export type WallSection = {
   vulnerable: string;
 };
 
-// The standing wall section a damage_object name points at, a refusal for
-// a sectioned wall named without a standing section, or null for any other
-// object.
-export function wallSectionFor(campaignId: string, name: string): WallSection | ToolError | null {
+// The standing wall section a damage_object name and section point at, a
+// refusal for a sectioned wall named without a standing section, or null for
+// any other object.
+export function wallSectionFor(campaignId: string, name: string, section: number | undefined): WallSection | ToolError | null {
   const encounter = getActiveBoard(campaignId);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   const standingWalls = map ? liveZones(map, encounter).filter((zone) => zoneRowFor(zone)?.sections) : [];
-  const named = parseSectionName(name, standingWalls);
+  const named = wallNamed(nameTerms(name, campaignLanguage(campaignId)), standingWalls);
   if (!named) {
     return null;
   }
@@ -51,15 +52,15 @@ export function wallSectionFor(campaignId: string, name: string): WallSection | 
   }
   const sections = row.sections;
   const standing = (zone: SpellZone) => sectionNumbers(zone, map.width, sections.feet);
-  const wall = named.section ? [...walls].reverse().find((zone) => standing(zone).includes(named.section as number)) : null;
-  if (!wall || !named.section) {
+  const wall = section ? [...walls].reverse().find((zone) => standing(zone).includes(section)) : null;
+  if (!wall || !section) {
     const listed = walls.flatMap((zone) => standing(zone)).sort((a, b) => a - b);
     return {
-      error: `Name the section of the ${walls[0].spell} to strike, "${walls[0].spell} section N" (sections are 10 feet, numbered from the end it was laid from; standing now: ${listed.join(", ") || "none"}). Nothing was rolled.`,
+      error: `Which section of the ${walls[0].spell}? Give its number in section (sections are 10 feet, numbered from the end it was laid from; standing now: ${listed.join(", ") || "none"}). Nothing was rolled.`,
       retry: true,
     };
   }
-  return { zoneId: wall.id, spell: wall.spell, section: named.section, ac: sections.ac, hp: sections.hp, vulnerable: sections.vulnerable };
+  return { zoneId: wall.id, spell: wall.spell, section, ac: sections.ac, hp: sections.hp, vulnerable: sections.vulnerable };
 }
 
 // The sections of a wall still standing (a broken one's squares are gone).

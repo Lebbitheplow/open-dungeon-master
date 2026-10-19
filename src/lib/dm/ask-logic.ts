@@ -6,7 +6,7 @@
 // read Draconic?", "how does grappling work?". Before this the only options
 // were a `do` that derailed the scene or an `ooc` the DM never answers.
 
-import { textKey } from "../language/text-logic.ts";
+import { searchWords, textKey } from "../language/text-logic.ts";
 
 export const ASK_SCOPES = ["story", "rules", "sheet"] as const;
 export type AskScope = (typeof ASK_SCOPES)[number];
@@ -217,19 +217,21 @@ export function recentTranscript(
 }
 
 // The passages of the transcript a search names: each message holding the
-// query's words, as a window around the first one found, best first. The
-// archive search finds sealed chapters and recorded scenes; the exchange in
-// progress is in neither, so the search tool reads it here (issue 250).
+// query's words (the table language's stop words aside: src/lib/language/
+// language.ts stopWordsFor, passed in because the Ask panel imports this
+// module and the stemmer's must stay off the browser), as a window around the
+// first one found, best first. The archive search finds sealed chapters and
+// recorded scenes; the exchange in progress is in neither, so the search tool
+// reads it here (issue 250).
 export function transcriptPassages(
   lines: readonly TranscriptLine[],
   query: string,
+  stopWords: ReadonlySet<string>,
   options: { limit?: number; window?: number } = {},
 ): string[] {
   const limit = options.limit ?? 3;
   const window = options.window ?? 700;
-  const words = [...new Set(textKey(query).split(" "))].filter(
-    (word) => word.length >= 3 && !STOP_WORDS.has(word),
-  );
+  const words = [...new Set(searchWords(query, stopWords))];
   if (!words.length) {
     return [];
   }
@@ -253,10 +255,3 @@ export function transcriptPassages(
     return `[recent:${line.seq}] ${line.who}: ${start > 0 ? "... " : ""}${passage}${start + window < text.length ? " ..." : ""}`;
   });
 }
-
-const STOP_WORDS = new Set([
-  "the", "and", "for", "are", "was", "were", "did", "does", "has", "have", "had", "with", "that", "this",
-  "what", "who", "whom", "why", "how", "when", "where", "which", "they", "them", "their", "there", "then",
-  "than", "you", "your", "our", "she", "her", "him", "his", "its", "not", "but", "any", "all", "can",
-  "could", "would", "should", "will", "into", "from", "about", "just", "yet", "still", "been", "being",
-]);

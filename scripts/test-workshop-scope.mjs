@@ -100,10 +100,10 @@ await test("F04: a human DM seat's own monster fights by name; a player's does n
   const out = await world.invoke("start_encounter", { enemies: [{ monster: "Bog Lurker" }] });
   assert.equal(out.ok, true, out.error);
   assert.deepEqual([world.enemies()[0].stats.maxHp, world.enemies()[0].stats.ac], [33, 14], "the DM seat's monster did not resolve");
-  await world.invoke("end_encounter", { outcome: "fled" });
+  await world.invoke("end_encounter", { outcome: "enemies_fled" });
   const theirs = await world.invoke("start_encounter", { enemies: [{ monster: "Pocket Drake" }] });
   assert.ok(!theirs.ok || world.enemies().every((enemy) => enemy.stats.maxHp !== 77), "a player's monster fought at the table");
-  if (theirs.ok) await world.invoke("end_encounter", { outcome: "fled" });
+  if (theirs.ok) await world.invoke("end_encounter", { outcome: "enemies_fled" });
 });
 
 // ---- forgetting ----

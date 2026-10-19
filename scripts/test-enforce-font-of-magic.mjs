@@ -1,5 +1,6 @@
 // Font of Magic: sorcery points into spell slots and back, through
-// use_resource with a variant (src/lib/dm/resource-tools.ts parseFontOfMagic,
+// use_resource with variant "create slot" or "convert slot" and the slot's
+// level in amount (src/lib/dm/resource-tools.ts fontOfMagicDirection,
 // computeFontOfMagic), and the long rest that takes created slots away
 // (src/lib/dm/rest-logic.ts longRestPatch).
 //
@@ -23,7 +24,6 @@ const world = await openTable();
 
 // SRD 5.1, Creating Spell Slots.
 const COST = { 1: 2, 2: 3, 3: 5, 4: 6, 5: 7 };
-const ORDINAL = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th", 6: "6th", 7: "7th", 8: "8th", 9: "9th" };
 // A sorcerer 20's own slots.
 const SLOTS_20 = { 1: [4, 0], 2: [3, 0], 3: [3, 0], 4: [3, 0], 5: [3, 0], 6: [2, 0], 7: [2, 0], 8: [1, 0], 9: [1, 0] };
 
@@ -33,16 +33,32 @@ const create = (id, level) =>
   world.invoke("use_resource", {
     characterId: id,
     resource: "Sorcery Points",
-    variant: `create a ${ORDINAL[level]}-level slot`,
+    variant: "create slot",
+    amount: level,
   });
 const convert = (id, level) =>
   world.invoke("use_resource", {
     characterId: id,
     resource: "Sorcery Points",
-    variant: `convert my ${ORDINAL[level]}-level slot into sorcery points`,
+    variant: "convert slot",
+    amount: level,
   });
 const points = (id) => world.sheet(id).resources.sorcery_points;
 const slot = (id, level) => world.sheet(id).spellcasting.slots[String(level)];
+
+await test("a variant off the list spends nothing and names the listed ones; a Metamagic option by its name is a plain spend", async () => {
+  for (const variant of ["convert to spell slot", "converti in uno slot", "convertir en emplacement", "convertir en espacio", "in einen Zauberplatz"]) {
+    const hero = sorcerer(5, { 1: [4, 0], 2: [3, 0], 3: [2, 0] });
+    const outcome = await world.invoke("use_resource", { characterId: hero.id, resource: "Sorcery Points", variant, amount: 3 });
+    assert.equal(outcome.retry, true, `${variant} was taken`);
+    assert.match(outcome.error, /'create slot' or 'convert slot'/);
+    assert.deepEqual(points(hero.id), { max: 5, used: 0 }, `${variant} spent points`);
+  }
+  const twinner = sorcerer(5, { 1: [4, 0], 2: [3, 0], 3: [2, 0] });
+  const twinned = await world.invoke("use_resource", { characterId: twinner.id, resource: "Sorcery Points", variant: "Twinned Spell", amount: 2 });
+  assert.equal(twinned.ok, true, twinned.error);
+  assert.deepEqual(points(twinner.id), { max: 5, used: 2 });
+});
 
 await test("a created slot costs 2, 3, 5, 6 and 7 points for levels 1 to 5", async () => {
   for (const [level, cost] of Object.entries(COST)) {
@@ -96,7 +112,7 @@ await test("only a sorcerer has a Font of Magic", async () => {
   const wizard = world.addHero({ class: "wizard", level: 5, spellcasting: casting("int", { 1: [4, 0], 2: [3, 0] }) });
   for (const resource of ["Sorcery Points", "Font of Magic"]) {
     await refusedUnchanged(world, wizard.id, () =>
-      world.invoke("use_resource", { characterId: wizard.id, resource, variant: "create a 1st-level slot" }),
+      world.invoke("use_resource", { characterId: wizard.id, resource, variant: "create slot", amount: 1 }),
     );
   }
 });
@@ -172,12 +188,12 @@ await test("created slots vanish at the end of a long rest, and the points come 
     level: 9,
     spellcasting: casting("cha", { 1: [4, 0], 2: [3, 0], 3: [3, 0], 4: [3, 0], 5: [1, 0] }),
   });
-  const variant = (text) =>
-    table.invoke("use_resource", { characterId: hero.id, resource: "Sorcery Points", variant: text });
-  assert.equal((await variant("create a 1st-level slot")).ok, true);
-  assert.equal((await variant("create a 2nd-level slot")).ok, true);
-  assert.equal((await variant("convert my 5th-level slot into sorcery points")).ok, true);
-  assert.equal((await variant("create a 3rd-level slot")).ok, true);
+  const variant = (text, amount) =>
+    table.invoke("use_resource", { characterId: hero.id, resource: "Sorcery Points", variant: text, amount });
+  assert.equal((await variant("create slot", 1)).ok, true);
+  assert.equal((await variant("create slot", 2)).ok, true);
+  assert.equal((await variant("convert slot", 5)).ok, true);
+  assert.equal((await variant("create slot", 3)).ok, true);
   assert.deepEqual(table.sheet(hero.id).resources.sorcery_points, { max: 9, used: 5 });
   assert.deepEqual(
     Object.values(table.sheet(hero.id).spellcasting.slots).map((entry) => [entry.max, entry.used]),

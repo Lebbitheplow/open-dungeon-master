@@ -299,7 +299,7 @@ export function attackSituation(input: {
   }
   // Under the water: weapons not made for it (src/lib/dm/underwater.ts).
   const underwater = kind !== "spell" && isImmersed(campaign.id, sheet.id)
-    ? underwaterSwing({ weapon: profile.weapon, melee: !atRange, swims: swimsFrom(undefined, sheet.features), beyondNormal: spatials.longRange })
+    ? underwaterSwing({ weapon: profile.weapon, base: profile.base, melee: !atRange, swims: swimsFrom(undefined, sheet.features), beyondNormal: spatials.longRange })
     : null;
   if (underwater?.note) {
     conditionContext.notes.push(underwater.note);

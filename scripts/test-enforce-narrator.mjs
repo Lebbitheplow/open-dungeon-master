@@ -296,7 +296,7 @@ await test("pc_attack's class options and the advantage rule are in the prompt, 
     assert.ok(rule.includes(option), `pc_attack option ${option} missing from the rule`);
   }
   assert.match(rule, /A knocked-out enemy is out of the fight but alive/);
-  assert.match(rule, /counts only with advantageReason naming a circumstance the server cannot see/);
+  assert.match(rule, /counts only with advantageSource 'other' and advantageReason naming a circumstance the server cannot see/);
   assert.match(rule, /Hunter's Mark and Hex ride hits on one creature/);
   assert.match(rule, /Invisibility \(not Greater Invisibility\) ends when the invisible character attacks or casts/);
   assert.doesNotMatch(systemText(), /(pass|give|grant) advantage (for|when)[^.]*(dark|hidden|cover)/i);
@@ -341,7 +341,8 @@ await test("The feature rules match the feature engine: Inspiration, the Channel
   assert.match(text, /Damage goes to its tool at the full amount with its type/);
   assert.doesNotMatch(text, /apply the frightened condition/i);
   const roll = requestRollTool.function.parameters.properties;
-  assert.match(roll.against.description, /'spell'/);
+  assert.ok(roll.against.enum.includes("frightened") && roll.against.enum.includes("poison"));
+  assert.match(roll.magical.description, /spell or other magic/);
   assert.match(roll.tool.description, /proficiency bonus/);
   assert.match(roll.useInspiration.description, /Inspiration/);
 });
@@ -526,10 +527,10 @@ const LIVE = { enemies: [{ id: "enemy-1", name: "Goblin 1", hp: 7, maxHp: 7, sta
 // The ruling on what a reader claims a narration states (src/lib/dm/claims.ts
 // reads the prose; each case gives the claims it returns).
 const kinds = (claims, exchanges, live = null) =>
-  ruleClaims(claims, guardOutcomes(conversationOf(exchanges), live))
+  ruleClaims(claims, guardOutcomes(conversationOf(exchanges), live, "english"))
     .map((entry) => entry.kind)
     .sort();
-const goblin = normalizeCreatureName("Goblin 1");
+const goblin = normalizeCreatureName("Goblin 1", "english");
 
 await test("A hit narrated on an attack the engine refused is a contradiction.", () => {
   const refused = {
@@ -660,7 +661,7 @@ await test("A kill narrated with no tool call, on an enemy the encounter holds a
   const rewrite = "Kara's blade flashes, but the goblin twists aside and keeps its feet, snarling as it circles her with its club held low and ready.";
   model.script([reply({ text: "Kara cuts down the goblin." }), reply({ text: rewrite })]);
   // The reader finds the kill in the reply; the rewrite claims nothing.
-  model.claims([[{ kind: "dies", target: normalizeCreatureName(kit.enemy(enemy.id).displayName), quote: "Kara cuts down the goblin." }]]);
+  model.claims([[{ kind: "dies", target: normalizeCreatureName(kit.enemy(enemy.id).displayName, "english"), quote: "Kara cuts down the goblin." }]]);
   const message = await model.turn(world, "I attack the goblin.", kara.id);
   assert.equal(kit.enemy(enemy.id).status, "alive");
   assert.equal(model.served(), 2, "no correction call was made");
@@ -682,7 +683,7 @@ await test("The narration guard's rewrite has one reserved call outside the four
   ]);
   // The last call's prose is read for the narrator's asides alone, then by
   // the guard at the end of the turn.
-  model.claims([[], [{ kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName), quote: "Kara's blade bites into the goblin." }]]);
+  model.claims([[], [{ kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName, "english"), quote: "Kara's blade bites into the goblin." }]]);
   const message = await model.turn(world, "I attack the goblin.", kara.id);
   world.clearDice();
   assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "the swing was meant to miss");
@@ -702,7 +703,7 @@ await test("Every call tells the server whether to reason: the tool decisions do
     reply({ text: "Kara's blade bites into the goblin." }),
     reply({ text: "Kara's blade whistles past the goblin, and the creature snarls as it circles back toward her with its club raised, looking for an opening." }),
   ]);
-  model.claims([[], [{ kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName), quote: "Kara's blade bites into the goblin." }]]);
+  model.claims([[], [{ kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName, "english"), quote: "Kara's blade bites into the goblin." }]]);
   await model.turn(world, "I attack the goblin.", kara.id);
   world.clearDice();
   const thinking = (body) => body.chat_template_kwargs?.enable_thinking;
@@ -717,7 +718,7 @@ await test("Every call tells the server whether to reason: the tool decisions do
 // tool touched this turn is held back once while the model rolls it.
 await test("In a fight, a reply that ends the turn on a blow no tool rolled is held back, and the attack is rolled before the narration.", async () => {
   const enemy = await karaUp();
-  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
+  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName, "english");
   world.clearDice();
   world.dice(2, 10, 10);
   model.script([
@@ -740,7 +741,7 @@ await test("In a fight, a reply that ends the turn on a blow no tool rolled is h
 // rules on it: here against the swing the turn went on to roll.
 await test("A blow written beside another call is ruled by the guard against the attack the turn then rolled.", async () => {
   const enemy = await karaUp();
-  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
+  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName, "english");
   const rewrite = "Kara's blade whistles past the goblin, and the creature snarls as it circles back toward her with its club raised, looking for an opening.";
   world.clearDice();
   world.dice(2, 10, 10);
@@ -760,7 +761,7 @@ await test("A blow written beside another call is ruled by the guard against the
 
 await test("A second blow written past the held-back one is ruled at the end of the turn and rewritten from the real results.", async () => {
   const enemy = await karaUp();
-  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName);
+  const target = normalizeCreatureName(kit.enemy(enemy.id).displayName, "english");
   const rewrite = "Kara closes on the goblin, blade raised, and it bares its teeth at her. What does she do?";
   model.script([
     reply({ text: "Kara's blade bites into the goblin." }),
@@ -912,7 +913,7 @@ await test("An agent program's narration is checked against the live encounter, 
   await agentWorld.beginFight([{ monster: "goblin", count: 1 }]);
   const before = listRecentMessages(agentWorld.campaignId, 50).length;
   const [goblinEnemy] = agentWorld.enemies();
-  routeModel.claims([[{ kind: "dies", target: normalizeCreatureName(goblinEnemy.displayName), quote: "Tamsin cuts down the goblin." }]]);
+  routeModel.claims([[{ kind: "dies", target: normalizeCreatureName(goblinEnemy.displayName, "english"), quote: "Tamsin cuts down the goblin." }]]);
   const refused = await agentCall(agentWorld, agentWorld.owner.id, "campaigns/[campaignId]/dm/narrate", {
     content: "Tamsin cuts down the goblin.",
   });

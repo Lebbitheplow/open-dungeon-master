@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
@@ -193,6 +194,20 @@ export const equipmentItemSchema = z.object({
   // the secret was never written to the sheet. The DM's reveal action renames
   // the row and flips this flag in one step.
   identified: z.boolean().optional(),
+  // The SRD or pack item this is, by the row's English name, when its own
+  // name is the table's ("Elixir of Health" for "Elisir di salute"): the
+  // engines read its row through this (src/lib/srd/item-tags.ts itemRow).
+  srdName: z.string().trim().min(1).max(80).optional(),
+  // What the item is, when no English row says it (loot the model invents,
+  // an item named in the table's language): src/lib/srd/item-tags.ts.
+  tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
+  // What one is worth in gold pieces, for a thing the content pack does not
+  // price (a gem, an art object, loot the model invents): its sale and a
+  // material component read it (src/lib/dm/trade-value.ts).
+  worth: z.number().positive().max(100000).optional(),
+  // The spell a spell scroll holds, by the name the spell lists use; what
+  // reading it casts (src/lib/dm/consumables.ts).
+  spell: z.string().trim().min(1).max(80).optional(),
   // A homebrew item's mechanics, snapshotted from the entry so the armour,
   // attack and magic-item engines read it exactly as they read SRD gear
   // (src/lib/homebrew/gear.ts). Refreshed on every sheet read; absent for

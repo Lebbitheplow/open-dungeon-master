@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { buildOrder, advanceOrder, coerceEncounterOutcome, critDamageExpression, enemyDamageMath, nameArrivals, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
+const { buildOrder, advanceOrder, critDamageExpression, enemyDamageMath, nameArrivals, numberDuplicates, pickEnemyTarget, resolveEncounterOutcome, spliceIntoOrder } = await import(
   "../src/lib/dm/encounter-logic.ts"
 );
 
@@ -178,25 +178,21 @@ test("pickEnemyTarget without positions falls back to lowest AC", () => {
   assert.equal(pickEnemyTarget(null, []), null);
 });
 
-test("coerceEncounterOutcome: exact outcomes pass through", () => {
-  assert.deepEqual(coerceEncounterOutcome("victory", ["dead"]), { outcome: "victory", inferred: false });
-  assert.deepEqual(coerceEncounterOutcome("enemies_fled", ["alive"]), { outcome: "enemies_fled", inferred: false });
+test("resolveEncounterOutcome: a sent outcome stands", () => {
+  assert.deepEqual(resolveEncounterOutcome("victory", ["dead"]), { outcome: "victory", inferred: false });
+  assert.deepEqual(resolveEncounterOutcome("enemies_fled", ["alive"]), { outcome: "enemies_fled", inferred: false });
+  assert.deepEqual(resolveEncounterOutcome("truce", ["dead", "dead"]), { outcome: "truce", inferred: false });
 });
 
-test("coerceEncounterOutcome: synonyms map", () => {
-  assert.equal(coerceEncounterOutcome("the bandits surrender", ["alive"]).outcome, "truce");
-  assert.equal(coerceEncounterOutcome("peace", ["alive"]).outcome, "truce");
-  assert.equal(coerceEncounterOutcome("retreat", ["alive"]).outcome, "enemies_fled");
-  assert.equal(coerceEncounterOutcome("enemies routed", ["alive"]).outcome, "enemies_fled");
-  assert.equal(coerceEncounterOutcome("we won", ["dead"]).outcome, "victory");
-  assert.equal(coerceEncounterOutcome("party flees", ["alive"]).outcome, "party_fled");
-  assert.equal(coerceEncounterOutcome("tpk", ["alive"]).outcome, "party_defeated");
-});
-
-test("coerceEncounterOutcome: unknown/missing infers from roster", () => {
-  assert.deepEqual(coerceEncounterOutcome(undefined, ["dead", "dead"]), { outcome: "victory", inferred: true });
-  assert.deepEqual(coerceEncounterOutcome("???", ["fled", "fled"]), { outcome: "enemies_fled", inferred: true });
-  assert.deepEqual(coerceEncounterOutcome("", ["alive", "dead"]), { outcome: "truce", inferred: true });
+test("resolveEncounterOutcome: none sent, or one off the list, is read off the roster", () => {
+  assert.deepEqual(resolveEncounterOutcome(undefined, ["dead", "dead"]), { outcome: "victory", inferred: true });
+  assert.deepEqual(resolveEncounterOutcome("???", ["fled", "fled"]), { outcome: "enemies_fled", inferred: true });
+  assert.deepEqual(resolveEncounterOutcome("", ["alive", "dead"]), { outcome: "truce", inferred: true });
+  // No word is read for an outcome, in English or another language: with an
+  // enemy standing, "we won" is the roster's truce.
+  for (const said of ["we won", "abbiamo vinto", "nous avons gagné", "hemos ganado", "wir haben gewonnen", "Victory"]) {
+    assert.deepEqual(resolveEncounterOutcome(said, ["alive", "dead"]), { outcome: "truce", inferred: true }, said);
+  }
 });
 
 test("critical extra dice add one more of the first damage die", () => {

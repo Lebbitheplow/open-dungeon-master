@@ -3,8 +3,8 @@
 //
 // Pure: no database, no events. src/lib/battlemap/view.ts feeds it the rows
 // it has already read, and scripts/test-intent.mjs drives it directly. It
-// must not import map-tools (which imports view.ts), so the attack's kind is
-// read here rather than borrowed from there.
+// must not import map-tools (which imports view.ts); the attack's reach is the
+// engine's own reading (src/lib/dm/enemy-profile.ts).
 import type { EnemyAttack, EnemyStats } from "@/lib/bestiary/statblock";
 import type { EncounterIntents } from "@/lib/db/encounter-intents";
 import type { IntentVerbKind, TokenIntent } from "@/lib/battlemap/intent";
@@ -12,48 +12,31 @@ import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { chebyshev } from "@/lib/battlemap/types";
 import { averageDetail } from "@/lib/srd/odds";
 import { textKey } from "@/lib/language/text-logic";
+import { enemyAttackProfile } from "@/lib/dm/enemy-profile";
 
-// A stat snapshot keeps an attack's name, bonus, dice and damage type, and
-// nothing about reach or range, so the name decides, as it does for the
-// engine's own reach check (map-tools RANGED_ATTACK_RE). Weapons are asked
-// first because "Light Crossbow" is a weapon even though a crossbow has bolts.
-const RANGED_WEAPON_RE = /bow|sling|dart|javelin|thrown|rifle|pistol|gun|rock|spit|spine|web|longarm/i;
-const SPELL_RE =
-  /spell|\bray\b|bolt|blast|beam|breath|gaze|curse|hex|eldritch|arcane|magic|fireball|lightning|\bword\b|spear of/i;
-
-export function attackVerbKind(attack: Pick<EnemyAttack, "name"> | null | undefined): IntentVerbKind {
-  const name = attack?.name?.trim() ?? "";
-  if (!name) {
+// An attack's kind from its stat block: a spell attack, else whether it
+// reaches at range (a thrown weapon does), else a melee blow.
+export function attackVerbKind(attack: EnemyAttack | null | undefined): IntentVerbKind {
+  if (!attack) {
     return "other";
   }
-  if (RANGED_WEAPON_RE.test(name)) {
-    return "ranged";
-  }
-  if (SPELL_RE.test(name)) {
+  if (attack.spellAttack) {
     return "spell";
   }
-  return "melee";
+  return enemyAttackProfile(attack).ranged ? "ranged" : "melee";
 }
 
-const MOVE_RE = /flee|retreat|withdraw|fall back|advance|reposition|\bmove|\bdash|\bhide|take cover|close in/i;
-
-// The kind of a DECLARED verb, which is free text. A name the stat block
-// lists is that attack's kind; otherwise the words decide, and a verb that
-// says nothing recognisable is "other" rather than assumed to be a blade.
+// The kind of a DECLARED verb, which is free text in the table's language. A
+// name the stat block lists is that attack's kind; otherwise the kind the
+// call names, or "other" rather than one guessed from the verb's words.
 export function declaredVerbKind(
   verb: string,
-  attacks: Array<Pick<EnemyAttack, "name">> = [],
+  attacks: EnemyAttack[],
+  kind: IntentVerbKind | undefined,
 ): IntentVerbKind {
   const wanted = textKey(verb);
   const listed = attacks.find((entry) => textKey(entry.name) === wanted);
-  if (listed) {
-    return attackVerbKind(listed);
-  }
-  if (MOVE_RE.test(verb)) {
-    return "move";
-  }
-  const kind = attackVerbKind({ name: verb });
-  return kind === "melee" ? "other" : kind;
+  return listed ? attackVerbKind(listed) : (kind ?? "other");
 }
 
 // The average of a damage expression, rounded for a badge; null when the

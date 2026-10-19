@@ -26,7 +26,7 @@ export function personLines(campaign: Pick<Campaign, "id" | "gameSettings">, tex
     return [];
   }
   const sheets = listSheets(campaign.id);
-  const creatures = new Map([...guardOutcomes([], liveStateFor(campaign.id)).creatures].map(([ref, fact]) => [ref, fact.display]));
+  const creatures = new Map([...guardOutcomes([], liveStateFor(campaign.id), campaign.gameSettings.tableLanguage).creatures].map(([ref, fact]) => [ref, fact.display]));
   const speakers = [...speakerRoster(campaign.id, sheets, creatures).values()];
   const recent = listRecentMessages(campaign.id, COMMON_WORDS_MESSAGES)
     .filter((message) => message.authorType === "dm")
@@ -50,7 +50,7 @@ export async function modelLines(campaign: Campaign, text: string, label: string
     label,
     text,
     kinds: ["speaker"],
-    outcomes: guardOutcomes([], liveStateFor(campaign.id)),
+    outcomes: guardOutcomes([], liveStateFor(campaign.id), campaign.gameSettings.tableLanguage),
     sheets: listSheets(campaign.id),
   });
   return modelTextLines(

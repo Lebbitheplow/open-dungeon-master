@@ -7,7 +7,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { addPartyItem, removePartyItem, splitBankedXp } from "@/lib/dm/party-logic";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
-import { addCopper, formatCopper, parseCoins, purseCopper } from "@/lib/srd/currency";
+import { addCopper, formatCopper, parseCoins, purseCopper, unreadCoins } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
@@ -131,10 +131,16 @@ export function handlePartyStash(
       if (!taken) {
         return notCarried(fresh.name, fresh.equipment.map((item) => item.name), name, isTableGearName(campaign.id, name));
       }
+      const { srdName, tags, worth, spell } = taken.item;
       const added = addPartyItem(getParty(campaign.id).inventory, {
         name,
         qty: taken.removed,
-        weight: fresh.equipment.find((item) => textKey(item.name) === textKey(name))?.weight,
+        weight: taken.item.weight,
+        identified: taken.item.identified,
+        srdName,
+        tags,
+        worth,
+        spell,
       });
       if ("error" in added) {
         return added;
@@ -151,8 +157,13 @@ export function handlePartyStash(
     if ("error" in taken) {
       return taken;
     }
+    const { srdName, tags, worth, spell } = taken.item;
     const granted = grantItemMath(fresh.equipment, taken.item.name, taken.removed, {
       identified: taken.item.identified !== false,
+      srdName,
+      tags,
+      worth,
+      spell,
     });
     patchSheet(fresh.id, { equipment: granted.equipment });
     const next = updateParty(campaign.id, (current) => ({ ...current, inventory: taken.inventory }));
@@ -163,7 +174,11 @@ export function handlePartyStash(
 
   // Money. Coins win over the whole-gold amount when both are sent, for the
   // same reason they do in modify_gold: the more specific one was meant.
-  const parsed = args.coins ? parseCoins(args.coins) : null;
+  const parsed = args.coins?.trim() ? parseCoins(args.coins) : null;
+  // Coins sent and unread are asked for again, never taken as the amount.
+  if (args.coins?.trim() && parsed === null) {
+    return { error: `${unreadCoins(args.coins)}. Nothing changed.`, retry: true };
+  }
   const copper = parsed ?? (args.amount ?? 0) * 100;
   if (copper <= 0) {
     return { error: "Say how much: coins like '3 gp 4 sp', or an amount in gold.", retry: true };

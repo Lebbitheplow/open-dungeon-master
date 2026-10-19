@@ -8,6 +8,7 @@
 // point after 1d4 hours (src/lib/dm/death.ts rollStableTimer).
 //
 // This module must not import mutations.ts (which imports it).
+import { catalogName } from "@/lib/srd/adventuring-gear";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -32,7 +33,7 @@ import { resolveRollExpression } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
-import { STABILIZE_DC, SUFFOCATING, stabilizeMethod } from "@/lib/dm/vitals-logic";
+import { STABILIZE_DC, SUFFOCATING, type StabilizeMethod } from "@/lib/dm/vitals-logic";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -106,7 +107,7 @@ export function handleStabilize(
   turnId: string,
   sheet: CharacterSheet,
   healer: CharacterSheet | null,
-  input: { method?: string; reason?: string },
+  input: { method?: StabilizeMethod; reason?: string },
 ): ToolResult {
   const reason = (input.reason ?? "").slice(0, 200);
   const track = sheet.deathSaves;
@@ -159,7 +160,7 @@ export function handleStabilize(
   if (spent && !spent.ok) {
     return toolError(spent);
   }
-  const method = stabilizeMethod(input.method);
+  const method = input.method ?? "check";
   let kitPatch: FullPatchSheetInput | null = null;
   let how = "";
   if (method === "kit") {
@@ -296,10 +297,11 @@ export function healerKitUse(
   target: CharacterSheet,
   itemName: string,
 ): ToolError | { ok: true; amount: number; note: string } | null {
-  if (!/healer'?s kit/i.test(itemName) || !holdsFeat(healer, "Healer")) {
+  // The SRD's Healer's Kit, by its row (src/lib/srd/adventuring-gear.ts).
+  if (catalogName(itemName) !== "Healer's Kit" || !holdsFeat(healer, "Healer")) {
     return null;
   }
-  const kit = findCarriedItem(healer.equipment, "healer's kit");
+  const kit = findCarriedItem(healer.equipment, itemName);
   if (!kit || (kit.charges ?? HEALERS_KIT_USES) <= 0) {
     return { error: `${healer.name} carries no healer's kit with a use left. Nothing was spent.`, refused: "rules" };
   }

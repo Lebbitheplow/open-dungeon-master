@@ -41,6 +41,7 @@ import { authoredTurnStart } from "@/lib/dm/authored-turns";
 import { readiedSpellOf } from "@/lib/dm/readied-spell";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { textKey } from "@/lib/language/text-logic";
+import { listedAgainst } from "@/lib/dm/roll-about";
 
 // Condition upkeep: timed conditions count down and expire, save-ends
 // conditions get their re-save rolled server-side (enemy saves from stat
@@ -458,7 +459,7 @@ function tickSheetConditions(
         due.ability,
         due.dc,
         `${due.ability.toUpperCase()} save to end ${due.name}`,
-        due.name,
+        { against: listedAgainst(due.name) },
       );
       // A carrier the save spent (an inspiration die) is gone from the
       // stored sheet; the conditions this tick writes back must not restore it.

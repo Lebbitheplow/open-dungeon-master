@@ -109,12 +109,13 @@ export const worldTools: ToolDef[] = [
     function: {
       name: "damage_object",
       description:
-        "Resolve an attempt to break an inanimate object (a door, a chest, a rope, a window) against the DMG object table. Give its name, material and size (or an explicit ac and hp). Each call is one blow. Objects are immune to poison and psychic damage. A section of a Wall of Ice is named 'Wall of Ice section N' (10-foot sections from the end it was laid from): the server uses its AC 12 and 30 hit points, doubles fire, and when it breaks opens its squares and lays the frigid air.",
+        "Resolve an attempt to break an inanimate object (a door, a chest, a rope, a window) against the DMG object table. Give its name, material and size (or an explicit ac and hp). Each call is one blow. Objects are immune to poison and psychic damage. A Wall of Ice is struck a section at a time: name it 'Wall of Ice' and give the section (10-foot sections from the end it was laid from): the server uses its AC 12 and 30 hit points, doubles fire, and when it breaks opens its squares and lays the frigid air.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           name: { type: "string", description: "What the object is ('the oak door'). The server keeps its damage between blows." },
+          section: { type: "integer", minimum: 1, description: "A Wall of Ice's section, numbered from the end it was laid from." },
           characterId: { type: "string", description: "The character striking it with a weapon: exact characterId from GAME STATE." },
           weapon: { type: "string", description: "The weapon they strike with, from their equipment." },
           damageType: { type: "string", description: "Damage type, for damage you pass yourself." },

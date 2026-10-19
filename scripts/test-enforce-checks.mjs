@@ -304,6 +304,7 @@ await test("strictness shifts a tier by two and leaves an exact DC alone", async
       // handler the model's call reaches.
       const notice = handleCheckNotice(
         table.campaign(),
+        { actor: "ai" },
         JSON.stringify({ difficulty, characterIds: [hero.id] }),
         table.sheets(),
         new Map(table.sheets().map((sheet) => [sheet.id, sheet])),

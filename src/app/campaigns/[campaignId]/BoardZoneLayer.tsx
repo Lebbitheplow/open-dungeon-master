@@ -191,9 +191,9 @@ export const ZoneLayer = memo(function ZoneLayer({ zones, width }: { zones: View
               className={zone.look === "wall" ? undefined : "zone-edge"}
             />
             {zone.leaving ? null : <ZoneTag zone={zone} width={width} color={color} />}
-            {/* A Wall of Ice's 10-foot sections, numbered as damage_object
-                names them ("Wall of Ice section 2"); a broken one is gone
-                from the list, so its badge pops out with it. */}
+            {/* A Wall of Ice's 10-foot sections, numbered as damage_object's
+                section counts them; a broken one is gone from the list, so
+                its badge pops out with it. */}
             {zone.sections?.map((section, index) => {
               const cx = (section.at % width) * TILE + TILE / 2;
               const cy = Math.floor(section.at / width) * TILE + TILE / 2;

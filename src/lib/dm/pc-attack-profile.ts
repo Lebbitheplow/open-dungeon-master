@@ -34,6 +34,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { summonAttackProfile } from "@/lib/dm/summon-rules";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { nameTerms } from "@/lib/language/language";
+import { campaignLanguage } from "@/lib/db/campaigns";
+import { weaponMaterial } from "@/lib/dm/damage-logic";
 
 export type AttackKind = "weapon" | "spell" | "natural" | "granted";
 
@@ -77,13 +80,14 @@ export function buildAttackProfile(
   let special: BuiltAttack["special"] = null;
   // An attack option a condition grants (Starry Form's Archer, Spiritual
   // Weapon): the server owns its dice and it rides a bonus action.
+  const weaponTerms = nameTerms(args.weapon, campaignLanguage(campaignId));
   const grantedTerm = [args.weapon, args.spell].filter(Boolean).join(" ").trim();
   const granted = grantedTerm ? grantedAttackFor(sheet.conditions, grantedTerm) : null;
   let grantedBonusAction = false;
   let grantedWithActivation: string | null = null;
-  const natural = !granted && !args.spell?.trim() ? authoredNaturalWeapon(sheet, args.weapon, derived.abilityMods) : null;
+  const natural = !granted && !args.spell?.trim() ? authoredNaturalWeapon(sheet, weaponTerms, derived.abilityMods) : null;
   // A lineage's bite or claws (src/lib/srd/racial-weapons.ts).
-  const racial = !granted && !natural && !args.spell?.trim() && !sheet.wildShape ? racialNaturalWeapon(sheet.features, args.weapon) : null;
+  const racial = !granted && !natural && !args.spell?.trim() && !sheet.wildShape ? racialNaturalWeapon(sheet.features, weaponTerms) : null;
   if (granted) {
     if (derived.spellAttack === null) {
       return { error: `${sheet.name}'s sheet has no spell attack bonus (no spellcasting ability), so ${granted.attack.name} cannot be rolled.`, refused: "rules" };
@@ -228,12 +232,12 @@ export function buildAttackProfile(
     });
     profile = { ...profile, proficient: true, riderNotes: [...profile.riderNotes, `${racial.feature}: ${racial.srd.damage}`] };
     kind = "weapon";
-  } else if (!sheet.wildShape?.attacks?.length && (natural || naturalWeaponGated(sheet, args.weapon))) {
+  } else if (!sheet.wildShape?.attacks?.length && (natural || naturalWeaponGated(sheet, weaponTerms))) {
     // A weapon a subclass feature is (Form of the Beast's claws, the
     // Soulknife's psychic blade, Radiant Sun Bolt): a proficient weapon of
     // its kind, with no item behind it (src/lib/srd/authored-effects-more.ts).
     if (!natural) {
-      return { error: `${sheet.name}'s ${args.weapon} exists only while raging (${naturalWeaponGated(sheet, args.weapon)}). They rage first (use_resource Rage), or attack with a weapon they carry.`, refused: "rules" };
+      return { error: `${sheet.name}'s ${args.weapon} exists only while raging (${naturalWeaponGated(sheet, weaponTerms)}). They rage first (use_resource Rage), or attack with a weapon they carry.`, refused: "rules" };
     }
     // The bonus-action second blade keeps its modifier and rolls its own die.
     const srd = args.offHand && natural.second ? { ...natural.srd, damage: `${natural.second} ${natural.weapon.type}` } : natural.srd;
@@ -303,8 +307,9 @@ export function buildAttackProfile(
     // Shillelagh: a club or quarterstaff swings with the spellcasting
     // ability and a d8, and is magical (src/lib/dm/attack-features.ts).
     const shillelagh = shillelaghSwing(sheet, resolved, derived);
-    const swing = (twoHanded: boolean) =>
-      weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
+    const material = weaponMaterial(sheet.equipment.find((item) => item.name === resolved.displayName));
+    const swing = (twoHanded: boolean) => ({
+      ...weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
         riders,
         martialArts: martialArtsApplies(sheet),
         brawler: brawlerUnarmed(sheet),
@@ -315,7 +320,9 @@ export function buildAttackProfile(
           weapon: resolved.displayName,
           shieldName,
         }),
-      });
+      }),
+      material,
+    });
     profile = swing(hands.twoHanded);
     let handsNote = hands.note;
     // SRD 5.1 Versatile: the bigger die is for a melee attack. A spear thrown

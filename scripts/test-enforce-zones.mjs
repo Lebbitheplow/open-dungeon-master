@@ -674,7 +674,7 @@ await test("Light makes the caster's held object shed bright light 20 feet: on a
   // Continual Flame is the same light, and it does not burn down.
   world.patch(wizard.id, {
     spellcasting: { ...world.sheet(wizard.id).spellcasting, prepared: ["Continual Flame"] },
-    equipment: [...world.sheet(wizard.id).equipment, { name: "Ruby dust worth 50 gp", qty: 1 }],
+    equipment: [...world.sheet(wizard.id).equipment, { name: "Ruby dust", qty: 1, worth: 50 }],
   });
   const flame = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Continual Flame", level: 2 });
   assert.equal(flame.ok, true, flame.error);

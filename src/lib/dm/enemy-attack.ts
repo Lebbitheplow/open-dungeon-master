@@ -3,6 +3,7 @@
 // encounter-tools.ts, which dispatches to it and whose auto-act fallback
 // calls it for the enemies a turn skipped. Must not import encounter-tools.
 
+import { matchWeapon } from "@/lib/srd/weapons";
 import { readiedHolder } from "@/lib/dm/readied-release";
 import { martialAdvantageDice, surpriseAttackDice } from "@/lib/dm/monster-traits";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
@@ -28,7 +29,6 @@ import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { planAttackFx } from "@/lib/battlemap/fx-plan";
 import { acWithEffects } from "@/lib/dm/ac-effects";
-import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import { coverFor } from "@/lib/dm/attack-spatial";
 import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
 import { spellAttackHold } from "@/lib/dm/spell-planes";
@@ -53,17 +53,16 @@ import { conditionRollRiders, conditionTurnShape } from "@/lib/srd/condition-eff
 import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
 import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
   targetCharacterId: z.string(),
   attack: z.string().optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
+  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
+  advantageSource: z.enum(ADVANTAGE_SOURCES).optional(),
   advantageReason: z.string().max(200).optional(),
 });
 
@@ -103,12 +102,17 @@ export function handleEnemyAttack(
   if (!encounter) {
     return { error: "No active encounter: enemy_attack works only in a fight. Call start_encounter first.", retry: true };
   }
-  let args: z.infer<typeof attackArgsSchema>;
+  let raw: unknown;
   try {
-    args = attackArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments: enemy_attack needs enemyId and targetCharacterId.", retry: true };
   }
+  const parsed = attackArgsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return invalidArguments("Invalid arguments: enemy_attack needs enemyId and targetCharacterId.", parsed.error);
+  }
+  const args = parsed.data;
   const found = resolveEnemyRef(encounter.id, args.enemyId);
   if (!found) {
     return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
@@ -267,7 +271,7 @@ export function handleEnemyAttack(
     // Under the water (underwater.ts): a shot past normal range misses, and
     // weapons not made for the water swing at disadvantage.
     const underwater = attackerSubmerged
-      ? underwaterSwing({ weapon: attack.name, melee: !ranged, swims: swimsFrom(standing.stats.speed), beyondNormal: mode.longRange, spell: attack.spellAttack })
+      ? underwaterSwing({ weapon: attack.name, base: matchWeapon(attack.name)?.name, melee: !ranged, swims: swimsFrom(standing.stats.speed), beyondNormal: mode.longRange, spell: attack.spellAttack })
       : null;
     if (underwater?.misses) {
       swings.push({ attack: attack.name, skipped: underwater.note });

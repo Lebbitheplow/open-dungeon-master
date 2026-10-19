@@ -235,7 +235,7 @@ function characterTurnStartDamage(campaign: Campaign, sheet: CharacterSheet, lin
         return;
       }
       if (!hold.noSave && hold.save) {
-        const save = rollCharacterSave(campaign, turn, live, hold.save, hold.dc, `${hold.save.toUpperCase()} save against ${hold.spell}`);
+        const save = rollCharacterSave(campaign, turn, live, hold.save, hold.dc, `${hold.save.toUpperCase()} save against ${hold.spell}`, { magical: true });
         if (save.success) {
           const cleared = withoutHold(live.conditions, live.conditionMeta as ConditionMetaMap, hold.tag);
           const updated = patchSheet(live.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });

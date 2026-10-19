@@ -2,6 +2,7 @@ import { SRD_ARMOR } from "@/lib/srd/armor";
 import { PACKS, type KitItem } from "@/lib/srd/starting-kit-data";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
+import { spellingIndex } from "@/lib/srd/name-forms";
 
 // SRD 5.1 adventuring gear, tools, instruments and foci: name, price and
 // weight, as the "Adventuring Gear", "Tools" and "Equipment Packs" tables
@@ -169,57 +170,28 @@ export const SRD_GEAR: SrdGear[] = [
   { name: "Viol", costCp: gp(30), weightLb: 1 },
 ];
 
-// "Rope, Hempen (50 feet)" -> "rope hempen 50 feet"; apostrophes and case
-// go, a trailing plural goes ("torches" -> "torch", "clothes" is kept by
-// the alias list naming it).
+// "Rope, Hempen (50 feet)" -> "rope hempen 50 feet": apostrophes and case go.
 export function gearKey(text: string): string {
   return textKey(text.replace(/['‘’ʼ´]/g, ""));
 }
 
-function singular(key: string): string {
-  if (/(ss|us|is)$/.test(key) || key.length < 4) {
-    return key;
-  }
-  if (/ches$/.test(key)) {
-    return key.replace(/es$/, "");
-  }
-  if (/ies$/.test(key)) {
-    return key.replace(/ies$/, "y");
-  }
-  return key.replace(/s$/, "");
-}
-
-const byKey = new Map<string, SrdGear>();
-function index(key: string, gear: SrdGear) {
-  if (key && !byKey.has(key)) {
-    byKey.set(key, gear);
-  }
-}
-for (const gear of SRD_GEAR) {
-  const whole = gearKey(gear.name);
-  index(whole, gear);
+// Every way a gear row is written, to its row: the catalog name, the book's
+// inverted form, the name without its bracket, the aliases, and the English
+// plurals of each ("torches", "rations"), the names before any plural so no
+// plural shadows another row's name.
+const byKey = spellingIndex(SRD_GEAR, (gear) => {
   // "Clothes, Common" is also "common clothes"; "Rope, Hempen (50 feet)"
   // also "hempen rope"; the bracket alone falls away too.
   const bare = gear.name.replace(/\s*\([^)]*\)\s*$/, "");
-  index(gearKey(bare), gear);
   const comma = /^([^,]+),\s*(.+)$/.exec(bare);
-  if (comma) {
-    index(gearKey(`${comma[2]} ${comma[1]}`), gear);
-  }
-  for (const alias of gear.aliases ?? []) {
-    index(gearKey(alias), gear);
-  }
-}
-
-function lookup(key: string): SrdGear | null {
-  return byKey.get(key) ?? byKey.get(singular(key)) ?? null;
-}
+  return [gear.name, bare, ...(comma ? [`${comma[2]} ${comma[1]}`] : []), ...(gear.aliases ?? [])].map(gearKey);
+});
 
 // The gear row a name points at: the catalog name, the book's inverted
 // form, an alias, singular or plural. Null for anything else.
 export function matchGear(text: string): SrdGear | null {
   const key = gearKey(text);
-  return key ? lookup(key) : null;
+  return key ? (byKey.get(key) ?? null) : null;
 }
 
 export function gearPriceCopper(name: string): number | null {
@@ -247,36 +219,23 @@ const TRAILERS = /\s+(?:of|from|with|containing|holding|including|that|which|bea
 // one, sticks of incense are not its blocks.
 const KEEP_AS_WRITTEN = [/\b(?:one|1)[- ]person\b/i, /\bsticks? of incense\b/i];
 
-const weaponByKey = new Map(SRD_WEAPONS.map((weapon) => [gearKey(weapon.name), weapon.name]));
-weaponByKey.set("staff", "Quarterstaff");
-weaponByKey.set("wooden staff", "Quarterstaff");
-weaponByKey.set("wood staff", "Quarterstaff");
-const armorByKey = new Map(SRD_ARMOR.map((armor) => [gearKey(armor.name), armor.name]));
-for (const armor of SRD_ARMOR) {
-  armorByKey.set(gearKey(`${armor.name} armor`), armor.name);
-}
+const weaponByKey = spellingIndex(SRD_WEAPONS, (weapon) => [
+  gearKey(weapon.name),
+  ...(weapon.name === "Quarterstaff" ? ["staff", "wooden staff", "wood staff"] : []),
+]);
+const armorByKey = spellingIndex(SRD_ARMOR, (armor) => [gearKey(armor.name), gearKey(`${armor.name} armor`)]);
 
 // The catalog name a phrase is, as a weapon, armor or gear; null when it is
 // none. Exact names only, so "belaying pin" is not a pin. Armor is matched
 // only with `armor` set: a phrase read whole or as the head of a clause,
 // never after its adjectives are dropped, so "work leathers" never becomes
 // Leather (issue #113).
-function catalogName(phrase: string, armor = true): string | null {
+export function catalogName(phrase: string, armor = true): string | null {
   const key = gearKey(phrase);
   if (!key) {
     return null;
   }
-  for (const candidate of [key, singular(key)]) {
-    const weapon = weaponByKey.get(candidate);
-    if (weapon) {
-      return weapon;
-    }
-    const worn = armor ? armorByKey.get(candidate) : undefined;
-    if (worn) {
-      return worn;
-    }
-  }
-  return lookup(key)?.name ?? null;
+  return weaponByKey.get(key)?.name ?? (armor ? armorByKey.get(key)?.name : undefined) ?? byKey.get(key)?.name ?? null;
 }
 
 // The catalog name for a phrase, trying the phrase whole, then what its

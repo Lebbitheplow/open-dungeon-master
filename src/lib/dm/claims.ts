@@ -304,7 +304,7 @@ export async function readReply(
   text: string,
   state: { inEncounter: boolean; encounterNudged: boolean; damageNudged: boolean; registering: readonly string[] },
 ): Promise<PartRead & { outcomes: ResolvedOutcomes }> {
-  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
+  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id), campaign.gameSettings.tableLanguage);
   const kinds = claimKindsFor({
     ...guardGate(campaign, outcomes, sheets),
     rollAsk: true,
@@ -335,7 +335,7 @@ export async function readAsides(
     label: `turn ${turn.id}`,
     text,
     kinds: ["aside"],
-    outcomes: guardOutcomes(turn.conversation, liveStateFor(campaign.id)),
+    outcomes: guardOutcomes(turn.conversation, liveStateFor(campaign.id), campaign.gameSettings.tableLanguage),
     sheets,
   });
 }

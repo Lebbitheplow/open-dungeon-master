@@ -14,8 +14,6 @@ export type ConcentrationSwap = {
   next: string;
 };
 
-const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 // The character's own spells a typed action names, in the order it names
 // them. Whole names only ("Bless" is not found inside "Blessing").
 export function spellsNamedIn(content: string, spells: readonly string[]): string[] {
@@ -34,20 +32,6 @@ export function spellsNamedIn(content: string, spells: readonly string[]): strin
     .sort((a, b) => a.at - b.at || textKey(b.name).length - textKey(a.name).length)
     .filter((entry, index, list) => index === 0 || entry.at !== list[index - 1].at)
     .map((entry) => entry.name);
-}
-
-// A typed action that already says the running spell goes: "drop Spirit
-// Guardians and cast Bless", "I let Hold Person end". Asking again would be
-// a redundant question.
-export function acknowledgesDrop(content: string, current: string): boolean {
-  const text = textKey(content);
-  const spell = escape(textKey(current));
-  const verbs = "(?:drop|dropping|end|ending|release|releasing|dismiss|dismissing|let go of|letting go of|stop concentrating on|stop|stopping|replace|replacing|give up|giving up|abandon|abandoning)";
-  return (
-    new RegExp(`${verbs}\\s+(?:my\\s+|the\\s+)?${spell}`).test(text) ||
-    new RegExp(`${spell}\\s+(?:end|ends|drop|drops|go|goes|fade|fades|lapse|lapses)\\b`).test(text) ||
-    new RegExp(`let\\s+(?:my\\s+|the\\s+)?${spell}\\s+(?:end|drop|go|fade|lapse)`).test(text)
-  );
 }
 
 // Whether a confirmation the player gave still answers this cast: the same

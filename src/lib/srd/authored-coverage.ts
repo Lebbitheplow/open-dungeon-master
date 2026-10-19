@@ -83,7 +83,7 @@ export const AUTHORED_READERS: Record<string, { file: string; call: string }> = 
   resist: { file: "src/lib/dm/pc-defenses.ts", call: "authoredResistances(" },
   immune_damage: { file: "src/lib/srd/trait-rules.ts", call: "authoredDamageImmunities(" },
   immune_condition: { file: "src/lib/srd/trait-rules.ts", call: "authoredConditionImmunities(" },
-  save_adv: { file: "src/lib/srd/trait-rules.ts", call: "authoredSaveAdvantages(" },
+  save_adv: { file: "src/lib/srd/trait-rules.ts", call: "authoredSaveTraits(" },
   save_prof: { file: "src/lib/srd/trait-rules.ts", call: "authoredSaveProficiencies(" },
   save_bonus: { file: "src/lib/srd/index.ts", call: "authoredSaveModifier(" },
   save_swap: { file: "src/lib/srd/index.ts", call: "authoredSaveModifier(" },

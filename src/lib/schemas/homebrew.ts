@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import type { Sentience } from "@/lib/homebrew/sentience";
 import type { HomebrewGearDef } from "@/lib/homebrew/item-data";
 import type { ItemMagic } from "@/lib/homebrew/item-magic-schema";
@@ -72,6 +73,7 @@ export const gearSnapshotShape = z.object({
   weight: z.number().min(0).optional(),
   // A sentient item's mind (src/lib/homebrew/sentience.ts).
   sentience: z.custom<Sentience>().optional(),
+  tags: z.array(z.enum(ITEM_TAGS)).optional(),
 });
 export type HomebrewGearSnapshot = z.infer<typeof gearSnapshotShape>;
 
@@ -100,6 +102,8 @@ export const homebrewDataSchema = z
     concentration: z.boolean().optional(),
     // item hints
     itemKind: z.enum(["weapon", "armor", "gear", "magic_item"]).optional(),
+    // What the item is, for the engines that ask (src/lib/srd/item-tags.ts).
+    tags: z.array(z.enum(ITEM_TAGS)).max(12).optional(),
     rarity: z.string().trim().max(40).optional(),
     cost: z.string().trim().max(40).optional(),
     // class/archetype hints

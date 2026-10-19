@@ -21,6 +21,8 @@
 // a feature its uses and its part of the turn (resource-turn.ts).
 // scripts/test-check-order.mjs holds every family to it.
 
+import type { ZodError } from "zod";
+
 export type ToolError = { error: string; retry: true } | { error: string; refused: "rules" | "limit" };
 
 // What a tool handler hands back: an error with its kind, or a result that
@@ -32,4 +34,14 @@ export type ToolResult = (ToolError & { [key: string]: unknown }) | { [key: stri
 // not the model's to read.
 export function toolError(refusal: ToolError): ToolError {
   return "retry" in refusal ? { error: refusal.error, retry: true } : { error: refusal.error, refused: refusal.refused };
+}
+
+// A call whose arguments its schema refused: what the call needs, then each
+// field zod refused with zod's own reason, which lists a fixed choice's values
+// ('Invalid option: expected one of "none"|"advantage"|"disadvantage"'), so the
+// model resends the call with a listed value instead of the server guessing
+// one from its words.
+export function invalidArguments(needs: string, error: ZodError): ToolError {
+  const fields = error.issues.map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`);
+  return { error: `${needs} (${fields.join("; ")})`, retry: true };
 }

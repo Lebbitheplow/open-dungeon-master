@@ -41,14 +41,15 @@ test("a raw DC reads back as the hardest tier it reaches", () => {
   assert.equal(difficultyOfDc(100), "nearly_impossible");
 });
 
-test("normalizer accepts spaces, hyphens, camelCase, and synonyms", () => {
+test("normalizer accepts a tier spaced, hyphenated or in capitals, and no other word", () => {
   assert.equal(normalizeDifficulty("very hard"), "very_hard");
   assert.equal(normalizeDifficulty("very-hard"), "very_hard");
-  assert.equal(normalizeDifficulty("veryHard"), "very_hard");
   assert.equal(normalizeDifficulty("VERY_HARD"), "very_hard");
-  assert.equal(normalizeDifficulty("medium"), "moderate");
-  assert.equal(normalizeDifficulty("trivial"), "very_easy");
-  assert.equal(normalizeDifficulty("impossible"), "nearly_impossible");
+  // Other words are refused with the tiers listed, never guessed (in English
+  // or any table language).
+  for (const word of ["veryHard", "medium", "trivial", "impossible", "difficile", "schwer"]) {
+    assert.equal(normalizeDifficulty(word), null, word);
+  }
 });
 
 test("normalizer rejects non-difficulty input", () => {

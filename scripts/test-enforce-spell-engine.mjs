@@ -278,7 +278,7 @@ await test("Revivify through heal brings a dead fighter back at 1 HP for one 3rd
   // In a fight the diamonds are carried: there is no buying them mid-battle
   // (src/lib/dm/cast-materials.ts).
   const { world, sheets: [priest, fighter] } = await table([
-    { ...caster("cleric", "wis", ["Revivify"]), gold: 400, equipment: [{ name: "Diamonds (300 gp)", qty: 1 }] },
+    { ...caster("cleric", "wis", ["Revivify"]), gold: 400, equipment: [{ name: "Diamonds", qty: 1, worth: 300 }] },
     FIGHTER,
   ]);
   world.patch(fighter.id, { currentHp: 0, deathSaves: DEAD });

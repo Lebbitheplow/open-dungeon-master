@@ -328,7 +328,7 @@ await test("Prismatic Spray's violet ray blinds; a failed WIS save at the start 
 
 await test("Forcecage: a creature inside the cage cannot walk out of it, and one outside cannot walk in.", async () => {
   const { world, sheets: [wizard, fighter], enemies: [goblin] } = await board(
-    [caster("wizard", "int", ["Forcecage"], [], 13, { equipment: [{ name: "Ruby dust (1,500 gp)", qty: 1 }] }), FIGHTER],
+    [caster("wizard", "int", ["Forcecage"], [], 13, { equipment: [{ name: "Ruby dust", qty: 1, worth: 1500 }] }), FIGHTER],
     { 0: { x: 2, y: 8 }, 1: { x: 7, y: 4 }, e0: { x: 12, y: 4 } },
     { stats: { speed: "40 ft." } },
   );

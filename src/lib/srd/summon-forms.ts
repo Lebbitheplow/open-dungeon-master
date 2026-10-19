@@ -14,6 +14,7 @@
 
 import { BEAST_FORMS, type BeastForm } from "@/lib/srd/beast-forms";
 import { findNamed } from "@/lib/language/text-logic";
+import { creatureSpellings } from "@/lib/srd/name-forms";
 
 export type SummonFormAttack = {
   name: string;
@@ -430,7 +431,7 @@ const ALL: SummonForm[] = [
 // (src/lib/language/text-logic.ts findNamed): "spider" is the Giant Spider, a giant elk no
 // Elk. Null when the table does not know it.
 export function findSummonForm(term: string): SummonForm | null {
-  return findNamed(ALL, term, (form) => form.name);
+  return findNamed(ALL, [term], (form) => creatureSpellings(form.name));
 }
 
 // The creatures of these kinds the table holds at a challenge rating or

@@ -10,7 +10,8 @@
 // Called from pc-attack-plan.ts (the budget, before anything is spent) and
 // from authored-hooks.ts authoredOnHit (the bite, after the hit).
 
-import type { Campaign } from "@/lib/db/campaigns";
+import { nameTerms } from "@/lib/language/language";
+import { campaignLanguage, type Campaign } from "@/lib/db/campaigns";
 import { turnKey, type Encounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { Advantage } from "@/lib/dice";
@@ -35,7 +36,7 @@ export function withClawsExtra(
   budget: TurnBudget,
   notes: string[],
 ): TurnBudget {
-  const natural = authoredNaturalWeapon(sheet, weapon);
+  const natural = authoredNaturalWeapon(sheet, nameTerms(weapon, campaignLanguage(sheet.campaignId)));
   if (!natural?.weapon.extraAttack || budget.oncePerTurn.includes(CLAWS_EXTRA)) {
     return budget;
   }
@@ -77,7 +78,7 @@ export function rapidStrike(input: {
 // with the first. Null when it may be made; the weapon needs no second item
 // in hand, so two-weapon fighting's carried-weapons rule does not apply.
 export function secondWeaponProblem(sheet: CharacterSheet, weapon: string | undefined, budget: TurnBudget | null): ToolError | null | undefined {
-  const natural = authoredNaturalWeapon(sheet, weapon);
+  const natural = authoredNaturalWeapon(sheet, nameTerms(weapon, campaignLanguage(sheet.campaignId)));
   if (!natural?.second) {
     return undefined;
   }
@@ -98,7 +99,7 @@ export function naturalWeaponOnHit(
   weaponName: string | undefined,
 ): string[] {
   const sheet = getSheetById(stale.id) ?? stale;
-  const natural = authoredNaturalWeapon(sheet, weaponName);
+  const natural = authoredNaturalWeapon(sheet, nameTerms(weaponName, campaign.gameSettings.tableLanguage));
   if (natural?.weapon.onHit !== "bite_heal") {
     return [];
   }

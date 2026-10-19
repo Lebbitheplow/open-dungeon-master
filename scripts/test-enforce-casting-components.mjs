@@ -128,11 +128,23 @@ await test("a silenced caster cannot cast a spell with a verbal component", asyn
 await test("Revivify consumes the diamond it is cast with", async () => {
   const world = await openWorld();
   worlds.push(world);
-  const priest = world.addHero(cleric(5, { equipment: [{ name: "Diamond (300 gp)", qty: 1 }], gold: 0 }));
+  const priest = world.addHero(cleric(5, { equipment: [{ name: "Diamond", qty: 1, worth: 300 }], gold: 0 }));
   const out = await world.invoke("use_spell_slot", { characterId: priest.id, level: 3, spell: "Revivify" });
   assert.equal(out.ok, true, out.error);
   const left = world.sheet(priest.id).equipment.filter((item) => /diamond/i.test(item.name));
   assert.deepEqual(left, [], "the diamond is still in the pack");
+});
+
+await test("Revivify takes a diamond by the worth it was given; a worth written only into a name is no worth", async () => {
+  const world = await openWorld();
+  worlds.push(world);
+  const priest = world.addHero(cleric(5, { equipment: [{ name: "Diamond", qty: 1, worth: 300 }], gold: 0 }));
+  const out = await world.invoke("use_spell_slot", { characterId: priest.id, level: 3, spell: "Revivify" });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(world.sheet(priest.id).equipment.filter((item) => item.name === "Diamond"), [], "the diamond is still in the pack");
+  const poor = world.addHero(cleric(5, { equipment: [{ name: "Diamond (300 gp)", qty: 1 }], gold: 0 }));
+  const refusal = await world.invoke("use_spell_slot", { characterId: poor.id, level: 3, spell: "Revivify" });
+  assert.match(String(refusal.error), /with worth 300/, "a diamond named with its worth paid for Revivify");
 });
 
 // ---- the bonus action rule ----

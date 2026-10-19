@@ -9,7 +9,7 @@ import { classListFor } from "@/lib/srd/multiclass";
 
 const FEAT_SPELLS = /\b(fey touched|shadow touched|magic initiate|ritual caster)\b/i;
 // Level-one features the class-feature rules cover: a ranger's Favored Enemy
-// and Natural Explorer, and the racial traits a check's reason triggers.
+// and Natural Explorer, and the racial traits a check's about triggers.
 const LEVEL_ONE_FEATURES_CLASS = /\branger\b/i;
 const LEVEL_ONE_FEATURES_RACE = /\b(dwarf|gnome|goliath)\b/i;
 

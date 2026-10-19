@@ -1,8 +1,8 @@
 import { readiedHeld } from "@/lib/dm/readied-kinds";
-import { findNamed } from "@/lib/language/text-logic";
+import { nameTerms } from "@/lib/language/language";
 import { carriedLight, lightPlacement } from "@/lib/dm/light-timers";
 import { getClock } from "@/lib/db/clock";
-import type { Campaign } from "@/lib/db/campaigns";
+import { campaignLanguage, type Campaign } from "@/lib/db/campaigns";
 import {
   getActiveBoard,
   getActiveEncounter,
@@ -62,7 +62,7 @@ import { zoneCoverBetween } from "@/lib/dm/zone-rules";
 import { dragLandings, enemyDrag } from "@/lib/dm/drag-move";
 import { flightOf, markSqueezing } from "@/lib/dm/token-state";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { findNamed, textKey } from "@/lib/language/text-logic";
 
 export { landTheFlightless } from "@/lib/dm/token-state";
 
@@ -250,7 +250,7 @@ function resolveAnyToken(
       .filter((token) => token.kind !== "pc" && token.kind !== "enemy")
       .map((token) => ({ name: token.name, token: () => token })),
   ];
-  return findNamed(named, trimmed, (entry) => entry.name)?.token() ?? null;
+  return findNamed(named, nameTerms(trimmed, campaignLanguage(map.campaignId)), (entry) => [entry.name])?.token() ?? null;
 }
 
 // A name the board holds no single token for: the names it does hold.

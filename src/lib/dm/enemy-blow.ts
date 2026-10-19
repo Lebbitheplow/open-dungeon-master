@@ -10,7 +10,7 @@ import { getDmTurn, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
 import { landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { healthState } from "@/lib/bestiary/health";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
-import { weaponMaterial } from "@/lib/dm/damage-logic";
+import type { WeaponMaterial } from "@/lib/dm/damage-logic";
 import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
 import { applyEnemyDamage, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { resistLineFor } from "@/lib/dm/underwater";
@@ -26,8 +26,8 @@ export type DamageBlow = {
   riders?: TypedRider[];
   crit?: boolean;
   critExtraDice?: number;
-  // The weapon's name, for a silvered or adamantine one (damage-logic.ts).
-  weapon?: string;
+  // A silvered or adamantine weapon's material (damage-logic.ts).
+  material?: WeaponMaterial;
 };
 
 // One rolled damage total landing on an enemy. With typed riders the blow is
@@ -47,7 +47,7 @@ function applyBlow(
 ): Record<string, unknown> {
   const amount = Math.max(1, roll.total);
   const magical = blow?.magical === true;
-  const material = weaponMaterial(blow?.weapon);
+  const material = blow?.material ?? {};
   const parts =
     blow?.riders?.length && damageType && roll.breakdown?.terms
       ? damageParts(roll.breakdown, damageType, blow.riders, {
@@ -167,7 +167,7 @@ export function applyPendingDamageRoll(pending: PendingRoll, roll: StoredRoll): 
           crit: pending.attack.crit,
           critExtraDice: pending.attack.critExtraDice,
           nonlethal: (pending.attack as { nonlethal?: boolean }).nonlethal === true,
-          weapon: (pending.attack as { weapon?: string }).weapon,
+          material: (pending.attack as { material?: WeaponMaterial }).material,
         }
       : undefined,
   );

@@ -15,6 +15,7 @@ import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { computeIdf, lexicalScore } from "@/lib/dm/fusion-logic";
+import { stopWordsFor } from "@/lib/language/language";
 import { extractToolCalls } from "@/lib/dm/rolls";
 import { searchScenes } from "@/lib/dm/memory-index";
 import { scoreChaptersByKeywords } from "@/lib/dm/recall-logic";
@@ -196,6 +197,7 @@ async function retrieveArchive(campaignId: string, query: string, chapterBudget:
   const passages = transcriptPassages(
     transcriptLines(campaignId, listRecentMessages(campaignId, SEARCHED_MESSAGES)),
     query,
+    stopWordsFor(campaignLanguage(campaignId)),
   );
   if (passages.length) {
     evidence.push(`The latest exchanges that mention it, in full where they fit:\n${passages.join("\n\n")}`);

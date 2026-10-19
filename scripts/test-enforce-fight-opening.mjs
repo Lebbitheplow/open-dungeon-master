@@ -50,13 +50,13 @@ const EIGHT = { kind: "amount", value: 8, of: "damage", quote: "8 damage." };
 
 await test("A damage figure no tool rolled is found; no claim, or a figure already on the table, is not.", () => {
   const input = [{ role: "system", content: "Alden Veyr HP 10/10, AC 8" }, { role: "user", content: "[Alden Veyr | attempt] I step into the chamber." }];
-  assert.equal(unrolledFigure([EIGHT], input), "8 damage.");
-  assert.equal(unrolledFigure([], input), null);
+  assert.equal(unrolledFigure([EIGHT], input, "english"), "8 damage.");
+  assert.equal(unrolledFigure([], input, "english"), null);
   const noted = [...input, { role: "user", content: "[Table note] The spikes deal 8 piercing damage to Alden Veyr." }];
-  assert.equal(unrolledFigure([EIGHT], noted), null);
+  assert.equal(unrolledFigure([EIGHT], noted, "english"), null);
   // A chat model reads the game state's turn-to-turn part as a user message; its numbers are still no table note.
   const moment = [...input, { role: "user", content: `${THIS_MOMENT_HEADING}\nRecent rolls:\n- Alden Veyr: damage rolled 8\n\n=== END GAME STATE ===` }];
-  assert.equal(unrolledFigure([EIGHT], moment), "8 damage.");
+  assert.equal(unrolledFigure([EIGHT], moment, "english"), "8 damage.");
 });
 
 // In a fight, a hit or a miss on an enemy no tool touched this turn was
@@ -64,18 +64,18 @@ await test("A damage figure no tool rolled is found; no claim, or a figure alrea
 // swing) is the guard's to check against what it rolled.
 await test("A blow on a live enemy no tool touched is found, numbered twins included; a touched one, or no fight, is not.", () => {
   const live = { enemies: [{ id: "e1", name: "Bandit 1", hp: 11, maxHp: 11, status: "alive" }, { id: "e2", name: "Bandit 2", hp: 11, maxHp: 11, status: "alive" }] };
-  const target = normalizeCreatureName("Bandit 1");
+  const target = normalizeCreatureName("Bandit 1", "english");
   const hit = { kind: "hit", target, quote: "your shortsword finds its mark in his ribs" };
-  const untouched = resolveOutcomes([], live);
+  const untouched = resolveOutcomes([], live, "english");
   assert.equal(unrolledBlow([hit], untouched), hit.quote);
   assert.match(ruleClaims([hit], untouched)[0]?.detail ?? "", /no attack on Bandit 1 was rolled this turn/);
   // An area spell's row names the bandit: its save was rolled.
-  const area = resolveOutcomes([{ name: "aoe_damage", arguments: "{}", result: { results: [{ target: "Bandit 1", hp: "4/11" }] } }], live);
+  const area = resolveOutcomes([{ name: "aoe_damage", arguments: "{}", result: { results: [{ target: "Bandit 1", hp: "4/11" }] } }], live, "english");
   assert.equal(unrolledBlow([hit], area), null);
   assert.deepEqual(ruleClaims([hit], area), []);
-  assert.equal(unrolledBlow([hit], resolveOutcomes([], null)), null, "no fight runs");
+  assert.equal(unrolledBlow([hit], resolveOutcomes([], null, "english")), null, "no fight runs");
   // Bandit 1 and Bandit 2 key alike: with neither touched, a blow on either was unrolled.
-  const swungAtTwo = resolveOutcomes([{ name: "pc_attack", arguments: "{}", result: { hit: true, target: "Bandit 2", targetHp: "5/11" } }], live);
+  const swungAtTwo = resolveOutcomes([{ name: "pc_attack", arguments: "{}", result: { hit: true, target: "Bandit 2", targetHp: "5/11" } }], live, "english");
   assert.equal(unrolledBlow([hit], swungAtTwo), null, "a swing at Bandit 2 may be the one the prose means");
 });
 

@@ -140,7 +140,7 @@ export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
   },
   "fighter::Born to the Saddle": {
     subclass: "Cavalier",
-    effects: [{ kind: "save_adv", against: "mount|dismount|unseat|saddle|thrown from|knocked off|fall from" }],
+    effects: [{ kind: "save_adv", against: ["dismount"] }],
   },
   "fighter::Unwavering Mark": {
     subclass: "Cavalier",

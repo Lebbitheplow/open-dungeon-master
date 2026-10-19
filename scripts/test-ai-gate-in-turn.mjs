@@ -166,6 +166,16 @@ await test("Damage to an enemy the model writes as its own number is refused, an
   assert.equal(world.enemies()[0].currentHp, 7);
 });
 
+await test("A request_roll the model sends on its turn passes the gate too: an advantage claimed with a reason and no source is asked, and nothing is rolled.", async () => {
+  const before = listRecentRolls(world.campaignId, 50).length;
+  const result = await turnWith(
+    call("request_roll", { kind: "skill_check", characterId: kara.id, skill: "athletics", difficulty: "moderate", advantage: "advantage", advantageReason: "the goblin is tangled in the canvas", reason: "shoving the goblin" }),
+    "I shove the goblin.",
+  );
+  assert.match(result.error ?? "", /names no advantageSource/);
+  assert.equal(listRecentRolls(world.campaignId, 50).length, before, "a roll was made past the gate");
+});
+
 model.close();
 world.close();
 finish();

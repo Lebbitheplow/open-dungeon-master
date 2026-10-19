@@ -133,7 +133,7 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
     if (matchMagicItem(entry.item)) {
       return { error: `${entry.item} is a magic item; downtime crafting makes nonmagical objects only (SRD 5.1, Crafting).`, refused: "rules" };
     }
-    if (!listPriceCp(entry.item)) {
+    if (!listPriceCp({ name: entry.item })) {
       return { error: `The server has no market value for "${entry.item}"; name an item from the equipment lists so its crafting can be measured.`, retry: true };
     }
     for (const id of [sheet.id, ...(entry.helperIds ?? [])]) {
@@ -147,7 +147,7 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
     }
     const progress = downtimeOf(campaign.id, sheet.id).crafting;
     const starting = !progress || textKey(progress.item) !== textKey(entry.item);
-    const materials = Math.floor((listPriceCp(entry.item) ?? 0) / 2);
+    const materials = Math.floor((listPriceCp({ name: entry.item }) ?? 0) / 2);
     if (starting && purseOf(sheet) < materials) {
       return { error: `${sheet.name} needs ${formatCopper(materials)} of raw materials (half the market value) to start crafting ${entry.item}, and has ${formatCopper(purseOf(sheet))}.`, refused: "rules" };
     }
@@ -201,7 +201,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
   const progress: DowntimeProgress = { ...downtimeOf(campaign.id, sheet.id) };
   if (entry.activity === "crafting" && entry.item && entry.tool) {
     const item = entry.item.trim();
-    const valueCp = listPriceCp(item) ?? 0;
+    const valueCp = listPriceCp({ name: item }) ?? 0;
     let crafting = progress.crafting;
     if (!crafting || textKey(crafting.item) !== textKey(item)) {
       if (crafting) {

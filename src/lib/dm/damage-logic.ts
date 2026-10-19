@@ -6,6 +6,7 @@
 // there.
 import { RAGING } from "@/lib/srd/class-resources";
 import { matchArmor, type SrdArmor } from "@/lib/srd/armor";
+import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
 
 function has(conditions: string[], names: string[]): string | null {
   const lowered = conditions.map((entry) => entry.toLowerCase());
@@ -60,13 +61,11 @@ function lineCovers(line: string, type: string, magical: boolean, material: Weap
 // What a weapon is made of, for the resistances that name it.
 export type WeaponMaterial = { silvered?: boolean; adamantine?: boolean };
 
-// A weapon's material read from its name: "Silvered Longsword",
-// "Adamantine Greataxe".
-export function weaponMaterial(name: string | undefined): WeaponMaterial {
-  const text = (name ?? "").toLowerCase();
+// A wielded item's material, by what it is (src/lib/srd/item-tags.ts).
+export function weaponMaterial(item: TaggedItem | undefined): WeaponMaterial {
   return {
-    ...(/\bsilver(ed)?\b/.test(text) ? { silvered: true } : {}),
-    ...(/\badamantine\b/.test(text) ? { adamantine: true } : {}),
+    ...(item && hasItemTag(item, "silvered") ? { silvered: true } : {}),
+    ...(item && hasItemTag(item, "adamantine") ? { adamantine: true } : {}),
   };
 }
 

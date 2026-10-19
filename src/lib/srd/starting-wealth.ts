@@ -72,7 +72,9 @@ export function wealthCeilingGold(level: number): number {
 }
 
 // SRD 5.1 prices in gold pieces, for the weapons and armor the bundled
-// tables carry. The setting gear is priced beside its nearest SRD kin.
+// tables carry. The setting gear is priced beside its nearest SRD kin. Each
+// name is also spelled with "armor" after it ("Plate Armor"), on the table:
+// the name a buyer writes is looked up as written.
 const PRICES_GP: Record<string, number> = Object.fromEntries(Object.entries({
   club: 0.1, dagger: 2, greatclub: 0.2, handaxe: 5, javelin: 0.5, "light hammer": 2, mace: 5,
   quarterstaff: 0.2, sickle: 1, spear: 1, "light crossbow": 25, dart: 0.05, shortbow: 25,
@@ -89,13 +91,13 @@ const PRICES_GP: Record<string, number> = Object.fromEntries(Object.entries({
   "chain mail": 75, splint: 200, plate: 1500, shield: 10,
   "armorweave vest": 10, "kevlar vest": 45, "riot plating": 75, "brass carapace": 50,
   "scrap plate": 50, "ballistic shield": 10,
-}).map(([name, gold]) => [textKey(name), gold]));
+}).flatMap(([name, gold]) => [[textKey(name), gold], [`${textKey(name)} armor`, gold]]));
 
 const key = (name: string) => textKey(name.replace(/\(\s*\d+\s*\)\s*$/, ""));
 
 export function bundledPriceCopper(name: string): number | null {
   const wanted = key(name);
-  const gold = PRICES_GP[wanted] ?? PRICES_GP[wanted.replace(/ armor$/, "")] ?? null;
+  const gold = PRICES_GP[wanted] ?? null;
   if (gold !== null) {
     return Math.round(gold * 100);
   }

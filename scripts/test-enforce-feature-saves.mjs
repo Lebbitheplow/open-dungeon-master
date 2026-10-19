@@ -70,12 +70,12 @@ const stout = world.addHero({
 });
 
 await test("F:M1: Gnome Cunning gives advantage on INT, WIS and CHA saves against magic.", async () => {
-  const magic = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "spell (hold person)", dc: 13 }, [3, 17]);
+  const magic = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "paralyzed", magical: true, dc: 13 }, [3, 17]);
   assert.equal(magic.out.ok, true, magic.out.error);
   assert.equal(magic.faces.length, 2, "two d20s against a spell");
-  const mundane = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "a falling rock", dc: 13 }, [3]);
+  const mundane = await roll(gnome.id, { kind: "saving_throw", ability: "wis", against: "bludgeoning", dc: 13 }, [3]);
   assert.equal(mundane.faces.length, 1, "one d20 against something that is not magic");
-  const dex = await roll(gnome.id, { kind: "saving_throw", ability: "dex", against: "spell", dc: 13 }, [3]);
+  const dex = await roll(gnome.id, { kind: "saving_throw", ability: "dex", magical: true, dc: 13 }, [3]);
   assert.equal(dex.faces.length, 1, "DEX saves are not covered");
 });
 
@@ -84,6 +84,16 @@ await test("F:M2: Fey Ancestry gives advantage on saves against being charmed.",
   assert.equal(charm.faces.length, 2);
   const plain = await roll(elf.id, { kind: "saving_throw", ability: "wis", against: "frightened", dc: 13 }, [3]);
   assert.equal(plain.faces.length, 1);
+});
+
+await test("What a save resists is its against, never the words of its reason, in every table language.", async () => {
+  const reasons = ["the vampire's charming gaze", "lo sguardo ammaliante del vampiro", "le regard charmeur du vampire", "la mirada hechizante del vampiro", "der bezaubernde Blick des Vampirs"];
+  for (const reason of reasons) {
+    const named = await roll(elf.id, { kind: "saving_throw", ability: "wis", against: "charmed", dc: 13, reason }, [3, 17]);
+    assert.equal(named.faces.length, 2, reason);
+    const unnamed = await roll(elf.id, { kind: "saving_throw", ability: "wis", dc: 13, reason }, [3]);
+    assert.equal(unnamed.faces.length, 1, reason);
+  }
 });
 
 await test("F:M3: Dwarven and Stout Resilience give advantage on saves against poison.", async () => {

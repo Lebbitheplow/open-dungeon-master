@@ -3,6 +3,7 @@
 
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "../language/text-logic.ts";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 
 export type SlotState = { max: number; used: number };
 export type EquipmentRow = {
@@ -12,6 +13,11 @@ export type EquipmentRow = {
   // False while the party does not know what this is. Absent reads as true,
   // so every row written before the flag existed stays identified.
   identified?: boolean;
+  // A spell scroll's spell: two scrolls of different spells never merge.
+  spell?: string;
+  // The row it is, when its name is the table's: two potions of different
+  // rows never merge.
+  srdName?: string;
 };
 
 // Absent means known: an unidentified item is the exception, and the default
@@ -113,7 +119,7 @@ export function spendSlotMath(slot: SlotState | undefined | null): SlotState | n
 
 // Remove qty of an item; partial removal adjusts, zero removes the row.
 // Returns null when the item is absent.
-export function removeItemMath(equipment: EquipmentRow[], name: string, qty: number) {
+export function removeItemMath<Row extends EquipmentRow>(equipment: Row[], name: string, qty: number) {
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name),
   );
@@ -128,7 +134,20 @@ export function removeItemMath(equipment: EquipmentRow[], name: string, qty: num
   } else {
     next[index] = { ...item, qty: item.qty - removed };
   }
-  return { equipment: next, removed };
+  return { equipment: next, removed, item };
+}
+
+// What a tool says an item is, beyond its name: its tags, its worth, a
+// scroll's spell.
+export type ItemFacts = { srdName?: string; tags?: ItemTag[]; worth?: number; spell?: string };
+
+function itemFacts(facts: ItemFacts): ItemFacts {
+  return {
+    ...(facts.srdName ? { srdName: facts.srdName } : {}),
+    ...(facts.tags?.length ? { tags: facts.tags } : {}),
+    ...(facts.worth ? { worth: facts.worth } : {}),
+    ...(facts.spell ? { spell: facts.spell } : {}),
+  };
 }
 
 // Add qty of an item, merging with an existing row by name.
@@ -141,18 +160,25 @@ export function grantItemMath(
   equipment: EquipmentRow[],
   name: string,
   qty: number,
-  options: { identified?: boolean } = {},
+  // What the item is, when no English row says it (src/lib/srd/item-tags.ts),
+  // what one is worth, when the pack does not price it, and a scroll's
+  // spell; never written on an unidentified one, whose secret stays off the
+  // sheet.
+  options: { identified?: boolean } & ItemFacts = {},
 ) {
   const amount = Math.max(1, Math.floor(qty));
   const known = options.identified !== false;
+  const facts = known ? itemFacts(options) : {};
+  // Two scrolls of different spells, or two potions of different rows, are
+  // two things, whatever they are called.
   const index = equipment.findIndex(
-    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known,
+    (item) => textKey(item.name) === textKey(name) && isIdentified(item) === known && item.spell === facts.spell && item.srdName === facts.srdName,
   );
   if (index < 0) {
     return {
       equipment: [
         ...equipment,
-        known ? { name, qty: amount } : { name, qty: amount, identified: false },
+        known ? { name, qty: amount, ...facts } : { name, qty: amount, identified: false },
       ],
     };
   }
@@ -172,6 +198,7 @@ export function revealItemMath(
   equipment: EquipmentRow[],
   name: string,
   revealedName?: string,
+  facts: ItemFacts = {},
 ): { equipment: EquipmentRow[]; from: string; to: string } | null {
   const index = equipment.findIndex(
     (item) => textKey(item.name) === textKey(name) && !isIdentified(item),
@@ -186,7 +213,7 @@ export function revealItemMath(
   // and one representation for "identified" is one fewer thing to disagree.
   const rest = { ...next[index] };
   delete rest.identified;
-  next[index] = { ...rest, name: to };
+  next[index] = { ...rest, name: to, ...itemFacts(facts) };
   return { equipment: next, from, to };
 }
 

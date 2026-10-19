@@ -11,36 +11,25 @@
 // scripts/test-ammunition.mjs can import it directly.
 
 import type { ToolError } from "../dm/tool-errors.ts";
-import { textKey } from "@/lib/language/text-logic";
+import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
 
 export type AmmoKind = "arrows" | "bolts" | "bullets" | "needles";
 
-// What each ammunition weapon fires. Matched against the SRD weapon name,
-// lowercased, longest key first so "hand crossbow" beats "crossbow".
-const WEAPON_AMMO: Array<[match: string, kind: AmmoKind]> = [
-  ["blowgun", "needles"],
-  ["hand crossbow", "bolts"],
-  ["heavy crossbow", "bolts"],
-  ["light crossbow", "bolts"],
-  ["crossbow", "bolts"],
-  ["shortbow", "arrows"],
-  ["longbow", "arrows"],
-  ["bow", "arrows"],
-  ["sling", "bullets"],
-  ["pistol", "bullets"],
-  ["revolver", "bullets"],
-  ["musket", "bullets"],
-  ["rifle", "bullets"],
-];
-
-// The nouns an inventory line may use for each kind. "Sling bullets" and
-// "bullets" both work, as do the singular forms a player might type.
-const AMMO_WORDS: Record<AmmoKind, string[]> = {
-  arrows: ["arrow", "arrows"],
-  bolts: ["bolt", "bolts", "quarrel", "quarrels"],
-  bullets: ["bullet", "bullets", "cartridge", "cartridges", "shot"],
-  needles: ["needle", "needles"],
-};
+// What each ammunition weapon fires, by the SRD weapon row's name
+// (src/lib/srd/weapons.ts).
+const WEAPON_AMMO = new Map<string, AmmoKind>([
+  ["Blowgun", "needles"],
+  ["Hand Crossbow", "bolts"],
+  ["Heavy Crossbow", "bolts"],
+  ["Light Crossbow", "bolts"],
+  ["Shortbow", "arrows"],
+  ["Longbow", "arrows"],
+  ["Sling", "bullets"],
+  ["Pistol", "bullets"],
+  ["Revolver", "bullets"],
+  ["Musket", "bullets"],
+  ["Hunting Rifle", "bullets"],
+]);
 
 // Pounds per round, from the SRD equipment table: 20 arrows weigh 1 lb, 20
 // bolts or sling bullets 1.5 lb, 50 blowgun needles 1 lb. Per round rather
@@ -60,17 +49,12 @@ export const AMMO_LABELS: Record<AmmoKind, string> = {
   needles: "needles",
 };
 
-export function ammoKindForWeapon(weaponName: string): AmmoKind | null {
-  const name = textKey(weaponName ?? "");
-  for (const [match, kind] of WEAPON_AMMO) {
-    if (name.includes(match)) {
-      return kind;
-    }
-  }
-  return null;
+// What an SRD weapon fires, by its row's name; null for any other.
+export function ammoKindForWeapon(srdName: string | undefined): AmmoKind | null {
+  return (srdName && WEAPON_AMMO.get(srdName)) || null;
 }
 
-type Item = { name: string; qty: number };
+type Item = TaggedItem & { qty: number };
 
 // How many rounds an inventory line holds. `qty` is authoritative, but a
 // line written as "Arrows (20)" carries its count in the name and would
@@ -84,20 +68,14 @@ export function ammoCount(item: Item): number {
   return item.qty;
 }
 
-function isAmmoFor(kind: AmmoKind, name: string): boolean {
-  const lower = name.toLowerCase();
-  return AMMO_WORDS[kind].some((word) => new RegExp(`\\b${word}\\b`).test(lower));
-}
+// The ammunition kinds, each the tag an inventory line carries for it
+// (src/lib/srd/item-tags.ts).
+const AMMO_KINDS: AmmoKind[] = ["arrows", "bolts", "bullets", "needles"];
 
 // Which kind of ammunition an inventory line IS, as opposed to which kind a
 // weapon fires. Null for everything that is not ammunition.
-export function ammoKindForItem(itemName: string): AmmoKind | null {
-  for (const kind of Object.keys(AMMO_WORDS) as AmmoKind[]) {
-    if (isAmmoFor(kind, itemName ?? "")) {
-      return kind;
-    }
-  }
-  return null;
+export function ammoKindForItem(item: TaggedItem): AmmoKind | null {
+  return AMMO_KINDS.find((kind) => hasItemTag(item, kind)) ?? null;
 }
 
 // The inventory line this weapon draws from, or null when the character is
@@ -109,7 +87,7 @@ export function findAmmo(
 ): { index: number; item: Item; count: number } | null {
   for (let index = 0; index < equipment.length; index += 1) {
     const item = equipment[index];
-    if (isAmmoFor(kind, item.name) && ammoCount(item) > 0) {
+    if (hasItemTag(item, kind) && ammoCount(item) > 0) {
       return { index, item, count: ammoCount(item) };
     }
   }
@@ -124,10 +102,12 @@ export type AmmoSpend =
 // caller decides how to persist it.
 export function spendAmmo(
   equipment: Item[],
-  weaponName: string,
+  // The SRD weapon it is (AttackProfile's base), and the name it is carried
+  // under.
+  weapon: { base: string | undefined; name: string },
   characterName: string,
 ): AmmoSpend | null {
-  const kind = ammoKindForWeapon(weaponName);
+  const kind = ammoKindForWeapon(weapon.base);
   if (!kind) {
     // Not an ammunition weapon; nothing to track.
     return null;
@@ -137,7 +117,7 @@ export function spendAmmo(
     return {
       ok: false,
       kind,
-      error: `${characterName} is out of ${AMMO_LABELS[kind]} and cannot fire the ${weaponName}.`,
+      error: `${characterName} is out of ${AMMO_LABELS[kind]} and cannot fire the ${weapon.name}.`,
       refused: "rules",
     };
   }

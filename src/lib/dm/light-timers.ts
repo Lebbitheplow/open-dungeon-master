@@ -3,6 +3,8 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishFx } from "@/lib/dm/fx";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
+import type { ItemTag } from "@/lib/schemas/item-tags";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 // Torch and lantern timers (docs/vtt-parity-implementation-plan.md 7.3).
 // A carried light is inferred from equipment; a torch burns an hour, a
@@ -16,32 +18,30 @@ import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 
 export type CarriedLight = { radius: number; minutes: number };
 
-type Source = { match: RegExp; radius: number; minutes: number; fuel?: RegExp };
-
-// Lamp oil ("Flask of Oil", "Oil (flask)", "Lamp oil"), never a magic oil:
-// an Oil of Sharpness or of Etherealness is not burned in a lantern.
-const OIL = /\boil\b(?!\s+of\b)/i;
+// What an item is decides the light (src/lib/srd/item-tags.ts); a lantern
+// burns lamp oil, never a magic oil.
+type Source = { tag: ItemTag; radius: number; minutes: number; fuel?: ItemTag };
 
 const SOURCES: Source[] = [
-  { match: /everburning|sunrod|glowstone/i, radius: 4, minutes: 0 },
-  { match: /bullseye lantern/i, radius: 12, minutes: 360, fuel: OIL },
-  { match: /lantern/i, radius: 6, minutes: 360, fuel: OIL },
-  { match: /torch/i, radius: 4, minutes: 60 },
-  { match: /candle/i, radius: 1, minutes: 60 },
+  { tag: "everburning_light", radius: 4, minutes: 0 },
+  { tag: "bullseye_lantern", radius: 12, minutes: 360, fuel: "lamp_oil" },
+  { tag: "lantern", radius: 6, minutes: 360, fuel: "lamp_oil" },
+  { tag: "torch", radius: 4, minutes: 60 },
+  { tag: "candle", radius: 1, minutes: 60 },
 ];
 
 // The light a pack can give, and what it burns: the source itself, or the
 // fuel a lantern needs.
 function burningSource(equipment: EquipmentItem[]): { source: Source; burns: EquipmentItem | null } | null {
   for (const source of SOURCES) {
-    const lamp = equipment.find((item) => source.match.test(item.name));
+    const lamp = equipment.find((item) => hasItemTag(item, source.tag));
     if (!lamp) {
       continue;
     }
     if (!source.fuel) {
       return { source, burns: source.minutes > 0 ? lamp : null };
     }
-    const fuel = equipment.find((item) => item !== lamp && source.fuel?.test(item.name));
+    const fuel = equipment.find((item) => item !== lamp && source.fuel && hasItemTag(item, source.fuel));
     if (fuel) {
       return { source, burns: fuel };
     }

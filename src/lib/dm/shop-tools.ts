@@ -332,13 +332,13 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   if (!removal) {
     return notCarried(sheet.name, sheet.equipment.map((item) => item.name), args.item, isTableGearName(campaign.id, args.item));
   }
-  const carried = sheet.equipment.find((item) => textKey(item.name) === textKey(args.item))?.name ?? args.item;
+  const line = sheet.equipment.find((item) => textKey(item.name) === textKey(args.item)) ?? { name: args.item };
+  const carried = line.name;
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
-  // Selling Treasure); a treasure named with its value is priced by it.
-  // A value written into the name prices only treasure; "Longsword (15 gp)"
-  // is priced as a longsword (src/lib/dm/trade-value.ts).
-  const listCp = listPriceCp(carried);
-  const each = listCp !== null ? (keepsFullValue(carried) ? listCp : offerPriceCp(listCp)) : args.priceCp ?? null;
+  // Selling Treasure), priced by the worth they were given; a name is never
+  // read for a price (src/lib/dm/trade-value.ts).
+  const listCp = listPriceCp(line);
+  const each = listCp !== null ? (keepsFullValue(line) ? listCp : offerPriceCp(listCp)) : args.priceCp ?? null;
   if (each === null) {
     return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.`, retry: true };
   }

@@ -19,7 +19,7 @@ const { damageAdjust } = await import("../src/lib/dm/damage-logic.ts");
 const fighter = world.addHero({
   name: "Fighter", class: "fighter", level: 5, abilities: { str: 16, dex: 10 }, proficiencies: { ...TRAINED, skills: ["athletics", "perception"] },
   maxHp: 60, ac: 10, acOverride: true,
-  equipment: [{ name: "Longsword", qty: 1 }, { name: "Shortsword", qty: 1 }, { name: "Silvered Longsword", qty: 1 }, { name: "Longbow", qty: 1 }, { name: "Light Crossbow", qty: 1 }, { name: "Hand Crossbow", qty: 1 }],
+  equipment: [{ name: "Longsword", qty: 1 }, { name: "Shortsword", qty: 1 }, { name: "Silvered Longsword", qty: 1, tags: ["silvered"] }, { name: "Longbow", qty: 1 }, { name: "Light Crossbow", qty: 1 }, { name: "Hand Crossbow", qty: 1 }],
 });
 const other = world.addHero({
   name: "Other", class: "fighter", level: 5, proficiencies: TRAINED, maxHp: 60, ac: 10, acOverride: true,
@@ -224,13 +224,13 @@ await test("A silvered weapon passes resistance and immunity to nonmagical attac
 
 await test("A blinded creature automatically fails any ability check that requires sight; a deafened one any that requires hearing.", async () => {
   world.patch(fighter.id, { conditions: ["blinded"], conditionMeta: {} });
-  const spot = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", reason: "spot the tracks in the mud" });
+  const spot = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", by: "sight", reason: "spot the tracks in the mud" });
   assert.equal(spot.ok, true, spot.error);
   assert.equal(spot.result.autoFailed, true, "a blinded character rolled to spot tracks");
-  const listen = await mk.forced([10], () => world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", reason: "listen at the door" }));
+  const listen = await mk.forced([10], () => world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", by: "hearing", reason: "listen at the door" }));
   assert.notEqual(listen.result.autoFailed, true, "a blinded character failed a hearing check");
   world.patch(fighter.id, { conditions: ["deafened"], conditionMeta: {} });
-  const hear = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", reason: "listen at the door" });
+  const hear = await world.invoke("request_roll", { characterId: fighter.id, kind: "skill_check", skill: "perception", by: "hearing", reason: "listen at the door" });
   assert.equal(hear.result.autoFailed, true, "a deafened character rolled to listen");
   world.patch(fighter.id, { conditions: [], conditionMeta: {} });
 });

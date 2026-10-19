@@ -146,7 +146,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
     if (sheet.deathSaves?.dead) {
       continue;
     }
-    const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", "spell");
+    const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", { magical: true });
     const rays = rollRays(rayDie(input, sheet.id, sheet.name));
     const notes: string[] = [];
     for (const ray of rays) {

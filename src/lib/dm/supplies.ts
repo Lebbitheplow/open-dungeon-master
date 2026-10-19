@@ -26,11 +26,9 @@ import { publishPersisted } from "@/lib/events";
 import { exhaustionPatch } from "@/lib/dm/vitals-logic";
 import { abilityMod } from "@/lib/srd";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
+import { hasItemTag } from "@/lib/srd/item-tags";
 
 export type Hunger = { food: number; water: number };
-
-const RATION = /\b(ration|rations|trail ?rations?|iron rations?|food)\b/i;
-const WATERSKIN = /\bwater ?skin\b|\bcanteen\b|\bflask of water\b|\bwater\b/i;
 
 // How many days a character can go without food before each further day
 // costs a level of exhaustion.
@@ -49,7 +47,7 @@ export function dayOfUpkeep(
   const notes: string[] = [];
   let equipment: EquipmentItem[] | null = null;
   let food = hunger.food;
-  const ration = sheet.equipment.find((item) => RATION.test(item.name) && item.qty > 0);
+  const ration = sheet.equipment.find((item) => hasItemTag(item, "food") && item.qty > 0);
   if (ration) {
     equipment = sheet.equipment.flatMap((item) =>
       item !== ration ? [item] : item.qty > 1 ? [{ ...item, qty: item.qty - 1 }] : [],
@@ -60,7 +58,7 @@ export function dayOfUpkeep(
     food += 1;
     notes.push(`went a day without food (${food})`);
   }
-  const drank = waterRation !== "none" && sheet.equipment.some((item) => WATERSKIN.test(item.name));
+  const drank = waterRation !== "none" && sheet.equipment.some((item) => hasItemTag(item, "water"));
   // Half the water: the day's save is the caller's to roll.
   const halfWater = drank && waterRation === "half";
   const water = drank ? 0 : hunger.water + 1;
@@ -108,7 +106,7 @@ export function upkeepAtDawns(
       const upkeep = dayOfUpkeep(sheet, next[sheet.id] ?? { food: 0, water: 0 }, waterRation);
       next[sheet.id] = upkeep.hunger;
       if (upkeep.halfWater) {
-        const save = characterSave(campaign, sheet, { ability: "con", dc: 15, detail: `${sheet.name}: CON save on half water`, against: "thirst" });
+        const save = characterSave(campaign, sheet, { ability: "con", dc: 15, detail: `${sheet.name}: CON save on half water`, against: "exhaustion" });
         if (!save.success) {
           upkeep.exhaustion += (sheet.exhaustion ?? 0) >= 1 ? 2 : 1;
         }

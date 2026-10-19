@@ -2,14 +2,16 @@
 //
 // The AI's turn loop (turn.ts) used to carry its own copy of this, and the
 // two drifted: the copy skipped the table's strictness and rolled for the
-// dead. There is one now. The model's call differs in two things only, both
-// passed in: a parked roll remembers the tool call it answers, so the model
-// can be resumed with the result, and the refusals are worded for a model.
+// dead. There is one now. The model's call differs in three things only:
+// a parked roll remembers the tool call it answers, so the model can be
+// resumed with the result, the refusals are worded for a model, and a field
+// it leaves unnamed that the character's traits would read is asked for.
 // Everything else is shared: the expression comes from the sheet, conditions
 // can decide the roll outright, an inspiration die is spent whether the
 // dice are physical or digital, an initiative roll feeds the encounter, and
 // a damage roll aimed at an enemy applies itself.
 import { claimedAdvantage } from "@/lib/dm/pc-attack-options";
+import { askedFields, unnamedTraitFields } from "@/lib/dm/roll-feature-riders";
 import { rollExpression } from "@/lib/dice";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
@@ -34,7 +36,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { moteAfterRoll, moteOf } from "@/lib/dm/authored-mote";
 import { applyRollGates } from "@/lib/dm/roll-gates";
-import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 
 export function handleRequestRoll(
   campaign: Campaign,
@@ -49,27 +51,29 @@ export function handleRequestRoll(
   model?: { toolCallId: string | null },
 ): ToolResult {
   const campaignId = campaign.id;
-  let args: RollArgs;
+  const needs = model
+    ? "Invalid request_roll arguments. Send JSON with kind, and skill/ability/dc or expression as documented."
+    : "Pick a roll kind, and a skill, ability or DC to go with it.";
+  let raw: unknown;
   try {
-    const raw = JSON.parse(rawArguments || "{}");
-    args = rollArgsSchema.parse(raw);
-    args = {
-      ...args,
-      dc: rollDcFor(args, raw, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard")),
-    };
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
-    return {
-      error: model
-        ? "Invalid request_roll arguments. Send JSON with kind, and skill/ability/dc or expression as documented."
-        : "Pick a roll kind, and a skill, ability or DC to go with it.",
-      retry: true,
-    };
+    return { error: needs, retry: true };
   }
+  const parsed = rollArgsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return model ? invalidArguments(needs, parsed.error) : { error: needs, retry: true };
+  }
+  let args: RollArgs = parsed.data;
+  args = {
+    ...args,
+    dc: rollDcFor(args, raw, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard")),
+  };
 
   // The AI's advantage stands only on a circumstance the server cannot see
   // (the same rule as pc_attack's); the DM console rules freely.
   if (turn.actor === "ai" && args.advantage && args.advantage !== "none") {
-    const claim = claimedAdvantage({ requested: args.advantage, reason: args.advantageReason, byAi: true });
+    const claim = claimedAdvantage({ requested: args.advantage, source: args.advantageSource, reason: args.advantageReason, byAi: true });
     args = { ...args, advantage: claim.requested };
   }
   const sheet = resolveSheetRef(args.characterId, sheets, sheetsById);
@@ -113,13 +117,20 @@ export function handleRequestRoll(
     };
   }
 
-  const resolved = resolveRollExpression(
-    args,
-    sheet,
-    sheet
-      ? rollExtrasFor(campaign, sheet, args.kind)
-      : { encumbrance: campaign.gameSettings.variantRules.encumbrance },
-  );
+  const extras = sheet ? rollExtrasFor(campaign, sheet, args.kind) : { encumbrance: campaign.gameSettings.variantRules.encumbrance };
+  // A trait of the character's that a field the model left unnamed would
+  // call on (src/lib/dm/roll-about.ts): it names the field, or 'none', before
+  // anything is rolled, so the trait is never lost to an omission.
+  if (turn.actor === "ai" && sheet) {
+    const asked = unnamedTraitFields(sheet, args);
+    if (asked.length) {
+      return {
+        error: `${sheet.name} holds a trait this roll can call on. Name ${askedFields(asked)}, as the fiction is, and send the roll again. Nothing was rolled.`,
+        retry: true,
+      };
+    }
+  }
+  const resolved = resolveRollExpression(args, sheet, extras);
   if ("error" in resolved) {
     return toolError(resolved);
   }

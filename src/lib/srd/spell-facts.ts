@@ -305,6 +305,15 @@ const MANIFEST = new Map(
   ),
 );
 
+// Every name the checklist prints a spell under, the given one first: "Tasha's
+// Hideous Laughter" is also "Hideous Laughter", "Bigby's Hand" "Arcane Hand".
+// For the tables keyed by one of those names; a name the checklist does not
+// carry is only itself.
+export function spellNamesOf(name: string): string[] {
+  const listed = MANIFEST.get(textKey(name));
+  return [...new Set([name, ...(listed ? [listed.n, ...(listed.a ?? [])] : [])])];
+}
+
 function manifestRange(value: ManifestSpell["d"]): SpellRange {
   if (typeof value === "number") {
     return { kind: "feet", feet: value };

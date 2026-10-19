@@ -195,6 +195,8 @@ export type ProfileSignals = {
 
 // Words in the players' newest lines that call for a group. Deliberately
 // plain: a miss costs one more_tools call, a false hit a few hundred tokens.
+// English words only, an extra: at a table in another language every group
+// these would open is that one more_tools call away.
 const INTENT: Array<[ToolGroupId, RegExp]> = [
   ["shop", /\b(buy|buying|sell|selling|shop|shops|merchant|wares|haggle|barter|price|prices)\b/i],
   ["world", /\b(travel|journey|road|ride (?:to|north|south|east|west)|march|days? (?:later|pass)|wait (?:until|for)|treasure|hoard|loot|break (?:down|open|the)|smash|weather)\b/i],

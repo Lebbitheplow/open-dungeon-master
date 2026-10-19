@@ -184,7 +184,7 @@ async function iceWall() {
 
 await test("Wall of Ice: a 10-foot section has AC 12 and 30 hit points and is vulnerable to fire; a section brought to 0 no longer stands.", async () => {
   const { world, sheets: [, fighter] } = await iceWall();
-  const out = await world.invoke("damage_object", { name: "Wall of Ice section 3", damage: "16", damageType: "fire" });
+  const out = await world.invoke("damage_object", { name: "Wall of Ice", section: 3, damage: "16", damageType: "fire" });
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.ac, 12);
   assert.equal(out.result.hp, 30);
@@ -197,7 +197,7 @@ await test("Wall of Ice: a 10-foot section has AC 12 and 30 hit points and is vu
 
 await test("A broken section of a Wall of Ice leaves frigid air: a creature moving through it for the first time on a turn makes a CON save or takes 5d6 cold (half on a success).", async () => {
   const { world, sheets: [, fighter] } = await iceWall();
-  await world.invoke("damage_object", { name: "Wall of Ice section 3", damage: "30", damageType: "bludgeoning" });
+  await world.invoke("damage_object", { name: "Wall of Ice", section: 3, damage: "30", damageType: "bludgeoning" });
   const before = hp(world, fighter.id);
   world.dice(1, 1, 1, 1, 1, 1);
   const through = await walk(world, fighter.id, 14, 4);
@@ -304,7 +304,7 @@ await test("damage_object on a Wall of Ice with no section named is refused, lis
 
 await test("The frigid air of a broken Wall of Ice section ends when the caster's concentration on the wall ends.", async () => {
   const { world, sheets: [wizard] } = await iceWall();
-  await world.invoke("damage_object", { name: "Wall of Ice section 2", damage: "30", damageType: "bludgeoning" });
+  await world.invoke("damage_object", { name: "Wall of Ice", section: 2, damage: "30", damageType: "bludgeoning" });
   assert.ok(zonesOf(world).some((zone) => zone.spell === "Frigid Air"), "the frigid air is laid");
   world.dice(1);
   await world.invoke("apply_damage", { characterId: wizard.id, amount: 10, type: "slashing" });

@@ -1,5 +1,5 @@
 // Money in more than one denomination: what a purse is worth, how it reads,
-// and what a person typing "340 silver" gets.
+// and what a person typing "340 sp" gets.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
@@ -69,11 +69,18 @@ test("a bare number is gold, because every price in the pack is", () => {
   assert.equal(parseCoins("12gp"), 1200);
 });
 
-test("denominations parse by name and by code", () => {
-  assert.equal(parseCoins("340 silver"), 3400);
+test("denominations parse by their codes", () => {
+  assert.equal(parseCoins("340 sp"), 3400);
   assert.equal(parseCoins("2 pp 5 sp"), 2050);
-  assert.equal(parseCoins("6 copper pieces"), 6);
+  assert.equal(parseCoins("6 cp"), 6);
   assert.equal(parseCoins("1,200 gp"), 120000);
+  assert.equal(parseCoins("1.5 gp"), 150);
+});
+
+test("a coin's name in any language is no code, never a guessed amount", () => {
+  for (const text of ["340 silver", "12 gold pieces", "50 mo", "5 monete d'argento", "50 pièces d'or", "50 monedas de oro", "50 Goldmünzen", "3 gp 5 mo"]) {
+    assert.equal(parseCoins(text), null, text);
+  }
 });
 
 test("nothing said parses to null, so a caller can tell it apart from free", () => {

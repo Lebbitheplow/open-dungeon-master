@@ -8,6 +8,7 @@ import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { call, fakeModel, reply } from "./lib/enforce-narrator.mjs";
 import { OMITTED_MARK, clipKeepingEnds, recentTranscript, transcriptPassages } from "../src/lib/dm/ask-logic.ts";
+import { stopWordsFor } from "../src/lib/language/language.ts";
 
 const { test, finish } = suite("test-ask-recent");
 
@@ -60,11 +61,11 @@ await test("A search finds the passage inside a long message, not only its start
     { seq: 7, who: "DM", content: `${filler(60)} ${DOG} ${filler(10)}` },
     { seq: 8, who: "Tavi", content: "I keep walking." },
   ];
-  const found = transcriptPassages(lines, "has the grey dog noticed Tavi?");
+  const found = transcriptPassages(lines, "has the grey dog noticed Tavi?", stopWordsFor("english"));
   assert.equal(found.length, 1);
   assert.ok(found[0].startsWith("[recent:7] DM: "));
   assert.ok(found[0].includes("grey dog slips out"), found[0].slice(0, 200));
-  assert.deepEqual(transcriptPassages(lines, "the and was"), []);
+  assert.deepEqual(transcriptPassages(lines, "the and was", stopWordsFor("english")), []);
 });
 
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });

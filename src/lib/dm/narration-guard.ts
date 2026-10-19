@@ -66,7 +66,7 @@ async function readNarration(
   parts: readonly string[],
   partReads: ReadonlyMap<string, PartRead>,
 ): Promise<{ contradictions: Contradiction[]; lines: SpokenLine[] }> {
-  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id));
+  const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id), campaign.gameSettings.tableLanguage);
   const kinds = guardKinds(campaign, outcomes, sheets);
   const wanted = (part: string): ClaimKind[] => (hasQuotedLine(part) ? [...kinds, "speaker"] : kinds);
   // A part read before this turn's outcomes gave the guard more to check (an

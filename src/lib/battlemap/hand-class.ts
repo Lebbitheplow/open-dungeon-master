@@ -293,7 +293,7 @@ export function bonusStrikeCards(
     own.push({ feature: "Unwavering Mark", weapon: melee ?? null, rules: "Against your marked creature that struck someone else: a melee attack with advantage and +half your fighter level damage." });
   }
   if (holds(sheet, "hungry jaws")) {
-    const bite = racialNaturalWeapon(sheet.features, "bite");
+    const bite = racialNaturalWeapon(sheet.features, ["bite"]);
     if (bite) own.push({ feature: "Hungry Jaws", weapon: { name: bite.srd.name, srd: bite.srd } as Carried, rules: "A bite as a bonus action; on a hit you gain your Constitution modifier in temporary hit points." });
   }
   if (holds(sheet, "pistol and blade")) {

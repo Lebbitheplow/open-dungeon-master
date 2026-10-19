@@ -15,6 +15,7 @@ import {
   type KitOption,
   type KitSlot,
 } from "@/lib/srd/starting-kit-data";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 import { SRD_WEAPONS, defaultLoadout } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -74,8 +75,7 @@ const MARTIAL_DOMAINS = ["tempest", "war", "twilight"];
 export type KitTraining = { armor: string[]; weapons: string[]; subclass?: string };
 
 function domainOf(subclass: string | undefined, list: string[]): boolean {
-  const name = lower(subclass ?? "").replace(/\s*domain\s*/g, "");
-  return list.includes(name);
+  return list.some((domain) => subclassNamed(subclass ?? "", `${domain} domain`));
 }
 
 // Whether a character may take an option: false only for an "(if
