@@ -13,7 +13,7 @@ import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
-import { cantripCapOf, casterViewsOf, maxSpellLevelOf, type CasterView } from "@/lib/srd/spell-prep";
+import { cantripCapOf, casterListOf, casterViewsOf, maxSpellLevelOf, type CasterView } from "@/lib/srd/spell-prep";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
 type Learner = Pick<CharacterSheet, "name" | "class" | "level" | "subclass" | "classes" | "abilities" | "spellcasting">;
@@ -22,11 +22,14 @@ const lower = (name: string) => name.trim().toLowerCase();
 
 // The caster views whose class list carries the spell: the class's own list,
 // or the spells its subclass adds to it (a patron's expanded list).
+// A third caster's list is its profile's: an Eldritch Knight learns a
+// wizard spell, which "fighter" was never on.
 export function viewsWithSpell(sheet: Learner, facts: SpellFacts, extras?: SubclassExtras): CasterView[] {
-  return casterViewsOf(sheet).filter(
+  return casterViewsOf(sheet, extras).filter(
     (view) =>
       facts.classes.length === 0 ||
       facts.classes.includes(lower(view.classId)) ||
+      facts.classes.includes(lower(casterListOf(view))) ||
       subclassSpellsFor(view.classId, view.subclass, view.level, extras).some((name) => lower(name) === lower(facts.name)),
   );
 }
@@ -37,7 +40,7 @@ export function learnProblem(sheet: Learner, spell: string, facts: SpellFacts | 
   }
   const views = viewsWithSpell(sheet, facts, extras);
   if (!views.length) {
-    const classes = casterViewsOf(sheet).map((view) => view.classId).join(" or ") || sheet.class;
+    const classes = casterViewsOf(sheet).map((view) => casterListOf(view)).join(" or ") || sheet.class;
     return { error: `${facts.name} is not on the ${classes} spell list, so ${sheet.name} cannot learn it.`, refused: "rules" };
   }
   if (facts.level === 0) {

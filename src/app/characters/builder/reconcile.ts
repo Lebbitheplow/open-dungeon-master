@@ -253,7 +253,7 @@ export function reconcilePicks(
       return false;
     }
     const taken = perKind.get(option.k) ?? 0;
-    if (taken >= optionSlotsFor(klass.id, subclass, level, option.k)) {
+    if (taken >= optionSlotsFor(klass.id, subclass, level, option.k, features)) {
       return false;
     }
     perKind.set(option.k, taken + 1);

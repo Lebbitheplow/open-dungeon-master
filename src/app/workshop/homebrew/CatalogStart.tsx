@@ -37,7 +37,7 @@ export function CatalogStart({
   // so a wizard spell starts from wizard spells rather than the whole book.
   scope?: Record<string, string>;
 }) {
-  const [classSlug, setClassSlug] = useState<string>("fighter");
+  const [classSlug, setClassSlug] = useState<string>(kind === "archetype" && scope.class ? scope.class : "fighter");
   // mechanics=1: the row comes with what the engine runs for it, so the copy
   // starts with that and not only the words (catalog-mechanics.ts).
   const extra: Record<string, string> = kind === "archetype" ? { class: classSlug, mechanics: "1" } : { ...scope, mechanics: "1" };

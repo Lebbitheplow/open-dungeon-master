@@ -88,6 +88,27 @@ function classLevel(sheet: AuthoredSheet, classId: string): number {
   return Math.max(1, sheet.level ?? 1);
 }
 
+// The rows by feature name alone, for a feature a workshop subclass borrowed
+// from another class's subclass (a barbarian subclass with War Magic, from
+// the workshop's feature catalog). Taken only when a single class's table
+// carries that name, so a name two classes mean differently is never guessed.
+const BY_NAME = new Map<string, Row[]>();
+for (const row of BY_KEY.values()) {
+  const name = textKey(row.feature);
+  BY_NAME.set(name, [...(BY_NAME.get(name) ?? []), row]);
+}
+
+function borrowedRow(name: string): Row | undefined {
+  const rows = BY_NAME.get(name);
+  return rows?.length === 1 ? rows[0] : undefined;
+}
+
+// The option a held name chose ("bear" of "Totem Spirit (Bear)"), when the
+// row matched on the bare name.
+function choiceOf(exact: Row | undefined, chosen: RegExpExecArray | null): string | null {
+  return !exact && chosen ? chosen[2].trim().toLowerCase() : null;
+}
+
 // The authored features a sheet holds, each with the option chosen for it
 // ("Totem Spirit (Bear)") and the level of the class that granted it.
 export function heldAuthored(sheet: AuthoredSheet): HeldAuthored[] {
@@ -106,11 +127,27 @@ export function heldAuthored(sheet: AuthoredSheet): HeldAuthored[] {
         out.push({
           ...row,
           name: feature.name,
-          choice: !exact && chosen ? chosen[2].trim().toLowerCase() : null,
+          choice: choiceOf(exact, chosen),
           level: classLevel(sheet, classId),
         });
         found = true;
         break;
+      }
+    }
+    // A class feature its own class's table does not carry: borrowed from
+    // another class's subclass, it runs as there, by the level of the class
+    // that holds it.
+    if (!found && feature.classId && feature.source === "class") {
+      const exact = borrowedRow(full);
+      const row = exact ?? (chosen ? borrowedRow(textKey(chosen[1])) : undefined);
+      if (row) {
+        out.push({
+          ...row,
+          name: feature.name,
+          choice: choiceOf(exact, chosen),
+          level: classLevel(sheet, lower(feature.classId)),
+        });
+        found = true;
       }
     }
     // A genre class's feature, found by its name (authored-effects-genre.ts).

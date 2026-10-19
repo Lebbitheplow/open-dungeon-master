@@ -1,6 +1,6 @@
 "use client";
 
-import { isThievesTools, THIEVES_TOOLS } from "@/lib/srd/features";
+import { classFeaturesFor, isThievesTools, subclassCastingProfileFor, THIEVES_TOOLS } from "@/lib/srd/features";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Dices, Loader2, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -215,7 +215,10 @@ export function LevelUpDialog({
     setOptionPicks((current) =>
       current.filter((pick) => {
         const option = findOptionByFeatureName(pick);
-        return option !== null && optionSlotsFor(classChoice, name, classLevelAfter, option.k) > 0;
+        return (
+          option !== null &&
+          optionSlotsFor(classChoice, name, classLevelAfter, option.k, classFeaturesFor(classChoice, name, classLevelAfter)) > 0
+        );
       }),
     );
   }
@@ -309,11 +312,18 @@ export function LevelUpDialog({
     }
   }
 
+  // What the class grants at its new level, the subclass picked here
+  // included: a workshop subclass's Combat Superiority opens its maneuvers
+  // before the sheet holds it.
+  const grantedAfter = classFeaturesFor(classChoice, subclassChoice || entrySubclass, classLevelAfter).map((feature) => ({
+    ...feature,
+    classId: classChoice,
+  }));
   const openSlots = openOptionSlots({
     classId: classChoice,
     subclass: subclassChoice || entrySubclass,
     level: classLevelAfter,
-    features: [...sheet.features, ...optionPicks.map((name) => ({ name }))],
+    features: [...sheet.features, ...grantedAfter, ...optionPicks.map((name) => ({ name }))],
     feats: [...sheet.feats, ...featsPicked],
   });
   const needsOptions = openSlots.some((slot) => slot.remaining > 0);
@@ -335,12 +345,17 @@ export function LevelUpDialog({
     (caster) => caster.classId.toLowerCase() === classChoice.toLowerCase(),
   );
   const effectiveSubclass = subclassChoice || entrySubclass;
+  const progression =
+    subclassCastingProfileFor(classChoice, effectiveSubclass) ??
+    casterEntry?.progression ??
+    (sheet.spellcasting?.casters?.length ? undefined : sheet.spellcasting?.progression);
   // The chosen class's casting at its new level, from the engine's tables:
   // an Eldritch Knight or Arcane Trickster casts from the wizard's list
   // (U:UB1), which the class row alone (no spell ability) never showed.
   const caster = casterPreview({
     classId: classChoice,
     subclass: effectiveSubclass,
+    progression,
     level: classLevelAfter,
     abilitiesAfter: after.abilities,
   });
@@ -519,12 +534,13 @@ export function LevelUpDialog({
     if (remainingPicks !== null && spellPicks.length >= remainingPicks) {
       return { short: "All new spells chosen", long: `That is every new spell for this level. Untick one to choose ${name}.` };
     }
-    if (!isThirdCaster(classChoice, effectiveSubclass)) {
+    if (!isThirdCaster(classChoice, effectiveSubclass, progression)) {
       return null;
     }
     const offSchool = thirdCasterPickRefusal({
       classId: classChoice,
       subclass: effectiveSubclass,
+      progression,
       level: classLevelAfter,
       known: knownList,
       picks: spellPicks,

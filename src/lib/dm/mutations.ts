@@ -93,7 +93,7 @@ import { spellClassFor } from "@/lib/classes";
 import { planHealFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { checklistClassSpell, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
-import { casterViewsOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
+import { casterViewsOf, spellCapOf, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { invalidArguments, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -1753,17 +1753,21 @@ export function applyDmMutation(
           };
         }
         let targetCaster: (typeof casters)[number] | null = null;
+        // The ceilings as the sheet's views read them: an Eldritch Knight's
+        // spells known (src/lib/srd/spell-prep.ts spellCapOf), where the
+        // fighter's own count is none at all.
+        const learnerViews = casterViewsOf(sheet, subclassExtrasForTable(campaign.id, sheet.userId));
         if (casters.length) {
           const classLevels = Object.fromEntries(
             (sheet.classes ?? []).map((entry) => [entry.id.toLowerCase(), entry.level]),
           );
-          for (const caster of casters) {
+          // The views come one per caster entry, in its order.
+          for (const [index, caster] of casters.entries()) {
             const level = classLevels[caster.classId.toLowerCase()] ?? sheet.level;
-            const cap = suggestedSpellCount(
-              spellClassFor(caster.classId),
-              level,
-              abilityMod(sheet.abilities[caster.ability]),
-            );
+            const view = learnerViews[index];
+            const cap = view
+              ? spellCapOf(view, sheet.abilities)
+              : suggestedSpellCount(spellClassFor(caster.classId), level, abilityMod(sheet.abilities[caster.ability]));
             const classEntry = (sheet.classes ?? []).find(
               (entry) => entry.id.toLowerCase() === caster.classId.toLowerCase(),
             );
@@ -1785,11 +1789,9 @@ export function applyDmMutation(
             };
           }
         } else {
-          const ceiling = suggestedSpellCount(
-            sheet.class,
-            sheet.level,
-            abilityMod(sheet.abilities[sheet.spellcasting.ability]),
-          );
+          const ceiling = learnerViews[0]
+            ? spellCapOf(learnerViews[0], sheet.abilities)
+            : suggestedSpellCount(sheet.class, sheet.level, abilityMod(sheet.abilities[sheet.spellcasting.ability]));
           const current = spellsAgainstLimit(
             intoKnown ? known : prepared,
             subclassSpellsFor(sheet.class, sheet.subclass, sheet.level, subclassExtrasForTable(campaign.id, sheet.userId)),

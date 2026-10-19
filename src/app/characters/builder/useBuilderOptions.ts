@@ -37,7 +37,9 @@ export {
 // with its rules text, built by insertAuthoredContent in
 // scripts/import-open5e.mjs, so a new player can read what a circle or an
 // oath actually does before committing to it.
-export type ArchetypeOption = { id: string; name: string; desc: string };
+// `workshop`: a subclass from the table's (or your own) workshop, with its
+// features listed by level; the rest are the content pack's.
+export type ArchetypeOption = { id: string; name: string; desc: string; workshop?: boolean; features?: string };
 
 // Loads race/class/background options from the Open5e content pack with the
 // bundled SRD data as fallback (and as the shape contract). `keepRaceId` is
@@ -185,11 +187,26 @@ export function useArchetypes(classId: string) {
               .filter((table): table is NonNullable<typeof table> => table !== null),
           );
           setArchetypes(
-            rows.map((row) => ({
-              id: row.slug,
-              name: row.name,
-              desc: String(row.data?.desc ?? ""),
-            })),
+            rows.map((row) => {
+              const workshop = String((row as { source?: string }).source ?? "") === "homebrew";
+              const table = workshop
+                ? extraSubclassOf({ name: row.name, source: "homebrew", data: (row.data ?? {}) as Record<string, unknown> })
+                : null;
+              return {
+                id: row.slug,
+                name: row.name,
+                desc: String(row.data?.desc ?? ""),
+                ...(workshop ? { workshop: true } : {}),
+                ...(table
+                  ? {
+                      features: Object.entries(table.levels)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([level, features]) => `Level ${level}: ${features.map((feature) => feature.n).join(", ")}`)
+                        .join(". "),
+                    }
+                  : {}),
+              };
+            }),
           );
         }
       })

@@ -98,7 +98,7 @@ export function legalCompanionSheet(draft: CompanionDraft): CompanionSheet {
   const abilities = applyAsiChoices(draft.sheet.abilities, asiChoices);
 
   let spellcasting: Spellcasting = null;
-  const [casting] = castingClassesOf(classes, classGrantsFor);
+  const [casting] = castingClassesOf(classes, classGrantsFor, subclassExtrasFor(tableAuthors(campaign.id)));
   if (casting) {
     const spellOf = (name: string) => spellFactsFor(name, tableAuthors(campaign.id));
     const before = emptyView(klass.id, casting.ability, level);
@@ -198,11 +198,14 @@ function levelOnce(campaign: Campaign, sheet: CharacterSheet): CharacterSheet | 
   const abilities = applyAsiChoices(sheet.abilities, asiChoices);
 
   let picks: string[] = [];
-  const casting = castingClassesOf(after, classGrantsFor).find(
+  // The table's workshop subclasses: one that casts as an Eldritch Knight,
+  // or hands out always-prepared spells, does so for a companion too.
+  const extras = subclassExtrasFor(tableAuthors(campaign.id));
+  const casting = castingClassesOf(after, classGrantsFor, extras, sheet.spellcasting).find(
     (entry) => lower(entry.entry.id) === lower(leading.id),
   );
   if (casting) {
-    const held = casterViewsOf(sheet).find(
+    const held = casterViewsOf(sheet, extras).find(
       (view) => !sheet.spellcasting?.casters?.length || lower(view.classId) === lower(leading.id),
     );
     picks = companionSpellPicks({

@@ -16,8 +16,9 @@ import type {
 import { XP_THRESHOLDS, findClass, spellSlotsFor } from "@/lib/srd";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
-import { pactSlotsFor, slotTableFor } from "@/lib/srd/multiclass";
+import { pactSlotsFor, progressionForClass, slotTableFor } from "@/lib/srd/multiclass";
 import { isThirdCaster } from "@/lib/srd/third-caster";
+import { subclassCastingProfileFor } from "@/lib/srd/features";
 
 type Die = CharacterSheet["hitDice"]["die"];
 
@@ -82,13 +83,14 @@ function settlePools(state: LevelState): HitDicePool[] | null {
 
 // The slot row (and pact slots) a class list has, with what was spent kept
 // spent. Exported for the level-up, which writes the spell lists itself.
-export function settleSlots(state: LevelState, classes: ClassEntry[]): Spellcasting {
+export function settleSlots(state: LevelState, classes: ClassEntry[], extras?: SubclassExtras): Spellcasting {
   const casting = state.spellcasting;
+  const progression = (entry: ClassEntry) => subclassCastingProfileFor(entry.id, entry.subclass, extras) ?? progressionForClass(state, entry.id);
   const casters = classes.filter((entry) => {
     const klass = findClass(entry.id);
     return klass
       ? (klass.casterType !== "none" && Boolean(klass.spellAbility)) ||
-          (isThirdCaster(entry.id, entry.subclass) && entry.level >= 3)
+          (isThirdCaster(entry.id, entry.subclass, progression(entry)) && entry.level >= 3)
       : false;
   });
   if (!casters.length) {
@@ -98,8 +100,8 @@ export function settleSlots(state: LevelState, classes: ClassEntry[]): Spellcast
   }
   const multiclass = classes.length > 1;
   const table = multiclass
-    ? slotTableFor({ class: state.class, classes })
-    : spellSlotsFor(classes[0].id, classes[0].level, classes[0].subclass);
+    ? slotTableFor({ class: state.class, classes, spellcasting: casting }, progression)
+    : spellSlotsFor(classes[0].id, classes[0].level, classes[0].subclass, progression(classes[0]));
   const warlock = classes.find((entry) => findClass(entry.id)?.casterType === "pact");
   // A lone warlock's pact slots live in `slots`; beside another class they
   // move to `pact`, and what was spent of them moves too.
@@ -173,7 +175,7 @@ export function settleLevelChange(
     features,
     hitDice,
     hitDicePools,
-    spellcasting: pinned.spellcasting ? state.spellcasting : settleSlots(state, classes),
+    spellcasting: pinned.spellcasting ? state.spellcasting : settleSlots(state, classes, extras),
     xp: pinned.xp ? state.xp : Math.max(state.xp, XP_THRESHOLDS[total - 1] ?? 0),
   };
 }
