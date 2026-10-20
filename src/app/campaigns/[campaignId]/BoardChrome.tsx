@@ -76,14 +76,32 @@ export function InitiativeRail({
   round,
   faceOf,
   onOpen,
+  namesOnly = false,
 }: {
   encounter: PublicEncounter;
   round: number;
   faceOf: FaceLookup;
   onOpen?: () => void;
+  namesOnly?: boolean;
 }) {
   if (!encounter.orderReady || !encounter.order.length) {
     return null;
+  }
+  if (namesOnly) {
+    return (
+      <div className="board-initiative-names" data-tour="battle-initiative">
+        <button type="button" onClick={onOpen} disabled={!onOpen} aria-label={`Round ${round}, open initiative order`}>
+          Round {round} · initiative
+        </button>
+        <ol tabIndex={0} aria-label="Initiative order">
+          {encounter.order.map((entry, at) => (
+            <li key={`${entry.id}-${at}`} aria-current={at === encounter.turnIndex ? "step" : undefined} title={entry.name}>
+              {entry.name}
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
   }
   // A short order is shown as it stands. A longer one is a window on the
   // cycle, starting one before the current turn, so whoever is up and whoever

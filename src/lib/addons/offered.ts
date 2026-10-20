@@ -9,7 +9,7 @@ type Owner = { addonId: string; addonName: string; addonVersion: string };
 
 export type OfferedImporter = Owner & Pick<WorkshopImporter, "id" | "title" | "description" | "accepts" | "maxInputMB"> & { options: OptionField[] };
 export type OfferedGenerator = Owner & Pick<MapGenerator, "id" | "title" | "description"> & { options: OptionField[] };
-export type OfferedBoardView = Owner & Pick<BoardView, "id" | "title" | "description" | "needsViewData" | "sessionLayout"> & { url: string; options: OptionField[] };
+export type OfferedBoardView = Owner & Pick<BoardView, "id" | "title" | "description" | "needsViewData" | "sessionLayout" | "sessionTheme"> & { url: string; options: OptionField[] };
 
 export type OfferedContributions = {
   supported: boolean;
@@ -56,6 +56,7 @@ export function offeredContributions(): OfferedContributions {
         description: view.description,
         needsViewData: view.needsViewData,
         sessionLayout: view.sessionLayout,
+        sessionTheme: view.sessionTheme,
         url: boardViewUrl(addon.id, addon.manifest.version, view.entry),
         options: view.options,
       });

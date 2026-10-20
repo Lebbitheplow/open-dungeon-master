@@ -1307,6 +1307,24 @@
                 "type": "string",
                 "const": "stage"
               },
+              "sessionTheme": {
+                "type": "object",
+                "properties": {
+                  "surface": {
+                    "type": "string",
+                    "pattern": "^#[0-3][0-9a-f][0-3][0-9a-f][0-3][0-9a-f]$"
+                  },
+                  "accent": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  }
+                },
+                "required": [
+                  "surface",
+                  "accent"
+                ],
+                "additionalProperties": false
+              },
               "options": {
                 "default": [],
                 "maxItems": 12,

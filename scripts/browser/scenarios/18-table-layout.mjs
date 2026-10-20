@@ -4,7 +4,8 @@
 // the composer, the board and the side panel's contents carry on through
 // every move, and the server never hears of it. A phone keeps its bottom
 // bar whatever a wide window arranged.
-import { check, eventually, sleep, openPanelTab } from "../lib.mjs";
+import { readFileSync } from "node:fs";
+import { check, eventually, sleep, openPanelTab, newContext, signIn } from "../lib.mjs";
 
 const KEY = "odm:table-layout:player";
 
@@ -58,16 +59,35 @@ export default {
       if (pathname.includes("/api/") && /layout|arrange/i.test(pathname)) layoutCalls.push(request.url());
     });
     let addonInstalled = true;
-    if (viewport === "desktop" && !t.app) {
-      await page.route("**/api/addons", (route) => route.fulfill({ json: {
+    const installFixture = async (target) => {
+      await target.addInitScript(() => window.addEventListener("message", (event) => {
+        if (event.data?.odm !== 1 || event.data.type !== "camera-state") return;
+        const frame = [...document.querySelectorAll("iframe")].find((node) => node.contentWindow === event.source);
+        if (frame) frame.dataset.camera = JSON.stringify(event.data);
+      }));
+      await target.route("**/api/addons", (route) => route.fulfill({ json: {
         supported: true, workshopImporters: [], mapGenerators: [],
         boardViews: addonInstalled ? [undefined, "stage"].map((sessionLayout) => ({ addonId: "portrait-fixture", addonName: "Fixture", addonVersion: "1.0.0", id: sessionLayout ?? "table", title: sessionLayout ? "Fixture session" : "Fixture table", description: "", needsViewData: false, sessionLayout, options: [{ key: "detail", label: "Detail", type: "boolean", default: true }], url: "/api/addons/portrait-fixture/ui/index.html" })) : [],
       } }));
-      await page.route("**/api/addons/portrait-fixture/ui/**", (route) => route.fulfill({ contentType: "text/html", body: `<!doctype html><title>Board fixture</title><script>
-        addEventListener('message', e => { if(e.source === parent && e.data?.odm === 1) document.body.dataset.message = e.data.type; });
-        parent.postMessage({odm:1,type:'ready'}, '*');
-        </script>` }));
-    }
+      await target.route("**/api/addons/portrait-fixture/ui/**", (route) => {
+        const script = new URL(route.request().url()).pathname.endsWith("board.js");
+        const body = readFileSync(new URL(`../../../examples/addons/hello-dungeon/ui/board.${script ? "js" : "html"}`, import.meta.url), "utf8");
+        return route.fulfill({ contentType: script ? "text/javascript" : "text/html", body: script ? body : body.replace('<script src="board.js">', `<script>addEventListener('message', e => { if(e.source === parent && e.data?.odm === 1) document.body.dataset.message = e.data.type; });</script><script src="board.js">`) });
+      });
+    };
+    const cameraOf = async (frame) => JSON.parse(await frame.getAttribute("data-camera") ?? "null");
+    const checkViewport = async (frame) => {
+      await eventually(() => frame.evaluate((node) => {
+        const viewport = node.closest(".board-view");
+        const a = node.getBoundingClientRect(), b = viewport.getBoundingClientRect();
+        const style = getComputedStyle(viewport), scale = b.width / viewport.offsetWidth;
+        const left = parseFloat(style.borderLeftWidth) * scale, right = parseFloat(style.borderRightWidth) * scale;
+        const top = parseFloat(style.borderTopWidth) * scale, bottom = parseFloat(style.borderBottomWidth) * scale;
+        const wrapper = viewport.querySelector(":scope > div[style*='transform-origin']");
+        return Math.max(Math.abs(a.x - b.x - left), Math.abs(a.y - b.y - top), Math.abs(a.width - b.width + left + right), Math.abs(a.height - b.height + top + bottom)) < 2 && getComputedStyle(wrapper).transform === "none";
+      }), { label: "the session renderer filling its viewport without a flat-board transform" });
+    };
+    if (viewport === "desktop" && !t.app) await installFixture(page);
     await t.open(`/campaigns/${ids.campaignId}`);
     await dismissTour(page);
     await clearLayouts(page);
@@ -296,22 +316,46 @@ export default {
     if (viewport === "desktop" && !t.app) {
       const addon = page.getByRole("radio", { name: "Fixture table", exact: true });
       const session = page.getByRole("radio", { name: "Fixture session", exact: true });
+      const originalSize = page.viewportSize();
+      await page.setViewportSize({ ...originalSize, height: 650 });
+      await eventually(async () => {
+        const box = await boxOf(composer);
+        return box && box.y + box.height <= 650;
+      }, { label: "native input remaining visible in a short window" });
+      check(await page.locator(`${root}.hand`).evaluate(node => getComputedStyle(node).overflowY) === "auto", "native short-window hand still yields space to the input");
+      await page.setViewportSize(originalSize);
       await t.tap(addon);
       check((await slot("rail").count()) === 0, "a board-only addon leaves the native session layout alone");
       const nativeLayout = JSON.stringify(await readLayout(page));
       await composer.fill("A draft across presentation changes");
-      await page.evaluate((prefix) => { window.__sessionNative = [".cine-chronicle", ".cine-fight-board", ".cine-panel", '[data-tour="composer-input"] textarea'].map(s => document.querySelector(prefix + s)); }, root);
+      await page.evaluate((prefix) => { window.__sessionNative = [".cine-chronicle", ".cine-fight-board", ".cine-panel", '[data-tour="composer-input"] textarea', ".hand"].map(s => document.querySelector(prefix + s)); }, root);
       await t.tap(session);
       await eventually(() => row.getAttribute("data-presentation").then(v => v === "stage"), { label: "addon session composition" });
-      check(await page.evaluate((prefix) => window.__sessionNative.every((n,i) => n && n === document.querySelector(prefix + [".cine-chronicle", ".cine-fight-board", ".cine-panel", '[data-tour="composer-input"] textarea'][i])), root), "native regions keep their DOM identity when the preset activates");
+      check(await page.evaluate((prefix) => window.__sessionNative.every((n,i) => n && n === document.querySelector(prefix + [".cine-chronicle", ".cine-fight-board", ".cine-panel", '[data-tour="composer-input"] textarea', ".hand"][i])), root), "native regions, hand and composer keep their DOM identity when the preset activates");
       const party = await boxOf(page.locator(`${root}[data-tour="party-rail"]`));
       const chronicle = await boxOf(page.locator(`${root}.cine-fight > .cine-chronicle`));
       const board = await boxOf(page.locator(`${root}.cine-fight-board`));
-      const controls = await boxOf(page.locator(`${root}.cine-fight-controls`));
+      const entry = await boxOf(page.locator(`${root}.session-compose-entry`));
+      const hand = await boxOf(page.locator(`${root}.session-compose-hand`));
       const side = await boxOf(page.locator(`${root}.cine-panel`));
       check(Math.abs(party.x - chronicle.x) < 2 && party.y + party.height <= chronicle.y + 1, "Party is above Chronicle in the left column");
       check(board.x >= chronicle.x + chronicle.width && side.x >= board.x + board.width && board.width > side.width, "tabletop dominates the center with native controls at right");
-      check(controls.x >= board.x - 1 && controls.y >= board.y + board.height - 1, "native hand and composer sit below the board");
+      check(Math.abs(entry.x - chronicle.x) < 2 && entry.y >= chronicle.y + chronicle.height - 1, "native composer sits below Chronicle");
+      check(hand.x >= board.x - 1 && hand.y >= board.y + board.height - 1, "native hand stays below the board");
+      check(await composer.evaluate(node => node.form === document.querySelector(".hand")?.closest("form")), "hand and typed commands still share the native form");
+      const rendered = page.locator(`${root}.cine-fight-board iframe`);
+      await eventually(() => cameraOf(rendered), { label: "public example camera report" });
+      await checkViewport(rendered);
+      const fitted = (await cameraOf(rendered)).zoom;
+      await t.tap(page.getByRole("button", { name: "Zoom in", exact: true }));
+      await eventually(async () => (await cameraOf(rendered)).zoom > fitted, { label: "native zoom steering the renderer" });
+      await t.tap(page.getByRole("button", { name: "Fit the board", exact: true }));
+      await eventually(async () => (await cameraOf(rendered)).zoom === 1, { label: "native fit steering the renderer" });
+      await t.tap(page.getByRole("button", { name: "Enlarge battle map", exact: true }));
+      const enlarged = page.getByRole("dialog").locator("iframe");
+      await eventually(() => cameraOf(enlarged), { label: "enlarged public example camera" });
+      await checkViewport(enlarged);
+      await t.tap(page.getByRole("button", { name: "Close the board", exact: true }));
       await t.tap(page.getByRole("button", { name: "Fixture session options", exact: true }));
       await t.tap(page.getByRole("switch", { name: "Detail", exact: true }));
       await page.keyboard.press("Escape");
@@ -358,10 +402,7 @@ export default {
       await eventually(() => row.getAttribute("data-presentation").then(v => v === "stage"), { label: "session activated from native Story" });
       check(await page.evaluate(() => window.__storyBoard.isConnected && window.__storyFrame.isConnected), "native Story activation keeps the same board and camera frame mounted");
       check(await page.locator(`${root}.board-panel`).count() === 1, "Story activation does not duplicate the native board");
-      await eventually(async () => {
-        const c = await cameraState();
-        return Math.abs(c.zoom - storyCamera.zoom) < 0.001 && Math.abs(c.x - storyCamera.x) < 0.002 && Math.abs(c.y - storyCamera.y) < 0.002;
-      }, { label: "Story activation retaining camera zoom and normalized pan" });
+      await checkViewport(storyFrame.locator("iframe"));
       check(await storyBoard.getByRole("menu", { name: "Actions for Tavi Lockwhisper" }).count() === 1 && await storyBoard.getByTitle("Point at a tile", { exact: true }).getAttribute("aria-pressed") === "true", "native selection and local board controls survive activation");
       await openPanelTab(t, "notes");
       check(await page.evaluate(() => window.__storyBoard.isConnected), "the centered board stays mounted when native side controls change tabs");
@@ -411,6 +452,27 @@ export default {
       check((await slot("rail").count()) === 0, "a removed addon with a stale saved choice uses native unmounting");
 
       addonInstalled = true;
+      // A projected job fixture exercises the existing status component;
+      // it starts no actual AI job and never calls Stop.
+      await page.route(`**/api/campaigns/${ids.campaignId}`, async (route) => {
+        const response = await route.fetch();
+        await route.fulfill({ response, json: { ...await response.json(), dmStatus: "thinking", dmJob: { id: "layout-job", kind: "turn", stage: "starting", since: Date.now(), startedAt: Date.now(), stopping: false } } });
+      });
+      await t.open(`/campaigns/${ids.campaignId}`);
+      const status = page.locator(`${root}.session-compose-entry .session-status`);
+      await eventually(() => status.isVisible(), { label: "native DM status in the session layout" });
+      const statusBox = await boxOf(status);
+      const liveChronicle = await boxOf(page.locator(`${root}.cine-fight > .cine-chronicle`));
+      check(Math.abs(statusBox.x - liveChronicle.x) < 2 && statusBox.y + statusBox.height <= liveChronicle.y + 1, "native DM activity is pinned above Chronicle");
+      check((await status.innerText()).includes("DM at work"), "activity uses the native job phrase");
+      check(await status.getByRole("button", { name: "Stop the DM" }).count() === 1, "native story authority still controls Stop");
+      await page.evaluate(() => { window.__statusNode = document.querySelector(".session-compose-entry .session-status"); });
+      await t.shot("chronicle-composer-status");
+      await t.tap(page.getByRole("radio", { name: "Board", exact: true }));
+      check(await page.evaluate(() => window.__statusNode === document.querySelector(".session-compose-entry .session-status")), "disabling preserves the same native status component");
+      check(await status.evaluate(node => getComputedStyle(node).position) === "static", "native status placement returns without an addon");
+      await page.unroute(`**/api/campaigns/${ids.campaignId}`);
+      await t.tap(session);
       await t.open(`/campaigns/${ids.quietId}`);
       await eventually(() => row.getAttribute("data-presentation").then(v => v === "stage"), { label: "session presentation without a tactical map" });
       const frame = page.frameLocator('iframe[title="Fixture session board view, from Fixture"]');
@@ -418,9 +480,52 @@ export default {
       await frame.locator("body").evaluate(() => parent.postMessage({ odm: 1, type: "error", message: "Fixture load failed" }, "*"));
       await eventually(() => row.getAttribute("data-presentation").then(v => v === null), { label: "renderer error restoring the native presentation" });
       await eventually(() => page.locator(`${root}.session-transcript`).isVisible(), { label: "mapless failure restoring the native transcript" });
+
+      // A real server camera event reaches a separate player; fallback keeps
+      // that player's original native camera rather than the DM's last view.
+      const campaign = `${t.base}/api/campaigns/${ids.campaignId}`;
+      const playerContext = await newContext(page.context().browser(), "desktop", { app: false });
+      try {
+        check((await t.api.patch(`${campaign}/settings`, { data: { dmMode: "steered" } })).ok(), "the fixture lead takes the DM seat");
+        await signIn(playerContext, t.base, ids.player, ids.password);
+        const player = await playerContext.newPage();
+        await installFixture(player);
+        await player.goto(`${t.base}/campaigns/${ids.campaignId}`, { waitUntil: "networkidle" });
+        const native = player.locator(".board-view").first();
+        await native.focus();
+        await player.keyboard.press("+");
+        await player.keyboard.press("ArrowRight");
+        const nativeCamera = () => native.locator(":scope > div[style*='transform:']").first().evaluate((node) => {
+          const m = new DOMMatrix(getComputedStyle(node).transform);
+          return { zoom: m.a, x: m.e / node.parentElement.clientWidth, y: m.f / node.parentElement.clientWidth };
+        });
+        const before = await nativeCamera();
+        await player.getByRole("radio", { name: "Fixture session", exact: true }).click();
+        const view = native.locator("iframe");
+        await eventually(() => cameraOf(view), { label: "player renderer ready" });
+        const steer = async (mode) => check((await t.api.post(`${campaign}/dm/board`, { data: { do: "camera", mode, x: 1, y: 2, zoom: 2 } })).ok(), `DM ${mode} accepted by the native route`);
+        await steer("lock");
+        await eventually(async () => (await cameraOf(view))?.zoom === 2, { label: "server lock reaching the player's renderer" });
+        await native.focus();
+        await player.keyboard.press("+");
+        check((await cameraOf(view)).zoom === 2, "native local zoom respects the DM lock");
+        await steer("free");
+        await eventually(() => player.getByText("The DM is steering the view", { exact: false }).count().then(n => n === 0), { label: "server camera release" });
+        await player.getByRole("button", { name: "Fit the board", exact: true }).click();
+        await eventually(async () => (await cameraOf(view)).zoom === 1, { label: "released renderer accepting local fit" });
+        await player.getByRole("radio", { name: "Board", exact: true }).click();
+        await eventually(async () => {
+          const after = await nativeCamera();
+          check(Math.abs(after.zoom - before.zoom) < 0.001 && Math.abs(after.x - before.x) < 0.002 && Math.abs(after.y - before.y) < 0.002, `native camera before ${JSON.stringify(before)}, after ${JSON.stringify(after)}`);
+          return true;
+        }, { label: "native camera surviving server steering while hidden" });
+      } finally {
+        await t.api.patch(`${campaign}/settings`, { data: { dmMode: "ai" } });
+        await playerContext.close();
+      }
     }
 
-    // Nothing of it ever left the browser.
+    // Layout preferences never left the browser.
     check(layoutCalls.length === 0, `the arrangement never reaches the server (${layoutCalls.join(", ")})`);
     await clearLayouts(page);
   },

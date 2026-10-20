@@ -209,9 +209,21 @@ grid.
 
 A board view may declare `"sessionLayout": "stage"`. On a docked desktop
 session, selecting that view uses a host-owned layout: Party above Chronicle
-at left, board in the center, native side controls at right, and the native
-hand/composer under the board. This is structural layout only; addon code,
-styles and assets remain in its sandbox. Older views omit the field and
+at left, board in the center, native side controls at right, the native hand
+under the board, and the composer under Chronicle. The existing live DM status
+occupies a fixed row above Chronicle while the DM is busy (or stays beside
+the composer on browsers without CSS anchor positioning). The same form,
+hand, status and input components stay mounted; only CSS placement changes.
+Addon code, stylesheets and assets remain in its sandbox. A stage view can
+optionally declare `sessionTheme: { "surface": "#17212b", "accent": "#7dd3fc" }`:
+two opaque `#RRGGBB` colors interpreted by the host, never injected CSS.
+Each surface channel is limited to 0–63 to keep the native light text readable.
+The accent colors decorative borders; text, health, errors and keyboard focus
+retain native colors. Unknown theme keys and non-hex values are refused. A theme
+requires `sessionLayout: "stage"`. It affects the native panel/card surfaces and
+board frame only in night mode on a docked desktop. Day mode, mobile and the
+native view keep their existing styles. This is a first appearance slice,
+not a complete component skin or arbitrary layout API. Older views omit the field and
 retain the original session layout. No arbitrary layout names or CSS are accepted.
 
 Session views must leave `needsViewData` false: they work even without a
@@ -228,6 +240,20 @@ alongside it; changing side tabs does not remove that board. Its native
 camera uses the existing resize behavior, and token selection/local controls
 survive activation and return to Story. A quest glance, when present, sits
 below the center controls in this composition.
+
+Session renderers fill the visible board viewport independently of the flat
+grid camera. The host keeps the native grid/camera mounted for fallback,
+and places token anchors in this visible viewport. Inline and enlarged boards
+have separate anchors. Ordinary board-only addons retain the flat camera.
+The snapshot message includes `sessionLayout: "stage"` only for session views;
+pages shared with a board-only contribution must leave its camera to the host.
+Handle `camera-control` for the host's zoom, fit and arrow keys, and report
+`camera-state` after rendering/camera changes so DM steering uses your current
+view. State coordinates are fractional tile coordinates at the view center;
+zoom is relative to your fitted view (1). The host validates finite values,
+in-map centers and zoom 0.25–8, and normalizes to the existing DM route's
+integer coordinates (clamped within the map)/zoom 0.5–3 when the DM explicitly pulls/locks the view.
+Reporting camera state never moves tokens or grants DM authority.
 
 The native transcript, Chronicle, composer and mapped renderer remain mounted
 while switching story/board within this presentation. Removing a map or
@@ -325,6 +351,7 @@ From the table to your page:
 { odm: 1, type: "fx", events }                                      // effects as they land, each once
 { odm: 1, type: "ping", x, y, focus, at }                           // somebody pointed at a square
 { odm: 1, type: "camera", mode: "pull" | "lock" | "free", x, y, zoom } // the DM steering everyone's view
+{ odm: 1, type: "camera-control", action }                          // session view: zoom-in, zoom-out, fit, left, right, up, down
 ```
 
 An effect is `{ id, kind, from, to, fromTokenId, toTokenId, outcome,
@@ -346,6 +373,7 @@ From your page to the table:
 { odm: 1, type: "file", requestId, name }          // "backdrop", or one of snapshot.view.files[].name
 { odm: 1, type: "face", requestId, tokenId }       // the picture the figure wears on the flat board
 { odm: 1, type: "anchors", tokens }                // where you drew each figure (below)
+{ odm: 1, type: "camera-state", x, y, zoom }         // session view's current camera; never an action
 { odm: 1, type: "error", message }                 // shown to the viewer under the board
 ```
 

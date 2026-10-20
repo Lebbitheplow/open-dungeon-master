@@ -255,6 +255,7 @@ export function SessionChatColumn({
           always did. Always drawn, so switching the stage never remounts
           the Ask draft or the Hand. */}
       <div className="cine-fight-controls">
+      <div className="session-compose-support">
       <RulingBar
         campaignId={campaignId}
         disputes={state.disputes}
@@ -293,6 +294,7 @@ export function SessionChatColumn({
           them. Shown to every seat, because a player owed an answer is owed
           the knowledge of who is giving it. */}
       <DmCoverNotice cover={campaign?.dmCover ?? null} />
+      </div>
 
       {children}
       </div>

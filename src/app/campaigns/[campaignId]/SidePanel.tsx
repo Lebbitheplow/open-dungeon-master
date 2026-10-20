@@ -53,6 +53,7 @@ function SidePanelInner({
   storyDue,
   glance,
   boardOnStage = false,
+  preservePartyState = false,
   ...content
 }: SidePanelRouterProps & {
   tabs: PanelTabDef[];
@@ -66,6 +67,7 @@ function SidePanelInner({
   // The quest line above the panel (CinematicParts.tsx QuestGlance).
   glance?: ReactNode;
   boardOnStage?: boolean;
+  preservePartyState?: boolean;
 }) {
   // The widen button's two widths are the panel's column in the table's
   // arrangement (src/lib/table-layout.ts); a reader may drag it anywhere
@@ -127,7 +129,8 @@ function SidePanelInner({
         {tabs.length ? (
           contentTabs.map((contentTab) => (
             <div
-              key={contentTab}
+              // A staged Battle tab shows the same roster as Party.
+              key={preservePartyState && content.stageBoard && contentTab === "battle" ? "party" : contentTab}
               className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none"
               data-session-region={boardOnStage ? (contentTab === "battle" ? "board" : "controls") : undefined}
             >

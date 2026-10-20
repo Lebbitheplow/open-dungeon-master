@@ -165,7 +165,8 @@ function ComposerInner({
   const tooLong = length > maxChars;
   return (
     <form onSubmit={onSubmit} className="glass session-desk cine-desk border-t border-stone-700/40 px-3 pb-3 pt-2.5">
-      <div className="mx-auto max-w-3xl sm:px-3">
+      <div className="session-desk-body mx-auto max-w-3xl sm:px-3">
+        <div className="session-compose-notices">
         {pendingRolls.map((pending) => (
           <PendingRollCard
             // Inspiration rewrites the parked roll's dice: the card starts
@@ -204,6 +205,8 @@ function ComposerInner({
             onDismiss={joinBanner.onDismiss}
           />
         ) : null}
+        </div>
+        <div className="session-compose-hand">
         {/* The Hand (docs/visual-overhaul-plan.md 5.2): a player's combat options
             as cards, only while a fight is on. It adds to everything below and
             takes nothing away: the pills, the box, the mic and the send button
@@ -239,6 +242,8 @@ function ComposerInner({
             mounts={mounts}
           />
         ) : null}
+        </div>
+        <div className="session-compose-entry">
         <div data-pill-group="" className="mb-2 flex flex-wrap items-center gap-1.5" data-tour="composer-modes">
           {/* The DM authors and talks out of character; they have no
               character to act or speak as, and the story directions exist to
@@ -360,6 +365,7 @@ function ComposerInner({
         </div>
         <LengthNote id={noteId} length={length} max={maxChars} from={0.8} className="mt-1" />
         {error ? <p className="motion-shake mt-1.5 text-sm text-red-400">{error}</p> : null}
+        </div>
       </div>
     </form>
   );

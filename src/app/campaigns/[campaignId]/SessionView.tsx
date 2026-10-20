@@ -1,6 +1,7 @@
 "use client";
 
 import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
+import { useThemePrefs } from "@/lib/theme-mode";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { CoordinationPanel } from "@/app/campaigns/[campaignId]/CoordinationPanel";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
@@ -23,6 +24,7 @@ const EMPTY_IDS: string[] = [];
 
 import {
   type FormEvent,
+  type CSSProperties,
   lazy,
   Suspense,
   useCallback,
@@ -366,6 +368,8 @@ export function SessionView({
   const { active: addonBoardView, views: addonViews, choose: chooseBoardView } = useBoardView(state.battleMap?.addonView?.addonId);
   const [addonOptions, setAddonOption] = useBoardViewOptions();
   const sessionLayout = docked && addonBoardView?.sessionLayout === "stage";
+  const { mode: themeMode } = useThemePrefs();
+  const sessionTheme = sessionLayout && themeMode === "dark" ? addonBoardView?.sessionTheme : undefined;
   const [addonStageView, setAddonStageView] = useState<"board" | "story">("board");
   const restoreNativeView = useCallback(() => chooseBoardView(""), [chooseBoardView]);
   const [stageView, setStageView] = useState<"board" | "story">(() =>
@@ -940,7 +944,9 @@ export function SessionView({
   } satisfies Omit<SidePanelRouterProps, "tab" | "visible" | "onOpenTab">;
 
   return (
-    <main className="cine-stage flex h-dvh flex-col" data-session-view={sessionLayout ? shownStageView : undefined} data-side-board={boardInPanel ? "" : undefined}>
+    <main className="cine-stage flex h-dvh flex-col" data-session-view={sessionLayout ? shownStageView : undefined} data-side-board={boardInPanel ? "" : undefined}
+      data-addon-theme={sessionTheme ? "" : undefined}
+      style={sessionTheme ? { "--session-surface": sessionTheme.surface, "--session-accent": sessionTheme.accent } as CSSProperties : undefined}>
       {/* The cinematic frame ("ODM World Concepts" 3b): the scene's painting
           behind everything, the party down the left, the turn order along
           the top, the last roll as a pill. CinematicParts.tsx. */}
@@ -1172,6 +1178,7 @@ export function SessionView({
               <SidePanel
                 {...routerProps}
                 boardOnStage={boardInPanel}
+                preservePartyState={sessionLayout}
                 tabs={railTabs}
                 tab={railTab}
                 onTabChange={openTab}

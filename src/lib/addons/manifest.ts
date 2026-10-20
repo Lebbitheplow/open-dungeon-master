@@ -176,6 +176,11 @@ export const boardViewSchema = z.object({
   needsViewData: z.boolean().default(false),
   // A host-owned layout of native regions, never addon CSS or React code.
   sessionLayout: z.literal("stage").optional(),
+  // Opaque dark surfaces keep native light text readable; accent is decorative.
+  sessionTheme: z.object({
+    surface: z.string().regex(/^#[0-3][0-9a-f][0-3][0-9a-f][0-3][0-9a-f]$/i),
+    accent: z.string().regex(/^#[0-9a-f]{6}$/i),
+  }).strict().optional(),
   // Choices each viewer makes for this view on their own device (a pixel
   // scale, a quality tier for a slower computer), drawn by the table and
   // handed to the view in its snapshot. The frame cannot keep anything of its
@@ -184,6 +189,9 @@ export const boardViewSchema = z.object({
 }).refine((view) => !view.sessionLayout || !view.needsViewData, {
   message: "A session layout must work without map-specific view data.",
   path: ["needsViewData"],
+}).refine((view) => !view.sessionTheme || view.sessionLayout === "stage", {
+  message: "A session theme requires the stage session layout.",
+  path: ["sessionTheme"],
 });
 
 export type WorkshopImporter = z.infer<typeof workshopImporterSchema>;

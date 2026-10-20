@@ -59,6 +59,17 @@ await test("session layouts are opt-in, bounded, and independent of map data", (
   assert.equal(parse({ sessionLayout: "stage", needsViewData: true }).success, false);
 });
 
+await test("session colors are bounded data and require a session layout", () => {
+  const parse = (patch) => addonManifestSchema.safeParse({ ...example, contributes: { boardViews: [{ id: "session", title: "Session", entry: "ui/board.html", sessionLayout: "stage", ...patch }] } });
+  const sessionTheme = { surface: "#17212b", accent: "#40c9ff" };
+  assert.deepEqual(parse({ sessionTheme }).data.contributes.boardViews[0].sessionTheme, sessionTheme);
+  assert.equal(parse({}).data.contributes.boardViews[0].sessionTheme, undefined);
+  assert.equal(parse({ sessionTheme, sessionLayout: undefined }).success, false);
+  assert.equal(parse({ sessionTheme: { ...sessionTheme, surface: "#ffffff" } }).success, false);
+  assert.equal(parse({ sessionTheme: { ...sessionTheme, accent: "url(https://example.com)" } }).success, false);
+  assert.equal(parse({ sessionTheme: { ...sessionTheme, css: "display:none" } }).success, false);
+});
+
 await test("ids, paths and empty addons are refused", () => {
   const bad = (patch) => addonManifestSchema.safeParse({ ...example, ...patch }).success;
   assert.equal(bad({ id: "Hello_Dungeon" }), false);
@@ -538,6 +549,8 @@ await test("file requests resolve to the map's own files only", () => {
 });
 
 await test("the frame's messages are read strictly", () => {
+  assert.deepEqual(readViewMessage({ odm: 1, type: "camera-state", x: 2.5, y: 1, zoom: 1.2 }), { type: "camera-state", x: 2.5, y: 1, zoom: 1.2 });
+  for (const bad of [{ x: NaN, y: 1, zoom: 1 }, { x: 1, y: Infinity, zoom: 1 }, { x: 1, y: 1, zoom: 0 }, { x: 1, y: 1, zoom: 9 }, { x: "1", y: 1, zoom: 1 }]) assert.equal(readViewMessage({ odm: 1, type: "camera-state", ...bad }), null);
   assert.deepEqual(readViewMessage({ odm: 1, type: "tile", x: 2, y: 1 }), { type: "tile", x: 2, y: 1 });
   assert.equal(readViewMessage({ odm: 1, type: "tile", x: 1.5, y: 1 }), null);
   assert.equal(readViewMessage({ odm: 2, type: "ready" }), null);
