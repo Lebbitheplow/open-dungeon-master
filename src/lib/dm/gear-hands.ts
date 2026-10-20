@@ -27,7 +27,7 @@ export type GearKind = "armor" | "shield" | "weapon" | "worn" | "carried";
 // homebrew block, a magic weapon's base item, the SRD table by name.
 export function weaponRowOf(item: EquipmentItem): SrdWeapon | null {
   const magic = magicWeaponOfRow(item);
-  return (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? matchWeapon(item.name);
+  return (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? matchWeapon(item);
 }
 
 export function gearKindOf(item: EquipmentItem): GearKind {

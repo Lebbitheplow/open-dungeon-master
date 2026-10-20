@@ -153,7 +153,7 @@ export function weaponLineFor(
   martialArts: boolean,
 ): WeaponLine | null {
   const magic = magicWeaponOfRow(item);
-  const srd = (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? matchWeapon(item.name);
+  const srd = (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? matchWeapon(item);
   if (!srd) {
     return null;
   }

@@ -300,7 +300,10 @@ export const DropLayer = memo(function DropLayer({ drops }: { drops: NonNullable
         const nth = onSquare.get(square) ?? 0;
         onSquare.set(square, nth + 1);
         const item = drop.name.replace(/^\d+\s+/, "");
-        const family = matchWeapon(item) ? "item-weapon" : matchArmor(item) ? "item-armor" : "item-gear";
+        // A dropped item carries only its name here; the finders read the
+        // row through it (src/lib/srd/item-row.ts).
+        const row = { name: item };
+        const family = matchWeapon(row) ? "item-weapon" : matchArmor(row) ? "item-armor" : "item-gear";
         const src = iconCandidates({ kind: "item", key: item, family })[0];
         const cx = drop.x * TILE + TILE - size / 2 - 3 - nth * size * 0.6;
         const cy = drop.y * TILE + TILE - size / 2 - 3;
