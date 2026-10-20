@@ -84,6 +84,28 @@ test("resolveAttackWeapon: proficient weapon beats stronger unproficient one", (
   assert.equal(resolved.srd?.name, "Dagger");
 });
 
+// A cleric's starting kit (mace, shield, light crossbow): with the shield on
+// the arm the crossbow cannot be shot, so the unnamed pick is the mace. The
+// server's own companion turn names no weapon and was refused for the
+// crossbow, wasting the turn.
+test("resolveAttackWeapon: a shield on the arm passes over a two-handed weapon", () => {
+  const kit = [
+    { name: "Mace", qty: 1, equipped: true },
+    { name: "Shield", qty: 1, equipped: true },
+    { name: "Light Crossbow", qty: 1 },
+  ];
+  assert.equal(resolveAttackWeapon(kit, ["simple"], undefined).srd?.name, "Light Crossbow");
+  assert.equal(resolveAttackWeapon(kit, ["simple"], undefined, { shieldOnArm: true }).srd?.name, "Mace");
+  // A named weapon is still the one named; the hands rule refuses it.
+  assert.equal(resolveAttackWeapon(kit, ["simple"], "light crossbow", { shieldOnArm: true }).srd?.name, "Light Crossbow");
+  // Only two-handed weapons carried: still the best of them, so the refusal
+  // says why rather than an unarmed swing nobody asked for.
+  assert.equal(
+    resolveAttackWeapon([{ name: "Greatsword", qty: 1 }], ["martial"], undefined, { shieldOnArm: true }).srd?.name,
+    "Greatsword",
+  );
+});
+
 test("resolveAttackWeapon: nothing usable falls back to unarmed", () => {
   const resolved = resolveAttackWeapon([{ name: "Rope", qty: 1 }], ["simple"], undefined);
   assert.equal(resolved.unarmed, true);

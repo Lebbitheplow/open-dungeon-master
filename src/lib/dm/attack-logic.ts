@@ -121,10 +121,13 @@ function itemMatchesTerm(itemName: string, term: string): boolean {
 // their carried equipment and the SRD table, and "unarmed strike" is the
 // rules' own; no name picks the best proficient carried weapon; nothing
 // usable falls back to an unarmed strike.
+// `shieldOnArm`: a two-handed weapon cannot be used with a shield on the arm
+// (attack-rules.ts handsRuling), so the unnamed pick prefers one that can.
 export function resolveAttackWeapon(
   equipment: EquipmentItem[],
   weaponProfs: string[],
   weaponArg: string | undefined,
+  options: { shieldOnArm?: boolean } = {},
 ): ResolvedWeapon {
   const arg = (weaponArg ?? "").trim();
   if (arg) {
@@ -158,21 +161,31 @@ export function resolveAttackWeapon(
       ...(magic?.gear ? { gear: magic.gear } : {}),
     };
   }
-  // No name given: best carried weapon, proficient ones first.
-  let best: { item: EquipmentItem; srd: SrdWeapon; proficient: boolean; gear: WeaponGear | null } | null = null;
+  // No name given: best carried weapon, one the hands can use first, then
+  // proficient ones. With only two-handed weapons beside a shield the best of
+  // them still stands, and the hands rule says why it cannot swing.
+  let best: {
+    item: EquipmentItem;
+    srd: SrdWeapon;
+    usable: boolean;
+    proficient: boolean;
+    gear: WeaponGear | null;
+  } | null = null;
   for (const item of equipment) {
     const magic = magicWeaponOfRow(item);
     const srd = (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? magic.srd ?? null;
     if (!srd) {
       continue;
     }
+    const usable = !(options.shieldOnArm && (srd.properties ?? []).includes("two-handed"));
     const proficient = isWeaponProficient(weaponProfs, srd);
     if (
       !best ||
-      (proficient && !best.proficient) ||
-      (proficient === best.proficient && damageScore(srd) > damageScore(best.srd))
+      (usable && !best.usable) ||
+      (usable === best.usable && proficient && !best.proficient) ||
+      (usable === best.usable && proficient === best.proficient && damageScore(srd) > damageScore(best.srd))
     ) {
-      best = { item, srd, proficient, gear: magic?.gear ?? null };
+      best = { item, srd, usable, proficient, gear: magic?.gear ?? null };
     }
   }
   if (best) {

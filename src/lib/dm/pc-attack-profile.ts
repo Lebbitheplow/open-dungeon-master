@@ -279,17 +279,20 @@ export function buildAttackProfile(
     };
     kind = "natural";
   } else {
-    const resolved = resolveAttackWeapon(sheet.equipment, sheet.proficiencies.weapons, args.weapon);
+    // Hands: a shield on the arm leaves one free, and the off-hand swing
+    // has the other weapon in the other hand. An unnamed weapon is picked
+    // with the shield in mind.
+    const shieldName = acBreakdownFor(sheet).shieldName;
+    const resolved = resolveAttackWeapon(sheet.equipment, sheet.proficiencies.weapons, args.weapon, {
+      shieldOnArm: shieldName !== null,
+    });
     if (resolved.carried === false) {
       return {
         error: `${sheet.name} carries no ${resolved.displayName}. They attack with a weapon from their equipment, with an unarmed strike, or with something they pick up (an improvised weapon, named for what it is).`,
         refused: "rules",
       };
     }
-    // Hands: a shield on the arm leaves one free, and the off-hand swing
-    // has the other weapon in the other hand.
     const properties = resolved.srd?.properties ?? [];
-    const shieldName = acBreakdownFor(sheet).shieldName;
     const lance = resolved.srd?.name === SPECIAL_WEAPONS.lance;
     const hands = handsRuling({
       who: sheet.name,
