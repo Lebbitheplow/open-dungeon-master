@@ -34,6 +34,7 @@ const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { createSheet, getSheetById } = await import("../src/lib/db/sheets.ts");
 const { insertShop, getShop, listShops } = await import("../src/lib/db/shops.ts");
 const { handleBuyItem, handleSellItem, handleHaggle, stockPool } = await import("../src/lib/dm/shop-tools.ts");
+const { magicItemValueCp } = await import("../src/lib/srd/magic-item-value.ts");
 const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 const { computeTrade, normalizeTradeOffer, tradeSummary, canResolveTrade } = await import("../src/lib/dm/trade-logic.ts");
 const { applyTrade } = await import("../src/lib/dm/trade.ts");
@@ -113,6 +114,48 @@ test("a general store always carries the everyday basics, one line each, ahead o
   }
 });
 
+test("a magic item is priced by its rarity, as SRD 5.2 sets it", () => {
+  const plate = (base) => (base === "plate" ? 150000 : null);
+  const value = (name, rarity, category) => magicItemValueCp({ name, rarity, category }, plate);
+  assert.equal(value("Cloak of Protection", "uncommon", "wondrous item"), 40000);
+  assert.equal(value("Potion of Climbing", "common", "potion"), 5000, "a consumable is worth half");
+  assert.equal(value("Ammunition +1", "uncommon", "weapon"), 20000, "ammunition is a consumable");
+  assert.equal(value("Plate Armor +1", "rare", "armor (plate)"), 550000, "+1 plate is the rare 4,000 gp and plate's 1,500");
+  assert.equal(value("Ring of Regeneration", "Very Rare ", "ring"), 4000000);
+  assert.equal(value("Vorpal Sword", "legendary", "weapon (any sword)"), null, "which sword it is was left open");
+  assert.equal(value("Belt of Giant Strength", "rarity varies", "wondrous item"), null);
+  assert.equal(value("Spell Scroll", "common", "scroll"), null, "a scroll is priced by a spell level the row does not give");
+  assert.equal(value("Orb of Dragonkind", "artifact", "wondrous item"), null);
+});
+
+test("a curiosity shop sells commons in a village and saves uncommon and rare magic for a city", () => {
+  let seed = 3;
+  const random = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const pool = ["common", "uncommon", "rare", "very rare"].flatMap((rarity) =>
+    Array.from({ length: 30 }, (_, index) => ({ name: `${rarity} ${index}`, cost: "100 gp", rarity })),
+  );
+  const village = stockFromPool(pool, "village", random);
+  assert.equal(village.length, 10);
+  assert.ok(village.every((line) => line.itemName.startsWith("common ")), village.map((line) => line.itemName).join(", "));
+  const city = stockFromPool(pool, "city", random).map((line) => line.itemName);
+  const count = (rarity) => city.filter((name) => name.startsWith(`${rarity} `)).length;
+  assert.equal(city.length, 24);
+  assert.equal(count("very rare"), 0, "nothing rarer than rare is for sale");
+  assert.ok(count("common") > count("rare") && count("rare") > 0, city.join(", "));
+  // From the pack itself, when the runner has it.
+  const curiosities = stockPool("curiosities");
+  if (curiosities.length) {
+    const shelf = stockFromPool(curiosities, "village");
+    assert.equal(shelf.length, 10, "the village shop opened with bare shelves");
+    assert.ok(shelf.every((line) => line.priceCp === 5000 || line.priceCp === 10000), shelf.map((line) => `${line.itemName} ${line.priceCp}`).join(", "));
+    assert.ok(stockFromPool(curiosities, "city").every((line) => line.priceCp <= 550000));
+    assert.equal(curiosities.find((item) => item.name === "Potion of Healing")?.cost, "5000 cp", "a potion of healing at the 50 gp the gear list asks");
+    const apothecary = stockPool("apothecary").map((item) => item.name);
+    assert.ok(apothecary.includes("Potion of Climbing"), apothecary.join(", "));
+    assert.ok(!apothecary.some((name) => /periapt|almanac/i.test(name)), apothecary.join(", "));
+  }
+});
+
 test("restock comes due by the clock", () => {
   assert.equal(restockDue({ restockDays: 7, restockedAt: 0 }, 6 * 1440, 1440), false);
   assert.equal(restockDue({ restockDays: 7, restockedAt: 0 }, 7 * 1440, 1440), true);
@@ -189,6 +232,22 @@ test("selling pays half list for a known item and restocks the shelf", () => {
   const lacking = handleSellItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Longsword" }));
   assert.equal(lacking.refused, "rules", JSON.stringify(lacking));
   assert.match(String(lacking.error), /does not carry "Longsword"/);
+});
+
+test("a keeper buys a magic item back at half what the shelf would ask, and prices none too rare to stock", () => {
+  if (!stockPool("curiosities").length) {
+    return; // the rarity comes from the content pack
+  }
+  const owner = createUser("wren", "x");
+  const wren = createSheet(campaign.id, owner.id, 3, sheetInput("Wren", [{ name: "Potion of Climbing", qty: 1 }, { name: "Ring of Regeneration", qty: 1 }], 0));
+  const odd = insertShop(campaign.id, { name: "Odd Lots", kind: "curiosities", size: "village", markup: 1, stock: [] });
+  const sold = handleSellItem(campaign, JSON.stringify({ characterId: wren.id, shop: odd.id, item: "Potion of Climbing" }));
+  assert.equal(sold.ok, true, JSON.stringify(sold));
+  assert.equal(getSheetById(wren.id).gold, 25, "half the 50 gp a common potion is worth");
+  assert.equal(getShop(odd.id).stock.find((line) => line.itemName === "Potion of Climbing").priceCp, 5000);
+  const ring = handleSellItem(campaign, JSON.stringify({ characterId: wren.id, shop: odd.id, item: "Ring of Regeneration" }));
+  assert.equal(ring.retry, true, JSON.stringify(ring));
+  assert.match(String(ring.error), /pass priceCp/);
 });
 
 test("a haggle moves the markup a step and is one try per character", () => {

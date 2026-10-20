@@ -19,6 +19,7 @@ import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addStock,
   askingPriceCp,
+  costToCopper,
   findStockLine,
   haggleDc,
   haggleStep,
@@ -29,11 +30,14 @@ import {
   refillStock,
   renderShopsForPrompt,
   restockDue,
+  SHELF_RARITIES,
   SIZE_MARKUP,
   stockFromPool,
   takeStock,
   type Shop,
+  type ShopSize,
 } from "@/lib/dm/shop-logic";
+import { magicItemValueCp, pricedRarity } from "@/lib/srd/magic-item-value";
 import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -160,15 +164,20 @@ function publishSheet(campaign: Campaign, sheetId: string) {
 // kinds, filtered by the kind's words when it has any. Once per name: the
 // pack files some items under two documents, and a shelf with two "Barrel"
 // lines sells one of them and strands the other. The first item each of the
-// kind's staples names is marked, and always goes on the shelf.
-export function stockPool(kind: string): Array<{ name: string; cost: string; staple?: boolean }> {
+// kind's staples names is marked, and always goes on the shelf. The pack
+// prices no magic item, so each is priced by its rarity and carries that
+// rarity for the shelf's size to choose by; a curiosity shop opened bare.
+export function stockPool(kind: string): Array<{ name: string; cost: string; staple?: boolean; rarity?: string }> {
   const spec = KIND_POOL[normalizeShopKind(kind)];
-  const pool: Array<{ name: string; cost: string; staple?: boolean }> = [];
+  const pool: Array<{ name: string; cost: string; staple?: boolean; rarity?: string }> = [];
   const seen = new Set<string>();
   const stapled = new Set<string>();
+  const baseCost = spec.kinds.includes("magic_item") ? baseCostLookup() : null;
   for (const itemKind of spec.kinds) {
     for (const item of packItemsOfKind(itemKind)) {
-      if (!item.cost || (spec.match && !spec.match.test(item.name)) || spec.skip?.includes(item.category) || seen.has(textKey(item.name))) {
+      const magic = baseCost && item.kind === "magic_item" ? magicItemValueCp(item, baseCost) : undefined;
+      const cost = magic === undefined ? item.cost : magic === null ? "" : `${magic} cp`;
+      if (!cost || (spec.match && !spec.match.test(item.name)) || spec.skip?.includes(item.category) || seen.has(textKey(item.name))) {
         continue;
       }
       seen.add(textKey(item.name));
@@ -177,16 +186,41 @@ export function stockPool(kind: string): Array<{ name: string; cost: string; sta
       if (first) {
         stapled.add(textKey(staple));
       }
-      pool.push({ name: item.name, cost: item.cost, ...(first ? { staple: true } : {}) });
+      const rarity = magic ? pricedRarity(item.rarity) : null;
+      pool.push({ name: item.name, cost, ...(first ? { staple: true } : {}), ...(rarity ? { rarity } : {}) });
     }
   }
   return pool;
 }
 
+// The pack's weapons and armor priced by name, for a magic item made from
+// one: "plate" finds Plate, "chain shirt" Chain Shirt.
+function baseCostLookup(): (base: string) => number | null {
+  const prices = new Map<string, number>();
+  for (const item of [...packItemsOfKind("weapon"), ...packItemsOfKind("armor")]) {
+    const cp = costToCopper(item.cost);
+    if (cp !== null && !prices.has(textKey(item.name))) {
+      prices.set(textKey(item.name), cp);
+    }
+  }
+  return (base) => prices.get(textKey(base)) ?? prices.get(textKey(`${base} armor`)) ?? null;
+}
+
+// What the keeper pays for a magic item works from what the shelf would ask
+// for it: its rarity's value, when a shop of this size sells that rarity.
+// Anything rarer is no stock of theirs, and the DM names the price.
+function shelfMagicValueCp(name: string, size: ShopSize): number | null {
+  const wanted = textKey(name);
+  const row = searchItems({ q: name, kind: "magic_item", limit: 50 }).find(
+    (item) => textKey(item.name) === wanted && SHELF_RARITIES[size].includes(pricedRarity(item.rarity) ?? ""),
+  );
+  return row ? magicItemValueCp(row, baseCostLookup()) : null;
+}
+
 // Every pack item of one kind. The search hands back at most 200 rows a call,
 // sorted by name, so one call stocked a general store from the gear before
-// "M" (no torch, rope or rations, ever) and a curiosity shop from the first
-// 200 of some 1,600 magic items: every page is read until the rows run out.
+// "M" (no torch, rope or rations, ever): every page is read until the rows
+// run out.
 const PAGE = 200;
 function packItemsOfKind(kind: "weapon" | "armor" | "gear" | "magic_item"): ReturnType<typeof searchItems> {
   const found: ReturnType<typeof searchItems> = [];
@@ -361,7 +395,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure), priced by the worth they were given; a name is never
   // read for a price (src/lib/dm/trade-value.ts).
-  const listCp = listPriceCp(line);
+  const listCp = listPriceCp(line) ?? shelfMagicValueCp(carried, shop.size);
   const each = listCp !== null ? (keepsFullValue(line) ? listCp : offerPriceCp(listCp)) : args.priceCp ?? null;
   if (each === null) {
     return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.`, retry: true };
