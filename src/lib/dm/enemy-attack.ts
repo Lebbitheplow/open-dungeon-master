@@ -40,7 +40,7 @@ import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy
 import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
-import { charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
+import { attackNamed, charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enemySwingOdds, hasFeatureNamed } from "@/lib/dm/enemy-swing-odds";
@@ -53,7 +53,7 @@ import { conditionRollRiders, conditionTurnShape } from "@/lib/srd/condition-eff
 import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
 import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, noneNamed, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 
@@ -161,7 +161,14 @@ export function handleEnemyAttack(
   }
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   const single = takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
-  const planned = plannedSwings(found.stats, attacks, args.attack, { single });
+  const asked = args.attack ? attackNamed(attacks, args.attack) : null;
+  if (args.attack && !asked) {
+    return noneNamed(`${found.displayName} has no attack called`, args.attack, attacks.map((attack) => attack.name));
+  }
+  if (single && !asked && attacks.length > 1) {
+    return { error: `${found.displayName} makes one attack this turn: name it in attack (${attacks.map((attack) => attack.name).join(", ")}).`, retry: true };
+  }
+  const planned = plannedSwings(found.stats, attacks, asked, { single });
   const profiles = planned.map((attack) => enemyAttackProfile(attack, found.stats.traits ?? []));
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;

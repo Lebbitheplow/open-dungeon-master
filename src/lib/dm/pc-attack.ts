@@ -190,6 +190,11 @@ export const pcAttackTool: ToolDef = {
           description:
             "Hunter ranger with Volley: the action makes one ranged weapon attack against each creature within 10 feet of the first target; call pc_attack once per creature with volley true. The first spends the whole action.",
         },
+        improvised: {
+          type: "boolean",
+          description:
+            "An object picked up that is no weapon on their sheet (a chair, a bottle), swung as an improvised weapon.",
+        },
         twoHanded: {
           type: "boolean",
           description:
@@ -237,6 +242,7 @@ const pcAttackArgsSchema = z.object({
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),
   advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
+  improvised: z.coerce.boolean().optional(),
   twoHanded: z.coerce.boolean().optional(),
   offHand: z.coerce.boolean().optional(),
   smite: z.coerce.number().int().min(1).max(9).optional(),
@@ -451,17 +457,22 @@ function spendPcAttack(plan: AttackPlan): ToolError | null {
     context.notes.push(plan.drawn.note);
   }
   if (ammo && ammo.ok) {
-    const equipment = withAmmoCount(plan.drawn?.equipment ?? sheet.equipment, ammo.index, ammo.remaining);
+    const carried = plan.drawn?.equipment ?? sheet.equipment;
+    const equipment = withAmmoCount(carried, ammo.index, ammo.remaining);
     patchSheet(sheet.id, { equipment });
     // Tallied under the line's name as it reads NOW: a quiver written
     // "Arrows (20)" is renamed by every shot, and the tally follows it so the
-    // end of the fight finds the line it has to refill.
+    // end of the fight finds the line it has to refill. The last one spent
+    // takes the line off the sheet, so the tally keeps the line itself.
+    const emptied = ammo.remaining <= 0;
     const before = `${sheet.id}|${ammo.name}`;
-    const after = `${sheet.id}|${equipment[ammo.index]?.name ?? ammo.name}`;
+    const after = `${sheet.id}|${emptied ? ammo.name : (equipment[ammo.index]?.name ?? ammo.name)}`;
     const tally = { ...encounter.ammoSpent };
-    const spentSoFar = tally[before] ?? 0;
+    const spentOf = (entry: (typeof tally)[string] | undefined) => (typeof entry === "object" ? entry.spent : (entry ?? 0));
+    const spentSoFar = spentOf(tally[before]);
     delete tally[before];
-    tally[after] = (tally[after] ?? 0) + spentSoFar + 1;
+    const spent = spentOf(tally[after]) + spentSoFar + 1;
+    tally[after] = emptied && carried[ammo.index] ? { spent, line: carried[ammo.index] } : spent;
     encounter.ammoSpent = tally;
     saveEncounter(encounter);
   }

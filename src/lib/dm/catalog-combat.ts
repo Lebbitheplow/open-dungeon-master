@@ -154,6 +154,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Attacker", kind: "character", required: true },
       { name: "targetEnemyId", label: "Target", kind: "enemy", required: true },
       { name: "weapon", label: "Weapon", kind: "text", help: "From their equipment. Blank uses the best weapon they carry." },
+      { name: "improvised", label: "Improvised weapon", kind: "boolean", help: "An object they picked up that is no weapon on their sheet (a chair, a bottle), named in Weapon." },
       { name: "spell", label: "Attack spell", kind: "text", help: "An attack-roll spell instead of a weapon, such as Fire Bolt. It takes the whole action." },
       { name: "damage", label: "Spell damage", kind: "dice", placeholder: "1d10", help: "Only for a spell the content pack does not know." },
       damageTypeField("damageType", "Spell damage type"),

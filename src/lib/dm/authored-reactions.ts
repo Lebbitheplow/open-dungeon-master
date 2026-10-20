@@ -38,11 +38,9 @@ import { withinFeet } from "@/lib/dm/authored-saves";
 import { resolveMoreReaction } from "@/lib/dm/authored-reactions-more";
 import { projectWard } from "@/lib/dm/arcane-ward";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { noneNamed, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
 type Found = { reaction: AuthoredReaction; held: HeldAuthored; holder: CharacterSheet; variant: string };
 
@@ -192,7 +190,7 @@ export function authoredReaction(ctx: Ctx): ToolResult | null {
 function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
   const { reaction, held, holder } = found;
   const does = reaction.does;
-  const label = lower(reaction.name);
+  const label = textKey(reaction.name);
   const encounter = ctx.encounter;
   switch (does.kind) {
     case "reduce": {
@@ -207,7 +205,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       const hit = lastHitOn(ctx, target, label);
       if ("error" in hit) return hit;
       const swing = hit.record.swings[hit.index];
-      if (does.types && !does.types.includes(lower(swing.type ?? hit.record.type))) {
+      if (does.types && !does.types.includes(textKey(swing.type ?? hit.record.type))) {
         return { error: `${reaction.name} answers ${does.types.join(", ")} damage, and the hit on ${target.name} was ${swing.type ?? hit.record.type}. Nothing was spent.`, refused: "rules" };
       }
       let reduction: number;
@@ -288,7 +286,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       }
       const hit = lastHitOn(ctx, target, label);
       if ("error" in hit) return hit;
-      const type = lower(hit.record.swings[hit.index].type ?? hit.record.type);
+      const type = textKey(hit.record.swings[hit.index].type ?? hit.record.type);
       if (!does.types.includes(type)) {
         return { error: `${reaction.name} answers ${does.types.join(", ")} damage; the hit on ${target.name} was ${type || "untyped"}. Nothing was spent.`, refused: "rules" };
       }
@@ -296,7 +294,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       if (pcResistances(target).includes(type)) {
         return { applied: `${target.name} already resists ${type} damage: ${reaction.name} changes nothing.` };
       }
-      const corrected = hit.record.swings.map((entry) => (lower(entry.type ?? hit.record.type) === type && entry.hit ? { ...entry, raw: Math.floor(entry.raw / 2) } : entry));
+      const corrected = hit.record.swings.map((entry) => (textKey(entry.type ?? hit.record.type) === type && entry.hit ? { ...entry, raw: Math.floor(entry.raw / 2) } : entry));
       const settled = settle(ctx, hit.record, corrected, label);
       return { applied: `${target.name} resists this ${type} damage: ${settled.given} hit points come back. HP ${settled.hp}.` };
     }
@@ -405,7 +403,14 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       if (!enemy || !encounter) {
         return { error: `${reaction.name} answers a creature in the fight: pass targetEnemyId. Nothing was spent.`, retry: true };
       }
-      const condition = (does.variants && Object.entries(does.variants).find(([key]) => found.variant.includes(key))?.[1]) ?? does.condition;
+      // A reaction with variants takes the one named whole after its name
+      // ("Raging Storm tundra"); a miss is refused before anything rolls.
+      const variants = Object.entries(does.variants ?? {});
+      const chosen = variants.find(([key]) => textKey(key) === found.variant);
+      if (variants.length && !chosen) {
+        return noneNamed(`${reaction.name} has no variant called`, found.variant, variants.map(([key]) => `${reaction.name} ${key}`));
+      }
+      const condition = chosen?.[1] ?? does.condition;
       const dc = saveDc(holder, does.dcAbility);
       const save = rollEnemySave(ctx.campaign.id, enemy, does.save, dc, {
         magical: true,
@@ -415,7 +420,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       if (save.success) {
         return { applied: `${enemy.displayName} resists (${does.save.toUpperCase()} ${save.total} vs DC ${dc}).` };
       }
-      patchEnemyConditions(enemy.id, [...enemy.conditions.filter((entry) => lower(entry) !== condition), condition], {
+      patchEnemyConditions(enemy.id, [...enemy.conditions.filter((entry) => textKey(entry) !== condition), condition], {
         ...(enemy.conditionMeta as ConditionMetaMap),
         [condition]: { source: ctx.sheet.id, ...(does.rounds ? { rounds: does.rounds } : { untilTurnOf: ctx.sheet.id }) },
       } as typeof enemy.conditionMeta);

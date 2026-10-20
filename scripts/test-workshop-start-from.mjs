@@ -6,8 +6,9 @@
 //   - A renamed copy of mundane gear weighs what the catalog row says, and
 //     a sheet carrying it weighs the same as one carrying the original (F09).
 //   - Every trait, action, reaction and legendary action a pack monster row
-//     prints, named from the raw row and not from parseMonster, is still on
-//     a copy after save and reload, word for word (F05).
+//     prints, named from the raw row as the app reads it (with its pack
+//     corrections) and not from parseMonster, is still on a copy after save
+//     and reload, word for word (F05).
 //   - The checker finds no rule deviation in the SRD's own spells and magic
 //     items: a finding on a published entry would be a false one (F13).
 //
@@ -25,6 +26,7 @@ const { hydrateHomebrewGear } = await import("../src/lib/db/homebrew.ts");
 const { lineWeightLb } = await import("../src/lib/srd/encumbrance.ts");
 const { getContentDb } = await import("../src/lib/content/db.ts");
 const { parseMonster } = await import("../src/lib/bestiary/statblock.ts");
+const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");
 const { draftFromData, draftFromStats, draftToData } = await import("../src/lib/bestiary/monster-draft.ts");
 const { bundledSpellRows, bundledItemRows } = await import("../src/lib/rulebook/catalog-rows.ts");
 const { withMechanics } = await import("../src/lib/workshop/catalog-mechanics.ts");
@@ -125,7 +127,7 @@ await test("F05: every entry a pack monster row prints is on its copy after save
   assert.ok(rows.length >= 300, `only ${rows.length} SRD monster rows`);
   const lost = [];
   for (const row of rows) {
-    const raw = JSON.parse(row.data_json);
+    const raw = correctedMonsterData(JSON.parse(row.data_json));
     const parsed = parseMonster(raw, Number(row.cr) || 0);
     const reloaded = draftFromData(`${row.name} Copy`, draftToData(draftFromStats(`${row.name} Copy`, parsed), ""));
     const printed = reloaded.stats.printed ?? { traits: [], actions: [], reactions: [], legendary: [] };

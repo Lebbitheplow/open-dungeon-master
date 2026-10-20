@@ -29,15 +29,14 @@ import { READIED } from "@/lib/dm/object-actions";
 import { handlePcAttack } from "@/lib/dm/pc-attack";
 import { noHit, SPENT, spendReaction, type Ctx } from "@/lib/dm/reaction-tools";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
+import { isNamed } from "@/lib/srd/feature-names";
 
 export function srdFeatureReaction(ctx: Ctx): Record<string, unknown> | null {
-  const asked = lower(ctx.args.feature);
-  if (/^retaliation\b/.test(asked)) {
+  if (isNamed(ctx.args.feature, "retaliation")) {
     return retaliation(ctx);
   }
-  if (/^(superior hunter's defense:\s*)?stand against the tide\b/.test(asked)) {
+  if (isNamed(ctx.args.feature, "stand against the tide")) {
     return standAgainstTheTide(ctx);
   }
   return null;
@@ -66,7 +65,7 @@ function retaliation(ctx: Ctx): ToolResult {
   addSheetCondition(campaign, sheet, READIED, { untilTurnOf: sheet.id }, "Retaliation");
   const result = handlePcAttack(campaign, ctx.turn, JSON.stringify({ characterId: sheet.id, targetEnemyId: enemy.id }), ctx.sheets, ctx.sheetsById, new Set(), null);
   const after = getSheetById(sheet.id);
-  if (after?.conditions.some((entry) => lower(entry) === READIED)) {
+  if (after?.conditions.some((entry) => textKey(entry) === READIED)) {
     const cleared = removeConditions(after.conditions, after.conditionMeta, [READIED]);
     patchSheet(after.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
   }
@@ -95,7 +94,7 @@ function standAgainstTheTide(ctx: Ctx): ToolResult {
     return { error: "Stand Against the Tide turns the attack on another creature, not the attacker: pass its targetEnemyId. Nothing was spent.", retry: true };
   }
   const attacker = getEnemy(record.attacker.id);
-  const attack = (attacker?.stats.attacks ?? []).find((entry) => lower(entry.name) === lower(record.attack)) ?? attacker?.stats.attacks?.[0];
+  const attack = (attacker?.stats.attacks ?? []).find((entry) => textKey(entry.name) === textKey(record.attack));
   if (!attacker || !attack) {
     return { error: `The server has no record of ${record.attacker.name}'s ${record.attack} to repeat. Nothing was spent.`, refused: "rules" };
   }

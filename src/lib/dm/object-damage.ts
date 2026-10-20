@@ -42,6 +42,7 @@ const objectSchema = z.object({
   damageType: z.string().max(30).optional(),
   characterId: z.string().max(80).optional(),
   weapon: z.string().max(80).optional(),
+  improvised: z.coerce.boolean().optional(),
   ac: z.coerce.number().int().min(1).max(30).optional(),
   hp: z.coerce.number().int().min(1).max(1000).optional(),
   // SRD 5.1 (Objects): a big object's damage threshold. A blow below it is
@@ -108,7 +109,7 @@ export function damageObject(
   if (sheet && campaign) {
     // The character's own attack, from their sheet: the roll has to beat the
     // object's AC before any damage lands.
-    const built = buildAttackProfile(campaign.id, sheet, { weapon: args.weapon });
+    const built = buildAttackProfile(campaign.id, sheet, { weapon: args.weapon, improvised: args.improvised });
     if ("error" in built) {
       return toolError(built);
     }

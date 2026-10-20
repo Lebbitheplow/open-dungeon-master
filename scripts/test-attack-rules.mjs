@@ -72,9 +72,13 @@ test("an unarmed strike and an improvised weapon need no place in the pack", () 
   const fist = resolveAttackWeapon([], [], "unarmed strike");
   assert.equal(fist.unarmed, true);
   assert.equal(fist.carried, true);
-  const stool = resolveAttackWeapon([], [], "bar stool");
+  const stool = resolveAttackWeapon([], [], "bar stool", { improvised: true });
   assert.equal(stool.srd, null);
   assert.equal(stool.carried, true);
+  // A name that is no carried line is not taken for an object picked up
+  // unless the attack says it is one, and a table weapon never is.
+  assert.equal(resolveAttackWeapon([], [], "bar stool").carried, false);
+  assert.equal(resolveAttackWeapon([], [], "Greatsword", { improvised: true }).carried, false);
   // Nothing named and nothing carried: the fists.
   assert.equal(resolveAttackWeapon([], [], undefined).unarmed, true);
 });

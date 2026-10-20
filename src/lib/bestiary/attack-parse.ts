@@ -81,8 +81,12 @@ export function parseAttack(action: RawAttackRow): EnemyAttack | null {
     }
   }
   // An attack whose hit only grapples or restrains (a roper's tendril) is
-  // still an attack: no damage, its rider does the work.
-  if (!damage && !text.baseDice && text.onHit?.condition && !text.onHit.damage) {
+  // still an attack: no damage, its rider does the work. So is one whose
+  // damage is all its save's (a guardian naga's Spit Poison, "Hit: The
+  // target must make a DC 15 Constitution saving throw, taking 45 (10d8)
+  // poison damage on a failed save"): the row's dice are the save's, which
+  // the rider rolls, and the hit deals none of its own.
+  if (!text.baseDice && ((!damage && text.onHit?.condition && !text.onHit.damage) || (text.onHit?.save && text.onHit.damage))) {
     damage = "0";
   }
   if (!damage || !isValidExpression(damage)) {

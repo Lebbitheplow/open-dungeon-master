@@ -153,7 +153,7 @@ export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEne
       melee: (attack.mode ?? (attack.range && !attack.reach ? "ranged" : "melee")) !== "ranged",
       ...(attack.spellAttack ? { spellAttack: true } : {}),
       ...(onHit ? { onHit } : {}),
-      swings: plannedSwings(stats, attacks, attack.name).map((swing) => swing.name),
+      swings: plannedSwings(stats, attacks, attack).map((swing) => swing.name),
     });
   }
 

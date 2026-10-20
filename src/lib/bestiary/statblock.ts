@@ -1,7 +1,18 @@
 import { printedBlockOf, type PrintedBlock } from "@/lib/bestiary/printed-block";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
-import { parseRoutines, type OnHitRider, type RoutineStep, type TypedDice } from "@/lib/bestiary/attack-text";
+import {
+  ATTACK_GROUP,
+  COUNT_WORD,
+  multiattackAlternatives,
+  multiattackItems,
+  multiattackParts,
+  multiattackSentences,
+  parseRoutines,
+  type OnHitRider,
+  type RoutineStep,
+  type TypedDice,
+} from "@/lib/bestiary/attack-text";
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import {
   ENGINE_TRAIT_NAMES,
@@ -189,22 +200,54 @@ const MULTIATTACK_WORDS: Record<string, number> = {
 // corrupt block, well above any SRD creature (the tarrasque makes five).
 const MAX_MULTIATTACK = 10;
 
+function countOf(word: string): number {
+  const lower = word.toLowerCase();
+  return MULTIATTACK_WORDS[lower] ?? (lower === "a" || lower === "an" || lower === "one" ? 1 : Number(lower));
+}
+
 // "The wolf makes two bite attacks." -> 2. As many as the stat block says
-// (SRD 5.1, Multiattack): "makes five attacks" is five swings. The hydra's
+// (SRD 5.1, Multiattack): "makes five attacks" is five swings, "makes two
+// attacks: ..." two, and "makes three claw attacks and one bite attack"
+// four: every group the first way to spend the turn lists, through each
+// "makes" in it ("makes four attacks with its tendrils, uses Reel, and makes
+// one attack with its bite" is five), up to an alternative ("or two ranged
+// attacks", ", or it makes..."), and a "can also make" extra. The hydra's
 // "as many bite attacks as it has heads" reads as the five heads it starts
 // with.
 export function parseMultiattackCount(description: string): number | null {
   if (/as many [^.]*attacks? as it has heads/i.test(description)) {
     return 5;
   }
-  const match = /makes?\s+(?:either\s+)?(two|three|four|five|six|seven|eight|nine|ten|\d{1,2})\b[^.]*attack/i.exec(
-    description,
-  );
-  if (!match) {
+  const sentences = multiattackSentences(description);
+  const first = sentences.find((sentence) => /\bmakes?\s/i.test(sentence));
+  if (!first) {
     return null;
   }
-  const word = match[1].toLowerCase();
-  const count = MULTIATTACK_WORDS[word] ?? Number(word);
+  const header = new RegExp(`\\bmakes?\\s+(${COUNT_WORD})\\s+(?:\\w+\\s+)?attacks?\\s*:`, "i").exec(first);
+  let count = header ? countOf(header[1]) : 0;
+  // The first part that makes attacks: "can either use Drift Backward or
+  // make two attacks" is two.
+  for (const part of header ? [] : multiattackParts(first)) {
+    for (const clause of part.split(/\bmakes?\s+/i).slice(1)) {
+      // "two rapier or two shortbow attacks": the noun said once, for both.
+      const [alternative, ...others] = multiattackAlternatives(clause);
+      const listed = others.length && !/\battacks?\b/i.test(alternative) ? `${alternative} attacks` : alternative;
+      for (const item of multiattackItems(listed)) {
+        const group = ATTACK_GROUP.exec(item);
+        if (!group) {
+          break;
+        }
+        count += countOf(group[1]);
+      }
+    }
+    if (count) {
+      break;
+    }
+  }
+  for (const sentence of sentences) {
+    const also = /can also make (a|an|one|two)\b[^.]*?attacks?/i.exec(sentence);
+    count += also ? countOf(also[1]) : 0;
+  }
   return count >= 2 ? Math.min(MAX_MULTIATTACK, count) : null;
 }
 

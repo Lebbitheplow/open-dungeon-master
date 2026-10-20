@@ -30,13 +30,13 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 
 type Resolution = ToolError | { result: Record<string, unknown> };
 
 // Whether the sheet knows this maneuver ("Maneuver: Rally").
 export function knowsManeuver(sheet: CharacterSheet, name: string): boolean {
-  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && textKey(feature.name).includes(textKey(name)));
+  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && isNamed(feature.name, name));
 }
 
 function companion(sheet: CharacterSheet, targetId: string | undefined, label: string): CharacterSheet | ToolError {
@@ -132,7 +132,7 @@ export function commandersStrike(campaign: Campaign, sheet: CharacterSheet, targ
   // Both marks last for the rest of the fighter's turn.
   const lasts = untilTurnEnd(sheet.id, { turnBegun: true, source: sheet.id });
   const strike = `${SUPERIORITY_STRIKE} (1${maneuverDieFor(sheet)})`;
-  const held = fresh.conditions.filter((entry) => !/^(commander's strike|superiority strike)\b/i.test(entry));
+  const held = fresh.conditions.filter((entry) => !isConditionNamed(entry, COMMANDED, SUPERIORITY_STRIKE));
   const updated = patchSheet(fresh.id, {
     conditions: [...held, COMMANDED, strike],
     conditionMeta: { ...fresh.conditionMeta, [COMMANDED]: lasts, [strike]: lasts },

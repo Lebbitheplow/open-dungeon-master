@@ -34,10 +34,13 @@ const dexDerived = {
   abilityMods: { str: -1, dex: 4, con: 1, int: 1, wis: 2, cha: 0 },
 };
 
-test("weaponNamed: exact, plural, containment both ways", () => {
+test("weaponNamed: whole name, plural, written apart, book order; never a word of a name", () => {
   assert.equal(weaponNamed("Longsword")?.name, "Longsword");
   assert.equal(weaponNamed("longswords")?.name, "Longsword");
-  assert.equal(weaponNamed("Longsword of the Dawn")?.name, "Longsword");
+  assert.equal(weaponNamed("long sword")?.name, "Longsword");
+  assert.equal(weaponNamed("Crossbow, light")?.name, "Light Crossbow");
+  assert.equal(weaponNamed("Longsword of the Dawn"), null);
+  assert.equal(weaponNamed("Club soda"), null);
   assert.equal(weaponNamed("hand crossbow")?.name, "Hand Crossbow");
   assert.equal(weaponNamed("a rusty pipe"), null);
 });
@@ -49,14 +52,15 @@ test("isWeaponProficient: category and specific terms", () => {
   assert.equal(isWeaponProficient(["simple", "longbows"], longbow), true);
 });
 
-test("resolveAttackWeapon: named weapon matches carried equipment", () => {
-  const resolved = resolveAttackWeapon(
-    [{ name: "Longsword of the Dawn", qty: 1 }],
-    ["martial"],
-    "longsword",
-  );
+test("resolveAttackWeapon: a named weapon is the carried line by its whole name", () => {
+  const pack = [{ name: "Longsword of the Dawn", qty: 1, srdName: "Longsword" }];
+  const resolved = resolveAttackWeapon(pack, ["martial"], "longsword of the dawn");
   assert.equal(resolved.displayName, "Longsword of the Dawn");
   assert.equal(resolved.srd?.name, "Longsword");
+  // Its row's name takes it too; a word of its name does not.
+  assert.equal(resolveAttackWeapon(pack, ["martial"], "Longsword").displayName, "Longsword of the Dawn");
+  assert.equal(resolveAttackWeapon([{ name: "Longsword of the Dawn", qty: 1 }], ["martial"], "longsword").carried, false);
+  assert.equal(resolveAttackWeapon(pack, ["martial"], "Dawn").carried, false);
 });
 
 test("resolveAttackWeapon: no arg picks best proficient carried weapon", () => {
@@ -120,7 +124,7 @@ test("resolveAttackWeapon: nothing usable falls back to unarmed", () => {
 });
 
 test("resolveAttackWeapon: unknown named weapon is improvised", () => {
-  const resolved = resolveAttackWeapon([], ["martial"], "barstool");
+  const resolved = resolveAttackWeapon([], ["martial"], "barstool", { improvised: true });
   assert.equal(resolved.srd, null);
   const profile = weaponAttackProfile(derived, ["martial"], resolved);
   assert.equal(profile.improvised, true);

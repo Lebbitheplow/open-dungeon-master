@@ -297,6 +297,23 @@ await test("Half the ammunition spent in a battle is recovered afterwards, howev
   assert.equal(quiver?.name, "Arrows (18)", `four shots from "Arrows (20)" left "${quiver?.name}" after the fight`);
 });
 
+await test("A quiver spent to its last arrow comes back as the line it was, its row with it, at every table; nothing else on the sheet is refilled.", async () => {
+  for (const name of ["Frecce", "Flèches", "Flechas", "Pfeile", "Quiver arrows"]) {
+    await range.arena({ first: holder.id });
+    range.stand(archer.id, 4);
+    carry([{ name: "Longbow", qty: 1 }, { name, srdName: "Arrows", qty: 2 }, { name: "Bedroll", qty: 1 }]);
+    for (let shot = 0; shot < 2; shot += 1) {
+      await range.swing(archer.id, { weapon: "Longbow" }, 2);
+    }
+    assert.equal(counted.sheet(archer.id).equipment.some((item) => item.name === name), false, `${name}: the empty quiver stayed`);
+    await range.endFight();
+    const equipment = counted.sheet(archer.id).equipment;
+    const quiver = equipment.find((item) => item.name === name);
+    assert.deepEqual([quiver?.qty, quiver?.srdName], [1, "Arrows"], `${name}: ${JSON.stringify(equipment)}`);
+    assert.equal(qtyOf(counted.sheet(archer.id), "Bedroll"), 1, `${name}: the arrows went to the bedroll`);
+  }
+});
+
 await test("A refused attack never happened: a shot the engine turns down for range must leave the quiver as it was.", async () => {
   await range.arena({ first: holder.id });
   carry([{ name: "Hand Crossbow", qty: 1 }, { name: "Bolts", qty: 10 }]);

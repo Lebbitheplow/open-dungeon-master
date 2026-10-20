@@ -144,14 +144,17 @@ test("the lair acts on initiative count 20, with an option its block prints, onc
   const stored = getActiveEncounter(campaign.id);
   stored.legendary.lairDue = stored.round;
   saveEncounter(stored);
-  // An option the block does not print is refused while it prints some.
+  // An option the block does not print is refused while it prints some, and
+  // so is a line's first words: an option is its number or its whole line.
   const made = handleLairAction(live(), null, JSON.stringify({ action: "A rain of frogs." }));
   assert.match(made.error, /options are printed/);
-  const first = handleLairAction(live(), null, JSON.stringify({ action: "The ground shakes." }));
+  const partial = handleLairAction(live(), null, JSON.stringify({ action: "The ground shakes." }));
+  assert.match(partial.error, /send one's number \(or its whole line\): 1\. The ground shakes;/);
+  const first = handleLairAction(live(), null, JSON.stringify({ action: "1" }));
   assert.equal(first.ok, true, first.error);
   // Its save resolves through the engine: aoe_damage with the printed DC.
   assert.match(first.next, /aoe_damage: dc 15, saveAbility "dex"/);
-  const again = handleLairAction(live(), null, JSON.stringify({ action: "1" }));
+  const again = handleLairAction(live(), null, JSON.stringify({ action: "The ground shakes; each creature makes a DC 15 Dex save or falls prone." }));
   assert.match(again.error, /already acted/);
 });
 

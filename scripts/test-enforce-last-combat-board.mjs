@@ -19,7 +19,7 @@ const { damageAdjust } = await import("../src/lib/dm/damage-logic.ts");
 const fighter = world.addHero({
   name: "Fighter", class: "fighter", level: 5, abilities: { str: 16, dex: 10 }, proficiencies: { ...TRAINED, skills: ["athletics", "perception"] },
   maxHp: 60, ac: 10, acOverride: true,
-  equipment: [{ name: "Longsword", qty: 1 }, { name: "Shortsword", qty: 1 }, { name: "Silvered Longsword", qty: 1, tags: ["silvered"] }, { name: "Longbow", qty: 1 }, { name: "Light Crossbow", qty: 1 }, { name: "Hand Crossbow", qty: 1 }],
+  equipment: [{ name: "Longsword", qty: 1 }, { name: "Shortsword", qty: 1 }, { name: "Silvered Longsword", srdName: "Longsword", qty: 1, tags: ["silvered"] }, { name: "Longbow", qty: 1 }, { name: "Light Crossbow", qty: 1 }, { name: "Hand Crossbow", qty: 1 }],
 });
 const other = world.addHero({
   name: "Other", class: "fighter", level: 5, proficiencies: TRAINED, maxHp: 60, ac: 10, acOverride: true,

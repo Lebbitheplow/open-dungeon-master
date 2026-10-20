@@ -34,6 +34,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { isNamed } from "@/lib/srd/feature-names";
 
 export type ManeuverUse =
   | "swing"
@@ -63,19 +64,11 @@ const USES: Array<[string, ManeuverUse]> = [
   ["tactical assessment", "check"],
 ];
 
-const plain = (name: string) =>
-  name
-    .trim()
-    .toLowerCase()
-    .replace(/[’`]/g, "'")
-    .replace(/^maneuver:\s*/, "")
-    .replace(/commanders strike/, "commander's strike");
-
-// The maneuver a name refers to, and how it is taken. Unknown names are
-// swings, as every maneuver that rides an attack is.
+// How the maneuver a whole name ("Parry", "Maneuver: Parry") refers to is
+// taken. The rest are swings, as every maneuver that rides an attack is:
+// whether the sheet knows the one named is pickManeuver's to check.
 export function maneuverUse(name: string): ManeuverUse {
-  const key = plain(name);
-  return USES.find(([entry]) => key === entry || key.includes(entry))?.[1] ?? "swing";
+  return USES.find(([entry]) => isNamed(name, entry))?.[1] ?? "swing";
 }
 
 // The words a pc_attack call gets for a maneuver that is not part of a
