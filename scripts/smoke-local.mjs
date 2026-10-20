@@ -18,8 +18,9 @@
 //   node scripts/smoke-local.mjs --provider local --model gemma4:31b-it-qat [--runs 6]
 //       (Ollama native API at OLLAMA_BASE_URL; LOCAL_TEXT_CONTEXT caps num_ctx)
 //   options: --turns N (how many of the scenario's turns to play, default all)
-//            --scenario ford|town (the ford's five turns, or the town's eight:
-//            arrival, an NPC, persuasion, a purchase, stealth, a fight, attacks)
+//            --scenario ford|town|skirmish (the ford's five turns, the town's
+//            eight: arrival, an NPC, persuasion, a purchase, stealth, a fight,
+//            attacks; or the skirmish's nine, a fight over several rounds)
 //            --label NAME  --out DIR (writes <label>.json)
 //            --context N (the window the prompt packs against; custom provider)
 //            --key KEY (the custom provider's API key, default OPENAI_COMPAT_API_KEY;
@@ -302,7 +303,56 @@ const TOWN = [
   },
 ];
 
+// --scenario skirmish: a fight played out over several rounds, each line
+// declared by the character whose turn it is (who: "current"), so a model is
+// measured on the combat itself rather than on lines the order refuses.
+const FIGHTING = (why) => (turn) => called(turn, ["pc_attack", "end_turn", "move_token", "take_action", "cast_at_enemy"], why);
+const SKIRMISH = [
+  {
+    label: "approach",
+    who: "avery",
+    text: "We follow the goblin tracks down into the ravine, weapons ready.",
+  },
+  {
+    label: "ambush",
+    who: "bram",
+    text: "Goblins leap from the rocks above! I raise my sword and shout a warning to Avery.",
+    expect: (turn) => (turn.encounter ? null : "no encounter started (the fight was narrated instead)"),
+  },
+  ...["round-1a", "round-1b", "round-2a", "round-2b", "round-3a", "round-3b"].map((label) => ({
+    label,
+    who: "current",
+    fallback: "avery",
+    text: "I close in on the nearest goblin and attack it.",
+    expect: FIGHTING("the turn was told in prose with no combat tool"),
+  })),
+  {
+    label: "aftermath",
+    who: "current",
+    fallback: "avery",
+    text: "If any goblins are still standing I attack the nearest one; otherwise I search the bodies for anything useful.",
+  },
+];
+
+// The player who speaks a scripted line: the character whose turn the fight
+// is on for who "current", the line's own speaker otherwise.
+function speakerFor(script, players, campaignId) {
+  if (script.who !== "current") {
+    return players[script.who];
+  }
+  const encounter = getActiveEncounter(campaignId);
+  const entry = encounter?.orderReady ? encounter.order[encounter.turnIndex] : null;
+  const current = entry?.kind === "pc" ? Object.values(players).find((player) => player.sheet.id === entry.characterId) : null;
+  return current ?? players[script.fallback];
+}
+
 const SCENARIOS = {
+  skirmish: {
+    title: "The Goblin Ravine",
+    description: "Goblins have been raiding the road, and the party follows them home.",
+    theme: "classic fantasy, a rocky ravine",
+    turns: SKIRMISH,
+  },
   ford: {
     title: "The Salt Road",
     description: "A one-scene caravan job that goes wrong at the ford.",
@@ -413,7 +463,7 @@ async function playRun(runNumber) {
 
   const turns = [];
   for (const script of TURNS.slice(0, MAX_TURNS)) {
-    const player = players[script.who];
+    const player = speakerFor(script, players, campaign.id);
     const playerSeq = allocateSeq(campaign.id);
     insertCampaignMessage({
       campaignId: campaign.id,
