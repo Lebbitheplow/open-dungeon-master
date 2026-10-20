@@ -104,6 +104,17 @@ export function handleRequestRoll(
       retry: true,
     };
   }
+  // Out of a fight there is no one on the board to swing at: the AI's attack
+  // roll with no fight running rolled a bare d20 that hit nobody, and
+  // gpt-oss-20b and Qwen3.6-35B, each rolling one after the last goblin fell,
+  // narrated a hit on a goblin already dead. A person at the console rolls
+  // what they rule.
+  if (args.kind === "attack" && sheet && model && !getActiveEncounter(campaignId)) {
+    return {
+      error: "No fight is running, so there is nobody to attack: every enemy of the last fight is down or gone. If the character attacks someone who stands, start the fight with start_encounter and resolve the swing with pc_attack; otherwise narrate what they do instead.",
+      refused: "rules",
+    };
+  }
   // The same holds for the damage: a party character's damage on an enemy
   // with no attack roll behind it would skip the hit, the action and the
   // turn. Damage aimed at an enemy from nobody's sheet (an NPC ally the
