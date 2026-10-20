@@ -36,12 +36,17 @@ export default {
       check(await heading.isVisible(), "the page stays until the player leaves it");
 
       check(!(await skip.isChecked()), "the hero page shows by default");
+      // The save is awaited from before the click: armed afterwards, a save
+      // that had already answered was waited on until the timeout.
+      const saved = () => page.waitForResponse((response) => response.url().endsWith("/api/profile") && response.request().method() === "PATCH");
+      let save = saved();
       await skip.check();
-      await page.waitForResponse((response) => response.url().endsWith("/api/profile") && response.request().method() === "PATCH");
+      await save;
       await page.reload();
       await eventually(() => skip.isChecked(), { timeoutMs: 20_000, label: "the account kept 'Don't show this again'" });
+      save = saved();
       await skip.uncheck();
-      await page.waitForResponse((response) => response.url().endsWith("/api/profile") && response.request().method() === "PATCH");
+      await save;
 
       await page.getByRole("button", { name: "Bring to a table" }).click();
       await eventually(() => page.getByRole("dialog").isVisible(), { label: "the join dialog" });
