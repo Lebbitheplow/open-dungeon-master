@@ -323,7 +323,9 @@ const SKIRMISH = [
     label,
     who: "current",
     fallback: "avery",
-    text: "I close in on the nearest goblin and attack it.",
+    // A whole turn in one line, ended, so the next line is the next
+    // combatant's and never a second attack on a spent turn.
+    text: "I close in on the nearest goblin and attack it, then I end my turn.",
     expect: FIGHTING("the turn was told in prose with no combat tool"),
   })),
   {
