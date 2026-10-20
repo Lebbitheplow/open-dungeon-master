@@ -214,12 +214,20 @@ slipped most. Before a player's turn ended where the table was told it ends
 the turn on), the same skirmish gave gpt-oss-20b 14 missed and 15 slips in five
 runs, and the default model 8 and 7 in four: a turn the player had ended stayed
 open, and the next player's words went to the same character. Two of gpt-oss's
-six misses now were the BC-250's llama.cpp build (b11721, up for two days)
-dropping a stream; two of its town misses were a player acting on another
-character's turn, which the DM rightly answered without an attack. One run of the
-default model narrated a hit after the fight had ended, on a goblin already dead;
-an attack roll with no fight running is now refused. No other run narrated a blow
-that no tool landed.
+six misses were replies llama.cpp threw away whole: when the reasoning budget
+ends gpt-oss's thought and it writes on without opening its answer, llama.cpp's
+parser refuses the reply (every build from the app's b10621 to the newest), and
+the app now asks for it once more. Two of its town misses were a player acting
+on another character's turn, which the DM rightly answered without an attack.
+The town runs had no content pack, so the inn's shop opened bare; a general
+store now always stocks everyday gear such as torches, rations and rope. One
+run of the default model narrated a hit after the fight had ended, on a goblin
+already dead; an attack roll with no fight running is now refused. No other run
+narrated a blow that no tool landed. One gpt-oss skirmish run narrated an
+ambush with no fight started, which began a turn late; an attack begun on the
+party in prose is now read as a fight starting, and the DM is asked to start
+it or to say that nobody attacked, so a misread threat costs a call, not a
+fight.
 
 Measured before those changes: the 35B at Q2 on the BC-250 played a fight about
 as well as gpt-oss-20b (two skirmish runs: 1 missed, 3 slips), slower (130 to 190
