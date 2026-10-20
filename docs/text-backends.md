@@ -203,26 +203,31 @@ repeated passage); an invented blow is a hit the narration lands that no tool ro
 
 | Model, machine | Town (8 turns a run) | Ford (5) | Skirmish (9) | Seconds a turn |
 |---|---|---|---|---|
-| gpt-oss-20b, AMD BC-250 | 4 runs: 2 missed, 0 slips | 4 runs: 0, 0 | 5 runs: 14 missed, 15 slips | 100 to 160 |
-| gpt-oss-20b, Framework Desktop | 1 run: 2, 0 | 1 run: 0, 0 | 2 runs: 4, 1 | 110 to 190 |
-| Qwen3.6-35B-A3B UD-Q2_K_XL, AMD BC-250 | 2 runs: 3, 3 | 1 run: 0, 0 | 2 runs: 1, 3 | 130 to 190 |
-| Qwen3.6-35B-A3B Q8, Framework Desktop (the default) | 2 runs: 3, 0 | 2 runs: 0, 2 | 4 runs: 8, 7 | 120 to 300 |
+| gpt-oss-20b, AMD BC-250 | 2 runs: 5 missed, 0 slips | 2 runs: 0, 0 | 4 runs: 6 missed, 0 slips | 90 to 160 |
+| Qwen3.6-35B-A3B Q8, Framework Desktop (the default) | 2 runs: 0, 1 | (not rerun) | 5 runs: 2 missed, 0 slips | 135 to 205 |
 
 The Framework Desktop is an AMD Ryzen AI Max+ 395 with 128 GB shared by its
 Radeon 8060S graphics; its real play on the default model took a median of 90
-seconds a turn. No run narrated a blow that no tool landed (what the checker
-flagged was a trail that "cuts into" a ravine and a sword that "bites into empty
-air" on a miss). The skirmish, a fight of identical lines, is where every model
-slips. gpt-oss-20b most often leaves a turn the player ended in words open, so
-the character is still up with no movement left; the End turn card ends it
-whatever the model does. The same fixes took the default model from 5 missed
-and 12 slips in two skirmish runs to 8 and 7 in four.
+seconds a turn. The skirmish, a fight of identical lines, is where every model
+slipped most. Before a player's turn ended where the table was told it ends
+(pc_attack's approach and endTurn, a narration or the player's own words handing
+the turn on), the same skirmish gave gpt-oss-20b 14 missed and 15 slips in five
+runs, and the default model 8 and 7 in four: a turn the player had ended stayed
+open, and the next player's words went to the same character. Two of gpt-oss's
+six misses now were the BC-250's llama.cpp build (b11721, up for two days)
+dropping a stream; two of its town misses were a player acting on another
+character's turn, which the DM rightly answered without an attack. One run of the
+default model narrated a hit after the fight had ended, on a goblin already dead;
+an attack roll with no fight running is now refused. No other run narrated a blow
+that no tool landed.
 
-The 35B at Q2 now plays a fight about as well as gpt-oss-20b, slower, and with
-more slips around the town. gpt-oss-20b is the minimum for its speed and its
-memory: it leaves room for a picture model beside it on a bigger machine. Run it
-on a llama.cpp release build: a fork built for another model's speculative
-decoding ended its streams early and showed its reasoning.
+Measured before those changes: the 35B at Q2 on the BC-250 played a fight about
+as well as gpt-oss-20b (two skirmish runs: 1 missed, 3 slips), slower (130 to 190
+seconds a turn), and with more slips around the town; gpt-oss-20b on the
+Framework Desktop ran 110 to 190 seconds a turn. gpt-oss-20b is the minimum for
+its speed and its memory: it leaves room for a picture model beside it on a
+bigger machine. Run it on a llama.cpp release build: a fork built for another
+model's speculative decoding ended its streams early and showed its reasoning.
 
 ### Below the minimum: short rules
 

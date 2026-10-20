@@ -10,7 +10,7 @@ What each setup needs from the machine:
 | Setup | Machine |
 |---|---|
 | A human DM, an API key or an agent program | Any machine that runs Node or Docker; 2 GB of memory is comfortable. No graphics card. |
-| A local model, the minimum | 16 GB of graphics memory (a 16 GB card, or 24 GB of memory on a Mac) for gpt-oss-20b: 100 to 160 seconds a turn on an AMD BC-250 |
+| A local model, the minimum | 16 GB of graphics memory (a 16 GB card, or 24 GB of memory on a Mac) for gpt-oss-20b: 90 to 160 seconds a turn on an AMD BC-250 |
 | A local model, recommended | About 28 GB for Qwen3.6-35B-A3B at Q4, 45 GB at Q8: a median of 90 seconds a turn on a Framework Desktop (Ryzen AI Max+ 395, 128 GB shared) |
 | Local pictures (ComfyUI) | 8 GB of graphics memory or more for an SDXL-class model, on top of a local model's share ([image-generation.md](image-generation.md)) |
 
