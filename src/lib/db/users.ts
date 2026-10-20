@@ -146,6 +146,9 @@ export type UserSettings = {
   // The player's virtual dice (src/lib/dice/dice-look.ts); absent means
   // the tray's original look.
   diceLook?: DiceLook;
+  // "Don't show this again" on the hero page a new character lands on
+  // after its first save (src/app/characters/[characterId]/ready).
+  skipHeroPage?: boolean;
   // The walkthroughs finished, by tour id (src/lib/tours/account-logic.ts).
   // Written only through recordFinishedTours, which merges per tour: the
   // profile PATCH replaces a key whole and does not accept this one.
