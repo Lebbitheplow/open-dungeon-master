@@ -6,8 +6,8 @@
 // because the Torch's row is also spelled "torches". Pure.
 
 // A key's plural forms, the key first: "torch" is also "torches", "ration"
-// "rations", "supply" "supplies". The last word pluralizes, so "hempen rope"
-// is also "hempen ropes".
+// "rations", "supply" "supplies", "elf" "elves". The last word pluralizes,
+// so "hempen rope" is also "hempen ropes".
 export function pluralForms(key: string): string[] {
   const forms = [key, `${key}s`];
   if (/(?:s|x|z|ch|sh)$/.test(key)) {
@@ -16,7 +16,19 @@ export function pluralForms(key: string): string[] {
   if (/[^aeiou]y$/.test(key)) {
     forms.push(`${key.slice(0, -1)}ies`);
   }
+  if (/[lr]f$/.test(key)) {
+    forms.push(`${key.slice(0, -1)}ves`);
+  }
   return forms;
+}
+
+// Whether two keys of ODM's English rules vocabulary (a creature type, a
+// race, a terrain) are one, written in the singular or the plural:
+// "monstrosity" and "monstrosities", "orc" and "orcs", "dwarf" and
+// "dwarves". A feature records its picks either way ("Favored Enemy:
+// undead, fiends").
+export function sameRulesKey(a: string, b: string): boolean {
+  return pluralForms(a).includes(b) || pluralForms(b).includes(a);
 }
 
 // Every spelling of each row, to the row: each row's own spellings first,
@@ -34,11 +46,4 @@ export function spellingIndex<T>(rows: readonly T[], spellings: (row: T) => stri
     }
   }
   return index;
-}
-
-// A creature form's English spellings, its name first: "the wolf", "a wolf",
-// "wolf form", "brown bear shape" (a wild shape, a polymorph, a summon or a
-// familiar asked for the way English names it).
-export function creatureSpellings(name: string): [string, ...string[]] {
-  return [name, `the ${name}`, `a ${name}`, `an ${name}`, `${name} form`, `${name} shape`];
 }

@@ -139,27 +139,21 @@ export function asciiSlugOf(name: string): string {
   return ascii.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-// A record by the name a caller gives: one of the record's spellings, or a
-// part of one record's name only ("rex"). Anything else is none, never the
-// record whose name sits inside it: a giant elk is no Elk, a werewolf no
-// Wolf. `terms` are the ways to read what was written (the name as written,
-// then without its article); a record's first spelling is its name, the only
-// one a part is looked for in. Compared by textKey, so "giant_spider" and
-// "Giant-Spider" are the Giant Spider and an accented name matches.
-export function findNamed<T>(list: readonly T[], terms: readonly string[], spellingsOf: (entry: T) => readonly [string, ...string[]]): T | null {
-  const wanted = [...new Set(terms.map(textKey).filter(Boolean))];
-  if (!wanted.length) {
-    return null;
-  }
-  const exact = list.find((entry) => spellingsOf(entry).some((spelling) => wanted.includes(textKey(spelling))));
-  if (exact) {
-    return exact;
-  }
-  const parts = list.filter((entry) => {
-    const name = ` ${textKey(spellingsOf(entry)[0])} `;
-    return wanted.some((term) => name.includes(` ${term} `));
-  });
-  return parts.length === 1 ? parts[0] : null;
+// A record by the name a caller gives: one of the record's spellings, whole,
+// compared by textKey, so "giant_spider" and "Giant-Spider" are the Giant
+// Spider and an accented name matches. Anything else is none, never the
+// record whose name holds it or the rest of it: "spider" is no Giant Spider,
+// a giant elk no Elk, "the wolf" no Wolf; the refusal names the records
+// namesHolding finds.
+export function findNamed<T>(list: readonly T[], name: string, spellingsOf: (entry: T) => readonly [string, ...string[]]): T | null {
+  const wanted = textKey(name);
+  return wanted ? (list.find((entry) => spellingsOf(entry).some((spelling) => textKey(spelling) === wanted)) ?? null) : null;
+}
+
+// The records whose name holds the name as whole words, for the refusal of
+// a name no record has: "spider" names the Giant Spider.
+export function namesHolding<T>(list: readonly T[], name: string, spellingsOf: (entry: T) => readonly [string, ...string[]]): T[] {
+  return textKey(name) ? list.filter((entry) => containsPhrase(spellingsOf(entry)[0], name)) : [];
 }
 
 // The order names are listed in, the same on every server and at every
@@ -174,3 +168,30 @@ export function compareNames(a: string, b: string): number {
 }
 
 export const byName = (a: { name: string }, b: { name: string }) => compareNames(a.name, b.name);
+
+// A whole number as a person writes it at any table: digits, with ".", ",",
+// an apostrophe (Swiss "1'000") or a space between groups of exactly three
+// ("1.000", "1,000", "1 000" are a thousand). A part of a whole is never read: "1,5" is one and a half at one
+// table and fifteen at another, so the reason comes back instead, naming the
+// mark, for the caller to ask again.
+const GROUPED = /^[+-]?\d{1,3}([.,   '’])\d{3}(?:\1\d{3})*$/;
+
+export function writtenWholeNumber(text: string): number | { unread: string } {
+  const written = text.trim();
+  if (/^[+-]?\d+$/.test(written) || GROUPED.test(written)) {
+    return Number(written.replace(/[^\d+-]/g, ""));
+  }
+  const marks = [...new Set(Array.from(written.matchAll(/\d([^\d])(?=\d)/gu), (found) => found[1]))];
+  const mark = marks[0];
+  if (marks.length > 1) {
+    return { unread: `"${written}" mixes ${marks.map((each) => (each.trim() ? `"${each}"` : "a space")).join(" and ")}: one mark stands between groups of three, as in "1${mark}000"` };
+  }
+  if (mark && !GROUPED.test(`1${mark}000`)) {
+    return { unread: `in "${written}", "${mark}" is no mark between digits: groups of three take ".", ",", "'" or a space, as in "1.000"` };
+  }
+  return {
+    unread: mark
+      ? `in "${written}", ${mark.trim() ? `"${mark}"` : "a space"} between digits stands only before a group of three, as in "1${mark}000"`
+      : `"${written}" is not one`,
+  };
+}

@@ -11,6 +11,7 @@
 // guard tests can load it.
 
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { writtenWholeNumber } from "@/lib/language/text-logic";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -88,10 +89,10 @@ export function foldFieldValue(
   if (found.kind === "text") {
     return { args: { [found.name]: String(value).trim(), ...rest } };
   }
-  const text = String(value).trim().replace(/,/g, "");
-  const number = Number(text);
-  if (!text || !Number.isFinite(number) || !Number.isInteger(number)) {
-    return { error: `${found.label} takes a whole number, and "${String(value)}" is not one.`, retry: true };
+  const number = typeof value === "number" ? value : writtenWholeNumber(String(value));
+  if (typeof number !== "number" || !Number.isInteger(number)) {
+    const reason = typeof number === "number" ? `"${String(value)}" is not one` : number.unread;
+    return { error: `${found.label} takes a whole number: ${reason}.`, retry: true };
   }
   if (found.kind === "ability") {
     const current = (rest.abilities ?? abilities) as Record<Ability, number>;

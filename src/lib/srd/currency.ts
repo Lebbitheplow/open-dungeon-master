@@ -13,8 +13,10 @@
 // `gold * 100 + copper`, every existing reader of `gold` keeps working
 // unchanged, and nothing a table notices is lost.
 //
-// Pure by design: no imports at all, so scripts/test-currency.mjs can load it
-// and the client can format a purse without a request.
+// Pure by design: it imports only text-logic, so scripts/test-currency.mjs
+// can load it and the client can format a purse without a request.
+
+import { writtenWholeNumber } from "../language/text-logic.ts";
 
 export const DENOMINATIONS = ["cp", "sp", "ep", "gp", "pp"] as const;
 export type Denomination = (typeof DENOMINATIONS)[number];
@@ -81,23 +83,21 @@ export function formatPurse(purse: Purse): string {
   return formatCopper(purseCopper(purse));
 }
 
-// An amount in the coins' codes, the SRD's notation, which formatCopper
-// writes and the content pack's costs use: "12gp", "2 pp 5 sp", "17" (a bare
-// number is gold, which is what every existing price in the pack means). The
-// codes are the same at every table, so no language's coin words are read:
-// anything but numbers and codes ("340 silver", "50 mo", "5 arrows") is
-// null, never a guess that would silently charge for it, and so is a text
-// with no number at all, so a caller can tell "nothing was said" from
-// "nothing was worth anything".
-export function parseCoins(text: string): number | null {
+// Amounts in the coins' codes, the SRD's notation, which formatCopper
+// writes: "12gp", "2 pp 5 sp", "17" (a bare number is gold). The codes are
+// the same at every table, so no language's coin words are read: anything
+// but numbers and codes ("340 silver", "50 mo", "5 arrows") is null, never a
+// guess that would silently charge for it, and so is a text with no number
+// at all, so a caller can tell "nothing was said" from "nothing was worth
+// anything". `amountOf` reads each number.
+function coinsOf(text: string, amountOf: (written: string) => number | null): number | null {
   const parts = String(text ?? "")
     .toLowerCase()
-    .replace(/,/g, "")
-    .match(/\d+(?:\.\d+)?|[^\s\d.-]+/g) ?? [];
+    .match(/\d(?:[\d.,'’\u00a0\u202f ]*\d)?|[^\s\d.,'’-]+/gu) ?? [];
   let total = 0;
   for (let index = 0; index < parts.length; index += 1) {
-    const amount = Number(parts[index]);
-    if (!Number.isFinite(amount)) {
+    const amount = amountOf(parts[index]);
+    if (amount === null) {
       return null;
     }
     const denomination = DENOMINATIONS.find((code) => code === parts[index + 1]);
@@ -109,9 +109,33 @@ export function parseCoins(text: string): number | null {
   return parts.length ? Math.round(total) : null;
 }
 
-// Why a coin amount cannot be read, for the refusal that asks for it again.
+// An amount someone wrote (the model's coins, a price typed in the market):
+// whole numbers of each coin, a thousands mark read only before a group of
+// three digits (src/lib/language/text-logic.ts writtenWholeNumber), so
+// "1,5 gp" is refused rather than read as 1.5 or 15 gold.
+export function parseCoins(text: string): number | null {
+  return coinsOf(text, (written) => {
+    const amount = writtenWholeNumber(written);
+    return typeof amount === "number" ? amount : null;
+  });
+}
+
+// The content pack's own cost notation, which is English and fixed: "."
+// is a decimal point and "," a thousands mark ("0.05 gp", "2,000 gp").
+export function packCostCopper(text: string): number | null {
+  return coinsOf(text, (written) => {
+    const amount = Number(written.replace(/,/g, ""));
+    return Number.isFinite(amount) ? amount : null;
+  });
+}
+
+// Why a coin amount cannot be read, for the refusal that asks for it again:
+// the mark a number was written with, else the codes.
 export function unreadCoins(text: string): string {
-  return `"${text}" is not an amount in the coins' codes: write it with pp, gp, ep, sp and cp, like "3 gp 4 sp"`;
+  const number = (String(text ?? "").match(/\d(?:[\d.,'’\u00a0\u202f ]*\d)?/gu) ?? []).map(writtenWholeNumber).find((amount) => typeof amount !== "number");
+  return number
+    ? `Coins come in whole numbers: ${number.unread}. Write a part of a coin in smaller coins, like "1 gp 5 sp"`
+    : `"${text}" is not an amount in the coins' codes: write it with pp, gp, ep, sp and cp, like "3 gp 4 sp"`;
 }
 
 export type PurseChange = {

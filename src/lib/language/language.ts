@@ -7,7 +7,7 @@
 
 import * as snowball from "multilingual-stemmer";
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
-import { textKey, words } from "./text-logic.ts";
+import { words } from "./text-logic.ts";
 import { STOP_LIST as danish } from "./stop-words/danish.ts";
 import { STOP_LIST as dutch } from "./stop-words/dutch.ts";
 import { STOP_LIST as english } from "./stop-words/english.ts";
@@ -138,12 +138,4 @@ export function withoutLeadingStopWords(key: string, language: TableLanguage): s
     start += 1;
   }
   return parts.slice(start).join(" ");
-}
-
-// The ways to read a name someone wrote, in order: as written, then without
-// its leading article or possessive (withoutLeadingStopWords). Empty for no
-// name.
-export function nameTerms(text: string | undefined, language: TableLanguage): string[] {
-  const key = textKey(text ?? "");
-  return key ? [...new Set([key, withoutLeadingStopWords(key, language)])] : [];
 }

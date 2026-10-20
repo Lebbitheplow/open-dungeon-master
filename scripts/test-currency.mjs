@@ -13,9 +13,11 @@ const {
   formatCopper,
   formatPurse,
   fromCopper,
+  packCostCopper,
   parseCoins,
   purseCopper,
   splitCopper,
+  unreadCoins,
 } = await import("../src/lib/srd/currency.ts");
 
 let passed = 0;
@@ -74,7 +76,19 @@ test("denominations parse by their codes", () => {
   assert.equal(parseCoins("2 pp 5 sp"), 2050);
   assert.equal(parseCoins("6 cp"), 6);
   assert.equal(parseCoins("1,200 gp"), 120000);
-  assert.equal(parseCoins("1.5 gp"), 150);
+  assert.equal(parseCoins("1.200 gp"), 120000);
+});
+
+test("a part of a coin is refused, naming the mark, never read as one table's decimal", () => {
+  for (const text of ["1.5 gp", "1,5 gp", "2,50 sp"]) {
+    assert.equal(parseCoins(text), null, text);
+    assert.match(unreadCoins(text), /whole numbers.*"1 gp 5 sp"/, text);
+  }
+});
+
+test("the pack's own costs keep their English notation", () => {
+  assert.equal(packCostCopper("0.05 gp"), 5);
+  assert.equal(packCostCopper("5,000 gp"), 500000);
 });
 
 test("a coin's name in any language is no code, never a guessed amount", () => {
