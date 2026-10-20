@@ -12,6 +12,7 @@ import { racialFeatCount } from "@/lib/srd/race-id";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { halfFeatPicks, scoresWithHalfFeats, settledHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
+  gearNameKey,
   layeredPrice,
   judgeStartingGear,
   type StartingWealthMethod,
@@ -43,6 +44,8 @@ import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import { builderHitPoints } from "./builderHp";
+import { buildReceipt, settleQty, weaponLineFor, withAddedQty } from "./receiptMath";
+import { combatRiders, fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
 import { textKey } from "@/lib/language/text-logic";
@@ -507,7 +510,22 @@ export function useBuilderDerived({
         );
     const verdict = judgeStartingGear({ equipment: fullEquipment, freeKit, coinCopper, priceOf });
     const left = Math.max(0, coinCopper - verdict.spentCopper);
+    // How many of each name the kits put in the pack, as fullEquipment
+    // merged them: those copies leave together, through the removed names.
+    const preAdded = new Map<string, number>();
+    if (!keepsStoredGear) {
+      const kitted = [
+        ...autoLoadout.filter((item) => !removedAutoNames.includes(item.name)),
+        ...backgroundKit.names.filter((itemName) => !removedAutoNames.includes(itemName)).map((itemName) => ({ name: itemName, qty: 1 })),
+      ];
+      for (const item of kitted) {
+        const name = gearNameKey(item.name);
+        preAdded.set(name, (preAdded.get(name) ?? 0) + item.qty);
+      }
+    }
+    const receipt = buildReceipt({ equipment: fullEquipment, preAdded, freeKit, coinCopper, priceOf });
     return {
+      receipt,
       method: wealthMethod,
       coinCopper,
       spentCopper: verdict.spentCopper,
@@ -520,7 +538,7 @@ export function useBuilderDerived({
       gold: Math.floor(left / 100),
       copper: left % 100,
     };
-  }, [equipment, fullEquipment, autoLoadout, startingKit, backgroundKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
+  }, [equipment, fullEquipment, autoLoadout, removedAutoNames, startingKit, backgroundKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
 
   // AC is derived from the gear above, never typed: equipping a breastplate
   // moves the number here and on the sheet. Pinning an armor class is a
@@ -539,6 +557,48 @@ export function useBuilderDerived({
     });
   }, [klass, preview, shownAbilities, fullEquipment, subclass, effectiveLevel]);
   const ac = acInfo?.ac ?? acOverride ?? 10;
+
+  // The receipt the gear step shows (src/app/characters/builder/
+  // receiptMath.ts), with a to-hit and damage line on each weapon worked
+  // as the sheet's attack cards work it: the class's features and fighting
+  // styles for riders, Martial Arts only with no armor and no shield.
+  const { setEquipment, setRemovedAutoNames, stylePicks } = state;
+  const gearReceipt = useMemo(() => {
+    const riders = klass
+      ? combatRiders({
+          class: klass.id,
+          level: effectiveLevel,
+          features: [
+            ...classFeaturesFor(klass.id, subclass, effectiveLevel),
+            ...stylePicks.map((id) => ({ name: fightingStyleFeatureName(id) })),
+          ],
+        })
+      : null;
+    const martialArts = !acInfo?.armorName && !acInfo?.shieldName;
+    const rows = purse.receipt.rows.map((row) => {
+      const item = fullEquipment.find((entry) => entry.name === row.name);
+      return preview && riders && item
+        ? { ...row, weapon: weaponLineFor(item, preview.derived, preview.proficiencies.weapons ?? [], riders, martialArts) }
+        : row;
+    });
+    // A typed or stepped quantity: copies over the kit's are the player's
+    // own added entry; none at all removes the kit's copies too.
+    const setQty = (itemName: string, wanted: number) => {
+      const row = rows.find((entry) => entry.name === itemName);
+      if (!row) {
+        return;
+      }
+      const qty = settleQty(row, wanted);
+      setEquipment((current) => withAddedQty(current, itemName, Math.max(0, qty - row.preAdded), row.slug));
+      if (qty === 0 && row.preAdded > 0) {
+        setRemovedAutoNames((removed) => (removed.includes(itemName) ? removed : [...removed, itemName]));
+      }
+    };
+    return { ...purse.receipt, rows, setQty };
+  }, [purse.receipt, fullEquipment, preview, klass, subclass, effectiveLevel, stylePicks, acInfo, setEquipment, setRemovedAutoNames]);
+  // The purse the steps read carries the finished receipt, so the gear step
+  // shows it through the purse view it already builds.
+  const shownPurse = useMemo(() => ({ ...purse, receipt: gearReceipt }), [purse, gearReceipt]);
 
   // What this class and subclass actually hand the character at this level.
   // Showing them turns a blind dropdown choice into an informed one.
@@ -699,7 +759,7 @@ export function useBuilderDerived({
     kitTraining,
     backgroundKit,
     fullEquipment,
-    purse,
+    purse: shownPurse,
     acInfo,
     ac,
     grantedFeatures,

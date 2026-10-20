@@ -284,6 +284,7 @@
     "app/characters/builder/FeatChoicesFields.tsx#str-key": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/FeatChoicesFields.tsx#toLowerCase": [["key",1,"spell list id"]],
     "app/characters/builder/FeatChoicesFields.tsx#toUpperCase": [["display",1,"an SRD name title-cased"]],
+    "app/characters/builder/GearReceipt.tsx#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/KitChoicesSection.tsx#toUpperCase": [["display",1,"capitalised label"]],
     "app/characters/builder/LineageCarousel.tsx#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/OptionCardGrid.tsx#str-eq": [["key",5,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],

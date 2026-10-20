@@ -9,6 +9,7 @@ import { gearFromHomebrewData, type HomebrewGear } from "@/lib/homebrew/gear";
 import { packRowPrice } from "@/lib/srd/starting-wealth";
 import CatalogBrowser, { type CatalogSection } from "./CatalogBrowser";
 import ContentPicker, { type PickerEntry } from "./ContentPicker";
+import GearReceipt, { type ReceiptView } from "./GearReceipt";
 import { Chip } from "./steps/shared";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -66,6 +67,9 @@ export type PurseView = {
   // Everything the purse cannot pay for, in the rules' words; empty when
   // the pack is fine.
   problems: string[];
+  // The pack line by line, with its quantity setter (receiptMath.ts). The
+  // builder always sends one; without it the pack shows as chips.
+  receipt?: ReceiptView;
   // A table that rolls starting wealth: the server's roll, or the button
   // that asks for it.
   wealth: {
@@ -196,27 +200,31 @@ export default function EquipmentSection({
         sections={GEAR_SHELF}
         metaOf={(entry) => entry.rarity || entry.cost || ""}
       />
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {equipment.map((item) => (
-          <Chip
-            key={item.name}
-            label={item.qty > 1 ? `${item.name} x${item.qty}` : item.name}
-            homebrew={item.slug?.startsWith("homebrew:") ?? false}
-            info={
-              item.slug?.startsWith("homebrew:")
-                ? undefined
-                : {
-                    reference: {
-                      kind: "items",
-                      slug: item.slug ?? contentSlug(item.name),
-                      name: item.name,
-                    },
-                  }
-            }
-            onRemove={() => onRemove(item.name)}
-          />
-        ))}
-      </div>
+      {purse.receipt ? (
+        <GearReceipt receipt={purse.receipt} />
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {equipment.map((item) => (
+            <Chip
+              key={item.name}
+              label={item.qty > 1 ? `${item.name} x${item.qty}` : item.name}
+              homebrew={item.slug?.startsWith("homebrew:") ?? false}
+              info={
+                item.slug?.startsWith("homebrew:")
+                  ? undefined
+                  : {
+                      reference: {
+                        kind: "items",
+                        slug: item.slug ?? contentSlug(item.name),
+                        name: item.name,
+                      },
+                    }
+              }
+              onRemove={() => onRemove(item.name)}
+            />
+          ))}
+        </div>
+      )}
       <div className="mt-3 space-y-1.5">
         {purse.wealth && !purse.wealth.rolled ? (
           <button
@@ -230,13 +238,16 @@ export default function EquipmentSection({
             Roll starting wealth ({purse.wealth.dice})
           </button>
         ) : null}
-        <div className="flex items-baseline gap-2">
-          <Coins className="size-3.5 self-center text-amber-300/80" />
-          <span className="text-xs text-stone-400">Coin left after the gear</span>
-          <span key={`${purse.gold}-${purse.copper}`} className="reveal font-mono text-sm text-amber-200">
-            {purse.gold} gp{purse.copper ? ` ${purse.copper} cp` : ""}
-          </span>
-        </div>
+        {/* The receipt's foot carries the coin left when there is one. */}
+        {purse.receipt ? null : (
+          <div className="flex items-baseline gap-2">
+            <Coins className="size-3.5 self-center text-amber-300/80" />
+            <span className="text-xs text-stone-400">Coin left after the gear</span>
+            <span key={`${purse.gold}-${purse.copper}`} className="reveal font-mono text-sm text-amber-200">
+              {purse.gold} gp{purse.copper ? ` ${purse.copper} cp` : ""}
+            </span>
+          </div>
+        )}
         <p className="text-[11px] text-stone-500">
           {purse.wealth?.rolled
             ? `The server rolled ${purse.wealth.rolled.faces.join(", ")} on ${purse.wealth.dice}: ${purse.wealth.rolled.gold} gp. `

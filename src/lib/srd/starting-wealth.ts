@@ -93,7 +93,11 @@ const PRICES_GP: Record<string, number> = Object.fromEntries(Object.entries({
   "scrap plate": 50, "ballistic shield": 10,
 }).flatMap(([name, gold]) => [[textKey(name), gold], [`${textKey(name)} armor`, gold]]));
 
-const key = (name: string) => textKey(name.replace(/\(\s*\d+\s*\)\s*$/, ""));
+// The key the purse matches gear by: the Unicode text key, without a
+// trailing count ("Arrows (20)" is arrows). The builder's receipt counts
+// free copies by the same key (src/app/characters/builder/receiptMath.ts).
+export const gearNameKey = (name: string) => textKey(name.replace(/\(\s*\d+\s*\)\s*$/, ""));
+const key = gearNameKey;
 
 export function bundledPriceCopper(name: string): number | null {
   const wanted = key(name);
