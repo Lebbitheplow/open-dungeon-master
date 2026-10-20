@@ -78,8 +78,8 @@ export function useNarrationAudio(): NarrationAudio {
   // same tts_ready re-enters through re-renders or reducer echoes.
   const handledRef = useRef(new Set<string>());
   // Narration that landed before the first user gesture. SessionView hands
-  // each message over exactly once, so dropping these would lose them for
-  // good; they wait here and play from unlock().
+  // each message over exactly once, so they wait here, oldest first, and
+  // unlock() plays the newest; the rest keep their transcript replay.
   const pendingRef = useRef<Array<{ messageId: string; url: string }>>([]);
   // Every change to pendingRef goes through here so `held` follows it.
   const setPending = useCallback((next: Array<{ messageId: string; url: string }>) => {
@@ -167,6 +167,8 @@ export function useNarrationAudio(): NarrationAudio {
           // touched, or one that sat idle). This narration is offered only
           // once, so it goes back to wait, along with whatever queued
           // behind it, and the header shows the "enable audio" state again.
+          // Oldest first, so the next unlock() plays only the newest of them
+          // and leaves the rest to their replay buttons, as at first load.
           setPending([{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current]);
           queueRef.current = [];
           playingRef.current = null;
@@ -201,22 +203,25 @@ export function useNarrationAudio(): NarrationAudio {
   const unlock = useCallback(() => {
     setUnlocked(true);
     unlockedRef.current = true;
-    // Anything that arrived before this gesture starts now, oldest first,
-    // on the same "never interrupt what is playing" rule as live narration.
+    // Only the newest passage that arrived before this gesture plays, on the
+    // same "never interrupt what is playing" rule as live narration. A tab
+    // watched for an hour can hold ten minutes of narration, and playing it
+    // all back to back would bury the live scene under stale passages (the
+    // server skips narration that fell behind on the same rule). The older
+    // ones keep their replay buttons in the transcript (audioByMessage).
     const waiting = pendingRef.current;
     if (waiting.length) {
       setPending([]);
     }
-    if (!waiting.length || readMuted()) {
+    const newest = waiting[waiting.length - 1];
+    if (!newest || readMuted()) {
       return;
     }
     if (playingRef.current) {
-      queueRef.current.push(...waiting);
+      queueRef.current.push(newest);
       return;
     }
-    const [first, ...rest] = waiting;
-    queueRef.current.push(...rest);
-    startPlayback(first.messageId, first.url);
+    startPlayback(newest.messageId, newest.url);
   }, [setPending, startPlayback]);
 
   // Any first interaction with the page (click, key press) also counts as
