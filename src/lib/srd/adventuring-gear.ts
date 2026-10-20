@@ -1,6 +1,6 @@
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { PACKS, type KitItem } from "@/lib/srd/starting-kit-data";
-import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { SRD_WEAPONS, WEAPON_ALIASES } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 import { spellingIndex } from "@/lib/srd/name-forms";
 
@@ -219,10 +219,7 @@ const TRAILERS = /\s+(?:of|from|with|containing|holding|including|that|which|bea
 // one, sticks of incense are not its blocks.
 const KEEP_AS_WRITTEN = [/\b(?:one|1)[- ]person\b/i, /\bsticks? of incense\b/i];
 
-const weaponByKey = spellingIndex(SRD_WEAPONS, (weapon) => [
-  gearKey(weapon.name),
-  ...(weapon.name === "Quarterstaff" ? ["staff", "wooden staff", "wood staff"] : []),
-]);
+const weaponByKey = spellingIndex(SRD_WEAPONS, (weapon) => [gearKey(weapon.name), ...(WEAPON_ALIASES[weapon.name] ?? [])]);
 const armorByKey = spellingIndex(SRD_ARMOR, (armor) => [gearKey(armor.name), gearKey(`${armor.name} armor`)]);
 
 // The catalog name a phrase is, as a weapon, armor or gear; null when it is

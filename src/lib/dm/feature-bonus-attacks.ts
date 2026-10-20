@@ -24,7 +24,7 @@
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { classLevelFor } from "@/lib/srd/multiclass";
-import { matchWeapon } from "@/lib/srd/weapons";
+import { weaponNamed } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
@@ -113,7 +113,7 @@ export function featureBonusAttack(input: {
     }
   }
   if (holds(sheet, "pistol and blade")) {
-    const firearm = matchWeapon(profile.weapon)?.category === "firearm";
+    const firearm = weaponNamed(profile.base ?? "")?.category === "firearm";
     if (!budget.oncePerTurn.includes(MELEE_ATTACKED)) {
       refusals.push({ error: "Pistol and Blade's firearm shot follows a melee weapon attack this turn, and they have made none.", retry: true });
     } else if (!firearm) {

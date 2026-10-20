@@ -8,7 +8,7 @@ import type { AuditEntry, CampaignLocation } from "@/app/campaigns/[campaignId]/
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { magicItemNamed } from "@/lib/srd/magic-items";
 import { CharacterPortrait } from "@/lib/ui";
 
 // The table's set pieces (docs/visual-overhaul-plan.md 8c.6): the level-up
@@ -176,7 +176,7 @@ type Gain = { name: string; qty: number };
 // rest is honest gear.
 function lootTier(name: string): "common" | "rare" | "epic" {
   if (/\+[23]\b/.test(name)) return "epic";
-  if (/\+1\b/.test(name) || matchMagicItem(name) !== null) return "rare";
+  if (/\+1\b/.test(name) || magicItemNamed(name) !== null) return "rare";
   return "common";
 }
 

@@ -23,7 +23,7 @@ const {
 } = await import("../src/lib/dm/attack-rules.ts");
 const { ragingMeleeBonus, resolveAttackWeapon, weaponAttackProfile } = await import("../src/lib/dm/attack-logic.ts");
 const { freshBudget } = await import("../src/lib/dm/action-budget.ts");
-const { matchWeapon } = await import("../src/lib/srd/weapons.ts");
+const { weaponNamed } = await import("../src/lib/srd/weapons.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -36,14 +36,14 @@ const profileOf = (name, stance = {}) =>
   weaponAttackProfile(
     derived,
     ["simple", "martial"],
-    { displayName: name, srd: matchWeapon(name), unarmed: false },
+    { displayName: name, srd: weaponNamed(name), unarmed: false },
     stance,
   );
 const hands = (weapon, extra = {}) =>
   handsRuling({
     who: "Asha",
     weapon,
-    properties: matchWeapon(weapon).properties ?? [],
+    properties: weaponNamed(weapon).properties ?? [],
     lance: weapon === "Lance",
     mounted: false,
     twoHandedAsked: false,
@@ -250,7 +250,7 @@ test("the off-hand swing keeps a penalty and drops a bonus", () => {
   const weak = weaponAttackProfile(
     { abilityMods: { str: -2, dex: -2 }, proficiencyBonus: 3 },
     ["martial"],
-    { displayName: "Shortsword", srd: matchWeapon("Shortsword"), unarmed: false },
+    { displayName: "Shortsword", srd: weaponNamed("Shortsword"), unarmed: false },
     { offHand: true },
   );
   assert.equal(weak.damageExpression, "1d6-2");

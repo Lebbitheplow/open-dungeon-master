@@ -9,6 +9,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 const {
+  magicItemNamed,
   matchMagicItem,
   magicItemRiders,
   effectiveAbilities,
@@ -60,7 +61,7 @@ test("the generated table has a real body of items", () => {
 
 test("a flat-AC item grants its bonus only while attuned", () => {
   const cloak = "Cloak of Protection";
-  assert.equal(matchMagicItem(cloak)?.requiresAttunement, true);
+  assert.equal(magicItemNamed(cloak)?.requiresAttunement, true);
   // Attuned: +1 AC, +1 saves.
   const on = magicItemRiders(attuned(cloak));
   assert.equal(on.acBonus, 1);
@@ -136,13 +137,13 @@ test("every generated item is well formed", () => {
 });
 
 test("a name matches whole, by name or by pack slug, never by a fragment", () => {
-  assert.equal(matchMagicItem("+1 Cloak of Protection")?.name, "Cloak of Protection");
-  assert.equal(matchMagicItem("cloak  of PROTECTION")?.name, "Cloak of Protection");
-  assert.equal(matchMagicItem("Ring of Protection (spare)")?.name, "Ring of Protection");
-  assert.equal(matchMagicItem("Grandmother's band", "ring-of-protection")?.name, "Ring of Protection");
-  assert.equal(matchMagicItem("Ring of Resistance (Fire)")?.name, "Ring of Fire Resistance");
+  assert.equal(magicItemNamed("+1 Cloak of Protection")?.name, "Cloak of Protection");
+  assert.equal(magicItemNamed("cloak  of PROTECTION")?.name, "Cloak of Protection");
+  assert.equal(magicItemNamed("Ring of Protection (spare)")?.name, "Ring of Protection");
+  assert.equal(matchMagicItem({ name: "Grandmother's band", slug: "ring-of-protection" })?.name, "Ring of Protection");
+  assert.equal(magicItemNamed("Ring of Resistance (Fire)")?.name, "Ring of Fire Resistance");
   for (const name of ["a mundane rope", "Pouch", "Potion", "Staff", "Ring", "Basilisk Fang", "Cloak of Protection of the Owl"]) {
-    assert.equal(matchMagicItem(name), null, name);
+    assert.equal(magicItemNamed(name), null, name);
   }
 });
 
@@ -168,12 +169,12 @@ test("an item gives its magic only to someone its text lets attune", () => {
   assert.equal(magicItemRiders(staff, { class: "fighter" }).acBonus, 0);
   assert.equal(magicItemRiders(staff, { class: "wizard" }).acBonus, 2);
   assert.equal(magicItemRiders(staff, { class: "fighter", classes: [{ id: "fighter" }, { id: "warlock" }] }).saveBonus, 2);
-  assert.equal(mayAttune(matchMagicItem("Holy Avenger"), { class: "paladin" }), true);
-  assert.equal(mayAttune(matchMagicItem("Holy Avenger"), { class: "fighter" }), false);
-  assert.equal(mayAttune(matchMagicItem("Wand of Fireballs"), { class: "fighter", spellcasting: null }), false);
-  assert.equal(mayAttune(matchMagicItem("Wand of Fireballs"), { class: "bard", spellcasting: { ability: "cha" } }), true);
-  assert.equal(mayAttune(matchMagicItem("Talisman of Pure Good"), { alignment: "Lawful Good" }), true);
-  assert.equal(mayAttune(matchMagicItem("Talisman of Pure Good"), { alignment: "Chaotic Evil" }), false);
+  assert.equal(mayAttune(magicItemNamed("Holy Avenger"), { class: "paladin" }), true);
+  assert.equal(mayAttune(magicItemNamed("Holy Avenger"), { class: "fighter" }), false);
+  assert.equal(mayAttune(magicItemNamed("Wand of Fireballs"), { class: "fighter", spellcasting: null }), false);
+  assert.equal(mayAttune(magicItemNamed("Wand of Fireballs"), { class: "bard", spellcasting: { ability: "cha" } }), true);
+  assert.equal(mayAttune(magicItemNamed("Talisman of Pure Good"), { alignment: "Lawful Good" }), true);
+  assert.equal(mayAttune(magicItemNamed("Talisman of Pure Good"), { alignment: "Chaotic Evil" }), false);
 });
 
 test("attunement is refused with the reason, and settled the same way on a write", () => {
@@ -202,22 +203,22 @@ test("attunement is refused with the reason, and settled the same way on a write
 test("the rows a person corrected against the item's own text", () => {
   // Magic weapons now have rows (their base weapon and bonus), with no worn
   // effect: a Vorpal Sword gives no resistance, a Defender no standing AC.
-  assert.deepEqual(matchMagicItem("Vorpal Sword")?.effects, []);
-  assert.deepEqual(matchMagicItem("Defender")?.effects, []);
-  assert.equal(matchMagicItem("Asi"), null);
-  assert.deepEqual(matchMagicItem("Staff of Power").effects, [
+  assert.deepEqual(magicItemNamed("Vorpal Sword")?.effects, []);
+  assert.deepEqual(magicItemNamed("Defender")?.effects, []);
+  assert.equal(magicItemNamed("Asi"), null);
+  assert.deepEqual(magicItemNamed("Staff of Power").effects, [
     { kind: "ac_bonus", amount: 2 },
     { kind: "save_bonus", amount: 2 },
   ]);
-  assert.deepEqual(matchMagicItem("Belt of Storm Giant Strength").effects, [
+  assert.deepEqual(magicItemNamed("Belt of Storm Giant Strength").effects, [
     { kind: "set_ability", ability: "str", score: 29 },
   ]);
-  assert.deepEqual(matchMagicItem("Red Dragon Scale Mail").effects, [
+  assert.deepEqual(magicItemNamed("Red Dragon Scale Mail").effects, [
     { kind: "ac_bonus", amount: 1 },
     { kind: "resistance", types: ["fire"] },
   ]);
   for (const potion of ["Potion of Ebbing Strength", "Potion of Malleability", "Wisp of the Void"]) {
-    assert.equal(matchMagicItem(potion), null, potion);
+    assert.equal(magicItemNamed(potion), null, potion);
   }
 });
 

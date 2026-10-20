@@ -727,7 +727,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const legacyPin =
     policy.trustsHeld &&
     input.acOverride === undefined &&
-    !equipment.some((item) => matchArmor(item.name));
+    !equipment.some((item) => matchArmor(item));
 
   const sheet: CreateSheetInput = {
     ...input,

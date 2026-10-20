@@ -13,7 +13,7 @@
 // creation: such things are found or granted in play.
 import { gearPriceCopper } from "@/lib/srd/adventuring-gear";
 import { parseCoins } from "@/lib/srd/currency";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { magicItemNamed } from "@/lib/srd/magic-items";
 import { textKey } from "@/lib/language/text-logic";
 
 export const STARTING_WEALTH_METHODS = ["equipment", "rolled"] as const;
@@ -116,7 +116,7 @@ export function looksMagical(name: string): boolean {
   if (/(^|\s)\+\d/.test(name)) {
     return true;
   }
-  const known = matchMagicItem(name);
+  const known = magicItemNamed(name);
   return Boolean(known) && key(name).includes(textKey(known!.match));
 }
 

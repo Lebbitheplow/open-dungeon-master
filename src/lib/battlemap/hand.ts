@@ -64,7 +64,7 @@ export function carriedWeapons(sheet: Pick<CharacterSheet, "equipment">): Carrie
   for (const item of sheet.equipment) {
     const own = weaponOf(item);
     const magic = magicWeaponOfRow(item);
-    const srd = (magic.gear ? magic.srd : null) ?? own ?? matchWeapon(item.name);
+    const srd = (magic.gear ? magic.srd : null) ?? own ?? matchWeapon(item);
     const key = textKey(item.name);
     if (!srd || seen.has(key)) continue;
     seen.add(key);

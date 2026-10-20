@@ -14,7 +14,8 @@
 // could set any price by naming the item.
 
 import { searchItems } from "@/lib/content";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { magicItemNamed } from "@/lib/srd/magic-items";
+import { rowName, srdNameWithBonus, type RowItem } from "@/lib/srd/item-row";
 import { COPPER_PER_GOLD, parseCoins } from "@/lib/srd/currency";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
@@ -37,7 +38,7 @@ function isMagicItem(name: string): boolean {
   if (!bare) {
     return false;
   }
-  if (matchMagicItem(bare)) {
+  if (magicItemNamed(bare)) {
     return true;
   }
   const wanted = textKey(bare);
@@ -82,7 +83,7 @@ function isTreasure(item: TradedItem): boolean {
   if (!TREASURE.some((tag) => hasItemTag(item, tag))) {
     return false;
   }
-  const listed = item.srdName ?? item.name;
+  const listed = rowName(item);
   return !isMagicItem(listed) && !isPricedGear(listed);
 }
 
@@ -104,18 +105,20 @@ export function packListCp(name: string): number | null {
 }
 
 // The list price the table holds for a thing: the pack's price when it knows
-// the item, else the worth it was given. Null when neither knows it.
+// the item, else the worth it was given. Null when neither knows it. The
+// pack is read by srdNameWithBonus (src/lib/srd/item-row.ts), so a
+// "Spada lunga +1" is no 15 gp longsword, as a "Longsword +1" is not.
 export function listPriceCp(item: TradedItem): number | null {
-  return packListCp(item.srdName ?? item.name) ?? (item.worth ? Math.round(item.worth * COPPER_PER_GOLD) : null);
+  return packListCp(srdNameWithBonus(item)) ?? (item.worth ? Math.round(item.worth * COPPER_PER_GOLD) : null);
 }
 
 // Why a worth cannot be given to this item, or null when it can: the pack's
 // price is the item's, whatever worth a tool names.
-export function worthProblem(name: string, worth: number | undefined, what: string): ToolError | null {
-  if (worth === undefined || packListCp(name) === null) {
+export function worthProblem(item: RowItem, worth: number | undefined, what: string): ToolError | null {
+  if (worth === undefined || packListCp(srdNameWithBonus(item)) === null) {
     return null;
   }
-  return { error: `${what}: "${name}" has a list price in the content pack, which is its worth; leave worth out. Nothing changed.`, retry: true };
+  return { error: `${what}: "${item.name}" has a list price in the content pack, which is its worth; leave worth out. Nothing changed.`, retry: true };
 }
 
 // What a seller is paid for one, from its list price: full for gems, art

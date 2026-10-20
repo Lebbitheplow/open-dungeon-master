@@ -109,12 +109,11 @@ function moveItem(
   taker: Row[],
   line: TradeLine,
 ): { giver: Row[]; taker: Row[] } | null {
-  const held = giver.find((item) => textKey(item.name) === textKey(line.name));
   const removal = removeItemMath(giver, line.name, line.qty);
-  if (!held || !removal || removal.removed < line.qty) {
+  if (!removal || removal.removed < line.qty) {
     return null;
   }
-  const arriving = handedOver(held, line.qty);
+  const arriving = handedOver(removal.item, line.qty);
   const index = taker.findIndex((item) => sameThing(item, arriving));
   if (index < 0) {
     return { giver: removal.equipment, taker: [...taker, arriving] };
