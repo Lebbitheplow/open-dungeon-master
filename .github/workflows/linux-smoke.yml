@@ -11,9 +11,11 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    # Lint, the unit suite, the build and 80-odd browser scenarios: a
-    # passing run already takes 28 minutes.
-    timeout-minutes: 45
+    # Lint, the unit suite (700-odd files), the build and 126 browser
+    # scenarios on desktop and phone: a passing run takes about 50 minutes
+    # on a hosted runner, and the 45-minute limit cut 0.28.3's run off in
+    # the middle of the scenarios with everything before them green.
+    timeout-minutes: 75
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
