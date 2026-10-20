@@ -99,25 +99,38 @@ await test("A narration that asks what they do next ends nothing", async () => {
   assert.equal(current(), avery.id, "a question about the rest of the turn ended it");
 });
 
+const wordsRead = () => model.readerRequests.some((request) => String(request.messages?.[1]?.content ?? "").includes("Player's words:"));
+
 await test("The player's own words end the turn once the DM ruled on what they did, though nothing else ended it", async () => {
   const goblin = await stage();
   kit.place(goblin.id, 15, 5);
+  const ruled = [
+    reply({ calls: [call("pc_attack", { characterId: avery.id, targetEnemyId: goblin.id, weapon: "Longsword" })] }),
+    reply({ text: "The goblin is too far off for Avery's blade to reach. What does Avery do?" }),
+  ];
+  // Plain English needs no reader call.
+  await playerTurn("I close in on the goblin and attack it, then I end my turn.", ruled, [[]]);
+  assert.equal(wordsRead(), false, "plain English was sent to the reader");
+  assert.equal(current(), kara.id, "the player ended the turn and it stayed open");
+  // Any other language is the reader's to read.
+  const again = await stage();
+  kit.place(again.id, 15, 5);
   await playerTurn(
-    "I close in on the goblin and attack it, then I end my turn.",
+    "Me acerco al goblin y lo ataco, y termino mi turno.",
     [
-      reply({ calls: [call("pc_attack", { characterId: avery.id, targetEnemyId: goblin.id, weapon: "Longsword" })] }),
+      reply({ calls: [call("pc_attack", { characterId: avery.id, targetEnemyId: again.id, weapon: "Longsword" })] }),
       reply({ text: "The goblin is too far off for Avery's blade to reach. What does Avery do?" }),
     ],
-    [[], [{ kind: "turn_over", quote: "then I end my turn." }]],
+    [[], [{ kind: "turn_over", quote: "y termino mi turno." }]],
   );
-  assert.ok(model.readerRequests.some((request) => String(request.messages?.[1]?.content ?? "").includes("Player's words:")), "the player's words were never read");
-  assert.equal(current(), kara.id, "the player ended the turn and it stayed open");
+  assert.equal(wordsRead(), true, "the player's words were never read");
+  assert.equal(current(), kara.id, "the player ended the turn in Spanish and it stayed open");
 });
 
 await test("The player's words end nothing when the DM only asked them a question", async () => {
   await stage();
   await playerTurn("I attack it, then I end my turn.", [reply({ text: "Which of them, Avery: the goblin on the left or the one on the ledge?" })], [[], [{ kind: "turn_over", quote: "then I end my turn." }]]);
-  assert.ok(!model.readerRequests.some((request) => String(request.messages?.[1]?.content ?? "").includes("Player's words:")), "words were read on a turn nothing was ruled on");
+  assert.equal(wordsRead(), false, "words were read on a turn nothing was ruled on");
   assert.equal(current(), avery.id);
 });
 

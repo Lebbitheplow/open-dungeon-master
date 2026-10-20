@@ -14,7 +14,7 @@ import { READER_PROMPT_START } from "./lib/claims-reader.mjs";
 const { test, finish } = suite("test-claims");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
 
-const { checkClaims, claimKindsFor, namedSpeakers, parseReaderReply, readerSystem, renderReaderInput, withoutAsides } = await import(
+const { checkClaims, claimKindsFor, endsTurnInEnglish, namedSpeakers, parseReaderReply, readerSystem, renderReaderInput, withoutAsides } = await import(
   "../src/lib/dm/claims-logic.ts"
 );
 const { leveledSpellNames, readClaims } = await import("../src/lib/dm/claims.ts");
@@ -62,6 +62,16 @@ await test("A turn handed on is a claim of its own, kept only when it was asked 
   assert.deepEqual(checkClaims(raw, { ...base, kinds: ["aside"] }), []);
   assert.deepEqual(checkClaims([{ kind: "turn_over", quote: "Bram goes next." }], { ...base, kinds: ["turn_over"] }), []);
   assert.match(readerSystem([], false), /"kind":"turn_over"/);
+  assert.match(readerSystem([], false), /headed "Player's words" is asked only for turn_over/);
+});
+
+await test("The plain English ways a player ends their turn are read beside the reader, and nothing else is.", () => {
+  for (const said of ["I close in on the nearest goblin and attack it, then I end my turn.", "That's my turn.", "Kara ends her turn.", "I'm ending my turn here", "My turn is over."]) {
+    assert.equal(endsTurnInEnglish(said), true, said);
+  }
+  for (const said of ["I attack the goblin.", "Whose turn is it?", "I wait for my turn.", "It's my turn now, right?"]) {
+    assert.equal(endsTurnInEnglish(said), false, said);
+  }
 });
 
 await test("The request lists the kinds, the refs and the narration; the instructions name every skill id.", () => {

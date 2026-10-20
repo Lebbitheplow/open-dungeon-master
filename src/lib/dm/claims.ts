@@ -26,6 +26,7 @@ import { textKey } from "@/lib/language/text-logic";
 import {
   checkClaims,
   claimKindsFor,
+  endsTurnInEnglish,
   namedSpeakers,
   parseReaderReply,
   readerSystem,
@@ -142,6 +143,9 @@ export async function readTurnEndInWords(
   const text = wordsThisTurn(campaign.id, characterId);
   if (!text.trim()) {
     return false;
+  }
+  if (endsTurnInEnglish(text)) {
+    return true;
   }
   const claims = await readClaims(campaign, {
     label: `turn ${turn.id}`,

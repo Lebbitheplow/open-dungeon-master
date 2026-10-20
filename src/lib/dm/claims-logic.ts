@@ -143,6 +143,17 @@ const KIND_LINES: Record<ClaimKind, string> = {
     '{"kind":"speaker","ref":SPEAKER_REF,"quote":Q}: the one claim about quoted dialogue, saying only who speaks a line of it; quote is copied from inside that line\'s quotation marks. Only when the words around the line tie it to one listed person: a tag that names them or one of their other names, the person the narration is about just before or after it, or a word like "she" that points back to them. Leave the line out when its tag names nobody listed ("a guard calls", "you say"), when it answers the line before with no tag of its own, or when you would be guessing: a line left out stays the narrator\'s, and a line given to the wrong person is a mistake. One claim per quoted line.',
 };
 
+// The plain English ways a player ends their turn, read beside the reader's
+// turn_over claim on their words (dm/claims.ts readTurnEndInWords): gpt-oss-20b
+// as the reader found "then I end my turn" in one reading and missed it in
+// the next. A miss here costs what a table in any other language pays: the
+// reader's reading alone.
+const ENDS_TURN_IN_ENGLISH = /\b(?:end(?:s|ing)?|finish(?:es|ing)?) (?:my|the|his|her|their) turn\b|\bthat'?s (?:it for )?my turn\b|\bmy turn is (?:over|done)\b/i;
+
+export function endsTurnInEnglish(text: string): boolean {
+  return ENDS_TURN_IN_ENGLISH.test(text);
+}
+
 // The reader's instructions. Every claim kind about the game is listed so the
 // system prompt is the same on every call; the request says which kinds to
 // use. Who speaks a line is listed only on a read that asks it: offered on
@@ -164,6 +175,7 @@ ${kinds.map((kind) => `- ${KIND_LINES[kind]}`).join("\n")}
 SKILL is one of: ${skillIds.join(", ")}.
 
 Rules:
+- A passage headed "Player's words" is asked only for turn_over: there the player's own word that their turn ends is the claim.
 - A claim only for what the narrator states as a fact happening now. Never for:
   - anything inside quoted dialogue, numbers included;
   - what a character reports, boasts, swears or claims ("the innkeeper insists the boar was slain" is no death);
