@@ -290,6 +290,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "size", label: "Size", kind: "select", options: OBJECT_SIZE_OPTIONS },
       { name: "characterId", label: "Struck by", kind: "character", help: "The server rolls their weapon attack against its AC and their damage." },
       { name: "weapon", label: "With", kind: "text", placeholder: "warhammer", help: "From their equipment." },
+      { name: "improvised", label: "Improvised weapon", kind: "boolean", help: "An object they picked up that is no weapon on their sheet." },
       { name: "damage", label: "Or damage", kind: "dice", help: "Something other than a character's weapon." },
       damageTypeField("damageType", "Damage type", "Objects shrug off poison and psychic."),
       { name: "fragile", label: "Fragile", kind: "boolean" },

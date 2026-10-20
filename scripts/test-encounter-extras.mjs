@@ -86,6 +86,18 @@ test("slots match the enemies the fight actually made, by name, in order", () =>
   );
 });
 
+test("an invented enemy start_encounter numbered matches its slot by the slot's label, at every table", () => {
+  for (const monster of ["Brigante", "Brigand", "Bandido", "Räuber", "Bandit"]) {
+    const slots = expandRoster([{ monster, count: 2 }, { monster: "goblin", count: 1 }]);
+    const enemies = [
+      { id: "b1", slug: "custom", displayName: `${monster} 1` },
+      { id: "b2", slug: "custom", displayName: `${monster} 2` },
+      { id: "g", slug: "goblin", displayName: "Goblin" },
+    ];
+    assert.deepEqual([...matchSlots(slots, enemies).entries()].map(([slot, enemy]) => `${slot}:${enemy.id}`), ["0:b1", "1:b2", "2:g"], monster);
+  }
+});
+
 test("the DM note says what the fight is worth and what happens when", () => {
   const lines = describeExtras({
     ...EMPTY_TEMPLATE_EXTRAS,

@@ -1,4 +1,4 @@
-import { byName, textKey } from "@/lib/language/text-logic";
+import { byName, findNamed } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { clampPower, normalizeFactionAttitude, type Faction, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -50,24 +50,11 @@ export function getFaction(factionId: string): Faction | null {
   return row ? map(row) : null;
 }
 
-// Exact first, then the loose match a model tends to produce ("the reed
-// court", "Reed Court"): one side contains the other. Both compare by Unicode
-// case (src/lib/language), never SQLite's ASCII-only NOCASE.
+// The whole name, compared by Unicode case (src/lib/language), never
+// SQLite's ASCII-only NOCASE; a miss is the caller's to refuse with the
+// factions there are.
 export function findFactionByName(campaignId: string, name: string): Faction | null {
-  const factions = listFactions(campaignId);
-  const wanted = textKey(name);
-  const exact = factions.find((faction) => textKey(faction.name) === wanted);
-  if (exact) {
-    return exact;
-  }
-  if (wanted.length < 3) {
-    return null;
-  }
-  const candidates = factions.filter((faction) => {
-    const own = textKey(faction.name);
-    return own.includes(wanted) || wanted.includes(own);
-  });
-  return candidates.length === 1 ? candidates[0] : null;
+  return findNamed(listFactions(campaignId), name, (faction) => [faction.name]);
 }
 
 export type FactionInput = {

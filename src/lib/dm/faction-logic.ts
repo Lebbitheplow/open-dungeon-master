@@ -3,7 +3,7 @@
 // the world's arcs move; the party has a reputation with each, minus five
 // to five, that leans every social check with one of its members.
 
-import { textKey } from "../language/text-logic.ts";
+import { containsPhrase, textKey } from "../language/text-logic.ts";
 
 export const FACTION_ATTITUDES = ["hostile", "wary", "neutral", "friendly", "allied"] as const;
 export type FactionAttitude = (typeof FACTION_ATTITUDES)[number];
@@ -96,11 +96,12 @@ export function advanceFactionGoals(
   return out;
 }
 
-// A world arc names a faction when the faction's name is in the arc's own
-// name or driver; a rung reached moves that faction's power.
+// A world arc names a faction when the faction's whole name stands in the
+// arc's own name or driver as whole words, never inside another word ("the
+// Ashford Rebellion" names no Ash); a rung reached moves that faction's
+// power.
 export function factionsNamedBy(text: string, factions: Faction[]): Faction[] {
-  const haystack = textKey(text);
-  return factions.filter((faction) => faction.name.trim() && haystack.includes(textKey(faction.name)));
+  return factions.filter((faction) => Boolean(textKey(faction.name)) && containsPhrase(text, faction.name));
 }
 
 // The factions block for the prompt: the DM's version carries power and

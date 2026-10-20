@@ -7,8 +7,7 @@
 // import it directly. Data derived from the SRD 5.1, (c) Wizards of the
 // Coast LLC, CC-BY-4.0. See docs/LICENSES.md.
 
-import { compareNames, findNamed } from "@/lib/language/text-logic";
-import { creatureSpellings } from "@/lib/srd/name-forms";
+import { compareNames, findNamed, namesHolding } from "@/lib/language/text-logic";
 
 export type BeastAttack = {
   name: string;
@@ -163,7 +162,12 @@ export const BEAST_FORMS: BeastForm[] = [
 ];
 
 export function findBeastForm(term: string): BeastForm | null {
-  return findNamed(BEAST_FORMS, [term], (form) => creatureSpellings(form.name));
+  return findNamed(BEAST_FORMS, term, (form) => [form.name]);
+}
+
+// The forms whose name holds a word a refused name was, for the refusal.
+export function beastFormsHolding(term: string): BeastForm[] {
+  return namesHolding(BEAST_FORMS, term, (form) => [form.name]);
 }
 
 // Creatures as a question or a refusal names them, the lowest challenge
@@ -177,7 +181,8 @@ export function wildShapeForms(caps: { maxCr: number; fly: boolean; swim: boolea
   return BEAST_FORMS.filter((form) => form.cr <= caps.maxCr && (caps.fly || !form.fly) && (caps.swim || !form.swim));
 }
 
-// SRD Wild Shape ceilings by druid level; Circle of the Moon raises the CR
+// SRD Wild Shape ceilings by druid level (the class table's
+// Wild Shape Improvement at 4th and 8th); Circle of the Moon raises the CR
 // (1 from 2nd, level/3 from 6th) but not the movement gates.
 export function wildShapeCapsFor(
   level: number,

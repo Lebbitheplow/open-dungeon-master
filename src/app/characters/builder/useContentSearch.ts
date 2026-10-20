@@ -27,6 +27,9 @@ export type PickerEntry = {
   // by the server's own catalog so a pick and its purchase check agree
   // even where the pack files the name twice (src/lib/characters/catalog.ts).
   price?: { copper: number | null; magic: boolean };
+  // The row a shelf line picked from an item names, as the shop routes take
+  // it, when its name is one row (src/app/api/content/[kind]/route.ts).
+  srdName?: string;
   // What the engine runs for the row, when the search asked for it with
   // mechanics=1 (src/lib/workshop/catalog-mechanics.ts): a spell's block,
   // an item's gear.

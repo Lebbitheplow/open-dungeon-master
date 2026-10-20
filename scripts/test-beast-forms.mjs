@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { BEAST_FORMS, findBeastForm, formatCr, wildShapeCapsFor } = await import(
+const { BEAST_FORMS, beastFormsHolding, findBeastForm, formatCr, wildShapeCapsFor } = await import(
   "../src/lib/srd/beast-forms.ts"
 );
 const { computeSheetDerived, effectiveAcFor, speedFor } = await import(
@@ -36,13 +36,19 @@ test("every form is a coherent stat block", () => {
   }
 });
 
-test("form lookup takes a name or a part of one, and is never wrong-species", () => {
+test("form lookup takes a whole name, never a part of one, and is never wrong-species", () => {
   assert.equal(findBeastForm("Wolf")?.name, "Wolf");
-  assert.equal(findBeastForm("a wolf")?.name, "Wolf");
-  assert.equal(findBeastForm("brown bear form")?.name, "Brown Bear");
+  assert.equal(findBeastForm("WOLF")?.name, "Wolf");
+  // An English article or "form" around the name is a guess no other table
+  // gets: the form is named as the list writes it.
+  assert.equal(findBeastForm("a wolf"), null);
+  assert.equal(findBeastForm("brown bear form"), null);
   assert.equal(findBeastForm("dire wolf")?.name, "Dire Wolf");
   assert.equal(findBeastForm("tyrannosaurus rex")?.name, "Tyrannosaurus Rex");
-  assert.equal(findBeastForm("rex")?.name, "Tyrannosaurus Rex");
+  // A part of one name is no form either; the refusal names the forms that
+  // hold it.
+  assert.equal(findBeastForm("rex"), null);
+  assert.deepEqual(beastFormsHolding("rex").map((form) => form.name), ["Tyrannosaurus Rex"]);
   assert.equal(findBeastForm("house cat"), null);
   assert.equal(findBeastForm(""), null);
   // A name the table does not hold is no form, never the beast inside it:

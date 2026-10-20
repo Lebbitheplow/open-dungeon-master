@@ -83,7 +83,7 @@ export function castSummon(
   const slotLevel = Math.max(spell.level, args.level ?? spell.level);
   // Animate Dead, Create Undead: a casting may reassert control over the
   // undead it already made, rather than making new ones.
-  if (spell.reassert && /\b(?:reassert|renew|control)\b/i.test(args.variant ?? "")) {
+  if (spell.reassert && textKey(args.variant ?? "") === "reassert control") {
     return reassertControl(campaign, args, slotLevel, cast);
   }
   const plan = summonPlan(spell, slotLevel, args.variant ?? "", args.count);

@@ -27,6 +27,11 @@ const { listSheets } = await import("../src/lib/db/sheets.ts");
 const { mountTools } = await import("../src/lib/dm/mount-tools.ts");
 const { checkMount } = await import("../src/lib/srd/mounts.ts");
 const { lineNamed } = await import("../src/lib/srd/item-row.ts");
+const { renameEnemy } = await import("../src/lib/db/encounters.ts");
+const { renameTokenByRef } = await import("../src/lib/db/battle-maps.ts");
+const { updateGameSettings } = await import("../src/lib/db/campaigns.ts");
+const { upsertCurrentLocation } = await import("../src/lib/db/locations.ts");
+const { listShops } = await import("../src/lib/db/shops.ts");
 
 // A refusal that names every option given, and changed nothing the test
 // can see.
@@ -360,6 +365,74 @@ await test("downtime crafting: the tools are a proficiency's whole name; a word 
     refused(await world.invoke("downtime", { days: 1, characterId: smith.id, activity: "crafting", item: "Shield", tool }), "Smith's tools");
   }
   accepted(await world.invoke("downtime", { days: 1, characterId: smith.id, activity: "crafting", item: "Shield", tool: "SMITH’S TOOLS" }));
+});
+
+await test("teleport_token and pc_attack: a token or a natural weapon is the whole name as written, at every table; a name with an article before it is another name, never the token or the weapon that is the rest of it.", async () => {
+  const [first, second] = (await kit.fight(2), world.enemies());
+  // As a prepared encounter names its enemies: the tracker and the board.
+  const rename = (enemy, name) => {
+    renameEnemy(enemy.id, name);
+    renameTokenByRef(kit.map().id, enemy.id, name);
+  };
+  for (const [language, plain, article, other] of [
+    ["english", "Wolf", "The Wolf", "Bear"],
+    ["italian", "Lupo", "Il Lupo", "Orso"],
+    ["french", "Garde", "La Garde", "Ours"],
+    ["spanish", "Guardia", "La Guardia", "Oso"],
+    ["german", "Wache", "Die Wache", "Bär"],
+  ]) {
+    updateGameSettings(world.campaignId, { tableLanguage: language });
+    rename(first, plain);
+    rename(second, article);
+    kit.place(first.id, 2, 2);
+    kit.place(second.id, 6, 6);
+    accepted(await world.invoke("teleport_token", { tokenName: article, x: 7, y: 7 }));
+    assert.deepEqual([kit.token(second.id).x, kit.token(first.id).x], [7, 2], `${language}: ${article}`);
+    rename(second, other);
+    refused(await world.invoke("teleport_token", { tokenName: article, x: 8, y: 8 }), plain, other);
+    assert.equal(kit.token(first.id).x, 2, `${language}: ${article} moved ${plain}`);
+  }
+  updateGameSettings(world.campaignId, { tableLanguage: "english" });
+  // A lineage's claws (src/lib/srd/racial-weapons.ts), on a hero at the board.
+  const tabaxi = fighter;
+  const features = world.sheet(tabaxi.id).features;
+  world.patch(tabaxi.id, { features: [...features, { name: "Claws (1d4 slashing unarmed strike)" }] });
+  kit.place(first.id, 5, 5);
+  kit.place(tabaxi.id, 6, 5);
+  kit.giveTurn(tabaxi.id);
+  refused(await world.invoke("pc_attack", { characterId: tabaxi.id, enemyId: first.id, weapon: "her claws" }), "her claws");
+  kit.giveTurn(tabaxi.id);
+  world.dice(1, 1);
+  accepted(await world.invoke("pc_attack", { characterId: tabaxi.id, enemyId: first.id, weapon: "claws" }));
+  world.clearDice();
+  world.patch(tabaxi.id, { features });
+  await kit.endFight();
+});
+
+await test("open_shop: a name that holds a shop standing here, or that its name holds, is refused naming it, at every table; its whole name reopens it, and a name of its own opens a new shop.", async () => {
+  for (const [language, place, shop, part, longer, other] of [
+    ["italian", "Pietrafonda", "Bottega di Marla", "Marla", "La Bottega di Marla", "Fucina del Nano"],
+    ["french", "Roche-Grise", "Échoppe de Marla", "Marla", "L'Échoppe de Marla", "Forge du Nain"],
+    ["spanish", "Piedragris", "Tienda de Marla", "Marla", "La Tienda de Marla", "Fragua del Enano"],
+    ["german", "Grauenstein", "Marlas Laden", "Laden", "Der Marlas Laden", "Zwergenschmiede"],
+    ["english", "Greystone", "Marla's Shop", "Marla", "The Marla's Shop", "Dwarven Forge"],
+  ]) {
+    updateGameSettings(world.campaignId, { tableLanguage: language });
+    upsertCurrentLocation({ campaignId: world.campaignId, name: place });
+    accepted(await world.invoke("open_shop", { name: shop, kind: "general", size: "village" }));
+    for (const name of [part, longer]) {
+      refused(await world.invoke("open_shop", { name, kind: "general", size: "village" }), shop, "Nothing was opened");
+    }
+    const again = await world.invoke("open_shop", { name: shop.toUpperCase(), kind: "general", size: "village" });
+    accepted(again);
+    assert.equal(again.result?.reopened, true, `${language}: the whole name did not reopen ${shop}`);
+    accepted(await world.invoke("open_shop", { name: other, kind: "smith", size: "village" }));
+  }
+  updateGameSettings(world.campaignId, { tableLanguage: "english" });
+  const names = listShops(world.campaignId).map((entry) => entry.name);
+  for (const unwanted of ["Marla", "Laden", "La Bottega di Marla", "The Marla's Shop"]) {
+    assert.ok(!names.includes(unwanted), `a second shop "${unwanted}" was opened`);
+  }
 });
 
 finish();

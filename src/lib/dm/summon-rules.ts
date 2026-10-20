@@ -8,28 +8,22 @@ import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SheetSummon, SummonAttack } from "@/lib/schemas/summon";
 import type { SummonForm } from "@/lib/srd/summon-forms";
-import type { ToolError } from "@/lib/dm/tool-errors";
+import { noneNamed, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 export const SUMMONED = "summoned";
 
 const TILE = 5;
 
-function pickAttack(summon: SheetSummon, weapon: string | undefined): SummonAttack | null {
+// The attack the call names by its whole name, or the only one there is.
+function pickAttack(summon: SheetSummon, weapon: string | undefined): SummonAttack | undefined {
   const wanted = textKey(weapon ?? "");
-  const named = wanted
-    ? summon.attacks.find((attack) => {
-        const name = textKey(attack.name);
-        return name.includes(wanted) || wanted.includes(name);
-      })
-    : null;
-  return named ?? summon.attacks[0] ?? null;
+  return wanted ? summon.attacks.find((attack) => textKey(attack.name) === wanted) : summon.attacks.length === 1 ? summon.attacks[0] : undefined;
 }
 
 // The attack a summoned creature makes with pc_attack: the stat block's own
-// to-hit and dice (a named attack matches loosely, none takes the first),
-// its reach or range, and any rider dice of another type kept apart so each
-// meets its own resistance.
+// to-hit and dice, its reach or range, and any rider dice of another type
+// kept apart so each meets its own resistance.
 export function summonAttackProfile(
   sheet: Pick<CharacterSheet, "name" | "summon">,
   weapon: string | undefined,
@@ -38,9 +32,15 @@ export function summonAttackProfile(
   if (!summon) {
     return null;
   }
+  if (!summon.attacks.length) {
+    return { error: `${sheet.name} (${summon.form}) has no attack; it cannot fight.`, refused: "rules" };
+  }
   const attack = pickAttack(summon, weapon);
   if (!attack) {
-    return { error: `${sheet.name} (${summon.form}) has no attack; it cannot fight.`, refused: "rules" };
+    const names = summon.attacks.map((entry) => entry.name);
+    return weapon?.trim()
+      ? noneNamed(`${sheet.name} (${summon.form}) has no attack called`, weapon.trim(), names)
+      : { error: `${sheet.name} (${summon.form}) has several attacks; name one in weapon: ${names.join(", ")}.`, retry: true };
   }
   const ranged = Boolean(attack.range);
   const riders = attack.riders ?? [];

@@ -313,36 +313,27 @@ export function normalizeTemplateExtras(
   };
 }
 
-// Which enemy the fight actually made is which slot. Matched by name in
-// roster order rather than by insertion order, because the enemies of one
-// start_encounter share a timestamp and a list ordered by it is a guess.
+// Which enemy the fight actually made is which slot. Matched in roster order
+// rather than by insertion order, because the enemies of one start_encounter
+// share a timestamp and a list ordered by it is a guess: by the slot's label,
+// which start_encounter numbers the same way ("Brigante 2"), else by the
+// whole slug or name.
 export function matchSlots<T extends { id: string; slug: string; displayName: string }>(
   slots: RosterSlot[],
   enemies: T[],
 ): Map<number, T> {
   const matched = new Map<number, T>();
   const used = new Set<string>();
-  // Exact names first across every slot, then the loose matches for what
-  // is left: otherwise "goblin" would take the hobgoblin before the goblin.
-  const passes: Array<(slug: string, name: string, wanted: string) => boolean> = [
-    (slug, name, wanted) => slug === wanted || name === wanted,
-    (slug, name, wanted) => slug.includes(wanted) || name.includes(wanted) || wanted.includes(name),
-  ];
-  for (const test of passes) {
-    for (const slot of slots) {
-      if (matched.has(slot.slot)) {
-        continue;
-      }
-      const wanted = textKey(slot.monster);
-      const enemy = enemies.find(
-        (candidate) =>
-          !used.has(candidate.id) &&
-          test(textKey(candidate.slug), textKey(candidate.displayName), wanted),
-      );
-      if (enemy) {
-        used.add(enemy.id);
-        matched.set(slot.slot, enemy);
-      }
+  for (const slot of slots) {
+    const label = textKey(slot.label);
+    const wanted = textKey(slot.monster);
+    const free = enemies.filter((candidate) => !used.has(candidate.id));
+    const enemy =
+      free.find((candidate) => textKey(candidate.displayName) === label) ??
+      free.find((candidate) => textKey(candidate.slug) === wanted || textKey(candidate.displayName) === wanted);
+    if (enemy) {
+      used.add(enemy.id);
+      matched.set(slot.slot, enemy);
     }
   }
   return matched;

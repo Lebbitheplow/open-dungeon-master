@@ -13,8 +13,7 @@
 // See docs/LICENSES.md.
 
 import { BEAST_FORMS, type BeastForm } from "@/lib/srd/beast-forms";
-import { findNamed } from "@/lib/language/text-logic";
-import { creatureSpellings } from "@/lib/srd/name-forms";
+import { findNamed, namesHolding } from "@/lib/language/text-logic";
 
 export type SummonFormAttack = {
   name: string;
@@ -428,10 +427,16 @@ const ALL: SummonForm[] = [
 ];
 
 // The stat block a caller names, matched as a beast form is
-// (src/lib/language/text-logic.ts findNamed): "spider" is the Giant Spider, a giant elk no
-// Elk. Null when the table does not know it.
+// (src/lib/language/text-logic.ts findNamed): its whole name, so a giant elk
+// is no Elk. Null when the table does not know it.
 export function findSummonForm(term: string): SummonForm | null {
-  return findNamed(ALL, [term], (form) => creatureSpellings(form.name));
+  return findNamed(ALL, term, (form) => [form.name]);
+}
+
+// The stat blocks whose name holds a word a refused name was, for the
+// refusal ("spider": Giant Spider).
+export function summonFormsHolding(term: string): string[] {
+  return namesHolding(ALL, term, (form) => [form.name]).map((form) => form.name);
 }
 
 // The creatures of these kinds the table holds at a challenge rating or

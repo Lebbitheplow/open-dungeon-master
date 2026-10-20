@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { MARKUP_STEPS, costToCopper, type StockLine } from "@/lib/dm/shop-logic";
 import { formatCopper, parseCoins, unreadCoins } from "@/lib/srd/currency";
-import { magicItemBonus, withoutBonus } from "@/lib/srd/item-row";
+import { withoutBonus } from "@/lib/srd/item-row";
 import { KitButton, panelField, SettingToggle } from "./PanelKit";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -21,14 +21,6 @@ import { textKey } from "@/lib/language/text-logic";
 // What it saves is the shelf now and the shelf a restock refills to. A line
 // picked from the catalog keeps the row it is (srdName) when it is renamed
 // into the table's language, so what is bought is still that row.
-
-// The row a catalog pick is, as srdName takes it: without the bonus its name
-// declares, which stays in the line's name; a family of +1 to +3 items is no
-// one row.
-function pickedRow(name: string): { srdName?: string } {
-  const row = withoutBonus(name).slice(0, 80);
-  return magicItemBonus(row) ? {} : { srdName: row };
-}
 
 export type EditableShop = {
   id: string;
@@ -270,7 +262,7 @@ export function MarketShopEditor({
                 qty: 1,
                 priceCp: entry.price?.copper ?? costToCopper(entry.cost ?? "") ?? 100,
                 note: "",
-                ...pickedRow(entry.name),
+                ...(entry.srdName ? { srdName: entry.srdName } : {}),
               })
             }
           />

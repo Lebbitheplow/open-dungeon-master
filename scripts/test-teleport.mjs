@@ -178,7 +178,7 @@ test("an enemy teleports by name and an unknown name is refused", () => {
   assert.equal(out.ok, true, JSON.stringify(out));
   assert.equal(getTokenByRef(map.id, goblin.id).y, 2);
   const unknown = teleport({ tokenName: "Dragon", x: 2, y: 2 });
-  assert.match(unknown.error, /No single combatant on the battle map is called "Dragon"; it holds .*Goblin/);
+  assert.match(unknown.error, /No combatant on the battle map is called "Dragon"; it holds .*Goblin/);
 });
 
 test("set_movement records flying and the projection reports it", () => {

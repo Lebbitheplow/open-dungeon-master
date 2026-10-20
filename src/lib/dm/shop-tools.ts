@@ -50,7 +50,7 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
-import { textKey } from "@/lib/language/text-logic";
+import { containsPhrase, textKey } from "@/lib/language/text-logic";
 
 // The shop tools (docs/vtt-parity-implementation-plan.md 11.1). The server
 // prices everything: the model names the item, the shelf says what it
@@ -318,6 +318,18 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
     publishShops(campaign.id);
     announceShop(campaign.id, shop);
     return { ok: true, shop: shop.name, reopened: true, restocked: due, lines: shop.stock.length, shelf: shelfLines(shop) };
+  }
+  // A name that holds a shop standing here, or that one's name holds
+  // ("Marla" for "Bottega di Marla"), is asked again rather than opened as a
+  // second shop beside it, whose shelf and haggling would start over: a shop
+  // is reopened by its whole name.
+  const here = location ? listShopsAt(campaign.id, location.id, location.name) : listShops(campaign.id).filter((shop) => !shop.locationId && !shop.locationName);
+  const overlapping = here.filter((shop) => containsPhrase(shop.name, args.name) || containsPhrase(args.name, shop.name));
+  if (overlapping.length) {
+    return {
+      error: `open_shop: ${overlapping.map((shop) => `"${shop.name}"`).join(", ")} ${overlapping.length > 1 ? "stand" : "stands"} here. Send its name as it is to reopen it, or give a new shop a name of its own. Nothing was opened.`,
+      retry: true,
+    };
   }
   const shop = insertShop(campaign.id, {
     name: args.name,

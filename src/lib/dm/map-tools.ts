@@ -1,8 +1,7 @@
 import { readiedHeld } from "@/lib/dm/readied-kinds";
-import { nameTerms } from "@/lib/language/language";
 import { carriedLight, lightPlacement } from "@/lib/dm/light-timers";
 import { getClock } from "@/lib/db/clock";
-import { campaignLanguage, type Campaign } from "@/lib/db/campaigns";
+import type { Campaign } from "@/lib/db/campaigns";
 import {
   getActiveBoard,
   getActiveEncounter,
@@ -242,21 +241,22 @@ function resolveAnyToken(
   if (byId) {
     return getTokenByRef(map.id, byId.id);
   }
-  // An enemy or one of the DM's own pieces by its name, or by a part of one
-  // name only (src/lib/language/text-logic.ts findNamed): "goblin" with Goblin 1 and Goblin 2
-  // on the board is neither, and is asked again (unknownCombatant).
+  // An enemy or one of the DM's own pieces by its whole name
+  // (src/lib/language/text-logic.ts findNamed): "goblin" with Goblin 1 on the
+  // board is no piece, and is asked again with the names there are
+  // (unknownCombatant).
   const named = [
     ...enemies.map((enemy) => ({ name: enemy.displayName, token: () => getTokenByRef(map.id, enemy.id) })),
     ...listTokens(map.id)
       .filter((token) => token.kind !== "pc" && token.kind !== "enemy")
       .map((token) => ({ name: token.name, token: () => token })),
   ];
-  return findNamed(named, nameTerms(trimmed, campaignLanguage(map.campaignId)), (entry) => [entry.name])?.token() ?? null;
+  return findNamed(named, trimmed, (entry) => [entry.name])?.token() ?? null;
 }
 
 // A name the board holds no single token for: the names it does hold.
 function unknownCombatant(map: BattleMap, name: string): ToolError {
-  return { error: `No single combatant on the battle map is called "${name}"; it holds ${listTokens(map.id).map((token) => token.name).join(", ")}.`, retry: true };
+  return { error: `No combatant on the battle map is called "${name}"; it holds ${listTokens(map.id).map((token) => token.name).join(", ")}.`, retry: true };
 }
 
 export function handleTeleportToken(
@@ -450,12 +450,11 @@ function resolveMoveTarget(
     return token ? { token, kind: "pc", speedTiles: speedToTiles(sheet.speed) } : null;
   }
   const enemies = listEnemies(encounterId);
-  // A part of one name only, as resolveAnyToken reads it: "A" (gpt-oss-20b
+  // By its whole name only, as resolveAnyToken reads it: "A" (gpt-oss-20b
   // meaning Avery) once walked Bandit 1, the first name with an "a" in it.
   const enemy =
     enemies.find((entry) => entry.id === trimmed) ??
-    enemies.find((entry) => textKey(entry.displayName) === textKey(trimmed)) ??
-    findNamed(enemies, nameTerms(trimmed, campaignLanguage(map.campaignId)), (entry) => [entry.displayName]);
+    enemies.find((entry) => textKey(entry.displayName) === textKey(trimmed));
   if (!enemy || enemy.status !== "alive") {
     return null;
   }

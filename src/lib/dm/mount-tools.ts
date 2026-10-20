@@ -43,14 +43,14 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "mount_up",
-      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from their own turn's movement in a fight. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}. For anything else, send customName with a speed and a size.`,
+      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from their own turn's movement in a fight. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}; one of them is sent in mount by that listed name whatever the table calls it (a 'cavallo da galoppo' is mount 'Riding horse'). customName, with a speed and a size, is only for an animal no list has.`,
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           characterId: { type: "string" },
-          mount: { type: "string", description: "A known mount's name." },
-          customName: { type: "string", description: "Or a beast of your own." },
+          mount: { type: "string", description: "A known mount, by its listed name, at a table in any language." },
+          customName: { type: "string", description: "Or an animal no list has, by its name." },
           speed: { type: "integer", minimum: 0, maximum: 200, description: "For a custom mount." },
           size: { type: "string", enum: [...MOUNT_SIZES], description: "For a custom mount." },
           controlled: { type: "boolean", description: "Trained to bear a rider: it shares the rider's initiative." },

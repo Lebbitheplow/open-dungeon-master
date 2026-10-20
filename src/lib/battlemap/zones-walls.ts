@@ -43,19 +43,14 @@ export function sectionCells(zone: Pick<SpellZone, "origin" | "cells">, section:
 }
 
 // The sectioned wall a name points at ("Wall of Ice"), compared whole, or
-// null for another name. `terms` are the ways to read the name (src/lib/
-// language/language.ts nameTerms). `walls` are the sectioned walls standing
-// on the board, so a workshop copy of Wall of Ice under a name of its own
-// ("Rime Wall") is found by that name.
+// null for another name. `walls` are the sectioned walls standing on the
+// board, so a workshop copy of Wall of Ice under a name of its own ("Rime
+// Wall") is found by that name.
 export function wallNamed(
-  terms: readonly string[],
+  name: string,
   walls: Array<{ spell: string; runsAs?: string }> = [],
 ): { spell: string; runsAs?: string } | null {
-  for (const spell of terms.map(textKey)) {
-    const copy = walls.find((wall) => wall.runsAs && textKey(wall.spell) === spell);
-    if (zoneRowFor(copy ? { spell: copy.spell, runsAs: copy.runsAs } : spell)?.sections) {
-      return { spell, ...(copy?.runsAs ? { runsAs: copy.runsAs } : {}) };
-    }
-  }
-  return null;
+  const spell = textKey(name);
+  const copy = walls.find((wall) => wall.runsAs && textKey(wall.spell) === spell);
+  return zoneRowFor(copy ? { spell: copy.spell, runsAs: copy.runsAs } : spell)?.sections ? { spell, ...(copy?.runsAs ? { runsAs: copy.runsAs } : {}) } : null;
 }

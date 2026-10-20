@@ -18,6 +18,7 @@ import {
   planRename,
 } from "@/lib/dm/entity-review-logic";
 import { recordsChanged } from "@/lib/workshop/record-events";
+import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,9 +107,11 @@ export async function POST(
       return Response.json({ error: plan.error }, { status: 409 });
     }
     // A rename onto a name another NPC already holds would violate the
-    // UNIQUE (campaign_id, name) constraint; say so rather than 500.
+    // UNIQUE (campaign_id, name) constraint, and onto one it holds in another
+    // case or spelling ("ÉLODIE") would leave two NPCs answering to one name
+    // (getNpcByName compares by textKey); say so rather than 500.
     const clash = listNpcs(campaignId).find(
-      (other) => other.id !== npc.id && other.name === plan.name,
+      (other) => other.id !== npc.id && textKey(other.name) === textKey(plan.name),
     );
     if (clash) {
       return Response.json(

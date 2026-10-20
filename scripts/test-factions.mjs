@@ -78,6 +78,18 @@ test("an arc names a faction when its name appears", () => {
   assert.deepEqual(factionsNamedBy("Nobody here", factions), []);
 });
 
+test("an arc names a faction by its whole name as whole words, at every table; never inside another word", () => {
+  const named = (text, name) => factionsNamedBy(text, [{ id: "f", campaignId: "c", name, blurb: "", goal: "" }]).length === 1;
+  assert.equal(named("The Ashford Rebellion spreads", "Ash"), false);
+  assert.equal(named("Rosalba's debts come due", "Rosa"), false);
+  assert.equal(named("La rivolta di Porto Franco", "Porto Franco"), true);
+  assert.equal(named("La révolte de la Guilde du Fer", "Guilde du Fer"), true);
+  assert.equal(named("La revuelta del Gremio del Hierro", "Gremio del Hierro"), true);
+  assert.equal(named("Der Aufstand der Eisengilde", "Eisengilde"), true);
+  assert.equal(named("The SALT GUILD moves", "Salt Guild"), true);
+  assert.equal(named("The guild of salt is broken", "Salt Guild"), false);
+});
+
 test("the prompt block keeps goal and power for the DM alone", () => {
   const dm = renderFactionsForPrompt(factions, { f1: -2 }, true);
   assert.match(dm, /GOAL \(DM-only\): Own the ferry/);
@@ -100,7 +112,7 @@ test("a faction is stored normalised", () => {
 });
 
 test("adjust_reputation moves the party's standing and remembers why", () => {
-  const first = handleAdjustReputation(campaign, JSON.stringify({ faction: "reed court", delta: 2, reason: "They returned the ferryman's son." }));
+  const first = handleAdjustReputation(campaign, JSON.stringify({ faction: "the reed court", delta: 2, reason: "They returned the ferryman's son." }));
   assert.equal(first.ok, true);
   assert.equal(first.after, 2);
   assert.equal(getParty(campaign.id).reputation[court.id], 2);

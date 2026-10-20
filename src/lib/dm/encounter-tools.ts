@@ -127,6 +127,7 @@ import { ENEMY_TURNS_CUE, enemiesDue, enemiesOwedTurn, holdForEnemies } from "@/
 import { approachForCompanion } from "@/lib/dm/companion-approach";
 import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { holdsFeat } from "@/lib/srd/feat-effects";
 
 // Server-authoritative combat: enemies spawn from real stat blocks, their
 // HP changes only through these tools, and the initiative pointer is moved
@@ -183,7 +184,7 @@ function crLabel(cr: number): string {
 // ---- start_encounter ----
 
 const hasAlert = (sheet: CharacterSheet) =>
-  (sheet.feats ?? []).some((feat) => /^alert\b/i.test(feat.trim()));
+  holdsFeat(sheet, "Alert");
 
 const startArgsSchema = z.object({
   enemies: z.array(enemyRequestSchema).min(1).max(8),

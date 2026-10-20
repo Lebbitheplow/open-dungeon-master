@@ -47,7 +47,7 @@ export function handleReadCard(campaign: Campaign, rawArguments: string): ToolRe
   const card = resolvePrepRef(campaign.storyArc, cards, ref);
   if (!card) {
     return {
-      error: `No prep card answers to "${ref}". Beats a model wrote have no card; a planned event's id is the [evN] in the arc; titles must match a card on the imported board.`,
+      error: `No prep card answers to "${ref}". Beats a model wrote have no card; a planned event's id is the [evN] in the arc; a title is a card's whole title: ${cards.map((entry) => entry.title).join(", ")}.`,
       retry: true,
     };
   }
