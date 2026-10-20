@@ -1776,7 +1776,7 @@
     "lib/model-registry/discovery-logic.ts#re-word": [["key",2,"provider capability names and model ids"]],
     "lib/model-registry/discovery-logic.ts#str-includes": [["key",2,"provider capability names and model ids"]],
     "lib/model-registry/hardware.ts#\\w": [["key",2,"device names"]],
-    "lib/model-registry/hardware.ts#re-word": [["key",1,"GPU names"]],
+    "lib/model-registry/hardware.ts#re-word": [["key",2,"GPU names, and the DRM card nodes in sysfs"]],
     "lib/model-registry/probes.ts#toLowerCase": [["key",1,"host"]],
     "lib/model-registry/registry.ts#str-includes": [["key",2,"provider capability and modality names"]],
     "lib/model-registry/registry.ts#toLowerCase": [["key",2,"model ids"]],

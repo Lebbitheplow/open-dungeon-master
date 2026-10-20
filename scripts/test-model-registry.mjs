@@ -563,18 +563,43 @@ try {
     assert.equal(hardware.readGpuStats({}), null);
     const halo = { ramGb: 125, gpu: { name: "AMD Radeon 8060S Graphics", vramGb: 120 }, unified: hardware.unifiedMemory({ name: "AMD Radeon 8060S Graphics", vramGb: 120 }, 125) };
     assert.equal(halo.unified, true);
-    assert.equal(hardware.memoryBudgetGb(halo), 125, "one pool, counted once");
+    assert.equal(hardware.memoryBudgetGb(halo), 100, "one pool, counted once, less the system's share");
     const card = { ramGb: 32, gpu: { name: "NVIDIA GeForce RTX 4090", vramGb: 24 }, unified: hardware.unifiedMemory({ name: "NVIDIA GeForce RTX 4090", vramGb: 24 }, 32) };
     assert.equal(card.unified, false);
-    assert.equal(hardware.memoryBudgetGb(card), 56, "the card plus what the runtime offloads to RAM");
+    assert.equal(hardware.memoryBudgetGb(card), 40, "the card plus half the system memory, as the desktop app reckons it");
     assert.equal(hardware.fitsMachine(36, card), true);
     assert.equal(hardware.fitsMachine(60, card), false);
     assert.equal(hardware.fitsMachine(0, card), null);
     assert.equal(hardware.fitsMachine(10, { ramGb: 0, gpu: null, unified: false }), null, "unknown memory judges nothing");
     assert.match(hardware.describeMachine(halo), /AMD Radeon 8060S Graphics, 125 GB memory shared/);
-    assert.match(hardware.describeMachine({ ramGb: 16, gpu: null, unified: false }), /^16 GB memory$/);
-    const verdict = logic.assessModel({ role: "story", id: "x", catalog: null, listed: true, local: true, memory: { sizeGb: 60, budgetGb: 56 } });
+    assert.match(hardware.describeMachine({ ramGb: 16, gpu: null, unified: false }), /^16 GB memory, no graphics card found$/);
+    assert.equal(hardware.memoryBudgetGb({ ramGb: 64, gpu: null, unified: false }), 64, "no card known: only weights beyond the memory are too big");
+    const verdict = logic.assessModel({ role: "story", id: "x", catalog: null, listed: true, local: true, memory: { sizeGb: 60, budgetGb: 40 } });
     assert.equal(verdict.fit, "unfit");
+  });
+
+  await test("the local storyteller a machine runs follows the 16 GB minimum, and the card is read from its driver", () => {
+    const card = (vramGb, ramGb = 32) => ({ ramGb, gpu: { name: "card", vramGb }, unified: false });
+    assert.equal(hardware.storytellerFit(card(8, 64)), "below", "an 8 GB card is below the minimum whatever sits beside it");
+    assert.equal(hardware.storytellerFit(card(15.7, 16)), "minimum", "a 16 GB card reads a little under 16");
+    assert.equal(hardware.storytellerFit(card(16, 32)), "recommended", "16 GB beside 32 GB holds the 35B at Q4 with its experts in RAM");
+    assert.equal(hardware.storytellerFit({ ramGb: 16, gpu: { name: "Apple silicon", vramGb: 16 }, unified: true }), "below", "a 16 GB Mac leaves its GPU about 13");
+    assert.equal(hardware.storytellerFit({ ramGb: 24, gpu: { name: "Apple silicon", vramGb: 24 }, unified: true }), "minimum");
+    assert.equal(hardware.storytellerFit({ ramGb: 32, gpu: null, unified: false }), "unknown");
+    assert.equal(hardware.graphicsMemoryGb({ ramGb: 125, gpu: { name: "AMD graphics", vramGb: 125 }, unified: true }), 100);
+    assert.deepEqual(hardware.readNvidiaSmi("24564, NVIDIA GeForce RTX 4090\n"), { name: "NVIDIA GeForce RTX 4090", vramGb: 24 });
+    assert.equal(hardware.readNvidiaSmi("NVIDIA-SMI has failed"), null);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "odm-drm-"));
+    try {
+      assert.equal(hardware.readAmdSysfs(root), null, "no card with amdgpu's nodes");
+      fs.mkdirSync(path.join(root, "card1", "device"), { recursive: true });
+      fs.writeFileSync(path.join(root, "card1", "device", "mem_info_vram_total"), String(512 * 1024 ** 2));
+      fs.writeFileSync(path.join(root, "card1", "device", "mem_info_gtt_total"), String(112 * 1024 ** 3));
+      fs.mkdirSync(path.join(root, "card1-DP-1"), { recursive: true });
+      assert.deepEqual(hardware.readAmdSysfs(root), { vramGb: 0.5, gttGb: 112 }, "an APU: a small carve-out, the real pool in GTT");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   await test("the agent program's own list is the harness answer; its vendor's rows say the rest", async () => {

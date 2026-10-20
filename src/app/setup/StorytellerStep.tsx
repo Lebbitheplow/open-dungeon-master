@@ -4,11 +4,11 @@ import { ExternalLink, Loader2, RefreshCw, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { RECOMMENDED_WINDOW, STORY_WINDOW_NEEDS, windowFlag } from "@/lib/story-window";
+import { STORY_WINDOW_NEEDS } from "@/lib/story-window";
 import { BackendProbe } from "@/app/admin/BackendProbe";
-import { CopyLine } from "@/components/CopyLine";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { AgentPanel } from "@/app/setup/AgentPanel";
+import { StartHints } from "@/app/setup/StartHints";
 import { NO_LIST, type Draft, type ModelList } from "@/app/setup/draft";
 import { ChoiceCard, ChoiceCards, FoundRow, ModelPicker, ScanMark, host, type ScanResult } from "@/app/setup/SetupParts";
 import {
@@ -22,8 +22,6 @@ import {
 } from "@/lib/setup/discovery-logic";
 
 type Update = (change: (draft: Draft) => Draft) => void;
-
-const SMALL_HARDWARE_GUIDE = "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/text-backends.md#smaller-hardware";
 
 type Listing =
   | { ok: true; baseUrl: string; models: ListedModel[]; recommended: string }
@@ -81,7 +79,7 @@ export function StorytellerStep({
           onPick={() => pick("local")}
           glyph="ui-ai"
           title="A model on this computer"
-          sub="llama.cpp, Ollama, LM Studio, vLLM or another server you run. Free to play, private, needs a capable GPU."
+          sub="llama.cpp, Ollama, LM Studio, vLLM or another server you run. Free to play and private; needs at least 16 GB of graphics memory."
           badge={scanning ? { text: "Looking…", tone: "off" } : found.length ? { text: `Found ${found.length}`, tone: "ready" } : null}
         />
         <ChoiceCard
@@ -117,6 +115,7 @@ export function StorytellerStep({
             onRescan={onRescan}
             savedKeyBase={savedKeyBase}
             inContainer={inContainer}
+            machine={scan?.machine ?? null}
           />
         </div>
       ) : draft.story === "key" ? (
@@ -146,6 +145,7 @@ function LocalPanel({
   onRescan,
   savedKeyBase,
   inContainer,
+  machine,
 }: {
   draft: Draft;
   update: Update;
@@ -154,6 +154,7 @@ function LocalPanel({
   onRescan: () => void;
   savedKeyBase: string;
   inContainer: boolean;
+  machine: ScanResult["machine"] | null;
 }) {
   const local = draft.local;
   const [looking, setLooking] = useState(false);
@@ -233,7 +234,7 @@ function LocalPanel({
         />
       </div>
 
-      {!scanning && !found.length ? <StartHints inContainer={inContainer} /> : null}
+      {!scanning && !found.length ? <StartHints inContainer={inContainer} machine={machine} /> : null}
 
       {local.typed ? (
         <div key="typed" className="reveal flex flex-wrap items-end gap-2">
@@ -298,49 +299,6 @@ function LocalPanel({
       ) : null}
       <p className="text-[11px] leading-4 text-stone-500">{STORY_WINDOW_NEEDS} The server sets it (llama-server -c, Ollama&apos;s num_ctx).</p>
     </div>
-  );
-}
-
-// What to run when nothing answered. The commands match the README's.
-function StartHints({ inContainer }: { inContainer: boolean }) {
-  return (
-    <details className="reveal rounded-lg border border-stone-800 bg-stone-950/40 px-3 py-2">
-      <summary className="cursor-pointer text-sm text-stone-300">How do I start one?</summary>
-      <div className="mt-3 space-y-3 text-xs text-stone-400">
-        {inContainer ? (
-          <p className="su-note">
-            This server runs in a container, so it looks for your model server on the host as host.docker.internal. Start
-            the server on the host listening on 0.0.0.0, not only 127.0.0.1.
-          </p>
-        ) : null}
-        <p>
-          {STORY_WINDOW_NEEDS} The commands below run the default storyteller at 64K; on a smaller machine,{" "}
-          <code>-c {windowFlag(RECOMMENDED_WINDOW)}</code> still plays everything.
-        </p>
-        <div>
-          <span className="mb-1 block">llama.cpp with the default storyteller (Qwen3.6-35B-A3B, 64K window):</span>
-          <CopyLine
-            text={`llama-server -m Qwen3.6-35B-A3B-Q8_0.gguf -c 65536 --jinja --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --temp 0.7 --top-p 0.95 --top-k 20 --min-p 0.0 --port 8001 --alias qwen3.6-35b${inContainer ? " --host 0.0.0.0" : ""}`}
-            label="llama-server command"
-          />
-        </div>
-        <p>
-          A smaller GPU, 4 to 16 GB?{" "}
-          <a href={SMALL_HARDWARE_GUIDE} target="_blank" rel="noreferrer" className="text-amber-200 underline">
-            The models and commands that fit
-          </a>
-          .
-        </p>
-        <div>
-          <span className="mb-1 block">Ollama, with the same settings baked in (it calls the dice and other tools less reliably than llama.cpp):</span>
-          <CopyLine text="ollama pull qwen3.6:35b-a3b-q8_0 && ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile" label="Ollama commands" />
-        </div>
-        <p>
-          LM Studio: load a model and switch on its local server. Any server with OpenAI-style tool calls works. Then press
-          Look again.
-        </p>
-      </div>
-    </details>
   );
 }
 
