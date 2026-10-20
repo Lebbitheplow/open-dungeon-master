@@ -157,17 +157,23 @@ export function draftKnown(doc: WorldDoc, entities: DigestEntity[], entity: Dige
   ].filter(Boolean);
 }
 
-export function draftMessages(input: { worldName: string; name: string; typeName: string; known: string[]; hiddenTruth: string; hint: string }) {
+// `asks` is what the entry's kind needs covered (adapters.ts DRAFT_ASKS);
+// `rules` the playable record it links to, read back so the entry agrees
+// with what the table plays.
+export function draftMessages(input: { worldName: string; name: string; typeName: string; known: string[]; hiddenTruth: string; hint: string; asks?: string; rules?: string[] }) {
   return [
     {
       role: "system" as const,
       content: [
         `You write encyclopedia entries for ${input.worldName}, a tabletop world.`,
         "Write the entry asked for in two or three short paragraphs, in the world's own voice: no game statistics, no mention of players or of the game.",
+        input.asks ?? "",
         "Use only what you are told and what follows from it. A hidden truth may colour the entry with hints, but it must never be stated.",
         "A fact tagged [draft] is not settled and one tagged [alternate] is another telling, not what happened: write neither as plain fact.",
         "Reply with the entry's text only.",
-      ].join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
     },
     {
       role: "user" as const,
@@ -175,6 +181,7 @@ export function draftMessages(input: { worldName: string; name: string; typeName
         `The entry: ${input.name}, a ${input.typeName.toLowerCase()}.`,
         ...input.known,
         input.hiddenTruth ? `Hidden truth (never state it): ${input.hiddenTruth}` : "",
+        ...(input.rules ?? []).map((line) => `Its rules at the table, which the entry must agree with but never quote: ${line}`),
         input.hint ? `The game master asks: ${input.hint}` : "",
       ]
         .filter(Boolean)
@@ -198,4 +205,42 @@ export function paintPrompt(shelf: Shelf, typeName: string, about: string, style
             ? "A single legendary object on its own, museum-quality rendering on a dark background, no people, no figures"
             : "Detailed fantasy illustration of the subject described, evocative and painterly";
   return [what, style, about.replace(/\s+/g, " ").slice(0, 400), "No text, no letters"].filter(Boolean).join(". ");
+}
+
+// ---- what an apply did ----
+
+// The forge's apply, answered (src/lib/db/world-forge-io.ts applyForge):
+// what was made, and every entry, link and name that was not, with why.
+export type ForgeApplied = {
+  created: number;
+  links: number;
+  stubs: number;
+  skipped: string[];
+  made: Array<{ key: string; name: string; ref: string }>;
+  failed: Array<{ key: string; name: string; error: string }>;
+  linksLeft: Array<{ from: string; to: string; label: string; why: string }>;
+  stubsLeft: Array<{ name: string; why: string }>;
+};
+
+const counted = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+const bare = (reason: string) => (reason.endsWith(".") ? reason.slice(0, -1) : reason);
+
+// The report, line by line: what was applied first, then each kind of thing
+// that was not, with why (`left`). `partial` is true when anything asked for
+// was left out, so a links-only or partial apply never reads as whole.
+export type ReportLine = { text: string; left: boolean };
+
+export function forgeReport(applied: ForgeApplied): { lines: ReportLine[]; partial: boolean } {
+  const added = [
+    applied.created ? counted(applied.created, "entry", "entries") : "",
+    applied.links ? counted(applied.links, "link", "links") : "",
+  ].filter(Boolean);
+  const kept = applied.stubs ? `kept ${counted(applied.stubs, "name", "names")} to write` : "";
+  const first = added.length ? `Added ${added.join(" and ")}${kept ? `, and ${kept}` : ""}.` : kept ? `Only ${kept}.` : "Nothing was added.";
+  const lines: ReportLine[] = [{ text: first, left: false }];
+  if (applied.made.length) lines.push({ text: `New: ${applied.made.map((row) => row.name).join(", ")}.`, left: false });
+  if (applied.failed.length) lines.push({ text: `Not added: ${applied.failed.map((row) => `${row.name} (${bare(row.error)})`).join("; ")}.`, left: true });
+  if (applied.linksLeft.length) lines.push({ text: `Links not added: ${applied.linksLeft.map((link) => `${link.from} ${link.label} ${link.to} (${link.why})`).join("; ")}.`, left: true });
+  if (applied.stubsLeft.length) lines.push({ text: `Names not kept to write: ${applied.stubsLeft.map((stub) => `${stub.name} (${stub.why})`).join("; ")}.`, left: true });
+  return { lines, partial: lines.some((line) => line.left) };
 }

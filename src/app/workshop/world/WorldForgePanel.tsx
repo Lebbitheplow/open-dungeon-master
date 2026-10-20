@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenText, Download, Hourglass, Lock, Map as MapIcon, MessageCircleQuestion, Network, PenLine, Shapes, Sparkles, Upload } from "lucide-react";
+import { BookOpenText, Download, Hourglass, Lock, Map as MapIcon, MessageCircleQuestion, Network, PenLine, Shapes, Sparkles, Upload, Wand2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -19,6 +19,7 @@ import { StubsView } from "./StubsView";
 import { TypesView } from "./TypesView";
 import { ForgeView } from "./ForgeView";
 import { AskView } from "./AskView";
+import { OutlineView } from "./OutlineView";
 import { TablePrep } from "./TablePrep";
 import type { OpenPrep } from "./PlaceBattleMaps";
 import type { PlaceBindingKind } from "@/lib/worldforge/model";
@@ -34,13 +35,18 @@ import { SceneLosses } from "./SceneLosses";
 // with (src/lib/worldforge/model.ts), so what is written here is what the
 // Cast, the Region, Factions and Lore hold and what the AI DM is told.
 
-type View = "wiki" | "web" | "timeline" | "atlas" | "secrets" | "stubs" | "types" | "forge" | "ask";
+type View = "wiki" | "web" | "timeline" | "atlas" | "secrets" | "stubs" | "types" | "outline" | "forge" | "ask";
 
-// Forge and Ask need a text model; the rail leaves them out on a server
-// that has none, and everything else works the same.
-const AI_VIEWS: ReadonlySet<View> = new Set(["forge", "ask"]);
+// Outline, Forge and Ask need a text model; the rail leaves them out on a
+// server that has none, and everything else works the same. Outline drafts
+// a world from an idea (OutlineView.tsx) and Forge extracts from notes:
+// two operations, two views. Drafting a world is the workshop's, not the
+// play table's.
+const AI_VIEWS: ReadonlySet<View> = new Set(["outline", "forge", "ask"]);
+const WORKSHOP_VIEWS: ReadonlySet<View> = new Set(["outline"]);
 const VIEWS: Array<{ value: View; label: string; icon: IconRailItem["icon"] }> = [
   { value: "wiki", label: "Wiki", icon: BookOpenText },
+  { value: "outline", label: "Outline", icon: Wand2 },
   { value: "forge", label: "Forge", icon: Sparkles },
   { value: "ask", label: "Ask", icon: MessageCircleQuestion },
   { value: "web", label: "Web", icon: Network },
@@ -141,7 +147,7 @@ export function WorldForgePanel({
   const [tablePlace, setTablePlace] = useState<Place>(() => (atTable ? readPlace(campaignId) : { view: "wiki", entry: null }));
   const askedView = atTable ? tablePlace.view : params.get("view");
   const chosenView: View = VIEWS.some((entry) => entry.value === askedView) ? (askedView as View) : "wiki";
-  const view: View = !canWrite && AI_VIEWS.has(chosenView) ? "wiki" : chosenView;
+  const view: View = (!canWrite && AI_VIEWS.has(chosenView)) || (atTable && WORKSHOP_VIEWS.has(chosenView)) ? "wiki" : chosenView;
   const focus = atTable ? tablePlace.entry : params.get("entry");
   // A move to another entry or view closes an open editor, so it asks first
   // when the editor has changes (src/app/workshop/unsaved.ts); a tour's
@@ -359,15 +365,15 @@ export function WorldForgePanel({
       {!canWrite || !canPaint ? (
         <p className="text-[11px] text-stone-500" data-tour="world-ai-note">
           {!canWrite && !canPaint
-            ? "Forge, Ask, Draft and Paint need AI (a text model, an image backend), which this server does not have set up. Everything else here works without it, and pictures can still be uploaded."
+            ? "Outline, Forge, Ask, Draft and Paint need AI (a text model, an image backend), which this server does not have set up. Everything else here works without it, and pictures can still be uploaded. An admin switches them on under Admin > Text model defaults and Admin > Image generation."
             : !canWrite
-              ? "Forge, Ask and Draft need a text model, which this server does not have set up. Everything else here works without it."
-              : "Paint needs an image backend, which this server does not have set up. Pictures can still be uploaded."}
+              ? "Outline, Forge, Ask and Draft need a text model, which this server does not have set up. Everything else here works without it. An admin switches them on under Admin > Text model defaults."
+              : "Paint needs an image backend, which this server does not have set up. Pictures can still be uploaded. An admin switches it on under Admin > Image generation."}
         </p>
       ) : null}
 
       <IconRail
-        items={VIEWS.filter((entry) => canWrite || !AI_VIEWS.has(entry.value)).map((entry) => ({ ...entry, badge: counts[entry.value] || undefined, tour: `world-view-${entry.value}` }))}
+        items={VIEWS.filter((entry) => (canWrite || !AI_VIEWS.has(entry.value)) && !(atTable && WORKSHOP_VIEWS.has(entry.value))).map((entry) => ({ ...entry, badge: counts[entry.value] || undefined, tour: `world-view-${entry.value}` }))}
         value={view}
         onChange={setView}
         orientation="horizontal"
@@ -381,7 +387,8 @@ export function WorldForgePanel({
         {world ? (
           // Keyed by view so the incoming one rises in instead of cutting.
           <div key={view} className="motion-tab">
-            {view === "wiki" ? <WikiView campaignId={campaignId} api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} onOpenPrep={openPrep} onCreate={onCreate} atTable={atTable} canWrite={canWrite} canPaint={canPaint} /> : null}
+            {view === "wiki" ? <WikiView campaignId={campaignId} api={api} world={world} focus={focus} onFocus={setFocus} onOpenSystem={onOpenSystem} onOpenPrep={openPrep} onCreate={onCreate} onDraftWorld={canWrite && !atTable ? () => setView("outline") : undefined} atTable={atTable} canWrite={canWrite} canPaint={canPaint} /> : null}
+            {view === "outline" ? <OutlineView api={api} world={world} onOpen={open} onOpenSystem={onOpenSystem} /> : null}
             {view === "forge" ? <ForgeView api={api} world={world} onOpen={open} /> : null}
             {view === "ask" ? <AskView api={api} world={world} onOpen={open} /> : null}
             {view === "web" ? <WebView world={world} focus={focus} onOpen={open} /> : null}

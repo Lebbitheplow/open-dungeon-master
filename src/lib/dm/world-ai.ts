@@ -16,6 +16,12 @@ import { mentionSegments } from "@/lib/worldforge/text";
 import { parseRef, typeFor } from "@/lib/worldforge/model";
 import { recordsChanged } from "@/lib/workshop/record-events";
 import { accountOf } from "@/lib/worldforge/account";
+import { DRAFT_ASKS, draftKind } from "@/lib/worldforge/adapters";
+import type { BoundRecord } from "@/lib/db/world-bindings";
+import { resolveMonster } from "@/lib/bestiary/index";
+import { describeMonster } from "@/lib/bestiary/monster-draft";
+import { getHomebrew, tableAuthors } from "@/lib/db/homebrew";
+import { describeHomebrew } from "@/lib/homebrew/gear";
 
 // WorldForge's AI tools against the workshop's own models: the forge (notes
 // into entries and links, previewed, nothing written), ask the world, draft
@@ -25,7 +31,9 @@ import { accountOf } from "@/lib/worldforge/account";
 
 type Failure = { error: string };
 
-async function ask(campaign: Campaign, [system, ...rest]: Array<{ role: "system" | "user"; content: string }>): Promise<string | Failure> {
+// One answer from the workshop's model; the world outline
+// (src/lib/dm/world-outline.ts) asks through it too.
+export async function ask(campaign: Campaign, [system, ...rest]: Array<{ role: "system" | "user"; content: string }>): Promise<string | Failure> {
   const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [{ ...system, content: withLanguage(system.content, campaign.gameSettings.tableLanguage) }, ...rest],
@@ -64,17 +72,55 @@ export async function askTheWorld(campaign: Campaign, question: string): Promise
   return { answer: reply, refs, sources, read: retrieval.passages, omitted: retrieval.omitted };
 }
 
+// Draft, through the adapter for the entry's kind (src/lib/worldforge/adapters.ts):
+// a person is asked for a voice and wants, a creature for habits and signs,
+// an item for its making and its cost. A creature or item that links to a
+// stat block or a Homebrew entry is told its rules, so the article agrees
+// with what the table plays.
 export async function draftEntry(campaign: Campaign, ref: string, hint: string): Promise<{ text: string } | Failure> {
   const { doc, entities } = worldView(campaign.id);
   const entity = entities.find((entry) => entry.ref === ref);
   if (!entity) return { error: "No such entry in this workshop." };
   const type = typeFor(doc, entity.shelf, entity.entry.typeId);
   const known = draftKnown(doc, entities, entity);
+  const found = entity.bound.filter((record) => record.found);
   const reply = await ask(
     campaign,
-    draftMessages({ worldName: campaign.title, name: entity.name, typeName: type.name, known, hiddenTruth: entity.entry.hiddenTruth, hint }),
+    draftMessages({
+      worldName: campaign.title,
+      name: entity.name,
+      typeName: type.name,
+      known,
+      hiddenTruth: entity.entry.hiddenTruth,
+      hint,
+      asks: DRAFT_ASKS[draftKind(entity.shelf, type, found)],
+      rules: found.map((record) => boundRules(campaign, record)).filter(Boolean),
+    }),
   );
   return typeof reply === "string" ? { text: reply.slice(0, 12_000) } : reply;
+}
+
+// One line on a linked stat block or item, in the words its own tool uses.
+function boundRules(campaign: Campaign, record: BoundRecord): string {
+  if (record.kind === "monster") {
+    const monster = resolveMonster(record.ref, campaign.gameSettings, { userIds: tableAuthors(campaign.id) });
+    if (!monster) return "";
+    const stats = monster.stats;
+    const attacks = stats.attacks.map((attack) => `${attack.name} (${attack.type})`).join(", ");
+    return [
+      `${record.name} is a ${stats.size ?? "Medium"} ${stats.type ?? "creature"}, ${describeMonster({ name: record.name, stats, extraDamagePerRound: 0 })}`,
+      attacks ? `attacks: ${attacks}` : "",
+      stats.traits.length ? `traits: ${stats.traits.slice(0, 4).join(" ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ")
+      .slice(0, 800);
+  }
+  if (record.kind === "item" && record.ownId) {
+    const item = tableAuthors(campaign.id).map((author) => getHomebrew(author, record.ownId)).find(Boolean);
+    return item ? `${item.name}: ${describeHomebrew("item", item.data)}`.slice(0, 600) : "";
+  }
+  return record.kind === "item" ? `${record.name}, an item from the rulebook.` : "";
 }
 
 // Fire and forget on the serial media queue (one GPU, shared with the DM

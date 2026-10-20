@@ -8,8 +8,10 @@ import { ui } from "@/lib/ui";
 import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import {
   CREATE_CHOICES,
+  ENABLE_DRAFTING,
   GROUP_LABELS,
   WAY_LABELS,
+  missingModels,
   offeredWays,
   stepUnavailable,
   type CreateGroup,
@@ -73,6 +75,13 @@ export function CreateChooser({
           <p className="text-xs text-stone-500">
             Lands in <span className="text-amber-200" data-testid="create-lands">{choice.lands}</span>
           </p>
+          {missingModels(choice, models)
+            .filter((model) => choice.steps.some((step) => !stepUnavailable(step, models) && step.drafts === model))
+            .map((model) => (
+              <p key={model} className="text-[11px] text-stone-500" data-testid="create-enable">
+                Draft with AI needs {ENABLE_DRAFTING[model]}, and this server has none set up, so it is not offered here. The rest works the same.
+              </p>
+            ))}
           {choice.steps.map((step) => {
             const ways = offeredWays(step, models);
             const off = stepUnavailable(step, models);
@@ -91,7 +100,7 @@ export function CreateChooser({
                 <span className="flex items-center gap-2 text-sm text-amber-100">
                   {step.label} <ArrowRight className="ml-auto size-4 text-stone-500" />
                 </span>
-                <span className="text-xs text-stone-400">{off ? "This server has no AI model set up, so this one is not available here." : step.detail}</span>
+                <span className="text-xs text-stone-400">{off ? `This needs ${ENABLE_DRAFTING[step.needs ?? step.drafts ?? "story"]}, and this server has none set up. The other ways in here work without it.` : step.detail}</span>
                 <span className="flex flex-wrap gap-1">
                   {ways.map((way) => (
                     <span key={way} className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-stone-400">
@@ -106,6 +115,11 @@ export function CreateChooser({
       ) : (
         <div className="flex flex-col gap-4" data-testid="create-choices">
           <p className="text-sm text-stone-400">Pick what you want to end up with. Each opens in the tool that makes it, so it is checked and stored the way that tool&apos;s own are.</p>
+          {!models.story ? (
+            <p className="text-xs text-stone-500" data-testid="create-no-ai">
+              This server has no text model, so nothing here is drafted with AI: everything can still be made by hand or copied from one that exists. An admin switches drafting on under Admin &gt; Text model defaults.
+            </p>
+          ) : null}
           {GROUPS.map((group) => (
             <section key={group} className="flex flex-col gap-1.5">
               <h3 className="eyebrow text-[10px] text-stone-500">{GROUP_LABELS[group]}</h3>

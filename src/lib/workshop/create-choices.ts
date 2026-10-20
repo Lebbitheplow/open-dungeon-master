@@ -10,7 +10,10 @@ import type { SystemId } from "@/app/workshop/[workshopId]/systems";
 // scripts/test-create-chooser.mjs checks that every way in is answered.
 
 // How a thing gets made. "extract" is WorldForge's Forge, which keeps only
-// what the notes say; "draft" asks a model to write from a line.
+// what the notes say; "draft" asks a model to write from a line. A world
+// drafted from an idea (WorldForge's Outline view) is reviewed before
+// anything is made, and its creatures and items go through the Bestiary's
+// and Homebrew's own validators.
 export type CreateWay = "blank" | "copy" | "upload" | "draft" | "extract";
 
 export const WAY_LABELS: Record<CreateWay, string> = {
@@ -65,6 +68,15 @@ export const CREATE_CHOICES: CreateChoice[] = [
     lands: "WorldForge",
     group: "world",
     steps: [
+      {
+        label: "Draft a world from an idea",
+        detail: "Write a line or two. A model drafts an outline of people, places, factions and lore, with a few creatures and items, each counted. You tick what to make; creatures and items are built and checked by the Bestiary and Homebrew.",
+        ways: ["draft"],
+        system: "world",
+        view: "outline",
+        needs: "story",
+        drafts: "story",
+      },
       {
         label: "Extract from your notes",
         detail: "Paste notes and WorldForge lists who and what they name. You keep the ones you want; it does not invent what the notes leave out.",
@@ -306,4 +318,19 @@ export function offeredWays(step: CreateStep, models: { story: boolean; images: 
 // A step the server cannot do at all: every way it has needs a missing model.
 export function stepUnavailable(step: CreateStep, models: { story: boolean; images: boolean }): boolean {
   return (step.needs !== undefined && !models[step.needs]) || offeredWays(step, models).length === 0;
+}
+
+// Why a way is missing, and how to get it: what a server without AI still
+// offers, and where an admin switches drafting on.
+export const ENABLE_DRAFTING: Record<"story" | "images", string> = {
+  story: "a text model, which an admin adds under Admin > Text model defaults",
+  images: "an image backend, which an admin adds under Admin > Image generation",
+};
+
+// The models a choice would draft with that this server lacks: one line
+// each in the chooser, so a missing "Draft with AI" is explained, not just
+// absent.
+export function missingModels(choice: CreateChoice, models: { story: boolean; images: boolean }): Array<"story" | "images"> {
+  const wanted = new Set(choice.steps.flatMap((step) => [step.needs, step.drafts]).filter((model): model is "story" | "images" => model !== undefined));
+  return [...wanted].filter((model) => !models[model]);
 }
