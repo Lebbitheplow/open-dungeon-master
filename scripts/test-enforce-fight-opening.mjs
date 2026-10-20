@@ -106,6 +106,20 @@ await test("One correction, never a loop: a model that writes the blow again kee
   assert.ok(dm.content.includes("8 damage"));
 });
 
+await test("A call for initiative with no fight running starts the fight, whichever claim the reader made of it, and rolls nothing for a fight that does not exist.", async () => {
+  await kit.endFight();
+  const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
+  const rolled = () => listRecentRolls(world.campaignId, 500).length;
+  const before = rolled();
+  const announce = "Steel rings as the cultists throw back their hoods. Roll initiative!";
+  model.script([reply({ text: announce }), reply({ text: "The hooded figures melt back into the crowd." })]);
+  model.claims([[{ kind: "roll_ask", character: "all", check: "initiative", quote: "Roll initiative!" }]]);
+  const dm = await model.turn(world, "I push through the market crowd.", alden.id, alden.userId);
+  assert.match(String(userLines(model.requests[1]).at(-1)), /start_encounter/, "the call for initiative was not sent back to start_encounter");
+  assert.equal(rolled(), before, "initiative was rolled for a fight that did not exist");
+  assert.ok(!dm.content.includes("Roll initiative"), dm.content);
+});
+
 await test("A figure the turn's own tool rolled is the truth and is narrated as it stands.", async () => {
   await kit.endFight();
   await kit.fight(1, { heroFaces: { [alden.id]: 20 } });

@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 const {
   ENGINE_BOUNDARY_RULES,
   ENGINE_BOUNDARY_CHECK,
-  FAKE_ENCOUNTER_PROMPT,
+  fakeEncounterPrompt,
   buildCorrectionPrompt,
   collectExchanges,
   fightAnnounced,
@@ -519,10 +519,13 @@ test("a fight announced is a fight_start claim", () => {
   assert.equal(fightAnnounced([]), false);
 });
 
-test("the fake-encounter correction says what to call and what not to restate", () => {
-  assert.match(FAKE_ENCOUNTER_PROMPT, /start_encounter/);
-  assert.match(FAKE_ENCOUNTER_PROMPT, /no encounter exists/);
-  assert.match(FAKE_ENCOUNTER_PROMPT, /encounter panel/);
+test("the fake-encounter correction quotes what read as a fight, says what to call and what not to restate, and lets the model say nobody attacked", () => {
+  const prompt = fakeEncounterPrompt([{ kind: "fight_start", quote: "jabbing a thick finger at Bram's purse." }]);
+  assert.match(prompt, /\("jabbing a thick finger at Bram's purse\."\)/);
+  assert.match(prompt, /start_encounter/);
+  assert.match(prompt, /no encounter exists/);
+  assert.match(prompt, /If nobody has attacked anyone, call no tool and give the same narration again/);
+  assert.match(prompt, /encounter panel/);
 });
 
 test("a figure no tool rolled and the model was never shown is a blow landed in prose", () => {

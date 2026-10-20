@@ -89,8 +89,9 @@ import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import {
   collectExchanges,
   earlierFigures,
-  FAKE_ENCOUNTER_PROMPT,
+  fakeEncounterPrompt,
   fightAnnounced,
+  initiativeStartsFight,
   unrolledBlow,
   unrolledBlowPrompt,
   unrolledFigure,
@@ -1435,7 +1436,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
           registering: registeringNames(structuredCalls),
         })
       : null;
-    const claims = read?.claims ?? [];
+    const claims = inEncounter ? read?.claims ?? [] : initiativeStartsFight(read?.claims ?? []);
     const proseRolls = rollAsksFromClaims(salvage.text, claims, sheets);
     const salvagedCalls = [...xmlSalvage.calls, ...jsonSalvage.calls, ...salvage.calls, ...proseRolls.calls];
     const visibleText = proseRolls.text;
@@ -1852,7 +1853,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
           tool_calls: echoedToolCalls,
         });
         answerRanAbove(fightOwnsFloor(campaignId), false);
-        turn.conversation.push({ role: "user", content: FAKE_ENCOUNTER_PROMPT });
+        turn.conversation.push({ role: "user", content: fakeEncounterPrompt(claims) });
         // Saved again: the save above still carried the withheld announcement.
         saveDmTurn(turn);
         continue;

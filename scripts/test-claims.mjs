@@ -65,6 +65,13 @@ await test("A turn handed on is a claim of its own, kept only when it was asked 
   assert.match(readerSystem([], false), /headed "Player's words" is asked only for turn_over/);
 });
 
+await test("A fight starting is an ambush or a blow begun on the party as well as a call for initiative, and never a threat or a fight between others.", () => {
+  const system = readerSystem([], false);
+  assert.match(system, /"kind":"fight_start".*a call to roll initiative/);
+  assert.match(system, /"kind":"fight_start".*hostile creatures attacking a party character now: an ambush springing on them/);
+  assert.match(system, /"kind":"fight_start".*Never for words, threats, demands, warnings or gestures, or weapons drawn or aimed with no attack made yet; a fight between others/);
+});
+
 await test("The plain English ways a player ends their turn are read beside the reader, and nothing else is.", () => {
   for (const said of ["I close in on the nearest goblin and attack it, then I end my turn.", "That's my turn.", "Kara ends her turn.", "I'm ending my turn here", "My turn is over."]) {
     assert.equal(endsTurnInEnglish(said), true, said);

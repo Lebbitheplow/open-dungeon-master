@@ -129,8 +129,14 @@ const KIND_LINES: Record<ClaimKind, string> = {
   // named, so the cast went unflagged (measured on the reader's test
   // cases; a hosted model read them the same either way).
   cast: '{"kind":"cast","caster":PARTY_REF,"spell":"English spell name","quote":Q}: a party character casts a spell now. Add "spent":SPENT_REF only when what the narration describes is really the effect of something that character spent this turn, as the message lists it under "Spent refs": a feature, an item or an action is no spell, whatever spell it looks like. Never for a spell the narration names or says is cast: that is a cast of its own, even beside a spend.',
+  // An ambush told as story counts: gpt-oss-20b narrated goblins bursting
+  // from the cliffs and closing in, with no start_encounter, and the reader
+  // read no fight in it, so the fight began a turn late (2026-10-20). Words,
+  // gestures, weapons drawn and fights between others stay out by name: a
+  // claim here makes the model start an encounter (gpt-oss read a threat, an
+  // ogre's jabbing finger and sparring guards as fights before they did).
   fight_start:
-    '{"kind":"fight_start","quote":Q}: the narration announces to the players that a fight begins now: a call to roll initiative, or a stat-block style enemy roster (enemy counts with challenge ratings, a surprise field).',
+    '{"kind":"fight_start","quote":Q}: a fight begins now. Report it for any one of: a call to roll initiative; a stat-block style enemy roster (enemy counts with challenge ratings, a surprise field); hostile creatures attacking a party character now: an ambush springing on them, enemies charging, leaping or rushing at them, a blow struck or a shot loosed at one of them (the attack beginning is enough, landed or not). quote is the words of that attack or that call. Never for words, threats, demands, warnings or gestures, or weapons drawn or aimed with no attack made yet; a fight between others that no party character is in (sparring, a brawl across the room); a fight that might come, is told as past, or is over.',
   roll_ask:
     '{"kind":"roll_ask","character":PARTY_REF|"all","check":"skill"|"ability"|"save"|"initiative","skill":SKILL,"ability":"str"|"dex"|"con"|"int"|"wis"|"cha","dc":N,"quote":Q}: the narration asks a party character to roll now. skill only for a skill check; ability for a save or a bare ability check; dc only when stated.',
   // Narrow on purpose: a sentence it names is cut from the narration, so

@@ -709,10 +709,26 @@ export function fightAnnounced(claims: readonly NarrationClaim[]): boolean {
   return claims.some((claim) => claim.kind === "fight_start");
 }
 
+// A call for initiative with no fight running is a fight starting, whichever
+// kind the reader filed it under. Read as a roll ask, it rolled initiative for
+// a fight that did not exist, and the rolls sent the turn on to narrate them,
+// past the check above (gpt-oss-20b filed "Roll initiative!" as a roll ask in
+// two reads of three, 2026-10-20). start_encounter rolls everyone's.
+export function initiativeStartsFight(claims: readonly NarrationClaim[]): NarrationClaim[] {
+  return claims.map((claim) => (claim.kind === "roll_ask" && claim.check === "initiative" ? { kind: "fight_start", quote: claim.quote } : claim));
+}
+
 // What the turn loop sends back when a fight was announced with no
-// start_encounter behind it. Kept beside the other correction text so the
-// wording is testable without a model call.
-export const FAKE_ENCOUNTER_PROMPT = `[System] Your narration announced a fight starting, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. Call start_encounter now with the enemies you announced, then narrate the fight breaking out from the tool results. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;
+// start_encounter behind it, quoting the words that read as one. The model
+// may answer that nobody attacked: told only to start the fight, gpt-oss-20b
+// started one over a bouncer's toll in three replays of three; with the way
+// out it still started gx-1's real ambush in three of three and the toll in
+// none (2026-10-20). Kept beside the other correction text so the wording is
+// testable without a model call.
+export function fakeEncounterPrompt(claims: readonly NarrationClaim[]): string {
+  const quote = claims.find((claim) => claim.kind === "fight_start")?.quote ?? "";
+  return `[System] Your narration reads as a fight starting${quote ? ` ("${quote}")` : ""}, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. If a fight is starting, call start_encounter now with those enemies, then narrate the fight breaking out from the tool results. If nobody has attacked anyone, call no tool and give the same narration again. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;
+}
 
 // ---------------------------------------------------------------------------
 // Part 5: blows landed in prose alone
