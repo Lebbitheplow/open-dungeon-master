@@ -59,7 +59,15 @@ export default {
     await t.shot("saved");
 
     // Duplicate and edit: the copy opens in the editor and says it is one.
+    // The saved name shows in the editor's own heading before the save has
+    // navigated, so wait for the character page's actions themselves: in
+    // the app the page arrived a beat after the heading matched, and the
+    // menu was looked for on the editor, found absent, and never opened.
     const menu = page.locator(`${root}button[aria-label^="More actions"]`).locator("visible=true");
+    await eventually(
+      async () => (await menu.count()) || (await visible(page, root, /^\s*Duplicate and edit/).count()),
+      { timeoutMs: 30_000, label: "the character page's actions after the save" },
+    );
     if (await menu.count()) {
       await t.tap(menu.first());
       await sleep(400);
