@@ -96,7 +96,7 @@ import {
   unrolledDamagePrompt,
 } from "@/lib/dm/engine-boundary";
 import { withoutAsides, type PartRead } from "@/lib/dm/claims-logic";
-import { withoutCombatBookkeeping, withoutRepeatedSentences } from "@/lib/dm/narration-tidy-logic";
+import { REPEATED_NARRATION_PROMPT, repeatsNarration, withoutCombatBookkeeping, withoutRepeatedSentences } from "@/lib/dm/narration-tidy-logic";
 import { readAsides, readReply, registeringNames } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import type { SpokenLine } from "@/lib/dm/speech";
@@ -1242,6 +1242,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // attack or a cast, and whether the one corrective call for it was spent.
   const card = cardPlayed(context);
   let intentNudged = false;
+  // The last turn's narration said again with no tool is sent back once.
+  let repeatNudged = false;
+  let lastNarration: string | null = null;
+  const previousNarration = () =>
+    (lastNarration ??=
+      listRecentMessages(campaignId, 12)
+        .filter((message) => message.authorType === "dm")
+        .at(-1)?.content ?? "");
   // Whether an empty reply was already asked again, and whether the call
   // that ended the loop came back empty (see narrateAfterToolLeak).
   let emptyRetried = false;
@@ -1795,6 +1803,24 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         planNudged = true;
         turn.conversation.push({ role: "assistant", content: visibleText || "", ...carried });
         turn.conversation.push({ role: "user", content: planCorrection(turn.callIndex === MAX_MODEL_CALLS - 1) });
+        saveDmTurn(turn);
+        continue;
+      }
+      // The last turn's paragraph said again, with no tool: the player's new
+      // action never happened. Held back, and the model is sent once to
+      // resolve it and narrate what is new (src/lib/dm/narration-tidy-logic.ts).
+      if (
+        !finalCall &&
+        !repeatNudged &&
+        !toolCalls.length &&
+        narration &&
+        turn.narrationParts[turn.narrationParts.length - 1] === narration &&
+        repeatsNarration(narration, previousNarration())
+      ) {
+        repeatNudged = true;
+        turn.narrationParts.pop();
+        turn.conversation.push({ role: "assistant", content: visibleText || "", ...carried });
+        turn.conversation.push({ role: "user", content: REPEATED_NARRATION_PROMPT });
         saveDmTurn(turn);
         continue;
       }

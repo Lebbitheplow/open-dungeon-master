@@ -3,7 +3,7 @@
 // The inputs are what Qwen3.6-35B at Q2 wrote on an AMD BC-250 on the full
 // rules, word for word.
 import assert from "node:assert/strict";
-import { withoutCombatBookkeeping, withoutRepeatedSentences } from "../src/lib/dm/narration-tidy-logic.ts";
+import { repeatsNarration, withoutCombatBookkeeping, withoutRepeatedSentences } from "../src/lib/dm/narration-tidy-logic.ts";
 
 let passed = 0;
 const check = (name, fn) => {
@@ -75,6 +75,18 @@ check("a reply printed twice in one part keeps one copy, and short lines may rep
 check("a part left with nothing is dropped", () => {
   const line = "Mist curls over the ford, cold and grey in the morning light.";
   assert.deepEqual(withoutRepeatedSentences([line, line]), [line]);
+});
+
+check("a reply that is mostly the last turn's narration is a repeat; one shared line or a new scene is not", () => {
+  const last =
+    "Avery's blade flashes in the dim light of the ravine. The goblin staggers back against the rocks, snarling. The second goblin circles to your left, spear raised. What will you do?";
+  assert.equal(repeatsNarration(last, last), true);
+  assert.equal(repeatsNarration(`${last} The wind picks up.`, last), true);
+  const fresh =
+    "Your sword bites deep into the goblin's shoulder and it drops its spear with a howl. The second goblin circles to your left, spear raised. Bram, you are up.";
+  assert.equal(repeatsNarration(fresh, last), false, "one sentence carried over is not a repeat");
+  assert.equal(repeatsNarration("The goblin staggers back against the rocks, snarling.", last), false, "one sentence is too little to judge");
+  assert.equal(repeatsNarration(last, ""), false);
 });
 
 console.log(`narration tidy: ${passed} checks passed`);

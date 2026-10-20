@@ -47,6 +47,25 @@ export function withoutRepeatedSentences(parts: readonly string[]): string[] {
   return kept;
 }
 
+// Whether a reply is mostly the last turn's narration said again: a player
+// who repeats a line ("I attack it") got back the paragraph the model wrote
+// last time, with no tool, so the new action never happened (gpt-oss-20b and
+// Qwen3.6-35B both did it in a fight of identical lines). Two sentences at
+// least, most of them the last narration's.
+export function repeatsNarration(text: string, previous: string): boolean {
+  const keys = (value: string) =>
+    (value.match(SENTENCE) ?? []).map((piece) => textKey(piece)).filter((key) => key.length >= MIN_REPEAT_CHARS);
+  const now = keys(text);
+  if (now.length < 2) {
+    return false;
+  }
+  const before = new Set(keys(previous));
+  return now.filter((key) => before.has(key)).length / now.length >= 0.6;
+}
+
+export const REPEATED_NARRATION_PROMPT =
+  "[System] That reply repeats your previous narration almost word for word. The player has acted again, and this is a new moment. Resolve what they just did with the tools (in a fight: the attack, move or spell they declared, on their turn), then narrate only what is new.";
+
 // A bold heading for a turn, a round or the fight itself: "**Bram's Turn**",
 // "**Round 1:**", "**Combat begins.**", "**End of Avery's Turn.**".
 const COMBAT_HEADING = /\*\*[^*\n]{0,40}?\b(?:turn|round|combat|initiative)\b[^*\n]{0,30}?\*\*[ \t]*[.:!]?/gi;
