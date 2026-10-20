@@ -10,6 +10,7 @@ import { knownTraining } from "../FeatChoicesFields";
 import type { ClassOption, RaceOption } from "../useBuilderOptions";
 import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
+import { PickForMe } from "./shared";
 
 // What the health explainer works from, shared with the Max HP line on the
 // last step: both read derived.hp (builderHp.ts), the figure the server
@@ -77,14 +78,19 @@ export function AbilitiesStep({
   derived,
   race,
   klass,
+  onPickForMe,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
+  // "Pick for me" on the improvements the level brings (quickBuild.ts):
+  // the cards stay blank until it is pressed.
+  onPickForMe?: (target: "asi") => void;
 }) {
   const { asiSlotLevels, activeAsiChoices, asiTakenInPlay, asiBaseAbilities, effectiveLevel } = derived;
   const asiToPick = asiTakenInPlay.filter((taken) => !taken).length;
+  const asiOpen = activeAsiChoices.filter((choice, index) => choice === null && !asiTakenInPlay[index]).length;
   return (
     <div className="space-y-4">
       <div data-builder-target="scores">
@@ -110,6 +116,15 @@ export function AbilitiesStep({
       </div>
       {asiSlotLevels.length ? (
         <div data-builder-target="asi">
+        {onPickForMe && asiOpen > 0 ? (
+          <p className="mb-2 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+            <span className="grow">
+              {asiOpen === 1 ? "One improvement is" : `${asiOpen} improvements are`} still to choose. Pick for me adds
+              the points to {klass ? `a ${klass.name.toLowerCase()}'s` : "the"} main scores, never a feat.
+            </span>
+            <PickForMe what={asiOpen === 1 ? "the improvement" : "the improvements"} onPick={() => onPickForMe("asi")} />
+          </p>
+        ) : null}
         <AsiFeatEditor
           level={effectiveLevel}
           slotLevels={asiSlotLevels}

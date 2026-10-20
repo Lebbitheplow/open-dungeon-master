@@ -103,7 +103,9 @@ const STAPLES = [
   "Meteor Swarm", "Mass Heal", "Power Word Kill", "True Resurrection", "Foresight",
 ].map(textKey);
 
-function byPreference<T extends { name: string }>(spells: T[]): T[] {
+// Spells best first: the staples above in their order, then the rest by
+// name. The builder's quick build ranks a whole list the same way.
+export function preferredSpellOrder<T extends { name: string }>(spells: T[]): T[] {
   const rank = (spell: T) => {
     const index = STAPLES.indexOf(textKey(spell.name));
     return index === -1 ? STAPLES.length : index;
@@ -153,7 +155,7 @@ export function companionSpellPicks(input: CompanionSpellInput): string[] {
   // What was asked for leads, in the order it was asked.
   const ordered = [
     ...wanted.flatMap((name) => open.filter((spell) => textKey(spell.name) === name)),
-    ...byPreference(open.filter((spell) => !wanted.includes(textKey(spell.name)))),
+    ...preferredSpellOrder(open.filter((spell) => !wanted.includes(textKey(spell.name)))),
   ];
 
   const cantripCap = cantripCapOf(after);
