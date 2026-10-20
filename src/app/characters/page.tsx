@@ -68,6 +68,9 @@ export default function CharactersPage() {
   const [cloningId, setCloningId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  // A file older than a rule that asks for a pick comes in without it; the
+  // library says what is still to choose and where (issue #430).
+  const [importOwed, setImportOwed] = useState<{ id: string; name: string; owed: string[] } | null>(null);
   const cropping = characters.find((character) => character.id === croppingId);
   const pollCount = useRef(0);
   const importInput = useRef<HTMLInputElement>(null);
@@ -154,6 +157,7 @@ export default function CharactersPage() {
   async function importFile(file: File) {
     setImporting(true);
     setImportError("");
+    setImportOwed(null);
     try {
       let parsed: unknown;
       try {
@@ -174,6 +178,9 @@ export default function CharactersPage() {
       }
       if (data.character) {
         setCharacters((current) => [data.character, ...current]);
+        if (Array.isArray(data.owed) && data.owed.length) {
+          setImportOwed({ id: data.character.id, name: data.character.name, owed: data.owed });
+        }
       }
     } catch {
       setImportError("Import failed.");
@@ -255,6 +262,33 @@ export default function CharactersPage() {
         <p role="alert" className="motion-shake mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-sm text-red-300">
           {importError}
         </p>
+      ) : null}
+      {importOwed ? (
+        <div role="status" className="reveal mb-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-sm text-amber-100">
+          <p>
+            {importOwed.name} came from a file made before these choices were asked for, so they are still to make:
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-amber-200/90">
+            {importOwed.owed.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className="mt-2 flex flex-wrap items-center gap-2">
+            <Link
+              href={`/characters/${importOwed.id}/edit`}
+              className="inline-flex min-h-10 items-center rounded-lg border border-amber-600/60 px-3 font-medium text-amber-100 hover:bg-amber-900/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            >
+              Choose them now
+            </Link>
+            <button
+              type="button"
+              onClick={() => setImportOwed(null)}
+              className="inline-flex min-h-10 items-center rounded-lg px-3 text-stone-400 hover:text-stone-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            >
+              Later
+            </button>
+          </p>
+        </div>
       ) : null}
 
       {loading ? (

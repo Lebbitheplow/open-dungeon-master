@@ -98,6 +98,9 @@ function policyFor(context: LegalityContext) {
     keepsClasses: !made,
     // A stored character's picks were settled where the server saw them.
     judgesPicks: door !== "stored",
+    // A file may be older than the rule that asks for a pick: one it left
+    // open is owed, not wrong; one it names is still judged (issue #430).
+    picksMayWait: door === "import",
     plainStory: door === "import",
     trustsHeld: door === "stored",
   };
@@ -503,6 +506,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     feats: feats.feats.map((name) => ({ name, desc: context.featOf(name)?.desc ?? "" })),
     choices: input.featChoices ?? {},
     strict: policy.judgesPicks && context.door !== "engine",
+    picksMayWait: policy.picksMayWait,
   });
   if (policy.judgesPicks) {
     problems.push(...granted.problems);
@@ -519,6 +523,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
         ? autoSubclassPicks(subclassTraining, granted.proficiencies, input.featChoices)
         : (input.featChoices ?? {}),
     strict: policy.judgesPicks && context.door !== "engine",
+    picksMayWait: policy.picksMayWait,
     abilities,
   });
   if (policy.judgesPicks) {
@@ -536,10 +541,12 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     raisedAbility: raisedByFeat,
     spellOf: context.spellOf,
     strict: policy.judgesPicks && context.door !== "engine",
+    picksMayWait: policy.picksMayWait,
   });
   if (policy.judgesPicks) {
     problems.push(...taught.problems);
   }
+  const owed = [...(granted.owed ?? []), ...(bySubclass.owed ?? []), ...(taught.owed ?? [])];
   // Elemental Adept's type is kept the same way ("Elemental Adept: fire").
   const elementPicks = feats.feats.flatMap((name) => {
     const spec = featGrantSpec(context.featOf(name)?.desc ?? "");
@@ -768,6 +775,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     problems: [...new Set(problems)],
     sheet,
     ...(rolledHp ? { rolled: { hp: rolledHp } } : {}),
+    ...(owed.length ? { owed: [...new Set(owed)] } : {}),
   };
 }
 

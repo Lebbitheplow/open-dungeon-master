@@ -455,6 +455,11 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     // Level-up ASIs land here as raw scores; the campaign records no
     // AsiChoice for them, so asiChoices keeps only creation-time picks.
     abilities: sheet.abilities,
+    // The picks a feat or subclass taken in play was made with come home
+    // with it, so the builder and a file see them as made (issue #430).
+    ...(sheet.featChoices || character.sheet.featChoices
+      ? { featChoices: { ...(character.sheet.featChoices ?? {}), ...(sheet.featChoices ?? {}) } }
+      : {}),
     spellcasting: sheet.spellcasting
       ? {
           ...sheet.spellcasting,

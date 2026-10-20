@@ -264,13 +264,17 @@ export type FeatSpellInput = {
   // Strict: every pick is named, is a real spell, and is one the feat
   // offers. Otherwise what is named is taken as it is.
   strict: boolean;
+  // With strict: a pick left open is owed (in `owed`), not wrong; what is
+  // named is still checked (a file from before the feat asked, #430).
+  picksMayWait?: boolean;
 };
 
-export type FeatSpellVerdict = { grants: FeatSpellGrant[]; problems: string[] };
+export type FeatSpellVerdict = { grants: FeatSpellGrant[]; problems: string[]; owed?: string[] };
 
 // The spells every feat on the sheet teaches, with the picks as recorded.
 export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
   const problems: string[] = [];
+  const owedPicks: string[] = [];
   const grants: FeatSpellGrant[] = [];
   for (const feat of input.feats) {
     const spec = featSpellSpec(feat.desc);
@@ -281,7 +285,7 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
     if (input.strict) {
       const owed = featSpellsOwed(feat.name, spec, picks);
       if (owed) {
-        problems.push(owed);
+        (input.picksMayWait ? owedPicks : problems).push(owed);
       }
     }
     const list = spec.listChoice ? lower(picks.list ?? "") || null : null;
@@ -344,7 +348,7 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
       ability,
     });
   }
-  return { grants, problems };
+  return { grants, problems, ...(owedPicks.length ? { owed: owedPicks } : {}) };
 }
 
 const capital = (value: string) => value.replace(/(^|\s|')([a-z])/g, (_, before, letter) => `${before}${letter.toUpperCase()}`);

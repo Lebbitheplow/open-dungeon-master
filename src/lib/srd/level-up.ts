@@ -427,13 +427,14 @@ export function buildLevelUp(
   const freshTraining = subclassGrants(classes, context.subclassExtras).filter(
     (grant) => !trainedBefore.has(`${grant.classId}|${lower(grant.name)}`),
   );
+  const trainingChoices = context.autoPicks
+    ? autoSubclassPicks(freshTraining, proficiencies, request.featChoices)
+    : (request.featChoices ?? {});
   if (freshTraining.length) {
     const trained = applySubclassTraining({
       proficiencies,
       grants: freshTraining,
-      choices: context.autoPicks
-        ? autoSubclassPicks(freshTraining, proficiencies, request.featChoices)
-        : (request.featChoices ?? {}),
+      choices: trainingChoices,
       strict: true,
       abilities,
     });
@@ -616,11 +617,22 @@ export function buildLevelUp(
   // The feat's spells join the lists, on top of the class's own; a
   // character with no Spellcasting gets a slotless block for them.
   spellcasting = withFeatSpells(spellcasting, taught.grants);
+  // The picks this level applied, recorded beside the ones the sheet already
+  // keeps: without them a feat taken in play went home, to a file and back
+  // to the builder looking unpicked, and was asked for again (issue #430).
+  const recorded = Object.fromEntries(
+    [...featsTaken.map((name) => context.featOf(name)?.name ?? name), ...freshTraining.map((grant) => grant.name)].flatMap((name) => {
+      const key = lower(name);
+      const picks = trainingChoices[key] ?? trainingChoices[name] ?? request.featChoices?.[key] ?? request.featChoices?.[name];
+      return picks ? [[key, picks] as const] : [];
+    }),
+  );
   const patch: FullPatchSheetInput = {
     maxHp,
     currentHp,
     proficiencies,
     features,
+    ...(Object.keys(recorded).length ? { featChoices: { ...(sheet.featChoices ?? {}), ...recorded } } : {}),
     ...(asked.choices.length || primalChampion ? { abilities, feats } : {}),
     ...(spellcasting !== sheet.spellcasting ? { spellcasting } : {}),
     ...(multiclass ? { classes } : { level: target, subclass: classes[0].subclass }),

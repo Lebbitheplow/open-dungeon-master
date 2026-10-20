@@ -714,6 +714,9 @@ export type CharacterSheet = {
   // The cards its player keeps in the visible Hand, in order (issue 231,
   // src/lib/battlemap/hand-layout.ts). Absent: the automatic split.
   handLayout?: { fan: string[]; known: string[] };
+  // The picks its feats and subclass grants were made with, by name (the
+  // library copy's own field). Absent on a sheet that records none.
+  featChoices?: CreateSheetInput["featChoices"];
   createdAt: string;
   updatedAt: string;
 };
