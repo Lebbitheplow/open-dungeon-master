@@ -195,6 +195,18 @@ test("starting armor follows class training", () => {
   }
 });
 
+test("a table's setting armor is suggested to any class trained for it, the class's own setting's as before (issue #434)", () => {
+  const names = (list) => list.map((armor) => armor.name);
+  // An SRD fighter in a cyberpunk campaign is offered the kevlar vest.
+  const fighterCyberpunk = names(suggestArmor(["light", "medium", "heavy", "shields"], ["steampunk", "cyberpunk"]));
+  assert.ok(fighterCyberpunk.includes("Kevlar Vest"), fighterCyberpunk.join(", "));
+  assert.ok(fighterCyberpunk.includes("Riot Plating"));
+  // In high fantasy, no setting armor at all.
+  const fighterFantasy = names(suggestArmor(["light", "medium", "heavy", "shields"], ["steampunk", "high_fantasy"]));
+  assert.ok(!fighterFantasy.includes("Kevlar Vest"));
+  assert.ok(fighterFantasy.includes("Brass Carapace"), "the fighter's own steampunk tag still counts");
+});
+
 test("the table itself is coherent", () => {
   assert.equal(ATTUNEMENT_SLOTS, 3);
   for (const armor of SRD_ARMOR) {

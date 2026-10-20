@@ -17,6 +17,9 @@ import mysteryJson from "@/lib/classes/mystery.json";
 import postApocalypticJson from "@/lib/classes/post-apocalyptic.json";
 import steampunkJson from "@/lib/classes/steampunk.json";
 import featureNamesJson from "@/lib/classes/feature-names.json";
+// The SRD's own table, as data: srd/index.ts imports this module's values,
+// so the ids are read from the JSON rather than from it.
+import srdClassesJson from "@/lib/srd/classes.json";
 
 export { classFeatureDescription } from "@/lib/classes/feature-text";
 
@@ -108,23 +111,37 @@ export function classGenres(classId: string): Genre[] {
   return findCustomClass(classId)?.genres ?? SRD_GENRE_TAGS[classId] ?? [];
 }
 
-// Class ids that belong in a genre's world, the same rule the character
-// builder applies to its picker: high fantasy and custom worlds take the
-// whole catalog (empty list = no restriction), every other genre takes only
-// its tagged classes. Used to keep AI companions in setting.
 // The same question as genreClassIds, asked for a campaign that may have a
 // world pack selected. A pack names the callings that exist in its world, and
 // that list is both narrower and truer than the genre tags, so it wins. The
 // pack ids arrive as a PARAMETER rather than by importing the pack loader,
 // which keeps this module free of fs and safe for the character builder to
-// import on the client.
+// import on the client. One rule for every place a class is offered or
+// drafted: AI companions, the level-up dialog's list, an agent's level-up
+// options (issues #433, #434). Empty: the whole catalog.
 export function settingClassIds(genre: Genre, packClassIds: string[]): string[] {
   return packClassIds.length ? packClassIds : genreClassIds(genre);
 }
 
+// Genres whose classes a high fantasy world takes beside the SRD's: a witch
+// hunter or a grave knight fits a world of swords and spells, a netrunner or
+// a steam knight does not (issue #434).
+const HIGH_FANTASY_KIN: Genre[] = ["dark_fantasy"];
+
+// Class ids that belong in a genre's world. A custom world takes the whole
+// catalog (empty list = no restriction); high fantasy takes the SRD classes
+// and its kin's; every other genre takes its tagged classes.
 export function genreClassIds(genre: Genre): string[] {
-  if (genre === "high_fantasy" || genre === "custom") {
+  if (genre === "custom") {
     return [];
+  }
+  if (genre === "high_fantasy") {
+    return [
+      ...(srdClassesJson as { classes: Array<{ id: string }> }).classes.map((entry) => entry.id),
+      ...CUSTOM_CLASSES.filter((entry) => entry.genres.some((tag) => HIGH_FANTASY_KIN.includes(tag))).map(
+        (entry) => entry.id,
+      ),
+    ];
   }
   const custom = CUSTOM_CLASSES.filter((entry) => entry.genres.includes(genre)).map(
     (entry) => entry.id,
@@ -133,4 +150,22 @@ export function genreClassIds(genre: Genre): string[] {
     .filter(([, genres]) => genres.includes(genre))
     .map(([classId]) => classId);
   return [...custom, ...srd];
+}
+
+// A list of classes split into the ones the campaign's setting offers
+// (settingClassIds) and the rest, each in its given order. With no setting
+// list (a custom world) every class is the setting's. The level-up dialog
+// shows the first and folds the second under "Other settings" (issue #433).
+export function splitBySetting<T extends { id: string }>(
+  entries: readonly T[],
+  settingIds: readonly string[],
+): { setting: T[]; other: T[] } {
+  if (!settingIds.length) {
+    return { setting: [...entries], other: [] };
+  }
+  const offered = new Set(settingIds);
+  return {
+    setting: entries.filter((entry) => offered.has(entry.id)),
+    other: entries.filter((entry) => !offered.has(entry.id)),
+  };
 }

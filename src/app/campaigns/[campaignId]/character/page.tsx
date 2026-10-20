@@ -17,6 +17,10 @@ import { navigateTo } from "@/lib/navigation";
 import { refusalText } from "@/app/characters/builder/refusal";
 import { builderDraftKey, clearBuilderDraft } from "@/app/characters/builder/builderDraft";
 import { PregenPicker } from "@/app/campaigns/[campaignId]/PregenPicker";
+import { useWorldPack } from "@/app/characters/builder/useBuilderOptions";
+import { settingClassIds } from "@/lib/classes";
+import { genrePreset } from "@/lib/genres";
+import { findClass } from "@/lib/srd";
 
 type LibraryCharacter = {
   id: string;
@@ -105,6 +109,20 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
       cancelled = true;
     };
   }, [campaignId]);
+
+  // Which of a library character's classes come from another setting than
+  // the table's: said on the card before it joins, never refused (issue
+  // #434). The same rule keeps the table's AI companions in setting.
+  const pack = useWorldPack(worldPackId || undefined);
+  const settingIds = genre ? settingClassIds(genre, (pack?.classes ?? []).map((entry) => entry.id)) : [];
+  const settingName = pack?.name ?? (genre ? genrePreset(genre).name : "");
+  const strangers = (character: LibraryCharacter): string[] => {
+    if (!settingIds.length) {
+      return [];
+    }
+    const ids = [...new Set([character.class, ...(character.sheet?.classes ?? []).map((entry) => entry.id)].map((id) => id.toLowerCase()))];
+    return ids.filter((id) => !settingIds.includes(id)).map((id) => findClass(id)?.name ?? titleCase(id));
+  };
 
   const editCharacter =
     flow === "edit" && currentLibraryId
@@ -227,6 +245,11 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
                     {titleCase(character.class)}
                     {character.subclass ? ` (${character.subclass})` : ""}
                   </p>
+                  {strangers(character).length ? (
+                    <p className="reveal mt-1 text-xs text-stone-400">
+                      {strangers(character).join(" and ")} {strangers(character).length === 1 ? "comes" : "come"} from another setting; this table plays {settingName}.
+                    </p>
+                  ) : null}
                   {character.level !== level ? (
                     <p className="reveal mt-1 text-xs text-amber-200">
                       {character.level < level

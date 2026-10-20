@@ -2,12 +2,15 @@
 
 import { classFeaturesFor, isThievesTools, subclassCastingProfileFor, THIEVES_TOOLS } from "@/lib/srd/features";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Dices, Loader2, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, Dices, Loader2, Search, Sparkles, X } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
 import { useClassFeatureText } from "@/lib/classes/use-feature-text";
+import { settingClassIds, splitBySetting } from "@/lib/classes";
+import type { Genre } from "@/lib/schemas/game-settings";
+import { ui } from "@/lib/ui";
 import {
   findOptionByFeatureName,
   openOptionSlots,
@@ -68,7 +71,7 @@ import { authoredFeatDesc, featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { featGrantSpec, featOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { subclassGrants } from "@/lib/srd/subclass-training";
 import FeatChoicesFields from "@/app/characters/builder/FeatChoicesFields";
-import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
+import { useArchetypes, useWorldPack } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -86,6 +89,8 @@ export function LevelUpDialog({
   sheet,
   multiclassAllowed = true,
   hpMethod = "average",
+  genre,
+  worldPack,
   onDone,
 }: {
   campaignId: string;
@@ -98,6 +103,11 @@ export function LevelUpDialog({
   multiclassAllowed?: boolean;
   // The table's hit point method (a campaign setting).
   hpMethod?: HpMethod;
+  // The campaign's genre and world pack: the new classes its setting offers
+  // lead the multiclass list, the rest fold under "Other settings" (issue
+  // #433). Absent: one list.
+  genre?: Genre;
+  worldPack?: string;
   onDone: () => void;
 }) {
   // Held from the moment the dialog opens: the sheet the server sends back
@@ -197,6 +207,25 @@ export function LevelUpDialog({
       .sort((a, b) => Number(b.check.ok) - Number(a.check.ok));
   }, [classList, sheet, multiclassAllowed]);
   const needsClassStep = classList.length > 1 || newClassOptions.some((entry) => entry.check.ok);
+  // The setting's classes first, the rest folded; a search looks through
+  // both (issue #433). The same rule keeps AI companions in setting
+  // (src/lib/classes/index.ts settingClassIds).
+  const pack = useWorldPack(worldPack || undefined);
+  const [classQuery, setClassQuery] = useState("");
+  const [otherOpen, setOtherOpen] = useState(false);
+  const classGroups = useMemo(() => {
+    const ids = genre ? settingClassIds(genre, (pack?.classes ?? []).map((entry) => entry.id)) : [];
+    const query = textKey(classQuery.trim());
+    const matching = query
+      ? newClassOptions.filter(({ option }) => textKey(option.name).includes(query))
+      : newClassOptions;
+    const split = splitBySetting(
+      matching.map((entry) => ({ ...entry, id: entry.option.id })),
+      ids,
+    );
+    return { ...split, label: pack?.classes.length ? `Callings of ${pack.name}` : "Recommended for this setting", query };
+  }, [genre, pack, classQuery, newClassOptions]);
+  const classListId = useId();
 
   // Some multiclass grants include one class-skill pick (rogue, ranger,
   // bard); offered right in the class step and validated server-side.
@@ -886,43 +915,92 @@ export function LevelUpDialog({
                         A new class starts at level 1 with SOME of its training: no saving
                         throws, and only the proficiencies the multiclass rules grant.
                       </p>
-                      <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
-                        {newClassOptions.map(({ option, check }) => {
-                          const picked = classChoice.toLowerCase() === option.id.toLowerCase();
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              disabled={!check.ok}
-                              onClick={() => {
-                                if (!picked) {
-                                  setClassChoice(option.id);
-                                  resetClassPicks();
-                                }
-                              }}
-                              className={cn(
-                                "block w-full rounded-lg border px-3 py-2 text-left",
-                                picked
-                                  ? "border-amber-600 bg-stone-900 text-amber-100"
-                                  : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
-                                !check.ok && "cursor-not-allowed opacity-50 hover:border-stone-700 hover:bg-transparent",
-                              )}
-                            >
-                              <span className="flex items-center justify-between text-sm">
-                                <span>{option.name}</span>
-                                <span className="text-xs text-stone-500">d{option.hitDie}</span>
-                              </span>
-                              <span className="block text-xs text-stone-400">
-                                {check.ok
-                                  ? `Grants: ${describeGrant(multiclassGrantsFor(option.id))}`
-                                  : check.error}
-                              </span>
-                              <span className="block text-[11px] text-stone-600">
-                                Requires {describePrereq(option.id)}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <label className="relative block">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+                        <input
+                          type="search"
+                          value={classQuery}
+                          onChange={(event) => setClassQuery(event.target.value)}
+                          placeholder={`Search ${newClassOptions.length} classes`}
+                          aria-label="Search classes"
+                          aria-describedby={`${classListId}-hint`}
+                          className={cn(ui.input, "pl-8")}
+                        />
+                        <span id={`${classListId}-hint`} className="sr-only" aria-live="polite">
+                          {classGroups.query
+                            ? `${classGroups.setting.length + classGroups.other.length} ${classGroups.setting.length + classGroups.other.length === 1 ? "class matches" : "classes match"}.`
+                            : "Searches the class names."}
+                        </span>
+                      </label>
+                      <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                        {classGroups.other.length && classGroups.setting.length ? (
+                          <p className="text-[11px] uppercase tracking-wide text-stone-500">{classGroups.label}</p>
+                        ) : null}
+                        {classGroups.setting.map(({ option, check }) => (
+                          <NewClassButton
+                            key={option.id}
+                            option={option}
+                            check={check}
+                            chosen={classChoice}
+                            onPick={() => {
+                              setClassChoice(option.id);
+                              resetClassPicks();
+                            }}
+                          />
+                        ))}
+                        {classGroups.other.length ? (
+                          classGroups.query || !classGroups.setting.length ? (
+                            <>
+                              {classGroups.setting.length ? (
+                                <p className="pt-1 text-[11px] uppercase tracking-wide text-stone-500">Other settings</p>
+                              ) : null}
+                              {classGroups.other.map(({ option, check }) => (
+                                <NewClassButton
+                                  key={option.id}
+                                  option={option}
+                                  check={check}
+                                  chosen={classChoice}
+                                  onPick={() => {
+                                    setClassChoice(option.id);
+                                    resetClassPicks();
+                                  }}
+                                />
+                              ))}
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                aria-expanded={otherOpen}
+                                aria-controls={`${classListId}-other`}
+                                onClick={() => setOtherOpen((open) => !open)}
+                                className="flex min-h-10 w-full items-center justify-between rounded-lg border border-dashed border-stone-700 px-3 text-left text-xs text-stone-400 hover:border-amber-800 hover:text-stone-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                              >
+                                <span>Other settings ({classGroups.other.length})</span>
+                                <ChevronDown className={cn("size-3.5 transition-transform duration-200", otherOpen && "rotate-180")} aria-hidden="true" />
+                              </button>
+                              {otherOpen ? (
+                                <div id={`${classListId}-other`} className="reveal space-y-1.5">
+                                  {classGroups.other.map(({ option, check }) => (
+                                    <NewClassButton
+                                      key={option.id}
+                                      option={option}
+                                      check={check}
+                                      chosen={classChoice}
+                                      onPick={() => {
+                                        setClassChoice(option.id);
+                                        resetClassPicks();
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              ) : null}
+                            </>
+                          )
+                        ) : null}
+                        {classGroups.query && !classGroups.setting.length && !classGroups.other.length ? (
+                          <p className="reveal text-xs text-stone-500">No class by that name.</p>
+                        ) : null}
                       </div>
                     </>
                   ) : null}
@@ -1368,5 +1446,51 @@ export function LevelUpDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+// One class a level could start: its hit die, what the multiclass rules
+// grant, and its prerequisite; greyed with the reason when the character
+// does not meet it.
+function NewClassButton({
+  option,
+  check,
+  chosen,
+  onPick,
+}: {
+  option: { id: string; name: string; hitDie: number };
+  check: ReturnType<typeof canMulticlassInto>;
+  // The class id picked so far; class ids fold to lower case.
+  chosen: string;
+  onPick: () => void;
+}) {
+  const picked = chosen.toLowerCase() === option.id.toLowerCase();
+  return (
+    <button
+      type="button"
+      disabled={!check.ok}
+      aria-pressed={picked}
+      onClick={() => {
+        if (!picked) {
+          onPick();
+        }
+      }}
+      className={cn(
+        "block w-full rounded-lg border px-3 py-2 text-left",
+        picked
+          ? "border-amber-600 bg-stone-900 text-amber-100"
+          : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
+        !check.ok && "cursor-not-allowed opacity-50 hover:border-stone-700 hover:bg-transparent",
+      )}
+    >
+      <span className="flex items-center justify-between text-sm">
+        <span>{option.name}</span>
+        <span className="text-xs text-stone-500">d{option.hitDie}</span>
+      </span>
+      <span className="block text-xs text-stone-400">
+        {check.ok ? `Grants: ${describeGrant(multiclassGrantsFor(option.id))}` : check.error}
+      </span>
+      <span className="block text-[11px] text-stone-600">Requires {describePrereq(option.id)}</span>
+    </button>
   );
 }

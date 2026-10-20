@@ -242,7 +242,7 @@ function CharacterBuilderForm({
     ...state.asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
   ]);
   const featDescs = featTexts.descs;
-  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs });
+  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs, genre });
   // Each feat's prerequisite judged as the save judges it, against the
   // character as built so far (featPrereqs.ts): the feat pickers read it,
   // and the gates below flag a picked feat a later choice broke.
