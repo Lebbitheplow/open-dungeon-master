@@ -13,7 +13,9 @@ first. No model is named in the code: a server that lists exactly one chat
 model runs it with the model field left blank, and with several the admin
 picks one (the guided setup, or Admin > Text model defaults). The model these
 settings are tuned for is base Qwen3.6-35B-A3B Q8 with a 64K context and
-Qwen's recommended non-thinking samplers. A short default context silently
+Qwen's recommended non-thinking samplers; it needs about 28 GB of graphics
+memory at Q4, and a 16 GB card runs gpt-oss-20b instead
+([Hardware for a local model](#hardware-for-a-local-model)). A short default context silently
 truncates the long DM prompt (party sheets, scene, story summary), which
 makes the model loop; the 64K window is what fixes that. Direct llama-server
 run:
@@ -148,50 +150,81 @@ The pin is written after the per-role sampling settings are applied, and no samp
 profile offers `presence_penalty`, so this cannot be reintroduced from a settings
 screen. Breaking dice rolling should not be one checkbox away.
 
-## Smaller hardware
+## Hardware for a local model
 
-Run llama.cpp's `llama-server` on a smaller card: the app fits the turn to the
-model, and the prompt cache above keeps each turn's first call short. What to run,
-by the card's memory, measured on an AMD BC-250 (16 GB shared, Vulkan) with
-`scripts/smoke-local.mjs --scenario town`: eight turns that travel, meet an
-innkeeper, persuade, buy, sneak and fight, each with the tool call it needs.
+The storyteller runs on the GPU, and the GPU's memory decides which model plays:
 
-| Card | Model, window | File | Rules | Town: checks missed, seconds a turn |
+| Graphics memory | Storyteller | File |
+|---|---|---|
+| about 28 GB or more | Qwen3.6-35B-A3B, recommended (above): Q4_K_M from about 28 GB, Q8 from about 45 GB | 22 to 38 GB |
+| 16 GB, the minimum | gpt-oss-20b, MXFP4 | 12.1 GB |
+| under 16 GB | not supported | |
+
+Graphics memory is a card's own memory or, on a machine whose CPU and GPU share
+one pool (Apple silicon, AMD Ryzen AI Max), the share the system leaves the GPU: a
+Mac needs 24 GB or more for the minimum. The 35B is a mixture of experts, so on a
+PC its experts can wait in system memory (llama-server's `--n-cpu-moe`): a 16 GB
+card with 32 GB of system memory runs it at Q4, and the desktop app sets that up
+itself. gpt-oss-20b fits a 16 GB card whole.
+
+Below the minimum is not supported, and problems there are not treated as bugs. A
+smaller model may limp through a scene on the short rules (below), but it skips
+rolls, attacks out of turn and narrates past the dice often enough that the table
+stops trusting it. Use an API key, an agent program or a human Dungeon Master on a
+smaller machine instead.
+
+### The 16 GB minimum: gpt-oss-20b
+
+OpenAI's gpt-oss-20b has 21 billion parameters with 3.6 billion active, so it plays
+the full rules and the full tool set at the speed of a much smaller model. The file
+is `gpt-oss-20b-MXFP4.gguf` from
+[ggml-org/gpt-oss-20b-GGUF](https://huggingface.co/ggml-org/gpt-oss-20b-GGUF):
+
+```bash
+llama-server -m gpt-oss-20b-MXFP4.gguf \
+  -c 65536 --jinja \
+  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --reasoning-budget 1024 \
+  --port 8001 --alias gpt-oss-20b
+```
+
+Leave the sampling at llama.cpp's defaults, as it was measured. It reasons in a
+channel of its own, which the app reads apart from the story; a tool call it starts
+in the prose ("to=functions.request_roll") is cut before the table sees it. Its
+window is cheap: half its layers look back only 128 tokens, so 64K at `q8_0` takes
+about 1 GB beside the file.
+
+Measured with `scripts/smoke-local.mjs` on the full rules: the town (eight turns that
+travel, meet an innkeeper, persuade, buy, sneak and fight), the ford (five, with an
+ambush) and the skirmish (nine, a fight over several rounds, each line spoken by
+whoever is up). A check is missed when its turn lacks the tool call it needs; a slip
+is something a player should never read (a recited turn order, a leaked call, a
+repeated passage); an invented blow is a hit the narration lands that no tool rolled.
+
+| Model, machine | Town (8 turns a run) | Ford (5) | Skirmish (9) | Seconds a turn |
 |---|---|---|---|---|
-| 16 GB | Qwen3.6-35B-A3B UD-Q2_K_XL, 64K | 12.3 GB | full | 0 of 8, 130 |
-| 16 GB | the same, with `DM_BRIEF_RULES=1` | 12.3 GB | short | 1 of 8, 66 |
-| 12 GB | Qwen3.5 9B Q8_0, 64K | 9.5 GB | short | 1 and 2 of 8 (two runs), 75 |
-| 8 GB | Qwen3.5 9B Q4_K_M, 64K | 5.7 GB | short | 0 and 1 of 8 (two runs), 61 |
-| 8 GB | Gemma 4 12B QAT UD-Q4_K_XL, 64K | 6.7 GB | short | 1 of 8, 110 |
-| 4 to 6 GB | Qwen3.5 9B UD-IQ3_XXS, 24K, one slot | 4.0 GB | short | 0 of 8 |
+| gpt-oss-20b, AMD BC-250 | 4 runs: 2 missed, 0 slips | 4 runs: 0, 0 | 5 runs: 14 missed, 15 slips | 100 to 160 |
+| gpt-oss-20b, Framework Desktop | 1 run: 2, 0 | 1 run: 0, 0 | 2 runs: 4, 1 | 110 to 190 |
+| Qwen3.6-35B-A3B UD-Q2_K_XL, AMD BC-250 | 2 runs: 3, 3 | 1 run: 0, 0 | 2 runs: 1, 3 | 130 to 190 |
+| Qwen3.6-35B-A3B Q8, Framework Desktop (the default) | 2 runs: 3, 0 | 2 runs: 0, 2 | 4 runs: 8, 7 | 120 to 300 |
 
-The 35B is a mixture of experts with 3B parameters active, so it writes faster than
-the 9B it outweighs; on a 16 GB box the short rules halve its turn for the
-occasional skipped call (here, the innkeeper registered a turn late). Its UD-IQ3_XXS
-file fits the BC-250 only with a 32K window and missed 2 of 8 with the full rules.
-How fast each reads a prompt and writes, from `llama-bench` on the BC-250:
+The Framework Desktop is an AMD Ryzen AI Max+ 395 with 128 GB shared by its
+Radeon 8060S graphics; its real play on the default model took a median of 90
+seconds a turn. No run narrated a blow that no tool landed (what the checker
+flagged was a trail that "cuts into" a ravine and a sword that "bites into empty
+air" on a miss). The skirmish, a fight of identical lines, is where every model
+slips. gpt-oss-20b most often leaves a turn the player ended in words open, so
+the character is still up with no movement left; the End turn card ends it
+whatever the model does. The same fixes took the default model from 5 missed
+and 12 slips in two skirmish runs to 8 and 7 in four.
 
-| Model | Prompt, tokens/s | Writing, tokens/s | Writing, 16K in |
-|---|---|---|---|
-| Qwen3.6-35B-A3B UD-Q2_K_XL | 485 | 81 | 68 |
-| Qwen3.6-35B-A3B UD-IQ3_XXS | 449 | 81 | 67 |
-| Gemma 4 26B-A4B UD-Q3_K_XL | 517 | 64 | 54 |
-| Qwen3.5 9B Q8_0 | 416 | 33 | 30 |
-| Qwen3.5 9B Q4_K_M | 385 | 48 | 42 |
-| Gemma 4 12B QAT | 240 | 32 | 29 |
-| Qwen3 14B Q4_K_M | 201 | 30 | 20 |
-| Ministral 3 14B Q4_K_M | 205 | 24 | 20 |
+The 35B at Q2 now plays a fight about as well as gpt-oss-20b, slower, and with
+more slips around the town. gpt-oss-20b is the minimum for its speed and its
+memory: it leaves room for a picture model beside it on a bigger machine. Run it
+on a llama.cpp release build: a fork built for another model's speculative
+decoding ended its streams early and showed its reasoning.
 
-Tried and not recommended: Qwen3 14B (3 of 8 missed at 297 seconds a turn; a dense
-14B writes slowly here and thinks at length) and Qwen3.5 9B at UD-IQ2_M (3 of 8, the
-wrong tools). Gemma 4 26B-A4B at UD-Q3_K_XL (12.9 GB) ran the BC-250 out of memory
-at 64K and at 32K; a 16 GB card that does not share its memory with the system may
-hold it. Ministral 3 14B missed 5 of 8 until the app learned that its chat
-template refuses two messages in a row from the same side, and 1 of 8 at 106 seconds
-a turn once the app joined them; it writes at 24 tokens a second here, so it is no
-faster than Gemma 4 12B, which needs less memory.
-
-### How a small model is played
+### Below the minimum: short rules
 
 A model with fewer than 16 billion parameters is played differently, with
 nothing to set. The app reads the size from llama-server's `/v1/models`
@@ -209,31 +242,25 @@ turn:
 
 `DM_BRIEF_RULES=0` in the environment plays a small model like any other, and
 `DM_BRIEF_RULES=1` gives any model the short rules. Thinking stays on for the tool
-calls: on the town the 9B missed 3 checks with it and 6 without (fights narrated, a
-sneak decided with no roll), for 75 seconds a turn instead of 54.
+calls. This keeps a small model at the table; it does not make one supported. What
+was measured on the BC-250 below the minimum, for the record (the town, checks
+missed of eight):
 
-On the full rules the same 9B (Q8_0) missed 3 of the ford's 5 checks at 179 seconds
-a turn, and none of them on the short rules, in two runs: a search narrated with no
-roll and a fake dice marker written into the prose, and an attack written as text
-instead of called. A small model is still weakest on the battle map: it attacks out
-of turn and cannot count squares, so an attack out of reach is refused with the
-square to walk to.
+| Model, window | File | Rules | Town |
+|---|---|---|---|
+| Qwen3.5 9B Q8_0, 64K | 9.5 GB | short | 1 and 2 of 8 |
+| Qwen3.5 9B Q4_K_M, 64K | 5.7 GB | short | 0 and 1 of 8 |
+| Gemma 4 12B QAT UD-Q4_K_XL, 64K | 6.7 GB | short | 1 of 8 |
+| Qwen3.5 9B UD-IQ3_XXS, 24K | 4.0 GB | short | 0 of 8 |
 
-### A card smaller than the model
-
-`-ngl` puts that many of the model's layers on the card and the rest on the CPU.
-Reading the prompt stays fast, since llama.cpp moves that work to the card; writing
-slows. Qwen3.5 9B Q4_K_M on the BC-250 wrote 47 tokens a second with all 32 layers
-on the GPU, 17 with 20 and 13 with 14, and UD-IQ3_XXS wrote 18 with 26; each read
-the prompt at 375 to 390. The BC-250's CPU shares the same fast memory, so a
-desktop's DDR4 or DDR5 makes the CPU's share slower than this.
-
-The 9B's cache is small: only 8 of its 32 layers keep the whole history, about 17 KB
-a token at `q8_0`, so a 24K window takes 0.4 GB. On a 4 GB card, run UD-IQ3_XXS
-(4.0 GB) with `-c 24576 -np 1` and as many layers as fit. Not measured here: the
-35B on an 8 to 12 GB card with its experts in system memory (`--n-cpu-moe`).
+A small model is weakest on the battle map: it attacks out of turn and cannot count squares, so an
+attack out of reach is refused with the square to walk to. Qwen3 14B, Qwen3.5 9B at
+UD-IQ2_M and Ministral 3 14B missed more; Gemma 4 26B-A4B at UD-Q3_K_XL ran the
+BC-250 out of memory.
 
 ### AMD BC-250
+
+The BC-250 is the 16 GB box the minimum was measured on.
 
 - The 16 GB of GDDR6 is shared by the CPU and the GPU. Set the VRAM carve-out low
   (512 MB) and let the GPU use the rest as GTT, with the kernel arguments
@@ -245,27 +272,27 @@ a token at `q8_0`, so a 24K window takes 0.4 GB. On a 4 GB card, run UD-IQ3_XXS
   box out of memory and the kernel kills one of them.
 
 ```bash
-llama-server -m Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf --alias qwen3.6-35b-q2 \
+llama-server -m gpt-oss-20b-MXFP4.gguf --alias gpt-oss-20b \
   -c 65536 -np 2 --kv-unified --jinja -ngl 99 \
   --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
   --reasoning-budget 1024 --cache-ram 0 \
-  --port 8090
+  --port 8001
 ```
 
 - With `--kv-unified` the `-c` is shared by both slots, while `/props` reports it
   whole for each: a DM turn and the app's helper call running at once must fit in
-  it together. A fight on the full rules runs to about 52K tokens, so a reply that
-  runs away can fill 64K (the 35B at Q2 did once); the short rules stay under 20K.
+  it together. A fight on the full rules runs to about 52K tokens.
 - `--cache-ram 0` keeps llama-server from holding extra prompt cache in system
   memory, which on this box is the memory the model needs.
-- The same command serves any model above; on a 16 GB discrete card the 35B's
-  UD-IQ3_XXS file also fits at 64K.
 
 ## Local models (legacy "Local" provider, Ollama)
 
-The app uses the Gemma 4 quantization-aware-trained (QAT, Q4_0) builds, which
-keep close to full-precision quality at a fraction of the memory. Any of
-these work — pull what fits your RAM:
+The legacy Ollama-native provider was built around the Gemma 4
+quantization-aware-trained (QAT, Q4_0) builds. The storyteller's minimum
+([Hardware for a local model](#hardware-for-a-local-model)) holds here too: the
+E2B, E4B and 12B are below 16 billion parameters and play only on the short
+rules, which is not supported for the storyteller, though any of them serves as
+the utility model for summaries:
 
 ```bash
 ollama pull gemma4:e2b-it-qat       # 4.3 GB

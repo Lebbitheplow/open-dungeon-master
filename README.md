@@ -146,13 +146,16 @@ model server such as llama.cpp or Ollama, an API key (OpenAI, OpenRouter or any
 OpenAI-compatible provider), or a CLI agent you already pay for (Claude Code,
 Codex, opencode, Grok Build). Pictures and voice are optional.
 
-A local model needs a **context window of at least 16K tokens to narrate and
-24K to run fights; 32K or more is recommended**. The default storyteller runs
-at 64K, and the guided setup's **Test backend** reads the window a server runs
+A local model needs **at least 16 GB of graphics memory**: a 16 GB card runs
+gpt-oss-20b, the minimum, and about 28 GB runs the recommended Qwen3.6-35B-A3B
+([what each size of card runs](docs/text-backends.md#hardware-for-a-local-model)).
+Below 16 GB a local model is not supported; use an API key, an agent program or
+a human Dungeon Master. Run it on llama.cpp, with a **context window of at
+least 16K tokens to narrate and 24K to run fights; 32K or more is
+recommended**. The default storyteller runs at 64K, and the guided setup's
+**Test backend** reads the window a server runs
 ([what each size plays](docs/text-backends.md#context-window)). Hosted models
-and agent programs have far more. On a 4 to 16 GB card, run llama.cpp rather
-than Ollama; a model under 16B is played with short rules and fewer tools, by
-itself ([what fits each card](docs/text-backends.md#smaller-hardware)).
+and agent programs have far more.
 
 ```bash
 git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
@@ -185,7 +188,7 @@ Both follow the stable releases. Nightly betas, and how a beta becomes stable:
   - [Backups and moving to another server](docs/backup-restore.md)
   - [Releases and update channels](docs/releases.md): stable, the nightly betas, and how a beta is promoted
 - **The storyteller**
-  - [Text backends](docs/text-backends.md): the recommended DM model and its settings, smaller hardware (4 to 16 GB cards, the BC-250), Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
+  - [Text backends](docs/text-backends.md): the recommended DM model and its settings, the hardware each model needs (16 GB and gpt-oss-20b at the least, the BC-250), Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
   - [Agent programs as the DM](docs/agent-harness.md): Claude Code, Codex, opencode and Grok Build on their own sign-in
 - **Pictures, voice and sound**
   - [Setting up pictures, narration and dictation](docs/media-setup.md): ComfyUI, an OpenAI key, Kokoro, Whisper

@@ -110,7 +110,10 @@ prompts at 1024 px (fast mode), seconds per picture once the model is loaded,
 the first picture after a model switch (which loads it from disk), and peak GPU
 memory. The rows live in `src/lib/image-models/verified.json`, one per model
 and hardware profile, and the picker shows the row for the hardware it
-recognises from ComfyUI's `/system_stats`.
+recognises from ComfyUI's `/system_stats`. The strix-halo profile below is a
+Framework Desktop: an AMD Ryzen AI Max+ 395 whose Radeon 8060S graphics share
+its 128 GB of memory, so a peak figure is memory taken from that one pool. On
+a separate card the peak has to fit the card.
 
 <!-- measured-table: node scripts/bench-image-models.mjs --table -->
 
