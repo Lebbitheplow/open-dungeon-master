@@ -234,16 +234,12 @@ export function boardFx(events: FxEvent[]): BoardFx[] {
 
 // What the page sends the frame. Effects, pings and the camera are moments:
 // each arrives once, as it happens.
-export type CameraControl = "zoom-in" | "zoom-out" | "fit" | "left" | "right" | "up" | "down";
-export type ViewCameraState = { x: number; y: number; zoom: number };
-
 export type HostMessage =
-  | { odm: number; type: "snapshot"; snapshot: BoardSnapshot; sessionLayout?: "stage" }
+  | { odm: number; type: "snapshot"; snapshot: BoardSnapshot }
   | { odm: number; type: "scene"; genre: string | null; appearance: BoardSnapshot["appearance"]; options: BoardSnapshot["options"]; assetsUrl: string }
   | { odm: number; type: "fx"; events: BoardFx[] }
   | { odm: number; type: "ping"; x: number; y: number; focus: boolean; at: number }
   | { odm: number; type: "camera"; mode: "pull" | "lock" | "free"; x: number | null; y: number | null; zoom: number | null }
-  | { odm: number; type: "camera-control"; action: CameraControl }
   | { odm: number; type: "file"; requestId: string; ok: true; name: string; mime: string; bytes: ArrayBuffer }
   | { odm: number; type: "file"; requestId: string; ok: false; name: string; error: string };
 
@@ -253,7 +249,6 @@ export type HostMessageBody = HostMessage extends infer T ? (T extends unknown ?
 // What the frame may send the page.
 export type ViewMessage =
   | { type: "ready" }
-  | ({ type: "camera-state" } & ViewCameraState)
   | { type: "tile"; x: number; y: number }
   | { type: "token"; tokenId: string }
   | { type: "hover"; x: number; y: number }
@@ -295,10 +290,6 @@ export function readViewMessage(raw: unknown): ViewMessage | null {
   switch (message.type) {
     case "ready":
       return { type: "ready" };
-    case "camera-state":
-      return [message.x, message.y, message.zoom].every(value => typeof value === "number" && Number.isFinite(value)) && (message.zoom as number) >= 0.25 && (message.zoom as number) <= 8
-        ? { type: "camera-state", x: message.x as number, y: message.y as number, zoom: message.zoom as number }
-        : null;
     case "tile": {
       const x = int(message.x);
       const y = int(message.y);

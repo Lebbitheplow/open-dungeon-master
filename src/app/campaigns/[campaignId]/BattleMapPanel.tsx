@@ -74,9 +74,9 @@ import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
 import { TabletopOrder } from "@/app/campaigns/[campaignId]/CinematicParts";
-import { AddonBoardView, postTo } from "@/app/campaigns/[campaignId]/AddonBoardView";
+import { AddonBoardView } from "@/app/campaigns/[campaignId]/AddonBoardView";
 import { AddonViewSwitch, boardViewKey, useBoardView, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
-import type { Anchor, BoardLook, CameraControl, ViewCameraState } from "@/lib/addons/board-bridge";
+import type { Anchor, BoardLook } from "@/lib/addons/board-bridge";
 
 // The tactical battle map tab.
 //
@@ -228,9 +228,7 @@ export function BattleMapPanel({
     return byRef;
   }, [sheets, encounter?.enemies]);
   const [anchors, setAnchors] = useState<Record<string, Anchor>>({});
-  const [enlargedAnchors, setEnlargedAnchors] = useState<Record<string, Anchor>>({});
-  const addonCameras = useRef(new WeakMap<HTMLIFrameElement, ViewCameraState>());
-  const anchorOf = (tokenId: string, expanded: boolean) => (addonView && !drawActive ? (expanded ? enlargedAnchors : anchors)[tokenId] : undefined);
+  const anchorOf = (tokenId: string) => (addonView ? anchors[tokenId] : undefined);
   // A slot the DM added to the order has no token to borrow a face from.
   const faceOfEntry = useCallback(
     (entry: { id: string; kind: string; name: string }) => [
@@ -306,7 +304,6 @@ export function BattleMapPanel({
   const [sketch, setSketch] = useState<Array<{ x: number; y: number }> | null>(null);
   const sketchRef = useRef<Array<{ x: number; y: number }> | null>(null);
   const drawActive = canDirect ? tool === "draw" : drawing;
-  const addonViewport = Boolean(addonView?.sessionLayout && !drawActive);
 
   const scene = view.board === "scene";
   const canMove = view.reachable.length > 0;
@@ -321,22 +318,12 @@ export function BattleMapPanel({
     [turnToken],
   );
   const { frameRef, attachFrame, ...cam } = useBoardCamera(view.width, view.height, {
-    enabled: !addonViewport,
     followTurn: followTurn && !canDirect,
     turnTile,
     remote: camera,
     onRemoteHandled: onCameraDone,
     isDirector: canDirect,
   });
-  const addonFrame = () => frameRef.current?.querySelector<HTMLIFrameElement>("iframe") ?? null;
-  const controlAddonCamera = (action: CameraControl) => postTo(addonFrame(), { type: "camera-control", action });
-  const followX = turnTile?.x;
-  const followY = turnTile?.y;
-  useEffect(() => {
-    if (addonViewport && followTurn && !canDirect && !cam.locked && followX !== undefined && followY !== undefined) {
-      postTo(frameRef.current?.querySelector<HTMLIFrameElement>("iframe") ?? null, { type: "camera", mode: "pull", x: followX, y: followY, zoom: null });
-    }
-  }, [addonViewport, followTurn, canDirect, cam.locked, followX, followY, frameRef]);
 
   // A focusing ping opens the board on every client. That is an adjustment
   // made while rendering because the prop changed, not an effect: an effect
@@ -941,7 +928,7 @@ export function BattleMapPanel({
   // board on screen carries it (the open tabletop covers the panel). Both
   // boards drawing it let the tabletop take it and close with it, leaving
   // the panel's board bare.
-  const gridWith = (picture: HTMLCanvasElement | null, expanded = false) => (
+  const gridWith = (picture: HTMLCanvasElement | null) => (
     <div
       ref={attachFrame}
       tabIndex={0}
@@ -950,36 +937,31 @@ export function BattleMapPanel({
       // side panel, a phone, the enlarged dialog) and not to the window.
       // board-view (board.css) draws the ring that says the board has the
       // keyboard, for a click as much as for Tab (issue 90).
-      className={cn("board-view @container relative overflow-hidden rounded-lg outline-none", addonViewport && "min-h-36")}
-      data-addon-viewport={addonViewport ? "" : undefined}
-      {...(addonViewport ? {} : cam.frameProps)}
-      onKeyDown={(event) => {
-        if (!addonViewport) { cam.frameProps.onKeyDown(event); return; }
-        if (cam.locked || event.ctrlKey || event.metaKey || event.altKey) return;
-        const action = ({ "+": "zoom-in", "=": "zoom-in", "-": "zoom-out", "0": "fit", ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" } as Record<string, CameraControl>)[event.key];
-        if (action) { event.preventDefault(); controlAddonCamera(action); }
-      }}
+      className="board-view @container relative overflow-hidden rounded-lg outline-none"
+      {...cam.frameProps}
       onPointerDownCapture={onFramePointerDownCapture}
       onPointerMove={(event) => {
-        if (!addonViewport) { cam.frameProps.onPointerMove(event); onFramePointerMove(event); }
+        cam.frameProps.onPointerMove(event);
+        onFramePointerMove(event);
       }}
       onPointerUp={(event) => {
-        if (!addonViewport) { cam.frameProps.onPointerUp(event); onFramePointerUp(event); }
+        cam.frameProps.onPointerUp(event);
+        onFramePointerUp(event);
       }}
       onPointerCancel={(event) => {
-        if (!addonViewport) { cam.frameProps.onPointerCancel(event); onFramePointerCancel(); }
+        cam.frameProps.onPointerCancel(event);
+        onFramePointerCancel();
       }}
     >
       {view.outdoors ? <SkyLayer scene={sky} mode="board" className="rounded-lg" visible={visible} /> : null}
       <div
-        className={cn(!addonViewport && cam.eased && "sky-wash", addonViewport ? "absolute inset-0 isolate" : "relative", drawActive && "touch-none")}
+        className={cn(cam.eased && "sky-wash", "relative", drawActive && "touch-none")}
         style={{
-          transform: addonViewport ? undefined : `translate(${cam.camera.x}px, ${cam.camera.y}px) scale(${cam.camera.zoom})`,
+          transform: `translate(${cam.camera.x}px, ${cam.camera.y}px) scale(${cam.camera.zoom})`,
           transformOrigin: "0 0",
-          transition: !addonViewport && cam.eased ? "transform var(--dur-scene) var(--ease-drift)" : "none",
+          transition: cam.eased ? "transform var(--dur-scene) var(--ease-drift)" : "none",
         }}
       >
-        <div style={{ display: addonViewport ? "none" : "contents" }}>
         <BattleMapGrid
           view={gridView}
           sheets={sheets}
@@ -1005,9 +987,10 @@ export function BattleMapPanel({
           onLabelClick={onOpenLabel}
         />
         <JumpArc leap={leap} width={view.width} height={view.height} />
-        </div>
-        {/* Session renderers own the visible viewport and camera; ordinary
-            board views keep the grid's sizing and camera. Drawing uses the grid. */}
+        {/* The addon's view lies over the grid, which still sizes the
+            frame; the plates, the ghost and the HUD stay above it, and its
+            taps arrive in handleTile and handleToken like the grid's own.
+            Drawing on the board goes back to the grid while it lasts. */}
         {addonView && !drawActive ? (
           <div className="absolute inset-0 z-[15] rounded-lg bg-[#0d0b1c]">
             <AddonBoardView
@@ -1031,9 +1014,8 @@ export function BattleMapPanel({
               intents={intents}
               fx={fx}
               ping={ping}
-              camera={addonViewport && canDirect ? null : camera}
-              onAnchors={expanded ? setEnlargedAnchors : setAnchors}
-              onCameraState={(state, frame) => addonCameras.current.set(frame, state)}
+              camera={camera}
+              onAnchors={setAnchors}
               viewOptions={viewOptions[boardViewKey(addonView)]}
               onFailure={addonView.sessionLayout ? () => setViewChoice("") : undefined}
             />
@@ -1075,7 +1057,7 @@ export function BattleMapPanel({
             boardWidth={view.width}
             boardHeight={view.height}
             footprint={view.tokenFootprint[hudToken.id] ?? 1}
-            anchor={anchorOf(hudToken.id, expanded)}
+            anchor={anchorOf(hudToken.id)}
             actions={targeting ? [] : hudActions}
             hint={
               targeting
@@ -1113,7 +1095,7 @@ export function BattleMapPanel({
             boardWidth={view.width}
             boardHeight={view.height}
             footprint={view.tokenFootprint[plateToken.id] ?? 1}
-            anchor={anchorOf(plateToken.id, expanded)}
+            anchor={anchorOf(plateToken.id)}
             face={faceOfToken(plateToken)}
             health={view.tokenHealth[plateToken.id]}
             conditions={view.tokenConditions[plateToken.id]}
@@ -1187,9 +1169,9 @@ export function BattleMapPanel({
       {/* Camera controls: corner buttons for everyone, the DM's pull and
           lock, and the escape hatch when a lock has held too long. */}
       <BoardCameraControls
-        onZoomIn={addonViewport ? () => controlAddonCamera("zoom-in") : cam.zoomIn}
-        onZoomOut={addonViewport ? () => controlAddonCamera("zoom-out") : cam.zoomOut}
-        onFit={addonViewport ? () => controlAddonCamera("fit") : cam.reset}
+        onZoomIn={cam.zoomIn}
+        onZoomOut={cam.zoomOut}
+        onFit={cam.reset}
         followTurn={!canDirect && !scene ? followTurn : null}
         onFollowTurn={() => setFollowTurn((current) => !current)}
         onDirect={
@@ -1199,10 +1181,9 @@ export function BattleMapPanel({
                   void post("/dm/board", { do: "camera", mode: "free" });
                   return;
                 }
-                const frame = addonFrame();
-                const here = addonViewport ? (frame ? addonCameras.current.get(frame) : null) : cam.describe();
+                const here = cam.describe();
                 if (here) {
-                  void post("/dm/board", { do: "camera", mode, ...here, ...(addonViewport ? { x: Math.min(view.width - 1, Math.round(here.x)), y: Math.min(view.height - 1, Math.round(here.y)), zoom: Math.max(0.5, Math.min(3, here.zoom)) } : {}) });
+                  void post("/dm/board", { do: "camera", mode, ...here });
                 }
               }
             : undefined
@@ -1215,7 +1196,7 @@ export function BattleMapPanel({
           <Lock className="size-3" />
           The DM is steering the view
           {cam.canRelease ? (
-            <button type="button" onClick={() => { cam.release(); if (addonViewport) postTo(addonFrame(), { type: "camera", mode: "free", x: null, y: null, zoom: null }); }} className="ml-1 text-stone-300 underline">
+            <button type="button" onClick={cam.release} className="ml-1 text-stone-300 underline">
               look around anyway
             </button>
           ) : null}
@@ -1492,7 +1473,7 @@ export function BattleMapPanel({
             <div className="cine-tabletop-body">
               {chronicle}
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="cine-board-frame">{gridWith(enlarged ? painted : null, true)}</div>
+                <div className="cine-board-frame">{gridWith(enlarged ? painted : null)}</div>
                 {underBoard}
               </div>
               {!scene ? <TabletopOrder encounter={encounter} faceOf={faceOfEntry} /> : null}

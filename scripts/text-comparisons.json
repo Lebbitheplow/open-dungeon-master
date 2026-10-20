@@ -540,7 +540,7 @@
     "instrumentation.ts#str-eq": [["key",2,"Next.js runtime and phase names"]],
     "lib/addons/archive.ts#[a-z]": [["key",1,"a drive letter in a path"]],
     "lib/addons/board-bridge.ts#[a-z]": [["key",1,"a short id"]],
-    "lib/addons/board-bridge.ts#str-case": [["key",9,"addon board message types and view names (protocol)"]],
+    "lib/addons/board-bridge.ts#str-case": [["key",8,"addon board message types and view names (protocol)"]],
     "lib/addons/board-bridge.ts#str-eq": [["key",1,"addon board message types and view names (protocol)"]],
     "lib/addons/catalog-entry.ts#str-list": [["key",1,"addon catalog categories (fixed choice)"]],
     "lib/addons/contracts.ts#[a-z]": [["key",2,"file names"]],

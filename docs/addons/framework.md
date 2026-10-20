@@ -276,8 +276,7 @@ practical; say so in [extension-points.md](extension-points.md) and in the
 release notes. Update the example addon to show the change.
 
 **A new board view message.** Host to view: add it to `HostMessage` in
-`board-bridge.ts` and send it from `AddonBoardView.tsx` (local session camera
-controls use its `postTo` helper in `BattleMapPanel.tsx`). View to host: add it
+`board-bridge.ts` and send it from `AddonBoardView.tsx`. View to host: add it
 to `ViewMessage`, read it strictly in `readViewMessage` (shape, sizes,
 characters), and handle it in `AddonBoardView.tsx` as the equivalent action
 on the flat board would be handled. Add a case to the "messages are read

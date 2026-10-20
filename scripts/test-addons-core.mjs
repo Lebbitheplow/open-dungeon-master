@@ -538,8 +538,6 @@ await test("file requests resolve to the map's own files only", () => {
 });
 
 await test("the frame's messages are read strictly", () => {
-  assert.deepEqual(readViewMessage({ odm: 1, type: "camera-state", x: 2.5, y: 1, zoom: 1.2 }), { type: "camera-state", x: 2.5, y: 1, zoom: 1.2 });
-  for (const bad of [{ x: NaN, y: 1, zoom: 1 }, { x: 1, y: Infinity, zoom: 1 }, { x: 1, y: 1, zoom: 0 }, { x: 1, y: 1, zoom: 9 }, { x: "1", y: 1, zoom: 1 }]) assert.equal(readViewMessage({ odm: 1, type: "camera-state", ...bad }), null);
   assert.deepEqual(readViewMessage({ odm: 1, type: "tile", x: 2, y: 1 }), { type: "tile", x: 2, y: 1 });
   assert.equal(readViewMessage({ odm: 1, type: "tile", x: 1.5, y: 1 }), null);
   assert.equal(readViewMessage({ odm: 2, type: "ready" }), null);

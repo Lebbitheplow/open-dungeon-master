@@ -30,10 +30,6 @@
   const context = canvas.getContext("2d");
   let snapshot = null;
   let layout = null;
-  let cameraZoom = 1;
-  let cameraCenter = null;
-  let cameraLocked = false;
-  let sessionLayout = false;
   let hoverKey = "";
   let modelFor = "";
   let sentAnchors = "";
@@ -110,12 +106,10 @@
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     const { width: cols, height: rows } = snapshot;
     // Tile size that fits the whole diamond, walls included.
-    const tw = Math.max(8, Math.min((width - 16) / ((cols + rows) / 2), ((height - 40) / ((cols + rows) / 2 + 3)) * 2)) * cameraZoom;
+    const tw = Math.max(8, Math.min((width - 16) / ((cols + rows) / 2), ((height - 40) / ((cols + rows) / 2 + 3)) * 2));
     const th = tw / 2;
-    const [cx, cy] = cameraCenter ?? [cols / 2, rows / 2];
-    const originX = width / 2 - ((cx - cy) * tw) / 2;
-    const originY = height / 2 - ((cx + cy) * th) / 2 + th * 1.5;
-    send({ type: "camera-state", x: Math.max(0, Math.min(cols - 1, cx - 0.5)), y: Math.max(0, Math.min(rows - 1, cy - 0.5)), zoom: cameraZoom });
+    const originX = width / 2 - ((cols - rows) * tw) / 4;
+    const originY = (height - ((cols + rows) * th) / 2) / 2 + th * 1.5;
     return { tw, th, lift: th * 0.9, originX, originY, width, height };
   }
 
@@ -393,21 +387,6 @@
     if (event.source !== window.parent) return;
     const message = event.data;
     if (!message || message.odm !== BRIDGE) return;
-    if (message.type === "camera-control" && sessionLayout && !cameraLocked && snapshot) {
-      const action = message.action;
-      if (action === "fit") { cameraZoom = 1; cameraCenter = null; }
-      else if (action === "zoom-in" || action === "zoom-out") cameraZoom = Math.max(0.25, Math.min(8, cameraZoom * (action === "zoom-in" ? 1.2 : 1 / 1.2)));
-      else {
-        const [x, y] = cameraCenter ?? [snapshot.width / 2, snapshot.height / 2];
-        cameraCenter = [x + (action === "left" ? -1 : action === "right" ? 1 : 0), y + (action === "up" ? -1 : action === "down" ? 1 : 0)];
-      }
-      draw();
-    } else if (message.type === "camera" && sessionLayout && snapshot) {
-      cameraLocked = message.mode === "lock";
-      if (Number.isFinite(message.x) && Number.isFinite(message.y)) cameraCenter = [message.x + 0.5, message.y + 0.5];
-      if (Number.isFinite(message.zoom)) cameraZoom = Math.max(0.25, Math.min(8, message.zoom));
-      draw();
-    }
     if (message.type === "scene") {
       snapshot = null;
       layout = null;
@@ -415,7 +394,6 @@
       document.body.dataset.theme = message.appearance?.theme === "day" ? "day" : "night";
       badge.textContent = "No tactical map. Play continues through the native controls.";
     } else if (message.type === "snapshot") {
-      sessionLayout = message.sessionLayout === "stage";
       snapshot = message.snapshot;
       document.body.dataset.theme = snapshot.appearance?.theme === "day" ? "day" : "night";
       if (!snapshot.view) badge.textContent = "";
