@@ -125,6 +125,17 @@ if (world.hasPack) {
     assert.equal(tv.listPriceCp({ name: "Orb of Dragonkind", worth: 50000 }), 5000000);
     assert.equal(tv.listPriceCp({ name: "Ring of Regeneration" }), 4000000);
   });
+
+  await test("A +1, +2 or +3 weapon, armor or shield is worth its bonus's rarity and the item it is: a Longsword +1 is 415 gp, +1 plate 5,500 gp.", async () => {
+    assert.equal(tv.listPriceCp({ name: "Longsword +1" }), 41500, "uncommon 400 gp and the longsword's 15 gp");
+    assert.equal(tv.listPriceCp({ name: "Spada lunga +1", srdName: "Longsword" }), 41500, "the same sword named in the table's language");
+    assert.equal(tv.listPriceCp({ name: "+1 Plate" }), 550000, "SRD 5.2's own example: rare 4,000 gp and plate's 1,500 gp");
+    assert.equal(tv.listPriceCp({ name: "Shield +2" }), 401000, "a +2 shield is rare");
+    assert.equal(tv.listPriceCp({ name: "Longsword" }), 1500, "a plain longsword keeps its list price");
+    carry([]);
+    const granted = await world.invoke("grant_item", { characterId: trader.id, name: "Longsword +1", worth: 2000, reason: "a knight's bequest" });
+    assert.equal(granted.retry, true, "a +1 longsword was given a worth of 2,000 gp");
+  });
 }
 
 await test("A shop that buys pays full value for a gem or an art object, and half for anything else.", async () => {

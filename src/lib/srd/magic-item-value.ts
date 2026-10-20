@@ -31,6 +31,23 @@ const CONSUMABLE_NAME = /ammunition|^dust of /i;
 // shelf would hand over is known.
 const CHOICE_WORDS = new Set(["any", "or", "light", "medium", "heavy"]);
 
+// SRD 5.1's magic weapons, armor and shields by the bonus their names
+// declare: a weapon or a shield is uncommon at +1, rare at +2 and very rare
+// at +3; armor is rare, very rare and legendary.
+const BONUS_RARITY: Record<"weapon" | "armor" | "shield", readonly PricedRarity[]> = {
+  weapon: ["uncommon", "rare", "very rare"],
+  shield: ["uncommon", "rare", "very rare"],
+  armor: ["rare", "very rare", "legendary"],
+};
+
+// A +1, +2 or +3 weapon, armor or shield: its bonus's rarity value and the
+// cost of the item it is. The pack files these only as one row whose rarity
+// varies ("Weapon, +1, +2, or +3"), so the bonus says which.
+export function bonusItemValue(kind: "weapon" | "armor" | "shield", bonus: number, baseCp: number): { cp: number; rarity: PricedRarity } | null {
+  const rarity = BONUS_RARITY[kind][bonus - 1];
+  return rarity ? { cp: RARITY_VALUE_GP[rarity] * COPPER_PER_GOLD + baseCp, rarity } : null;
+}
+
 // The item's value in copper, or null when it has none: an artifact, a
 // rarity that varies, a spell scroll, a base left to choice. baseCostCp
 // prices the named weapon or armor ("plate", "longsword") from the pack.

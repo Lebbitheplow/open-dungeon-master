@@ -16,8 +16,8 @@
 
 import { searchItems } from "@/lib/content";
 import { magicItemNamed } from "@/lib/srd/magic-items";
-import { magicItemValueCp, pricedRarity, type PricedRarity } from "@/lib/srd/magic-item-value";
-import { rowName, srdNameWithBonus, type RowItem } from "@/lib/srd/item-row";
+import { bonusItemValue, magicItemValueCp, pricedRarity, type PricedRarity } from "@/lib/srd/magic-item-value";
+import { magicItemBonus, rowName, srdNameWithBonus, withoutBonus, type RowItem } from "@/lib/srd/item-row";
 import { COPPER_PER_GOLD, parseCoins } from "@/lib/srd/currency";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
@@ -111,7 +111,13 @@ export function packListCp(name: string): number | null {
 // a name the pack has no magic item of, and for one no rarity prices (an
 // artifact, a rarity that varies). The first row a rarity prices answers: the
 // SRD's Belt of Giant Strength varies, the pack's other edition calls it rare.
+// A weapon or armor the pack prices, with a bonus in its name ("Longsword
+// +1", "+2 Plate"), is priced by that bonus.
 export function packMagicValue(name: string): { cp: number; rarity: PricedRarity } | null {
+  const bonused = bonusValue(name);
+  if (bonused) {
+    return bonused;
+  }
   const magic = (bare: string) => packItemsNamed(bare).filter((item) => item.kind === "magic_item");
   const whole = magic(name);
   const baseCostCp = (base: string) => packListCp(base) ?? packListCp(`${base} armor`);
@@ -123,6 +129,21 @@ export function packMagicValue(name: string): { cp: number; rarity: PricedRarity
     }
   }
   return null;
+}
+
+// A weapon, armor or shield the pack prices, with the bonus its name
+// declares, at SRD 5.1's rarity for that bonus. Read before the pack's own
+// rows: its other edition files a "Shield +2" as very rare, where the SRD
+// the rules follow makes it rare.
+function bonusValue(name: string): { cp: number; rarity: PricedRarity } | null {
+  const bonus = magicItemBonus(name);
+  const base = bonus ? withoutBonus(name) : name;
+  if (base === name) {
+    return null;
+  }
+  const row = packItemsNamed(base).find((item) => (item.kind === "weapon" || item.kind === "armor") && packListCp(item.name) !== null);
+  const kind = row?.kind === "weapon" ? "weapon" : row?.category === "shield" ? "shield" : "armor";
+  return row ? bonusItemValue(kind, bonus, packListCp(row.name) ?? 0) : null;
 }
 
 // The magic item value the table holds for a thing, or null when it is no

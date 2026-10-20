@@ -1618,6 +1618,7 @@
     "lib/dm/tool-text.ts#RegExp i": [["key",1,"tool-call markup (tool names, XML tags)"]],
     "lib/dm/tool-text.ts#\\b": [["key",1,"tool-call markup (tool names, XML tags)"]],
     "lib/dm/tool-text.ts#re-word": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/trade-value.ts#str-eq": [["key",1,"the content pack's item category field: a shield takes a shield's rarity for its bonus"]],
     "lib/dm/trap-escape.ts#toLowerCase": [["key",2,"condition labels (engine vocabulary)"]],
     "lib/dm/trap-escape.ts#toUpperCase": [["display",1,"ability abbreviation shown in a roll note"]],
     "lib/dm/turn-budget.ts#toLowerCase": [["english-source",2,"reference: SRD beast names compared whole"]],

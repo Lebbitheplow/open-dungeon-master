@@ -34,7 +34,7 @@ const { createCampaign } = await import("../src/lib/db/campaigns.ts");
 const { createSheet, getSheetById } = await import("../src/lib/db/sheets.ts");
 const { insertShop, getShop, listShops } = await import("../src/lib/db/shops.ts");
 const { handleBuyItem, handleSellItem, handleHaggle, stockPool } = await import("../src/lib/dm/shop-tools.ts");
-const { magicItemValueCp } = await import("../src/lib/srd/magic-item-value.ts");
+const { bonusItemValue, magicItemValueCp } = await import("../src/lib/srd/magic-item-value.ts");
 const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 const { computeTrade, normalizeTradeOffer, tradeSummary, canResolveTrade } = await import("../src/lib/dm/trade-logic.ts");
 const { applyTrade } = await import("../src/lib/dm/trade.ts");
@@ -126,6 +126,10 @@ test("a magic item is priced by its rarity, as SRD 5.2 sets it", () => {
   assert.equal(value("Belt of Giant Strength", "rarity varies", "wondrous item"), null);
   assert.equal(value("Spell Scroll", "common", "scroll"), null, "a scroll is priced by a spell level the row does not give");
   assert.equal(value("Orb of Dragonkind", "artifact", "wondrous item"), null);
+  assert.deepEqual(bonusItemValue("armor", 1, 150000), { cp: 550000, rarity: "rare" }, "+1 plate");
+  assert.deepEqual(bonusItemValue("weapon", 3, 1500), { cp: 4001500, rarity: "very rare" }, "+3 longsword");
+  assert.deepEqual(bonusItemValue("shield", 2, 1000), { cp: 401000, rarity: "rare" }, "+2 shield");
+  assert.equal(bonusItemValue("weapon", 4, 1500), null);
 });
 
 test("a curiosity shop sells commons in a village and saves uncommon and rare magic for a city", () => {
