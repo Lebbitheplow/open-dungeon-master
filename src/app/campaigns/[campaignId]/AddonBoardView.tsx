@@ -10,6 +10,7 @@ import {
   type Anchor,
   type BoardLook,
   type HostMessageBody,
+  type ViewCameraState,
 } from "@/lib/addons/board-bridge";
 import type { OfferedBoardView } from "@/lib/addons/offered";
 import { normalizeOptionValues } from "@/lib/addons/contracts";
@@ -36,7 +37,7 @@ import { useThemePrefs } from "@/lib/theme-mode";
 
 // The frame's origin is opaque ("null"), so "*" is the only target that
 // reaches it; the message only ever goes to this frame's own window.
-function postTo(frame: HTMLIFrameElement | null, message: HostMessageBody, transfer: Transferable[] = []) {
+export function postTo(frame: HTMLIFrameElement | null, message: HostMessageBody, transfer: Transferable[] = []) {
   frame?.contentWindow?.postMessage({ odm: BOARD_BRIDGE_VERSION, ...message }, "*", transfer);
 }
 
@@ -57,6 +58,7 @@ export function AddonBoardView({
   ping = null,
   camera = null,
   onAnchors,
+  onCameraState,
   viewOptions,
   onFailure,
 }: {
@@ -77,6 +79,7 @@ export function AddonBoardView({
   camera?: CameraEvent | null;
   // Where the view drew each figure, for the plates and the action ring.
   onAnchors?: (anchors: Record<string, Anchor>) => void;
+  onCameraState?: (state: ViewCameraState, frame: HTMLIFrameElement) => void;
   // What this device chose for the view's own options.
   viewOptions?: Record<string, string | number | boolean>;
   onFailure?: () => void;
@@ -113,9 +116,9 @@ export function AddonBoardView({
 
   // The newest of everything the message handler reads, so it is attached
   // once per frame rather than once per board update.
-  const latest = useRef({ view, onTile, onToken, onHover, faceFor, onAnchors, onFailure });
+  const latest = useRef({ view, onTile, onToken, onHover, faceFor, onAnchors, onCameraState, onFailure });
   useEffect(() => {
-    latest.current = { view, onTile, onToken, onHover, faceFor, onAnchors, onFailure };
+    latest.current = { view, onTile, onToken, onHover, faceFor, onAnchors, onCameraState, onFailure };
   });
 
   useEffect(() => {
@@ -132,6 +135,7 @@ export function AddonBoardView({
       }
       postTo(frame.current, {
         type: "snapshot",
+        sessionLayout: boardView.sessionLayout,
         snapshot: boardSnapshot(view, boardView.addonId, {
           canDirect,
           genre,
@@ -143,7 +147,7 @@ export function AddonBoardView({
         }),
       });
     }
-  }, [readyAt, view, canDirect, genre, appearance, boardView.addonId, boardView.options, looks, intents, assetsUrl, viewOptions]);
+  }, [readyAt, view, canDirect, genre, appearance, boardView.addonId, boardView.options, boardView.sessionLayout, looks, intents, assetsUrl, viewOptions]);
 
   // The moments, each sent once: effects by id, a ping and a camera move by
   // when they happened. A frame that loads late hears only what follows.
@@ -195,6 +199,11 @@ export function AddonBoardView({
       switch (message.type) {
         case "ready":
           setReadyAt((count) => count + 1);
+          break;
+        case "camera-state":
+          if (current.view && frame.current && message.x >= 0 && message.y >= 0 && message.x < current.view.width && message.y < current.view.height) {
+            current.onCameraState?.({ x: message.x, y: message.y, zoom: message.zoom }, frame.current);
+          }
           break;
         case "tile":
           if (current.view && message.x >= 0 && message.y >= 0 && message.x < current.view.width && message.y < current.view.height) {
