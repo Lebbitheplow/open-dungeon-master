@@ -82,12 +82,13 @@ test("unrelated words open no shop, and the match is word-bounded", () => {
 });
 
 test("the rules open the shop before its wares and keep prices out of prose", () => {
-  const rule = /place that sells goods, call open_shop before describing its wares/;
+  // One clause of the bookkeeping rule every call carries, so it costs a
+  // 16K window no line of its own.
+  const rule = /call open_shop before describing a place's wares, never pricing them in prose/;
   assert.match(rules.DM_SYSTEM, rule, "the full rules carry it");
-  assert.match(rules.DM_SYSTEM, /never price them in prose: the Market shows them/);
   const context = { inEncounter: false, groups: new Set(), caster: false, features: false, classFeatures: false, featSpells: false, dying: false, arc: false, recall: false, map: false, legendary: false };
-  assert.match(rules.dmSystemText(false, context), rule, "a compact call out of a fight carries it, shop group open or not");
-  assert.doesNotMatch(rules.dmSystemText(false, { ...context, inEncounter: true }), rule, "a fight leaves it out");
+  assert.match(rules.dmSystemText(false, context), rule, "a compact call carries it, shop group open or not");
+  assert.match(rules.DM_SYSTEM, /buy_item, sell_item and haggle trade at a shop in GAME STATE/, "trading at a listed shop still goes through its tools");
 });
 
 const dm = createUser("dm", "x");
