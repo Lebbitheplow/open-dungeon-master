@@ -32,7 +32,7 @@ export const WORLD_TOUR_STEPS: TourStep[] = [
   {
     id: "ask",
     title: "Ask the world",
-    body: "A question answered from this world only, hidden truths included, with every entry the answer names linked. When the world does not say, the answer says so.",
+    body: "A question answered from this world only, hidden truths included, with every entry the answer names linked and the passages it rests on shown as its sources. When the world does not say, the answer says so.",
     anchors: ["world-ask"],
     prepare: "world-view-ask",
     lazy: true,

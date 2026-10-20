@@ -1,7 +1,7 @@
 import { LINK_LABELS, typeFor, type Shelf, type WorldDoc, type WorldType } from "./model.ts";
 import { fieldLines, formatYear } from "./time.ts";
-import { canonAdmits, canonLegend, canonRank, canonTag, eventLine, pickEvents, secretStanding } from "./canon.ts";
-import { mentionSegments, type Named } from "./text.ts";
+import { canonAdmits, canonTag, eventLine, pickEvents } from "./canon.ts";
+import type { Named } from "./text.ts";
 import { accountOf } from "./account.ts";
 import { textKey } from "../language/text-logic.ts";
 
@@ -127,79 +127,8 @@ export function readForgeReply(reply: Raw | null, doc: Pick<WorldDoc, "types">, 
 
 // ---- the world, in words a model can read ----
 
-export type DigestEntity = { ref: string; shelf: Shelf; name: string; aliases: string[]; tagline: string; text: string; entry: WorldDoc["entries"][string] };
-
-// The world for a model to answer from, the entries the question names
-// first, then the settled ones before the rest, until the budget runs out.
-// Hidden truths ride along marked as the DM's: the answers go to the DM.
-// Canon follows the policy every model path shares (canon.ts): the author's
-// Ask reads every entry and event, each one that is not canon tagged, the
-// tags explained at the top; the timeline is the events about what was asked
-// first, then the settled and the latest, read forward in each calendar.
-export function worldDigest(doc: WorldDoc, entities: DigestEntity[], focus: string, budget: number): string {
-  const named = entities.map((entity) => ({ ref: entity.ref, name: entity.name, aliases: entity.aliases }));
-  const asked = new Set(mentionSegments(focus, named).filter((segment) => segment.ref).map((segment) => segment.ref!));
-  const order = [...entities].sort(
-    (a, b) => Number(asked.has(b.ref)) - Number(asked.has(a.ref)) || canonRank(a.entry.canon) - canonRank(b.entry.canon),
-  );
-  const nameOf = new Map(entities.map((entity) => [entity.ref, entity.name]));
-  const tagOf = new Map(entities.map((entity) => [entity.ref, canonTag(entity.entry.canon)]));
-  const timeline = pickEvents(doc.events, doc.calendars, "ask", 40, (event) => event.refs.some((ref) => asked.has(ref)));
-  const lines: string[] = [];
-  let used = 0;
-  const push = (line: string) => {
-    if (used + line.length > budget) return false;
-    lines.push(line);
-    used += line.length + 1;
-    return true;
-  };
-  const legend = canonLegend([...entities.map((entity) => entity.entry.canon), ...timeline.map((event) => event.canon)]);
-  if (legend) push(legend);
-  for (const entity of order) {
-    const type = typeFor(doc, entity.shelf, entity.entry.typeId);
-    const about = (accountOf(entity) || entity.tagline).replace(/\s+/g, " ").slice(0, asked.has(entity.ref) ? 900 : 280);
-    const fields = fieldLines(type, entity.entry, doc.calendars, true).map(({ def, text }) => `${def.name}: ${text}`).join("; ");
-    const ties = doc.links
-      .filter((link) => link.from === entity.ref && nameOf.has(link.to))
-      .map((link) => `${link.label} ${nameOf.get(link.to)}${tagOf.get(link.to)}${link.veracity === "hidden" ? " (hidden)" : link.veracity === "believed" ? " (believed, untrue)" : ""}`)
-      .slice(0, 8)
-      .join("; ");
-    const line = [
-      `## ${entity.name} (${type.name})${canonTag(entity.entry.canon)}${entity.aliases.length ? `, also ${entity.aliases.join(", ")}` : ""}`,
-      about,
-      fields ? `Facts: ${fields}` : "",
-      ties ? `Ties: ${ties}` : "",
-      entity.entry.hiddenTruth ? `DM only: ${entity.entry.hiddenTruth.slice(0, 400)}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    if (!push(line)) break;
-  }
-  const events = timeline.map((event) => {
-    const line = eventLine(event, doc.calendars, true);
-    return `- ${formatYear(event.when, doc.calendars).primary ? "" : "undated: "}${line}${event.body ? `, ${event.body.slice(0, 160)}` : ""}`;
-  });
-  if (events.length) push(`## Timeline\n${events.join("\n")}`);
-  const secrets = doc.secrets.map((secret) => `- ${secret.title}${secret.knownBy.length ? ` (kept by ${secret.knownBy.map((ref) => nameOf.get(ref)).filter(Boolean).join(", ")})` : ""}: ${secretStanding(secret)}`);
-  if (secrets.length) push(`## Secrets (DM only)\n${secrets.slice(0, 30).join("\n")}`);
-  return lines.join("\n\n");
-}
-
-export function askMessages(digest: string, question: string, worldName: string) {
-  return [
-    {
-      role: "system" as const,
-      content: [
-        `You keep the lore of ${worldName}, a tabletop world, and answer its game master.`,
-        "Answer from the world below and nothing else. When it does not say, say so plainly and suggest what the game master could decide.",
-        "Name entries exactly as they are written, so the answer links to them. Lines marked DM only are the game master's own and may be used.",
-        "An entry or event tagged [draft], [alternate] or [retired] is not this world's canon: when your answer rests on one, say which it is.",
-        "Be brief: a short paragraph or a few lines.",
-      ].join("\n"),
-    },
-    { role: "user" as const, content: `${digest}\n\n# The question\n${question}` },
-  ];
-}
+// An entry as Ask (ask.ts) and Draft read it.
+export type DigestEntity = { ref: string; shelf: Shelf; name: string; aliases: string[]; tags: string[]; tagline: string; text: string; entry: WorldDoc["entries"][string] };
 
 // What Draft is told about an entry: its own texts and fields, its open
 // ties and its events. It follows the canon policy every model path shares

@@ -10,7 +10,8 @@ import { presetFor } from "@/lib/worlds/preset";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { copyIntoUploads, whenImagesAvailable } from "@/lib/portrait";
 import { updateWorldEntity, worldView } from "@/lib/db/world-forge";
-import { askMessages, draftKnown, draftMessages, forgeMessages, paintPrompt, readForgeReply, replyJson, worldDigest, type ForgePreview } from "@/lib/worldforge/forge";
+import { draftKnown, draftMessages, forgeMessages, paintPrompt, readForgeReply, replyJson, type ForgePreview } from "@/lib/worldforge/forge";
+import { askMessages, askPassages, citedPassages, type AskOmitted, type AskPassage } from "@/lib/worldforge/ask";
 import { mentionSegments } from "@/lib/worldforge/text";
 import { parseRef, typeFor } from "@/lib/worldforge/model";
 import { recordsChanged } from "@/lib/workshop/record-events";
@@ -44,14 +45,23 @@ export async function forgeFromNotes(campaign: Campaign, text: string, hint: str
   return preview.entities.length || preview.links.length ? { preview } : { error: "The model found nothing it could turn into entries." };
 }
 
-export async function askTheWorld(campaign: Campaign, question: string): Promise<{ answer: string; refs: string[] } | Failure> {
+// Ask (src/lib/worldforge/ask.ts, audit WF-15): the passages that match the
+// question, read the way search_lore reads in play; the answer, with the
+// passages it cites as its sources, every passage it was given, and the
+// matches left out for space. `refs` are the entries the answer names or
+// cites. Only the DM asks (the route needs story authority), and what is
+// read is the world the DM already sees.
+export type AskAnswer = { answer: string; refs: string[]; sources: AskPassage[]; read: AskPassage[]; omitted: AskOmitted };
+
+export async function askTheWorld(campaign: Campaign, question: string): Promise<AskAnswer | Failure> {
   const { doc, entities } = worldView(campaign.id);
-  const digest = worldDigest(doc, entities, question, 14_000);
-  const reply = await ask(campaign, askMessages(digest, question, campaign.title));
+  const retrieval = askPassages(doc, entities, question, campaign.gameSettings.tableLanguage);
+  const reply = await ask(campaign, askMessages(retrieval, question, campaign.title));
   if (typeof reply !== "string") return reply;
+  const sources = citedPassages(reply, retrieval.passages);
   const named = entities.map((entity) => ({ ref: entity.ref, name: entity.name, aliases: entity.aliases }));
-  const refs = [...new Set(mentionSegments(reply, named).filter((segment) => segment.ref).map((segment) => segment.ref!))];
-  return { answer: reply, refs };
+  const refs = [...new Set([...sources.map((source) => source.ref).filter(Boolean), ...mentionSegments(reply, named).filter((segment) => segment.ref).map((segment) => segment.ref!)])];
+  return { answer: reply, refs, sources, read: retrieval.passages, omitted: retrieval.omitted };
 }
 
 export async function draftEntry(campaign: Campaign, ref: string, hint: string): Promise<{ text: string } | Failure> {
