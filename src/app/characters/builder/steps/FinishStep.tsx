@@ -3,6 +3,7 @@
 import { Camera, UserRound } from "lucide-react";
 import { useId } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { LengthNote } from "@/components/ui/LengthNote";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
@@ -19,6 +20,9 @@ import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { hpExplainerInput } from "./AbilitiesStep";
 import { Chip, Field, StepPanel, inputClass } from "./shared";
+
+// The sheet schema's own limit on a backstory (src/lib/schemas/sheet.ts).
+const BACKSTORY_MAX = 2000;
 
 export type BuilderRole = "pc" | "companion";
 
@@ -69,6 +73,7 @@ export function FinishStep({
   const { portrait, setPortrait } = state;
   const appearanceId = useId();
   const alignmentId = useId();
+  const backstoryId = useId();
   const { preview, acInfo, ac, effectiveLevel } = derived;
   const keptSaved = Boolean(initial?.portrait && portrait?.url === initial.portrait.url);
   const hp = hpExplainerInput(derived, klass);
@@ -272,17 +277,19 @@ export function FinishStep({
 
       <StepPanel
         title="Backstory (optional)"
-        help="Who were they before the adventure? The party can read this, and the DM weaves it into the story."
+        help="Who were they before the adventure, and whom do they serve: a god, a patron, a cause? The party can read this, and the DM reads all of it and weaves it into the story."
       >
         <textarea
           value={state.backstory}
           onChange={(event) => state.setBackstory(event.target.value)}
           rows={4}
-          maxLength={2000}
-          placeholder="A disgraced temple guard looking for a second chance..."
+          maxLength={BACKSTORY_MAX}
+          placeholder="A disgraced temple guard of the moon goddess, looking for a second chance..."
           className={cn(inputClass, "resize-y")}
           aria-label="Backstory"
+          aria-describedby={`${backstoryId}-length`}
         />
+        <LengthNote id={`${backstoryId}-length`} length={state.backstory.length} max={BACKSTORY_MAX} from={0.75} />
       </StepPanel>
 
       {!racialFeat && state.feats.length ? (

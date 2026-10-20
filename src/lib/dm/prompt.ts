@@ -439,7 +439,9 @@ export function describeSheet(
   // the load penalty in it and a carried-weight line is added, so the model
   // never has to work the pounds out itself.
   // The table owner's id, for the feats they brewed themselves.
-  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[] } = {},
+  // `compact` is a call packed for a small window (tool-profiles.ts): the
+  // backstory keeps its start there, and says it was cut.
+  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[]; compact?: boolean } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   // A workshop or pack subclass's features carry their own text.
@@ -665,9 +667,43 @@ export function describeSheet(
     lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
   if (sheet.backstory) {
-    lines.push(`  Backstory: ${sheet.backstory.slice(0, 400)}`);
+    // Whole: the builder promises the DM weaves it in, and a god, a rival or
+    // a lost sibling sits as often in its last lines as its first (issue
+    // #429: the first 400 characters of 2,000 used to be all the DM saw).
+    lines.push(`  Backstory: ${options.compact ? cutForRoom(sheet.backstory, COMPACT_TEXT_CHARS.backstory) : sheet.backstory}`);
   }
   return lines.join("\n");
+}
+
+// What a compact call keeps of the text the table wrote for the DM, and
+// what each notes list carries whole before its notes keep only their start.
+const COMPACT_TEXT_CHARS = { backstory: 400, note: 300 } as const;
+const NOTES_SHARE_CHARS = 4_000;
+
+// The start of a text cut at a word, saying it was cut, so the model never
+// takes the first lines for the whole.
+export function cutForRoom(text: string, cap: number): string {
+  if (text.length <= cap) {
+    return text;
+  }
+  return `${text.slice(0, cap).replace(/\s+\S*$/, "")}... (cut for room)`;
+}
+
+// Notes ride whole, in the order given (pinned first), until the list's
+// share is spent; past it, and in a compact call, each keeps its start. A
+// note used to be cut to 300 characters of the 2,000 its box takes, which
+// lost the secret at the end of a storyboard card or a long canon note.
+export function fitNoteBodies<T extends { body: string }>(notes: T[], compact: boolean): string[] {
+  let left = NOTES_SHARE_CHARS;
+  return notes.map((note) => {
+    if (compact) {
+      return cutForRoom(note.body, COMPACT_TEXT_CHARS.note);
+    }
+    const whole = note.body.length <= left;
+    const text = whole ? note.body : cutForRoom(note.body, Math.max(COMPACT_TEXT_CHARS.note, left));
+    left = Math.max(0, left - text.length);
+    return text;
+  });
 }
 
 export function buildGameStateBlock(state: DmGameState): string {
@@ -942,21 +978,24 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (state.loreBlock) {
     moment.push(state.loreBlock);
   }
+  const compact = Boolean(state.ruleContext);
   if (state.publicNotes?.length) {
+    const notes = state.publicNotes.slice(0, 10);
+    const bodies = fitNoteBodies(notes, compact);
     sections.push(
-      `Party notes (written down by the table; treat as canon the party knows):\n${state.publicNotes
-        .slice(0, 10)
+      `Party notes (written down by the table; treat as canon the party knows):\n${notes
         .map(
-          (note) =>
-            `- ${note.pinned ? "[pinned] " : ""}${note.title ? `${note.title}: ` : ""}${note.body.slice(0, 300)}`,
+          (note, index) =>
+            `- ${note.pinned ? "[pinned] " : ""}${note.title ? `${note.title}: ` : ""}${bodies[index]}`,
         )
         .join("\n")}`,
     );
   }
   if (state.dmPrepNotes?.length) {
+    const bodies = fitNoteBodies(state.dmPrepNotes, compact);
     sections.push(
       `DM prep notes (secret; the table's own preparation for you: let them shape what happens, never read them out or hint that they exist):\n${state.dmPrepNotes
-        .map((note) => `- ${note.title ? `${note.title}: ` : ""}${note.body.slice(0, 300)}`)
+        .map((note, index) => `- ${note.title ? `${note.title}: ` : ""}${bodies[index]}`)
         .join("\n")}`,
     );
   }
@@ -1064,7 +1103,7 @@ export function buildGameStateBlock(state: DmGameState): string {
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
-          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign) },
+          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign), compact: Boolean(state.ruleContext) },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         const between = state.betweenBySheet?.get(sheet.id);
