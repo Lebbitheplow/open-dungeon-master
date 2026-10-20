@@ -1,3 +1,4 @@
+import { settleDroppedOnFightEnd } from "@/lib/db/dropped-items";
 import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
 import { silencedImmunity } from "@/lib/dm/zone-rules";
 import { burnWebUnder } from "@/lib/dm/zone-cast";
@@ -86,6 +87,9 @@ export function finishEncounter(
   endEncounter(encounter.id, outcome);
   // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
   settleFrenzies(campaign);
+  // What was dropped stays where it fell; what a fallen enemy held lies with
+  // it (src/lib/db/dropped-items.ts, issue #424).
+  const itemsLeft = settleDroppedOnFightEnd(campaign.id, encounter.id);
 
   // Half the ammunition spent in the fight is recovered from the field
   // (PHB). Only ever non-empty when the `ammunition` variant rule is on, so
@@ -187,6 +191,9 @@ export function finishEncounter(
   return {
     encounterOver: true,
     ...(Object.keys(ammoRecovered).length ? { ammoRecovered } : {}),
+    ...(itemsLeft.length
+      ? { itemsLeft: `On the ground after the fight: ${itemsLeft.join("; ")}. The party can collect them (handle_item pick_up).` }
+      : {}),
     outcome,
     ...(guestsGone.length
       ? {

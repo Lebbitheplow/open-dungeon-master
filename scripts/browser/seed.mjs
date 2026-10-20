@@ -170,6 +170,18 @@ const [goblin] = world.enemies();
 kit.place(tavi.id, 2, 2);
 kit.place(goblin.id, 3, 2);
 kit.giveTurn(tavi.id);
+// A handaxe knocked loose lies beside Tavi (issue #424): the board draws it
+// within reach, and the Hand offers to pick it up.
+const { insertDroppedItem } = await import("../../src/lib/db/dropped-items.ts");
+insertDroppedItem({
+  campaignId: world.campaignId,
+  mapId: kit.map().id,
+  x: 2,
+  y: 3,
+  place: "",
+  item: { name: "Handaxe", qty: 1 },
+  droppedBy: "Goblin 1",
+});
 
 // A campaign still in its lobby, for the lobby pages and the cover dialog.
 const lobby = campaigns.createCampaign(world.owner.id, {

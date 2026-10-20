@@ -19,6 +19,7 @@ import {
 import {
   AimLayer,
   AimScrim,
+  DropLayer,
   MoteLayer,
   StageLayerDefs,
   tokenCentre,
@@ -518,6 +519,8 @@ export const BattleMapGrid = memo(
             />
           );
         })}
+        {/* Things dropped on the board (issue #424), over the figures. */}
+        {view.drops?.length ? <DropLayer drops={view.drops} /> : null}
         <TargetLines tokens={view.tokens} targets={view.targets} footprints={view.tokenFootprint} />
         {overlay?.aim ? <AimLayer aim={overlay.aim} tokens={view.tokens} footprints={view.tokenFootprint} /> : null}
         <DrawingLayer drawings={view.drawings} sketch={overlay?.sketch} />

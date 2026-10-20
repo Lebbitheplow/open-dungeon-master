@@ -73,7 +73,9 @@ const EMPTY_OPTIONS: NonNullable<HandCard["options"]> = [];
 // one tap cannot post the same action twice. Nothing is marked spent here;
 // the engine's projection is the count.
 const PENDING_MS = 45_000;
-export type HandPending = { cost: HandCard["cost"]; attack: boolean; name: string; signature: string };
+// `interaction`: the card was the turn's object interaction (hand-gear.ts),
+// so the other interaction cards wait with it.
+export type HandPending = { cost: HandCard["cost"]; attack: boolean; name: string; signature: string; interaction?: boolean };
 
 export function useHandPending(signature: string) {
   const [pending, setPending] = useState<HandPending | null>(null);
@@ -91,9 +93,13 @@ export function useHandPending(signature: string) {
 export function holdPendingCards(all: HandCard[], waiting: HandPending | null): HandCard[] {
   if (!waiting) return all;
   const reason = `Sent. Waiting for the DM to resolve ${waiting.name}.`;
-  return all.map((card) =>
-    !card.disabled && (card.cost === waiting.cost || (waiting.attack && card.intent.card === "attack" && card.cost === "action"))
-      ? { ...card, disabled: reason, spent: false }
-      : card,
-  );
+  // A free card (a drop, Stand up, Dismount) spends no part of the turn the
+  // engine counts, so its count never moves to release a hold: it holds
+  // only itself, and the interaction cards when it was the interaction. End
+  // turn stays open behind it.
+  const holds = (card: HandCard) =>
+    waiting.cost === "free"
+      ? card.name === waiting.name || (Boolean(waiting.interaction) && card.interaction === true)
+      : card.cost === waiting.cost || (waiting.attack && card.intent.card === "attack" && card.cost === "action");
+  return all.map((card) => (!card.disabled && holds(card) ? { ...card, disabled: reason, spent: false } : card));
 }

@@ -290,7 +290,7 @@ export const mutationTools: ToolDef[] = [
     worth: ITEM_WORTH_PROPERTY,
     spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
-  tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, use use_item; for sales, use purchase.", {
+  tool("remove_item", "Take an item from a character for good (stolen, destroyed, burned up). Something dropped, set down or knocked away is NOT removed: use handle_item drop, which leaves it where it fell. For consumables being USED, use use_item; for sales, use purchase.", {
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),

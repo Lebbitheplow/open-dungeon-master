@@ -18,7 +18,12 @@ import { z } from "zod";
 const text = (max: number) => z.string().trim().min(1).max(max);
 const square = z.number().int().min(0).max(200).optional();
 
-export const HAND_INTENT_ACTIONS = ["search", "escape", "stand-up"] as const;
+export const HAND_INTENT_ACTIONS = ["search", "escape", "stand-up", "stabilize", "dismount"] as const;
+
+// What a gear card does with an item (issue #424): handle_item's actions,
+// and use for a potion or another consumable (use_item).
+export const HAND_GEAR_ACTIONS = ["equip", "unequip", "drop", "pick_up", "hand", "use"] as const;
+export type HandGearAction = (typeof HAND_GEAR_ACTIONS)[number];
 
 // pc_attack's bonusAttack values (src/lib/dm/pc-attack-options.ts
 // BONUS_ATTACKS) and Open Hand Technique's riders (attack-choice-rules.ts).
@@ -45,6 +50,9 @@ export const handIntentExtras = {
   readyAction: z.enum(READIABLE).optional(),
   // Search's skill.
   skill: z.enum(["perception", "investigation"]).optional(),
+  // A gear card's item: the carried row's name, or the id of a thing on the
+  // ground (handle_item, use_item).
+  item: text(120).optional(),
   // Where a spell's area is laid on the battle map, under the placement
   // arguments' own names (src/lib/dm/zone-args.ts): a burst's centre or a
   // wall's first square, and the square a wall or a line runs toward.
@@ -93,6 +101,7 @@ export type HandIntentExtras = {
   readyLevel?: number;
   readyAction?: string;
   skill?: "perception" | "investigation";
+  item?: string;
   atX?: number;
   atY?: number;
   towardX?: number;
@@ -113,6 +122,7 @@ export function handExtraArgs(intent: HandIntentExtras): string[] {
   if (intent.readySpell && intent.readyLevel) args.push(`level=${intent.readyLevel}`);
   if (intent.readyAction) args.push(`readied=${intent.readyAction}`);
   if (intent.skill) args.push(`skill=${intent.skill}`);
+  if (intent.item) args.push(`item=${intent.item}`);
   for (const key of ["atX", "atY", "towardX", "towardY"] as const) {
     if (intent[key] !== undefined) args.push(`${key}=${intent[key]}`);
   }

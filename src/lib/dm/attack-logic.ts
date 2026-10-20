@@ -6,6 +6,7 @@ import {
   type SrdWeapon,
 } from "@/lib/srd/weapons";
 import { itemNames, lineNamed, magicItemBonus } from "@/lib/srd/item-row";
+import { wearingIsExplicit } from "@/lib/srd/armor";
 import {
   gearProfileParts,
   isMagicWeaponName,
@@ -164,12 +165,17 @@ export function resolveAttackWeapon(
     };
   }
   // No name given: best carried weapon, one the hands can use first, then
-  // proficient ones. With only two-handed weapons beside a shield the best of
-  // them still stands, and the hands rule says why it cannot swing.
+  // the one in hand (issue #424: a character holding a mace was played with
+  // the crossbow in the pack), then proficient ones, then the most damage.
+  // With only two-handed weapons beside a shield the best of them still
+  // stands, and the hands rule says why it cannot swing. A sheet that marks
+  // nothing as equipped holds everything, as the armor engine reads it.
+  const explicit = wearingIsExplicit(equipment);
   let best: {
     item: EquipmentItem;
     srd: SrdWeapon;
     usable: boolean;
+    held: boolean;
     proficient: boolean;
     gear: WeaponGear | null;
   } | null = null;
@@ -180,14 +186,17 @@ export function resolveAttackWeapon(
       continue;
     }
     const usable = !(options.shieldOnArm && (srd.properties ?? []).includes("two-handed"));
+    const held = !explicit || item.equipped === true;
     const proficient = isWeaponProficient(weaponProfs, srd);
-    if (
-      !best ||
-      (usable && !best.usable) ||
-      (usable === best.usable && proficient && !best.proficient) ||
-      (usable === best.usable && proficient === best.proficient && damageScore(srd) > damageScore(best.srd))
-    ) {
-      best = { item, srd, usable, proficient, gear: magic?.gear ?? null };
+    const better = (() => {
+      if (!best) return true;
+      if (usable !== best.usable) return usable;
+      if (held !== best.held) return held;
+      if (proficient !== best.proficient) return proficient;
+      return damageScore(srd) > damageScore(best.srd);
+    })();
+    if (better) {
+      best = { item, srd, usable, held, proficient, gear: magic?.gear ?? null };
     }
   }
   if (best) {

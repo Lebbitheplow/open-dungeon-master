@@ -27,6 +27,7 @@ import type { CastMember } from "@/lib/dm/cast";
 import type { Speaker } from "@/lib/dm/speech";
 import type { BeatCadence } from "@/lib/dm/beat-cadence";
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
+import type { PlayerMapView } from "@/lib/battlemap/view-types";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 import type { InputKind } from "@/lib/campaign-types";
@@ -86,6 +87,8 @@ function ComposerInner({
   composerRef,
   trackAmmo,
   edges,
+  drops,
+  mounts,
   highlight = false,
   directorArm,
   storyCadence,
@@ -138,6 +141,9 @@ function ComposerInner({
   // The board's cover and flanking from this character to each enemy, for
   // the Hand's hit preview (src/lib/battlemap/view-tactics.ts).
   edges?: Record<string, TargetEdge>;
+  // What lies on the board and who rides what, for the Hand's gear cards.
+  drops?: PlayerMapView["drops"];
+  mounts?: PlayerMapView["mounts"];
   // A gold pulse on the frame: the board says it is this player's turn.
   highlight?: boolean;
   directorArm: CampaignState["directorArm"];
@@ -229,6 +235,8 @@ function ComposerInner({
             composerRef={composerRef}
             trackAmmo={trackAmmo}
             edges={edges}
+            drops={drops}
+            mounts={mounts}
           />
         ) : null}
         <div data-pill-group="" className="mb-2 flex flex-wrap items-center gap-1.5" data-tour="composer-modes">

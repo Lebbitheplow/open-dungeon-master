@@ -51,6 +51,7 @@ export function turnFromEncounter(
     ...(own?.castThisAction ? { castThisAction: true } : {}),
     ...(own && own.lightMeleeAttack !== undefined ? { lightMeleeAttack: own.lightMeleeAttack } : {}),
     ...(own && own.oneHandMeleeAttack !== undefined ? { oneHandMeleeAttack: own.oneHandMeleeAttack } : {}),
+    ...(own?.interactionUsed ? { interactionUsed: true } : {}),
     table,
   };
 }
@@ -88,6 +89,7 @@ export function turnSignature(turn: HandTurn): string {
     turn.grantedActions ?? 0,
     turn.flurryStrikes ?? 0,
     (turn.marks ?? []).length,
+    turn.interactionUsed ? 1 : 0,
     turn.table?.round ?? 0,
     turn.table?.acting?.name ?? "",
   ].join("|");

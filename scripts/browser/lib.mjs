@@ -217,6 +217,8 @@ export function pageHarness({ page, base, ids, app, viewport, outDir, tag, api }
     api,
     tap: (locator) => (touch && app ? locator.tap() : locator.click()),
     shot: (name) => page.screenshot({ path: path.join(outDir, `${tag}-${name}.png`), fullPage: false }).catch(() => {}),
+    // Where a shot of that name goes, for a clipped screenshot of one part.
+    shotPath: (name) => path.join(outDir, `${tag}-${name}.png`),
     // Where the page is: the address bar on the server; in the app, whose
     // window stays on index.html, the shell's own navigation.
     url: async () => {
