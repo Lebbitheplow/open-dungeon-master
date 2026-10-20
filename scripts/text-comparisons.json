@@ -310,6 +310,8 @@
     "app/characters/builder/playstyles.ts#str-list": [["key",21,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/playstyles.ts#toLowerCase": [["key",1,"skill id"]],
     "app/characters/builder/reconcile.ts#toLowerCase": [["key",3,"skill id, the key a granted skill is looked up by"],["english-source",2,"reference: bundled SRD racial trait names compared with an SRD skill name"]],
+    "app/characters/builder/roving.ts#str-case": [["key",6,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/characters/builder/roving.ts#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/steps/AbilitiesStep.tsx#toLowerCase": [["display",3,"race and class in a sentence"]],
     "app/characters/builder/steps/AncestryStep.tsx#str-list": [["key",6,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/steps/CallingStep.tsx#str-list": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
