@@ -4,7 +4,7 @@ import { getCurrentLocation, listLocations } from "@/lib/db/locations";
 import { getNpcById, listNpcs } from "@/lib/db/npcs";
 import { insertShop, listShops, listShopsAt, normalizeStock, shopRefProblem, stockLineSchema } from "@/lib/db/shops";
 import { askingPriceCp, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
-import { stockPool } from "@/lib/dm/shop-tools";
+import { announceShop, stockPool } from "@/lib/dm/shop-tools";
 import { stockFromPool } from "@/lib/dm/shop-logic";
 import { getClock } from "@/lib/db/clock";
 import { publishEphemeral } from "@/lib/events";
@@ -102,5 +102,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
     restockedAt: getClock(campaignId).instant,
   });
   publishEphemeral(campaignId, "shops_updated", { at: Date.now() });
+  // A shop opened where the party stands is open to them now: the chat
+  // says so, as it does for one the AI DM opens.
+  if (place && place.id === getCurrentLocation(campaignId)?.id) {
+    announceShop(campaignId, shop);
+  }
   return Response.json({ shop: shopView(shop) });
 }

@@ -1658,6 +1658,10 @@ function ensureSchema(db: SqliteDatabase) {
     // src/lib/dm/speech.ts SpokenLine), decided when the message is written.
     // Null on messages written before it, whose lines stay the narrator's.
     ["speech_json", `TEXT`],
+    // The shop a "<shop> is open" line announces (src/lib/dm/shop-tools.ts
+    // announceShop), so the chat's Browse wares opens the Market on it.
+    // Null on every other message.
+    ["shop_id", `TEXT`],
   ]);
 
   addColumns("dm_turns", [

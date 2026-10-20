@@ -200,7 +200,9 @@ export type ProfileSignals = {
 // English words only, an extra: at a table in another language every group
 // these would open is that one more_tools call away.
 const INTENT: Array<[ToolGroupId, RegExp]> = [
-  ["shop", /\b(buy|buying|sell|selling|shop|shops|merchant|wares|haggle|barter|price|prices)\b/i],
+  // Trading words, and the places that sell: walking into a smithy has to
+  // offer open_shop before the DM describes its shelf.
+  ["shop", /\b(buy|buys|buying|bought|sell|sells|selling|sold|shop|shops|shopping|merchants?|wares|browse|browsing|haggle|haggling|barter|bartering|prices?|(?:black|weapon)?smiths?|smithy|smithies|forges?|armou?rers?|stores?|stalls?|stand|stands|vendors?|traders?|trading post|markets?|marketplace|bazaars?|apothecary|apothecaries|herbalists?|alchemists?|outfitters?|provisioners?|fletchers?)\b/i],
   ["world", /\b(travel|journey|road|ride (?:to|north|south|east|west)|march|days? (?:later|pass)|wait (?:until|for)|treasure|hoard|loot|break (?:down|open|the)|smash|weather)\b/i],
   ["explore", /\b(craft|crafting|downtime|research|train(?:ing)?|lifestyle|carouse|lift|drag|push|haul|disease|poison(?:ed)?|madness)\b/i],
   ["hazards", /\b(trap|traps|fall|falls|jump|leap|climb|drown|swim|lava|fire|burning|freezing|suffocat\w*)\b/i],

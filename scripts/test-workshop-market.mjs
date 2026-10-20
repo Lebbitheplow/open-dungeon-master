@@ -325,10 +325,13 @@ await test("asking for second copies brings a numbered shop with the authored sh
   assert.deepEqual(getShop(tableShop.id).stock, [ROPE], "the copy touched the played shop");
 });
 
-await test("a due restock refills the authored shelf; a pack restock with no pack keeps what is there", async () => {
+await test("a due restock refills the authored shelf; a restock with nothing to draw on keeps what is there", async () => {
   updateShop(tableShop.id, { restockDays: 3 });
+  // Curiosities: magic items only, which the bundled SRD tables never stock,
+  // so with no pack there is nothing to draw on.
   const pool = insertShop(campaignId, {
     name: "Harbour Sundries",
+    kind: "curiosities",
     locationId: tableShop.locationId,
     locationName: "The Harbour",
     stock: [{ itemName: "Torch", qty: 4, priceCp: 1, note: "" }],

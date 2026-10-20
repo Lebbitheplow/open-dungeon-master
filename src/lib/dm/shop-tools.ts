@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { allocateSeq } from "@/lib/db/campaigns";
+import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { getClock } from "@/lib/db/clock";
 import { getCurrentLocation } from "@/lib/db/locations";
@@ -10,6 +11,10 @@ import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { findShopNear, getShop, insertShop, listShopsAt, updateShop } from "@/lib/db/shops";
 import { searchItems } from "@/lib/content";
+import { SRD_GEAR } from "@/lib/srd/adventuring-gear";
+import { SRD_ARMOR } from "@/lib/srd/armor";
+import { bundledPriceCopper } from "@/lib/srd/starting-wealth";
+import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs } from "@/lib/dm/rolls";
@@ -62,7 +67,7 @@ export const shopTools: ToolDef[] = [
     function: {
       name: "open_shop",
       description:
-        "Open a shop at the party's current place; the server stocks its shelves from the content pack at the settlement size's markup. Call it once when the party first walks in; the shop and its prices then appear in GAME STATE. A shop already standing here (one in SHOPS HERE) is reopened as it is: its shelf, prices and haggles stay, and it restocks only when its restock day has come.",
+        "Open the shop where the party stands. The server stocks its shelves from the content pack at the settlement size's markup. Call it once when the party first walks in; the shop and its prices then appear in GAME STATE. A shop already standing here (one in SHOPS HERE) is reopened as it is: its shelf, prices and haggles stay, and it restocks only when its restock day has come.",
       parameters: {
         type: "object",
         properties: {
@@ -149,6 +154,20 @@ function publishShops(campaignId: string) {
   publishEphemeral(campaignId, "shops_updated", { at: Date.now() });
 }
 
+// One line in the chat when a shop opens or reopens where the party stands:
+// "<shop> is open", which the chat draws with a Browse wares button onto
+// the Market (MessageItem.tsx). Once per opening: a second open_shop in the
+// same breath, with nothing said since, adds no second line.
+export function announceShop(campaignId: string, shop: Pick<Shop, "id" | "name">) {
+  const [latest] = listRecentMessages(campaignId, 1);
+  if (latest?.authorType === "system" && latest.shopId === shop.id) {
+    return;
+  }
+  const seq = allocateSeq(campaignId);
+  const message = insertCampaignMessage({ campaignId, seq, authorType: "system", glyph: "cue-coin", shopId: shop.id, content: `${shop.name} is open.` });
+  publishWithSeq(campaignId, seq, "message_added", { message });
+}
+
 function publishSheet(campaign: Campaign, sheetId: string) {
   const updated = patchSheet(sheetId, {});
   if (updated) {
@@ -173,7 +192,28 @@ export function stockPool(kind: string): Array<{ name: string; cost: string }> {
       pool.push({ name: item.name, cost: item.cost });
     }
   }
-  return pool;
+  return pool.length ? pool : bundledPool(spec);
+}
+
+// With no content pack installed (or none with this kind's goods), the
+// bundled SRD 5.1 tables the builder prices from: weapons, armor and
+// adventuring gear at list price. The setting's firearms and genre armor
+// and every magic item stay off the shelf, as they do at creation
+// (src/lib/srd/starting-wealth.ts), so a curiosities shop stays bare.
+// The weapon table prints the SRD's own rows first; the setting's firearms,
+// exotics and simple genre weapons (a machete, a hurled vial) follow from
+// the first firearm on, and carry no genre mark of their own.
+const SRD_TABLE_WEAPONS = SRD_WEAPONS.slice(0, SRD_WEAPONS.findIndex((weapon) => weapon.category === "firearm"));
+
+function bundledPool(spec: (typeof KIND_POOL)[keyof typeof KIND_POOL]): Array<{ name: string; cost: string }> {
+  const rows: Array<{ name: string; cp: number | null }> = [
+    ...(spec.kinds.includes("weapon") ? SRD_TABLE_WEAPONS.map((weapon) => ({ name: weapon.name, cp: bundledPriceCopper(weapon.name) })) : []),
+    ...(spec.kinds.includes("armor") ? SRD_ARMOR.filter((armor) => !armor.genres).map((armor) => ({ name: armor.name, cp: bundledPriceCopper(armor.name) })) : []),
+    ...(spec.kinds.includes("gear") ? SRD_GEAR.map((gear) => ({ name: gear.name, cp: gear.costCp })) : []),
+  ];
+  return rows
+    .filter((row): row is { name: string; cp: number } => row.cp !== null && row.cp > 0 && (!spec.match || spec.match.test(row.name)))
+    .map((row) => ({ name: row.name, cost: `${row.cp} cp` }));
 }
 
 // A restock: a prepared shelf is refilled to what its author wrote; a shop
@@ -224,6 +264,7 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
     })!;
     const shop = due ? restockShop(placed, instant, random) : placed;
     publishShops(campaign.id);
+    announceShop(campaign.id, shop);
     return { ok: true, shop: shop.name, reopened: true, restocked: due, lines: shop.stock.length, shelf: shelfLines(shop) };
   }
   const shop = insertShop(campaign.id, {
@@ -238,6 +279,7 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
     restockedAt: instant,
   });
   publishShops(campaign.id);
+  announceShop(campaign.id, shop);
   return { ok: true, shop: shop.name, reopened: false, restocked: false, lines: shop.stock.length, shelf: shelfLines(shop) };
 }
 
@@ -340,7 +382,9 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   const listCp = listPriceCp(line);
   const each = listCp !== null ? (keepsFullValue(line) ? listCp : offerPriceCp(listCp)) : args.priceCp ?? null;
   if (each === null) {
-    return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.`, retry: true };
+    // `unpriced`: the Market has no price to send, so it hands the sale to
+    // whoever runs the story to name one (MarketPanel.tsx).
+    return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.`, retry: true, unpriced: true };
   }
   const total = each * removal.removed;
   const paid = addCopper({ gold: sheet.gold, copper: sheet.copper }, total);

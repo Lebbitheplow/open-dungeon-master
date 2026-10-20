@@ -38,6 +38,7 @@ import {
 import {
   BlockedMessage,
   PlayerMessage,
+  ShopOpenLine,
   SystemMessage,
   copyAction,
   reportAction, disputeAction } from "@/app/campaigns/[campaignId]/MessageParts";
@@ -79,6 +80,7 @@ export const MessageItem = memo(function MessageItem({
   onRenarrate,
   onContinueScene,
   onSelectVariant,
+  onBrowseShop,
   mine,
   blocked,
   onReport,
@@ -122,6 +124,8 @@ export const MessageItem = memo(function MessageItem({
   onContinueScene?: (message: CampaignMessage) => void;
   // Browse the rerolled takes; the picked one is what the table reads.
   onSelectVariant?: (message: CampaignMessage, index: number) => void;
+  // A shop's "is open" line opens the Market on that shop.
+  onBrowseShop?: (shopId: string) => void;
 }) {
   // Local to the row: only one narration is ever being corrected at a time,
   // and the draft should not survive the row unmounting.
@@ -199,6 +203,12 @@ export const MessageItem = memo(function MessageItem({
           canRetry={canRetryTurn}
         />
       );
+    }
+    // A shop opened where the party stands: its line, and the way to its
+    // shelf in the Market.
+    if (message.shopId) {
+      const shopId = message.shopId;
+      return <ShopOpenLine content={message.content} onBrowse={onBrowseShop ? () => onBrowseShop(shopId) : undefined} />;
     }
     return <SystemMessage content={message.content} glyph={message.glyph} />;
   }

@@ -470,6 +470,40 @@ for (const viewport of ["desktop", "phone"]) {
   wardrobe[viewport] = table.id;
 }
 
+// A table at a village whose smithy the DM just opened (shops in play):
+// the "is open" line that opening wrote, whose Browse wares opens the
+// Market on the shop. Its own table, so no other scenario's chat or atlas
+// gains a line or a place.
+const MARKET_TITLE = "Market Table";
+const MARKET_SHOP = "Brann's Forge";
+const marketTable = campaigns.createCampaign(world.owner.id, {
+  title: MARKET_TITLE,
+  description: "A village forge with its doors open.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.setCampaignStatus(marketTable.id, "active");
+sheets.createSheet(marketTable.id, world.owner.id, 3, heroInput({ name: "Wren Ashby", class: "fighter", level: 3 }));
+{
+  const { upsertCurrentLocation } = await import("../../src/lib/db/locations.ts");
+  const { handleOpenShop } = await import("../../src/lib/dm/shop-tools.ts");
+  upsertCurrentLocation({ campaignId: marketTable.id, name: "Oakhollow" });
+  messages.insertCampaignMessage({
+    campaignId: marketTable.id,
+    seq: campaigns.allocateSeq(marketTable.id),
+    authorType: "dm",
+    speech: [],
+    content: "Heat rolls out of the forge. Brann looks up from a half-finished axe head and nods at the racks along the wall.",
+  });
+  const opened = handleOpenShop(campaigns.getCampaignById(marketTable.id), JSON.stringify({ name: MARKET_SHOP, kind: "smith", size: "village" }));
+  if (!opened.ok) {
+    throw new Error(`could not open ${MARKET_SHOP}: ${JSON.stringify(opened)}`);
+  }
+}
+
 for (const user of [world.owner, player, ...tourAccounts]) {
   setUserPassword(user.id, await hashPassword(PASSWORD), false);
 }
@@ -570,6 +604,8 @@ const ids = {
   offerId: offer.id,
   offerSummary: offer.summary,
   quietId: quiet.id,
+  marketTableId: marketTable.id,
+  marketShop: MARKET_SHOP,
   quietTitle: QUIET_TITLE,
   quietLoreTurnId,
   tourTableId: tourTable.id,
@@ -590,6 +626,7 @@ const ids = {
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
+    [marketTable.id]: MARKET_TITLE,
     [prepared.id]: PREP_TITLE,
     [tourTable.id]: TOUR_TITLE,
     [prepSource.id]: PREP_SOURCE_TITLE,
