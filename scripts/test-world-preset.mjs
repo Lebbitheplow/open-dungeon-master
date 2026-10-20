@@ -131,7 +131,11 @@ test("packRecommends and packIds read the pack's own lists", () => {
 test("settingClassIds prefers the pack list and falls back to the genre", () => {
   assert.deepEqual(settingClassIds("cyberpunk", ["a", "b"]), ["a", "b"]);
   assert.ok(settingClassIds("cyberpunk", []).includes("netrunner"));
-  assert.deepEqual(settingClassIds("high_fantasy", []), []);
+  // High fantasy plays the SRD's callings and dark fantasy's (issue #434);
+  // a class made only for another setting is not among them.
+  const high = settingClassIds("high_fantasy", []);
+  assert.ok(high.includes("fighter") && high.includes("witch_hunter"), high.join(", "));
+  assert.ok(!high.includes("netrunner"));
 });
 
 test("the primer names the world and prints canonical names in the alias table", () => {

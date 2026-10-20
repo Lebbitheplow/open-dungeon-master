@@ -739,6 +739,26 @@ function ensureSchema(db: SqliteDatabase) {
       PRIMARY KEY (map_id, character_id)
     );
 
+    -- Things put down rather than lost (issue #424): a sword let fall to
+    -- draw a bow, a shield, a key set down. On the board where it fell while
+    -- that board is up (map_id, x, y), and at the place it fell (the
+    -- location's name then) after; anyone within reach picks it up. An enemy
+    -- that takes one holds it (held_by_enemy) until it falls or the fight ends.
+    CREATE TABLE IF NOT EXISTS dropped_items (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      map_id TEXT,
+      x INTEGER,
+      y INTEGER,
+      place TEXT NOT NULL DEFAULT '',
+      item_json TEXT NOT NULL,
+      dropped_by TEXT NOT NULL DEFAULT '',
+      held_by_enemy TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dropped_items_campaign ON dropped_items(campaign_id);
+
     -- Persistent NPCs and their disposition toward the party. Attitude is the
     -- 5e social-interaction scale (hostile/indifferent/friendly); it persists
     -- across sessions so an NPC the party angered stays angry. last_shift_turn
@@ -1535,6 +1555,12 @@ function ensureSchema(db: SqliteDatabase) {
     ["gender", `TEXT NOT NULL DEFAULT ''`],
     // Player-authored backstory, visible to the whole party and the DM.
     ["backstory", `TEXT NOT NULL DEFAULT ''`],
+    // The picks a feat or a subclass grant left to the player (Linguist's
+    // languages, a Lore bard's skills), keyed by its name, as the library
+    // copy keeps them. A level-up records the ones it applies, so the
+    // character goes home, to a file and to the builder with them (issue
+    // #430). NULL on sheets stored before the column: nothing recorded.
+    ["feat_choices_json", `TEXT`],
     // Class features, racial traits, and story-granted abilities; the DM
     // prompt treats this as the complete list of what a character can do.
     ["features_json", `TEXT`],

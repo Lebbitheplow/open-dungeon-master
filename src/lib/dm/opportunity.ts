@@ -19,7 +19,7 @@ import {
   weaponOf,
 } from "@/lib/dm/attack-logic";
 import { RAGING } from "@/lib/srd/class-resources";
-import { computeSheetDerived } from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { matchWeapon } from "@/lib/srd/weapons";
 import { magicWeaponOfRow } from "@/lib/dm/gear-attack";
 import { combatRiders } from "@/lib/srd/feature-effects";
@@ -362,12 +362,12 @@ function stokeRage(sheet: NonNullable<ReturnType<typeof getSheetById>>) {
 }
 
 // The melee weapon a character strikes with when something walks away from
-// them: the best one they carry. A character carrying only a bow has no
-// opportunity attack to make. A magic weapon is its base weapon (a Flame
-// Tongue is a longsword, src/lib/dm/gear-attack.ts).
+// them: the best one they carry, one-handed beside a shield. A character
+// carrying only a bow has no opportunity attack to make. A magic weapon is
+// its base weapon (a Flame Tongue is a longsword, src/lib/dm/gear-attack.ts).
 function meleeWeaponFor(sheet: NonNullable<ReturnType<typeof getSheetById>>) {
   const weaponFor = (item: (typeof sheet.equipment)[number]) =>
-    magicWeaponOfRow(item).srd ?? weaponOf(item) ?? matchWeapon(item.name);
+    magicWeaponOfRow(item).srd ?? weaponOf(item) ?? matchWeapon(item);
   const melee = sheet.equipment.filter((item) => {
     const weapon = weaponFor(item);
     return weapon !== null && weapon.kind === "melee";
@@ -376,7 +376,9 @@ function meleeWeaponFor(sheet: NonNullable<ReturnType<typeof getSheetById>>) {
   if (!melee.length && carriesWeapon) {
     return null;
   }
-  return resolveAttackWeapon(melee, sheet.proficiencies.weapons, undefined);
+  return resolveAttackWeapon(melee, sheet.proficiencies.weapons, undefined, {
+    shieldOnArm: acBreakdownFor(sheet).shieldName !== null,
+  });
 }
 
 // The other side of the same rule: an enemy that walks out of a character's

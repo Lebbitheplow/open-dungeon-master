@@ -15,7 +15,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
-type Carried = { name: string; qty?: number; equipped?: boolean };
+type Carried = { name: string; srdName?: string; qty?: number; equipped?: boolean };
 type XY = { x: number; y: number };
 
 // A content pack twin (Level Up's Dual-Wielding Expert) counts as the feat,
@@ -90,7 +90,7 @@ export function thrownAtRange(
 function offHandWeaponsCarried(equipment: Carried[], dualWielder: boolean): number {
   let count = 0;
   for (const item of equipment) {
-    const weapon = matchWeapon(item.name);
+    const weapon = matchWeapon(item);
     const properties = weapon?.properties ?? [];
     if (weapon && weapon.kind === "melee" && (dualWielder ? !properties.includes("two-handed") : properties.includes("light"))) {
       count += Math.max(1, item.qty ?? 1);
@@ -169,7 +169,7 @@ export function otherHandArmed(input: {
     if (item.equipped !== true) {
       return false;
     }
-    const weapon = matchWeapon(item.name);
+    const weapon = matchWeapon(item);
     if (!weapon || weapon.kind !== "melee" || (weapon.properties ?? []).includes("two-handed")) {
       return false;
     }

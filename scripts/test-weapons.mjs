@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SRD_WEAPONS, defaultLoadout, suggestWeapons } from "../src/lib/srd/weapons.ts";
+import { SRD_WEAPONS, defaultLoadout, suggestWeapons, weaponNamed } from "../src/lib/srd/weapons.ts";
+import { getContentDb } from "../src/lib/content/db.ts";
 import srdClasses from "../src/lib/srd/classes.json" with { type: "json" };
 
 const catalogDir = join(dirname(fileURLToPath(import.meta.url)), "../src/lib/classes");
@@ -129,6 +130,54 @@ test("suggestions dedupe and respect the cap", () => {
   assert.equal(suggested.length, 4);
   assert.equal(new Set(suggested).size, 4);
   assert.equal(suggested[0], "Longsword");
+});
+
+// A weapon is found by its name as whole words, never as a fragment of
+// another word, also written apart or in the book's order; ammunition is no
+// weapon. What a sheet, a shop or a stat block names reads the same.
+test("the weapon finder reads whole names, never a fragment", () => {
+  for (const [name, weapon] of [
+    ["+1 long sword", "Longsword"],
+    ["Longsword of the Dawn", "Longsword"],
+    ["Hand crossbows", "Hand Crossbow"],
+    ["Crossbow, light", "Light Crossbow"],
+    ["Crossbow, heavy", "Heavy Crossbow"],
+    ["Crossbow, hand", "Hand Crossbow"],
+    ["Battle axe", "Battleaxe"],
+    ["Hand axe", "Handaxe"],
+    ["War hammer", "Warhammer"],
+    ["Morning star", "Morningstar"],
+    ["Staff", "Quarterstaff"],
+    ["Dagger of Venom", "Dagger"],
+    ["Net", "Net"],
+  ]) {
+    assert.equal(weaponNamed(name)?.name, weapon, name);
+  }
+  for (const name of [
+    "Signet Ring", "Spikes, Iron", "Chain", "Silver", "Vial", "Hammer", "Bullets, Sling (20)", "Sling bullets", "Blowgun needles",
+    "Angry Hornet", "Bed of Spikes", "Signet of the Magister", "Stone Glance", "Telekinetic Pull", "Nether Bolt", "Tail Spike", "Shock", "Sword", "Bow",
+  ]) {
+    assert.equal(weaponNamed(name), null, name);
+  }
+});
+
+// The pack's own rows, where it is installed (CI runs without it): every
+// SRD weapon is its weapon, and no other row is one unless the weapon table
+// holds its name.
+test("every SRD weapon in the pack is its weapon, and nothing else is one", () => {
+  const db = getContentDb();
+  if (!db) {
+    console.log("note: content pack absent; skipping the pack's weapon rows");
+    return;
+  }
+  const rows = db.prepare("SELECT DISTINCT name, kind, document_slug FROM items").all();
+  for (const { name } of rows.filter((row) => row.kind === "weapon" && row.document_slug === "wotc-srd")) {
+    assert.ok(weaponNamed(name), `${name} is no weapon`);
+  }
+  const misread = rows
+    .filter((row) => row.kind !== "weapon" && row.kind !== "magic_item")
+    .filter(({ name }) => weaponNamed(name) && weaponNamed(name).name.toLowerCase() !== name.toLowerCase());
+  assert.deepEqual(misread.map(({ name }) => name), []);
 });
 
 console.log(`test-weapons: ${passed} tests passed.`);

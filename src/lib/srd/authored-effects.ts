@@ -177,7 +177,7 @@ export function hasCondition(sheet: AuthoredSheet, name: string): boolean {
 export function wearsHeavy(sheet: AuthoredSheet): boolean {
   const items = sheet.equipment ?? [];
   return items.some(
-    (item) => isWorn(item, items) && (item.gear?.armor?.category ?? matchArmor(item.name)?.category) === "heavy",
+    (item) => isWorn(item, items) && (item.gear?.armor?.category ?? matchArmor(item)?.category) === "heavy",
   );
 }
 

@@ -22,7 +22,13 @@ export const BUNDLE_ORIGIN = "bundle";
 // The kinds an origin can describe, and the table each one's copies live in.
 // "board-*" are rows a storyboard card COMPILED into rather than rows copied
 // (src/lib/db/workshop-storyboard.ts); their origin row is the card.
+// "beats" are storyboard cards themselves (audit WF-19): a card that came
+// from a WorldForge file names the file's world ("wf:<id>") and its scene
+// id, one from a bundle names BUNDLE_ORIGIN and its portable key, and one
+// copied with a workshop names that workshop and its card. A card with no
+// row was made here.
 export const ORIGIN_TABLES = {
+  beats: "workshop_beats",
   npcs: "npcs",
   factions: "factions",
   locations: "locations",

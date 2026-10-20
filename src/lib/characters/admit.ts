@@ -15,6 +15,8 @@ export type Admitted =
       sheet: CreateSheetInput;
       // Hit dice the server rolled for a table that rolls its hit points.
       rolledHp?: number[];
+      // Picks a file left open that it could not have made (issue #430).
+      owed?: string[];
       // Call once the character is stored: the rolls it was made with are
       // spent, so the next character throws its own.
       settle: () => void;
@@ -46,6 +48,7 @@ export function admitSheet(
     ok: true,
     sheet: judged.sheet,
     ...(judged.rolled?.hp ? { rolledHp: judged.rolled.hp } : {}),
+    ...(judged.owed?.length ? { owed: judged.owed } : {}),
     settle: () => {
       if (usedPool) {
         spendAbilityPool(input.userId, abilityPlaceFor(input));

@@ -19,7 +19,18 @@ export const inputClass = ui.input;
 // "Two choices left on this step: Class skills · Fighting style", each name
 // a way to its block. The footer's blocker says the first; this says how
 // many there are and reaches each. Nothing shows once the step is done.
-export function OwedLine({ picks, onShow }: { picks: OwedPick[]; onShow: (target: BlockerTarget) => void }) {
+// `onFill` adds "Fill what's left" (quickBuild.ts): every open slot picked
+// for the player at once, read back, with one Undo. Only on request; the
+// line is the offer.
+export function OwedLine({
+  picks,
+  onShow,
+  onFill,
+}: {
+  picks: OwedPick[];
+  onShow: (target: BlockerTarget) => void;
+  onFill?: () => void;
+}) {
   const headline = owedHeadline(picks.length);
   if (!headline) {
     return null;
@@ -44,7 +55,33 @@ export function OwedLine({ picks, onShow }: { picks: OwedPick[]; onShow: (target
           </button>
         </span>
       ))}
+      {onFill ? (
+        <button
+          type="button"
+          onClick={onFill}
+          data-quick-fill=""
+          className="ml-1 rounded-md border border-sky-500/40 px-1.5 py-0.5 text-sky-200 transition-colors hover:bg-sky-500/10"
+        >
+          Fill what&apos;s left
+        </button>
+      ) : null}
     </p>
+  );
+}
+
+// "Pick for me" on one card that the level brings (a subclass, an ability
+// score improvement): the card stays blank until it is pressed.
+export function PickForMe({ onPick, what }: { onPick: () => void; what: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      data-pick-for-me=""
+      aria-label={`Pick ${what} for me`}
+      className="shrink-0 rounded-md border border-sky-500/40 px-1.5 py-0.5 text-xs text-sky-200 transition-colors hover:bg-sky-500/10"
+    >
+      Pick for me
+    </button>
   );
 }
 

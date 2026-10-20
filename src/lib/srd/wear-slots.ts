@@ -27,6 +27,7 @@
 import slotsJson from "@/lib/classes/item-slots.json";
 import { armorOfRow, isWorn, type WornItem } from "@/lib/srd/armor";
 import { textKey } from "@/lib/language/text-logic";
+import { rowName } from "@/lib/srd/item-row";
 import { isWornPlace } from "@/lib/srd/worn-places";
 
 export type WearSlot = "armor" | "shield" | "cloak" | "head" | "feet" | "hands" | "wrists" | "neck" | "waist" | "ring" | "eyes" | "robe";
@@ -84,16 +85,14 @@ export function wearSlotOf(item: SlotRow): WearSlot | null {
   const gear = item.gear as (WornItem["gear"] & { wornOn?: unknown }) | undefined;
   const suit = gear?.armor;
   const own = isWornPlace(gear?.wornOn) ? gear.wornOn : null;
-  // An item named in the table's language finds its row by the SRD name
-  // the DM gave it (srdName, #408), as the sheet's wear toggle does.
-  const rowName = item.srdName?.trim() || item.name;
-  const key = `${rowName}\u0000${item.slug ?? ""}\u0000${suit ? JSON.stringify(suit) : ""}\u0000${own ?? ""}`;
+  const row = rowName(item);
+  const key = `${row}\u0000${item.slug ?? ""}\u0000${suit ? JSON.stringify(suit) : ""}\u0000${own ?? ""}`;
   const cached = slotCache.get(item);
   if (cached?.key === key) {
     return cached.slot;
   }
   const armor = armorOfRow(item as WornItem)?.armor ?? null;
-  const slot: WearSlot | null = armor ? (armor.category === "shield" ? "shield" : "armor") : (own ?? rowSlot(rowName));
+  const slot: WearSlot | null = armor ? (armor.category === "shield" ? "shield" : "armor") : (own ?? rowSlot(row));
   slotCache.set(item, { key, slot });
   return slot;
 }
@@ -107,7 +106,7 @@ export function oneOfKind(slot: WearSlot): string | null {
 // flags (the engines ask once per item of the same pack).
 const countedCache = new WeakMap<readonly object[], { items: object[]; flags: string; counted: Set<object> }>();
 const flagsOf = (equipment: readonly SlotRow[]) =>
-  equipment.map((item) => `${item.equipped}|${item.attuned}|${item.layered}|${item.name}|${item.srdName ?? ""}|${item.slug ?? ""}`).join("\u0001");
+  equipment.map((item) => `${item.equipped}|${item.attuned}|${item.layered}|${item.name}|${rowName(item)}|${item.slug ?? ""}`).join("\u0001");
 
 // The worn rows whose magic counts: everything worn, except that a limited
 // place keeps only as many as it holds. Within a place the rows the DM let

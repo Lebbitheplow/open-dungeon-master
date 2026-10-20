@@ -210,6 +210,7 @@ building the older files would be a downgrade, which an upgraded database refuse
 ```bash
 npm test            # every scripts/test-*.mjs, one at a time, failures listed at the end
 npm run coverage    # the same, plus a code coverage report in coverage/index.html
+npm run dead-code   # files, exports, locals and parameters nothing uses (a report, not a CI gate)
 ```
 
 Each test script is a plain Node program, so `node scripts/test-<name>.mjs` runs one
@@ -217,3 +218,7 @@ on its own. Code coverage counts the `.ts` files under `src/`; `.tsx` is left ou
 since the scripts render no UI. It shows which code ran, not what a test checked.
 A script reports a failure by throwing or by calling `process.exit(1)`; setting
 `process.exitCode` on its own is not seen by the runner.
+
+The dead-code check follows imports from the entry points Next.js and the
+test runner know, plus those listed in `knip.jsonc`: a file only the desktop
+and Android apps import goes there, or the check reports it as unused.

@@ -58,7 +58,14 @@ export function armorClassLine(ac: number, parts: string[] | undefined): Derived
 
 // The purse as the gear step and the review show it.
 export function purseViewFor(input: {
-  purse: { gold: number; copper: number; spentCopper: number; problems: string[]; method: string };
+  purse: {
+    gold: number;
+    copper: number;
+    spentCopper: number;
+    problems: string[];
+    method: string;
+    receipt?: PurseView["receipt"];
+  };
   keepsStoredGear: boolean;
   backgroundName: string;
   backgroundPurse: number;
@@ -82,6 +89,7 @@ export function purseViewFor(input: {
     copper: purse.copper,
     source,
     problems: [...new Set(purse.problems)],
+    ...(purse.receipt ? { receipt: purse.receipt } : {}),
     wealth: rolledTable
       ? {
           dice,

@@ -118,8 +118,10 @@ export function MessageList({
   blockedUserIds = [],
   onReport,
   onDispute,
+  hidden = false,
 }: {
   messages: CampaignMessage[];
+  hidden?: boolean;
   campaignId: string;
   meUserId?: string;
   // Players the viewer has blocked; their rows fold away.
@@ -337,7 +339,7 @@ export function MessageList({
   }
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="session-transcript flex-1 overflow-y-auto">
+    <div ref={containerRef} hidden={hidden} onScroll={handleScroll} className="session-transcript flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6">
       {messages.flatMap((message, index) => [
         ...(index === draftAt ? [draftBubble] : []),

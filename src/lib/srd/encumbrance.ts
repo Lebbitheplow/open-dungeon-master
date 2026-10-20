@@ -16,6 +16,7 @@
 // exact when it is not.
 import { gearWeightLb } from "@/lib/srd/adventuring-gear";
 import { matchArmor } from "@/lib/srd/armor";
+import { rowName } from "@/lib/srd/item-row";
 import { matchWeapon, SRD_WEAPON_WEIGHT_LB } from "@/lib/srd/weapons";
 import { ammoCount, ammoKindForItem, AMMO_WEIGHT_LB } from "@/lib/srd/ammunition";
 import { magicItemRiders, type Wearer, type WornMagicItem } from "@/lib/srd/magic-items";
@@ -119,18 +120,18 @@ export function loadLine(item: CarriedItem, index = 0): LoadLine {
   if (typeof item.weight === "number" && Number.isFinite(item.weight) && item.weight > 0) {
     return weighed(item.weight, "item");
   }
-  const armor = matchArmor(item.name);
+  const armor = matchArmor(item);
   if (armor) {
     return weighed(armor.weightLb, "armor");
   }
   // Adventuring gear and tools by their SRD weights (adventuring-gear.ts),
   // for a kit the content pack did not stamp.
-  const gear = gearWeightLb(item.name);
+  const gear = gearWeightLb(rowName(item));
   if (gear !== null) {
     return weighed(gear, "gear");
   }
   // Then a weapon by the SRD's table (a +1 longsword weighs a longsword's 3 lb).
-  const weapon = matchWeapon(item.name);
+  const weapon = matchWeapon(item);
   if (weapon && SRD_WEAPON_WEIGHT_LB[weapon.name] !== undefined) {
     return weighed(SRD_WEAPON_WEIGHT_LB[weapon.name], "weapon");
   }

@@ -2,6 +2,7 @@ import { normalizeReputation } from "@/lib/dm/faction-logic";
 import { describeFormation, normalizeFormationChange, type FormationChange } from "@/lib/dm/formation-logic";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { lineNamed } from "@/lib/srd/item-row";
 import { listedItemTags } from "@/lib/schemas/item-tags";
 import type { ItemFacts } from "@/lib/dm/mutation-math";
 
@@ -180,7 +181,7 @@ export function removePartyItem(
   known: boolean,
   qty = 1,
 ): { inventory: PartyItem[]; removed: number; item: PartyItem } | ToolError {
-  const index = inventory.findIndex((row) => textKey(row.name) === textKey(name));
+  const index = lineNamed(inventory, name);
   if (index < 0) {
     return known
       ? { error: `The pack does not hold "${name}".`, refused: "rules" }

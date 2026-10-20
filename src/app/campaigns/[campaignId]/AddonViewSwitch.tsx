@@ -1,10 +1,11 @@
 "use client";
 
 import { SlidersHorizontal } from "lucide-react";
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { AddonFields, type FieldValues } from "@/components/addons/AddonFields";
 import { Dialog } from "@/components/ui/Dialog";
 import type { OfferedBoardView } from "@/lib/addons/offered";
+import { useAddons } from "@/lib/addons/use-addons";
 import { cn } from "@/lib/cn";
 
 // Which way this device draws the board: the built-in grid, or a board view
@@ -17,36 +18,67 @@ import { cn } from "@/lib/cn";
 
 const KEY = "odm.boardView";
 const OPTIONS_KEY = "odm.boardViewOptions";
+const CHOICE_EVENT = "odm:board-view";
+let choiceInMemory: string | null = null;
 
 export function boardViewKey(view: Pick<OfferedBoardView, "addonId" | "id">): string {
   return `${view.addonId}:${view.id}`;
 }
 
+function readChoice(): string {
+  if (typeof window === "undefined") return "";
+  if (choiceInMemory !== null) return choiceInMemory;
+  try {
+    return window.localStorage.getItem(KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function subscribeChoice(listener: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== KEY) return;
+    choiceInMemory = null;
+    listener();
+  };
+  window.addEventListener(CHOICE_EVENT, listener);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(CHOICE_EVENT, listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+function chooseView(next: string): void {
+  choiceInMemory = next;
+  try {
+    if (next) window.localStorage.setItem(KEY, next);
+    else window.localStorage.removeItem(KEY);
+  } catch {
+    // A private window keeps the choice for this page only.
+  }
+  window.dispatchEvent(new Event(CHOICE_EVENT));
+}
+
 export function useBoardViewChoice(): [string, (next: string) => void] {
-  const [choice, setChoice] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try {
-      return window.localStorage.getItem(KEY) ?? "";
-    } catch {
-      return "";
-    }
-  });
-  const choose = useCallback((next: string) => {
-    setChoice(next);
-    try {
-      if (next) window.localStorage.setItem(KEY, next);
-      else window.localStorage.removeItem(KEY);
-    } catch {
-      // A private window keeps the choice for this page only.
-    }
-  }, []);
-  return [choice, choose];
+  return [useSyncExternalStore(subscribeChoice, readChoice, () => ""), chooseView];
+}
+
+// The session and the board resolve the same live, compatible selection.
+export function useBoardView(mapAddonId?: string) {
+  const { boardViews } = useAddons();
+  const [choice, choose] = useBoardViewChoice();
+  const views = boardViews.filter((view) => !view.needsViewData || view.addonId === mapAddonId);
+  return { views, choose, active: views.find((view) => boardViewKey(view) === choice) ?? null };
 }
 
 type StoredOptions = Record<string, FieldValues>;
+const OPTIONS_EVENT = "odm:board-view-options";
+let optionsInMemory: StoredOptions | null = null;
 
 function readStoredOptions(): StoredOptions {
   if (typeof window === "undefined") return {};
+  if (optionsInMemory !== null) return optionsInMemory;
   try {
     const parsed = JSON.parse(window.localStorage.getItem(OPTIONS_KEY) ?? "{}") as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as StoredOptions) : {};
@@ -59,16 +91,30 @@ function readStoredOptions(): StoredOptions {
 // are checked against the view's fields where they are used (board-bridge.ts).
 export function useBoardViewOptions(): [StoredOptions, (viewKey: string, key: string, value: string | number | boolean) => void] {
   const [stored, setStored] = useState<StoredOptions>(readStoredOptions);
+  useEffect(() => {
+    const update = () => setStored(readStoredOptions());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== OPTIONS_KEY) return;
+      optionsInMemory = null;
+      update();
+    };
+    window.addEventListener(OPTIONS_EVENT, update);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(OPTIONS_EVENT, update);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
   const change = useCallback((viewKey: string, key: string, value: string | number | boolean) => {
-    setStored((current) => {
-      const next = { ...current, [viewKey]: { ...current[viewKey], [key]: value } };
-      try {
-        window.localStorage.setItem(OPTIONS_KEY, JSON.stringify(next));
-      } catch {
-        // A private window keeps the choice for this page only.
-      }
-      return next;
-    });
+    const current = readStoredOptions();
+    const next = { ...current, [viewKey]: { ...current[viewKey], [key]: value } };
+    optionsInMemory = next;
+    try {
+      window.localStorage.setItem(OPTIONS_KEY, JSON.stringify(next));
+    } catch {
+      // A private window keeps the choice for this page only.
+    }
+    window.dispatchEvent(new Event(OPTIONS_EVENT));
   }, []);
   return [stored, change];
 }

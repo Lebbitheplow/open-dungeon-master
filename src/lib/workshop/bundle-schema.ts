@@ -283,6 +283,10 @@ const beatSchema = z.object({
     .default({}),
   x: z.number().default(0),
   y: z.number().default(0),
+  // The card's portable key (audit WF-19), like a linkable row's: the
+  // importer records it as where the card came from, and its next export
+  // writes it again. A bundle written before cards had one reads as "".
+  ref: refSchema,
 });
 
 // The region map (it never travelled before). Terrain is one character per

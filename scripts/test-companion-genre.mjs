@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { genreClassIds, classGenres } = await import("../src/lib/classes/index.ts");
+const { genreClassIds, classGenres, settingClassIds, splitBySetting } = await import("../src/lib/classes/index.ts");
 const { GENRE_PRESETS, genrePreset } = await import("../src/lib/genres.ts");
 const { GENRES, gameSettingsSchema, resolveCompanionMode, companionSlotsFree } = await import(
   "../src/lib/schemas/game-settings.ts"
@@ -20,9 +20,17 @@ function test(name, fn) {
 
 const settings = (overrides = {}) => gameSettingsSchema.parse(overrides);
 
-test("open worlds take the whole catalog, themed worlds do not", () => {
-  assert.deepEqual(genreClassIds("high_fantasy"), []);
+test("a custom world takes the whole catalog; high fantasy has its own list; themed worlds take their tagged classes", () => {
   assert.deepEqual(genreClassIds("custom"), []);
+  // Issue #434: high fantasy is the SRD's classes and dark fantasy's, not
+  // "no restriction" (which put a netrunner in a high fantasy party).
+  const fantasy = genreClassIds("high_fantasy");
+  for (const id of ["fighter", "wizard", "cleric", "paladin", "witch_hunter", "grave_knight"]) {
+    assert.ok(fantasy.includes(id), `${id} belongs in high fantasy`);
+  }
+  for (const id of ["netrunner", "street_samurai", "steam_knight", "detective", "road_warrior"]) {
+    assert.ok(!fantasy.includes(id), `${id} does not belong in high fantasy`);
+  }
   for (const genre of GENRES) {
     if (genre === "high_fantasy" || genre === "custom") {
       continue;
@@ -79,6 +87,17 @@ test("party and guest slots are counted separately", () => {
   assert.equal(companionSlotsFree(table, 4, ["guest"]), false);
   assert.equal(companionSlotsFree(table, 4, ["party"]), true);
   assert.equal(companionSlotsFree(settings({ companions: "off" }), 1, []), false);
+});
+
+test("the level-up list splits a class list by the setting and keeps the order (issue #433)", () => {
+  const entries = ["fighter", "netrunner", "wizard", "grave_knight", "steam_knight"].map((id) => ({ id }));
+  const split = splitBySetting(entries, genreClassIds("high_fantasy"));
+  assert.deepEqual(split.setting.map((entry) => entry.id), ["fighter", "wizard", "grave_knight"]);
+  assert.deepEqual(split.other.map((entry) => entry.id), ["netrunner", "steam_knight"]);
+  // A custom world: one list.
+  assert.deepEqual(splitBySetting(entries, genreClassIds("custom")).other, []);
+  // A world pack's callings win over the genre's.
+  assert.deepEqual(splitBySetting(entries, settingClassIds("high_fantasy", ["netrunner"])).setting.map((entry) => entry.id), ["netrunner"]);
 });
 
 console.log(`test-companion-genre: ${passed} passed`);

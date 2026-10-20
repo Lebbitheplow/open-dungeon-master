@@ -10,6 +10,7 @@
 
 import magicItemsJson from "@/lib/classes/magic-items.json";
 import { textKey } from "@/lib/language/text-logic";
+import { rowName, type RowItem } from "@/lib/srd/item-row";
 
 // Extra dice a magic weapon adds to a hit. `type` "weapon" is the weapon's
 // own damage type; `vs` limits it to those creature types, `notVs` keeps it
@@ -101,12 +102,18 @@ function exact(name: string, slug?: string | null): GearDef | null {
 // Resistance". `baseInName` is the weapon or armor the caller's own matcher
 // found in the name; with it gone, what is left names the item. Only a row
 // that is itself a magic weapon or armor is found this way, so a "Longsword
-// of Warning" the table does not know stays a longsword.
-export function gearDefFor(
-  name: string,
-  slug?: string | null,
-  baseInName?: string | null,
-): GearDef | null {
+// of Warning" the table does not know stays a longsword. A carried item is
+// read by its row (src/lib/srd/item-row.ts).
+export function gearDefFor(item: RowItem, baseInName?: string | null): GearDef | null {
+  return lookUp(rowName(item), item.slug, baseInName);
+}
+
+// The same for a name nobody carries: an attack's weapon, a catalog entry.
+export function gearDefNamed(name: string, baseInName?: string | null): GearDef | null {
+  return lookUp(name, null, baseInName);
+}
+
+function lookUp(name: string, slug: string | null | undefined, baseInName: string | null | undefined): GearDef | null {
   const direct = exact(name, slug);
   if (direct || !baseInName) {
     return direct;
@@ -151,12 +158,12 @@ export function gearBaseName(def: GearDef | null, kind: "weapon" | "armor"): str
 type RowGear = { def?: Omit<GearDef, "name" | "match"> };
 
 export function gearDefOfRow(
-  item: { name: string; slug?: string | null; gear?: unknown },
+  item: RowItem & { gear?: unknown },
   baseInName?: string | null,
 ): GearDef | null {
   const own = (item.gear as RowGear | undefined)?.def;
   if (own && typeof own === "object") {
     return { ...own, name: item.name, match: `homebrew ${textKey(item.name)}` };
   }
-  return gearDefFor(item.name, item.slug, baseInName);
+  return gearDefFor(item, baseInName);
 }

@@ -7,7 +7,7 @@ import { spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { BONUS_SPELL, LEVELLED_SPELL } from "@/lib/dm/cast-rules";
 import { attackContext, mergeAdvantage } from "@/lib/dm/condition-logic";
 import { asPercent, attackOdds, averageDetail } from "@/lib/srd/odds";
-import { matchWeapon } from "@/lib/srd/weapons";
+import { weaponNamed } from "@/lib/srd/weapons";
 import {
   budgetOf,
   type HandAttackOption,
@@ -244,6 +244,23 @@ export function composeSentence(
   if (intent.card === "monster") {
     return "";
   }
+  if (intent.card === "gear") {
+    const item = chosenLabel(card, choices) ?? "it";
+    switch (intent.action) {
+      case "equip":
+        return card.id === "gear:don-shield" ? `I strap on my ${item}.` : `I draw my ${item}.`;
+      case "unequip":
+        return card.id === "gear:doff-shield" ? `I take off my ${item}.` : `I stow my ${item}.`;
+      case "drop":
+        return `I drop my ${item}.`;
+      case "pick_up":
+        return `I pick up the ${item}.`;
+      case "hand":
+        return `I hand my ${item} to ${who || "my ally"}.`;
+      case "use":
+        return aim && aim.kind !== "self" ? `I give ${who} my ${item} to drink.` : `I drink my ${item}.`;
+    }
+  }
   // The feature that routes it to the bonus action is the card's name
   // before the colon ("Cunning Action: Dash").
   const route = intent.bonus ? card.name.split(":")[0].trim() : "";
@@ -281,6 +298,10 @@ export function composeSentence(
       return "I end my turn.";
     case "stand-up":
       return "I stand up.";
+    case "stabilize":
+      return `I try to stabilize ${who || "my dying ally"}.`;
+    case "dismount":
+      return "I dismount.";
   }
 }
 
@@ -369,6 +390,9 @@ export function afterCommit(turn: HandTurn, card: HandCard, allowed = 1): HandTu
       : card.cost === "action" || card.cost === "bonus" || card.cost === "reaction"
         ? spendAction(budget, card.cost, card.name, "")
         : null;
+  // A gear card that is the object interaction marks it; once it is gone,
+  // the card's cost is the Use an Object action and is spent above.
+  const interacts = card.interaction === true;
   const spent = result && result.ok ? result.budget : budget;
   const next: HandTurn = {
     ...turn,
@@ -380,12 +404,13 @@ export function afterCommit(turn: HandTurn, card: HandCard, allowed = 1): HandTu
     grantedActions: spent.grantedActions,
     flurryStrikes: spent.flurryStrikes,
     marks: spent.oncePerTurn,
+    ...(turn.interactionUsed || interacts ? { interactionUsed: true } : {}),
   };
   // What the Attack action was made with, as the engine records it
   // (pc-attack-spend.ts) and the public turn says it: the off-hand card
   // reads it (issue 210).
   if (swing && result?.ok && intent.card === "attack") {
-    const properties = matchWeapon(intent.weapon ?? "")?.properties ?? [];
+    const properties = weaponNamed(intent.weapon ?? "")?.properties ?? [];
     const wielded = card.melee && intent.weapon !== "Unarmed strike";
     next.lightMeleeAttack = Boolean(turn.lightMeleeAttack) || (wielded && properties.includes("light"));
     next.oneHandMeleeAttack = Boolean(turn.oneHandMeleeAttack) || (wielded && !properties.includes("two-handed"));

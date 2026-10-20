@@ -31,6 +31,7 @@ import { HelpDot, MethodInfoDialog, type HpExplainerInput } from "./AbilityExpla
 import { AbilitySummary } from "./AbilitySummary";
 import { DiceDefs, DiceRow } from "./Dice";
 import { fetchOpenAbilityPool, requestAbilityPool, type AbilityPoolAnswer } from "./useTableRules";
+import { useRovingGroup } from "./roving";
 import { useContentCampaign } from "@/lib/content-scope";
 import { prefersStillMotion } from "@/lib/effects-mode";
 import { rerollWords } from "@/lib/srd/ability-rerolls";
@@ -134,6 +135,8 @@ export default function AbilityEditor({
   const [held, setHeld] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<Ability | "tray" | null>(null);
   const [methodInfoOpen, setMethodInfoOpen] = useState(false);
+  // The three ways are one tab stop, with the arrows between them (F16).
+  const methodKeys = useRovingGroup({ keys: METHODS.map((entry) => entry.id), chosen: method });
   // The dice are the server's: while it answers the throw button waits, and
   // a refusal is shown in its words beside the tray.
   const [asking, setAsking] = useState(false);
@@ -337,13 +340,15 @@ export default function AbilityEditor({
         <h2 className="eyebrow w-full text-xs text-amber-200/90 sm:w-auto">
           <GameTerm id="ability_score">Ability scores</GameTerm>
         </h2>
-        <div className="method-switch">
+        <div className="method-switch" onKeyDown={methodKeys.onKeyDown} onFocus={methodKeys.onFocus}>
           {METHODS.map((entry) => (
             <button
               key={entry.id}
               type="button"
               onClick={() => (entry.id === method ? undefined : switchMethod(entry.id))}
               aria-pressed={method === entry.id}
+              tabIndex={methodKeys.tabIndex(entry.id)}
+              data-roving-item={entry.id}
               className="method-option"
             >
               <span>{entry.label}</span>
@@ -639,25 +644,12 @@ export default function AbilityEditor({
               ) : null}
 
               {method === "standard" ? (
-                <span className="flex min-w-[192px] flex-[1_1_192px] items-center gap-[5px]" role="group" aria-label={`${label} score`}>
-                  {STANDARD_ARRAY.map((value) => {
-                    const mine = assigned === value;
-                    const taken = !mine && ABILITY_KEYS.some((key) => scores[key] === value);
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => onScoresChange(assignStandard(scores, ability, value))}
-                        aria-pressed={mine}
-                        aria-label={`${label} ${value}${taken ? ", held by another ability" : ""}`}
-                        data-taken={taken || undefined}
-                        className="slot-button"
-                      >
-                        {value}
-                      </button>
-                    );
-                  })}
-                </span>
+                <StandardArrayRow
+                  label={label}
+                  assigned={assigned}
+                  isTaken={(value) => ABILITY_KEYS.some((key) => key !== ability && scores[key] === value)}
+                  onAssign={(value) => onScoresChange(assignStandard(scores, ability, value))}
+                />
               ) : null}
 
               {method === "pointbuy" ? (
@@ -719,5 +711,51 @@ export default function AbilityEditor({
         current={method}
       />
     </section>
+  );
+}
+
+// One ability's row of the standard array: a labelled group of six toggle
+// buttons that is one tab stop, the arrows and Home and End moving along it
+// and Enter or Space assigning (F16). Six abilities were thirty-six stops.
+export function StandardArrayRow({
+  label,
+  assigned,
+  isTaken,
+  onAssign,
+}: {
+  label: string;
+  assigned: number | null | undefined;
+  isTaken: (value: number) => boolean;
+  onAssign: (value: number) => void;
+}) {
+  const roving = useRovingGroup({ keys: STANDARD_ARRAY.map(String), chosen: assigned == null ? null : String(assigned) });
+  return (
+    <span
+      className="flex min-w-[192px] flex-[1_1_192px] items-center gap-[5px]"
+      role="group"
+      aria-label={`${label} score`}
+      onKeyDown={roving.onKeyDown}
+      onFocus={roving.onFocus}
+    >
+      {STANDARD_ARRAY.map((value) => {
+        const mine = assigned === value;
+        const taken = !mine && isTaken(value);
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onAssign(value)}
+            aria-pressed={mine}
+            aria-label={`${label} ${value}${taken ? ", held by another ability" : ""}`}
+            data-taken={taken || undefined}
+            tabIndex={roving.tabIndex(String(value))}
+            data-roving-item={value}
+            className="slot-button"
+          >
+            {value}
+          </button>
+        );
+      })}
+    </span>
   );
 }

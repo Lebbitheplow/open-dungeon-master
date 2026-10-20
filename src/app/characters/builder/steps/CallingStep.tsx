@@ -23,7 +23,7 @@ import { ClassChoices } from "./ClassChoices";
 import { PlaystylePicker } from "../PlaystylePicker";
 import { EASY_CLASSES, fillClassSkills, type PlaystyleId } from "../playstyles";
 import FeatChoicesFields, { knownTraining } from "../FeatChoicesFields";
-import { Field, PickPill, StepPanel, inputClass } from "./shared";
+import { Field, PickForMe, PickPill, StepPanel, inputClass } from "./shared";
 
 // Step 3: the class (painted cards in the picker's groups and order, the
 // setting's callings first and badged, each with its emblem and a ? that
@@ -45,6 +45,7 @@ export function CallingStep({
   subclassLockedAt,
   chosenArchetype,
   playstyle,
+  onPickForMe,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
@@ -62,6 +63,9 @@ export function CallingStep({
   chosenArchetype: ArchetypeOption | null;
   // The answer given on the first step, so the picker opens on it.
   playstyle?: { value: PlaystyleId | null; onChange: (style: PlaystyleId | null) => void };
+  // "Pick for me" on the subclass (quickBuild.ts), offered once the level
+  // asks for one.
+  onPickForMe?: (target: "subclass") => void;
 }) {
   const { subclass } = state;
   const { effectiveLevel, grantedFeatures } = derived;
@@ -298,12 +302,15 @@ export function CallingStep({
                   />
                 </>
               ) : (
-                <span className="grow">
-                  <span className="text-amber-300">Still to choose. </span>
-                  Your <GameTerm id="subclass">subclass</GameTerm> is the biggest choice about how
-                  this character plays. Tap the info icon next to any option to read what it does
-                  before choosing.
-                </span>
+                <>
+                  <span className="grow">
+                    <span className="text-amber-300">Still to choose. </span>
+                    Your <GameTerm id="subclass">subclass</GameTerm> is the biggest choice about how
+                    this character plays. Tap the info icon next to any option to read what it does
+                    before choosing.
+                  </span>
+                  {onPickForMe ? <PickForMe what="a subclass" onPick={() => onPickForMe("subclass")} /> : null}
+                </>
               )}
             </span>
             {/* What the subclass trains the character in (issue 251): its

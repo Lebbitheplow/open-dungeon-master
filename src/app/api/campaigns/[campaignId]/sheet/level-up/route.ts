@@ -1,5 +1,7 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { offeredSubclasses, raceGrantsFor } from "@/lib/characters/catalog";
+import { settingClassIds } from "@/lib/classes";
+import { packClassIds } from "@/lib/dm/companion-tools";
 import { tableAuthors } from "@/lib/db/homebrew";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { subclassExtrasFor } from "@/lib/db/subclass-extras";
@@ -48,6 +50,7 @@ export async function GET(
     subclassesOf: (id) => offeredSubclasses(id, owner),
     freeCantrips: freeCantripCount(sheet, raceGrantsFor(sheet.race, owner)?.cantripChoice?.count ?? 0),
     subclassExtras: subclassExtrasFor(owner),
+    settingClassIds: settingClassIds(context.campaign.gameSettings.genre, packClassIds(context.campaign.gameSettings)),
   });
   if ("error" in options) {
     return Response.json({ error: options.error }, { status: 400 });

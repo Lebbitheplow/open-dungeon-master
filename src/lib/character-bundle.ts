@@ -68,6 +68,10 @@ export const characterBundleSchema = z.object({
   kind: z.literal(CHARACTER_BUNDLE_KIND),
   version: z.literal(CHARACTER_BUNDLE_VERSION),
   exportedAt: z.string().max(40),
+  // The server release that wrote the file (issue #430), so a later rule
+  // change can tell an old file from a hand-edited one. Optional: files
+  // written before it carry none.
+  appVersion: z.string().trim().max(40).optional(),
   name: z.string().trim().min(1).max(60),
   level: z.number().int().min(1).max(20),
   // The experience behind the level. Optional: a file written before the
@@ -106,12 +110,14 @@ export async function buildCharacterBundle(
   character: { name: string; level: number; xp?: number; sheet: CreateSheetInput },
   readPortrait: PortraitReader,
   now: Date = new Date(),
+  appVersion?: string,
 ): Promise<CharacterBundle> {
   const sheet: CreateSheetInput = { ...character.sheet, portrait: null };
   const bundle: CharacterBundle = {
     kind: CHARACTER_BUNDLE_KIND,
     version: CHARACTER_BUNDLE_VERSION,
     exportedAt: now.toISOString(),
+    ...(appVersion ? { appVersion } : {}),
     name: character.name,
     level: character.level,
     ...(character.xp !== undefined ? { xp: character.xp } : {}),

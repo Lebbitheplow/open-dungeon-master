@@ -37,7 +37,7 @@ import {
 import { afflictCondition, dropConditions, liveAfflictions } from "@/lib/dm/afflictions";
 import { writeAfflictions } from "@/lib/dm/between-io";
 import { magicValueOf, packListCp } from "@/lib/dm/trade-value";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { magicItemNamed } from "@/lib/srd/magic-items";
 import { grantItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -130,7 +130,7 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
     if (!entry.item?.trim() || !entry.tool?.trim()) {
       return { error: `Crafting needs the item to make and the tool it is made with (smith's tools, leatherworker's tools...).`, retry: true };
     }
-    if (matchMagicItem(entry.item) || magicValueOf({ name: entry.item })) {
+    if (magicItemNamed(entry.item) || magicValueOf({ name: entry.item })) {
       return { error: `${entry.item} is a magic item; downtime crafting makes nonmagical objects only (SRD 5.1, Crafting).`, refused: "rules" };
     }
     // Measured by the pack's list price alone: a magic item's value by its

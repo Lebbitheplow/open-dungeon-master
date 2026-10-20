@@ -116,6 +116,25 @@
   transform-origin: center;
   animation: board-miss-pop var(--dur-beat) var(--ease-spring) both;
 }
+/* A thing dropped on the board falls into its corner (issue #424); one in
+   reach breathes a ring. */
+@keyframes board-drop-fall {
+  0% { opacity: 0; transform: translateY(-10px) scale(0.6); }
+  70% { opacity: 1; transform: translateY(1px) scale(1.06); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes board-drop-reach {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.board-drop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: board-drop-fall var(--dur-beat) var(--ease-spring) both;
+}
+.board-drop-reach {
+  animation: board-drop-reach 1.8s var(--ease-drift) infinite;
+}
 
 /* The chrome sits over painted, lit terrain, which is dark in both themes,
    so its plates are fixed dark glass rather than theme surfaces. */
@@ -547,6 +566,8 @@ html[data-theme="light"] .check-card[data-crit="nat20"] {
 
 [data-effects="low"] .board-mote,
 [data-effects="low"] .board-torch,
+[data-effects="low"] .board-drop,
+[data-effects="low"] .board-drop-reach,
 [data-effects="low"] .board-arrow,
 [data-effects="low"] .board-reticle,
 [data-effects="low"] .board-plate-current,

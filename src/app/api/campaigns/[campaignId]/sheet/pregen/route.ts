@@ -1,14 +1,13 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { oweSkippedImprovements } from "@/lib/characters/adapt";
-import { admitSheet, refusal } from "@/lib/characters/admit";
+import { refusal } from "@/lib/characters/admit";
+import { admitPregen } from "@/lib/characters/seat-preview";
 import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
 import { createCharacter } from "@/lib/db/characters";
 import { createSheet, getSheetForUser } from "@/lib/db/sheets";
 import { seatAddedSheet } from "@/lib/character-seat";
 import { publishPersisted } from "@/lib/events";
 import { queueLibraryPortrait } from "@/lib/portrait";
-import { createSheetSchema } from "@/lib/schemas/sheet";
 import { pregenById } from "@/lib/starter/pregens";
 
 export const runtime = "nodejs";
@@ -42,21 +41,13 @@ export async function POST(
   if (!pregen) {
     return Response.json({ error: "No such hero." }, { status: 404 });
   }
-  const input = createSheetSchema.parse(pregen.sheet);
-  const admitted = admitSheet({
-    door: "table",
-    level: context.campaign.startingLevel,
-    sheet: input,
-    userId: context.user.id,
-    campaign: context.campaign,
-  });
+  // The door and the owed improvements are src/lib/characters/seat-preview.ts,
+  // shared with the confirm sheet the player reads before this.
+  const admitted = admitPregen(pregen, context.campaign, context.user.id);
   if (!admitted.ok) {
     return refusal(admitted.problems);
   }
-  // Every hero is a level 1 build: at a higher table the improvements its
-  // level earned were never offered, so they are owed, not taken (backlog
-  // B6, the rule a library hero joining above its level follows).
-  const seated = oweSkippedImprovements(admitted.sheet, input, 1, context.campaign.startingLevel);
+  const seated = admitted.sheet;
   const libraryCharacter = createCharacter(context.user.id, context.campaign.startingLevel, seated);
   const sheet = createSheet(campaignId, context.user.id, context.campaign.startingLevel, seated, libraryCharacter.id);
   admitted.settle();

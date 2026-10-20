@@ -378,7 +378,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   if (!removal) {
     return notCarried(sheet.name, sheet.equipment.map((item) => item.name), args.item, isTableGearName(campaign.id, args.item));
   }
-  const line = sheet.equipment.find((item) => textKey(item.name) === textKey(args.item)) ?? { name: args.item };
+  const line = removal.item;
   const carried = line.name;
   // A shop buys the magic it would sell (SRD 5.2, Magic Item Rarity). Anything
   // rarer finds a buyer among "the wealthiest nobles" (SRD 5.1, Selling

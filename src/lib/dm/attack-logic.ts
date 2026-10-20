@@ -2,9 +2,11 @@ import {
   damageScore,
   isWeaponProficient,
   matchWeapon,
+  weaponNamed,
   type SrdWeapon,
 } from "@/lib/srd/weapons";
-import { magicItemBonus } from "@/lib/srd/armor";
+import { itemNames, lineNamed, magicItemBonus } from "@/lib/srd/item-row";
+import { wearingIsExplicit } from "@/lib/srd/armor";
 import {
   gearProfileParts,
   isMagicWeaponName,
@@ -121,10 +123,13 @@ function itemMatchesTerm(itemName: string, term: string): boolean {
 // their carried equipment and the SRD table, and "unarmed strike" is the
 // rules' own; no name picks the best proficient carried weapon; nothing
 // usable falls back to an unarmed strike.
+// `shieldOnArm`: a two-handed weapon cannot be used with a shield on the arm
+// (attack-rules.ts handsRuling), so the unnamed pick prefers one that can.
 export function resolveAttackWeapon(
   equipment: EquipmentItem[],
   weaponProfs: string[],
   weaponArg: string | undefined,
+  options: { shieldOnArm?: boolean } = {},
 ): ResolvedWeapon {
   const arg = (weaponArg ?? "").trim();
   if (arg) {
@@ -132,11 +137,12 @@ export function resolveAttackWeapon(
       return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
     }
     // The exact name wins over a name that merely contains it, so a
-    // "Longsword" asked for beside a "Longsword +1" is the plain one.
-    const wanted = textKey(arg);
+    // "Longsword" asked for beside a "Longsword +1" is the plain one. The
+    // line the name picks out comes first (src/lib/srd/item-row.ts
+    // lineNamed): "Longsword" swings the "Spada lunga" the DM named by it.
     const carriedItem =
-      equipment.find((item) => textKey(item.name) === wanted) ??
-      equipment.find((item) => itemMatchesTerm(item.name, arg));
+      equipment[lineNamed(equipment, arg)] ??
+      equipment.find((item) => itemNames(item).some((name) => itemMatchesTerm(name, arg)));
     // A carried homebrew weapon carries its own block (src/lib/homebrew/
     // gear.ts) and wins over a name that happens to resemble an SRD one. A
     // carried magic weapon swings as its base weapon (src/lib/dm/
@@ -145,8 +151,8 @@ export function resolveAttackWeapon(
     const srd =
       (magic?.gear ? magic.srd : null) ??
       weaponOf(carriedItem) ??
-      matchWeapon(arg) ??
-      (carriedItem ? matchWeapon(carriedItem.name) : null);
+      weaponNamed(arg) ??
+      (carriedItem ? matchWeapon(carriedItem) : null);
     return {
       displayName: carriedItem?.name ?? srd?.name ?? arg,
       srd,
@@ -158,21 +164,39 @@ export function resolveAttackWeapon(
       ...(magic?.gear ? { gear: magic.gear } : {}),
     };
   }
-  // No name given: best carried weapon, proficient ones first.
-  let best: { item: EquipmentItem; srd: SrdWeapon; proficient: boolean; gear: WeaponGear | null } | null = null;
+  // No name given: best carried weapon, one the hands can use first, then
+  // the one in hand (issue #424: a character holding a mace was played with
+  // the crossbow in the pack), then proficient ones, then the most damage.
+  // With only two-handed weapons beside a shield the best of them still
+  // stands, and the hands rule says why it cannot swing. A sheet that marks
+  // nothing as equipped holds everything, as the armor engine reads it.
+  const explicit = wearingIsExplicit(equipment);
+  let best: {
+    item: EquipmentItem;
+    srd: SrdWeapon;
+    usable: boolean;
+    held: boolean;
+    proficient: boolean;
+    gear: WeaponGear | null;
+  } | null = null;
   for (const item of equipment) {
     const magic = magicWeaponOfRow(item);
     const srd = (magic.gear ? magic.srd : null) ?? weaponOf(item) ?? magic.srd ?? null;
     if (!srd) {
       continue;
     }
+    const usable = !(options.shieldOnArm && (srd.properties ?? []).includes("two-handed"));
+    const held = !explicit || item.equipped === true;
     const proficient = isWeaponProficient(weaponProfs, srd);
-    if (
-      !best ||
-      (proficient && !best.proficient) ||
-      (proficient === best.proficient && damageScore(srd) > damageScore(best.srd))
-    ) {
-      best = { item, srd, proficient, gear: magic?.gear ?? null };
+    const better = (() => {
+      if (!best) return true;
+      if (usable !== best.usable) return usable;
+      if (held !== best.held) return held;
+      if (proficient !== best.proficient) return proficient;
+      return damageScore(srd) > damageScore(best.srd);
+    })();
+    if (better) {
+      best = { item, srd, usable, held, proficient, gear: magic?.gear ?? null };
     }
   }
   if (best) {

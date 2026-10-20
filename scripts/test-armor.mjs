@@ -12,11 +12,11 @@ const {
   computeArmorClass,
   defaultArmor,
   isArmorProficient,
-  magicItemBonus,
-  matchArmor,
+  armorNamed,
   suggestArmor,
   unarmoredFormulaFor,
 } = await import("../src/lib/srd/armor.ts");
+const { magicItemBonus } = await import("../src/lib/srd/item-row.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -36,19 +36,19 @@ const ac = (input) =>
   }).ac;
 
 test("matches armor by exact and trailing name", () => {
-  assert.equal(matchArmor("Plate")?.name, "Plate");
-  assert.equal(matchArmor("plate armor")?.name, "Plate");
-  assert.equal(matchArmor("+1 Plate")?.name, "Plate");
-  assert.equal(matchArmor("Dwarven Chain Mail")?.name, "Chain Mail");
+  assert.equal(armorNamed("Plate")?.name, "Plate");
+  assert.equal(armorNamed("plate armor")?.name, "Plate");
+  assert.equal(armorNamed("+1 Plate")?.name, "Plate");
+  assert.equal(armorNamed("Dwarven Chain Mail")?.name, "Chain Mail");
   // Longest canonical name wins over its own suffix.
-  assert.equal(matchArmor("Studded Leather")?.name, "Studded Leather");
-  assert.equal(matchArmor("Chain Mail")?.name, "Chain Mail");
+  assert.equal(armorNamed("Studded Leather")?.name, "Studded Leather");
+  assert.equal(armorNamed("Chain Mail")?.name, "Chain Mail");
 });
 
 test("ordinary gear never becomes armor", () => {
   // The old substring approach turned every one of these into armor.
   for (const name of ["Leather Backpack", "Hide Rope", "Plate of Stew", "Shield Charm Scroll"]) {
-    assert.equal(matchArmor(name), null, name);
+    assert.equal(armorNamed(name), null, name);
   }
 });
 
@@ -63,9 +63,9 @@ test("reads the magic bonus off an item name", () => {
 });
 
 test("armor proficiency cascades from heavy down", () => {
-  const plate = matchArmor("Plate");
-  const leather = matchArmor("Leather");
-  const shield = matchArmor("Shield");
+  const plate = armorNamed("Plate");
+  const leather = armorNamed("Leather");
+  const shield = armorNamed("Shield");
   assert.equal(isArmorProficient(["heavy"], plate), true);
   assert.equal(isArmorProficient(["heavy"], leather), true);
   assert.equal(isArmorProficient(["light"], plate), false);
@@ -195,10 +195,22 @@ test("starting armor follows class training", () => {
   }
 });
 
+test("a table's setting armor is suggested to any class trained for it, the class's own setting's as before (issue #434)", () => {
+  const names = (list) => list.map((armor) => armor.name);
+  // An SRD fighter in a cyberpunk campaign is offered the kevlar vest.
+  const fighterCyberpunk = names(suggestArmor(["light", "medium", "heavy", "shields"], ["steampunk", "cyberpunk"]));
+  assert.ok(fighterCyberpunk.includes("Kevlar Vest"), fighterCyberpunk.join(", "));
+  assert.ok(fighterCyberpunk.includes("Riot Plating"));
+  // In high fantasy, no setting armor at all.
+  const fighterFantasy = names(suggestArmor(["light", "medium", "heavy", "shields"], ["steampunk", "high_fantasy"]));
+  assert.ok(!fighterFantasy.includes("Kevlar Vest"));
+  assert.ok(fighterFantasy.includes("Brass Carapace"), "the fighter's own steampunk tag still counts");
+});
+
 test("the table itself is coherent", () => {
   assert.equal(ATTUNEMENT_SLOTS, 3);
   for (const armor of SRD_ARMOR) {
-    assert.equal(matchArmor(armor.name)?.name, armor.name, armor.name);
+    assert.equal(armorNamed(armor.name)?.name, armor.name, armor.name);
     if (armor.category === "heavy") {
       assert.equal(armor.dexCap, 0, armor.name);
     }

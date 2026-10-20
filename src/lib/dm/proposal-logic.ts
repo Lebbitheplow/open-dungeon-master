@@ -6,6 +6,7 @@
 
 import type { ToolError } from "./tool-errors.ts";
 import { textKey } from "../language/text-logic.ts";
+import { lineNamed } from "../srd/item-row.ts";
 
 export const PROPOSAL_TOOL_NAMES = new Set([
   "grant_item",
@@ -180,7 +181,7 @@ export type OfferArgs = ProposalArgs & { coins?: string; additional?: boolean; u
 
 export type OfferSheet = {
   name: string;
-  equipment: Array<{ name: string; qty: number }>;
+  equipment: Array<{ name: string; qty: number; srdName?: string }>;
   gold: number;
   copper: number;
 };
@@ -188,8 +189,7 @@ export type OfferSheet = {
 // The first row by that name, as removeItemMath takes it (an unidentified
 // twin sits in its own row and is not touched by a removal of the first).
 function heldQty(sheet: OfferSheet, name: string): number {
-  const wanted = textKey(name);
-  const row = sheet.equipment.find((item) => textKey(item.name) === wanted);
+  const row = sheet.equipment[lineNamed(sheet.equipment, name)];
   return row ? Math.max(0, Number(row.qty) || 0) : 0;
 }
 

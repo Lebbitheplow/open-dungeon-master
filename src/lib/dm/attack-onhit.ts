@@ -123,7 +123,7 @@ export function poisonCoatRefusal(sheet: CharacterSheet, itemName: string): Tool
     return null;
   }
   const coatable = sheet.equipment.some((item) => {
-    const weapon = matchWeapon(item.name);
+    const weapon = matchWeapon(item);
     return Boolean(weapon && slashesOrPierces(weapon.damage)) || (["arrows", "bolts", "needles"] as const).some((kind) => hasItemTag(item, kind));
   });
   return coatable

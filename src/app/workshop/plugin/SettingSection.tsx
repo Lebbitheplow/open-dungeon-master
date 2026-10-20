@@ -9,14 +9,15 @@ import type { SectionProps } from "@/app/workshop/plugin/types";
 // beyond its names. Factions, places, hooks and a glossary go into the
 // game-state block; name seeds are offered as clickable suggestions in the
 // character builder. Pull from this workshop (in the panel header) fills
-// these from the lore, places, hook cards and cast already built here.
+// these from the factions, lore, places, hook cards and cast already built
+// here.
 
 export function SettingSection({ draft, onDraft }: SectionProps) {
   return (
     <div className="space-y-4">
       <section className={ui.card + " p-4"}>
         <SectionHead title="Factions" glyph="system-factions" className="mb-0" />
-        <p className="mb-3 text-[11px] text-stone-500">Who holds power and what they want. Lore filed under &quot;factions&quot; lands here when you pull from the workshop.</p>
+        <p className="mb-3 text-[11px] text-stone-500">Who holds power and what they want. The workshop&apos;s factions land here when you pull from it, with where each is based and who belongs, as far as the line goes.</p>
         <PairList
           items={draft.factions}
           onChange={(factions) => onDraft({ ...draft, factions })}

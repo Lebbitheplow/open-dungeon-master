@@ -310,10 +310,11 @@ await test("in a fight hit dice are not spent, armor does not change and nothing
   await refusedBy(table, fighter.id, { gear: { Plate: { equipped: true } } }, "refused");
   await refusedBy(table, fighter.id, { gear: { Leather: { equipped: false } } }, "refused");
   await refusedBy(table, fighter.id, { gear: { "Ring of Protection": { attuned: true } } }, "refused");
-  // A weapon is drawn for nothing, on anyone's turn.
-  const drawn = await postUsage(table, fighter.id, { gear: { Longsword: { equipped: true } } });
-  assert.equal(drawn.status, 200, drawn.json.error);
-  assert.equal(table.sheet(fighter.id).equipment.find((item) => item.name === "Longsword").equipped, true);
+  // A weapon is drawn with the turn's free object interaction, so on the
+  // character's own turn (issue #424); off it, nothing is drawn or charged.
+  // scripts/test-enforce-handle-item.mjs draws on the character's turn.
+  await refusedBy(table, fighter.id, { gear: { Longsword: { equipped: true } } }, "refused");
+  assert.equal(table.sheet(fighter.id).equipment.find((item) => item.name === "Longsword").equipped, false);
   assert.equal(table.encounter().turnBudget, null);
 });
 
