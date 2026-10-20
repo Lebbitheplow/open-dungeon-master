@@ -1300,12 +1300,16 @@ export const requestRollTool = {
 
 // Gives the floor to specific characters: other players are blocked from
 // acting until one of the named players responds (or the owner releases it).
+// When to call it is said here as well as in the core rules: the model reads
+// a tool's own words where it chooses the tool, and with the trigger only in
+// the core rules a live table's spotlights fell to a third. It rides in the
+// first sentence, the one a compact call keeps (src/lib/dm/tool-profiles.ts).
 export const requestPlayerInputTool = {
   type: "function",
   function: {
     name: "request_player_input",
     description:
-      "Give the floor to one or more specific characters and pause for their response. Narrate first, then call it.",
+      "Give the floor to specific characters and pause for their response whenever your reply ends with an NPC speaking to them or a decision that is theirs, not the whole party's. Narrate first, then call it. Never answer for them instead.",
     parameters: {
       type: "object",
       additionalProperties: false,
