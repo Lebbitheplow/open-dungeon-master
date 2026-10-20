@@ -44,7 +44,9 @@ await test("the lobby, a solo table and the mid-game gate all offer the three ro
   for (const route of ["ready", "library", "build"]) assert.match(routes, new RegExp(`route="${route}"`));
   assert.match(routes, /\$\{page\}\?start=new/, "the builder shortcut is kept");
   const page = read("src/app/campaigns/[campaignId]/character/page.tsx");
-  assert.match(page, /flow === "join" \? \(\s*<PregenPicker/, "the join page offers ready-made heroes beside the library");
+  const chooser = read("src/app/campaigns/[campaignId]/HeroChooser.tsx");
+  assert.match(page, /<HeroChooser/, "the join page opens on the hero chooser");
+  assert.match(chooser, /flow === "join" \? <PregenPicker/, "which offers ready-made heroes beside the library");
   assert.match(page, /In a hurry\? Take a ready-made hero/, "and above the builder");
 });
 
