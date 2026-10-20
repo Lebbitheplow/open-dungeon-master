@@ -977,7 +977,7 @@
     "lib/dm/attack-features.ts#toLowerCase": [["key",1,"condition labels and creature types (engine and SRD vocabulary)"]],
     "lib/dm/attack-logic.ts#re-affix": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/attack-logic.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"],["english-source",1,"reference: an SRD weapon name compared whole"]],
-    "lib/dm/attack-logic.ts#str-includes": [["key",9,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/attack-logic.ts#str-includes": [["key",10,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/attack-logic.ts#toLowerCase": [["key",1,"class id"],["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"],["english-source",1,"reference: an SRD weapon name compared whole"]],
     "lib/dm/attack-marks.ts#re-word": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/attack-marks.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
