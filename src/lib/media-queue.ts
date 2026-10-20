@@ -27,7 +27,9 @@ export type MediaLane = "gpu" | "tts" | `tts:${string}`;
 
 type Waiting = { superseded: boolean; followers: Array<() => void> };
 
-export type LaneStats = { waiting: number; lastWaitMs: number; lastRunMs: number; superseded: number };
+// `running` is 1 while the lane has a job under way: with `waiting`, what a
+// picture still in the queue is behind (WorldForge's Paint says so).
+export type LaneStats = { waiting: number; running: number; lastWaitMs: number; lastRunMs: number; superseded: number };
 
 declare global {
   var __odmMediaQueues: Partial<Record<MediaLane, Promise<void>>> | undefined;
@@ -39,7 +41,7 @@ function laneStats(lane: string): LaneStats {
   const stats = (globalThis.__odmMediaStats ??= new Map());
   let entry = stats.get(lane);
   if (!entry) {
-    entry = { waiting: 0, lastWaitMs: 0, lastRunMs: 0, superseded: 0 };
+    entry = { waiting: 0, running: 0, lastWaitMs: 0, lastRunMs: 0, superseded: 0 };
     stats.set(lane, entry);
   }
   return entry;
@@ -96,9 +98,11 @@ export function enqueueMediaJob(
       }
       stats.lastWaitMs = Date.now() - queuedAt;
       const started = Date.now();
+      stats.running = 1;
       try {
         await scoped();
       } finally {
+        stats.running = 0;
         stats.lastRunMs = Date.now() - started;
       }
     })
