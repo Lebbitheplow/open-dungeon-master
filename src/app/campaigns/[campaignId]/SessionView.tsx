@@ -1281,6 +1281,8 @@ export function SessionView({
             targetLevel={myLevelUp.level}
             multiclassAllowed={campaign.gameSettings?.multiclassingEnabled ?? true}
             hpMethod={campaign.gameSettings?.hpMethod ?? "average"}
+            genre={campaign.gameSettings?.genre}
+            worldPack={campaign.gameSettings?.worldPack}
             onDone={() => {
               setDismissedLevelUp(noticeKey);
               setLevelUpByHand(false);

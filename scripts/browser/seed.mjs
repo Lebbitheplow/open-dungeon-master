@@ -516,6 +516,34 @@ const sable = createCharacter(world.owner.id, 4, {
   notes: "",
 });
 
+// A high fantasy table whose fighter has earned level 4 (issues 433, 434):
+// the level-up dialog's multiclass list leads with the setting's own
+// classes, folds the rest under Other settings, and can be searched.
+const levelTable = campaigns.createCampaign(world.owner.id, {
+  title: "Level Table",
+  description: "A quiet road after a hard fight.",
+  theme: "high-fantasy",
+  maxPlayers: 6,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false, genre: "high_fantasy" },
+});
+campaigns.setCampaignStatus(levelTable.id, "active");
+const leveller = sheets.createSheet(
+  levelTable.id,
+  world.owner.id,
+  3,
+  heroInput({ name: "Rook Ashvale", class: "fighter", level: 3, abilities: { str: 15, dex: 13, con: 14, int: 13, wis: 13, cha: 13 } }),
+);
+getDatabase().prepare(`UPDATE character_sheets SET xp = ? WHERE id = ?`).run(2700, leveller.id);
+messages.insertCampaignMessage({
+  campaignId: levelTable.id,
+  seq: campaigns.allocateSeq(levelTable.id),
+  authorType: "dm",
+  speech: [],
+  content: "The road is quiet now. Rook wipes the blade clean and feels steadier for it.",
+});
+
 // The lead runs the server too, for the admin settings (issue 255).
 setUserAdmin(world.owner.id, true);
 
@@ -555,8 +583,10 @@ const ids = {
   closing,
   stopTables,
   wardrobe,
+  levelTableId: levelTable.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
+    [levelTable.id]: "Level Table",
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

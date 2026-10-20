@@ -1,5 +1,6 @@
 "use client";
 
+import type { Genre } from "@/lib/schemas/game-settings";
 import { expertiseAllowed } from "@/lib/srd/features";
 import { useMemo } from "react";
 import { starterSpellsFor } from "@/lib/help";
@@ -94,6 +95,7 @@ export function useBuilderDerived({
   fixedLevel,
   rules,
   featDescs,
+  genre,
 }: {
   state: BuilderState;
   race: RaceOption | undefined;
@@ -101,6 +103,10 @@ export function useBuilderDerived({
   background: BackgroundOption | undefined;
   fixedLevel?: number;
   rules?: TableRules;
+  // The table's genre, when the character is made for one: its setting's
+  // armor is suggested to any class trained for it, as the class's own
+  // genre's is (issue #434: a fighter at a cyberpunk table saw no vest).
+  genre?: Genre;
   // The text of content-pack feats the builder has fetched, by lower-case
   // name (useFeatDescs); ODM's own feats are bundled. What a feat grants is
   // read from its text (src/lib/srd/feat-grants.ts).
@@ -448,12 +454,12 @@ export function useBuilderDerived({
     }
     return [
       ...suggestWeapons(klass.weapons).map((weapon) => ({ name: weapon.name, note: weapon.damage })),
-      ...suggestArmor(klass.armor, klass.genres).map((armor) => ({
+      ...suggestArmor(klass.armor, [...(klass.genres ?? []), ...(genre ? [genre] : [])]).map((armor) => ({
         name: armor.name,
         note: armor.category === "shield" ? `+${armor.baseAc} AC` : `AC ${armor.baseAc}`,
       })),
     ];
-  }, [klass]);
+  }, [klass, genre]);
   const fullEquipment = useMemo(() => {
     if (keepsStoredGear) {
       return equipment;

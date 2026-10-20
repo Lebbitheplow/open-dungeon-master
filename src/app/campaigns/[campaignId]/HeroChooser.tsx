@@ -10,6 +10,11 @@ import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { JoinConfirmDialog, type JoinHero } from "@/app/campaigns/[campaignId]/JoinConfirmDialog";
 import { chooserSections } from "@/app/campaigns/[campaignId]/hero-chooser";
 import { PregenPicker } from "@/app/campaigns/[campaignId]/PregenPicker";
+import { useWorldPack } from "@/app/characters/builder/useBuilderOptions";
+import { settingClassIds } from "@/lib/classes";
+import { genrePreset } from "@/lib/genres";
+import type { Genre } from "@/lib/schemas/game-settings";
+import { findClass } from "@/lib/srd";
 
 export type ChooserCharacter = {
   id: string;
@@ -39,6 +44,8 @@ export function HeroChooser({
   level,
   characters,
   currentLibraryId,
+  genre,
+  worldPackId,
   onBuildNew,
   onSeated,
 }: {
@@ -49,10 +56,27 @@ export function HeroChooser({
   // The player's library, allies the DM plays already left out.
   characters: ChooserCharacter[];
   currentLibraryId: string | null;
+  // The table's setting, for the line that says a hero's class comes from
+  // another one.
+  genre?: Genre;
+  worldPackId?: string;
   onBuildNew: () => void;
   onSeated: () => void;
 }) {
   const [workshops, setWorkshops] = useState<Record<string, string>>({});
+  // Which of a library character's classes come from another setting than
+  // the table's: said on the card before it joins, never refused (issue
+  // #434). The same rule keeps the table's AI companions in setting.
+  const pack = useWorldPack(worldPackId || undefined);
+  const settingIds = genre ? settingClassIds(genre, (pack?.classes ?? []).map((entry) => entry.id)) : [];
+  const settingName = pack?.name ?? (genre ? genrePreset(genre).name : "");
+  const strangers = (character: ChooserCharacter): string[] => {
+    if (!settingIds.length) {
+      return [];
+    }
+    const ids = [...new Set([character.class, ...(character.sheet?.classes ?? []).map((entry) => entry.id)].map((id) => id.toLowerCase()))];
+    return ids.filter((id) => !settingIds.includes(id)).map((id) => findClass(id)?.name ?? titleCase(id));
+  };
   const [picked, setPicked] = useState<JoinHero | null>(null);
   const sections = chooserSections(characters);
 
@@ -107,6 +131,11 @@ export function HeroChooser({
             {character.subclass ? ` (${character.subclass})` : ""}
           </p>
           {from ? <p className="mt-0.5 text-xs text-stone-500">From {from}</p> : null}
+          {strangers(character).length ? (
+            <p className="reveal mt-1 text-xs text-stone-400">
+              {strangers(character).join(" and ")} {strangers(character).length === 1 ? "comes" : "come"} from another setting; this table plays {settingName}.
+            </p>
+          ) : null}
           {character.level !== level ? (
             <p className="reveal mt-1 text-xs text-amber-200">
               {character.level < level

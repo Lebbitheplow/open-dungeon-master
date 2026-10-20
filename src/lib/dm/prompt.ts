@@ -6,7 +6,7 @@ import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ADVENTURE_BEGINS_NOTE, LEAD_NOTE_PREFIX, OPENING_SCENE_CUE, type CampaignMember } from "@/lib/campaign-types";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
-import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
+import { computeSheetDerived, findClass, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
@@ -352,8 +352,9 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
     : genreClassIds(campaign.gameSettings.genre);
   const setting = [
     `- Companions belong to THIS world (${preset.name}), not to generic fantasy.`,
+    // By name, not id: a snake_case id reads to a model as a tool to call.
     classIds.length
-      ? ` Only these classes exist here: ${classIds.join(", ")}; add_companion refuses anything else.`
+      ? ` Only these classes exist here: ${classIds.map((id) => findClass(id)?.name ?? id).join(", ")}; add_companion refuses anything else.`
       : "",
     ` ${preset.raceHint}`,
     preset.nameHints ? ` Name them in the world's register: ${nameRegisterHint(preset.nameHints)}` : "",

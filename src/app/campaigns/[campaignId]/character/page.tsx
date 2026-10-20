@@ -191,6 +191,8 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
             flow={flow === "replace" ? "replace" : "join"}
             level={level}
             characters={library}
+            genre={genre}
+            worldPackId={worldPackId}
             currentLibraryId={currentLibraryId}
             onBuildNew={() => setMode("create")}
             onSeated={seated}

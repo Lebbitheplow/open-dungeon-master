@@ -281,6 +281,22 @@ try {
     world.close();
   });
 
+  await test("The classes a level could start are listed with the table's setting first, and a class of another setting says so (issue #434).", async () => {
+    const { world, campaignId, play } = await seated(LEGAL_FIGHTER);
+    globalThis.fetch = await routeFetch(world);
+    const outcome = await workbenchCall(play, "odm_level_up_options", { campaignId });
+    assert.equal(outcome.isError, false, outcome.text);
+    const others = json(outcome).otherClasses;
+    const flagged = (id) => others.find((entry) => entry.id === id)?.fromAnotherSetting === true;
+    // The table plays high fantasy (the default): a wizard belongs, a netrunner does not.
+    assert.equal(flagged("wizard"), false);
+    assert.equal(flagged("grave_knight"), false);
+    assert.equal(flagged("netrunner"), true);
+    const firstStranger = others.findIndex((entry) => entry.fromAnotherSetting);
+    assert.ok(firstStranger > 0 && others.slice(firstStranger).every((entry) => entry.fromAnotherSetting), "the setting's classes come first");
+    world.close();
+  });
+
   await test("A malformed class id is refused before any route is called.", async () => {
     const { play, world } = await seated(LEGAL_FIGHTER);
     globalThis.fetch = () => {

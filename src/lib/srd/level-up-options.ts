@@ -58,6 +58,10 @@ export type LevelUpOptionsContext = {
   // Cantrips the race gave, known on top of the class's (free-cantrips.ts).
   freeCantrips: number;
   subclassExtras?: SubclassExtras;
+  // The classes the campaign's setting offers (src/lib/classes/index.ts
+  // settingClassIds); empty for a world that takes them all. A class of
+  // another setting is listed after them and says so (issue #434).
+  settingClassIds?: string[];
 };
 
 type ClassRow = { id: string; subclass: string; level: number };
@@ -81,7 +85,7 @@ export type LevelUpOptions = {
   // The subclass the picks below are counted under: the one held, or the
   // one asked about; null before either.
   countedUnderSubclass: string | null;
-  otherClasses: Array<{ id: string; allowed: boolean; reason?: string }>;
+  otherClasses: Array<{ id: string; allowed: boolean; reason?: string; fromAnotherSetting?: true }>;
   hitPoints: {
     die: string;
     method: HpMethod;
@@ -158,12 +162,19 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
     .filter((entry) => entry.id.toLowerCase() !== classId)
     .map((entry) => ({ id: entry.id, allowed: true }));
   if (context.multiclassAllowed && classList.length < MULTICLASS_CAP) {
-    for (const candidate of ALL_CLASSES) {
-      if (candidate.id === classId || classList.some((entry) => entry.id.toLowerCase() === candidate.id)) {
-        continue;
-      }
+    const setting = new Set(context.settingClassIds ?? []);
+    const offered = (id: string) => !setting.size || setting.has(id);
+    const candidates = ALL_CLASSES.filter(
+      (candidate) => candidate.id !== classId && !classList.some((entry) => entry.id.toLowerCase() === candidate.id),
+    ).sort((a, b) => Number(offered(b.id)) - Number(offered(a.id)));
+    for (const candidate of candidates) {
       const check = canMulticlassInto(sheet, candidate.id);
-      otherClasses.push(check.ok ? { id: candidate.id, allowed: true } : { id: candidate.id, allowed: false, reason: check.error });
+      otherClasses.push({
+        id: candidate.id,
+        allowed: check.ok,
+        ...(check.ok ? {} : { reason: check.error }),
+        ...(offered(candidate.id) ? {} : { fromAnotherSetting: true as const }),
+      });
     }
   }
 
