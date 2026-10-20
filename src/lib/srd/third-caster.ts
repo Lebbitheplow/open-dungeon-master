@@ -165,10 +165,6 @@ export function isThirdCaster(classId: string, subclass: string | undefined | nu
   return thirdCasterProfileOf(classId, subclass, setting) !== null;
 }
 
-export function thirdCasterLabel(profile: ThirdCasterProfile): string {
-  return PROFILES[profile].label;
-}
-
 // The class list a third caster learns from and the ability it casts with.
 export function thirdCasterList(profile: ThirdCasterProfile): string {
   return PROFILES[profile].list;
