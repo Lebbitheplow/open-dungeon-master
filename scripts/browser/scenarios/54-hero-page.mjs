@@ -1,5 +1,7 @@
 // F23 and F26: the hero page a new character lands on after its first save.
-// The seeded library fighter's page: the heading holds focus on arrival, the
+// The seeded library fighter's page, read as it stands now: library-edit
+// renames it and library-level-up may raise it before this runs, so the
+// name and level come from the API, not from the seed. The page: the heading holds focus on arrival, the
 // build's line and three things to try are there as text, "Don't show this
 // again" is kept on the account across a reload, "Bring to a table" opens
 // the join dialog, and Done goes to the roster. Nothing on it moves on by
@@ -10,8 +12,11 @@ export default {
   name: "hero-page",
   viewports: ["desktop", "phone"],
   async run(t) {
-    const { page, ids } = t;
-    const heading = page.getByRole("heading", { level: 1, name: "Brann Stoutheart is ready" });
+    const { page, ids, api, base } = t;
+    const stored = await api.get(`${base}/api/characters/${ids.library}`);
+    check(stored.ok(), "the seeded library character");
+    const { character } = await stored.json();
+    const heading = page.getByRole("heading", { level: 1, name: `${character.name} is ready`, exact: true });
     const skip = page.getByRole("checkbox", { name: "Don't show this again" });
     try {
       await t.open(`/characters/${ids.library}/ready`);
@@ -21,7 +26,9 @@ export default {
       const tips = page.getByRole("region", { name: "Three things to try on your turn" }).getByRole("listitem");
       await eventually(async () => (await tips.count()) === 3, { label: "three things to try" });
       check((await tips.first().innerText()).startsWith("Swing your Longsword: "), `the fighter's first thing is the sword: ${await tips.first().innerText()}`);
-      check(await page.getByText(/^(AC \d+ at level 3|Spell DC|Strength 16)/).isVisible(), "the line that notices the build");
+      // One of the reveal line's three rules, whichever the build meets now.
+      const reveal = new RegExp(`^(AC \\d+ at level ${character.level}, |Spell DC \\d+, |(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) \\d+, )`);
+      check(await page.getByText(reveal).isVisible(), "the line that notices the build");
       await t.shot("hero-page");
 
       // Persistent: still there after a wait that a toast would not survive.
