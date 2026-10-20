@@ -13,7 +13,9 @@ const { renderToStaticMarkup } = await import("react-dom/server");
 const arrival = await import("../src/app/characters/portrait-arrival.ts");
 const { PortraitToast, RosterPortraitSlot, RosterPortraitStatus } = await import("../src/app/characters/RosterPortrait.tsx");
 
-const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+// Line endings as git wrote them: a Windows checkout reads CRLF, and the
+// multi-line patterns below are written with \n.
+const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 let passed = 0;
 async function test(name, fn) {

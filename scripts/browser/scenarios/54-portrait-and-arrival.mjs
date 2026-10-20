@@ -28,6 +28,7 @@ export default {
 
     // ---- F25 ----
     let reads = 0;
+    let name = ids.libraryName;
     await page.route(/\/api\/characters(\?|$)/, async (route) => {
       if (route.request().method() !== "GET") {
         await route.fallback();
@@ -36,6 +37,9 @@ export default {
       const response = await route.fetch();
       const body = await response.json();
       reads += 1;
+      // The name as stored now: an earlier scenario (07-library-edit) may
+      // have renamed the seeded character.
+      name = (body.characters ?? []).find((character) => character.id === ids.library)?.name ?? name;
       body.characters = (body.characters ?? []).map((character) =>
         character.id !== ids.library
           ? character
@@ -53,7 +57,9 @@ export default {
     const focusBefore = await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80) ?? "");
     const toast = page.locator(".portrait-toast");
     await eventually(() => toast.count(), { timeoutMs: 15_000, label: `the ready toast (read ${reads} times)` });
-    check((await toast.textContent()) === `${ids.libraryName}'s portrait is ready`, "the toast names the character");
+    await eventually(async () => (await toast.textContent()) === `${name}'s portrait is ready`, {
+      label: `the toast naming ${name}`,
+    });
     check(
       (await page.locator(".portrait-toast-region").getAttribute("role")) === "status",
       "the toast is a polite status",
@@ -76,7 +82,9 @@ export default {
       const seated = await seat();
       check(seated.ok(), `the seat was taken (${seated.status()})`);
       await eventually(() => banner.count(), { timeoutMs: 15_000, label: "the arrival banner from the lobby's own stream" });
-      check((await banner.textContent()).includes(`${ids.libraryName} takes a seat`), "the banner names the arrival");
+      await eventually(async () => (await banner.textContent()).includes(`${name} takes a seat`), {
+        label: `the banner naming ${name}`,
+      });
       const announced = await page.locator('p[role="status"].sr-only').filter({ hasText: "takes a seat" }).count();
       check(announced === 1, `one polite announcement (${announced})`);
       check((await banner.getByRole("button").count()) === 0, "with motion it carries no button");
