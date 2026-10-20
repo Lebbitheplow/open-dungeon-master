@@ -6,8 +6,9 @@ import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ADVENTURE_BEGINS_NOTE, LEAD_NOTE_PREFIX, OPENING_SCENE_CUE, type CampaignMember } from "@/lib/campaign-types";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
-import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
+import { computeSheetDerived, findClass, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
+import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 // The genre catalogs' rules text, all of it: the model reads it beside a
 // custom feature (src/lib/classes/feature-text.ts).
@@ -118,7 +119,11 @@ export function buildDmSystem(
   if (gmBlock) {
     parts.push(gmBlock);
   }
-  const styleBlock = renderNarrationStyle(campaign.gameSettings.narrationLength, campaign.gameSettings.styleNotes);
+  const styleBlock = renderNarrationStyle(
+    campaign.gameSettings.narrationLength,
+    campaign.gameSettings.styleNotes,
+    campaign.gameSettings.combatPace,
+  );
   if (styleBlock) {
     parts.push(styleBlock);
   }
@@ -229,6 +234,9 @@ export type DmGameState = {
   }>;
   // Public party notes (lead-curated canon), pinned first.
   publicNotes?: Array<{ pinned: boolean; title: string; body: string }>;
+  // Things dropped rather than lost, where they lie (src/lib/dm/gear-tool.ts
+  // describeGround, issue #424).
+  groundItems?: string[];
   // The DM's private prep notes (src/lib/db/notes.ts listDmPrepNotes).
   dmPrepNotes?: Array<{ title: string; body: string }>;
   // Server-tracked world facts (the divergence register), newest first.
@@ -344,8 +352,9 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
     : genreClassIds(campaign.gameSettings.genre);
   const setting = [
     `- Companions belong to THIS world (${preset.name}), not to generic fantasy.`,
+    // By name, not id: a snake_case id reads to a model as a tool to call.
     classIds.length
-      ? ` Only these classes exist here: ${classIds.join(", ")}; add_companion refuses anything else.`
+      ? ` Only these classes exist here: ${classIds.map((id) => findClass(id)?.name ?? id).join(", ")}; add_companion refuses anything else.`
       : "",
     ` ${preset.raceHint}`,
     preset.nameHints ? ` Name them in the world's register: ${nameRegisterHint(preset.nameHints)}` : "",
@@ -439,7 +448,9 @@ export function describeSheet(
   // the load penalty in it and a carried-weight line is added, so the model
   // never has to work the pounds out itself.
   // The table owner's id, for the feats they brewed themselves.
-  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[] } = {},
+  // `compact` is a call packed for a small window (tool-profiles.ts): the
+  // backstory keeps its start there, and says it was cut.
+  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[]; compact?: boolean } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   // A workshop or pack subclass's features carry their own text.
@@ -661,13 +672,54 @@ export function describeSheet(
         : "none"
     } | Gold: ${sheet.gold}`,
   );
+  // What the hands hold and the body wears, on a sheet that says (issue
+  // #424): an attack with anything else draws it first, the turn's free
+  // object interaction.
+  if (wearingIsExplicit(sheet.equipment)) {
+    const worn = sheet.equipment.filter((item) => item.equipped === true).map((item) => item.name);
+    lines.push(`  Worn and in hand: ${worn.length ? worn.join(", ") : "nothing"} (everything else is packed away)`);
+  }
   if (sheet.background || sheet.alignment) {
     lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
   if (sheet.backstory) {
-    lines.push(`  Backstory: ${sheet.backstory.slice(0, 400)}`);
+    // Whole: the builder promises the DM weaves it in, and a god, a rival or
+    // a lost sibling sits as often in its last lines as its first (issue
+    // #429: the first 400 characters of 2,000 used to be all the DM saw).
+    lines.push(`  Backstory: ${options.compact ? cutForRoom(sheet.backstory, COMPACT_TEXT_CHARS.backstory) : sheet.backstory}`);
   }
   return lines.join("\n");
+}
+
+// What a compact call keeps of the text the table wrote for the DM, and
+// what each notes list carries whole before its notes keep only their start.
+const COMPACT_TEXT_CHARS = { backstory: 400, note: 300 } as const;
+const NOTES_SHARE_CHARS = 4_000;
+
+// The start of a text cut at a word, saying it was cut, so the model never
+// takes the first lines for the whole.
+export function cutForRoom(text: string, cap: number): string {
+  if (text.length <= cap) {
+    return text;
+  }
+  return `${text.slice(0, cap).replace(/\s+\S*$/, "")}... (cut for room)`;
+}
+
+// Notes ride whole, in the order given (pinned first), until the list's
+// share is spent; past it, and in a compact call, each keeps its start. A
+// note used to be cut to 300 characters of the 2,000 its box takes, which
+// lost the secret at the end of a storyboard card or a long canon note.
+export function fitNoteBodies<T extends { body: string }>(notes: T[], compact: boolean): string[] {
+  let left = NOTES_SHARE_CHARS;
+  return notes.map((note) => {
+    if (compact) {
+      return cutForRoom(note.body, COMPACT_TEXT_CHARS.note);
+    }
+    const whole = note.body.length <= left;
+    const text = whole ? note.body : cutForRoom(note.body, Math.max(COMPACT_TEXT_CHARS.note, left));
+    left = Math.max(0, left - text.length);
+    return text;
+  });
 }
 
 export function buildGameStateBlock(state: DmGameState): string {
@@ -939,24 +991,33 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (state.houseRulesBlock) {
     moment.push(state.houseRulesBlock);
   }
+  // In the moment: a drop or a pick-up changes it from one turn to the next.
+  if (state.groundItems?.length) {
+    moment.push(
+      `On the ground (dropped, not lost; anyone within 5 ft takes it with handle_item pick_up, by name or [id]):\n${state.groundItems.map((line) => `- ${line}`).join("\n")}`,
+    );
+  }
   if (state.loreBlock) {
     moment.push(state.loreBlock);
   }
+  const compact = Boolean(state.ruleContext);
   if (state.publicNotes?.length) {
+    const notes = state.publicNotes.slice(0, 10);
+    const bodies = fitNoteBodies(notes, compact);
     sections.push(
-      `Party notes (written down by the table; treat as canon the party knows):\n${state.publicNotes
-        .slice(0, 10)
+      `Party notes (written down by the table; treat as canon the party knows):\n${notes
         .map(
-          (note) =>
-            `- ${note.pinned ? "[pinned] " : ""}${note.title ? `${note.title}: ` : ""}${note.body.slice(0, 300)}`,
+          (note, index) =>
+            `- ${note.pinned ? "[pinned] " : ""}${note.title ? `${note.title}: ` : ""}${bodies[index]}`,
         )
         .join("\n")}`,
     );
   }
   if (state.dmPrepNotes?.length) {
+    const bodies = fitNoteBodies(state.dmPrepNotes, compact);
     sections.push(
       `DM prep notes (secret; the table's own preparation for you: let them shape what happens, never read them out or hint that they exist):\n${state.dmPrepNotes
-        .map((note) => `- ${note.title ? `${note.title}: ` : ""}${note.body.slice(0, 300)}`)
+        .map((note, index) => `- ${note.title ? `${note.title}: ` : ""}${bodies[index]}`)
         .join("\n")}`,
     );
   }
@@ -1064,7 +1125,7 @@ export function buildGameStateBlock(state: DmGameState): string {
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
-          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign) },
+          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign), compact: Boolean(state.ruleContext) },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         const between = state.betweenBySheet?.get(sheet.id);
@@ -1283,12 +1344,16 @@ export const requestRollTool = {
 
 // Gives the floor to specific characters: other players are blocked from
 // acting until one of the named players responds (or the owner releases it).
+// When to call it is said here as well as in the core rules: the model reads
+// a tool's own words where it chooses the tool, and with the trigger only in
+// the core rules a live table's spotlights fell to a third. It rides in the
+// first sentence, the one a compact call keeps (src/lib/dm/tool-profiles.ts).
 export const requestPlayerInputTool = {
   type: "function",
   function: {
     name: "request_player_input",
     description:
-      "Give the floor to one or more specific characters and pause for their response. Narrate first, then call it.",
+      "Give the floor to specific characters and pause for their response whenever your reply ends with an NPC speaking to them or a decision that is theirs, not the whole party's. Narrate first, then call it. Never answer for them instead.",
     parameters: {
       type: "object",
       additionalProperties: false,

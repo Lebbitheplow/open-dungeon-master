@@ -1,3 +1,4 @@
+import { serverVersion } from "@/lib/addons/installed";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { buildCharacterBundle, characterBundleFilename } from "@/lib/character-bundle";
 import { getCharacterForUser } from "@/lib/db/characters";
@@ -25,7 +26,7 @@ export async function GET(
   if (!character) {
     return Response.json({ error: "Character not found." }, { status: 404 });
   }
-  const bundle = await buildCharacterBundle(character, readUploadedImage);
+  const bundle = await buildCharacterBundle(character, readUploadedImage, new Date(), serverVersion());
   return new Response(JSON.stringify(bundle, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",

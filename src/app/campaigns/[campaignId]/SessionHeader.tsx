@@ -3,7 +3,7 @@
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ArrowLeft, Check } from "lucide-react";
-import { memo, useState, type ComponentProps, type ReactNode } from "react";
+import { memo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Slider } from "@/components/ui/Slider";
@@ -36,6 +36,7 @@ function HeaderAudioControl({
   onToggle,
   onVolume,
   glyph,
+  held = 0,
 }: {
   onLabel: string;
   offLabel: string;
@@ -44,21 +45,59 @@ function HeaderAudioControl({
   unlocked: boolean;
   muted: boolean;
   volume: number;
-  onToggle: () => void;
+  // `enabling` is true when the press began on the "enable" state: by the
+  // time the click lands, the page's pointerdown has already unlocked audio
+  // and re-rendered, so the state at the press is captured here.
+  onToggle: (enabling: boolean) => void;
   onVolume: (value: number) => void;
   // The painting for this audio group; muted strikes it through.
   glyph: string;
+  // Clips the browser is holding until a gesture on this page, counted on
+  // the icon as well as said above the composer (AudioWaitingBanner.tsx).
+  held?: number;
 }) {
   const quiet = muted || !unlocked;
-  const toggleLabel = !unlocked ? enableLabel : muted ? offLabel : onLabel;
+  const waiting = !muted && held > 0;
+  const toggleLabel = waiting ? `${enableLabel} (${held} waiting)` : !unlocked ? enableLabel : muted ? offLabel : onLabel;
+  const buttonClass = headerButtonClass(!quiet);
+  const enablingRef = useRef(false);
+  const notePress = () => {
+    enablingRef.current = !unlocked && !muted;
+  };
+  const icon = <HeaderGlyph glyph={glyph} off={quiet} />;
+  // Beside the button, not in it: the button's press effect clips what it
+  // holds (.motion-press is overflow: hidden), and the table's are round.
+  // Placed from the row's left edge, where the button starts, so the button
+  // and its volume slider stay siblings for the header's hover reveal
+  // (.session-hbtn ~ .session-volume in world.css).
+  const badge = waiting ? (
+    <span
+      key={held}
+      aria-hidden
+      className="count-pop pointer-events-none absolute -top-1 left-6 z-10 min-w-4 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-center text-[10px] font-semibold leading-4 text-amber-950 shadow-glow-gold"
+    >
+      {held}
+    </span>
+  ) : null;
   const percent = (value: number) => `${Math.round(value * 100)}%`;
   return (
-    <div className="hidden items-center sm:flex">
+    <div className="relative hidden items-center sm:flex">
       <Tooltip content={toggleLabel} side="bottom">
-        <button type="button" onClick={onToggle} aria-label={toggleLabel} className={headerButtonClass(!quiet)}>
-          <HeaderGlyph glyph={glyph} off={quiet} />
+        <button
+          type="button"
+          onPointerDown={notePress}
+          onKeyDown={notePress}
+          onClick={() => {
+            onToggle(enablingRef.current);
+            enablingRef.current = false;
+          }}
+          aria-label={toggleLabel}
+          className={buttonClass}
+        >
+          {icon}
         </button>
       </Tooltip>
+      {badge}
       {unlocked && !muted ? (
         <Tooltip content={volumeLabel} side="bottom">
           <Slider
@@ -242,9 +281,15 @@ export const SessionHeader = memo(function SessionHeader({
             unlocked={narration.unlocked}
             muted={narration.muted}
             volume={narration.volume}
-            onToggle={() => {
+            held={narration.held}
+            onToggle={(enabling) => {
+              // "Enable narration audio" must not also mute: toggling here
+              // used to switch narration off on that first press and drop
+              // every passage that had been waiting for it.
               narration.unlock();
-              narration.setMuted(!narration.muted);
+              if (!enabling) {
+                narration.setMuted(!narration.muted);
+              }
             }}
             onVolume={(value) => narration.setVolume(value)}
             glyph="ui-speech"

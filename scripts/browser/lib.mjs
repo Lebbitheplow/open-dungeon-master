@@ -217,6 +217,8 @@ export function pageHarness({ page, base, ids, app, viewport, outDir, tag, api }
     api,
     tap: (locator) => (touch && app ? locator.tap() : locator.click()),
     shot: (name) => page.screenshot({ path: path.join(outDir, `${tag}-${name}.png`), fullPage: false }).catch(() => {}),
+    // Where a shot of that name goes, for a clipped screenshot of one part.
+    shotPath: (name) => path.join(outDir, `${tag}-${name}.png`),
     // Where the page is: the address bar on the server; in the app, whose
     // window stays on index.html, the shell's own navigation.
     url: async () => {
@@ -315,6 +317,14 @@ async function appNavigate(page, route, ids, touch) {
     }
     await tile.waitFor({ state: "visible", timeout: 30_000 });
     await tap(tile);
+    // A page under the campaign (its character chooser, its table): once the
+    // campaign is open, push the full route on the shell's router, the way
+    // the lobby's own links do.
+    const rest = route.slice(`/campaigns/${campaign}`.length);
+    if (rest && !rest.startsWith("?")) {
+      await sleep(2_000);
+      await push(route);
+    }
   } else {
     await push(route);
   }

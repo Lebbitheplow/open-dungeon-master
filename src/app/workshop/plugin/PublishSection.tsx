@@ -4,7 +4,7 @@ import { Select } from "@/components/ui/Select";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { AlertTriangle, CheckCircle2, Download, FileUp, Loader2, Server, Trash2 } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -12,6 +12,8 @@ import { draftBytes, draftFromPack, finishDraft, type WorldPackDraft } from "@/l
 import { checkDraft } from "@/lib/worlds/draft-check";
 import type { WorldPackSummary } from "@/lib/worlds/summary";
 import { MAX_MANIFEST_BYTES } from "@/lib/worlds/types";
+import { notInDraft, type PackOmission, type SettingLists } from "@/lib/workshop/to-pack";
+import { OmissionReport } from "@/app/workshop/plugin/OmissionReport";
 import type { SectionProps } from "@/app/workshop/plugin/types";
 
 // The last tab: what is still missing, and the three ways out. Download
@@ -23,6 +25,13 @@ import type { SectionProps } from "@/app/workshop/plugin/types";
 // The checks run in the browser as the draft changes (src/lib/worlds/
 // draft-check.ts); the export route runs them again plus the content-pack
 // integrity checks, and its problems land in the same list.
+//
+// Above the ways out, what the pack leaves out of this workshop (WF-18),
+// read from the same compile Pull uses, so the author sees every Atlas map,
+// event, secret, fight and homebrew entry a table will not get before the
+// pack goes anywhere. What the draft does not hold of the workshop's
+// setting is worked out here against the draft on screen, so it follows an
+// edit without asking the server again.
 
 function download(name: string, payload: unknown) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -58,6 +67,32 @@ export function PublishSection({
   const [installed, setInstalled] = useState<WorldPackSummary[]>([]);
   const [startFrom, setStartFrom] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [report, setReport] = useState<{ pulled: SettingLists; omissions: PackOmission[] } | null>(null);
+  const [reportError, setReportError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/workshops/${workshopId}/plugin/pull`)
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!live) return;
+        if (!response.ok) {
+          setReportError(data.error ?? "What the pack leaves out could not be read.");
+          return;
+        }
+        setReport({ pulled: data.pulled, omissions: data.omissions ?? [] });
+      })
+      .catch(() => live && setReportError("Could not reach the server to read what the pack leaves out."));
+    return () => {
+      live = false;
+    };
+  }, [workshopId]);
+
+  const omissions = useMemo(() => {
+    if (!report) return [];
+    const missing = notInDraft(report.pulled, draft);
+    return [...(missing ? [missing] : []), ...report.omissions.filter((omission) => omission.key !== "not-pulled")];
+  }, [report, draft]);
 
   useEffect(() => {
     fetch("/api/worlds")
@@ -205,6 +240,8 @@ export function PublishSection({
           </details>
         ) : null}
       </section>
+
+      <OmissionReport omissions={omissions} loading={!report && !reportError} error={reportError} />
 
       <UnofficialPackNotice rightsHolder={draft.rightsHolder} inspiredBy={draft.inspiredBy.trim() || undefined} />
 

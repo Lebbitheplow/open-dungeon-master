@@ -52,6 +52,7 @@ function SidePanelInner({
   mobileVisible,
   storyDue,
   glance,
+  boardOnStage = false,
   ...content
 }: SidePanelRouterProps & {
   tabs: PanelTabDef[];
@@ -64,6 +65,7 @@ function SidePanelInner({
   storyDue: boolean;
   // The quest line above the panel (CinematicParts.tsx QuestGlance).
   glance?: ReactNode;
+  boardOnStage?: boolean;
 }) {
   // The widen button's two widths are the panel's column in the table's
   // arrangement (src/lib/table-layout.ts); a reader may drag it anywhere
@@ -79,6 +81,8 @@ function SidePanelInner({
   const shown = usePaneShown("panel");
   const visible = shown && (docked || mobileVisible);
   const { tab, steersStory } = content;
+  // Keep the board's keyed owner while native controls switch beside it.
+  const contentTabs: PanelTab[] = boardOnStage ? ["battle", tab === "battle" ? "party" : tab] : [tab];
 
   const items = useMemo<IconRailItem<PanelTab>[]>(
     () =>
@@ -121,9 +125,15 @@ function SidePanelInner({
         {glance}
         {/* Keyed by tab so the incoming panel rises in instead of cutting. */}
         {tabs.length ? (
-          <div key={tab} className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none">
-            <SidePanelRouter {...content} visible={visible} onOpenTab={onTabChange} />
-          </div>
+          contentTabs.map((contentTab) => (
+            <div
+              key={contentTab}
+              className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none"
+              data-session-region={boardOnStage ? (contentTab === "battle" ? "board" : "controls") : undefined}
+            >
+              <SidePanelRouter {...content} tab={contentTab} visible={visible} onOpenTab={onTabChange} />
+            </div>
+          ))
         ) : (
           <p className="motion-tab px-2 py-6 text-center font-serif text-sm italic text-stone-400">
             Every tab has a pane of its own. Put one back from its bar to see it here again.

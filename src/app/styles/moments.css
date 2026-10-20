@@ -198,6 +198,118 @@
 html[data-theme="light"] .moment-travel { background: linear-gradient(180deg, #fffdf7, #f1e7cf); }
 html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter: invert(1) hue-rotate(180deg); }
 
+/* ---- arrival banner (ArrivalBanner.tsx, F27) ----
+   A player taking a seat in the lobby: the travel banner's shape, laid on
+   the top of the lobby card's art (Lobby.tsx wraps the card to hold it),
+   so at any width it covers only that picture and never another card's
+   words. Open to a pointer so it can be held or dismissed. */
+.moment-arrival {
+  position: absolute;
+  left: 50%;
+  top: 0.75rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: max-content;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.5rem 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 171, 58, 0.55);
+  background: linear-gradient(180deg, rgba(33, 27, 58, 0.96), rgba(12, 8, 24, 0.96));
+  box-shadow: var(--shadow-glow-gold), 0 14px 34px rgba(4, 2, 12, 0.6);
+  transform: translateX(-50%);
+  animation: arrival-in 420ms var(--ease-settle, ease-out) both;
+}
+.moment-arrival-medallion { width: 2.75rem; height: 2.75rem; flex-shrink: 0; }
+/* A long name wraps rather than losing "takes a seat". */
+.moment-arrival-name {
+  display: block;
+  padding-right: 0.8rem;
+  font-family: var(--font-display, serif);
+  font-size: 1.05rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.moment-arrival-detail {
+  display: block;
+  overflow: hidden;
+  padding-right: 0.8rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-stone-400);
+}
+.moment-arrival-dismiss {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 171, 58, 0.55);
+  background: rgba(20, 12, 40, 0.7);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-amber-100);
+  cursor: pointer;
+}
+/* At phone width the card's art is short: a smaller line and button keep
+   the banner on the picture, above the card's own heading. */
+@media (max-width: 639px) {
+  .moment-arrival { top: 0.5rem; gap: 0.5rem; padding: 0.35rem 0.45rem; }
+  .moment-arrival-medallion { width: 2.25rem; height: 2.25rem; }
+  .moment-arrival-name { font-size: 0.9rem; }
+  .moment-arrival-dismiss { padding: 0 0.75rem; }
+}
+.moment-arrival-dismiss:hover { border-color: rgba(236, 210, 135, 0.9); }
+.moment-arrival-dismiss:focus-visible { outline: 2px solid var(--color-amber-300); outline-offset: 3px; }
+@keyframes arrival-in {
+  from { opacity: 0; transform: translate(-50%, -16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+/* Still under low effects (data-still, set from the same Effects setting)
+   or reduced motion: it is simply there. */
+.moment-arrival[data-still],
+[data-effects="low"] .moment-arrival { animation: none; }
+html[data-theme="light"] .moment-arrival { background: linear-gradient(180deg, #fffdf7, #f1e7cf); }
+html[data-theme="light"] .moment-arrival-detail { color: var(--color-stone-600); }
+html[data-theme="light"] .moment-arrival-dismiss { background: #fffdf7; color: var(--color-amber-900); }
+
+/* ---- portrait arrival (characters/RosterPortrait.tsx, F25) ----
+   A roster portrait that has just been painted fades in, briefly; the
+   page's toast says so without taking focus. */
+.portrait-arrive { animation: portrait-arrive 360ms var(--ease-settle, ease-out) both; }
+@keyframes portrait-arrive {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Centred at the foot, clear of the corner buttons on either side. */
+.portrait-toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  z-index: 56;
+  width: max-content;
+  max-width: min(calc(100vw - 7rem), 26rem);
+  margin: 0 auto;
+  text-align: center;
+  pointer-events: none;
+}
+.portrait-toast {
+  padding: 0.6rem 1.1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 171, 58, 0.55);
+  background: linear-gradient(180deg, rgba(33, 27, 58, 0.96), rgba(12, 8, 24, 0.96));
+  box-shadow: var(--shadow-glow-gold), 0 10px 26px rgba(4, 2, 12, 0.55);
+  font-size: 0.875rem;
+  color: var(--color-amber-100);
+  animation: overlay-soft 300ms ease-out both;
+}
+html[data-theme="light"] .portrait-toast { background: linear-gradient(180deg, #fffdf7, #f1e7cf); color: var(--color-amber-900); }
+[data-effects="low"] .portrait-arrive,
+[data-effects="low"] .portrait-toast { animation: none; }
+
 /* ---- loot reveal ---- */
 .moment-loot {
   position: fixed;
@@ -273,6 +385,9 @@ html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter:
   .moment-loot-card { animation: overlay-soft 300ms ease-out both; }
   .moment-travel { animation: none; transform: translateX(-50%); }
   .moment-travel-rose { animation: none; }
+  .moment-arrival { animation: none; transform: translateX(-50%); }
+  .portrait-arrive,
+  .portrait-toast { animation: none; }
   .moment-loot-rays { display: none; }
   .moment-stage,
   .moment-kicker,

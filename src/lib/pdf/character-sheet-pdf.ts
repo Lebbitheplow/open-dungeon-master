@@ -486,7 +486,7 @@ function weaponAttacks(
 ): WeaponRow[] {
   const rows: WeaponRow[] = [];
   for (const item of c.equipment) {
-    const srd = weaponOf(item) ?? matchWeapon(item.name);
+    const srd = weaponOf(item) ?? matchWeapon(item);
     if (!srd) {
       continue;
     }

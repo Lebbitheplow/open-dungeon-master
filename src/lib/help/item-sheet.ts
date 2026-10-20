@@ -1,6 +1,7 @@
 import { describeContentEntry } from "@/lib/help";
 import { DAMAGE_TYPE_BLURBS, WEAPON_PROPERTY_BLURBS } from "@/lib/help/terms";
-import { magicItemBonus, matchArmor, type SrdArmor } from "@/lib/srd/armor";
+import { armorNamed, type SrdArmor } from "@/lib/srd/armor";
+import { magicItemBonus } from "@/lib/srd/item-row";
 import { SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms } from "@/lib/srd/name-forms";
@@ -257,11 +258,11 @@ export function buildItemSheet(name: string, rows: Array<Row | undefined | null>
       type = `${type} armor`;
     }
     // The pack's armour rows carry no weight; the bundled table does.
-    srdArmor = matchArmor(str(packArmor, "name") || name);
+    srdArmor = armorNamed(str(packArmor, "name") || name);
   } else if (packWeapon) {
     weapon = weaponFromPack(packWeapon, bonus);
     type = asType(str(packWeapon, "category")) || "Weapon";
-  } else if ((srdArmor = matchArmor(name))) {
+  } else if ((srdArmor = armorNamed(name))) {
     armor = armorFromSrd(srdArmor, bonus);
     type = srdArmor.category === "shield" ? "Shield" : `${capitalize(srdArmor.category)} armor`;
   } else {

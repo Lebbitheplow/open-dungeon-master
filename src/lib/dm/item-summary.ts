@@ -52,7 +52,7 @@ export function magicItemLine(item: EquipmentItem, equipment: readonly Equipment
   // A workshop item's own magic rides on its line (gearDefOfRow); its effects
   // are the ones magic-items.ts reads off the same line.
   const def = gearDefOfRow(item);
-  const worn = item.gear?.magic ? { effects: item.gear.magic.effects, requiresAttunement: item.gear.magic.requiresAttunement } : matchMagicItem(item.name, item.slug);
+  const worn = item.gear?.magic ? { effects: item.gear.magic.effects, requiresAttunement: item.gear.magic.requiresAttunement } : matchMagicItem(item);
   const bonusByName = /(?:^|[\s,(])\+([123])(?![0-9])/.exec(item.name);
   if (!def && !worn && !bonusByName) {
     const sentence = packSentence(item.name);

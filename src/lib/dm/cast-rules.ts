@@ -199,7 +199,7 @@ const MUTE = ["silenced", "gagged", "muted"];
 export function handsBusy(sheet: Pick<Caster, "equipment" | "proficiencies" | "class" | "level" | "features" | "classes" | "abilities" | "conditions">): number {
   const shield = acBreakdownFor(sheet).shieldName ? 1 : 0;
   const weapons = sheet.equipment
-    .filter((item: EquipmentItem) => item.equipped === true && matchWeapon(item.name) !== null)
+    .filter((item: EquipmentItem) => item.equipped === true && matchWeapon(item) !== null)
     .reduce((sum, item) => sum + Math.max(1, item.qty ?? 1), 0);
   return Math.min(2, shield + weapons);
 }

@@ -71,6 +71,111 @@ async function pickerKeys(page, trigger) {
   return problems;
 }
 
+// One tab stop per group of choices (backlog F16), from the keyboard: the
+// method switch and a standard-array row each hold one stop, the arrows and
+// Home and End move inside, wrapping, Enter assigns, and Tab leaves the row.
+async function arrayKeys(page) {
+  const problems = [];
+  const active = () =>
+    page.evaluate(() => ({
+      label: document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent?.trim() ?? null,
+      method: document.activeElement?.classList.contains("method-option") ?? false,
+      inStrength: Boolean(document.activeElement?.closest('[aria-label="Strength score"]')),
+      pressed: document.activeElement?.getAttribute("aria-pressed") ?? null,
+    }));
+  const stops = (selector) =>
+    page.evaluate((selector) => [...document.querySelectorAll(selector)].filter((node) => node.getClientRects().length && node.tabIndex === 0).length, selector);
+  const methods = "[data-builder-root] section[data-active] .method-switch .method-option";
+  if ((await stops(methods)) !== 1) problems.push(`the method switch has ${await stops(methods)} tab stops, not 1`);
+  await page.locator(methods).locator("visible=true").and(page.locator('[tabindex="0"]')).first().focus();
+  const before = (await active()).label;
+  await page.keyboard.press("ArrowRight");
+  const after = await active();
+  if (!after.method || after.label === before) problems.push("Arrow Right did not move along the method switch");
+  if ((await stops(methods)) !== 1) problems.push("the method switch's tab stop did not follow the arrow");
+  // Standard array is the first way; Home reaches it and Enter switches to
+  // it if the build used another.
+  await page.keyboard.press("Home");
+  if ((await active()).pressed !== "true") await page.keyboard.press("Enter");
+  // Every row from the keyboard, Strength 15 down to Charisma 8, which also
+  // leaves the build a full array, so the later steps stay open.
+  const abilities = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
+  const values = [15, 14, 13, 12, 10, 8];
+  for (const [at, ability] of abilities.entries()) {
+    const row = `[data-builder-root] section[data-active] [role="group"][aria-label="${ability} score"] button`;
+    await eventually(async () => (await page.locator(row).locator("visible=true").count()) === 6, { timeoutMs: 5_000, label: `the ${ability} row of the standard array` });
+    if ((await stops(row)) !== 1) problems.push(`the ${ability} row has ${await stops(row)} tab stops, not 1`);
+    await page.locator(row).locator("visible=true").and(page.locator('[tabindex="0"]')).first().focus();
+    const named = async (value) => (await active()).label?.startsWith(`${ability} ${value}`) === true;
+    if (at === 0) {
+      await page.keyboard.press("End");
+      if (!(await named(8))) problems.push(`End went to ${(await active()).label}, not ${ability} 8`);
+      await page.keyboard.press("ArrowRight");
+      if (!(await named(15))) problems.push(`Arrow Right from the last did not wrap to the first: ${(await active()).label}`);
+      await page.keyboard.press("ArrowLeft");
+      if (!(await named(8))) problems.push(`Arrow Left from the first did not wrap to the last: ${(await active()).label}`);
+    }
+    await page.keyboard.press("Home");
+    if (!(await named(15))) problems.push(`Home went to ${(await active()).label}, not ${ability} 15`);
+    for (let step = 0; step < at; step += 1) await page.keyboard.press("ArrowRight");
+    // Enter on the value already held takes it back, so press it twice then.
+    if ((await active()).pressed === "true") await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await sleep(150);
+    if (!(await named(values[at])) || (await active()).pressed !== "true") problems.push(`Enter did not give ${ability} ${values[at]}: ${(await active()).label}`);
+    if (at === 0) {
+      await page.keyboard.press("Tab");
+      if ((await active()).inStrength) problems.push("Tab stayed inside the Strength row");
+    }
+  }
+  return problems;
+}
+
+// The same for a card grid: one stop, arrows across rows and columns, Enter
+// chooses, and Tab goes on to that card's ? and then out of the grid.
+async function gridKeys(page) {
+  const problems = [];
+  const cards = "[data-builder-root] section[data-active] .creator-card";
+  const state = () =>
+    page.evaluate((cards) => {
+      const list = [...document.querySelectorAll(cards)].filter((node) => node.getClientRects().length);
+      const focused = document.activeElement;
+      return {
+        stops: list.filter((node) => node.tabIndex === 0).length,
+        index: list.indexOf(focused),
+        top: focused?.getBoundingClientRect().top ?? 0,
+        pressed: focused?.getAttribute("aria-pressed") ?? null,
+        help: focused?.classList.contains("creator-help") ? focused.closest(".creator-card-wrap")?.querySelector(".creator-card") === list.find((node) => node.tabIndex === 0) : null,
+        inGrid: Boolean(focused?.closest(".creator-card-wrap")),
+        count: list.length,
+      };
+    }, cards);
+  const first = await state();
+  if (first.stops !== 1) problems.push(`the card grid has ${first.stops} tab stops, not 1`);
+  await page.locator(cards).locator("visible=true").and(page.locator('[tabindex="0"]')).first().focus();
+  await page.keyboard.press("Home");
+  if ((await state()).index !== 0) problems.push("Home did not reach the first card");
+  await page.keyboard.press("ArrowRight");
+  if ((await state()).index !== 1) problems.push("Arrow Right did not reach the second card");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  if ((await state()).index !== first.count - 1) problems.push("Arrow Left from the first card did not wrap to the last");
+  await page.keyboard.press("Home");
+  const top = (await state()).top;
+  await page.keyboard.press("ArrowDown");
+  const down = await state();
+  if (down.index <= 0 || down.top <= top) problems.push(`Arrow Down did not reach the row below (card ${down.index})`);
+  await page.keyboard.press("Enter");
+  await sleep(300);
+  if ((await state()).pressed !== "true") problems.push("Enter did not choose the focused card");
+  if ((await state()).stops !== 1) problems.push("the grid's tab stop did not follow the arrows");
+  await page.keyboard.press("Tab");
+  if ((await state()).help !== true) problems.push("Tab from a card did not reach that card's details");
+  await page.keyboard.press("Tab");
+  if ((await state()).inGrid) problems.push("a second Tab stayed inside the card grid");
+  return problems;
+}
+
 function report(where, violations) {
   return violations.map((violation) => `${where}: ${violation.id} (${violation.impact}) ${violation.help} at ${violation.nodes.join(", ")}`);
 }
@@ -82,6 +187,7 @@ export default {
     const { page, root, ids } = t;
     const found = [];
     let pickerChecked = false;
+    let arrayChecked = false;
 
     // Every step of a stored build, reached by its diamond, once per
     // condition. Emulated media survives the reopen; the zoom is the window
@@ -140,11 +246,17 @@ export default {
             found.push(...(await pickerKeys(page, trigger.first())).map((problem) => `${where} picker: ${problem}`));
           }
         }
+        // Last on its step, as it may switch the build to the standard array.
+        if (!arrayChecked && (await page.locator(`${root}section[data-active] .method-switch`).locator("visible=true").count())) {
+          arrayChecked = true;
+          found.push(...(await arrayKeys(page)).map((problem) => `${where} standard array: ${problem}`));
+        }
       }
       if (condition.zoom && size) await page.setViewportSize(size);
     }
     await page.emulateMedia({ reducedMotion: null, forcedColors: null });
     if (!pickerChecked) found.push("no option picker found on any step");
+    if (!arrayChecked) found.push("no method switch found on any step");
 
     // The "Show me" highlight under reduced motion: the global rule cuts the
     // flash to 0.01ms, so the block must keep a still outline instead.
@@ -179,6 +291,8 @@ export default {
     await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
     await sleep(900);
+    await eventually(() => page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").count(), { timeoutMs: 15_000, label: "the lineage cards" });
+    found.push(...(await gridKeys(page)).map((problem) => `lineage grid: ${problem}`));
     const details = page.locator(`${root}section[data-active] button[aria-label^="Details"], ${root}section[data-active] .creator-help`).locator("visible=true");
     await eventually(() => details.count(), { timeoutMs: 15_000, label: "a lineage card's details button" });
     await t.tap(details.first());

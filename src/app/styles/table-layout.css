@@ -13,6 +13,102 @@
 .tlay-slot { display: contents; }
 .tlay-slot[hidden] { display: none !important; }
 
+/* A sandboxed view may select this host-owned composition, never inject CSS.
+   Contents participate in one grid without changing React parents or keys. */
+@media (min-width: 64rem) {
+  .cine-row[data-presentation="stage"] {
+    position: relative;
+    display: grid;
+    grid-template-columns: clamp(13rem, 18vw, 19rem) minmax(320px, 1fr) clamp(18rem, 26vw, 24rem);
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, auto);
+    gap: 12px;
+    padding: 12px;
+  }
+  .cine-row[data-presentation="stage"] .cine-chat,
+  .cine-row[data-presentation="stage"] .cine-fight { display: contents; }
+  .cine-row[data-presentation="stage"] .cine-party {
+    display: flex;
+    grid-area: 1 / 1;
+    width: auto;
+    max-height: 24dvh;
+    min-height: 0;
+    padding: 0;
+    overflow-y: auto;
+  }
+  .cine-row[data-presentation="stage"] .cine-chronicle {
+    grid-area: 2 / 1 / 4 / 2;
+    min-height: 0;
+    margin: 0;
+  }
+  .cine-row[data-presentation="stage"] .cine-fight-board,
+  .cine-row[data-presentation="stage"] .session-transcript {
+    grid-area: 1 / 2 / 3 / 3;
+    min-height: 0;
+    margin: 0;
+  }
+  .cine-row[data-presentation="stage"] .cine-fight-controls {
+    grid-area: 3 / 2;
+    max-height: 42dvh;
+  }
+  .cine-row[data-presentation="stage"] > .tlay-slot[data-pane="panel"],
+  .cine-row[data-presentation="stage"] > .tlay-slot[data-pane^="tab:"] {
+    position: absolute;
+    grid-area: 1 / 3 / 4 / 4;
+    top: var(--session-pane-top);
+    height: var(--session-pane-height);
+    width: 100%;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .cine-row[data-presentation="stage"] > .tlay-slot > .cine-panel,
+  .cine-row[data-presentation="stage"] > .tlay-slot > .tlay-pane {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+  }
+  .cine-row[data-presentation="stage"] > .tlay-slot[data-pane="tab:battle"] {
+    grid-area: 1 / 2 / 3 / 3;
+    top: 0;
+    height: 100%;
+  }
+  .cine-stage[data-session-view="story"] .tlay-slot[data-pane="tab:battle"],
+  .cine-row[data-presentation="stage"] .cine-fight-board[hidden] { display: none !important; }
+
+  /* A board opened in native Story keeps its React parent in the side panel.
+     These wrappers step aside so that same board participates in the grid. */
+  .cine-stage[data-side-board] .tlay-slot[data-pane="panel"],
+  .cine-stage[data-side-board] .tlay-slot[data-pane="panel"] > .cine-panel,
+  .cine-stage[data-side-board] .cine-panel > .side-panel-body,
+  .cine-stage[data-side-board] [data-session-region="board"] { display: contents; }
+  .cine-stage[data-side-board] .cine-panel > .side-panel-body > .cine-quest { grid-area: 4 / 2; margin: 0; }
+  .cine-stage[data-side-board] [data-session-region="board"] > .board-dock {
+    grid-area: 1 / 2 / 3 / 3;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+  }
+  .cine-stage[data-side-board] .board-dock > .board-panel { flex: 1; }
+  .cine-stage[data-side-board] .board-dock > .board-panel > .board-view { flex: 1; min-height: 9rem; }
+  .cine-stage[data-side-board] [data-session-region="controls"],
+  .cine-stage[data-side-board] .cine-panel > .cine-rail {
+    position: absolute;
+    grid-area: 1 / 3 / 4 / 4;
+    top: var(--session-pane-top);
+    height: var(--session-pane-height);
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .cine-stage[data-side-board] [data-session-region="controls"] {
+    width: calc(100% - 4rem);
+    padding: 12px;
+    background: var(--cine-panel);
+  }
+  .cine-stage[data-side-board] .cine-panel > .cine-rail { right: 0; }
+  .cine-stage[data-side-board][data-session-view="story"] [data-session-region="board"] > .board-dock { display: none; }
+}
+.session-transcript[hidden] { display: none !important; }
+
 /* ---- an arrangement of the reader's own: each slot placed ---- */
 
 .cine-row[data-tlay="custom"] { position: relative; }

@@ -74,6 +74,12 @@ export function builderSpellAdvice(
   if (!casting.casts || !casting.ability) {
     return null;
   }
+  // No slot to cast a levelled spell with yet (a setting half caster at
+  // level 1 that borrows a full caster's list): nothing to hold, so nothing
+  // to ask for. The spell step offers no level 1 spell until there is a slot.
+  if (casting.maxSpellLevel === 0) {
+    return null;
+  }
   if (casting.third) {
     return spellCapOf(
       {

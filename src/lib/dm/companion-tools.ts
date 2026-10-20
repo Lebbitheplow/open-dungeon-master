@@ -116,7 +116,7 @@ export const COMPANION_TOOL_NAMES = new Set(["add_companion", "dismiss_companion
 // with a class that can never validate: an unwinnable retry loop. Packs in the
 // repo are checked by scripts/test-world-packs.mjs, but one loaded through
 // WORLD_PACKS_DIR is unvetted.
-function packClassIds(settings: Campaign["gameSettings"]): string[] {
+export function packClassIds(settings: Campaign["gameSettings"]): string[] {
   return packIds(packFor(settings), "classes").filter((id) => findClass(id));
 }
 

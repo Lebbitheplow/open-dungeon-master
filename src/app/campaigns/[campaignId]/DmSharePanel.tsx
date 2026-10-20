@@ -9,6 +9,8 @@ import { FieldLabel } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { BUNDLE_KIND_LABELS } from "@/lib/workshop/bundle";
 import { slugOf } from "@/lib/language/text-logic";
+import type { PackOmission } from "@/lib/workshop/to-pack";
+import { OmissionReport } from "@/app/workshop/plugin/OmissionReport";
 
 // Handing a workshop to somebody else.
 //
@@ -47,7 +49,8 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
   const [error, setError] = useState("");
   const [counts, setCounts] = useState<Counts | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [refusals, setRefusals] = useState<Array<{ field: string; reason: string }>>([]);
+  // What the last pack draft left out of the workshop, entry by entry.
+  const [left, setLeft] = useState<{ notes: string[]; omissions: PackOmission[] } | null>(null);
   // Your shelf (hand-built monsters, homebrew items, spells and options):
   // all of it, or only what this workshop uses; and what the export said.
   const [shelfScope, setShelfScope] = useState<"all" | "used">("all");
@@ -81,7 +84,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
   async function exportBundle() {
     setBusy("bundle");
     setError("");
-    setRefusals([]);
+    setLeft(null);
     try {
       const data = await post("");
       setCounts(data.counts);
@@ -100,7 +103,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
     setError("");
     try {
       const data = await post("/pack");
-      setRefusals(data.refusals ?? []);
+      setLeft({ notes: data.notes ?? [], omissions: data.omissions ?? [] });
       setWarnings(data.warnings ?? []);
       setCounts(null);
       if (!data.filled) {
@@ -298,17 +301,9 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
         </div>
       ) : null}
 
-      {refusals.length ? (
-        <div className="dm-card reveal mt-4 border-t border-amber-500/15 pt-3">
-          <SectionHead title="What did not fit in a world pack" glyph="quest-failed" />
-          <ul className="stagger space-y-1.5">
-            {refusals.map((refusal) => (
-              <li key={refusal.field} className="text-xs text-stone-400">
-                <span className="text-stone-300">{refusal.field}</span>
-                <span className="block text-stone-500">{refusal.reason}</span>
-              </li>
-            ))}
-          </ul>
+      {left ? (
+        <div className="reveal mt-4">
+          <OmissionReport notes={left.notes} omissions={left.omissions} />
         </div>
       ) : null}
 

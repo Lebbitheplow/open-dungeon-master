@@ -24,8 +24,9 @@ import { PLUGIN_SECTIONS, type SectionId } from "@/app/workshop/plugin/types";
 // again from the header whenever wanted. The tabs are the builder: every
 // part of a pack as its own editor, each one picking from a catalog rather
 // than typing an id. Pull from this workshop is the bridge between the
-// tool and the rest of the workshop: lore, places, hook cards and cast
-// already built here become the pack's setting lists.
+// tool and the rest of the workshop: factions, lore, places, hook cards
+// and cast already built here become the pack's setting lists, and the
+// Publish tab lists what they leave behind.
 //
 // The draft is one JSON value on the server (one per workshop) and the
 // panel autosaves it a moment after each change, the whole value each
@@ -165,11 +166,14 @@ export function PluginPanel({
         setSaveState("saved");
         onChanged?.(draftCount(parsed.data));
       }
-      const refusals = (data.refusals ?? []) as Array<{ reason: string }>;
+      // What stayed behind is listed whole on the Publish tab; the notice
+      // only counts it, so a pull never reads as having taken everything.
+      const left = ((data.omissions ?? []) as Array<{ assets: string[] }>).reduce((sum, omission) => sum + omission.assets.length, 0);
+      const behind = left ? ` ${left} ${left === 1 ? "entry stays" : "entries stay"} in the workshop; Check & publish lists them.` : "";
       setPullNotice(
         data.added
-          ? `Pulled ${data.added} ${data.added === 1 ? "entry" : "entries"} into the setting lists.${refusals.length ? ` ${refusals[0].reason}` : ""}`
-          : `Nothing new to pull. ${refusals[0]?.reason ?? "Write some lore, places or hook cards first."}`,
+          ? `Pulled ${data.added} ${data.added === 1 ? "entry" : "entries"} into the setting lists.${behind}`
+          : `Nothing new to pull.${behind || " Write some factions, lore, places or hook cards first."}`,
       );
     } finally {
       setPulling(false);

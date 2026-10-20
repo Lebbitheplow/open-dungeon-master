@@ -20,6 +20,7 @@ import {
   type Beat,
   type BeatKind,
   type BeatLinks,
+  type BeatOrigin,
   type Board,
   type BoardInventory,
   type Suggestion,
@@ -61,6 +62,8 @@ type Payload = {
   inventory: BoardInventory;
   // Links that no longer resolve, by card.
   broken: Record<string, Array<keyof BeatLinks>>;
+  // Where each card came from (audit WF-19); a card made here has none.
+  origins?: Record<string, BeatOrigin>;
   suggestions: Suggestion[];
   compiled: CompiledBoard & { summary: CompileSummary };
   // The shared workshop a workshop draws on, and what it could draw on
@@ -231,6 +234,7 @@ export function DmStoryboardPanel({
       onChange={setEdit}
       inventory={data.inventory}
       broken={data.broken?.[beat.id] ?? []}
+      origin={data.origins?.[beat.id]}
       others={nodes.filter((other) => other.id !== beat.id)}
       busy={busy}
       onSave={() => void save(beat)}

@@ -1,5 +1,5 @@
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
-import { insertBeat, listBeats } from "@/lib/db/workshop-beats";
+import { beatOrigins, insertBeat, listBeats } from "@/lib/db/workshop-beats";
 import { chaptersOf, commonChoices, storyboardInventory } from "@/lib/db/workshop-common";
 import { boardGraph, brokenLinks, checkBeat, linksWithin, suggestTopics } from "@/lib/workshop/board";
 import { compileBoard, summarizeCompile } from "@/lib/workshop/board-compile";
@@ -44,6 +44,8 @@ export async function GET(
     board: boardGraph(beats),
     inventory,
     broken,
+    // Where each card came from, by card; a card made here has none.
+    origins: beatOrigins(campaignId),
     suggestions: suggestTopics(beats, inventory),
     // What this board would become, computed against a campaign with no arc
     // of its own. The import screen recomputes it against the real target.

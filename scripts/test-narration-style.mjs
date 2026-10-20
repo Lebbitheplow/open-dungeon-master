@@ -56,4 +56,27 @@ await test("The lead saves them in Table settings and the next prompt carries th
   assert.equal(getCampaignById(world.campaignId).gameSettings.styleNotes, "Less purple prose.");
 });
 
+await test("Combat pace (issue #432): balanced adds nothing; fewer or more fights each add one pacing line, saved from Table settings like the length", async () => {
+  assert.equal(renderNarrationStyle("standard", "", "balanced"), "");
+  assert.equal(renderNarrationStyle("standard", ""), "");
+  assert.match(renderNarrationStyle("standard", "", "frequent"), /^NARRATION STYLE:\n- This table wants more fights\./);
+  assert.match(renderNarrationStyle("standard", "", "rare"), /This table wants fewer fights\./);
+  const world = await openWorld();
+  const route = await world.route("campaigns/[campaignId]/settings");
+  world.signIn(world.owner);
+  const saved = await route.PATCH(
+    new Request("http://test/", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ combatPace: "frequent" }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  assert.equal(saved.status, 200, await saved.clone().text());
+  const campaign = getCampaignById(world.campaignId);
+  assert.equal(campaign.gameSettings.combatPace, "frequent");
+  assert.match(buildDmSystem(campaign, []), /This table wants more fights/);
+  const refused = await route.PATCH(
+    new Request("http://test/", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ combatPace: "constant" }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  assert.equal(refused.status, 400);
+});
+
 finish();

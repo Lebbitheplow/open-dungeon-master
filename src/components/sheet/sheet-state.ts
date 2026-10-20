@@ -183,7 +183,7 @@ export type ItemStatus = {
 export function itemStatus(sheet: CharacterSheet, item: EquipmentItem): ItemStatus {
   const rule = chargeRuleOf(item);
   const charges = rule ? `${chargesLeft(item, rule)}/${chargeMax(rule)} charges` : null;
-  const cursed = Boolean(item.attuned && gearDefFor(item.name, item.slug)?.cursed);
+  const cursed = Boolean(item.attuned && gearDefFor(item)?.cursed);
   const refusal = attunementRefusal(sheet, { [item.name]: { attuned: !(item.attuned || item.attuning) } });
   return { charges, attuning: Boolean(item.attuning), cursed, attuneRefusal: refusal };
 }
@@ -240,12 +240,11 @@ export function isWornGear(item: Pick<EquipmentItem, "name" | "slug" | "srdName"
   if (wearSlotOf(item) !== null) {
     return true;
   }
-  const name = item.srdName ?? item.name;
-  if (item.gear?.armor || item.gear?.weapon || matchArmor(name) || matchWeapon(name) || gearDefFor(name, item.slug)?.base) {
+  if (item.gear?.armor || item.gear?.weapon || matchArmor(item) || matchWeapon(item) || gearDefFor(item)?.base) {
     return true;
   }
-  const magic = item.gear?.magic ?? matchMagicItem(name, item.slug);
-  const riders = item.gear?.checks ? { carried: item.gear.magic?.carried === true } : checkRidersOf(name);
+  const magic = item.gear?.magic ?? matchMagicItem(item);
+  const riders = item.gear?.checks ? { carried: item.gear.magic?.carried === true } : checkRidersOf(item);
   if ((magic && !magic.carried) || (riders && !riders.carried)) {
     return true;
   }
@@ -260,9 +259,9 @@ export function isWornGear(item: Pick<EquipmentItem, "name" | "slug" | "srdName"
 export function wearableGear(equipment: EquipmentItem[]): EquipmentItem[] {
   return equipment.filter(
     (item) =>
-      matchArmor(item.name) !== null ||
+      matchArmor(item) !== null ||
       /\+[123]\b/.test(item.name) ||
-      matchMagicItem(item.name) !== null ||
+      matchMagicItem(item) !== null ||
       Boolean(item.gear?.magic) ||
       wearSlotOf(item) !== null,
   );

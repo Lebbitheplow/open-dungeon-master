@@ -128,7 +128,7 @@ export function wearsHeavyArmor(
   equipment: Array<{ name: string; equipped?: boolean; gear?: { armor?: SrdArmor } }> | undefined,
 ): boolean {
   const items = equipment ?? [];
-  return items.some((item) => isWorn(item, items) && (item.gear?.armor ?? matchArmor(item.name))?.category === "heavy");
+  return items.some((item) => isWorn(item, items) && (item.gear?.armor ?? matchArmor(item))?.category === "heavy");
 }
 
 // Rage gives its benefits only to a barbarian who is not wearing heavy armor.

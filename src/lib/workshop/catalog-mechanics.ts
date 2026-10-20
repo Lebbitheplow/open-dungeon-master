@@ -1,13 +1,14 @@
 import { getEntryDetail, spellMechanicsFor } from "@/lib/content";
 import { packRaceOptions } from "@/lib/content/race-options";
-import { armorInside, magicItemBonus, matchArmor, SRD_ARMOR, type SrdArmor } from "@/lib/srd/armor";
-import { checkRidersOf } from "@/lib/srd/item-check-riders";
+import { armorInside, armorNamed, SRD_ARMOR, type SrdArmor } from "@/lib/srd/armor";
+import { magicItemBonus } from "@/lib/srd/item-row";
+import { checkRidersNamed } from "@/lib/srd/item-check-riders";
 import { itemSpellsOf } from "@/lib/srd/item-spells";
-import { gearBaseName, gearDefFor } from "@/lib/srd/magic-gear";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { gearBaseName, gearDefNamed } from "@/lib/srd/magic-gear";
+import { magicItemNamed } from "@/lib/srd/magic-items";
 import { rowSlot } from "@/lib/srd/wear-slots";
 import { isWornPlace } from "@/lib/srd/worn-places";
-import { matchWeapon, SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
+import { weaponNamed, SRD_WEAPONS, type SrdWeapon } from "@/lib/srd/weapons";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { subclassFeatureDescription, subclassLevelFor, subclassTableFor } from "@/lib/srd/features";
 import { subclassLevelsFromProse, type SubclassFeatureRow } from "@/lib/srd/subclass-tables";
@@ -54,10 +55,10 @@ export function itemMechanicsOf(row: Row): Record<string, unknown> | null {
     return null;
   }
   const name = row.name;
-  const worn = matchMagicItem(name);
-  const named = matchWeapon(name);
-  const def = gearDefFor(name, undefined, named?.name ?? matchArmor(name)?.name ?? null);
-  const checks = checkRidersOf(name);
+  const worn = magicItemNamed(name);
+  const named = weaponNamed(name);
+  const def = gearDefNamed(name, named?.name ?? armorNamed(name)?.name ?? null);
+  const checks = checkRidersNamed(name);
   const spells = itemSpellsOf(name);
   const magic = Boolean(worn || def || checks || spells.length || row.kind === "magic_item");
   const out: Record<string, unknown> = {};
@@ -65,14 +66,14 @@ export function itemMechanicsOf(row: Row): Record<string, unknown> | null {
   // A name that ends in a weapon or a suit swings or is worn as that one
   // ("Anointing Mace", "Animated Chain Mail"), as the engine reads it.
   const weapon = def?.base?.kind === "weapon" ? (named ?? exactWeapon(gearBaseName(def, "weapon") ?? "")) : def?.base ? null : named;
-  const inside = matchArmor(name) ?? armorInside(name);
+  const inside = armorNamed(name) ?? armorInside(name);
   const armor =
     def?.base?.kind === "armor"
       ? (inside ?? exactArmor(gearBaseName(def, "armor") ?? ""))
       : def?.base || weapon
         ? null
         : magic && !def?.armor
-          ? matchArmor(name)
+          ? armorNamed(name)
           : inside;
   out.itemKind = magic ? "magic_item" : weapon ? "weapon" : armor ? "armor" : "gear";
   if (weapon) {

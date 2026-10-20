@@ -30,8 +30,8 @@ const pack = path.join(dir, "open5e.sqlite");
 process.env.CONTENT_DB_PATH = pack;
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { matchArmor, armorInside, SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
-const { matchWeapon, SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
+const { armorNamed, armorInside, SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
+const { weaponNamed, SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
 const { matchGear, SRD_GEAR } = await import("../src/lib/srd/adventuring-gear.ts");
 const { buildItemSheet } = await import("../src/lib/help/item-sheet.ts");
 const { itemWeightByName } = await import("../src/lib/content/item-weights.ts");
@@ -71,12 +71,12 @@ const TRANSLATED = {
 test("every SRD weapon, armour and gear row is found by its name and its plural", () => {
   for (const weapon of SRD_WEAPONS) {
     for (const form of pluralForms(weapon.name.toLowerCase())) {
-      assert.equal(matchWeapon(form)?.name, weapon.name, form);
+      assert.equal(weaponNamed(form)?.name, weapon.name, form);
     }
   }
   for (const armor of SRD_ARMOR) {
     for (const form of pluralForms(armor.name.toLowerCase())) {
-      assert.equal(matchArmor(form)?.name, armor.name, form);
+      assert.equal(armorNamed(form)?.name, armor.name, form);
     }
   }
   for (const gear of SRD_GEAR) {
@@ -90,15 +90,15 @@ test("every SRD weapon, armour and gear row is found by its name and its plural"
 });
 
 test("the English forms of an armour stay on its row: Plate Armor, Shields, a magic bonus, a suit at the tail", () => {
-  assert.equal(matchArmor("Plate Armor")?.name, "Plate");
-  assert.equal(matchArmor("Plate Armour")?.name, "Plate");
-  assert.equal(matchArmor("Armor, Plate")?.name, "Plate");
-  assert.equal(matchArmor("Shields")?.name, "Shield");
-  assert.equal(matchArmor("+1 Studded Leather Armor")?.name, "Studded Leather");
-  assert.equal(matchArmor("Dwarven Chain Mail")?.name, "Chain Mail");
+  assert.equal(armorNamed("Plate Armor")?.name, "Plate");
+  assert.equal(armorNamed("Plate Armour")?.name, "Plate");
+  assert.equal(armorNamed("Armor, Plate")?.name, "Plate");
+  assert.equal(armorNamed("Shields")?.name, "Shield");
+  assert.equal(armorNamed("+1 Studded Leather Armor")?.name, "Studded Leather");
+  assert.equal(armorNamed("Dwarven Chain Mail")?.name, "Chain Mail");
   // A Guild Engineer's work leathers are clothing (#113); leathers alone are Leather.
-  assert.equal(matchArmor("work leathers"), null);
-  assert.equal(matchArmor("Leathers")?.name, "Leather");
+  assert.equal(armorNamed("work leathers"), null);
+  assert.equal(armorNamed("Leathers")?.name, "Leather");
   assert.equal(armorInside("Plate Armor of Etherealness")?.name, "Plate");
   assert.equal(armorInside("Glamoured Padded Leathers of Resistance")?.name, "Padded");
   assert.equal(bundledPriceCopper("Plate Armor"), 150_000);
@@ -119,25 +119,25 @@ test("a weapon's tail and its plural reach the item sheet, and under water a wea
 test("a name in each table language is compared as written: it finds no English row, and loses no letter", () => {
   for (const language of LANGUAGES.slice(1)) {
     const names = TRANSLATED[language];
-    assert.equal(matchWeapon(names.sword), null, `${language}: ${names.sword}`);
-    assert.equal(matchWeapon(names.swords), null, `${language}: ${names.swords}`);
-    assert.equal(matchArmor(names.shield), null, `${language}: ${names.shield}`);
-    assert.equal(matchArmor(names.shields), null, `${language}: ${names.shields}`);
-    assert.equal(matchArmor(names.plate), null, `${language}: ${names.plate}`);
+    assert.equal(weaponNamed(names.sword), null, `${language}: ${names.sword}`);
+    assert.equal(weaponNamed(names.swords), null, `${language}: ${names.swords}`);
+    assert.equal(armorNamed(names.shield), null, `${language}: ${names.shield}`);
+    assert.equal(armorNamed(names.shields), null, `${language}: ${names.shields}`);
+    assert.equal(armorNamed(names.plate), null, `${language}: ${names.plate}`);
     assert.equal(matchGear(names.torch), null, `${language}: ${names.torch}`);
     assert.equal(itemWeightByName(names.torch), null, `${language}: ${names.torch}`);
     assert.equal(findPoison(names.poison), null, `${language}: ${names.poison}`);
   }
   const english = TRANSLATED.english;
-  assert.equal(matchWeapon(english.swords)?.name, "Longsword");
-  assert.equal(matchArmor(english.shields)?.name, "Shield");
-  assert.equal(matchArmor(english.plate)?.name, "Plate");
+  assert.equal(weaponNamed(english.swords)?.name, "Longsword");
+  assert.equal(armorNamed(english.shields)?.name, "Shield");
+  assert.equal(armorNamed(english.plate)?.name, "Plate");
   assert.equal(matchGear(english.torch)?.name, "Torch");
   assert.equal(itemWeightByName(english.torch), 1);
   assert.equal(itemWeightByName("Pouches"), 1);
   assert.equal(findPoison(english.poison)?.id, "serpent_venom");
   // A name ending in "s" keeps its letter: the Kris and the Gladius are not a Kri or a Gladiu.
-  assert.equal(matchWeapon("Kris"), null);
+  assert.equal(weaponNamed("Kris"), null);
   assert.equal(matchGear("Pelles"), null);
 });
 

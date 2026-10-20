@@ -249,4 +249,32 @@ await test("a companion out of reach walks to its target before it swings, as th
   assert.equal(after, before + 1, "the companion walked up and never swung");
 });
 
+await test("a companion with a shield on the arm swings its one-handed weapon, not the two-handed one it also carries", async () => {
+  const { world, kit, hero, companion } = await companionTable();
+  // A cleric's starting kit: the light crossbow out-damages the mace, but it
+  // needs both hands, and the server's turn was refused for it and wasted.
+  world.patch(companion.id, {
+    equipment: [
+      { name: "Mace", qty: 1, equipped: true },
+      { name: "Shield", qty: 1, equipped: true },
+      { name: "Light Crossbow", qty: 1 },
+      { name: "Crossbow bolts", qty: 20 },
+    ],
+  });
+  await kit.fight(1, { heroFaces: { [hero.id]: 2, [companion.id]: 20 }, enemyFace: 8 });
+  const [goblin] = world.enemies();
+  kit.place(companion.id, 5, 5);
+  kit.place(goblin.id, 5, 6);
+  kit.place(hero.id, 9, 9);
+  assert.equal(kit.current().characterId, companion.id);
+  const before = listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack").length;
+  world.dice(18, 5, 5);
+  const out = await post(world, world.owner, "campaigns/[campaignId]/dm/initiative", {}, { op: "companion" });
+  world.clearDice();
+  assert.equal(out.status, 200, out.body.error);
+  const attacks = listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack");
+  assert.equal(attacks.length, before + 1, "the companion's turn was spent on a weapon it could not use");
+  assert.ok(attacks.some((roll) => /Mace/.test(JSON.stringify(roll))), "the swing was not the mace");
+});
+
 finish();

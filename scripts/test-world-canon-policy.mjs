@@ -17,6 +17,7 @@ const { worldForPrompt } = await import("../src/lib/dm/world-prompt.ts");
 const { handleSearchLore } = await import("../src/lib/dm/lore-search.ts");
 const { buildTurnRetrieval } = await import("../src/lib/dm/context-retrieval.ts");
 const forge = await import("../src/lib/worldforge/forge.ts");
+const ask = await import("../src/lib/worldforge/ask.ts");
 
 const world = await openWorld();
 const id = world.campaignId;
@@ -108,7 +109,7 @@ await test("search_lore leaves retired records out and says what a draft or alte
   assert.match(secret?.text ?? "", /^the party has learned this/, JSON.stringify(sister.results));
 });
 
-await test("Ask reads every record with its canon tag, the settled ones first, and the asked entry's events first.", () => {
+await test("Ask reads every record with its canon tag, the settled ones first, a retired one last, and the asked entry's events among its matches.", () => {
   // Forty-five later events would crowd an early asked one out of a timeline
   // read oldest first.
   patch((doc) => ({
@@ -119,18 +120,20 @@ await test("Ask reads every record with its canon tag, the settled ones first, a
     ],
   }));
   const { doc, entities } = worldView(id);
-  const digest = forge.worldDigest(doc, entities, "Tell me about Captain Orrin", 14_000);
-  assert.match(digest, /^WorldForge marks what is not canon: \[draft\][^\n]*\[alternate\][^\n]*\[retired\] no longer true in this world\./);
-  assert.match(digest, /## The Old Toll \(Other\) \[retired\]/);
-  assert.match(digest, /## The Drowned Crown \(Artifact\) \[draft\]/);
-  assert.match(digest, /- 99 TR \(= 1339 AF\): Orrin drowns at sea \[alternate\]/);
-  assert.match(digest, /- 60 TR \(= 1300 AF\): Orrin sells the fleet \[retired\]/);
-  assert.match(digest, /- 2000 AF \(= 760 TR\): Orrin's statue raised/, "the asked entry's latest event fell out of the timeline");
-  assert.match(digest, /- Wenna is Orrin's sister: the party has learned this/);
-  assert.match(digest, /- The chain was cut from inside \(kept by Captain Orrin\): DM only/);
-  const general = forge.worldDigest(doc, entities, "What is going on?", 14_000);
-  assert.ok(general.indexOf("## Captain Orrin") < general.indexOf("## The Old Toll"), "a retired entry came before a canon one");
-  assert.match(forge.askMessages(digest, "q", "The Saltmarch")[0].content, /tagged \[draft\], \[alternate\] or \[retired\] is not this world's canon/);
+  const asked = ask.askPassages(doc, entities, "Tell me about Captain Orrin", "english");
+  const prompt = ask.askMessages(asked, "Tell me about Captain Orrin", "The Saltmarch")[1].content;
+  assert.match(prompt, /^WorldForge marks what is not canon: \[draft\][^\n]*\[alternate\][^\n]*\[retired\] no longer true in this world\./);
+  assert.match(prompt, /\] The Old Toll \(Other\) \[retired\], /);
+  assert.match(prompt, /\] The Drowned Crown \(Artifact\) \[draft\], /);
+  assert.match(prompt, /99 TR \(= 1339 AF\): Orrin drowns at sea \[alternate\]/);
+  assert.match(prompt, /60 TR \(= 1300 AF\): Orrin sells the fleet \[retired\]/);
+  assert.match(prompt, /2000 AF \(= 760 TR\): Orrin's statue raised/, "the asked entry's latest event was not read");
+  assert.match(prompt, /\] Wenna is Orrin's sister, secret\nthe party has learned this/);
+  assert.match(prompt, /\] The chain was cut from inside, secret, DM only\nDM only: the party has not learned this\. [^\n]*Kept by Captain Orrin/);
+  const general = ask.askPassages(doc, entities, "What is going on?", "english").passages;
+  const at = (name) => general.findIndex((passage) => passage.name === name);
+  assert.ok(at("Captain Orrin") >= 0 && at("Captain Orrin") < at("The Old Toll"), "a retired entry came before a canon one");
+  assert.match(ask.askMessages(asked, "q", "The Saltmarch")[0].content, /tagged \[draft\], \[alternate\] or \[retired\] is not this world's canon/);
 });
 
 await test("Draft writes from the same policy: retired ties and events left out, alternate ones tagged.", () => {

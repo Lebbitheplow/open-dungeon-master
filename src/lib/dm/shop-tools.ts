@@ -332,7 +332,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   if (!removal) {
     return notCarried(sheet.name, sheet.equipment.map((item) => item.name), args.item, isTableGearName(campaign.id, args.item));
   }
-  const line = sheet.equipment.find((item) => textKey(item.name) === textKey(args.item)) ?? { name: args.item };
+  const line = removal.item;
   const carried = line.name;
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure), priced by the worth they were given; a name is never

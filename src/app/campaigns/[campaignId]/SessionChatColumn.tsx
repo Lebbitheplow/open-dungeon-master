@@ -38,6 +38,8 @@ export function SessionChatColumn({
   onRenarrate,
   onPinned,
   stage,
+  keepTranscript = false,
+  showTranscript = false,
   children,
 }: {
   state: CampaignState;
@@ -62,6 +64,8 @@ export function SessionChatColumn({
   // The fight stage (the board and the chronicle scroll) in place of the
   // transcript while a board is on the table and the columns are docked.
   stage?: ReactNode;
+  keepTranscript?: boolean;
+  showTranscript?: boolean;
   children: ReactNode;
 }) {
   const { campaign, messages, rolls, sheets, locations, dmStatus, utilityCalls } = state;
@@ -92,8 +96,10 @@ export function SessionChatColumn({
         onClose={() => setReportTarget(null)}
         onBlocked={(userId) => setJustBlocked((current) => [...current, userId])}
       />
-      {stage ? stage : (
+      {stage}
+      {!stage || keepTranscript ? (
       <MessageList
+        hidden={Boolean(stage) && !showTranscript}
         messages={messages}
         campaignId={campaignId}
         canRetryTurn={steersStory}
@@ -240,7 +246,7 @@ export function SessionChatColumn({
             : undefined
         }
       />
-      )}
+      ) : null}
 
       {/* Everything under the transcript, in one box: beside a staged board
           it is the column under the board, next to the full-height scroll

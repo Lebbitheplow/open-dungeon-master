@@ -46,6 +46,7 @@ import {
 import { featureCards, spellCards, spellNames } from "@/lib/battlemap/hand-spells";
 import { intimidatingPresenceCards, subclassSpendCards } from "@/lib/battlemap/hand-subclass";
 import { spellHoldOf } from "@/lib/battlemap/hand-escape";
+import { gearCards, undrawnGate } from "@/lib/battlemap/hand-gear";
 import { textKey } from "@/lib/language/text-logic";
 
 export * from "@/lib/battlemap/hand-core";
@@ -64,7 +65,7 @@ export function carriedWeapons(sheet: Pick<CharacterSheet, "equipment">): Carrie
   for (const item of sheet.equipment) {
     const own = weaponOf(item);
     const magic = magicWeaponOfRow(item);
-    const srd = (magic.gear ? magic.srd : null) ?? own ?? matchWeapon(item.name);
+    const srd = (magic.gear ? magic.srd : null) ?? own ?? matchWeapon(item);
     const key = textKey(item.name);
     if (!srd || seen.has(key)) continue;
     seen.add(key);
@@ -217,9 +218,9 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
         shieldName,
       });
       const opened: Gate = rule ? { reason: rule.error, spent: false } : null;
-      return gated(card, standing, costGate("bonus", turn, sheet, `an off-hand attack with ${name}`), opened);
+      return gated(card, standing, costGate("bonus", turn, sheet, `an off-hand attack with ${name}`), opened, undrawnGate(sheet, turn, name));
     }
-    return gated(card, standing, handsGate, attackGate(turn, allowed, sheet, { unarmed: srd === null }), ammoGate);
+    return gated(card, standing, handsGate, attackGate(turn, allowed, sheet, { unarmed: srd === null }), ammoGate, undrawnGate(sheet, turn, name));
   };
 
   for (const weapon of carried) cards.push(build(weapon.name, weapon.srd, false, weapon.gear));
@@ -494,6 +495,7 @@ export function deriveHand(sheet: CharacterSheet, turn: HandTurn = FRESH_TURN, o
     ...subclassSpendCards(sheet, turn, taken),
     ...kiCards(sheet, turn),
     ...basicCards(sheet, turn, riders).map((card) => (card.id === "basic:ready" ? withReadySpells(card, spells) : card)),
+    ...gearCards(sheet, turn, options.gear),
     ...fastHandsCards(sheet, turn),
   ];
 }

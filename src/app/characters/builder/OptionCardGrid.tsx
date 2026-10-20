@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import type { IconRef } from "@/lib/icons";
 import { ui } from "@/lib/ui";
 import { filterGroups, foldGroups } from "./lineage";
+import { useRovingGroup } from "./roving";
 
 // One painted card in a lineage or class grid. `meta` is the canonical name
 // behind a world pack's reskin, searched along with the name.
@@ -116,6 +117,15 @@ export function OptionCardGrid({
     return { shown: folded.groups, hidden: folded.hidden };
   }, [narrowed, query, folds, expanded, searching, value]);
   const shownCount = shown.reduce((sum, group) => sum + group.options.length, 0);
+  // The grid is one tab stop (F16): the arrows move across rows and
+  // columns, Enter or Space chooses. The focused card's "?" is the one
+  // further stop, so Tab from a card reaches its details and then leaves
+  // the grid; every other card's "?" waits until its card has focus.
+  const roving = useRovingGroup({
+    keys: shown.flatMap((group) => group.options.map((option) => option.id)),
+    chosen: value,
+    layout: "grid",
+  });
   const lone = searching && shownCount === 1 ? shown[0].options[0] : null;
 
   // Entering the step puts the caret in the search box, for a keyboard or a
@@ -179,7 +189,7 @@ export function OptionCardGrid({
             ? `One match, ${lone.name}. Press Enter to choose it.`
             : query.trim()
               ? `${shownCount} ${noun === "class" ? (shownCount === 1 ? "class" : "classes") : `${noun}${shownCount === 1 ? "" : "s"}`} match.`
-              : "Searches names, roles and the other words on each card."}
+              : "Searches names, roles and the other words on each card. Tab on to the cards and move between them with the arrow keys."}
         </span>
       </label>
 
@@ -221,7 +231,7 @@ export function OptionCardGrid({
 
       {/* Room on the left and top for the Selected pill, which overhangs its
           card and would otherwise be clipped by the step's scroll pane. */}
-      <div className="space-y-4 px-2 pt-2.5 pb-1">
+      <div className="space-y-4 px-2 pt-2.5 pb-1" onKeyDown={roving.onKeyDown} onFocus={roving.onFocus}>
         {shown.map((group, groupIndex) => (
           <section key={group.label ?? `group-${groupIndex}`}>
             {group.label ? (
@@ -253,6 +263,8 @@ export function OptionCardGrid({
                       type="button"
                       onClick={() => onChoose(option.id)}
                       aria-pressed={chosen}
+                      tabIndex={roving.tabIndex(option.id)}
+                      data-roving-item={option.id}
                       aria-label={`${option.name}${group.recommended ? ", fits this setting" : ""}`}
                       aria-describedby={
                         [option.tagline ? `${descId}-tag` : "", option.chips.length ? `${descId}-chips` : ""]
@@ -297,6 +309,7 @@ export function OptionCardGrid({
                       type="button"
                       onClick={() => onDetails(option.id)}
                       aria-label={`Details for ${option.name}`}
+                      tabIndex={roving.tabIndex(option.id)}
                       className="creator-help"
                     >
                       <span>?</span>

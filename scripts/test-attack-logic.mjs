@@ -13,7 +13,7 @@ const {
   ragingMeleeBonus,
   splitDamage,
 } = await import("../src/lib/dm/attack-logic.ts");
-const { matchWeapon, isWeaponProficient } = await import("../src/lib/srd/weapons.ts");
+const { weaponNamed, isWeaponProficient } = await import("../src/lib/srd/weapons.ts");
 const { combatRiders } = await import("../src/lib/srd/feature-effects.ts");
 
 const ridersFor = (klass, level, ...names) =>
@@ -34,16 +34,16 @@ const dexDerived = {
   abilityMods: { str: -1, dex: 4, con: 1, int: 1, wis: 2, cha: 0 },
 };
 
-test("matchWeapon: exact, plural, containment both ways", () => {
-  assert.equal(matchWeapon("Longsword")?.name, "Longsword");
-  assert.equal(matchWeapon("longswords")?.name, "Longsword");
-  assert.equal(matchWeapon("Longsword of the Dawn")?.name, "Longsword");
-  assert.equal(matchWeapon("hand crossbow")?.name, "Hand Crossbow");
-  assert.equal(matchWeapon("a rusty pipe"), null);
+test("weaponNamed: exact, plural, containment both ways", () => {
+  assert.equal(weaponNamed("Longsword")?.name, "Longsword");
+  assert.equal(weaponNamed("longswords")?.name, "Longsword");
+  assert.equal(weaponNamed("Longsword of the Dawn")?.name, "Longsword");
+  assert.equal(weaponNamed("hand crossbow")?.name, "Hand Crossbow");
+  assert.equal(weaponNamed("a rusty pipe"), null);
 });
 
 test("isWeaponProficient: category and specific terms", () => {
-  const longbow = matchWeapon("longbow");
+  const longbow = weaponNamed("longbow");
   assert.equal(isWeaponProficient(["martial"], longbow), true);
   assert.equal(isWeaponProficient(["simple"], longbow), false);
   assert.equal(isWeaponProficient(["simple", "longbows"], longbow), true);
@@ -82,6 +82,33 @@ test("resolveAttackWeapon: proficient weapon beats stronger unproficient one", (
     undefined,
   );
   assert.equal(resolved.srd?.name, "Dagger");
+});
+
+// A cleric's starting kit (mace, shield, light crossbow): with the shield on
+// the arm the crossbow cannot be shot, so the unnamed pick is the mace. The
+// server's own companion turn names no weapon and was refused for the
+// crossbow, wasting the turn.
+test("resolveAttackWeapon: a shield on the arm passes over a two-handed weapon", () => {
+  const kit = [
+    { name: "Mace", qty: 1, equipped: true },
+    { name: "Shield", qty: 1, equipped: true },
+    { name: "Light Crossbow", qty: 1 },
+  ];
+  // The mace is the one in hand (issue #424: held before stowed).
+  assert.equal(resolveAttackWeapon(kit, ["simple"], undefined).srd?.name, "Mace");
+  assert.equal(resolveAttackWeapon(kit, ["simple"], undefined, { shieldOnArm: true }).srd?.name, "Mace");
+  // With both held, the crossbow's bigger die wins until the shield is on.
+  const held = kit.map((item) => ({ ...item, equipped: true }));
+  assert.equal(resolveAttackWeapon(held, ["simple"], undefined).srd?.name, "Light Crossbow");
+  assert.equal(resolveAttackWeapon(held, ["simple"], undefined, { shieldOnArm: true }).srd?.name, "Mace");
+  // A named weapon is still the one named; the hands rule refuses it.
+  assert.equal(resolveAttackWeapon(kit, ["simple"], "light crossbow", { shieldOnArm: true }).srd?.name, "Light Crossbow");
+  // Only two-handed weapons carried: still the best of them, so the refusal
+  // says why rather than an unarmed swing nobody asked for.
+  assert.equal(
+    resolveAttackWeapon([{ name: "Greatsword", qty: 1 }], ["martial"], undefined, { shieldOnArm: true }).srd?.name,
+    "Greatsword",
+  );
 });
 
 test("resolveAttackWeapon: nothing usable falls back to unarmed", () => {
@@ -328,13 +355,13 @@ test("the heavy property lands on the profile for the Small-creature rule", () =
   };
   const greataxe = weaponAttackProfile(derived, ["martial"], {
     displayName: "Greataxe",
-    srd: matchWeapon("Greataxe"),
+    srd: weaponNamed("Greataxe"),
     unarmed: false,
   });
   assert.equal(greataxe.heavy, true);
   const shortsword = weaponAttackProfile(derived, ["martial"], {
     displayName: "Shortsword",
-    srd: matchWeapon("Shortsword"),
+    srd: weaponNamed("Shortsword"),
     unarmed: false,
   });
   assert.equal(shortsword.heavy, false);

@@ -3,7 +3,7 @@ import { byName, textKey } from "@/lib/language/text-logic";
 import { createSheet, getSheetById, getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { admitSheet } from "@/lib/characters/admit";
-import { getCampaignById } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { XP_THRESHOLDS, levelForXp } from "@/lib/srd";
 import { subclassExtrasFor } from "@/lib/db/subclass-extras";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
@@ -349,6 +349,25 @@ export function instantiateIntoCampaign(
     return { error: "You already have a character in this campaign." };
   }
   const level = Math.max(1, Math.min(20, targetLevel));
+  const admitted = admitLibraryCharacter(character, campaign, userId, level);
+  if (!admitted.ok) {
+    return { error: admitted.error, problems: admitted.problems };
+  }
+  // A character entering at its own level brings the experience it has.
+  return createSheet(campaignId, userId, level, admitted.sheet, characterId, {
+    xp: character.level === level ? character.xp : 0,
+  });
+}
+
+// A library character adapted to a table's level and judged by the stored
+// door, stored nowhere: the join above, and the confirm sheet a player reads
+// before it (src/lib/characters/seat-preview.ts), so the preview is the join.
+export function admitLibraryCharacter(
+  character: LibraryCharacter,
+  campaign: Campaign | null,
+  userId: string,
+  level: number,
+): { ok: true; sheet: CreateSheetInput } | { ok: false; error: string; problems: string[] } {
   // The adaptation itself lives in src/lib/characters/adapt.ts, pure, so a
   // companion coming out of this same library gets exactly the work done to
   // it and a test can drive every branch without a database.
@@ -362,14 +381,12 @@ export function instantiateIntoCampaign(
   });
   if (!admitted.ok) {
     return {
+      ok: false,
       error: `${character.name} cannot enter play as stored. ${admitted.problems[0]} Edit the character in your library, then try again.`,
       problems: admitted.problems,
     };
   }
-  // A character entering at its own level brings the experience it has.
-  return createSheet(campaignId, userId, level, admitted.sheet, characterId, {
-    xp: character.level === level ? character.xp : 0,
-  });
+  return { ok: true, sheet: admitted.sheet };
 }
 
 // An ally the DM plays is not a seat a player takes. The companion door
@@ -455,6 +472,11 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     // Level-up ASIs land here as raw scores; the campaign records no
     // AsiChoice for them, so asiChoices keeps only creation-time picks.
     abilities: sheet.abilities,
+    // The picks a feat or subclass taken in play was made with come home
+    // with it, so the builder and a file see them as made (issue #430).
+    ...(sheet.featChoices || character.sheet.featChoices
+      ? { featChoices: { ...(character.sheet.featChoices ?? {}), ...(sheet.featChoices ?? {}) } }
+      : {}),
     spellcasting: sheet.spellcasting
       ? {
           ...sheet.spellcasting,

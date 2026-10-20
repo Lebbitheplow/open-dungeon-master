@@ -13,6 +13,9 @@ import { recordManualTicks } from "@/lib/dm/manual-ticks";
 import { attunementRefusal, gearChanges, gearPatch, usageLowers, usageSpendsHitDice } from "@/lib/dm/usage-rules";
 import { acBreakdownFor } from "@/lib/srd";
 import { armorChangeMinutes } from "@/lib/dm/don-doff";
+import { gearKindOf, handsFor, handsFullError, handsFullFor, spendInteraction } from "@/lib/dm/gear-hands";
+import { dualWields } from "@/lib/dm/attack-rules";
+import { hasFastHands } from "@/lib/dm/bonus-routes";
 import { advanceClock } from "@/lib/db/clock";
 
 export const runtime = "nodejs";
@@ -131,7 +134,7 @@ export async function POST(
   // edit or the DM's update_sheet.
   const changes = parsed.data.gear
     ? gearChanges(sheet, parsed.data.gear)
-    : { armor: [], shields: [], attunement: [] };
+    : { armor: [], shields: [], attunement: [], held: [] };
   let wornEquipment: FullPatchSheetInput["equipment"] | null = null;
   if (parsed.data.gear) {
     if (Object.keys(parsed.data.gear).some((name) => !sheet.equipment.some((item) => item.name === name))) {
@@ -165,9 +168,23 @@ export async function POST(
   }
   let shieldBudget: ReturnType<typeof spendAction> | null = null;
   if (encounter && parsed.data.gear) {
+    // Two hands: a weapon or a shield taken up needs one free, as the DM's
+    // handle_item asks (src/lib/dm/gear-hands.ts).
+    const after = wornEquipment ?? sheet.equipment;
+    for (const [name, change] of Object.entries(parsed.data.gear)) {
+      const row = after.find((item) => item.name === name);
+      const kind = row ? gearKindOf(row) : null;
+      if (!row || change?.equipped !== true || (kind !== "weapon" && kind !== "shield")) {
+        continue;
+      }
+      const full = handsFullFor(after, row);
+      if (full.length) {
+        return refuse(handsFullError(sheet.name, name, full, kind === "shield" ? "strapped on" : "drawn"));
+      }
+    }
     if (changes.armor.length) {
       return refuse(
-        `Armor takes minutes to put on or take off, so ${changes.armor[0]} cannot change during a fight. A shield takes one action, and weapons are free.`,
+        `Armor takes minutes to put on or take off, so ${changes.armor[0]} cannot change during a fight. A shield takes one action, and a weapon the free object interaction.`,
       );
     }
     if (changes.attunement.length) {
@@ -190,6 +207,38 @@ export async function POST(
       if (!shieldBudget.ok) {
         return refuse(shieldBudget.error);
       }
+    }
+    // A weapon drawn or stowed, a ring or a cloak put on: the turn's free
+    // object interaction, a second the Use an Object action (issue #424).
+    // Dual Wielder draws two one-handed weapons with the one.
+    if (changes.held.length) {
+      const able = canAct({ sheet, encounter, kind: "free" });
+      if (!able.ok) {
+        return refuse(able.error);
+      }
+      let budget = shieldBudget?.ok ? shieldBudget.budget : budgetFor(encounter, sheet.id, attacksAllowedFor(sheet));
+      if (!budget) {
+        return refuse(`Drawing, stowing or putting something on happens on ${sheet.name}'s own turn.`);
+      }
+      for (const name of changes.held) {
+        const row = sheet.equipment.find((item) => item.name === name);
+        if (!row) {
+          continue;
+        }
+        const on = parsed.data.gear[name]?.equipped === true;
+        const spent = spendInteraction(budget, {
+          what: `${on ? "drawing" : "putting away"} ${name}`,
+          who: sheet.name,
+          oneHandedWeapon: gearKindOf(row) === "weapon" && handsFor(row) === 1,
+          dualWielder: dualWields(sheet.feats, sheet.campaignId),
+          fastHands: hasFastHands(sheet),
+        });
+        if (!spent.ok) {
+          return refuse(spent.error);
+        }
+        budget = spent.budget;
+      }
+      shieldBudget = { ok: true, budget };
     }
   }
 

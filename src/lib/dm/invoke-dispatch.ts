@@ -35,6 +35,7 @@ import { handleClearEffect, handleSetEffect } from "@/lib/dm/effect-tools";
 import { handleEndScene, handleSceneCheck, handleStartScene } from "@/lib/dm/scene-tools";
 import { handlePlaySting, handleSetAmbience } from "@/lib/dm/ambience-tools";
 import { handleDismount, handleMountUp } from "@/lib/dm/mount-tools";
+import { handleItemCall } from "@/lib/dm/gear-tool";
 import {
   handleDamageObject,
   handlePassTime,
@@ -218,6 +219,8 @@ export async function dispatchAdjudication(
       return handleMountUp(campaign, rawArguments, sheets, sheetsById, turn);
     case "dismount":
       return handleDismount(campaign, rawArguments, sheets, sheetsById, turn);
+    case "handle_item":
+      return handleItemCall(campaign, rawArguments, sheets, sheetsById, turn);
     case "damage_object":
       return handleDamageObject(rawArguments, campaign, turn);
     case "add_companion":

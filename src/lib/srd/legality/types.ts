@@ -81,6 +81,11 @@ export type Legalized = {
   sheet: CreateSheetInput;
   // What the server rolled while deriving, for the response to show.
   rolled?: { hp?: number[] };
+  // Picks a file left open that it could not have made: a feat's or a
+  // subclass's from before they asked for them (issue #430). The character
+  // comes in without them and the builder asks for them when it is next
+  // opened; the response tells the importer.
+  owed?: string[];
 };
 
 export const lower = (value: string) => value.trim().toLowerCase();

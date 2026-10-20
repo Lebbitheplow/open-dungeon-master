@@ -88,8 +88,13 @@ export async function POST(request: Request) {
   if (!unpacked.carriedPortrait) {
     queueLibraryPortrait(character);
   }
+  // A file older than a rule that asks for a pick comes in without it, and
+  // says what is still to choose: the builder asks when it is next opened.
   return Response.json(
-    { character: { ...character, portraitStatus: portraitStatus(character.id), campaigns: [] } },
+    {
+      character: { ...character, portraitStatus: portraitStatus(character.id), campaigns: [] },
+      ...(admitted.owed?.length ? { owed: admitted.owed } : {}),
+    },
     { status: 201 },
   );
 }
