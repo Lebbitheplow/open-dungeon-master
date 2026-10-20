@@ -6,6 +6,7 @@
 
 import { activeAuthored, type AuthoredSheet } from "@/lib/srd/authored-effects";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { isNamed } from "@/lib/srd/feature-names";
 
 // An arrow missed this turn ("curving-shot:<enemyId>"): Curving Shot may
 // reroll it at another creature.
@@ -36,7 +37,7 @@ export function authoredBonusAttackProblem(
       effect.after === "attack"
         ? (budget?.attacksMade ?? 0) > 0 && !castWithAction
         : effect.after === "telekinesis"
-          ? /telekinesis/i.test(sheet.concentratingOn ?? "")
+          ? isNamed(sheet.concentratingOn ?? "", "telekinesis")
           : effect.after === "missed_arrow"
             ? (budget?.oncePerTurn ?? []).some((key) => key.startsWith(CURVING_SHOT))
           : effect.after === "cantrip"

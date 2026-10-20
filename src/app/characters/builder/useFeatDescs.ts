@@ -6,16 +6,17 @@ import { scopeQuery, useContentCampaign } from "@/lib/content-scope";
 import { authoredFeatDesc, registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 import { packFeatText } from "@/lib/srd/feat-text";
 import { registerFeatRules } from "@/lib/srd/feature-effects";
+import { textKey } from "@/lib/language/text-logic";
 
-// The text of the feats on the sheet, by lower-case name, for what each
+// The text of the feats on the sheet, by the textKey of the name, for what each
 // grants (src/lib/srd/feat-grants.ts). ODM's own feats are bundled; a
 // content pack's is fetched once from the content API and kept.
 export function useFeatDescs(names: string[]): Record<string, string> {
   return useFeatTexts(names).descs;
 }
 
-// The same fetch, with each feat's prerequisite beside its text, by
-// lower-case name, for the feat pickers' check (src/lib/srd/legality/
+// The same fetch, with each feat's prerequisite beside its text, by the
+// textKey of the name, for the feat pickers' check (src/lib/srd/legality/
 // features.ts checkPrerequisite). ODM's own are bundled and not here.
 export function useFeatTexts(names: string[]): { descs: Record<string, string>; prerequisites: Record<string, string> } {
   // The table the character is built for: its DMs' workshop feats, read the
@@ -25,8 +26,8 @@ export function useFeatTexts(names: string[]): { descs: Record<string, string>; 
   const [prerequisites, setPrerequisites] = useState<Record<string, string>>({});
   const wanted = names
     .map((name) => name.trim())
-    .filter((name) => name && !authoredFeatDesc(name) && fetched[name.toLowerCase()] === undefined);
-  const key = wanted.map((name) => name.toLowerCase()).sort().join("|");
+    .filter((name) => name && !authoredFeatDesc(name) && fetched[textKey(name)] === undefined);
+  const key = [...new Map(wanted.map((name) => [textKey(name), name])).values()].sort().join("|");
   // Each feat is asked for once per table, and its answer is kept however
   // the list changes meanwhile. The key shrinks as each answer lands, and
   // the effect used to drop every answer still on its way at that point and
@@ -44,7 +45,7 @@ export function useFeatTexts(names: string[]): { descs: Record<string, string>; 
       return;
     }
     for (const name of key.split("|")) {
-      const flight = `${campaignId ?? ""}|${name}`;
+      const flight = `${campaignId ?? ""}|${textKey(name)}`;
       if (inFlight.current.has(flight)) {
         continue;
       }
@@ -78,12 +79,12 @@ export function useFeatTexts(names: string[]): { descs: Record<string, string>; 
               registerFeatRules(name, desc);
             }
           }
-          setFetched((current) => ({ ...current, [name]: desc }));
-          setPrerequisites((current) => ({ ...current, [name]: text.prerequisite }));
+          setFetched((current) => ({ ...current, [textKey(name)]: desc }));
+          setPrerequisites((current) => ({ ...current, [textKey(name)]: text.prerequisite }));
         })
         .catch(() => {
           if (!stale()) {
-            setFetched((current) => ({ ...current, [name]: "" }));
+            setFetched((current) => ({ ...current, [textKey(name)]: "" }));
           }
         })
         .finally(() => inFlight.current.delete(flight));

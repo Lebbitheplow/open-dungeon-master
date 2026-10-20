@@ -7,7 +7,7 @@
 
 import { authoredInitiativeRefills } from "@/lib/srd/authored-effects";
 import { resourceDef, resourceLevel, type Recharge, type ResourceMap } from "@/lib/srd/class-resources";
-import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature, isNamed } from "@/lib/srd/feature-names";
 
 // Rest refills: long rests refill everything, short rests only the
 // short-recharge pools. With the sheet to hand the refill reads the level the
@@ -42,7 +42,7 @@ export function refillResources(
     rest === "short" &&
     points &&
     points.used > 0 &&
-    sheet?.features?.some((feature) => textKey(feature.name).startsWith("sorcerous restoration"))
+    sheet?.features?.some((feature) => isNamed(feature.name, "Sorcerous Restoration"))
   ) {
     out.sorcery_points = { max: points.max, used: Math.max(0, points.used - 4) };
   }
@@ -56,17 +56,15 @@ export function initiativeRefills(
   resources: ResourceMap | undefined,
   features: Array<{ name: string }>,
 ): { resources: ResourceMap; notes: string[] } | null {
-  const holds = (name: string) =>
-    features.some((feature) => textKey(feature.name).startsWith(name));
   const next: ResourceMap = { ...(resources ?? {}) };
   const notes: string[] = [];
   const inspiration = next.bardic_inspiration;
-  if (holds("superior inspiration") && inspiration && inspiration.used >= inspiration.max) {
+  if (holdsFeature({ features }, "superior inspiration") && inspiration && inspiration.used >= inspiration.max) {
     next.bardic_inspiration = { max: inspiration.max, used: inspiration.max - 1 };
     notes.push("Superior Inspiration: one Bardic Inspiration comes back");
   }
   const ki = next.ki;
-  if (holds("perfect self") && ki && ki.used >= ki.max) {
+  if (holdsFeature({ features }, "perfect self") && ki && ki.used >= ki.max) {
     next.ki = { max: ki.max, used: Math.max(0, ki.max - 4) };
     notes.push("Perfect Self: 4 ki points come back");
   }

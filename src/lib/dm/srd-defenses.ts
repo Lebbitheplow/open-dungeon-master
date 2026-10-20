@@ -20,12 +20,11 @@ import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
 
 export function naturesSanctuaryRefusal(campaignId: string, enemy: EncounterEnemy, targetId: string): ToolError | null {
   const target = getSheetById(targetId);
-  if (!target || !holdsFeature(target, "nature's sanctuary") || !/\b(beast|plant)\b/.test(lower(String(enemy.stats.type ?? "")))) {
+  if (!target || !holdsFeature(target, "nature's sanctuary") || !/\b(beast|plant)\b/.test(textKey(String(enemy.stats.type ?? "")))) {
     return null;
   }
   const dc = computeSheetDerived(target).spellSaveDc ?? 13;
@@ -58,7 +57,7 @@ export function tranquilityAfterLongRest(campaign: Campaign, restingIds: string[
     if (!sheet || sheet.deathSaves?.dead || !holdsFeature(sheet, "tranquility")) {
       continue;
     }
-    const kept = sheet.conditions.filter((entry) => lower(entry) !== "sanctuary");
+    const kept = sheet.conditions.filter((entry) => textKey(entry) !== "sanctuary");
     const updated = patchSheet(sheet.id, {
       conditions: [...kept, "sanctuary"],
       conditionMeta: { ...(sheet.conditionMeta as ConditionMetaMap), sanctuary: { source: sheet.id, rounds: 14400 } },

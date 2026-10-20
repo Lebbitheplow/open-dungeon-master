@@ -22,7 +22,9 @@ import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
-import { isNamed, nameChoice } from "@/lib/srd/feature-names";
+import { nameChoice } from "@/lib/srd/feature-names";
+import { favoredEnemies } from "@/lib/srd/check-traits";
+import { sameRulesKey } from "@/lib/srd/name-forms";
 
 type Sheet = Pick<CharacterSheet, "name" | "class" | "level" | "classes" | "features" | "feats" | "conditions" | "resources" | "spellcasting">;
 
@@ -56,32 +58,15 @@ export function seenTargetConditions(sheet: Sheet, conditions: string[]): string
 
 export const FOE_SLAYER = "foe-slayer";
 
-// The creature types (and, for humanoids, the races) a ranger's Favored
-// Enemy names: a feature written "Favored Enemy: undead, fiends" or
-// "Favored Enemy (orcs)". None recorded, none favored.
-export function favoredEnemyTypes(sheet: Sheet): string[] {
-  const out: string[] = [];
-  for (const feature of sheet.features) {
-    const match = /^favored enemy(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i.exec(feature.name.trim());
-    if (match) {
-      out.push(
-        ...match[1]
-          .split(/,|\band\b/)
-          .map((entry) => textKey(entry).replace(/s$/, ""))
-          .filter(Boolean),
-      );
-    }
-  }
-  return out;
-}
-
-// The enemy is favored by its creature type ("fiend (demon)" is a fiend), a
-// subtype ("humanoid (goblinoid, orc)" is an orc) or its row ("goblin"),
-// each whole: no name it merely holds ("Forcemage" is no orc).
+// The enemy is favored (src/lib/srd/check-traits.ts favoredEnemies) by its
+// creature type ("fiend (demon)" is a fiend), a subtype ("humanoid
+// (goblinoid, orc)" is an orc) or its row ("goblin"), each whole, in the
+// singular or the plural ("monstrosities", "elves"): no name it merely
+// holds ("Forcemage" is no orc).
 export function isFavoredEnemy(sheet: Sheet, enemy: Pick<EncounterEnemy, "slug" | "stats">): boolean {
   const type = String(enemy.stats.type ?? "");
-  const kinds = [textKey(enemy.slug), ...(nameChoice(type) ?? "").split(",").map(textKey)];
-  return favoredEnemyTypes(sheet).some((favored) => isNamed(type, favored) || kinds.includes(favored));
+  const kinds = [textKey(enemy.slug), textKey(type.replace(/\s*\([^()]*\)\s*$/, "")), ...(nameChoice(type) ?? "").split(",").map(textKey)].filter(Boolean);
+  return favoredEnemies(sheet).some((favored) => kinds.some((kind) => sameRulesKey(kind, favored)));
 }
 
 // The bonus Foe Slayer can add to this attack, or 0: a ranger 20 (or the

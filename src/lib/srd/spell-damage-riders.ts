@@ -13,6 +13,7 @@
 
 import { authoredSpellDice } from "@/lib/srd/authored-effects-more";
 import { textKey } from "@/lib/language/text-logic";
+import { familyOf, holdsFeature, isNamed, nameChoice } from "@/lib/srd/feature-names";
 
 type Caster = {
   class: string;
@@ -27,9 +28,6 @@ type Caster = {
 };
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
-
-const hasFeature = (sheet: Caster, name: string) =>
-  sheet.features.some((feature) => textKey(feature.name).startsWith(name));
 
 // The damage type of each dragon a Draconic Bloodline sorcerer can descend
 // from (SRD 5.1, Dragon Ancestor table).
@@ -50,13 +48,9 @@ const DRAGON_TYPES: Record<string, string> = {
 // that records the choice ("Dragon Ancestor: Red", "Dragon Ancestor (gold)").
 export function dragonAncestorType(sheet: Pick<Caster, "features">): string | null {
   for (const feature of sheet.features) {
-    const name = textKey(feature.name);
-    if (!name.includes("dragon ancestor") && !name.includes("draconic bloodline")) {
-      continue;
-    }
-    const color = Object.keys(DRAGON_TYPES).find((entry) => new RegExp(`\\b${entry}\\b`).test(name));
-    if (color) {
-      return DRAGON_TYPES[color];
+    const type = isNamed(familyOf(feature.name), "Dragon Ancestor", "Draconic Bloodline") ? DRAGON_TYPES[textKey(nameChoice(feature.name) ?? "")] : undefined;
+    if (type) {
+      return type;
     }
   }
   return null;
@@ -85,7 +79,7 @@ export function spellDamageRiders(
   const riders: SpellDamageRiders = { flat: 0, dice: [], potentCantrip: false, notes: [] };
   const school = (spell.school ?? "").toLowerCase();
   const wizardSpell = !spell.classes?.length || spell.classes.includes("wizard");
-  if (school === "evocation" && wizardSpell && hasFeature(sheet, "empowered evocation")) {
+  if (school === "evocation" && wizardSpell && holdsFeature(sheet, "empowered evocation")) {
     const bonus = mod(sheet.abilities.int);
     if (bonus > 0) {
       riders.flat += bonus;
@@ -97,7 +91,7 @@ export function spellDamageRiders(
     ancestor &&
     spell.damageType &&
     spell.damageType.toLowerCase() === ancestor &&
-    hasFeature(sheet, "elemental affinity")
+    holdsFeature(sheet, "elemental affinity")
   ) {
     const bonus = mod(sheet.abilities.cha);
     if (bonus > 0) {
@@ -105,7 +99,7 @@ export function spellDamageRiders(
       riders.notes.push(`Elemental Affinity: +${bonus} ${ancestor} (Charisma)`);
     }
   }
-  if (spell.level === 0 && hasFeature(sheet, "potent cantrip")) {
+  if (spell.level === 0 && holdsFeature(sheet, "potent cantrip")) {
     riders.potentCantrip = true;
   }
   // The subclass features that add a die to the spell's damage.

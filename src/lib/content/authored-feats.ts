@@ -55,9 +55,9 @@ export function withAuthoredFeats(
   if ((options.offset ?? 0) > 0) {
     return served;
   }
-  const names = new Set(options.packNames.map((name) => name.trim().toLowerCase()));
+  const names = new Set(options.packNames.map(textKey));
   const missing = authoredFeatEntries(options.q).filter(
-    (entry) => !names.has(entry.name.toLowerCase()),
+    (entry) => !names.has(textKey(entry.name)),
   );
   if (!missing.length) {
     return served;

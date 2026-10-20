@@ -1,6 +1,6 @@
 import { raceMechanics, type RaceMechanics } from "@/lib/content/mechanics";
 import { SRD_RACES, type SrdRace } from "@/lib/srd";
-import { srdRaceId } from "@/lib/srd/race-id";
+import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
 import { isEdition2024 } from "@/lib/content/edition";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -186,7 +186,7 @@ function withSrd(parsed: RaceMechanics, srd: SrdRace): RaceMechanics {
     choiceTraitNames: parsed.choiceTraitNames,
     ...((srd.size ?? parsed.size) ? { size: (srd.size as RaceMechanics["size"]) ?? parsed.size } : {}),
     // Every bundled dwarf carries the Dwarf's own Speed trait.
-    ...(parsed.heavyArmorSpeed || /dwarf/.test(srd.id) ? { heavyArmorSpeed: true } : {}),
+    ...(parsed.heavyArmorSpeed || isDwarf(srd.id) ? { heavyArmorSpeed: true } : {}),
   };
   for (const key of GRANT_KEYS) {
     if (srd[key] !== undefined) {

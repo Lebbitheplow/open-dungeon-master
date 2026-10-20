@@ -17,6 +17,7 @@ const features = await import("../src/lib/srd/features.ts");
 const { wearsUntrainedArmor } = await import("../src/lib/srd/armor.ts");
 const { casterStateProblem } = await import("../src/lib/dm/cast-rules.ts");
 const { buildLevelUp } = await import("../src/lib/srd/level-up.ts");
+const { keyedFeatChoices } = await import("../src/lib/schemas/sheet.ts");
 
 await test("Every entry of the training table names a real feature of a real subclass.", () => {
   const missing = training.trainingTableKeys().filter((key) => {
@@ -195,7 +196,7 @@ await test("A bard who takes College of Lore at level 3 is asked for the three s
   const refused = buildLevelUp(bardAt2, levelRequest(), context);
   assert.ok("error" in refused);
   assert.match(refused.error, /Bonus Proficiencies \(Lore\): pick 3 skills/);
-  const taken = buildLevelUp(bardAt2, levelRequest({ featChoices: { "bonus proficiencies (lore)": { skills: ["arcana", "history", "stealth"] } } }), context);
+  const taken = buildLevelUp(bardAt2, levelRequest({ featChoices: keyedFeatChoices({ "Bonus Proficiencies (Lore)": { skills: ["arcana", "history", "stealth"] } }) }), context);
   assert.ok(!("error" in taken), taken.error);
   for (const skill of ["arcana", "history", "stealth", "acrobatics"]) {
     assert.ok(taken.patch.proficiencies.skills.includes(skill), skill);

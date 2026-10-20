@@ -10,6 +10,8 @@ import {
   type ConditionMetaMap,
 } from "@/lib/dm/condition-logic";
 import type { DeathTrack } from "@/lib/dm/death-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
+import { textKey } from "@/lib/language/text-logic";
 
 export const UNCONSCIOUS = "unconscious";
 export const PRONE = "prone";
@@ -137,9 +139,9 @@ export function exhaustionPatch(
   };
 }
 
-// "exhaustion", "exhausted", "exhaustion 2": every word for the track.
+// The track by its name, or as ODM stores a level of it ("exhaustion 2").
 export function namesExhaustion(condition: string): boolean {
-  return /^exhaust/.test(condition.trim().toLowerCase());
+  return isConditionNamed(condition, "exhaustion") || /^exhaustion \d+$/.test(textKey(condition));
 }
 
 export const STABILIZE_METHODS = ["check", "kit", "spell"] as const;

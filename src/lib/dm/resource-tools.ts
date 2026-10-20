@@ -7,6 +7,7 @@ import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import {
+  beastFormsHolding,
   findBeastForm,
   formatCr,
   formList,
@@ -27,9 +28,11 @@ import { textKey } from "@/lib/language/text-logic";
 import { optionsOfKind } from "@/lib/srd/options";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { holdsMote } from "@/lib/srd/authored-effects-more";
-import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { holdingHint, noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { nameChoice } from "@/lib/srd/feature-names";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 
 export { computePurchase } from "@/lib/dm/purchase-math";
 
@@ -318,6 +321,12 @@ export function computeUseResource(
     if (technique) {
       return spendKiTechnique(campaign, sheet, technique, variant);
     }
+    if (variant?.trim()) {
+      return {
+        error: `${def.displayName} takes variant 'flurry of blows', 'patient defense', 'step of the wind' ('step of the wind dash' to Dash), 'diamond soul' or 'empty body'; "${variant}" is none of them. A plain spend (Stunning Strike) names no variant. Nothing was spent.`,
+        retry: true,
+      };
+    }
   }
 
   // Font of Magic: sorcery points convert into a spell slot and back, the
@@ -451,14 +460,20 @@ export function computeUseResource(
     }
     case "buff": {
       const effect = def.effect;
-      const wanted = (variant ?? "").trim().toLowerCase();
-      const condition =
-        wanted && effect.variants?.length
-          ? (effect.variants.find((entry) => entry.toLowerCase().includes(wanted)) ??
-            (effect.variants.some((entry) => wanted.includes(entry.toLowerCase()))
-              ? effect.variants.find((entry) => wanted.includes(entry.toLowerCase()))!
-              : effect.condition))
-          : effect.condition;
+      // A feature with variants takes the one named whole or by its choice
+      // ("bear" for "spirit totem: bear"); a miss is refused, never the
+      // first.
+      let condition = effect.condition;
+      if (effect.variants?.length) {
+        const wanted = textKey(variant ?? "");
+        const picked = effect.variants.find((entry) => [entry, nameChoice(entry) ?? ""].some((spelling) => textKey(spelling) === wanted));
+        if (!picked) {
+          return wanted
+            ? noneNamed(`${def.displayName} has no variant called`, (variant ?? "").trim(), effect.variants)
+            : { error: `${def.displayName} needs its variant: ${effect.variants.join(", ")}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
+        }
+        condition = picked;
+      }
       const recipient = effect.target === "ally" ? target : sheet;
       if (recipient.conditions.some((entry) => entry.toLowerCase() === condition)) {
         return { error: `${recipient.name} is already ${condition}; the feature is already running.`, refused: "rules" };
@@ -504,9 +519,6 @@ export function computeUseResource(
       outcome.result.applied = `${condition} on ${recipient.name} for ${effect.rounds} rounds`;
       if (summary) {
         outcome.result.effect = summary;
-      }
-      if (effect.variants?.length && !wanted) {
-        outcome.result.variants = `Options: ${effect.variants.join(", ")}. Pass variant to pick; ${condition} was applied.`;
       }
       return outcome;
     }
@@ -607,7 +619,7 @@ export function computeUseResource(
       // circle, not the character's summed level or primary subclass.
       const druidEntry = classListFor(sheet).find((entry) => entry.id.toLowerCase() === "druid");
       const druidLevel = classLevelFor(sheet, "druid") || sheet.level;
-      const moonDruid = /moon/i.test(druidEntry?.subclass ?? sheet.subclass ?? "");
+      const moonDruid = subclassNamed(druidEntry?.subclass ?? sheet.subclass ?? "", "Circle of the Moon");
       const caps = wildShapeCapsFor(druidLevel, moonDruid);
       // The forms they can take now, for every question and refusal below.
       const offer = formList(wildShapeForms(caps));
@@ -674,7 +686,7 @@ export function computeUseResource(
       const limits = `CR ${formatCr(caps.maxCr)} or lower${caps.fly ? "" : ", no flying forms"}${caps.swim ? "" : ", no swimming forms"}`;
       if (!form?.hp || !form?.ac || form.cr === undefined) {
         return {
-          error: `"${name}" is not in the beast-form table; pass formHp, formAc and formCr from its stat block (and formFlies or formSwims if it does). At druid level ${druidLevel} the form must be ${limits}; the table's forms within it: ${offer}.`,
+          error: `"${name}" is not in the beast-form table; pass formHp, formAc and formCr from its stat block (and formFlies or formSwims if it does). At druid level ${druidLevel} the form must be ${limits}; the table's forms within it: ${offer}.${holdingHint(name, beastFormsHolding(name).map((form) => form.name))}`,
           retry: true,
         };
       }

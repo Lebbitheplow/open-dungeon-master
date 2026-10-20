@@ -5,6 +5,13 @@ import type { AuthoredEntry } from "@/lib/srd/authored-effects-types";
 
 export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
   // ---- druid ----
+  // Combat Wild Shape spends Wild Shape's own uses: the change as a bonus
+  // action (src/lib/dm/resource-turn.ts) and a slot burned for 1d8 per
+  // level while transformed (src/lib/dm/mutations.ts).
+  "druid::Combat Wild Shape": {
+    subclass: "Circle of the Moon",
+    counter: "wild_shape",
+  },
   "druid::Halo of Spores": {
     subclass: "Circle of Spores",
     reactions: [

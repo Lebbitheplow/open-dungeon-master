@@ -15,6 +15,7 @@ import type { PickerEntry } from "./useContentSearch";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState } from "./useBuilderState";
+import { textKey } from "@/lib/language/text-logic";
 
 // The feat pickers judge a feat's prerequisite the way the save does
 // (src/lib/srd/legality/features.ts checkPrerequisite, which the server's
@@ -142,14 +143,14 @@ export function builderFeatCandidate({ state, derived, race, klass, background }
 // the stored character already `held` before this edit is not judged
 // again, as the server does not judge it (judgeFeats).
 export function builderFeatJudge(facts: BuilderFacts, prerequisites: Record<string, string>, held: string[] = []): FeatJudge {
-  const kept = new Set(held.map((name) => name.trim().toLowerCase()));
+  const kept = new Set(held.map(textKey));
   const settled = builderFeatCandidate(facts);
   const filling = builderFeatCandidate(facts, true);
   const check = (prerequisite: string, forSlot = false) => {
     const { who, waiting } = forSlot ? filling : settled;
     return checkPrerequisite(prerequisite, who, waiting);
   };
-  const isHeld = (name: string) => kept.has(name.trim().toLowerCase());
+  const isHeld = (name: string) => kept.has(textKey(name));
   return {
     check,
     held: isHeld,
@@ -157,7 +158,7 @@ export function builderFeatJudge(facts: BuilderFacts, prerequisites: Record<stri
       if (isHeld(name)) {
         return null;
       }
-      const prerequisite = authoredFeatPrerequisite(name) ?? prerequisites[name.trim().toLowerCase()];
+      const prerequisite = authoredFeatPrerequisite(name) ?? prerequisites[textKey(name)];
       return prerequisite === undefined ? null : check(prerequisite);
     },
   };

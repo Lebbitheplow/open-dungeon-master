@@ -10,7 +10,7 @@
 // src/lib/srd, so the roll resolver, set_condition, the damage path, the
 // legality check and the level-up all read the same answer.
 
-import { defenseRiders } from "@/lib/srd/feature-effects";
+import { defenseRiders, hasBrave } from "@/lib/srd/feature-effects";
 import {
   authoredConditionImmunities,
   authoredDamageImmunities,
@@ -18,9 +18,12 @@ import {
   authoredSaveTraits,
   authoredSaveProficiencies,
 } from "@/lib/srd/authored-effects";
-import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature } from "@/lib/srd/feature-names";
 import type { SaveAgainst } from "@/lib/dm/roll-about";
 import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
+import { textKey } from "@/lib/language/text-logic";
+import { subclassNamed } from "@/lib/srd/subclass-name";
+import { isDwarf } from "@/lib/srd/race-id";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 type FeatureLike = { name: string; source?: string; classId?: string };
@@ -36,30 +39,21 @@ export type TraitSheet = {
   conditions?: string[];
 };
 
-const lower = (value: string | undefined) => (value ?? "").trim().toLowerCase();
-
-// Whether the sheet holds a feature whose name starts with (or is) one of
-// these names. Racial traits carry their gist in brackets ("Brave (adv. vs
-// frightened)"), so the start of the name is what identifies them.
-export function holdsFeature(sheet: TraitSheet, ...names: string[]): boolean {
-  const wanted = names.map(textKey);
-  return [...(sheet.features ?? []).map((feature) => feature.name), ...(sheet.feats ?? [])].some((name) =>
-    [name, name.replace(/\s*\(.*$/, ""), name.replace(/\s*:.*$/, "")].some((held) => wanted.includes(textKey(held))),
-  );
-}
+// Read where the pure engines read it too (src/lib/srd/feature-names.ts).
+export { holdsFeature };
 
 // The level a class-scaled feature reads: the class's own level on a
 // multiclass sheet, the character level otherwise.
 export function classLevelOf(sheet: TraitSheet, classId: string): number {
-  const entry = (sheet.classes ?? []).find((item) => lower(item.id) === classId);
+  const entry = (sheet.classes ?? []).find((item) => textKey(item.id) === classId);
   if (entry) {
     return entry.level;
   }
-  return lower(sheet.class) === classId ? (sheet.level ?? 1) : 0;
+  return textKey(sheet.class ?? "") === classId ? (sheet.level ?? 1) : 0;
 }
 
 function hasCondition(sheet: TraitSheet, ...names: string[]): boolean {
-  const held = (sheet.conditions ?? []).map(lower);
+  const held = (sheet.conditions ?? []).map(textKey);
   return names.some((name) => held.includes(name));
 }
 
@@ -75,7 +69,7 @@ function hasCondition(sheet: TraitSheet, ...names: string[]): boolean {
 export type SaveTrait = RollKey & { note: string };
 export function heldSaveTraits(sheet: TraitSheet): SaveTrait[] {
   const out: SaveTrait[] = [];
-  if (holdsBrave(sheet)) {
+  if (hasBrave(sheet)) {
     out.push({ roll: "save", against: ["frightened"], note: "Brave: advantage on saves against being frightened" });
   }
   // Steel Will (a Hunter ranger's Defensive Tactics pick).
@@ -85,7 +79,7 @@ export function heldSaveTraits(sheet: TraitSheet): SaveTrait[] {
   if (holdsFeature(sheet, "fey ancestry")) {
     out.push({ roll: "save", against: ["charmed"], note: "Fey Ancestry: advantage on saves against being charmed" });
   }
-  if (holdsFeature(sheet, "dwarven resilience", "stout resilience", "duergar resilience") || /dwarf/.test(lower(sheet.race))) {
+  if (holdsFeature(sheet, "dwarven resilience", "stout resilience", "duergar resilience") || isDwarf(sheet.race ?? "")) {
     out.push({ roll: "save", against: ["poison", "poisoned"], note: "advantage on saves against poison (resilience)" });
   }
   if (holdsFeature(sheet, "gnome cunning")) {
@@ -121,14 +115,6 @@ export function traitSaveAdvantages(
     notes.push("Danger Sense: advantage on DEX saves");
   }
   return notes;
-}
-
-// Brave, as the builder writes it or as a race-sourced trait of that name.
-function holdsBrave(sheet: TraitSheet): boolean {
-  return (sheet.features ?? []).some((feature) => {
-    const name = textKey(feature.name);
-    return name.includes("brave") && (feature.source === "race" || name.includes("frighten"));
-  });
 }
 
 // Danger Sense: the barbarian must be able to see and hear what is coming,
@@ -247,7 +233,7 @@ export function sourcedConditionImmunity(
   condition: string,
   creatureType: string | undefined,
 ): string | null {
-  const type = lower(creatureType);
+  const type = textKey(creatureType ?? "");
   if (!type || (condition !== "charmed" && condition !== "frightened")) {
     return null;
   }
@@ -337,9 +323,9 @@ export function hasEvasion(sheet: TraitSheet): boolean {
 // feature, or off the subclass for a sheet whose features are not yet
 // granted (the builder, a level-up in progress).
 export function featureHitPoints(sheet: TraitSheet): number {
-  const sorcerer = (sheet.classes ?? []).find((entry) => lower(entry.id) === "sorcerer");
-  const subclass = sorcerer ? sorcerer.subclass : lower(sheet.class) === "sorcerer" ? sheet.subclass : "";
-  const draconic = holdsFeature(sheet, "draconic resilience") || /draconic/i.test(subclass ?? "");
+  const sorcerer = (sheet.classes ?? []).find((entry) => textKey(entry.id) === "sorcerer");
+  const subclass = sorcerer ? sorcerer.subclass : textKey(sheet.class ?? "") === "sorcerer" ? sheet.subclass : "";
+  const draconic = holdsFeature(sheet, "draconic resilience") || subclassNamed(subclass ?? "", "Draconic Bloodline");
   return draconic ? Math.max(0, classLevelOf(sheet, "sorcerer")) : 0;
 }
 

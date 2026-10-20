@@ -112,10 +112,10 @@ await test("Artisan's Blessing is an hour's ritual: refused in a fight, and noth
 });
 
 await test("The cost table reads the option from the variant or the resource's own name.", () => {
-  assert.deepEqual(optionCost("channel_divinity", "Channel Divinity: War God's Blessing", true), { option: "war god's blessing", cost: "reaction" });
-  assert.deepEqual(optionCost("channel_divinity", "guided strike", true), { option: "guided strike", cost: "none" });
-  assert.deepEqual(optionCost("channel_divinity", "champion challenge", true), { option: "champion challenge", cost: "bonus" });
-  assert.equal(optionCost("channel_divinity", "something new", true), null);
+  assert.deepEqual(optionCost("channel_divinity", ["Channel Divinity: War God's Blessing"], true), { option: "war god's blessing", cost: "reaction" });
+  assert.deepEqual(optionCost("channel_divinity", ["guided strike"], true), { option: "guided strike", cost: "none" });
+  assert.deepEqual(optionCost("channel_divinity", ["champion challenge"], true), { option: "champion challenge", cost: "bonus" });
+  assert.equal(optionCost("channel_divinity", ["something new"], true), null);
 });
 
 await test("Telekinetic Movement is the Psi Warrior's action.", async () => {

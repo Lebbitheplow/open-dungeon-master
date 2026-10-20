@@ -33,6 +33,9 @@ import type { SpellCondition, SpellMech } from "@/lib/srd/spell-mech-types";
 import type { SaveAbilityId } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { sendHome } from "@/lib/dm/spell-planes";
+import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
+import { nameChoice } from "@/lib/srd/feature-names";
 
 const FEET_PER_TILE = 5;
 
@@ -95,22 +98,28 @@ export function flooredDamage(
 // ---- the condition ----
 
 // The chosen form of a condition, and what it lays with it: Command's word
-// (Grovel: prone), Eyebite's form (Sickened: its own rules). The caller's
-// word is kept only when the spell offers it.
+// (Grovel: prone), Eyebite's form (Sickened: its own rules). A word Command
+// gives no more for is plain commanded; a spell with variants needs one,
+// named whole ("cursed (wis)") or by what its parentheses hold ("wis"), and
+// refuses any other.
 export function chosenCondition(
   condition: SpellCondition,
   wanted: string | null,
-): { name: string; extra: string[]; rules: Partial<SpellCondition> } {
-  const word = (wanted ?? "").trim().toLowerCase();
-  const choice = condition.choices?.[word];
-  // A variant named whole ("cursed (wis)") or by what its parentheses hold
-  // ("wis", "attacks").
-  const variant =
-    condition.variants?.find((entry) => entry === word || entry.endsWith(`(${word})`)) ?? condition.name;
+): { name: string; extra: string[]; rules: Partial<SpellCondition> } | ToolError {
+  const word = textKey(wanted ?? "");
+  const choice = Object.entries(condition.choices ?? {}).find(([key]) => textKey(key) === word)?.[1];
+  const variant = condition.variants?.find((entry) => [entry, nameChoice(entry) ?? ""].some((spelling) => textKey(spelling) === word));
+  if (condition.variants?.length && !variant) {
+    return {
+      error: `${word ? `"${(wanted ?? "").trim()}" is none of the spell's conditions` : "The spell lays one condition of several, named in condition"}: ${condition.variants.join(", ")}. Ask the player which, unless they named one. Nothing was spent.`,
+      retry: true,
+    };
+  }
+  const name = variant ?? condition.name;
   return {
-    name: choice ? condition.name : variant,
+    name,
     extra: choice ?? [],
-    rules: condition.variantRules?.[variant] ?? {},
+    rules: condition.variantRules?.[name] ?? {},
   };
 }
 

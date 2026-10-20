@@ -22,6 +22,7 @@ import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOpti
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState, EquipmentItem } from "./useBuilderState";
 import { textKey } from "@/lib/language/text-logic";
+import { featChoice } from "@/lib/schemas/sheet";
 
 export type BuilderResult = { level: number; sheet: CreateSheetInput };
 
@@ -118,7 +119,7 @@ function featPicksBlock(
     return null;
   }
   for (const feat of feats) {
-    const owed = featOwed(feat, specOf(feat), featChoices?.[feat.trim().toLowerCase()]);
+    const owed = featOwed(feat, specOf(feat), featChoice(featChoices, feat));
     if (owed) {
       return owed;
     }
@@ -234,7 +235,7 @@ export function callingBlocks(
   // What the subclass's training leaves to the player: a Lore bard's three
   // skills, a Knowledge cleric's languages and skills (issue 251).
   for (const grant of derived.subclassTraining ?? []) {
-    const left = featOwed(grant.name, grant.spec, state.featChoices?.[grant.name.trim().toLowerCase()]);
+    const left = featOwed(grant.name, grant.spec, featChoice(state.featChoices, grant.name));
     if (left) {
       owed.push(block("subclass", left));
       break;
@@ -613,7 +614,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       // (src/lib/srd/feat-grants.ts); the server applies them.
       featChoices: Object.fromEntries(
         [...new Set([...asiFeats, ...state.feats, ...(derived.subclassTraining ?? []).map((grant) => grant.name)])]
-          .map((feat) => [feat.trim().toLowerCase(), (state.featChoices ?? {})[feat.trim().toLowerCase()]] as const)
+          .map((feat) => [textKey(feat), featChoice(state.featChoices, feat)] as const)
           .filter((entry): entry is readonly [string, NonNullable<(typeof entry)[1]>] => Boolean(entry[1])),
       ),
       // Server-side creation populates SRD class features, racial traits

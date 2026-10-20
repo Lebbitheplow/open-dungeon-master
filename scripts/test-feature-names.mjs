@@ -26,9 +26,12 @@ const { hasElvenAccuracy } = await import("../src/lib/srd/feature-effects.ts");
 const { hasHalflingNimbleness } = await import("../src/lib/battlemap/passage.ts");
 const { initiativeRefills } = await import("../src/lib/srd/resource-refills.ts");
 const { canonicalCondition, conditionNameRefusal } = await import("../src/lib/dm/set-condition.ts");
+const { conditionEffectsFor } = await import("../src/lib/srd/condition-effects.ts");
 const { reactionTimingOf } = await import("../src/lib/dm/reaction-kinds.ts");
 const { kiTechnique } = await import("../src/lib/dm/bonus-actions.ts");
 const { heldCheckTraits } = await import("../src/lib/srd/check-traits.ts");
+const { isFavoredEnemy } = await import("../src/lib/dm/attack-features.ts");
+const { keyFits } = await import("../src/lib/srd/roll-keys.ts");
 const { ignoresHeavyArmorSpeedPenalty, unarmoredFormulaFor } = await import("../src/lib/srd/armor.ts");
 const { featureHitPoints } = await import("../src/lib/srd/trait-rules.ts");
 const { hasFastHands } = await import("../src/lib/dm/bonus-routes.ts");
@@ -38,6 +41,7 @@ const { bonusCastOf } = await import("../src/lib/dm/cast-rules.ts");
 const { featChoice, featChoicesSchema, keyedFeatChoices, withFeatChoice } = await import("../src/lib/schemas/sheet.ts");
 const { createCharacter, getCharacter } = await import("../src/lib/db/characters.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
+const { getSheetById } = await import("../src/lib/db/sheets.ts");
 const { upsertNpc, getNpcByName, listNpcs } = await import("../src/lib/db/npcs.ts");
 const { mintSession } = await import("../src/lib/auth.ts");
 const review = await import("../src/app/api/campaigns/[campaignId]/npcs/review/route.ts");
@@ -136,6 +140,23 @@ await test("a condition is its whole name, or with a bracket note; any other wor
     assert.match(conditionNameRefusal(raw)?.error ?? "", /sourceEnemyId/, raw);
   }
   assert.equal(conditionNameRefusal("spaventato"), null);
+  // A family's choice is a feature's format, never a condition's: "Curse:
+  // Blinded" is no blinded, and no rule reads it as one.
+  assert.equal(canonicalCondition("Curse: Blinded"), "curse: blinded");
+  assert.equal(conditionEffectsFor("Spell: Bless"), null);
+  assert.equal(conditionEffectsFor("bless (the cleric)")?.match.includes("bless"), true);
+  // A story condition that holds a condition's word is asked which it is: the
+  // condition with its source, or the story condition named without the word.
+  for (const raw of ["paralyzed arm", "Curse: Blinded"]) {
+    const refusal = conditionNameRefusal(raw)?.error ?? "";
+    assert.match(refusal, /If it is the condition, send condition "(paralyzed|blinded)" and who caused it in sourceEnemyId or sourceCharacterId; if it is a story condition no rule applies to, send it again named without the word/, raw);
+  }
+  // A story condition in the table's language holds no condition's English
+  // word, and is kept as written at every table.
+  for (const raw of ["braccio paralizzato", "Maledizione: accecato", "bras paralysé", "brazo paralizado", "gelähmter Arm"]) {
+    assert.equal(conditionNameRefusal(raw), null, raw);
+    assert.equal(canonicalCondition(raw), raw.toLowerCase(), raw);
+  }
   const command = { name: "Command", castingTime: "action", level: 1, classes: ["paladin"] };
   const held = (condition) => bonusCastOf({ conditions: [condition], features: [] }, command, null)?.feature ?? null;
   assert.equal(held("Mantle of Majesty (1 minute)"), "Mantle of Majesty");
@@ -148,12 +169,12 @@ await test("a condition is its whole name, or with a bracket note; any other wor
 await test("a record list finds a whole spelling only; its refusal names the records whose name holds the word.", () => {
   const forms = [{ name: "Giant Spider" }, { name: "Wolf" }, { name: "Dire Wolf" }];
   const spellings = (entry) => [entry.name];
-  assert.equal(findNamed(forms, ["giant spider"], spellings)?.name, "Giant Spider");
-  assert.equal(findNamed(forms, ["GIANT-SPIDER"], spellings)?.name, "Giant Spider");
-  assert.equal(findNamed(forms, ["spider"], spellings), null);
-  assert.equal(findNamed(forms, ["ragno gigante"], spellings), null);
-  assert.deepEqual(namesHolding(forms, ["spider"], spellings).map((entry) => entry.name), ["Giant Spider"]);
-  assert.deepEqual(namesHolding(forms, ["wolf"], spellings).map((entry) => entry.name), ["Wolf", "Dire Wolf"]);
+  assert.equal(findNamed(forms, "giant spider", spellings)?.name, "Giant Spider");
+  assert.equal(findNamed(forms, "GIANT-SPIDER", spellings)?.name, "Giant Spider");
+  assert.equal(findNamed(forms, "spider", spellings), null);
+  assert.equal(findNamed(forms, "ragno gigante", spellings), null);
+  assert.deepEqual(namesHolding(forms, "spider", spellings).map((entry) => entry.name), ["Giant Spider"]);
+  assert.deepEqual(namesHolding(forms, "wolf", spellings).map((entry) => entry.name), ["Wolf", "Dire Wolf"]);
 });
 
 await test("names compare by textKey: curly quotes, ß and SS, case, hyphens and spacing are one key.", () => {
@@ -186,6 +207,22 @@ await test("a feat's picks are found under its textKey: a map sent or stored und
   assert.equal(featChoice(read.featChoices, "Elemental Adept")?.damageType, "fire");
 });
 
+await test("a campaign sheet stored before the keys were textKey keeps its picks under names with brackets, apostrophes and hyphens: the subclass grants and the pack feats whose lower case is not their key.", () => {
+  const hero = world.addHero({ name: "Lore Keeper", class: "bard", level: 3 });
+  const stored = {
+    "bonus proficiencies (lore)": { skills: ["arcana", "history", "nature"] },
+    "giant's power": { cantrips: ["Thaumaturgy"] },
+    "bonus proficiency (heavy armor)": { skills: [] },
+    "dual-wielding expert": { ability: "dex" },
+  };
+  getDatabase().prepare("UPDATE character_sheets SET feat_choices_json = ? WHERE id = ?").run(JSON.stringify(stored), hero.id);
+  const read = getSheetById(hero.id);
+  assert.deepEqual(featChoice(read.featChoices, "Bonus Proficiencies (Lore)"), stored["bonus proficiencies (lore)"]);
+  assert.deepEqual(featChoice(read.featChoices, "Giant’s Power"), stored["giant's power"]);
+  assert.deepEqual(featChoice(read.featChoices, "Bonus Proficiency (heavy armor)"), stored["bonus proficiency (heavy armor)"]);
+  assert.deepEqual(featChoice(read.featChoices, "Dual-Wielding Expert"), stored["dual-wielding expert"]);
+});
+
 await test("an NPC renamed onto a name another NPC holds in another case or spelling is refused as the clash it is.", async () => {
   const elodie = upsertNpc({ campaignId: world.campaignId, name: "Élodie" });
   const marta = upsertNpc({ campaignId: world.campaignId, name: "Marta" });
@@ -201,6 +238,37 @@ await test("an NPC renamed onto a name another NPC holds in another case or spel
   assert.equal(renamed.status, 200, await renamed.clone().text());
   assert.deepEqual(listNpcs(world.campaignId).map((npc) => npc.name).sort(), ["Marta la Rossa", "Élodie"].sort());
   assert.equal(getNpcByName(world.campaignId, "ÉLODIE")?.id, elodie.id);
+});
+
+await test("Favored Enemy and Natural Explorer picks are keys of the rules' English vocabulary, in the singular or the plural the SRD writes: monstrosities, elves, dwarves and gnolls are favored, and a forest and a swamp explored.", () => {
+  const owlbear = { slug: "owlbear", stats: { type: "monstrosity" } };
+  const drow = { slug: "drow", stats: { type: "humanoid (elf)" } };
+  const dwarf = { slug: "duergar", stats: { type: "humanoid (dwarf)" } };
+  const gnoll = { slug: "gnoll", stats: { type: "humanoid (gnoll)" } };
+  const imp = { slug: "imp", stats: { type: "fiend (devil)" } };
+  const zombie = { slug: "zombie", stats: { type: "undead" } };
+  const favored = (feature, enemy) => isFavoredEnemy({ features: [{ name: feature }] }, enemy);
+  assert.ok(favored("Favored Enemy: monstrosities", owlbear));
+  assert.ok(favored("Favored Enemy (elves and dwarves)", drow));
+  assert.ok(favored("Favored Enemy (elves and dwarves)", dwarf));
+  assert.ok(favored("Favored Enemy: gnolls, orcs", gnoll));
+  assert.ok(favored("Favored Enemy: fiend", imp));
+  assert.ok(favored("Favored Enemy Improvement: Undead", zombie));
+  assert.ok(!favored("Favored Enemy: elves", dwarf));
+  assert.ok(!favored("Favored Enemy: orcs", { slug: "forcemage", stats: { type: "humanoid (human)" } }));
+  // A pick is a key of the rules' English vocabulary, at every table, as
+  // the feature's own name is: a word of the table's language is none.
+  for (const pick of ["non morti", "morts-vivants", "no muertos", "Untote"]) {
+    assert.ok(!favored(`Favored Enemy: ${pick}`, zombie), pick);
+  }
+  // The check a pick gives advantage to, about the creature a call names.
+  const traits = heldCheckTraits({ features: [{ name: "Favored Enemy: monstrosities, elves" }, { name: "Natural Explorer: forests and swamps" }], feats: [] });
+  const tracking = traits.find((trait) => trait.about === "tracking");
+  for (const creature of ["monstrosity", "monstrosities", "elf", "elves"]) {
+    assert.ok(keyFits(tracking, { roll: "check", skill: "survival", about: "tracking", creature }), creature);
+  }
+  assert.ok(!keyFits(tracking, { roll: "check", skill: "survival", about: "tracking", creature: "dwarf" }));
+  assert.deepEqual(traits.find((trait) => trait.terrains)?.terrains, ["forest", "swamp"]);
 });
 
 finish();

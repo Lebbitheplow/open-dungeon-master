@@ -40,6 +40,7 @@ import { describeMinutes, minutesSinceDeath } from "@/lib/dm/revival";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature } from "@/lib/srd/feature-names";
 
 type Cast = (args: Record<string, unknown>) => ToolResult;
 
@@ -49,9 +50,6 @@ export type HealSpellOutcome =
   // The spell did its own thing (a revival, a stabilize): return this.
   | { done: Record<string, unknown> }
   | ToolError;
-
-const hasFeature = (sheet: CharacterSheet, name: string) =>
-  sheet.features.some((feature) => textKey(feature.name).startsWith(name));
 
 // The most a dice expression can roll: "2d8+3" is 19.
 export function maximumOf(expression: string): number {
@@ -188,12 +186,12 @@ export function castHealingSpell(
   const riders: string[] = [];
   // Signed: a WIS 8 cleric's Cure Wounds is 1d8 - 1 (the floor is on the total).
   let bonus = modifier;
-  if (slotLevel >= 1 && hasFeature(caster, "disciple of life")) {
+  if (slotLevel >= 1 && holdsFeature(caster, "disciple of life")) {
     bonus += 2 + slotLevel;
     riders.push(`Disciple of Life +${2 + slotLevel}`);
   }
   const maximize =
-    (slotLevel >= 1 && hasFeature(caster, "supreme healing")) ||
+    (slotLevel >= 1 && holdsFeature(caster, "supreme healing")) ||
     // Circle of Mortality: on a creature at 0 hit points (authored-effects.ts).
     authoredHealMax(caster, target) !== null ||
     target.conditions.some((entry) => entry.toLowerCase() === "beacon of hope");
@@ -228,7 +226,7 @@ export function castHealingSpell(
   }
   // Blessed Healer (Life 6): healing another creature with a slot heals the
   // cleric 2 + the slot's level.
-  if (slotLevel >= 1 && target.id !== caster.id && hasFeature(caster, "blessed healer")) {
+  if (slotLevel >= 1 && target.id !== caster.id && holdsFeature(caster, "blessed healer")) {
     const self = getSheetById(caster.id) ?? caster;
     const currentHp = Math.min(effectiveMaxHp(self), self.currentHp + 2 + slotLevel);
     if (currentHp > self.currentHp && self.currentHp > 0) {

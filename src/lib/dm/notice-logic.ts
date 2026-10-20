@@ -7,6 +7,7 @@
 // Wisdom (Perception) checks that rely on sight, and a passive check at
 // disadvantage is -5; in darkness a creature without darkvision sees nothing,
 // and darkvision turns darkness into dim light and dim light into bright.
+import { isConditionNamed } from "../srd/feature-names.ts";
 
 export type Light = "bright" | "dim" | "dark";
 
@@ -128,6 +129,6 @@ export function cannotNotice(sheet: { currentHp: number; conditions: string[]; d
   return (
     Boolean(sheet.deathSaves?.dead) ||
     sheet.currentHp <= 0 ||
-    sheet.conditions.some((condition) => /^(unconscious|asleep|sleeping)\b/i.test(condition.trim()))
+    sheet.conditions.some((condition) => isConditionNamed(condition, "unconscious", "asleep", "sleeping"))
   );
 }

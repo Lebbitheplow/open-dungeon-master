@@ -107,8 +107,6 @@ const THIRD_SLOTS: number[][] = [
 // Spells known by class level, index = level - 1.
 const THIRD_SPELLS_KNOWN = [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13];
 
-const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
-
 const FEATURE_PROFILE = new Map(
   (Object.keys(PROFILES) as ThirdCasterProfile[])
     .filter((id) => PROFILES[id].feature)
@@ -134,7 +132,7 @@ export function isThirdCasterFeature(name: string): boolean {
 // The class's own profile, for "third-caster" and for a caller that knows
 // only that the class casts as a third caster.
 export function defaultThirdCasterProfile(classId: string): ThirdCasterProfile {
-  return BUNDLED[normalize(classId)]?.profile ?? "eldritch-knight";
+  return BUNDLED[textKey(classId)]?.profile ?? "eldritch-knight";
 }
 
 export function isThirdCasterProfile(value: unknown): value is ThirdCasterProfile {
@@ -156,7 +154,7 @@ export function thirdCasterProfileOf(
   if (setting === "third-caster") {
     return defaultThirdCasterProfile(classId);
   }
-  const bundled = BUNDLED[normalize(classId)];
+  const bundled = BUNDLED[textKey(classId)];
   return bundled && textKey(subclass ?? "") === bundled.subclass ? bundled.profile : null;
 }
 
@@ -224,13 +222,13 @@ export function thirdCasterOutside(
   spells: Array<{ school: unknown }>,
   setting?: string | null,
 ): number {
-  const profile = thirdCasterProfileOf(classId, "", setting) ?? BUNDLED[normalize(classId)]?.profile;
+  const profile = thirdCasterProfileOf(classId, "", setting) ?? BUNDLED[textKey(classId)]?.profile;
   if (!profile) {
     return 0;
   }
   const schools = PROFILES[profile].schools;
   return spells.filter((spell) => {
-    const school = normalize(schoolWord(spell.school));
+    const school = textKey(schoolWord(spell.school));
     return Boolean(school) && !schools.includes(school);
   }).length;
 }

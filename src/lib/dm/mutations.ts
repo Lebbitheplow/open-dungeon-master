@@ -103,6 +103,7 @@ import { isTableGearName } from "@/lib/db/homebrew";
 import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
 import { ITEM_TAGS } from "@/lib/schemas/item-tags";
+import { holdsFeature, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -142,14 +143,14 @@ const characterProperty = {
 const ITEM_SRD_NAME_PROPERTY = {
   type: "string",
   description:
-    "The SRD or pack item this is, by its English name ('Elixir of Health', 'Potion of Healing', 'Longsword'), when name is the table's own ('Elisir di salute'): the server reads what it does from that item. Omit when name already is that English name, for loot no list has, and while it is unidentified.",
+    "The SRD or pack item this is, by its English name ('Elixir of Health', 'Potion of Healing', 'Longsword'), when name is the table's own ('Elisir di salute'): the server reads what it does from that item. A magic weapon or armor built on a chosen base is named with it as the SRD writes it ('Flame Tongue Scimitar', 'Vicious Rapier', 'Mithral Half Plate', 'Chain Mail of Fire Resistance'). Omit when name already is that English name, for loot no list has, and while it is unidentified.",
 };
 
 const ITEM_TAGS_PROPERTY = {
   type: "array",
   items: { type: "string", enum: [...ITEM_TAGS] },
   description:
-    "What the item is, when it is no SRD or pack item (loot you invent): the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure; [] when none fits. Omit for an SRD or pack item (its name or srdName says it), and while it is unidentified.",
+    "What the item is, beyond what its SRD or pack item says: the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. For loot no list has (loot you invent), all of what it is, [] when none fits. For an SRD or pack item, only what the item adds to its row: a silvered longsword is srdName 'Longsword' with tags ['silvered']; omit them otherwise. Omit while it is unidentified.",
 };
 
 // The spell a spell scroll holds (src/lib/dm/consumables.ts).
@@ -1193,11 +1194,18 @@ export function applyDmMutation(
       if (badQty) {
         return { result: badQty };
       }
+      // The row a bought item is, as grant_item takes it; a sold one is the
+      // carried line.
+      const listed = action === "buy" ? srdNameFor(args.srdName, "purchase") : {};
+      if ("error" in listed) {
+        return { result: listed };
+      }
       const outcome = computePurchase(sheet, {
         item: itemName,
         price: args.price,
         qty: args.qty ?? 1,
         action,
+        srdName: listed.srdName,
       });
       if ("error" in outcome) {
         return { result: outcome };
@@ -1304,7 +1312,7 @@ export function applyDmMutation(
           },
         };
       }
-      const option = optionCost(counter?.id, `${args.variant ?? ""} ${resourceName}`, fighting);
+      const option = optionCost(counter?.id, [args.variant ?? "", resourceName], fighting);
       if (option && "refused" in option) {
         return { result: option.refused };
       }
@@ -1428,7 +1436,7 @@ export function applyDmMutation(
       // "concentration" is not a real condition: clearing it ends the
       // tracked spell (a caster dropping concentration voluntarily).
       const rawCondition = (args.condition ?? "").trim().toLowerCase();
-      if (rawCondition.startsWith("concentrat")) {
+      if (isConditionNamed(rawCondition, "concentration")) {
         const ended = breakConcentration(campaign, turnId, sheet.id, "ended voluntarily");
         return ended
           ? { result: { ok: true, cleared: `concentration (${ended})` } }
@@ -1437,14 +1445,12 @@ export function applyDmMutation(
       // Exhaustion clears one level at a time (greater restoration, a long
       // rest); level 0 is fully recovered.
       if (namesExhaustion(rawCondition)) {
-        if (sheet.exhaustion <= 0 && !sheet.conditions.some((entry) => entry.startsWith("exhaustion"))) {
+        if (sheet.exhaustion <= 0 && !sheet.conditions.some(namesExhaustion)) {
           return { result: { error: `${sheet.name} has no exhaustion.`, retry: true } };
         }
         const nextLevel = exhaustionPatch(sheet, sheet.exhaustion - 1).exhaustion;
         // Legacy string entries clear alongside the leveled field.
-        const cleanedConditions = sheet.conditions.filter(
-          (entry) => !entry.startsWith("exhaustion"),
-        );
+        const cleanedConditions = sheet.conditions.filter((entry) => !namesExhaustion(entry));
         const patch = { exhaustion: nextLevel, conditions: cleanedConditions };
         patchSheet(sheet.id, patch);
         audit(campaign, turnId, sheet, "clear_condition", { condition: "exhaustion", level: nextLevel }, reason, patch);
@@ -1456,13 +1462,10 @@ export function applyDmMutation(
           },
         };
       }
-      // Forgiving match: "poison" clears "poisoned", and legacy free-form
-      // entries ("poisoned by the dart") still clear alongside it.
+      // The condition by its whole name, with or without a bracket note:
+      // "aided" clears "aided (+10)"; a miss lists what the sheet holds.
       const wanted = canonicalCondition(args.condition ?? "");
-      const matches = (entry: string) =>
-        entry === wanted ||
-        canonicalCondition(entry) === wanted ||
-        (wanted.length > 3 && (entry.includes(wanted) || wanted.includes(entry)));
+      const matches = (entry: string) => entry === wanted || canonicalCondition(entry) === wanted || isConditionNamed(entry, wanted);
       const removed = wanted ? sheet.conditions.filter(matches) : [];
       if (!removed.length) {
         return {
@@ -1505,10 +1508,8 @@ export function applyDmMutation(
       // Combat Wild Shape: while transformed, a slot becomes 1d8 healing per
       // slot level, restoring the beast form's pool. Called as
       // use_spell_slot with spell="Combat Wild Shape".
-      if (/combat wild shape/i.test(spell)) {
-        const hasFeature = sheet.features.some((feature) =>
-          textKey(feature.name).includes("combat wild shape"),
-        );
+      if (isNamed(spell, "combat wild shape")) {
+        const hasFeature = holdsFeature(sheet, "Combat Wild Shape");
         if (!hasFeature) {
           return { result: { error: `${sheet.name} has no Combat Wild Shape.`, refused: "rules" } };
         }

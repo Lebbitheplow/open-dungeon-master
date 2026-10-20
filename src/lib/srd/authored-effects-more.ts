@@ -25,8 +25,8 @@ import type { NaturalWeapon } from "@/lib/srd/authored-effects-types";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag } from "@/lib/srd/item-tags";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
+import { pluralForms } from "@/lib/srd/name-forms";
+import { spellNamesOf } from "@/lib/srd/spell-facts";
 
 // ---- weapons the feature is ----
 
@@ -58,22 +58,21 @@ function toSrd(weapon: NaturalWeapon, level: number, mods: Record<string, number
   };
 }
 
-// The weapon a feature makes that pc_attack's `weapon` names ("claws", "the
-// psychic blade", "radiant sun bolt"), when its gate holds (a rage for Form
-// of the Beast). `terms` are the ways to read the name (src/lib/language/
-// language.ts nameTerms). Null when the name is none of them.
+// The weapon a feature makes that pc_attack's `weapon` names, whole
+// ("claws", "psychic blade", "radiant sun bolt"), when its gate holds (a
+// rage for Form of the Beast). Null when the name is none of them.
 export function authoredNaturalWeapon(
   sheet: AuthoredSheet,
-  terms: readonly string[],
+  name: string,
   mods: Record<string, number> = {},
 ): HeldNaturalWeapon | null {
-  const wanted = terms.map(textKey).filter(Boolean);
-  if (!wanted.length) {
+  const wanted = textKey(name);
+  if (!wanted) {
     return null;
   }
   for (const { effect, held } of activeAuthored(sheet, "natural_weapon")) {
-    const names = [effect.weapon.name, ...(effect.weapon.aliases ?? [])].map(textKey);
-    if (names.some((name) => wanted.some((term) => name === term || term.startsWith(name) || name.startsWith(term)))) {
+    const names = [effect.weapon.name, ...(effect.weapon.aliases ?? [])].flatMap((name) => pluralForms(textKey(name)));
+    if (names.includes(wanted)) {
       return {
         feature: held.feature,
         weapon: effect.weapon,
@@ -87,13 +86,10 @@ export function authoredNaturalWeapon(
 
 // A natural weapon the sheet would have if its gate held: for the refusal
 // that says why it cannot swing it now ("claws, while raging").
-export function naturalWeaponGated(sheet: AuthoredSheet, terms: readonly string[]): string | null {
-  if (!terms.length) {
-    return null;
-  }
+export function naturalWeaponGated(sheet: AuthoredSheet, name: string): string | null {
   const open = { ...sheet, conditions: [...(sheet.conditions ?? []), "raging"], equipment: [] };
-  const found = authoredNaturalWeapon(open, terms);
-  return found && !authoredNaturalWeapon(sheet, terms) ? found.feature : null;
+  const found = authoredNaturalWeapon(open, name);
+  return found && !authoredNaturalWeapon(sheet, name) ? found.feature : null;
 }
 
 // ---- reach, Sneak Attack, saves ----
@@ -111,7 +107,7 @@ export function authoredSneakBonus(
   marks: Array<{ condition: string; source?: string }>,
 ): { dice: number; feature: string } | null {
   for (const { effect, held } of activeAuthored(sheet, "sneak_bonus")) {
-    if (marks.some((mark) => lower(mark.condition) === lower(effect.mark) && mark.source === sheetId)) {
+    if (marks.some((mark) => textKey(mark.condition) === textKey(effect.mark) && mark.source === sheetId)) {
       return { dice: effect.dice, feature: held.feature };
     }
   }
@@ -129,7 +125,7 @@ export function authoredSaveDieVs(
     return null;
   }
   for (const { effect, held } of activeAuthored(sheet, "save_die_vs")) {
-    const mark = forcer.conditions.find((entry) => lower(entry) === lower(effect.mark));
+    const mark = forcer.conditions.find((entry) => textKey(entry) === textKey(effect.mark));
     if (mark && forcer.meta[mark]?.source === sheetId) {
       return { die: effect.die, feature: held.feature };
     }
@@ -149,12 +145,12 @@ export function authoredSpellDice(
   const dice: string[] = [];
   const notes: string[] = [];
   for (const { effect, held } of activeAuthored(sheet, "spell_rider")) {
-    const byType = effect.damageTypes?.includes(lower(spell.damageType));
+    const byType = effect.damageTypes?.includes(textKey(spell.damageType ?? ""));
     const byHealing = effect.healing && spell.healing;
     const typed = effect.damageTypes || effect.healing ? Boolean(byType || byHealing) : true;
     // An artificer spell is one the caster casts as an artificer: the class
     // is the caster's (a spell list is shared by several classes).
-    const casterClasses = [lower(sheet.class), ...(sheet.classes ?? []).map((entry) => lower(entry.id))];
+    const casterClasses = [textKey(sheet.class ?? ""), ...(sheet.classes ?? []).map((entry) => textKey(entry.id))];
     const listed = !effect.classes || casterClasses.some((entry) => effect.classes!.includes(entry));
     const wanted = effect.items;
     const item = wanted ? (sheet.equipment ?? []).find((entry) => wanted.some((tag) => hasItemTag(entry, tag))) : null;
@@ -175,12 +171,14 @@ export function authoredConcentrationGuard(
   spell: string | null | undefined,
   mods: Record<string, number> = {},
 ): { feature: string; tempHp: number } | null {
-  const wanted = textKey(spell ?? "");
-  if (!wanted) {
+  if (!spell?.trim()) {
     return null;
   }
+  // The guarded spell under any name the checklist prints it under: the
+  // bundled row is "Evard's Black Tentacles", the SRD's "Black Tentacles".
+  const names = spellNamesOf(spell).map(textKey);
   for (const { effect, held } of activeAuthored(sheet, "concentration_guard")) {
-    if (wanted.includes(textKey(effect.spell)) || textKey(effect.spell).includes(wanted)) {
+    if (names.includes(textKey(effect.spell))) {
       return { feature: held.feature, tempHp: Math.max(0, Number(resolveFormula(effect.tempHp, held.level, mods)) || 0) };
     }
   }
@@ -193,7 +191,7 @@ export function authoredTwinSpell(
   spell: { school?: string | null; level: number },
 ): { feature: string; cost: string } | null {
   for (const { effect, held } of activeAuthored(sheet, "twin_spell")) {
-    if (lower(spell.school) === lower(effect.school) && spell.level >= 1 && spell.level <= effect.maxLevel) {
+    if (textKey(spell.school ?? "") === textKey(effect.school) && spell.level >= 1 && spell.level <= effect.maxLevel) {
       const [count, die] = effect.costPerLevel.split("d");
       return { feature: held.feature, cost: `${Number(count) * spell.level}d${die}` };
     }

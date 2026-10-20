@@ -19,6 +19,7 @@ import { ABILITY_LABELS } from "./AbilityEditor";
 import CatalogBrowser from "./CatalogBrowser";
 import ContentPicker from "./ContentPicker";
 import { judgeEntry, prerequisiteNote, useFeatJudge } from "./featPrereqs";
+import { featChoice as featPicksOf } from "@/lib/schemas/sheet";
 
 const ABILITY_KEYS = Object.keys(ABILITY_LABELS) as Ability[];
 
@@ -294,7 +295,7 @@ export default function AsiFeatEditor({
                     feat={choice.feat}
                     desc={featDescOf?.(choice.feat)}
                     spec={featSpecOf(choice.feat)}
-                    picks={featChoices?.[choice.feat.trim().toLowerCase()]}
+                    picks={featPicksOf(featChoices, choice.feat)}
                     known={known}
                     onChange={(picks) => onFeatPicks(choice.feat, picks)}
                   />

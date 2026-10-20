@@ -52,6 +52,7 @@ import { castingHold } from "@/lib/dm/spell-planes";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { spellHeldProblem } from "@/lib/dm/cast-rules";
+import { conditionNameRefusal } from "@/lib/dm/set-condition";
 
 const castArgsSchema = z.object({
   characterId: z.string(),
@@ -216,9 +217,16 @@ export function handleCastAtEnemy(
   // chooses among a spell's variants (Blindness/Deafness).
   const mechCondition = mech?.condition ?? null;
   const wanted = args.condition ? canonicalCondition(args.condition) : null;
+  const misnamed = !mechCondition && args.condition ? conditionNameRefusal(args.condition) : null;
+  if (misnamed) {
+    return misnamed;
+  }
   // Command's word, Eyebite's form: the caller's pick among what the spell
   // offers (src/lib/dm/spell-riders.ts).
   const picked = mechCondition ? chosenCondition(mechCondition, args.condition ?? null) : null;
+  if (picked && "error" in picked) {
+    return picked;
+  }
   const conditions = pool
     ? [canonicalCondition(pool.condition)]
     : picked

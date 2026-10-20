@@ -44,10 +44,9 @@ import {
   type ThirdCasterSetting,
 } from "@/lib/srd/third-caster";
 import { featureHitPoints, holdsFeature, withPrimalChampion } from "@/lib/srd/trait-rules";
+import { textKey } from "@/lib/language/text-logic";
 
 type ClassRow = { id: string; subclass: string; level: number };
-
-const lower = (value: string) => value.trim().toLowerCase();
 
 // The scores after this level: the improvements chosen (and a half-feat's
 // point), then Primal Champion at barbarian 20, in the server's order.
@@ -71,7 +70,7 @@ export function abilitiesAfterLevel(
     }
   }
   const primalChampion =
-    lower(leveled.id) === "barbarian" && leveled.level === 20 && !holdsFeature(sheet, "primal champion");
+    textKey(leveled.id) === "barbarian" && leveled.level === 20 && !holdsFeature(sheet, "primal champion");
   if (primalChampion) {
     abilities = withPrimalChampion(abilities);
   }

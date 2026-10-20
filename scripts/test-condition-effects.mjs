@@ -217,8 +217,14 @@ test("granted attacks: starry form archer resolves with leveled dice", () => {
   assert.ok(found.attack.bonusAction);
   assert.equal(grantedAttackDice(found.attack, 2), "1d8");
   assert.equal(grantedAttackDice(found.attack, 10), "2d8");
-  // Loose lookup: the model may just say "archer" or "starry form".
-  assert.ok(grantedAttackFor(["starry form: archer"], "starry form"));
+  // By the whole name, as the condition writes it or with a bracket note;
+  // the family alone names no form.
+  assert.ok(grantedAttackFor(["starry form: archer"], "starry form (archer)"));
+  // The form's option alone is no name of the attack, at any table.
+  for (const term of ["archer", "arciere", "archer (forme étoilée)", "arquero", "Bogenschütze"]) {
+    assert.equal(grantedAttackFor(["starry form: archer"], term), null, term);
+  }
+  assert.equal(grantedAttackFor(["starry form: archer"], "starry form"), null);
   assert.equal(grantedAttackFor(["starry form: archer"], "longsword"), null);
   assert.equal(grantedAttackFor([], "starry form"), null);
 });

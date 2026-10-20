@@ -49,6 +49,7 @@ import { viewZones } from "@/lib/dm/zone-view";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { addSilenceChips, viewerMoves } from "@/lib/battlemap/view-moves";
 import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
+import { holdsFeature } from "@/lib/srd/feature-names";
 
 export type { PlayerMapView } from "@/lib/battlemap/view-types";
 
@@ -61,7 +62,7 @@ export type { PlayerMapView } from "@/lib/battlemap/view-types";
 // Aura of Protection reaches 10 ft from paladin 6 and 30 ft from 18; the
 // save bonus itself is applied by src/lib/dm/aura.ts. This is only the ring.
 function paladinAura(sheet: CharacterSheet): { radiusFeet: number; tone: AuraTone } | null {
-  const hasAura = sheet.features.some((feature) => /aura of protection/i.test(feature.name));
+  const hasAura = holdsFeature(sheet, "Aura of Protection");
   if (!hasAura) {
     return null;
   }

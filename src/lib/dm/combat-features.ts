@@ -43,8 +43,9 @@ import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-
-const lower = (value: string) => value.trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
+import { subclassNamed } from "@/lib/srd/subclass-name";
+import { isNamed } from "@/lib/srd/feature-names";
 
 // Feet between two combatants on the live board, or null with no board.
 export function feetBetween(encounterId: string, a: string, b: string): number | null {
@@ -132,14 +133,13 @@ export function combatFeatureSpend(
   resourceName: string,
   targetEnemyId: string | undefined,
 ): Record<string, unknown> | null {
-  const name = lower(resourceName);
-  if (/^intimidating presence\b/.test(name)) {
+  if (isNamed(resourceName, "intimidating presence")) {
     return intimidatingPresence(campaign, sheet, targetEnemyId);
   }
-  if (/^holy nimbus\b/.test(name)) {
+  if (isNamed(resourceName, "holy nimbus")) {
     return holyNimbus(campaign, turnId, sheet);
   }
-  if (/^divine intervention\b/.test(name)) {
+  if (isNamed(resourceName, "divine intervention")) {
     return divineIntervention(campaign, turnId, sheet);
   }
   return null;
@@ -152,7 +152,7 @@ const DAY_ROUNDS = 14400;
 
 function intimidatingPresence(campaign: Campaign, stale: CharacterSheet, targetEnemyId: string | undefined): ToolResult {
   const sheet = getSheetById(stale.id) ?? stale;
-  if (!holdsFeature(sheet, "intimidating presence") && !(classLevelOf(sheet, "barbarian") >= 10 && /berserker/i.test(sheet.subclass ?? ""))) {
+  if (!holdsFeature(sheet, "intimidating presence") && !(classLevelOf(sheet, "barbarian") >= 10 && subclassNamed(sheet.subclass ?? "", "Path of the Berserker"))) {
     return { error: `${sheet.name} does not have Intimidating Presence (a Berserker's 10th level feature).`, refused: "rules" };
   }
   const encounter = getActiveEncounter(campaign.id);
@@ -255,7 +255,7 @@ export function holyNimbusTurnStart(campaign: Campaign, encounter: Encounter, co
   const lines: string[] = [];
   const paladins = listSheets(campaign.id)
     .map((stale) => getSheetById(stale.id) ?? stale)
-    .filter((sheet) => sheet.conditions.some((entry) => lower(entry) === HOLY_NIMBUS) && sheet.currentHp > 0);
+    .filter((sheet) => sheet.conditions.some((entry) => textKey(entry) === HOLY_NIMBUS) && sheet.currentHp > 0);
   if (!paladins.length) {
     return lines;
   }

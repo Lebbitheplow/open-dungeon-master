@@ -17,6 +17,7 @@ import { removeConditions } from "@/lib/dm/condition-logic";
 import { prepareResourceCharge } from "@/lib/dm/resource-turn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { isNamed } from "@/lib/srd/feature-names";
 
 function audit(
   campaign: Campaign,
@@ -103,7 +104,7 @@ export function chooseFiendishResilience(
   variant: string | undefined,
   reason: string,
 ): ToolResult {
-  const index = sheet.features.findIndex((feature) => /^fiendish resilience\b/i.test(feature.name.trim()));
+  const index = sheet.features.findIndex((feature) => isNamed(feature.name, "Fiendish Resilience"));
   if (index < 0) {
     return { error: `${sheet.name} does not have Fiendish Resilience.`, refused: "rules" };
   }

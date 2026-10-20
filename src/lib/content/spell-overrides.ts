@@ -22,7 +22,7 @@
 
 import { authoredSpells, type AuthoredSpell } from "@/lib/srd/spell-facts";
 import { checklistSpell } from "@/lib/srd/spell-lists";
-import { compareNames } from "@/lib/language/text-logic";
+import { compareNames, textKey } from "@/lib/language/text-logic";
 
 export type RawSpellRow = {
   slug: string;
@@ -114,10 +114,8 @@ const FIELD_FIXES: Record<string, Record<string, unknown>> = {
   "water walk": { material: "A piece of cork." },
 };
 
-const key = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
-
 export function normalizeSchool(school: string): string {
-  const lowered = key(school).replace(/[^a-z]+/g, "_");
+  const lowered = textKey(school).replace(/[^a-z]+/g, "_");
   if ((SCHOOLS as readonly string[]).includes(lowered)) {
     return lowered;
   }
@@ -126,7 +124,7 @@ export function normalizeSchool(school: string): string {
 
 function authoredRow(spell: AuthoredSpell): RawSpellRow {
   return {
-    slug: `odm-${key(spell.name).replace(/[^a-z0-9]+/g, "-")}`,
+    slug: `odm-${textKey(spell.name).replace(/[^a-z0-9]+/g, "-")}`,
     name: spell.name,
     documentSlug: AUTHORED_DOCUMENT,
     level: spell.level,
@@ -150,13 +148,13 @@ function authoredRow(spell: AuthoredSpell): RawSpellRow {
 function corrected(row: RawSpellRow): RawSpellRow {
   const listed = checklistSpell(row.name);
   const published = row.documentSlug === SRD_DOCUMENT || row.documentSlug === AUTHORED_DOCUMENT;
-  const fixes = row.documentSlug === SRD_DOCUMENT ? FIELD_FIXES[key(row.name)] : undefined;
+  const fixes = row.documentSlug === SRD_DOCUMENT ? FIELD_FIXES[textKey(row.name)] : undefined;
   return {
     ...row,
     school: normalizeSchool(row.school),
     // The checklist speaks for the spells it names; a third party row of a
     // name it does not carry keeps its own list.
-    classes: published && listed ? listed.classes : row.classes.map((entry) => key(entry)),
+    classes: published && listed ? listed.classes : row.classes.map((entry) => textKey(entry)),
     data: fixes ? { ...row.data, ...fixes } : row.data,
   };
 }
@@ -164,12 +162,12 @@ function corrected(row: RawSpellRow): RawSpellRow {
 // The pack's rows as this engine serves them: one row a name, corrected,
 // ordered by level and then name as the pickers have always listed them.
 export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
-  const authored = new Map(authoredSpells().map((spell) => [key(spell.name), spell] as const));
+  const authored = new Map(authoredSpells().map((spell) => [textKey(spell.name), spell] as const));
   const best = new Map<string, RawSpellRow>();
   const offer = (row: RawSpellRow) => {
-    const held = best.get(key(row.name));
+    const held = best.get(textKey(row.name));
     if (!held || documentRank(row.documentSlug) < documentRank(held.documentSlug)) {
-      best.set(key(row.name), row);
+      best.set(textKey(row.name), row);
     }
   };
   for (const row of packRows) {
@@ -177,7 +175,7 @@ export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
       continue;
     }
     if (row.documentSlug === AUTHORED_DOCUMENT) {
-      const fresh = authored.get(key(row.name));
+      const fresh = authored.get(textKey(row.name));
       // A spell ODM has since withdrawn from its file is withdrawn here too.
       if (fresh) {
         offer({ ...authoredRow(fresh), slug: row.slug, aliases: row.aliases });
@@ -196,13 +194,13 @@ export function servedSpellRows(packRows: RawSpellRow[]): RawSpellRow[] {
   for (const row of best.values()) {
     if (documentRank(row.documentSlug) < 2) {
       for (const alias of row.aliases) {
-        aliasOwners.set(key(alias), row);
+        aliasOwners.set(textKey(alias), row);
       }
     }
   }
   return [...best.values()]
     .filter((row) => {
-      const owner = aliasOwners.get(key(row.name));
+      const owner = aliasOwners.get(textKey(row.name));
       return !owner || owner === row || documentRank(row.documentSlug) < 2;
     })
     .map(corrected)

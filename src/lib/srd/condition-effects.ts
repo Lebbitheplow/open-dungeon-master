@@ -21,6 +21,7 @@ import { AFFLICTION_CONDITION_EFFECTS } from "@/lib/srd/affliction-conditions";
 import { LAST_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-last";
 import { NUMBERED_CONDITION_EFFECTS, STRIKE_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-spells";
 import type { ConditionEffectRow, SaveAbilityId } from "@/lib/srd/condition-effect-types";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 export type { ConditionEffectRow, SaveAbilityId } from "@/lib/srd/condition-effect-types";
 
@@ -739,19 +740,15 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
   ...LAST_CONDITION_EFFECTS,
 ];
 
-function normalize(name: string) {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-// The registry row a condition name resolves to, or null. Exact term or
-// "term (" prefix, longest term winning, mirroring feature-effects.
+// The registry row a condition name resolves to, or null: a row's term as
+// the whole name, or with a bracket note (src/lib/srd/feature-names.ts), the
+// longest term winning ("cursed (attacks)" over a bare "cursed").
 export function conditionEffectsFor(conditionName: string): ConditionEffectRow | null {
-  const name = normalize(conditionName);
   let best: ConditionEffectRow | null = null;
   let bestLength = -1;
   for (const row of CONDITION_EFFECTS) {
     for (const term of row.match) {
-      if ((name === term || name.startsWith(`${term} `) || name.startsWith(`${term}(`) || name.startsWith(`${term} (`)) && term.length > bestLength) {
+      if (isConditionNamed(conditionName, term) && term.length > bestLength) {
         best = row;
         bestLength = term.length;
       }

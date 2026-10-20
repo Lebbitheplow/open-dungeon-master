@@ -33,12 +33,10 @@ import { spellNames } from "@/lib/battlemap/hand-spells";
 import { COMMANDED } from "@/lib/dm/maneuver-rules";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature, isNamed } from "@/lib/srd/feature-names";
 
 // A Battle Master maneuver's card wears its painting.
 const MANEUVER_ICON = (name: string): HandCard["icon"] => ({ kind: "option", key: `Maneuver: ${name}`, family: "option-maneuver" });
-
-const holds = (sheet: CharacterSheet, fragment: string) =>
-  sheet.features.some((feature) => textKey(feature.name).includes(fragment));
 
 function base(
   id: string,
@@ -147,10 +145,10 @@ export function reactionCards(
         ? spellReaction(sheet, turn, "Shield", prompt, "+5 AC against the attack that hit: a swing the +5 beats misses.", "none")
         : null;
       if (shield) cards.push(shield);
-      if (holds(sheet, "uncanny dodge")) {
+      if (holdsFeature(sheet, "uncanny dodge")) {
         feature(mine, "Uncanny Dodge", prompt, "Halve the damage of the attack that hit you.");
       }
-      if (mine.ranged && holds(sheet, "deflect missiles")) {
+      if (mine.ranged && holdsFeature(sheet, "deflect missiles")) {
         feature(mine, "Deflect Missiles", prompt, "Take 1d10 + DEX + monk level off a ranged weapon hit.");
       }
       if (mine.attackerId && !answered(mine, "Hellish Rebuke")) {
@@ -165,7 +163,7 @@ export function reactionCards(
         if (rebuke) cards.push(rebuke);
       }
     }
-    if (mine.source === "fall" && holds(sheet, "slow fall")) {
+    if (mine.source === "fall" && holdsFeature(sheet, "slow fall")) {
       feature(mine, "Slow Fall", prompt, "Take five times your monk level off the fall.");
     }
     if (mine.source === "attack") {
@@ -177,7 +175,7 @@ export function reactionCards(
 
   // The Battle Master's reactions (src/lib/dm/maneuver-reactions.ts): Parry
   // against a melee hit, Riposte against a melee miss, each a die.
-  const knows = (name: string) => sheet.features.some((entry) => /^maneuver:/i.test(entry.name) && textKey(entry.name).includes(name));
+  const knows = (name: string) => sheet.features.some((entry) => /^maneuver:/i.test(entry.name) && isNamed(entry.name, name));
   const dice = sheet.resources.sub_superiority_dice;
   if (dice && dice.max > dice.used) {
     if (mine && mine.source === "attack" && !mine.ranged && knows("parry")) {
@@ -204,10 +202,10 @@ export function reactionCards(
     const ally = party.find((entry) => entry.id === hit.characterId);
     if (!ally) continue;
     const prompt = what(hit, ally.name);
-    if (holds(sheet, "cutting words") && (sheet.resources.bardic_inspiration?.max ?? 0) > (sheet.resources.bardic_inspiration?.used ?? 0)) {
+    if (holdsFeature(sheet, "cutting words") && (sheet.resources.bardic_inspiration?.max ?? 0) > (sheet.resources.bardic_inspiration?.used ?? 0)) {
       feature(hit, "Cutting Words", prompt, "Spend a Bardic Inspiration die off the roll or the damage.", "ally");
     }
-    if (holds(sheet, "protection")) {
+    if (holdsFeature(sheet, "protection")) {
       feature(hit, "Protection", prompt, "Impose disadvantage on the attack: it is rolled again.", "ally");
     }
     for (const held of subclassReactions(sheet, hit, "ally")) {

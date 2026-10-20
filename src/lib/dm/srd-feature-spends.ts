@@ -41,8 +41,6 @@ import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
 
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
-
 export type SrdSpendArgs = { variant?: string; targetEnemyId?: string; amount?: number };
 
 export function srdFeatureSpend(
@@ -78,7 +76,7 @@ function poolLeft(sheet: CharacterSheet, id: string): number {
 
 function addCondition(campaign: Campaign, sheet: CharacterSheet, condition: string, meta: Record<string, unknown>) {
   const fresh = getSheetById(sheet.id) ?? sheet;
-  const kept = fresh.conditions.filter((entry) => lower(entry) !== lower(condition));
+  const kept = fresh.conditions.filter((entry) => textKey(entry) !== textKey(condition));
   patchSheet(fresh.id, {
     conditions: [...kept, condition],
     conditionMeta: { ...(fresh.conditionMeta as ConditionMetaMap), [condition]: meta },
@@ -178,7 +176,13 @@ function draconicPresence(campaign: Campaign, turnId: string, sheet: CharacterSh
   if (!encounter) {
     return { error: "Draconic Presence answers creatures in a fight; there is none. Nothing was spent.", refused: "rules" };
   }
-  const condition = /charm/.test(lower(args.variant)) ? "charmed" : "frightened";
+  // Charming or frightening, the sorcerer's choice: the variant names one
+  // whole, never a default.
+  const wanted = textKey(args.variant ?? "");
+  const condition = wanted === "charm" ? "charmed" : wanted === "fear" ? "frightened" : null;
+  if (!condition) {
+    return { error: `Draconic Presence takes variant 'fear' or 'charm'${wanted ? `; "${args.variant}" is neither` : ""}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
+  }
   const chosen: EncounterEnemy[] = args.targetEnemyId
     ? [resolveEnemyRef(encounter.id, args.targetEnemyId)].filter((enemy): enemy is EncounterEnemy => Boolean(enemy))
     : listEnemies(encounter.id).filter((enemy) => {

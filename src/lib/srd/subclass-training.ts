@@ -32,6 +32,7 @@ import { KNOWN_TOOLS } from "@/lib/srd/feat-grant-text";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { textKey } from "@/lib/language/text-logic";
+import { featChoice, withFeatChoice } from "@/lib/schemas/sheet";
 
 export type SaveGrant = {
   // The saving throw the feature grants, and what it grants instead when
@@ -273,10 +274,10 @@ export function subclassGrants(classes: ClassEntryLike[], extras?: SubclassExtra
       continue;
     }
     // Only the subclass's own features: the class's table has none of these.
-    const base = new Set(classFeaturesFor(entry.id, "", entry.level).map((feature) => feature.name.toLowerCase()));
+    const base = new Set(classFeaturesFor(entry.id, "", entry.level).map((feature) => textKey(feature.name)));
     for (const feature of classFeaturesFor(entry.id, subclass, entry.level, extras)) {
       const name = feature.name.trim();
-      if (base.has(name.toLowerCase()) || seen.has(key(entry.id, subclass, name))) {
+      if (base.has(textKey(name)) || seen.has(key(entry.id, subclass, name))) {
         continue;
       }
       seen.add(key(entry.id, subclass, name));
@@ -370,15 +371,14 @@ export function subclassFixedTraining(grants: SubclassGrant[]): { armor: string[
 // being refused for want of a player to choose them. A pick the request
 // already names is kept.
 export function autoSubclassPicks(grants: SubclassGrant[], held: Proficiencies, choices: FeatChoices = {}): FeatChoices {
-  const out: FeatChoices = { ...choices };
+  let out: FeatChoices = { ...choices };
   const has = (list: string[], entry: string) => list.some((value) => textKey(value) === textKey(entry));
   const skills = [...held.skills];
   const languages = [...held.languages];
   const tools = [...held.tools];
   const weapons = [...held.weapons];
   for (const grant of grants) {
-    const keyName = grant.name.trim().toLowerCase();
-    const picks = { ...(out[keyName] ?? out[grant.name] ?? {}) };
+    const picks = { ...(featChoice(out, grant.name) ?? {}) };
     const fill = (kind: "skills" | "languages" | "tools" | "weapons", count: number, pool: readonly string[], own: string[]) => {
       const current = [...(picks[kind] ?? [])].filter(Boolean);
       for (const option of pool) {
@@ -413,7 +413,7 @@ export function autoSubclassPicks(grants: SubclassGrant[], held: Proficiencies, 
       }
     }
     if (Object.keys(picks).length) {
-      out[keyName] = picks;
+      out = withFeatChoice(out, grant.name, picks);
     }
   }
   return out;
