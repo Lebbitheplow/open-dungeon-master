@@ -9,7 +9,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { FileUp, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { AppHeader } from "@/components/AppHeader";
@@ -17,8 +17,16 @@ import { KebabMenu } from "@/components/KebabMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
-import { CharacterPortrait, ui } from "@/lib/ui";
+import { ui } from "@/lib/ui";
 import { navigateTo } from "@/lib/navigation";
+import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
+import { PortraitToast, RosterPortraitSlot, RosterPortraitStatus } from "@/app/characters/RosterPortrait";
+import {
+  PORTRAIT_TOAST_MS,
+  portraitPhases,
+  portraitsReady,
+  type PortraitPhase,
+} from "@/app/characters/portrait-arrival";
 
 // Where a character is playing. A library character is a template and each
 // campaign holds its own copy, so one entry can be at several tables at once
@@ -71,6 +79,33 @@ export default function CharactersPage() {
   const cropping = characters.find((character) => character.id === croppingId);
   const pollCount = useRef(0);
   const importInput = useRef<HTMLInputElement>(null);
+  // F25: each portrait's phase at the last read, so a painting that lands
+  // between two reads fades in and is announced once, by the toast.
+  const phases = useRef<Record<string, PortraitPhase>>({});
+  const [arriving, setArriving] = useState<string[]>([]);
+  const [toasts, setToasts] = useState<{ id: string; name: string }[]>([]);
+  const [retryingId, setRetryingId] = useState("");
+  const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
+  const lowEffects = useLowEffects();
+  const still = lowEffects || prefersReducedMotion();
+
+  // A fresh read of the library: what finished painting since the last one.
+  const receive = useCallback((next: LibraryCharacter[]) => {
+    const ready = portraitsReady(phases.current, next);
+    phases.current = portraitPhases(next);
+    if (ready.length) {
+      setArriving((current) => [...current, ...ready.map((entry) => entry.id)]);
+      setToasts((current) => [...current, ...ready]);
+    }
+    setCharacters(next);
+  }, []);
+
+  const toast = toasts[0] ?? null;
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToasts((current) => current.slice(1)), PORTRAIT_TOAST_MS);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     readLoad<{ characters?: LibraryCharacter[] }>(fetch("/api/characters"), "Your characters").then((outcome) => {
@@ -82,11 +117,11 @@ export default function CharactersPage() {
       }
       settle(outcome);
       if (outcome.payload?.characters) {
-        setCharacters(outcome.payload.characters);
+        receive(outcome.payload.characters);
       }
       setLoading(false);
     });
-  }, [reloads, settle]);
+  }, [reloads, settle, receive]);
 
   // While a portrait renders in the background, re-fetch until it lands (or
   // fails); the finished image then appears without a reload.
@@ -100,12 +135,40 @@ export default function CharactersPage() {
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
           if (data?.characters) {
-            setCharacters(data.characters);
+            receive(data.characters);
           }
         });
     }, 2500);
     return () => clearTimeout(id);
-  }, [characters]);
+  }, [characters, receive]);
+
+  // "Try again" on a failed painting: the same route as the sheet's "Paint
+  // one". The card waits on the new painting as it did on the first.
+  async function repaint(id: string) {
+    setRetryingId(id);
+    setRetryErrors((current) => ({ ...current, [id]: "" }));
+    try {
+      const response = await fetch(`/api/characters/${id}/portrait`, { method: "POST" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setRetryErrors((current) => ({ ...current, [id]: data.error || "The portrait could not be queued." }));
+        return;
+      }
+      phases.current = { ...phases.current, [id]: "painting" };
+      pollCount.current = 0;
+      setCharacters((current) =>
+        current.map((character) =>
+          character.id === id
+            ? { ...character, portraitStatus: "queued", sheet: { ...character.sheet, portrait: null } }
+            : character,
+        ),
+      );
+    } catch {
+      setRetryErrors((current) => ({ ...current, [id]: "Could not reach the server." }));
+    } finally {
+      setRetryingId("");
+    }
+  }
 
   async function setPortrait(id: string, url: string) {
     const response = await fetch(`/api/characters/${id}`, {
@@ -285,6 +348,11 @@ export default function CharactersPage() {
                 key={character.id}
                 character={character}
                 cloning={cloningId === character.id}
+                arriving={arriving.includes(character.id)}
+                still={still}
+                retrying={retryingId === character.id}
+                retryError={retryErrors[character.id] ?? ""}
+                onRetryPortrait={() => void repaint(character.id)}
                 onDelete={() => remove(character.id, character.name)}
                 onUploadPortrait={() => setCroppingId(character.id)}
                 onDuplicate={() => duplicate(character.id)}
@@ -304,6 +372,7 @@ export default function CharactersPage() {
           onClose={() => setCroppingId("")}
         />
       ) : null}
+      <PortraitToast toast={toast} />
     </main>
   );
 }
@@ -316,6 +385,11 @@ export default function CharactersPage() {
 function CharacterCard({
   character,
   cloning,
+  arriving,
+  still,
+  retrying,
+  retryError,
+  onRetryPortrait,
   onDelete,
   onUploadPortrait,
   onDuplicate,
@@ -323,6 +397,11 @@ function CharacterCard({
 }: {
   character: LibraryCharacter;
   cloning: boolean;
+  arriving: boolean;
+  still: boolean;
+  retrying: boolean;
+  retryError: string;
+  onRetryPortrait: () => void;
   onDelete: () => void;
   onUploadPortrait: () => void;
   onDuplicate: () => void;
@@ -354,42 +433,7 @@ function CharacterCard({
       <Link href={`/characters/${character.id}`} className="block">
         <div className="flex items-center gap-3">
           <span className="relative shrink-0">
-          {character.sheet?.portrait?.url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={character.sheet.portrait.url}
-              alt={character.name}
-              className="size-12 shrink-0 rounded-lg border border-amber-500/30 object-cover shadow-glow-gold"
-            />
-          ) : portraitPending(character) ? (
-            // The spinner says what it is waiting on, to a screen reader as
-            // well as to a pointer, and says it once, politely.
-            <span
-              role="status"
-              title="Painting portrait..."
-              className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-stone-900"
-            >
-              <Loader2 className="size-4 animate-spin text-amber-200" aria-hidden="true" />
-              <span className="sr-only">Painting {character.name}&apos;s portrait...</span>
-            </span>
-          ) : (
-            <span
-              title={
-                character.portraitStatus === "failed" ? "Portrait generation failed" : undefined
-              }
-            >
-              <CharacterPortrait
-                look={{
-                  race: character.race,
-                  class: character.class,
-                  gender: character.sheet?.gender,
-                }}
-                alt={character.name}
-                size="size-12"
-                className="border-amber-500/30 shadow-glow-gold"
-              />
-            </span>
-          )}
+            <RosterPortraitSlot character={character} arriving={arriving} still={still} />
             <GameIcon
               icon={{ kind: "family", key: `class-${character.class}` }}
               size="size-6"
@@ -413,6 +457,12 @@ function CharacterCard({
           <p className="reveal text-xs text-stone-500">{titleCase(character.background)}</p>
         ) : null}
       </Link>
+      <RosterPortraitStatus
+        character={character}
+        retrying={retrying}
+        retryError={retryError}
+        onRetry={onRetryPortrait}
+      />
       {character.campaigns?.length ? (
         <div className="reveal mt-2 flex flex-wrap gap-1.5 border-t border-stone-700/40 pt-2">
           {character.campaigns.map((assignment) => (

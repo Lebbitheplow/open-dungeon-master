@@ -108,13 +108,23 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
   console.log("ok: the Show me highlight stays visible with reduced motion (B5)");
 }
 
-// B14. The roster's portrait spinner is a polite status with words a screen
-// reader hears, not a tooltip alone.
+// B14. The roster's portrait painting status is a polite status with words a
+// screen reader hears, not a tooltip alone. Since F25 the words are also on
+// the card (scripts/test-portrait-arrival.mjs covers the rest).
 {
-  const page = read("src/app/characters/page.tsx");
-  const pending = page.slice(page.indexOf("portraitPending(character) ?"), page.indexOf(") : (", page.indexOf("portraitPending(character) ?")));
-  assert.ok(pending.includes('role="status"'), "the painting spinner is a status");
-  assert.match(pending, /<span className="sr-only">Painting .*portrait\.\.\.<\/span>/, "the status has words");
+  const { RosterPortraitStatus } = await import("../src/app/characters/RosterPortrait.tsx");
+  const markup = renderToStaticMarkup(
+    createElement(RosterPortraitStatus, {
+      character: { id: "c1", name: "Thornwick", portraitStatus: "generating", sheet: { portrait: null } },
+      retrying: false,
+      retryError: "",
+      onRetry() {},
+    }),
+  );
+  const status = markup.match(/<p role="status"[^>]*>(.*?)<\/p>/)?.[1] ?? "";
+  assert.ok(status, `the painting line is a status: ${markup}`);
+  assert.match(status, /Thornwick/, "the status names the character");
+  assert.match(status, /Painting portrait…/, "the status has words");
   console.log("ok: the portrait painting spinner is announced (B14)");
 }
 

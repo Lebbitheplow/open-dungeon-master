@@ -191,7 +191,7 @@
     "app/campaigns/[campaignId]/MessageContent.tsx#re-word": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/MessageItem.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/Moments.tsx#\\b": [["key",2,"a magic bonus written \"+1\" in an item name (notation)"]],
-    "app/campaigns/[campaignId]/Moments.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/campaigns/[campaignId]/moment-parts.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/MonsterFields.tsx#str-list": [["key",4,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/MonsterFields.tsx#toUpperCase": [["display",2,"ability abbreviation and creature type shown"]],
     "app/campaigns/[campaignId]/MonsterHand.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
