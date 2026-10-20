@@ -175,6 +175,7 @@ export function tableGroupSummary(id: TableGroupId, settings: GameSettings, cont
         aiNarrates ? `outcome check ${onOff(settings.narrationGuard)}` : null,
         aiNarrates && settings.narrationLength !== "standard" ? `${settings.narrationLength} narration` : null,
         aiNarrates && settings.styleNotes ? "style notes set" : null,
+        aiNarrates && (settings.combatPace ?? "balanced") !== "balanced" ? (settings.combatPace === "rare" ? "fewer fights" : "more fights") : null,
         aiNarrates ? `living world ${onOff(settings.worldSimulation)}` : null,
         alliesShown(settings) ? `allies: ${ALLY_WORDS[settings.companions]}` : null,
       ]

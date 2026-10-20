@@ -191,6 +191,11 @@ export const gameSettingsSchema = z.object({
   // Standard and blank change nothing in the prompt.
   narrationLength: z.enum(["short", "standard", "rich"]).default("standard"),
   styleNotes: z.string().trim().max(500).default(""),
+  // How often the AI DM's world brings a fight (issue #432): the encounter
+  // dice of the world tick (src/lib/dm/world-tick-logic.ts pacedTickConfig),
+  // what an encounter spark asks for, and one pacing line in the prompt.
+  // Balanced is the dice as they were and changes nothing in the prompt.
+  combatPace: z.enum(["rare", "balanced", "frequent"]).default("balanced"),
   // Optional 5e variant rules the server engines and DM prompt honor.
   // Rendered as one line each in the prompt by src/lib/dm/rules-logic.ts.
   // Optional turn stages (src/lib/dm/stages.ts). All default on; this exists
