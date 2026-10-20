@@ -86,7 +86,8 @@ import {
   EXTRA_ENCOUNTER_TOOL_NAMES,
   extraEncounterTools,
 } from "@/lib/dm/encounter-tools-extra";
-import { handlePcAttack, pcAttackTool } from "@/lib/dm/pc-attack";
+import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-attack";
+import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { wakeDm } from "@/lib/dm/wake";
@@ -1041,6 +1042,39 @@ function handleEndTurn(
   };
 }
 
+// pc_attack's endTurn: the player said the attack ends their turn
+// (src/lib/dm/pc-attack-approach.ts). Once the attack resolved, or the walk
+// toward the target spent the turn's movement without reaching it, the turn
+// ends here as end_turn ends it, and the result says who acts next. A
+// refused attack ends nothing: the model hears why first. A parked one
+// (physical dice) waits on its roll, and its player ends the turn.
+function endTurnAfterAttack(
+  campaign: Campaign,
+  turn: DmTurn,
+  rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  result: ToolResult,
+): ToolResult {
+  const characterId = endTurnAsked(rawArguments);
+  if (!characterId || result[PC_ATTACK_PARKED] || (result.error && !result.approached)) {
+    return result;
+  }
+  const ended = handleEndTurn(campaign, turn, JSON.stringify({ characterId }), sheets, sheetsById);
+  if (ended.error) {
+    // The last enemy fell to the swing and the fight is over: no turn to end.
+    return getActiveEncounter(campaign.id) ? { ...result, turnNotEnded: ended.error } : result;
+  }
+  return { ...result, turnEnded: Object.fromEntries(Object.entries(ended).filter(([key]) => key !== "ok")) };
+}
+
+// Ends a player's turn the narration already handed on (src/lib/dm/turn.ts):
+// the pointer moves after the narration, as for a turn end_turn resolved,
+// and the backstop plays the enemies it passes (advanceAfterTurn).
+export function resolveTurnFromNarration(turn: DmTurn, sheetId: string) {
+  markTurnResolved(turn, sheetId);
+}
+
 // ---- dispatch ----
 
 export function applyEncounterCall(
@@ -1084,7 +1118,7 @@ export function applyEncounterCall(
         callContext?.toolCallId ?? null,
       );
       markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
-      return { result };
+      return { result: endTurnAfterAttack(campaign, turn, rawArguments, sheets, sheetsById, result) };
     }
     case "cast_at_enemy": {
       const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");

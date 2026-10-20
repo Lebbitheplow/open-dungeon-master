@@ -579,8 +579,11 @@ const OMITTED_ON_PURPOSE = {
   // several in activities, each with the same fields the form offers.
   downtime: ["activities"],
   // A person's advantage stands as their ruling; only the AI names where it
-  // comes from (src/lib/dm/pc-attack-options.ts claimedAdvantage).
-  pc_attack: ["advantageSource"],
+  // comes from (src/lib/dm/pc-attack-options.ts claimedAdvantage). A person
+  // walks the token on the board and ends the turn from the initiative bar;
+  // approach and endTurn carry the move and the end a player declared around
+  // their attack on the AI's one call (src/lib/dm/pc-attack-approach.ts).
+  pc_attack: ["advantageSource", "approach", "endTurn"],
   enemy_attack: ["advantageSource"],
   request_roll: ["advantageSource"],
 };

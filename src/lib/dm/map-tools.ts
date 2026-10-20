@@ -446,10 +446,12 @@ function resolveMoveTarget(
     return token ? { token, kind: "pc", speedTiles: speedToTiles(sheet.speed) } : null;
   }
   const enemies = listEnemies(encounterId);
+  // A part of one name only, as resolveAnyToken reads it: "A" (gpt-oss-20b
+  // meaning Avery) once walked Bandit 1, the first name with an "a" in it.
   const enemy =
     enemies.find((entry) => entry.id === trimmed) ??
     enemies.find((entry) => textKey(entry.displayName) === textKey(trimmed)) ??
-    enemies.find((entry) => textKey(entry.displayName).includes(textKey(trimmed)));
+    findNamed(enemies, nameTerms(trimmed, campaignLanguage(map.campaignId)), (entry) => [entry.displayName]);
   if (!enemy || enemy.status !== "alive") {
     return null;
   }
@@ -875,6 +877,6 @@ export function checkPcAttackRange(
   // Named, so a model that cannot count tiles knows where the walk ends.
   const enemy = listEnemies(encounterId).find((entry) => entry.id === target.refId);
   const square = openSquaresBeside(encounterId, map, attacker, target, footprintForSize(enemy?.stats.size))[0];
-  const where = square ? ` The nearest open square beside ${target.name} is (${square.x},${square.y}): move_token ${attacker.name} there, then attack.` : "";
+  const where = square ? ` When their player said they close in, send the attack again with approach true: the server walks them to (${square.x},${square.y}), the nearest open square beside ${target.name}, and attacks. The nearest open square beside ${target.name} is (${square.x},${square.y}): move_token ${attacker.name} there, then attack.` : "";
   return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.${where}`, retry: true };
 }

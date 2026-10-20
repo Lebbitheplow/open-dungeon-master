@@ -50,6 +50,18 @@ await test("Only the kinds engine state can rule on are asked, and nothing is as
   assert.deepEqual(claimKindsFor({ ...GATE, guard: false, unrolled: true, fightStart: true }), ["amount", "fight_start"]);
   // Who speaks a quoted line is asked whether or not the guard is on.
   assert.deepEqual(claimKindsFor({ ...GATE, guard: false, speech: true }), ["speaker"]);
+  // So is a turn handed on: it moves the fight, it rules on nothing.
+  assert.deepEqual(claimKindsFor({ ...GATE, guard: false, turnOver: true }), ["turn_over"]);
+});
+
+await test("A turn handed on is a claim of its own, kept only when it was asked and quotes the narration.", () => {
+  const text = "Avery steps back from the goblin. It is now Kara's turn.";
+  const base = { text, attackRefs: new Set(), creatureRefs: new Set(), party: new Map(), leveledSpells: new Set(), normalizeSpell: (name) => name, skills: new Set(), spent: new Map(), speakers: new Map() };
+  const raw = [{ kind: "turn_over", quote: "It is now Kara's turn." }];
+  assert.deepEqual(checkClaims(raw, { ...base, kinds: ["turn_over"] }), raw);
+  assert.deepEqual(checkClaims(raw, { ...base, kinds: ["aside"] }), []);
+  assert.deepEqual(checkClaims([{ kind: "turn_over", quote: "Bram goes next." }], { ...base, kinds: ["turn_over"] }), []);
+  assert.match(readerSystem([], false), /"kind":"turn_over"/);
 });
 
 await test("The request lists the kinds, the refs and the narration; the instructions name every skill id.", () => {

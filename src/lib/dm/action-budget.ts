@@ -62,7 +62,13 @@ export type TurnBudget = {
   hasteGranted?: number;
   // Slow: an action OR a bonus action this turn, and one attack.
   slowed?: boolean;
+  // The attacks this turn has rolled, with what they did: a narration that
+  // recalls an earlier swing of the same turn ("you already struck it")
+  // tells what happened, not a blow nobody rolled (engine-boundary.ts).
+  struck?: StruckSwing[];
 };
+
+export type StruckSwing = { target: string; hit: boolean; damage?: number };
 
 export function freshBudget(input: {
   ownerId: string;

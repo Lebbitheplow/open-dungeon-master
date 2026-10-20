@@ -88,6 +88,7 @@ import {
 import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import {
   collectExchanges,
+  earlierFigures,
   FAKE_ENCOUNTER_PROMPT,
   fightAnnounced,
   unrolledBlow,
@@ -103,7 +104,7 @@ import {
   withoutRepeatedSentences,
   withoutToolTalk,
 } from "@/lib/dm/narration-tidy-logic";
-import { readAsides, readReply, registeringNames } from "@/lib/dm/claims";
+import { liveStateFor, readAsides, readReply, readTurnEndInWords, registeringNames, ruledFor, turnOverFor } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import type { SpokenLine } from "@/lib/dm/speech";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -199,6 +200,7 @@ import {
   ENCOUNTER_TOOL_NAMES,
   encounterTools,
   ensureInitiativeProgress,
+  resolveTurnFromNarration,
 } from "@/lib/dm/encounter-tools";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { restTools } from "@/lib/dm/rest-tools";
@@ -1860,7 +1862,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // 91). Hold it back and send the model to the tool that resolves it.
       const unrolled =
         !finalCall && !damageNudged && narration && turn.narrationParts[turn.narrationParts.length - 1] === narration
-          ? unrolledFigure(claims, turn.conversation, campaign.gameSettings.tableLanguage)
+          ? unrolledFigure(claims, turn.conversation, campaign.gameSettings.tableLanguage, earlierFigures(liveStateFor(campaignId)))
           : null;
       if (unrolled) {
         damageNudged = true;
@@ -2031,7 +2033,25 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
     // disagree. Its reads also say who speaks the narration's lines.
-    spoken = await enforceEngineBoundary(campaign, turn, sheets, partReads);
+    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads);
+    spoken = guarded.spoken;
+    // The narration told the table a player's turn is over ("It is now
+    // Bram's turn") and no call ended it: it ends after the narration, as
+    // the table was told, and the enemies it passes act then
+    // (encounter-tools.ts advanceAfterTurn).
+    if (guarded.handedOn) {
+      console.warn(`[dm-turn] turn ${turn.id}: the narration handed the turn on without end_turn; it ends after the narration.`);
+      resolveTurnFromNarration(turn, guarded.handedOn);
+    } else {
+      // The player's own words ended it ("...then I end my turn") and the
+      // DM ruled on what they did, but nothing ended it: it ends now too.
+      const waiting = turnOverFor(campaignId, turn);
+      const walker = waiting ? sheets.find((sheet) => sheet.id === waiting) : undefined;
+      if (waiting && walker && ruledFor(turn.conversation, walker) && (await readTurnEndInWords(campaign, sheets, turn, waiting))) {
+        console.warn(`[dm-turn] turn ${turn.id}: the player ended the turn in words and nothing ended it; it ends after the narration.`);
+        resolveTurnFromNarration(turn, waiting);
+      }
+    }
   }
   // A turn the queue gave up on writes nothing if it ever wakes: its notice
   // is already in the transcript (src/lib/dm/turn-halt.ts).

@@ -12,7 +12,9 @@
 //     (+5), a low wall is half cover and never more (los.ts coverBetween).
 //   - An enemy out of melee reach walks up to its target along a legal path
 //     as part of enemy_attack, out of its own speed (approachForAttack).
-//     A player is never moved: their attack is refused instead.
+//     A player is moved only when the attack says their player closes in
+//     (pc_attack's approach, pc-attack-approach.ts); otherwise their attack
+//     is refused instead.
 //   - An attack-roll spell reaches 120 feet whatever the spell
 //     (attack-logic.ts spellAttackProfile).
 import assert from "node:assert/strict";
@@ -82,6 +84,68 @@ await test("an attack out of reach names the nearest open square beside the targ
   kit.place(hero.id, x, y);
   const from = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
   assert.equal(from.result?.hit, true, from.error);
+});
+
+await test("approach: a player who closes in walks to the nearest square beside the target and strikes from there", async () => {
+  const enemy = await stage([5, 5], [9, 5]);
+  kit.giveTurn(hero.id);
+  const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword", approach: true });
+  assert.equal(swing.ok, true, swing.error);
+  assert.equal(swing.result.hit, true);
+  const token = kit.token(hero.id);
+  assert.equal(Math.max(Math.abs(token.x - 9), Math.abs(token.y - 5)), 1, `(${token.x},${token.y}) is not beside the target`);
+  assert.equal(swing.result.approached?.movementSpent, "15 ft", JSON.stringify(swing.result.approached));
+});
+
+await test("approach: too far to reach this turn, they close in as far as they can and nothing is attacked", async () => {
+  // 50 feet off: 30 feet of movement leaves them 20 feet short.
+  const enemy = await stage([5, 5], [15, 5]);
+  kit.giveTurn(hero.id);
+  const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword", approach: true });
+  assert.equal(swing.ok, false);
+  assert.match(swing.error ?? "", /still out of reach, so nothing was attacked/);
+  assert.equal(swing.unused, 2, "dice were rolled for an attack that never happened");
+  assert.equal(kit.enemy(enemy.id).currentHp, 400);
+  assert.equal(kit.token(hero.id).x, 11, "the hero did not close in by their speed");
+  assert.equal(world.encounter().turnBudget, null, "a walk is no attack made");
+});
+
+await test("approach walks nobody whose turn has no attack left: the swing is refused where they stand", async () => {
+  const enemy = await stage([5, 5], [6, 5]);
+  kit.giveTurn(hero.id);
+  // A 5th-level fighter: two swings with Extra Attack.
+  for (const faces of [[15, 4], [15, 4]]) {
+    const swing = await kit.swing(hero.id, enemy.id, faces, { weapon: "Longsword" });
+    assert.equal(swing.result.hit, true, swing.error);
+  }
+  kit.place(enemy.id, 9, 5);
+  const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword", approach: true });
+  assert.equal(swing.ok, false);
+  assert.match(swing.error ?? "", /already made all 2 of their attacks/);
+  assert.deepEqual([kit.token(hero.id).x, kit.token(hero.id).y], [5, 5], "the hero walked for a swing the turn could not pay for");
+});
+
+await test("approach walks nobody already in reach, and nobody a thrown weapon reaches", async () => {
+  let enemy = await stage([5, 5], [6, 5]);
+  kit.giveTurn(hero.id);
+  let swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword", approach: true });
+  assert.equal(swing.result.hit, true, swing.error);
+  assert.equal(swing.result.approached, undefined);
+  enemy = await stage([5, 5], [8, 5]);
+  kit.giveTurn(hero.id);
+  swing = await kit.swing(hero.id, enemy.id, [10, 3], { weapon: "Dagger", approach: true });
+  assert.equal(swing.ok, true, swing.error);
+  assert.deepEqual([kit.token(hero.id).x, kit.token(hero.id).y], [5, 5], "a dagger in throwing range walked its thrower");
+});
+
+await test("a token named by one letter is no enemy whose name holds that letter", async () => {
+  // gpt-oss-20b sent "A" for Avery and walked Bandit 1, the first name with
+  // an "a" in it. The goblin's name holds a "b".
+  const enemy = await stage([5, 5], [12, 5]);
+  const out = await world.invoke("move_token", { tokenName: "b", x: 10, y: 5 });
+  assert.equal(out.ok, false);
+  assert.match(out.error ?? "", /No single combatant on the battle map is called "b"/);
+  assert.equal(kit.token(enemy.id).x, 12);
 });
 
 await test("reach against a Large creature is measured to its nearest square (issue #186)", async () => {

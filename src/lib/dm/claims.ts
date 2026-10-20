@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
+import { getActiveEncounter, listEnemies, orderEntryId } from "@/lib/db/encounters";
+import { budgetApplies } from "@/lib/dm/action-budget";
 import { listNpcs } from "@/lib/db/npcs";
+import { getSheetById } from "@/lib/db/sheets";
+import { declaredThisTurn, wordsThisTurn } from "@/lib/dm/player-word";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { arcTextTimeoutMs } from "@/lib/model-client";
@@ -11,8 +14,10 @@ import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { SRD_SKILLS } from "@/lib/srd";
 import spellManifest from "@/lib/srd/manifest/spells.json";
 import {
+  collectExchanges,
   guardOutcomes,
   normalizeSpellName,
+  type GuardMessage,
   type LiveState,
   type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
@@ -67,6 +72,10 @@ export function liveStateFor(campaignId: string): LiveState | null {
   if (!encounter) {
     return null;
   }
+  // The swings the acting combatant's turn already rolled; a budget left
+  // from an earlier turn says nothing about this one.
+  const current = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  const struck = current && budgetApplies(encounter.turnBudget, orderEntryId(current), encounter.round) ? encounter.turnBudget.struck : undefined;
   return {
     enemies: listEnemies(encounter.id).map((enemy) => ({
       id: enemy.id,
@@ -75,7 +84,74 @@ export function liveStateFor(campaignId: string): LiveState | null {
       maxHp: enemy.maxHp,
       status: enemy.status,
     })),
+    ...(struck?.length ? { struck } : {}),
   };
+}
+
+// The player's character whose turn the narration may end by handing it on
+// (the turn_over claim): the fight's pointer rests on them, their player's
+// word has come in since the DM last spoke, and no call of this DM turn
+// ended it. The default local models wrote "It is now Bram's turn" and left
+// the pointer where it was, so Bram's player was refused and the next words
+// went to the same character (the skirmish smoke, 2026-10-20). A companion's
+// turn is the model's to play whole. Null when no such turn waits.
+export function turnOverFor(campaignId: string, turn: Pick<DmTurn, "resolvedCharacterIds">): string | null {
+  const encounter = getActiveEncounter(campaignId);
+  if (!encounter || !encounter.orderReady || encounter.kind === "scene") {
+    return null;
+  }
+  const current = encounter.order[encounter.turnIndex];
+  if (current?.kind !== "pc" || !current.characterId || turn.resolvedCharacterIds.includes(current.characterId)) {
+    return null;
+  }
+  const sheet = getSheetById(current.characterId);
+  return sheet && !sheet.isCompanion && declaredThisTurn(campaignId, sheet.id) ? sheet.id : null;
+}
+
+// Whether this DM turn ruled on something the character did: a call that
+// names them ran and answered, as a result or a refusal (a swing out of
+// reach, a walk with no movement left). Asking them a question is no ruling.
+export function ruledFor(conversation: readonly GuardMessage[], sheet: Pick<CharacterSheet, "id" | "name">): boolean {
+  return collectExchanges(conversation).some((exchange) => {
+    if (!exchange.result || exchange.name === "request_player_input") {
+      return false;
+    }
+    try {
+      const args = JSON.parse(exchange.arguments || "{}") as Record<string, unknown>;
+      // move_token names its walker by name or id.
+      const walker = typeof args.tokenName === "string" ? args.tokenName : "";
+      return args.characterId === sheet.id || args.casterId === sheet.id || walker === sheet.id || (walker !== "" && textKey(walker) === textKey(sheet.name));
+    } catch {
+      return false;
+    }
+  });
+}
+
+// Whether the player's own words end the turn the fight still waits on
+// ("I close in and attack it, then I end my turn"), once the DM ruled on what
+// they did (ruledFor). gpt-oss-20b answered that line by asking what they do
+// next, and the next player's words went to the same character (the skirmish
+// smoke, 2026-10-20). Read like the narration, in any language; one reader
+// call, made only for a turn that would otherwise stay open.
+export async function readTurnEndInWords(
+  campaign: Campaign,
+  sheets: readonly CharacterSheet[],
+  turn: Pick<DmTurn, "id" | "conversation">,
+  characterId: string,
+): Promise<boolean> {
+  const text = wordsThisTurn(campaign.id, characterId);
+  if (!text.trim()) {
+    return false;
+  }
+  const claims = await readClaims(campaign, {
+    label: `turn ${turn.id}`,
+    text,
+    kinds: ["turn_over"],
+    outcomes: guardOutcomes(turn.conversation, null, campaign.gameSettings.tableLanguage),
+    sheets,
+    heading: "Player's words",
+  });
+  return claims.some((claim) => claim.kind === "turn_over");
 }
 
 // What the guard can rule on, from engine state alone: the part of the
@@ -168,6 +244,8 @@ export async function readClaims(
     // NPC names the reply being read registers (set_npc), for a speaker
     // claim on their first line.
     registering?: readonly string[];
+    // A player's own words rather than narration (readTurnEndInWords).
+    heading?: "Player's words";
   },
 ): Promise<NarrationClaim[]> {
   if (!input.kinds.length || !input.text.trim()) {
@@ -207,6 +285,7 @@ export async function readClaims(
           spent,
         },
         input.text,
+        input.heading,
       ),
     },
   ];
@@ -300,7 +379,7 @@ export function registeringNames(calls: ReadonlyArray<{ name: string; rawArgumen
 export async function readReply(
   campaign: Campaign,
   sheets: readonly CharacterSheet[],
-  turn: Pick<DmTurn, "id" | "conversation">,
+  turn: Pick<DmTurn, "id" | "conversation" | "resolvedCharacterIds">,
   text: string,
   state: { inEncounter: boolean; encounterNudged: boolean; damageNudged: boolean; registering: readonly string[] },
 ): Promise<PartRead & { outcomes: ResolvedOutcomes }> {
@@ -312,6 +391,7 @@ export async function readReply(
     unrolled: !state.damageNudged && !outcomes.damageNumbers.length,
     speech: hasQuotedLine(text),
     aside: true,
+    turnOver: Boolean(turnOverFor(campaign.id, turn)),
   });
   return {
     kinds,

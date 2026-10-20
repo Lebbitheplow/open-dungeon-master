@@ -13,7 +13,7 @@ import type { Speaker } from "./speech.ts";
 import { QUOTE, quotedText, speakerMatchers } from "./speech-prose.ts";
 import { textKey, words } from "../language/text-logic.ts";
 
-export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker"] as const;
+export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker", "turn_over"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
 
 export const ROLL_ASK_CHECKS = ["skill", "ability", "save", "initiative"] as const;
@@ -40,7 +40,8 @@ export type NarrationClaim =
       quote: string;
     }
   | { kind: "aside"; quote: string }
-  | { kind: "speaker"; line: string; speaker: Speaker };
+  | { kind: "speaker"; line: string; speaker: Speaker }
+  | { kind: "turn_over"; quote: string };
 
 // Which claims a piece of narration could contradict or trigger, from
 // engine state alone. A kind the turn gives no ground truth for is never
@@ -75,6 +76,10 @@ export type ReaderGate = {
   // The passage may reach the table as narration, so a sentence where the
   // narrator talks to itself about its next steps can be kept off it.
   aside?: boolean;
+  // A fight waits on a player's character whose turn this DM turn has not
+  // ended, so prose that hands the turn on can end it (dm/claims.ts
+  // turnOverFor).
+  turnOver?: boolean;
 };
 
 // One read of a passage: the kinds it was asked and the claims that
@@ -107,6 +112,9 @@ export function claimKindsFor(gate: ReaderGate): ClaimKind[] {
   if (gate.speech) {
     kinds.push("speaker");
   }
+  if (gate.turnOver) {
+    kinds.push("turn_over");
+  }
   return kinds;
 }
 
@@ -129,6 +137,8 @@ const KIND_LINES: Record<ClaimKind, string> = {
   // everything that only sounds like an aside is listed as not one.
   aside:
     '{"kind":"aside","quote":Q}: the narrator steps out of the story to talk to itself about its own work: what it will do, check, look up or set up next, or the game\'s bookkeeping that work waits on ("The quay is not on the map yet.", "I\'ll check how the table records that first."). Unlike the other kinds it is not about what happens in the story. One claim per such sentence; quote is copied from that one sentence. Never for: any character\'s words, however they are written (quoted in any style, a letter, an inscription, a song, a voice in someone\'s head); an out-of-character answer to a player; a question or an offer to the players ("What do you do?", "Let me know if you search the boat."); the story itself, even told by a narrator who says "I" because the table asked for one.',
+  turn_over:
+    '{"kind":"turn_over","quote":Q}: the narration says the acting character\'s own turn is over now, or hands the turn to whoever acts next ("Your turn ends.", "It is now Bram\'s turn.", "The goblins act next."); in a player\'s words, that they end their turn ("...then I end my turn.", "That\'s my turn."). Never for a question about what they do next, or an offer of what they could still do.',
   speaker:
     '{"kind":"speaker","ref":SPEAKER_REF,"quote":Q}: the one claim about quoted dialogue, saying only who speaks a line of it; quote is copied from inside that line\'s quotation marks. Only when the words around the line tie it to one listed person: a tag that names them or one of their other names, the person the narration is about just before or after it, or a word like "she" that points back to them. Leave the line out when its tag names nobody listed ("a guard calls", "you say"), when it answers the line before with no tag of its own, or when you would be guessing: a line left out stays the narrator\'s, and a line given to the wrong person is a mistake. One claim per quoted line.',
 };
@@ -157,7 +167,7 @@ Rules:
 - A claim only for what the narrator states as a fact happening now. Never for:
   - anything inside quoted dialogue, numbers included;
   - what a character reports, boasts, swears or claims ("the innkeeper insists the boar was slain" is no death);
-  - comparisons, metaphors and similes; hedged, possible, nearly-happening or negated statements ("the wyvern barely clings to life" is no death);
+  - comparisons, metaphors and similes; hedged, possible, nearly-happening, hypothetical or negated statements ("the wyvern barely clings to life" is no death; "your blade would miss from here" and "it cannot reach him" are no miss);
   - attempts ("swings at", "strikes toward");
   - events in the past ("yesterday's fireball");
   - a spell cast by anyone outside the party.
@@ -181,7 +191,9 @@ export type ReaderRefs = {
   spent: Array<{ ref: string; name: string; by: string }>;
 };
 
-export function renderReaderInput(kinds: readonly ClaimKind[], refs: ReaderRefs, text: string): string {
+// A player's own words are read only for turn_over (claims.ts
+// readTurnEndInWords), under their own heading.
+export function renderReaderInput(kinds: readonly ClaimKind[], refs: ReaderRefs, text: string, heading: "Narration" | "Player's words" = "Narration"): string {
   const creatures = refs.creatures.map((entry) => `"${entry.ref}" for ${entry.display}`).join(", ") || "(none)";
   const party = refs.party.map((entry) => `"${entry.ref}" for ${entry.name}`).join(", ") || "(none)";
   const speakers = kinds.includes("speaker")
@@ -191,7 +203,7 @@ export function renderReaderInput(kinds: readonly ClaimKind[], refs: ReaderRefs,
     kinds.includes("cast") && refs.spent.length
       ? `\nSpent refs: ${refs.spent.map((entry) => `"${entry.ref}" for ${entry.name} (${entry.by})`).join(", ")}`
       : "";
-  return `Ask: ${kinds.join(", ")}\nCreature refs: ${creatures}\nParty refs: ${party}${spent}${speakers}\n\nNarration:\n<<<\n${text}\n>>>`;
+  return `Ask: ${kinds.join(", ")}\nCreature refs: ${creatures}\nParty refs: ${party}${spent}${speakers}\n\n${heading}:\n<<<\n${text}\n>>>`;
 }
 
 // The reply, read once at the boundary: a claim that is not shaped as its
@@ -222,6 +234,7 @@ const claimSchema = z.discriminatedUnion("kind", [
     quote: quoteField,
   }),
   z.object({ kind: z.literal("aside"), quote: quoteField }),
+  z.object({ kind: z.literal("turn_over"), quote: quoteField }),
   z.object({ kind: z.literal("speaker"), ref: z.string().min(1).max(120), quote: quoteField }),
 ]);
 const replySchema = z.object({ claims: z.array(z.unknown()).max(40) });
@@ -320,6 +333,7 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
       case "amount":
       case "fight_start":
       case "aside":
+      case "turn_over":
         kept.push(claim);
         break;
       case "cast": {

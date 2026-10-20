@@ -185,7 +185,9 @@ export function walkCharacter(
   sheet: CharacterSheet,
   token: BattleToken,
   destination: XY,
-  options: { drag?: boolean } = {},
+  // whole: a walk the movement cannot finish is refused, nothing moved
+  // (pc_attack's approach walks only when the swing can follow).
+  options: { drag?: boolean; whole?: boolean } = {},
 ): ToolResult {
   // Off their turn, the move they readied (SRD 5.1, Ready): their reaction,
   // up to their full speed, their own turn's movement untouched.
@@ -261,6 +263,9 @@ export function walkCharacter(
   if (!walk.at) {
     const why = fear ? `${sheet.name} is frightened and cannot move closer to what it fears.` : `${sheet.name} has no movement left for that.`;
     return { error: `${why}${stillAt(listTokens(map.id), token)}`, refused: "rules" };
+  }
+  if (options.whole && !walk.reachedEnd) {
+    return { error: `${sheet.name} cannot reach (${destination.x},${destination.y}) with the movement left this turn.`, refused: "rules" };
   }
   const origin = { x: token.x, y: token.y };
   const walkedSquares = steps.slice(0, steps.findIndex((step) => step.x === walk.at?.x && step.y === walk.at?.y) + 1);
