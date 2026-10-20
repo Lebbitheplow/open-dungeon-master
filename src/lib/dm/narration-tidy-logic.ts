@@ -5,6 +5,7 @@
 // Dependency-free so scripts/test-narration-tidy.mjs can import it directly.
 
 import { textKey } from "../language/text-logic.ts";
+import { DM_TOOL_NAME_PATTERN } from "./tool-text.ts";
 
 // A sentence shorter than this may be said twice on purpose: a shouted
 // "Run!", a chant, a name called again.
@@ -45,6 +46,24 @@ export function withoutRepeatedSentences(parts: readonly string[]): string[] {
     }
   }
   return kept;
+}
+
+// The DM's tools whose names no story uses: the ones with an underscore
+// ("move_token", "pc_attack"); "heal", "travel" and "lift" are words too.
+const TOOL_NAME = new RegExp(`\\b(?:${DM_TOOL_NAME_PATTERN.split("|").filter((name) => name.includes("_")).join("|")})\\b`);
+
+// A sentence naming one of those tools is the model reasoning aloud ("the
+// correct next step is to call move_token for Bram", gpt-oss-20b), never the
+// story.
+export function withoutToolTalk(text: string): string {
+  if (!TOOL_NAME.test(text)) {
+    return text;
+  }
+  let out = "";
+  for (const piece of text.match(SENTENCE) ?? [text]) {
+    out += TOOL_NAME.test(piece) ? (/\s*$/.exec(piece)?.[0] ?? "") : piece;
+  }
+  return tidyBlankLines(out);
 }
 
 // Whether a reply is mostly the last turn's narration said again: a player

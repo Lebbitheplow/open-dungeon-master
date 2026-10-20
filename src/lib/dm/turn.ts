@@ -96,7 +96,13 @@ import {
   unrolledDamagePrompt,
 } from "@/lib/dm/engine-boundary";
 import { withoutAsides, type PartRead } from "@/lib/dm/claims-logic";
-import { REPEATED_NARRATION_PROMPT, repeatsNarration, withoutCombatBookkeeping, withoutRepeatedSentences } from "@/lib/dm/narration-tidy-logic";
+import {
+  REPEATED_NARRATION_PROMPT,
+  repeatsNarration,
+  withoutCombatBookkeeping,
+  withoutRepeatedSentences,
+  withoutToolTalk,
+} from "@/lib/dm/narration-tidy-logic";
 import { readAsides, readReply, registeringNames } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import type { SpokenLine } from "@/lib/dm/speech";
@@ -2728,7 +2734,9 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   // What the table reads keeps the fight's bookkeeping out of the story and
   // says each sentence once (src/lib/dm/narration-tidy-logic.ts).
   const combatants = fightNames(campaignId);
-  const narrationParts = withoutRepeatedSentences(turn.narrationParts.map((part) => withoutCombatBookkeeping(part, combatants)));
+  const narrationParts = withoutRepeatedSentences(
+    turn.narrationParts.map((part) => withoutToolTalk(withoutCombatBookkeeping(part, combatants))),
+  );
   let content = narrationParts.join("\n\n").trim();
   if (!content) {
     // A refused player action says why instead of the bare fallback line.

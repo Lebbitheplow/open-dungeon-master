@@ -3,7 +3,7 @@
 // The inputs are what Qwen3.6-35B at Q2 wrote on an AMD BC-250 on the full
 // rules, word for word.
 import assert from "node:assert/strict";
-import { repeatsNarration, withoutCombatBookkeeping, withoutRepeatedSentences } from "../src/lib/dm/narration-tidy-logic.ts";
+import { repeatsNarration, withoutCombatBookkeeping, withoutRepeatedSentences, withoutToolTalk } from "../src/lib/dm/narration-tidy-logic.ts";
 
 let passed = 0;
 const check = (name, fn) => {
@@ -87,6 +87,14 @@ check("a reply that is mostly the last turn's narration is a repeat; one shared 
   assert.equal(repeatsNarration(fresh, last), false, "one sentence carried over is not a repeat");
   assert.equal(repeatsNarration("The goblin staggers back against the rocks, snarling.", last), false, "one sentence is too little to judge");
   assert.equal(repeatsNarration(last, ""), false);
+});
+
+check("a sentence naming a DM tool is the model thinking aloud and goes; tool names that are words stay", () => {
+  const leaked =
+    'Bram presses forward through the mud. The correct next step is to call move_token for Bram to move somewhere. So we interpret: he intends to close in. The goblin snarls.';
+  assert.equal(withoutToolTalk(leaked), "Bram presses forward through the mud. So we interpret: he intends to close in. The goblin snarls.");
+  const story = "You travel north for a day, then heal at the shrine before you lift the gate.";
+  assert.equal(withoutToolTalk(story), story);
 });
 
 console.log(`narration tidy: ${passed} checks passed`);
