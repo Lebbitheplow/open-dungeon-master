@@ -331,6 +331,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     description: "Take your active character's next level, as the level-up dialog does: read odm_level_up_options first and send its nextLevel with the picks it lists. The server builds the level from these choices alone (hit points by the table's method, features, slots) and refuses an unearned level or an illegal pick with the reason. A pick left out stays owed for the next level-up. The answer is the new sheet with hpGained.",
     properties: {
       ...campaignIdProp,
+      ...WEBHOOK_GUARD_PROPS,
       level: { type: "integer", minimum: 2, maximum: 20, description: "The next level (nextLevel from odm_level_up_options): one level at a time." },
       levelUpClass: { type: "string", description: "The class taking the level; leave out for the first class." },
       hpChoice: { type: "string", enum: ["roll", "average"], description: "Only where the table rolls hit points: average takes the fixed value instead of the server's roll." },
@@ -603,7 +604,7 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   }
   const body = tool.body?.(args);
   let guarded = false;
-  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
+  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
     try {
       if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
       const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,

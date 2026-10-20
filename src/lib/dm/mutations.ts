@@ -290,7 +290,7 @@ export const mutationTools: ToolDef[] = [
     worth: ITEM_WORTH_PROPERTY,
     spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
-  tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, use use_item; for sales, use purchase.", {
+  tool("remove_item", "Take an item from a character for good (stolen, destroyed, burned up). Something dropped, set down or knocked away is NOT removed: use handle_item drop, which leaves it where it fell. For consumables being USED, use use_item; for sales, use purchase.", {
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),
@@ -1015,7 +1015,7 @@ export function applyDmMutation(
       if ("error" in listed) {
         return { result: listed };
       }
-      const priced = worthProblem(listed.srdName ?? name, args.worth, "grant_item");
+      const priced = worthProblem({ name, ...listed }, args.worth, "grant_item");
       if (priced) {
         return { result: priced };
       }
@@ -1054,7 +1054,7 @@ export function applyDmMutation(
       if ("error" in listed) {
         return { result: listed };
       }
-      const priced = worthProblem(listed.srdName ?? revealed, args.worth, "reveal_item");
+      const priced = worthProblem({ name: revealed, ...listed }, args.worth, "reveal_item");
       if (priced) {
         return { result: priced };
       }
@@ -1101,11 +1101,11 @@ export function applyDmMutation(
         return { result: notCarried(sheet.name, sheet.equipment.map((item) => item.name), name, isTableGearName(campaign.id, name)) };
       }
       patchSheet(sheet.id, { equipment: math.equipment });
-      audit(campaign, turnId, sheet, "remove_item", { name, removed: math.removed }, reason, {
+      audit(campaign, turnId, sheet, "remove_item", { name: math.item.name, removed: math.removed }, reason, {
         equipment: math.equipment,
       });
       publishSheet(campaign, sheet.id);
-      return { result: { ok: true, removed: name, qty: math.removed } };
+      return { result: { ok: true, removed: math.item.name, qty: math.removed } };
     }
     case "use_item": {
       const unasked = characterCallUnasked(campaign.id, getDmTurn(turnId), rawArguments, "characterId");

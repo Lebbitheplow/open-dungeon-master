@@ -36,6 +36,11 @@ export type IdentityPlaystyle = {
   onChooseClass: (classId: string) => void;
   // The offered backgrounds that suit the answer (playstyleBackgrounds).
   backgrounds: Array<{ id: string; name: string }>;
+  // The question in its door's words: a player's job, or what the party
+  // needs (the DM's quick companion).
+  question: string;
+  // "Help me build" (QuickBuildQuiz.tsx), carrying the job picked so far.
+  onHelpMeBuild: (style: PlaystyleId | null) => void;
 };
 export function IdentityStep({
   state,
@@ -104,13 +109,15 @@ export function IdentityStep({
       ) : null}
 
       {playstyle ? (
-        <StepPanel title="How do you want to play?">
+        <StepPanel title={playstyle.question}>
           <PlaystylePicker
             offered={playstyle.offered}
             chosen={playstyle.chosenClass}
             onChoose={playstyle.onChooseClass}
             style={playstyle.value}
             onStyle={playstyle.onChange}
+            question={playstyle.question}
+            onHelpMeBuild={playstyle.onHelpMeBuild}
             intro="New to this? Pick what sounds fun. It suggests a class and a background, and nothing is chosen until you choose it."
           />
         </StepPanel>
@@ -217,7 +224,7 @@ export function IdentityStep({
               // The playstyle's backgrounds, one tap each; the list above
               // keeps every other.
               <span key={playstyle.value} className="reveal mt-1.5 flex flex-wrap items-center gap-1 text-xs text-stone-500" data-background-hints>
-                Suits how you want to play:
+                Suits that job:
                 {playstyle.backgrounds.map((entry) => (
                   <button
                     key={entry.id}

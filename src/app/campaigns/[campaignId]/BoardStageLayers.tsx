@@ -5,6 +5,10 @@ import { TILE } from "@/app/campaigns/[campaignId]/battleMapCells";
 import { seededUnit } from "@/lib/battlemap/delivery";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import { HostSvgImage } from "@/components/ui/HostSvgImage";
+import { iconCandidates } from "@/lib/icons";
+import { matchArmor } from "@/lib/srd/armor";
+import { matchWeapon } from "@/lib/srd/weapons";
 
 // The stage dressing of the live board (docs/visual-overhaul-plan.md 5.1):
 // the spotlight that follows the turn, the dust in the torchlight, and the
@@ -278,3 +282,40 @@ export function AimScrim({ width, height }: { width: number; height: number }) {
     />
   );
 }
+
+// Things dropped on the board (issue #424): each at the corner of its square,
+// over the figures so a sword at someone's feet still shows, and never in
+// the way of a tap. Several on one square sit side by side. One within the
+// viewer's reach wears a ring: it can be picked up from where they stand.
+export const DropLayer = memo(function DropLayer({ drops }: { drops: NonNullable<PlayerMapView["drops"]> }) {
+  if (!drops.length) {
+    return null;
+  }
+  const onSquare = new Map<string, number>();
+  const size = TILE * 0.42;
+  return (
+    <g pointerEvents="none" data-board-drops="">
+      {drops.map((drop) => {
+        const square = `${drop.x},${drop.y}`;
+        const nth = onSquare.get(square) ?? 0;
+        onSquare.set(square, nth + 1);
+        const item = drop.name.replace(/^\d+\s+/, "");
+        // A dropped item carries only its name here; the finders read the
+        // row through it (src/lib/srd/item-row.ts).
+        const row = { name: item };
+        const family = matchWeapon(row) ? "item-weapon" : matchArmor(row) ? "item-armor" : "item-gear";
+        const src = iconCandidates({ kind: "item", key: item, family })[0];
+        const cx = drop.x * TILE + TILE - size / 2 - 3 - nth * size * 0.6;
+        const cy = drop.y * TILE + TILE - size / 2 - 3;
+        return (
+          <g key={drop.id} className="board-drop" data-drop-id={drop.id} data-reach={drop.reach ? "" : undefined}>
+            <title>{`${drop.name} on the ground${drop.by ? `, dropped by ${drop.by}` : ""}${drop.reach ? ": within reach" : ""}`}</title>
+            {drop.reach ? <circle className="board-drop-reach" cx={cx} cy={cy} r={size * 0.68} fill="none" stroke="#f5d97a" strokeWidth={1.5} /> : null}
+            <circle cx={cx} cy={cy} r={size * 0.56} fill="#0c0a09" fillOpacity={0.72} stroke="#d4ab3a" strokeWidth={1} />
+            {src ? <HostSvgImage href={src} x={cx - size / 2} y={cy - size / 2} width={size} height={size} /> : null}
+          </g>
+        );
+      })}
+    </g>
+  );
+});

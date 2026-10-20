@@ -15,7 +15,7 @@ import type { OrderEntry } from "@/lib/db/encounters";
 import type { IconRef } from "@/lib/icons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
-import type { HandIntentExtras } from "@/lib/battlemap/hand-intent";
+import type { HandGearAction, HandIntentExtras } from "@/lib/battlemap/hand-intent";
 import type { HandArea } from "@/lib/battlemap/hand-area";
 
 export type HandCost = "action" | "bonus" | "reaction" | "rider" | "free";
@@ -23,7 +23,7 @@ export type HandCardType = "attack" | "rider" | "spell" | "control" | "mend" | "
 export type HandTarget = "enemy" | "ally" | "self" | "none";
 export type BasicActionId =
   | "dodge" | "dash" | "disengage" | "help" | "hide" | "ready" | "grapple" | "shove" | "use-object" | "end-turn"
-  | "search" | "escape" | "stand-up";
+  | "search" | "escape" | "stand-up" | "stabilize" | "dismount";
 
 // What the structured commit carries beside the sentence. An optional extra
 // field on the action body: a server that does not know it drops it. The
@@ -37,6 +37,9 @@ export type HandIntent = (
   | { card: "feature"; resourceId: string }
   | { card: "basic"; action: BasicActionId }
   | { card: "reaction"; feature: string; spell?: string; slotLevel?: number | null }
+  // A gear card (issue #424, hand-gear.ts): a shield, a weapon, a thing
+  // dropped, picked up, handed over or drunk. `item` rides as the extra.
+  | { card: "gear"; action: HandGearAction }
   // A monster's card in the DM's hand (src/lib/battlemap/monster-hand.ts):
   // one of its stat block's attacks, a save ability, or breaking off. Sent
   // to the console's invoke route, never to the actions route.
@@ -106,6 +109,9 @@ export type HandCard = {
   // restoration ends, the spell a Ready holds. Sent under the tool
   // argument's own name (hand-intent.ts).
   choice?: HandChoice;
+  // The card is the turn's object interaction (hand-gear.ts): a draw, a
+  // stow, a pick-up, a hand-over.
+  interaction?: boolean;
   // A spell that leaves an area on the battle map: the square it is laid on
   // is picked on the board (src/lib/battlemap/hand-area.ts) and sent as the
   // tool's atX/atY/towardX/towardY.
@@ -113,7 +119,7 @@ export type HandCard = {
 };
 
 export type HandChoice = {
-  arg: "condition" | "variant" | "readySpell";
+  arg: "condition" | "variant" | "readySpell" | "item";
   label: string;
   options: Array<{ value: string; label: string; note?: string }>;
   // What is sent when the player picks none (the first option otherwise).
@@ -173,6 +179,8 @@ export type HandTurn = {
   // 210). Absent from a server too old to send them.
   lightMeleeAttack?: boolean;
   oneHandMeleeAttack?: boolean;
+  // The turn's free object interaction is spent (issue #424).
+  interactionUsed?: boolean;
   // The engine's reading of the fight, so the gates ask canAct itself.
   table?: HandTable | null;
 };
@@ -218,6 +226,18 @@ export type HandOptions = {
   // The table's ammunition variant rule. Undefined = unknown: the count is
   // shown but an empty quiver only warns.
   trackAmmo?: boolean;
+  // What the gear cards need beyond the sheet (hand-gear.ts).
+  gear?: HandGearContext;
+};
+
+// The board and the party as the gear cards read them: what lies on the
+// ground near this character (the board view's drops), the mount they ride,
+// how many allies could take something handed over, and who is dying.
+export type HandGearContext = {
+  drops?: Array<{ id: string; name: string; reach: boolean }>;
+  mount?: string | null;
+  allies?: number;
+  dying?: Array<{ id: string; name: string }>;
 };
 
 // The fan's seats, End turn's included (src/lib/battlemap/hand-layout.ts).
@@ -338,6 +358,7 @@ export function budgetOf(turn: HandTurn, sheet: Pick<CharacterSheet, "id">, allo
     ...(turn.castThisAction ? { castThisAction: true } : {}),
     ...(turn.lightMeleeAttack ? { lightMeleeAttack: true } : {}),
     ...(turn.oneHandMeleeAttack ? { oneHandMeleeAttack: true } : {}),
+    ...(turn.interactionUsed ? { interaction: { what: "an object", weapons: 2 } } : {}),
   };
 }
 

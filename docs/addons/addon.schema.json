@@ -1303,6 +1303,10 @@
                 "default": false,
                 "type": "boolean"
               },
+              "sessionLayout": {
+                "type": "string",
+                "const": "stage"
+              },
               "options": {
                 "default": [],
                 "maxItems": 12,

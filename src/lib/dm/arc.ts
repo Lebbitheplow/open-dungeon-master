@@ -83,7 +83,7 @@ function worldContext(campaignId: string): string {
   const party = listSheets(campaignId)
     .map(
       (sheet) =>
-        `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory.slice(0, 400)}` : ""}`,
+        `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory}` : ""}`,
     )
     .join("\n");
   return [
@@ -97,6 +97,12 @@ function worldContext(campaignId: string): string {
     // The pack's factions and hooks give the saga real named powers to plan
     // against instead of inventing a pantheon the world does not have.
     packWorldHints(campaign.gameSettings),
+    // The table's combat pace (issue #432) shapes how many beats are fights.
+    campaign.gameSettings.combatPace === "frequent"
+      ? "Pacing: this table wants more fights. Give most acts at least one beat that is a fight the party cannot talk its way past."
+      : campaign.gameSettings.combatPace === "rare"
+        ? "Pacing: this table wants fewer fights. Favor beats of talk, intrigue, travel and discovery; keep fights to the moments the story turns on."
+        : "",
   ]
     .filter(Boolean)
     .join("\n\n");

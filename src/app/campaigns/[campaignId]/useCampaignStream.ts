@@ -66,7 +66,7 @@ export type MediaStatus = {
 // from mediaStatus: both are keyed by message id, and a passage can be
 // waiting on its picture and its voice at once (issue 88).
 export type NarrationStatus = {
-  state: "queued" | "generating" | "failed";
+  state: "queued" | "generating" | "failed" | "skipped";
   reason?: string;
 };
 

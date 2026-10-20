@@ -1,6 +1,6 @@
 {
   "name": "open-dungeon-master",
-  "version": "0.28.2",
+  "version": "0.28.3",
   "private": true,
   "description": "Multiplayer D&D 5e campaigns with an AI Dungeon Master, fully on-device",
   "license": "MIT",
@@ -15,6 +15,7 @@
     "start:lan": "next start -H 0.0.0.0 -p 3005",
     "lint": "eslint",
     "audit:check": "node scripts/check-audit.mjs",
+    "dead-code": "tsc --noEmit --incremental false --noUnusedLocals --noUnusedParameters --allowUnreachableCode false && knip",
     "test": "vitest run",
     "test:browser": "node scripts/browser/run.mjs",
     "coverage": "vitest run --coverage",
@@ -67,6 +68,7 @@
     "axe-core": "4.13.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
+    "knip": "^6.42.0",
     "playwright-core": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^6",

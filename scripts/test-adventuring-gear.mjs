@@ -15,7 +15,7 @@ const { SRD_GEAR, matchGear, gearPriceCopper, gearWeightLb, resolveGearLine, res
 const { PACKS } = await import("../src/lib/srd/starting-kit-data.ts");
 const { bundledPrices, bundledPriceCopper, judgeStartingGear, layeredPrice, packRowPrice } = await import("../src/lib/srd/starting-wealth.ts");
 const { lineWeightLb } = await import("../src/lib/srd/encumbrance.ts");
-const { matchArmor, suggestArmor, armorOfRow } = await import("../src/lib/srd/armor.ts");
+const { armorNamed, suggestArmor, armorOfRow } = await import("../src/lib/srd/armor.ts");
 const { srdBackgroundOptions } = await import("../src/lib/characters/options.ts");
 const { classGenres } = await import("../src/lib/classes/index.ts");
 const { acBreakdownFor } = await import("../src/lib/srd/index.ts");
@@ -128,13 +128,13 @@ test("what the catalog does not know stays as the book wrote it, tidied, and a c
 });
 
 test("'work leathers' is not Leather armor: a barbarian keeps Unarmored Defense (#113)", () => {
-  assert.equal(matchArmor("work leathers"), null);
-  assert.equal(matchArmor("Work Leathers"), null);
+  assert.equal(armorNamed("work leathers"), null);
+  assert.equal(armorNamed("Work Leathers"), null);
   assert.equal(armorOfRow({ name: "Work leathers" }), null);
   // The tail rule still finds armor written out in full.
-  assert.equal(matchArmor("Dwarven Chain Mail")?.name, "Chain Mail");
-  assert.equal(matchArmor("+1 Studded Leather")?.name, "Studded Leather");
-  assert.equal(matchArmor("Shields")?.name, "Shield");
+  assert.equal(armorNamed("Dwarven Chain Mail")?.name, "Chain Mail");
+  assert.equal(armorNamed("+1 Studded Leather")?.name, "Studded Leather");
+  assert.equal(armorNamed("Shields")?.name, "Shield");
   const ac = acBreakdownFor({
     class: "barbarian",
     level: 1,

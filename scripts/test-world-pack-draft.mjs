@@ -235,7 +235,7 @@ test("mergePulled adds the compile's flavour and never overwrites", () => {
     theme: "",
     premise: "",
   };
-  const compiled = compileToPack(bundle);
+  const compiled = compileToPack(workshopBundleSchema.parse({ kind: "odm.workshop", version: 1, ...bundle }));
   const before = fullDraft();
   const { draft, added } = mergePulled(before, compiled.draft);
   assert.equal(draft.factions[0].blurb, "Priests who own the water.", "the hand-written faction is kept");

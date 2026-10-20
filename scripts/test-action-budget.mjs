@@ -110,7 +110,9 @@ test("the summary names what is left, for the DM prompt", () => {
   budget = spendAttack(budget, "Grog").budget;
   budget = spendAction(budget, "bonus", "x", "Grog").budget;
   budget = spendAction(budget, "reaction", "x", "Grog").budget;
-  assert.equal(describeBudget(budget), "has nothing left to spend");
+  // The free object interaction is the last thing a turn holds (issue #424).
+  assert.equal(describeBudget(budget), "has free object interaction remaining");
+  assert.equal(describeBudget({ ...budget, interaction: { what: "drawing a dagger", weapons: 1 } }), "has nothing left to spend");
   assert.match(describeBudget({ ...make(), dashed: true }), /Dash/);
   assert.match(describeBudget({ ...make(), disengaged: true }), /disengaged/);
 });

@@ -14,6 +14,7 @@ import {
 } from "./model.ts";
 import { ROW_TEXT, accountOf, leadOf } from "./account.ts";
 import { textKey } from "../language/text-logic.ts";
+import { readScenes, type ImportedBeat, type SceneLoss } from "./scenes.ts";
 
 // WorldForge's own file, both ways: its JSON export (format version 4) read
 // into a workshop with nothing dropped, and a workshop written back out as a
@@ -85,7 +86,7 @@ export type ImportedRecord = {
   entry: Entry;
 };
 
-export type ImportedBeat = { wfId: string; title: string; body: string; story: string; order: number; pov: string; place: string };
+export type { ImportedBeat } from "./scenes.ts";
 
 // The newest WorldForge export format this reader knows. A newer file may
 // hold things this reader would drop without a word, so it is refused.
@@ -96,6 +97,10 @@ export type WorldImport = {
   // is written: text cut to a limit, rows over a cap, pictures that are not
   // pictures. Empty when the file comes in whole.
   losses: string[];
+  // What each scene holds that a storyboard card does not carry, by scene
+  // (src/lib/worldforge/scenes.ts). Named before anything is written, like
+  // `losses`.
+  sceneLosses: SceneLoss[];
   // What comes in on purpose differently, said so nobody is surprised.
   notes: string[];
   worldName: string;
@@ -304,20 +309,18 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
 
   const stories = new Map(list(world.stories, 40).map(rec).map((story) => [wfKey(story.id), str(story.name, 80)]));
   const premise = str(rec(list(world.stories, 1)[0]).summary, 500);
-  const scenes = list(world.scenes, 400).map(rec);
-  const bodies = rec(world.sceneBodies);
-  const beats = scenes
-    .filter((scene) => str(scene.title, 120) && typeof scene.order === "number")
-    .sort((a, b) => str(a.storyId, 80).localeCompare(str(b.storyId, 80)) || (a.order as number) - (b.order as number))
-    .map((scene) => ({
-      wfId: wfKey(scene.id),
-      title: str(scene.title, 120),
-      body: str(scene.gist, 2_000) || str(bodies[wfKey(scene.id)], 2_000),
-      story: stories.get(wfKey(scene.storyId)) ?? "",
-      order: scene.order as number,
-      pov: refOfWf(scene.povEntityId),
-      place: refOfWf(scene.locationEntityId),
-    }));
+  const scenes = capped(world.scenes, 400, "scenes").map(rec);
+  const nameOfRef = new Map(records.map((record) => [record.ref, record.name]));
+  // Each scene as a card, and what each one loses (src/lib/worldforge/scenes.ts).
+  const { beats, sceneLosses, leftOut } = readScenes({ scenes, bodies: rec(world.sceneBodies), stories, refOf: refOfWf, key: wfKey, nameOf: (ref) => nameOfRef.get(ref) });
+  if (leftOut) {
+    losses.push(`${plural(leftOut, "scene has", "scenes have")} no title or no place in its story's order, and ${leftOut === 1 ? "is" : "are"} left out.`);
+  }
+  if (beats.length) {
+    notes.push(
+      "Each story's scenes come in as a row of “Something happens” cards on the storyboard, each leading to the next; the story's own name is not kept on the board. A scene brought in before is updated rather than added again.",
+    );
+  }
 
   const backgrounds = rec(rec(world.media).mapBackgrounds);
   const mapImages: Record<string, string> = {};
@@ -332,7 +335,7 @@ export function readWorldForge(raw: unknown): WorldImport | { error: string } {
   if (doc.secrets.length) {
     notes.push("A secret new to this world comes in with the party knowing none of it yet; one brought in before keeps what the party has learned. Who in the world knows each one comes in as written.");
   }
-  return { losses, notes, worldName, worldId, premise, records, doc, beats, mapImages };
+  return { losses, sceneLosses, notes, worldName, worldId, premise, records, doc, beats, mapImages };
 }
 
 // ---- out ----

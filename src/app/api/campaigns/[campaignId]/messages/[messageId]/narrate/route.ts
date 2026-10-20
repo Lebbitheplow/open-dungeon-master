@@ -48,6 +48,8 @@ export async function POST(
     context.campaign.gameSettings,
     // A passage spoken as someone is read as them again, not as the narrator.
     message.speaker ?? null,
+    // Asked for by name: read even when narration has fallen behind.
+    { onDemand: true },
   );
 
   if (!existsSync(narrationAudioPath(campaignId, message.id))) {

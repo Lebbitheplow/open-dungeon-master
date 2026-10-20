@@ -373,11 +373,33 @@ challenge rating and the creature type. A feature is picked from every feature
 the SRD tables grant. What a person types is the world's word for the thing and
 a line about it, which is all a reskin is.
 
-**Pull from this workshop** reads the lore filed under "factions", the places,
-the storyboard's hook cards and the cast's names into the setting lists, through
-the same compile the Share tool's "Compile a world pack" uses
-(`src/lib/workshop/to-pack.ts`). It adds and never overwrites, so an entry
-written by hand survives a second pull.
+**Pull from this workshop** reads the workshop's factions (the ones its
+Factions tool and WorldForge write, and any older lore filed under
+"factions"), its lore, places, the storyboard's hook cards and the cast's names
+into the setting lists, through the same compile the Share tool's "Compile a
+world pack" uses (`src/lib/workshop/to-pack.ts`). It adds and never
+overwrites, so an entry written by hand survives a second pull.
+
+- A faction's line is its own one-line summary, then where it is based and who
+  belongs to it ("Based in Saltmarch Harbour. Members: Mira Fenn and Old
+  Tobb."), as far as the 200 characters go; a long member list ends "and 4
+  more". The pack format is unchanged, so an older install reads the line as
+  it reads any other.
+- A place's line and a glossary meaning are the entry's account (a place's
+  article, a lore entry's body), cut where a sentence ends.
+- A lore entry kept for the DM and an entry that is not canon stay out: a pack
+  has no private part and no way to mark a line as unsettled.
+
+**What the pack leaves out.** The Publish tab lists, before anything is
+published, everything in the workshop the pack does not carry, kind by kind,
+each with the entries it names (`src/lib/workshop/to-pack-omissions.ts`):
+what the workshop has and the draft does not; world detail (Atlas maps, the
+timeline, secrets and hidden truths, storyboard cards, custom fields,
+relationships, the Cast's details, notes, pictures, accounts cut short, and
+what was kept back); and the scenario and its mechanics (encounters, battle
+maps, links to playable records, hand-built monsters, homebrew, roll tables,
+shops, pregens, the region map, house rules). The workshop bundle carries all
+of it. The Share tool shows the same list after compiling a pack draft.
 
 **Pictures** are uploaded through a plain file input, one slot per thing the
 pack names, and resized in the browser to the slot's shape (256 px squares,

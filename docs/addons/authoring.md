@@ -75,6 +75,11 @@ every check the server does, including the ones a JSON Schema cannot express.
 | `settings` | Fields the admin fills in once |
 | `contributes` | The extension points it adds to: `workshopImporters`, `mapGenerators`, `boardViews` |
 
+An optional `boardViews[].sessionLayout: "stage"` selects the host's native
+session-region layout when that viewer selects the view. It requires
+`needsViewData: false` and handling the no-map `scene` message. See
+[the session stage contract](extension-points.md#optional-session-stage-layout).
+
 ### runtime
 
 ```json

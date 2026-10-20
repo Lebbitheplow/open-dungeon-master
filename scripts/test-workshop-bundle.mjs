@@ -406,22 +406,23 @@ test("the reskin tables come out empty, and the compile says so", () => {
   // The honest part. A world pack IS its reskin tables, and a workshop holds
   // none, so a compile that quietly produced an empty pack would be claiming
   // to have done something it did not.
-  const { draft, refusals } = compileToPack(fullBundle());
+  const { draft, notes } = compileToPack(fullBundle());
   for (const field of ["races", "classes", "backgrounds", "spells", "items", "features"]) {
     assert.deepEqual(draft[field], [], `${field} was not empty`);
   }
-  assert.ok(refusals.some((refusal) => /reskin/i.test(refusal.reason)));
+  assert.ok(notes.some((note) => /reskin/i.test(note)));
 });
 
 test("hand-built monsters are refused with the reason, not silently dropped", () => {
   const withMonsters = workshopBundleSchema.parse(
     bundle({ monsters: [{ name: "Vault Drowner", stats: {} }] }),
   );
-  const { draft, refusals } = compileToPack(withMonsters);
+  const { draft, omissions } = compileToPack(withMonsters);
   assert.deepEqual(draft.monsters, []);
-  const refusal = refusals.find((entry) => entry.field === "monsters");
-  assert.ok(refusal, "no refusal was recorded for the monster left behind");
+  const refusal = omissions.find((entry) => entry.key === "monsters");
+  assert.ok(refusal, "no omission was recorded for the monster left behind");
   assert.match(refusal.reason, /slug/);
+  assert.deepEqual(refusal.assets, ["Vault Drowner"], "the monster left behind is named");
 });
 
 test("a prepared fight's kind of ground travels, and an older file reads as none", () => {
@@ -435,8 +436,10 @@ test("scenario content is refused as belonging in the bundle, not the pack", () 
   const withScenario = workshopBundleSchema.parse(
     bundle({ encounters: [{ name: "Ambush" }], maps: [{ name: "Hall", width: 8, height: 8 }] }),
   );
-  const { refusals } = compileToPack(withScenario);
-  assert.ok(refusals.some((entry) => /setting, not a scenario/i.test(entry.reason)));
+  const { omissions } = compileToPack(withScenario);
+  assert.ok(omissions.some((entry) => /setting, not a scenario/i.test(entry.reason)));
+  assert.deepEqual(omissions.find((entry) => entry.key === "encounters")?.assets, ["Ambush"]);
+  assert.deepEqual(omissions.find((entry) => entry.key === "maps")?.assets, ["Hall"]);
 });
 
 test("an empty workshop compiles to nothing and reports it", () => {
@@ -475,16 +478,16 @@ test("a draft built from content past every pack limit still parses", () => {
   assert.ok(parsed.success, `the draft failed the pack schema: ${parsed.error?.issues[0]?.message}`);
 });
 
-test("long lore is clipped to the pack's limits and the clipping is announced", () => {
+test("long lore is clipped to the pack's limits and the entry is named as cut short", () => {
   const wordy = workshopBundleSchema.parse(
     bundle({
       lore: [{ category: "history", title: "A very long title ".repeat(4), body: "x".repeat(900) }],
     }),
   );
-  const { draft, warnings } = compileToPack(wordy);
+  const { draft, omissions } = compileToPack(wordy);
   assert.ok(draft.glossary[0].term.length <= 40);
   assert.ok(draft.glossary[0].meaning.length <= 160);
-  assert.ok(warnings.some((line) => /clipped/i.test(line)));
+  assert.deepEqual(omissions.find((entry) => entry.key === "shortened")?.assets, ["A very long title ".repeat(4).trim()], "the shortened entry is named by its whole title");
 });
 
 console.log(`workshop bundle: ${passed} checks passed`);

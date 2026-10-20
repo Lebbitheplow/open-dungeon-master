@@ -8,6 +8,7 @@ import { applyWorldImport } from "@/lib/db/world-forge-io";
 import { importedBundleText } from "@/lib/addons/run-importer";
 import { taskFor } from "@/lib/addons/tasks";
 import type { WorldImport } from "@/lib/worldforge/format";
+import { sceneLossLines } from "@/lib/worldforge/scenes";
 import {
   bundleCounts,
   bundleDependencies,
@@ -110,7 +111,12 @@ export async function POST(request: Request) {
       sharedHomes: sharedHomesFor(user.id, bundle),
       // A WorldForge file names what it would not bring in whole, and what
       // it brings in differently, before the workshop is made.
-      warnings: [...bundleWarnings(bundle), ...(read.worldForge?.losses ?? []), ...(read.worldForge?.notes ?? [])],
+      warnings: [
+        ...bundleWarnings(bundle),
+        ...(read.worldForge?.losses ?? []),
+        ...sceneLossLines(read.worldForge?.sceneLosses ?? []),
+        ...(read.worldForge?.notes ?? []),
+      ],
     });
   }
 

@@ -15,9 +15,11 @@ import {
   ROUTE_LABELS,
   ROUTE_LABEL_MAX,
   TITLE_MAX,
+  originLine,
   type Beat,
   type BeatKind,
   type BeatLinks,
+  type BeatOrigin,
   type BoardInventory,
   type BoardNode,
   type RouteKind,
@@ -50,12 +52,15 @@ export function BeatEditor({
   onSave,
   onDelete,
   broken = [],
+  origin,
 }: {
   edit: Beat;
   onChange: (beat: Beat) => void;
   inventory: BoardInventory;
   // Links this card holds that no longer resolve.
   broken?: Array<keyof BeatLinks>;
+  // Where the card came from, when it was not made here.
+  origin?: BeatOrigin;
   // Every other card on the board, as candidates for "leads to".
   others: BoardNode[];
   busy: boolean;
@@ -85,6 +90,11 @@ export function BeatEditor({
   return (
     <>
       <SectionHead title="The card" glyph={KIND_GLYPH[edit.kind]} className="mb-0" />
+      {origin ? (
+        <p className="text-[11px] text-stone-500" data-testid="card-origin">
+          {originLine(origin)}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <span className="w-full sm:w-52">
           <Select<BeatKind>

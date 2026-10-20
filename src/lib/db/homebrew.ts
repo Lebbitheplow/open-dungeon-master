@@ -3,7 +3,7 @@ import { getContentDb } from "@/lib/content/db";
 import { repairedWeight } from "@/lib/content/item-weights";
 import { gearFromHomebrewData } from "@/lib/homebrew/gear";
 import { SRD_ARMOR } from "@/lib/srd/armor";
-import { matchMagicItem } from "@/lib/srd/magic-items";
+import { magicItemNamed } from "@/lib/srd/magic-items";
 import { matchGear } from "@/lib/srd/adventuring-gear";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { CreateHomebrewInput, HomebrewKind } from "@/lib/schemas/homebrew";
@@ -218,7 +218,7 @@ export function isPublishedGearName(name: string): boolean {
   return (
     SRD_WEAPONS.some((weapon) => gearKey(weapon.name) === key) ||
     SRD_ARMOR.some((armor) => gearKey(armor.name) === key) ||
-    matchMagicItem(name) !== null ||
+    magicItemNamed(name) !== null ||
     publishedPackNames().has(key)
   );
 }

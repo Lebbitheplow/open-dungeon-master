@@ -61,12 +61,6 @@ export function regionToPin(frame: MapFrame, cell: Cell, grid: GridSize): { at: 
   return { at: { x: fit(surface.x), y: fit(surface.y) }, onSurface: inside(surface) };
 }
 
-// The frame a picture of this shape gets when its pins were placed on the
-// picture itself (a WorldForge file's maps).
-export function pictureFrame(aspect: number): MapFrame | undefined {
-  return readFrame({ surface: aspect, image: aspect, fit: "cover" });
-}
-
 // The map that stands over the Region, if one does.
 export function regionMapOf(doc: Pick<WorldDoc, "maps">): AtlasMap | null {
   return doc.maps.find((atlas) => atlas.role === "region") ?? null;

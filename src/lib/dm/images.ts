@@ -24,7 +24,9 @@ export function publishMediaStatus(
   campaignId: string,
   kind: "image" | "map" | "tts",
   targetId: string,
-  state: "queued" | "generating" | "failed",
+  // "skipped": narration that fell behind and was passed over for a newer
+  // passage (src/lib/tts.ts). Not a failure; the replay button still reads it.
+  state: "queued" | "generating" | "failed" | "skipped",
   // Why it failed, in words the table can read (narration, issue 88).
   reason?: string,
 ) {

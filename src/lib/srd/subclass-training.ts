@@ -332,6 +332,8 @@ export function applySubclassTraining(input: {
   grants: SubclassGrant[];
   choices: FeatChoices;
   strict: boolean;
+  // A file's picks may wait, as a feat's do (applyFeatGrants).
+  picksMayWait?: boolean;
   abilities?: Partial<Record<Ability, number>>;
 }): FeatGrantVerdict {
   if (!input.grants.length) {
@@ -342,9 +344,14 @@ export function applySubclassTraining(input: {
     feats: input.grants.map((grant) => ({ name: grant.name, desc: "", spec: grant.spec })),
     choices: input.choices,
     strict: input.strict,
+    picksMayWait: input.picksMayWait,
   });
   const saves = withSaves(applied.proficiencies.saves as Ability[], input.grants, input.abilities);
-  return { problems: applied.problems, proficiencies: { ...applied.proficiencies, saves } };
+  return {
+    problems: applied.problems,
+    proficiencies: { ...applied.proficiencies, saves },
+    ...(applied.owed ? { owed: applied.owed } : {}),
+  };
 }
 
 // The armor and weapon training the subclasses give outright, for the checks

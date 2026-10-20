@@ -7,9 +7,12 @@ import { LengthNote } from "@/components/ui/LengthNote";
 import { cn } from "@/lib/cn";
 import { panelField } from "@/app/campaigns/[campaignId]/PanelKit";
 import {
+  COMBAT_PACE_HINTS,
+  COMBAT_PACE_LABELS,
   NARRATION_LENGTH_HINTS,
   NARRATION_LENGTH_LABELS,
   STYLE_NOTES_MAX,
+  type CombatPace,
   type NarrationLength,
 } from "@/lib/dm/narration-style-logic";
 import type { GameSettings } from "@/lib/schemas/game-settings";
@@ -57,6 +60,27 @@ export function NarrationStyleRows({
         </Tooltip>
         <span key={settings.narrationLength} className="live-in text-stone-500">
           {NARRATION_LENGTH_HINTS[settings.narrationLength]}
+        </span>
+      </div>
+      <div data-settings-row="combat-pace" className="reveal flex flex-wrap items-center gap-2">
+        <span className="pk-rowlabel">Fights</span>
+        <Tooltip content="How often the AI DM's world brings a fight: how soon trouble finds the party on its own, whether that trouble wants a fight, and how the story plans its acts. Balanced leaves it to the story.">
+          <span className="inline-flex min-w-0 max-w-full">
+            <Select<CombatPace>
+              size="sm"
+              label="How often fights come"
+              value={settings.combatPace ?? "balanced"}
+              onChange={(combatPace) => patch({ combatPace })}
+              options={(Object.keys(COMBAT_PACE_LABELS) as CombatPace[]).map((pace) => ({
+                value: pace,
+                label: COMBAT_PACE_LABELS[pace],
+              }))}
+              className="min-w-0 max-w-full"
+            />
+          </span>
+        </Tooltip>
+        <span key={settings.combatPace ?? "balanced"} className="live-in text-stone-500">
+          {COMBAT_PACE_HINTS[settings.combatPace ?? "balanced"]}
         </span>
       </div>
       <div data-settings-row="style-notes" className="reveal space-y-1">

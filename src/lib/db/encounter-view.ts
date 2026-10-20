@@ -154,6 +154,9 @@ export type PublicTurn = {
   // (issue 210).
   lightMeleeAttack?: boolean;
   oneHandMeleeAttack?: boolean;
+  // The turn's free object interaction is spent (issue #424): a draw, a
+  // pick-up or a hand-over now takes the Use an Object action.
+  interactionUsed?: boolean;
 };
 
 export type PublicLastHit = {
@@ -197,6 +200,7 @@ function turnView(encounter: Encounter): { turn?: PublicTurn } {
       ...(budget.castThisAction ? { castThisAction: true } : {}),
       lightMeleeAttack: Boolean(budget.lightMeleeAttack),
       oneHandMeleeAttack: Boolean(budget.oneHandMeleeAttack ?? budget.lightMeleeAttack),
+      ...(budget.interaction ? { interactionUsed: true } : {}),
     },
   };
 }

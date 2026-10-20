@@ -20,7 +20,8 @@ import { HandReactPrompt } from "@/app/campaigns/[campaignId]/HandReactPrompt";
 import { HandPips } from "@/app/campaigns/[campaignId]/HandPips";
 import { handTargets } from "@/app/campaigns/[campaignId]/handTargets";
 import { holdPendingCards, useHandChoices, useHandPending } from "@/app/campaigns/[campaignId]/useHandChoices";
-import { deriveHand, waitingHand, type HandCard } from "@/lib/battlemap/hand";
+import { deriveHand, waitingHand, type HandCard, type HandGearContext } from "@/lib/battlemap/hand";
+import type { PlayerMapView } from "@/lib/battlemap/view-types";
 import { arrangeHand, isUrgentCard, seatPicked, startingLayout } from "@/lib/battlemap/hand-layout";
 import {
   HAND_TARGET_EVENT,
@@ -97,6 +98,8 @@ function HandInner({
   trackAmmo,
   leaving,
   edges,
+  drops,
+  mounts,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -117,6 +120,10 @@ function HandInner({
   // The board's verdict from this character to each enemy (cover, flanking),
   // keyed by enemy id; absent off the map.
   edges?: Record<string, TargetEdge>;
+  // What lies on the board, and who rides what (issue #424): the gear cards'
+  // Pick up and Dismount.
+  drops?: PlayerMapView["drops"];
+  mounts?: PlayerMapView["mounts"];
 }) {
   const sheet = useMemo(
     () => initiativeCharacter(sheets, meUserId, encounter.acting?.id) ?? selectedCharacter(sheets, meUserId, activeSheetId),
@@ -144,10 +151,24 @@ function HandInner({
     () => (sheet && turn ? reactionCards(sheet, turn, hits ?? [], sheets) : []),
     [sheet, turn, hits, sheets],
   );
+  const gear = useMemo<HandGearContext | undefined>(
+    () =>
+      sheet
+        ? {
+            drops,
+            mount: mounts?.[sheet.id] ?? null,
+            allies: sheets.filter((entry) => entry.id !== sheet.id).length,
+            dying: sheets
+              .filter((entry) => entry.currentHp <= 0 && !entry.deathSaves?.dead && !entry.deathSaves?.stable)
+              .map((entry) => ({ id: entry.id, name: entry.name })),
+          }
+        : undefined,
+    [sheet, sheets, drops, mounts],
+  );
   const cards = useMemo(() => {
     if (!sheet || !turn) return [];
-    return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo })), waiting);
-  }, [sheet, turn, reactions, spells, trackAmmo, waiting]);
+    return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear })), waiting);
+  }, [sheet, turn, reactions, spells, trackAmmo, gear, waiting]);
 
   // Where each card sits, the fan or "more": the player's own arrangement
   // for this character when they have made one (issue 231).
@@ -340,6 +361,7 @@ function HandInner({
           attack: picked.intent.card === "attack" || picked.intent.card === "rider",
           name: picked.name,
           signature,
+          interaction: picked.interaction === true,
         });
       }
       setPlayed((current) => ({ card: picked, seq: (current?.seq ?? 0) + 1 }));

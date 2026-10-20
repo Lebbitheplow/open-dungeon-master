@@ -3,6 +3,7 @@
 
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "../language/text-logic.ts";
+import { lineNamed } from "../srd/item-row.ts";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 
 export type SlotState = { max: number; used: number };
@@ -117,12 +118,60 @@ export function spendSlotMath(slot: SlotState | undefined | null): SlotState | n
   return { max: slot.max, used: slot.used + 1 };
 }
 
-// Remove qty of an item; partial removal adjusts, zero removes the row.
-// Returns null when the item is absent.
-export function removeItemMath<Row extends EquipmentRow>(equipment: Row[], name: string, qty: number) {
-  const index = equipment.findIndex(
-    (item) => textKey(item.name) === textKey(name),
+// What an item IS travels with it when it changes hands or lies on the
+// ground: what the party knows of it, the entry its mechanics are read
+// through, a scroll's spell, a wand's charges, its tags, worth and weight.
+// How it was worn does not: the new holder has neither put it on nor
+// attuned to it. A homebrew block is read again from the entry when the
+// sheet is (hydrateHomebrewGear), so it does not travel either. Trades used
+// to keep the name alone, so a traded scroll lost its spell and a renamed
+// sword its weapon (issue #424, found beside it).
+export function handedOverRow<Row extends EquipmentRow>(row: Row, qty: number): Row {
+  const {
+    equipped: _equipped,
+    attuned: _attuned,
+    attuning: _attuning,
+    layered: _layered,
+    gear: _gear,
+    ...kept
+  } = row as Row & { equipped?: boolean; attuned?: boolean; attuning?: boolean; layered?: boolean; gear?: unknown };
+  void _equipped;
+  void _attuned;
+  void _attuning;
+  void _layered;
+  void _gear;
+  return { ...(kept as Row), qty: Math.max(1, Math.floor(qty)) };
+}
+
+// Whether two rows are the same thing, the rule grantItemMath merges by:
+// one name, known or unknown alike, one spell and one entry.
+export function sameItemRow(a: EquipmentRow, b: EquipmentRow): boolean {
+  return (
+    textKey(a.name) === textKey(b.name) &&
+    isIdentified(a) === isIdentified(b) &&
+    (a.slug ?? "") === (b.slug ?? "") &&
+    a.spell === b.spell &&
+    a.srdName === b.srdName
   );
+}
+
+// A row added to a pack, merged into the same thing when it is there.
+export function addRowMath<Row extends EquipmentRow>(equipment: Row[], row: Row): Row[] {
+  const index = equipment.findIndex((item) => sameItemRow(item, row));
+  if (index < 0) {
+    return [...equipment, row];
+  }
+  const next = [...equipment];
+  next[index] = { ...next[index], qty: next[index].qty + row.qty };
+  return next;
+}
+
+// Remove qty of an item; partial removal adjusts, zero removes the row.
+// Returns null when the item is absent. The row is the one the name picks
+// out (src/lib/srd/item-row.ts lineNamed): its own name, else its
+// srdNameWithBonus.
+export function removeItemMath<Row extends EquipmentRow>(equipment: Row[], name: string, qty: number) {
+  const index = lineNamed(equipment, name);
   if (index < 0) {
     return null;
   }

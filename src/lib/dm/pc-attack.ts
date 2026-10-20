@@ -387,8 +387,13 @@ function spendPcAttack(plan: AttackPlan): ToolError | null {
       `made off their own turn: ${sheet.name}'s reaction is spent until their next turn starts`,
     );
   }
+  // The weapon drawn for this attack is in hand from now on (issue #424).
+  if (plan.drawn) {
+    patchSheet(sheet.id, { equipment: plan.drawn.equipment });
+    context.notes.push(plan.drawn.note);
+  }
   if (ammo && ammo.ok) {
-    const equipment = withAmmoCount(sheet.equipment, ammo.index, ammo.remaining);
+    const equipment = withAmmoCount(plan.drawn?.equipment ?? sheet.equipment, ammo.index, ammo.remaining);
     patchSheet(sheet.id, { equipment });
     // Tallied under the line's name as it reads NOW: a quiver written
     // "Arrows (20)" is renamed by every shot, and the tally follows it so the

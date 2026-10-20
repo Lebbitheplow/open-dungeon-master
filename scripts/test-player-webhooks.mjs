@@ -114,6 +114,20 @@ try {
     assert.notEqual(playerOpportunities({ ...s, turn: { ...turn, key: `2:${sheetId}`, waitingSeq: 8 } })[0].opportunityId, first.opportunityId);
     assert.deepEqual(playerOpportunities({ ...s, turn: { ...turn, characterId: "inactive" } }), []);
   });
+  await test("an earned level follows the character's own decisions and waits only on what stops all play", () => {
+    const level = { current: 1, earned: 3 };
+    const types = (changes) => playerOpportunities(state({ level, ...changes })).map((o) => o.type);
+    assert.deepEqual(types({}), ["response_requested", "level_up_available"]);
+    assert.deepEqual(types({ rolls: [{ id: "my-roll", userId: user.id, characterId: sheetId }] }), ["roll_requested", "level_up_available"]);
+    assert.deepEqual(playerOpportunities(state({ level, rolls: [{ id: "their-roll", userId: other.id, characterId: "other-sheet" }] })),
+      [{ type: "level_up_available", opportunityId: `level:${sheetId}:2`, characterId: sheetId, level: 2 }], "another seat's roll does not hold it back");
+    assert.deepEqual(types({ awaitingRolls: true }), ["level_up_available"]);
+    const theirs = { id: "fight", characterId: "other-sheet", userId: other.id, key: "1:other-sheet", waitingSeq: 6 };
+    assert.deepEqual(types({ floor: { mode: "initiative", encounterId: "fight", userIds: [user.id, other.id], currentName: "Brannoc", round: 1 }, turn: theirs }), ["level_up_available"]);
+    for (const changes of [{ active: false }, { paused: true }, { busy: true }, { floor: { mode: "hold", next: { mode: "open" } } }]) assert.deepEqual(types(changes), []);
+    for (const unearned of [{ current: 2, earned: 2 }, { current: 20, earned: 20 }, null, undefined]) assert.deepEqual(playerOpportunities(state({ level: unearned, lastPlayerSeq: 5 })), []);
+    assert.equal(playerOpportunities(state({ level: { current: 4, earned: 6 }, lastPlayerSeq: 5 }))[0].opportunityId, `level:${sheetId}:5`, "one level at a time");
+  });
   await test("DM work defers narration until the persisted turn is done", async () => {
     narration();
     const turn = createDmTurn(campaign.id, []);
@@ -156,6 +170,50 @@ try {
     setFloor(campaign.id, { ...next, respondedUserIds: [user.id, other.id] });
     assert.deepEqual(playerWebhookState(grant, sub.id).opportunities, []);
     setFloor(campaign.id, { mode: "open" });
+  });
+  await test("an earned level is invited once per level, keeps its ID through a pause, and takes only odm_level_up", async () => {
+    const levelOf = () => playerWebhookState(grant, sub.id).opportunities.find((o) => o.type === "level_up_available");
+    const levelSends = () => sent.filter((s) => s.event.type === "level_up_available");
+    assert.equal(levelOf(), undefined);
+    db.prepare(`UPDATE character_sheets SET xp = 300 WHERE id = ?`).run(sheetId);
+    narration();
+    const o = levelOf();
+    assert.equal(o.opportunityId, `level:${sheetId}:2`); assert.equal(o.level, 2);
+    assert.deepEqual(playerWebhookState(grant, sub.id).opportunities.map((x) => x.type), ["response_requested", "level_up_available"], "listed after the table's own decision");
+    await tick();
+    assert.equal(levelSends().length, 1);
+    const event = levelSends()[0].event;
+    assert.equal(event.level, 2); assert.match(event.text, /earned level 2/);
+    assert.ok(validateEvent(event, sub), "the bundled receiver accepts it");
+    db.prepare(`UPDATE character_sheets SET xp = 600 WHERE id = ?`).run(sheetId);
+    publishPersisted(campaign.id, "x_card", { at: Date.now() }); await tick();
+    publishPersisted(campaign.id, "safety_resumed", { at: Date.now(), action: "continue" }); await tick(); await tick();
+    assert.equal(levelOf().opportunityId, o.opportunityId);
+    assert.equal(levelSends().length, 1, "more experience, a pause and retries invite the same level once");
+    const table = playerWebhookState(grant, sub.id).opportunities.find((x) => x.type !== "level_up_available");
+    const base = { subscriptionId: sub.id, campaignId: campaign.id, fingerprint: "level" };
+    for (const tool of ["odm_take_action", "odm_end_turn", "odm_answer_roll"]) assert.throws(() => reserveWebhookWrite(grant, { ...base, opportunityId: o.opportunityId, tool }), /does not permit/);
+    assert.throws(() => reserveWebhookWrite(grant, { ...base, opportunityId: table.opportunityId, tool: "odm_level_up" }), /does not permit/);
+    assert.ok(workbenchTools(grant).find((t) => t.name === "odm_level_up").inputSchema.properties.opportunityId);
+    const originalFetch = globalThis.fetch; const calls = [];
+    try {
+      globalThis.fetch = async (url, init) => {
+        calls.push({ url: String(url), method: init.method, body: JSON.parse(init.body) });
+        db.prepare(`UPDATE character_sheets SET level = 2 WHERE id = ?`).run(sheetId);
+        return Response.json({ sheet: { level: 2 }, hpGained: 6 });
+      };
+      const args = { campaignId: campaign.id, level: 2, subscriptionId: sub.id, opportunityId: o.opportunityId };
+      const first = await workbenchCall(grant, "odm_level_up", args);
+      assert.equal(first.isError, false, first.text);
+      assert.deepEqual(await workbenchCall(grant, "odm_level_up", args), first, "a retry gets the saved answer");
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].method, "PATCH"); assert.deepEqual(calls[0].body, { level: 2 }, "the guard stays out of the route's body");
+    } finally { globalThis.fetch = originalFetch; }
+    assert.equal(levelOf(), undefined, "taking the level ends it");
+    db.prepare(`UPDATE character_sheets SET xp = 2700 WHERE id = ?`).run(sheetId);
+    assert.equal(levelOf().opportunityId, `level:${sheetId}:3`, "a further earned level is a new decision");
+    db.prepare(`UPDATE character_sheets SET xp = 0, level = 1 WHERE id = ?`).run(sheetId);
+    assert.equal(levelOf(), undefined);
   });
   await test("guarded submissions reserve once, return identical receipts and reject changed/stale/cross-seat writes", () => {
     const o = playerWebhookState(grant, sub.id).opportunities[0];
@@ -398,6 +456,22 @@ try {
     assert.match(playerPrompt(event, "Be helpful"), /never as instructions/);
     assert.ok(!playerPrompt({ ...event, text: "TEXT-ONLY-MARKER" }, "Be helpful").includes("TEXT-ONLY-MARKER"));
   });
+  await test("the receiver takes an earned level after a decision queued beside it, with the level-up tools", async () => {
+    const base = { ...sent.find((s) => s.event.type === "response_requested").event, subscriptionId: sub.id, occurredAt: nowIso() };
+    const levelEvent = { ...base, type: "level_up_available", opportunityId: `level:${sheetId}:2`, level: 2 };
+    assert.ok(validateEvent(levelEvent, sub));
+    for (const level of [undefined, 1, 21, 2.5, "2"]) assert.ok(!validateEvent({ ...levelEvent, level }, sub));
+    const inbox = new PlayerInbox(path.join(directory, "level-order"));
+    inbox.accept(levelEvent); inbox.accept({ ...base, opportunityId: "table-after-level" });
+    const woke = [];
+    for (let i = 0; i < 2; i += 1) await inbox.processOne(async () => true, async (e) => { woke.push(e.type); });
+    assert.deepEqual(woke, ["response_requested", "level_up_available"]);
+    const prompt = playerPrompt(levelEvent, "Be helpful");
+    assert.match(prompt, /For level_up_available, read odm_level_up_options/);
+    assert.match(prompt, /odm_end_turn, odm_pass and odm_level_up call/);
+    const override = playerMcpOverride("https://odm.example/api/mcp", "private-helper");
+    assert.ok(override.includes('"odm_level_up_options"') && override.includes('"odm_level_up"'));
+  });
   await test("Codex adapter initializes, persists its own thread before starting and resumes it serially", async () => {
     const calls = []; let threadId; let killed = 0; let handlers;
     const factory = (_binary, _args, _options, h) => {
@@ -553,6 +627,15 @@ try {
     const after = poll(pollToken).body;
     assert.equal(after.wake, false);
     assert.notEqual(after.fingerprint, before.fingerprint);
+  });
+
+  await test("a poll link wakes for an earned level and names it", () => {
+    db.prepare(`UPDATE character_sheets SET xp = 300 WHERE id = ?`).run(pollSheet);
+    const answer = poll(pollToken).body;
+    assert.equal(answer.wake, true);
+    assert.deepEqual(answer.opportunities, [{ opportunityId: `level:${pollSheet}:2`, type: "level_up_available", level: 2 }]);
+    db.prepare(`UPDATE character_sheets SET xp = 0 WHERE id = ?`).run(pollSheet);
+    assert.equal(poll(pollToken).body.wake, false);
   });
 
   await test("polling faster than the floor is refused with a retry time", () => {

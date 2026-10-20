@@ -18,8 +18,8 @@ const { atTable, throughLibrary, call, sheetRoute, campaignId, player, world, cl
   await openCreation();
 const builder = await openBuilder();
 const srd = await import("../src/lib/srd/index.ts");
-const { defaultArmor, matchArmor, isArmorProficient } = await import("../src/lib/srd/armor.ts");
-const { defaultLoadout, matchWeapon, isWeaponProficient, SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
+const { defaultArmor, armorNamed, isArmorProficient, matchArmor } = await import("../src/lib/srd/armor.ts");
+const { defaultLoadout, weaponNamed, isWeaponProficient, matchWeapon, SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
 const kits = await import("../src/lib/srd/starting-kit.ts");
 const { customClassOptions } = await import("../src/lib/characters/options.ts");
 
@@ -140,11 +140,11 @@ await test("A barbarian's starting equipment (SRD 5.1) is a greataxe or a martia
   const kit = kits.classKitFor("barbarian");
   // Whatever the choices, nothing in it is armor.
   const everything = kit.lines.flatMap((line) => line.options.flatMap((option) => option.items.map((item) => item.name)));
-  assert.deepEqual(everything.filter((name) => matchArmor(name)), []);
+  assert.deepEqual(everything.filter((name) => armorNamed(name)), []);
   const resolved = kits.startingKitFor(barbarian, null);
-  assert.deepEqual(resolved.items.filter((item) => matchArmor(item.name)).map((item) => item.name), []);
+  assert.deepEqual(resolved.items.filter((item) => matchArmor(item)).map((item) => item.name), []);
   assert.deepEqual(
-    resolved.items.filter((item) => matchWeapon(item.name)).map((item) => `${item.name} x${item.qty}`),
+    resolved.items.filter((item) => matchWeapon(item)).map((item) => `${item.name} x${item.qty}`),
     ["Greataxe x1", "Handaxe x2", "Javelin x4"],
   );
 });
@@ -186,12 +186,12 @@ await test("each of ODM's setting classes starts with a small fixed kit of its o
     assert.equal(kit.source, "odm", klass.id);
     assert.ok(kit.lines.every((line) => line.options.length === 1 && !line.options[0].slots), klass.id);
     const items = kits.startingKitFor(klass, null).items;
-    const weapons = items.map((item) => matchWeapon(item.name)).filter(Boolean);
+    const weapons = items.map((item) => matchWeapon(item)).filter(Boolean);
     assert.ok(weapons.length >= 1, `${klass.id} starts unarmed`);
     for (const weapon of weapons) {
       assert.ok(isWeaponProficient(klass.weapons, weapon), `${klass.id}: ${weapon.name}`);
     }
-    for (const armor of items.map((item) => matchArmor(item.name)).filter(Boolean)) {
+    for (const armor of items.map((item) => matchArmor(item)).filter(Boolean)) {
       assert.ok(isArmorProficient(klass.armor, armor), `${klass.id}: ${armor.name}`);
     }
   }
@@ -208,10 +208,10 @@ await test("a class no table describes (a content pack's own) starts with what i
 });
 
 await test("a pack's hammer and censer are gear, not the light hammer or the censer mace", () => {
-  assert.equal(matchWeapon("Hammer"), null);
-  assert.equal(matchWeapon("Censer"), null);
-  assert.equal(matchWeapon("Light Hammer")?.name, "Light Hammer");
-  assert.equal(matchWeapon("Censer Mace")?.name, "Censer Mace");
+  assert.equal(weaponNamed("Hammer"), null);
+  assert.equal(weaponNamed("Censer"), null);
+  assert.equal(weaponNamed("Light Hammer")?.name, "Light Hammer");
+  assert.equal(weaponNamed("Censer Mace")?.name, "Censer Mace");
 });
 
 // ---- the builder and the server ----
@@ -229,7 +229,7 @@ await test("a barbarian's armor class at creation is 10 + Dexterity + Constituti
   const { dex, con } = built.sheet.abilities;
   const expected = 10 + abilityMod(dex) + abilityMod(con);
   assert.equal(built.derived.ac, expected);
-  assert.ok(!built.sheet.equipment.some((item) => matchArmor(item.name)), JSON.stringify(built.sheet.equipment));
+  assert.ok(!built.sheet.equipment.some((item) => matchArmor(item)), JSON.stringify(built.sheet.equipment));
   const outcome = await atTable(built.sheet);
   assert.equal(outcome.status, 201, outcome.error);
   assert.equal(outcome.sheet.ac, expected);

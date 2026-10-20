@@ -91,6 +91,18 @@ await test("An srdName no list holds is asked again, from the model and the cons
   assert.equal(carried("Elisir strano"), undefined);
 });
 
+await test("An srdName that carries a bonus is asked again, with the bonus kept in the name, and nothing is granted.", async () => {
+  for (const srdName of ["Longsword +1", "+2 Plate", "Weapon, +1", "Shield +3"]) {
+    const out = await ai("grant_item", { characterId: hero.id, name: "Lama del destino", srdName, reason: "the chest" }, hero);
+    assert.equal(out.retry, true, `${srdName} was stored`);
+    assert.match(out.error, /carries a bonus, which belongs in name/, srdName);
+  }
+  assert.equal(carried("Lama del destino"), undefined);
+  const granted = await ai("grant_item", { characterId: hero.id, name: "Lama del destino +1", srdName: "Longsword", reason: "the chest" }, hero);
+  assert.equal(granted.ok, true, granted.error);
+  assert.equal(carried("Lama del destino +1").srdName, "Longsword");
+});
+
 await test("A spell named for a thing no row knows makes it a spell scroll, with no question asked.", async () => {
   const out = await ai("grant_item", { characterId: hero.id, name: "Rotolo di Dardo incantato", spell: "Magic Missile", reason: "the chest" }, hero);
   assert.equal(out.ok, true, out.error);

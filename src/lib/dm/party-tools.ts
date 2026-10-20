@@ -133,7 +133,7 @@ export function handlePartyStash(
       }
       const { srdName, tags, worth, spell } = taken.item;
       const added = addPartyItem(getParty(campaign.id).inventory, {
-        name,
+        name: taken.item.name,
         qty: taken.removed,
         weight: taken.item.weight,
         identified: taken.item.identified,
@@ -148,8 +148,8 @@ export function handlePartyStash(
       patchSheet(fresh.id, { equipment: taken.equipment });
       const party = updateParty(campaign.id, (current) => ({ ...current, inventory: added.inventory }));
       publishParty(campaign.id, party);
-      tableNote(campaign, `${fresh.name} puts ${name}${taken.removed > 1 ? ` x${taken.removed}` : ""} in the party's pack.`, "cue-bell");
-      return { ok: true, stowed: name, qty: taken.removed };
+      tableNote(campaign, `${fresh.name} puts ${taken.item.name}${taken.removed > 1 ? ` x${taken.removed}` : ""} in the party's pack.`, "cue-bell");
+      return { ok: true, stowed: taken.item.name, qty: taken.removed };
     }
 
     const party = getParty(campaign.id);
@@ -168,8 +168,8 @@ export function handlePartyStash(
     patchSheet(fresh.id, { equipment: granted.equipment });
     const next = updateParty(campaign.id, (current) => ({ ...current, inventory: taken.inventory }));
     publishParty(campaign.id, next);
-    tableNote(campaign, `${fresh.name} takes ${name}${taken.removed > 1 ? ` x${taken.removed}` : ""} from the party's pack.`, "cue-bell");
-    return { ok: true, took: name, qty: taken.removed };
+    tableNote(campaign, `${fresh.name} takes ${taken.item.name}${taken.removed > 1 ? ` x${taken.removed}` : ""} from the party's pack.`, "cue-bell");
+    return { ok: true, took: taken.item.name, qty: taken.removed };
   }
 
   // Money. Coins win over the whole-gold amount when both are sent, for the

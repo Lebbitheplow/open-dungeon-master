@@ -6,7 +6,7 @@ import type { BlockerTarget, StepBlock } from "./submit";
 // says how many there are and goes to each. Pure, for
 // scripts/test-builder-owed.mjs.
 
-const TARGET_WORDS: Record<BlockerTarget, string> = {
+export const TARGET_WORDS: Record<BlockerTarget, string> = {
   name: "Name",
   background: "Background",
   backgroundSkills: "Background skills",

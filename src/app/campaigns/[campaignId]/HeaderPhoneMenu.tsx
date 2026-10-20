@@ -1,7 +1,7 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { SoundDialog, soundSummary, type SoundSteering } from "@/app/campaigns/[campaignId]/SoundPanel";
@@ -37,12 +37,27 @@ export function HeaderPhoneMenu({
   const hint = (text: string) => <span className="session-menu-hint">{text}</span>;
   const narrationQuiet = narration.muted || !narration.unlocked;
   const narrationState = !narration.unlocked ? "Narration: tap to hear it" : narration.muted ? "Narration: muted" : "Narration: on";
+  // Narration the browser is holding until a tap, counted on the menu's
+  // button as the desktop header counts it on the narration icon.
+  const held = narrates && !narration.muted ? narration.held : 0;
+  // Whether the press began on "tap to hear it": the page's own pointerdown
+  // unlocks audio and re-renders before the row is selected, so toggling
+  // mute on the state at select time would switch narration off instead.
+  const enablingRef = useRef(false);
+  const notePress = () => {
+    enablingRef.current = !narration.unlocked && !narration.muted;
+  };
   const soundState = ambienceEnabled ? soundSummary(ambience) : null;
   return (
-    <div className="sm:hidden">
+    <div className="relative sm:hidden">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <button type="button" aria-label="Table menu" data-tour="header-menu" className={headerButtonClass(false)}>
+          <button
+            type="button"
+            aria-label={held > 0 ? `Table menu (${held} narration${held === 1 ? "" : "s"} waiting)` : "Table menu"}
+            data-tour="header-menu"
+            className={headerButtonClass(false)}
+          >
             <span className="tab-more-diamonds" aria-hidden="true">
               <i />
               <i />
@@ -56,11 +71,17 @@ export function HeaderPhoneMenu({
               <>
                 <DropdownMenu.Item
                   className={row}
+                  onPointerDown={notePress}
+                  onKeyDown={notePress}
                   onSelect={(event) => {
                     // The menu stays open so the volume below can be set.
                     event.preventDefault();
+                    const enabling = enablingRef.current;
+                    enablingRef.current = false;
                     narration.unlock();
-                    narration.setMuted(!narration.muted);
+                    if (!enabling) {
+                      narration.setMuted(!narration.muted);
+                    }
                   }}
                 >
                   <HeaderGlyph glyph="ui-speech" off={narrationQuiet} />
@@ -114,6 +135,16 @@ export function HeaderPhoneMenu({
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+      {held > 0 ? (
+        // Beside the button: its press effect clips what it holds.
+        <span
+          key={held}
+          aria-hidden
+          className="count-pop pointer-events-none absolute -top-1 left-6 z-10 min-w-4 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-center text-[10px] font-semibold leading-4 text-amber-950 shadow-glow-gold"
+        >
+          {held}
+        </span>
+      ) : null}
       {ambienceEnabled ? <SoundDialog open={soundOpen} onOpenChange={setSoundOpen} ambience={ambience} steering={sound} /> : null}
       <RulebookDialog open={rulebookOpen} onOpenChange={setRulebookOpen} />
     </div>

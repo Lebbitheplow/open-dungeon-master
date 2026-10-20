@@ -1,25 +1,31 @@
 import type { ClassRole } from "@/lib/srd/class-roles";
 import { textKey } from "@/lib/language/text-logic";
 
-// "How do you want to play?", for someone who does not yet know a class by
-// its name: each answer is a job at the table in plain words, the class
+// "In a fight, what's your job?", for someone who does not yet know a class
+// by its name: each answer is a job at the table in plain words, the class
 // roles it means (src/lib/srd/class-roles.ts), and the classes a first
 // character of that kind usually starts with. Suggestions only: the whole
 // catalog stays below, and nothing is picked until the player picks it.
+// The same five answers are the quick-build quiz's first question
+// (quickBuild.ts), in the words agreed for it on 2026-10-15, so a job
+// picked here carries into "Help me build". Magic is not a job: the quiz
+// asks it second, and a caster shows under the job it does.
 // Pure, for scripts/test-builder-playstyles.mjs.
 
-export type PlaystyleId = "front" | "hit" | "magic" | "help" | "sneak";
+export type PlaystyleId = "tank" | "dps" | "healer" | "support" | "utility";
 
-// `backgrounds` are the SRD backgrounds whose skills suit the playstyle,
-// offered on the first step before the class is: a soldier's Athletics for
-// the front line, a sage's Arcana for a caster, a criminal's Stealth for a
-// scout.
-export const PLAYSTYLES: ReadonlyArray<{ id: PlaystyleId; label: string; blurb: string; roles: ClassRole[]; first: string[]; backgrounds: string[] }> = [
-  { id: "front", label: "Stand in front", blurb: "Take the hits and keep the others safe.", roles: ["Tank"], first: ["fighter", "barbarian", "paladin"], backgrounds: ["soldier", "folk_hero"] },
-  { id: "hit", label: "Hit hard", blurb: "End fights fast, up close or from afar.", roles: ["DPS"], first: ["fighter", "ranger", "warlock", "rogue"], backgrounds: ["soldier", "outlander"] },
-  { id: "magic", label: "Cast spells", blurb: "Bend the battle with magic.", roles: ["Control"], first: ["wizard", "sorcerer", "warlock"], backgrounds: ["sage", "hermit"] },
-  { id: "help", label: "Help my friends", blurb: "Heal, protect and lift the party.", roles: ["Healer", "Support"], first: ["cleric", "bard", "druid"], backgrounds: ["acolyte", "folk_hero"] },
-  { id: "sneak", label: "Sneak and solve", blurb: "Scout ahead, pick locks, talk your way through.", roles: ["Utility"], first: ["rogue", "ranger", "bard"], backgrounds: ["criminal", "urchin", "charlatan"] },
+// `tag` is the job in the words a gamer already knows, printed in bold
+// brackets after the plain words: "Deal the damage (DPS)".
+// `backgrounds` are the SRD backgrounds whose skills suit the job, offered
+// on the first step before the class is: a soldier's Athletics for the
+// front line, an acolyte's Religion for a healer, a criminal's Stealth for
+// a scout.
+export const PLAYSTYLES: ReadonlyArray<{ id: PlaystyleId; label: string; tag: string; blurb: string; roles: ClassRole[]; first: string[]; backgrounds: string[] }> = [
+  { id: "tank", label: "Hold the line, take the hits", tag: "Tank", blurb: "Stand in front and keep the others safe.", roles: ["Tank"], first: ["fighter", "barbarian", "paladin"], backgrounds: ["soldier", "folk_hero"] },
+  { id: "dps", label: "Deal the damage", tag: "DPS", blurb: "End fights fast, with a blade, a bow or a spell.", roles: ["DPS"], first: ["fighter", "warlock", "ranger", "rogue"], backgrounds: ["soldier", "outlander"] },
+  { id: "healer", label: "Keep everyone alive", tag: "Healer", blurb: "Heal the hurt and bring the fallen back up.", roles: ["Healer"], first: ["cleric", "druid", "paladin"], backgrounds: ["acolyte", "hermit"] },
+  { id: "support", label: "Help the team, control the battlefield", tag: "Support / Control", blurb: "Lift your friends, hinder your foes, bend the fight with magic.", roles: ["Support", "Control"], first: ["bard", "wizard", "druid"], backgrounds: ["sage", "acolyte"] },
+  { id: "utility", label: "Scout, sneak, solve problems", tag: "Utility", blurb: "Scout ahead, pick locks, talk your way through.", roles: ["Utility"], first: ["rogue", "ranger", "bard"], backgrounds: ["criminal", "urchin", "charlatan"] },
 ];
 
 // Classes with the fewest choices to manage in play: a good first

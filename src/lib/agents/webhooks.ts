@@ -8,6 +8,7 @@ import { getActiveEncounter, turnKey } from "@/lib/db/encounters";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { getDmStatus } from "@/lib/dm/status";
 import { dmQueuePaused } from "@/lib/dm/queue";
+import { levelForXp } from "@/lib/srd";
 import { grantUser, type ConnectionGrant } from "@/lib/agents/grants";
 import { playerOpportunities, type PlayerOpportunity } from "./webhook-opportunities";
 
@@ -29,7 +30,7 @@ export type PlayerWebhookEvent = {
   version: 1; eventId: string; subscriptionId: string; campaignId: string;
   playerId: string; characterId: string; opportunityId: string;
   type: PlayerOpportunity["type"] | "campaign_paused" | "campaign_resumed" | "campaign_ended";
-  seq: number; occurredAt: string; pendingRollId?: string; phase?: "act" | "finish";
+  seq: number; occurredAt: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number;
   // A plain-language summary with the IDs a guarded write needs. Hosted
   // receivers that pass on only a text field (a Claude Code routine reads
   // just `text`) still tell their agent what woke it.
@@ -257,7 +258,7 @@ export type PollAnswer =
 type PollBody = {
   subscriptionId: string; campaignId: string; characterId: string;
   lifecycle: string; busy: boolean; wake: boolean; fingerprint: string;
-  opportunities: Array<{ opportunityId: string; type: PlayerOpportunity["type"]; phase?: "act" | "finish"; pendingRollId?: string }>;
+  opportunities: Array<{ opportunityId: string; type: PlayerOpportunity["type"]; phase?: "act" | "finish"; pendingRollId?: string; level?: number }>;
 };
 
 // What a poll link answers: the same opportunities a pushed webhook would
@@ -285,6 +286,7 @@ export function pollLinkAnswer(token: string, now = Date.now()): PollAnswer {
   const opportunities = state.opportunities.map((o) => ({
     opportunityId: o.opportunityId, type: o.type,
     ...(o.phase ? { phase: o.phase } : {}), ...(o.pendingRollId ? { pendingRollId: o.pendingRollId } : {}),
+    ...(o.level ? { level: o.level } : {}),
   }));
   const fingerprint = createHash("sha256")
     .update(JSON.stringify([state.lifecycle, opportunities.map((o) => o.opportunityId)]))
@@ -345,7 +347,10 @@ export function reserveWebhookWrite(grant: ConnectionGrant, input: { subscriptio
       (input.tool !== "odm_answer_roll" && opportunity.type === "roll_requested") ||
       (input.tool === "odm_take_action" && opportunity.phase === "finish") ||
       (input.tool === "odm_end_turn" && opportunity.type !== "turn_started") ||
-      (input.tool === "odm_pass" && opportunity.type !== "response_requested")) {
+      (input.tool === "odm_pass" && opportunity.type !== "response_requested") ||
+      // A level is taken only with odm_level_up, and odm_level_up takes
+      // nothing but a level: never a way to act at the table out of turn.
+      ((input.tool === "odm_level_up") !== (opportunity.type === "level_up_available"))) {
       throw new Error("That opportunity is stale or does not permit this submission. Read the table again.");
     }
     db.prepare(`INSERT INTO player_webhook_writes (subscription_id, opportunity_id, tool, fingerprint) VALUES (?, ?, ?, ?)`)
@@ -418,6 +423,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   const held = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'floor_changed' AND json_extract(payload_json, '$.floor.mode') = 'hold'`)
     .get(campaign.id) as { seq: number | null };
   const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0);
+  const sheet = getSheetForUser(campaign.id, grant.userId);
   const busy = Boolean(running) || !["idle", "awaiting_rolls"].includes(status);
   const opportunities = playerOpportunities({
     active: campaign.status === "active", paused, busy,
@@ -428,12 +434,15 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
       id: encounter.id, characterId: entry.characterId, userId: entry.userId, key: turnKey(encounter), waitingSeq: encounter.waitingSeq,
     } : null,
     narration, lastPlayerSeq: Math.max(last.seq ?? 0, passed.seq ?? 0),
+    level: sheet?.id === sub.character_id && !sheet.isCompanion ? { current: sheet.level, earned: Math.min(20, levelForXp(sheet.xp)) } : null,
   });
-  return { opportunities: opportunities.map((o) => ({ ...o, opportunityId: `${o.opportunityId}:gate:${gate}` })), busy,
+  // A pause or hold re-invites a table decision it interrupted. A level is
+  // the same decision before and after one, so it keeps its ID.
+  return { opportunities: opportunities.map((o) => ({ ...o, opportunityId: o.type === "level_up_available" ? o.opportunityId : `${o.opportunityId}:gate:${gate}` })), busy,
     lifecycle: campaign.status === "ended" ? "ended" : campaign.status !== "active" || paused ? "paused" : "active" };
 }
 
-function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish" }, now: number) {
+function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number }, now: number) {
   // Every tick offers every open opportunity again. Only a new or cancelled
   // one is written, so skip building its text (a campaign and sheet read).
   const queued = getDatabase().prepare(`SELECT state FROM player_webhook_deliveries WHERE subscription_id = ? AND opportunity_id = ?`)
@@ -462,6 +471,7 @@ function eventText(sub: Subscription, grant: ConnectionGrant, event: Omit<Player
   const what = event.type === "roll_requested" ? `a roll is waiting for you in ${at}.`
     : event.type === "turn_started" ? (event.phase === "finish" ? `your combat turn in ${at} is ready to end.` : `it is your turn in combat in ${at}.`)
     : event.type === "response_requested" ? `the table in ${at} may want your response.`
+    : event.type === "level_up_available" ? `your experience in ${at} has earned level ${event.level}. Answer any roll or turn first, then read odm_level_up_options and take it with odm_level_up.`
     : event.type === "campaign_paused" ? `${at} is paused.`
     : event.type === "campaign_resumed" ? `${at} has resumed.`
     : `${at} has ended.`;
