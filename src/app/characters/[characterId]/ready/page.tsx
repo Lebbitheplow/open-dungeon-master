@@ -68,9 +68,13 @@ export default function HeroReadyPage({ params }: { params: Promise<{ characterI
 
   // Focus moves to the heading once, when the page has something to say,
   // so a screen reader starts at the character's name.
+  // Deferred a tick: in the apps the heading is attached after this effect
+  // runs on the render that loads it, and a focus() then found no element.
   const loaded = character !== null;
   useEffect(() => {
-    if (loaded) heading.current?.focus();
+    if (!loaded) return;
+    const id = window.setTimeout(() => heading.current?.focus(), 0);
+    return () => window.clearTimeout(id);
   }, [loaded]);
 
   // The portrait paints in the background; re-read until it lands.

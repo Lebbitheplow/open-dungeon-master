@@ -42,7 +42,14 @@ export default {
       let save = saved();
       await skip.check();
       await save;
-      await page.reload();
+      // A fresh read of the page: the shell's reload lands on its own home
+      // screen, so in the app the page is left and opened again.
+      if (t.app) {
+        await t.open("/characters");
+        await t.open(`/characters/${ids.library}/ready`);
+      } else {
+        await page.reload();
+      }
       await eventually(() => skip.isChecked(), { timeoutMs: 20_000, label: "the account kept 'Don't show this again'" });
       save = saved();
       await skip.uncheck();
