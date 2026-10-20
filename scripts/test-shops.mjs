@@ -87,6 +87,32 @@ test("stocking from a pool sizes the shelf to the settlement", () => {
   assert.equal(stockFromPool([{ name: "Free", cost: "" }], "city", random).length, 0);
 });
 
+test("a general store always carries the everyday basics, one line each, ahead of what the dice pick", () => {
+  let seed = 7;
+  const random = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const pool = [
+    ...Array.from({ length: 40 }, (_, index) => ({ name: `Thing ${index}`, cost: `${index + 1} gp` })),
+    { name: "Torch", cost: "1 cp", staple: true },
+    { name: "Rations", cost: "5 sp", staple: true },
+  ];
+  const shelf = stockFromPool(pool, "hamlet", random);
+  assert.deepEqual(shelf.slice(0, 2).map((line) => line.itemName), ["Rations", "Torch"]);
+  assert.equal(shelf.length, 8, "the staples come beside the hamlet's six lines");
+  // From the pack itself, when the runner has it.
+  const staples = stockPool("general").filter((item) => item.staple).map((item) => item.name);
+  if (staples.length) {
+    assert.ok(staples.includes("Torch"), staples.join(", "));
+    assert.equal(staples.filter((name) => /^rations/i.test(name)).length, 1, "one line of rations across the pack's two editions");
+    assert.ok(!staples.some((name) => /taggit|silk/i.test(name)), staples.join(", "));
+    assert.deepEqual(stockPool("smith").filter((item) => item.staple), [], "only the general store has staples");
+    // Every page of the pack, not the first 200 rows by name, and none of
+    // what a general store never sells.
+    const general = stockPool("general").map((item) => item.name);
+    assert.ok(general.includes("Waterskin") && general.includes("Whetstone"), "the pool stopped partway through the alphabet");
+    assert.ok(!general.some((name) => /^(camel|galley|warship|cow|cinnamon|assassin's blood|airship)$/i.test(name)), general.join(", "));
+  }
+});
+
 test("restock comes due by the clock", () => {
   assert.equal(restockDue({ restockDays: 7, restockedAt: 0 }, 6 * 1440, 1440), false);
   assert.equal(restockDue({ restockDays: 7, restockedAt: 0 }, 7 * 1440, 1440), true);

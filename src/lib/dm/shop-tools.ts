@@ -159,21 +159,45 @@ function publishSheet(campaign: Campaign, sheetId: string) {
 // The pool a shop of this kind stocks from: the pack's items of the right
 // kinds, filtered by the kind's words when it has any. Once per name: the
 // pack files some items under two documents, and a shelf with two "Barrel"
-// lines sells one of them and strands the other.
-export function stockPool(kind: string): Array<{ name: string; cost: string }> {
+// lines sells one of them and strands the other. The first item each of the
+// kind's staples names is marked, and always goes on the shelf.
+export function stockPool(kind: string): Array<{ name: string; cost: string; staple?: boolean }> {
   const spec = KIND_POOL[normalizeShopKind(kind)];
-  const pool: Array<{ name: string; cost: string }> = [];
+  const pool: Array<{ name: string; cost: string; staple?: boolean }> = [];
   const seen = new Set<string>();
+  const stapled = new Set<string>();
   for (const itemKind of spec.kinds) {
-    for (const item of searchItems({ kind: itemKind, limit: 400 })) {
-      if (!item.cost || (spec.match && !spec.match.test(item.name)) || seen.has(textKey(item.name))) {
+    for (const item of packItemsOfKind(itemKind)) {
+      if (!item.cost || (spec.match && !spec.match.test(item.name)) || spec.skip?.includes(item.category) || seen.has(textKey(item.name))) {
         continue;
       }
       seen.add(textKey(item.name));
-      pool.push({ name: item.name, cost: item.cost });
+      const staple = spec.staples?.exec(item.name)?.[1];
+      const first = staple !== undefined && !stapled.has(textKey(staple));
+      if (first) {
+        stapled.add(textKey(staple));
+      }
+      pool.push({ name: item.name, cost: item.cost, ...(first ? { staple: true } : {}) });
     }
   }
   return pool;
+}
+
+// Every pack item of one kind. The search hands back at most 200 rows a call,
+// sorted by name, so one call stocked a general store from the gear before
+// "M" (no torch, rope or rations, ever) and a curiosity shop from the first
+// 200 of some 1,600 magic items: every page is read until the rows run out.
+const PAGE = 200;
+function packItemsOfKind(kind: "weapon" | "armor" | "gear" | "magic_item"): ReturnType<typeof searchItems> {
+  const found: ReturnType<typeof searchItems> = [];
+  for (let offset = 0; offset < PAGE * 20; offset += PAGE) {
+    const page = searchItems({ kind, limit: PAGE, offset });
+    found.push(...page);
+    if (page.length < PAGE) {
+      break;
+    }
+  }
+  return found;
 }
 
 // A restock: a prepared shelf is refilled to what its author wrote; a shop

@@ -561,6 +561,12 @@ async function playRun(runNumber) {
 
 // ---- the runs -------------------------------------------------------------------
 say(`smoke-local ${VERSION}: ${LABEL} | provider ${PROVIDER} | ${PROVIDER === "custom" ? args.url : process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"} | ${args.scenario} | ${RUNS} run(s) x ${MAX_TURNS} turn(s)`);
+// A worktree has no data/ of its own: without the pack every shop opens bare
+// and every item lookup finds nothing, which reads as the model's fault.
+const contentDb = process.env.CONTENT_DB_PATH || path.join(process.cwd(), "data", "content", "open5e.sqlite");
+if (!fs.existsSync(contentDb)) {
+  say(`  warning: no content pack at ${contentDb}; shops open with bare shelves (set CONTENT_DB_PATH)`);
+}
 const runs = [];
 for (let run = 1; run <= RUNS; run += 1) {
   runs.push(await playRun(run));
