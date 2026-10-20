@@ -32,6 +32,8 @@ import { concentrationSwapFor } from "@/lib/dm/concentration-confirm";
 import { inCoordination } from "@/lib/dm/coordination";
 import { confirmsSwap, swapQuestion } from "@/lib/dm/concentration-confirm-logic";
 import { tableAuthors } from "@/lib/db/homebrew";
+import { tableBreakOn } from "@/lib/dm/table-break";
+import { breakRefusal } from "@/lib/dm/table-break-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -92,6 +94,13 @@ export async function POST(
   }
 
   const { kind } = parsed.data;
+  // A table break (src/lib/dm/table-break.ts) stops play where it stands:
+  // table talk goes on, nothing in character does, and the floor underneath
+  // is left alone so Resume picks up exactly there.
+  const tableBreak = kind === "ooc" ? null : tableBreakOn(campaignId);
+  if (tableBreak) {
+    return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
+  }
   const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
   // Floor control: during a spotlight only the named players may act (ooc is
   // always allowed); the floor releases once ALL of them have answered.

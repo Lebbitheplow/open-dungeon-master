@@ -23,7 +23,7 @@ import { createDmJobControl, jobDeadlineMs, jobStage, runInDmJob, viewOf, type D
 import { describeStage, stalledReason, type DmJobKind, type DmJobView } from "@/lib/dm/job-stage-logic";
 import { haltAbandonedJob } from "@/lib/dm/turn-halt";
 
-type Pause = { reason: string; promise: Promise<void>; resolve: () => void };
+type Pause = { reasons: string[]; promise: Promise<void>; resolve: () => void };
 
 declare global {
   var __odmDmQueues: Map<string, Promise<void>> | undefined;
@@ -52,22 +52,43 @@ function watchdog() {
 
 // A paused campaign (docs/vtt-parity-implementation-plan.md 9.1, the
 // X-card) keeps its queue but runs nothing: every job waits at the gate
-// until someone resumes it. Pausing twice keeps the first reason.
+// until someone resumes it. A campaign can be paused for more than one
+// reason at once (the X-card raised during a table break): each reason is
+// lifted on its own, and the gate opens only once none is left. Pausing
+// again for a reason already held changes nothing, and the first reason
+// stays the one dmQueuePaused names.
 export function pauseDmQueue(campaignId: string, reason: string): void {
-  if (pauses().has(campaignId)) {
+  const held = pauses().get(campaignId);
+  if (held) {
+    if (!held.reasons.includes(reason)) {
+      held.reasons.push(reason);
+    }
     return;
   }
   let resolve: () => void = () => {};
   const promise = new Promise<void>((done) => {
     resolve = done;
   });
-  pauses().set(campaignId, { reason, promise, resolve });
+  pauses().set(campaignId, { reasons: [reason], promise, resolve });
 }
 
-export function resumeDmQueue(campaignId: string): boolean {
+// Lifts one reason, or with none named every reason at once (a deleted
+// campaign). True when something was lifted; the queue runs again only when
+// no reason is left.
+export function resumeDmQueue(campaignId: string, reason?: string): boolean {
   const pause = pauses().get(campaignId);
   if (!pause) {
     return false;
+  }
+  if (reason !== undefined) {
+    const at = pause.reasons.indexOf(reason);
+    if (at < 0) {
+      return false;
+    }
+    pause.reasons.splice(at, 1);
+    if (pause.reasons.length) {
+      return true;
+    }
   }
   pauses().delete(campaignId);
   pause.resolve();
@@ -75,7 +96,12 @@ export function resumeDmQueue(campaignId: string): boolean {
 }
 
 export function dmQueuePaused(campaignId: string): string | null {
-  return pauses().get(campaignId)?.reason ?? null;
+  return pauses().get(campaignId)?.reasons[0] ?? null;
+}
+
+// Whether the campaign is paused for this reason, whatever else holds it.
+export function dmQueuePausedFor(campaignId: string, reason: string): boolean {
+  return pauses().get(campaignId)?.reasons.includes(reason) ?? false;
 }
 
 function gate(campaignId: string): Promise<void> {

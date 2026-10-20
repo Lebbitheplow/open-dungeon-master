@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Coffee } from "lucide-react";
 import { memo, useState, type ComponentProps, type ReactNode } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -21,6 +21,7 @@ import { SoundControl, type SoundSteering } from "@/app/campaigns/[campaignId]/S
 import { LayoutMenu } from "@/app/campaigns/[campaignId]/TableLayoutParts";
 import { HeaderPhoneMenu } from "@/app/campaigns/[campaignId]/HeaderPhoneMenu";
 import type { LayoutSeat } from "@/app/campaigns/[campaignId]/table-layout-store";
+import type { TableBreakControl } from "@/app/campaigns/[campaignId]/TableBreakBanner";
 
 // The narration group in the header from sm up: the familiar icon button
 // with an inline slider. Below sm the header has no spare width, and the same
@@ -106,6 +107,7 @@ export const SessionHeader = memo(function SessionHeader({
   ribbon,
   stage,
   layoutSeat,
+  tableBreak,
 }: {
   title: string;
   scene: string;
@@ -141,6 +143,9 @@ export const SessionHeader = memo(function SessionHeader({
   // Whose arrangement the layout menu edits (TableLayoutParts.tsx): the
   // DM seat keeps one, every player seat another.
   layoutSeat?: LayoutSeat;
+  // Pause the table for a break (TableBreakBanner.tsx): any person in a
+  // seat, from sm up here and in the phone's table menu below it.
+  tableBreak?: TableBreakControl;
 }) {
   // Narration switched off server-wide: no passage is read aloud, so the
   // narration volume would steer nothing (issue 275; the lobby's own row
@@ -270,6 +275,11 @@ export const SessionHeader = memo(function SessionHeader({
           </Tooltip>
         ) : null}
         {layoutSeat ? <LayoutMenu seat={layoutSeat} /> : null}
+        {tableBreak ? (
+          <div className="hidden sm:flex">
+            <TableBreakButton control={tableBreak} />
+          </div>
+        ) : null}
         <div className="hidden sm:flex">
           <RulebookButton />
         </div>
@@ -293,6 +303,7 @@ export const SessionHeader = memo(function SessionHeader({
           ambience={ambience}
           sound={sound}
           onHelp={onHelp}
+          tableBreak={tableBreak}
         />
         </div>
         <Tooltip content="All campaigns" side="bottom">
@@ -311,6 +322,31 @@ export const SessionHeader = memo(function SessionHeader({
     </header>
   );
 });
+
+// Pause for a break, or, while one is on, Resume for those who may lift it.
+// Lit while the table is paused; for anyone else it only says so.
+function TableBreakButton({ control }: { control: TableBreakControl }) {
+  const label = !control.paused
+    ? "Pause the table for a break"
+    : control.mayResume
+      ? "Resume the table"
+      : "The table is paused";
+  return (
+    <Tooltip content={label} side="bottom">
+      <button
+        type="button"
+        onClick={control.paused ? control.onResume : control.onPause}
+        disabled={control.paused && !control.mayResume}
+        aria-label={label}
+        aria-pressed={control.paused}
+        data-tour="header-pause"
+        className={headerButtonClass(control.paused)}
+      >
+        <Coffee aria-hidden="true" className="size-5 text-amber-200" />
+      </button>
+    </Tooltip>
+  );
+}
 
 // The rulebook, laid open over the table so a rule can be checked without
 // leaving the session.

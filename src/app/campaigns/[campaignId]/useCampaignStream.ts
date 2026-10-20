@@ -43,6 +43,7 @@ import { navigateTo } from "@/lib/navigation";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
 import { registerBrowserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
+import type { TableBreak } from "@/lib/dm/table-break-logic";
 
 export type DmStatus =
   | "idle"
@@ -263,6 +264,8 @@ export type CampaignState = {
   handout: HandoutShown | null;
   // Someone raised the X-card and the table is paused; nobody is named.
   safetyPause: { at: number; reason: "x_card" } | null;
+  // A table break: who paused and since when (src/lib/dm/table-break.ts).
+  tableBreak: TableBreak | null;
   narrationAudio: Record<string, string>;
   // `live` marks a passage offered while it is still being rendered
   // (tts_stream): heard now, by whoever is at the table now.
@@ -377,6 +380,7 @@ const initialState: CampaignState = {
   camera: null,
   handout: null,
   safetyPause: null,
+  tableBreak: null,
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
@@ -689,6 +693,16 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "safety_resumed":
           next.safetyPause = null;
+          return next;
+        case "table_paused":
+          next.tableBreak = {
+            at: Number(payload.at ?? Date.now()),
+            userId: String(payload.userId ?? ""),
+            name: String(payload.name ?? "Someone"),
+          };
+          return next;
+        case "table_resumed":
+          next.tableBreak = null;
           return next;
         case "location_map_ready":
           next.locations = state.locations.map((location) =>
@@ -1059,6 +1073,8 @@ const PERSISTED_EVENTS = [
   "handout_dismissed",
   "x_card",
   "safety_resumed",
+  "table_paused",
+  "table_resumed",
   // Each of these has a case above and was published for the table, but was
   // never listened for, so it only showed after a reload: the party record
   // (purse, pack, travel formation), a painted NPC portrait, the Director's
@@ -1276,6 +1292,7 @@ export function useCampaignStream(campaignId: string) {
           activeSheetId: data.activeSheetId ?? "",
           handout: data.handout ?? null,
           safetyPause: data.safetyPause ?? null,
+          tableBreak: data.tableBreak ?? null,
           titleCard: data.titleCard ?? null,
           titleCardQueue: [],
           lastSeq,

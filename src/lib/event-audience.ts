@@ -155,6 +155,9 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // Safety: the X-card is for everyone by definition.
   x_card: TABLE,
   safety_resumed: TABLE,
+  // A table break names who paused: everyone is told, as at a real table.
+  table_paused: TABLE,
+  table_resumed: TABLE,
   // Media and sound.
   image_ready: TABLE,
   media_status: TABLE,

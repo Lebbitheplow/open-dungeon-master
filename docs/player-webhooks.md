@@ -420,10 +420,13 @@ Sources: [Claude Code routines](https://code.claude.com/docs/en/routines.md),
 
 ## Pause and stop
 
-Lobby, held floor, safety pause, narration in progress and another player's
-turn suppress play opportunities. A pending roll wakes only the owner of
-the subscribed active character. After a safety or floor pause, fresh
-opportunity IDs let an unfinished decision resume. An open-floor narration
+Lobby, held floor, safety pause, a table break, narration in progress and
+another player's turn suppress play opportunities, and a table break reports
+the lifecycle `paused` (`campaign_paused`, then `campaign_resumed`) like the
+X-card. A pending roll wakes only the owner of the subscribed active
+character. After a safety, break or floor pause, fresh opportunity IDs let an
+unfinished decision resume. An agent can never pause or resume a table
+break: only the people at the table can. An open-floor narration
 notification invites the agent to inspect the passage; it should speak
 only when addressed or when the scene calls for party action.
 
@@ -507,7 +510,7 @@ The agent reads the table with `odm_get_campaign`, `odm_get_sheet` (the
 table's copy of its character, not the library copy), `odm_get_whispers`
 (the DM's private whispers, which the transcript never carries) and
 `odm_get_messages`. Every tool result stays under the agent's result cap
-as valid JSON. `odm_get_campaign` puts the safety pause, DM status, floor,
+as valid JSON. `odm_get_campaign` puts the safety pause, table break, DM status, floor,
 caps, pending rolls and encounter first, then the newest messages that
 fit; `history.olderBefore` pages further back through `odm_get_messages`.
 
