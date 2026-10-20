@@ -37,8 +37,12 @@ export type GenerateInput = {
   enemyCount: number;
   // How far the nearest enemy stands from the party as the fight opens, in
   // tiles, when the story has already said (a blow struck at arm's length
-  // must not open across the field). Absent, the sides take opposite edges.
+  // must not open across the field). Absent, an ambush and a fight indoors
+  // open CLOSE_OPENING_TILES apart, and anything else on opposite edges.
   enemyDistanceTiles?: number;
+  // One side caught the other unawares (start_encounter's ambush or
+  // surprised): it struck from close by.
+  ambush?: boolean;
   // Overrides for a person building a map on purpose: when the DM says "cave,
   // dark" outright, their answer wins over the scene's.
   theme?: MapTheme;
@@ -342,6 +346,12 @@ function pickSpawns(
   return picked;
 }
 
+// Thirty feet: one move puts a melee fighter beside the nearest enemy. Thugs
+// who burst through an inn room's door, goblins who leap from the rocks
+// overhead, opened 55 to 80 feet apart on the default board, and every first
+// round went on walking (the skirmish and town smokes, 2026-10-20).
+export const CLOSE_OPENING_TILES = 6;
+
 export function generateBattleMap(input: GenerateInput): GeneratedMap {
   const width = Math.min(MAP_SIZE.maxWidth, Math.max(MAP_SIZE.minWidth, input.width ?? 20));
   const height = Math.min(MAP_SIZE.maxHeight, Math.max(MAP_SIZE.minHeight, input.height ?? 15));
@@ -393,9 +403,10 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
   const pcRange: [number, number] = flip ? [width - 1 - band, width - 1] : [1, 1 + band];
   const enemyRange: [number, number] = flip ? [1, 1 + band] : [width - 1 - band, width - 1];
   let pcSpawns = pickSpawns(tiles, width, height, rng, pcRange[0], pcRange[1], input.pcCount, taken);
+  const opening = input.enemyDistanceTiles ?? (input.ambush || theme === "interior" ? CLOSE_OPENING_TILES : undefined);
   const pickEnemies = (party: XY[]) =>
-    input.enemyDistanceTiles && party.length
-      ? pickSpawnsAtDistance(tiles, width, height, rng, party, Math.max(1, Math.round(input.enemyDistanceTiles)), input.enemyCount, taken)
+    opening && party.length
+      ? pickSpawnsAtDistance(tiles, width, height, rng, party, Math.max(1, Math.round(opening)), input.enemyCount, taken)
       : pickSpawns(tiles, width, height, rng, enemyRange[0], enemyRange[1], input.enemyCount, taken);
   let enemySpawns = pickEnemies(pcSpawns);
 

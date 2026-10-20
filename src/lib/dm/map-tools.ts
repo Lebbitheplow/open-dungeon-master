@@ -101,6 +101,9 @@ export function createBattleMapForEncounter(
   scene?: string,
   // Where the enemy comes from against the travel formation (issue 230).
   from: "ahead" | "behind" = "ahead",
+  // One side caught the other unawares: the board opens close
+  // (battlemap/generate.ts CLOSE_OPENING_TILES) unless distanceFeet said.
+  ambush = false,
 ): { map: BattleMap; formation: string } | null {
   const location = getCurrentLocation(campaign.id);
   const generated = generateBattleMap({
@@ -109,6 +112,7 @@ export function createBattleMapForEncounter(
     pcCount: sheets.length,
     enemyCount: enemies.length,
     enemyDistanceTiles: distanceFeet ? Math.max(1, Math.round(distanceFeet / 5)) : undefined,
+    ambush,
   });
   const map = createBattleMap({
     encounterId: encounter.id,

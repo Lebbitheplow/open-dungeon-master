@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { generateBattleMap, fnv1a, mulberry32 } = await import("../src/lib/battlemap/generate.ts");
+const { CLOSE_OPENING_TILES, generateBattleMap, fnv1a, mulberry32 } = await import("../src/lib/battlemap/generate.ts");
 const { TERRAIN, tileIndex } = await import("../src/lib/battlemap/types.ts");
 
 let passed = 0;
@@ -74,6 +74,15 @@ test("all spawns are mutually reachable", () => {
     for (const spot of [...map.pcSpawns, ...map.enemySpawns]) {
       assert.ok(seen.has(tileIndex(map.width, spot.x, spot.y)), `${seedText} spawn unreachable`);
     }
+  }
+});
+
+test("a fight indoors or from ambush opens thirty feet apart unless the story said how far", () => {
+  const nearest = (map) => Math.min(...map.enemySpawns.flatMap((enemy) => map.pcSpawns.map((pc) => Math.max(Math.abs(pc.x - enemy.x), Math.abs(pc.y - enemy.y)))));
+  for (let seed = 1; seed <= 6; seed += 1) {
+    assert.equal(nearest(generateBattleMap({ ...base, seed, scene: "tavern" })), CLOSE_OPENING_TILES, `tavern, seed ${seed}`);
+    assert.equal(nearest(generateBattleMap({ ...base, seed, scene: "plains", ambush: true })), CLOSE_OPENING_TILES, `ambush, seed ${seed}`);
+    assert.equal(nearest(generateBattleMap({ ...base, seed, scene: "tavern", enemyDistanceTiles: 2 })), 2, `told, seed ${seed}`);
   }
 });
 
