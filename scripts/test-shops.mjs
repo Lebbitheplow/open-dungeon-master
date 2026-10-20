@@ -234,20 +234,32 @@ test("selling pays half list for a known item and restocks the shelf", () => {
   assert.match(String(lacking.error), /does not carry "Longsword"/);
 });
 
-test("a keeper buys a magic item back at half what the shelf would ask, and prices none too rare to stock", () => {
+test("a keeper buys a magic item back at half what the shelf would ask, and none rarer than the shop sells", () => {
   if (!stockPool("curiosities").length) {
     return; // the rarity comes from the content pack
   }
   const owner = createUser("wren", "x");
-  const wren = createSheet(campaign.id, owner.id, 3, sheetInput("Wren", [{ name: "Potion of Climbing", qty: 1 }, { name: "Ring of Regeneration", qty: 1 }], 0));
+  const carried = [
+    { name: "Potion of Climbing", qty: 1 },
+    { name: "Cloak of Protection", qty: 1 },
+    { name: "Ring of Regeneration", qty: 1 },
+  ];
+  const wren = createSheet(campaign.id, owner.id, 3, sheetInput("Wren", carried, 0));
   const odd = insertShop(campaign.id, { name: "Odd Lots", kind: "curiosities", size: "village", markup: 1, stock: [] });
   const sold = handleSellItem(campaign, JSON.stringify({ characterId: wren.id, shop: odd.id, item: "Potion of Climbing" }));
   assert.equal(sold.ok, true, JSON.stringify(sold));
   assert.equal(getSheetById(wren.id).gold, 25, "half the 50 gp a common potion is worth");
   assert.equal(getShop(odd.id).stock.find((line) => line.itemName === "Potion of Climbing").priceCp, 5000);
+  const cloak = handleSellItem(campaign, JSON.stringify({ characterId: wren.id, shop: odd.id, item: "Cloak of Protection", priceCp: 100 }));
+  assert.equal(cloak.refused, "rules", JSON.stringify(cloak));
+  assert.match(String(cloak.error), /uncommon magic item changes hands only in a city/);
   const ring = handleSellItem(campaign, JSON.stringify({ characterId: wren.id, shop: odd.id, item: "Ring of Regeneration" }));
-  assert.equal(ring.retry, true, JSON.stringify(ring));
-  assert.match(String(ring.error), /pass priceCp/);
+  assert.equal(ring.refused, "rules", JSON.stringify(ring));
+  assert.match(String(ring.error), /only by the wealthiest nobles/);
+  assert.equal(getSheetById(wren.id).equipment.length, 2, "a refused sale took something");
+  const city = insertShop(campaign.id, { name: "The Gilded Owl", kind: "curiosities", size: "city", markup: 1, stock: [] });
+  assert.equal(handleSellItem(campaign, JSON.stringify({ characterId: wren.id, shop: city.id, item: "Cloak of Protection" })).ok, true);
+  assert.equal(getSheetById(wren.id).gold, 225, "half the cloak's 400 gp");
 });
 
 test("a haggle moves the markup a step and is one try per character", () => {

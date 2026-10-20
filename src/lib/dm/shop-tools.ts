@@ -14,7 +14,7 @@ import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
-import { keepsFullValue, listPriceCp } from "@/lib/dm/trade-value";
+import { keepsFullValue, listPriceCp, magicValueOf } from "@/lib/dm/trade-value";
 import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addStock,
@@ -35,7 +35,6 @@ import {
   stockFromPool,
   takeStock,
   type Shop,
-  type ShopSize,
 } from "@/lib/dm/shop-logic";
 import { magicItemValueCp, pricedRarity } from "@/lib/srd/magic-item-value";
 import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
@@ -204,17 +203,6 @@ function baseCostLookup(): (base: string) => number | null {
     }
   }
   return (base) => prices.get(textKey(base)) ?? prices.get(textKey(`${base} armor`)) ?? null;
-}
-
-// What the keeper pays for a magic item works from what the shelf would ask
-// for it: its rarity's value, when a shop of this size sells that rarity.
-// Anything rarer is no stock of theirs, and the DM names the price.
-function shelfMagicValueCp(name: string, size: ShopSize): number | null {
-  const wanted = textKey(name);
-  const row = searchItems({ q: name, kind: "magic_item", limit: 50 }).find(
-    (item) => textKey(item.name) === wanted && SHELF_RARITIES[size].includes(pricedRarity(item.rarity) ?? ""),
-  );
-  return row ? magicItemValueCp(row, baseCostLookup()) : null;
 }
 
 // Every pack item of one kind. The search hands back at most 200 rows a call,
@@ -392,10 +380,18 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   }
   const line = sheet.equipment.find((item) => textKey(item.name) === textKey(args.item)) ?? { name: args.item };
   const carried = line.name;
+  // A shop buys the magic it would sell (SRD 5.2, Magic Item Rarity). Anything
+  // rarer finds a buyer among "the wealthiest nobles" (SRD 5.1, Selling
+  // Treasure), whom the story provides and purchase settles.
+  const magic = magicValueOf(line);
+  if (magic && !SHELF_RARITIES[shop.size].includes(magic.rarity)) {
+    const where = SHELF_RARITIES.city.includes(magic.rarity) ? "changes hands only in a city" : "is bought by no shop, only by the wealthiest nobles";
+    return { error: `${shop.name} does not buy ${carried}: a ${magic.rarity} magic item ${where}. A buyer the story provides is settled with purchase. Nothing was sold.`, refused: "rules" };
+  }
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure), priced by the worth they were given; a name is never
   // read for a price (src/lib/dm/trade-value.ts).
-  const listCp = listPriceCp(line) ?? shelfMagicValueCp(carried, shop.size);
+  const listCp = listPriceCp(line);
   const each = listCp !== null ? (keepsFullValue(line) ? listCp : offerPriceCp(listCp)) : args.priceCp ?? null;
   if (each === null) {
     return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.`, retry: true };
