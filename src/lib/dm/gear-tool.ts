@@ -144,7 +144,6 @@ export function handleItemCall(
       return handOver(campaign, turn, encounter, sheet, to, row, qty, reason);
     }
   }
-  return retry("Nothing to do.");
 }
 
 // ---- wearing and holding ----
