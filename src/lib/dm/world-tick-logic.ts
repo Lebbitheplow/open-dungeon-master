@@ -39,6 +39,8 @@ export type TickConfig = {
   encounter: { grace: number; slope: number; cap: number };
   worldArcSlope: number;
   worldArcCap: number;
+  // What an encounter spark asks of the DM; the balanced wording when unset.
+  encounterText?: string;
 };
 
 // Permille ramps: expected intervals of roughly ~20 turns (surprise),
@@ -112,6 +114,38 @@ const SURPRISE_SPARK =
 const ENCOUNTER_SPARK =
   "Something finds the party: an encounter fitting the current location and hour arrives on its own (a patrol, a beast, a traveler, trouble). It need not be hostile; if violence breaks out, use start_encounter.";
 
+// A table's combat pace (issue #432, the campaign's combatPace): the
+// encounter dice relative to the server's own (so the DM_TICK_* knobs still
+// set the middle), and what the spark asks for. Fewer fights waits twice as
+// long before the first, climbs at half the rate to half the cap, and asks
+// for something the party can get past; more fights does the reverse and
+// asks for trouble that wants a fight. Balanced is the config as given.
+// Averages at the defaults: about 60 turns, 33, and 21.
+export type CombatPace = "rare" | "balanced" | "frequent";
+
+const RARE_ENCOUNTER_SPARK =
+  "Something finds the party: an encounter fitting the current location and hour arrives on its own (a traveler, a patrol, a wary beast). Make it something they can talk, sneak or bargain past; use start_encounter only if the players choose violence.";
+const FREQUENT_ENCOUNTER_SPARK =
+  "Trouble finds the party: an encounter fitting the current location and hour that wants a fight (an ambush, a patrol that will not be talked down, a hungry beast). Open it with start_encounter when the violence starts.";
+
+export function pacedTickConfig(config: TickConfig, pace: CombatPace | undefined): TickConfig {
+  if (!pace || pace === "balanced") {
+    return config;
+  }
+  const { grace, slope, cap } = config.encounter;
+  return pace === "rare"
+    ? {
+        ...config,
+        encounter: { grace: grace * 2, slope: Math.max(1, Math.floor(slope / 2)), cap: Math.round(cap / 2) },
+        encounterText: RARE_ENCOUNTER_SPARK,
+      }
+    : {
+        ...config,
+        encounter: { grace: Math.ceil(grace / 2), slope: slope * 2, cap: Math.min(1000, cap * 2) },
+        encounterText: FREQUENT_ENCOUNTER_SPARK,
+      };
+}
+
 function pushSpark(sparks: Spark[], spark: Spark): Spark[] {
   // One pending spark per kind; newest wins, queue stays bounded.
   return [...sparks.filter((entry) => entry.kind !== spark.kind), spark].slice(-MAX_SPARKS);
@@ -151,7 +185,7 @@ export function tickWorld(
     // Combat pauses the encounter clock entirely.
     next.sinceEncounter = state.sinceEncounter;
   } else if (roll() < encounterChance(next.sinceEncounter, config)) {
-    sparks = pushSpark(sparks, { kind: "encounter", text: ENCOUNTER_SPARK });
+    sparks = pushSpark(sparks, { kind: "encounter", text: config.encounterText ?? ENCOUNTER_SPARK });
     next.sinceEncounter = 0;
   }
 

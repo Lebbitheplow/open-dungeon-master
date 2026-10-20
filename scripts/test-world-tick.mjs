@@ -7,6 +7,7 @@ import {
   drainSparks,
   emptyTickState,
   encounterChance,
+  pacedTickConfig,
   parseTickState,
   surpriseChance,
   tickWorld,
@@ -165,6 +166,54 @@ test("quiet timeskips advance the world but queue no surprise/encounter sparks",
 test("tick count is clamped on timeskips", () => {
   const result = tickWorldQuietly(emptyTickState(), [], 99, () => 0.999);
   assert.equal(result.state.turnCount, 12);
+});
+
+// Issue #432: a table's combat pace moves the encounter dice and what the
+// spark asks for. The mean turns to the first encounter spark, with the
+// surprise and world engines left out of the count.
+function meanEncounterInterval(config, seed) {
+  const rng = makeRng(seed);
+  const runs = 3000;
+  let total = 0;
+  for (let run = 0; run < runs; run += 1) {
+    let state = emptyTickState();
+    let turns = 0;
+    for (;;) {
+      turns += 1;
+      const result = tickWorld(state, [], { inEncounter: false }, rng, config);
+      state = { ...result.state, sparks: [] };
+      if (state.sinceEncounter === 0 || turns > 1000) {
+        break;
+      }
+    }
+    total += turns;
+  }
+  return total / runs;
+}
+
+test("combat pace: balanced is the config as given; fewer fights waits longer and more fights comes sooner", () => {
+  assert.equal(pacedTickConfig(DEFAULT_TICK_CONFIG, "balanced"), DEFAULT_TICK_CONFIG);
+  assert.equal(pacedTickConfig(DEFAULT_TICK_CONFIG, undefined), DEFAULT_TICK_CONFIG);
+  const rare = meanEncounterInterval(pacedTickConfig(DEFAULT_TICK_CONFIG, "rare"), 11);
+  const balanced = meanEncounterInterval(DEFAULT_TICK_CONFIG, 11);
+  const frequent = meanEncounterInterval(pacedTickConfig(DEFAULT_TICK_CONFIG, "frequent"), 11);
+  assert.ok(balanced > 25 && balanced < 45, `balanced ${balanced.toFixed(1)}`);
+  assert.ok(rare > balanced * 1.4, `rare ${rare.toFixed(1)} vs balanced ${balanced.toFixed(1)}`);
+  assert.ok(frequent < balanced * 0.75, `frequent ${frequent.toFixed(1)} vs balanced ${balanced.toFixed(1)}`);
+});
+
+test("combat pace: the spark asks for a fight at a frequent table and for a way past at a rare one", () => {
+  const sparkOf = (config) =>
+    tickWorld({ ...emptyTickState(), sinceEncounter: 200 }, [], { inEncounter: false }, () => 0, config).state.sparks.find(
+      (spark) => spark.kind === "encounter",
+    ).text;
+  assert.match(sparkOf(DEFAULT_TICK_CONFIG), /It need not be hostile/);
+  assert.match(sparkOf(pacedTickConfig(DEFAULT_TICK_CONFIG, "frequent")), /wants a fight/);
+  assert.match(sparkOf(pacedTickConfig(DEFAULT_TICK_CONFIG, "rare")), /talk, sneak or bargain past/);
+  // The server's own knobs still set the middle: a paced config scales them.
+  const tuned = { ...DEFAULT_TICK_CONFIG, encounter: { grace: 30, slope: 4, cap: 200 } };
+  assert.deepEqual(pacedTickConfig(tuned, "frequent").encounter, { grace: 15, slope: 8, cap: 400 });
+  assert.deepEqual(pacedTickConfig(tuned, "rare").encounter, { grace: 60, slope: 2, cap: 100 });
 });
 
 console.log(`${passed} world tick tests passed`);

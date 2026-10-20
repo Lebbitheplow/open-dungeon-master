@@ -14,6 +14,7 @@ import { shiftFactionPower } from "@/lib/dm/faction-tools";
 import {
   DEFAULT_TICK_CONFIG,
   drainSparks,
+  pacedTickConfig,
   parseTickState,
   tickWorld,
   tickWorldQuietly,
@@ -100,7 +101,8 @@ export function tickWorldState(campaignId: string) {
       campaign.storyArc?.worldArcs ?? [],
       { inEncounter: Boolean(getActiveEncounter(campaignId)) },
       Math.random,
-      tickConfig(),
+      // The table's combat pace moves the encounter dice (issue #432).
+      pacedTickConfig(tickConfig(), campaign.gameSettings.combatPace),
     );
     persistTickResult(campaignId, result);
   } catch (error) {
@@ -121,7 +123,7 @@ export function tickWorldTimeskip(campaignId: string, ticks: number) {
       campaign.storyArc?.worldArcs ?? [],
       ticks,
       Math.random,
-      tickConfig(),
+      pacedTickConfig(tickConfig(), campaign.gameSettings.combatPace),
     );
     persistTickResult(campaignId, result);
     advanceNpcAgency(campaignId, "", { rounds: 1, tickPressureCounters: false });

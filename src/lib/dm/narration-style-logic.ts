@@ -30,13 +30,44 @@ const LENGTH_TEXT: Record<NarrationLength, string> = {
 
 export const STYLE_NOTES_MAX = 500;
 
-// Standard length and no notes render nothing, so a table that never
-// touches either sends the same prompt it always did.
-export function renderNarrationStyle(length: NarrationLength | undefined, notes: string | undefined): string {
+// How often fights come (issue #432). The world tick's encounter dice follow
+// it (src/lib/dm/world-tick-logic.ts pacedTickConfig); this is the line the
+// DM reads. Balanced renders nothing.
+export type CombatPace = "rare" | "balanced" | "frequent";
+
+export const COMBAT_PACE_LABELS: Record<CombatPace, string> = {
+  rare: "Fewer fights",
+  balanced: "Balanced",
+  frequent: "More fights",
+};
+
+export const COMBAT_PACE_HINTS: Record<CombatPace, string> = {
+  rare: "Talk, stealth and exploring come first; a fight when the players start one or the story leaves no way round.",
+  balanced: "Fights come as the story and the world bring them.",
+  frequent: "Trouble finds the party more often, and more of it wants a fight.",
+};
+
+const PACE_TEXT: Record<CombatPace, string> = {
+  rare: "This table wants fewer fights. Favor talk, stealth, puzzles and exploration; let most trouble be talked, sneaked or bargained past, and start combat when the players choose it or the story leaves no other way.",
+  balanced: "",
+  frequent: "This table wants more fights. When a scene stalls or the party travels, bring trouble that wants a fight, and about once a session let one break out that the party cannot talk its way past. A fight still follows the story and starts with start_encounter.",
+};
+
+// Standard length, no notes and a balanced pace render nothing, so a table
+// that never touches them sends the same prompt it always did.
+export function renderNarrationStyle(
+  length: NarrationLength | undefined,
+  notes: string | undefined,
+  pace?: CombatPace,
+): string {
   const lines: string[] = [];
   const lengthLine = LENGTH_TEXT[length ?? "standard"] ?? "";
   if (lengthLine) {
     lines.push(lengthLine);
+  }
+  const paceLine = PACE_TEXT[pace ?? "balanced"] ?? "";
+  if (paceLine) {
+    lines.push(paceLine);
   }
   const written = (notes ?? "").replace(/\s+/g, " ").trim().slice(0, STYLE_NOTES_MAX);
   if (written) {

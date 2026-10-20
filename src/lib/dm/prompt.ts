@@ -119,7 +119,11 @@ export function buildDmSystem(
   if (gmBlock) {
     parts.push(gmBlock);
   }
-  const styleBlock = renderNarrationStyle(campaign.gameSettings.narrationLength, campaign.gameSettings.styleNotes);
+  const styleBlock = renderNarrationStyle(
+    campaign.gameSettings.narrationLength,
+    campaign.gameSettings.styleNotes,
+    campaign.gameSettings.combatPace,
+  );
   if (styleBlock) {
     parts.push(styleBlock);
   }

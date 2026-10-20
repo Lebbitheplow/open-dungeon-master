@@ -41,6 +41,10 @@
   transition: border-color var(--dur-quick) var(--ease-snap), box-shadow 220ms var(--ease-spring);
 }
 .kit-select-sm { height: 2rem; padding: 0 0.55rem; font-size: 0.78rem; border-radius: 0.4rem; }
+/* Compact on a desk, a finger still gets 40 px (as panels.css .pk-tap). */
+@media (pointer: coarse) {
+  .kit-select-sm { height: 2.5rem; }
+}
 .kit-select:hover { border-color: rgba(212, 171, 58, 0.45); }
 .kit-select:focus-visible,
 .kit-select[data-state="open"] {
