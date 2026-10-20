@@ -36,10 +36,10 @@ const pack = [
   { name: "Rope", qty: 1 },
 ];
 
-test("findCarriedItem fuzzy matches", () => {
+test("findCarriedItem takes the whole name, never words of it", () => {
   assert.equal(findCarriedItem(pack, "potion of healing").name, "Potion of Healing");
-  assert.equal(findCarriedItem(pack, "healing potion").name, "Potion of Healing");
-  assert.equal(findCarriedItem(pack, "Potion").name, "Potion of Healing");
+  assert.equal(findCarriedItem(pack, "healing potion"), null);
+  assert.equal(findCarriedItem(pack, "Potion"), null);
   assert.equal(findCarriedItem(pack, "shield"), null);
 });
 

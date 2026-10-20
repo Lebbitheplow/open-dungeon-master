@@ -1,5 +1,6 @@
-import { COPPER_PER_GOLD, formatCopper, parseCoins } from "@/lib/srd/currency";
+import { COPPER_PER_GOLD, formatCopper, packCostCopper } from "@/lib/srd/currency";
 import { compareNames, textKey } from "@/lib/language/text-logic";
+import { lineNamed } from "@/lib/srd/item-row";
 
 // Shops (docs/vtt-parity-implementation-plan.md 11.1): pure pricing and
 // stocking. Prices come from the content pack's cost strings, marked up by
@@ -17,7 +18,9 @@ export type ShopSize = (typeof SHOP_SIZES)[number];
 export const SHOP_KINDS = ["general", "smith", "apothecary", "outfitter", "curiosities"] as const;
 export type ShopKind = (typeof SHOP_KINDS)[number];
 
-export type StockLine = { itemName: string; qty: number; priceCp: number; note: string };
+// srdName: the SRD or pack row a line named in the table's language is,
+// picked from the catalog, so what is bought is that row.
+export type StockLine = { itemName: string; qty: number; priceCp: number; note: string; srdName?: string };
 
 // The dearest a shelf line may be priced, in copper (a million gold): high
 // enough for any legendary item, low enough that a typed slip cannot put a
@@ -97,7 +100,7 @@ export function haggleDc(size: ShopSize): number {
 
 // A pack cost string ("15 gp", "2 sp", "5,000 gp") in copper, or null.
 export function costToCopper(cost: string): number | null {
-  const parsed = parseCoins(cost);
+  const parsed = packCostCopper(cost);
   return parsed === null || parsed <= 0 ? null : parsed;
 }
 
@@ -111,19 +114,12 @@ export function offerPriceCp(listCp: number): number {
   return Math.max(1, Math.floor(listCp / 2));
 }
 
-// Find a stock line by name, loosely: exact first, then a line that
-// contains the words asked for.
+// A stock line by the names a carried line answers to (lineNamed): its
+// whole name, else the row it is listed as, so "Longsword" buys the "Spada
+// lunga" picked from the catalog. A miss is refused with the shelf listed.
 export function findStockLine(stock: StockLine[], name: string): StockLine | null {
-  const wanted = textKey(name);
-  if (!wanted) {
-    return null;
-  }
-  const exact = stock.find((line) => textKey(line.itemName) === wanted);
-  if (exact) {
-    return exact;
-  }
-  const loose = stock.filter((line) => textKey(line.itemName).includes(wanted) || wanted.includes(textKey(line.itemName)));
-  return loose.length === 1 ? loose[0] : null;
+  const rows = stock.map((line) => ({ name: line.itemName, srdName: line.srdName }));
+  return stock[lineNamed(rows, name)] ?? null;
 }
 
 // Take qty of a line out of the stock, dropping it at zero; null when the
@@ -136,13 +132,14 @@ export function takeStock(stock: StockLine[], itemName: string, qty: number): St
   return stock.map((entry) => (entry === line ? { ...entry, qty: entry.qty - qty } : entry)).filter((entry) => entry.qty > 0);
 }
 
-// Put qty of an item into stock at the keeper's list price, merging by name.
-export function addStock(stock: StockLine[], itemName: string, qty: number, priceCp: number, note = ""): StockLine[] {
+// Put qty of an item into stock at the keeper's list price, merging by name,
+// with the row it is.
+export function addStock(stock: StockLine[], itemName: string, qty: number, priceCp: number, srdName?: string): StockLine[] {
   const existing = stock.find((line) => textKey(line.itemName) === textKey(itemName));
   if (existing) {
     return stock.map((line) => (line === existing ? { ...line, qty: line.qty + qty } : line));
   }
-  return [...stock, { itemName: itemName.slice(0, 80), qty, priceCp: Math.max(1, Math.round(priceCp)), note: note.slice(0, 120) }];
+  return [...stock, { itemName: itemName.slice(0, 80), qty, priceCp: Math.max(1, Math.round(priceCp)), note: "", ...(srdName ? { srdName } : {}) }];
 }
 
 // The magic a shelf of this size carries (SRD 5.2, Magic Item Rarity):

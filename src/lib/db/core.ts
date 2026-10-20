@@ -8,12 +8,14 @@ import { populateFeatures, populateFeaturesForClasses } from "@/lib/srd/features
 import { packSubclassExtras } from "@/lib/content/archetype-tables";
 import { extraSubclassOf, mergeExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { repairedTraining } from "@/lib/srd/subclass-training";
+import { keyedFeatChoices } from "@/lib/schemas/sheet";
 import { populateResources } from "@/lib/srd/class-resources";
 import { featsAsRun, registerTableFeatReader } from "@/lib/srd/feat-effects";
 import { tableFeatsFrom } from "@/lib/db/table-feats";
 import { registerTableHazardReader } from "@/lib/srd/table-hazards";
 import { tableHazardsFrom } from "@/lib/db/table-hazards";
 import { ROW_TEXT, settleLoreTexts } from "@/lib/worldforge/account";
+import { backfillLegacyItemRows } from "@/lib/db/item-row-backfill";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "local-roleplay.sqlite");
@@ -2288,6 +2290,17 @@ function ensureSchema(db: SqliteDatabase) {
     })();
   }
 
+  // Items saved before names were read whole keep the weapon or armor the
+  // words of their English name gave them (src/lib/db/item-row-backfill.ts).
+  // One pass, guarded by an app_settings marker.
+  const itemRowMarker = db.prepare(`SELECT key FROM app_settings WHERE key = 'item_row_backfill_done'`).get();
+  if (!itemRowMarker) {
+    db.transaction(() => {
+      backfillLegacyItemRows(db);
+      db.prepare(`INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`).run("item_row_backfill_done", "true", new Date().toISOString());
+    })();
+  }
+
   // Connected agents (docs/archive/harness-mcp-plan.md 7): a player's own agent
   // session (Claude Code, Codex, any MCP client) acting as that player over
   // /api/mcp. Only the token's hash is kept, the same rule as sessions.
@@ -3140,7 +3153,7 @@ export function resyncLibraryTraining(db: SqliteDatabase): number {
           ? sheet.classes
           : [{ id: row.class, level: row.level, subclass: row.subclass }];
       const training = repairedTraining(
-        { proficiencies: sheet.proficiencies, abilities: sheet.abilities, featChoices: sheet.featChoices },
+        { proficiencies: sheet.proficiencies, abilities: sheet.abilities, featChoices: keyedFeatChoices(sheet.featChoices) },
         classes,
         extras,
       );

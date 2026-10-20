@@ -81,6 +81,21 @@ if (world.hasPack) {
     assert.match(String(out.error), /magic item/);
     assert.equal(purse(crafter.id), 10000);
   });
+
+  await test("Crafting a thing the table names in its own words takes its row as srdName, as grant_item does: priced by that row, and the line made carries it.", async () => {
+    for (const item of ["Scudo", "Bouclier", "Escudo", "Schild", "Round shield"]) {
+      const crafter = world.addHero({ class: "fighter", level: 1, gold: 100, proficiencies: profs({ tools: ["Smith's tools"] }) });
+      const before = world.campaign().clock.instant;
+      const asked = await world.invoke("downtime", { days: 2, characterId: crafter.id, activity: "crafting", item, tool: "smith's tools" });
+      assert.equal(asked.ok, false, `${item}: crafted with no price`);
+      assert.match(asked.error, /srdName/);
+      assert.equal(world.campaign().clock.instant, before);
+      const made = await world.invoke("downtime", { days: 2, characterId: crafter.id, activity: "crafting", item, srdName: "Shield", tool: "smith's tools" });
+      assert.equal(made.ok, true, made.error);
+      assert.equal(world.sheet(crafter.id).equipment.find((line) => line.name === item)?.srdName, "Shield", item);
+      assert.equal(purse(crafter.id), 9500, item);
+    }
+  });
 }
 
 await test("Training takes 250 days at 1 gp a day and then teaches the language.", async () => {

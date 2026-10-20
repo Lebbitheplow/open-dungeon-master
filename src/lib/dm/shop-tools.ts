@@ -9,7 +9,7 @@ import { getNpcById, getNpcByName } from "@/lib/db/npcs";
 import { insertRoll } from "@/lib/db/rolls";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { findShopNear, getShop, insertShop, listShopsAt, updateShop } from "@/lib/db/shops";
+import { findShopNear, getShop, insertShop, listShops, listShopsAt, updateShop } from "@/lib/db/shops";
 import { searchItems } from "@/lib/content";
 import { SRD_GEAR } from "@/lib/srd/adventuring-gear";
 import { SRD_ARMOR } from "@/lib/srd/armor";
@@ -47,7 +47,7 @@ import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper } from "@/lib/srd/currency";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { textKey } from "@/lib/language/text-logic";
@@ -145,6 +145,12 @@ function resolveSheet(campaign: Campaign, ref: string): CharacterSheet | null {
   const sheets = listSheets(campaign.id);
   const stale = resolveSheetRef(ref, sheets, new Map(sheets.map((sheet) => [sheet.id, sheet])));
   return stale ? getSheetById(stale.id) ?? stale : null;
+}
+
+// A shop no name found, refused with the shops the campaign has.
+function noShop(campaign: Campaign, ref: string): ToolError {
+  const refusal = noneNamed("There is no shop called", ref, listShops(campaign.id).map((shop) => shop.name));
+  return { ...refusal, error: `${refusal.error} A new one opens with open_shop.` };
 }
 
 // By id, or by name at the party's place before anywhere else.
@@ -363,7 +369,7 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
-    return { error: `No shop called "${args.shop}" here. Open one with open_shop first.`, retry: true };
+    return noShop(campaign, args.shop);
   }
   const line = findStockLine(shop.stock, args.item);
   if (!line) {
@@ -379,7 +385,7 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
     return { error: `${line.itemName} x${args.qty} costs ${formatCopper(total)}; ${sheet.name} carries ${formatCopper(purse.gold * 100 + purse.copper)}. They cannot afford it.`, refused: "rules" };
   }
   const paid = addCopper(purse, -total);
-  const items = grantItemMath(sheet.equipment, line.itemName, args.qty);
+  const items = grantItemMath(sheet.equipment, line.itemName, args.qty, line.srdName ? { srdName: line.srdName } : {});
   // Strength x 15 pounds is all a character can carry (src/lib/dm/load-rules.ts).
   const tooHeavy = capacityProblem(sheet, items.equipment, line.itemName, paid.purse.gold);
   if (tooHeavy) {
@@ -411,7 +417,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
-    return { error: `No shop called "${args.shop}" here.`, retry: true };
+    return noShop(campaign, args.shop);
   }
   if (!shop.buys) {
     return { error: `${shop.name} does not buy.`, refused: "rules" };
@@ -444,7 +450,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   const paid = addCopper({ gold: sheet.gold, copper: sheet.copper }, total);
   const patch = { gold: paid.purse.gold, copper: paid.purse.copper, equipment: removal.equipment };
   patchSheet(sheet.id, patch);
-  updateShop(shop.id, { stock: addStock(shop.stock, carried, removal.removed, listCp ?? each * 2) });
+  updateShop(shop.id, { stock: addStock(shop.stock, carried, removal.removed, listCp ?? each * 2, line.srdName) });
   ledger(campaign, sheet, "purchase", { item: carried, qty: removal.removed, action: "sell", priceCp: each, shop: shop.name }, `Sold at ${shop.name}`, patch, `Sold ${carried}${removal.removed > 1 ? ` x${removal.removed}` : ""} for ${formatCopper(total)} at ${shop.name}.`);
   publishSheet(campaign, sheet.id);
   publishShops(campaign.id);
@@ -465,7 +471,7 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
-    return { error: `No shop called "${args.shop}" here.`, retry: true };
+    return noShop(campaign, args.shop);
   }
   if (shop.haggledBy.includes(sheet.id)) {
     return { error: `${sheet.name} already tried their luck with ${shop.name}'s keeper.`, refused: "rules" };

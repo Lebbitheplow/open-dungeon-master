@@ -48,13 +48,17 @@ export const resourceTools: ToolDef[] = [
     function: {
       name: "purchase",
       description:
-        "Resolve a character buying or selling an item outside a shop, in one audited step.",
+        "Resolve a character buying or selling an item outside a shop, in one audited step. Buying a thing the table names in its own words ('Spada lunga'): srdName is the SRD or pack item it is, by its English name ('Longsword'), sent with the first call as grant_item sends it; omit it when item already is that English name. Loot no list has, or a spell scroll, is granted with grant_item (its tags, its spell) and paid for with modify_gold.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           item: { type: "string", description: "Item name, without its worth: price carries that." },
+          // Described in the description of purchase itself, since the 16K
+          // compact profile, which cuts every description to its first
+          // sentence, carries purchase in its core with no room for one more.
+          srdName: { type: "string" },
           price: {
             type: "integer",
             minimum: 0,

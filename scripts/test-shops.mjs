@@ -65,18 +65,26 @@ test("a haggle walks the ladder a step either way and never off it", () => {
   assert.equal(haggleStep(2, false), 2);
 });
 
-test("stock lines are found loosely, taken down and put back", () => {
+test("stock lines are found by their whole name, taken down and put back with the row they are", () => {
   const stock = [
     { itemName: "Torch", qty: 5, priceCp: 1, note: "" },
     { itemName: "Hooded Lantern", qty: 1, priceCp: 500, note: "" },
   ];
   assert.equal(findStockLine(stock, "torch").itemName, "Torch");
-  assert.equal(findStockLine(stock, "lantern").itemName, "Hooded Lantern");
+  assert.equal(findStockLine(stock, "hooded lantern").itemName, "Hooded Lantern");
+  assert.equal(findStockLine(stock, "lantern"), null);
   assert.equal(findStockLine(stock, "sword"), null);
+  // A line renamed into the table's language answers to its row as well.
+  const shelf = [...stock, { itemName: "Spada lunga", qty: 1, priceCp: 1500, note: "", srdName: "Longsword" }];
+  assert.equal(findStockLine(shelf, "longsword").itemName, "Spada lunga");
+  assert.equal(findStockLine(shelf, "SPADA LUNGA").itemName, "Spada lunga");
+  assert.equal(findStockLine(shelf, "spada"), null);
+  assert.equal(findStockLine(shelf, "long sword"), null);
   assert.equal(takeStock(stock, "Torch", 6), null);
   assert.deepEqual(takeStock(stock, "Hooded Lantern", 1).map((line) => line.itemName), ["Torch"]);
   assert.equal(addStock(stock, "torch", 2, 1)[0].qty, 7);
   assert.equal(addStock(stock, "Rope", 1, 100).length, 3);
+  assert.equal(addStock(stock, "Corda di canapa", 1, 100, "Rope, hempen (50 feet)")[2].srdName, "Rope, hempen (50 feet)");
 });
 
 test("stocking from a pool sizes the shelf to the settlement", () => {
@@ -201,22 +209,29 @@ const shop = insertShop(campaign.id, {
   stock: [
     { itemName: "Rope, Hempen (50 feet)", qty: 2, priceCp: 100, note: "" },
     { itemName: "Plate Armor", qty: 1, priceCp: 150000, note: "" },
+    { itemName: "Pozione di guarigione", qty: 1, priceCp: 50, note: "", srdName: "Potion of Healing" },
   ],
 });
 
 test("buying takes the coin and the goods together and writes the ledger", () => {
-  const result = handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: "sundries", item: "rope", qty: 1 }));
+  const result = handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: "marla's sundries", item: "rope, hempen (50 feet)", qty: 1 }));
   assert.equal(result.ok, true, JSON.stringify(result));
   const after = getSheetById(marla.id);
   assert.equal(after.gold, 9);
   assert.ok(after.equipment.some((item) => /rope/i.test(item.name)));
   assert.equal(getShop(shop.id).stock.find((line) => /rope/i.test(line.itemName)).qty, 1);
   assert.ok(listRecentAudit(campaign.id).some((entry) => entry.kind === "purchase" && entry.characterId === marla.id));
+  // A shelf line listed as a row is bought as that row.
+  assert.equal(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Pozione di guarigione" })).ok, true);
+  assert.equal(getSheetById(marla.id).equipment.find((item) => item.name === "Pozione di guarigione")?.srdName, "Potion of Healing");
+  // A word of a shop's or a line's name is neither.
+  assert.equal(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: "sundries", item: "Plate Armor" })).retry, true);
+  assert.match(String(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "rope" })).error), /does not stock "rope"/);
 });
 
 test("the purse and the shelf refuse what they cannot cover", () => {
-  assert.match(String(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "plate" })).error), /cannot afford/);
-  assert.match(String(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "rope", qty: 5 })).error), /only 1/);
+  assert.match(String(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Plate Armor" })).error), /cannot afford/);
+  assert.match(String(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Rope, Hempen (50 feet)", qty: 5 })).error), /only 1/);
   assert.match(String(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "dragon" })).error), /does not stock/);
 });
 

@@ -144,7 +144,7 @@ function highestSlotLevel(sheet: CharacterSheet): number {
 // is not on the reader's class list cannot be read, and stays in the pack.
 export function consumableRefusal(sheet: CharacterSheet, item: ScrollItem): ToolError | null {
   // A vial of basic poison needs a weapon to coat (src/lib/dm/attack-onhit.ts).
-  const coat = poisonCoatRefusal(sheet, item.name);
+  const coat = poisonCoatRefusal(sheet, item);
   if (coat) {
     return coat;
   }
@@ -204,7 +204,7 @@ export function applyConsumable(
   if (spell) {
     return readScroll(campaign, turnId, user, spell);
   }
-  const coated = coatWithPoison(campaign, user, itemName);
+  const coated = coatWithPoison(campaign, user, item);
   if (coated) {
     return coated;
   }

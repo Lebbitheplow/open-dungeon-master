@@ -11,7 +11,6 @@
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import type { TypedRider } from "@/lib/dm/damage-parts";
 import {
-  gearBaseName,
   gearDefNamed,
   gearDefOfRow,
   gearRidersActive,
@@ -30,7 +29,7 @@ export type WeaponGear = {
 };
 
 // The weapon a carried row swings as, and the magic weapon it is when it is
-// one: the SRD weapon its name names wins ("Flame Tongue Scimitar"), else the
+// one: the base its composite name names ("Flame Tongue Scimitar"), else the
 // base the item's entry gives ("Flame Tongue" is a longsword). A row whose
 // magic item is armor or a wondrous thing is not made a weapon here.
 //
@@ -46,15 +45,11 @@ export function magicWeaponOfRow(
     return { srd: own!, gear: null };
   }
   const named = hasOwn ? own! : matchWeapon(item);
-  const def = gearDefOfRow(item, named?.name);
-  // A row with no base of its own is a weapon when its name names one and
-  // its riders are a weapon's (a Constant Dagger's +1, a Dragonslaying
-  // Lance's +3): those riders count too.
-  const namesWeapon = Boolean(named && def?.weapon && Object.keys(def.weapon).length);
-  if (!def || (def.base && def.base.kind !== "weapon") || (!def.base && !hasOwn && !namesWeapon)) {
+  const def = gearDefOfRow(item);
+  if (!def || (def.base ? def.base.kind !== "weapon" : !hasOwn)) {
     return { srd: named, gear: null };
   }
-  const base = named ?? weaponNamed(gearBaseName(def, "weapon") ?? "");
+  const base = hasOwn ? own! : weaponNamed(def.base?.name ?? "");
   const riders = gearRidersActive(def, item) ? (def.weapon ?? {}) : {};
   return { srd: base ? withGear(base, riders) : null, gear: { def, riders } };
 }
@@ -62,7 +57,7 @@ export function magicWeaponOfRow(
 // A magic weapon asked for by a name nobody carries: still a weapon on the
 // table, not an improvised object.
 export function isMagicWeaponName(name: string): boolean {
-  const def = gearDefNamed(name, weaponNamed(name)?.name);
+  const def = gearDefNamed(name);
   return def?.base?.kind === "weapon";
 }
 

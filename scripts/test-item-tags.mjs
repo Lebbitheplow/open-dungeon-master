@@ -79,12 +79,13 @@ test("the rules' misreadings stay out: a wand of lightning bolts is no ammunitio
   assert.equal(itemTags({ name: "Oil of Sharpness" }).includes("lamp_oil"), false);
 });
 
-test("a vial of basic poison is its row, by any of the row's spellings, and no sentence that holds the words", () => {
+test("a vial of basic poison is its row, by any of the row's spellings or its srdName, and no sentence that holds the words", () => {
   for (const name of ["Poison, Basic (vial)", "Basic Poison", "vial of basic poison"]) {
-    assert.equal(isBasicPoison(name), true, name);
+    assert.equal(isBasicPoison({ name }), true, name);
   }
-  assert.equal(isBasicPoison("a basic note on poison"), false);
-  assert.equal(isBasicPoison("Veleno base"), false);
+  assert.equal(isBasicPoison({ name: "a basic note on poison" }), false);
+  assert.equal(isBasicPoison({ name: "Veleno base" }), false);
+  assert.equal(isBasicPoison({ name: "Veleno base", srdName: "Poison, Basic (vial)" }), true);
 });
 
 // The same thing at five tables: the English row's name, then the name a

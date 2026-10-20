@@ -231,30 +231,33 @@ test("a name finds the line by that name, else the one whose srdNameWithBonus it
   assert.equal(removeItemMath([sword], "Dagger", 1), null);
 });
 
-test("the loose rules read srdNameWithBonus as they read the own name of an item named as the row", () => {
+test("an item named in the table's language answers to its row's whole name as one named as the row does, and to no word of it", () => {
+  // A "+1" asked of a plain sword swings the sword they carry, whose own
+  // bonus the attack takes.
   for (const pack of [[item("Spada lunga", "Longsword")], [item("Longsword", undefined)]]) {
-    const resolved = resolveAttackWeapon(pack, profs, "Longsword +1");
-    assert.equal(resolved.carried, true, pack[0].name);
-    assert.equal(resolved.displayName, pack[0].name);
+    assert.equal(resolveAttackWeapon(pack, profs, "Longsword +1").displayName, pack[0].name);
+    assert.equal(resolveAttackWeapon(pack, profs, "Longsword").displayName, pack[0].name);
   }
   const potion = item("Pozione di guarigione", "Potion of Healing", { equipped: false });
   const englishPotion = item("Potion of Healing", undefined, { equipped: false });
   const climbing = item("Potion of Climbing", undefined, { equipped: false });
   for (const [pack, englishPack, asked] of [
+    [[potion], [englishPotion], "Potion of Healing"],
     [[potion], [englishPotion], "healing potion"],
     [[potion], [englishPotion], "healing"],
     [[potion, climbing], [englishPotion, climbing], "potion"],
-    [[climbing, potion], [climbing, englishPotion], "potion"],
+    [[climbing, potion], [climbing, englishPotion], "Potion of Healing"],
   ]) {
     const where = `${asked} in ${pack.map((row) => row.name)}`;
     assert.equal(pack.indexOf(findCarriedItem(pack, asked)), englishPack.indexOf(findCarriedItem(englishPack, asked)), where);
   }
-  const staff = item("Bastone della guarigione", "Staff of Healing", { equipped: false });
+  const another = item("Fiala di guarigione", "Potion of Healing", { equipped: false });
   assert.deepEqual(
-    carriedItemsMatching([potion, staff], "healing").map((row) => row.name),
-    ["Pozione di guarigione", "Bastone della guarigione"],
-    "a name two rows answer to is ambiguous, as two English names would be",
+    carriedItemsMatching([potion, another], "Potion of Healing").map((row) => row.name),
+    ["Pozione di guarigione", "Fiala di guarigione"],
+    "a name two lines answer to is ambiguous, as two English lines of one name would be",
   );
+  assert.deepEqual(carriedItemsMatching([potion, another], "healing"), [], "a word of a name answers to nothing");
 });
 
 test("srdName takes only a name the lists hold, never a bonus, a family or a guess", () => {

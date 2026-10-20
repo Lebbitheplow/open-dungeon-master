@@ -131,8 +131,9 @@ test("'work leathers' is not Leather armor: a barbarian keeps Unarmored Defense 
   assert.equal(armorNamed("work leathers"), null);
   assert.equal(armorNamed("Work Leathers"), null);
   assert.equal(armorOfRow({ name: "Work leathers" }), null);
-  // The tail rule still finds armor written out in full.
-  assert.equal(armorNamed("Dwarven Chain Mail")?.name, "Chain Mail");
+  // Armor is found by its whole name, past a "+N" bonus; a name around it
+  // ("Dwarven Chain Mail") is a different item, which srdName names.
+  assert.equal(armorNamed("Dwarven Chain Mail"), null);
   assert.equal(armorNamed("+1 Studded Leather")?.name, "Studded Leather");
   assert.equal(armorNamed("Shields")?.name, "Shield");
   const ac = acBreakdownFor({

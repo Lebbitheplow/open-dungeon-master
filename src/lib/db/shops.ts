@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { compareNames, textKey } from "@/lib/language/text-logic";
+import { compareNames, findNamed, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   clampMarkup,
@@ -9,6 +9,7 @@ import {
   type Shop,
   type StockLine,
 } from "@/lib/dm/shop-logic";
+import { srdNameFor } from "@/lib/dm/item-logic";
 
 // Shops (docs/vtt-parity-implementation-plan.md 11.1): one row per shop,
 // tied to a campaign location by id and remembered by name so a place
@@ -41,6 +42,13 @@ export const stockLineSchema = z.object({
   qty: z.number().int().min(0).max(999),
   priceCp: z.number().int().min(1).max(MAX_STOCK_PRICE_CP),
   note: z.string().max(120).default(""),
+  // The row a catalog pick named, as the lists spell it.
+  srdName: z
+    .string()
+    .trim()
+    .max(80)
+    .refine((name) => !("error" in srdNameFor(name, "stock")), "srdName is no SRD or pack item's name")
+    .optional(),
 });
 
 export function normalizeStock(raw: unknown): StockLine[] {
@@ -50,11 +58,14 @@ export function normalizeStock(raw: unknown): StockLine[] {
   return raw
     .map((line) => {
       const record = (line ?? {}) as Record<string, unknown>;
+      // A row the lists hold, as they spell it; anything else is no row.
+      const listed = typeof record.srdName === "string" ? srdNameFor(record.srdName, "stock") : {};
       return {
         itemName: String(record.itemName ?? record.name ?? "").trim().slice(0, 80),
         qty: Math.max(0, Math.min(999, Math.round(Number(record.qty) || 0))),
         priceCp: Math.min(MAX_STOCK_PRICE_CP, Math.max(1, Math.round(Number(record.priceCp) || 1))),
         note: String(record.note ?? "").slice(0, 120),
+        ...("srdName" in listed && listed.srdName ? { srdName: listed.srdName } : {}),
       };
     })
     .filter((line) => line.itemName && line.qty > 0)
@@ -112,8 +123,7 @@ export function getShop(shopId: string): Shop | null {
 }
 
 function byName(shops: Shop[], name: string): Shop | null {
-  const wanted = textKey(name);
-  return shops.find((shop) => textKey(shop.name) === wanted) ?? shops.filter((shop) => textKey(shop.name).includes(wanted)).at(0) ?? null;
+  return findNamed(shops, name, (shop) => [shop.name]);
 }
 
 export function findShopByName(campaignId: string, name: string): Shop | null {

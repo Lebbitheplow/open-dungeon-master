@@ -28,8 +28,6 @@ import type { KitItem } from "@/lib/srd/starting-kit";
 import { ARTISANS_TOOLS, GAMING_SETS, MUSICAL_INSTRUMENTS, splitToolGrants } from "@/lib/srd/tool-choices";
 import { textKey } from "@/lib/language/text-logic";
 
-const lower = (value: string) => value.trim().toLowerCase();
-
 // ---- a tool-kind line, filled from the character's training ----
 
 type ToolKind = { pattern: RegExp; from: string[] };
@@ -44,7 +42,7 @@ const TOOL_KINDS: ToolKind[] = [
 // rather than a named item: "of your choice", "to match your choice of tool
 // proficiency", or the bare "a set of dice or deck of cards".
 export function isToolChoiceLine(line: string): boolean {
-  const text = lower(line);
+  const text = line.trim().toLowerCase();
   if (/to match your choice of tool proficiency/.test(text)) {
     return true;
   }
@@ -70,7 +68,7 @@ export function fillToolLine(
   line: string,
   input: { tools: string[]; backgroundTools: string[]; used: Set<string> },
 ): string | null {
-  const text = lower(line);
+  const text = line.trim().toLowerCase();
   const choices = splitToolGrants(input.backgroundTools).choices;
   const preferred = new Set(choices.flatMap((choice) => choice.from.map(textKey)));
   let pool: string[];
@@ -104,7 +102,7 @@ export type GearAlternative = {
 // The tools a kind phrase ("artisan's tools", "other musical instrument",
 // "gaming set") may come to, or null when the phrase is not a kind.
 function kindOptions(phrase: string): string[] | null {
-  const text = lower(phrase).replace(/^(?:other|any|another)\s+/, "");
+  const text = phrase.trim().toLowerCase().replace(/^(?:other|any|another)\s+/, "");
   const kinds = TOOL_KINDS.filter((kind) => kind.pattern.test(text));
   if (!kinds.length || resolveGearLine(phrase).resolved) {
     return null;

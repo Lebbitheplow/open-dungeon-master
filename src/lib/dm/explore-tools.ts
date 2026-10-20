@@ -19,6 +19,7 @@ import { sizeForRace } from "@/lib/srd";
 import { LIFESTYLES } from "@/lib/dm/between-state";
 import { tableNote, writeLifestyle } from "@/lib/dm/between-io";
 import { LIFESTYLE_COST_CP, downtimeProblem, spendDowntime, type DowntimeEntry } from "@/lib/dm/lifestyle";
+import { srdNameFor } from "@/lib/dm/item-logic";
 import { infectDisease, infectWorkshopDisease, inflictMadness } from "@/lib/dm/afflictions";
 import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
@@ -41,6 +42,7 @@ const activityProperties = {
   characterId: { type: "string", description: "Exact characterId from GAME STATE." },
   activity: { type: "string", enum: [...ACTIVITIES], description: "What they spend the days on." },
   item: { type: "string", description: "Crafting: the nonmagical item being made (its market value sets the work: 5 gp a day per crafter, materials half the value, paid at the start)." },
+  srdName: { type: "string", description: "Crafting, when item is in the table's language: its SRD or pack name in English ('Longsword')." },
   tool: { type: "string", description: "Crafting: the artisan's tools used; the crafter and every helper must be proficient with them." },
   helperIds: { type: "array", items: { type: "string" }, description: "Crafting: other characters proficient with the tools working on the same item; each adds 5 gp a day." },
   subject: { type: "string", description: "Training: the language or tool being learned (250 days at 1 gp a day)." },
@@ -205,6 +207,7 @@ const entrySchema = z.object({
   characterId: z.string(),
   activity: z.enum(ACTIVITIES),
   item: z.string().max(80).optional(),
+  srdName: z.string().max(80).optional(),
   tool: z.string().max(60).optional(),
   helperIds: z.array(z.string()).max(6).optional(),
   subject: z.string().max(60).optional(),
@@ -300,7 +303,11 @@ export function handleExploreCall(
       if (!sheet) {
         return { error: `Unknown characterId ${entry.characterId}; use one from GAME STATE. No time passed.`, retry: true };
       }
-      const fixed = { ...entry, characterId: sheet.id };
+      const listed = srdNameFor(entry.srdName, "downtime");
+      if ("error" in listed) {
+        return { ...listed, error: `${listed.error} No time passed.` };
+      }
+      const fixed = { ...entry, srdName: listed.srdName, characterId: sheet.id };
       const problem = downtimeProblem(campaign, sheet, fixed);
       if (problem) {
         return { ...problem, error: `${problem.error} No time passed.` };

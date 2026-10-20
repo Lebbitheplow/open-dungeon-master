@@ -73,6 +73,7 @@ export const EXPLORE_ADJUDICATIONS: CatalogEntry[] = [
         ],
       },
       { name: "item", label: "Item to craft", kind: "text", help: "Crafting: a nonmagical item; 5 gp of its value a day per crafter." },
+      { name: "srdName", label: "SRD item it is", kind: "text", placeholder: "Longsword", help: "Crafting an item named in the table's language: the SRD or pack item it is, by its English name, which prices it and says what it is." },
       { name: "tool", label: "Tools", kind: "text", help: "Crafting: the artisan's tools; every crafter must be proficient." },
       { name: "helperIds", label: "Helping crafters", kind: "characters" },
       { name: "subject", label: "Language or tool to learn", kind: "text", help: "Training: 250 days at 1 gp a day." },

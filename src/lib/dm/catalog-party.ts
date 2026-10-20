@@ -15,14 +15,14 @@ import {
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
 
-// What an item is, for one no SRD or pack item is (src/lib/srd/item-tags.ts),
-// typed as the tags the server takes.
+// What an item is beyond its SRD or pack item, or all of it for one no list
+// has (src/lib/srd/item-tags.ts), typed as the tags the server takes.
 const ITEM_TAGS_FIELD: CatalogField = {
   name: "tags",
   label: "What it is",
   kind: "list",
   placeholder: "potion, healing_potion",
-  help: `For an item no SRD or pack list has, comma separated, from: ${ITEM_TAGS.join(", ")}.`,
+  help: `Comma separated, from: ${ITEM_TAGS.join(", ")}. For an item no SRD or pack list has, all of what it is; for one that has a row, only what it adds (a silvered longsword: silvered).`,
 };
 
 // The SRD or pack item an item named in the table's language is
@@ -32,7 +32,7 @@ const ITEM_SRD_NAME_FIELD: CatalogField = {
   label: "SRD item it is",
   kind: "text",
   placeholder: "Elixir of Health",
-  help: "For an item named in the table's language: the SRD or pack item it is, by its English name, so it works as that item does.",
+  help: "For an item named in the table's language: the SRD or pack item it is, by its English name, so it works as that item does. A magic weapon or armor on a chosen base names both, as the SRD writes it: Flame Tongue Scimitar, Vicious Rapier.",
 };
 
 // What one is worth, for a thing the content pack does not price
@@ -267,6 +267,8 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "item", label: "Item", kind: "text", required: true },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 99 },
+      { ...ITEM_SRD_NAME_FIELD, help: `An enemy's drop only. ${ITEM_SRD_NAME_FIELD.help}` },
+      { ...ITEM_TAGS_FIELD, help: `An enemy's drop only. ${ITEM_TAGS_FIELD.help}` },
       { name: "toCharacterId", label: "Hand to", kind: "character" },
       REASON,
     ],
@@ -305,6 +307,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "item", label: "Item", kind: "text", required: true },
       { name: "price", label: "Gold each", kind: "number", required: true, min: 0, max: 100000 },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 99 },
+      { ...ITEM_SRD_NAME_FIELD, help: `Buying only. ${ITEM_SRD_NAME_FIELD.help}` },
       REASON,
     ],
   },

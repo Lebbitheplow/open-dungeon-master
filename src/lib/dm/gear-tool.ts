@@ -24,7 +24,10 @@ import { dualWields } from "@/lib/dm/attack-rules";
 import { hasFastHands } from "@/lib/dm/bonus-routes";
 import { canAct } from "@/lib/dm/can-act";
 import { armorChangeMinutes } from "@/lib/dm/don-doff";
-import { drawRow, gearKindOf, handsFor, handsFullError, handsFullFor, holdIfFree, inHand, rowNamed, spendInteraction } from "@/lib/dm/gear-hands";
+import { drawRow, gearKindOf, handsFor, handsFullError, handsFullFor, holdIfFree, inHand, spendInteraction } from "@/lib/dm/gear-hands";
+import { lineNamed } from "@/lib/srd/item-row";
+import { srdNameFor } from "@/lib/dm/item-logic";
+import { ITEM_TAGS, listedItemTags } from "@/lib/schemas/item-tags";
 import { drop, enemyHandles, pickUp, standing } from "@/lib/dm/gear-ground";
 import { ownBudget, refuse, retry, saveEquipment } from "@/lib/dm/gear-store";
 import { footprintDistance } from "@/lib/battlemap/footprint";
@@ -63,6 +66,8 @@ export const handleItemTool = {
           description: "The carried item's name; for pick_up the item on the ground (name or id); for an enemy's drop what it lets fall.",
         },
         qty: { type: "integer", minimum: 1, maximum: 99, description: "How many of a stack (drop, hand, pick_up). One when left out." },
+        srdName: { type: "string", description: "An enemy's drop in the table's language: its SRD or pack name in English ('Scimitar')." },
+        tags: { type: "array", items: { type: "string" }, description: "An enemy's drop only: as grant_item's tags." },
         toCharacterId: { type: "string", description: "hand: who receives it." },
         reason: { type: "string" },
       },
@@ -77,6 +82,8 @@ type Args = {
   action?: string;
   item?: string;
   qty?: number;
+  srdName?: string;
+  tags?: unknown;
   toCharacterId?: string;
   reason?: string;
 };
@@ -106,7 +113,18 @@ export function handleItemCall(
   const reason = (args.reason ?? "").slice(0, 200);
   const encounter = getActiveEncounter(campaign.id);
   if (args.enemyId) {
-    return enemyHandles(campaign, encounter, args.enemyId, action, itemName, qty);
+    // What an enemy lets fall is a thing no sheet knew yet: it lies as the
+    // row it is, as grant_item would give it.
+    const listed = srdNameFor(args.srdName, "handle_item");
+    if ("error" in listed) {
+      return listed;
+    }
+    const tags = Array.isArray(args.tags) ? args.tags.map(String) : undefined;
+    const unknown = tags?.filter((tag) => !(ITEM_TAGS as readonly string[]).includes(tag)) ?? [];
+    if (unknown.length) {
+      return retry(`handle_item: no tag ${unknown.map((tag) => `"${tag}"`).join(", ")}. The tags: ${ITEM_TAGS.join(", ")}.`);
+    }
+    return enemyHandles(campaign, encounter, args.enemyId, action, itemName, qty, { ...listed, ...(tags?.length ? { tags: listedItemTags(tags) } : {}) });
   }
   const named = resolveSheetRef(args.characterId, sheets, sheetsById);
   if (!named) {
@@ -126,7 +144,7 @@ export function handleItemCall(
   if (action === "pick_up") {
     return pickUp(campaign, turn, encounter, sheet, itemName, qty, reason);
   }
-  const row = rowNamed(sheet.equipment, itemName);
+  const row = sheet.equipment[lineNamed(sheet.equipment, itemName)];
   if (!row) {
     return retry(`${sheet.name} carries no "${itemName}". They carry: ${sheet.equipment.map((item) => item.name).join(", ") || "nothing"}.`);
   }

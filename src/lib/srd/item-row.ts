@@ -50,20 +50,37 @@ export function srdNameWithBonus(item: RowItem): string {
   return bonus ? `${item.srdName} +${bonus}` : (item.srdName ?? item.name);
 }
 
-// Both names a carried item answers to, for the loose rules.
-export function itemNames(item: RowItem): string[] {
-  return [item.name, srdNameWithBonus(item)];
+// The lines a tool's item name picks out, by the first of its names that
+// any line answers to: its very own name, which names one line on the
+// sheet, else its srdNameWithBonus, else its row. A starting-kit
+// "Longsword" is the one "Longsword" takes beside the "Spada lunga" the DM
+// granted later, and with only a "Longsword +1" carried, "Longsword" is
+// that one. A word of a name picks out nothing.
+function namedLines<T extends RowItem>(items: readonly T[], name: string): { tier: number; lines: T[] } {
+  const wanted = textKey(name);
+  if (wanted) {
+    for (const [tier, nameOf] of [(item: RowItem) => item.name, srdNameWithBonus, rowName].entries()) {
+      const lines = items.filter((item) => textKey(nameOf(item)) === wanted);
+      if (lines.length) {
+        return { tier, lines };
+      }
+    }
+  }
+  return { tier: 0, lines: [] };
 }
 
-// The line a tool's item name picks out, or -1: the one by that very name,
-// which names one line on the sheet, else one whose srdNameWithBonus it is.
-// A starting-kit "Longsword" is the one "Longsword" takes beside the "Spada
-// lunga" the DM granted later.
+export function linesNamed<T extends RowItem>(items: readonly T[], name: string): T[] {
+  return namedLines(items, name).lines;
+}
+
+// The one line linesNamed picks out, as an index, or -1. A row two lines of
+// their own names answer to (a "Spada lunga" and a silvered "Spada
+// d'argento", both longswords) picks out none: the tool names the one it
+// means.
 export function lineNamed(items: readonly RowItem[], name: string): number {
-  const wanted = textKey(name);
-  if (!wanted) {
+  const { tier, lines } = namedLines(items, name);
+  if (!lines.length || (tier > 0 && new Set(lines.map((line) => textKey(line.name))).size > 1)) {
     return -1;
   }
-  const own = items.findIndex((item) => textKey(item.name) === wanted);
-  return own >= 0 ? own : items.findIndex((item) => textKey(srdNameWithBonus(item)) === wanted);
+  return items.indexOf(lines[0]);
 }

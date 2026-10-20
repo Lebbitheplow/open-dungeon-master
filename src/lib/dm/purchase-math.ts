@@ -20,10 +20,11 @@ import { lineNamed } from "@/lib/srd/item-row";
 // the worth of what was bought.
 export function computePurchase(
   sheet: CharacterSheet,
-  args: { item: string; price: number; qty: number; action: "buy" | "sell" },
+  // srdName: the row a bought item is, as grant_item takes it.
+  args: { item: string; price: number; qty: number; action: "buy" | "sell"; srdName?: string },
 ): Outcome | ToolError {
   // What is sold is the carried line, with what it is (item-tags.ts).
-  const item = (args.action === "sell" ? sheet.equipment[lineNamed(sheet.equipment, args.item)] : undefined) ?? { name: args.item };
+  const item = (args.action === "sell" ? sheet.equipment[lineNamed(sheet.equipment, args.item)] : undefined) ?? { name: args.item, srdName: args.srdName };
   const listCp = listPriceCp(item);
   const eachCp =
     listCp === null
@@ -42,7 +43,7 @@ export function computePurchase(
       };
     }
     const paid = addCopper(purse, -totalCp).purse;
-    const items = grantItemMath(sheet.equipment, args.item.slice(0, 80), args.qty, listCp === null && args.price > 0 ? { worth: args.price } : {});
+    const items = grantItemMath(sheet.equipment, args.item.slice(0, 80), args.qty, { srdName: args.srdName, ...(listCp === null && args.price > 0 ? { worth: args.price } : {}) });
     return {
       patch: { gold: paid.gold, copper: paid.copper, equipment: items.equipment },
       result: {

@@ -12,7 +12,7 @@ export const LIFESTYLES = ["wretched", "squalid", "poor", "modest", "comfortable
 export type Lifestyle = (typeof LIFESTYLES)[number];
 
 export type DowntimeProgress = {
-  crafting?: { item: string; valueCp: number; progressCp: number; tool: string };
+  crafting?: { item: string; srdName?: string; valueCp: number; progressCp: number; tool: string };
   training?: { subject: string; kind: "language" | "tool"; days: number };
   recuperating?: { days: number };
   research?: { topic: string; days: number };

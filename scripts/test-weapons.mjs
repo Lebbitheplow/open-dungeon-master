@@ -132,13 +132,13 @@ test("suggestions dedupe and respect the cap", () => {
   assert.equal(suggested[0], "Longsword");
 });
 
-// A weapon is found by its name as whole words, never as a fragment of
-// another word, also written apart or in the book's order; ammunition is no
-// weapon. What a sheet, a shop or a stat block names reads the same.
+// A weapon is found by its whole name past a "+N" bonus, also written apart
+// or in the book's order; a name that holds one among other words is another
+// item, whose row srdName names, and ammunition is no weapon. What a sheet, a
+// shop or a stat block names reads the same.
 test("the weapon finder reads whole names, never a fragment", () => {
   for (const [name, weapon] of [
     ["+1 long sword", "Longsword"],
-    ["Longsword of the Dawn", "Longsword"],
     ["Hand crossbows", "Hand Crossbow"],
     ["Crossbow, light", "Light Crossbow"],
     ["Crossbow, heavy", "Heavy Crossbow"],
@@ -148,14 +148,13 @@ test("the weapon finder reads whole names, never a fragment", () => {
     ["War hammer", "Warhammer"],
     ["Morning star", "Morningstar"],
     ["Staff", "Quarterstaff"],
-    ["Dagger of Venom", "Dagger"],
     ["Net", "Net"],
   ]) {
     assert.equal(weaponNamed(name)?.name, weapon, name);
   }
   for (const name of [
     "Signet Ring", "Spikes, Iron", "Chain", "Silver", "Vial", "Hammer", "Bullets, Sling (20)", "Sling bullets", "Blowgun needles",
-    "Angry Hornet", "Bed of Spikes", "Signet of the Magister", "Stone Glance", "Telekinetic Pull", "Nether Bolt", "Tail Spike", "Shock", "Sword", "Bow",
+    "Longsword of the Dawn", "Dagger of Venom", "Angry Hornet", "Bed of Spikes", "Signet of the Magister", "Stone Glance", "Telekinetic Pull", "Nether Bolt", "Tail Spike", "Shock", "Sword", "Bow",
   ]) {
     assert.equal(weaponNamed(name), null, name);
   }

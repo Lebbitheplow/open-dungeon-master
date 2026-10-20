@@ -35,12 +35,12 @@ const ac = (input) =>
     ...input,
   }).ac;
 
-test("matches armor by exact and trailing name", () => {
+test("matches armor by its whole name, past a bonus", () => {
   assert.equal(armorNamed("Plate")?.name, "Plate");
   assert.equal(armorNamed("plate armor")?.name, "Plate");
   assert.equal(armorNamed("+1 Plate")?.name, "Plate");
-  assert.equal(armorNamed("Dwarven Chain Mail")?.name, "Chain Mail");
-  // Longest canonical name wins over its own suffix.
+  // A name around the armor's is another item, whose row srdName names.
+  assert.equal(armorNamed("Dwarven Chain Mail"), null);
   assert.equal(armorNamed("Studded Leather")?.name, "Studded Leather");
   assert.equal(armorNamed("Chain Mail")?.name, "Chain Mail");
 });

@@ -66,16 +66,6 @@ export function inHand(item: EquipmentItem, equipment: readonly EquipmentItem[])
   return isWorn(item, equipment);
 }
 
-// The row a name means, exactly first, then by its words.
-export function rowNamed(equipment: readonly EquipmentItem[], name: string): EquipmentItem | null {
-  const wanted = textKey(name);
-  return (
-    equipment.find((item) => textKey(item.name) === wanted) ??
-    equipment.find((item) => textKey(item.name).includes(wanted) && wanted.length >= 3) ??
-    null
-  );
-}
-
 // What fills the hands besides this row, when there is no room left for
 // it: the shield on the arm and the weapons held. Empty when it fits. A
 // two-handed weapon needs both hands; anything else one.
