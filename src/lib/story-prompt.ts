@@ -46,7 +46,13 @@ const THINK_CLOSER = /<\/(?:think|thinking|thought|reasoning)>/gi;
 const FINAL_CHANNEL = /<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?/gi;
 const THOUGHT_CHANNEL_BLOCK =
   /<\|?channel\|?>\s*(?:analysis|commentary|thought|thinking)\b[\s\S]*?(?=<\|?channel\|?>|<\|start\|>|$)/gi;
-const BARE_MARKER = /<\|?(?:start|end|message|channel|return|im_start|im_end)\|?>/gi;
+const BARE_MARKER = /<\|?(?:start|end|message|channel|return|constrain|call|im_start|im_end)\|?>/gi;
+// A Harmony tool call begun in the visible reply (gpt-oss): the recipient
+// "to=functions.request_player_input", with the format and message markers
+// after it. Nothing of it is story; arguments after it are bare JSON, which
+// the DM turn salvages or cuts (src/lib/dm/json-salvage.ts).
+const HARMONY_RECIPIENT =
+  /[ \t]*(?:\b(?:assistant)?commentary\s*)?\bto=functions\.[A-Za-z_][\w.-]*(?:\s*<\|?constrain\|?>\s*\w*|\s+json\b)?(?:\s*<\|?message\|?>)?/gi;
 // Harmony markers collapsed by a broken template glue the role and channel
 // straight into the text ("...assistantfinalYou draw your blade.").
 const GLUED_FINAL = /assistantfinal[:\s]*/gi;
@@ -83,6 +89,7 @@ export function stripReasoningArtifacts(raw: string): string {
 
   text = text
     .replace(THOUGHT_CHANNEL_BLOCK, "")
+    .replace(HARMONY_RECIPIENT, "")
     .replace(BARE_MARKER, "")
     .replace(THINK_TAG, "");
 
@@ -114,7 +121,7 @@ const STREAM_CHANNEL_BOUNDARY = /<\|?channel\|?>|<\|?(?:start|im_start)\|?>/i;
 // and bare Harmony/ChatML tokens. Opening think tags are NOT here — they are
 // handled by STREAM_SUPPRESS_OPEN so the match kinds stay unambiguous.
 const STREAM_STRIP =
-  /<\/(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?|assistantfinal[:\s]*|<\|?(?:start|im_start)\|?>\s*assistant\b|<\|?(?:start|end|message|channel|return|im_start|im_end)\|?>/i;
+  /<\/(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?|assistantfinal[:\s]*|<\|?(?:start|im_start)\|?>\s*assistant\b|<\|?(?:start|end|message|channel|return|constrain|call|im_start|im_end)\|?>/i;
 const STREAM_HOLDBACK_CHARS = 48;
 
 // Whether text stops inside a reasoning block it opened (a <think> or a
@@ -142,6 +149,15 @@ function partialMarkerStart(text: string): number {
   for (let length = window.length; length > 0; length -= 1) {
     if (glued.startsWith(window.slice(-length))) {
       return text.length - length;
+    }
+  }
+  // A trailing prefix of a Harmony recipient ("to=functions."), at a word
+  // start.
+  const recipient = "to=functions.";
+  for (let length = Math.min(recipient.length, text.length); length > 1; length -= 1) {
+    const start = text.length - length;
+    if (recipient.startsWith(text.slice(start)) && (start === 0 || /\W/.test(text[start - 1]))) {
+      return start;
     }
   }
   return -1;
@@ -196,10 +212,11 @@ export function createStreamingArtifactFilter() {
         if (jsonReply) {
           break;
         }
-        // Tool arguments glued to the prose as bare JSON are salvaged or cut
+        // Tool arguments glued to the prose as bare JSON, or a Harmony call
+        // naming its tool ("to=functions.request_roll"), are salvaged or cut
         // once the call completes (src/lib/dm/json-salvage.ts); the prose
-        // before them streams, the object and anything after it wait.
-        const bareJsonAt = pending.search(/\{\s*"/);
+        // before them streams, the call and anything after it wait.
+        const bareJsonAt = pending.search(/\{\s*"|\bto=functions\./);
         if (bareJsonAt >= 0 && !STREAM_SUPPRESS_OPEN.test(pending.slice(0, bareJsonAt))) {
           output += pending.slice(0, bareJsonAt).replace(new RegExp(STREAM_STRIP.source, "gi"), "");
           pending = "";

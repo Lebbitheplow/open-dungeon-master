@@ -33,7 +33,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const { findBareJsonObjects, stripToolText } = await import("../src/lib/dm/tool-text.ts");
 const { salvageJsonToolCalls } = await import("../src/lib/dm/json-salvage.ts");
-const { createStreamingArtifactFilter, extractStoryText } = await import("../src/lib/story-prompt.ts");
+const { createStreamingArtifactFilter, extractReplyText, extractStoryText } = await import("../src/lib/story-prompt.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, getFloor, setCampaignStatus, updateStorySettings, allocateSeq } =
   await import("../src/lib/db/campaigns.ts");
@@ -111,6 +111,28 @@ const catalogue = dmTurnToolCatalogue(getCampaignById(probe.id), false, false);
   const prose = ["A sign reads {closed}", " in chalk."].map((chunk) => plain.push(chunk)).join("") + plain.flush();
   assert.equal(prose, "A sign reads {closed} in chalk.");
   console.log("ok: the stream holds back bare JSON and nothing else");
+}
+
+// gpt-oss on llama-server ended a narration with the start of a Harmony tool
+// call, " to=functions.request_player_input", which reached the table.
+{
+  const leaked = `${QUESTION}\n\n to=functions.request_player_input`;
+  assert.equal(extractStoryText(leaked), QUESTION);
+  const withArgs = extractReplyText(
+    `${QUESTION} to=functions.request_player_input <|constrain|>json<|message|>{"characterIds":["c1"],"prompt":"Where?"}<|call|>`,
+  );
+  assert.ok(!/to=functions|<\|/.test(withArgs), withArgs);
+  const salvaged = salvageJsonToolCalls(withArgs, catalogue);
+  assert.deepEqual(salvaged.calls.map((call) => call.name), ["request_player_input"]);
+  assert.equal(salvaged.text, QUESTION);
+  assert.equal(extractStoryText("You walk to the door. It is locked."), "You walk to the door. It is locked.");
+  const filter = createStreamingArtifactFilter();
+  const streamed = [`${QUESTION} to`, "=functions.request", "_player_input"].map((chunk) => filter.push(chunk)).join("") + filter.flush();
+  assert.equal(streamed.trim(), QUESTION);
+  const plain = createStreamingArtifactFilter();
+  const prose = ["You want to", " go on?"].map((chunk) => plain.push(chunk)).join("") + plain.flush();
+  assert.equal(prose, "You want to go on?");
+  console.log("ok: a Harmony tool call begun in the prose never reaches the table, and its arguments are salvaged");
 }
 
 // ---- the turn machine ----------------------------------------------------------
