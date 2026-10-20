@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { PartyState } from "@/lib/dm/party-logic";
 import { PARTY_BACKSTORY_MAX, PARTY_HOOK_MAX } from "@/lib/dm/party-story";
@@ -61,6 +61,23 @@ export function PartyStory({
   const [note, setNote] = useState("");
   const [hookDraft, setHookDraft] = useState<string | null>(null);
 
+  // Focus follows the edit: a control that unmounts or turns disabled under
+  // the keyboard drops focus to the page, and a screen reader loses its place.
+  // Opening the hook moves into its box, closing it returns to Edit, and a
+  // finished save or draft returns to the backstory box.
+  const backstoryRef = useRef<HTMLTextAreaElement>(null);
+  const hookBoxRef = useRef<HTMLTextAreaElement>(null);
+  const hookEditRef = useRef<HTMLButtonElement>(null);
+  const [focusTo, setFocusTo] = useState<"" | "hookBox" | "hookEdit" | "backstory">("");
+  useEffect(() => {
+    if (!focusTo) {
+      return;
+    }
+    const target = { hookBox: hookBoxRef, hookEdit: hookEditRef, backstory: backstoryRef }[focusTo].current;
+    target?.focus();
+    setFocusTo("");
+  }, [focusTo, hookDraft, busy]);
+
   const dirty = text.trim() !== saved.trim();
 
   async function post(body: unknown): Promise<Record<string, unknown> | null> {
@@ -92,6 +109,7 @@ export function PartyStory({
       setError("Could not reach the server.");
     } finally {
       setBusy("");
+      setFocusTo("backstory");
     }
   }
 
@@ -109,6 +127,7 @@ export function PartyStory({
       setError("Could not reach the server.");
     } finally {
       setBusy("");
+      setFocusTo("backstory");
     }
   }
 
@@ -127,11 +146,15 @@ export function PartyStory({
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         setError(data.error || "Could not save the party hook.");
+        setFocusTo("hookBox");
         return;
       }
       setHookDraft(null);
+      setNote("Party hook saved.");
+      setFocusTo("hookEdit");
     } catch {
       setError("Could not reach the server.");
+      setFocusTo("hookBox");
     } finally {
       setBusy("");
     }
@@ -147,14 +170,27 @@ export function PartyStory({
           <div className="flex items-center justify-between gap-2">
             <span className={ui.sectionEyebrow}>Party hook</span>
             {canEditHook && hookDraft === null ? (
-              <button type="button" data-party-hook-edit onClick={() => setHookDraft(hook)} className="text-xs text-stone-400 hover:text-amber-200">
-                {hook ? "Edit" : "Add one"}
+              <button
+                type="button"
+                ref={hookEditRef}
+                data-party-hook-edit
+                aria-label={hook ? "Edit the party hook" : "Add a party hook"}
+                onClick={() => {
+                  setHookDraft(hook);
+                  setFocusTo("hookBox");
+                }}
+                className="-my-3 -mr-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md px-2 text-xs text-stone-400 hover:text-amber-200"
+              >
+                {/* The name a screen reader hears says what it changes, and
+                    starts with the word on screen for voice control. */}
+                {hook ? "Edit" : "Add"}
               </button>
             ) : null}
           </div>
           {hookDraft !== null ? (
             <div className="mt-1 space-y-2">
               <textarea
+                ref={hookBoxRef}
                 value={hookDraft}
                 onChange={(event) => setHookDraft(event.target.value)}
                 rows={2}
@@ -164,10 +200,18 @@ export function PartyStory({
                 className={ui.input}
               />
               <div className="flex gap-2">
-                <button type="button" data-party-hook-save disabled={busy !== ""} onClick={() => void saveHook()} className={ui.btnSmall}>
+                <button type="button" data-party-hook-save disabled={busy !== ""} onClick={() => void saveHook()} className={cn(ui.btnSmall, "min-h-10")}>
                   {busy === "hook" ? <Loader2 className="size-3.5 animate-spin" /> : null} Save hook
                 </button>
-                <button type="button" onClick={() => setHookDraft(null)} className={ui.btnSmall}>
+                <button
+                  type="button"
+                  data-party-hook-cancel
+                  onClick={() => {
+                    setHookDraft(null);
+                    setFocusTo("hookEdit");
+                  }}
+                  className={cn(ui.btnSmall, "min-h-10")}
+                >
                   Cancel
                 </button>
               </div>
@@ -185,6 +229,7 @@ export function PartyStory({
         {canWrite ? (
           <>
             <textarea
+              ref={backstoryRef}
               value={text}
               onChange={(event) => setText(event.target.value)}
               rows={4}
@@ -199,13 +244,13 @@ export function PartyStory({
                 data-party-backstory-save
                 disabled={busy !== "" || !dirty}
                 onClick={() => void save()}
-                className={ui.btnSmall}
+                className={cn(ui.btnSmall, "min-h-10")}
               >
                 {busy === "save" ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 {text.trim() || !saved ? "Save backstory" : "Clear backstory"}
               </button>
               {hasCharacters && offersStoryModel(capabilities) ? (
-                <button type="button" disabled={busy !== ""} onClick={() => void draft()} className={ui.btnSmall}>
+                <button type="button" disabled={busy !== ""} onClick={() => void draft()} className={cn(ui.btnSmall, "min-h-10")}>
                   {busy === "draft" ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                   Draft from our backstories
                 </button>
@@ -231,7 +276,11 @@ export function PartyStory({
             {error}
           </p>
         ) : null}
-        {note && !error ? <p className="mt-1 text-xs text-emerald-300/80">{note}</p> : null}
+        {/* Always rendered, so a screen reader is already listening when a
+            save's confirmation is written into it. */}
+        <p role="status" data-party-story-status className={cn("text-xs text-emerald-300/80", note && !error ? "mt-1" : "sr-only")}>
+          {note && !error ? note : ""}
+        </p>
         <p className="mt-1 text-xs text-stone-500">
           {savedBy ? `Last saved by ${savedBy}${savedAt && !Number.isNaN(savedAt.getTime()) ? ` on ${savedAt.toLocaleDateString()}` : ""}. ` : ""}
           {inPlay
