@@ -10,9 +10,14 @@ import { textKey } from "@/lib/language/text-logic";
 // now says which: the refusal's reason when there was one, what a spell cast
 // is missing when the message was one, and a plain hint otherwise. Refusals
 // from the DM's other tools stay hidden: their text can name things the
-// table is not meant to see.
+// table is not meant to see. A player action that went through and was then
+// never narrated (the model's last call wrote a tool call instead of prose)
+// says it went through: "try again" there asked for a second attack or a
+// second purchase.
 
 export const EMPTY_TURN_LINE = "The moment hangs there, waiting on the party's next move.";
+export const RESOLVED_TURN_LINE =
+  "Your action went through, and its dice and changes are on the table, but the DM gave no narration for it. Go on with your next move.";
 
 const PLAYER_ACTION_TOOLS = new Set([
   "cast_at_enemy",
@@ -24,6 +29,10 @@ const PLAYER_ACTION_TOOLS = new Set([
   "use_item",
   "use_reaction",
 ]);
+
+// What a player buys goes through these: done once, it must not be asked for
+// again.
+const PURCHASE_TOOLS = new Set(["purchase", "buy_item"]);
 
 const CARDS_HINT = "You can also play it from the cards in your hand.";
 
@@ -41,9 +50,12 @@ export type EmptyTurnPlayer = {
 type ToolCallLike = { id?: string; name?: string; function?: { name?: string } };
 
 export function emptyTurnLine(conversation: ChatMessage[], player?: EmptyTurnPlayer | null): string {
-  const refusal = lastActionRefusal(conversation);
-  if (refusal) {
-    return `The DM could not resolve that: ${refusal} ${CARDS_HINT}`;
+  const outcome = lastActionOutcome(conversation);
+  if (outcome?.refusal) {
+    return `The DM could not resolve that: ${outcome.refusal} ${CARDS_HINT}`;
+  }
+  if (outcome?.resolved) {
+    return RESOLVED_TURN_LINE;
   }
   if (player && player.text.trim()) {
     return explainLooseAction(player);
@@ -51,7 +63,9 @@ export function emptyTurnLine(conversation: ChatMessage[], player?: EmptyTurnPla
   return EMPTY_TURN_LINE;
 }
 
-function lastActionRefusal(conversation: ChatMessage[]): string | null {
+// The latest player action this turn: refused by the rules (its reason), or
+// gone through. A retry or a limit coaches the model and is passed over.
+function lastActionOutcome(conversation: ChatMessage[]): { refusal?: string; resolved?: boolean } | null {
   const names = new Map<string, string>();
   for (const message of conversation) {
     if (message.role !== "assistant" || !Array.isArray(message.tool_calls)) {
@@ -69,7 +83,8 @@ function lastActionRefusal(conversation: ChatMessage[]): string | null {
     if (message.role !== "tool" || !message.tool_call_id || typeof message.content !== "string") {
       continue;
     }
-    if (!PLAYER_ACTION_TOOLS.has(names.get(message.tool_call_id) ?? "")) {
+    const name = names.get(message.tool_call_id) ?? "";
+    if (!PLAYER_ACTION_TOOLS.has(name) && !PURCHASE_TOOLS.has(name)) {
       continue;
     }
     let parsed: unknown;
@@ -83,9 +98,13 @@ function lastActionRefusal(conversation: ChatMessage[]): string | null {
     // the model sent, a choice to ask for) coaches the model and means
     // nothing at the table, and a cap on the turn is not their character
     // failing.
-    if (typeof error === "string" && error.trim() && refused === "rules") {
-      return firstSentences(error);
+    if (typeof error === "string" && error.trim()) {
+      if (refused === "rules" && PLAYER_ACTION_TOOLS.has(name)) {
+        return { refusal: firstSentences(error) };
+      }
+      continue;
     }
+    return { resolved: true };
   }
   return null;
 }

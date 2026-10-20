@@ -121,7 +121,7 @@ const { getActiveEncounter, listEnemies } = await import("../src/lib/db/encounte
 const { listQuests } = await import("../src/lib/db/quests.ts");
 const { listActiveFacts } = await import("../src/lib/db/facts.ts");
 const { listNpcs } = await import("../src/lib/db/npcs.ts");
-const { EMPTY_TURN_LINE } = await import("../src/lib/dm/empty-turn.ts");
+const { EMPTY_TURN_LINE, RESOLVED_TURN_LINE } = await import("../src/lib/dm/empty-turn.ts");
 const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
 const { storyContextTokens } = await import("../src/lib/model-client.ts");
 const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -170,7 +170,7 @@ function parseRescue(line) {
 }
 
 // ---- what a player must never read -------------------------------------------
-const EMPTY_PREFIXES = [EMPTY_TURN_LINE, "The DM had no answer", "The DM could not"];
+const EMPTY_PREFIXES = [EMPTY_TURN_LINE, RESOLVED_TURN_LINE, "The DM had no answer", "The DM could not"];
 const isEmptyTurn = (text) => EMPTY_PREFIXES.some((prefix) => text.startsWith(prefix));
 const ROLL_MARKER = /\[roll:[0-9a-f-]{36}\]\s*/g;
 
