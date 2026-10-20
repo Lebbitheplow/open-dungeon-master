@@ -1044,9 +1044,10 @@ function handleEndTurn(
 
 // pc_attack's endTurn: the player said the attack ends their turn
 // (src/lib/dm/pc-attack-approach.ts). Once the attack resolved, or the walk
-// toward the target spent the turn's movement without reaching it, the turn
-// ends here as end_turn ends it, and the result says who acts next. A
-// refused attack ends nothing: the model hears why first. A parked one
+// toward the target spent the turn's movement without reaching it
+// (outOfReach), the turn ends here as end_turn ends it, and the result says
+// who acts next. Any other refused attack ends nothing: the model hears why
+// first. A parked one
 // (physical dice) waits on its roll, and its player ends the turn.
 function endTurnAfterAttack(
   campaign: Campaign,
@@ -1057,7 +1058,7 @@ function endTurnAfterAttack(
   result: ToolResult,
 ): ToolResult {
   const characterId = endTurnAsked(rawArguments);
-  if (!characterId || result[PC_ATTACK_PARKED] || (result.error && !result.approached)) {
+  if (!characterId || result[PC_ATTACK_PARKED] || (result.error && !result.outOfReach)) {
     return result;
   }
   const ended = handleEndTurn(campaign, turn, JSON.stringify({ characterId }), sheets, sheetsById);

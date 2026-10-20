@@ -311,11 +311,17 @@ export function handlePcAttack(
 
   // The move to the target the player declared, when the swing needs it
   // (src/lib/dm/pc-attack-approach.ts): the plan is asked first (it spends
-  // nothing), and only a refusal for reach alone walks, so the attack is
-  // then planned from where it is made.
+  // nothing), and only a refusal for reach alone walks: asked again with
+  // reach set aside, anything else that would refuse the swing (the turn's
+  // attacks spent, a feature they lack) refuses it where they stand. The
+  // attack is then planned from where it is made.
   if (args.approach) {
     const dry = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById });
     if ("refused" in dry) {
+      const beside = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById, skipReach: true });
+      if ("refused" in beside) {
+        return beside.refused;
+      }
       const approach = approachForAttack(campaign, encounter, sheet, args, dry.refused);
       if (!approach) {
         return dry.refused;

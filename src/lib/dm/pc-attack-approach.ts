@@ -7,9 +7,6 @@ import { openSquaresBeside } from "@/lib/dm/companion-approach";
 import { checkPcAttackRange } from "@/lib/dm/map-tools";
 import type { PcAttackArgs } from "@/lib/dm/pc-attack";
 import { buildAttackProfile } from "@/lib/dm/pc-attack-profile";
-import { spendAttack } from "@/lib/dm/action-budget";
-import { attacksAllowedFor, budgetFor } from "@/lib/dm/turn-budget";
-import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { walkCharacter } from "@/lib/dm/token-rules";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -27,8 +24,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // own turn (token-rules.ts walkCharacter: speed, prone, fear, the
 // opportunity attacks it draws) to the nearest open square beside the
 // target from which the swing can follow. Only a melee attack refused for
-// reach alone walks (every other refusal comes first, so nobody spends their
-// movement on a swing the turn cannot pay for), and only on the model's word
+// reach alone walks (pc-attack.ts asks the plan again with reach set aside,
+// so nobody spends their movement on a swing that would be refused anyway:
+// Qwen3.6-35B sent a fighter's approach with a monk's bonus strike, walked
+// him, and lost his turn to the refusal), and only on the model's word
 // that the player declared the move: the board is the player's otherwise
 // (pc-attack-plan.ts). Out of reach for the whole turn, they close in as
 // far as the movement goes and nothing is attacked, as an enemy's
@@ -39,7 +38,8 @@ export type Approach =
   | { walked: ToolResult }
   // No swing this turn: why, with the walk toward the target when one was
   // made (an endTurn on the attack still ends the turn then).
-  | { refused: ToolError & { approached?: ToolResult } };
+  // outOfReach marks the one refusal an endTurn still ends the turn on.
+  | { refused: ToolError & { approached?: ToolResult; outOfReach?: true } };
 
 export function approachForAttack(
   campaign: Campaign,
@@ -80,15 +80,6 @@ export function approachForAttack(
   if (!blocked || blocked.error !== refusal.error) {
     return null;
   }
-  // The range is asked before the turn's budget (pc-attack-plan.ts), so a
-  // swing the turn has no attack left for is refused here, before the walk.
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
-  if (budget && !args.offHand && !args.bonusAttack && !args.hordeBreaker) {
-    const swing = spendAttack(budget, sheet.name, { unarmed: profile.weapon === "Unarmed strike" });
-    if (!swing.ok) {
-      return { refused: toolError(swing) };
-    }
-  }
   const squares = openSquaresBeside(encounter.id, map, me, them, footprintForSize(enemy.stats.size));
   for (const square of squares) {
     const walked = walkCharacter(campaign, encounter, map, sheet, me, square, { whole: true });
@@ -109,6 +100,7 @@ export function approachForAttack(
       error: `${sheet.name} closes in on ${enemy.displayName} as far as their movement goes and is still out of reach, so nothing was attacked this turn.`,
       refused: "rules",
       approached: walkOf(walked),
+      outOfReach: true,
     },
   };
 }

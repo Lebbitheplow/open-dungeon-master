@@ -85,6 +85,35 @@ await test("pc_attack with endTurn ends the attacker's turn with the attack, and
   assert.equal(current(), kara.id, "the pointer stayed on Avery");
 });
 
+await test("approach with endTurn: a walk that falls short ends the turn as the player asked, nothing attacked", async () => {
+  const goblin = await stage();
+  kit.place(goblin.id, 16, 5);
+  await playerTurn("I close in on the goblin and attack it, then I end my turn.", [
+    reply({ calls: [call("pc_attack", { characterId: avery.id, targetEnemyId: goblin.id, weapon: "Longsword", approach: true, endTurn: true })] }),
+    reply({ text: "Avery charges across the stones but cannot reach the goblin before the moment passes." }),
+  ]);
+  const attack = model.results(model.requests[1]).at(-1)?.result;
+  assert.equal(attack?.outOfReach, true, JSON.stringify(attack));
+  assert.ok(attack?.turnEnded, "the short walk did not end the turn");
+  assert.equal(kit.enemy(goblin.id).currentHp, 400);
+  assert.equal(current(), kara.id);
+});
+
+await test("approach walks nobody into a swing something else refuses, and that refusal ends no turn", async () => {
+  // Qwen3.6-35B sent a fighter's approach and endTurn with a monk's bonus
+  // strike: he was walked, refused, and lost the turn.
+  const goblin = await stage();
+  kit.place(goblin.id, 9, 5);
+  await playerTurn("I rush the goblin and strike, then I end my turn.", [
+    reply({ calls: [call("pc_attack", { characterId: avery.id, targetEnemyId: goblin.id, weapon: "Longsword", approach: true, endTurn: true, bonusAttack: "martial arts" })] }),
+    reply({ text: "Avery hesitates." }),
+  ]);
+  const attack = model.results(model.requests[1]).at(-1)?.result;
+  assert.match(String(attack?.error ?? ""), /Martial Arts/, JSON.stringify(attack));
+  assert.deepEqual([kit.token(avery.id).x, kit.token(avery.id).y], [5, 5], "Avery walked for a swing that was refused anyway");
+  assert.equal(attack?.turnEnded, undefined);
+});
+
 await test("A narration that hands the turn on ends it after the narration, though the model never called end_turn", async () => {
   await stage();
   const text = "Avery feints and slips clear of the goblin's blade. It is now Kara's turn.";
