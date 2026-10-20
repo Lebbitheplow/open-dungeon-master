@@ -104,6 +104,20 @@ export type Beat = {
   y: number;
 };
 
+// Where a card came from (audit WF-19; src/lib/db/workshop-beats.ts
+// beatOrigins). A card with none was made on this board.
+export type BeatOrigin =
+  | { kind: "worldforge"; world: string; scene: string }
+  | { kind: "bundle"; ref: string }
+  | { kind: "copy"; workshopId: string; title: string };
+
+// The origin in the author's words, for the card's editor.
+export function originLine(origin: BeatOrigin): string {
+  if (origin.kind === "worldforge") return "Came in from a WorldForge file. Opening that file again updates this card rather than adding another; what you change here stands.";
+  if (origin.kind === "bundle") return "Came in with a shared workshop bundle.";
+  return origin.title ? `Copied from the workshop “${origin.title}”.` : "Copied from another workshop.";
+}
+
 export function normalizeBeatKind(raw: unknown): BeatKind {
   return (BEAT_KINDS as readonly string[]).includes(raw as string)
     ? (raw as BeatKind)

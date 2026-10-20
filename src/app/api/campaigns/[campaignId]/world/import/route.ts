@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { applyWorldImport } from "@/lib/db/world-forge-io";
+import { applyWorldImport, worldSource } from "@/lib/db/world-forge-io";
+import { scenesWithoutRoom } from "@/lib/db/world-forge-scenes";
+import { MAX_BEATS } from "@/lib/workshop/board";
 import { readWorldForge } from "@/lib/worldforge/format";
 import { publishEphemeral } from "@/lib/events";
 import { uploadRefusalResponse } from "@/lib/upload-budget";
@@ -43,8 +45,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if ("error" in read) {
     return Response.json({ error: read.error }, { status: 400 });
   }
-  if (read.losses.length && !parsed.data.accept) {
-    return Response.json({ preview: true, losses: read.losses, notes: read.notes });
+  // Scenes this board has no room for are a loss of this workshop's, not
+  // the file's, so they are counted here where the board is known.
+  const over = scenesWithoutRoom(campaignId, worldSource(read), read.beats);
+  const losses = over ? [...read.losses, `${over.toLocaleString("en")} of the file's scenes do not fit: a storyboard holds ${MAX_BEATS} cards.`] : read.losses;
+  if ((losses.length || read.sceneLosses.length) && !parsed.data.accept) {
+    return Response.json({ preview: true, losses, scenes: read.sceneLosses, notes: read.notes });
   }
   const result = applyWorldImport(campaignId, { id: context.user.id, isAdmin: context.user.isAdmin }, read);
   if ("error" in result) {

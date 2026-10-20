@@ -206,7 +206,7 @@ export function exportWorkshopBundle(
   // marked shared, so the bundle stands on its own. A shared fight brings
   // the shared map it is drawn on, and a shared place the map it stands on.
   const beats = allRows(
-    `SELECT id, kind, title, body, links_json, edges_json, routes_json, x, y FROM workshop_beats WHERE campaign_id = ? ORDER BY created_at`,
+    `SELECT id, kind, title, body, links_json, edges_json, routes_json, x, y FROM workshop_beats WHERE campaign_id = ? ORDER BY created_at, rowid`,
     workshopId,
   );
   const common = getCommonWorkshop(campaign);
@@ -548,6 +548,7 @@ export function exportWorkshopBundle(
       ) as WorkshopBundle["storyboard"][number]["links"],
       x: Number(row.x) || 0,
       y: Number(row.y) || 0,
+      ref: refFor(workshopId, "beats", str(row.id)),
     };
   });
 
