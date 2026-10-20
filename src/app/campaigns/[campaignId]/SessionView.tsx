@@ -61,6 +61,8 @@ import {
   type PanelTab,
 } from "@/app/campaigns/[campaignId]/SessionTabs";
 import { SessionChatColumn } from "@/app/campaigns/[campaignId]/SessionChatColumn";
+import { AddonViewSwitch, boardViewKey, useBoardView, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
+import { AddonBoardView } from "@/app/campaigns/[campaignId]/AddonBoardView";
 import { SessionHeader } from "@/app/campaigns/[campaignId]/SessionHeader";
 import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/SessionBanner";
 import { isPrimaryDm } from "@/lib/dm/viewer";
@@ -361,16 +363,26 @@ export function SessionView({
   // than a map in the side panel. The header switch shows the story there
   // instead; the choice is the reader's, kept per browser.
   const docked = useDocked();
+  const { active: addonBoardView, views: addonViews, choose: chooseBoardView } = useBoardView(state.battleMap?.addonView?.addonId);
+  const [addonOptions, setAddonOption] = useBoardViewOptions();
+  const sessionLayout = docked && addonBoardView?.sessionLayout === "stage";
+  const [addonStageView, setAddonStageView] = useState<"board" | "story">("board");
+  const restoreNativeView = useCallback(() => chooseBoardView(""), [chooseBoardView]);
   const [stageView, setStageView] = useState<"board" | "story">(() =>
     typeof window !== "undefined" && window.localStorage.getItem("odm:stage-view") === "story" ? "story" : "board",
   );
   const toggleStage = useCallback(() => {
+    if (sessionLayout) {
+      setAddonStageView((current) => current === "board" ? "story" : "board");
+      return;
+    }
     setStageView((current) => {
       const next = current === "board" ? "story" : "board";
       window.localStorage.setItem("odm:stage-view", next);
       return next;
     });
-  }, []);
+  }, [sessionLayout]);
+  const shownStageView = sessionLayout ? addonStageView : stageView;
   const { panelTab, setPanelTab, mobileView, setMobileView } = useSessionTabs({
     chatTarget,
     battleMap: state.battleMap,
@@ -751,7 +763,9 @@ export function SessionView({
   // stage holds the board, the Battle tab shows the party, so the maps
   // step opens the Map tab instead.
   const hasBattleMap = Boolean(state.battleMap);
-  const boardStaged = docked && stageView === "board" && hasBattleMap && !battlePane;
+  // Keep the native Story board under its existing side-panel owner.
+  const boardInPanel = sessionLayout && stageView === "story" && hasBattleMap && !battlePane;
+  const boardStaged = docked && (sessionLayout || stageView === "board") && hasBattleMap && !battlePane;
   const boardInTab = hasBattleMap && !boardStaged;
   const prepareTourStep = useCallback(
     (name: string) => {
@@ -813,7 +827,7 @@ export function SessionView({
   }
 
   const storyDue = storyCadence.level !== "quiet";
-  const fightStaged = boardStaged;
+  const fightStaged = boardStaged || sessionLayout;
   // Two copies of the scroll: the fight stage's has no composer (the desk
   // is right under the board); the enlarged board's keeps it (the dialog
   // covers the desk).
@@ -922,11 +936,11 @@ export function SessionView({
     relationshipsEnabled,
     beats: state.beats,
     tabletopChronicle: chronicleDesk ?? undefined,
-    stageBoard: fightStaged,
+    stageBoard: fightStaged && !battlePane && !boardInPanel,
   } satisfies Omit<SidePanelRouterProps, "tab" | "visible" | "onOpenTab">;
 
   return (
-    <main className="cine-stage flex h-dvh flex-col">
+    <main className="cine-stage flex h-dvh flex-col" data-session-view={sessionLayout ? shownStageView : undefined} data-side-board={boardInPanel ? "" : undefined}>
       {/* The cinematic frame ("ODM World Concepts" 3b): the scene's painting
           behind everything, the party down the left, the turn order along
           the top, the last roll as a pill. CinematicParts.tsx. */}
@@ -953,8 +967,8 @@ export function SessionView({
         ambience={ambience}
         sound={sound}
         onHelp={openHelp}
-        stage={state.battleMap && docked && !battlePane ? { on: stageView === "board", onToggle: toggleStage } : undefined}
-        layoutSeat={layoutSeat}
+        stage={sessionLayout || (state.battleMap && docked && !battlePane) ? { on: shownStageView === "board", onToggle: toggleStage } : undefined}
+        layoutSeat={sessionLayout ? undefined : layoutSeat}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
@@ -967,14 +981,22 @@ export function SessionView({
         }
       />
 
+      {docked && ((!state.battleMap && addonViews.some((view) => view.sessionLayout)) || (sessionLayout && shownStageView === "story")) ? (
+        <div className="relative px-3 py-1">
+          <AddonViewSwitch views={addonViews.filter((view) => state.battleMap || view.sessionLayout)} value={addonBoardView ? boardViewKey(addonBoardView) : ""} onChange={chooseBoardView} stored={addonOptions} onOption={setAddonOption} />
+        </div>
+      ) : null}
+
       <TableRow
         seat={layoutSeat}
-        active={arranged}
+        active={arranged && !sessionLayout}
+        presentation={sessionLayout ? "stage" : undefined}
         tabs={panelTabs}
         panes={[
           {
             id: "rail",
-            node: fightStaged ? null : (
+            available: !fightStaged || sessionLayout,
+            node: fightStaged && !sessionLayout ? null : (
               <PartyRail
                 sheets={sheets}
                 meUserId={me.id}
@@ -988,12 +1010,15 @@ export function SessionView({
             id: "table",
             node: (
               <SessionChatColumn
+                keepTranscript={sessionLayout}
+                showTranscript={sessionLayout && shownStageView === "story"}
                 stage={
-                  fightStaged && state.battleMap ? (
+                  fightStaged ? (
                     <div className="cine-fight">
                       {chronicle}
                       {chronicle ? <ChronicleSplitter /> : null}
-                      <div className="cine-fight-board cine-board-frame">
+                      <div className="cine-fight-board cine-board-frame" hidden={sessionLayout && (shownStageView === "story" || battlePane || boardInPanel)}>
+                        {state.battleMap && !battlePane && !boardInPanel ? (
                         <Suspense fallback={<PanelLoading />}>
                         <BattleMapPanel
                           campaignId={campaign.id}
@@ -1034,6 +1059,17 @@ export function SessionView({
                           visible
                         />
                         </Suspense>
+                        ) : !state.battleMap && sessionLayout && addonBoardView ? (
+                          <AddonBoardView
+                            key={boardViewKey(addonBoardView)}
+                            view={null}
+                            boardView={addonBoardView}
+                            canDirect={caps.adjudicates}
+                            genre={campaign.gameSettings?.genre ?? null}
+                            viewOptions={addonOptions[boardViewKey(addonBoardView)]}
+                            onFailure={restoreNativeView}
+                          />
+                        ) : null}
                       </div>
                     </div>
                   ) : undefined
@@ -1135,6 +1171,7 @@ export function SessionView({
             node: (
               <SidePanel
                 {...routerProps}
+                boardOnStage={boardInPanel}
                 tabs={railTabs}
                 tab={railTab}
                 onTabChange={openTab}

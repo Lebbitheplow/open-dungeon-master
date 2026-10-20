@@ -50,6 +50,15 @@ await test("the example addon's manifest reads", () => {
   assert.deepEqual(addonFit(parsed, host), { ok: true });
 });
 
+await test("session layouts are opt-in, bounded, and independent of map data", () => {
+  const view = { id: "session", title: "Session", entry: "ui/board.html" };
+  const parse = (patch) => addonManifestSchema.safeParse({ ...example, contributes: { boardViews: [{ ...view, ...patch }] } });
+  assert.equal(parse({}).data.contributes.boardViews[0].sessionLayout, undefined);
+  assert.equal(parse({ sessionLayout: "stage" }).data.contributes.boardViews[0].sessionLayout, "stage");
+  assert.equal(parse({ sessionLayout: "custom-css" }).success, false);
+  assert.equal(parse({ sessionLayout: "stage", needsViewData: true }).success, false);
+});
+
 await test("ids, paths and empty addons are refused", () => {
   const bad = (patch) => addonManifestSchema.safeParse({ ...example, ...patch }).success;
   assert.equal(bad({ id: "Hello_Dungeon" }), false);
@@ -270,7 +279,7 @@ await test("catalog entries come from the manifest, and the list is held to its 
   const entry = catalogEntry(manifest, { ...pinned, path: "examples/addons/hello-dungeon" }, { contentSha256: "d".repeat(64), bytes: 4096 }, "tools");
   assert.equal(entry.name, "Hello Dungeon");
   assert.equal(entry.author, "Open Dungeon Master");
-  assert.deepEqual(entry.contributes.boardViews, ["Isometric"]);
+  assert.deepEqual(entry.contributes.boardViews, ["Isometric", "Isometric session"]);
   assert.deepEqual(entry.permissions, ["ai.text"]);
   assert.equal(entry.setupMB, 1);
   const second = { ...entry, id: "another-addon" };

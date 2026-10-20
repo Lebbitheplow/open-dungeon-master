@@ -174,11 +174,16 @@ export const boardViewSchema = z.object({
   // Offered only on maps that carry this addon's view data (a map one of its
   // generators made), rather than on every board.
   needsViewData: z.boolean().default(false),
+  // A host-owned layout of native regions, never addon CSS or React code.
+  sessionLayout: z.literal("stage").optional(),
   // Choices each viewer makes for this view on their own device (a pixel
   // scale, a quality tier for a slower computer), drawn by the table and
   // handed to the view in its snapshot. The frame cannot keep anything of its
   // own: its storage is sandboxed away.
   options: z.array(optionFieldSchema).max(12).default([]),
+}).refine((view) => !view.sessionLayout || !view.needsViewData, {
+  message: "A session layout must work without map-specific view data.",
+  path: ["needsViewData"],
 });
 
 export type WorkshopImporter = z.infer<typeof workshopImporterSchema>;
