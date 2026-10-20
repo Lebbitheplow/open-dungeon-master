@@ -68,15 +68,20 @@ export function PartyStory({
   const backstoryRef = useRef<HTMLTextAreaElement>(null);
   const hookBoxRef = useRef<HTMLTextAreaElement>(null);
   const hookEditRef = useRef<HTMLButtonElement>(null);
-  const [focusTo, setFocusTo] = useState<"" | "hookBox" | "hookEdit" | "backstory">("");
+  // Where focus goes after the render a change causes: set beside the state
+  // change, read once that render has committed.
+  const focusNext = useRef<"" | "hookBox" | "hookEdit" | "backstory">("");
+  const setFocusTo = (target: "hookBox" | "hookEdit" | "backstory") => {
+    focusNext.current = target;
+  };
   useEffect(() => {
-    if (!focusTo) {
+    const next = focusNext.current;
+    if (!next) {
       return;
     }
-    const target = { hookBox: hookBoxRef, hookEdit: hookEditRef, backstory: backstoryRef }[focusTo].current;
-    target?.focus();
-    setFocusTo("");
-  }, [focusTo, hookDraft, busy]);
+    focusNext.current = "";
+    ({ hookBox: hookBoxRef, hookEdit: hookEditRef, backstory: backstoryRef })[next].current?.focus();
+  });
 
   const dirty = text.trim() !== saved.trim();
 
