@@ -186,7 +186,7 @@ export function describeSpeechFailure(error: unknown, backend: Pick<TtsBackend, 
     const detail = error.detail ? `: ${error.detail}` : "";
     return `${where} answered HTTP ${error.status}${detail}`.replace(/\.?$/, ".");
   }
-  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+  if (isSpeechTimeout(error)) {
     return `${where} took too long to answer.`;
   }
   if (error instanceof SpeechEmptyError) {
@@ -256,7 +256,28 @@ export function upstreamDetail(body: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
-async function requestSpeech(backend: TtsBackend, input: string, voice: string, speed: number): Promise<Buffer> {
+// How long one speech request may take before it is given up on. A stalled
+// provider used to hold a table's narration lane for three minutes per
+// passage, so the voice fell further behind the text with every turn. The
+// wait now grows with the passage, from a short floor to a modest ceiling:
+// OpenAI's gpt-4o-mini-tts reads 950 characters in about 9 s, and Kokoro on a
+// CPU is slower still, so the floor leaves room for both.
+export const SPEECH_TIMEOUT_FLOOR_MS = 30_000;
+export const SPEECH_TIMEOUT_CEILING_MS = 60_000;
+const SPEECH_TIMEOUT_MS_PER_CHAR = 25;
+
+export function speechTimeoutMs(characters: number): number {
+  const scaled = SPEECH_TIMEOUT_FLOOR_MS + Math.max(0, characters) * SPEECH_TIMEOUT_MS_PER_CHAR;
+  return Math.min(SPEECH_TIMEOUT_CEILING_MS, scaled);
+}
+
+export function isSpeechTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+export type SpeechRequestOptions = { timeoutMs?: number };
+
+async function requestSpeechOnce(backend: TtsBackend, input: string, voice: string, speed: number, timeoutMs: number): Promise<Buffer> {
   const response = await fetch(`${backend.v1}/audio/speech`, {
     method: "POST",
     headers: {
@@ -264,7 +285,7 @@ async function requestSpeech(backend: TtsBackend, input: string, voice: string, 
       ...(backend.apiKey ? { Authorization: `Bearer ${backend.apiKey}` } : {}),
     },
     body: JSON.stringify({ model: backend.model, voice, input, response_format: "mp3", ...(speed !== 1 ? { speed } : {}) }),
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     throw new SpeechHttpError(response.status, upstreamDetail(await response.text().catch(() => "")));
@@ -274,6 +295,27 @@ async function requestSpeech(backend: TtsBackend, input: string, voice: string, 
     throw new SpeechEmptyError();
   }
   return audio;
+}
+
+// A request that timed out is asked once more: a provider that stalls on one
+// request usually answers the next in seconds. Any other failure is final.
+async function requestSpeech(
+  backend: TtsBackend,
+  input: string,
+  voice: string,
+  speed: number,
+  options: SpeechRequestOptions = {},
+): Promise<Buffer> {
+  const timeoutMs = options.timeoutMs ?? speechTimeoutMs(input.length);
+  try {
+    return await requestSpeechOnce(backend, input, voice, speed, timeoutMs);
+  } catch (error) {
+    if (!isSpeechTimeout(error)) {
+      throw error;
+    }
+    console.warn(`[tts] speech request timed out after ${timeoutMs} ms; asking once more`);
+    return requestSpeechOnce(backend, input, voice, speed, timeoutMs);
+  }
 }
 
 // The model a passage is asked for: the one picked (or TTS_MODEL), else, on
@@ -297,7 +339,13 @@ export async function withNarrationModel(backend: TtsBackend): Promise<TtsBacken
 }
 
 // One clip of speech from the configured server.
-export async function synthesizeSpeech(input: string, voice: string, speed = 1, configured: TtsBackend = ttsBackend()): Promise<Buffer> {
+export async function synthesizeSpeech(
+  input: string,
+  voice: string,
+  speed = 1,
+  configured: TtsBackend = ttsBackend(),
+  options: SpeechRequestOptions = {},
+): Promise<Buffer> {
   if (configured.provider === "off") {
     throw new Error("Narration is switched off on this server.");
   }
@@ -309,7 +357,7 @@ export async function synthesizeSpeech(input: string, voice: string, speed = 1, 
   // A local server with no default named falls back to the first voice it
   // lists, as the admin form says it will.
   const defaultVoice = backend.defaultVoice || voices[0] || "";
-  return requestSpeech(backend, input, effectiveVoice(voice, { ...backend, defaultVoice }, voices), speed);
+  return requestSpeech(backend, input, effectiveVoice(voice, { ...backend, defaultVoice }, voices), speed, options);
 }
 
 type VoiceCacheEntry = { at: number; ids: string[]; listed: boolean };
