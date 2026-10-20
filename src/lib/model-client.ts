@@ -175,6 +175,10 @@ export type ChatRequestOptions = {
   // that each name the other route cannot send it back and forth. Set only
   // by requestCustomMessage's own route switch, like dropParams.
   refusedRoutes?: readonly OpenAiToolRoute[];
+  // Set on the one retry of a reply the backend's own parser threw away
+  // (UNPARSED_REPLY), so a second refusal is the answer. Set only by
+  // requestCustomMessage, like dropParams.
+  unparsedRetried?: boolean;
   // Which of the server's two models this call is for: the admin's Fast
   // setting is per role (issue 255). Unset reads as the story model.
   role?: "story" | "utility";
@@ -699,6 +703,22 @@ function guardReasoningDelta(streaming: boolean, cancel: () => void, budgetChars
       throw new StreamRepetitionError(null);
     }
   };
+}
+
+// llama-server's own parser refusing what the model wrote (common/chat.cpp:
+// "The model produced output that does not match the expected peg-native
+// format"), inside a stream that answered 200 or as a 500. The whole reply is
+// thrown away. gpt-oss-20b does it when the server's reasoning budget forces
+// the end of its thought (--reasoning-budget, which the app's preset sets) and
+// it writes on without opening its answer: 4 of 734 calls on the BC-250 and 2
+// of about 80 fight turns, each a halted turn (2026-10-20). llama.cpp b10621,
+// the build the app pins, b11721 and master all parse it so. A fresh reply is
+// almost always whole, so the call is asked once more.
+const UNPARSED_REPLY = /model produced output that does not match the expected/i;
+
+function unparsedRetry(options: ChatRequestOptions): ChatRequestOptions {
+  console.warn("[model] the backend could not parse the model's reply and threw it away; the call is asked again");
+  return { ...options, unparsedRetried: true };
 }
 
 // The same call asked again without thinking, once its reasoning ran past
@@ -1255,6 +1275,10 @@ async function requestCustomMessageNow(
       });
     }
 
+    if (!options.unparsedRetried && UNPARSED_REPLY.test(text)) {
+      return requestCustomMessageNow(baseUrl, model, apiKey, messages, unparsedRetry(options));
+    }
+
     return {
       error: Response.json(
         {
@@ -1435,6 +1459,12 @@ async function requestCustomMessageNow(
     }
 
     if (upstreamError) {
+      // Asked again only while nothing of it reached the table: the parser
+      // refuses at the point it stops following, and story text before that
+      // point has already streamed.
+      if (!options.unparsedRetried && UNPARSED_REPLY.test(upstreamError) && !contentParts.length && !toolCalls.some(Boolean)) {
+        return requestCustomMessageNow(baseUrl, model, apiKey, messages, unparsedRetry(options));
+      }
       return {
         error: Response.json(
           {

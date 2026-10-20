@@ -33,6 +33,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const seen = { chat: [], ollama: [] };
 // Per model: "ok", "fail" (500), or a window it refuses past ("n_ctx:4096").
 const behaviour = new Map();
+const unparsedOnce = new Set();
 function sse(res, deltas, usage, finish = "stop", extra = {}) {
   res.writeHead(200, { "Content-Type": "text/event-stream" });
   for (const delta of deltas) {
@@ -59,6 +60,21 @@ const server = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" }).end(
           JSON.stringify({ error: { code: 500, message: "Error: Jinja Exception: After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results.", type: "server_error" } }),
         );
+        return;
+      }
+      // llama-server's own parser throwing the reply away, as it words it:
+      // once, every time, or after story text already streamed.
+      if (mode.startsWith("unparsed") && (mode !== "unparsed" || !unparsedOnce.has(body.model))) {
+        unparsedOnce.add(body.model);
+        const error = { code: 500, message: "The model produced output that does not match the expected peg-native format", type: "server_error" };
+        if (!body.stream) {
+          res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error }));
+          return;
+        }
+        const delta = mode === "unparsed-after-text" ? { content: "The guard " } : { reasoning_content: "We need to" };
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+        res.end(`data: ${JSON.stringify({ error })}\n\n`);
         return;
       }
       if (mode.startsWith("n_ctx:")) {
@@ -215,6 +231,38 @@ const lastCalls = (n) =>
   await requestDmMessage(settings(), turn, { onDelta: () => {} });
   assert.deepEqual(seen.chat[0].messages.map((message) => message.role), ["system", "user", "user"], "another model is sent the messages as they are");
   console.log("ok: a template that refuses two user messages in a row is sent them joined, from then on");
+}
+
+// ---- 1c. a reply llama-server's own parser threw away ------------------------------
+// gpt-oss-20b writing on past the end its reasoning budget forced: the turn
+// halted on "Backend stream failed." (BC-250, 2026-10-20).
+{
+  process.env.OPENAI_COMPAT_CONTEXT = "8192";
+  const turn = [
+    { role: "system", content: "Rules." },
+    { role: "user", content: "[Avery | attempt] I search the cart." },
+  ];
+  const ask = async (name, mode, streaming) => {
+    behaviour.set(name, mode);
+    seen.chat.length = 0;
+    const result = await requestDmMessage(settings({ customModel: name }), turn, streaming ? { onDelta: () => {} } : {});
+    return { result, sent: seen.chat.length, said: result.error ? await result.error.json() : null };
+  };
+  const streamed = await ask("unparsed-stream", "unparsed", true);
+  assert.equal(streamed.said, null, JSON.stringify(streamed.said));
+  assert.equal(streamed.sent, 2, "thrown away once, then asked again");
+  assert.equal(streamed.result.message.content, "The guard nods.");
+  const whole = await ask("unparsed-whole", "unparsed", false);
+  assert.equal(whole.said, null, JSON.stringify(whole.said));
+  assert.equal(whole.sent, 2);
+  assert.equal(whole.result.message.content, "Summary.");
+  const twice = await ask("unparsed-twice", "unparsed-always", true);
+  assert.equal(twice.sent, 2, "asked again once, not for ever");
+  assert.match(twice.said?.detail ?? "", /does not match the expected peg-native format/);
+  const afterText = await ask("unparsed-text", "unparsed-after-text", true);
+  assert.equal(afterText.sent, 1, "story text had already gone to the table, and the call was asked again");
+  assert.ok(afterText.said);
+  console.log("ok: a reply the backend's parser threw away is asked again once, unless its story text already streamed");
 }
 
 // ---- 2. refused before the call on a known window ---------------------------------

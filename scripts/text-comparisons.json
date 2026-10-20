@@ -1760,7 +1760,7 @@
     "lib/media-access.ts#re-word": [["key",2,"upload paths, table names, SQLite column types, media kinds"]],
     "lib/media-access.ts#str-eq": [["key",7,"upload paths, table names, SQLite column types, media kinds"]],
     "lib/media-queue.ts#str-eq": [["key",1,"queue lane id"]],
-    "lib/model-client.ts#re-word": [["key",7,"provider ids and endpoint paths"],["english-source",3,"the model server's own English error message, read to name the failure"]],
+    "lib/model-client.ts#re-word": [["key",7,"provider ids and endpoint paths"],["english-source",4,"the model server's own English error message, read to name the failure"]],
     "lib/model-client.ts#str-eq": [["key",12,"provider ids and endpoint paths"]],
     "lib/model-registry/catalog-logic.ts#[a-z]": [["key",3,"hostnames, model and provider ids, release dates"]],
     "lib/model-registry/catalog-logic.ts#\\b": [["key",1,"hostnames, model and provider ids, release dates"]],
