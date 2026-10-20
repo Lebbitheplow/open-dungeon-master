@@ -109,9 +109,15 @@ export type FeatGrantInput = {
   // and the rest is left alone (a stored sheet, a companion the engine
   // drafts).
   strict: boolean;
+  // With strict: a pick left open is owed rather than wrong, and lands in
+  // `owed` instead of `problems`; a pick that is named is still held to the
+  // feat. A file exported before a feat asked for its picks names none of
+  // them (issue #430), and what it does name is still somebody's hand edit.
+  picksMayWait?: boolean;
 };
 
-export type FeatGrantVerdict = { proficiencies: Proficiencies; problems: string[] };
+// `owed`: the picks still to make, when they may wait (picksMayWait).
+export type FeatGrantVerdict = { proficiencies: Proficiencies; problems: string[]; owed?: string[] };
 
 const WEAPON_NAMES = new Set(SRD_WEAPONS.map((weapon) => lower(weapon.name)));
 const weaponName = (name: string) => SRD_WEAPONS.find((weapon) => lower(weapon.name) === lower(name))?.name ?? null;
@@ -120,6 +126,7 @@ const weaponName = (name: string) => SRD_WEAPONS.find((weapon) => lower(weapon.n
 // picks as the sheet records them, held to the feat's text when strict.
 export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
   const problems: string[] = [];
+  const owedPicks: string[] = [];
   let languages = [...input.proficiencies.languages];
   let skills = [...input.proficiencies.skills];
   let expertise = [...(input.proficiencies.expertise ?? [])];
@@ -165,7 +172,7 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
     if (input.strict) {
       const owed = featPicksOwed(feat.name, spec, picks);
       if (owed) {
-        problems.push(owed);
+        (input.picksMayWait ? owedPicks : problems).push(owed);
       }
       const element = lower(picks.damageType ?? "");
       if (spec.damageTypes.length && element && !spec.damageTypes.includes(element)) {
@@ -310,6 +317,7 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
   return {
     problems,
     proficiencies: { ...input.proficiencies, languages, skills, expertise, weapons, tools, armor },
+    ...(owedPicks.length ? { owed: owedPicks } : {}),
   };
 }
 

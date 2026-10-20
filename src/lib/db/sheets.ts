@@ -23,6 +23,8 @@ import type {
 } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 
+type FeatChoices = NonNullable<CreateSheetInput["featChoices"]>;
+
 // Every rule that reads a species by id reads a pack or workshop species
 // through this (src/lib/srd/race-id.ts); every sheet the engines touch
 // comes through this module first.
@@ -76,6 +78,7 @@ type SheetRow = {
   companion_kind: string | null;
   personality: string | null;
   hand_layout_json?: string | null;
+  feat_choices_json?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -162,6 +165,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
         : null,
     personality: row.personality ?? "",
     ...handLayoutOf(row.hand_layout_json),
+    ...featChoicesOf(row.feat_choices_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -173,6 +177,16 @@ function handLayoutOf(json: string | null | undefined): { handLayout?: HandLayou
   const layout = json ? normalizeHandLayout(parseJson(json, null)) : null;
   return layout ? { handLayout: layout } : {};
 }
+
+// The picks the sheet's feats and subclass grants were made with, when it
+// records any (issue #430).
+function featChoicesOf(json: string | null | undefined): { featChoices?: FeatChoices } {
+  const choices = json ? parseJson<FeatChoices | null>(json, null) : null;
+  return choices && typeof choices === "object" && Object.keys(choices).length ? { featChoices: choices } : {};
+}
+
+const featChoicesJson = (choices: FeatChoices | undefined): string | null =>
+  choices && Object.keys(choices).length ? JSON.stringify(choices) : null;
 
 // The player's arrangement of this character's Hand (issue 231), or null to
 // go back to the automatic split. Only the layout column is written: it is a
@@ -191,7 +205,7 @@ const SHEET_COLUMNS = `
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
-  portrait_json, notes, backstory, is_companion, companion_kind, personality, hand_layout_json, created_at, updated_at
+  portrait_json, notes, backstory, is_companion, companion_kind, personality, hand_layout_json, feat_choices_json, created_at, updated_at
 `;
 
 // Flags a freshly created sheet as an AI companion. Kept out of the main
@@ -369,9 +383,9 @@ export function createSheet(
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
         hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, copper, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
-        notes, backstory, created_at, updated_at
+        notes, backstory, feat_choices_json, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -418,6 +432,7 @@ export function createSheet(
     input.notes,
     // Older library sheet_json blobs predate the field.
     input.backstory ?? "",
+    featChoicesJson(input.featChoices),
     now,
     now,
   );
@@ -712,6 +727,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     portrait: patch.portrait !== undefined ? patch.portrait : existing.portrait,
     notes: patch.notes ?? existing.notes,
     backstory: patch.backstory ?? existing.backstory,
+    featChoices: patch.featChoices ?? existing.featChoices,
   };
 
   // A level or a class that changed, by any path, brings its features, hit
@@ -838,7 +854,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           spellcasting_json = ?, wild_shape_json = ?, pets_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?, concentration_rounds = ?,
           feats_json = ?, features_json = ?, subclass = ?,
           classes_json = ?, hit_dice_pools_json = ?,
-          portrait_json = ?, notes = ?, backstory = ?, updated_at = ?
+          portrait_json = ?, notes = ?, backstory = ?, feat_choices_json = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -882,6 +898,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.portrait ? JSON.stringify(next.portrait) : null,
       next.notes,
       next.backstory,
+      featChoicesJson(next.featChoices),
       nowIso(),
       sheetId,
     );

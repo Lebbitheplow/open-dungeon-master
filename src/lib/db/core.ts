@@ -1555,6 +1555,12 @@ function ensureSchema(db: SqliteDatabase) {
     ["gender", `TEXT NOT NULL DEFAULT ''`],
     // Player-authored backstory, visible to the whole party and the DM.
     ["backstory", `TEXT NOT NULL DEFAULT ''`],
+    // The picks a feat or a subclass grant left to the player (Linguist's
+    // languages, a Lore bard's skills), keyed by its name, as the library
+    // copy keeps them. A level-up records the ones it applies, so the
+    // character goes home, to a file and to the builder with them (issue
+    // #430). NULL on sheets stored before the column: nothing recorded.
+    ["feat_choices_json", `TEXT`],
     // Class features, racial traits, and story-granted abilities; the DM
     // prompt treats this as the complete list of what a character can do.
     ["features_json", `TEXT`],
