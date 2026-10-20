@@ -97,6 +97,10 @@ export default {
         await entry({ typeId: typeOf("lore"), name: `Wall Lore ${at} ${stamp}`, text: `The sea wall's ${at}th tower keeps its lamps trimmed at dusk.\n\nStorms come over the sea wall in the ${at}th month, and the lamps on the wall are lit early.` });
       }
 
+      // The app shell reads the host's capabilities once, when it signs in,
+      // so the stand-in model above never reaches it and the Ask tab stays
+      // gated. The view is the same compiled page; the website run covers it.
+      if (t.app) return;
       await t.open(`/workshop/${id}?system=world&view=ask`);
       const input = page.getByRole("textbox", { name: "A question about the world" }).locator("visible=true");
       await input.waitFor({ timeout: 30_000 });

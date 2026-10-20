@@ -317,6 +317,14 @@ async function appNavigate(page, route, ids, touch) {
     }
     await tile.waitFor({ state: "visible", timeout: 30_000 });
     await tap(tile);
+    // A page under the campaign (its character chooser, its table): once the
+    // campaign is open, push the full route on the shell's router, the way
+    // the lobby's own links do.
+    const rest = route.slice(`/campaigns/${campaign}`.length);
+    if (rest && !rest.startsWith("?")) {
+      await sleep(2_000);
+      await push(route);
+    }
   } else {
     await push(route);
   }
