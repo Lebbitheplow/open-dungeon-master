@@ -44,6 +44,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { LeadPanel as LeadPanelComponent } from "@/app/campaigns/[campaignId]/LeadPanel";
 import type { SessionSettings as SessionSettingsComponent } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { PanelLoading, panels } from "@/app/campaigns/[campaignId]/side-panel-loaders";
+import { mayWritePartyBackstory } from "@/lib/dm/party-story";
 
 // Every panel but the party roster (the tab a table opens on) is its own
 // download, fetched when its tab is first opened or, sooner, when the
@@ -406,6 +407,19 @@ export function SidePanelRouter({
                 meUserId={meUserId}
                 party={campaign?.party}
                 arrangesFormation={isLead || adjudicates}
+                partyStory={
+                  campaign?.gameSettings
+                    ? {
+                        hook: campaign.gameSettings.partyHook ?? "",
+                        canWrite: mayWritePartyBackstory({
+                          isLead,
+                          holdsDmSeat: meUserId === campaign.dmUserId || meUserId === campaign.assistantDmUserId,
+                          hasCharacter: sheets.some((sheet) => sheet.userId === meUserId && !sheet.isCompanion),
+                        }),
+                        canEditHook: steersStory,
+                      }
+                    : undefined
+                }
                 spotlightUserIds={spotlightUserIds}
                 onlineUserIds={onlineUserIds}
                 steersStory={steersStory}

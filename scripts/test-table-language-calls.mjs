@@ -232,6 +232,8 @@ const CLASSIFIED = {
   "src/lib/dm/overworld-describe.ts": { prose: 1, machine: 0 },
   "src/lib/dm/recap.ts": { prose: 1, machine: 0 },
   "src/lib/dm/setup.ts": { prose: 1, machine: 0 },
+  // The party backstory's draft button: a draft the players edit.
+  "src/lib/dm/party-draft.ts": { prose: 1, machine: 0 },
   "src/lib/dm/world-arc.ts": { prose: 1, machine: 0 },
   // WorldForge's forge, ask and draft, through one helper.
   "src/lib/dm/world-ai.ts": { prose: 1, machine: 0 },

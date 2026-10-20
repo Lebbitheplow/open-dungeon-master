@@ -1,6 +1,7 @@
 "use client";
 
 import { TravelFormation } from "@/app/campaigns/[campaignId]/TravelFormation";
+import { PartyStory } from "@/app/campaigns/[campaignId]/PartyStory";
 import type { PartyState } from "@/lib/dm/party-logic";
 import { fieldedOf } from "@/lib/player-characters";
 import { Bot, Check, Crown, Heart, ImagePlus, PawPrint, Save, Sparkles, UserPlus } from "lucide-react";
@@ -322,6 +323,7 @@ export function PartyPanel({
   onLevelUp,
   party,
   arrangesFormation = false,
+  partyStory,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
@@ -329,6 +331,9 @@ export function PartyPanel({
   // arranges it (the party lead, or the DM seat where a person runs it).
   party?: PartyState;
   arrangesFormation?: boolean;
+  // Why this party is together (PartyStory.tsx), at a table that plays: the
+  // setup hook and who may edit what. Left out (a workshop), no card.
+  partyStory?: { hook: string; canWrite: boolean; canEditHook: boolean };
   // A level-up the experience has earned and nobody has taken yet: the
   // owner's card offers it.
   levelUpLevel?: number | null;
@@ -910,6 +915,21 @@ export function PartyPanel({
           meUserId={meUserId}
           arranges={arrangesFormation}
         />
+      ) : null}
+
+      {partyStory && campaignId && (partyStory.hook || party?.backstory || partyStory.canWrite) ? (
+        <section className="mt-4 space-y-2">
+          <SectionHead title="Party story" glyph="tab-party" level="h3" />
+          <PartyStory
+            campaignId={campaignId}
+            hook={partyStory.hook}
+            party={party}
+            canWrite={partyStory.canWrite}
+            canEditHook={partyStory.canEditHook}
+            hasCharacters={sheets.some((sheet) => !(sheet.isCompanion && sheet.companionKind === "guest"))}
+            inPlay
+          />
+        </section>
       ) : null}
 
       {buildingCompanion && campaignId ? (

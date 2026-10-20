@@ -11,6 +11,7 @@ import { nameRegisterHint } from "@/lib/genres";
 import { publishPersisted } from "@/lib/events";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { requestDmMessage } from "@/lib/dm/model";
+import { partyStoryOf, partyStorySetupLines } from "@/lib/dm/party-story";
 
 // Pre-session story setup: one model call that invents a premise, opening
 // scene, and a SECRET outline the DM steers by. Runs on the campaign's DM
@@ -29,6 +30,9 @@ export async function runStorySetup(campaignId: string) {
   const worldHints = [
     campaign.theme ? `World/theme set by the table: ${campaign.theme}` : "",
     campaign.description ? `Table's own premise notes: ${campaign.description}` : "",
+    // Why the party is together, when the table said: the premise invented
+    // here should fit it. Read only; both stay the table's to write.
+    ...partyStorySetupLines(partyStoryOf(campaign)),
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
       : `Genre: ${preset.name}. ${preset.dmFlavor} ${nameRegisterHint(preset.nameHints)}`,

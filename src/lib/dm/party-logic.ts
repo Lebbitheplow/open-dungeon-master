@@ -5,6 +5,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { lineNamed } from "@/lib/srd/item-row";
 import { listedItemTags } from "@/lib/schemas/item-tags";
 import type { ItemFacts } from "@/lib/dm/mutation-math";
+import { PARTY_BACKSTORY_MAX } from "@/lib/dm/party-story";
 
 // The party as a thing in its own right.
 //
@@ -61,6 +62,13 @@ export type PartyState = {
   // What the party is doing between scenes: "resting", "on the road to
   // Dunmar", "searching the archive". One line, shown to the table.
   activity: string;
+  // Optional: the table's shared account of who these characters are to
+  // each other, written in the lobby (src/lib/dm/party-story.ts). Any seated
+  // player, the lead or a DM may rewrite it and the latest save wins, so the
+  // record keeps who saved it last and when. "" is no backstory.
+  backstory: string;
+  backstoryBy: string;
+  backstoryAt: string;
 };
 
 export const PARTY_ITEM_NAME_MAX = 80;
@@ -78,6 +86,9 @@ export function emptyParty(): PartyState {
     marchingOrder: [],
     formationChange: null,
     activity: "",
+    backstory: "",
+    backstoryBy: "",
+    backstoryAt: "",
   };
 }
 
@@ -104,6 +115,9 @@ export function normalizeParty(raw: unknown): PartyState {
       : [],
     formationChange: normalizeFormationChange(record.formationChange),
     activity: String(record.activity ?? "").slice(0, PARTY_ACTIVITY_MAX),
+    backstory: String(record.backstory ?? "").slice(0, PARTY_BACKSTORY_MAX),
+    backstoryBy: String(record.backstoryBy ?? "").slice(0, 80),
+    backstoryAt: String(record.backstoryAt ?? "").slice(0, 40),
   };
 }
 

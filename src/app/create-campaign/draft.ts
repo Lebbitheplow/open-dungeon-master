@@ -20,6 +20,8 @@ export type CampaignDraft = {
   dmMode: DmModeSetting;
   title: string;
   description: string;
+  // Optional: why the group is together, before anyone has a character.
+  partyHook: string;
   theme: string;
   maxPlayers: number;
   startingLevel: number;
@@ -91,6 +93,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   dmMode: "ai",
   title: "",
   description: "",
+  partyHook: "",
   theme: "",
   maxPlayers: 5,
   startingLevel: 1,

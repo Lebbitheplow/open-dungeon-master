@@ -6,6 +6,7 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { GENRE_PRESETS } from "@/lib/genres";
+import { PARTY_HOOK_MAX } from "@/lib/dm/party-story";
 import {
   TABLE_LANGUAGE_HELP,
   TABLE_LANGUAGE_LABELS,
@@ -33,9 +34,10 @@ const SETTING_INFO = `The setting decides how the world sounds, what the maps an
 ).join("\n\n")}`;
 
 // The setting as eight painted portals, its custom description, the theme the
-// preset writes (and the person may overwrite) and the premise. One component
-// because the portals and the theme field share the type-in: picking a
-// portal writes the preset's line into the theme while it plays.
+// preset writes (and the person may overwrite), the premise and the optional
+// party hook. One component because the portals and the theme field share the
+// type-in: picking a portal writes the preset's line into the theme while it
+// plays.
 export function WorldFields({
   draft,
   patch,
@@ -197,6 +199,31 @@ export function WorldFields({
             maxLength={500}
             className="cc-bare"
           />
+        </span>
+      </label>
+
+      {/* Written before anyone has a character, so it is about the group,
+          never a named hero; the players can say who they are to each other
+          in the lobby's party backstory once they have joined. */}
+      <label className="cc-field block">
+        <span className="cc-field-head">
+          <span className="cc-eyebrow">Party hook</span>
+          <span className="cc-note">optional; why the group is together</span>
+        </span>
+        <span className="cc-serif block">
+          <textarea
+            value={draft.partyHook}
+            onChange={(event) => patch({ partyHook: event.target.value })}
+            rows={2}
+            maxLength={PARTY_HOOK_MAX}
+            placeholder="For example: deserters from the same border company, survivors of one shipwreck, debtors to the same guild."
+            className="cc-bare"
+          />
+        </span>
+        <span className="mt-1 block text-xs text-stone-500">
+          A line about the group, not anyone in it: characters come later. Leave it blank and the
+          party meets however the story starts. The players can write their shared backstory in the
+          lobby.
         </span>
       </label>
     </div>
