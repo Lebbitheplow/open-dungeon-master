@@ -94,8 +94,13 @@ test("resolveAttackWeapon: a shield on the arm passes over a two-handed weapon",
     { name: "Shield", qty: 1, equipped: true },
     { name: "Light Crossbow", qty: 1 },
   ];
-  assert.equal(resolveAttackWeapon(kit, ["simple"], undefined).srd?.name, "Light Crossbow");
+  // The mace is the one in hand (issue #424: held before stowed).
+  assert.equal(resolveAttackWeapon(kit, ["simple"], undefined).srd?.name, "Mace");
   assert.equal(resolveAttackWeapon(kit, ["simple"], undefined, { shieldOnArm: true }).srd?.name, "Mace");
+  // With both held, the crossbow's bigger die wins until the shield is on.
+  const held = kit.map((item) => ({ ...item, equipped: true }));
+  assert.equal(resolveAttackWeapon(held, ["simple"], undefined).srd?.name, "Light Crossbow");
+  assert.equal(resolveAttackWeapon(held, ["simple"], undefined, { shieldOnArm: true }).srd?.name, "Mace");
   // A named weapon is still the one named; the hands rule refuses it.
   assert.equal(resolveAttackWeapon(kit, ["simple"], "light crossbow", { shieldOnArm: true }).srd?.name, "Light Crossbow");
   // Only two-handed weapons carried: still the best of them, so the refusal

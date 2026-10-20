@@ -8,6 +8,7 @@ import { ADVENTURE_BEGINS_NOTE, LEAD_NOTE_PREFIX, OPENING_SCENE_CUE, type Campai
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
+import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 // The genre catalogs' rules text, all of it: the model reads it beside a
 // custom feature (src/lib/classes/feature-text.ts).
@@ -229,6 +230,9 @@ export type DmGameState = {
   }>;
   // Public party notes (lead-curated canon), pinned first.
   publicNotes?: Array<{ pinned: boolean; title: string; body: string }>;
+  // Things dropped rather than lost, where they lie (src/lib/dm/gear-tool.ts
+  // describeGround, issue #424).
+  groundItems?: string[];
   // The DM's private prep notes (src/lib/db/notes.ts listDmPrepNotes).
   dmPrepNotes?: Array<{ title: string; body: string }>;
   // Server-tracked world facts (the divergence register), newest first.
@@ -661,6 +665,13 @@ export function describeSheet(
         : "none"
     } | Gold: ${sheet.gold}`,
   );
+  // What the hands hold and the body wears, on a sheet that says (issue
+  // #424): an attack with anything else draws it first, the turn's free
+  // object interaction.
+  if (wearingIsExplicit(sheet.equipment)) {
+    const worn = sheet.equipment.filter((item) => item.equipped === true).map((item) => item.name);
+    lines.push(`  Worn and in hand: ${worn.length ? worn.join(", ") : "nothing"} (everything else is packed away)`);
+  }
   if (sheet.background || sheet.alignment) {
     lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
@@ -938,6 +949,12 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.houseRulesBlock) {
     moment.push(state.houseRulesBlock);
+  }
+  // In the moment: a drop or a pick-up changes it from one turn to the next.
+  if (state.groundItems?.length) {
+    moment.push(
+      `On the ground (dropped, not lost; anyone within 5 ft takes it with handle_item pick_up, by name or [id]):\n${state.groundItems.map((line) => `- ${line}`).join("\n")}`,
+    );
   }
   if (state.loreBlock) {
     moment.push(state.loreBlock);

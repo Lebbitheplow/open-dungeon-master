@@ -62,6 +62,11 @@ export type TurnBudget = {
   hasteGranted?: number;
   // Slow: an action OR a bonus action this turn, and one attack.
   slowed?: boolean;
+  // The one free object interaction of the turn (SRD 5.1, Actions in
+  // Combat): what it went on, and how many one-handed weapons it drew or
+  // stowed (Dual Wielder's two). A second object takes the Use an Object
+  // action (src/lib/dm/gear-hands.ts spendInteraction).
+  interaction?: { what: string; weapons: number };
 };
 
 export function freshBudget(input: {
@@ -375,6 +380,9 @@ export function describeBudget(budget: TurnBudget): string {
   }
   if ((budget.extraActions ?? 0) > 0) {
     parts.push("an extra action (Haste)");
+  }
+  if (!budget.interaction) {
+    parts.push("free object interaction");
   }
   if (budget.dashed) {
     parts.push("doubled movement (Dash)");

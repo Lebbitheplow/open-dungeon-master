@@ -13,13 +13,13 @@
 // Pure: the schema, the prompt line and the correction are testable without
 // a database.
 import { z } from "zod";
-import { HAND_INTENT_ACTIONS, describeHandExtras, handExtraArgs, handIntentExtras } from "@/lib/battlemap/hand-intent";
+import { HAND_GEAR_ACTIONS, HAND_INTENT_ACTIONS, describeHandExtras, handExtraArgs, handIntentExtras } from "@/lib/battlemap/hand-intent";
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 
 export const messageIntentSchema = z.object({
   ...handIntentExtras,
-  card: z.enum(["attack", "rider", "spell", "feature", "basic", "reaction"]),
+  card: z.enum(["attack", "rider", "spell", "feature", "basic", "reaction", "gear"]),
   weapon: text(80).optional(),
   offHand: z.boolean().optional(),
   rider: text(80).optional(),
@@ -27,7 +27,7 @@ export const messageIntentSchema = z.object({
   slotLevel: z.number().int().min(0).max(9).nullable().optional(),
   resourceId: text(80).optional(),
   action: z
-    .enum(["dodge", "dash", "disengage", "help", "hide", "ready", "grapple", "shove", "use-object", "end-turn", ...HAND_INTENT_ACTIONS])
+    .enum(["dodge", "dash", "disengage", "help", "hide", "ready", "grapple", "shove", "use-object", "end-turn", ...HAND_INTENT_ACTIONS, ...HAND_GEAR_ACTIONS])
     .optional(),
   targetId: text(120).optional(),
   targetName: text(120).optional(),
@@ -65,9 +65,19 @@ export function intentTools(intent: MessageIntent): string[] {
     case "feature":
       return ["use_resource"];
     case "basic":
-      return intent.action === "end-turn" ? ["end_turn"] : intent.action === "stand-up" ? ["clear_condition"] : ["take_action"];
+      return intent.action === "end-turn"
+        ? ["end_turn"]
+        : intent.action === "stand-up"
+          ? ["clear_condition"]
+          : intent.action === "stabilize"
+            ? ["stabilize"]
+            : intent.action === "dismount"
+              ? ["dismount"]
+              : ["take_action"];
     case "reaction":
       return ["use_reaction"];
+    case "gear":
+      return intent.action === "use" ? ["use_item"] : ["handle_item"];
   }
 }
 
@@ -104,9 +114,23 @@ function what(intent: MessageIntent): string {
     case "feature":
       return `the feature ${intent.resourceId ?? ""}${target(intent)}`.trim();
     case "basic":
+      if (intent.action === "stabilize") {
+        return `stabilizing ${intent.targetName ?? "a dying ally"}${intent.targetId ? ` (stabilize characterId=${intent.targetId}, the actor as healerId)` : ""}`;
+      }
       return `the ${intent.action ?? "basic"} action${target(intent)}`;
     case "reaction":
       return `the reaction ${intent.feature ?? intent.spell ?? ""}${target(intent)}`;
+    case "gear": {
+      const item = intent.item ?? "an item";
+      switch (intent.action) {
+        case "hand":
+          return `handing ${item} to ${intent.targetName ?? "an ally"}${intent.targetId ? ` (handle_item action=hand, toCharacterId=${intent.targetId})` : ""}`;
+        case "use":
+          return `using ${item}${target(intent)}`;
+        default:
+          return `handle_item action=${intent.action ?? "equip"} on ${item}`;
+      }
+    }
   }
 }
 

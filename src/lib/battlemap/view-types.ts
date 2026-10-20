@@ -92,6 +92,14 @@ export type PlayerMapView = {
   // patches of light and the overlay picture are the DM's alone: a player
   // sees a locked or secret door as the wall the engine treats it as.
   labels: MapLabel[];
+  // Things dropped on this board (issue #424, src/lib/db/dropped-items.ts),
+  // on squares this viewer has seen: where each lies, who let it fall, and
+  // whether the viewer's own token stands within 5 ft of it (pick it up).
+  // A fallen enemy's hold lies on its square. Absent from an older server.
+  drops?: Array<{ id: string; name: string; x: number; y: number; by: string; reach: boolean }>;
+  // Who rides what: the party's mounts by character id, the mount's name
+  // (src/lib/db/mounts.ts). The Hand's Dismount card reads it.
+  mounts?: Record<string, string>;
   // Marks drawn on the board: everyone's, and the DM's own for the DM.
   drawings: MapDrawing[];
   doors?: DoorStates;

@@ -1,4 +1,4 @@
-import { removeItemMath } from "@/lib/dm/mutation-math";
+import { addRowMath, handedOverRow, removeItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper, purseCopper } from "@/lib/srd/currency";
 import { textKey } from "@/lib/language/text-logic";
@@ -83,25 +83,6 @@ export function canResolveTrade(action: "approve" | "decline" | "cancel", actorI
 type Patch = { gold: number; copper: number; equipment: CharacterSheet["equipment"] };
 type Row = CharacterSheet["equipment"][number];
 
-// What an item IS travels with it: whether the party knows what it is, the
-// entry its mechanics are read through, and what it weighs. How the giver
-// wore it does not: the new owner has neither put it on nor attuned to it,
-// and the snapshot is rebuilt from the entry when their sheet is read.
-function handedOver(row: Row, qty: number): Row {
-  return {
-    name: row.name,
-    qty,
-    ...(row.slug !== undefined ? { slug: row.slug } : {}),
-    ...(row.weight !== undefined ? { weight: row.weight } : {}),
-    ...(row.identified === false ? { identified: false } : {}),
-  };
-}
-
-const sameThing = (a: Row, b: Row) =>
-  textKey(a.name) === textKey(b.name) &&
-  (a.identified === false) === (b.identified === false) &&
-  (a.slug ?? "") === (b.slug ?? "");
-
 // Moves `qty` of a named item from one pack to the other, or null when the
 // giver holds fewer. The row that leaves is the one removeItemMath takes.
 function moveItem(
@@ -114,14 +95,9 @@ function moveItem(
   if (!held || !removal || removal.removed < line.qty) {
     return null;
   }
-  const arriving = handedOver(held, line.qty);
-  const index = taker.findIndex((item) => sameThing(item, arriving));
-  if (index < 0) {
-    return { giver: removal.equipment, taker: [...taker, arriving] };
-  }
-  const next = [...taker];
-  next[index] = { ...next[index], qty: next[index].qty + line.qty };
-  return { giver: removal.equipment, taker: next };
+  // What the item is travels with it; how the giver wore it does not
+  // (src/lib/dm/mutation-math.ts handedOverRow).
+  return { giver: removal.equipment, taker: addRowMath(taker, handedOverRow(held, line.qty)) };
 }
 
 // Both patches, or the reason it cannot happen. Everything is checked

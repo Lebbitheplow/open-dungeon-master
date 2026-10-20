@@ -54,6 +54,9 @@ export type GearChanges = {
   shields: string[];
   // Attunement begun or ended: a short rest.
   attunement: string[];
+  // A weapon drawn or stowed, or anything else put on or taken off: the
+  // turn's free object interaction in a fight (issue #424).
+  held: string[];
 };
 
 // Which of the named items would really change state. Until a sheet has its
@@ -63,7 +66,7 @@ export function gearChanges(
   sheet: Pick<CharacterSheet, "equipment">,
   gear: NonNullable<UsageAsk["gear"]>,
 ): GearChanges {
-  const changes: GearChanges = { armor: [], shields: [], attunement: [] };
+  const changes: GearChanges = { armor: [], shields: [], attunement: [], held: [] };
   for (const item of sheet.equipment) {
     const entry = gear[item.name];
     if (!entry) {
@@ -79,7 +82,8 @@ export function gearChanges(
     // A magic suit is armor too (Armor of Invulnerability is plate).
     const armor = armorOfRow(item)?.armor ?? null;
     if (!armor) {
-      // Weapons and everything else: drawing or stowing is free.
+      // Weapons and everything else: the free object interaction.
+      changes.held.push(item.name);
       continue;
     }
     if (armor.category === "shield") {

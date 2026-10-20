@@ -1058,6 +1058,8 @@ export function SessionView({
                     campaignId={campaign.id}
                     trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
                     edges={state.battleMap?.edges}
+                    drops={state.battleMap?.drops}
+                    mounts={state.battleMap?.mounts}
                     sheets={sheets}
                     meUserId={me.id}
                     activeSheetId={state.activeSheetId}

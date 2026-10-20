@@ -211,6 +211,7 @@ import { PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
 import { SCENE_TOOL_NAMES, sceneTools } from "@/lib/dm/scene-tools";
 import { AMBIENCE_TOOL_NAMES, ambienceTools, followSceneAmbience } from "@/lib/dm/ambience-tools";
 import { MOUNT_TOOL_NAMES, mountTools } from "@/lib/dm/mount-tools";
+import { describeGround, GEAR_TOOL_NAMES, handleItemTool } from "@/lib/dm/gear-tool";
 import { effectTools, EFFECT_TOOL_NAMES } from "@/lib/dm/effect-tools";
 import { worldTools, WORLD_TOOL_NAMES } from "@/lib/dm/world-tools";
 import { exploreTools, EXPLORE_TOOL_NAMES } from "@/lib/dm/explore-tools";
@@ -238,6 +239,54 @@ import { extraBlockLines } from "@/lib/bestiary/block-sections";
 
 const MUTATION_NAMES = new Set<string>(MUTATION_TOOL_NAMES);
 const ENCOUNTER_NAMES = new Set<string>(ENCOUNTER_TOOL_NAMES);
+// World, party, scene, mount and gear calls: each one sends the turn to the
+// follow-up branch, where it runs.
+const WORLD_RUN_NAMES = new Set<string>([
+  ...WORLD_TOOL_NAMES,
+  ...EXPLORE_TOOL_NAMES,
+  ...PARTY_TOOL_NAMES,
+  ...EFFECT_TOOL_NAMES,
+  ...SCENE_TOOL_NAMES,
+  ...MOUNT_TOOL_NAMES,
+  ...GEAR_TOOL_NAMES,
+  ...AMBIENCE_TOOL_NAMES,
+  ...BINDER_TOOL_NAMES,
+  ...FACTION_TOOL_NAMES,
+  ...SHOP_TOOL_NAMES,
+  ...SETTLEMENT_TOOL_NAMES,
+]);
+// Every call that sends a DM turn on to the follow-up branch, where the
+// calls run (or that ran before it, as bookkeeping). A call outside it, with
+// narration beside it, is answered "ok" and never run: each tool dmTurnTools
+// offers must be here (scripts/test-turn-runs-every-tool.mjs holds them
+// together).
+export const TURN_RUN_NAMES: ReadonlySet<string> = new Set<string>([
+  "request_roll",
+  "request_player_input",
+  ...MUTATION_NAMES,
+  ...ENCOUNTER_NAMES,
+  "cast_buff",
+  "take_rest",
+  ...COMPANION_TOOL_NAMES,
+  "move_party",
+  "update_location",
+  "record_event",
+  "complete_beat",
+  "recall_story",
+  "search_lore",
+  "read_card",
+  "write_campaign_note",
+  "send_whisper",
+  ...CHECK_TOOL_NAMES,
+  ...HAZARD_TOOL_NAMES,
+  ...SPLIT_DAMAGE_TOOL_NAMES,
+  ...PET_TOOL_NAMES,
+  ...SOCIAL_TOOL_NAMES,
+  ...RELATIONSHIP_TOOL_NAMES,
+  ...WORLD_RUN_NAMES,
+  "generate_image",
+  MORE_TOOLS,
+]);
 
 // One DM turn is a bounded tool loop: narrate -> maybe request rolls ->
 // server rolls -> model interprets -> ... -> final narration. The model
@@ -677,6 +726,7 @@ async function openTurn(
         body: note.body,
       })),
       dmPrepNotes: listDmPrepNotes(campaignId, 8).map((note) => ({ title: note.title, body: note.body })),
+      groundItems: describeGround(campaignId),
       facts: listActiveFacts(campaignId).map((fact) => ({
         category: fact.category,
         subject: fact.subject,
@@ -939,7 +989,13 @@ export function dmTurnTools(
     // the library switched off, which is why it is gated here rather
     // than left to the handler to refuse.
     ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
-    ...(inEncounter ? [] : mountTools),
+    // Mounting and dismounting cost half a turn's movement in a fight
+    // (mount-tools.ts), so a rider who is up can get down mid-round; a table
+    // with nobody mounted carries neither tool into a fight (issue #424).
+    ...(inEncounter && !Object.keys(getMounts(campaign.id)).length ? [] : mountTools),
+    // Shields, weapons and things put down or picked up, in and out of a
+    // fight (src/lib/dm/gear-tool.ts, issue #424).
+    handleItemTool,
     ...encounterTools(inEncounter),
     // The table's prepared fights, by name, when it has any (#154).
     ...(inEncounter ? [] : preparedEncounterTools(campaign)),
@@ -1500,20 +1556,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const relationshipCalls = runnable.filter((toolCall) =>
       (RELATIONSHIP_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const worldCalls = runnable.filter(
-      (toolCall) =>
-        (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (EXPLORE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (PARTY_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (EFFECT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (SCENE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (MOUNT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (AMBIENCE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (BINDER_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (FACTION_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (SHOP_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (SETTLEMENT_TOOL_NAMES as readonly string[]).includes(toolCall.name),
-    );
+    const worldCalls = runnable.filter((toolCall) => WORLD_RUN_NAMES.has(toolCall.name));
 
     const accepted = new Set<(typeof toolCalls)[number]>();
     // Location bookkeeping is synchronous and cheap; maps render async on

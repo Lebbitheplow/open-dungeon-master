@@ -103,6 +103,7 @@ export type ToolGroupId =
   | "scenes"
   | "sound"
   | "mounts"
+  | "gear"
   | "pets"
   | "relationships"
   | "picture";
@@ -137,6 +138,7 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   scenes: { summary: "structured scenes: chases, heists, skill challenges", tools: ["start_scene", "scene_check", "end_scene"] },
   sound: { summary: "the table's music and sound stings", tools: ["set_ambience", "play_sting"] },
   mounts: { summary: "mounting and dismounting", tools: ["mount_up", "dismount"] },
+  gear: { summary: "a shield put on or off, a weapon drawn or stowed, something dropped, picked up or handed over", tools: ["handle_item"] },
   pets: { summary: "familiars, pets and animal companions", tools: ["summon_pet", "pet_attack", "damage_pet", "dismiss_pet"] },
   relationships: { summary: "bonds, romance and their endings", tools: ["relationship_beat", "romance_advance", "relationship_end"] },
   picture: { summary: "a picture of the scene", tools: ["generate_image"] },
@@ -203,6 +205,7 @@ const INTENT: Array<[ToolGroupId, RegExp]> = [
   ["explore", /\b(craft|crafting|downtime|research|train(?:ing)?|lifestyle|carouse|lift|drag|push|haul|disease|poison(?:ed)?|madness)\b/i],
   ["hazards", /\b(trap|traps|fall|falls|jump|leap|climb|drown|swim|lava|fire|burning|freezing|suffocat\w*)\b/i],
   ["mounts", /\b(horse|horses|mount|mounts|saddle|steed|pony)\b/i],
+  ["gear", /\b(drops?|dropping|draws?|drawing|sheathes?|stows?|shield|picks? up|(?:hand|give)(?:s|ed)? (?:it|him|her|them|over|my|the|his|their))\b/i],
   ["relationships", /\b(romance|kiss|flirt|court|befriend|friendship)\b/i],
   ["pets", /\b(familiar|pet|animal companion)\b/i],
   ["binder", /\b(quest|quests|handout|map of|letter|journal)\b/i],
