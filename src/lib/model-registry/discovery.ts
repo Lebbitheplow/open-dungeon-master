@@ -8,6 +8,7 @@
 
 import { listModels, type ModelListing } from "@/lib/setup/discovery";
 import { modelsUrl, normalizeBaseUrl } from "@/lib/setup/discovery-logic";
+import { replyTimeout } from "@/lib/reply-timeout";
 import { serverEnv } from "@/lib/server-env";
 import { rememberLocalContextWindow } from "@/lib/text-models";
 import { isImageModelId } from "./catalog-logic";
@@ -28,7 +29,7 @@ export type OllamaListing =
 export async function listOllamaModels(baseUrl = ollamaBaseUrl()): Promise<OllamaListing> {
   const base = baseUrl.trim().replace(/\/+$/, "").replace(/\/v1$/, "");
   try {
-    const response = await fetch(`${base}/api/tags`, { cache: "no-store", signal: AbortSignal.timeout(LIST_TIMEOUT_MS) });
+    const response = await fetch(`${base}/api/tags`, { cache: "no-store", signal: replyTimeout(LIST_TIMEOUT_MS) });
     if (!response.ok) {
       return { ok: false, baseUrl: base, error: `Ollama answered ${response.status} when asked for its models.` };
     }
@@ -59,7 +60,7 @@ export async function ollamaModelInfo(model: string, baseUrl = ollamaBaseUrl()):
       cache: "no-store",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ model }),
-      signal: AbortSignal.timeout(SHOW_TIMEOUT_MS),
+      signal: replyTimeout(SHOW_TIMEOUT_MS),
     });
     info = response.ok ? readOllamaShow(await response.json().catch(() => null)) : null;
   } catch {
@@ -115,7 +116,7 @@ async function listModelIds(baseUrlInput: string, apiKey: string, read: (json: u
     const response = await fetch(modelsUrl(baseUrl), {
       cache: "no-store",
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-      signal: AbortSignal.timeout(LIST_TIMEOUT_MS * 2),
+      signal: replyTimeout(LIST_TIMEOUT_MS * 2),
     });
     if (response.status === 401 || response.status === 403) {
       return { ok: false, baseUrl, needsKey: true, error: apiKey ? `${host} turned the key down.` : `${host} wants an API key.` };
