@@ -25,6 +25,7 @@ const { decideTableWait, clampWaitSeconds, formatLeft, holdsPostForTable, TABLE_
 const { settleTableWait, passTable, currentTableWait, tableWaitTurnStarted, waitsForTable, tableWaitHasAnswers } = await import("../src/lib/dm/table-wait.ts");
 const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
 const { setDmStatus } = await import("../src/lib/dm/status.ts");
+const { pauseTable, resumeTable } = await import("../src/lib/dm/table-break.ts");
 const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
 const { createPlayerWebhook, playerWebhookState, reserveWebhookWrite } = await import("../src/lib/agents/webhooks.ts");
 
@@ -229,6 +230,28 @@ try {
     assert.equal(currentTableWait(campaign.id), null);
     assert.equal(passTable(campaign.id, alice.id).ok, false);
     setFloor(campaign.id, { mode: "open" });
+  });
+
+  await test("a table break stands the wait aside, and Resume starts its clock again", () => {
+    const back = subscribe(campaign.id, () => {}, bob.id);
+    tableWaitTurnStarted(campaign.id, db.prepare(`SELECT next_seq - 1 AS seq FROM campaigns WHERE id = ?`).get(campaign.id).seq);
+    narrate();
+    post(alice.id, "wait-sheet-a");
+    assert.equal(settleTableWait(campaign.id), false);
+    assert.ok(currentTableWait(campaign.id).deadline);
+    pauseTable(campaign.id, { id: alice.id, username: "wait-alice" });
+    assert.equal(waitsForTable(getCampaignById(campaign.id)), false);
+    assert.equal(currentTableWait(campaign.id), null, "no wait banner over a break");
+    assert.equal(settleTableWait(campaign.id, Date.now() + 10 * 60_000), false, "a deadline passing during the break fires nothing");
+    const refused = passTable(campaign.id, bob.id);
+    assert.equal(refused.ok, false);
+    assert.match(refused.error, /The table is paused/);
+    const resumedAt = Date.now();
+    resumeTable(campaign.id, { id: alice.id, username: "wait-alice" });
+    const view = currentTableWait(campaign.id);
+    assert.deepEqual(view.waitingOn.map((seat) => seat.name), ["Kalanis"]);
+    assert.ok(Date.parse(view.deadline) >= resumedAt + 120_000, "the clock counts from Resume, not from before the break");
+    back();
   });
 
   await test("a spotlight answered by its named players does not then wait on the rest of the table", () => {

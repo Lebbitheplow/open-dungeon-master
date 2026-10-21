@@ -455,9 +455,14 @@ export function SessionView({
     [breakCampaignId],
   );
   const resumeTable = useCallback(() => sendBreak("DELETE"), [sendBreak]);
+  // A break is for a table with someone else at it (another person or an
+  // agent playing a seat); alone, closing the app is the pause. A muted seat
+  // cannot call one (the route checks its voice), so it is not offered one.
+  const breakMembers = state.members;
+  const breakOffered = breakMembers.length > 1 && !breakMembers.some((member) => member.userId === me?.id && member.muted);
   const breakControl = useMemo<TableBreakControl | undefined>(
     () =>
-      campaign?.status === "active"
+      campaign?.status === "active" && (tableBreak !== null || breakOffered)
         ? {
             paused: tableBreak !== null,
             mayResume: mayResumeTable,
@@ -465,7 +470,7 @@ export function SessionView({
             onResume: () => void sendBreak("DELETE"),
           }
         : undefined,
-    [campaign?.status, tableBreak, mayResumeTable, sendBreak],
+    [campaign?.status, tableBreak, breakOffered, mayResumeTable, sendBreak],
   );
   if (isDm && !seenDmSeat) {
     setSeenDmSeat(true);

@@ -33,6 +33,7 @@ const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
 const { createPlayerWebhook, playerWebhookState } = await import("../src/lib/agents/webhooks.ts");
 const { workbenchTools } = await import("../src/lib/agents/workbench.ts");
 const { campaignForAgent } = await import("../src/lib/agents/agent-results.ts");
+const { setMemberMuted } = await import("../src/lib/db/moderation.ts");
 
 // A route call as a connected agent program sends it (workbench.ts).
 async function asAgent(mod, method, params) {
@@ -101,6 +102,16 @@ await test("any player pauses; only they, the lead or the DM resume; a second pa
     assert.equal(dmQueuePaused(world.campaignId), null);
   }
   assert.equal((await resume(player)).json.already, true, "resuming an unpaused table is a no-op");
+  world.close();
+});
+
+await test("a player the lead has muted cannot call a break, as they cannot post", async () => {
+  const { world, player, lead, pause } = await table();
+  setMemberMuted(world.campaignId, player.id, true);
+  const refused = await pause(player);
+  assert.equal(refused.status, 403, JSON.stringify(refused.json));
+  assert.equal(tableBreakOn(world.campaignId), null);
+  assert.equal((await pause(lead)).status, 200, "the lead still can");
   world.close();
 });
 

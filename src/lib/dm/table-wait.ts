@@ -18,7 +18,9 @@ import { coverInEffect } from "@/lib/dm/delegation";
 import { getDmStatus } from "@/lib/dm/status";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { wakeDm } from "@/lib/dm/wake";
-import { onlineUserIds, publishEphemeral, publishPersisted } from "@/lib/events";
+import { latestEventOfType, onlineUserIds, publishEphemeral, publishPersisted } from "@/lib/events";
+import { tableBreakOn } from "@/lib/dm/table-break";
+import { breakRefusal } from "@/lib/dm/table-break-logic";
 import { runsAiTurns } from "@/lib/workshop/kind";
 import { decideTableWait, type TableSeat, type TableWaitDecision, type TableWaitView } from "./table-wait-logic";
 
@@ -43,8 +45,12 @@ function memory(campaignId: string): WaitMemory {
 // Whether this table holds its AI turns for the table at all, whatever the
 // floor is doing. A person in the DM seat reads each post as it lands, so
 // only an AI-run table (or a running cover) waits.
+//
+// A table break (src/lib/dm/table-break.ts) stands the wait aside: nobody
+// can answer while the table is paused, so no clock runs and nothing fires;
+// Resume settles the table again, with the clock counted from then.
 export function waitsForTable(campaign: Campaign): boolean {
-  if (!campaign.gameSettings.waitForTable || !runsAiTurns(campaign) || campaign.status !== "active") {
+  if (!campaign.gameSettings.waitForTable || !runsAiTurns(campaign) || campaign.status !== "active" || tableBreakOn(campaign.id)) {
     return false;
   }
   const covering = coverInEffect(campaign.gameSettings.dmMode, campaign.gameSettings.dmAssist, campaign.dmCover);
@@ -83,9 +89,12 @@ function windowFor(campaignId: string): { since: number; openedAt: number } | nu
     return null;
   }
   const readSeq = memory(campaignId).readSeq;
+  // A break taken since the narration spent none of the table's time: the
+  // clock counts from the latest Resume when that came later.
+  const resumed = Number((latestEventOfType(campaignId, ["table_resumed"])?.payload as { at?: unknown } | null)?.at);
   return {
     since: readSeq ?? narration.seq,
-    openedAt: new Date(narration.createdAt).getTime(),
+    openedAt: Math.max(new Date(narration.createdAt).getTime(), Number.isFinite(resumed) ? resumed : 0),
   };
 }
 
@@ -229,6 +238,10 @@ export type PassResult = { ok: true; fire: boolean } | { ok: false; status: numb
 // waiting to pass on, and once the player has already acted or passed.
 export function passTable(campaignId: string, userId: string): PassResult {
   const campaign = getCampaignById(campaignId);
+  const paused = tableBreakOn(campaignId);
+  if (paused) {
+    return { ok: false, status: 409, error: breakRefusal(paused) };
+  }
   if (!campaign || !waitsForTable(campaign)) {
     return { ok: false, status: 409, error: "This table does not wait for everyone, so there is nothing to pass." };
   }
