@@ -37,7 +37,7 @@ import {
   resolveSocialCheck,
   socialCheckDc,
 } from "@/lib/dm/social";
-import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveRollExpression, resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -335,7 +335,7 @@ export function handleSocialCheck(
   const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = stale ? getSheetById(stale.id) ?? stale : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const npc = getNpcByName(campaign.id, args.npc);
   if (!npc) {

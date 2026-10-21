@@ -19,7 +19,7 @@ import { characterEscape, enemyEscape } from "@/lib/dm/grapple";
 import { readyAction, searchAction, objectAction } from "@/lib/dm/object-actions";
 import { READIABLE } from "@/lib/dm/readied-kinds";
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { readySpell } from "@/lib/dm/readied-spell";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { DODGING } from "@/lib/dm/condition-logic";
@@ -362,7 +362,7 @@ export function handleTakeAction(
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const encounter = getActiveEncounter(campaign.id);
   // Off their turn, the action they readied: released with their reaction,

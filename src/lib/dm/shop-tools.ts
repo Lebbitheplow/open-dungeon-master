@@ -17,7 +17,7 @@ import { bundledPriceCopper } from "@/lib/srd/starting-wealth";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
-import { resolveRollExpression, resolveSheetRef, type RollArgs } from "@/lib/dm/rolls";
+import { resolveRollExpression, resolveSheetRef, type RollArgs, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { keepsFullValue, listPriceCp, magicValueOf } from "@/lib/dm/trade-value";
 import { capacityProblem } from "@/lib/dm/load-rules";
@@ -377,7 +377,7 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, listSheets(campaign.id));
   }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
@@ -425,7 +425,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, listSheets(campaign.id));
   }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
@@ -479,7 +479,7 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, listSheets(campaign.id));
   }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {

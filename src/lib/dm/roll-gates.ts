@@ -23,7 +23,7 @@ import { publishWithSeq } from "@/lib/events";
 import { resolveMonster } from "@/lib/bestiary";
 import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import { mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import { redactRoll } from "@/lib/dm/viewer";
 import { findSkill } from "@/lib/srd";
@@ -94,7 +94,9 @@ export function contestOpponent(
     const encounter = getActiveEncounter(campaign.id);
     const enemy: EncounterEnemy | null = encounter ? resolveEnemyRef(encounter.id, ref.enemyId) : null;
     if (!enemy) {
-      return { error: "Unknown againstEnemyId; use an enemy of the running fight from GAME STATE, or againstMonster with the creature's name out of a fight.", retry: true };
+      return encounter
+        ? unknownEnemyRef(encounter.id, "againstEnemyId", ref.enemyId, "Out of a fight, send againstMonster with the creature's name.")
+        : { error: "No fight is running: againstEnemyId names an enemy of a fight. Out of one, send againstMonster with the creature's name.", retry: true };
     }
     if (enemy.status !== "alive") {
       return { error: `${enemy.displayName} is ${enemy.status} and contests nothing.`, retry: true };

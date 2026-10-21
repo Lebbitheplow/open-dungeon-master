@@ -77,6 +77,7 @@ import {
   finishEncounter,
   publishEncounter,
   resolveEnemyRef,
+  unknownEnemyRef,
 } from "@/lib/dm/enemy-damage";
 import { enemyFalls } from "@/lib/dm/enemy-fall";
 import { enemyCallOutOfTurn } from "@/lib/dm/enemy-turn-order";
@@ -91,7 +92,7 @@ import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { wakeDm } from "@/lib/dm/wake";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
   castAtEnemyTool,
   castAtPlayerTool,
@@ -803,7 +804,7 @@ function handleDamageEnemy(
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is already ${enemy.status}.`, retry: true };
@@ -975,7 +976,7 @@ function handleEndTurn(
   }
   const sheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   // Ending a turn is the one thing its owner can always do: a character
   // stunned in the middle of their turn still has to be able to hand it on.

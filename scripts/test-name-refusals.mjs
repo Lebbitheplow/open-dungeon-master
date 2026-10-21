@@ -437,4 +437,42 @@ await test("open_shop: a name that holds a shop standing here, or that its name 
   }
 });
 
+await test("an enemy or character ref that is none of the fight's or the party's is refused with the living enemies or the party by name and id, so the retry is one call.", async () => {
+  await kit.fight(3);
+  const [kept, other, felled] = world.enemies();
+  kit.setEnemy(felled.id, { currentHp: 1 });
+  accepted(await world.invoke("damage_enemy", { enemyId: felled.id, amount: 5, damageType: "bludgeoning" }));
+  assert.equal(kit.enemy(felled.id).status, "dead");
+  const party = listSheets(world.campaignId);
+  const lists = (out, field, ref, records) => {
+    refused(out, `Unknown ${field} "${ref}"`, ...records.map((record) => `${record.name} (${record.id})`));
+  };
+  const living = [kept, other].map((enemy) => ({ id: enemy.id, name: kit.enemy(enemy.id).displayName }));
+  const enemyCalls = [
+    ["pc_attack", "targetEnemyId", { characterId: fighter.id, weapon: "Longsword" }],
+    ["cast_at_enemy", "targetEnemyId", { characterId: party.find((sheet) => sheet.name === "Dee").id, spell: "Blindness/Deafness", saveAbility: "con" }],
+    ["enemy_attack", "enemyId", { targetCharacterId: fighter.id }],
+    ["damage_enemy", "enemyId", { amount: 3, damageType: "fire" }],
+    ["enemy_flees", "enemyId", {}],
+    ["set_enemy_condition", "enemyId", { condition: "prone" }],
+    ["declare_intent", "actor", { verb: "attack" }],
+  ];
+  for (const ref of ["goblin-9", felled.id.slice(0, 8)]) {
+    for (const [tool, field, args] of enemyCalls) {
+      kit.giveTurn(fighter.id);
+      lists(await world.invoke(tool, { ...args, [field]: ref }), field, ref, living);
+    }
+  }
+  const out = await world.invoke("enemy_attack", { enemyId: kept.id, targetCharacterId: "Ady" });
+  lists(out, "targetCharacterId", "Ady", party);
+  for (const [tool, args] of [
+    ["pc_attack", { targetEnemyId: kept.id, weapon: "Longsword" }],
+    ["take_action", { action: "dodge" }],
+    ["end_turn", {}],
+    ["mount_up", { mount: "Riding horse" }],
+  ]) {
+    lists(await world.invoke(tool, { ...args, characterId: "Ady" }), "characterId", "Ady", party);
+  }
+});
+
 finish();

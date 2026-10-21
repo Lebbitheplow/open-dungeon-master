@@ -6,7 +6,7 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { dcForDifficulty, DIFFICULTY_TIERS, type DifficultyTier } from "@/lib/srd/dc";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
   abandonTracker,
   advanceRound,
@@ -189,7 +189,7 @@ export function handleSceneCheck(
   }
   const sheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const invalid = checkSceneAttempt(tracker, sheet.id);
   if (invalid) {

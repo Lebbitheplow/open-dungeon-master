@@ -27,8 +27,8 @@ import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { conditionUntargetable } from "@/lib/srd/condition-effect-queries";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { applyDmMutation, canonicalCondition, castBarred } from "@/lib/dm/mutations";
-import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { publishEncounter, resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
@@ -104,7 +104,7 @@ export function handleCastAtEnemy(
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   // A reaction spell is asked by the cast guard's reaction gate instead,
   // which judges one answering the hit that dropped the caster as they stood
@@ -119,7 +119,7 @@ export function handleCastAtEnemy(
   const dc = spellSaveDcFor(sheet, args.spell ?? "");
   const enemy = resolveEnemyRef(encounter.id, args.targetEnemyId);
   if (!enemy) {
-    return { error: "Unknown targetEnemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId);
   }
   const barred = castBarred(campaign, turn.id, { characterId: sheet.id, spell: args.spell, ...(args.level ? { level: args.level } : {}), via, units: hitDiceOf(enemy) }, sheets, sheetsById);
   if (barred) {

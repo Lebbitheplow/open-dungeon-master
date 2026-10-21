@@ -34,7 +34,7 @@ import { footprintDistance } from "@/lib/battlemap/footprint";
 import { tokenFootprint } from "@/lib/dm/board-reach";
 import { addRowMath, handedOverRow, removeItemMath } from "@/lib/dm/mutation-math";
 import { characterCallUnasked } from "@/lib/dm/player-word";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import { gearPatch, implicitlyWorn } from "@/lib/dm/usage-rules";
@@ -128,7 +128,7 @@ export function handleItemCall(
   }
   const named = resolveSheetRef(args.characterId, sheets, sheetsById);
   if (!named) {
-    return retry("Unknown characterId; use one from GAME STATE.");
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   // The turn's party list is read once, before its calls run: a drop and a
   // draw sent together would otherwise see the hands as they were before

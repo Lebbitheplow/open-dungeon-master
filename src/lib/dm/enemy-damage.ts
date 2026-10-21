@@ -35,7 +35,7 @@ import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 // The single server-side path for damage landing on an enemy. Used by the
@@ -65,6 +65,13 @@ export function resolveEnemyRef(encounterId: string, ref: string): EncounterEnem
       (enemy) => textKey(enemy.displayName) === textKey(trimmed),
     ) ?? null
   );
+}
+
+// The refusal of an enemy ref resolveEnemyRef found nothing for, listing the
+// enemies still standing in the fight.
+export function unknownEnemyRef(encounterId: string, field: string, ref: string | undefined, tail = ""): ToolError {
+  const living = listEnemies(encounterId).filter((enemy) => enemy.status === "alive");
+  return unknownRef(field, ref, living.map((enemy) => ({ id: enemy.id, name: enemy.displayName })), tail);
 }
 
 export function finishEncounter(

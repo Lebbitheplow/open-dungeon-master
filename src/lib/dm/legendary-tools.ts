@@ -2,7 +2,7 @@ import { z } from "zod";
 import { dmRoll } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, orderEntryId, saveEncounter, turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -181,7 +181,7 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is ${enemy.status}.`, retry: true };
@@ -286,7 +286,7 @@ export function handleLegendaryResist(campaign: Campaign, rawArguments: string):
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   const pool = encounter.legendary.pools[enemy.id];
   if (!pool) {

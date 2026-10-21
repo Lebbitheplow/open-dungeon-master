@@ -20,8 +20,8 @@ import { beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/
 import { shapedAbilities, shapeForms, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { applyDmMutation, castBarred } from "@/lib/dm/mutations";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { lifetimeAtSlot } from "@/lib/dm/spell-effects";
@@ -82,7 +82,7 @@ export function handleCastBuff(
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   // A reaction spell is asked by the cast guard's reaction gate instead,
   // which judges one answering the hit that dropped the caster as they stood
@@ -149,7 +149,9 @@ export function handleCastBuff(
     const encounter = getActiveEncounter(campaign.id);
     const enemy = encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
     if (!enemy) {
-      return { error: "Unknown targetEnemyId; use one from GAME STATE. Nothing was spent.", retry: true };
+      return encounter
+        ? unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+        : { error: "No fight is running: targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
     }
     return castShapeAtEnemy(
       campaign,
@@ -214,7 +216,9 @@ export function handleCastBuff(
       ? resolveEnemyRef(encounterNow.id, args.targetEnemyId)
       : null;
   if (MARKS.has(buff.condition) && args.targetEnemyId && !quarry) {
-    return { error: "Unknown targetEnemyId for the mark; use one from GAME STATE. Nothing was spent.", retry: true };
+    return encounterNow
+      ? unknownEnemyRef(encounterNow.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+      : { error: "No fight is running: a mark's targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
   }
 
   // Resolve the recipients: self-only spells ignore stray targets.

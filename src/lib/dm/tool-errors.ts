@@ -59,6 +59,14 @@ export function noneNamed(subject: string, name: string, options: readonly strin
   };
 }
 
+// An id that is no enemy of the fight or no character of the party, refused
+// with the ones there are by name and id: a bare "use one from GAME STATE"
+// sent the model back to search for it, or to give the attack up.
+export function unknownRef(field: string, ref: string | undefined, records: readonly { id: string; name: string }[], tail = ""): ToolError {
+  const refused = noneNamed(`Unknown ${field}`, ref ?? "", records.map((record) => `${record.name} (${record.id})`));
+  return tail ? { ...refused, error: `${refused.error} ${tail}` } : refused;
+}
+
 // The records whose name holds the word a refused name was, for its
 // refusal: "spider" is no Giant Spider, but the refusal names it.
 export function holdingHint(name: string, holding: readonly string[]): string {

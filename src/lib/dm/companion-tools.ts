@@ -54,6 +54,7 @@ import {
 } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { unknownSheetRef } from "@/lib/dm/rolls";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -521,7 +522,7 @@ export function handleDismissCompanion(
     sheets.find((candidate) => textKey(candidate.name) === needle) ??
     null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   if (!sheet.isCompanion) {
     return { error: `${sheet.name} is a player's character and cannot be dismissed.`, retry: true };

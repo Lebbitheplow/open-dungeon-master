@@ -35,7 +35,7 @@ import { spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { wornArmorTurnsCrits } from "@/lib/srd/armor";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
@@ -56,6 +56,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { invalidArguments, noneNamed, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
+import { unknownSheetRef } from "@/lib/dm/rolls";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
@@ -115,7 +116,7 @@ export function handleEnemyAttack(
   const args = parsed.data;
   const found = resolveEnemyRef(encounter.id, args.enemyId);
   if (!found) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   // One guard for the enemy side (src/lib/dm/can-act.ts): the dead, the
   // incapacitated and the surprised do nothing, and an action is one a round.
@@ -130,7 +131,7 @@ export function handleEnemyAttack(
     );
   const target = staleTarget ? getSheetById(staleTarget.id) : null;
   if (!target) {
-    return { error: "Unknown targetCharacterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
   }
   // SRD 5.1, Charmed: a charmed creature cannot attack its charmer.
   if (charmedBy(found.conditions, found.conditionMeta, target.id)) {

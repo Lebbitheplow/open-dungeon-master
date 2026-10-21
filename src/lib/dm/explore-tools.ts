@@ -12,7 +12,7 @@ import { advanceClock, setTravelPace } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { describeDuration, describeInstant } from "@/lib/dm/calendar";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { liftLimits, weighed } from "@/lib/dm/load-rules";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { sizeForRace } from "@/lib/srd";
@@ -162,7 +162,7 @@ function handleLift(args: z.infer<typeof liftSchema>, sheets: CharacterSheet[], 
   const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const how = args.how ?? "lift";
   const limits = liftLimits(sheet);
@@ -301,7 +301,7 @@ export function handleExploreCall(
       const stale = resolveSheetRef(entry.characterId, sheets, sheetsById);
       const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
       if (!sheet) {
-        return { error: `Unknown characterId ${entry.characterId}; use one from GAME STATE. No time passed.`, retry: true };
+        return unknownSheetRef("characterId", entry.characterId, sheets, "No time passed.");
       }
       const listed = srdNameFor(entry.srdName, "downtime");
       if ("error" in listed) {
@@ -332,7 +332,7 @@ export function handleExploreCall(
     const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
     const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
     if (!sheet) {
-      return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+      return unknownSheetRef("characterId", args.characterId, sheets);
     }
     if (sheet.deathSaves?.dead) {
       return { error: `${sheet.name} is dead; nothing more takes hold.`, retry: true };

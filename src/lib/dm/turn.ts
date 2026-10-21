@@ -85,6 +85,7 @@ import {
   rollAsksFromClaims,
   salvageTextualToolCalls,
   salvageXmlToolCalls,
+  unknownSheetRef,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import {
@@ -2508,13 +2509,10 @@ export function handleRecordEvent(
   } catch {
     return { error: "Invalid arguments.", retry: true };
   }
-  const sheet = resolveSheetRef(
-    typeof args.characterId === "string" ? args.characterId : undefined,
-    sheets,
-    sheetsById,
-  );
+  const ref = typeof args.characterId === "string" ? args.characterId : undefined;
+  const sheet = resolveSheetRef(ref, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", ref, sheets);
   }
   // A kind off the list is "story", never an error: a milestone is always
   // worth recording under some kind. Its words are not read for one.

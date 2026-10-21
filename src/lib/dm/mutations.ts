@@ -104,6 +104,7 @@ import { freeSlotsLine, spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
 import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { holdsFeature, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
+import { unknownSheetRef } from "@/lib/dm/rolls";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -788,7 +789,7 @@ export function applyDmMutation(
 
   const sheet = resolve(args.characterId);
   if (!sheet) {
-    return { result: { error: "Unknown characterId; use one from GAME STATE.", retry: true } };
+    return { result: unknownSheetRef("characterId", args.characterId, sheets) };
   }
 
   switch (toolName) {
@@ -1119,7 +1120,7 @@ export function applyDmMutation(
       }
       const target = args.targetCharacterId ? resolve(args.targetCharacterId) : sheet;
       if (!target) {
-        return { result: { error: "Unknown targetCharacterId; use one from GAME STATE.", retry: true } };
+        return { result: unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets) };
       }
       // A Healer's kit use heals (src/lib/dm/stabilize.ts); null otherwise.
       const kitHeal = healerKitUse(campaign, turnId, sheet, target, itemName);
@@ -1250,7 +1251,7 @@ export function applyDmMutation(
       }
       const target = args.targetCharacterId ? resolve(args.targetCharacterId) : sheet;
       if (!target) {
-        return { result: { error: "Unknown targetCharacterId; use one from GAME STATE.", retry: true } };
+        return { result: unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets) };
       }
       // An amount is a whole number of at least one; none at all means one.
       if (args.amount !== undefined && args.amount < 1) {

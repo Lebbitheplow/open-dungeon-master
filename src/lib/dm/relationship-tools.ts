@@ -43,7 +43,7 @@ import {
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
-import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveRollExpression, resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -318,7 +318,7 @@ export function handleRelationshipBeat(
   }
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const subject = resolveSubject(campaign, args.subject, sheets);
   if ("error" in subject) {
@@ -495,7 +495,7 @@ export function handleRomanceAdvance(
   }
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const subject = resolveSubject(campaign, args.subject, sheets);
   if ("error" in subject) {
@@ -676,7 +676,7 @@ export function handleRelationshipEnd(
   }
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const subject = resolveSubject(campaign, args.subject, sheets);
   if ("error" in subject) {

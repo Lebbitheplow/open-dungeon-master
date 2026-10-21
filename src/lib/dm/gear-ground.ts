@@ -21,7 +21,7 @@ import { tokenFootprint } from "@/lib/dm/board-reach";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { hasFastHands } from "@/lib/dm/bonus-routes";
 import { canAct } from "@/lib/dm/can-act";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { gearKindOf, holdIfFree, inHand, spendInteraction } from "@/lib/dm/gear-hands";
 import { lineNamed, linesNamed } from "@/lib/srd/item-row";
 import type { ItemTag } from "@/lib/schemas/item-tags";
@@ -217,8 +217,11 @@ export function enemyHandles(
     return refuse("An enemy handles items in a fight; there is no fight running.");
   }
   const enemy = resolveEnemyRef(encounter.id, ref);
-  if (!enemy || enemy.status !== "alive") {
-    return retry("Unknown or fallen enemyId; use a living enemy from GAME STATE.");
+  if (!enemy) {
+    return unknownEnemyRef(encounter.id, "enemyId", ref);
+  }
+  if (enemy.status !== "alive") {
+    return retry(`${enemy.displayName} is ${enemy.status}: only a living enemy handles items.`);
   }
   const { map, token } = standing(campaign.id, enemy.id);
   if (action === "drop") {

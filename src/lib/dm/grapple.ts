@@ -41,7 +41,7 @@ import { canEnemyAct } from "@/lib/dm/can-act";
 import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
-import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { publishEncounter, resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { enemyAttackProfile } from "@/lib/dm/enemy-profile";
 import { characterSpellEscape, characterSpellHold, enemySpellEscape, enemySpellHold } from "@/lib/dm/spell-escape";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -172,7 +172,7 @@ export function enemyEscape(
   }
   const enemy = resolveEnemyRef(encounter.id, enemyRef);
   if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", enemyRef);
   }
   const held = enemy.conditions.some((entry) => entry.toLowerCase() === GRAPPLED)
     ? grappleOf(enemy.conditionMeta)

@@ -2,11 +2,11 @@ import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { recordEncounterIntent } from "@/lib/db/encounter-intents";
-import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { publishEncounter, resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { declaredVerbKind, expectedDamage } from "@/lib/dm/intent";
 import { INTENT_VERB_KINDS } from "@/lib/battlemap/intent";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
@@ -73,7 +73,7 @@ export function handleDeclareIntent(
   }
   const enemy = resolveEnemyRef(encounter.id, args.actor);
   if (!enemy) {
-    return { error: "Unknown actor; use an enemyId from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "actor", args.actor);
   }
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is already ${enemy.status}.`, retry: true };
@@ -81,7 +81,7 @@ export function handleDeclareIntent(
   const wantsTarget = Boolean(args.target?.trim());
   const target = wantsTarget ? resolveSheetRef(args.target, sheets, sheetsById) : null;
   if (wantsTarget && !target) {
-    return { error: "Unknown target; use a characterId from GAME STATE, or omit target.", retry: true };
+    return unknownSheetRef("target", args.target, sheets, "Or omit target.");
   }
   // A number is only ever the DM's own or the named attack's average: a verb
   // the stat block does not list gets none rather than a guess.
