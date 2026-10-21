@@ -99,6 +99,12 @@ export default {
       await eventually(() => banner.count(), { timeoutMs: 20_000, label: "the break banner on the lead's screen" });
       const text = await banner.innerText();
       check(new RegExp(`Paused by ${ids.player}`, "i").test(text), `the banner names who paused: ${text}`);
+      // Under the header, not over it: the seeded table is in a fight, whose
+      // initiative ribbon makes the header taller than a fixed offset allowed.
+      const header = await page.locator(`${root}.session-header`).locator("visible=true").first().boundingBox();
+      await eventually(async () => ((await banner.boundingBox())?.y ?? 0) >= (header?.y ?? 0) + (header?.height ?? 0), {
+        label: "the banner below the header's bottom edge",
+      });
       check(/Paused for \d+ s/.test(text), `the banner counts the break: ${text}`);
       check((await banner.getByRole("button", { name: "Resume" }).count()) === 1, "the lead is offered Resume");
       await eventually(async () => (await page.evaluate(() => window.__odmPauses)) > stopsBefore, {

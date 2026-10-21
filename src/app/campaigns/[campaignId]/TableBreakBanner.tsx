@@ -33,6 +33,30 @@ export function TableBreakBanner({
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
+  // Under the session header, whatever its height: a fight's initiative
+  // ribbon makes it taller, and a fixed offset laid the banner over the
+  // ribbon's names. Measured while a break is up, and again when the header
+  // or the window changes size.
+  const [top, setTop] = useState<number | null>(null);
+  const paused = tableBreak !== null;
+  useEffect(() => {
+    if (!paused) {
+      return;
+    }
+    const header = document.querySelector<HTMLElement>(".session-header");
+    if (!header) {
+      return;
+    }
+    const place = () => setTop(Math.round(header.getBoundingClientRect().bottom) + 6);
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(header);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [paused]);
   const pausedAt = tableBreak?.at ?? null;
   useEffect(() => {
     if (pausedAt === null) {
@@ -54,7 +78,10 @@ export function TableBreakBanner({
     }
   }
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[calc(4.25rem+env(safe-area-inset-top))] z-[51] flex justify-center px-3">
+    <div
+      className="pointer-events-none fixed inset-x-0 top-[calc(4.25rem+env(safe-area-inset-top))] z-[51] flex justify-center px-3"
+      style={top === null ? undefined : { top }}
+    >
       <SessionBanner
         glyph="tab-timeline"
         lead={<Coffee aria-hidden="true" className="size-7 shrink-0 text-amber-300" />}
