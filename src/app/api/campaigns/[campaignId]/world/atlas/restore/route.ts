@@ -1,6 +1,6 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { restoreToAtlas } from "@/lib/db/atlas-edit";
-import { worldView } from "@/lib/db/world-forge";
+import { worldAnswer } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { partyAtlasChanged } from "@/lib/db/party-atlas";
 import { getWorldDoc } from "@/lib/db/world-forge";
@@ -32,5 +32,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   partyAtlasChanged(campaignId, before);
   recordsChanged(campaignId, "world");
-  return Response.json({ ...result, ...worldView(campaignId) });
+  return Response.json({ ...result, ...worldAnswer(campaignId) });
 }

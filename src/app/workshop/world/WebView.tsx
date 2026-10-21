@@ -34,6 +34,18 @@ const VIEWS: Array<{ id: View; label: string }> = [
 type GraphEdge = Edge & { kind: string; label: string; veracity?: string };
 type Graph = { nodes: string[]; edges: GraphEdge[]; at: Map<string, XY> };
 
+// The most linked entries, up to WEB_MAX, in their first order.
+function mostLinked(nodes: string[], links: Array<{ from: string; to: string }>): string[] {
+  if (nodes.length <= WEB_MAX) return nodes;
+  const degree = new Map<string, number>();
+  for (const link of links) {
+    degree.set(link.from, (degree.get(link.from) ?? 0) + 1);
+    degree.set(link.to, (degree.get(link.to) ?? 0) + 1);
+  }
+  const kept = new Set([...nodes].sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (a < b ? -1 : a > b ? 1 : 0)).slice(0, WEB_MAX));
+  return nodes.filter((ref) => kept.has(ref));
+}
+
 // Up to this many entries the web is laid out in the render, as it always
 // was (a few milliseconds). A bigger world is laid out a slice at a time
 // between frames (src/lib/worldforge/force-layout.ts), so the page answers
@@ -42,6 +54,11 @@ type Graph = { nodes: string[]; edges: GraphEdge[]; at: Map<string, XY> };
 // places as on any recentre.
 const SYNC_LIMIT = 60;
 const SLICE_MS = 8;
+// The whole world's web shows at most this many entries, the most linked
+// (audit WF-24): 3,900 linked entries took 14 s to settle into a tangle no
+// one could read. Centring on an entry shows its neighbourhood, whatever
+// the world's size.
+export const WEB_MAX = 300;
 
 function useSettledGraph(target: Omit<Graph, "at"> & { at: Map<string, XY> | null }): { graph: Graph | null; settling: boolean } {
   const [settled, setSettled] = useState<Graph | null>(null);
@@ -86,7 +103,7 @@ export function WebView({ world, focus, onOpen }: { world: WorldState; focus: st
   const byRef = useMemo(() => new Map(entities.map((entity) => [entity.ref, entity])), [entities]);
   const live = useMemo(() => new Set(entities.map((entity) => entity.ref)), [entities]);
 
-  const target = useMemo((): Omit<Graph, "at"> & { at: Map<string, XY> | null } => {
+  const target = useMemo((): Omit<Graph, "at"> & { at: Map<string, XY> | null; of: number } => {
     const links = doc.links.filter((link) => live.has(link.from) && live.has(link.to) && linkInView(link, view));
     if (mode === "family") {
       const tree = family(links, live, view);
@@ -96,19 +113,20 @@ export function WebView({ world, focus, onOpen }: { world: WorldState; focus: st
         ...tree.spouses.map((edge) => ({ ...edge, kind: "spouse", label: "spouse of" })),
         ...tree.siblings.map((edge) => ({ ...edge, kind: "sibling", label: "sibling of" })),
       ];
-      return { nodes, edges, at: rowsLayout(treeRows(nodes, tree.parents)) };
+      return { nodes, edges, at: rowsLayout(treeRows(nodes, tree.parents)), of: nodes.length };
     }
     if (mode === "chain") {
       const tree = chain(links, live, view);
       const nodes = [...new Set(tree.edges.flatMap((edge) => [edge.from, edge.to]))];
-      return { nodes, edges: tree.edges.map((edge) => ({ ...edge, kind: "chain", label: "above" })), at: rowsLayout(treeRows(nodes, tree.above)) };
+      return { nodes, edges: tree.edges.map((edge) => ({ ...edge, kind: "chain", label: "above" })), at: rowsLayout(treeRows(nodes, tree.above)), of: nodes.length };
     }
-    const nodes = center ? [...neighbourhood(center, links, hops, view)].filter((ref) => live.has(ref)) : [...new Set(links.flatMap((link) => [link.from, link.to]))];
+    const reached = center ? [...neighbourhood(center, links, hops, view)].filter((ref) => live.has(ref)) : [...new Set(links.flatMap((link) => [link.from, link.to]))];
+    const nodes = center ? reached : mostLinked(reached, links);
     const set = new Set(nodes);
     const edges = links
       .filter((link) => set.has(link.from) && set.has(link.to))
       .map((link) => ({ from: link.from, to: link.to, veracity: link.veracity, kind: link.oneway ? "oneway" : "link", label: link.rank ? `${link.label} (${link.rank})` : link.label }));
-    return { nodes, edges, at: nodes.length <= SYNC_LIMIT ? webLayout(nodes, edges) : null };
+    return { nodes, edges, at: nodes.length <= SYNC_LIMIT ? webLayout(nodes, edges) : null, of: reached.length };
   }, [center, doc.links, hops, live, mode, view]);
   const { graph: settled, settling } = useSettledGraph(target);
   const graph: Graph = settled ?? { nodes: [], edges: [], at: new Map() };
@@ -153,6 +171,11 @@ export function WebView({ world, focus, onOpen }: { world: WorldState; focus: st
           </div>
         ) : null}
       </div>
+      {mode === "web" && !center && target.of > target.nodes.length ? (
+        <p className="text-xs text-stone-400" data-testid="web-most-linked">
+          The {target.nodes.length} most linked of {target.of.toLocaleString()} linked entries. Choose one to see the web around it.
+        </p>
+      ) : null}
 
       {/* On a phone the web keeps a readable size and scrolls sideways; the
           card for the chosen entry sits under it instead of over it. */}

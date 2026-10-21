@@ -1,7 +1,8 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { compressedJson } from "@/lib/compressed-json";
 import { followPins } from "@/lib/db/atlas-region";
 import { partyAtlasChanged } from "@/lib/db/party-atlas";
-import { patchWorldDoc, worldCounts, worldView } from "@/lib/db/world-forge";
+import { patchWorldDoc, worldAnswer, worldCounts } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { recordsChanged } from "@/lib/workshop/record-events";
 
@@ -9,7 +10,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // The workshop's WorldForge (src/lib/worldforge/model.ts): its document and
-// the records it describes. The DM's alone, hidden truths and all.
+// the records it describes (each entry's WorldForge data once, on its
+// record: worldAnswer), gzipped when big (compressedJson). The DM's alone,
+// hidden truths and all.
 // ?counts=1 answers with the hub card's numbers only.
 export async function GET(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = await params;
@@ -20,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ camp
   if (new URL(request.url).searchParams.get("counts")) {
     return Response.json({ counts: worldCounts(campaignId) });
   }
-  return Response.json(worldView(campaignId));
+  return compressedJson(request, worldAnswer(campaignId));
 }
 
 // Changes slices (types, links, folders, calendars, events, secrets, stubs,
@@ -46,5 +49,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   partyAtlasChanged(campaignId, before);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, "world");
-  return Response.json({ ...worldView(campaignId), ...(conflicts.length ? { conflicts } : {}), ...(region.length ? { region } : {}) });
+  return compressedJson(request, { ...worldAnswer(campaignId), ...(conflicts.length ? { conflicts } : {}), ...(region.length ? { region } : {}) });
 }
