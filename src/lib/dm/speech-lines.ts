@@ -34,7 +34,7 @@ export function personLines(campaign: Pick<Campaign, "id" | "gameSettings">, tex
   return linesOf(
     attributeSpeech(text, speakers, {
       common: commonWords(recent),
-      pronouns: campaign.gameSettings.tableLanguage === "english",
+      englishPronouns: campaign.gameSettings.tableLanguage === "english",
     }),
   );
 }

@@ -289,7 +289,7 @@ test("playing a draw marks the interaction spent; playing a drop or the shield d
 
 test("a played gear sentence opens the gear tools for a compact call", () => {
   for (const text of ["I draw my Greatsword.", "I take off my Shield.", "I drop my Longsword.", "I pick up the Handaxe.", "I hand my Dagger to Mira."]) {
-    assert.ok(autoGroups({ inEncounter: true, playerText: text }).has("gear"), text);
+    assert.ok(autoGroups({ inEncounter: true, englishPlayerText: text }).has("gear"), text);
   }
 });
 

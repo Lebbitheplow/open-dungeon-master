@@ -251,14 +251,14 @@ test("the workshop pickers' searches fold case, spacing and form like every othe
 test("speech is tied to a speaker whose name the prose writes decomposed or in another case", () => {
   const speaker = { kind: "npc", id: "n1", name: "Élodie Marsh" };
   for (const prose of [`${decomposed("Élodie")} says: "Hello."`, `ÉLODIE says: "Hello."`]) {
-    const segments = attributeSpeech(prose, [speaker], { pronouns: true });
+    const segments = attributeSpeech(prose, [speaker], { englishPronouns: true });
     const spoken = segments.find((segment) => segment.kind === "speech");
     assert.equal(spoken?.speaker.id, "n1", prose);
     // The prose keeps the name as it was written, in its own form.
     assert.ok(segments.some((segment) => segment.kind === "prose" && segment.text.includes(prose.split(" ")[0])), prose);
   }
   const russian = { kind: "npc", id: "n2", name: "Олег" };
-  const said = attributeSpeech("Олег говорит: «Привет.»", [russian], { pronouns: false });
+  const said = attributeSpeech("Олег говорит: «Привет.»", [russian], { englishPronouns: false });
   assert.equal(said.find((segment) => segment.kind === "speech")?.speaker.id, "n2");
 });
 

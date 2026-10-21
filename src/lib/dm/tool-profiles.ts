@@ -190,16 +190,18 @@ export type ProfileSignals = {
   legendary?: boolean;
   // Someone at the table casts spells.
   caster?: boolean;
-  // The newest player lines, and the tool a card played from the Hand names.
-  playerText?: string;
+  // The newest player lines at an English table, read for the English words
+  // of ENGLISH_INTENT (none at another table), and the tool a card played
+  // from the Hand names.
+  englishPlayerText?: string;
   cardTool?: string | null;
 };
 
-// Words in the players' newest lines that call for a group. Deliberately
-// plain: a miss costs one more_tools call, a false hit a few hundred tokens.
-// English words only, an extra: at a table in another language every group
-// these would open is that one more_tools call away.
-const INTENT: Array<[ToolGroupId, RegExp]> = [
+// English words in the players' newest lines that call for a group, read
+// only at an English table. Deliberately plain: a miss costs one more_tools
+// call, a false hit a few hundred tokens. An extra: at a table in another
+// language every group these would open is that one more_tools call away.
+const ENGLISH_INTENT: Array<[ToolGroupId, RegExp]> = [
   // Trading words, and the places that sell: walking into a smithy has to
   // offer open_shop before the DM describes its shelf.
   ["shop", /\b(buy|buys|buying|bought|sell|sells|selling|sold|shop|shops|shopping|merchants?|wares|browse|browsing|haggle|haggling|barter|bartering|prices?|(?:black|weapon)?smiths?|smithy|smithies|forges?|armou?rers?|stores?|stalls?|stand|stands|vendors?|traders?|trading post|markets?|marketplace|bazaars?|apothecary|apothecaries|herbalists?|alchemists?|outfitters?|provisioners?|fletchers?)\b/i],
@@ -226,8 +228,8 @@ export function autoGroups(signals: ProfileSignals): Set<ToolGroupId> {
   if (signals.quests) groups.add("binder");
   if (signals.inEncounter && signals.legendary) groups.add("legendary");
   if (signals.caster) groups.add("spells");
-  const text = signals.playerText ?? "";
-  for (const [group, pattern] of INTENT) {
+  const text = signals.englishPlayerText ?? "";
+  for (const [group, pattern] of ENGLISH_INTENT) {
     if (pattern.test(text)) groups.add(group);
   }
   const carded = signals.cardTool ? groupOfTool(signals.cardTool) : null;

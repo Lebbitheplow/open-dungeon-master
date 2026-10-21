@@ -18,6 +18,7 @@ check("a turn order recited on one line goes, with the heading that opened the f
     withoutCombatBookkeeping(
       "**Combat begins.** The undead are surprised. 1. Avery (14) 2. Silent Cultist 2 3. Bram (9) 4. Silent Cultist 1 5. Silenced Captain (12) It is Avery's turn.",
       FIGHT,
+      "english",
     ),
     "The undead are surprised. It is Avery's turn.",
   );
@@ -28,6 +29,7 @@ check("a bold list goes with the clause that introduced it, and the story after 
     withoutCombatBookkeeping(
       "Avery takes initiative with a roll of 21, while Bram rolls a 6. The updated order is: 1. **Masked Thug 1** 2. **Avery** 3. **Masked Thug 2** 4. **Bram** **Masked Thug 1** is now directly in Avery's path.",
       FIGHT,
+      "english",
     ),
     "Avery takes initiative with a roll of 21, while Bram rolls a 6. **Masked Thug 1** is now directly in Avery's path.",
   );
@@ -35,26 +37,36 @@ check("a bold list goes with the clause that introduced it, and the story after 
 
 check("what is left of a recited order, and a turn heading, go", () => {
   assert.equal(
-    withoutCombatBookkeeping("**Avery's Turn** The thug that attacked you recovers its balance. 1. 2. **Avery** **Bram**", FIGHT),
+    withoutCombatBookkeeping("**Avery's Turn** The thug that attacked you recovers its balance. 1. 2. **Avery** **Bram**", FIGHT, "english"),
     "The thug that attacked you recovers its balance.",
   );
 });
 
 check("a round heading and a bulleted summary of the round go", () => {
   assert.equal(
-    withoutCombatBookkeeping("**Round 1:**\n* **Masked Thug 1 attacks Bram.**\nThe thugs act on the surprised party's lost turn.", FIGHT),
+    withoutCombatBookkeeping("**Round 1:**\n* **Masked Thug 1 attacks Bram.**\nThe thugs act on the surprised party's lost turn.", FIGHT, "english"),
     "The thugs act on the surprised party's lost turn.",
   );
 });
 
 check("a numbered list of anything but the fight's own names stays", () => {
   const text = "You could: 1. Run for the door 2. Fight them here.";
-  assert.equal(withoutCombatBookkeeping(text, FIGHT), text);
+  assert.equal(withoutCombatBookkeeping(text, FIGHT, "english"), text);
 });
 
 check("with no fight running nothing is taken", () => {
   const text = "**Combat begins.** 1. Avery (14) 2. Bram (9)";
-  assert.equal(withoutCombatBookkeeping(text, []), text);
+  assert.equal(withoutCombatBookkeeping(text, [], "english"), text);
+});
+
+check("at every other table the English headings stay as written, and the recited order and the bulleted summary go by the fight's own names", () => {
+  for (const language of ["italian", "french", "spanish", "german"]) {
+    assert.equal(
+      withoutCombatBookkeeping("**Avery's Turn** La nebbia sale. 1. Avery (14) 2. Silent Cultist 2 3. Bram (9)\n* **Masked Thug 1 attacks Bram.**", FIGHT, language),
+      "**Avery's Turn** La nebbia sale.",
+      language,
+    );
+  }
 });
 
 check("a later call repeating the earlier call's prose says it once", () => {

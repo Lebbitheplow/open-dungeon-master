@@ -13,7 +13,7 @@ const { attributeSpeech, linesOf } = await import("../src/lib/dm/speech.ts");
 // person's English prose, read from its words (src/lib/dm/speech.ts).
 const voiced = (text, options) =>
   planSpeech(text, {
-    lines: linesOf(attributeSpeech(text, options.cast.map((entry) => ({ kind: "npc", id: "", name: entry.name })), { pronouns: true })),
+    lines: linesOf(attributeSpeech(text, options.cast.map((entry) => ({ kind: "npc", id: "", name: entry.name })), { englishPronouns: true })),
     ...options,
   });
 

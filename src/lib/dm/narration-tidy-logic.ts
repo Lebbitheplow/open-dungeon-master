@@ -6,6 +6,7 @@
 
 import { textKey } from "../language/text-logic.ts";
 import { DM_TOOL_NAME_PATTERN } from "./tool-text.ts";
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
 
 // A sentence shorter than this may be said twice on purpose: a shouted
 // "Run!", a chant, a name called again.
@@ -85,9 +86,10 @@ export function repeatsNarration(text: string, previous: string): boolean {
 export const REPEATED_NARRATION_PROMPT =
   "[System] That reply repeats your previous narration almost word for word. The player has acted again, and this is a new moment. Resolve what they just did with the tools (in a fight: the attack, move or spell they declared, on their turn), then narrate only what is new.";
 
-// A bold heading for a turn, a round or the fight itself: "**Bram's Turn**",
-// "**Round 1:**", "**Combat begins.**", "**End of Avery's Turn.**".
-const COMBAT_HEADING = /\*\*[^*\n]{0,40}?\b(?:turn|round|combat|initiative)\b[^*\n]{0,30}?\*\*[ \t]*[.:!]?/gi;
+// An English bold heading for a turn, a round or the fight itself, read only
+// at an English table: "**Bram's Turn**", "**Round 1:**", "**Combat
+// begins.**", "**End of Avery's Turn.**".
+const ENGLISH_COMBAT_HEADING = /\*\*[^*\n]{0,40}?\b(?:turn|round|combat|initiative)\b[^*\n]{0,30}?\*\*[ \t]*[.:!]?/gi;
 // What is left of a recited order once its names went: "1. 2. **Avery** **Bram**".
 const NUMBERS_LEFT = /(?:^|(?<=\s))\d{1,2}\.(?:\s+\d{1,2}\.)+(?:\s+\*\*[^*\n]{1,40}\*\*)*/g;
 // A bulleted line in a fight is a summary of it, not the story: "* **Masked
@@ -147,16 +149,19 @@ function withoutNamedRuns(text: string, names: readonly string[]): string {
 }
 
 // The fight's bookkeeping written into the story while a fight runs: the
-// headings above and the recited order. The board and the turn strip show
-// both; Qwen3.6-35B at Q2 wrote them in most fights. `names` are the fight's
-// combatants; none means no fight, and the text is left as it is.
-export function withoutCombatBookkeeping(text: string, names: readonly string[]): string {
+// recited order and a bulleted summary, found by the fight's own names at
+// every table, and the English headings above at an English table only. The
+// board and the turn strip show both; Qwen3.6-35B at Q2 wrote them in most
+// fights. `names` are the fight's combatants; none means no fight, and the
+// text is left as it is.
+export function withoutCombatBookkeeping(text: string, names: readonly string[], language: TableLanguage): string {
   const known = [...new Set(names.map((name) => name.trim()).filter((name) => name.length >= 2))].sort((a, b) => b.length - a.length);
   if (!known.length) {
     return text;
   }
   const keys = known.map((name) => textKey(name));
   const unbulleted = text.replace(BULLET_LINE, (line, body: string) => (keys.some((key) => ` ${textKey(body)} `.includes(` ${key} `)) ? "" : line));
-  const stripped = withoutNamedRuns(unbulleted.replace(COMBAT_HEADING, ""), known).replace(NUMBERS_LEFT, "");
+  const headed = language === "english" ? unbulleted.replace(ENGLISH_COMBAT_HEADING, "") : unbulleted;
+  const stripped = withoutNamedRuns(headed, known).replace(NUMBERS_LEFT, "");
   return tidyBlankLines(stripped.replace(/\*\*\s*\*\*/g, ""));
 }
