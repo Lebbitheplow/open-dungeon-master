@@ -60,6 +60,7 @@ import {
   useSessionTabs,
   type PanelTab,
 } from "@/app/campaigns/[campaignId]/SessionTabs";
+import { browseWares, type MarketRequest } from "@/lib/dm/table-tabs";
 import { SessionChatColumn } from "@/app/campaigns/[campaignId]/SessionChatColumn";
 import { AddonViewSwitch, boardViewKey, useBoardView, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
 import { AddonBoardView } from "@/app/campaigns/[campaignId]/AddonBoardView";
@@ -732,6 +733,18 @@ export function SessionView({
     },
     [openTab, setMobileView],
   );
+  // A shop's Browse wares in the chat: the Market on that shop, in the side
+  // panel at a desk and in place of the table on a phone.
+  const [marketRequest, setMarketRequest] = useState<MarketRequest | null>(null);
+  const browseShop = useCallback(
+    (shopId: string) => {
+      const target = browseWares(shopId, Date.now());
+      setMarketRequest(target.request);
+      openTab(target.tab);
+      setMobileView(target.mobileView);
+    },
+    [openTab, setMobileView],
+  );
   const bumpPins = useCallback(() => setPinsVersion((count) => count + 1), []);
   const openLoreCheck = useCallback(
     (message: CampaignMessage, selection: string) => setLoreCheck({ message, selection }),
@@ -929,6 +942,7 @@ export function SessionView({
     worldVersion: state.worldVersion,
     loreVersion: state.loreVersion,
     shopsVersion: state.shopsVersion,
+    marketRequest,
     coins: state.coins,
     activeSheetId: state.activeSheetId,
     questsVersion: state.questsVersion,
@@ -1088,6 +1102,7 @@ export function SessionView({
                 onError={setError}
                 onLoreCheck={openLoreCheck}
                 onRenarrate={setRenarrate}
+                onBrowseShop={browseShop}
                 onPinned={bumpPins}
               >
                 {needsCharacter ? (

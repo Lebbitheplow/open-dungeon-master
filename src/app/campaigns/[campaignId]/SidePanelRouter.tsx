@@ -41,6 +41,7 @@ import type { MapPing } from "@/lib/dm/board-logic";
 import { companionSlotsFree, lastingCompanionBlock, resolveCompanionMode } from "@/lib/schemas/game-settings";
 import { hasHumanDm, partySlotCount } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { MarketRequest } from "@/lib/dm/table-tabs";
 import type { LeadPanel as LeadPanelComponent } from "@/app/campaigns/[campaignId]/LeadPanel";
 import type { SessionSettings as SessionSettingsComponent } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { PanelLoading, panels } from "@/app/campaigns/[campaignId]/side-panel-loaders";
@@ -162,6 +163,8 @@ export type SidePanelRouterProps = {
   // Bumped on lore_updated, so the lore list reads itself again.
   loreVersion?: number;
   shopsVersion?: number;
+  // A Browse wares pressed in the chat: open the Market on that shop.
+  marketRequest?: MarketRequest | null;
   coins?: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
   activeSheetId?: string;
   questsVersion: number;
@@ -239,6 +242,7 @@ export function SidePanelRouter({
   worldVersion = 0,
   loreVersion = 0,
   shopsVersion = 0,
+  marketRequest = null,
   coins = null,
   activeSheetId = "",
   questsVersion,
@@ -258,6 +262,13 @@ export function SidePanelRouter({
   // this panel reads or sets them.
   const [partySection, setPartySection] = useState<PartySection>("party");
   const [storySection, setStorySection] = useState<StorySection>("story");
+  // A Browse wares from the chat turns Party to its Market, once per press.
+  // State-from-props during render, as useSessionTabs takes a chat target.
+  const [seenMarketAt, setSeenMarketAt] = useState(0);
+  if (marketRequest && marketRequest.at !== seenMarketAt) {
+    setSeenMarketAt(marketRequest.at);
+    setPartySection("market");
+  }
 
   const partySubTabs: SubTabDef<PartySection>[] = [
     ["party", "Roster", Users],
@@ -384,6 +395,8 @@ export function SidePanelRouter({
 
               refreshKey={shopsVersion}
               coins={coins}
+              focus={marketRequest}
+              onAskKeeper={onCompose}
             />
             </Suspense>
           ) : (

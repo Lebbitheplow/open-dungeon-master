@@ -41,6 +41,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const result =
     parsed.data.action === "buy" ? handleBuyItem(context.campaign, raw) : parsed.data.action === "sell" ? handleSellItem(context.campaign, raw) : handleHaggle(context.campaign, raw);
   if ("error" in result) {
+    // Something nobody has priced: the keeper names a price, through the DM.
+    if (result.unpriced === true) {
+      return Response.json({ error: "The shopkeeper will name a price.", unpriced: true }, { status: 409 });
+    }
     return Response.json({ error: String(result.error) }, { status: 409 });
   }
   return Response.json({ result });

@@ -7,7 +7,7 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -15,6 +15,7 @@ import { formatCopper } from "@/lib/srd/currency";
 import { KitButton, LoadFailed, panelField, PanelLoading, SettingToggle } from "./PanelKit";
 import { MarketShopEditor, type Named } from "./MarketShopEditor";
 import type { StockLine } from "@/lib/dm/shop-logic";
+import type { MarketRequest } from "@/lib/dm/table-tabs";
 
 // The market (docs/vtt-parity-implementation-plan.md 11.1): the shops at
 // the party's place, stock as tiles with a price chip in coin, a Buy on
@@ -53,6 +54,11 @@ function coinGlyph(copper: number): string {
   return copper >= 100 ? "coin-gp" : copper >= 10 ? "coin-sp" : "coin-cp";
 }
 
+// The last Browse wares the Market answered. Kept outside the panel, which
+// remounts each time its section is opened again, so a later visit to the
+// Market is not taken for the same press.
+let lastFocusedAt = 0;
+
 export function MarketPanel({
   campaignId,
   steersStory,
@@ -60,6 +66,8 @@ export function MarketPanel({
   mySheet,
   refreshKey = 0,
   coins,
+  focus = null,
+  onAskKeeper,
 }: {
   campaignId: string;
   // Story authority sees every shop and where it stands.
@@ -70,6 +78,11 @@ export function MarketPanel({
   mySheet: CharacterSheet | null;
   refreshKey?: number;
   coins?: { characterId: string; direction: "in" | "out"; at: number } | null;
+  // A Browse wares from the chat: the heading takes focus and that shop
+  // comes into view, once per press.
+  focus?: MarketRequest | null;
+  // Puts an action in the composer, for a sale only the DM can price.
+  onAskKeeper?: (text: string) => void;
 }) {
   const [shops, setShops] = useState<ShopView[] | null>(null);
   const [here, setHere] = useState<{ id: string; name: string } | null>(null);
@@ -86,6 +99,12 @@ export function MarketPanel({
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState({ name: "", kind: "general", size: "village", locationId: "", keeperNpcId: "", stockFromPack: true });
   const [reload, setReload] = useState(0);
+  // Something the pack and the item's worth leave unpriced: the keeper
+  // names a price, so the sale goes to whoever runs the story.
+  const [unpriced, setUnpriced] = useState<{ shop: string; item: string } | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [spotlight, setSpotlight] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -110,9 +129,27 @@ export function MarketPanel({
     };
   }, [campaignId, refreshKey, reload, settle, isDm]);
 
+  // Deferred a tick, as the hero page's heading is: the panel paints the
+  // shops on the render that loads them, after this effect is scheduled.
+  const loadedShops = shops !== null;
+  useEffect(() => {
+    if (!focus || !loadedShops || focus.at === lastFocusedAt) {
+      return;
+    }
+    lastFocusedAt = focus.at;
+    const id = window.setTimeout(() => {
+      headingRef.current?.focus({ preventScroll: true });
+      const section = listRef.current?.querySelector<HTMLElement>(`[data-shop-id="${CSS.escape(focus.shopId)}"]`);
+      (section ?? headingRef.current)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      setSpotlight(section ? focus.shopId : "");
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [focus, loadedShops]);
+
   async function counter(shop: ShopView, action: "buy" | "sell" | "haggle", item = "") {
     setBusy(`${shop.id}:${action}:${item}`);
     setError("");
+    setUnpriced(null);
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/shops/${shop.id}/trade`, {
         method: "POST",
@@ -120,7 +157,9 @@ export function MarketPanel({
         body: JSON.stringify({ action, item, qty: 1, characterId: mySheet?.id }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
+      if (!response.ok && data.unpriced === true) {
+        setUnpriced({ shop: shop.name, item });
+      } else if (!response.ok) {
         setError(String(data.error ?? "The keeper shakes their head."));
       } else if (action === "haggle") {
         setError(data.result?.success ? `Haggled well: prices ${data.result.prices}.` : `The keeper is unmoved: prices ${data.result?.prices ?? "rise"}.`);
@@ -181,8 +220,9 @@ export function MarketPanel({
     return <PanelLoading label="Looking over the stalls..." />;
   }
   return (
-    <div className="space-y-2">
+    <div ref={listRef} className="space-y-2">
       <SectionHead
+        headingRef={headingRef}
         title="Market"
         glyph="tab-market"
         aside={
@@ -196,6 +236,16 @@ export function MarketPanel({
       />
       {here ? <p className="-mt-1 text-xs text-stone-500">at {here.name}</p> : null}
       {error ? <p role="status" className="live-in text-xs text-amber-300/90">{error}</p> : null}
+      {unpriced ? (
+        <p role="status" className="live-in flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300/90">
+          <span className="min-w-0">The shopkeeper will name a price for {unpriced.item}.</span>
+          {onAskKeeper ? (
+            <KitButton onClick={() => onAskKeeper(`I offer my ${unpriced.item} to the keeper of ${unpriced.shop} and ask what they would pay.`)}>
+              Ask at the counter
+            </KitButton>
+          ) : null}
+        </p>
+      ) : null}
       {canPrep ? (
         opening ? (
           <div className="panel reveal flex flex-wrap items-center gap-1.5 rounded-lg p-2.5">
@@ -268,7 +318,7 @@ export function MarketPanel({
           );
         }
         return (
-          <section key={shop.id} className="panel @container space-y-2 rounded-lg p-2.5">
+          <section key={shop.id} data-shop-id={shop.id} data-spotlight={spotlight === shop.id ? "" : undefined} className={cn("panel @container space-y-2 rounded-lg p-2.5", spotlight === shop.id && "ring-1 ring-amber-400/60")}>
             <ContextMenu items={shopItems} label={shop.name} className="group flex items-center gap-2">
               {shop.keeperPortrait ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -279,8 +329,10 @@ export function MarketPanel({
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className="gold-title truncate text-sm">{shop.name}</p>
-                <p className="truncate text-[11px] text-stone-500">
+                {/* Wrapped, not cut: beside Haggle and the prep buttons a
+                    20rem panel leaves a name and its markup a few letters. */}
+                <p className="gold-title break-words text-sm leading-tight">{shop.name}</p>
+                <p className="text-pretty break-words text-[11px] leading-snug text-stone-500">
                   {shop.kind}
                   {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
                   {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}

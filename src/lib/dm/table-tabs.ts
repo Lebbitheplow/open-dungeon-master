@@ -119,3 +119,20 @@ export function phoneBarSplit(tabs: TableTabId[]): { bar: TableTabId[]; more: Ta
   );
   return { bar: tabs.filter((tab) => keep.has(tab)), more: tabs.filter((tab) => !keep.has(tab)) };
 }
+
+// Where a chat line's Browse wares goes (MessageItem.tsx): the Market
+// section of the Party tab, in the side panel at a desk, and on a phone in
+// place of the table, the same panel whether Party sits on the bar or under
+// More; the bar's Table cell is the way back. The shop rides along, with
+// the moment of the press, so the Market brings that shop into view and a
+// second press on the same line is a second request.
+export type MarketRequest = { shopId: string; at: number };
+
+export function browseWares(shopId: string, at: number): {
+  tab: TableTabId;
+  section: "market";
+  mobileView: "panel";
+  request: MarketRequest;
+} {
+  return { tab: "party", section: "market", mobileView: "panel", request: { shopId, at } };
+}

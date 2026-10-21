@@ -114,6 +114,7 @@ export function MessageList({
   onRenarrate,
   onContinueScene,
   onSelectVariant,
+  onBrowseShop,
   meUserId = "",
   blockedUserIds = [],
   onReport,
@@ -155,6 +156,8 @@ export function MessageList({
   onRenarrate?: (message: CampaignMessage) => void;
   onContinueScene?: (message: CampaignMessage) => void;
   onSelectVariant?: (message: CampaignMessage, index: number) => void;
+  // A shop's "is open" line opens the Market on that shop.
+  onBrowseShop?: (shopId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -251,6 +254,15 @@ export function MessageList({
             selectVariantRef.current?.(message, index)
         : undefined,
     [hasSelectVariant],
+  );
+  const browseShopRef = useRef(onBrowseShop);
+  useEffect(() => {
+    browseShopRef.current = onBrowseShop;
+  });
+  const hasBrowseShop = Boolean(onBrowseShop);
+  const stableBrowseShop = useMemo(
+    () => (hasBrowseShop ? (shopId: string) => browseShopRef.current?.(shopId) : undefined),
+    [hasBrowseShop],
   );
   const reportRef = useRef(onReport);
   useEffect(() => {
@@ -385,6 +397,7 @@ export function MessageList({
               : undefined
           }
           onSelectVariant={stableSelectVariant}
+          onBrowseShop={stableBrowseShop}
         />
       ])}
       {draftAt === -1 ? draftBubble : null}

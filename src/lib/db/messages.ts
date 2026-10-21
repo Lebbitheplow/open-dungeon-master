@@ -41,6 +41,9 @@ export type CampaignMessage = {
   // Who speaks each quoted line of a DM message, stored by its writer
   // (src/lib/dm/speech.ts). Empty where nobody speaks or before it existed.
   speech: SpokenLine[];
+  // The shop a "<shop> is open" system line announces; the chat draws it
+  // with a Browse wares button that opens the Market on that shop.
+  shopId?: string;
   createdAt: string;
 };
 
@@ -62,6 +65,7 @@ type MessageRow = {
   intent_json?: string | null;
   glyph?: string | null;
   speech_json?: string | null;
+  shop_id?: string | null;
   created_at: string;
 };
 
@@ -84,6 +88,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     intent: parseMessageIntent(parseJson<unknown>(row.intent_json ?? "null", null)) ?? undefined,
     glyph: isSystemGlyph(row.glyph) ? row.glyph : undefined,
     speech: normalizeSpokenLines(parseJson<unknown>(row.speech_json ?? "null", null)),
+    shopId: row.shop_id ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -105,7 +110,7 @@ export function insertCampaignMessage(
   } & (
     | { authorType: "player"; glyph?: never; speech?: never }
     | { authorType: "dm"; glyph?: never; speech: readonly SpokenLine[] }
-    | { authorType: "system"; glyph: SystemGlyph; speech?: never }
+    | { authorType: "system"; glyph: SystemGlyph; speech?: never; shopId?: string }
   ),
 ): CampaignMessage {
   const id = crypto.randomUUID();
@@ -114,9 +119,9 @@ export function insertCampaignMessage(
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, glyph, speech_json, created_at
+          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, glyph, speech_json, shop_id, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -134,6 +139,7 @@ export function insertCampaignMessage(
       input.intent ? JSON.stringify(input.intent) : null,
       input.glyph ?? null,
       input.speech?.length ? JSON.stringify(input.speech) : null,
+      (input.authorType === "system" && input.shopId) || null,
       nowIso(),
     );
   touchCampaign(input.campaignId);

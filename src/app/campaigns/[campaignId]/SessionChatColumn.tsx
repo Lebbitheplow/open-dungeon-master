@@ -36,6 +36,7 @@ export function SessionChatColumn({
   onError,
   onLoreCheck,
   onRenarrate,
+  onBrowseShop,
   onPinned,
   stage,
   keepTranscript = false,
@@ -59,6 +60,8 @@ export function SessionChatColumn({
   onError: (message: string) => void;
   onLoreCheck: (message: CampaignMessage, selection: string) => void;
   onRenarrate: (message: CampaignMessage) => void;
+  // A shop's "is open" line opens the Market on that shop.
+  onBrowseShop: (shopId: string) => void;
   // A memory pin landed, so the pins panel should refetch.
   onPinned: () => void;
   // The fight stage (the board and the chronicle scroll) in place of the
@@ -139,6 +142,7 @@ export function SessionChatColumn({
           onLoreCheck(message, selection.length > 3 ? selection : "");
         }}
         onRenarrate={steersStory ? onRenarrate : undefined}
+        onBrowseShop={onBrowseShop}
         onContinueScene={
           steersStory
             ? async (message) => {
