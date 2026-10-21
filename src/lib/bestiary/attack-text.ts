@@ -1,4 +1,4 @@
-import { parseSaveEffect } from "@/lib/dm/monster-abilities";
+import { CONDITION_WORDS, conditionName, parseSaveEffect, SAVE_DC } from "@/lib/dm/monster-abilities";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms } from "@/lib/srd/name-forms";
@@ -62,6 +62,9 @@ export type AttackText = {
   // when the line prints no dice.
   baseDice?: string;
   printedAverage?: number;
+  // The hit opens with no damage of its own (a Giant Spider's Web): what
+  // it does is its on-hit rider.
+  effectOnly?: boolean;
 };
 
 const compact = (raw: string) => raw.replace(/\s+/g, "");
@@ -102,67 +105,125 @@ export function readAttackText(desc: string): AttackText {
     out.mode = word === "melee or ranged" ? "both" : word === "melee" ? "melee" : "ranged";
     out.spellAttack = kind[2].toLowerCase() === "spell";
   }
-  const reach = /reach\s+(\d{1,3})\s*ft/i.exec(text);
+  // Tome of Beasts 3 prints its numbers bare: "+8 to hit, 10 ft." (reach),
+  // "+5 to hit 30/120'" or a ranged "+7 to hit, 60 ft." (range).
+  const near = /to hit,?\s+(?:reach\s+)?(\d{1,3})\s*(?:ft\b|')/i.exec(text);
+  const reach = /reach\s+(\d{1,3})\s*ft/i.exec(text) ?? (out.mode !== "ranged" ? near : null);
   if (reach) {
     out.reach = Number(reach[1]);
   }
-  const range = /range\s+(\d{1,4})(?:\s*\/\s*(\d{1,4}))?\s*ft/i.exec(text);
+  const range =
+    /range\s+(\d{1,4})(?:\s*\/\s*(\d{1,4}))?\s*(?:ft\b|')/i.exec(text) ??
+    /to hit,?\s+(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:ft\b|')/i.exec(text) ??
+    (out.mode === "ranged" ? near : null);
   if (range) {
     out.range = { normal: Number(range[1]), long: Number(range[2] ?? range[1]) };
   }
-  const hitAt = text.search(/hit:/i);
-  const hit = hitAt >= 0 ? text.slice(hitAt + 4) : text;
+  const hit = hitClause(text);
+  // A choice of types ("cold, fire, lightning, poison, or thunder damage (its
+  // choice)") is read as the first type named.
+  const words = DAMAGE_WORDS.join("|");
+  const typeList = `(${words})\\b(?:,?\\s+(?:or\\s+)?(?:${words})\\b)*`;
   // The hit's own type is the one its clause opens with ("Hit: 1 piercing
   // damage", "Hit: 7 (1d8 + 3) piercing damage"); else the first typed dice
   // before a saving throw, whose damage is the save's and not the hit's (a
   // Poisonous Snake's "taking 5 (2d4) poison damage on a failed save").
   const own =
-    new RegExp(`^\\s*\\d+\\s*(?:\\([^)]*\\)\\s*)?(${DAMAGE_WORDS.join("|")})\\s+damage`, "i").exec(hit) ??
-    new RegExp(`\\d+\\s*\\([^)]*\\)\\s+(${DAMAGE_WORDS.join("|")})\\s+damage`, "i").exec(hit.split(/saving throw/i)[0]);
-  if (own) {
-    out.types.push(own[1].toLowerCase());
-  }
-  // The hit's own dice open the line: "Hit: 7 (1d8 + 3) piercing damage".
-  const base = hitAt >= 0 ? /^\s*(\d{1,3})\s*\(\s*(\d{1,3}d\d{1,3}(?:\s*[+-]\s*\d{1,3})?)\s*\)/i.exec(hit) : null;
+    new RegExp(`^\\s*\\d+\\s*(?:\\([^)]*\\)\\s*)?${typeList}`, "i").exec(hit) ??
+    new RegExp(`\\d+\\s*\\([^)]*\\)\\s+${typeList}\\s+damage`, "i").exec(hit.split(/saving throw/i)[0]);
+  // The hit's own dice open the clause: "Hit: 7 (1d8 + 3) piercing damage".
+  const base = /^\s*(\d{1,3})\s*\(\s*(\d{1,3}d\d{1,3}(?:\s*[+-]\s*\d{1,3})?)\s*\)/i.exec(hit);
   // A flat hit with no dice ("Hit: 1 piercing damage", a homunculus) is its
   // own base.
-  const flat = hitAt >= 0 && !base ? new RegExp(`^\\s*(\\d{1,3})\\s+(${DAMAGE_WORDS.join("|")})\\s+damage`, "i").exec(hit) : null;
+  const flat = !base ? new RegExp(`^\\s*(\\d{1,3})\\s+(${words})\\s+damage`, "i").exec(hit) : null;
   let printed = base ? Number(base[1]) : flat ? Number(flat[1]) : 0;
   if (base) {
     out.baseDice = compact(base[2]);
   } else if (flat) {
     out.baseDice = flat[1];
   }
-  // "plus 3 (1d6) lightning or thunder damage (djinni's choice)" rides as
-  // the first type named.
-  const words = DAMAGE_WORDS.join("|");
-  for (const rider of hit.matchAll(
-    new RegExp(`plus\\s+(\\d+)\\s*\\((\\d{1,3}d\\d{1,3}(?:\\s*[+-]\\s*\\d+)?)\\)\\s+(${words})(?:\\s+or\\s+(?:${words}))?\\s+damage`, "gi"),
-  )) {
-    const type = rider[3].toLowerCase();
-    out.riders.push({ dice: compact(rider[2]), type });
+  // A hit whose type the block leaves to a trait or the creature ("damage
+  // of the type determined by Apothecary") is untyped, never its rider's.
+  if (own) {
+    out.types.push(own[1].toLowerCase());
+  } else if (base || flat) {
+    out.types.push("untyped");
+  }
+  // Each "plus 7 (2d6) fire damage" (Tome of Beasts 3: "+ 7 (2d6) fire",
+  // Black Flag: "piercing and 3 (1d6) fire damage") rides the hit under its
+  // own type, or untyped when it names none; an "and" before the hit's save
+  // only, since after it the dice are the save's. One that holds only
+  // sometimes ("if used with two hands", "if the swarm has half of its hit
+  // points or fewer", "when Enlarged") or burns on later turns ("ongoing fire
+  // damage") is no part of the hit: the DM's to apply.
+  const manual: string[] = [];
+  let unread = 0;
+  const saveAt = hit.search(/saving throw/i);
+  for (const plus of hit.matchAll(/(?:plus|\+|and)\s+(\d+)\s*\(\s*(\d{1,3}d\d{1,3}(?:\s*[+-]\s*\d+)?)\s*\)\s*/gi)) {
+    const after = hit.slice((plus.index ?? 0) + plus[0].length);
+    const typed = new RegExp(`^${typeList}(?:\\s+damage\\b)?`, "i").exec(after);
+    if (/^and/i.test(plus[0]) && (!typed || (saveAt >= 0 && (plus.index ?? 0) > saveAt))) {
+      continue;
+    }
+    const bare = /^damage\b/i.exec(after);
+    const tail = after.slice((typed ?? bare)?.[0].length ?? 0);
+    if (/^ongoing\b/i.test(after) || ((typed || bare) && /^\s*(?:if|when|while|against)\b/i.test(tail))) {
+      manual.push(`${plus[0].replace(/^(?:plus|\+|and)\s+/i, "").trim()} ${after.split(/[.;]/)[0].trim()}`);
+      continue;
+    }
+    printed += Number(plus[1]);
+    if (!typed && !bare) {
+      unread += 1;
+      continue;
+    }
+    const type = typed ? typed[1].toLowerCase() : "untyped";
+    out.riders.push({ dice: compact(plus[2]), type });
     if (!out.types.includes(type)) {
       out.types.push(type);
     }
   }
-  // The printed average counts every "plus N (dice)", read or not; a blow
-  // whose riders were not all read has no printed dice to stand on.
-  const plus = [...hit.matchAll(/plus\s+(\d+)\s*\(\s*\d{1,3}d\d{1,3}[^)]*\)/gi)];
-  printed += plus.reduce((sum, match) => sum + Number(match[1]), 0);
-  if ((base || flat) && plus.length === out.riders.length) {
+  // The printed average counts every rider of the hit; a blow whose riders
+  // were not all read has no printed dice to stand on.
+  if ((base || flat) && !unread) {
     out.printedAverage = printed;
   }
-  const onHit = readOnHit(hit);
-  if (onHit) {
+  const effectOnly = !base && !flat;
+  if (effectOnly) {
+    out.effectOnly = true;
+  }
+  const onHit = readOnHit(hit, effectOnly);
+  if (manual.length) {
+    out.onHit = { ...onHit, manual: [...(onHit?.manual ?? []), ...manual] };
+  } else if (onHit) {
     out.onHit = onHit;
   }
   return out;
 }
 
+// The clause after "Hit:"; in a document that prints no label (Tome of
+// Beasts 3: "+8 to hit, 10 ft., one target, 18 (3d8+5) slashing damage"),
+// the line from its first dice, or after the bonus when it prints none.
+function hitClause(text: string): string {
+  const label = text.search(/\bhit:/i);
+  if (label >= 0) {
+    return text.slice(label + 4);
+  }
+  const bonus = /to hit\b/i.exec(text);
+  const after = bonus ? text.slice(bonus.index + bonus[0].length) : text;
+  const dice = after.search(/\d{1,3}\s*\(\s*\d{1,3}d\d/i);
+  if (dice >= 0) {
+    return after.slice(dice);
+  }
+  // No dice: what the hit does follows the target ("one creature,. The
+  // target is grappled").
+  const target = /\b(?:one|single|each)\b[^.,]*?\b(?:target|creature|tgt)s?\b[^.,]*[.,]*\s*/i.exec(after);
+  return target ? after.slice(target.index + target[0].length) : after;
+}
+
 // What a hit does besides its damage.
-function readOnHit(hit: string): OnHitRider | null {
+function readOnHit(hit: string, effectOnly: boolean): OnHitRider | null {
   const rider: OnHitRider = {};
-  const dcAt = hit.search(/DC\s*\d{1,2}\s+(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving throw/i);
+  const dcAt = hit.search(SAVE_DC);
   if (dcAt >= 0) {
     // The sentence with the save in it decides the effect; what follows it
     // ("if the poison reduces the target to 0 ...") is a different rule.
@@ -184,7 +245,7 @@ function readOnHit(hit: string): OnHitRider | null {
       rider.repeatSave = true;
     }
   }
-  const grapple = /(?:target|it|creature) is grappled\s*\(escape DC\s*(\d{1,2})\)/i.exec(hit);
+  const grapple = /(?:target|it|creature)(?: is)? grappled\s*\(escape DC\s*(\d{1,2})\)/i.exec(hit);
   if (grapple) {
     rider.escapeDc = Number(grapple[1]);
     if (!rider.condition) {
@@ -207,11 +268,19 @@ function readOnHit(hit: string): OnHitRider | null {
   if (/\bis swallowed\b/i.test(hit)) {
     rider.swallow = true;
   }
-  const manual = hit
-    .split(/(?<=\.)\s+/)
-    .filter((sentence) => /\b(?:disease|diseased|cursed|curse|lycanthrop\w*|swallowed|petrif\w*|strength score is reduced|stable but poisoned)\b/i.test(sentence))
-    .map((sentence) => sentence.trim())
-    .slice(0, 3);
+  const sentences = hit.split(/(?<=\.)\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+  let manual = sentences.filter((sentence) => /\b(?:disease|diseased|cursed|curse|lycanthrop\w*|swallowed|petrif\w*|strength score is reduced|stable but poisoned)\b/i.test(sentence));
+  // A hit that only lays an effect: the condition its first sentence names
+  // ("The target is restrained by webbing", "it is knocked prone"), and what
+  // else it says (the webbing's escape, an attachment, a sleep) for the DM.
+  if (effectOnly && !rider.condition && !rider.damage && !rider.swallow) {
+    const laid = new RegExp(`\\b(?:target|creatures?|it)\\b[^.]*?\\b(?:is|are|becomes?)\\s+(?:magically\\s+)?(knocked prone|${CONDITION_WORDS.join("|")})\\b`, "i").exec(sentences[0] ?? "");
+    if (laid) {
+      rider.condition = conditionName(laid[1]);
+    }
+    manual = [...new Set([...manual, ...sentences.slice(laid ? 1 : 0)])];
+  }
+  manual = manual.slice(0, 3);
   if (manual.length) {
     rider.manual = manual;
   }
@@ -292,7 +361,7 @@ function stepChoices(item: string): string[] {
 
 // Every routine a list of items allows: each item with a choice of attack
 // multiplies the routines. A routine naming an attack the block does not
-// have (the lamia's Intoxicating Touch, no attack roll) is left out.
+// have is left out.
 function routinesOfList(body: string, names: string[]): RoutineStep[][] {
   const items = body.split(/,\s*(?:and\s+)?|\s+and\s+/).map((item) => item.trim()).filter(Boolean);
   let routines: RoutineStep[][] = [[]];

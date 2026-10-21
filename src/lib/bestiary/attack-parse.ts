@@ -62,9 +62,13 @@ function printedBonus(desc: string): number | null {
 }
 
 export function parseAttack(action: RawAttackRow): EnemyAttack | null {
-  const toHit = printedBonus(asString(action.desc)) ?? asNumber(action.attack_bonus);
+  // A bonus of +0 or less is an attack when the line prints it (a bat's
+  // bite, "+0 to hit"); a field of 0 with none printed is an action that is
+  // no attack.
+  const printed = printedBonus(asString(action.desc));
+  const toHit = printed ?? asNumber(action.attack_bonus);
   const dice = asString(action.damage_dice).replace(/\s+/g, "");
-  if (toHit === null || toHit <= 0) {
+  if (toHit === null || (printed === null && toHit <= 0)) {
     return null;
   }
   const bonus = asNumber(action.damage_bonus) ?? 0;
@@ -73,11 +77,13 @@ export function parseAttack(action: RawAttackRow): EnemyAttack | null {
   let damage = damageFromFields(dice, bonus, text);
   // The numbers the block prints decide when the row's fields disagree with
   // them: a pack row can misprint its dice (a giant hyena's 1d6 for 2d6), and
-  // the line's own "N (XdY + Z)" beside the average is the SRD's.
+  // the line's own "N (XdY + Z)" beside the average is the SRD's. With no
+  // fields, the printed dice are the blow even when the average beside them
+  // is misprinted ("28 (4d8+5)"): the average is worked out from the dice.
   if (text.baseDice && text.printedAverage !== undefined) {
-    const printed = [text.baseDice, ...text.riders.map((rider) => rider.dice)].join("+");
-    if ((!damage || !matchesPrinted(damage, text.printedAverage)) && matchesPrinted(printed, text.printedAverage)) {
-      damage = printed;
+    const blow = [text.baseDice, ...text.riders.map((rider) => rider.dice)].join("+");
+    if (!damage || (!matchesPrinted(damage, text.printedAverage) && matchesPrinted(blow, text.printedAverage))) {
+      damage = blow;
     }
   }
   // An attack whose hit only grapples or restrains (a roper's tendril) is
@@ -85,8 +91,10 @@ export function parseAttack(action: RawAttackRow): EnemyAttack | null {
   // damage is all its save's (a guardian naga's Spit Poison, "Hit: The
   // target must make a DC 15 Constitution saving throw, taking 45 (10d8)
   // poison damage on a failed save"): the row's dice are the save's, which
-  // the rider rolls, and the hit deals none of its own.
-  if (!text.baseDice && ((!damage && text.onHit?.condition && !text.onHit.damage) || (text.onHit?.save && text.onHit.damage))) {
+  // the rider rolls, and the hit deals none of its own. And one whose hit
+  // prints no dice at all (a giant spider's web, a lamia's curse): what it
+  // lays is its rider, and what no rule models is the DM's.
+  if (!text.baseDice && ((!damage && text.onHit?.condition && !text.onHit.damage) || (text.onHit?.save && text.onHit.damage) || (!damage && text.effectOnly && text.onHit))) {
     damage = "0";
   }
   if (!damage || !isValidExpression(damage)) {

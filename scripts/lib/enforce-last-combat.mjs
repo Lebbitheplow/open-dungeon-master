@@ -65,7 +65,7 @@ export const ROUTINE_ROWS = {
   expected: {
     behir: [[{ attack: "Bite", count: 1 }, { attack: "Constrict", count: 1 }]],
     centaur: [[{ attack: "Pike", count: 1 }, { attack: "Hooves", count: 1 }], [{ attack: "Longbow", count: 2 }]],
-    lamia: [[{ attack: "Claws", count: 1 }, { attack: "Dagger", count: 1 }]],
+    lamia: [[{ attack: "Claws", count: 1 }, { attack: "Dagger", count: 1 }], [{ attack: "Claws", count: 1 }, { attack: "Intoxicating Touch", count: 1 }]],
     manticore: [[{ attack: "Bite", count: 1 }, { attack: "Claw", count: 2 }], [{ attack: "Tail Spike", count: 3 }]],
     medusa: [[{ attack: "Snake Hair", count: 1 }, { attack: "Shortsword", count: 2 }], [{ attack: "Longbow", count: 2 }]],
     merrow: [[{ attack: "Bite", count: 1 }, { attack: "Claws", count: 1 }], [{ attack: "Bite", count: 1 }, { attack: "Harpoon", count: 1 }]],
