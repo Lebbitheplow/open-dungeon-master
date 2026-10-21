@@ -530,7 +530,7 @@ export function PartyPanel({
                 type="button"
                 onClick={() => setViewingSheetId(sheet.id)}
                 title="View full character sheet"
-                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-press"
+                className="party-card-heading flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-press"
               >
               <CharacterPortrait
                 url={sheet.portrait?.url}
@@ -538,7 +538,7 @@ export function PartyPanel({
                 look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
                 alt={sheet.name}
                 size="size-12"
-                className="border-amber-500/30 shadow-glow-gold"
+                className="party-card-portrait border-amber-500/30 shadow-glow-gold"
               />
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 font-medium">
@@ -758,7 +758,7 @@ export function PartyPanel({
               </div>
             ) : null}
 
-            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+            <div className="party-card-stats mt-2 grid grid-cols-3 gap-1.5 text-center">
               {(
                 [
                   ["AC", String(shape ? shape.beastAc : sheet.ac)],
@@ -869,7 +869,7 @@ export function PartyPanel({
             ) : null}
 
             {setsPortrait ? (
-              <div className="reveal mt-2 space-y-1.5">
+              <div className="party-card-actions reveal mt-2 space-y-1.5">
                 {/* Hit points are driven by the server rules engines now, so
                     there is no manual HP stepper here; the lead's Adjust
                     dialog remains for corrections. */}

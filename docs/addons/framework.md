@@ -121,7 +121,7 @@ The app around it:
 | `src/app/workshop/maps/AddonMapGenerator.tsx` | Build a map with an addon |
 | `src/app/campaigns/[campaignId]/AddonBoardView.tsx`, `AddonViewSwitch.tsx` | The board view frame, the View switch and view options |
 | `BattleMapPanel.tsx`, `TokenHud.tsx`, `BoardChrome.tsx` | Wiring the frame into the board; anchors for the action ring and the plate |
-| `SessionView.tsx`, `SessionChatColumn.tsx`, `SidePanel.tsx`, `TableLayout.tsx`, `styles/table-layout.css` | Optional board-view `sessionLayout: "stage"`; stable native region ownership (including the native Story board), per-device selection and native fallback |
+| `SessionView.tsx`, `SessionChatColumn.tsx`, `SidePanel.tsx`, `TableLayout.tsx`, `styles/table-layout.css` | Optional board-view `sessionLayout: "stage"` and bounded `sessionTheme` colors; stable native region ownership (including the native Story board), per-device selection and native fallback |
 | `src/lib/db/map-addon-view*.ts`, `addon_view_json` on `prepared_maps` and `battle_maps` | View data stored with maps, carried in bundles |
 | `next.config.ts` | Leaves `ui/` and `assets/` out of the app's framing headers |
 
@@ -276,7 +276,8 @@ practical; say so in [extension-points.md](extension-points.md) and in the
 release notes. Update the example addon to show the change.
 
 **A new board view message.** Host to view: add it to `HostMessage` in
-`board-bridge.ts` and send it from `AddonBoardView.tsx`. View to host: add it
+`board-bridge.ts` and send it from `AddonBoardView.tsx` (local session camera
+controls use its `postTo` helper in `BattleMapPanel.tsx`). View to host: add it
 to `ViewMessage`, read it strictly in `readViewMessage` (shape, sizes,
 characters), and handle it in `AddonBoardView.tsx` as the equivalent action
 on the flat board would be handled. Add a case to the "messages are read

@@ -471,8 +471,8 @@
 @media (max-height: 719px) {
   .session-desk:has(.hand) { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; }
   .session-desk:has(.hand) > div { display: flex; flex: 0 1 auto; flex-direction: column; width: 100%; min-height: 0; }
-  .session-desk:has(.hand) > div > * { flex-shrink: 0; }
-  .session-desk:has(.hand) > div > .hand { flex: 0 1 auto; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+  .session-desk:has(.hand) > div > :is(.session-compose-notices, .session-compose-entry) > * { flex-shrink: 0; }
+  .session-desk:has(.hand) > div > .session-compose-hand > .hand { flex: 0 1 auto; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
 }
 @keyframes hand-rail-in {
   from { opacity: 0; transform: translateX(28px); }

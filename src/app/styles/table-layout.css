@@ -12,15 +12,62 @@
 
 .tlay-slot { display: contents; }
 .tlay-slot[hidden] { display: none !important; }
+/* Semantic regions keep the native form and component owners unchanged. */
+.session-compose-notices,
+.session-compose-hand,
+.session-compose-entry,
+.session-compose-support { display: contents; }
+.cine-chat-staged > .cine-fight-controls > .session-compose-support > * { flex: none; }
+
+/* A stage addon can reuse the full initiative order as a keyboard-scrollable list. */
+.board-initiative-names {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: clamp(7rem, 25%, 11rem);
+  max-height: 55%;
+  border: 1px solid rgba(107, 99, 148, 0.5);
+  border-radius: 6px;
+  background: rgba(13, 11, 28, 0.94);
+  color: #e9e6f4;
+}
+.board-initiative-names > button { flex: none; padding: 5px 8px; text-align: left; font-size: 10px; }
+.board-initiative-names > ol { min-height: 0; margin: 0; padding: 3px; overflow-y: auto; overscroll-behavior: contain; list-style: none; }
+.board-initiative-names li { padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; border: 1px solid transparent; border-radius: 4px; }
+.board-initiative-names [aria-current="step"] { border-color: var(--session-accent, #d4ab3a); background: rgba(107, 99, 148, 0.25); font-weight: 700; }
+.board-initiative-names :focus-visible { outline: 2px solid #f4e0a6; outline-offset: -2px; }
 
 /* A sandboxed view may select this host-owned composition, never inject CSS.
    Contents participate in one grid without changing React parents or keys. */
 @media (min-width: 64rem) {
+  .cine-row[data-presentation="stage"] .party-card { padding: 8px; }
+  .cine-row[data-presentation="stage"] .party-card-heading { gap: 6px; font-size: 13px; }
+  .cine-row[data-presentation="stage"] .party-card-portrait { width: 36px; height: 36px; }
+  .cine-row[data-presentation="stage"] .party-card-stats { margin-top: 4px; gap: 4px; }
+  .cine-row[data-presentation="stage"] .party-card-stats > span { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; }
+  .cine-row[data-presentation="stage"] .party-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .cine-row[data-presentation="stage"] .party-card-actions > * { margin: 0; min-width: 0; min-height: 30px; padding: 4px; gap: 4px; flex-wrap: nowrap; font-size: 11px; }
+  .cine-row[data-presentation="stage"] .party-card-actions > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* Two validated colors, scoped to an opted-in view; day mode stays native. */
+  .cine-stage[data-addon-theme] :is(.cine-panel, .party-card, .cine-party-card, .cine-chronicle-page, .cine-board-frame > .board-panel) {
+    background: var(--session-surface);
+    border-color: var(--session-accent);
+  }
+  .cine-stage[data-addon-theme] .cine-board-frame {
+    background: var(--session-accent);
+    box-shadow: none;
+  }
+  .cine-stage[data-addon-theme] .cine-board-frame::after {
+    content: none;
+  }
   .cine-row[data-presentation="stage"] {
     position: relative;
     display: grid;
     grid-template-columns: clamp(13rem, 18vw, 19rem) minmax(320px, 1fr) clamp(18rem, 26vw, 24rem);
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, auto);
+    grid-template-rows: auto var(--session-activity-height, 0px) minmax(0, 1fr) auto minmax(0, auto);
     gap: 12px;
     padding: 12px;
   }
@@ -28,32 +75,158 @@
   .cine-row[data-presentation="stage"] .cine-fight { display: contents; }
   .cine-row[data-presentation="stage"] .cine-party {
     display: flex;
+    flex-direction: column;
     grid-area: 1 / 1;
     width: auto;
-    max-height: 24dvh;
+    max-height: 25dvh;
     min-height: 0;
     padding: 0;
     overflow-y: auto;
+    gap: 3px;
   }
+  .cine-row[data-presentation="stage"] .cine-party-card { flex: none; width: 100%; gap: 6px; padding: 2px 6px; }
+  .cine-row[data-presentation="stage"] .cine-party-face { width: 28px; height: 28px; }
+  .cine-row[data-presentation="stage"] .cine-party-body { gap: 1px; }
+  .cine-row[data-presentation="stage"] .cine-party-name { font-size: 11px; line-height: 13px; }
+  .cine-row[data-presentation="stage"] .cine-party-hp { font-size: 10px; line-height: 13px; }
+  .cine-row[data-presentation="stage"] .cine-party-bar { height: 3px; }
+  .cine-row[data-presentation="stage"] .cine-party-class { font-size: 10px; line-height: 11px; }
   .cine-row[data-presentation="stage"] .cine-chronicle {
-    grid-area: 2 / 1 / 4 / 2;
+    grid-area: 3 / 1;
     min-height: 0;
     margin: 0;
   }
   .cine-row[data-presentation="stage"] .cine-fight-board,
   .cine-row[data-presentation="stage"] .session-transcript {
-    grid-area: 1 / 2 / 3 / 3;
+    grid-area: 1 / 2 / 4 / 3;
     min-height: 0;
     margin: 0;
   }
   .cine-row[data-presentation="stage"] .cine-fight-controls {
-    grid-area: 3 / 2;
-    max-height: 42dvh;
+    display: contents;
   }
+  .cine-row[data-presentation="stage"] .board-panel:has(> .board-view[data-addon-viewport]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto minmax(9rem, 1fr);
+    gap: 4px 8px;
+  }
+  .cine-row[data-presentation="stage"] .board-panel:has(> .board-view[data-addon-viewport]) > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+    margin: 0;
+  }
+  .cine-row[data-presentation="stage"] .board-panel > .board-view[data-addon-viewport] { grid-row: 2; }
+  .cine-row[data-presentation="stage"] .board-panel:has(> .board-view[data-addon-viewport]) > :is([role="radiogroup"], :has(> [role="radiogroup"])) { grid-column: auto; }
+  .cine-row[data-presentation="stage"] .cine-desk,
+  .cine-row[data-presentation="stage"] .session-desk-body {
+    display: contents;
+  }
+  .cine-row[data-presentation="stage"] .session-compose-support,
+  .cine-row[data-presentation="stage"] .session-compose-notices,
+  .cine-row[data-presentation="stage"] .session-compose-hand,
+  .cine-row[data-presentation="stage"] .session-compose-entry {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    max-height: 30dvh;
+    overflow-y: auto;
+  }
+  .cine-row[data-presentation="stage"] .session-compose-support { grid-area: 4 / 2; }
+  .cine-row[data-presentation="stage"] .session-compose-notices { grid-area: 4 / 1; }
+  .cine-row[data-presentation="stage"] .session-compose-hand { grid-area: 5 / 2; }
+  /* The native cards use a straight rail here, leaving the fan's room to the map. */
+  .cine-row[data-presentation="stage"] .hand { --card-w: 148px; --card-h: 140px; margin-bottom: 0; }
+  .cine-row[data-presentation="stage"] .hand-fan {
+    justify-content: flex-start;
+    gap: 8px;
+    height: auto;
+    padding: 8px 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    perspective: none;
+  }
+  .cine-row[data-presentation="stage"] .hand-slot {
+    flex: 0 0 var(--card-w);
+    height: var(--card-h);
+    transform: none;
+    animation: none;
+    scroll-snap-align: start;
+  }
+  .cine-row[data-presentation="stage"] .hand-card { left: 0; margin-left: 0; }
+  .cine-row[data-presentation="stage"] .hand-card.motion-card:is(:hover, :focus-visible, :active, [data-picked]) { --lift: 0px; --grow: 1; }
+  .cine-row[data-presentation="stage"] .hand-slot > .hand-preview {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    margin-left: 0;
+    padding: 6px;
+    transform: none;
+  }
+  .cine-row[data-presentation="stage"] .hand-card-body {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    gap: 4px;
+    padding: 7px;
+  }
+  .cine-row[data-presentation="stage"] :is(.hand-card-top, .hand-rules, .hand-foot) { grid-column: 1 / -1; }
+  .cine-row[data-presentation="stage"] .hand-art { grid-area: 2 / 1 / 4 / 2; }
+  .cine-row[data-presentation="stage"] .hand-name { grid-area: 2 / 2; }
+  .cine-row[data-presentation="stage"] .hand-numbers { grid-area: 3 / 2; }
+  .cine-row[data-presentation="stage"] .hand-more {
+    position: static;
+    flex: 0 0 44px;
+    height: var(--card-h);
+    scroll-snap-align: start;
+  }
+  .cine-row[data-presentation="stage"] .session-compose-entry { grid-area: 5 / 1; padding: 8px; }
+  .cine-row[data-presentation="stage"] .session-compose-support:empty,
+  .cine-row[data-presentation="stage"] .session-compose-notices:empty,
+  .cine-row[data-presentation="stage"] .session-compose-hand:empty { display: none; }
+  /* Keep the status owner and the mode buttons' positioned animation intact. */
+  @supports (position-anchor: --session-chronicle) and (anchor-scope: --session-chronicle) {
+    .cine-row[data-presentation="stage"] {
+      anchor-scope: --session-chronicle, --session-entry;
+      padding-bottom: 0;
+    }
+    .cine-row[data-presentation="stage"] .session-compose-entry {
+      anchor-name: --session-entry;
+      align-self: end;
+      padding-bottom: 0;
+    }
+    /* Keep turn/roll notices with the input when the central hand is taller. */
+    .cine-row[data-presentation="stage"] .session-compose-notices {
+      position: absolute;
+      position-anchor: --session-entry;
+      inset: auto;
+      bottom: calc(anchor(top) + 8px);
+      left: anchor(left);
+      width: anchor-size(width);
+      grid-area: auto;
+    }
+    .cine-row[data-presentation="stage"]:has(.session-status) { --session-activity-height: 2.25rem; }
+    .cine-row[data-presentation="stage"] .cine-chronicle { anchor-name: --session-chronicle; }
+    .cine-row[data-presentation="stage"] .session-compose-entry .session-status {
+      position: fixed;
+      position-anchor: --session-chronicle;
+      inset: auto;
+      top: anchor(top);
+      left: anchor(left);
+      width: anchor-size(width);
+      height: var(--session-activity-height);
+      translate: 0 calc(-100% - 12px);
+      margin: 0;
+      overflow: auto;
+      z-index: 1;
+    }
+  }
+  .cine-row[data-presentation="stage"] .cine-desk::before { display: none; }
   .cine-row[data-presentation="stage"] > .tlay-slot[data-pane="panel"],
   .cine-row[data-presentation="stage"] > .tlay-slot[data-pane^="tab:"] {
     position: absolute;
-    grid-area: 1 / 3 / 4 / 4;
+    grid-area: 1 / 3 / -1 / 4;
     top: var(--session-pane-top);
     height: var(--session-pane-height);
     width: 100%;
@@ -68,7 +241,7 @@
     flex: 1;
   }
   .cine-row[data-presentation="stage"] > .tlay-slot[data-pane="tab:battle"] {
-    grid-area: 1 / 2 / 3 / 3;
+    grid-area: 1 / 2 / 4 / 3;
     top: 0;
     height: 100%;
   }
@@ -81,9 +254,9 @@
   .cine-stage[data-side-board] .tlay-slot[data-pane="panel"] > .cine-panel,
   .cine-stage[data-side-board] .cine-panel > .side-panel-body,
   .cine-stage[data-side-board] [data-session-region="board"] { display: contents; }
-  .cine-stage[data-side-board] .cine-panel > .side-panel-body > .cine-quest { grid-area: 4 / 2; margin: 0; }
+  .cine-stage[data-side-board] .cine-panel > .side-panel-body > .cine-quest { grid-area: 6 / 2; margin: 0; }
   .cine-stage[data-side-board] [data-session-region="board"] > .board-dock {
-    grid-area: 1 / 2 / 3 / 3;
+    grid-area: 1 / 2 / 4 / 3;
     min-width: 0;
     min-height: 0;
     overflow: auto;
@@ -93,7 +266,7 @@
   .cine-stage[data-side-board] [data-session-region="controls"],
   .cine-stage[data-side-board] .cine-panel > .cine-rail {
     position: absolute;
-    grid-area: 1 / 3 / 4 / 4;
+    grid-area: 1 / 3 / -1 / 4;
     top: var(--session-pane-top);
     height: var(--session-pane-height);
     min-height: 0;
