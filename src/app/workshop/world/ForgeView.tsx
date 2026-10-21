@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
 import { KitButton, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
-import type { ForgeEntity, ForgeLink, ForgePreview } from "@/lib/worldforge/forge";
+import { forgeReport, type ForgeApplied, type ForgeEntity, type ForgeLink, type ForgePreview } from "@/lib/worldforge/forge";
 import type { WorldApi, WorldState } from "./useWorld";
 import { TypeChip, typeOf } from "./world-ui";
 
@@ -15,7 +15,11 @@ import { TypeChip, typeOf } from "./world-ui";
 // deserves an entry and how those things stand with each other. Nothing is
 // written until the DM ticks what to keep, and the forge only adds: a name
 // the world already has shows as there, never rewritten. Unticked names can
-// be kept as names to write later.
+// be kept as names to write later. Links alone, between entries the world
+// already has, can be kept too, and the report after says exactly what was
+// and was not applied (audit WF-08): every entry, link and name left out,
+// with why. Drafting a world from an idea is a different operation, in the
+// Outline view (OutlineView.tsx); the forge keeps to what the notes say.
 
 type Row = ForgeEntity & { keep: boolean };
 type LinkRow = ForgeLink & { keep: boolean };
@@ -28,12 +32,12 @@ export function ForgeView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   const [rows, setRows] = useState<Row[] | null>(null);
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [stubTheRest, setStubTheRest] = useState(true);
-  const [report, setReport] = useState("");
+  const [report, setReport] = useState<ReturnType<typeof forgeReport> | null>(null);
   const nameOf = (key: string) => rows?.find((row) => row.key === key)?.name ?? entities.find((entity) => entity.ref === key)?.name ?? key;
 
   async function forge() {
     setBusy(true);
-    setReport("");
+    setReport(null);
     const payload = await api.ai("forge", { text, hint });
     setBusy(false);
     const preview = payload?.preview as ForgePreview | undefined;
@@ -45,17 +49,17 @@ export function ForgeView({ api, world, onOpen }: { api: WorldApi; world: WorldS
   async function keep() {
     if (!rows) return;
     const chosen = rows.filter((row) => row.keep && !row.existing);
-    const alive = new Set([...chosen.map((row) => row.key), ...entities.map((entity) => entity.ref)]);
     setBusy(true);
+    // Every ticked link goes, with the names on screen: one whose end was
+    // not kept is reported as left out, not dropped without a word.
     const result = await api.ai("apply", {
       entities: chosen,
-      links: links.filter((link) => link.keep && alive.has(link.from) && alive.has(link.to)),
+      links: links.filter((link) => link.keep).map((link) => ({ ...link, fromName: nameOf(link.from), toName: nameOf(link.to) })),
       stubs: stubTheRest ? rows.filter((row) => !row.keep && !row.existing).map((row) => row.name) : [],
     });
     setBusy(false);
     if (!result) return;
-    const made = Number(result.created ?? 0);
-    setReport(`Added ${made} ${made === 1 ? "entry" : "entries"} and ${Number(result.links ?? 0)} links${Number(result.stubs ?? 0) ? `, and kept ${Number(result.stubs)} names to write` : ""}.`);
+    setReport(forgeReport(result as unknown as ForgeApplied));
     setRows(null);
     setLinks([]);
     setText("");
@@ -74,7 +78,13 @@ export function ForgeView({ api, world, onOpen }: { api: WorldApi; world: WorldS
         </KitButton>
       </div>
       {api.error ? <PanelError>{api.error}</PanelError> : null}
-      {report ? <p className="motion-pop rounded-lg border border-emerald-700/40 bg-emerald-900/15 px-3 py-2 text-xs text-stone-200" role="status">{report}</p> : null}
+      {report ? (
+        <div className={cn("motion-pop flex flex-col gap-0.5 rounded-lg border px-3 py-2 text-xs text-stone-200", report.partial ? "border-amber-600/50 bg-amber-900/15" : "border-emerald-700/40 bg-emerald-900/15")} role="status" data-testid="forge-report">
+          {report.lines.map((line, at) => (
+            <p key={at} className={line.left ? "text-amber-200" : undefined}>{line.text}</p>
+          ))}
+        </div>
+      ) : null}
 
       {rows ? (
         <section className="flex flex-col gap-2 animate-fade-up" aria-label="What the forge found">
@@ -120,7 +130,7 @@ export function ForgeView({ api, world, onOpen }: { api: WorldApi; world: WorldS
           </label>
           <div className="flex justify-end gap-2">
             <KitButton tone="small" onClick={() => { setRows(null); setLinks([]); }}>Throw it away</KitButton>
-            <KitButton tone="primary" busy={busy} disabled={busy || !rows.some((row) => row.keep && !row.existing)} onClick={keep}>
+            <KitButton tone="primary" busy={busy} disabled={busy || !(rows.some((row) => row.keep && !row.existing) || links.some((link) => link.keep))} onClick={keep}>
               {busy ? null : <Check className="size-3.5" />} Add the ticked
             </KitButton>
           </div>

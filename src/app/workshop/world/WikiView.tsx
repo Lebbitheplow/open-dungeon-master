@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderOpen, FolderPlus, Lock, Plus, Search, Trash2, X } from "lucide-react";
+import { FolderOpen, FolderPlus, Lock, Plus, Search, Trash2, Wand2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -29,6 +29,7 @@ export function WikiView({
   onOpenSystem,
   onOpenPrep,
   onCreate,
+  onDraftWorld,
   atTable = false,
   canWrite,
   canPaint,
@@ -43,6 +44,9 @@ export function WikiView({
   onOpenSystem?: OpenSystem;
   onOpenPrep?: OpenPrep;
   onCreate?: () => void;
+  // "Draft a world from this idea" (OutlineView.tsx), offered in the empty
+  // world when there is a text model to draft with.
+  onDraftWorld?: () => void;
   // The play table's World tab: the campaign's world, with no files to open.
   atTable?: boolean;
   // Whether there is a text model to draft with and an image backend to
@@ -195,7 +199,15 @@ export function WikiView({
             // make anything; Create says where each thing is made instead.
             <div className="flex flex-col items-start gap-2 px-1 py-1" data-testid="world-empty-create">
               <p className="text-xs text-stone-400">WorldForge keeps the story. A monster to fight, an item to hold or a map to stand on is made in its own tool, and Create takes you there.</p>
-              <CreateButton onClick={onCreate} />
+              <div className="flex flex-wrap gap-2">
+                {onDraftWorld ? (
+                  <button type="button" onClick={onDraftWorld} className={ui.btnSmall} data-testid="world-empty-outline">
+                    <Wand2 className="size-4" /> Draft a world from an idea
+                  </button>
+                ) : null}
+                <CreateButton onClick={onCreate} />
+              </div>
+              {!onDraftWorld && !atTable ? <p className="text-[11px] text-stone-500">Drafting a world from an idea needs a text model. An admin adds one under Admin &gt; Text model defaults; until then, entries are written by hand or opened from a WorldForge file.</p> : null}
             </div>
           ) : null}
           {shown.map((entity) => {
