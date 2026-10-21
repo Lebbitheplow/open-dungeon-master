@@ -28,6 +28,8 @@ import { generateBattleMap, fnv1a } from "@/lib/battlemap/generate";
 import { findPath, speedToTiles, squeezedAt, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { footprintLookup, occupiedTiles } from "@/lib/battlemap/view";
+import { footprintForSize } from "@/lib/battlemap/footprint";
+import { openSquaresBeside } from "@/lib/dm/companion-approach";
 import { nearestSquares, tilesApart } from "@/lib/dm/board-reach";
 
 import {
@@ -99,6 +101,9 @@ export function createBattleMapForEncounter(
   scene?: string,
   // Where the enemy comes from against the travel formation (issue 230).
   from: "ahead" | "behind" = "ahead",
+  // One side caught the other unawares: the board opens close
+  // (battlemap/generate.ts CLOSE_OPENING_TILES) unless distanceFeet said.
+  ambush = false,
 ): { map: BattleMap; formation: string } | null {
   const location = getCurrentLocation(campaign.id);
   const generated = generateBattleMap({
@@ -107,6 +112,7 @@ export function createBattleMapForEncounter(
     pcCount: sheets.length,
     enemyCount: enemies.length,
     enemyDistanceTiles: distanceFeet ? Math.max(1, Math.round(distanceFeet / 5)) : undefined,
+    ambush,
   });
   const map = createBattleMap({
     encounterId: encounter.id,
@@ -444,10 +450,12 @@ function resolveMoveTarget(
     return token ? { token, kind: "pc", speedTiles: speedToTiles(sheet.speed) } : null;
   }
   const enemies = listEnemies(encounterId);
+  // A part of one name only, as resolveAnyToken reads it: "A" (gpt-oss-20b
+  // meaning Avery) once walked Bandit 1, the first name with an "a" in it.
   const enemy =
     enemies.find((entry) => entry.id === trimmed) ??
     enemies.find((entry) => textKey(entry.displayName) === textKey(trimmed)) ??
-    enemies.find((entry) => textKey(entry.displayName).includes(textKey(trimmed)));
+    findNamed(enemies, nameTerms(trimmed, campaignLanguage(map.campaignId)), (entry) => [entry.displayName]);
   if (!enemy || enemy.status !== "alive") {
     return null;
   }
@@ -870,5 +878,9 @@ export function checkPcAttackRange(
   if (options.ranged || options.thrown) {
     return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${maxTiles * 5} ft maximum range. They must move their token closer or pick another target.`, retry: true };
   }
-  return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`, retry: true };
+  // Named, so a model that cannot count tiles knows where the walk ends.
+  const enemy = listEnemies(encounterId).find((entry) => entry.id === target.refId);
+  const square = openSquaresBeside(encounterId, map, attacker, target, footprintForSize(enemy?.stats.size))[0];
+  const where = square ? ` When their player said they close in, send the attack again with approach true: the server walks them to (${square.x},${square.y}), the nearest open square beside ${target.name}, and attacks. The nearest open square beside ${target.name} is (${square.x},${square.y}): move_token ${attacker.name} there, then attack.` : "";
+  return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.${where}`, retry: true };
 }

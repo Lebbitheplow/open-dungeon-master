@@ -14,7 +14,7 @@ import { READER_PROMPT_START } from "./lib/claims-reader.mjs";
 const { test, finish } = suite("test-claims");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
 
-const { checkClaims, claimKindsFor, namedSpeakers, parseReaderReply, readerSystem, renderReaderInput, withoutAsides } = await import(
+const { checkClaims, claimKindsFor, endsTurnInEnglish, namedSpeakers, parseReaderReply, readerSystem, renderReaderInput, withoutAsides } = await import(
   "../src/lib/dm/claims-logic.ts"
 );
 const { leveledSpellNames, readClaims } = await import("../src/lib/dm/claims.ts");
@@ -50,6 +50,35 @@ await test("Only the kinds engine state can rule on are asked, and nothing is as
   assert.deepEqual(claimKindsFor({ ...GATE, guard: false, unrolled: true, fightStart: true }), ["amount", "fight_start"]);
   // Who speaks a quoted line is asked whether or not the guard is on.
   assert.deepEqual(claimKindsFor({ ...GATE, guard: false, speech: true }), ["speaker"]);
+  // So is a turn handed on: it moves the fight, it rules on nothing.
+  assert.deepEqual(claimKindsFor({ ...GATE, guard: false, turnOver: true }), ["turn_over"]);
+});
+
+await test("A turn handed on is a claim of its own, kept only when it was asked and quotes the narration.", () => {
+  const text = "Avery steps back from the goblin. It is now Kara's turn.";
+  const base = { text, attackRefs: new Set(), creatureRefs: new Set(), party: new Map(), leveledSpells: new Set(), normalizeSpell: (name) => name, skills: new Set(), spent: new Map(), speakers: new Map() };
+  const raw = [{ kind: "turn_over", quote: "It is now Kara's turn." }];
+  assert.deepEqual(checkClaims(raw, { ...base, kinds: ["turn_over"] }), raw);
+  assert.deepEqual(checkClaims(raw, { ...base, kinds: ["aside"] }), []);
+  assert.deepEqual(checkClaims([{ kind: "turn_over", quote: "Bram goes next." }], { ...base, kinds: ["turn_over"] }), []);
+  assert.match(readerSystem([], false), /"kind":"turn_over"/);
+  assert.match(readerSystem([], false), /headed "Player's words" is asked only for turn_over/);
+});
+
+await test("A fight starting is an ambush or a blow begun on the party as well as a call for initiative, and never a threat or a fight between others.", () => {
+  const system = readerSystem([], false);
+  assert.match(system, /"kind":"fight_start".*a call to roll initiative/);
+  assert.match(system, /"kind":"fight_start".*hostile creatures attacking a party character now: an ambush springing on them/);
+  assert.match(system, /"kind":"fight_start".*Never for words, threats, demands, warnings or gestures, or weapons drawn or aimed with no attack made yet; a fight between others/);
+});
+
+await test("The plain English ways a player ends their turn are read beside the reader, and nothing else is.", () => {
+  for (const said of ["I close in on the nearest goblin and attack it, then I end my turn.", "That's my turn.", "Kara ends her turn.", "I'm ending my turn here", "My turn is over."]) {
+    assert.equal(endsTurnInEnglish(said), true, said);
+  }
+  for (const said of ["I attack the goblin.", "Whose turn is it?", "I wait for my turn.", "It's my turn now, right?"]) {
+    assert.equal(endsTurnInEnglish(said), false, said);
+  }
 });
 
 await test("The request lists the kinds, the refs and the narration; the instructions name every skill id.", () => {
@@ -158,6 +187,20 @@ await test("What a small model writes about the turn is cut without the reader; 
   assert.equal(withoutAsides(speech, []), speech, "a quoted line is speech");
   const tools = "Avery pulls out her thieves' tools and calls softly to Bram. The lock clicks.";
   assert.equal(withoutAsides(tools, []), tools);
+});
+
+// Qwen3.5 9B on the short rules copied the game state into the story: the
+// turn order as a list and the board squares it reads.
+await test("The turn order recited and the board's squares quoted are cut without the reader; the scene around them stays.", () => {
+  const order =
+    "The shadows circle, claws drawn.\n\n**Initiative order:**\n1. Shadow Aberration 1 (moves to (7,13))\n2. **Avery (your turn)**\n3. Bram\n\nThe purple mist swirls around the wagons. What do you do?";
+  assert.equal(withoutAsides(order, []), "The shadows circle, claws drawn.\n\nThe purple mist swirls around the wagons. What do you do?");
+  const inline = "**Current Initiative:** 1. Shadow 1 (at 7,13) 2. Avery (your turn)\nThe river roars.";
+  assert.equal(withoutAsides(inline, []).trim(), "The river roars.");
+  const squares = "Avery, you're up. You're currently at (15,1) with the nearest enemy at (7,11). The mist thickens.";
+  assert.equal(withoutAsides(squares, []).trim(), "Avery, you're up. The mist thickens.");
+  const fiction = "The old map marks two wells, a mill and the ford. The order of the watch changes at dusk.\nInitiative wins fights, the old sergeant says.";
+  assert.equal(withoutAsides(fiction, []), fiction, "words like order and numbers in prose stay");
 });
 
 await test("A claim of a kind not asked, about a creature the engine does not know, or by someone outside the party never acts.", () => {

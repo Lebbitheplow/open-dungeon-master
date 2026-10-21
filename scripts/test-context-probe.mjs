@@ -8,7 +8,9 @@ import {
   contextCacheKey,
   normalizeBaseUrl,
   OPENAI_CONTEXT_TOKENS,
+  paramsFromModelName,
   readContextWindow,
+  readModelParams,
 } from "../src/lib/dm/context-probe-logic.ts";
 
 let passed = 0;
@@ -85,6 +87,45 @@ check("the cache key separates models sharing one port", () => {
 
 check("OpenAI's shared floor is 128K; the catalog sizes anything smaller (scripts/test-model-registry.mjs)", () => {
   assert.equal(OPENAI_CONTEXT_TOKENS, 128_000);
+});
+
+// Captured live from /v1/models on a single-model llama-server (Qwen3.5 9B
+// Q8_0, b1-ff5a233), trimmed to the fields read.
+const LLAMA_MODELS = {
+  object: "list",
+  data: [
+    {
+      id: "qwen3.5-9b-q8",
+      aliases: ["qwen3.5-9b-q8"],
+      object: "model",
+      owned_by: "llamacpp",
+      meta: { vocab_type: 2, n_vocab: 248320, n_ctx: 81920, n_ctx_train: 262144, n_embd: 4096, n_params: 8953803264, size: 9516533760, ftype: "Q8_0" },
+    },
+  ],
+};
+
+check("the model's size comes from llama-server's /v1/models", () => {
+  assert.equal(readModelParams(LLAMA_MODELS, "qwen3.5-9b-q8"), 8953803264);
+  assert.equal(readModelParams(LLAMA_MODELS, ""), 8953803264, "no name: the only model listed");
+  assert.equal(readModelParams(LLAMA_MODELS, "anything"), 8953803264, "a single-model server answers to any name");
+  const router = { data: [{ id: "a", meta: { n_params: 9e9 } }, { id: "b", meta: { n_params: 35e9 } }, { id: "c" }] };
+  assert.equal(readModelParams(router, "b"), 35e9, "a router: the entry named");
+  assert.equal(readModelParams(router, "c"), null, "an unloaded model reports no size");
+  assert.equal(readModelParams(router, "z"), null, "a name a router does not list is not guessed");
+  assert.equal(readModelParams({ data: [{ id: "x" }] }, "x"), null, "vLLM, LM Studio: no meta");
+  assert.equal(readModelParams(null, "x"), null);
+  assert.equal(readModelParams({ data: [{ id: "x", meta: { n_params: "9e9" } }] }, "x"), null);
+});
+
+check("a name that states the size is read for it, the whole model's first", () => {
+  assert.equal(paramsFromModelName("qwen3.5-9b-q8"), 9e9);
+  assert.equal(paramsFromModelName("gemma4:12b-it-qat"), 12e9);
+  assert.equal(paramsFromModelName("Qwen3-30B-A3B-Instruct"), 30e9);
+  assert.equal(paramsFromModelName("llama3.1:8b"), 8e9);
+  assert.equal(paramsFromModelName("phi-3.5-mini"), null);
+  assert.equal(paramsFromModelName("gemma4:e4b-it-qat"), null, "an effective size is not the whole model");
+  assert.equal(paramsFromModelName("mixtral-8x7b"), null);
+  assert.equal(paramsFromModelName(""), null);
 });
 
 console.log(`context-probe: ${passed} tests passed`);

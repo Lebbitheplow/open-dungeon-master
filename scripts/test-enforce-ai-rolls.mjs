@@ -172,5 +172,21 @@ await test("in a fight the model's attack roll for a character is sent to pc_att
   assert.equal(rolls(world).length, before);
 });
 
+await test("with no fight running the model's attack roll rolls nothing: there is nobody to hit", async () => {
+  // Qwen3.6-35B rolled one after the last goblin fell, with no expression,
+  // and narrated a hit on a goblin already dead.
+  const world = await openWorld();
+  const hero = world.addHero({ class: "fighter" });
+  const before = rolls(world).length;
+  world.dice(15);
+  for (const args of [{ reason: "a swing" }, { expression: "1d20+5", reason: "a swing" }]) {
+    const { result } = modelRolls(world, { characterId: hero.id, kind: "attack", ...args });
+    assert.match(String(result.error), /No fight is running/);
+    assert.equal(result.refused, "rules");
+  }
+  assert.equal(world.clearDice(), 1);
+  assert.equal(rolls(world).length, before);
+});
+
 (await openWorld()).close();
 finish();

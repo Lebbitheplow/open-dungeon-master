@@ -106,6 +106,20 @@ await test("One correction, never a loop: a model that writes the blow again kee
   assert.ok(dm.content.includes("8 damage"));
 });
 
+await test("A call for initiative with no fight running starts the fight, whichever claim the reader made of it, and rolls nothing for a fight that does not exist.", async () => {
+  await kit.endFight();
+  const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
+  const rolled = () => listRecentRolls(world.campaignId, 500).length;
+  const before = rolled();
+  const announce = "Steel rings as the cultists throw back their hoods. Roll initiative!";
+  model.script([reply({ text: announce }), reply({ text: "The hooded figures melt back into the crowd." })]);
+  model.claims([[{ kind: "roll_ask", character: "all", check: "initiative", quote: "Roll initiative!" }]]);
+  const dm = await model.turn(world, "I push through the market crowd.", alden.id, alden.userId);
+  assert.match(String(userLines(model.requests[1]).at(-1)), /start_encounter/, "the call for initiative was not sent back to start_encounter");
+  assert.equal(rolled(), before, "initiative was rolled for a fight that did not exist");
+  assert.ok(!dm.content.includes("Roll initiative"), dm.content);
+});
+
 await test("A figure the turn's own tool rolled is the truth and is narrated as it stands.", async () => {
   await kit.endFight();
   await kit.fight(1, { heroFaces: { [alden.id]: 20 } });
@@ -158,7 +172,7 @@ const open = async (args) => {
   return nearest();
 };
 
-await test("start_encounter's distanceFeet sets how far the nearest enemy stands, on every board; without it the sides open across the field.", async () => {
+await test("start_encounter's distanceFeet sets how far the nearest enemy stands, on every board; without it an ambush opens 30 feet apart and anything else across the field.", async () => {
   for (const [feet, tiles] of [[5, 1], [10, 2], [30, 6]]) {
     for (let round = 0; round < 8; round += 1) {
       assert.equal(await open({ distanceFeet: feet }), tiles, `${feet} feet`);
@@ -169,6 +183,13 @@ await test("start_encounter's distanceFeet sets how far the nearest enemy stands
     apart.push(await open({}));
   }
   assert.ok(Math.max(...apart) >= 8, `the sides never opened across the field: ${apart.join(", ")}`);
+  // An ambush struck from close by: one move puts a melee fighter beside the
+  // nearest enemy, unless the story said how far.
+  for (let round = 0; round < 4; round += 1) {
+    assert.equal(await open({ ambush: "enemies" }), 6, "an ambush opened across the field");
+    assert.equal(await open({ surprised: "party" }), 6, "a surprise opened across the field");
+  }
+  assert.equal(await open({ ambush: "party", distanceFeet: 60 }), 12, "the story's distance gave way to the ambush's");
   // A value that is no distance at all (a weak tool caller's null or "")
   // is the same as none given, never a reason to refuse the fight.
   const ai = await aiEngine(field);

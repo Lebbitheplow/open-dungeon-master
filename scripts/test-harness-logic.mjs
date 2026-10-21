@@ -435,6 +435,38 @@ test("a chat model reads the turn-to-turn state after the transcript, the same t
   assert.deepEqual(chat.contextTrace.shape.historyEnd, plain.contextTrace.shape.historyEnd, "the transcript sits in the same place");
 });
 
+test("a chat model reads the rules as the system message and the state as the message before the transcript", () => {
+  const history = [
+    { id: "m1", seq: 1, authorType: "player", characterId: "sheet-1", content: "I listen at the chapel door.", intent: null },
+    { id: "m2", seq: 2, authorType: "dm", characterId: null, content: "Chanting, low and wet.", intent: null },
+  ];
+  const plain = { ...fightingState(), contextLimitTokens: 131_072, directorBlock: "DIRECTOR: the bell rings once." };
+  const chat = { ...plain, stateAfterRules: true };
+  const before = buildDmMessages(plain, history);
+  const after = buildDmMessages(chat, history);
+  assert.equal(after.length, before.length + 1, "one more message: the state");
+  assert.equal(after[0].role, "system");
+  assert.ok(!after[0].content.includes(THIS_TURN_HEADING), "no turn's state in the system message");
+  assert.ok(after[0].content.endsWith(ENCOUNTER_RULES.split("\n").at(-1)), "a fight's rules stay with the rules");
+  assert.equal(after[1].role, "user");
+  assert.ok(after[1].content.startsWith(THIS_TURN_HEADING));
+  assert.ok(after[1].content.endsWith("=== END GAME STATE ==="), "the state still runs to its end");
+  assert.deepEqual(after.slice(2, 2 + history.length), before.slice(1, 1 + history.length), "the history is untouched");
+  assert.equal(after.at(-1).content, "DIRECTOR: the bell rings once.", "the director's note stays last");
+  const paragraphs = (text) => text.split("\n\n").sort();
+  assert.deepEqual(paragraphs(`${after[0].content}\n\n${after[1].content}`), paragraphs(before[0].content), "the same text, moved");
+  // What a prompt cache keeps from one turn of the fight to the next: the
+  // cover countdown and the state move, the system message does not.
+  assert.equal(buildDmMessages({ ...fightingState(1), stateAfterRules: true }, history)[0].content, after[0].content);
+  assert.equal(chat.contextTrace.shape.historyStart, 2);
+  assert.equal(chat.contextTrace.shape.historyEnd, 2 + history.length);
+  // With the moment after the transcript as well, the standing state keeps
+  // its place and the moment follows the history.
+  const both = buildDmMessages({ ...plain, stateAfterRules: true, momentAfterHistory: true }, history);
+  assert.ok(both[1].content.startsWith(THIS_TURN_HEADING) && !both[1].content.includes(THIS_MOMENT_HEADING));
+  assert.ok(both[2 + history.length].content.startsWith(THIS_MOMENT_HEADING));
+});
+
 // What Claude Code caches as its second system block: everything after the
 // boundary marker in the system prompt file it is given.
 function blockTwo(state, history = []) {

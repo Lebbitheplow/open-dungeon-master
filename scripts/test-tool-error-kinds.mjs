@@ -113,6 +113,19 @@ await test("a spell name resolves; a misspelling or another language is fixed fr
 
 // ---- the turn loop's own answers ----
 
+// Qwen3.5 9B sent start_encounter ambush "none" twice: the turn refused the
+// whole fight with no word of which field was wrong, and it never started.
+await test("start_encounter on the AI's turn: a side it does not know is no side, and a field it refuses is named", async () => {
+  const world = await openWorld();
+  world.addHero({ class: "fighter", level: 3, proficiencies: TRAINED });
+  const started = await aiEncounter(world, "start_encounter", { enemies: [{ monster: "goblin", count: 1 }], ambush: "none", surprised: "both" });
+  expect(started, "ok");
+  assert.ok(world.encounter(), "the fight started");
+  const fresh = await openWorld();
+  fresh.addHero({ class: "fighter", level: 3, proficiencies: TRAINED });
+  expect(await aiEncounter(fresh, "start_encounter", { enemies: [], summary: "nobody" }), "retry", /fix or leave out: enemies/);
+});
+
 await test("an unknown tool is a retry, and the turn's cap on mutations is a limit", async () => {
   const world = await openWorld({ gameSettings: { ttsEnabled: false } });
   const model = await fakeModel();

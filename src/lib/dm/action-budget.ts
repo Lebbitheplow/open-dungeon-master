@@ -62,12 +62,18 @@ export type TurnBudget = {
   hasteGranted?: number;
   // Slow: an action OR a bonus action this turn, and one attack.
   slowed?: boolean;
+  // The attacks this turn has rolled, with what they did: a narration that
+  // recalls an earlier swing of the same turn ("you already struck it")
+  // tells what happened, not a blow nobody rolled (engine-boundary.ts).
+  struck?: StruckSwing[];
   // The one free object interaction of the turn (SRD 5.1, Actions in
   // Combat): what it went on, and how many one-handed weapons it drew or
   // stowed (Dual Wielder's two). A second object takes the Use an Object
   // action (src/lib/dm/gear-hands.ts spendInteraction).
   interaction?: { what: string; weapons: number };
 };
+
+export type StruckSwing = { target: string; hit: boolean; damage?: number };
 
 export function freshBudget(input: {
   ownerId: string;

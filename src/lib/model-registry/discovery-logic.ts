@@ -48,9 +48,12 @@ export type OllamaModelInfo = {
   // Ollama's own list where it gives one: "completion", "tools", "vision",
   // "thinking", "embedding".
   capabilities: string[];
+  // The whole model's parameter count (model_info "general.parameter_count");
+  // 0 when Ollama does not say.
+  parameters: number;
 };
 
-// POST /api/show {model}: the window and abilities of one model.
+// POST /api/show {model}: the window, size and abilities of one model.
 export function readOllamaShow(json: unknown): OllamaModelInfo | null {
   if (!isRecord(json)) return null;
   let contextTokens = 0;
@@ -61,10 +64,12 @@ export function readOllamaShow(json: unknown): OllamaModelInfo | null {
       break;
     }
   }
+  const count = info["general.parameter_count"];
+  const parameters = typeof count === "number" && Number.isFinite(count) && count > 0 ? count : 0;
   const capabilities = Array.isArray(json.capabilities)
     ? json.capabilities.filter((entry): entry is string => typeof entry === "string").slice(0, 10)
     : [];
-  return { contextTokens, capabilities };
+  return { contextTokens, capabilities, parameters };
 }
 
 // Ollama models that cannot narrate: embedding models answer no chat at all.

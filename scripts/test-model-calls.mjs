@@ -33,6 +33,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const seen = { chat: [], ollama: [] };
 // Per model: "ok", "fail" (500), or a window it refuses past ("n_ctx:4096").
 const behaviour = new Map();
+const unparsedOnce = new Set();
 function sse(res, deltas, usage, finish = "stop", extra = {}) {
   res.writeHead(200, { "Content-Type": "text/event-stream" });
   for (const delta of deltas) {
@@ -52,6 +53,28 @@ const server = http.createServer((req, res) => {
       const mode = behaviour.get(body.model) ?? "ok";
       if (mode === "fail") {
         res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "boom" }));
+        return;
+      }
+      // Mistral's template, as llama-server reports it: no two user messages in a row.
+      if (mode === "alternate" && body.messages.some((message, index) => index > 0 && message.role === "user" && body.messages[index - 1].role === "user")) {
+        res.writeHead(500, { "Content-Type": "application/json" }).end(
+          JSON.stringify({ error: { code: 500, message: "Error: Jinja Exception: After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results.", type: "server_error" } }),
+        );
+        return;
+      }
+      // llama-server's own parser throwing the reply away, as it words it:
+      // once, every time, or after story text already streamed.
+      if (mode.startsWith("unparsed") && (mode !== "unparsed" || !unparsedOnce.has(body.model))) {
+        unparsedOnce.add(body.model);
+        const error = { code: 500, message: "The model produced output that does not match the expected peg-native format", type: "server_error" };
+        if (!body.stream) {
+          res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error }));
+          return;
+        }
+        const delta = mode === "unparsed-after-text" ? { content: "The guard " } : { reasoning_content: "We need to" };
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+        res.end(`data: ${JSON.stringify({ error })}\n\n`);
         return;
       }
       if (mode.startsWith("n_ctx:")) {
@@ -81,6 +104,16 @@ const server = http.createServer((req, res) => {
     }
     if (req.url === "/api/chat") {
       seen.ollama.push(body);
+      // A thought that runs on, varied so the loop guard leaves it be.
+      if (body.stream && body.think === true && JSON.stringify(body.messages).includes("Think at length")) {
+        const words = ["guard", "door", "lantern", "ford", "mill", "hedge", "coin", "rope", "well", "bell", "crow", "path"];
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        for (let index = 0; index < 120; index += 1) {
+          res.write(`${JSON.stringify({ message: { thinking: `Thought ${index}: the ${words[index % 12]} by the ${words[(index * 7 + 3) % 12]} weighs ${index * 13} against ${words[(index * 5 + 1) % 12]}. ` }, done: false })}\n`);
+        }
+        res.end(`${JSON.stringify({ message: { content: "" }, done: true, done_reason: "length", prompt_eval_count: 300, eval_count: 4096 })}\n`);
+        return;
+      }
       const reply = { message: { content: "A short reply." }, done: true, done_reason: "length", prompt_eval_count: 300, eval_count: 50, prompt_eval_duration: 2e8, eval_duration: 9e8, load_duration: 1e6 };
       if (body.stream) {
         res.writeHead(200, { "Content-Type": "application/x-ndjson" });
@@ -173,6 +206,63 @@ const lastCalls = (n) =>
   assert.equal(usage.reasoning_tokens, 12);
   assert.equal(usage.role, "utility", "utility work on the story route is still recorded as utility");
   console.log(`ok: fitted to 8K (${sentTokens} tokens sent, reply cap ${sent.max_tokens}) and recorded with its cache and reasoning`);
+}
+
+// ---- 1b. a template that takes user and assistant only in turn ------------------
+{
+  process.env.OPENAI_COMPAT_CONTEXT = "8192";
+  behaviour.set("strict-roles", "alternate");
+  seen.chat.length = 0;
+  const turn = [
+    { role: "system", content: "Rules." },
+    { role: "user", content: "=== THIS TURN ===\nThe state." },
+    { role: "user", content: "[Avery | attempt] I search the cart." },
+  ];
+  const first = await requestDmMessage(settings({ customModel: "strict-roles" }), turn, { onDelta: () => {} });
+  assert.ok(!first.error, "the refused call went through once the messages were joined");
+  assert.equal(seen.chat.length, 2, "refused once, then sent joined");
+  assert.deepEqual(seen.chat[1].messages.map((message) => message.role), ["system", "user"]);
+  assert.equal(seen.chat[1].messages[1].content, "=== THIS TURN ===\nThe state.\n\n[Avery | attempt] I search the cart.");
+  seen.chat.length = 0;
+  const next = await requestDmMessage(settings({ customModel: "strict-roles" }), turn, { onDelta: () => {} });
+  assert.ok(!next.error);
+  assert.equal(seen.chat.length, 1, "the model's next call is joined from the start");
+  seen.chat.length = 0;
+  await requestDmMessage(settings(), turn, { onDelta: () => {} });
+  assert.deepEqual(seen.chat[0].messages.map((message) => message.role), ["system", "user", "user"], "another model is sent the messages as they are");
+  console.log("ok: a template that refuses two user messages in a row is sent them joined, from then on");
+}
+
+// ---- 1c. a reply llama-server's own parser threw away ------------------------------
+// gpt-oss-20b writing on past the end its reasoning budget forced: the turn
+// halted on "Backend stream failed." (BC-250, 2026-10-20).
+{
+  process.env.OPENAI_COMPAT_CONTEXT = "8192";
+  const turn = [
+    { role: "system", content: "Rules." },
+    { role: "user", content: "[Avery | attempt] I search the cart." },
+  ];
+  const ask = async (name, mode, streaming) => {
+    behaviour.set(name, mode);
+    seen.chat.length = 0;
+    const result = await requestDmMessage(settings({ customModel: name }), turn, streaming ? { onDelta: () => {} } : {});
+    return { result, sent: seen.chat.length, said: result.error ? await result.error.json() : null };
+  };
+  const streamed = await ask("unparsed-stream", "unparsed", true);
+  assert.equal(streamed.said, null, JSON.stringify(streamed.said));
+  assert.equal(streamed.sent, 2, "thrown away once, then asked again");
+  assert.equal(streamed.result.message.content, "The guard nods.");
+  const whole = await ask("unparsed-whole", "unparsed", false);
+  assert.equal(whole.said, null, JSON.stringify(whole.said));
+  assert.equal(whole.sent, 2);
+  assert.equal(whole.result.message.content, "Summary.");
+  const twice = await ask("unparsed-twice", "unparsed-always", true);
+  assert.equal(twice.sent, 2, "asked again once, not for ever");
+  assert.match(twice.said?.detail ?? "", /does not match the expected peg-native format/);
+  const afterText = await ask("unparsed-text", "unparsed-after-text", true);
+  assert.equal(afterText.sent, 1, "story text had already gone to the table, and the call was asked again");
+  assert.ok(afterText.said);
+  console.log("ok: a reply the backend's parser threw away is asked again once, unless its story text already streamed");
 }
 
 // ---- 2. refused before the call on a known window ---------------------------------
@@ -296,6 +386,7 @@ const lastCalls = (n) =>
   assert.equal(first.think, true, "the turn's thinking request reaches Ollama");
   assert.equal(first.tools?.length, 1);
   assert.equal(first.options.num_ctx, 8_192);
+  assert.equal(first.options.presence_penalty, 0, "pinned: Ollama's qwen3.5:9b ships 1.5, which suppresses tool calls");
   assert.ok(first.options.num_predict <= 4_096, "the local reply cap still applies");
   assert.equal(first.options.temperature, 0.7, "thinking runs cooler, as on the custom backend");
   assert.equal(thinkingCall.finishReason, "length", "done_reason length is read");
@@ -328,6 +419,19 @@ const lastCalls = (n) =>
   await requestDmMessage(local, [{ role: "system", content: "Rules." }, { role: "user", content: "Hi." }], { meta: { task: "recap" } });
   assert.equal(seen.ollama.at(-1).think, false, "left unset, thinking stays off as before");
   assert.equal(seen.ollama.at(-1).options.temperature, 0.9);
+  // A thought past the call's budget is cut, and the call asked again
+  // without thinking (Qwen3.5 9B on Ollama thought to the reply cap).
+  seen.ollama.length = 0;
+  const budgeted = await requestDmMessage(local, [{ role: "system", content: "Rules." }, { role: "user", content: "Think at length." }], {
+    tools,
+    toolChoice: "auto",
+    thinking: true,
+    reasoningBudgetChars: 2_000,
+    onDelta: () => {},
+    meta: { task: "turn" },
+  });
+  assert.deepEqual(seen.ollama.map((body) => body.think), [true, false], "cut, then asked again without thinking");
+  assert.equal(budgeted.message?.content, "A short reply.");
   delete process.env.LOCAL_TEXT_CONTEXT;
   console.log("ok: Ollama gets the thinking request, closed tools, the fitted cap, and reports length");
 }

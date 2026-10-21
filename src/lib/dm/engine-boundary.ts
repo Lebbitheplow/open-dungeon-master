@@ -13,7 +13,7 @@
 // mutates mechanical state; a detection at most costs one corrective model call.
 
 import type { NarrationClaim } from "./claims-logic.ts";
-import { THIS_MOMENT_HEADING } from "../prompt-boundary.ts";
+import { THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "../prompt-boundary.ts";
 import { textKey, WORD_CHAR } from "../language/text-logic.ts";
 import { withoutLeadingStopWords } from "../language/language.ts";
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
@@ -92,6 +92,9 @@ export type AttackFact = {
   // when one call rolled several swings that did not agree (a Multiattack that
   // missed once and hit once).
   ambiguous: boolean;
+  // Whether any call or swing this turn hit a creature under this name; a
+  // blow the prose lands on it is unrolled when none did, ambiguous or not.
+  anyHit?: boolean;
 };
 
 // The encounter as it stands when the narration is checked, read by the rim
@@ -99,7 +102,11 @@ export type AttackFact = {
 // whose tools said nothing about a creature: a kill narrated with no call
 // at all, or a hit on an attack the engine refused.
 export type LiveEnemy = { id: string; name: string; hp: number; maxHp: number; status: string };
-export type LiveState = { enemies: readonly LiveEnemy[] };
+// The attacks the acting combatant's turn rolled before this DM reply
+// (action-budget.ts TurnBudget.struck): a player's later word in the same
+// turn gets narration that may recall them ("your blade already bit").
+export type EarlierSwing = { target: string; hit: boolean; damage?: number };
+export type LiveState = { enemies: readonly LiveEnemy[]; struck?: readonly EarlierSwing[] };
 
 export type ResolvedOutcomes = {
   attacks: Map<string, AttackFact>;
@@ -432,17 +439,43 @@ export function resolveOutcomes(
           .filter((value): value is boolean => typeof value === "boolean");
         const mixedSwings =
           swingOutcomes.length > 1 && swingOutcomes.some((value) => value !== swingOutcomes[0]);
+        const landed = result.hit || swingOutcomes.some(Boolean);
         const existing = attacks.get(key);
         if (!existing) {
-          attacks.set(key, { display, hit: result.hit, ambiguous: mixedSwings });
+          attacks.set(key, { display, hit: result.hit, ambiguous: mixedSwings, anyHit: landed });
         } else {
           existing.ambiguous =
             existing.ambiguous ||
             mixedSwings ||
             existing.hit !== result.hit ||
             existing.display !== display;
+          existing.anyHit = Boolean(existing.anyHit) || landed;
         }
       }
+    }
+  }
+
+  // What the same turn rolled before this reply counts as rolled: recalling
+  // it is no blow the prose made up (Qwen3.6-35B wrote "Avery has already
+  // struck the goblin" after a refused second swing, was told no tool rolled
+  // it, and rewrote the hit into a miss). A creature this reply's own calls
+  // attacked is ruled on those alone.
+  const fromReply = new Set(attacks.keys());
+  for (const swing of live?.struck ?? []) {
+    const key = normalizeCreatureName(swing.target, language);
+    if (key.length < 3 || fromReply.has(key)) {
+      continue;
+    }
+    const existing = attacks.get(key);
+    if (existing) {
+      existing.ambiguous = existing.ambiguous || existing.hit !== swing.hit || existing.display !== swing.target;
+      existing.anyHit = Boolean(existing.anyHit) || swing.hit;
+    } else {
+      attacks.set(key, { display: swing.target, hit: swing.hit, ambiguous: false, anyHit: swing.hit });
+    }
+    if (swing.hit && typeof swing.damage === "number") {
+      numbers.add(swing.damage);
+      damageNumbers.push(swing.damage);
     }
   }
 
@@ -466,7 +499,7 @@ export function resolveOutcomes(
         touched.add(key);
       }
       if (enemy && key.length >= 3 && !attacks.has(key)) {
-        attacks.set(key, { display: enemy.name, hit: false, ambiguous: (perKey.get(key) ?? 0) > 1 });
+        attacks.set(key, { display: enemy.name, hit: false, ambiguous: (perKey.get(key) ?? 0) > 1, anyHit: false });
       }
     }
     // The encounter's own hit points come last, so they win: they are the
@@ -574,6 +607,14 @@ export function ruleClaims(claims: readonly NarrationClaim[], outcomes: Resolved
           break;
         }
         if (attack.ambiguous) {
+          // Two creatures under one name (Bandit 1 and Bandit 2), or swings
+          // that disagree: the clause cannot be pinned to one roll. But when
+          // nothing this turn hit any of them, a blow the prose lands on that
+          // name landed on nobody (Qwen3.6-35B at Q2 wrote a stab home after
+          // its swing was refused as out of reach).
+          if (claim.kind === "hit" && attack.anyHit === false) {
+            add({ kind: "hit", detail: `no attack on ${attack.display} hit this turn, but the narration lands one`, clause: claim.quote });
+          }
           break;
         }
         if (claim.kind === "hit" && !attack.hit) {
@@ -668,10 +709,26 @@ export function fightAnnounced(claims: readonly NarrationClaim[]): boolean {
   return claims.some((claim) => claim.kind === "fight_start");
 }
 
+// A call for initiative with no fight running is a fight starting, whichever
+// kind the reader filed it under. Read as a roll ask, it rolled initiative for
+// a fight that did not exist, and the rolls sent the turn on to narrate them,
+// past the check above (gpt-oss-20b filed "Roll initiative!" as a roll ask in
+// two reads of three, 2026-10-20). start_encounter rolls everyone's.
+export function initiativeStartsFight(claims: readonly NarrationClaim[]): NarrationClaim[] {
+  return claims.map((claim) => (claim.kind === "roll_ask" && claim.check === "initiative" ? { kind: "fight_start", quote: claim.quote } : claim));
+}
+
 // What the turn loop sends back when a fight was announced with no
-// start_encounter behind it. Kept beside the other correction text so the
-// wording is testable without a model call.
-export const FAKE_ENCOUNTER_PROMPT = `[System] Your narration announced a fight starting, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. Call start_encounter now with the enemies you announced, then narrate the fight breaking out from the tool results. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;
+// start_encounter behind it, quoting the words that read as one. The model
+// may answer that nobody attacked: told only to start the fight, gpt-oss-20b
+// started one over a bouncer's toll in three replays of three; with the way
+// out it still started gx-1's real ambush in three of three and the toll in
+// none (2026-10-20). Kept beside the other correction text so the wording is
+// testable without a model call.
+export function fakeEncounterPrompt(claims: readonly NarrationClaim[]): string {
+  const quote = claims.find((claim) => claim.kind === "fight_start")?.quote ?? "";
+  return `[System] Your narration reads as a fight starting${quote ? ` ("${quote}")` : ""}, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. If a fight is starting, call start_encounter now with those enemies, then narrate the fight breaking out from the tool results. If nobody has attacked anyone, call no tool and give the same narration again. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;
+}
 
 // ---------------------------------------------------------------------------
 // Part 5: blows landed in prose alone
@@ -690,22 +747,29 @@ const BARE_NUMBER = new RegExp(`(?<![${WORD_CHAR}_.-])\\d{1,3}(?![${WORD_CHAR}_-
 // healing figure on a turn whose tools rolled none, that nothing the model
 // was shown carries either (a table note for a blow the server dealt itself,
 // an earlier line being recalled). Returns the claim's quote, or null.
-export function unrolledFigure(claims: readonly NarrationClaim[], conversation: readonly GuardMessage[], language: TableLanguage): string | null {
+export function unrolledFigure(
+  claims: readonly NarrationClaim[],
+  conversation: readonly GuardMessage[],
+  language: TableLanguage,
+  // The damage the same turn rolled before this reply (earlierFigures).
+  earlier: readonly number[] = [],
+): string | null {
   const outcomes = resolveOutcomes(collectExchanges(conversation), null, language);
   // The turn rolled damage: a figure that misquotes it is the rewrite's to
   // fix, and sending the model back to the tools would land the blow twice.
   if (outcomes.damageNumbers.length) {
     return null;
   }
-  const shown = new Set(outcomes.numbers);
+  const shown = new Set([...outcomes.numbers, ...earlier]);
   for (const message of conversation) {
     // The game state is no table note: its numbers (hit points, the last
     // rolls) are not figures the turn dealt, wherever a chat model reads it
-    // (src/lib/dm/prompt.ts momentAfterHistory).
+    // (src/lib/dm/prompt.ts momentAfterHistory and stateAfterRules).
     if (
       message.role === "system" ||
       typeof message.content !== "string" ||
-      message.content.startsWith(THIS_MOMENT_HEADING)
+      message.content.startsWith(THIS_MOMENT_HEADING) ||
+      message.content.startsWith(THIS_TURN_HEADING)
     ) {
       continue;
     }
@@ -719,6 +783,11 @@ export function unrolledFigure(claims: readonly NarrationClaim[], conversation: 
     }
   }
   return null;
+}
+
+// The damage figures the acting combatant's turn landed before this reply.
+export function earlierFigures(live: LiveState | null): number[] {
+  return (live?.struck ?? []).flatMap((swing) => (swing.hit && typeof swing.damage === "number" ? [swing.damage] : []));
 }
 
 // What the turn loop sends back for it. Kept beside the other correction
@@ -748,7 +817,7 @@ export function unrolledBlow(claims: readonly NarrationClaim[], outcomes: Resolv
 }
 
 export function unrolledBlowPrompt(clause: string): string {
-  return `[System] Your narration resolves an attack that no tool rolled this turn ("${clause}"), so it has not happened: no dice were rolled and no hit points changed. Resolve only the attack the acting player declared, with its tool, and narrate from the result: pc_attack with their characterId, the targetEnemyId and their weapon (move_token first when the target is out of reach), cast_at_enemy for a spell; an enemy acts only on its own turn, through enemy_attack. Never act for a character whose player has not declared an action. If the attack cannot happen yet (out of reach, not their turn), say so instead of resolving it.`;
+  return `[System] Your narration resolves an attack that no tool rolled this turn ("${clause}"), so it has not happened: no dice were rolled and no hit points changed. Resolve only the attack the acting player declared, with its tool, and narrate from the result: pc_attack with their characterId, the targetEnemyId and their weapon (approach true when they close in on a target out of reach), cast_at_enemy for a spell; an enemy acts only on its own turn, through enemy_attack. Never act for a character whose player has not declared an action. If the attack cannot happen yet (out of reach, not their turn), say so instead of resolving it.`;
 }
 
 export function unrolledDamagePrompt(clause: string): string {

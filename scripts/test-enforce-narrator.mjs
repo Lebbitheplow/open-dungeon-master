@@ -691,6 +691,30 @@ await test("The narration guard's rewrite has one reserved call outside the four
   assert.equal(message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim(), rewrite);
 });
 
+await test("When the guard's rewrite keeps the contradiction, the sentence that contradicts the dice is cut from what the table reads.", async () => {
+  // Qwen3.6-35B at Q2, asked to fix a blow it landed on a miss, landed it again.
+  const enemy = await karaUp();
+  const check = () => call("request_roll", { characterId: kara.id, kind: "skill_check", skill: "perception", difficulty: "easy" });
+  const scene = "Rain hammers the muddy yard as the goblin circles Kara, its club raised and its yellow eyes narrowed to slits.";
+  const lie = "Kara's blade bites into the goblin.";
+  world.clearDice();
+  world.dice(2, 10, 10);
+  model.script([
+    reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, weapon: "Longsword" })] }),
+    reply({ calls: [check()] }),
+    reply({ calls: [check()] }),
+    reply({ text: `${scene} ${lie}` }),
+    reply({ text: `${lie} The goblin howls and staggers back through the rain, clutching the wound in its side.` }),
+  ]);
+  const hit = { kind: "hit", target: normalizeCreatureName(kit.enemy(enemy.id).displayName, "english"), quote: lie };
+  // The last call read for asides, the guard's read, then its read of the rewrite.
+  model.claims([[], [hit], [hit]]);
+  const message = await model.turn(world, "I attack the goblin.", kara.id);
+  world.clearDice();
+  assert.equal(kit.enemy(enemy.id).currentHp, kit.enemy(enemy.id).maxHp, "the swing was meant to miss");
+  assert.equal(message?.content.replace(/\[roll:[^\]]*\]\s*/g, "").trim(), scene);
+});
+
 await test("Every call tells the server whether to reason: the tool decisions do, the forced narration, the guard's rewrite and the claims reader do not.", async () => {
   const enemy = await karaUp();
   const check = () => call("request_roll", { characterId: kara.id, kind: "skill_check", skill: "perception", difficulty: "easy" });

@@ -5,7 +5,8 @@ import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { canonAdmits } from "@/lib/worldforge/canon";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
-import { probeCustomContextWindow, storyContextTokens } from "@/lib/model-client";
+import { probeCustomContextWindow, probeCustomModelParams, storyContextTokens } from "@/lib/model-client";
+import { ollamaModelInfo } from "@/lib/model-registry/discovery";
 import { loreExcerpt, renderLoreBlock, type LoreTrace, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { loreBudgetChars, selectLore, type LoreMoment } from "@/lib/dm/lore-selection";
 import { CHARS_PER_TOKEN, computeBudgets, promptWindowTokens } from "@/lib/dm/context-budget";
@@ -140,10 +141,19 @@ function pickFused<T>(
 // read it. llama.cpp and llama-swap report their -c on /props; anything else
 // misses quietly and the configured or default value stands. Cached per base
 // URL and model, so this costs one request per process.
+// The model's size is asked beside it (the tuning reads it: a small model
+// gets the short rules and the compact tools, src/lib/dm/model-tuning-logic.ts).
 export async function probeStoryWindow(settings: Campaign["settings"]): Promise<void> {
-  if (settings.textProvider !== "local") {
-    await probeCustomContextWindow(settings.customBaseUrl, settings.customApiKey, settings.customModel);
+  if (settings.textProvider === "local") {
+    if (settings.localTextModel.trim()) {
+      await ollamaModelInfo(settings.localTextModel.trim());
+    }
+    return;
   }
+  await Promise.all([
+    probeCustomContextWindow(settings.customBaseUrl, settings.customApiKey, settings.customModel),
+    settings.textProvider === "harness" ? null : probeCustomModelParams(settings.customBaseUrl, settings.customApiKey, settings.customModel),
+  ]);
 }
 
 export async function buildTurnRetrieval(

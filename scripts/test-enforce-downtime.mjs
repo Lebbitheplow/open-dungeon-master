@@ -73,6 +73,14 @@ if (world.hasPack) {
     assert.equal(world.sheet(crafter.id).equipment.some((item) => item.name === "Shield"), true);
     assert.equal(purse(crafter.id), 9500, "finishing cost more than the materials");
   });
+
+  await test("Crafting makes nonmagical objects only: a magic item from any book of the pack is refused, and its rarity's value buys no materials.", async () => {
+    const crafter = world.addHero({ class: "fighter", level: 1, gold: 100, proficiencies: profs({ tools: ["Leatherworker's tools"] }) });
+    const out = await world.invoke("downtime", { days: 1, characterId: crafter.id, activity: "crafting", item: "Comfy Slippers", tool: "leatherworker's tools" });
+    assert.equal(out.ok, false);
+    assert.match(String(out.error), /magic item/);
+    assert.equal(purse(crafter.id), 10000);
+  });
 }
 
 await test("Training takes 250 days at 1 gp a day and then teaches the language.", async () => {

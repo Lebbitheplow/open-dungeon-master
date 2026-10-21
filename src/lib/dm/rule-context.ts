@@ -52,9 +52,11 @@ export function ruleContextFor(input: {
   recall: boolean;
   map: boolean;
   legendary: boolean;
+  brief?: boolean;
 }): RuleContext {
   const sheets = input.sheets;
   return {
+    brief: input.brief ?? false,
     inEncounter: input.inEncounter,
     groups: new Set(input.groups),
     caster: sheets.some(casts),

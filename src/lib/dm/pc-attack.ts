@@ -18,7 +18,7 @@ import { planPcAttack, type AttackPlan } from "@/lib/dm/pc-attack-plan";
 import { rollPcAttack, strikeToHit } from "@/lib/dm/pc-attack-resolve";
 import { castAttackSpell } from "@/lib/dm/pc-attack-spell";
 import { resolveSheetRef } from "@/lib/dm/rolls";
-import { markReactionUsed, storeBudget } from "@/lib/dm/turn-budget";
+import { markReactionUsed, noteSwing, storeBudget } from "@/lib/dm/turn-budget";
 import { spendReadied } from "@/lib/dm/object-actions";
 import { spendGiantKiller } from "@/lib/dm/reaction-attacks";
 import { withAmmoCount } from "@/lib/srd/ammunition";
@@ -29,6 +29,7 @@ import { moteBurst, moteOf } from "@/lib/dm/authored-mote";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { invalidArguments, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { attacksLeft } from "@/lib/dm/action-budget";
+import { approachForAttack, withApproach } from "@/lib/dm/pc-attack-approach";
 
 // Re-exported for the callers that learned it here.
 export { resolvePendingPcAttack } from "@/lib/dm/pc-attack-parked";
@@ -71,6 +72,16 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           description:
             "Weapon they attack with, from their equipment, or 'unarmed strike'. Omit to use their best carried weapon. A weapon a subclass feature makes is named here too: a raging Path of the Beast barbarian's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second blade), a Sun Soul monk's 'radiant sun bolt'.",
+        },
+        approach: {
+          type: "boolean",
+          description:
+            "True when the player said their character moves to the target first (closes in, charges, rushes it) and the target is out of melee reach: the server walks them to the nearest open square beside it out of their movement, drawing any opportunity attacks, then attacks. Too far to reach this turn, they close in as far as they can and nothing is attacked.",
+        },
+        endTurn: {
+          type: "boolean",
+          description:
+            "True when the player said their turn ends after this attack (\"...then I end my turn\"): the server ends it once the attack resolves, as end_turn does, and the result names who acts next. Only on the last attack they declared; never call end_turn for it as well.",
         },
         spell: {
           type: "string",
@@ -218,6 +229,10 @@ const pcAttackArgsSchema = z.object({
   characterId: z.string(),
   targetEnemyId: z.string(),
   weapon: z.string().max(80).optional(),
+  // The move to the target the player declared (pc-attack-approach.ts).
+  approach: z.coerce.boolean().optional(),
+  // The player ends their turn with this attack (encounter-tools.ts).
+  endTurn: z.coerce.boolean().optional(),
   spell: z.string().max(80).optional(),
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),
@@ -294,10 +309,52 @@ export function handlePcAttack(
     return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
   }
 
+  // The move to the target the player declared, when the swing needs it
+  // (src/lib/dm/pc-attack-approach.ts): the plan is asked first (it spends
+  // nothing), and only a refusal for reach alone walks: asked again with
+  // reach set aside, anything else that would refuse the swing (the turn's
+  // attacks spent, a feature they lack) refuses it where they stand. The
+  // attack is then planned from where it is made.
+  if (args.approach) {
+    const dry = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById });
+    if ("refused" in dry) {
+      const beside = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById, skipReach: true });
+      if ("refused" in beside) {
+        return beside.refused;
+      }
+      const approach = approachForAttack(campaign, encounter, sheet, args, dry.refused);
+      if (!approach) {
+        return dry.refused;
+      }
+      if ("refused" in approach) {
+        return approach.refused;
+      }
+      const attack = attackFrom(campaign, turn, sheet, args, sheets, sheetsById, realDiceUserIds, toolCallId);
+      return attack[PC_ATTACK_PARKED] ? attack : withApproach(attack, approach.walked);
+    }
+  }
+  return attackFrom(campaign, turn, sheet, args, sheets, sheetsById, realDiceUserIds, toolCallId);
+}
+
+function attackFrom(
+  campaign: Campaign,
+  turn: DmTurn,
+  sheet: CharacterSheet,
+  args: PcAttackArgs,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  realDiceUserIds: Set<string>,
+  toolCallId: string | null,
+): ToolResult {
+  // The walk may have changed the fight: read it again.
+  const encounter = getActiveEncounter(campaign.id);
+  if (!encounter) {
+    return { error: "No active encounter. Call start_encounter first.", retry: true };
+  }
   // ---- refusals: everything that can stop this attack, before any spend ----
   // Asked in one place, in order, by planPcAttack (src/lib/dm/pc-attack-plan.ts).
 
-  const plan = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById });
+  const plan = planPcAttack({ campaign, turn, encounter, sheet: getSheetById(sheet.id) ?? sheet, args, sheets, sheetsById });
   if ("refused" in plan) {
     return plan.refused;
   }
@@ -334,6 +391,7 @@ export function handlePcAttack(
     return { [PC_ATTACK_PARKED]: true };
   }
   const rolled = rollPcAttack(plan, strike);
+  noteSwing(campaign.id, sheet.id, rolled);
   const burst = moteBurst(campaign, turn, mote, plan.enemy);
   return burst ? { ...rolled, mote: burst } : rolled;
 }

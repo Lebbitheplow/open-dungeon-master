@@ -33,7 +33,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const { findBareJsonObjects, stripToolText } = await import("../src/lib/dm/tool-text.ts");
 const { salvageJsonToolCalls } = await import("../src/lib/dm/json-salvage.ts");
-const { createStreamingArtifactFilter, extractStoryText } = await import("../src/lib/story-prompt.ts");
+const { createStreamingArtifactFilter, extractReplyText, extractStoryText } = await import("../src/lib/story-prompt.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, getFloor, setCampaignStatus, updateStorySettings, allocateSeq } =
   await import("../src/lib/db/campaigns.ts");
@@ -46,6 +46,8 @@ const { startDmTurn, dmTurnToolCatalogue, MAX_MODEL_CALLS } = await import("../s
 const NARRATION = "Bram's shortsword is still too far away; the ragged bandit stands well beyond reach.";
 const PASSAGE = "The Archmage's eyes flare, a spark of humor dancing in the blue light. It is a place of many doors. Choose yours wisely, Master Flamefinger. Even a scholar must know when to put down the book and pick up a glass of wine.";
 const QUESTION = "What will Bram do? He is 80 ft from the bandit.";
+const LAST_TURN =
+  "The bandit sneers from the far bank, his blade catching the morning light. Bram's boots sink into the cold mud of the ford as the current tugs at his legs. What will you do?";
 
 // ---- the pure helpers --------------------------------------------------------
 {
@@ -113,6 +115,28 @@ const catalogue = dmTurnToolCatalogue(getCampaignById(probe.id), false, false);
   console.log("ok: the stream holds back bare JSON and nothing else");
 }
 
+// gpt-oss on llama-server ended a narration with the start of a Harmony tool
+// call, " to=functions.request_player_input", which reached the table.
+{
+  const leaked = `${QUESTION}\n\n to=functions.request_player_input`;
+  assert.equal(extractStoryText(leaked), QUESTION);
+  const withArgs = extractReplyText(
+    `${QUESTION} to=functions.request_player_input <|constrain|>json<|message|>{"characterIds":["c1"],"prompt":"Where?"}<|call|>`,
+  );
+  assert.ok(!/to=functions|<\|/.test(withArgs), withArgs);
+  const salvaged = salvageJsonToolCalls(withArgs, catalogue);
+  assert.deepEqual(salvaged.calls.map((call) => call.name), ["request_player_input"]);
+  assert.equal(salvaged.text, QUESTION);
+  assert.equal(extractStoryText("You walk to the door. It is locked."), "You walk to the door. It is locked.");
+  const filter = createStreamingArtifactFilter();
+  const streamed = [`${QUESTION} to`, "=functions.request", "_player_input"].map((chunk) => filter.push(chunk)).join("") + filter.flush();
+  assert.equal(streamed.trim(), QUESTION);
+  const plain = createStreamingArtifactFilter();
+  const prose = ["You want to", " go on?"].map((chunk) => plain.push(chunk)).join("") + plain.flush();
+  assert.equal(prose, "You want to go on?");
+  console.log("ok: a Harmony tool call begun in the prose never reaches the table, and its arguments are salvaged");
+}
+
 // ---- the turn machine ----------------------------------------------------------
 let script = [];
 let calls = 0;
@@ -158,6 +182,8 @@ const server = http.createServer((req, res) => {
       sse(res, [{ content: `${NARRATION} What will you do?` }, { content: askJson() }]);
     } else if (reply === "unknown-tool") {
       sse(res, [toolCall("dance_wildly", { style: "jig" })]);
+    } else if (reply === "last-turn") {
+      sse(res, [{ content: LAST_TURN }]);
     } else if (reply === "repeat") {
       sse(res, [{ content: (PASSAGE + "\n\n").repeat(4) }]);
     } else if (reply === "repeat-reasoning") {
@@ -171,7 +197,7 @@ const server = http.createServer((req, res) => {
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const baseUrl = `http://127.0.0.1:${server.address().port}/v1`;
 
-function table(title) {
+function table(title, lastDm = "") {
   const campaign = createCampaign(lead.id, {
     title,
     description: "A test of the bare-JSON salvage and the empty-reply retry.",
@@ -205,6 +231,9 @@ function table(title) {
     }),
   );
   sheetId = sheet.id;
+  if (lastDm) {
+    insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "dm", content: lastDm, speech: [] });
+  }
   insertCampaignMessage({
     campaignId: campaign.id,
     seq: allocateSeq(campaign.id),
@@ -216,11 +245,11 @@ function table(title) {
   return campaign;
 }
 
-async function run(title, replies) {
+async function run(title, replies, lastDm = "") {
   script = replies;
   calls = 0;
   requests = [];
-  const campaign = table(title);
+  const campaign = table(title, lastDm);
   await startDmTurn(campaign.id);
   const messages = listRecentMessages(campaign.id, 20);
   const dm = messages.filter((m) => m.authorType === "dm");
@@ -229,6 +258,22 @@ async function run(title, replies) {
 
 const toolResults = (request) =>
   new Map(request.messages.filter((m) => m.role === "tool").map((m) => [m.tool_call_id, JSON.parse(m.content)]));
+
+// The last turn's narration said again with no tool is sent back once, and
+// the table reads the new reply (gpt-oss-20b and Qwen3.6-35B, a fight of
+// identical lines).
+{
+  const repeated = await run("Last turn again", ["last-turn", "narrate"], LAST_TURN);
+  assert.equal(repeated.text, NARRATION, `expected the new narration, got: ${repeated.text}`);
+  assert.equal(repeated.calls, 2);
+  assert.ok(
+    repeated.requests[1].messages.some((m) => m.role === "user" && /repeats your previous narration/.test(String(m.content))),
+    "the second call says why",
+  );
+  const fresh = await run("A new turn", ["narrate"], LAST_TURN);
+  assert.equal(fresh.calls, 1, "a reply unlike the last turn is not sent back");
+  console.log("ok: the last turn's narration said again is sent back once");
+}
 
 // The bug: a reply that is only the JSON closed the turn on the empty-turn line.
 const whole = await run("JSON question only", ["json-ask", "narrate"]);

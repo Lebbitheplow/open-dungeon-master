@@ -39,6 +39,24 @@ export function knownLocalContextWindow(modelId: string): number | null {
   return null;
 }
 
+// How many parameters Ollama said a local model has (/api/show's
+// general.parameter_count), kept beside its window and matched the same way.
+const learnedParams = new Map<string, number>();
+
+export function rememberLocalModelParams(modelId: string, params: number) {
+  if (Number.isFinite(params) && params > 0) {
+    learnedParams.set(modelId, params);
+  }
+}
+
+export function knownLocalModelParams(modelId: string): number | null {
+  const wanted = modelId.toLowerCase();
+  for (const [id, params] of learnedParams) {
+    if (id.toLowerCase() === wanted) return params;
+  }
+  return null;
+}
+
 export const DEFAULT_LOCAL_CONTEXT_TOKENS = 131_072;
 
 export function localModelContextWindow(modelId: string): number {

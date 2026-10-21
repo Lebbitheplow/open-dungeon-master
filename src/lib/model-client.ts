@@ -26,21 +26,26 @@ import {
 import {
   buildPropsUrl,
   contextCacheKey,
+  normalizeBaseUrl,
   OPENAI_CONTEXT_TOKENS,
+  paramsFromModelName,
   readContextWindow,
+  readModelParams,
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
 import { isPrivateBackendHost } from "@/lib/backend-host";
 import { chatTimings, chatUsage, ollamaUsage, type TokenUsage } from "@/lib/usage/parse";
 import { apiSpeedEligibility } from "@/lib/speed-tier";
 import { noteSpeed } from "@/lib/speed-status";
-import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow } from "@/lib/text-models";
+import { DEFAULT_LOCAL_CONTEXT_TOKENS, knownLocalContextWindow, knownLocalModelParams } from "@/lib/text-models";
+import { SMALL_MODEL_PARAMS } from "@/lib/dm/model-tuning-logic";
 import { catalogContextWindow, hostedCatalogModel, hostedContextWindow } from "@/lib/model-registry/catalog";
 import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
 import { onWindows } from "@/lib/host-platform";
 import { currentJobSignal, jobStopReason, noteJobProgress, withJobStage } from "@/lib/dm/job-control";
 import { MODEL_STAGE_GRACE_MS } from "@/lib/dm/job-stage-logic";
+import { rolesMustAlternate, withAlternatingRoles } from "@/lib/chat-roles-logic";
 import {
   createStreamRepetitionGuard,
   cutRepetition,
@@ -62,6 +67,7 @@ const DEFAULT_LOCAL_TEXT_TIMEOUT_MS = 6 * 60 * 1000;
 const MIN_TEXT_TIMEOUT_MS = 30 * 1000;
 const MAX_TEXT_TIMEOUT_MS = 30 * 60 * 1000;
 const WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS = 65_536;
+const SMALL_MODEL_LOCAL_CONTEXT_TOKENS = 32_768;
 
 export type TextContentPart = {
   type: "text";
@@ -142,9 +148,17 @@ export type ChatRequestOptions = {
   // stream parser forwards only delta.content, and reads the reasoning only
   // to stop a loop in it. `false` is sent too, not left to the server:
   // Qwen's and Gemma's chat templates reason by default, so a call that
-  // wants none (the final narration) would think anyway. Left unset, the
-  // server's default stands.
+  // wants none (the final narration) would think anyway. Left unset, it is
+  // off as well, as on Ollama: a stock llama-server running Qwen3.5 9B spent
+  // the whole 4,096-token reply of the campaign's setup call thinking and
+  // wrote no JSON.
   thinking?: boolean;
+  // The most reasoning this call may stream, in characters, before it is cut
+  // and the same call asked again without thinking. Unset, no limit: the
+  // server's own budget (llama-server --reasoning-budget) applies. Ollama has
+  // none, and Qwen3.5 9B there thought 18,700 characters to the reply cap
+  // and wrote nothing.
+  reasoningBudgetChars?: number;
   // The most this call's reply may run to: what the window leaves after the
   // prompt (src/lib/dm/request-fit.ts), or what the task needs. The backend's
   // own cap still applies when it is smaller. Unset keeps that cap alone.
@@ -161,6 +175,10 @@ export type ChatRequestOptions = {
   // that each name the other route cannot send it back and forth. Set only
   // by requestCustomMessage's own route switch, like dropParams.
   refusedRoutes?: readonly OpenAiToolRoute[];
+  // Set on the one retry of a reply the backend's own parser threw away
+  // (UNPARSED_REPLY), so a second refusal is the answer. Set only by
+  // requestCustomMessage, like dropParams.
+  unparsedRetried?: boolean;
   // Which of the server's two models this call is for: the admin's Fast
   // setting is per role (issue 255). Unset reads as the story model.
   role?: "story" | "utility";
@@ -218,13 +236,20 @@ export function localMaxOutputTokens() {
 // limiting factor. LOCAL_TEXT_CONTEXT can cap it to bound worst-case
 // prefill time on very long stories. The window comes from the documented
 // table, then what Ollama said of the model, then the catalog's row for the
-// same weights, then the 128K most current models share.
+// same weights, then the 128K most current models share. A small model
+// (model-tuning-logic.ts SMALL_MODEL_PARAMS) plays on the short rules, whose
+// prompts stay near 20K, so it asks for 32K: Qwen3.5 9B's native 262K is a
+// cache of about 8.6 GB, which pushed most of the model off a 4 GB card.
 export function localContextTokens(model: string) {
   const native = knownLocalContextWindow(model) ?? catalogContextWindow(model) ?? DEFAULT_LOCAL_CONTEXT_TOKENS;
   const raw = serverEnv("LOCAL_TEXT_CONTEXT");
   const parsed = Number.parseInt(raw, 10);
 
   if (!Number.isFinite(parsed)) {
+    const params = knownLocalModelParams(model) ?? paramsFromModelName(model);
+    if (params && params < SMALL_MODEL_PARAMS) {
+      return Math.min(native, SMALL_MODEL_LOCAL_CONTEXT_TOKENS);
+    }
     return onWindows()
       ? Math.min(native, WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS)
       : native;
@@ -373,6 +398,9 @@ export function contextOverflowWindow(text: string): number | null {
 // instead of paying the 400 again.
 const learnedToolRoutes = new Map<string, OpenAiToolRoute>();
 const rememberedDrops = new Map<string, Set<string>>();
+// Models whose chat template refused two user messages in a row
+// (src/lib/chat-roles-logic.ts): sent with neighbours joined from then on.
+const alternatingRoles = new Set<string>();
 
 // llama.cpp and llama-swap expose the real n_ctx the server was launched with
 // (its -c flag) on /props. Nothing else in the OpenAI-compatible ecosystem
@@ -434,6 +462,61 @@ export async function probeCustomContextWindow(
   })();
   probesInFlight.set(cacheKey, probe);
   return probe;
+}
+
+// How many parameters the model behind a custom endpoint has, from its
+// /v1/models listing (llama-server's meta.n_params), kept like the windows
+// above: a hit for half an hour, a miss for two minutes. Only a server on
+// this machine or the LAN is asked; a vendor API lists no sizes.
+const probedModelParams = new Map<string, { params: number; at: number }>();
+
+export async function probeCustomModelParams(baseUrl: string, apiKey: string, model: string): Promise<number | null> {
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base || endpointKind(baseUrl) !== "local") {
+    return null;
+  }
+  const cacheKey = contextCacheKey(baseUrl, model);
+  const cached = probedModelParams.get(cacheKey);
+  if (cached && Date.now() - cached.at < (cached.params ? PROBE_HIT_TTL_MS : PROBE_MISS_TTL_MS)) {
+    return cached.params || null;
+  }
+  const key = resolveCustomKey(baseUrl.trim(), apiKey, customChatEndpoint(baseUrl.trim())).resolvedKey;
+  let params = 0;
+  try {
+    const response = await fetch(`${base}/v1/models`, {
+      headers: key ? { Authorization: `Bearer ${key}` } : undefined,
+      signal: AbortSignal.timeout(2_000),
+      redirect: "error",
+    });
+    if (response.ok) {
+      const body = await readBody(response, MAX_BACKEND_ERROR_BYTES);
+      params = (body.complete ? readModelParams(JSON.parse(body.text), model) : null) ?? 0;
+    }
+  } catch {
+    // Unreachable or not llama.cpp: the model's name may still say.
+  }
+  probedModelParams.set(cacheKey, { params, at: Date.now() });
+  return params || null;
+}
+
+// The story model's size where anything says it: what the server reported
+// (Ollama's /api/show, llama-server's /v1/models), else the figure its name
+// states. A small model is small wherever it runs, so a hosted one is sized
+// by its name too. Null for an agent program or a name with no size.
+export function storyModelParams(settings: {
+  textProvider: string;
+  localTextModel: string;
+  customBaseUrl?: string;
+  customModel?: string;
+}): number | null {
+  if (settings.textProvider === "harness") {
+    return null;
+  }
+  if (settings.textProvider === "local") {
+    return knownLocalModelParams(settings.localTextModel) ?? paramsFromModelName(settings.localTextModel);
+  }
+  const model = (settings.customModel ?? "").trim() || getGlobalConfig().text.customModel || serverEnv("OPENAI_COMPAT_MODEL");
+  return probedModelParams.get(contextCacheKey(settings.customBaseUrl ?? "", settings.customModel ?? ""))?.params || paramsFromModelName(model);
 }
 
 // The context window of the model a utility call (Ask, the lore check) runs
@@ -595,18 +678,54 @@ function guardStreamDelta(onDelta: StreamDeltaHandler | undefined, cancel: () =>
   };
 }
 
+// Reasoning past the call's budget (ChatRequestOptions.reasoningBudgetChars).
+class ReasoningBudgetError extends Error {
+  constructor() {
+    super("The model's reasoning ran past its budget.");
+  }
+}
+
 // The reasoning channel loops too, and on a server with no reasoning budget
-// it runs to the output cap before any story text. Read only for that; it
-// never reaches the table.
-function guardReasoningDelta(streaming: boolean, cancel: () => void) {
+// it runs to the output cap before any story text. Read only for that, and
+// for the call's own budget; it never reaches the table.
+function guardReasoningDelta(streaming: boolean, cancel: () => void, budgetChars?: number) {
   if (!streaming) return undefined;
   const guard = createStreamRepetitionGuard();
+  let length = 0;
   return (text: string) => {
+    length += text.length;
+    if (budgetChars && length > budgetChars) {
+      cancel();
+      throw new ReasoningBudgetError();
+    }
     if (guard.push(text)) {
       cancel();
       throw new StreamRepetitionError(null);
     }
   };
+}
+
+// llama-server's own parser refusing what the model wrote (common/chat.cpp:
+// "The model produced output that does not match the expected peg-native
+// format"), inside a stream that answered 200 or as a 500. The whole reply is
+// thrown away. gpt-oss-20b does it when the server's reasoning budget forces
+// the end of its thought (--reasoning-budget, which the app's preset sets) and
+// it writes on without opening its answer: 4 of 734 calls on the BC-250 and 2
+// of about 80 fight turns, each a halted turn (2026-10-20). llama.cpp b10621,
+// the build the app pins, b11721 and master all parse it so. A fresh reply is
+// almost always whole, so the call is asked once more.
+const UNPARSED_REPLY = /model produced output that does not match the expected/i;
+
+function unparsedRetry(options: ChatRequestOptions): ChatRequestOptions {
+  console.warn("[model] the backend could not parse the model's reply and threw it away; the call is asked again");
+  return { ...options, unparsedRetried: true };
+}
+
+// The same call asked again without thinking, once its reasoning ran past
+// the budget: an answer decided at once beats none after minutes.
+function withoutThinking(options: ChatRequestOptions): ChatRequestOptions {
+  console.warn("[model] the reasoning ran past its budget; the call is asked again without thinking");
+  return { ...options, thinking: false, reasoningBudgetChars: undefined };
 }
 
 // A reply that arrived whole cannot be stopped early, but one that may only
@@ -885,6 +1004,7 @@ async function requestCustomMessageNow(
     ...(rememberedDrops.get(routeKey) ?? []),
     ...(options.dropParams ?? []),
   ]);
+  const sentMessages = alternatingRoles.has(routeKey) ? withAlternatingRoles(messages) : messages;
   const chatEndpoint = customChatEndpoint(trimmedBase);
   const endpoint = viaResponses ? customResponsesEndpoint(trimmedBase) : chatEndpoint;
   const { isGlobalBackend, isUtilityBackend, resolvedKey } = resolveCustomKey(trimmedBase, apiKey, endpoint);
@@ -920,7 +1040,7 @@ async function requestCustomMessageNow(
   const requestPayload: Record<string, unknown> = viaResponses
     ? responsesPayload({
         model: resolvedModel,
-        messages,
+        messages: sentMessages,
         sampling,
         maxOutputTokens: callOutputCap(maxOutputTokensFor(trimmedBase, resolvedModel), options),
         stream: Boolean(onDelta),
@@ -931,7 +1051,7 @@ async function requestCustomMessageNow(
         model: resolvedModel,
         // A Responses turn's reasoning items are that API's own; Chat
         // Completions would refuse the unknown field.
-        messages: messages.map((message) => {
+        messages: sentMessages.map((message) => {
           if (!message.provider_items) return message;
           const rest = { ...message };
           delete rest.provider_items;
@@ -946,9 +1066,7 @@ async function requestCustomMessageNow(
         // it from config. Skipped on backends with no preset to override, where
         // 0 is already the default and reasoning models reject the field.
         ...(caps.sendZeroPresencePenalty ? { presence_penalty: 0 } : {}),
-        ...(caps.allowTemplateKwargs && options.thinking !== undefined
-          ? { chat_template_kwargs: { enable_thinking: options.thinking } }
-          : {}),
+        ...(caps.allowTemplateKwargs ? { chat_template_kwargs: { enable_thinking: options.thinking === true } } : {}),
         // The last chunk of a stream carries the token counts only when
         // asked (OpenAI, llama-server, vLLM, LM Studio and OpenRouter all
         // honour it); a backend that rejects the field names it in its 400
@@ -999,7 +1117,7 @@ async function requestCustomMessageNow(
   );
   const requestTimeout = createRequestTimeout(timeoutMs);
   const guardedDelta = guardStreamDelta(onDelta, requestTimeout.cancel);
-  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel);
+  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel, options.reasoningBudgetChars);
   let upstream: Response;
   try {
     upstream = await fetchBackend(endpoint, {
@@ -1066,6 +1184,15 @@ async function requestCustomMessageNow(
         stripImageParts(messages),
         options,
       );
+    }
+
+    // A chat template that takes user and assistant only in turn refused two
+    // user messages in a row: the same call again with neighbours joined,
+    // and every later call for this model joined from the start.
+    if (!alternatingRoles.has(routeKey) && rolesMustAlternate(text)) {
+      console.warn(`[model] ${endpoint}: ${resolvedModel}'s chat template takes user and assistant in turn; joining neighbouring messages`);
+      alternatingRoles.add(routeKey);
+      return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, options);
     }
 
     // A request bigger than the server's window. The refusal often names
@@ -1148,6 +1275,10 @@ async function requestCustomMessageNow(
       });
     }
 
+    if (!options.unparsedRetried && UNPARSED_REPLY.test(text)) {
+      return requestCustomMessageNow(baseUrl, model, apiKey, messages, unparsedRetry(options));
+    }
+
     return {
       error: Response.json(
         {
@@ -1222,6 +1353,7 @@ async function requestCustomMessageNow(
       };
       return onDelta ? result : cutWholeReply(result, options);
     } catch (error) {
+      if (error instanceof ReasoningBudgetError) return requestCustomMessageNow(baseUrl, model, apiKey, messages, withoutThinking(options));
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       return readFailure(error);
     }
@@ -1321,11 +1453,18 @@ async function requestCustomMessageNow(
         }
       }, noteJobProgress);
     } catch (error) {
+      if (error instanceof ReasoningBudgetError) return requestCustomMessageNow(baseUrl, model, apiKey, messages, withoutThinking(options));
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       return readFailure(error);
     }
 
     if (upstreamError) {
+      // Asked again only while nothing of it reached the table: the parser
+      // refuses at the point it stops following, and story text before that
+      // point has already streamed.
+      if (!options.unparsedRetried && UNPARSED_REPLY.test(upstreamError) && !contentParts.length && !toolCalls.some(Boolean)) {
+        return requestCustomMessageNow(baseUrl, model, apiKey, messages, unparsedRetry(options));
+      }
       return {
         error: Response.json(
           {
@@ -1447,6 +1586,10 @@ async function requestLocalMessageNow(
     options: {
       ...sampling,
       temperature: sampling.temperature ?? 0.9,
+      // Pinned as on the OpenAI-compatible path (requestCustomMessage): a
+      // positive presence penalty suppresses tool calls, and Ollama's own
+      // qwen3.5:9b ships with 1.5 in its parameters.
+      presence_penalty: 0,
       num_predict: callOutputCap(localMaxOutputTokens(), options),
       num_ctx: localContextTokens(model),
     },
@@ -1467,7 +1610,7 @@ async function requestLocalMessageNow(
   );
   const requestTimeout = createRequestTimeout(timeoutMs);
   const guardedDelta = guardStreamDelta(onDelta, requestTimeout.cancel);
-  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel);
+  const guardedReasoning = guardReasoningDelta(Boolean(onDelta), requestTimeout.cancel, options.reasoningBudgetChars);
   let upstream: Response;
   try {
     upstream = await fetchBackend(`${baseUrl}/api/chat`, {
@@ -1574,6 +1717,7 @@ async function requestLocalMessageNow(
         localUsage = ollamaUsage(record) ?? localUsage;
       }, noteJobProgress);
     } catch (error) {
+      if (error instanceof ReasoningBudgetError) return requestLocalMessageNow(requestedModel, messages, withoutThinking(options));
       if (error instanceof StreamRepetitionError) return repeatedStreamResult(error, options);
       if (requestTimeout.stopped()) {
         return stoppedResult();

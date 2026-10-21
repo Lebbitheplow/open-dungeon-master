@@ -22,7 +22,7 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { redactRoll } from "@/lib/dm/viewer";
 import { autoApplyDamageRoll } from "@/lib/dm/enemy-damage";
-import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
+import { heldInitiative, recordInitiativeRoll } from "@/lib/dm/encounter-tools";
 import { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import {
   resolveRollExpression,
@@ -104,6 +104,17 @@ export function handleRequestRoll(
       retry: true,
     };
   }
+  // Out of a fight there is no one on the board to swing at: the AI's attack
+  // roll with no fight running rolled a bare d20 that hit nobody, and
+  // gpt-oss-20b and Qwen3.6-35B, each rolling one after the last goblin fell,
+  // narrated a hit on a goblin already dead. A person at the console rolls
+  // what they rule.
+  if (args.kind === "attack" && sheet && model && !getActiveEncounter(campaignId)) {
+    return {
+      error: "No fight is running, so there is nobody to attack: every enemy of the last fight is down or gone. If the character attacks someone who stands, start the fight with start_encounter and resolve the swing with pc_attack; otherwise narrate what they do instead.",
+      refused: "rules",
+    };
+  }
   // The same holds for the damage: a party character's damage on an enemy
   // with no attack roll behind it would skip the hit, the action and the
   // turn. Damage aimed at an enemy from nobody's sheet (an NPC ally the
@@ -115,6 +126,16 @@ export function handleRequestRoll(
         : `${sheet.name}'s damage on an enemy comes from Player attacks or a cast form, which roll the hit first; a bare damage roll does not land on an enemy.`,
       retry: true,
     };
+  }
+
+  // An initiative roll for a character the fight already ordered rolls
+  // nothing (src/lib/dm/encounter-tools.ts heldInitiative): it would change
+  // no count and only throw dice in front of the table.
+  if (args.kind === "initiative" && sheet) {
+    const held = heldInitiative(campaignId, sheet.id);
+    if (held) {
+      return { error: held, refused: "rules" };
+    }
   }
 
   const extras = sheet ? rollExtrasFor(campaign, sheet, args.kind) : { encumbrance: campaign.gameSettings.variantRules.encumbrance };

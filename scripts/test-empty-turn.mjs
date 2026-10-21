@@ -6,7 +6,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { EMPTY_TURN_LINE, emptyTurnLine } = await import("../src/lib/dm/empty-turn.ts");
+const { EMPTY_TURN_LINE, RESOLVED_TURN_LINE, emptyTurnLine } = await import("../src/lib/dm/empty-turn.ts");
 const { notReadyReason } = await import("../src/lib/srd/spell-prep.ts");
 
 let passed = 0;
@@ -87,6 +87,29 @@ test("only a rules refusal reaches the table: a retry or a limit is the model's 
   assert.match(refused({ error: "Kara is at 0 HP and cannot attack.", refused: "rules" }), /Kara is at 0 HP/);
   assert.equal(refused({ error: "Unknown targetEnemyId; use one from GAME STATE.", retry: true }), EMPTY_TURN_LINE);
   assert.equal(refused({ error: "Encounter action limit reached for this turn.", refused: "limit" }), EMPTY_TURN_LINE);
+});
+
+test("an action that went through and was never narrated says so, never 'try again'", () => {
+  const hit = { attacker: "Avery", target: "Goblin 3", hit: true, damage: 4, ok: true };
+  // Out of reach, a move, then the swing lands: the latest action wins.
+  const line = emptyTurnLine(
+    [
+      call("a", "pc_attack"),
+      result("a", { error: "Avery is 30 ft from Goblin 3, out of melee reach (5 ft).", refused: "rules" }),
+      call("b", "pc_attack"),
+      result("b", hit),
+    ],
+    mage("I attack the goblin"),
+  );
+  assert.equal(line, RESOLVED_TURN_LINE);
+  assert.equal(emptyTurnLine([call("a", "buy_item"), result("a", { ok: true, item: "Torch" })], mage("I buy a torch")), RESOLVED_TURN_LINE);
+  // A refusal after the swing is the latest word.
+  assert.match(
+    emptyTurnLine([call("a", "pc_attack"), result("a", hit), call("b", "pc_attack"), result("b", { error: "Avery has already made all 1 of their attack this turn.", refused: "rules" })]),
+    /already made all 1 of their attack/,
+  );
+  // The DM's own tools going through are not the player's action.
+  assert.equal(emptyTurnLine([call("a", "set_npc"), result("a", { ok: true })]), EMPTY_TURN_LINE);
 });
 
 test("anything else gets a plain hint, and no player keeps the old line", () => {

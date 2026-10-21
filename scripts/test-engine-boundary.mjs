@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 const {
   ENGINE_BOUNDARY_RULES,
   ENGINE_BOUNDARY_CHECK,
-  FAKE_ENCOUNTER_PROMPT,
+  fakeEncounterPrompt,
   buildCorrectionPrompt,
   collectExchanges,
   fightAnnounced,
@@ -359,6 +359,31 @@ test("a hit on an attack the engine refused, and a kill with no call, are caught
   assert.deepEqual(kinds(rule([amount(14)], [], live)), ["number"]);
 });
 
+test("a hit on one of two same-named enemies is caught when nothing hit either of them", () => {
+  // Qwen3.6-35B at Q2 on a BC-250: Avery's swing at Bandit 2 was refused as
+  // out of reach, and the prose drove the shortsword into "his side" anyway.
+  const live = {
+    enemies: [
+      { id: "e1", name: "Bandit 1", hp: 12, maxHp: 12, status: "alive" },
+      { id: "e2", name: "Bandit 2", hp: 12, maxHp: 12, status: "alive" },
+    ],
+  };
+  const refused = {
+    name: "pc_attack",
+    args: { characterId: "c1", targetEnemyId: "e2", weapon: "shortsword" },
+    result: { error: "Avery is 35 ft from Bandit 2, out of melee reach (5 ft)." },
+  };
+  assert.deepEqual(kinds(rule([about("hit", "bandit")], [refused], live)), ["hit"]);
+  // One of them really was hit: which one the prose means cannot be told, so
+  // the clause stands.
+  const hitOne = {
+    name: "pc_attack",
+    args: { characterId: "c1", targetEnemyId: "e1", weapon: "shortsword" },
+    result: { attacker: "Avery", target: "Bandit 1", rolled: 17, vsAc: 12, hit: true, damage: 5, hp: "7/12" },
+  };
+  assert.deepEqual(rule([about("hit", "bandit")], [refused, hitOne], live), []);
+});
+
 // ---------------------------------------------------------------------------
 // Part 4: the ruling's deliberate false negatives
 // ---------------------------------------------------------------------------
@@ -494,10 +519,13 @@ test("a fight announced is a fight_start claim", () => {
   assert.equal(fightAnnounced([]), false);
 });
 
-test("the fake-encounter correction says what to call and what not to restate", () => {
-  assert.match(FAKE_ENCOUNTER_PROMPT, /start_encounter/);
-  assert.match(FAKE_ENCOUNTER_PROMPT, /no encounter exists/);
-  assert.match(FAKE_ENCOUNTER_PROMPT, /encounter panel/);
+test("the fake-encounter correction quotes what read as a fight, says what to call and what not to restate, and lets the model say nobody attacked", () => {
+  const prompt = fakeEncounterPrompt([{ kind: "fight_start", quote: "jabbing a thick finger at Bram's purse." }]);
+  assert.match(prompt, /\("jabbing a thick finger at Bram's purse\."\)/);
+  assert.match(prompt, /start_encounter/);
+  assert.match(prompt, /no encounter exists/);
+  assert.match(prompt, /If nobody has attacked anyone, call no tool and give the same narration again/);
+  assert.match(prompt, /encounter panel/);
 });
 
 test("a figure no tool rolled and the model was never shown is a blow landed in prose", () => {

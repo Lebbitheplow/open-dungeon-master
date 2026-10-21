@@ -82,7 +82,7 @@ await test("the pointer starts on the highest player character, in round 1", () 
   assert.deepEqual(floor.userIds, [alert.userId]);
 });
 
-await test("initiative is rolled once: a second roll does not move anyone", async () => {
+await test("initiative is rolled once: a second roll is refused and moves nobody", async () => {
   const before = world.encounter().order;
   world.dice(20);
   const again = await world.invoke("request_roll", {
@@ -91,7 +91,9 @@ await test("initiative is rolled once: a second roll does not move anyone", asyn
     reason: "again",
   });
   world.clearDice();
-  assert.equal(again.ok, true, again.error);
+  // Nothing is rolled at all: a second roll only threw dice in front of the
+  // table (Qwen3.6-35B at Q2 rolled every character again after start_encounter).
+  assert.match(String(again.error ?? ""), /already has initiative/, JSON.stringify(again));
   assert.deepEqual(world.encounter().order, before);
 });
 

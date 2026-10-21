@@ -17,7 +17,10 @@
 //   node scripts/smoke-local.mjs --url http://127.0.0.1:8000/v1 --model gpt-oss-120b [--runs 6]
 //   node scripts/smoke-local.mjs --provider local --model gemma4:31b-it-qat [--runs 6]
 //       (Ollama native API at OLLAMA_BASE_URL; LOCAL_TEXT_CONTEXT caps num_ctx)
-//   options: --turns N (how many of the five turns to play, default 5)
+//   options: --turns N (how many of the scenario's turns to play, default all)
+//            --scenario ford|town|skirmish (the ford's five turns, the town's
+//            eight: arrival, an NPC, persuasion, a purchase, stealth, a fight,
+//            attacks; or the skirmish's nine, a fight over several rounds)
 //            --label NAME  --out DIR (writes <label>.json)
 //            --context N (the window the prompt packs against; custom provider)
 //            --key KEY (the custom provider's API key, default OPENAI_COMPAT_API_KEY;
@@ -39,7 +42,8 @@ const { values: args, positionals } = parseArgs({
     url: { type: "string", default: process.env.OPENAI_COMPAT_BASE_URL || "http://127.0.0.1:8001/v1" },
     model: { type: "string", default: "" },
     runs: { type: "string", default: "1" },
-    turns: { type: "string", default: "5" },
+    turns: { type: "string", default: "" },
+    scenario: { type: "string", default: "ford" },
     label: { type: "string", default: "" },
     out: { type: "string", default: "" },
     context: { type: "string", default: "" },
@@ -89,7 +93,6 @@ assert.ok(args.model, "--model is required");
 const PROVIDER = args.provider;
 assert.ok(PROVIDER === "custom" || PROVIDER === "local", "--provider is custom or local");
 const RUNS = Math.max(1, Number.parseInt(args.runs, 10) || 1);
-const MAX_TURNS = Math.min(5, Math.max(1, Number.parseInt(args.turns, 10) || 5));
 const LABEL = args.label || args.model;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-smoke-local-"));
@@ -118,7 +121,7 @@ const { getActiveEncounter, listEnemies } = await import("../src/lib/db/encounte
 const { listQuests } = await import("../src/lib/db/quests.ts");
 const { listActiveFacts } = await import("../src/lib/db/facts.ts");
 const { listNpcs } = await import("../src/lib/db/npcs.ts");
-const { EMPTY_TURN_LINE } = await import("../src/lib/dm/empty-turn.ts");
+const { EMPTY_TURN_LINE, RESOLVED_TURN_LINE } = await import("../src/lib/dm/empty-turn.ts");
 const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
 const { storyContextTokens } = await import("../src/lib/model-client.ts");
 const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -167,7 +170,7 @@ function parseRescue(line) {
 }
 
 // ---- what a player must never read -------------------------------------------
-const EMPTY_PREFIXES = [EMPTY_TURN_LINE, "The DM had no answer", "The DM could not"];
+const EMPTY_PREFIXES = [EMPTY_TURN_LINE, RESOLVED_TURN_LINE, "The DM had no answer", "The DM could not"];
 const isEmptyTurn = (text) => EMPTY_PREFIXES.some((prefix) => text.startsWith(prefix));
 const ROLL_MARKER = /\[roll:[0-9a-f-]{36}\]\s*/g;
 
@@ -212,7 +215,11 @@ function emptyCause(calls, rescues) {
 }
 
 // ---- one campaign -------------------------------------------------------------
-const TURNS = [
+// Each turn a scripted expectation can miss names the tools that would have
+// met it.
+const called = (turn, names, why) => (turn.tools.some((name) => names.includes(name)) ? null : why);
+
+const FORD = [
   {
     label: "kickoff",
     who: "avery",
@@ -241,6 +248,130 @@ const TURNS = [
     text: "Once the last bandit is down I haul the caravan master over and ask what is really in that coffer, and whether the job pays extra to see it through to the tide-ruin.",
   },
 ];
+
+// --scenario town: one line for each of the core actions a table leans on,
+// so a small model's tool use is measured on more than the ford's search
+// and fight.
+const TOWN = [
+  {
+    label: "arrive",
+    who: "avery",
+    text: "We walk into the village of Thornwick at dusk and head straight for the inn.",
+    expect: (turn) => called(turn, ["move_party", "update_location"], "the party arrived somewhere new and no move_party recorded it"),
+  },
+  {
+    label: "npc",
+    who: "bram",
+    text: "\"Evening. Has a merchant called Oswin come through here?\" I ask the innkeeper.",
+    expect: (turn) => called(turn, ["set_npc", "npc_reaction", "social_check"], "the innkeeper was never registered"),
+  },
+  {
+    label: "persuade",
+    who: "avery",
+    text: "I lean on the bar, praise her stew, and try to talk her into letting us have Oswin's old room for free.",
+    expect: (turn) => (turn.rolls > 0 || turn.tools.includes("social_check") ? null : "a persuasion attempt was decided without dice"),
+  },
+  {
+    label: "buy",
+    who: "bram",
+    text: "I pay for a hot meal and buy a torch.",
+    expect: (turn) => called(turn, ["purchase", "buy_item", "modify_gold", "grant_item"], "money changed hands in prose alone"),
+  },
+  {
+    label: "sneak",
+    who: "avery",
+    text: "Later that night I sneak upstairs and listen at the door of Oswin's old room.",
+    expect: (turn) => (turn.rolls > 0 || turn.tools.some((name) => ["check_notice", "group_check"].includes(name)) ? null : "sneaking and listening were decided without dice"),
+  },
+  {
+    label: "fight",
+    who: "bram",
+    text: "The door bursts open and two masked thugs rush at us with clubs! I draw my shortsword.",
+    expect: (turn) => (turn.encounter ? null : "no encounter started (the fight was narrated instead)"),
+  },
+  {
+    label: "attack",
+    who: "bram",
+    text: "I swing my shortsword at the nearest thug.",
+    expect: (turn) => called(turn, ["pc_attack", "enemy_attack", "end_turn"], "the attack was told in prose with no combat tool"),
+  },
+  {
+    label: "end-turn",
+    who: "avery",
+    text: "I stab the other thug with my shortsword, then I'm done for this turn.",
+    expect: (turn) => called(turn, ["pc_attack", "enemy_attack", "end_turn"], "the turn was told in prose with no combat tool"),
+  },
+];
+
+// --scenario skirmish: a fight played out over several rounds, each line
+// declared by the character whose turn it is (who: "current"), so a model is
+// measured on the combat itself rather than on lines the order refuses.
+const FIGHTING = (why) => (turn) => called(turn, ["pc_attack", "end_turn", "move_token", "take_action", "cast_at_enemy"], why);
+const SKIRMISH = [
+  {
+    label: "approach",
+    who: "avery",
+    text: "We follow the goblin tracks down into the ravine, weapons ready.",
+  },
+  {
+    label: "ambush",
+    who: "bram",
+    text: "Goblins leap from the rocks above! I raise my sword and shout a warning to Avery.",
+    expect: (turn) => (turn.encounter ? null : "no encounter started (the fight was narrated instead)"),
+  },
+  ...["round-1a", "round-1b", "round-2a", "round-2b", "round-3a", "round-3b"].map((label) => ({
+    label,
+    who: "current",
+    fallback: "avery",
+    // A whole turn in one line, ended, so the next line is the next
+    // combatant's and never a second attack on a spent turn.
+    text: "I close in on the nearest goblin and attack it, then I end my turn.",
+    expect: FIGHTING("the turn was told in prose with no combat tool"),
+  })),
+  {
+    label: "aftermath",
+    who: "current",
+    fallback: "avery",
+    text: "If any goblins are still standing I attack the nearest one; otherwise I search the bodies for anything useful.",
+  },
+];
+
+// The player who speaks a scripted line: the character whose turn the fight
+// is on for who "current", the line's own speaker otherwise.
+function speakerFor(script, players, campaignId) {
+  if (script.who !== "current") {
+    return players[script.who];
+  }
+  const encounter = getActiveEncounter(campaignId);
+  const entry = encounter?.orderReady ? encounter.order[encounter.turnIndex] : null;
+  const current = entry?.kind === "pc" ? Object.values(players).find((player) => player.sheet.id === entry.characterId) : null;
+  return current ?? players[script.fallback];
+}
+
+const SCENARIOS = {
+  skirmish: {
+    title: "The Goblin Ravine",
+    description: "Goblins have been raiding the road, and the party follows them home.",
+    theme: "classic fantasy, a rocky ravine",
+    turns: SKIRMISH,
+  },
+  ford: {
+    title: "The Salt Road",
+    description: "A one-scene caravan job that goes wrong at the ford.",
+    theme: "low fantasy, coastal trade road",
+    turns: FORD,
+  },
+  town: {
+    title: "The Thornwick Inn",
+    description: "A merchant has vanished from a village inn, and the party asks around.",
+    theme: "low fantasy, a quiet village with a secret",
+    turns: TOWN,
+  },
+};
+const SCENARIO = SCENARIOS[args.scenario];
+assert.ok(SCENARIO, `--scenario is one of ${Object.keys(SCENARIOS).join(", ")}`);
+const TURNS = SCENARIO.turns;
+const MAX_TURNS = Math.min(TURNS.length, Math.max(1, Number.parseInt(args.turns, 10) || TURNS.length));
 
 function sheet(name, cls, abilities) {
   return createSheetSchema.parse({
@@ -298,9 +429,9 @@ async function playRun(runNumber) {
   const lead = createUser(`lead${runNumber}${randomBytes(2).toString("hex")}`, "x", { isAdmin: true });
   const other = createUser(`bram${runNumber}${randomBytes(2).toString("hex")}`, "x");
   const campaign = createCampaign(lead.id, {
-    title: "The Salt Road",
-    description: "A one-scene caravan job that goes wrong at the ford.",
-    theme: "low fantasy, coastal trade road",
+    title: SCENARIO.title,
+    description: SCENARIO.description,
+    theme: SCENARIO.theme,
     maxPlayers: 4,
     startingLevel: 3,
     difficulty: "normal",
@@ -334,7 +465,7 @@ async function playRun(runNumber) {
 
   const turns = [];
   for (const script of TURNS.slice(0, MAX_TURNS)) {
-    const player = players[script.who];
+    const player = speakerFor(script, players, campaign.id);
     const playerSeq = allocateSeq(campaign.id);
     insertCampaignMessage({
       campaignId: campaign.id,
@@ -429,7 +560,13 @@ async function playRun(runNumber) {
 }
 
 // ---- the runs -------------------------------------------------------------------
-say(`smoke-local ${VERSION}: ${LABEL} | provider ${PROVIDER} | ${PROVIDER === "custom" ? args.url : process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"} | ${RUNS} run(s) x ${MAX_TURNS} turn(s)`);
+say(`smoke-local ${VERSION}: ${LABEL} | provider ${PROVIDER} | ${PROVIDER === "custom" ? args.url : process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"} | ${args.scenario} | ${RUNS} run(s) x ${MAX_TURNS} turn(s)`);
+// A worktree has no data/ of its own: without the pack every shop opens bare
+// and every item lookup finds nothing, which reads as the model's fault.
+const contentDb = process.env.CONTENT_DB_PATH || path.join(process.cwd(), "data", "content", "open5e.sqlite");
+if (!fs.existsSync(contentDb)) {
+  say(`  warning: no content pack at ${contentDb}; shops open with bare shelves (set CONTENT_DB_PATH)`);
+}
 const runs = [];
 for (let run = 1; run <= RUNS; run += 1) {
   runs.push(await playRun(run));
@@ -454,6 +591,7 @@ const summary = {
 };
 const report = {
   label: LABEL,
+  scenario: args.scenario,
   version: VERSION,
   provider: PROVIDER,
   model: args.model,

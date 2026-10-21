@@ -34,6 +34,18 @@ export function declaredThisTurn(campaignId: string, characterId: string): boole
   );
 }
 
+// What the character's player wrote since the DM last spoke, table talk
+// aside: the words a turn's end may be read from (src/lib/dm/claims.ts
+// readTurnEndInWords).
+export function wordsThisTurn(campaignId: string, characterId: string): string {
+  const messages = listRecentMessages(campaignId, 50);
+  const since = messages.slice(messages.findLastIndex(isNarration) + 1);
+  return since
+    .filter((message) => message.authorType === "player" && message.characterId === characterId && !message.content.startsWith("(ooc)"))
+    .map((message) => message.content)
+    .join("\n\n");
+}
+
 // The character whose own turn waits on their player: a player's character
 // (not a companion) who could act, and whose player has not spoken since the
 // DM last did. GAME STATE says so (src/lib/dm/turn.ts buildEncounterState),

@@ -54,9 +54,9 @@ const PINNED_PATHS = new Map([
 // the change that removes them. An entry no longer found fails the test too,
 // so this list only shrinks.
 const LEFTOVERS = new Map([
-  ["src/app/setup/StorytellerStep.tsx", {
-    ids: ["qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q8_0.gguf", "qwen3.6-35b", "qwen3.6:35b-a3b-q8_0", "qwen3.6-dm", "models/qwen3.6-dm.modelfile"],
-    why: "the guided setup's instructions for starting a model server, which name the model to download; what to recommend instead is upstream's call",
+  ["src/app/setup/StartHints.tsx", {
+    ids: ["qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q8_0.gguf", "qwen3.6-35b", "qwen3.6:35b-a3b-q8_0", "qwen3.6-dm", "models/qwen3.6-dm.modelfile", "gpt-oss-20b", "gpt-oss-20b-mxfp4.gguf"],
+    why: "the guided setup's instructions for starting a model server, which name the model to download: the recommended storyteller, and gpt-oss-20b as the 16 GB minimum (the maintainer's call, 2026-10-19, docs/text-backends.md)",
   }],
 ]);
 

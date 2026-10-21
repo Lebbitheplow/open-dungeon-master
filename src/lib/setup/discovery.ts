@@ -5,6 +5,7 @@
 // reading the answers are in discovery-logic.ts.
 import { comfyStatus, type ComfyStatus } from "@/lib/comfyui";
 import { hostAvailability } from "@/lib/harness/discover";
+import { describeMachine, machine, storytellerFit, type StorytellerFit } from "@/lib/model-registry/hardware";
 import { replyTimeout } from "@/lib/reply-timeout";
 import {
   COMFYUI_PORT,
@@ -50,6 +51,9 @@ export type ScanResult = {
   comfyui: ({ url: string } & Pick<ComfyStatus, "checkpoints" | "models" | "hardware">) | null;
   kokoro: { url: string; voices: string[] } | null;
   whisper: { url: string } | null;
+  // This machine and the local storyteller it can run, for the wizard's
+  // hints when no model server answered.
+  machine?: { summary: string; fit: StorytellerFit };
 };
 
 async function getJson(url: string, timeoutMs: number, headers: Record<string, string> = {}) {
@@ -121,11 +125,12 @@ export async function scanLocalServices(ownPort = process.env.PORT): Promise<Sca
   const inContainer = hostAvailability() === "container";
   const hosts = scanHosts(inContainer);
   const ports = textPorts(ownPort);
-  const [textResults, comfyui, kokoro, whisper] = await Promise.all([
+  const [textResults, comfyui, kokoro, whisper, here] = await Promise.all([
     Promise.all(hosts.flatMap((host) => ports.map(({ port, guess }) => findTextServer(host, port, guess)))),
     firstOf(hosts, findComfy),
     firstOf(hosts, findKokoro),
     firstOf(hosts, findWhisper),
+    machine(),
   ]);
   // Host networking answers the same server on both names; keep the first.
   const seenPorts = new Set<string>();
@@ -136,7 +141,7 @@ export async function scanLocalServices(ownPort = process.env.PORT): Promise<Sca
     seenPorts.add(port);
     return true;
   });
-  return { inContainer, text, comfyui, kokoro, whisper };
+  return { inContainer, text, comfyui, kokoro, whisper, machine: { summary: describeMachine(here), fit: storytellerFit(here) } };
 }
 
 export type ModelListing =

@@ -19,11 +19,12 @@ import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
-import { keepsFullValue, listPriceCp } from "@/lib/dm/trade-value";
+import { keepsFullValue, listPriceCp, magicValueOf } from "@/lib/dm/trade-value";
 import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addStock,
   askingPriceCp,
+  costToCopper,
   findStockLine,
   haggleDc,
   haggleStep,
@@ -34,11 +35,13 @@ import {
   refillStock,
   renderShopsForPrompt,
   restockDue,
+  SHELF_RARITIES,
   SIZE_MARKUP,
   stockFromPool,
   takeStock,
   type Shop,
 } from "@/lib/dm/shop-logic";
+import { magicItemValueCp, pricedRarity } from "@/lib/srd/magic-item-value";
 import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -178,18 +181,31 @@ function publishSheet(campaign: Campaign, sheetId: string) {
 // The pool a shop of this kind stocks from: the pack's items of the right
 // kinds, filtered by the kind's words when it has any. Once per name: the
 // pack files some items under two documents, and a shelf with two "Barrel"
-// lines sells one of them and strands the other.
-export function stockPool(kind: string): Array<{ name: string; cost: string }> {
+// lines sells one of them and strands the other. The first item each of the
+// kind's staples names is marked, and always goes on the shelf. The pack
+// prices no magic item, so each is priced by its rarity and carries that
+// rarity for the shelf's size to choose by; a curiosity shop opened bare.
+export function stockPool(kind: string): Array<{ name: string; cost: string; staple?: boolean; rarity?: string }> {
   const spec = KIND_POOL[normalizeShopKind(kind)];
-  const pool: Array<{ name: string; cost: string }> = [];
+  const pool: Array<{ name: string; cost: string; staple?: boolean; rarity?: string }> = [];
   const seen = new Set<string>();
+  const stapled = new Set<string>();
+  const baseCost = spec.kinds.includes("magic_item") ? baseCostLookup() : null;
   for (const itemKind of spec.kinds) {
-    for (const item of searchItems({ kind: itemKind, limit: 400 })) {
-      if (!item.cost || (spec.match && !spec.match.test(item.name)) || seen.has(textKey(item.name))) {
+    for (const item of packItemsOfKind(itemKind)) {
+      const magic = baseCost && item.kind === "magic_item" ? magicItemValueCp(item, baseCost) : undefined;
+      const cost = magic === undefined ? item.cost : magic === null ? "" : `${magic} cp`;
+      if (!cost || (spec.match && !spec.match.test(item.name)) || spec.skip?.includes(item.category) || seen.has(textKey(item.name))) {
         continue;
       }
       seen.add(textKey(item.name));
-      pool.push({ name: item.name, cost: item.cost });
+      const staple = spec.staples?.exec(item.name)?.[1];
+      const first = staple !== undefined && !stapled.has(textKey(staple));
+      if (first) {
+        stapled.add(textKey(staple));
+      }
+      const rarity = magic ? pricedRarity(item.rarity) : null;
+      pool.push({ name: item.name, cost, ...(first ? { staple: true } : {}), ...(rarity ? { rarity } : {}) });
     }
   }
   return pool.length ? pool : bundledPool(spec);
@@ -214,6 +230,36 @@ function bundledPool(spec: (typeof KIND_POOL)[keyof typeof KIND_POOL]): Array<{ 
   return rows
     .filter((row): row is { name: string; cp: number } => row.cp !== null && row.cp > 0 && (!spec.match || spec.match.test(row.name)))
     .map((row) => ({ name: row.name, cost: `${row.cp} cp` }));
+}
+
+// The pack's weapons and armor priced by name, for a magic item made from
+// one: "plate" finds Plate, "chain shirt" Chain Shirt.
+function baseCostLookup(): (base: string) => number | null {
+  const prices = new Map<string, number>();
+  for (const item of [...packItemsOfKind("weapon"), ...packItemsOfKind("armor")]) {
+    const cp = costToCopper(item.cost);
+    if (cp !== null && !prices.has(textKey(item.name))) {
+      prices.set(textKey(item.name), cp);
+    }
+  }
+  return (base) => prices.get(textKey(base)) ?? prices.get(textKey(`${base} armor`)) ?? null;
+}
+
+// Every pack item of one kind. The search hands back at most 200 rows a call,
+// sorted by name, so one call stocked a general store from the gear before
+// "M" (no torch, rope or rations, ever): every page is read until the rows
+// run out.
+const PAGE = 200;
+function packItemsOfKind(kind: "weapon" | "armor" | "gear" | "magic_item"): ReturnType<typeof searchItems> {
+  const found: ReturnType<typeof searchItems> = [];
+  for (let offset = 0; offset < PAGE * 20; offset += PAGE) {
+    const page = searchItems({ kind, limit: PAGE, offset });
+    found.push(...page);
+    if (page.length < PAGE) {
+      break;
+    }
+  }
+  return found;
 }
 
 // A restock: a prepared shelf is refilled to what its author wrote; a shop
@@ -376,6 +422,14 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   }
   const line = removal.item;
   const carried = line.name;
+  // A shop buys the magic it would sell (SRD 5.2, Magic Item Rarity). Anything
+  // rarer finds a buyer among "the wealthiest nobles" (SRD 5.1, Selling
+  // Treasure), whom the story provides and purchase settles.
+  const magic = magicValueOf(line);
+  if (magic && !SHELF_RARITIES[shop.size].includes(magic.rarity)) {
+    const where = SHELF_RARITIES.city.includes(magic.rarity) ? "changes hands only in a city" : "is bought by no shop, only by the wealthiest nobles";
+    return { error: `${shop.name} does not buy ${carried}: a ${magic.rarity} magic item ${where}. A buyer the story provides is settled with purchase. Nothing was sold.`, refused: "rules" };
+  }
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure), priced by the worth they were given; a name is never
   // read for a price (src/lib/dm/trade-value.ts).

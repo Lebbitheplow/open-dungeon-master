@@ -159,6 +159,9 @@ export function planPcAttack(input: {
   args: PcAttackArgs;
   sheets: CharacterSheet[];
   sheetsById: Map<string, CharacterSheet>;
+  // A dry run asking whether the attack would stand once its attacker walked
+  // into reach (pc_attack's approach, src/lib/dm/pc-attack-approach.ts).
+  skipReach?: boolean;
 }): AttackPlan | { refused: ToolError } {
   const { campaign, turn, encounter, sheet, args, sheets, sheetsById } = input;
 
@@ -208,7 +211,7 @@ export function planPcAttack(input: {
 
   // Battle-map positions are authoritative; players move their own tokens,
   // so an out-of-reach attack is refused rather than auto-approached.
-  const rangeError = checkPcAttackRange(encounter.id, sheet.id, enemy.id, {
+  const rangeError = input.skipReach ? null : checkPcAttackRange(encounter.id, sheet.id, enemy.id, {
     ranged: profile.ranged,
     rangeTiles: profile.rangeTiles,
     reachTiles: profile.reachTiles,

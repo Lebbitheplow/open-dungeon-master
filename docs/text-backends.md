@@ -13,7 +13,9 @@ first. No model is named in the code: a server that lists exactly one chat
 model runs it with the model field left blank, and with several the admin
 picks one (the guided setup, or Admin > Text model defaults). The model these
 settings are tuned for is base Qwen3.6-35B-A3B Q8 with a 64K context and
-Qwen's recommended non-thinking samplers. A short default context silently
+Qwen's recommended non-thinking samplers; it needs about 28 GB of graphics
+memory at Q4, and a 16 GB card runs gpt-oss-20b instead
+([Hardware for a local model](#hardware-for-a-local-model)). A short default context silently
 truncates the long DM prompt (party sheets, scene, story summary), which
 makes the model loop; the 64K window is what fixes that. Direct llama-server
 run:
@@ -37,9 +39,15 @@ on for tool calls. If the server runs with `--api-key`, set
 addresses: a player's campaign always runs on the server's, and only an
 admin's own campaign can set another in its Story AI panel.
 
-Prefer Ollama? The same model is committed as a Modelfile with the context
-and samplers baked in; build it and point the app at
-`http://127.0.0.1:11434/v1`, model `qwen3.6-dm`:
+Use llama.cpp where you can. Ollama renders the chat with its own code
+rather than the model's template, has no reasoning budget, and ships some
+models with a presence penalty that suppresses tool calls (the app now sends
+0). Qwen3.5 9B on Ollama called no tool in the six town turns it finished,
+narrating or writing nothing instead; llama-server, sent the same request
+for the same model at the same Q4_K_M quant, called them. If Ollama is what
+you have, the same 35B model is committed as a Modelfile with the context and
+samplers baked in; build it and point the app at `http://127.0.0.1:11434/v1`,
+model `qwen3.6-dm`:
 
 ```bash
 ollama pull qwen3.6:35b-a3b-q8_0
@@ -85,6 +93,10 @@ The app handles this per request, so you do not configure it on the server:
 - It sends `chat_template_kwargs: { enable_thinking: true }` on the **tool-decision**
   model calls only, and keeps the **final narration** call non-thinking so it still
   streams to players smoothly.
+- Every other call (campaign setup, the story arc, the helpers that read a reply)
+  asks for no thinking in so many words. A model that thinks by default (Qwen3.5 on a
+  stock llama-server) otherwise spent the whole 4,096-token reply of the setup call
+  thinking and wrote nothing.
 - A model the catalog says does not reason is not asked to think (it would only sample
   cooler for nothing). The Context panel's "Fitted to this model" lines say when that
   happened.
@@ -100,6 +112,32 @@ Expect the tradeoff: tool-decision calls run about 50-100s and a full turn about
 1.5-3 minutes on a single local GPU. Combat and multi-tool turns sit at the longer
 end.
 
+A small model (below) gets a budget from the app as well, for servers that have
+none: once its thinking passes about 6,000 characters (some 1,500 tokens), the
+call is cut off and asked again without thinking. Qwen3.5 9B on Ollama thought
+18,700 characters on one turn and then answered nothing; its useful thinking ran
+1,000 to 2,500.
+
+### The prompt cache
+
+Most of a turn's prompt is the same as the last turn's: the tool definitions and
+the rules, 36K of the default 40K tokens. The app sends them first and unchanged,
+as the system message, and the game state after them as a message of its own,
+before the transcript. llama-server can then reuse that start from one turn to the
+next, which matters most for Qwen3.5 and 3.6 (hybrid models) and Gemma (sliding
+window): their cache can only be picked up again where a message begins, and while
+the game state sat inside the system message every turn read the whole prompt
+again. llama-server's default checkpoint settings are enough; nothing needs setting.
+
+| First call of a turn | Before | Now |
+|---|---|---|
+| Qwen3.6-35B (the default), prompt reused | none of 40K tokens | 37K of 40K |
+| Qwen3.6-35B at Q2, AMD BC-250 | about 145 s | 14 to 33 s |
+| Qwen3.5 9B at Q4, AMD BC-250 | about 55 s | 13 to 26 s |
+
+A turn that starts a fight still reads it all once, for the fight's own tools and
+rules; every turn of the fight after that reuses them.
+
 ### presence_penalty
 
 Keep `presence_penalty` at 0 for the DM. A meaningful presence penalty under the long
@@ -112,11 +150,162 @@ The pin is written after the per-role sampling settings are applied, and no samp
 profile offers `presence_penalty`, so this cannot be reintroduced from a settings
 screen. Breaking dice rolling should not be one checkbox away.
 
+## Hardware for a local model
+
+The storyteller runs on the GPU, and the GPU's memory decides which model plays:
+
+| Graphics memory | Storyteller | File |
+|---|---|---|
+| about 28 GB or more | Qwen3.6-35B-A3B, recommended (above): Q4_K_M from about 28 GB, Q8 from about 45 GB | 22 to 38 GB |
+| 16 GB, the minimum | gpt-oss-20b, MXFP4 | 12.1 GB |
+| under 16 GB | not supported | |
+
+Graphics memory is a card's own memory or, on a machine whose CPU and GPU share
+one pool (Apple silicon, AMD Ryzen AI Max), the share the system leaves the GPU: a
+Mac needs 24 GB or more for the minimum. The 35B is a mixture of experts, so on a
+PC its experts can wait in system memory (llama-server's `--n-cpu-moe`): a 16 GB
+card with 32 GB of system memory runs it at Q4, and the desktop app sets that up
+itself. gpt-oss-20b fits a 16 GB card whole.
+
+Below the minimum is not supported, and problems there are not treated as bugs. A
+smaller model may limp through a scene on the short rules (below), but it skips
+rolls, attacks out of turn and narrates past the dice often enough that the table
+stops trusting it. Use an API key, an agent program or a human Dungeon Master on a
+smaller machine instead.
+
+### The 16 GB minimum: gpt-oss-20b
+
+OpenAI's gpt-oss-20b has 21 billion parameters with 3.6 billion active, so it plays
+the full rules and the full tool set at the speed of a much smaller model. The file
+is `gpt-oss-20b-MXFP4.gguf` from
+[ggml-org/gpt-oss-20b-GGUF](https://huggingface.co/ggml-org/gpt-oss-20b-GGUF):
+
+```bash
+llama-server -m gpt-oss-20b-MXFP4.gguf \
+  -c 65536 --jinja \
+  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --reasoning-budget 1024 \
+  --port 8001 --alias gpt-oss-20b
+```
+
+Leave the sampling at llama.cpp's defaults, as it was measured. It reasons in a
+channel of its own, which the app reads apart from the story; a tool call it starts
+in the prose ("to=functions.request_roll") is cut before the table sees it. Its
+window is cheap: half its layers look back only 128 tokens, so 64K at `q8_0` takes
+about 1 GB beside the file.
+
+Measured with `scripts/smoke-local.mjs` on the full rules: the town (eight turns that
+travel, meet an innkeeper, persuade, buy, sneak and fight), the ford (five, with an
+ambush) and the skirmish (nine, a fight over several rounds, each line spoken by
+whoever is up). A check is missed when its turn lacks the tool call it needs; a slip
+is something a player should never read (a recited turn order, a leaked call, a
+repeated passage); an invented blow is a hit the narration lands that no tool rolled.
+
+| Model, machine | Town (8 turns a run) | Ford (5) | Skirmish (9) | Seconds a turn |
+|---|---|---|---|---|
+| gpt-oss-20b, AMD BC-250 | 2 runs: 5 missed, 0 slips | 2 runs: 0, 0 | 4 runs: 6 missed, 0 slips | 90 to 160 |
+| Qwen3.6-35B-A3B Q8, Framework Desktop (the default) | 2 runs: 0, 1 | (not rerun) | 5 runs: 2 missed, 0 slips | 135 to 205 |
+
+The Framework Desktop is an AMD Ryzen AI Max+ 395 with 128 GB shared by its
+Radeon 8060S graphics; its real play on the default model took a median of 90
+seconds a turn. The skirmish, a fight of identical lines, is where every model
+slipped most. Before a player's turn ended where the table was told it ends
+(pc_attack's approach and endTurn, a narration or the player's own words handing
+the turn on), the same skirmish gave gpt-oss-20b 14 missed and 15 slips in five
+runs, and the default model 8 and 7 in four: a turn the player had ended stayed
+open, and the next player's words went to the same character. Two of gpt-oss's
+six misses were replies llama.cpp threw away whole: when the reasoning budget
+ends gpt-oss's thought and it writes on without opening its answer, llama.cpp's
+parser refuses the reply (every build from the app's b10621 to the newest), and
+the app now asks for it once more. Two of its town misses were a player acting
+on another character's turn, which the DM rightly answered without an attack.
+The town runs had no content pack, so the inn's shop opened bare; a general
+store now always stocks everyday gear such as torches, rations and rope. One
+run of the default model narrated a hit after the fight had ended, on a goblin
+already dead; an attack roll with no fight running is now refused. No other run
+narrated a blow that no tool landed. One gpt-oss skirmish run narrated an
+ambush with no fight started, which began a turn late; an attack begun on the
+party in prose is now read as a fight starting, and the DM is asked to start
+it or to say that nobody attacked, so a misread threat costs a call, not a
+fight.
+
+Measured before those changes: the 35B at Q2 on the BC-250 played a fight about
+as well as gpt-oss-20b (two skirmish runs: 1 missed, 3 slips), slower (130 to 190
+seconds a turn), and with more slips around the town; gpt-oss-20b on the
+Framework Desktop ran 110 to 190 seconds a turn. gpt-oss-20b is the minimum for
+its speed and its memory: it leaves room for a picture model beside it on a
+bigger machine. Run it on a llama.cpp release build: a fork built for another
+model's speculative decoding ended its streams early and showed its reasoning.
+
+### Below the minimum: short rules
+
+A model with fewer than 16 billion parameters is played differently, with
+nothing to set. The app reads the size from llama-server's `/v1/models`
+(`meta.n_params`), from Ollama's `/api/show`, or else from the size the model's
+name states (`qwen3.5-9b`, `gemma4:12b`), hosted or local alike. The Context
+panel's "Fitted to this model" lines say when it applied. For such a model the
+turn:
+
+- carries short rules: a few plain numbered steps naming the core tools (about
+  800 tokens, 330 more in a fight) instead of the full rules (6,000 to 9,000);
+- offers the compact tool set at any window, with the rest one `more_tools` call
+  away;
+- leaves the server's dice markers out of the past narration it reads (a 9B model
+  copied them into its prose instead of rolling).
+
+`DM_BRIEF_RULES=0` in the environment plays a small model like any other, and
+`DM_BRIEF_RULES=1` gives any model the short rules. Thinking stays on for the tool
+calls. This keeps a small model at the table; it does not make one supported. What
+was measured on the BC-250 below the minimum, for the record (the town, checks
+missed of eight):
+
+| Model, window | File | Rules | Town |
+|---|---|---|---|
+| Qwen3.5 9B Q8_0, 64K | 9.5 GB | short | 1 and 2 of 8 |
+| Qwen3.5 9B Q4_K_M, 64K | 5.7 GB | short | 0 and 1 of 8 |
+| Gemma 4 12B QAT UD-Q4_K_XL, 64K | 6.7 GB | short | 1 of 8 |
+| Qwen3.5 9B UD-IQ3_XXS, 24K | 4.0 GB | short | 0 of 8 |
+
+A small model is weakest on the battle map: it attacks out of turn and cannot count squares, so an
+attack out of reach is refused with the square to walk to. Qwen3 14B, Qwen3.5 9B at
+UD-IQ2_M and Ministral 3 14B missed more; Gemma 4 26B-A4B at UD-Q3_K_XL ran the
+BC-250 out of memory.
+
+### AMD BC-250
+
+The BC-250 is the 16 GB box the minimum was measured on.
+
+- The 16 GB of GDDR6 is shared by the CPU and the GPU. Set the VRAM carve-out low
+  (512 MB) and let the GPU use the rest as GTT, with the kernel arguments
+  `amdgpu.gttsize=14750 ttm.pages_limit=3776000`.
+- Build llama.cpp for Vulkan: `cmake -B build -DGGML_VULKAN=ON && cmake --build build -j`
+  (on Fedora the build also needs `spirv-headers-devel`). The HIP build failed for
+  this GPU (gfx1013) at llama.cpp ff5a233.
+- Run one model server at a time. A second one, or a service left enabled, runs the
+  box out of memory and the kernel kills one of them.
+
+```bash
+llama-server -m gpt-oss-20b-MXFP4.gguf --alias gpt-oss-20b \
+  -c 65536 -np 2 --kv-unified --jinja -ngl 99 \
+  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --reasoning-budget 1024 --cache-ram 0 \
+  --port 8001
+```
+
+- With `--kv-unified` the `-c` is shared by both slots, while `/props` reports it
+  whole for each: a DM turn and the app's helper call running at once must fit in
+  it together. A fight on the full rules runs to about 52K tokens.
+- `--cache-ram 0` keeps llama-server from holding extra prompt cache in system
+  memory, which on this box is the memory the model needs.
+
 ## Local models (legacy "Local" provider, Ollama)
 
-The app uses the Gemma 4 quantization-aware-trained (QAT, Q4_0) builds, which
-keep close to full-precision quality at a fraction of the memory. Any of
-these work — pull what fits your RAM:
+The legacy Ollama-native provider was built around the Gemma 4
+quantization-aware-trained (QAT, Q4_0) builds. The storyteller's minimum
+([Hardware for a local model](#hardware-for-a-local-model)) holds here too: the
+E2B, E4B and 12B are below 16 billion parameters and play only on the short
+rules, which is not supported for the storyteller, though any of them serves as
+the utility model for summaries:
 
 ```bash
 ollama pull gemma4:e2b-it-qat       # 4.3 GB
@@ -361,4 +550,6 @@ on the 12B), and it only bites when the cache goes cold on a very long story;
 set `LOCAL_TEXT_CONTEXT` to cap the window if you'd rather bound that.
 Windows caps the default local context at 65K tokens for smoother first-run
 behavior, but you can still set `LOCAL_TEXT_CONTEXT` higher if your machine
-has the headroom.
+has the headroom. A model under 16B parameters is capped at 32K: Qwen3.5 9B's
+native 262K window would ask Ollama for about 8 GB of cache, more than the
+weights, on the cards such a model is chosen for.

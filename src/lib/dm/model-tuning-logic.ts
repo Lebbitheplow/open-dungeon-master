@@ -25,6 +25,10 @@ export type ModelTuning = {
   // with the rest one more_tools call away.
   toolProfile: "full" | "lean" | "compact";
   leanTools: boolean;
+  // The short rules (src/lib/dm/prompt-rules.ts briefCoreText): a small
+  // model reads a few plain lines and the compact tools better than the
+  // whole rulebook, whatever its window.
+  briefRules: boolean;
   thinking: boolean;
   // The most a reply may run to, when the catalog caps the model below the
   // configured default; null keeps the default.
@@ -42,6 +46,18 @@ export const MIN_STORY_ROOM_TOKENS = 32_000;
 // windows where the rules, the tools and a reply did not fit together) get
 // the compact core and its more_tools (the context audit's F02).
 export const MIN_LEAN_ROOM_TOKENS = 24_000;
+// A model with fewer parameters than this is played on the compact tools and
+// the short rules. Qwen3.5 9B on the full set and rules (a 38K prompt, 75
+// tools) skipped the roll on an explicit search and spoke for the players;
+// the 27B and 35B the docs recommend sit well above the line, and the 7B to
+// 14B models that fit an 8 to 16 GB card sit below it.
+export const SMALL_MODEL_PARAMS = 16e9;
+// The most a small model may think before a tool-deciding call is asked
+// again without thinking (model-client.ts reasoningBudgetChars): about 1,500
+// tokens, between the 1,024 to 2,048 the docs ask a server to cap. Qwen3.5 9B
+// on Ollama, which has no budget, thought 18,700 characters and answered
+// nothing; its useful thoughts ran 1,000 to 2,500.
+export const SMALL_MODEL_REASONING_CHARS = 6_000;
 
 function envSwitch(value: string | undefined): boolean | null {
   const raw = (value ?? "").trim();
@@ -67,13 +83,26 @@ export function tuneForModel(input: {
   leanToolTokens?: number;
   catalog: CatalogFacts | null;
   configuredOutputTokens: number;
-  env?: { leanTools?: string; thinking?: string; toolProfile?: string };
+  // The model's parameter count where the server or its name says; null
+  // when nothing does.
+  parameters?: number | null;
+  env?: { leanTools?: string; thinking?: string; toolProfile?: string; briefRules?: string };
 }): ModelTuning {
   const notes: string[] = [];
   const { catalog } = input;
 
   const profileForced = profileSwitch(input.env?.toolProfile);
   const leanForced = envSwitch(input.env?.leanTools);
+  const briefForced = envSwitch(input.env?.briefRules);
+  const small = typeof input.parameters === "number" && input.parameters > 0 && input.parameters < SMALL_MODEL_PARAMS;
+  const briefRules = briefForced ?? small;
+  if (briefForced) {
+    notes.push("Short rules: DM_BRIEF_RULES=1 in the server's environment.");
+  } else if (briefRules) {
+    notes.push(
+      `Short rules and the compact tool set: the model has about ${Math.round((input.parameters ?? 0) / 1e9)}B parameters, and a small model follows a few plain rules and fewer tools better than the whole rulebook.`,
+    );
+  }
   const room = input.windowTokens - input.fullToolTokens;
   const leanRoom = input.leanToolTokens === undefined ? Number.POSITIVE_INFINITY : input.windowTokens - input.leanToolTokens;
   let toolProfile: ModelTuning["toolProfile"];
@@ -86,6 +115,8 @@ export function tuneForModel(input: {
   } else if (catalog && !catalog.toolCall) {
     toolProfile = "lean";
     notes.push("Trimmed tool set: the model catalog says this model takes no tool calls, so it is offered the fewest.");
+  } else if (briefRules) {
+    toolProfile = "compact";
   } else if (room >= MIN_STORY_ROOM_TOKENS) {
     toolProfile = "full";
   } else if (leanRoom >= MIN_LEAN_ROOM_TOKENS) {
@@ -119,5 +150,5 @@ export function tuneForModel(input: {
     notes.push(`Replies capped at ${tokens(catalog.outputTokens)} tokens, the most the model catalog says it writes.`);
   }
 
-  return { toolProfile, leanTools, thinking, outputCap, notes };
+  return { toolProfile, leanTools, briefRules, thinking, outputCap, notes };
 }

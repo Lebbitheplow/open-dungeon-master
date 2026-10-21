@@ -145,27 +145,65 @@ export function addStock(stock: StockLine[], itemName: string, qty: number, pric
   return [...stock, { itemName: itemName.slice(0, 80), qty, priceCp: Math.max(1, Math.round(priceCp)), note: note.slice(0, 120) }];
 }
 
-// Stock from a pool of priced items: a fixed count of lines for the size,
-// chosen by the dice handed in, a few of each of the cheap things and one
-// of anything dear.
+// The magic a shelf of this size carries (SRD 5.2, Magic Item Rarity):
+// common items are often sold in towns and cities, uncommon and rare ones
+// usually only in cities, and nothing rarer is for sale. A curiosity shop
+// the DM puts in a village still keeps its commons.
+export const SHELF_RARITIES: Record<ShopSize, readonly string[]> = {
+  hamlet: ["common"],
+  village: ["common"],
+  town: ["common"],
+  city: ["common", "uncommon", "rare"],
+};
+
+// How much of a shelf each rarity takes, by weight, so a city's curiosity
+// shop is mostly things a party might afford beside a few to save for.
+// Goods with no rarity weigh as commons.
+const RARITY_WEIGHT: Record<string, number> = { "": 3, common: 3, uncommon: 2, rare: 1 };
+
+// One of the items left: a rarity by its weight when the pool mixes them,
+// then any item of it.
+function pickIndex(items: ReadonlyArray<{ rarity: string }>, random: () => number): number {
+  const tiers = [...new Set(items.map((item) => item.rarity))];
+  if (tiers.length < 2) {
+    return Math.floor(random() * items.length);
+  }
+  const weights = tiers.map((tier) => RARITY_WEIGHT[tier] ?? 1);
+  let roll = random() * weights.reduce((sum, weight) => sum + weight, 0);
+  const tier = tiers.find((_, index) => (roll -= weights[index]) < 0) ?? tiers[tiers.length - 1];
+  const inTier = items.flatMap((item, index) => (item.rarity === tier ? [index] : []));
+  return inTier[Math.floor(random() * inTier.length)];
+}
+
+// Stock from a pool of priced items: the staples the pool marks first, then
+// a fixed count of lines for the size, chosen by the dice handed in; a few of
+// each of the cheap things and one of anything dear. A magic item comes only
+// in the rarities the size sells.
 export function stockFromPool(
-  pool: Array<{ name: string; cost: string; category?: string }>,
+  pool: Array<{ name: string; cost: string; category?: string; staple?: boolean; rarity?: string }>,
   size: ShopSize,
   random: () => number = Math.random,
 ): StockLine[] {
   const priced = pool
-    .map((item) => ({ name: item.name, cp: costToCopper(item.cost) }))
-    .filter((item): item is { name: string; cp: number } => item.cp !== null);
+    .filter((item) => !item.rarity || SHELF_RARITIES[size].includes(item.rarity))
+    .map((item) => ({ name: item.name, cp: costToCopper(item.cost), staple: Boolean(item.staple), rarity: item.rarity ?? "" }))
+    .filter((item): item is { name: string; cp: number; staple: boolean; rarity: string } => item.cp !== null);
+  const line = (item: { name: string; cp: number }): StockLine => {
+    const qty = item.cp >= 50 * COPPER_PER_GOLD ? 1 : item.cp >= 5 * COPPER_PER_GOLD ? 1 + Math.floor(random() * 3) : 2 + Math.floor(random() * 6);
+    return { itemName: item.name, qty, priceCp: item.cp, note: "" };
+  };
+  const byName = (a: StockLine, b: StockLine) => compareNames(a.itemName, b.itemName);
+  const staples = priced.filter((item) => item.staple).map(line).sort(byName);
   const picked: StockLine[] = [];
-  const remaining = [...priced];
+  const remaining = priced.filter((item) => !item.staple);
   const want = Math.min(SIZE_STOCK_LINES[size], remaining.length);
   while (picked.length < want && remaining.length) {
-    const index = Math.floor(random() * remaining.length);
-    const [item] = remaining.splice(index, 1);
-    const qty = item.cp >= 50 * COPPER_PER_GOLD ? 1 : item.cp >= 5 * COPPER_PER_GOLD ? 1 + Math.floor(random() * 3) : 2 + Math.floor(random() * 6);
-    picked.push({ itemName: item.name, qty, priceCp: item.cp, note: "" });
+    const [item] = remaining.splice(pickIndex(remaining, random), 1);
+    picked.push(line(item));
   }
-  return picked.sort((a, b) => compareNames(a.itemName, b.itemName));
+  // Staples lead, so the twelve lines the prompt and the tool's reply show
+  // always hold them.
+  return [...staples, ...picked.sort(byName)];
 }
 
 // A restock of a prepared shelf: every prepared line back up to its
@@ -182,10 +220,23 @@ export function refillStock(stock: StockLine[], prepared: StockLine[]): StockLin
 }
 
 // The item kinds each shop kind stocks, for the pool the tool draws from.
-export const KIND_POOL: Record<ShopKind, { kinds: Array<"weapon" | "armor" | "gear" | "magic_item">; match?: RegExp }> = {
-  general: { kinds: ["gear"] },
+// staples are what the kind always carries, one line each (the pool marks the
+// first name each one matches: the pack's two editions write "Rations" and
+// "Rations (1 day)"), beside the lines the dice pick. A general store drew
+// ten lines from some 300 pieces of gear, so a torch was on a village shelf
+// about one visit in thirty and "I buy a torch" was refused (2026-10-20).
+// skip names the pack's categories the kind never sells: a general store
+// offered camels, galleys, a cow and Assassin's Blood. Magic items are priced
+// by rarity (src/lib/srd/magic-item-value.ts); an apothecary's are its
+// potions and oils, not a Periapt of Proof against Poison.
+export const KIND_POOL: Record<ShopKind, { kinds: Array<"weapon" | "armor" | "gear" | "magic_item">; match?: RegExp; staples?: RegExp; skip?: readonly string[] }> = {
+  general: {
+    kinds: ["gear"],
+    staples: /^(torch|rations|rope|waterskin|tinderbox|bedroll|backpack|oil(?! of)|candle|blanket)\b/i,
+    skip: ["trade good", "poison", "waterborne vehicle", "land vehicle", "mount", "wondrous item"],
+  },
   smith: { kinds: ["weapon", "armor"] },
-  apothecary: { kinds: ["gear", "magic_item"], match: /potion|antitoxin|healer|herb|oil|vial|acid|poison/i },
+  apothecary: { kinds: ["gear", "magic_item"], match: /potion|antitoxin|healer|herb|oil|vial|acid|poison/i, skip: ["wondrous item", "ammunition"] },
   outfitter: { kinds: ["gear", "armor"], match: /pack|rope|tent|bedroll|rations|torch|lantern|cloak|boots|leather|climber|waterskin|backpack|tinder/i },
   curiosities: { kinds: ["magic_item"] },
 };

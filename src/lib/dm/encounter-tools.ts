@@ -86,7 +86,8 @@ import {
   EXTRA_ENCOUNTER_TOOL_NAMES,
   extraEncounterTools,
 } from "@/lib/dm/encounter-tools-extra";
-import { handlePcAttack, pcAttackTool } from "@/lib/dm/pc-attack";
+import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-attack";
+import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { wakeDm } from "@/lib/dm/wake";
@@ -187,8 +188,11 @@ const hasAlert = (sheet: CharacterSheet) =>
 const startArgsSchema = z.object({
   enemies: z.array(enemyRequestSchema).min(1).max(8),
   summary: z.string().optional(),
-  surprised: z.enum(["none", "enemies", "party"]).optional(),
-  ambush: z.enum(["enemies", "party"]).optional(),
+  // A side that is not one of these ("none", "both" from a weak caller) is
+  // the same as none given: Qwen3.5 9B sent ambush "none" twice and the
+  // whole fight was refused.
+  surprised: z.preprocess((value) => (value === "none" || value === "enemies" || value === "party" ? value : undefined), z.enum(["none", "enemies", "party"]).optional()),
+  ambush: z.preprocess((value) => (value === "enemies" || value === "party" ? value : undefined), z.enum(["enemies", "party"]).optional()),
   scene: z.string().max(40).optional(),
   // Feet between the party and the nearest enemy as the fight opens. A
   // value that is no distance (null, "", 0 from a weak tool caller) is the
@@ -205,28 +209,31 @@ const startArgsSchema = z.object({
 });
 
 // Accepts the documented {enemies:[...]} shape, or flat monster/name/count
-// keys (the textual-salvage path cannot produce arrays).
-function parseStartArgs(rawArguments: string): z.infer<typeof startArgsSchema> | null {
+// keys (the textual-salvage path cannot produce arrays). A refusal names the
+// fields the documented shape rejected, so the next call can fix them.
+function parseStartArgs(rawArguments: string): { args: z.infer<typeof startArgsSchema> } | { fields: string[] } {
   let raw: unknown;
   try {
     raw = JSON.parse(rawArguments || "{}");
   } catch {
-    return null;
+    return { fields: [] };
   }
   const nested = startArgsSchema.safeParse(raw);
   if (nested.success) {
-    return nested.data;
+    return { args: nested.data };
   }
   const flat = enemyRequestSchema
     .extend({ summary: z.string().optional() })
     .safeParse(raw);
   if (flat.success) {
     return {
-      enemies: [{ monster: flat.data.monster, name: flat.data.name, count: flat.data.count, cr: flat.data.cr }],
-      summary: flat.data.summary,
+      args: {
+        enemies: [{ monster: flat.data.monster, name: flat.data.name, count: flat.data.count, cr: flat.data.cr }],
+        summary: flat.data.summary,
+      },
     };
   }
-  return null;
+  return { fields: [...new Set(nested.error.issues.map((issue) => issue.path.join(".")).filter(Boolean))] };
 }
 
 function suggestionLines(campaign: Campaign, sheets: CharacterSheet[]): string {
@@ -244,14 +251,14 @@ function handleStartEncounter(
   // console's façade (src/lib/dm/initiative-ask.ts), on the person's turn.
   actor: DmTurn["actor"] = "human_dm",
 ): ToolResult {
-  const args = parseStartArgs(rawArguments);
-  if (!args) {
+  const parsed = parseStartArgs(rawArguments);
+  if (!("args" in parsed)) {
     return {
-      error:
-        'Invalid start_encounter arguments. Send {"enemies":[{"monster":"goblin","count":3}],"summary":"..."}.',
+      error: `Invalid start_encounter arguments${parsed.fields.length ? ` (fix or leave out: ${parsed.fields.join(", ")})` : ""}. Send {"enemies":[{"monster":"goblin","count":3}],"summary":"..."}.`,
       retry: true,
     };
   }
+  const args = parsed.args;
   if (args.scene !== undefined && !sceneIds().includes(args.scene)) {
     return { error: `Unknown scene "${args.scene}"; use one of: ${sceneIds().join(", ")}.`, retry: true };
   }
@@ -337,7 +344,8 @@ function handleStartEncounter(
   // plan.md 4.1), written with the fight so the tracker shows them at once.
   initLegendaryPools(encounter, enemies, args.lair === true);
   saveEncounter(encounter);
-  const placed = createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet, args.scene, args.from);
+  const caughtUnawares = Boolean(args.ambush) || (args.surprised !== undefined && args.surprised !== "none");
+  const placed = createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet, args.scene, args.from, caughtUnawares);
   publishEncounter(campaign.id);
   // The fight's card: the opening line in ember, "Ambush" when the party
   // was caught, with the combat sting (SceneTitle.tsx).
@@ -532,6 +540,20 @@ function describeOrder(encounter: Encounter): string {
   return encounter.order
     .map((entry, index) => (index === encounter.turnIndex ? `${entry.name} (CURRENT)` : entry.name))
     .join(" > ");
+}
+
+// The refusal for an initiative roll by a character already in the fight's
+// order, or null. The engine rolls initiative when the fight begins, and a
+// model that rolled it again (Qwen3.6-35B at Q2 did, every fight) threw dice
+// in front of the table that changed nothing: recordInitiativeRoll keeps the
+// first count.
+export function heldInitiative(campaignId: string, characterId: string): string | null {
+  const encounter = getActiveEncounter(campaignId);
+  const entry = encounter?.order.find((candidate) => candidate.kind === "pc" && candidate.characterId === characterId);
+  if (!encounter || !entry) {
+    return null;
+  }
+  return `${entry.name} already has initiative ${entry.initiative} in this fight, so nothing was rolled. Initiative order: ${describeOrder(encounter)}. Play the turn of whoever is CURRENT.`;
 }
 
 // Records one PC's initiative result. When the last one lands, builds the
@@ -1021,6 +1043,40 @@ function handleEndTurn(
   };
 }
 
+// pc_attack's endTurn: the player said the attack ends their turn
+// (src/lib/dm/pc-attack-approach.ts). Once the attack resolved, or the walk
+// toward the target spent the turn's movement without reaching it
+// (outOfReach), the turn ends here as end_turn ends it, and the result says
+// who acts next. Any other refused attack ends nothing: the model hears why
+// first. A parked one
+// (physical dice) waits on its roll, and its player ends the turn.
+function endTurnAfterAttack(
+  campaign: Campaign,
+  turn: DmTurn,
+  rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  result: ToolResult,
+): ToolResult {
+  const characterId = endTurnAsked(rawArguments);
+  if (!characterId || result[PC_ATTACK_PARKED] || (result.error && !result.outOfReach)) {
+    return result;
+  }
+  const ended = handleEndTurn(campaign, turn, JSON.stringify({ characterId }), sheets, sheetsById);
+  if (ended.error) {
+    // The last enemy fell to the swing and the fight is over: no turn to end.
+    return getActiveEncounter(campaign.id) ? { ...result, turnNotEnded: ended.error } : result;
+  }
+  return { ...result, turnEnded: Object.fromEntries(Object.entries(ended).filter(([key]) => key !== "ok")) };
+}
+
+// Ends a player's turn the narration already handed on (src/lib/dm/turn.ts):
+// the pointer moves after the narration, as for a turn end_turn resolved,
+// and the backstop plays the enemies it passes (advanceAfterTurn).
+export function resolveTurnFromNarration(turn: DmTurn, sheetId: string) {
+  markTurnResolved(turn, sheetId);
+}
+
 // ---- dispatch ----
 
 export function applyEncounterCall(
@@ -1064,7 +1120,7 @@ export function applyEncounterCall(
         callContext?.toolCallId ?? null,
       );
       markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
-      return { result };
+      return { result: endTurnAfterAttack(campaign, turn, rawArguments, sheets, sheetsById, result) };
     }
     case "cast_at_enemy": {
       const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
