@@ -546,10 +546,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             <div className={cn(ui.card, "p-3")}>
               <PartyStory
                 campaignId={campaign.id}
-                hook={campaign.gameSettings.partyHook}
                 party={campaign.party}
                 canWrite={mayWritePartyBackstory({ isLead, holdsDmSeat: isDm, hasCharacter: mySheets.length > 0 })}
-                canEditHook={steersStory}
                 hasCharacters={sheets.some((sheet) => !(sheet.isCompanion && sheet.companionKind === "guest"))}
               />
             </div>

@@ -423,13 +423,11 @@ export function SidePanelRouter({
                 partyStory={
                   campaign?.gameSettings
                     ? {
-                        hook: campaign.gameSettings.partyHook ?? "",
                         canWrite: mayWritePartyBackstory({
                           isLead,
                           holdsDmSeat: meUserId === campaign.dmUserId || meUserId === campaign.assistantDmUserId,
                           hasCharacter: sheets.some((sheet) => sheet.userId === meUserId && !sheet.isCompanion),
                         }),
-                        canEditHook: steersStory,
                       }
                     : undefined
                 }

@@ -1,8 +1,9 @@
-// Why the party is together (src/lib/dm/party-story.ts): the optional party
-// hook written at campaign setup and the optional shared backstory written in
-// the lobby. Both are skippable, and a skipped one changes nothing: the DM's
-// prompt, the saga planner and the story-setup pass read exactly what they
-// read before. Filled in, each reaches all three. The backstory's edit rule
+// Why the party is together (src/lib/dm/party-story.ts): the optional shared
+// backstory written in the lobby. It is skippable, and skipped it changes
+// nothing: the DM's prompt, the saga planner and the story-setup pass read
+// exactly what they read before. Filled in, it reaches all three. The
+// campaign creator gains nothing for it: the premise is the setup's place
+// for why the group is together. The backstory's edit rule
 // (the lead, a DM seat, anyone with a character; the latest save wins) and
 // the draft button are driven through the real route against a throwaway
 // database and a scripted model.
@@ -23,41 +24,33 @@ const campaigns = await import("../src/lib/db/campaigns.ts");
 const { getParty, updateParty } = await import("../src/lib/db/party.ts");
 const { setMemberMuted } = await import("../src/lib/db/moderation.ts");
 
-const HOOK = "Deserters from the same border company, hunted by their old captain.";
 const BACKSTORY = "Mira pulled Brann out of the river at Kell's Ford; he has owed her since.";
 
 // ---- the pure rules ----
 
-await test("Blank texts build nothing anywhere", async () => {
-  const blank = story.partyStoryOf({ gameSettings: { partyHook: "  " }, party: { backstory: "" } });
-  assert.deepEqual(blank, { hook: "", backstory: "" });
+await test("A blank backstory builds nothing anywhere", async () => {
+  const blank = story.partyStoryOf({ party: { backstory: "  " } });
+  assert.deepEqual(blank, { backstory: "" });
   assert.deepEqual(story.partyStoryPromptLines(blank), []);
   assert.equal(story.partyStoryPlannerBlock(blank), "");
   assert.deepEqual(story.partyStorySetupLines(blank), []);
-  // A campaign from before the fields existed reads the same as a blank one.
-  assert.deepEqual(story.partyStoryOf({ gameSettings: {} }), blank);
+  // A campaign from before the field existed reads the same as a blank one.
+  assert.deepEqual(story.partyStoryOf({ party: {} }), blank);
   assert.deepEqual(story.partyStoryOf({}), blank);
 });
 
-await test("Each text gets its own line, and only the one written", async () => {
-  const hookOnly = story.partyStoryPromptLines({ hook: HOOK, backstory: "" });
-  assert.equal(hookOnly.length, 1);
-  assert.match(hookOnly[0], /^Party hook .*border company/);
-  const both = story.partyStoryPromptLines({ hook: HOOK, backstory: BACKSTORY });
-  assert.equal(both.length, 2);
-  assert.match(both[1], /^Party backstory .*Kell's Ford/);
-  const planner = story.partyStoryPlannerBlock({ hook: "", backstory: BACKSTORY });
+await test("A written backstory gets one line in each", async () => {
+  const lines = story.partyStoryPromptLines({ backstory: BACKSTORY });
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^Party backstory .*Kell's Ford/);
+  const planner = story.partyStoryPlannerBlock({ backstory: BACKSTORY });
   assert.match(planner, /must keep it true/);
   assert.ok(planner.includes(BACKSTORY));
-  assert.ok(!planner.includes("How they came together"));
+  assert.deepEqual(story.partyStorySetupLines({ backstory: BACKSTORY }), [`Table's shared party backstory: ${BACKSTORY}`]);
 });
 
-await test("Over-long texts are clipped to their caps", async () => {
-  const long = story.partyStoryOf({
-    gameSettings: { partyHook: "h".repeat(900) },
-    party: { backstory: "b".repeat(2000) },
-  });
-  assert.equal(long.hook.length, story.PARTY_HOOK_MAX);
+await test("An over-long backstory is clipped to its cap", async () => {
+  const long = story.partyStoryOf({ party: { backstory: "b".repeat(2000) } });
   assert.equal(long.backstory.length, story.PARTY_BACKSTORY_MAX);
 });
 
@@ -69,9 +62,8 @@ await test("The edit rule: lead, DM seat or a seated character", async () => {
   assert.equal(may({ isLead: false, holdsDmSeat: false, hasCharacter: false }), false);
 });
 
-await test("Stored shapes default to blank and keep what was written", async () => {
-  assert.equal(normalizeGameSettings({}).partyHook, "");
-  assert.equal(normalizeGameSettings({ partyHook: `  ${HOOK}  ` }).partyHook, HOOK);
+await test("Stored shapes default to blank and keep what was written, and the table's settings gain nothing", async () => {
+  assert.ok(!("partyHook" in normalizeGameSettings({})), "no setting rides along with the backstory");
   assert.equal(emptyParty().backstory, "");
   // A party record stored before the field reads as no backstory.
   assert.equal(normalizeParty({ copper: 5 }).backstory, "");
@@ -95,33 +87,30 @@ function gameState(campaign) {
   return { campaign, members: [], sheets: [], recentRolls: [], storySummary: "" };
 }
 
-await test("An empty hook and backstory leave the DM's game state untouched", async () => {
+await test("An empty backstory leaves the DM's game state untouched", async () => {
   const world = await openWorld({ status: "lobby" });
   const before = buildGameStateBlock(gameState(world.campaign()));
-  // The same campaign as it read before the fields existed.
+  // The same campaign as it read before the field existed.
   const legacy = world.campaign();
-  delete legacy.gameSettings.partyHook;
   delete legacy.party.backstory;
   assert.equal(buildGameStateBlock(gameState(legacy)), before);
-  assert.ok(!/Party hook|Party backstory/.test(before));
+  assert.ok(!/Party backstory/.test(before));
   world.close();
 });
 
-await test("Filled in, both ride the game state right after the premise", async () => {
+await test("Filled in, it rides the game state right after the premise", async () => {
   const world = await openWorld({ status: "lobby", campaign: { description: "A war is ending badly." } });
-  campaigns.updateGameSettings(world.campaignId, { partyHook: HOOK });
   updateParty(world.campaignId, (party) => ({ ...party, backstory: BACKSTORY }));
   const block = buildGameStateBlock(gameState(world.campaign()));
   const premise = block.indexOf("Premise: A war is ending badly.");
-  const hook = block.indexOf(`Party hook (how the group came together, set before the characters existed): ${HOOK}`);
   const backstory = block.indexOf(BACKSTORY);
-  assert.ok(premise >= 0 && hook > premise && backstory > hook, block.slice(0, 800));
+  assert.ok(premise >= 0 && backstory > premise, block.slice(0, 800));
   world.close();
 });
 
 // ---- the planner and the setup pass ----
 
-await test("The saga planner and story setup read both, and neither when blank", async () => {
+await test("The saga planner and story setup read it, and nothing when blank", async () => {
   const model = await fakeModel();
   const userContent = (index) => {
     const messages = model.requests[index]?.messages ?? [];
@@ -136,11 +125,11 @@ await test("The saga planner and story setup read both, and neither when blank",
   await runStorySetup(blank.campaignId);
   assert.equal(model.requests.length, 2);
   for (const index of [0, 1]) {
-    assert.ok(!/party hook|party backstory|shared story/i.test(userContent(index)), userContent(index));
+    assert.ok(!/party backstory|shared story/i.test(userContent(index)), userContent(index));
   }
   blank.close();
 
-  const filled = await openWorld({ status: "lobby", gameSettings: { partyHook: HOOK } });
+  const filled = await openWorld({ status: "lobby" });
   filled.addHero({ name: "Mira", backstory: "A river pilot." });
   updateParty(filled.campaignId, (party) => ({ ...party, backstory: BACKSTORY }));
   model.pointAt(filled);
@@ -148,13 +137,10 @@ await test("The saga planner and story setup read both, and neither when blank",
   await generateStoryArc(filled.campaignId);
   await runStorySetup(filled.campaignId);
   const arc = userContent(0);
-  assert.ok(arc.includes(`- How they came together: ${HOOK}`), arc);
   assert.ok(arc.includes(`- Their shared backstory: ${BACKSTORY}`), arc);
   const setup = userContent(1);
-  assert.ok(setup.includes(`Table's party hook (why the group is together): ${HOOK}`), setup);
   assert.ok(setup.includes(`Table's shared party backstory: ${BACKSTORY}`), setup);
-  // The setup pass reads them and never rewrites them.
-  assert.equal(filled.campaign().gameSettings.partyHook, HOOK);
+  // The setup pass reads it and never rewrites it.
   assert.equal(getParty(filled.campaignId).backstory, BACKSTORY);
   filled.close();
   model.close();
@@ -171,18 +157,6 @@ async function call(mod, method, body, params) {
   const response = await mod[method](request, { params: Promise.resolve(params) });
   return { status: response.status, json: await response.json() };
 }
-
-await test("Campaign setup stores the hook, and leaving it out stores blank", async () => {
-  const world = await openWorld({ status: "lobby" });
-  const campaignsRoute = await world.route("campaigns");
-  world.signIn(world.owner);
-  const withHook = await call(campaignsRoute, "POST", { title: "Hooked", gameSettings: { partyHook: ` ${HOOK} ` } });
-  assert.equal(withHook.status, 201, JSON.stringify(withHook.json));
-  assert.equal(campaigns.getCampaignById(withHook.json.campaign.id).gameSettings.partyHook, HOOK);
-  const without = await call(campaignsRoute, "POST", { title: "Plain" });
-  assert.equal(campaigns.getCampaignById(without.json.campaign.id).gameSettings.partyHook, "");
-  world.close();
-});
 
 await test("Who may write the backstory, and the latest save wins", async () => {
   const world = await openWorld({ status: "lobby" });
@@ -241,7 +215,7 @@ await test("Who may write the backstory, and the latest save wins", async () => 
 
 await test("The draft asks the model from the characters' backstories and saves nothing", async () => {
   const model = await fakeModel();
-  const world = await openWorld({ status: "lobby", gameSettings: { partyHook: HOOK } });
+  const world = await openWorld({ status: "lobby", campaign: { description: "A war is ending badly." } });
   const route = await world.route("campaigns/[campaignId]/party/backstory");
   const params = { campaignId: world.campaignId };
   model.pointAt(world);
@@ -259,7 +233,7 @@ await test("The draft asks the model from the characters' backstories and saves 
   const asked = model.requests[0].messages.find((message) => message.role === "user").content;
   assert.ok(asked.includes("A river pilot who lost her boat."), asked);
   assert.ok(asked.includes("A smith's son who cannot swim."), asked);
-  assert.ok(asked.includes(HOOK), asked);
+  assert.ok(asked.includes("A war is ending badly."), "the premise is what the setup said of the group");
   assert.equal(getParty(world.campaignId).backstory, "");
   world.close();
   model.close();

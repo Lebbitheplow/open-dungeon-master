@@ -10,7 +10,6 @@ import {
   TABLE_LANGUAGES,
 } from "@/lib/schemas/game-settings-options";
 import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
-import { PARTY_HOOK_MAX } from "@/lib/dm/party-story";
 
 // The option lists and their labels live in ./game-settings-options (no
 // zod) so the campaign wizard can draw them without the validator; the
@@ -59,11 +58,6 @@ export const gameSettingsSchema = z.object({
   // removed from disk degrades silently back to its genre.
   worldPack: z.string().trim().max(50).default(""),
   aiStorySetup: z.boolean().default(true),
-  // Optional: why the party is together, written at setup before anyone has
-  // a character ("deserters from the same border company"). Empty sends the
-  // DM nothing (src/lib/dm/party-story.ts). The shared backstory the players
-  // write in the lobby lives on the party record, not here.
-  partyHook: z.string().trim().max(PARTY_HOOK_MAX).default(""),
   campaignLength: z.enum(CAMPAIGN_LENGTHS).default("standard"),
   dicePolicy: z.enum(DICE_POLICIES).default("digital_only"),
   ttsEnabled: z.boolean().default(true),

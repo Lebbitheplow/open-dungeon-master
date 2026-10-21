@@ -10,7 +10,6 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
   const {
     title,
     description,
-    partyHook,
     theme,
     maxPlayers,
     startingLevel,
@@ -69,8 +68,6 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       customGenreText: customGenreText.trim(),
       tableLanguage,
       aiStorySetup: aiNarrates && aiStorySetup,
-      // Optional; a blank one is sent blank and the DM is told nothing.
-      partyHook: partyHook.trim(),
       campaignLength,
       dicePolicy,
       ttsEnabled,

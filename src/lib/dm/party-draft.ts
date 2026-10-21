@@ -5,7 +5,6 @@ import {
   PARTY_BACKSTORY_MAX,
   PARTY_DRAFT_SYSTEM,
   partyDraftRequest,
-  partyStoryOf,
   type DraftCharacter,
 } from "@/lib/dm/party-story";
 import { withLanguage } from "@/lib/dm/table-language-logic";
@@ -31,7 +30,6 @@ export async function draftPartyBackstory(
         role: "user",
         content: partyDraftRequest({
           characters,
-          hook: partyStoryOf(campaign).hook,
           premise: campaign.description,
           setting: campaign.theme || campaign.gameSettings.genre.replace(/_/g, " "),
           current: current.trim().slice(0, PARTY_BACKSTORY_MAX),

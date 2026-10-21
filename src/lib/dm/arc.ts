@@ -120,8 +120,8 @@ function recentChapterLines(campaignId: string): string {
     .join("\n");
 }
 
-// Party-composition planning lines: the table's party hook and shared
-// backstory when it wrote them, pets, and AI companions the saga should
+// Party-composition planning lines: the table's shared party backstory when
+// it wrote one, pets, and AI companions the saga should
 // plan moments for. A beastmaster's wolf or a drakewarden's drake is a
 // promise the story ought to keep, so saga-scale generation (initial,
 // upgrade, and sequel passes) is told explicitly to plan around them. The
