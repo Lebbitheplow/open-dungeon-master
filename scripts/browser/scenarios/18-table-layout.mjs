@@ -356,7 +356,11 @@ export default {
       await eventually(() => cameraOf(enlarged), { label: "enlarged public example camera" });
       await checkViewport(enlarged);
       await t.tap(page.getByRole("button", { name: "Close the board", exact: true }));
-      await t.tap(page.getByRole("button", { name: "Fixture session options", exact: true }));
+      // The enlarged board keeps its own copy of the view's controls until
+      // its dialog has finished closing; options opened from that copy go
+      // with it. Wait for it to be gone, then use the board's own.
+      await eventually(async () => (await page.getByRole("dialog").count()) === 0, { label: "the enlarged board closed" });
+      await t.tap(page.getByRole("button", { name: "Fixture session options", exact: true }).locator("visible=true"));
       await t.tap(page.getByRole("switch", { name: "Detail", exact: true }));
       await page.keyboard.press("Escape");
       await page.evaluate((prefix) => { window.__sessionParty = document.querySelector(`${prefix}[data-tour="party-rail"]`); window.__sessionFrame = document.querySelector(`${prefix}.cine-fight-board iframe`); }, root);
