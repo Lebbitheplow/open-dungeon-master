@@ -130,6 +130,10 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       // settings panel's AI group, where the lead tunes them after a session.
       // `combatPace` (issue #432) beside them, for the same reason: a table
       // learns it wants more fights or fewer by playing.
+      //
+      // `waitForTable` and `waitForTableSeconds` (PR #438): whether the AI DM
+      // waits for everyone before it answers is learned once the table plays.
+      // It starts off and is the Players group's Pacing picker.
     },
   };
 }
