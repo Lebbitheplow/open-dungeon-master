@@ -129,15 +129,15 @@ for (const [written, stored] of Object.entries(WHOLE)) {
 }
 
 // A word that only begins an SRD name is no condition of it: it is kept as
-// the story condition it says it is, and the result says so, naming the
-// SRD's, so the model resends the one it meant.
+// the story condition it says it is, and the result says so, so the model
+// resends the one it meant (the tool's description names the SRD's).
 for (const written of ["poison", "blind", "frighten", "stun"]) {
   await test(`"${written}" is a story condition, never guessed to be an SRD one`, async () => {
     kit.reset(hero.id);
     const out = await set({ condition: written });
     assert.equal(out.ok, true, out.error);
     assert.deepEqual(held(), [written]);
-    assert.match(JSON.stringify(out), /is a story condition: no rule the server knows applies to it\. An SRD condition goes by its name: .*poisoned/);
+    assert.match(JSON.stringify(out), /is kept as a story condition: no rule the server knows applies to it\./);
   });
 }
 

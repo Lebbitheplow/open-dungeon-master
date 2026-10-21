@@ -246,6 +246,8 @@ await test("finding 11: purchase is gated as grant_item is, and the bought line 
   const bought = await ai("purchase", { characterId: hero.id, item: "Corda di canapa", srdName: "Rope, hempen (50 feet)", price: 1, action: "buy", reason: "the market" }, hero);
   assert.equal(bought.ok, true, bought.error);
   assert.equal(carried("Corda di canapa").srdName, "Rope, hempen (50 feet)");
+  // A model that grants a bought item again leaves two, or trades something in besides: the result says it is done.
+  assert.match(bought.note, /The trade is done: the server put it in .+'s pack and took the coin, and nothing else changed hands\. Do NOT call grant_item, modify_gold or handle_item for this trade\./);
   const shelf = normalizeStock([
     { itemName: "Lanterna schermabile", qty: 2, priceCp: 500, srdName: "lantern, hooded" },
     { itemName: "Pane", qty: 5, priceCp: 2 },

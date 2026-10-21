@@ -71,7 +71,7 @@ export const pcAttackTool: ToolDef = {
         weapon: {
           type: "string",
           description:
-            "Weapon they attack with, from their equipment, or 'unarmed strike'. Omit to use their best carried weapon. A weapon a subclass feature makes is named here too: a raging Path of the Beast barbarian's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second blade), a Sun Soul monk's 'radiant sun bolt'.",
+            "The weapon from their equipment, or 'unarmed strike' for a punch or kick in any language. Omit to use their best carried weapon. A weapon a subclass feature makes is named here too: a raging Path of the Beast barbarian's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second blade), a Sun Soul monk's 'radiant sun bolt'.",
         },
         approach: {
           type: "boolean",

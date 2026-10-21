@@ -8,7 +8,7 @@ import { keepsFullValue, listPriceCp, saleValueCp } from "@/lib/dm/trade-value";
 import { addCopper, formatCopper, purseCopper } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
-import { notCarried } from "@/lib/dm/item-logic";
+import { alreadyInPack, notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { lineNamed } from "@/lib/srd/item-row";
 
@@ -53,6 +53,7 @@ export function computePurchase(
         paid: formatCopper(totalCp),
         priced,
         gold: paid.gold,
+        note: alreadyInPack(sheet.name, true),
       },
       event: `Bought ${args.item}${args.qty > 1 ? ` x${args.qty}` : ""} for ${formatCopper(totalCp)}.`,
     };

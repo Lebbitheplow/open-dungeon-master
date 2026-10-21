@@ -40,6 +40,7 @@ import { magicValueOf, packListCp } from "@/lib/dm/trade-value";
 import { magicItemNamed } from "@/lib/srd/magic-items";
 import { rowName } from "@/lib/srd/item-row";
 import { grantItemMath } from "@/lib/dm/mutation-math";
+import { alreadyInPack } from "@/lib/dm/item-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
@@ -222,7 +223,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
       patchSheet(fresh.id, { equipment: grantItemMath(fresh.equipment, crafting.item, 1, crafting.srdName ? { srdName: crafting.srdName } : {}).equipment });
       publishSheetOf(campaign.id, fresh.id);
       delete progress.crafting;
-      lines.push(`${sheet.name} finishes crafting ${crafting.item}; it is in their pack.`);
+      lines.push(`${sheet.name} finishes crafting ${crafting.item}. ${alreadyInPack(sheet.name, false)}`);
     } else {
       progress.crafting = { ...crafting, progressCp };
       lines.push(`${sheet.name} crafts ${crafting.item}: ${formatCopper(progressCp)} of ${formatCopper(crafting.valueCp)} done (5 gp a day per crafter).`);

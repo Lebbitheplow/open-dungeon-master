@@ -61,13 +61,15 @@ export function canonicalCondition(raw: string): string {
 }
 
 // A condition no rule knows is the table's own story condition: legal, and
-// said so, so that a misspelt SRD name ("poison") is resent, not kept.
+// said so, so that a misspelt SRD name ("poison") is resent, not kept. The
+// SRD's names are in the tool's description: listed here again, they drew a
+// second call for the SRD condition beside a story one in live runs.
 function storyConditionNote(condition: string): { note?: string } {
   const known = knownConditions();
   if (known.includes(condition) || conditionEffectsFor(condition)) {
     return {};
   }
-  return { note: `"${condition}" is a story condition: no rule the server knows applies to it. An SRD condition goes by its name: ${known.join(", ")}.` };
+  return { note: `"${condition}" is kept as a story condition: no rule the server knows applies to it.` };
 }
 
 // "frightened of the dragon" is no condition, and no story condition either:

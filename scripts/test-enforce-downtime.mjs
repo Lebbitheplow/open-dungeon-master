@@ -92,6 +92,8 @@ if (world.hasPack) {
       assert.equal(world.campaign().clock.instant, before);
       const made = await world.invoke("downtime", { days: 2, characterId: crafter.id, activity: "crafting", item, srdName: "Shield", tool: "smith's tools" });
       assert.equal(made.ok, true, made.error);
+      assert.match(made.result.results.at(-1), /finishes crafting .+\. The server already put it in .+'s pack\. Do NOT call grant_item for it\./);
+      assert.equal(world.sheet(crafter.id).equipment.filter((line) => line.name === item).length, 1, item);
       assert.equal(world.sheet(crafter.id).equipment.find((line) => line.name === item)?.srdName, "Shield", item);
       assert.equal(purse(crafter.id), 9500, item);
     }

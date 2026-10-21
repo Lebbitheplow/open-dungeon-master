@@ -222,7 +222,9 @@ test("buying takes the coin and the goods together and writes the ledger", () =>
   assert.equal(getShop(shop.id).stock.find((line) => /rope/i.test(line.itemName)).qty, 1);
   assert.ok(listRecentAudit(campaign.id).some((entry) => entry.kind === "purchase" && entry.characterId === marla.id));
   // A shelf line listed as a row is bought as that row.
-  assert.equal(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Pozione di guarigione" })).ok, true);
+  const potion = handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Pozione di guarigione" }));
+  assert.equal(potion.ok, true);
+  assert.match(potion.note, /The trade is done: the server put it in Marla's pack and took the coin, and nothing else changed hands\. Do NOT call grant_item, modify_gold or handle_item for this trade\./);
   assert.equal(getSheetById(marla.id).equipment.find((item) => item.name === "Pozione di guarigione")?.srdName, "Potion of Healing");
   // A word of a shop's or a line's name is neither.
   assert.equal(handleBuyItem(campaign, JSON.stringify({ characterId: marla.id, shop: "sundries", item: "Plate Armor" })).retry, true);

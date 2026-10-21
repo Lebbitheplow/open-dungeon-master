@@ -118,7 +118,7 @@ await test("lair options: a listed option is taken by its number or its whole li
   }
 });
 
-await test("set_condition and set_enemy_condition: a condition is its whole name, or with a bracket note; a condition's name with words added is refused (\"of the dragon\" is sent as the source); any other word is a story condition, told the SRD names.", async () => {
+await test("set_condition and set_enemy_condition: a condition is its whole name, or with a bracket note; a condition's name with words added is refused (\"of the dragon\" is sent as the source); any other word is kept as a story condition, its note naming no SRD condition.", async () => {
   const [enemy] = world.enemies();
   try {
     for (const condition of ["frightened of the dragon", "prone-ish", "grappled by the ogre", "Poisoned badly"]) {
@@ -128,7 +128,9 @@ await test("set_condition and set_enemy_condition: a condition is its whole name
     for (const condition of ["spaventato", "effrayé", "asustado", "verängstigt"]) {
       const out = await world.invoke("set_condition", { characterId: cleric.id, condition });
       accepted(out);
-      assert.match(out.result.note, /story condition[^]*frightened/, `${condition} was not told the SRD names`);
+      assert.match(out.result.note, /is kept as a story condition: no rule the server knows applies to it\.$/, condition);
+      // The description lists the SRD names; listed again here they drew a second call for the SRD condition.
+      assert.doesNotMatch(out.result.note, /frightened/, condition);
       accepted(await world.invoke("clear_condition", { characterId: cleric.id, condition }));
     }
     accepted(await world.invoke("set_enemy_condition", { enemyId: enemy.id, condition: "Prone (from the shove)" }));

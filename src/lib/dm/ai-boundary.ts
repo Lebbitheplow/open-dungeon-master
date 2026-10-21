@@ -55,7 +55,7 @@ export function engineKept(instance: {
 }
 
 export const AI_BIND_REFUSAL = (who: string, condition: string): ToolError => ({
-  error: `${who} cannot be made ${condition} by narration alone: it is a save the server rolls. Give saveAbility and saveDc (and rounds if it has a set length) and the server rolls ${who}'s save first, laying ${condition} only on a failure; a spell is cast_at_enemy or cast_at_player, an attack's rider is its attack, a trap is apply_hazard.`,
+  error: `${who} cannot be made ${condition} by narration alone: it is a save the server rolls. Give saveAbility and saveDc (and rounds if it has a set length) and the server rolls ${who}'s save first, laying ${condition} only on a failure; a spell is cast_at_enemy or cast_at_player, an attack's rider is its attack, a trap is apply_hazard. An effect on one limb, or on the story alone, is a story condition: send it named without the word "${condition}".`,
   retry: true,
 });
 

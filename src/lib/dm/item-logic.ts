@@ -74,6 +74,15 @@ export function itemUseProblem(item: TaggedItem): ToolError | null {
   return null;
 }
 
+// What a tool that puts an item in a pack tells the model, as a hit says it
+// applied its damage: a model that grants it again leaves two, and one told
+// only of the coin hands the item over or trades something in besides.
+export function alreadyInPack(who: string, paid: boolean): string {
+  return paid
+    ? `The trade is done: the server put it in ${who}'s pack and took the coin, and nothing else changed hands. Do NOT call grant_item, modify_gold or handle_item for this trade.`
+    : `The server already put it in ${who}'s pack. Do NOT call grant_item for it.`;
+}
+
 // An item a character does not carry. A name the table's rules know (isTableGearName)
 // is the game saying no; a name nobody knows is the call's to fix, from what
 // they do carry.

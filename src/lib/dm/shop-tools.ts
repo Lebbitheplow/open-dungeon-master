@@ -48,7 +48,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper } from "@/lib/srd/currency";
 import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { notCarried } from "@/lib/dm/item-logic";
+import { alreadyInPack, notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { containsPhrase, textKey } from "@/lib/language/text-logic";
 
@@ -410,7 +410,7 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   publishSheet(campaign, sheet.id);
   publishShops(campaign.id);
   publishEphemeral(campaign.id, "coins", { characterId: sheet.id, direction: "out", amountCp: total, at: Date.now() });
-  return { ok: true, bought: line.itemName, qty: args.qty, paid: formatCopper(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper) };
+  return { ok: true, bought: line.itemName, qty: args.qty, paid: formatCopper(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper), note: alreadyInPack(sheet.name, true) };
 }
 
 // A price the table cannot check is still held to the ceiling purchase keeps
