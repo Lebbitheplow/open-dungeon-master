@@ -395,6 +395,18 @@ await test("A player cannot draft or make anything from an outline.", async () =
   assert.deepEqual(shelves(), before);
 });
 
+await test("A play table's story authority cannot draft a world through the outline route: it is the workshop's.", async () => {
+  const before = shelves();
+  world.signIn({ id: world.owner.id });
+  const response = await outlineRoute.POST(
+    new Request("http://test/", { method: "POST", body: JSON.stringify({ step: "asset", asset: { kind: "item", name: "Salt Lamp" } }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /in its workshop/);
+  assert.deepEqual(shelves(), before);
+});
+
 server.close();
 world.close();
 finish();

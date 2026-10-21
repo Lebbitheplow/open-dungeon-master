@@ -11,7 +11,6 @@ import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { copyIntoUploads } from "@/lib/portrait";
 import { imagesAvailable } from "@/lib/capabilities";
 import { pictureFailureReason } from "@/lib/dm/images";
-import { admitUpload, type UploadAccount } from "@/lib/upload-budget";
 import { worldView } from "@/lib/db/world-forge";
 import { draftKnown, draftMessages, forgeMessages, paintPrompt, readForgeReply, replyJson, type ForgePreview } from "@/lib/worldforge/forge";
 import { askMessages, askPassages, citedPassages, type AskOmitted, type AskPassage } from "@/lib/worldforge/ask";
@@ -130,21 +129,17 @@ function boundRules(campaign: Campaign, record: BoundRecord): string {
 // Paint (audit WF-16): a job on the serial media queue (one GPU, shared with
 // the DM model), kept as a row from queued to the DM's decision
 // (src/lib/db/world-paint-jobs.ts). The finished picture waits beside the
-// entry's own until the DM accepts it. A server with no image backend, or an
-// account over its upload allowance, gets a failed job saying so, and
-// nothing is queued. A second Paint while one is queued or working answers
-// that one.
+// entry's own until the DM accepts it. A server with no image backend gets a
+// failed job saying so, and nothing is queued. A second Paint while one is
+// queued or working answers that one. Like every picture the server paints
+// (portraits, covers, scenes, maps), it is not counted against the account's
+// upload allowance, which is for files people send.
 export const NO_IMAGE_BACKEND =
   "This server has no image backend set up, so nothing was painted. An admin can choose one in Admin > Image generation. Until then, Edit takes an uploaded picture.";
 
-// What a painted picture is counted as against the upload budget
-// (src/lib/upload-budget.ts) before it is painted: a generous size for one
-// render, since the real one is not known until the backend answers.
-const PAINT_BYTES = 4 * 1024 * 1024;
-
 export type Painting = { job: PaintJob; already: boolean } | { error: string; status: number; job?: PaintJob };
 
-export async function paintEntry(campaign: Campaign, ref: string, account: UploadAccount): Promise<Painting> {
+export async function paintEntry(campaign: Campaign, ref: string, account: { id: string }): Promise<Painting> {
   const { doc, entities } = worldView(campaign.id);
   const entity = entities.find((entry) => entry.ref === ref);
   if (!entity) return { error: "No such entry.", status: 404 };
@@ -154,14 +149,6 @@ export async function paintEntry(campaign: Campaign, ref: string, account: Uploa
   }
   const running = paintStatus(campaign.id, ref, previous).jobs.find((job) => job.state === "queued" || job.state === "working");
   if (running) return { job: running, already: true };
-  const refusal = admitUpload(account, PAINT_BYTES, 1);
-  if (refusal) {
-    const reason =
-      refusal.status === 507
-        ? `Paint was refused before it started: ${refusal.error}`
-        : `Paint was refused before it started, because pictures count toward your daily upload allowance. ${refusal.error}`;
-    return { error: reason, status: refusal.status, job: refusedPaintJob(campaign.id, ref, account.id, previous, reason) };
-  }
   const opened = openPaintJob(campaign.id, ref, account.id, previous);
   if (opened.already) return opened;
   const type = typeFor(doc, entity.shelf, entity.entry.typeId);

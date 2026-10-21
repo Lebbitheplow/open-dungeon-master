@@ -11,8 +11,10 @@
 //   - A second Paint while one runs answers that one.
 //   - Accept puts the new picture on the entry and keeps the old one to put
 //     back; reject keeps the entry's picture and lets the new one go.
-//   - A backend that declines, no backend at all, and the upload budget each
-//     leave a failed job with its reason, and Retry paints again.
+//   - A backend that declines and no backend at all each leave a failed job
+//     with its reason, and Retry paints again. The upload allowance is for
+//     files people send: Paint, like every picture the server paints, is not
+//     counted against it.
 //   - A job still waiting can be cancelled and is then never painted; one
 //     being painted cannot be. A long wait is said, and a job a restart
 //     dropped fails instead of spinning.
@@ -199,17 +201,18 @@ await test("No image backend: Paint is refused with a failed job that says what 
   }
 });
 
-await test("The upload budget refuses Paint before anything is queued, and the reason says why", async () => {
+await test("Paint is not counted against the upload allowance, as no picture the server paints is", async () => {
+  setScript(PAINT);
   const before = process.env.UPLOAD_DAILY_FILES;
   process.env.UPLOAD_DAILY_FILES = "1";
   resetUploadBudget();
   try {
     assert.equal(admitUpload({ id: owner.id }, 10, 1), null, "the day's one file is spent");
-    const refused = await paint(harbour);
-    assert.equal(refused.status, 429);
-    assert.equal(refused.body.job.state, "failed");
-    assert.match(refused.body.job.reason, /^Paint was refused before it started, because pictures count toward your daily upload allowance\. You have uploaded a lot today\. Try again in about/);
-    assert.equal((await reload(harbour)).body.jobs[0].reason, refused.body.job.reason);
+    const asked = await paint(harbour);
+    assert.equal(asked.status, 200, JSON.stringify(asked.body));
+    assert.notEqual(asked.body.job.state, "failed");
+    await until(async () => (await jobOf(harbour, asked.body.job.id)).state === "ready", "saw the picture painted");
+    assert.equal((await decide(harbour, { action: "reject", job: asked.body.job.id })).status, 200);
   } finally {
     if (before === undefined) delete process.env.UPLOAD_DAILY_FILES;
     else process.env.UPLOAD_DAILY_FILES = before;

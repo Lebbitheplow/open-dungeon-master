@@ -4,12 +4,15 @@ import { draftOutline, makeAsset } from "@/lib/dm/world-outline";
 import { publishEphemeral } from "@/lib/events";
 import { OUTLINE_ITEM_KINDS } from "@/lib/worldforge/outline";
 import { recordsChanged } from "@/lib/workshop/record-events";
+import { isWorkshop } from "@/lib/workshop/kind";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// "Draft a world from this idea" (src/lib/dm/world-outline.ts), the DM's
-// alone. "outline" asks the model once and writes nothing: the outline goes
+// "Draft a world from this idea" (src/lib/dm/world-outline.ts), the
+// workshop author's alone: a play table's World tab does not offer it, and
+// this route refuses a play table too, so its lead cannot fill their own
+// Bestiary and Homebrew through it. "outline" asks the model once and writes nothing: the outline goes
 // back to be reviewed. "asset" makes ONE ticked creature or item through the
 // Bestiary's or Homebrew's own validator, with a World entry linked to it;
 // a refusal is an error the page shows on that row, with Retry. The ticked
@@ -37,6 +40,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  if (!isWorkshop(context.campaign)) {
+    return Response.json({ error: "A world is drafted from an idea in its workshop, not at the table." }, { status: 400 });
   }
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
