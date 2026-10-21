@@ -344,7 +344,7 @@ export function EntityPage({
       {entity.entry.hiddenTruth ? (
         <section className="rounded-lg border border-red-900/60 bg-red-950/30 p-3" aria-label="Hidden truth">
           <h4 className="eyebrow mb-1 flex items-center gap-1 text-[10px] text-red-300">
-            <Lock className="size-3" /> Hidden truth, yours alone
+            <Lock className="size-3" /> Hidden truth, kept from players
           </h4>
           <p className="whitespace-pre-wrap text-sm text-red-100/90">{entity.entry.hiddenTruth}</p>
         </section>

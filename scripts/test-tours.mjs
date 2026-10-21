@@ -70,7 +70,7 @@ test("every step points at a known anchor or none", () => {
   const known = new Set([
     "composer-modes", "composer-input", "composer-talk", "battle-hand", "ask-dm",
     "party-rail", "initiative-ribbon", "quest-glance",
-    "tab-party", "tab-story", "tab-map", "tab-battle", "tab-chat", "tab-dm", "tab-settings", "tab-more",
+    "tab-party", "tab-story", "tab-map", "tab-battle", "tab-chat", "tab-dm", "tab-world", "tab-settings", "tab-more",
     "header-dice", "header-voice", "header-help", "header-menu", "header-stage", "header-layout",
     "dm-floor", "dm-beats", "dm-delegation", "dm-queue", "dm-console-tabs",
   ]);
@@ -112,10 +112,10 @@ const mapStore = () => {
 };
 const at = "2026-10-13T00:00:00.000Z";
 
-test("every tour a page opens by itself is in the registry, at version 1 unless revised", () => {
+test("every tour a page opens by itself is in the registry, at a whole version from 1", () => {
   for (const id of ["table-player", "table-dm", "workshop-shelf", "workshop-hub", HAND_TUTORIAL_ID, ...Object.keys(SYSTEM_TOURS).map(systemTourId)]) {
     assert.ok(isTourId(id), `${id} is a known tour`);
-    assert.equal(tourVersion(id), 1, `${id} starts at version 1`);
+    assert.ok(Number.isInteger(tourVersion(id)) && tourVersion(id) >= 1, `${id} has version ${tourVersion(id)}`);
   }
   assert.equal(new Set(TOUR_IDS).size, TOUR_IDS.length, "no tour is listed twice");
   assert.equal(isTourId("app"), false, "the client shell's own tour is not a server tour");
@@ -228,7 +228,7 @@ test("a lazy step survives an absent anchor; a plain one does not", () => {
 // The tools of a workshop, as the shell lists them.
 const SYSTEMS = [
   "world", "storyboard", "party", "maps", "region", "encounters", "cast",
-  "bestiary", "homebrew", "lore", "tables", "rules", "plugin", "share",
+  "factions", "bestiary", "homebrew", "lore", "tables", "rules", "plugin", "share",
 ];
 
 test("every workshop tool has a tour that opens on the rail and ends on help, and a guide", () => {
@@ -284,11 +284,21 @@ test("every table tour anchor exists in the source as data-tour", () => {
 test("every workshop tour anchor exists in the source as data-tour", () => {
   const source = SOURCE;
   for (const anchor of workshopTourAnchors()) {
-    const carried =
-      source.includes(`data-tour="${anchor}"`) ||
-      source.includes(`tour="${anchor}"`) ||
-      source.includes(`"${anchor}"`);
+    // As an attribute only: the anchor's name standing anywhere else in a
+    // file (a tour's own step, a prepare name) is not a target.
+    const carried = source.includes(`data-tour="${anchor}"`) || source.includes(`tour="${anchor}"`);
     assert.ok(carried, `no component carries data-tour="${anchor}"`);
+  }
+});
+
+test("every prepare a workshop tour sends is answered by some panel", () => {
+  for (const step of [...SHELF_TOUR, ...HUB_TOUR, ...Object.values(SYSTEM_TOURS).flat()]) {
+    if (!step.prepare) continue;
+    // A view of WorldForge is asked for by "world-view-<view>"; anything
+    // else by its own name, read by a useTourPrepare handler.
+    const view = step.prepare.startsWith("world-view-") ? step.prepare.slice("world-view-".length) : "";
+    const answered = view ? SOURCE.includes(`value: "${view}"`) && SOURCE.includes(`name.startsWith("world-view-")`) : SOURCE.includes(`"${step.prepare.split(":")[0]}"`);
+    assert.ok(answered, `${step.id}: nothing answers the prepare "${step.prepare}"`);
   }
 });
 
@@ -309,6 +319,49 @@ test("the pick-list helpers append without doubling and insert at the caret", ()
     "crypt",
     "Undead",
   ]);
+});
+
+// A tour whose words or targets change must be raised a version in
+// registry.ts, or the people who finished it never see what changed.
+// scripts/fixtures/tour-content.json holds each tour's version and a
+// fingerprint of its steps as last released. Change a tour, raise its
+// version, then record both here (node scripts/test-tours.mjs --record).
+// The Hand's card tutorial keeps its steps in its component, so it is not
+// fingerprinted here.
+const { createHash } = await import("node:crypto");
+const TOUR_CONTENT = {
+  "table-player": [...PLAYER_TOUR, ...FIRST_TURN_TOUR],
+  "table-dm": DM_TOUR,
+  "workshop-shelf": SHELF_TOUR,
+  "workshop-hub": HUB_TOUR,
+  ...Object.fromEntries(Object.entries(SYSTEM_TOURS).map(([system, steps]) => [systemTourId(system), steps])),
+};
+const fingerprint = (steps) =>
+  createHash("sha256")
+    .update(JSON.stringify(steps.map(({ id, title, body, anchors, prepare, lazy }) => [id, title, body, anchors, prepare ?? "", Boolean(lazy)])))
+    .digest("hex")
+    .slice(0, 16);
+const recordPath = new URL("./fixtures/tour-content.json", import.meta.url);
+if (process.argv.includes("--record")) {
+  const { writeFileSync } = await import("node:fs");
+  const record = Object.fromEntries(Object.entries(TOUR_CONTENT).map(([id, steps]) => [id, { version: tourVersion(id), content: fingerprint(steps) }]));
+  writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}
+`);
+  console.log(`recorded ${Object.keys(record).length} tours`);
+}
+const recorded = JSON.parse(readFileSync(recordPath, "utf8"));
+
+test("a tour whose content changed has its version raised, and the record says so", () => {
+  assert.deepEqual(Object.keys(recorded).sort(), Object.keys(TOUR_CONTENT).sort(), "a tour is missing from the record, or the record names one that is gone");
+  for (const [id, steps] of Object.entries(TOUR_CONTENT)) {
+    const now = { version: tourVersion(id), content: fingerprint(steps) };
+    const then = recorded[id];
+    if (now.content !== then.content && now.version === then.version) {
+      assert.fail(`${id} changed but is still version ${now.version}: raise it in src/lib/tours/registry.ts, then record it`);
+    }
+    assert.ok(now.version >= then.version, `${id} went back from version ${then.version} to ${now.version}`);
+    assert.deepEqual(now, then, `${id} is not recorded as it stands: run node scripts/test-tours.mjs --record`);
+  }
 });
 
 console.log(`test-tours: ${passed} passed`);

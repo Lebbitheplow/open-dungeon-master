@@ -294,7 +294,7 @@ export function EntityEditor({
 
       <div className="grid gap-3 @lg:grid-cols-2">
         {field(
-          "Hidden truth (yours alone)",
+          "Hidden truth (kept from players)",
           <textarea className={cn(ui.input, "min-h-20 border-red-900/50")} maxLength={4_000} value={draft.hiddenTruth} onChange={(event) => set("hiddenTruth", event.target.value)} />,
           "True in the world, unknown to it. The DM may let it surface; players never read it here.",
         )}

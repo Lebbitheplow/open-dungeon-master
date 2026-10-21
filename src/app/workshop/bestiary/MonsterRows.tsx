@@ -46,7 +46,12 @@ export function MonsterRows({
   const head = useListHead(monsters, readMonster);
   if (!monsters.length) {
     return (
-      <EmptyState size="md" art="chest" title="Nothing built yet. A monster made here answers to its name wherever a fight starts." />
+      <EmptyState
+        size="md"
+        art="chest"
+        title="Nothing built yet. A monster made here answers to its name wherever a fight starts."
+        hint="Start from a challenge rating or a rulebook monster. Then add it to a fight in Encounters, or give it a World entry to tie it to your setting; a campaign that brings that prep in gets its own copy."
+      />
     );
   }
   return (

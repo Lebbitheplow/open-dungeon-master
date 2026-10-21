@@ -7,6 +7,7 @@ import {
   Footprints,
   Hammer,
   Share2,
+  Sparkles,
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -102,6 +103,9 @@ export function WorkshopHelpDialog({
                     <li key={step}>{step}</li>
                   ))}
                 </ol>
+                <p className="text-sm text-stone-300">
+                  <span className="text-amber-200/90">At the table:</span> {guide.atTable}
+                </p>
                 {guide.tips.length ? (
                   <ul className="reveal space-y-1 text-xs text-stone-500">
                     {guide.tips.map((tip) => (
@@ -130,21 +134,35 @@ export function WorkshopHelpDialog({
       <Section icon={Share2} title="Into a campaign, and back out">
         <p>
           Creating a campaign offers a <span className="text-stone-300">Bring in prep</span> step:
-          pick a workshop (or another campaign you can see) and choose what to copy in. A campaign
+          pick a workshop (or another campaign you can see) and tick what to copy in. A campaign
           lobby can import the same way after creation, and once play has begun the table&apos;s{" "}
-          <span className="text-stone-300">Setup</span> tab does too. Copies are copies: the workshop keeps its
-          version, the campaign owns its own from then on, and name collisions get numbered
-          instead of overwritten. The Share tool exports the whole workshop as a bundle file
-          another server can import, and can compile a draft world pack from it.
+          <span className="text-stone-300">Settings</span> tab does too. Before anything is copied, the
+          review says what each pick brings along: WorldForge brings the people, places, factions and
+          lore it describes, and the hand-built monsters and items your prep uses are copied into that
+          table&apos;s Bestiary and Homebrew, so its fights and World entries work there as they did here.
+          Copies are copies: the workshop keeps its version, the campaign owns its own from then on, and
+          name collisions get numbered instead of overwritten. The Share tool exports the whole workshop
+          as a bundle file another server can import, and can compile a draft world pack from it.
         </p>
       </Section>
       <Section icon={Copy} title="Copying things">
         <p>
           A whole workshop can be cloned from the shelf or the hub, and individual pieces (maps,
           NPCs, monsters, encounters, tables, lore) each have a duplicate action, for the
-          version-two-of-this-boss workflow. Homebrew monsters, items, spells and options belong
-          to your account rather than to any one workshop, so they follow you everywhere but do
-          not travel inside bundles sent to other people.
+          version-two-of-this-boss workflow. Hand-built monsters, items, spells and options belong
+          to your account rather than to any one workshop, so they follow you into every workshop.
+          They travel too: a bundle carries your whole homebrew shelf or only what the workshop uses,
+          and a campaign that brings prep in gets its own copy of the monsters and items it uses.
+        </p>
+      </Section>
+      <Section icon={Sparkles} title="With or without AI">
+        <p>
+          Everything in a workshop can be made by hand or copied from one that exists. Drafting
+          with AI (Draft with AI, Draft a world from an idea, Forge, Ask and Draft in WorldForge,
+          Suggest in the Cast) needs a text model, and Paint needs an image backend. Where the
+          server has neither, those buttons are not offered and the rest works the same. An admin
+          adds them under <span className="text-stone-300">Admin &gt; Text model defaults</span> and{" "}
+          <span className="text-stone-300">Admin &gt; Image generation</span>.
         </p>
       </Section>
       <Section icon={BookOpen} title="Where the rules live">

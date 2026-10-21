@@ -38,7 +38,12 @@ export function BeatBoard({
 }) {
   if (board.nodes.length === 0) {
     return (
-      <EmptyState size="md" art="board" title="Nothing on the board. Start with a reason the party would go somewhere." />
+      <EmptyState
+        size="md"
+        art="board"
+        title="Nothing on the board. Start with a reason the party would go somewhere."
+        hint="When a campaign brings the board in, its cards become lore, quests, prepared fights, DM notes and the story arc."
+      />
     );
   }
   return (

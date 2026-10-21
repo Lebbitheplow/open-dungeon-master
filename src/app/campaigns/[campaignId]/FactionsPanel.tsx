@@ -166,6 +166,7 @@ export function FactionsPanel({
                 setDraft(blank());
                 setEditing("new");
               }}
+              data-tour="factions-add"
             >
               <Plus className="size-3.5" /> Add one
             </KitButton>
@@ -209,8 +210,13 @@ export function FactionsPanel({
           </div>
         </div>
       ) : null}
-      {!factions.length && editing === null ? <EmptyState size="sm" art="board" title="No factions yet. The powers of this world are unnamed." /> : null}
-      <ul className="stagger space-y-1.5">
+      {!factions.length && editing === null ? <EmptyState
+          size="sm"
+          art="board"
+          title="No factions yet. The powers of this world are unnamed."
+          hint={steersStory ? "Name each power, what the table knows of it and what it wants, and set where the party stands with it." : undefined}
+        /> : null}
+      <ul className="stagger space-y-1.5" data-tour="factions-list">
         {factions.map((faction) => {
           const items: ContextMenuItem[] = steersStory
             ? [
