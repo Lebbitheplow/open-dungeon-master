@@ -29,6 +29,7 @@ import { SetupNudge } from "@/app/home/SetupNudge";
 import { WorkshopSection } from "@/app/home/WorkshopSection";
 import { pickContinue, type HomeCampaign } from "@/app/home/types";
 import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
+import { shellHost } from "@/lib/shell-host";
 
 // The desktop and Android shells' quick tiles land here with ?new=1,
 // ?new=solo or ?new=starter and expect that wizard already open. Read once, at mount, as the
@@ -71,6 +72,19 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
     setSoloSeen(true);
   }
   const [starterOpen, setStarterOpen] = useState(() => requestedWizard() === "starter");
+  // A wizard the apps opened from their own title screen (?new=): closed
+  // without a campaign, it goes back to that screen, which already shows
+  // everything this one does. A create closes the dialog on its way to the
+  // lobby, so onCreated cancels the return.
+  const [openedByApp] = useState(() => requestedWizard() !== null && shellHost() !== null);
+  const appReturn = useRef<number | null>(null);
+  const closesToApp = (setOpen: (open: boolean) => void) => (open: boolean) => {
+    setOpen(open);
+    if (open || !openedByApp) {
+      return;
+    }
+    appReturn.current = window.setTimeout(() => shellHost()?.showServers(), 0);
+  };
   const [howToOpen, setHowToOpen] = useState(false);
   const joinInputRef = useRef<HTMLInputElement | null>(null);
   const capabilities = useCapabilities();
@@ -192,6 +206,10 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
 
   const continueCampaign = loading || loadFailed ? null : pickContinue(campaigns);
   const onCreated = (campaignId: string) => {
+    if (appReturn.current !== null) {
+      window.clearTimeout(appReturn.current);
+      appReturn.current = null;
+    }
     navigateTo(`/campaigns/${campaignId}`);
   };
 
@@ -286,10 +304,10 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
         </section>
 
         <Suspense fallback={null}>
-          {createSeen ? <CreateCampaignDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={onCreated} /> : null}
-          {soloSeen ? <CreateCampaignDialog solo open={soloOpen} onOpenChange={setSoloOpen} onCreated={onCreated} /> : null}
+          {createSeen ? <CreateCampaignDialog open={createOpen} onOpenChange={closesToApp(setCreateOpen)} onCreated={onCreated} /> : null}
+          {soloSeen ? <CreateCampaignDialog solo open={soloOpen} onOpenChange={closesToApp(setSoloOpen)} onCreated={onCreated} /> : null}
         </Suspense>
-        <StarterDialog open={starterOpen} onOpenChange={setStarterOpen} onCreated={onCreated} />
+        <StarterDialog open={starterOpen} onOpenChange={closesToApp(setStarterOpen)} onCreated={onCreated} />
         <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
       </div>
     </main>
