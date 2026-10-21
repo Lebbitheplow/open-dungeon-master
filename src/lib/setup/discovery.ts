@@ -5,6 +5,7 @@
 // reading the answers are in discovery-logic.ts.
 import { comfyStatus, type ComfyStatus } from "@/lib/comfyui";
 import { hostAvailability } from "@/lib/harness/discover";
+import { replyTimeout } from "@/lib/reply-timeout";
 import {
   COMFYUI_PORT,
   KOKORO_PORT,
@@ -53,7 +54,7 @@ export type ScanResult = {
 
 async function getJson(url: string, timeoutMs: number, headers: Record<string, string> = {}) {
   try {
-    const response = await fetch(url, { cache: "no-store", headers, signal: AbortSignal.timeout(timeoutMs) });
+    const response = await fetch(url, { cache: "no-store", headers, signal: replyTimeout(timeoutMs) });
     const body = await response.json().catch(() => null);
     return { status: response.status, body };
   } catch {
