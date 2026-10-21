@@ -11,8 +11,9 @@ export type HarnessChoiceId = "claude" | "codex" | "opencode" | "grok";
 export const PAINTING_AGENTS: readonly HarnessChoiceId[] = ["codex", "grok"];
 
 export type StoryChoice =
-  // A model server on this machine or the network.
-  | { kind: "local"; baseUrl: string; model: string; apiKey: string }
+  // A model server on this machine or the network. `ollama` is the server's
+  // own Ollama, found by the scan (discovery.ts ollamaNative).
+  | { kind: "local"; baseUrl: string; model: string; apiKey: string; ollama?: boolean }
   // A hosted provider and its key. A blank key keeps the one already saved.
   | { kind: "key"; provider: KeyProviderId; baseUrl: string; model: string; apiKey: string }
   // An agent program signed in on this machine.
@@ -37,6 +38,13 @@ export function storyPatch(choice: StoryChoice, savedBaseUrl = ""): { patch: Pat
         text: { provider: "harness" },
       },
     };
+  }
+  // The server's own Ollama runs on the Ollama provider, which sends the
+  // window with every call; its OpenAI-style endpoint would run Ollama's
+  // default, 4K on a card under 24 GB. The address is OLLAMA_BASE_URL's.
+  if (choice.kind === "local" && choice.ollama) {
+    const model = choice.model.trim();
+    return model ? { patch: { text: { provider: "local", localTextModel: model } } } : { error: "Pick a model." };
   }
   const baseUrl = normalizeBaseUrl(choice.kind === "key" ? keyProvider(choice.provider).baseUrl || choice.baseUrl : choice.baseUrl);
   if (!baseUrl) {

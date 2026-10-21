@@ -285,6 +285,14 @@ export function keyForListing(input: { typed: string; savedKey: string; savedBas
   return saved && host && host === hostOf(normalizeBaseUrl(input.savedBaseUrl)) ? saved : "";
 }
 
+// Whether two addresses name the same server, "localhost" and 127.0.0.1
+// alike: the scan asks 127.0.0.1, an env var may say localhost.
+export function sameServer(a: string, b: string): boolean {
+  const named = (url: string) => hostOf(normalizeBaseUrl(url)).replace(/^localhost(?=:|$)/, "127.0.0.1");
+  const first = named(a);
+  return Boolean(first) && first === named(b);
+}
+
 export function originOf(host: string, port: number): string {
   return `http://${host}:${port}`;
 }

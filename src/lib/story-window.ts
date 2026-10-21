@@ -14,6 +14,11 @@
 export const MIN_NARRATION_WINDOW = 16_000;
 export const MIN_COMBAT_WINDOW = 24_000;
 export const RECOMMENDED_WINDOW = 32_000;
+// The window the docs' llama-server commands start with (-c 65536): the
+// full tool set with a long transcript. The app asks Ollama for no more than
+// this unless LOCAL_TEXT_CONTEXT says otherwise (model-client.ts
+// localContextTokens).
+export const DEFAULT_WINDOW = 65_536;
 
 // llama-server's -c counts in 1,024s (65536 is "64K"), the catalog in
 // thousands (128000 is "128K"); each size is named the way it was set.

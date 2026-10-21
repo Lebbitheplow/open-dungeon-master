@@ -42,7 +42,7 @@ import { SMALL_MODEL_PARAMS } from "@/lib/dm/model-tuning-logic";
 import { catalogContextWindow, hostedCatalogModel, hostedContextWindow } from "@/lib/model-registry/catalog";
 import { ollamaModelInfo, soleListedModel, soleModelListing } from "@/lib/model-registry/discovery";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
-import { onWindows } from "@/lib/host-platform";
+import { DEFAULT_WINDOW } from "@/lib/story-window";
 import { currentJobSignal, jobStopReason, noteJobProgress, withJobStage } from "@/lib/dm/job-control";
 import { MODEL_STAGE_GRACE_MS } from "@/lib/dm/job-stage-logic";
 import { rolesMustAlternate, withAlternatingRoles } from "@/lib/chat-roles-logic";
@@ -66,7 +66,6 @@ const DEFAULT_CUSTOM_TEXT_TIMEOUT_MS = 3 * 60 * 1000;
 const DEFAULT_LOCAL_TEXT_TIMEOUT_MS = 6 * 60 * 1000;
 const MIN_TEXT_TIMEOUT_MS = 30 * 1000;
 const MAX_TEXT_TIMEOUT_MS = 30 * 60 * 1000;
-const WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS = 65_536;
 const SMALL_MODEL_LOCAL_CONTEXT_TOKENS = 32_768;
 
 export type TextContentPart = {
@@ -231,15 +230,18 @@ export function localMaxOutputTokens() {
   return Math.max(256, Math.min(parsed, MAX_CONFIGURABLE_OUTPUT_TOKENS));
 }
 
-// Defaults to the model's full native window: Gemma 4's sliding-window
-// attention keeps the KV cache small even at 256K, so memory is not the
-// limiting factor. LOCAL_TEXT_CONTEXT can cap it to bound worst-case
-// prefill time on very long stories. The window comes from the documented
-// table, then what Ollama said of the model, then the catalog's row for the
-// same weights, then the 128K most current models share. A small model
-// (model-tuning-logic.ts SMALL_MODEL_PARAMS) plays on the short rules, whose
-// prompts stay near 20K, so it asks for 32K: Qwen3.5 9B's native 262K is a
-// cache of about 8.6 GB, which pushed most of the model off a 4 GB card.
+// The window Ollama is asked for (num_ctx): the model's own, capped at the
+// 64K the docs run llama-server with (story-window.ts DEFAULT_WINDOW), which
+// plays the full tool set. Ollama reserves the cache for the whole window
+// when it loads the model, used or not: gpt-oss-20b's native 128K is about
+// 3 GB of cache on top of the model, more than a 16 GB card has to spare.
+// The model's own window comes from the documented table, then what Ollama
+// said of the model, then the catalog's row for the same weights, then the
+// 128K most current models share. A small model (model-tuning-logic.ts
+// SMALL_MODEL_PARAMS) plays on the short rules, whose prompts stay near 20K,
+// so it asks for 32K: Qwen3.5 9B's native 262K is a cache of about 8.6 GB,
+// which pushed most of the model off a 4 GB card. LOCAL_TEXT_CONTEXT, when
+// set, decides instead, up to the model's own window.
 export function localContextTokens(model: string) {
   const native = knownLocalContextWindow(model) ?? catalogContextWindow(model) ?? DEFAULT_LOCAL_CONTEXT_TOKENS;
   const raw = serverEnv("LOCAL_TEXT_CONTEXT");
@@ -250,9 +252,7 @@ export function localContextTokens(model: string) {
     if (params && params < SMALL_MODEL_PARAMS) {
       return Math.min(native, SMALL_MODEL_LOCAL_CONTEXT_TOKENS);
     }
-    return onWindows()
-      ? Math.min(native, WINDOWS_DEFAULT_LOCAL_CONTEXT_TOKENS)
-      : native;
+    return Math.min(native, DEFAULT_WINDOW);
   }
 
   return Math.max(2_048, Math.min(parsed, native));

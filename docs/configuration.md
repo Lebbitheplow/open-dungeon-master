@@ -15,7 +15,7 @@ falls through to the env var.
 | `OPENAI_COMPAT_BASE_URL` | — | New-story default URL for Connect a server |
 | `OPENAI_COMPAT_MODEL` | — | New-story default model for Connect a server |
 | `LOCAL_TEXT_MAX_TOKENS` | `4096` | Max tokens generated per local turn |
-| `LOCAL_TEXT_CONTEXT` | model max | Cap on the local context window |
+| `LOCAL_TEXT_CONTEXT` | model's own, up to 64K (32K under 16B) | Context window asked of Ollama, up to the model's own |
 | `LOCAL_TEXT_TIMEOUT_MS` | `360000` | Local turn timeout (idle, resets per streamed chunk) |
 | `ARC_TEXT_TIMEOUT_MS` | `480000` | Timeout for story-arc generation/refresh and chapter summaries (non-streaming, whole reply must finish in time) |
 | `OPENROUTER_API_KEY` | — | Fallback key for OpenRouter URLs (else set in-app) |

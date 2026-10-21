@@ -250,6 +250,28 @@ try {
     });
     assert.ok("error" in patches.storyPatch({ kind: "local", baseUrl: "", model: "m", apiKey: "" }));
     assert.ok("error" in patches.storyPatch({ kind: "local", baseUrl: "http://x:1", model: " ", apiKey: "" }));
+    // The server's own Ollama runs on the Ollama provider, which sends the
+    // window with every call; its OpenAI-style endpoint would run Ollama's
+    // 4K default on a 16 GB card. The custom fields are left as they were.
+    assert.deepEqual(
+      patches.storyPatch({ kind: "local", baseUrl: "http://127.0.0.1:11434/v1", model: " gpt-oss:20b ", apiKey: "", ollama: true }, "https://api.openai.com/v1"),
+      { patch: { text: { provider: "local", localTextModel: "gpt-oss:20b" } } },
+    );
+    assert.ok("error" in patches.storyPatch({ kind: "local", baseUrl: "http://127.0.0.1:11434/v1", model: " ", apiKey: "", ollama: true }));
+    assert.equal(
+      patches.storyPatch({ kind: "local", baseUrl: "http://127.0.0.1:11434/v1", model: "gpt-oss:20b", apiKey: "", ollama: false }).patch.text.provider,
+      "custom",
+      "an Ollama the server's provider cannot reach stays on its OpenAI-style address",
+    );
+  });
+
+  await test("a found Ollama is the server's own when the addresses match", () => {
+    assert.equal(logic.sameServer("http://127.0.0.1:11434/v1", "http://127.0.0.1:11434"), true);
+    assert.equal(logic.sameServer("http://127.0.0.1:11434/v1", "http://localhost:11434/"), true, "localhost is 127.0.0.1");
+    assert.equal(logic.sameServer("http://host.docker.internal:11434/v1", "http://host.docker.internal:11434"), true);
+    assert.equal(logic.sameServer("http://127.0.0.1:11434/v1", "http://host.docker.internal:11434"), false);
+    assert.equal(logic.sameServer("http://127.0.0.1:11434/v1", "http://127.0.0.1:8001"), false);
+    assert.equal(logic.sameServer("", ""), false);
   });
 
   await test("pictures, narration, name and joining patches", () => {

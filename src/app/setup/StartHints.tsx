@@ -59,13 +59,8 @@ export function StartHints({ inContainer, machine }: { inContainer: boolean; mac
           </a>
           .
         </p>
-        <div>
-          <span className="mb-1 block">Ollama, with the same settings baked in (it calls the dice and other tools less reliably than llama.cpp):</span>
-          <CopyLine text="ollama pull qwen3.6:35b-a3b-q8_0 && ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile" label="Ollama commands" />
-        </div>
         <p>
-          LM Studio: load a model and switch on its local server. Any server with OpenAI-style tool calls works. Then press
-          Look again.
+          Ollama, LM Studio, vLLM or any server with OpenAI-style tool calls works too: start it, then press Look again.
         </p>
       </div>
     </details>

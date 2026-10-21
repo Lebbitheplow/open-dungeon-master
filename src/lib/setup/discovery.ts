@@ -21,10 +21,12 @@ import {
   readModelsAnswer,
   recommendedModel,
   scanHosts,
+  sameServer,
   textPorts,
   type ListedModel,
   type TextServerKind,
 } from "@/lib/setup/discovery-logic";
+import { serverEnv } from "@/lib/server-env";
 
 // Long enough for a busy llama-server (or a machine deep in swap) to answer
 // /models while it decodes; every port is asked at once, so the whole scan
@@ -41,6 +43,12 @@ export type FoundTextServer = {
   needsKey: boolean;
   models: ListedModel[];
   recommended: string;
+  // Ollama at the address the server's own Ollama provider uses
+  // (OLLAMA_BASE_URL). The wizard connects it through Ollama's native API,
+  // where every call carries the window (model-client.ts
+  // localContextTokens): its OpenAI-style endpoint ignores a window sent
+  // with the request and runs Ollama's own, 4K on a card under 24 GB.
+  ollamaNative?: boolean;
 };
 
 export type ScanResult = {
@@ -79,6 +87,12 @@ async function findTextServer(host: string, port: number, guess: TextServerKind)
   if (verdict === "found" && !body) {
     return null;
   }
+  const ollamaBase = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
+  const ollamaNative =
+    kind === "ollama" &&
+    verdict === "found" &&
+    sameServer(baseUrl, ollamaBase) &&
+    (await getJson(`${originOf(host, port)}/api/tags`, SCAN_TIMEOUT_MS)).status === 200;
   return {
     kind,
     label: TEXT_SERVER_LABEL[kind],
@@ -86,6 +100,7 @@ async function findTextServer(host: string, port: number, guess: TextServerKind)
     needsKey: verdict === "needs-key",
     models,
     recommended: recommendedModel(models),
+    ...(ollamaNative ? { ollamaNative } : {}),
   };
 }
 

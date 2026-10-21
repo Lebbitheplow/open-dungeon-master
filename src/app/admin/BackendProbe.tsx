@@ -40,17 +40,20 @@ const ROUTE_NOTES: Record<string, string> = {
 
 // baseUrl/model/apiKey are the field values as typed; blanks fall back to the
 // saved settings and env server-side, mirroring how a real turn resolves
-// them. Pass the API key field only when it holds a freshly typed key.
+// them. Pass the API key field only when it holds a freshly typed key, and
+// the provider only when it is not yet saved (the guided setup).
 export function BackendProbe({
   which,
   baseUrl,
   model,
   apiKey = "",
+  provider,
 }: {
   which: "story" | "utility";
   baseUrl: string;
   model: string;
   apiKey?: string;
+  provider?: "local" | "custom";
 }) {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<ProbeResult | null>(null);
@@ -62,7 +65,7 @@ export function BackendProbe({
       const response = await fetch("/api/admin/backend-probe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ which, baseUrl, model, apiKey }),
+        body: JSON.stringify({ which, baseUrl, model, apiKey, ...(provider ? { provider } : {}) }),
       });
       const data = await response.json().catch(() => null);
       setResult(
