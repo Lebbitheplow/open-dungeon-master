@@ -57,6 +57,22 @@ export default {
       check(passages.length === 2, `the table has two DM passages to voice (${passages.length})`);
       const [older, newer] = passages;
 
+      // A passage voiced before the reloaded page's event stream is open
+      // never reaches it (tts_stream and tts_ready are not replayed), and
+      // the header's control is drawn before the stream connects. Each page
+      // load counts its stream's opens, so the scenario narrates only once
+      // the table can hear it.
+      await page.addInitScript(() => {
+        const Native = window.EventSource;
+        window.EventSource = class extends Native {
+          constructor(...args) {
+            super(...args);
+            this.addEventListener("open", () => {
+              window.__odmStreamOpens = (window.__odmStreamOpens ?? 0) + 1;
+            });
+          }
+        };
+      });
       // Arrives at a page nobody has touched: open it once (tours closed),
       // then reload and keep hands off, since any key or click unlocks.
       const untouched = async () => {
@@ -65,6 +81,10 @@ export default {
         await eventually(() => page.locator('[aria-label^="Enable narration audio"], [aria-label="Narration volume"]').count(), {
           timeoutMs: 30_000,
           label: "the header's narration control after a reload",
+        });
+        await eventually(() => page.evaluate(() => (window.__odmStreamOpens ?? 0) > 0), {
+          timeoutMs: 30_000,
+          label: "the table's event stream open after the reload",
         });
         // One after the other, so the newer one is the last to arrive.
         for (const passage of [older, newer]) {
