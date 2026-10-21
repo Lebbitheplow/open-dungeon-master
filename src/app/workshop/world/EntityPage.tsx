@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Brush, ExternalLink, EyeOff, Lock, Pencil, Plus, Theater, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { KitButton } from "@/app/campaigns/[campaignId]/PanelKit";
@@ -19,6 +19,7 @@ import { PlayFields } from "./PlayFields";
 import type { OpenSystem } from "./WorldForgePanel";
 import { LinkEditor } from "./LinkEditor";
 import { EntityAvatar, SHELF_SYSTEMS, TypeChip, typeOf } from "./world-ui";
+import { PaintPanel, usePaintJobs } from "./PaintJobs";
 
 // One entry, read: its picture and names, what the table plays with, its
 // article with every other entry it names linked, its type's fields, its
@@ -75,18 +76,10 @@ export function EntityPage({
 }) {
   const { doc, entities } = world;
   const [editing, setEditing] = useState(false);
-  // The picture this entry had when Paint was pressed; while set, the world
-  // is read again every few seconds until a new one lands (a render takes a
-  // while, and the media queue may be busy), for three minutes at most.
-  const [painting, setPainting] = useState<{ from: string; until: number } | null>(null);
-  // Still waiting: the picture on show is the one Paint was pressed over.
-  const isPainting = painting !== null && entity.portrait === painting.from;
-  const { refresh } = api;
-  useEffect(() => {
-    if (!isPainting || !painting) return;
-    const timer = window.setInterval(() => (Date.now() > painting.until ? setPainting(null) : refresh()), 5_000);
-    return () => window.clearInterval(timer);
-  }, [isPainting, painting, refresh]);
+  // Paint's jobs for this entry, kept on the server (PaintJobs.tsx): a
+  // picture on its way, waiting for a decision or failed is still there
+  // after a reload.
+  const paint = usePaintJobs(campaignId, entity.ref, entity.portrait, api.refresh);
   const [linking, setLinking] = useState<WorldLink | "new" | null>(null);
   const type = typeOf(doc, entity);
   const byRef = useMemo(() => new Map(entities.map((entry) => [entry.ref, entry])), [entities]);
@@ -214,14 +207,12 @@ export function EntityPage({
           {canPaint ? (
             <KitButton
               tone="small"
-              busy={isPainting}
-              disabled={isPainting}
-              title="Paint a picture for this entry: a portrait, a vista, a sigil or an illustration by its type"
-              onClick={async () => {
-                if (await api.ai("paint", { ref: entity.ref })) setPainting({ from: entity.portrait, until: Date.now() + 180_000 });
-              }}
+              busy={paint.running !== null || paint.busy === "paint"}
+              disabled={paint.running !== null || paint.busy !== null}
+              title="Paint a picture for this entry: a portrait, a vista, a sigil or an illustration by its type. It waits beside the current picture until you keep it."
+              onClick={paint.start}
             >
-              {isPainting ? null : <Brush className="size-3.5" />} {isPainting ? "Painting" : "Paint"}
+              {paint.running || paint.busy === "paint" ? null : <Brush className="size-3.5" />} {paint.running?.state === "queued" ? "Queued" : paint.running ? "Painting" : "Paint"}
             </KitButton>
           ) : null}
           {onOpenSystem ? (
@@ -234,6 +225,8 @@ export function EntityPage({
           </KitButton>
         </div>
       </header>
+
+      <PaintPanel entity={entity} paint={paint} canPaint={canPaint} />
 
       {facts.length ? (
         <div className="flex flex-wrap gap-1.5" aria-label="At the table">

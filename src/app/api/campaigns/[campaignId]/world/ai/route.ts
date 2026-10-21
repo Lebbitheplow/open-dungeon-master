@@ -2,7 +2,6 @@ import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { applyForge } from "@/lib/db/world-forge-io";
 import { askTheWorld, draftEntry, forgeFromNotes, paintEntry } from "@/lib/dm/world-ai";
-import { imagesAvailable } from "@/lib/capabilities";
 import { publishEphemeral } from "@/lib/events";
 import { parseRef } from "@/lib/worldforge/model";
 import { recordsChanged } from "@/lib/workshop/record-events";
@@ -13,7 +12,9 @@ export const dynamic = "force-dynamic";
 // WorldForge's AI tools (src/lib/dm/world-ai.ts), the DM's alone. The forge,
 // ask and draft only answer; nothing is written until the DM keeps it
 // ("apply" writes a forge preview's ticked rows). Paint queues a picture on
-// the media queue and answers at once.
+// the media queue and answers at once with its job, which the entry's
+// paint route (world/entities/[ref]/paint) reads and decides; a refusal
+// answers with the failed job and its reason.
 const ref = z.string().max(100).refine((value) => parseRef(value) !== null);
 const bodySchema = z.discriminatedUnion("tool", [
   z.object({ tool: z.literal("forge"), text: z.string().trim().min(1).max(20_000), hint: z.string().trim().max(300).default("") }),
@@ -42,11 +43,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
       return answer(await askTheWorld(context.campaign, body.question));
     case "draft":
       return answer(await draftEntry(context.campaign, body.ref, body.hint));
-    case "paint":
-      if (!(await imagesAvailable())) {
-        return Response.json({ error: "This server has no image backend to paint with." }, { status: 409 });
+    case "paint": {
+      const painted = await paintEntry(context.campaign, body.ref, context.user);
+      if ("error" in painted) {
+        const { status, ...rest } = painted;
+        return Response.json(rest, { status });
       }
-      return paintEntry(context.campaign, body.ref) ? Response.json({ queued: true }) : Response.json({ error: "No such entry." }, { status: 404 });
+      return Response.json(painted);
+    }
     case "apply": {
       const result = applyForge(campaignId, body);
       publishEphemeral(campaignId, "world_updated", { at: Date.now() });

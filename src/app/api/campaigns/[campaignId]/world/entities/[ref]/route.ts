@@ -1,5 +1,6 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { deleteWorldEntity, updateWorldEntity } from "@/lib/db/world-forge";
+import { forgetPaintJobs } from "@/lib/db/world-paint-jobs";
 import { publishEphemeral } from "@/lib/events";
 import { parseRef } from "@/lib/worldforge/model";
 import { recordsChanged } from "@/lib/workshop/record-events";
@@ -50,6 +51,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!ref || !deleteWorldEntity(campaignId, ref)) {
     return Response.json({ error: "No such entry." }, { status: 404 });
   }
+  forgetPaintJobs(campaignId, ref);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, parseRef(ref)!.shelf, "world");
   return Response.json({ ok: true });

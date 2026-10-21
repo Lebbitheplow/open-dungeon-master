@@ -200,7 +200,8 @@ async function paintJob(language) {
   const original = console.error;
   console.error = (...parts) => lines.push(parts.map(String).join(" "));
   try {
-    assert.equal(paintEntry(campaign, entity.ref), true);
+    const painted = await paintEntry(campaign, entity.ref, owner);
+    assert.equal(painted.job?.state, "queued");
     await until(() => comfyPrompts.length > before || lines.some((line) => line.includes("[worldforge]")));
   } finally {
     console.error = original;

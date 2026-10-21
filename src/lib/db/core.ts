@@ -706,6 +706,29 @@ function ensureSchema(db: SqliteDatabase) {
       updated_at TEXT NOT NULL
     );
 
+    -- WorldForge's Paint (src/lib/db/world-paint-jobs.ts, audit WF-16): one
+    -- row per picture asked for an entry, from queued to accepted, rejected,
+    -- cancelled or failed with its reason. A finished picture waits here
+    -- until the DM keeps it; previous_path is the picture the entry had when
+    -- it was asked, which a late result must not replace unnoticed. boot is
+    -- the process that queued it, so a restart's lost jobs read as failed.
+    CREATE TABLE IF NOT EXISTS world_paint_jobs (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      ref TEXT NOT NULL,
+      user_id TEXT,
+      state TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      result_path TEXT NOT NULL DEFAULT '',
+      previous_path TEXT NOT NULL DEFAULT '',
+      boot TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      started_at TEXT,
+      finished_at TEXT,
+      decided_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_world_paint_jobs_entry ON world_paint_jobs (campaign_id, ref, created_at);
+
     CREATE TABLE IF NOT EXISTS battle_tokens (
       id TEXT PRIMARY KEY,
       map_id TEXT NOT NULL REFERENCES battle_maps(id) ON DELETE CASCADE,
