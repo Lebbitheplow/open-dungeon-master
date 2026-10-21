@@ -24,8 +24,9 @@
 campaigns with an AI Dungeon Master, on your own machine. The narrator is whichever
 AI you already have: **a local model** (llama.cpp, Ollama, LM Studio, vLLM), **an
 API key** (OpenAI, OpenRouter, or any OpenAI-compatible endpoint), or **a CLI agent
-you already pay for** (Claude Code, Codex, opencode, Grok Build), which narrates on
-its own subscription with no API key handed over. The model is the creative mind
+you already pay for** (Codex, Grok Build, Claude Code, opencode), which narrates on
+its own subscription with no API key handed over; Codex and Grok Build paint the
+pictures too. The model is the creative mind
 and narrator; a stack of server-side engines enforces the 5e rules for both the
 players and the DM. **The narrator never owns the numbers**: dice, hit points, spell slots, conditions, and the death track are computed and
 clamped by the backend, and the model changes game state only through tools the
@@ -33,6 +34,16 @@ server validates.
 
 The AI drives the session, requesting rolls, starting encounters, and playing NPCs
 and companions, following a secret story arc it regenerates as the campaign moves.
+
+> [!TIP]
+> **New here? Start with the [knowledge base](https://opendungeonmaster.com/guide/)
+> on the website.** It covers choosing a setup, the
+> [system requirements](https://opendungeonmaster.com/guide/start/system-requirements/),
+> installing the desktop and Android apps or this server, playing, leading a table,
+> running one as a human Dungeon Master and every setting, and it is checked against
+> each release. Most players never need a server: the
+> [apps](https://opendungeonmaster.com/download/) host a world themselves. This README
+> and [docs/](docs) are the reference for people running and changing the server.
 
 <div align="center">
 
@@ -45,7 +56,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 <table>
 <tr>
 <td width="50%" align="center"><img src="docs/screenshot-battle-map.png" alt="The battle map enlarged: painted terrain, portrait tokens, the initiative strip and the fog shroud, with the chronicle beside it" width="460"><br><sub>The battle map, fogged and in initiative</sub></td>
-<td width="50%" align="center"><img src="docs/screenshot-builder.png" alt="The character builder on the ability scores step: the standard array placed across the six abilities, each with its racial bonus and final score" width="460"><br><sub>The character builder, placing ability scores</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-builder.png" alt="The character builder on the Abilities step: the six step names under their diamonds, the standard array placed across the six abilities with each final score, and Place them for a Cleric" width="460"><br><sub>The character builder, placing ability scores</sub></td>
 </tr>
 <tr>
 <td width="50%" align="center"><img src="docs/screenshot-workshop.png" alt="The workshop hub: an XP budget for the party it is built for, and tiles for WorldForge, storyboard, party, battle maps, region, encounters, cast, factions, bestiary, homebrew, lore, tables, rules, plugin and share" width="460"><br><sub>The workshop, where prep lives</sub></td>
@@ -71,7 +82,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/text-model.webp" width="56"><br>
 <b>Your AI Dungeon Master, your choice</b><br>
-<sub>A local model (llama.cpp, Ollama, LM Studio, vLLM), an API key (OpenAI, OpenRouter, any OpenAI-compatible endpoint with tool calling), or a CLI agent subscription you already have: Claude Code, Codex, opencode or Grok Build. Whichever narrates, it makes the creative calls and never states a roll or edits its own numbers.</sub>
+<sub>A local model (llama.cpp, Ollama, LM Studio, vLLM; gpt-oss-20b on a 16 GB gaming card), an API key (OpenAI, OpenRouter, any OpenAI-compatible endpoint with tool calling), or a CLI agent subscription you already have: Codex or Grok Build, which also paint the pictures, Claude Code or opencode. Whichever narrates, it makes the creative calls and never states a roll or edits its own numbers.</sub>
 </td>
 </tr>
 <tr>
@@ -95,7 +106,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/images.webp" width="56"><br>
 <b>Battle maps &amp; scene art</b><br>
-<sub>Optional ComfyUI drives character portraits, inline scene art and top-down battle maps with per-character line of sight. Missing? It fails soft to a placeholder.</sub>
+<sub>Optional ComfyUI, an OpenAI key, or the Codex or Grok Build agent that narrates paints character portraits, inline scene art and location maps; battle maps draw themselves with per-character line of sight. Missing? It fails soft to a placeholder.</sub>
 </td>
 </tr>
 <tr>
@@ -143,12 +154,20 @@ enforced and what is guidance: [docs/rules-coverage.md](docs/rules-coverage.md).
 
 You need **Node 22.18+, 24 or 26+** (or Docker) and **a storyteller**: a local
 model server such as llama.cpp or Ollama, an API key (OpenAI, OpenRouter or any
-OpenAI-compatible provider), or a CLI agent you already pay for (Claude Code,
-Codex, opencode, Grok Build). Pictures and voice are optional.
+OpenAI-compatible provider), or a CLI agent you already pay for (Codex, Grok Build,
+Claude Code, opencode). Pictures and voice are optional.
 
-A local model needs **at least 16 GB of graphics memory**: a 16 GB card runs
-gpt-oss-20b, the minimum, and about 28 GB runs the recommended Qwen3.6-35B-A3B
-([what each size of card runs](docs/text-backends.md#hardware-for-a-local-model)).
+The two simplest storytellers: a **ChatGPT Plus** or **SuperGrok** plan, whose Codex
+or Grok Build agent narrates and paints the pictures on one subscription, signed in
+on the server's computer; or a **gaming PC with a 16 GB graphics card** running
+gpt-oss-20b, free and private.
+
+A local model needs **at least 16 GB of graphics memory**. A 16 GB card (a GeForce
+RTX 4060 Ti 16 GB, 4070 Ti Super, 4080, 5060 Ti 16 GB, 5070 Ti or 5080, or a Radeon
+RX 7600 XT, 7800 XT, 9060 XT 16 GB or 9070) runs **gpt-oss-20b** whole on the card,
+the pick for that card, and about 28 GB runs the recommended Qwen3.6-35B-A3B
+([what each size of card runs](docs/text-backends.md#hardware-for-a-local-model),
+and the [system requirements](https://opendungeonmaster.com/guide/start/system-requirements/)).
 Below 16 GB a local model is not supported; use an API key, an agent program or
 a human Dungeon Master. Run it on llama.cpp, with a **context window of at
 least 16K tokens to narrate and 24K to run fights; 32K or more is
@@ -181,6 +200,12 @@ Both follow the stable releases. Nightly betas, and how a beta becomes stable:
 [docs/releases.md](docs/releases.md).
 
 ## Documentation
+
+Playing, hosting from the apps, leading a table and every setting are in the
+**[knowledge base](https://opendungeonmaster.com/guide/)** on opendungeonmaster.com,
+with a [FAQ](https://opendungeonmaster.com/guide/reference/faq/) and
+[what changed in each release](https://opendungeonmaster.com/guide/reference/whats-new/).
+The documents below are the server's own reference.
 
 - **Getting started**
   - [Install and first run](docs/install.md): requirements, the guided setup, setup by hand, the first admin account, the content pack, tests
