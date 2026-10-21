@@ -97,13 +97,13 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
           description:
-            "Situational advantage or disadvantage from the fiction that the server cannot see. It counts only with advantageSource 'other' and advantageReason. The server already applies conditions (prone, invisible, hidden, restrained...), cover, light and darkness, range, Help, flanking, Reckless Attack and every feature: never claim those.",
+            "Situational advantage or disadvantage from the fiction that the server cannot see. It counts only with advantageSource 'other' and advantageReason. The server already applies conditions (prone, invisible, hidden, restrained...), cover, light and darkness, range, Help, flanking, spells, Reckless Attack and every feature: never claim those.",
         },
         advantageSource: {
           type: "string",
           enum: [...ADVANTAGE_SOURCES],
           description:
-            "Where the advantage or disadvantage comes from. Only 'other', a circumstance of the fiction the server cannot see (named in advantageReason), counts: the server applies conditions, cover, light, range, Help, flanking, spells, Inspiration and features itself.",
+            "Where the advantage or disadvantage comes from; only 'other' counts.",
         },
         advantageReason: {
           type: "string",

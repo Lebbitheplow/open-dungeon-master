@@ -1300,7 +1300,7 @@ export const requestRollTool = {
           type: "string",
           enum: [...ADVANTAGE_SOURCES],
           description:
-            "Where the advantage or disadvantage comes from. Only 'other', a circumstance of the fiction the server cannot see (named in advantageReason), counts: the server applies conditions, cover, light, range, Help, flanking, spells, Inspiration and features itself.",
+            "Where the advantage or disadvantage comes from; only 'other' counts.",
         },
         advantageReason: {
           type: "string",
