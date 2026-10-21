@@ -86,11 +86,21 @@ export default {
           timeoutMs: 30_000,
           label: "the table's event stream open after the reload",
         });
-        // One after the other, so the newer one is the last to arrive.
-        for (const passage of [older, newer]) {
+        // One after the other, so the newer one is the last to arrive. A
+        // passage voiced while the stream is still settling (it can reopen
+        // once on a loaded machine) is not replayed, so each is voiced again
+        // until the banner shows the page heard it.
+        await voiceUntilHeld(older, "A passage arrived");
+        await voiceUntilHeld(newer, "2 passages arrived");
+      };
+      const voiceUntilHeld = async (passage, said) => {
+        const heard = () => banner.filter({ hasText: said }).count();
+        for (let attempt = 0; attempt < 4; attempt += 1) {
           const voiced = await api.post(`${base}/api/campaigns/${ids.campaignId}/messages/${passage.id}/narrate`);
           check(voiced.ok(), `narrating passage ${passage.id} answered ${voiced.status()}`);
+          if (await eventually(heard, { timeoutMs: 6_000, label: `"${said}"` }).catch(() => false)) return;
         }
+        await eventually(heard, { label: `the banner saying "${said}"` });
       };
       const banner = page.locator(".session-banner").filter({ hasText: "Narration is waiting" });
       // Above the composer, or over the bottom tabs on a phone whose view
