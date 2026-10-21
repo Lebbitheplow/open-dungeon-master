@@ -545,7 +545,7 @@ export function BondsGroup({ settings, patch }: Base) {
 // one of the choices is offered as itself.
 const WAIT_CHOICES = [30, 60, 120, 180, 300, 600, 900];
 function waitLabel(seconds: number) {
-  return `Waits for everyone, up to ${seconds % 60 ? `${seconds}s` : `${seconds / 60} min`} after the latest answer`;
+  return `Waits for everyone, up to ${seconds % 60 ? `${seconds}s` : `${seconds / 60} min`}`;
 }
 const PACING_INFO =
   "Answers the first post: the AI DM narrates as soon as anyone acts, so the quickest player sets the pace.\n\nWaits for everyone: after each narration the AI DM waits until every player who has the table open (or plays through a connected agent) has acted or pressed Pass, then answers them all in one turn. The clock starts with the first answer and restarts with every post or pass, so only a quiet table runs it out. The lead can say Go on now at any time. A spotlight, a fight's turn order and table talk never wait.";
