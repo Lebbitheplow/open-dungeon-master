@@ -40,6 +40,7 @@ import { companionMode } from "@/lib/dm/companion-tools";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
 import { describeWeather } from "@/lib/srd/weather";
 import { describeParty, normalizeParty } from "@/lib/dm/party-logic";
+import { partyStoryOf, partyStoryPromptLines } from "@/lib/dm/party-story";
 import { formationPartyIds } from "@/lib/dm/roster";
 import { getSceneTracker } from "@/lib/db/scene-tracker";
 import { trackerPromptBlock } from "@/lib/dm/scene-tracker-logic";
@@ -751,6 +752,9 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (campaign.description) {
     sections.push(`Premise: ${campaign.description}`);
   }
+  // Why this party is together, when the table wrote it down: the setup hook
+  // and the lobby's shared backstory. Nothing at all when both are blank.
+  sections.push(...partyStoryPromptLines(partyStoryOf(campaign)));
   // The in-world date, time of day and season. Authoritative like everything
   // else in this block: the model narrates from it rather than inventing
   // "as evening fell" over a scene the clock says is mid-morning. Moved by

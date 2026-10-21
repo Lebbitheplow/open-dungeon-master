@@ -16,6 +16,8 @@ import { LobbyParty } from "@/app/campaigns/[campaignId]/LobbyParty";
 import { LobbyGroupHead, LobbyHero, LobbyRealDice, enter } from "@/app/campaigns/[campaignId]/LobbyPieces";
 import { LobbyRoomCode } from "@/app/campaigns/[campaignId]/LobbyRoomCode";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
+import { PartyStory } from "@/app/campaigns/[campaignId]/PartyStory";
+import { mayWritePartyBackstory } from "@/lib/dm/party-story";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { useVoiceSpeaking } from "@/app/campaigns/[campaignId]/liveStore";
@@ -535,6 +537,23 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               onDelete={() => void deleteCampaign()}
             />
           </div>
+
+          {/* Optional, and written once characters have joined: how this
+              party knows each other. Right after the actions so a phone
+              reaches Begin first. */}
+          <section className="lobby-enter order-4 mb-6" style={enter(4)}>
+            <LobbyGroupHead glyph="tab-party" title="Party story" />
+            <div className={cn(ui.card, "p-3")}>
+              <PartyStory
+                campaignId={campaign.id}
+                hook={campaign.gameSettings.partyHook}
+                party={campaign.party}
+                canWrite={mayWritePartyBackstory({ isLead, holdsDmSeat: isDm, hasCharacter: mySheets.length > 0 })}
+                canEditHook={steersStory}
+                hasCharacters={sheets.some((sheet) => !(sheet.isCompanion && sheet.companionKind === "guest"))}
+              />
+            </div>
+          </section>
 
           {/* Settings, rules and lore are story authority (the lead at an AI
               table, the DM once a person runs it), which is what their routes

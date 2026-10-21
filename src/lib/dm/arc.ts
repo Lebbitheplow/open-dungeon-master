@@ -61,6 +61,7 @@ import { setDmStatus } from "@/lib/dm/status";
 import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { ensureWorldArcs } from "@/lib/dm/world-arc";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { partyStoryOf, partyStoryPlannerBlock } from "@/lib/dm/party-story";
 
 // Story-arc generation and upkeep. The arc is the DM's secret spine: a saga
 // sized by the lead's campaign-length setting is generated once at campaign
@@ -119,7 +120,8 @@ function recentChapterLines(campaignId: string): string {
     .join("\n");
 }
 
-// Party-composition planning lines: pets, and AI companions the saga should
+// Party-composition planning lines: the table's party hook and shared
+// backstory when it wrote them, pets, and AI companions the saga should
 // plan moments for. A beastmaster's wolf or a drakewarden's drake is a
 // promise the story ought to keep, so saga-scale generation (initial,
 // upgrade, and sequel passes) is told explicitly to plan around them. The
@@ -150,10 +152,18 @@ function partyCompositionContext(campaignId: string): string {
       );
     }
   }
-  if (!lines.length) {
-    return "";
-  }
-  return `Party composition notes; the plan must keep these promises (tie at least one boss, ally, or event to each line):\n${lines.join("\n")}`;
+  // The table's own account of why the party is together rides with the
+  // composition notes, so every saga-scale pass (initial, upgrade, act
+  // detail, sequel) keeps it and the per-chapter refresh stays as cheap.
+  const campaign = getCampaignById(campaignId);
+  return [
+    campaign ? partyStoryPlannerBlock(partyStoryOf(campaign)) : "",
+    lines.length
+      ? `Party composition notes; the plan must keep these promises (tie at least one boss, ally, or event to each line):\n${lines.join("\n")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 // Capability roster for the passes that write real beats. They see the arc
