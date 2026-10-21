@@ -19,13 +19,13 @@ import {
 // glowing gold focus rings, and pixel-art tiles framed in gold.
 
 export const PIXEL_ICONS = {
-  chats: "/sidebar-icons/chats.png",
-  characters: "/sidebar-icons/characters.png",
-  story: "/sidebar-icons/story.png",
-  images: "/sidebar-icons/images.png",
-  textModel: "/sidebar-icons/text-model.png",
-  localData: "/sidebar-icons/local-data.png",
-  support: "/sidebar-icons/support.png",
+  chats: "/sidebar-icons/chats.webp",
+  characters: "/sidebar-icons/characters.webp",
+  story: "/sidebar-icons/story.webp",
+  images: "/sidebar-icons/images.webp",
+  textModel: "/sidebar-icons/text-model.webp",
+  localData: "/sidebar-icons/local-data.webp",
+  support: "/sidebar-icons/support.webp",
 } as const;
 
 export const ui = {
