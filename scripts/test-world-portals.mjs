@@ -57,7 +57,6 @@ const DRAFT = {
   inventoryApprovals: false,
   midGameJoinOpen: false,
   holdSubmissions: false,
-  waitForTable: false,
   narrationGuard: true,
   relationships: "on",
   romance: "on",
@@ -70,7 +69,7 @@ const TABLE = {
   ttsAvailable: true,
   mapsAvailable: true,
 };
-const ALL_ON = { ...DRAFT, inventoryApprovals: true, vitalsApprovals: true, midGameJoinOpen: true, holdSubmissions: true, waitForTable: true };
+const ALL_ON = { ...DRAFT, inventoryApprovals: true, vitalsApprovals: true, midGameJoinOpen: true, holdSubmissions: true };
 
 // ---- the portals ----
 
@@ -169,10 +168,10 @@ function rowsOf(draft, gates) {
   return tableSheet(draft, gates).flatMap((group) => group.rows);
 }
 
-test("featuresOn counts fifteen, wait for the table included", () => {
-  assert.equal(featuresOn(ALL_ON, TABLE), 15);
-  assert.equal(countableRows(TABLE), 15);
-  assert.equal(rowsOf(ALL_ON, TABLE).filter((row) => row.counted).length, 15);
+test("featuresOn still counts fourteen", () => {
+  assert.equal(featuresOn(ALL_ON, TABLE), 14);
+  assert.equal(countableRows(TABLE), 14);
+  assert.equal(rowsOf(ALL_ON, TABLE).filter((row) => row.counted).length, 14);
   // The four that are shown but uncounted stay uncounted.
   const uncounted = rowsOf(ALL_ON, TABLE).filter((row) => !row.counted).map((row) => row.key);
   assert.deepEqual(uncounted.sort(), ["boardDrawing", "enemyIntent", "multiCharacter", "presentation"]);
@@ -205,14 +204,14 @@ test("the dots on the sheet always add up to featuresOn", () => {
 
 test("gating is the old gating", () => {
   const keys = (draft, gates) => rowsOf(draft, gates).map((row) => row.key);
-  assert.equal(keys(ALL_ON, TABLE).length, 19);
+  assert.equal(keys(ALL_ON, TABLE).length, 18);
   const human = keys(ALL_ON, { ...TABLE, aiNarrates: false });
-  for (const key of ["aiStorySetup", "narrationGuard", "worldSimulation", "waitForTable"]) {
+  for (const key of ["aiStorySetup", "narrationGuard", "worldSimulation"]) {
     assert.ok(!human.includes(key), `${key} shows with a human narrator`);
   }
   assert.ok(!tableSheet(ALL_ON, { ...TABLE, aiNarrates: false }).some((group) => group.id === "narration"));
   const solo = keys(ALL_ON, { ...TABLE, solo: true });
-  assert.ok(!solo.includes("midGameJoinOpen") && !solo.includes("holdSubmissions") && !solo.includes("waitForTable"));
+  assert.ok(!solo.includes("midGameJoinOpen") && !solo.includes("holdSubmissions"));
   assert.ok(!keys({ ...ALL_ON, ambienceEnabled: false }, TABLE).includes("ambienceAuto"));
   assert.ok(!keys({ ...ALL_ON, relationships: "off" }, TABLE).includes("romance"));
 });

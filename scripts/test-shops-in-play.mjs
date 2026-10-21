@@ -20,6 +20,9 @@ import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-shops-in-play-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
+// The fallback stock is checked as a fresh server has it, with no content
+// pack, whether or not this machine has one installed.
+process.env.CONTENT_DB_PATH = path.join(dir, "no-content-pack.sqlite");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
@@ -111,7 +114,7 @@ test("a shop opening writes one line for every seat, carrying the shop", () => {
 });
 
 test("with no content pack a shop stocks from the bundled SRD tables, magic left out", () => {
-  // This suite runs with no pack installed, as a fresh server does.
+  // CONTENT_DB_PATH above names no file, as on a fresh server.
   const smith = stockPool("smith");
   assert.ok(smith.some((item) => item.name === "Longsword" && item.cost === "1500 cp"), "a longsword at its 15 gp list price");
   assert.ok(smith.some((item) => item.name === "Plate"), "armor too");

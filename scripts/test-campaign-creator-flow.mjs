@@ -29,7 +29,7 @@ function drawnKeys(source) {
 
 await test("every switch of the old table sheet is drawn exactly once", () => {
   const every = tableSheet({ ...DEFAULT_DRAFT, ambienceEnabled: true, relationships: "on" }, allGates).flatMap((group) => group.rows.map((row) => row.key));
-  assert.equal(every.length, 19, "the table sheet's row count changed; update this test with it");
+  assert.equal(every.length, 18, "the table sheet's row count changed; update this test with it");
   // Characters per player is drawn as its three answers side by side
   // (MultiCharacterField), not as a cycling switch.
   const drawn = [
