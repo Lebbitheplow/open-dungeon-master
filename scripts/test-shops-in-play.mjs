@@ -92,6 +92,9 @@ test("the rules open the shop before its wares and keep prices out of prose", ()
   const context = { inEncounter: false, groups: new Set(), caster: false, features: false, classFeatures: false, featSpells: false, dying: false, arc: false, recall: false, map: false, legendary: false };
   assert.match(rules.dmSystemText(false, context), rule, "a compact call carries it, shop group open or not");
   assert.match(rules.DM_SYSTEM, /buy_item, sell_item and haggle trade at a shop in GAME STATE/, "trading at a listed shop still goes through its tools");
+  // The short rules a small model plays on (PR #463) say it too: the model
+  // that lists a smith's wares in prose is the small one.
+  assert.match(rules.dmSystemText(false, { ...context, brief: true }), /call open_shop before you describe its wares, and never price them in prose/, "the short rules carry it");
 });
 
 const dm = createUser("dm", "x");
