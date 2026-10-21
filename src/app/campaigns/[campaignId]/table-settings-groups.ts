@@ -191,6 +191,7 @@ export function tableGroupSummary(id: TableGroupId, settings: GameSettings, cont
       return [
         `joining mid-game ${settings.midGameJoinOpen ? "open" : "closed"}`,
         settings.holdSubmissions ? "held responses" : null,
+        settings.waitForTable ? "DM waits for the table" : null,
         settings.inventoryApprovals || settings.vitalsApprovals ? "players confirm changes" : "changes apply at once",
       ]
         .filter(Boolean)

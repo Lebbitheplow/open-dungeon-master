@@ -5,7 +5,8 @@ import { NO_STORYTELLER_MESSAGE, storyConfigured, storytellerConfigured } from "
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { layOver } from "@/lib/schemas/parse-keeping-valid";
 import { publishPersisted } from "@/lib/events";
-import { wakeForWaitingPlayers } from "@/lib/dm/loop";
+import { requestDmTurn, wakeForWaitingPlayers } from "@/lib/dm/loop";
+import { settleTableWait } from "@/lib/dm/table-wait";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,5 +80,15 @@ export async function PATCH(
     return Response.json({ error: "Campaign not found." }, { status: 404 });
   }
   publishPersisted(campaignId, "campaign_updated", { gameSettings });
+  // Wait for the table switched off or its time shortened: posts it held
+  // are answered now rather than at the next post, and every seat is told.
+  if (sent.has("waitForTable") || sent.has("waitForTableSeconds")) {
+    const fire = settleTableWait(campaignId);
+    if (fire) {
+      requestDmTurn(campaignId);
+    } else if (!gameSettings.waitForTable && context.campaign.gameSettings.waitForTable) {
+      wakeForWaitingPlayers(campaignId, true);
+    }
+  }
   return Response.json({ gameSettings });
 }

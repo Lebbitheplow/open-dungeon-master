@@ -11,6 +11,7 @@ import { MODE_GLYPHS } from "@/app/campaigns/[campaignId]/sessionGlyphs";
 import { useLingeringEncounter } from "@/app/campaigns/[campaignId]/useLingeringEncounter";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
+import { TableWaitBanner } from "@/app/campaigns/[campaignId]/TableWaitBanner";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
@@ -72,6 +73,7 @@ function ComposerInner({
   pendingRolls,
   members,
   floor,
+  tableWait,
   spotlighted,
   heldSpotlightNames,
   encounter,
@@ -118,6 +120,7 @@ function ComposerInner({
   // For the pending cards: who holds their own rolls (shake to roll).
   members: CampaignState["members"];
   floor: Parameters<typeof FloorBanners>[0]["floor"];
+  tableWait?: CampaignState["tableWait"];
   spotlighted: CampaignState["sheets"];
   heldSpotlightNames: string[];
   encounter: CampaignState["encounter"];
@@ -189,6 +192,15 @@ function ComposerInner({
           meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
+        {floor.mode === "open" && dmStatus === "idle" ? (
+          <TableWaitBanner
+            campaignId={campaignId}
+            wait={tableWait ?? null}
+            meUserId={meUserId}
+            steersStory={steersStory}
+            onGoOn={onReleaseFloor}
+          />
+        ) : null}
         <DirectorArmedBanner campaignId={campaignId} steersStory={steersStory} armed={directorArm} />
         <StoryNudge
           cadence={storyCadence}

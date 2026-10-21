@@ -27,6 +27,7 @@ export function featuresOn(draft: CampaignDraft, gates: WizardGates): number {
     aiNarrates && draft.narrationGuard,
     !solo && draft.midGameJoinOpen,
     !solo && draft.holdSubmissions,
+    aiNarrates && !solo && draft.waitForTable,
   ].filter(Boolean).length;
 }
 
@@ -46,6 +47,7 @@ export type SheetRowKey =
   | "multiCharacter"
   | "midGameJoinOpen"
   | "holdSubmissions"
+  | "waitForTable"
   | "multiclassingEnabled"
   | "inventoryApprovals"
   | "vitalsApprovals"
@@ -62,7 +64,7 @@ export type SheetRow = {
   on: boolean;
   // Where the knob rests: 0 off, 1 on, 0.5 for the middle of the tri-state.
   knob: 0 | 0.5 | 1;
-  // True for the thirteen rows featuresOn() adds up.
+  // True for the rows featuresOn() adds up.
   counted: boolean;
   disabled: boolean;
   // A row that exists because its parent is on arrives rather than blinks in.
@@ -98,6 +100,7 @@ const ROWS: RowSpec[] = [
   { key: "multiCharacter", group: "people", counted: false },
   { key: "midGameJoinOpen", group: "people", counted: true, tableOnly: true },
   { key: "holdSubmissions", group: "people", counted: true, tableOnly: true },
+  { key: "waitForTable", group: "people", counted: true, tableOnly: true, aiOnly: true },
   { key: "multiclassingEnabled", group: "rules", counted: true },
   { key: "inventoryApprovals", group: "rules", counted: true },
   { key: "vitalsApprovals", group: "rules", counted: true },
@@ -167,6 +170,8 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
       return { label: "Mid-game joining", hint: "New players can use the invite code after the start" };
     case "holdSubmissions":
       return { label: "Held responses", hint: "Nobody acts until the party lead opens the floor" };
+    case "waitForTable":
+      return { label: "Wait for the table", hint: "The DM answers once everyone has acted or passed" };
     case "multiclassingEnabled":
       return { label: "Multiclassing", hint: "Second classes at level-up" };
     case "inventoryApprovals":

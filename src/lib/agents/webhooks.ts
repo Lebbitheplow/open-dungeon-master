@@ -347,6 +347,7 @@ export function reserveWebhookWrite(grant: ConnectionGrant, input: { subscriptio
       (input.tool !== "odm_answer_roll" && opportunity.type === "roll_requested") ||
       (input.tool === "odm_take_action" && opportunity.phase === "finish") ||
       (input.tool === "odm_end_turn" && opportunity.type !== "turn_started") ||
+      (input.tool === "odm_pass" && opportunity.type !== "response_requested") ||
       // A level is taken only with odm_level_up, and odm_level_up takes
       // nothing but a level: never a way to act at the table out of turn.
       ((input.tool === "odm_level_up") !== (opportunity.type === "level_up_available"))) {
@@ -419,6 +420,10 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   const narration = getLatestDmMessage(campaign.id);
   const last = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_messages WHERE campaign_id = ? AND user_id = ? AND author_type = 'player' AND content NOT LIKE '(ooc) %'`)
     .get(campaign.id, grant.userId) as { seq: number | null };
+  // A pass at a table that waits for everyone (src/lib/dm/table-wait.ts)
+  // answers the passage as surely as a post does.
+  const passed = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'table_pass' AND json_extract(payload_json, '$.userId') = ?`)
+    .get(campaign.id, grant.userId) as { seq: number | null };
   const held = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'floor_changed' AND json_extract(payload_json, '$.floor.mode') = 'hold'`)
     .get(campaign.id) as { seq: number | null };
   const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0);
@@ -432,7 +437,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     turn: encounter?.orderReady && entry?.kind === "pc" ? {
       id: encounter.id, characterId: entry.characterId, userId: entry.userId, key: turnKey(encounter), waitingSeq: encounter.waitingSeq,
     } : null,
-    narration, lastPlayerSeq: last.seq ?? 0,
+    narration, lastPlayerSeq: Math.max(last.seq ?? 0, passed.seq ?? 0),
     level: sheet?.id === sub.character_id && !sheet.isCompanion ? { current: sheet.level, earned: Math.min(20, levelForXp(sheet.xp)) } : null,
   });
   // A pause or hold re-invites a table decision it interrupted. A level is

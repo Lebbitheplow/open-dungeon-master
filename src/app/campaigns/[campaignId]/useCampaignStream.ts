@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { CoordinationPhase } from "@/lib/dm/coordination-logic";
+import type { TableWaitView } from "@/lib/dm/table-wait-logic";
 import { coalesceRefresh } from "@/app/campaigns/[campaignId]/coalesce";
 import { createStreamWatchdog } from "@/app/campaigns/[campaignId]/streamWatchdog";
 import {
@@ -163,6 +164,9 @@ export type CampaignState = {
   campaign: Campaign | null;
   // The plan the party is coordinating, while it drafts (issue 254).
   coordination: CoordinationPhase | null;
+  // Who the DM is waiting on before its next turn, at a table that waits
+  // for everyone (src/lib/dm/table-wait.ts); null when it is not waiting.
+  tableWait: TableWaitView | null;
     // The table holds a story arc AI Story Setup has not built on yet (the
   // lobby's warning, issue 249); false for anyone who does not steer.
   prepArc: boolean;
@@ -331,6 +335,7 @@ const initialState: CampaignState = {
   campaign: null,
   prepArc: false,
   coordination: null,
+  tableWait: null,
   // A plain player until the snapshot says otherwise: the safe default is
   // the one that shows the fewest controls and no secrets.
   caps: capsForRole("player", "ai"),
@@ -933,6 +938,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "coordination_updated":
           next.coordination = (payload.phase as CoordinationPhase | null) ?? null;
           return next;
+        case "table_wait":
+          next.tableWait = (payload.wait as TableWaitView | null) ?? null;
+          return next;
         case "floor_changed":
           next.campaign = state.campaign
             ? { ...state.campaign, floor: payload.floor as Campaign["floor"] }
@@ -1094,6 +1102,9 @@ const EPHEMERAL_EVENTS = [
   "cast_updated",
   "tts_stream",
   "dm_status",
+  // Who the DM waits on before its next turn (src/lib/dm/table-wait.ts).
+  // The whole view each time, and the snapshot carries it for a reload.
+  "table_wait",
   "dm_job",
   "utility_calls",
   "dm_delta",
@@ -1256,6 +1267,7 @@ export function useCampaignStream(campaignId: string) {
           campaign: data.campaign,
           prepArc: Boolean(data.prepArc),
           coordination: (data.coordination as CoordinationPhase | null) ?? null,
+          tableWait: (data.tableWait as TableWaitView | null) ?? null,
           caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,
           members: data.members,

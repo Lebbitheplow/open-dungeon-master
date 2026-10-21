@@ -1187,6 +1187,7 @@ export function SessionView({
                     pendingRolls={pendingRolls}
                     members={state.members}
                     floor={floor}
+                    tableWait={state.tableWait}
                     spotlighted={gate.spotlighted}
                     heldSpotlightNames={gate.heldSpotlightNames}
                     encounter={state.encounter}

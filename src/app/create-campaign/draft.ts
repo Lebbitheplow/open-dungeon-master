@@ -65,6 +65,10 @@ export type CampaignDraft = {
   vitalsApprovals: boolean;
   midGameJoinOpen: boolean;
   holdSubmissions: boolean;
+  // Wait for the table (src/lib/dm/table-wait.ts). The wait's length is
+  // tuned at the table, in Settings, so the draft carries the default.
+  waitForTable: boolean;
+  waitForTableSeconds: number;
   narrationGuard: boolean;
   // Safety and tone (docs/vtt-parity-implementation-plan.md section 9).
   safety: { xCard: boolean; lines: string[]; veils: string[]; boundaries: "family" | "standard" | "mature" };
@@ -125,6 +129,8 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   vitalsApprovals: false,
   midGameJoinOpen: false,
   holdSubmissions: false,
+  waitForTable: false,
+  waitForTableSeconds: 300,
   narrationGuard: true,
   safety: { xCard: true, lines: [], veils: [], boundaries: "standard" },
   gm: { strictness: "standard", tone: [] },

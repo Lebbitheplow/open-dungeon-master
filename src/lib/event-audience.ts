@@ -103,6 +103,10 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // A coordinated plan is drafted in the open, for the party to fit its
   // moves together (issue 254); nothing in it is the DM's secret.
   coordination_updated: TABLE,
+  // Wait for the table (src/lib/dm/table-wait.ts): who the DM waits on and
+  // who passed. Both are what every seat already sees across the table.
+  table_wait: TABLE,
+  table_pass: TABLE,
   // A disputed ruling and its outcome: who objected and to what is the
   // table's business, and the vote is the table's.
   ruling_disputed: TABLE,

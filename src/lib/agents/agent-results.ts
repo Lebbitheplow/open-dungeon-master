@@ -268,6 +268,9 @@ export function campaignForAgent(text: string, max = MAX_RESULT_CHARS, options: 
     tableBreak: snapshot.tableBreak ?? null,
     dmStatus: snapshot.dmStatus ?? null,
     floor,
+    // Who the DM waits on before its next turn at a table that waits for
+    // everyone; odm_pass answers it without a post.
+    tableWait: snapshot.tableWait ?? null,
     caps: snapshot.caps ?? null,
     pendingRolls: snapshot.pendingRolls ?? [],
     encounter: snapshot.encounter ?? null,
@@ -356,6 +359,7 @@ function statusOf(snapshot: JsonObject, campaign: JsonObject): JsonObject {
     tableBreak: snapshot.tableBreak ?? null,
     dmStatus: snapshot.dmStatus ?? null,
     floor: campaign.floor ?? null,
+    tableWait: snapshot.tableWait ?? null,
     caps: snapshot.caps ?? null,
     pendingRolls: snapshot.pendingRolls ?? [],
     disputes: snapshot.disputes ?? [],

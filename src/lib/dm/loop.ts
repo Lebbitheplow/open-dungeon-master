@@ -1,12 +1,13 @@
 // Compatibility entry point: the DM turn now lives in src/lib/dm/turn.ts as
 // a persisted state machine (park/resume for physical dice). Callers keep
 // using runDmTurn via the per-campaign queue.
-import { campaignSeats, getCampaignById } from "@/lib/db/campaigns";
+import { campaignSeats, getCampaignById, latestSeq } from "@/lib/db/campaigns";
 import { consumeDmCoverTurn } from "@/lib/db/dm-cover";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { listRecentMessages } from "@/lib/db/messages";
 import { getDmStatus, setDmStatus } from "@/lib/dm/status";
+import { tableWaitTurnStarted } from "@/lib/dm/table-wait";
 import { startDmTurn } from "@/lib/dm/turn";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { registerDmWaker } from "@/lib/dm/wake";
@@ -68,6 +69,9 @@ export function requestDmTurn(campaignId: string): boolean {
     // Clear before the turn builds history: everything persisted up to this
     // point is covered by this turn; later arrivals re-request.
     requested().delete(campaignId);
+    // A table that waits for everyone opens its next window here, so a post
+    // made while this turn writes counts for the next one.
+    tableWaitTurnStarted(campaignId, latestSeq(campaignId));
     await startDmTurn(campaignId);
   }, { kind: "turn" });
   return true;

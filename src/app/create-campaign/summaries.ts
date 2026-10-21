@@ -94,6 +94,7 @@ export function playersSummary(draft: CampaignDraft, gates: WizardGates): string
     draft.multiCharacter === "off" ? "one character each" : draft.multiCharacter === "one_active" ? "several characters, one at a time" : "several characters, all fielded",
     gates.solo ? null : `joining mid-game ${draft.midGameJoinOpen ? "open" : "closed"}`,
     gates.solo ? null : draft.holdSubmissions ? "held responses" : null,
+    gates.solo || !gates.aiNarrates ? null : draft.waitForTable ? "the DM waits for the table" : null,
     draft.inventoryApprovals || draft.vitalsApprovals ? "players confirm changes" : "changes apply at once",
   ]
     .filter(Boolean)

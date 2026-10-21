@@ -28,6 +28,17 @@ export async function register() {
         console.error("[dm] could not recover what the restart interrupted", error);
       }
 
+      // Tables waiting for everyone lost their timers with the process
+      // (src/lib/dm/table-wait.ts). The loop is loaded first so a deadline
+      // that passed while the server was down can wake the DM.
+      try {
+        await import("@/lib/dm/loop");
+        const { rearmTableWaits } = await import("@/lib/dm/table-wait");
+        rearmTableWaits();
+      } catch (error) {
+        console.error("[dm] could not re-arm the tables waiting for everyone", error);
+      }
+
       // Event loop delay for the admin's metrics (src/lib/metrics.ts).
       const { startProcessMetrics } = await import("@/lib/metrics");
       startProcessMetrics();

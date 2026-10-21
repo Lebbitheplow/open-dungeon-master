@@ -316,6 +316,16 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     body: () => ({}),
   },
   {
+    name: "odm_pass",
+    scope: "play",
+    description: "Pass this beat at a table that waits for everyone (tableWait in odm_get_campaign lists who the DM is waiting on): you have nothing to add, so the DM stops waiting on you. Nothing is posted. Refused where the table does not wait, or once you have acted or passed since the last narration.",
+    properties: { ...campaignIdProp, ...WEBHOOK_GUARD_PROPS },
+    required: ["campaignId"],
+    method: "POST",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/pass`,
+    body: () => ({}),
+  },
+  {
     name: "odm_level_up",
     scope: "play",
     description: "Take your active character's next level, as the level-up dialog does: read odm_level_up_options first and send its nextLevel with the picks it lists. The server builds the level from these choices alone (hit points by the table's method, features, slots) and refuses an unearned level or an illegal pick with the reason. A pick left out stays owed for the next level-up. The answer is the new sheet with hpGained.",
@@ -594,7 +604,7 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   }
   const body = tool.body?.(args);
   let guarded = false;
-  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_level_up"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
+  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
     try {
       if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
       const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,

@@ -468,7 +468,7 @@ try {
     assert.deepEqual(woke, ["response_requested", "level_up_available"]);
     const prompt = playerPrompt(levelEvent, "Be helpful");
     assert.match(prompt, /For level_up_available, read odm_level_up_options/);
-    assert.match(prompt, /odm_end_turn and odm_level_up call/);
+    assert.match(prompt, /odm_end_turn, odm_pass and odm_level_up call/);
     const override = playerMcpOverride("https://odm.example/api/mcp", "private-helper");
     assert.ok(override.includes('"odm_level_up_options"') && override.includes('"odm_level_up"'));
   });
