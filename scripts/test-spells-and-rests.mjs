@@ -35,7 +35,9 @@ async function settle(campaignId) {
   }
 }
 
-const world = await openWorld({ gameSettings: { ttsEnabled: false } });
+// The DM answers each post as it lands: Kara's player has the table open,
+// and this suite is about slots and rests, not waiting for the table.
+const world = await openWorld({ gameSettings: { ttsEnabled: false, waitForTable: false } });
 const model = await fakeModel();
 model.pointAt(world);
 // Ama: a 3rd-level cleric, Wisdom 18 (+4), four 1st-level slots and two

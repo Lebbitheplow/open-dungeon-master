@@ -131,6 +131,11 @@ await test("only present players are waited on: a player alone at the table is a
   assert.equal(decideTableWait({ ...base, present: [A] }).gathering, false, "one player present is no table to gather");
   assert.equal(decideTableWait({ ...base, present: [A, A] }).gathering, false, "one person twice is still one");
   assert.equal(decideTableWait(base).gathering, true);
+  // A player who posted with no tab open is at the table too: the one with
+  // the table open is waited on, and told so.
+  const posted = decideTableWait({ ...base, present: [B], posts: [{ ...A, at: T0 }] });
+  assert.equal(posted.gathering, true);
+  assert.deepEqual(posted.view.waitingOn, [B]);
 });
 
 await test("only an open-floor post gathers: a spotlight answer, table talk and a first action never wait", () => {
