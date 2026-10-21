@@ -664,6 +664,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               settings={campaign.gameSettings}
               steersStory={steersStory}
               heading={false}
+              solo={campaign.maxPlayers <= 1}
             />
           </div>
         </div>

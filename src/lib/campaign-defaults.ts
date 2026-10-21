@@ -48,8 +48,6 @@ export const DEFAULT_GAME_SETTING_KEYS = [
   "vitalsApprovals",
   "midGameJoinOpen",
   "holdSubmissions",
-  "waitForTable",
-  "waitForTableSeconds",
   "narrationGuard",
   "safety",
   "gm",

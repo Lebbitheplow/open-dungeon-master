@@ -105,10 +105,13 @@ export function GameSettingsPanel({
   settings,
   steersStory,
   heading = true,
+  solo = false,
 }: {
   campaignId: string;
   settings: GameSettings;
   steersStory: boolean;
+  // A table of one: the controls that wait on other players are left out.
+  solo?: boolean;
   // The lobby names the section itself, so the panel's own title would say
   // "Table settings" twice.
   heading?: boolean;
@@ -346,7 +349,7 @@ export function GameSettingsPanel({
       case "bonds":
         return <BondsGroup {...base} />;
       case "players":
-        return <PlayersGroup {...base} />;
+        return <PlayersGroup {...base} solo={solo} />;
       case "console":
         return <ConsoleGroup {...base} />;
       case "board":

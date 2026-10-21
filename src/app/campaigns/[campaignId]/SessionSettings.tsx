@@ -132,6 +132,7 @@ export function SessionSettings({
             campaignId={campaign.id}
             settings={campaign.gameSettings}
             steersStory={steersStory}
+            solo={campaign.maxPlayers <= 1}
           />
         </div>
       ) : null}
