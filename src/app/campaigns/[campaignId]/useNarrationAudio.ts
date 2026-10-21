@@ -17,6 +17,13 @@ import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audi
 // refuses to autoplay hands the narration back to wait for the next gesture,
 // and an audio file that will not load or decode is named in playbackFailure
 // so the passage can say so.
+//
+// A table break (src/lib/dm/table-break.ts) holds narration on every screen:
+// `onBreak` stops whatever is being read (it goes back to the front of the
+// line, to be heard whole), nothing new starts, and what lands meanwhile
+// queues. Resume plays the line in order, each passage from its finished
+// file when that is ready, since a live stream may be gone by then. A replay
+// pressed during the break is the listener's own choice and still plays.
 
 const MUTED_KEY = AUDIO_PREF_FIELDS.narrationMuted.key;
 const VOLUME_KEY = AUDIO_PREF_FIELDS.narrationVolume.key;
@@ -61,7 +68,7 @@ export type NarrationAudio = {
   onTtsReady: (messageId: string, url: string, live: boolean) => void;
 };
 
-export function useNarrationAudio(): NarrationAudio {
+export function useNarrationAudio(onBreak = false): NarrationAudio {
   const muted = useSyncExternalStore(subscribePrefs, readMuted, () => true);
   const volume = useSyncExternalStore(subscribePrefs, readVolume, () => 0.8);
   const [unlocked, setUnlocked] = useState(false);
@@ -86,6 +93,8 @@ export function useNarrationAudio(): NarrationAudio {
     pendingRef.current = next;
     setHeld(next.length);
   }, []);
+  // A table break is on: nothing starts by itself.
+  const breakRef = useRef(onBreak);
 
   // The account copy of the prefs, applied over localStorage unless the
   // user touched a control first.
@@ -140,6 +149,9 @@ export function useNarrationAudio(): NarrationAudio {
         }
         playingRef.current = null;
         setPlayingMessageId(null);
+        if (breakRef.current) {
+          return;
+        }
         const next = queueRef.current.shift();
         if (next && !readMuted()) {
           run(next.messageId, next.url);
@@ -217,12 +229,41 @@ export function useNarrationAudio(): NarrationAudio {
     if (!newest || readMuted()) {
       return;
     }
-    if (playingRef.current) {
+    if (playingRef.current || breakRef.current) {
       queueRef.current.push(newest);
       return;
     }
     startPlayback(newest.messageId, newest.url);
   }, [setPending, startPlayback]);
+
+  // The break begins: the passage being read stops and waits at the front
+  // of the line. It ends: the line plays, oldest first.
+  useEffect(() => {
+    breakRef.current = onBreak;
+    if (onBreak) {
+      const current = playingRef.current;
+      if (!current) {
+        return;
+      }
+      const audio = audioRef.current;
+      playingRef.current = null;
+      setPlayingMessageId(null);
+      if (audio) {
+        audio.onended = null;
+        audio.onerror = null;
+        audio.pause();
+      }
+      queueRef.current.unshift({ messageId: current, url: audioByMessage.get(current) ?? audio?.src ?? "" });
+      return;
+    }
+    if (playingRef.current || !unlockedRef.current || readMuted()) {
+      return;
+    }
+    const next = queueRef.current.shift();
+    if (next) {
+      startPlayback(next.messageId, audioByMessage.get(next.messageId) ?? next.url);
+    }
+  }, [onBreak, audioByMessage, startPlayback]);
 
   // Any first interaction with the page (click, key press) also counts as
   // the unlock gesture, so narration autoplays without hunting for the
@@ -253,7 +294,7 @@ export function useNarrationAudio(): NarrationAudio {
         setPending([...pendingRef.current, { messageId, url }]);
         return;
       }
-      if (playingRef.current) {
+      if (playingRef.current || breakRef.current) {
         queueRef.current.push({ messageId, url });
       } else {
         startPlayback(messageId, url);

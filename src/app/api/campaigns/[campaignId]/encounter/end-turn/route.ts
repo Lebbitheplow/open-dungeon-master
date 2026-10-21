@@ -1,6 +1,8 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { endOwnTurn, endTurnRefusal } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { tableBreakOn } from "@/lib/dm/table-break";
+import { breakRefusal } from "@/lib/dm/table-break-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +19,11 @@ export async function POST(
   const context = await requireMember(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // The initiative pointer waits out a table break where it stands.
+  const tableBreak = tableBreakOn(campaignId);
+  if (tableBreak) {
+    return Response.json({ error: breakRefusal(tableBreak) }, { status: 409 });
   }
   if (!endOwnTurn(campaignId, context.user.id)) {
     return Response.json({ error: endTurnRefusal(campaignId, context.user.id) }, { status: 409 });

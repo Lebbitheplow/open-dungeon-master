@@ -45,6 +45,7 @@ import { getDmStatus } from "@/lib/dm/status";
 import { listUtilityCalls } from "@/lib/dm/call-tracker";
 import { listBlockedUserIds } from "@/lib/db/moderation";
 import { xCardRaised } from "@/lib/dm/safety";
+import { tableBreakOn } from "@/lib/dm/table-break";
 import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
@@ -170,6 +171,8 @@ export async function GET(
     // carries its own stamp and the overlay skips one older than a minute.
     handout: handoutOnTable(campaignId),
     safetyPause: safetyPauseOnTable(campaignId),
+    // A table break: who paused and since when (src/lib/dm/table-break.ts).
+    tableBreak: tableBreakOn(campaignId),
     titleCard: (latestEventOfType(campaignId, ["title_card"])?.payload as TitleCard | null) ?? null,
     // What this seat may see and do, so the client never re-derives it from
     // ids and never shows a control the server would refuse.

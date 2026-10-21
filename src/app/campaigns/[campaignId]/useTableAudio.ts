@@ -11,7 +11,9 @@ import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStre
 // app knows how to do this, which is why the two hooks are joined here
 // rather than inside either one.
 export function useTableAudio(state: CampaignState) {
-  const narration = useNarrationAudio();
+  // A table break holds the DM's voice until Resume (useNarrationAudio.ts).
+  // The room keeps its bed: a quiet table under a break is no worse for it.
+  const narration = useNarrationAudio(state.tableBreak !== null);
   const ambience = useAmbienceAudio(
     state.ambience,
     state.ambienceSting,

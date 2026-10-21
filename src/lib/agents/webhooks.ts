@@ -406,7 +406,11 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   const campaign = getCampaignForUser(sub.campaign_id, grant.userId)!;
   const safety = db.prepare(`SELECT seq, type FROM campaign_events WHERE campaign_id = ?
     AND type IN ('x_card', 'safety_resumed') ORDER BY seq DESC LIMIT 1`).get(campaign.id) as { seq: number; type: string } | undefined;
-  const paused = Boolean(dmQueuePaused(campaign.id)) || safety?.type === "x_card" || campaign.floor.mode === "hold";
+  // A table break (src/lib/dm/table-break.ts) holds the queue in memory; its
+  // events say the same across a restart, as the X-card's do.
+  const tableBreak = db.prepare(`SELECT seq, type FROM campaign_events WHERE campaign_id = ?
+    AND type IN ('table_paused', 'table_resumed') ORDER BY seq DESC LIMIT 1`).get(campaign.id) as { seq: number; type: string } | undefined;
+  const paused = Boolean(dmQueuePaused(campaign.id)) || safety?.type === "x_card" || tableBreak?.type === "table_paused" || campaign.floor.mode === "hold";
   const running = db.prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND actor = 'ai' AND status = 'running' LIMIT 1`).get(campaign.id);
   const awaiting = db.prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND actor = 'ai' AND status = 'awaiting_rolls' LIMIT 1`).get(campaign.id);
   const status = getDmStatus(campaign.id);
@@ -417,7 +421,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     .get(campaign.id, grant.userId) as { seq: number | null };
   const held = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'floor_changed' AND json_extract(payload_json, '$.floor.mode') = 'hold'`)
     .get(campaign.id) as { seq: number | null };
-  const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0);
+  const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0);
   const sheet = getSheetForUser(campaign.id, grant.userId);
   const busy = Boolean(running) || !["idle", "awaiting_rolls"].includes(status);
   const opportunities = playerOpportunities({

@@ -1,7 +1,7 @@
 import { getCampaignById } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import { getLatestDmMessage, updateMessageContent } from "@/lib/db/messages";
-import { dmQueuePaused, pauseDmQueue, resumeDmQueue } from "@/lib/dm/queue";
+import { dmQueuePausedFor, pauseDmQueue, resumeDmQueue } from "@/lib/dm/queue";
 import { runRenarrate } from "@/lib/dm/renarrate";
 import { publishPersisted } from "@/lib/events";
 
@@ -19,8 +19,10 @@ export function raiseXCard(campaignId: string): { at: number } {
   return { at };
 }
 
+// Raised whatever else holds the queue: a table break taken first does not
+// hide a card raised during it.
 export function xCardRaised(campaignId: string): boolean {
-  return dmQueuePaused(campaignId) === X_CARD_REASON;
+  return dmQueuePausedFor(campaignId, X_CARD_REASON);
 }
 
 // The pause is held in memory, so a restart lowered every raised X-card
@@ -47,7 +49,8 @@ export function restoreXCardPauses(): string[] {
 export type ResumeAction = "continue" | "rewind" | "reroll";
 
 // Continue as it stands, withdraw the last passage, or write it again
-// steering away from its subject. The queue reopens in every case.
+// steering away from its subject. The card comes down in every case; a
+// table break still up keeps the queue paused until it is resumed too.
 export async function resumeAfterXCard(
   campaignId: string,
   action: ResumeAction,
@@ -76,7 +79,7 @@ export async function resumeAfterXCard(
       publishPersisted(campaignId, "message_updated", { message: result.message });
     }
   }
-  resumeDmQueue(campaignId);
+  resumeDmQueue(campaignId, X_CARD_REASON);
   publishPersisted(campaignId, "safety_resumed", { at: Date.now(), action });
   return outcome;
 }

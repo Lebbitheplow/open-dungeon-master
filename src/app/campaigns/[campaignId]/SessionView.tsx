@@ -10,6 +10,8 @@ import { SceneTitle } from "@/components/SceneTitle";
 import { askConcentrationSwap, isConcentrationQuestion } from "@/components/concentration-prompt";
 import { HandoutStage } from "@/components/HandoutStage";
 import { SafetyPause } from "@/app/campaigns/[campaignId]/SafetyPause";
+import { TableBreakBanner, type TableBreakControl } from "@/app/campaigns/[campaignId]/TableBreakBanner";
+import { mayResumeBreak } from "@/lib/dm/table-break-logic";
 import type { Speaker } from "@/lib/dm/speech";
 import type { MapLabel } from "@/lib/battlemap/scene";
 
@@ -436,6 +438,34 @@ export function SessionView({
       isAdmin: Boolean((me as { isAdmin?: boolean } | null)?.isAdmin),
     }),
     [campaign?.id, campaign?.gameSettings?.ambienceAuto, steersStory, me],
+  );
+  // A table break (TableBreakBanner.tsx): any seat may call one on a table
+  // that is playing; the one who called it, the lead or the DM ends it.
+  const tableBreak = state.tableBreak;
+  const breakCampaignId = campaign?.id ?? "";
+  const mayResumeTable = Boolean(tableBreak && me && mayResumeBreak(tableBreak, { userId: me.id, isLead, isDm }));
+  const sendBreak = useCallback(
+    async (method: "POST" | "DELETE") => {
+      const response = await fetch(`/api/campaigns/${breakCampaignId}/table-break`, { method }).catch(() => null);
+      if (!response?.ok) {
+        const body = (await response?.json().catch(() => null)) as { error?: string } | null;
+        setError(body?.error || (method === "POST" ? "Could not pause the table." : "Could not resume the table."));
+      }
+    },
+    [breakCampaignId],
+  );
+  const resumeTable = useCallback(() => sendBreak("DELETE"), [sendBreak]);
+  const breakControl = useMemo<TableBreakControl | undefined>(
+    () =>
+      campaign?.status === "active"
+        ? {
+            paused: tableBreak !== null,
+            mayResume: mayResumeTable,
+            onPause: () => void sendBreak("POST"),
+            onResume: () => void sendBreak("DELETE"),
+          }
+        : undefined,
+    [campaign?.status, tableBreak, mayResumeTable, sendBreak],
   );
   if (isDm && !seenDmSeat) {
     setSeenDmSeat(true);
@@ -983,6 +1013,7 @@ export function SessionView({
         onHelp={openHelp}
         stage={sessionLayout || (state.battleMap && docked && !battlePane) ? { on: shownStageView === "board", onToggle: toggleStage } : undefined}
         layoutSeat={sessionLayout ? undefined : layoutSeat}
+        tableBreak={breakControl}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
@@ -1226,6 +1257,7 @@ export function SessionView({
 
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
       <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
+      <TableBreakBanner tableBreak={tableBreak} meUserId={me.id} mayResume={mayResumeTable} onResume={resumeTable} />
       <SafetyPause campaignId={campaign.id} paused={state.safetyPause !== null} steersStory={steersStory} />
       <HandoutStage
         campaignId={campaign.id}

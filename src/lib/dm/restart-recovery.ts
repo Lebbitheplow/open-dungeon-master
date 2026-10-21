@@ -10,12 +10,13 @@ import { failPendingLocationMaps } from "@/lib/db/locations";
 import { isAgentTurn } from "@/lib/dm/agent-turn";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { restoreXCardPauses } from "@/lib/dm/safety";
+import { restoreTableBreaks } from "@/lib/dm/table-break";
 import { haltDmTurn, resumeDmTurn } from "@/lib/dm/turn";
 
 // What a restart leaves wrong in the DM's state, put right once when a
 // server process starts (src/instrumentation.ts), before it answers its
-// first request. The queue, the status line and the X-card's pause live in
-// memory and die with a process; the turns and the safety events are in the
+// first request. The queue, the status line, the X-card's pause and a table
+// break live in memory and die with a process; the turns and the safety events are in the
 // database and outlive it, so the database is read for what the memory
 // held.
 //
@@ -39,6 +40,8 @@ export const RESTART_MAP_FAILED = "The server restarted before this map was draw
 export type RestartRecovery = {
   // Tables whose raised X-card was raised again.
   xCards: number;
+  // Tables on a break, paused again.
+  breaks: number;
   // Turns the last process was running, now failed with a Retry notice.
   halted: number;
   // Parked turns whose last roll was in, resumed through the queue.
@@ -57,14 +60,16 @@ export function recoverDmAfterRestart(): RestartRecovery | null {
   globalThis.__odmDmRecovered = true;
   // First, so anything queued below waits at the gate the table left up.
   const xCards = restoreXCardPauses().length;
+  const breaks = restoreTableBreaks().length;
   const halted = haltInterruptedTurns();
   const { resumed, closed } = resumeOrphanedParkedTurns();
   // The map queue was in memory too: a place still waiting on a render
   // would chart forever under the narration that introduced it.
   const maps = failPendingLocationMaps(RESTART_MAP_FAILED);
-  const recovery = { xCards, halted, resumed, closed, maps };
+  const recovery = { xCards, breaks, halted, resumed, closed, maps };
   const done = [
     xCards ? `${xCards} raised X-card(s) raised again` : "",
+    breaks ? `${breaks} table break(s) paused again` : "",
     halted ? `${halted} interrupted turn(s) halted for Retry` : "",
     resumed ? `${resumed} parked turn(s) resumed with the rolls already in` : "",
     closed ? `${closed} parked turn(s) the story has moved past closed` : "",
@@ -110,12 +115,12 @@ function haltInterruptedTurns(): number {
 }
 
 // The resume a table's last roll queued lived in the queue's memory, so a
-// restart before it ran (another job held the queue, or the X-card was up)
-// left the turn parked with every roll in and nothing left to enter:
-// submitting again is refused as already resolved, and Retry as waiting on
-// dice. The table's newest AI turn is resumed now, as the roll would have
-// resumed it, behind any X-card restored above; resumeDmTurn's own checks
-// make a second run a no-op. An older one the story has moved past (a newer
+// restart before it ran (another job held the queue, or the X-card or a
+// break was up) left the turn parked with every roll in and nothing left to
+// enter: submitting again is refused as already resolved, and Retry as
+// waiting on dice. The table's newest AI turn is resumed now, as the roll
+// would have resumed it, behind any X-card or break restored above;
+// resumeDmTurn's own checks make a second run a no-op. An older one the story has moved past (a newer
 // AI turn narrated since) is failed instead, with no model call and no
 // notice, the same "moved on" a retry is refused with: its roll was
 // published and applied when it was entered, and narrating it now would
