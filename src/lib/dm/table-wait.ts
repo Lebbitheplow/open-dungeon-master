@@ -153,7 +153,8 @@ export function currentTableWait(campaignId: string, now = Date.now()): TableWai
   if (getDmStatus(campaignId) !== "idle") {
     return null;
   }
-  return decisionFor(campaignId, now)?.view ?? null;
+  const decision = decisionFor(campaignId, now);
+  return decision?.gathering ? decision.view : null;
 }
 
 function publishView(campaignId: string, view: TableWaitView | null) {
@@ -195,7 +196,8 @@ export function settleTableWait(campaignId: string, now = Date.now(), holdUntilD
       ? { ...decided, fire: false }
       : decided;
   const entry = memory(campaignId);
-  publishView(campaignId, decision && !decision.fire ? decision.view : null);
+  // A player alone at the table is answered as they post: no banner, no Pass.
+  publishView(campaignId, decision && !decision.fire && decision.gathering ? decision.view : null);
   if (!decision || decision.fire || decision.deadline === null) {
     clearTimer(entry);
     return decision?.fire ?? false;
@@ -254,6 +256,9 @@ export function passTable(campaignId: string, userId: string): PassResult {
   const decision = decisionFor(campaignId, Date.now());
   if (!decision) {
     return { ok: false, status: 409, error: "The DM is not waiting on the table yet." };
+  }
+  if (!decision.gathering) {
+    return { ok: false, status: 409, error: "Nobody else is at the table to wait for: your post is answered as it lands." };
   }
   if (decision.view.answered.some((seat) => seat.userId === userId)) {
     return { ok: false, status: 409, error: "You have already answered this beat." };

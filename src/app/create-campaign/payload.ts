@@ -133,7 +133,8 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       //
       // `waitForTable` and `waitForTableSeconds` (PR #438): whether the AI DM
       // waits for everyone before it answers is learned once the table plays.
-      // It starts off and is the Players group's Pacing picker.
+      // It starts on (a lone player is answered at once) and is the Players
+      // group's Pacing picker.
     },
   };
 }

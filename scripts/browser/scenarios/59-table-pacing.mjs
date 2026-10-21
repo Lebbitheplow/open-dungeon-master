@@ -1,8 +1,8 @@
 // PR #438, Wait for the table: its one control is the Pacing picker under
 // Players and permissions, for a table the AI narrates with more than one
-// seat (the campaign creator does not ask). It starts at "Answers the first
-// post"; choosing a length turns the wait on with that length, the first
-// choice turns it off again, and an info button says what waiting does.
+// seat (the campaign creator does not ask). Waiting is the default, at five
+// minutes; "Answers the first post" turns it off, a length turns it back on
+// with that length, and an info button says what waiting does.
 import { axeViolations, check, eventually } from "../lib.mjs";
 
 export default {
@@ -13,7 +13,7 @@ export default {
     const campaignUrl = `${base}/api/campaigns/${ids.lobbyId}`;
     const read = async () => (await (await api.get(campaignUrl)).json()).campaign.gameSettings;
     // Viewports share one seeded world: start from the default either way.
-    await api.patch(`${campaignUrl}/settings`, { data: { waitForTable: false, waitForTableSeconds: 300 } });
+    await api.patch(`${campaignUrl}/settings`, { data: { waitForTable: true, waitForTableSeconds: 300 } });
 
     await t.open(`/campaigns/${ids.lobbyId}`);
     const panel = page.locator(`${root}[data-table-settings="edit"]`).locator("visible=true").first();
@@ -24,13 +24,13 @@ export default {
 
     const picker = players.locator('button[aria-label="When the AI DM answers"]');
     await eventually(() => picker.count(), { label: "the pacing picker" });
-    check(/Answers the first post/.test((await picker.textContent()) ?? ""), "it starts at Answers the first post");
+    check(/Waits for everyone, up to 5 min/.test((await picker.textContent()) ?? ""), "it starts at the default, waiting up to five minutes");
     check((await players.getByRole("button", { name: "What does waiting for everyone do?" }).count()) === 1, "an info button explains it");
     const violations = await axeViolations(page, `${root}[data-group="players"]`);
     const serious = violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
     check(!serious.length, `axe finds nothing serious in Players and permissions (${serious.map((violation) => violation.id).join(", ")})`);
     await players.scrollIntoViewIfNeeded();
-    await t.shot("off");
+    await t.shot("default");
 
     await t.tap(picker);
     await t.tap(page.getByRole("menuitemradio", { name: "Waits for everyone, up to 2 min" }).locator("visible=true").first());
@@ -44,5 +44,6 @@ export default {
     await t.tap(picker);
     await t.tap(page.getByRole("menuitemradio", { name: "Answers the first post" }).locator("visible=true").first());
     await eventually(async () => (await read()).waitForTable === false, { label: "the first choice turns it off" });
+    await api.patch(`${campaignUrl}/settings`, { data: { waitForTable: true, waitForTableSeconds: 300 } });
   },
 };

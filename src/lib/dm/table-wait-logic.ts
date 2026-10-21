@@ -45,6 +45,9 @@ export type TableWaitInput = {
 
 export type TableWaitDecision = {
   view: TableWaitView;
+  // Two or more players are present: there is a table to gather. With one,
+  // a post is answered at once and nothing is shown or waited on.
+  gathering: boolean;
   // The held turn should run now: there is something to answer, and either
   // nobody present is left or the time is up.
   fire: boolean;
@@ -111,6 +114,7 @@ export function decideTableWait(input: TableWaitInput): TableWaitDecision {
   const fire = deadline !== null && (waitingOn.length === 0 || input.now >= deadline);
   return {
     view: { waitingOn, answered, deadline: deadline === null ? null : new Date(deadline).toISOString() },
+    gathering: seen.size >= 2,
     fire,
     deadline,
   };

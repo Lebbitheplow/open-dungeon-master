@@ -37,9 +37,9 @@ const B = { userId: "b", name: "Kalanis" };
 const T0 = 1_000_000;
 const base = { present: [A, B], posts: [], passes: [], openedAt: T0, seconds: 120, now: T0 };
 
-await test("the setting defaults off, with a five-minute wait, so solo tables keep the old pace", () => {
+await test("the setting defaults on, with a five-minute wait (a lone player is still answered at once)", () => {
   const settings = normalizeGameSettings({});
-  assert.equal(settings.waitForTable, false);
+  assert.equal(settings.waitForTable, true);
   assert.equal(settings.waitForTableSeconds, 300);
   assert.equal(TABLE_WAIT_DEFAULT_SECONDS, 300);
   assert.equal(normalizeGameSettings({ waitForTable: true, waitForTableSeconds: 5 }).waitForTableSeconds, 300, "out of range falls back");
@@ -128,6 +128,9 @@ await test("only present players are waited on: a player alone at the table is a
   const d = decideTableWait({ ...base, present: [A], posts: [{ ...A, at: T0 }] });
   assert.equal(d.fire, true);
   assert.deepEqual(d.view.waitingOn, []);
+  assert.equal(decideTableWait({ ...base, present: [A] }).gathering, false, "one player present is no table to gather");
+  assert.equal(decideTableWait({ ...base, present: [A, A] }).gathering, false, "one person twice is still one");
+  assert.equal(decideTableWait(base).gathering, true);
 });
 
 await test("only an open-floor post gathers: a spotlight answer, table talk and a first action never wait", () => {
@@ -165,6 +168,7 @@ const leaveB = subscribe(campaign.id, () => {}, bob.id);
 
 try {
   await test("with the setting off nothing waits and a pass is refused", () => {
+    updateGameSettings(campaign.id, { waitForTable: false });
     narrate();
     assert.equal(waitsForTable(getCampaignById(campaign.id)), false);
     assert.equal(currentTableWait(campaign.id), null);
@@ -223,6 +227,18 @@ try {
   await test("a player who leaves is no longer waited on", () => {
     leaveB();
     assert.equal(settleTableWait(campaign.id), true);
+  });
+
+  await test("a player alone at the table sees no wait, cannot pass, and is answered as they post", () => {
+    tableWaitTurnStarted(campaign.id, db.prepare(`SELECT next_seq - 1 AS seq FROM campaigns WHERE id = ?`).get(campaign.id).seq);
+    narrate();
+    assert.equal(waitsForTable(getCampaignById(campaign.id)), true, "the table still waits once someone else is back");
+    assert.equal(currentTableWait(campaign.id), null, "no banner for a lone player");
+    const pass = passTable(campaign.id, alice.id);
+    assert.equal(pass.ok, false);
+    assert.match(pass.error, /Nobody else is at the table/);
+    post(alice.id, "wait-sheet-a");
+    assert.equal(settleTableWait(campaign.id), true, "answered at once");
   });
 
   await test("a spotlight or a hold suspends the wait", () => {
