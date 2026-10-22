@@ -33,6 +33,7 @@ export default {
       if (!field || !box || box.y < field.y) found.push("the table is not under the steps");
       const target = await toggle.boundingBox();
       if (!target || target.height < 40) found.push(`the fold button is ${target?.height ?? 0}px tall`);
+      await t.shot("folded");
       await t.tap(toggle);
       await eventually(() => table.isVisible(), { timeoutMs: 5_000, label: "the opened table" });
       if ((await toggle.getAttribute("aria-expanded")) !== "true") found.push("the opened button does not say so");

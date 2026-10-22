@@ -173,6 +173,35 @@ test("a wizard's spell save DC shows its parts", () => {
   assert.equal(rows.get("slots-2").label, "2nd-level slots");
 });
 
+test("worn armor and a shield set the armor class, as the sheet works it", () => {
+  // The kit's own choices left as they open; the chain mail and shield are
+  // bought, so they are what is worn.
+  const built = builder.build({
+    race: "human",
+    class: "fighter",
+    background: "soldier",
+    level: 3,
+    equipment: [{ name: "Chain Mail", qty: 1 }, { name: "Shield", qty: 1 }],
+  });
+  assert.ok(built.sheet, `no sheet: ${built.blocker}`);
+  const rows = rowsOf(tableOf({ ...built, klass: builder.classes.find((entry) => entry.id === "fighter") }));
+  const stored = built.sheet;
+  const ac = deriveAc({
+    class: stored.class,
+    level: built.level,
+    abilities: stored.abilities,
+    proficiencies: stored.proficiencies,
+    equipment: stored.equipment,
+    features: stored.features,
+    feats: stored.feats,
+    race: stored.race,
+  });
+  assert.equal(ac, 18);
+  assert.equal(rows.get("ac").value, "18");
+  assert.match(rows.get("ac").working, /Chain Mail/);
+  assert.match(rows.get("ac").working, /Shield/);
+});
+
 test("the preview no longer passes empty slots", () => {
   const wizard = builder.build(CASES[1].fields);
   assert.deepEqual(wizard.derived.spellSlots, wizard.sheet.spellcasting.slots);
