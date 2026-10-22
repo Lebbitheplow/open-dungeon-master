@@ -63,6 +63,7 @@ export function landNaturalOnHit(campaign: Campaign, hit: NaturalHit): string[] 
       record: { turn: hit.turn, detail: `${enemy.displayName}: ${onHit.save.toUpperCase()} save vs ${label}` },
       // A rider that binds the creature asks for its Legendary Resistance.
       resist: Boolean(onHit.condition),
+      against: onHit.condition,
     });
     saved = save.success;
     total = save.total;

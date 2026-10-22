@@ -90,6 +90,19 @@ await test("A flying snake's bite deals 1 piercing and its 3d4 poison rides the 
   assert.equal(enemyOf(world, dummy.id).currentHp, 90 - 7);
 });
 
+await test("A wolf's bite knocks a creature prone on a failed DC 11 Strength save, and one resistant to being knocked prone (Black Flag) saves with advantage.", async () => {
+  const plain = await shaped(2, "wolf");
+  // A 15 hits, the 2d4 rolls 2 and 2, the save's 1 fails.
+  const down = await bite(plain.world, plain.druid.id, plain.dummy, "Bite", [15, 2, 2, 1]);
+  assert.equal(down.ok, true, down.error);
+  assert.equal(enemyOf(plain.world, plain.dummy.id).conditions.includes("prone"), true);
+  const steady = await shaped(2, "wolf", {}, { conditionResist: "prone" });
+  // The same 1, and a 19 beside it: the higher is kept.
+  const stood = await bite(steady.world, steady.druid.id, steady.dummy, "Bite", [15, 2, 2, 1, 19]);
+  assert.equal(stood.ok, true, stood.error);
+  assert.equal(enemyOf(steady.world, steady.dummy.id).conditions.includes("prone"), false, "the save was rolled without advantage");
+});
+
 await test("The 3d4 poison meets the creature's own immunity: a creature immune to poison takes the 1 piercing alone.", async () => {
   const { world, druid, dummy } = await shaped(8, "flying snake", {}, { immune: "poison" });
   await bite(world, druid.id, dummy, "Bite", [10, 4, 4, 4]);
