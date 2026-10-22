@@ -22,6 +22,12 @@
 //   - Elk, Hooves: "one prone creature" only.
 //   - Conjure Minor Elementals: elementals of CR 2 or lower; SRD 5.1's
 //     mephits are the dust, ice, magma and steam mephits.
+//   - Find Steed: "it is a celestial, fey, or fiend (your choice) instead of
+//     its normal type"; Protection from Evil and Good gives celestials, fey
+//     and fiends disadvantage on attack rolls against the protected.
+//   - A grapple ends when the grappled creature leaves the grappler's reach:
+//     a giant octopus's tentacles reach 15 feet, a giant constrictor snake's
+//     bite 10.
 //
 // Every check reads a sheet, an enemy row or a refusal; dice are forced.
 import assert from "node:assert/strict";
@@ -29,9 +35,12 @@ import "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { caster, closeTables, enemyOf } from "./lib/enforce-spell-kit.mjs";
-import { board, holdTurn, place } from "./lib/enforce-zones.mjs";
+import { castOnOwnTurn, fightDummies, layMap } from "./lib/enforce-spells.mjs";
+import { board, holdTurn, OPEN, place } from "./lib/enforce-zones.mjs";
 
 const { test, finish } = suite("test-enforce-srd-creatures");
+const { releaseGrapplesOutOfReach } = await import("../src/lib/dm/grapple.ts");
+const { patchEnemyConditions } = await import("../src/lib/db/encounters.ts");
 
 const DRUID = (level, extra = {}) => ({
   class: "druid",
@@ -124,6 +133,25 @@ await test("A giant octopus's tentacles reach 15 feet and their hit grapples and
   assert.ok(held.conditions.includes("grappled") && held.conditions.includes("restrained"), held.conditions.join());
   assert.equal(held.conditionMeta.grappled.source, druid.id);
   assert.equal(held.conditionMeta.grappled.escapeDc, 16);
+  // The tentacles hold it 15 feet off; at 20 the grapple ends.
+  releaseGrapplesOutOfReach(world.campaign());
+  assert.ok(enemyOf(world, dummy.id).conditions.includes("grappled"), "the grapple was dropped within the tentacles' 15 feet");
+  place(world, dummy.id, 7, 4);
+  releaseGrapplesOutOfReach(world.campaign());
+  assert.ok(!enemyOf(world, dummy.id).conditions.includes("grappled"), "the grapple held 20 feet off");
+});
+
+await test("A giant constrictor snake's grapple holds within its bite's 10 feet and ends beyond them.", async () => {
+  const { world, druid, dummy } = await shaped(6, "giant constrictor snake", { subclass: "Circle of the Moon" });
+  const out = await bite(world, druid.id, dummy, "Constrict", [15, 3, 3]);
+  assert.equal(out.ok, true, out.error);
+  assert.equal(enemyOf(world, dummy.id).conditionMeta.grappled?.escapeDc, 16);
+  place(world, dummy.id, 5, 4);
+  releaseGrapplesOutOfReach(world.campaign());
+  assert.ok(enemyOf(world, dummy.id).conditions.includes("grappled"), "the grapple was dropped 10 feet off");
+  place(world, dummy.id, 6, 4);
+  releaseGrapplesOutOfReach(world.campaign());
+  assert.ok(!enemyOf(world, dummy.id).conditions.includes("grappled"), "the grapple held 15 feet off");
 });
 
 await test("Polymorph turns a 5th level character into an elephant (CR 4) with its own numbers.", async () => {
@@ -194,6 +222,18 @@ await test("A quasit's claws are piercing, and a failed DC 10 Constitution save 
   assert.equal(after.conditionMeta.poisoned.rounds, 10);
 });
 
+await test("A Pact of the Chain imp stored before the creature table, its sting one 1d4+3+3d6 roll, is read with the SRD sting and its DC 11 Constitution save.", async () => {
+  const { world, warlock, dummy } = await chainFamiliar("imp");
+  const [pet] = world.sheet(warlock.id).pets;
+  world.patch(warlock.id, { pets: [{ ...pet, attacks: [{ name: "Sting", toHit: 5, damage: "1d4+3+3d6", type: "piercing (poison rides the sting)" }] }] });
+  const [read] = world.sheet(warlock.id).pets;
+  assert.deepEqual([read.attacks[0].damage, read.attacks[0].onHit?.save, read.attacks[0].onHit?.dc], ["1d4+3", "con", 11]);
+  // A 15 hits, the sting rolls 2, the save a 5 against DC 11, the poison 6, 6, 6.
+  const out = await command(world, warlock, dummy, [15, 2, 5, 6, 6, 6]);
+  assert.equal(out.ok, true, out.error);
+  assert.equal(enemyOf(world, dummy.id).currentHp, 90 - 5 - 18);
+});
+
 await test("A pseudodragon's sting poisons on a failed DC 11 save and, failed by 5 or more, puts the creature to sleep for the hour.", async () => {
   const { world, warlock, dummy } = await chainFamiliar("pseudodragon");
   world.dice(15, 2, 4);
@@ -206,6 +246,34 @@ await test("A pseudodragon's sting poisons on a failed DC 11 save and, failed by
 });
 
 // ---- companions and conjured creatures ----
+
+await test("Find Steed's steed is a fey or a fiend as its caster names it and a celestial when none is named, and Protection from Evil and Good turns its hooves aside.", async () => {
+  const world = await openWorld();
+  const paladin = world.addHero(caster("paladin", "cha", ["Find Steed"], [], 5));
+  const steeds = () => world.sheets().filter((sheet) => sheet.summon?.spell === "Find Steed");
+  const fey = await world.invoke("cast_buff", { characterId: paladin.id, spell: "Find Steed", level: 2, variant: "fey warhorse" });
+  assert.equal(fey.ok, true, fey.error);
+  assert.deepEqual([steeds()[0].summon.form, steeds()[0].summon.creatureType], ["Warhorse", "fey"]);
+  const fiend = await world.invoke("cast_buff", { characterId: paladin.id, spell: "Find Steed", level: 2, variant: "elk (fiend)" });
+  assert.equal(fiend.ok, true, fiend.error);
+  assert.deepEqual([steeds()[0].summon.form, steeds()[0].summon.creatureType], ["Elk", "fiend"]);
+  const plain = await world.invoke("cast_buff", { characterId: paladin.id, spell: "Find Steed", level: 2, variant: "warhorse" });
+  assert.equal(plain.ok, true, plain.error);
+  const [steed] = steeds();
+  assert.equal(steed.summon.creatureType, "celestial");
+  // In a fight, beside a creature Protection from Evil and Good guards: a
+  // 20 and a 1, and the 1 stands.
+  const [dummy] = await fightDummies(world, 1, { heroFaces: { [paladin.id]: 20 } });
+  castOnOwnTurn(world);
+  await layMap(world, OPEN(), { [paladin.id]: { x: 1, y: 1 }, [steed.id]: { x: 3, y: 4 }, [dummy.id]: { x: 4, y: 4 } });
+  patchEnemyConditions(dummy.id, ["protection from evil and good"], {});
+  world.dice(20, 1, 3, 3);
+  const out = await world.invoke("pc_attack", { characterId: steed.id, targetEnemyId: dummy.id, weapon: "Hooves" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.hit, false, "the celestial steed's hooves were not turned aside");
+  assert.equal(enemyOf(world, dummy.id).currentHp, 90);
+});
 
 await test("A Beast Master's companion is a Medium or smaller beast: an elk (Large) is refused, a giant poisonous snake bonds with its poison.", async () => {
   const world = await openWorld();

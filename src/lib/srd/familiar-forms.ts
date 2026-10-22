@@ -74,6 +74,28 @@ export function familiarOffer(chain: boolean): string {
   return FAMILIAR_FORMS.filter((entry) => chain || !entry.chainOnly).map((entry) => entry.form.toLowerCase()).join(", ");
 }
 
+// A pet as the table now builds it: Pact of the Chain's forms stored before
+// the creature table carry the attacks this server once invented (the imp's
+// sting as one "1d4+3+3d6" roll, its poison no save), so a familiar whose
+// form the table knows fights with the table's attacks, and one that cannot
+// attack keeps none. Read on every load (src/lib/db/sheets.ts), so a sheet
+// saved before the fix is right the first time it is read.
+export function repairedPets(pets: SheetPet[]): SheetPet[] {
+  let changed = false;
+  const out = pets.map((pet) => {
+    if (pet.kind !== "familiar") {
+      return pet;
+    }
+    const form = findFamiliarForm(pet.form);
+    if (!form || JSON.stringify(pet.attacks ?? []) === JSON.stringify(form.attacks)) {
+      return pet;
+    }
+    changed = true;
+    return { ...pet, attacks: form.attacks.map((attack) => ({ ...attack })) };
+  });
+  return changed ? out : pets;
+}
+
 // Every form's name, the Pact of the Chain forms included.
 export function familiarFormNames(): string[] {
   return FAMILIAR_FORMS.map((entry) => entry.form);

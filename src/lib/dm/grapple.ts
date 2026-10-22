@@ -221,11 +221,17 @@ export function enemyEscape(
   };
 }
 
-// The grappler's reach in tiles: 1 for a character, a stat block's longest
-// melee reach for an enemy (an otyugh's tentacle holds from 10 feet).
-function reachOf(enemy: EncounterEnemy | null): number {
+// The grappler's reach in tiles: a stat block's longest melee reach for an
+// enemy (an otyugh's tentacle holds from 10 feet), and for a character the
+// natural attacks of the form they wear or the creature they are (a giant
+// octopus's tentacles hold from 15 feet, a giant constrictor snake from 10),
+// 1 otherwise.
+function reachOf(enemy: EncounterEnemy | null, holderId: string): number {
   if (!enemy) {
-    return 1;
+    const sheet = getSheetById(holderId);
+    const natural = sheet?.wildShape?.attacks ?? sheet?.summon?.attacks ?? [];
+    const reaches = natural.filter((attack) => !attack.range || attack.thrown).map((attack) => Math.floor((attack.reach ?? 5) / 5));
+    return Math.max(1, ...reaches);
   }
   const reaches = enemy.stats.attacks
     .map((attack) => enemyAttackProfile(attack, enemy.stats.traits ?? []))
@@ -259,7 +265,7 @@ export function releaseGrapplesOutOfReach(campaign: Campaign): string[] {
       continue;
     }
     const gap = apart(enemy.id, held.source);
-    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null)) {
+    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null, held.source)) {
       const cleared = withoutGrapple(enemy.conditions, enemy.conditionMeta, held);
       patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
       released.push(enemy.displayName);
@@ -271,7 +277,7 @@ export function releaseGrapplesOutOfReach(campaign: Campaign): string[] {
       continue;
     }
     const gap = apart(sheet.id, held.source);
-    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null)) {
+    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null, held.source)) {
       const cleared = withoutGrapple(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, held);
       const updated = patchSheet(sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
       if (updated) {
