@@ -103,6 +103,25 @@ export function cloneCampaign(
   if ("error" in result) {
     return { error: result.error };
   }
+  // The import clears each NPC's link into the arc's cast, because an import
+  // brings NPCs into someone else's story. A clone's arc is the source's own,
+  // cast ids and all, so the link stays true; without it a cast member whose
+  // NPC was renamed since (the hooded stranger, now named) is never joined
+  // again, since the next join is by name.
+  if (source.kind !== "workshop") {
+    const db = getDatabase();
+    const castOf = db.prepare(`SELECT arc_cast_id FROM npcs WHERE id = ? AND campaign_id = ?`);
+    const link = db.prepare(`UPDATE npcs SET arc_cast_id = ? WHERE id = ? AND campaign_id = ?`);
+    for (const [key, copyId] of result.idMap) {
+      if (!key.startsWith("npcs:")) {
+        continue;
+      }
+      const cast = (castOf.get(key.slice("npcs:".length), source.id) as { arc_cast_id: string } | undefined)?.arc_cast_id;
+      if (cast) {
+        link.run(cast, copyId, created.id);
+      }
+    }
+  }
 
   // A chapter's copy draws on the same shared workshop the chapter did, so
   // its cards' links into that workshop stay the same live rows (#159).

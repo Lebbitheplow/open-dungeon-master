@@ -1,4 +1,6 @@
+import { resolveMonster } from "@/lib/bestiary";
 import { getDatabase, parseJson } from "@/lib/db/core";
+import { tableAuthors } from "@/lib/db/homebrew";
 import { setQuestLog, setStoryArc, type Campaign } from "@/lib/db/campaigns";
 import { insertQuest, listQuests } from "@/lib/db/quests";
 import { appendBoardAct, normalizeStoryArc, type ArcEvent, type ArcEventKind, type Waypoint } from "@/lib/dm/arc-logic";
@@ -43,19 +45,38 @@ export type BoardResolver = {
   record: (kind: "board-lore" | "board-fight" | "board-note", rowId: string, cardId: string) => void;
 };
 
-// The fight each fight card became, for the waypoints that name it.
-export type BoardFights = Map<string, { name: string; roster: string }>;
+// The fight each fight card became, by id. The waypoints that name it read
+// its roster after the import has brought the monsters the roster names, so
+// a step says "2 Gloomfang" where the source wrote one of its author's ids
+// or a name that arrived renamed.
+export type BoardFights = Map<string, string>;
 
 type TemplateRow = { name: string; enemies_json: string; map_json: string; notes: string };
 
-function rosterLine(enemiesJson: string): string {
-  return (parseJson<Array<{ monster?: unknown; count?: unknown }>>(enemiesJson, []) ?? [])
-    .filter((row) => typeof row?.monster === "string" && row.monster)
+// A roster as the foes end_encounter will report: each monster by the name it
+// has at this table, a bare-name row as written.
+function rosterLine(enemiesJson: string, nameOf: (ref: string) => string): string {
+  return (parseJson<unknown[]>(enemiesJson, []) ?? [])
     .map((row) => {
-      const count = Math.max(1, Math.round(Number(row.count) || 1));
-      return count > 1 ? `${count} ${String(row.monster)}` : String(row.monster);
+      const ref = typeof row === "string" ? row : typeof row === "object" && row ? (row as { monster?: unknown }).monster : "";
+      if (typeof ref !== "string" || !ref.trim()) {
+        return "";
+      }
+      const count = typeof row === "object" && row ? Math.max(1, Math.round(Number((row as { count?: unknown }).count) || 1)) : 1;
+      const name = nameOf(ref.trim());
+      return count > 1 ? `${count} ${name}` : name;
     })
+    .filter(Boolean)
     .join(", ");
+}
+
+function fightOf(id: string | null | undefined, nameOf: (ref: string) => string): { name: string; roster: string } | undefined {
+  const row = id
+    ? (getDatabase().prepare(`SELECT name, enemies_json FROM encounter_templates WHERE id = ?`).get(id) as
+        | { name: string; enemies_json: string }
+        | undefined)
+    : undefined;
+  return row ? { name: row.name, roster: rosterLine(row.enemies_json, nameOf) } : undefined;
 }
 
 function rowName(table: "npcs" | "locations" | "encounter_templates", id: string): string {
@@ -196,12 +217,7 @@ export function writeStoryboardRows(
       resolver.record("board-fight", id, entry.cardId);
       written += 1;
     }
-    const row = db
-      .prepare(`SELECT name, enemies_json FROM encounter_templates WHERE id = ?`)
-      .get(id) as { name: string; enemies_json: string } | undefined;
-    if (row) {
-      fights.set(entry.cardId, { name: row.name, roster: rosterLine(row.enemies_json) });
-    }
+    fights.set(entry.cardId, id);
   }
 
   // Secrets become DM-only notes. campaign_notes carries a visibility column
@@ -245,6 +261,7 @@ function waypointsFor(
   links: BeatLinks,
   resolver: BoardResolver,
   fights: BoardFights,
+  nameOf: (ref: string) => string,
 ): Waypoint[] {
   const waypoints: Waypoint[] = [];
   const place = links.locationId ? resolver.link("locations", links.locationId) : null;
@@ -257,16 +274,8 @@ function waypointsFor(
   }
   // A fight waypoint is ticked by the foes end_encounter reports, so it
   // names the roster as well as the fight.
-  let fight = kind === "encounter" ? fights.get(cardId) : undefined;
-  if (!fight && links.encounterId) {
-    const id = resolver.link("encounters", links.encounterId);
-    const row = id
-      ? (getDatabase().prepare(`SELECT name, enemies_json FROM encounter_templates WHERE id = ?`).get(id) as
-          | { name: string; enemies_json: string }
-          | undefined)
-      : undefined;
-    fight = row ? { name: row.name, roster: rosterLine(row.enemies_json) } : undefined;
-  }
+  const fightId = (kind === "encounter" ? fights.get(cardId) : undefined) ?? (links.encounterId ? resolver.link("encounters", links.encounterId) : null);
+  const fight = fightOf(fightId, nameOf);
   if (fight) {
     waypoints.push({
       kind: "fight",
@@ -313,6 +322,11 @@ export function writeStoryboardColumns(
 ): { written: number; beatsAdded: number; cardsKept: number } {
   let written = 0;
   const { resolver, fights } = options;
+  const authors = tableAuthors(campaign.id);
+  const nameOf = (ref: string) => {
+    const monster = resolveMonster(ref, campaign.gameSettings, { userIds: authors });
+    return monster ? monster.reskinName ?? monster.baseName : ref;
+  };
   // Every card whole, whatever it became (issues #301 and #302): the arc's
   // lines point back to these by card id, and read_card opens them.
   const roleOf = new Map<string, PrepRole>();
@@ -375,12 +389,12 @@ export function writeStoryboardColumns(
   }
 
   const beats = compiled.arcPlan.map((beat) => {
-    const waypoints = waypointsFor(beat.cardId, beat.kind, beat.links, resolver, fights);
+    const waypoints = waypointsFor(beat.cardId, beat.kind, beat.links, resolver, fights, nameOf);
     cueOf.set(beat.cardId, cueLine(waypoints));
     return { text: beat.text, waypoints, cardId: beat.cardId };
   });
   const events: Array<Omit<ArcEvent, "id" | "status">> = compiled.moments.map((moment) => {
-    const along = cueLine(waypointsFor(moment.cardId, moment.kind, moment.links, resolver, fights));
+    const along = cueLine(waypointsFor(moment.cardId, moment.kind, moment.links, resolver, fights, nameOf));
     cueOf.set(moment.cardId, along);
     triggerOf.set(moment.cardId, moment.trigger);
     return {

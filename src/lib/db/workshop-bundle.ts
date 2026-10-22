@@ -38,6 +38,7 @@ import { recordMediaFile } from "@/lib/media-access";
 import { decodeBundleAddonView, landAddonView } from "@/lib/db/map-addon-view-bundle";
 import { writeMapAddonView } from "@/lib/db/map-addon-view";
 import { landLabels } from "@/lib/db/workshop-bundle-refs";
+import { dedupeName } from "@/lib/workshop/import";
 import type { MapAddonView } from "@/lib/addons/map-view";
 
 export { exportWorkshopBundle } from "@/lib/db/workshop-bundle-export";
@@ -470,6 +471,10 @@ function writeBundleRows(
       copied += 1;
     }
 
+    // Two tables of one name in a bundle (made before a campaign's tables had
+    // to differ) land numbered after the first, which keeps the name: the
+    // first is the one a "@table:" row rolled at the source.
+    const tablesTaken = new Set<string>();
     for (const table of bundle.tables) {
       const tableId = crypto.randomUUID();
       tableIds.push(tableId);
@@ -479,7 +484,7 @@ function writeBundleRows(
       ).run(
         tableId,
         workshop.id,
-        table.name,
+        dedupeName(table.name, tablesTaken),
         JSON.stringify(table.entries),
         table.noReplacement ? 1 : 0,
         userId,

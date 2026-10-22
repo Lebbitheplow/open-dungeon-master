@@ -21,7 +21,10 @@
 //     spells those cast, when the target's authors answer differently;
 //   - a character file carries the Homebrew its sheet stands on;
 //   - the content API names a player's own subclass and class a table leaves
-//     out, for the class asked about.
+//     out, for the class asked about;
+//   - a campaign clone keeps its NPCs' places in the arc's cast, a storyboard
+//     fight's step names its foes as the table calls them, and every table
+//     in a campaign has a name of its own that a rename carries.
 import assert from "node:assert/strict";
 import "./lib/enforce-world.mjs";
 import { call } from "./lib/enforce-campaign.mjs";
@@ -404,6 +407,67 @@ await test("F07: a character file carries its subclass and spells, and another a
   const refused = await call(route, "POST", broken);
   assert.equal(refused.status, 400, JSON.stringify(refused.json));
   assert.equal(listHomebrew(stranger.id).length, before);
+});
+
+// ---- What the first pass left: a clone's cast, a fight step's foes, tables of one name ----
+
+await test("A campaign clone keeps each NPC's link into the arc's cast", async () => {
+  const { cloneCampaign } = await import("../src/lib/db/campaign-clone.ts");
+  const { upsertNpc, patchNpcAgency } = await import("../src/lib/db/npcs.ts");
+  patchNpcAgency(upsertNpc({ campaignId: world.campaignId, name: "Hooded Mira" }).id, { arcCastId: "np1" });
+  const clone = cloneCampaign(world.owner.id, world.campaignId);
+  assert.ok(!("error" in clone), clone.error);
+  assert.equal(db.prepare(`SELECT arc_cast_id FROM npcs WHERE campaign_id = ? AND name = 'Hooded Mira'`).get(clone.campaign.id)?.arc_cast_id, "np1");
+});
+
+await test("A storyboard fight's step names its foes as the table calls them once the monsters arrive", async () => {
+  const { insertBeat } = await import("../src/lib/db/workshop-beats.ts");
+  const { checkBeat } = await import("../src/lib/workshop/board.ts");
+  const author = world.addUser("author");
+  const host = world.addUser("host");
+  monster(host.id, "Gloomfang", 11);
+  const theirs = monster(author.id, "Gloomfang", 17);
+  const workshop = createWorkshop(author.id, { title: "Den" });
+  const fight = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO encounter_templates (id, campaign_id, name, enemies_json, battlefield, map_json, notes, created_by_user_id, created_at, updated_at) VALUES (?, ?, 'Den ambush', ?, '', '{}', '', ?, ?, ?)`).run(
+    fight, workshop.id, JSON.stringify([{ monster: `homebrew:${theirs.id}`, count: 2 }]), author.id, now, now,
+  );
+  // The board test-story-setup.mjs knows writes an arc, a beat on it waiting on the den's fight.
+  for (const [kind, title, links] of [["backstory", "The flood", {}], ["setting", "The mill", {}], ["hook", "A howl at dusk", {}], ["event", "The wheel stops", { encounterId: fight }], ["npc_moment", "Marla confesses", {}], ["event", "The wheelhouse opens", {}], ["encounter", "The den", { encounterId: fight }]]) {
+    insertBeat(workshop.id, checkBeat({ kind, title, body: `${title}.`, links }).beat);
+  }
+  const table = campaigns.createCampaign(host.id, { title: "Host table", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  const outcome = runContentImport({ sourceId: workshop.id, campaignId: table.id, selection: ["storyboard"], houseRulesMode: "append" });
+  assert.ok(!("error" in outcome), outcome.error);
+  const brought = outcome.monstersBrought?.[0];
+  assert.ok(brought && brought !== "Gloomfang", JSON.stringify(outcome.monstersBrought));
+  const arc = JSON.stringify(campaigns.getCampaignById(table.id).storyArc);
+  assert.ok(arc.includes(`2 ${brought}`), arc);
+  assert.ok(!arc.includes("homebrew:"), arc);
+});
+
+await test("Each table in a campaign keeps a name of its own, and a rename carries the rows that roll on it", async () => {
+  const { getRollTable, updateRollTable } = await import("../src/lib/db/roll-tables.ts");
+  const owner = world.addUser("owner");
+  const workshop = createWorkshop(owner.id, { title: "Tables" });
+  const row = (text) => [{ min: 1, max: 1, text }];
+  const gems = insertRollTable({ campaignId: workshop.id, name: "Gems", entries: row("Ruby"), createdByUserId: owner.id });
+  const second = insertRollTable({ campaignId: workshop.id, name: "gems", entries: row("Opal"), createdByUserId: owner.id });
+  assert.equal(second.name, "gems (2)");
+  const loot = insertRollTable({ campaignId: workshop.id, name: "Loot", entries: [{ min: 1, max: 1, text: "Gems", ref: { kind: "table", name: "Gems" } }], createdByUserId: owner.id });
+  updateRollTable(gems.id, { name: "Jewels" });
+  assert.deepEqual(getRollTable(loot.id).entries[0], { min: 1, max: 1, text: "Jewels", ref: { kind: "table", name: "Jewels" } });
+  // A rename onto a name another table holds is refused, with the reason.
+  const route = await world.route("campaigns/[campaignId]/dm/roll-tables/[tableId]");
+  world.signIn(owner);
+  const refused = await call(route, "PATCH", { name: "jewels" }, { campaignId: workshop.id, tableId: loot.id });
+  assert.equal(refused.status, 409, JSON.stringify(refused.json));
+  assert.match(refused.json.error, /already called jewels/);
+  // An older bundle's two tables of one name land numbered after the first.
+  db.prepare(`UPDATE roll_tables SET name = 'Jewels' WHERE id = ?`).run(second.id);
+  const result = landed(owner.id, exported(workshop.id).bundle);
+  assert.deepEqual(listRollTables(result.workshopId).map((table) => table.name).sort(), ["Jewels", "Jewels (2)", "Loot"]);
 });
 
 // ---- F06: the content API's explanation ----

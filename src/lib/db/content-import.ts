@@ -523,18 +523,6 @@ export function runContentImport(input: {
 
   // ---- after the transaction ----
 
-  let beatsAdded = 0;
-  if (storyboard) {
-    const columns = writeStoryboardColumns(getCampaignById(campaignId) ?? campaign, storyboard, now, {
-      resolver,
-      fights,
-      arcMode: input.arcMode ?? "leave",
-      title: source.title,
-      sourceId,
-    });
-    counts.copied += columns.written;
-    beatsAdded = columns.beatsAdded;
-  }
   if (selected.has("houseRules")) {
     const incoming = getHouseRulesText(sourceId);
     if (incoming.trim()) {
@@ -587,6 +575,21 @@ export function runContentImport(input: {
   // ones the copied shops stock and roll-table rows name.
   const items = bringItems(sourceId, campaignId, { shops: ids("shops"), tables: ids("tables") }, travelled);
   const spellsBrought = [...new Set([...monsters.spells, ...items.spells])];
+  // The storyboard's arc last: a fight step names its foes as the roster
+  // reads once the monsters it names have been brought, or the step would
+  // carry an id or an old name the foes end_encounter reports never match.
+  let beatsAdded = 0;
+  if (storyboard) {
+    const columns = writeStoryboardColumns(getCampaignById(campaignId) ?? campaign, storyboard, now, {
+      resolver,
+      fights,
+      arcMode: input.arcMode ?? "leave",
+      title: source.title,
+      sourceId,
+    });
+    counts.copied += columns.written;
+    beatsAdded = columns.beatsAdded;
+  }
   const unresolved = unresolvedMonsters(campaignId);
   return {
     plan,
