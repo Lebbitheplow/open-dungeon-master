@@ -26,6 +26,7 @@ const BOARD_KEYS: Array<{ keys: string[]; does: string }> = [
   { keys: ["+", "−"], does: "Zoom in and out" },
   { keys: ["0"], does: "Fit the whole board" },
   { keys: ["Esc"], does: "Cancel an aim or a drag" },
+  { keys: ["Ctrl", "Z"], does: "Take back your last move" },
   { keys: ["Scroll"], does: "Zoom at the pointer" },
   { keys: ["Drag"], does: "Move the view" },
 ];
