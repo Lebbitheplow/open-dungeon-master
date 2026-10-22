@@ -184,7 +184,7 @@ export type DmEncounterState = {
     ac: number;
     status: string;
     conditions: string[];
-    attacks: Array<{ name: string; toHit: number; damage: string; type: string }>;
+    attacks: Array<{ name: string; toHit: number; damage: string; type: string; bonusAction?: boolean }>;
     traits: string[];
     resist: string;
     immune: string;
@@ -956,13 +956,14 @@ export function buildGameStateBlock(state: DmGameState): string {
       const parts = state.ruleContext?.brief
         ? [
             `- ${enemy.name} [enemyId=${enemy.enemyId}] ${healthState(current, max)}`,
-            ...(enemy.attacks.length ? [`attacks: ${enemy.attacks.map((attack) => attack.name).join(", ")}`] : []),
+            ...(enemy.attacks.length ? [`attacks: ${enemy.attacks.map((attack) => `${attack.name}${attack.bonusAction ? " (bonus action)" : ""}`).join(", ")}`] : []),
             ...enemy.traits,
           ]
         : [
             `- ${enemy.name} [enemyId=${enemy.enemyId}] HP ${enemy.hp} AC ${enemy.ac}`,
             ...enemy.attacks.map(
-              (attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`,
+              // A bonus action's attack is made beside the action's, by name.
+              (attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})${attack.bonusAction ? " [bonus action]" : ""}`,
             ),
             ...enemy.traits,
           ];

@@ -90,6 +90,7 @@ export function flooredDamage(
   }
   const adjusted = damageAdjust(amount, type, enemy.stats.resist, enemy.stats.immune, enemy.stats.vulnerable, {
     magical: true,
+    spell: true,
     resistAll: resistsAllDamage(enemy.conditions),
   }).amount;
   return Math.max(0, Math.min(adjusted, enemy.currentHp - floor));

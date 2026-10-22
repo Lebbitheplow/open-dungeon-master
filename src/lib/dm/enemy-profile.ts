@@ -117,6 +117,27 @@ function expand(routine: RoutineStep[], attacks: EnemyAttack[]): EnemyAttack[] {
 // legendary action's attack is. A block with only a count repeats the
 // attack asked for (or its first) that many times. A single swing is the
 // one asked for, which the caller requires of a block with several.
+// The blow a swing deals: the block's own, or what it prints instead at half
+// its hit points or fewer ("or 5 (2d4) piercing damage if the swarm has half
+// of its hit points or fewer") or at range ("in melee or 5 (1d6 + 2)
+// piercing damage at range"). The bloodied blow wins when both apply.
+export function alternativeBlow(attack: EnemyAttack, when: { ranged: boolean; bloodied: boolean }): EnemyAttack {
+  const alternatives = attack.alternatives ?? [];
+  const chosen =
+    (when.bloodied ? alternatives.find((entry) => entry.when === "bloodied") : undefined) ??
+    (when.ranged ? alternatives.find((entry) => entry.when === "ranged") : undefined);
+  if (!chosen) {
+    return attack;
+  }
+  const blow: EnemyAttack = { ...attack, damage: chosen.damage, type: chosen.type };
+  if (chosen.riders?.length) {
+    blow.riders = chosen.riders;
+  } else {
+    delete blow.riders;
+  }
+  return blow;
+}
+
 export function plannedSwings(
   stats: Pick<EnemyStats, "attacks" | "attacksPerTurn" | "routines">,
   attacks: EnemyAttack[],

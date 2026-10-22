@@ -256,6 +256,26 @@ export function rollCharacterSave(
   };
 }
 
+// Black Flag prints resistance to a condition (advantage on a save against
+// it) and, for a giant's prone, vulnerability (disadvantage). The lean a
+// save against these conditions gets.
+export function conditionSaveLean(
+  stats: { conditionResist?: string; conditionVulnerable?: string },
+  against: string | string[] | undefined,
+): Array<"advantage" | "disadvantage"> {
+  const wanted = (Array.isArray(against) ? against : against ? [against] : []).map((name) => name.trim().toLowerCase().replace(/\s+\d+$/, "")).filter(Boolean);
+  if (!wanted.length) {
+    return [];
+  }
+  const listed = (line: string | undefined) => (line ?? "").toLowerCase().split(/\s*,\s*/).filter(Boolean);
+  const resisted = listed(stats.conditionResist);
+  const vulnerable = listed(stats.conditionVulnerable);
+  return [
+    ...(wanted.some((name) => resisted.includes(name)) ? ["advantage" as const] : []),
+    ...(wanted.some((name) => vulnerable.includes(name)) ? ["disadvantage" as const] : []),
+  ];
+}
+
 // A creature's save from its stat block, with its conditions honoured: a
 // paralyzed, stunned, unconscious or petrified creature fails Strength and
 // Dexterity saves with no die rolled, a restrained one rolls Dexterity saves
@@ -282,6 +302,10 @@ export function rollEnemySave(
     // (src/lib/dm/legendary-tools.ts). A save that only halves damage is
     // left to the creature's choice (legendary_resist).
     resist?: boolean;
+    // The conditions a failure lays, or the one the save ends: a block
+    // resistant to one rolls with advantage, vulnerable to one with
+    // disadvantage (Black Flag's condition resistances).
+    against?: string | string[];
   } = {},
 ): ForcedSave {
   const derivation = rollDerivation(enemy.conditions, "saving_throw", ability);
@@ -300,6 +324,9 @@ export function rollEnemySave(
   // Authored subclass features (Magical Ambush, Hound of Ill Omen, Unsettling Words): authored-saves.ts.
   const authored = authoredEnemySave(campaignId, enemy, { magical: options.magical });
   const resistsMagic = options.magical === true && hasTrait(enemy.stats, "magicResistance");
+  const against = conditionSaveLean(enemy.stats, options.against);
+  // Sunlight Weakness: its saves are at disadvantage in sunlight.
+  const sunWeak = hasTrait(enemy.stats, "sunlightWeakness") && inDirectSunlight(campaignId);
   const worn = enemyExhaustion(enemy.conditions) >= 3;
   const advantage = mergeAdvantage([
     ...(worn ? ["disadvantage" as const] : []),
@@ -307,6 +334,8 @@ export function rollEnemySave(
     ...(effect.advantage ? ["advantage" as const] : []),
     ...(effect.disadvantage ? ["disadvantage" as const] : []),
     ...(resistsMagic ? ["advantage" as const] : []),
+    ...against,
+    ...(sunWeak ? ["disadvantage" as const] : []),
     ...(options.advantage ? ["advantage" as const] : []),
     ...(options.disadvantage ? ["disadvantage" as const] : []),
     ...riders.advantageSources,

@@ -33,11 +33,11 @@ export function enemyShapeSpellFor(spell: string): EnemyShapeSpell | null {
   return SPELLS[textKey(spell)] ?? null;
 }
 
-// A shapechanger says so in its type ("humanoid (shapechanger)") or in its
-// Shapechanger trait; the snapshot keeps the trait even where the type lost
-// its subtype.
-export function isShapechanger(stats: Pick<EnemyStats, "traits" | "type">): boolean {
-  return /shapechanger/i.test(stats.type ?? "") || (stats.traits ?? []).some((line) => /^shapechanger\b/i.test(line.trim()));
+// A shapechanger says so in its type ("humanoid (shapechanger)"), its
+// subtype (a succubus's, a Black Flag vampire's, which print no trait for
+// it) or its Shapechanger trait.
+export function isShapechanger(stats: Pick<EnemyStats, "traits" | "type" | "subtype">): boolean {
+  return /shapechanger/i.test(`${stats.type ?? ""} ${stats.subtype ?? ""}`) || (stats.traits ?? []).some((line) => /^shapechanger\b/i.test(line.trim()));
 }
 
 // The challenge rating the beast's is held to: the block's own, then the row's.

@@ -217,6 +217,29 @@ function writeLedger(encounter: LedgerHolder, ids: string[], owed: string[]) {
   };
 }
 
+// The fight's record of who has taken a bonus action this round, the one
+// Nimble Escape and an enemy's bonus-action spell keep too
+// (src/lib/dm/token-rules.ts, reaction-spells.ts).
+type BonusHolder = { round: number; legendary?: { bonus?: { round: number; ids: string[] } } };
+
+function bonusLedgerOf(encounter: BonusHolder): string[] {
+  const ledger = encounter.legendary?.bonus;
+  return ledger && ledger.round === encounter.round ? ledger.ids : [];
+}
+
+// Whether an enemy has taken its bonus action this round (a block's Bonus
+// Actions: one a round, beside its action).
+export function enemyBonusThisRound(encounter: BonusHolder | null, enemyId: string): boolean {
+  return encounter ? bonusLedgerOf(encounter).includes(enemyId) : false;
+}
+
+// Records an enemy's bonus action for the round. The caller saves the
+// encounter.
+export function markEnemyBonus(encounter: { round: number; legendary: { bonus?: { round: number; ids: string[] } } }, enemyId: string) {
+  const used = bonusLedgerOf(encounter);
+  encounter.legendary.bonus = { round: encounter.round, ids: used.includes(enemyId) ? used : [...used, enemyId] };
+}
+
 // Records an enemy's action for the round on the encounter object. An
 // action it is owed is spent before the round's own. The caller saves the
 // encounter.
@@ -254,14 +277,15 @@ export function oweEnemiesAnAction(encounter: LedgerHolder, enemyIds: string[]) 
   writeLedger(encounter, ids, [...owed, ...enemyIds]);
 }
 
-// An enemy's action, reaction or legendary action. Dead and incapacitated
-// enemies do nothing; a surprised one loses round 1; an action is one a
-// round. A legendary action is spent on somebody else's turn, so the action
-// already taken does not refuse it (the pool does, in legendary-tools.ts).
+// An enemy's action, bonus action, reaction or legendary action. Dead and
+// incapacitated enemies do nothing; a surprised one loses round 1; an action
+// is one a round, and so is a bonus action. A legendary action is spent on
+// somebody else's turn, so the action already taken does not refuse it (the
+// pool does, in legendary-tools.ts).
 export function canEnemyAct(input: {
   enemy: ActingEnemy;
   encounter: ActingEncounter | null;
-  kind: "action" | "reaction" | "legendary";
+  kind: "action" | "bonus" | "reaction" | "legendary";
 }): CanActResult {
   const { enemy, kind } = input;
   const encounter = isRunningFight(input.encounter) ? input.encounter : null;
@@ -275,14 +299,15 @@ export function canEnemyAct(input: {
       { error: `${enemy.displayName} is ${stoppedBy} and cannot act until the condition ends.`, refused: "rules" },
     );
   }
-  const held = kind === "action" ? spellTurnHold(enemy.conditions, "action") : null;
+  // A bonus action is held by whatever holds its action.
+  const held = kind === "action" || kind === "bonus" ? spellTurnHold(enemy.conditions, "action") : null;
   if (held) {
     return refuse("incapacitated", { error: `${enemy.displayName} is ${held} and loses its action this turn.`, refused: "rules" });
   }
   if (!encounter) {
     return { ok: true };
   }
-  if (isSurprised(encounter, enemy.id, kind !== "action")) {
+  if (isSurprised(encounter, enemy.id, kind === "reaction" || kind === "legendary")) {
     return refuse(
       "surprised",
       { error: `${enemy.displayName} is surprised and does nothing in the first round. It acts from round 2.`, refused: "rules" },
@@ -292,6 +317,12 @@ export function canEnemyAct(input: {
     return refuse(
       "no_initiative",
       { error: `Initiative is still being rolled, so ${enemy.displayName} cannot act yet. Roll initiative for every character first.`, retry: true },
+    );
+  }
+  if (kind === "bonus" && enemyBonusThisRound(encounter as BonusHolder, enemy.id)) {
+    return refuse(
+      "already_acted",
+      { error: `${enemy.displayName} has already taken its bonus action this round (round ${encounter.round}). Its action is separate.`, retry: true },
     );
   }
   if (kind === "action" && enemyActedThisRound(encounter, enemy.id)) {

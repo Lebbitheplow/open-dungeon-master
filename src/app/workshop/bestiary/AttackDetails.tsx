@@ -15,9 +15,10 @@ import { Field, FieldLabel, OptionalStepper, addChip, rowIcon } from "@/app/work
 
 // The half of an attack line the engine reads besides its bonus and dice
 // (src/lib/dm/enemy-profile.ts, enemy-attack.ts, enemy-hit.ts): whether it
-// is a melee or ranged swing, its reach and range in feet, the dice that
-// ride the hit under their own damage type, and what a hit does besides
-// damage, a save, a condition, a grapple's escape DC. Opened from the attack
+// is a melee or ranged swing, a bonus action's, its reach and range in feet,
+// the dice that ride the hit under their own damage type, what a hit does
+// besides damage (a save, a condition, a grapple's escape DC), and the
+// weaker blow a swarm deals at half its hit points. Opened from the attack
 // row; everything is optional and an attack without any of it swings as
 // before.
 
@@ -52,6 +53,14 @@ export function AttackDetails({ attack, onChange }: { attack: EnemyAttack; onCha
   };
   const riders = attack.riders ?? [];
   const setRiders = (next: typeof riders) => set({ riders: next.length ? next : undefined });
+  // The weaker blow at half its hit points (src/lib/dm/enemy-profile.ts
+  // alternativeBlow); a ranged alternative read from a pack line is kept.
+  const bloodied = attack.alternatives?.find((entry) => entry.when === "bloodied");
+  const setBloodied = (damage: string, type: string) => {
+    const others = (attack.alternatives ?? []).filter((entry) => entry.when !== "bloodied");
+    const next = damage.trim() ? [...others, { when: "bloodied" as const, damage: damage.replace(/\s+/g, ""), type: type || "untyped" }] : others;
+    set({ alternatives: next.length ? next : undefined });
+  };
 
   return (
     <div className="reveal grid gap-3 rounded-lg border border-stone-800 bg-stone-950/50 p-3">
@@ -81,8 +90,11 @@ export function AttackDetails({ attack, onChange }: { attack: EnemyAttack; onCha
         <Field label="Spell attack">
           <Switch label="A spell attack" on={attack.spellAttack === true} onChange={(on) => set({ spellAttack: on || undefined })} />
         </Field>
+        <Field label="Bonus action">
+          <Switch label="Made as a bonus action, beside the action's attacks" on={attack.bonusAction === true} onChange={(on) => set({ bonusAction: on || undefined })} />
+        </Field>
         <Field label="Reach">
-          <OptionalStepper label="Reach in feet" min={5} max={60} step={5} suffix="ft" fallback={5} value={attack.reach} onChange={(reach) => set({ reach: reach === "" ? undefined : reach })} />
+          <OptionalStepper label="Reach in feet (0 for a creature in its space)" min={0} max={60} step={5} suffix="ft" fallback={5} value={attack.reach} onChange={(reach) => set({ reach: reach === "" ? undefined : reach })} />
         </Field>
         <Field label="Range">
           <span className="flex items-center gap-1">
@@ -147,6 +159,23 @@ export function AttackDetails({ attack, onChange }: { attack: EnemyAttack; onCha
           </button>
         ) : null}
         <span className="text-[11px] text-stone-500">Each rider meets its own resistance: a fire rider on a bite is halved by fire resistance, not by piercing.</span>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Field as="label" label="At half its hit points or fewer">
+          <input
+            value={bloodied?.damage ?? ""}
+            placeholder="1d6"
+            onChange={(event) => setBloodied(event.target.value, bloodied?.type ?? attack.type.split("/")[0])}
+            className={cn(ui.input, "w-24")}
+          />
+        </Field>
+        {bloodied ? (
+          <Field as="label" label="Type">
+            <input list={typeList} value={bloodied.type} placeholder="piercing" onChange={(event) => setBloodied(bloodied.damage, event.target.value)} className={cn(ui.input, "w-28")} />
+          </Field>
+        ) : null}
+        <span className="basis-full text-[11px] text-stone-500">The blow it deals instead once it is down to half its hit points, as a swarm&apos;s bite weakens. Leave empty for the same blow throughout.</span>
       </div>
 
       <div className="grid gap-2">

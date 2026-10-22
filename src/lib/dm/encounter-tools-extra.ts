@@ -200,6 +200,7 @@ function handleEnemyCondition(
       }
       const save = rollEnemySave(campaign.id, enemy, args.saveAbility, args.saveDc, {
         resist: true,
+        against: wanted,
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${args.saveAbility.toUpperCase()} save against being ${wanted}` },
       });
       initialSave = `${args.saveAbility.toUpperCase()} save ${save.total ?? "failed outright"} vs DC ${args.saveDc}`;

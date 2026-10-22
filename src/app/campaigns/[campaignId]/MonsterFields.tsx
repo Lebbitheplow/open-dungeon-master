@@ -285,18 +285,23 @@ export function SizeAndDefences({
           enforces. Anything else still goes in by hand, because a monster
           immune to "being seen" is a fine monster and no chip list of ours
           will hold every answer. */}
+      {/* Black Flag's resistance and vulnerability to a condition (advantage
+          or disadvantage on the save) show only on a block that has them: a
+          copy keeps them editable, and no other book prints them. */}
       {(
         [
           ["resist", "Resistant to", DAMAGE_TYPES],
           ["immune", "Immune to", DAMAGE_TYPES],
           ["vulnerable", "Vulnerable to", DAMAGE_TYPES],
           ["conditionImmune", "Condition immunities", CONDITIONS],
+          ...(draft.stats.conditionResist ? [["conditionResist", "Resistant to conditions (advantage on the save)", CONDITIONS] as const] : []),
+          ...(draft.stats.conditionVulnerable ? [["conditionVulnerable", "Vulnerable to conditions (disadvantage on the save)", CONDITIONS] as const] : []),
         ] as const
       ).map(([field, label, known]) => (
         <TermPicker
           key={field}
           label={label}
-          value={draft.stats[field]}
+          value={draft.stats[field] ?? ""}
           known={known}
           onChange={(value) => set({ [field]: value })}
           glossary={glossaryFor(

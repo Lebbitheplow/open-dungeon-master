@@ -11,7 +11,7 @@ import type { Advantage, RollResult } from "@/lib/dice";
 import { claimOncePerTurn, type TurnBudget } from "@/lib/dm/action-budget";
 import { ragingMeleeBonus, type AttackProfile } from "@/lib/dm/attack-logic";
 import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
-import { damageAdjust, resistsAllDamage } from "@/lib/dm/damage-logic";
+import { damageAdjust, resistsAllDamage, type BlowSource } from "@/lib/dm/damage-logic";
 import { resistLineFor } from "@/lib/dm/underwater";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
@@ -424,7 +424,20 @@ export function applyHitDamage(input: {
     ignoreResistance: plan.elementalAdept || poisonerIgnoresResistance(plan.sheet, plan.profile.damageType),
     ignoreResistanceBy: plan.elementalAdept ? "Elemental Adept" : "Poisoner",
     concentrationDisadvantage: plan.mageSlayer,
+    blow: blowSource(plan),
   });
+}
+
+const GOOD_ALIGNMENTS = ["LG", "NG", "CG"];
+
+// A spell attack is a spell's damage; a weapon in a good character's hands
+// meets the defences that name the wielder (a rakshasa's vulnerability).
+export function blowSource(plan: Pick<AttackPlan, "kind" | "sheet">): BlowSource {
+  if (plan.kind === "spell") {
+    return { spell: true };
+  }
+  // The builder stores the alignment as its code (LG, NG, CG...).
+  return GOOD_ALIGNMENTS.includes((plan.sheet.alignment ?? "").trim().toUpperCase()) ? { goodWielder: true } : {};
 }
 
 // One blow landing on an enemy, per damage type: the shared end of
@@ -452,6 +465,8 @@ export function landBlow(input: {
   nonlethal?: boolean;
   // An opportunity attack leaves the fight open (enemy-damage.ts).
   holdVictory?: boolean;
+  // A spell's damage, or a good wielder's weapon (damage-logic.ts).
+  blow?: BlowSource;
 }): Record<string, unknown> {
   const { campaign, turn, encounter, enemy, sheets, sheetsById, profile, damageOutcome, dealt, crit, critExtraDice, magical } = input;
   // A silvered or adamantine weapon passes the resistances that name it.
@@ -481,7 +496,7 @@ export function landBlow(input: {
       sheets,
       sheetsById,
       profile.damageType,
-      { magical, nonlethal, holdVictory, ...material, ...(input.ignoreResistance ? { ignoreResistance: true, ignoreResistanceBy: input.ignoreResistanceBy } : {}), ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}) },
+      { magical, nonlethal, holdVictory, ...material, ...input.blow, ...(input.ignoreResistance ? { ignoreResistance: true, ignoreResistanceBy: input.ignoreResistanceBy } : {}), ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}) },
     );
   } else {
     // Two damage types in one blow: each meets the creature's resistances
@@ -496,7 +511,7 @@ export function landBlow(input: {
         resistAll ? "" : resistLineFor(campaign.id, enemy),
         enemy.stats.immune,
         enemy.stats.vulnerable,
-        { magical: index === 0 ? magical : true, ...(index === 0 ? material : {}) },
+        { magical: index === 0 ? magical : true, ...(index === 0 ? material : {}), ...(index === 0 ? input.blow : { spell: input.blow?.spell }) },
       ),
     }));
     const landed = byType.reduce((sum, part) => sum + part.amount, 0);

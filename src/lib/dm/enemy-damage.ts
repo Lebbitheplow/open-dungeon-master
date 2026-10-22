@@ -263,6 +263,11 @@ export function applyEnemyDamage(
     // A silvered or adamantine weapon (damage-logic.ts weaponMaterial).
     silvered?: boolean;
     adamantine?: boolean;
+    // A spell's damage, or a weapon a good creature wields: the defences
+    // that name them (an archmage's "damage from spells", a rakshasa's
+    // vulnerability, damage-logic.ts BlowSource).
+    spell?: boolean;
+    goodWielder?: boolean;
     // Elemental Adept: the creature's resistance to this type does not
     // count (src/lib/srd/feat-combat.ts).
     ignoreResistance?: boolean;
@@ -299,7 +304,7 @@ export function applyEnemyDamage(
         // Inside Silence, thunder does nothing (zone-rules.ts).
         `${enemy.stats.immune ?? ""}${silencedImmunity(campaign.id, enemy.id)}`,
         enemy.stats.vulnerable,
-        { magical: options?.magical === true, resistAll: resistsAllDamage(enemy.conditions), silvered: options?.silvered, adamantine: options?.adamantine },
+        { magical: options?.magical === true, resistAll: resistsAllDamage(enemy.conditions), silvered: options?.silvered, adamantine: options?.adamantine, spell: options?.spell, goodWielder: options?.goodWielder },
       );
   if (adjusted.amount <= 0) {
     return {

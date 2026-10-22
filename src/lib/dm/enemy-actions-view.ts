@@ -1,7 +1,7 @@
 import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { manualTraits } from "@/lib/dm/monster-traits";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
-import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
+import { turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { canEnemyAct, enemyActedThisRound } from "@/lib/dm/can-act";
 import { plannedSwings } from "@/lib/dm/enemy-profile";
 import { abilityFromLine, abilityRefusal, type MonsterAbility } from "@/lib/dm/monster-abilities";
@@ -101,14 +101,22 @@ function onHitLine(attack: EnemyAttack): string | undefined {
 }
 
 function abilityResource(ability: MonsterAbility): string {
+  // Two breaths share the one recharge their entry prints.
+  const shared = ability.group ? `, shared as ${ability.group}` : "";
   if (ability.recharge) {
-    return ability.recharge === 6 ? "Recharge 6" : `Recharge ${ability.recharge}-6`;
+    return `${ability.recharge === 6 ? "Recharge 6" : `Recharge ${ability.recharge}-6`}${shared}`;
   }
   if (ability.perDay) {
-    return `${ability.perDay}/day`;
+    return `${ability.perDay}/${ability.perRest ? "rest" : "day"}${shared}`;
   }
-  if (ability.perRest) {
-    return "Once a fight";
+  if (ability.perRest || ability.rechargeSpecial) {
+    return `Once a fight${shared}`;
+  }
+  if (ability.oncePer) {
+    return `Once a ${ability.oncePer}`;
+  }
+  if (ability.partOf) {
+    return `With ${ability.partOf}`;
   }
   return "";
 }
@@ -172,7 +180,7 @@ export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEne
       ...(ability.condition ? { condition: ability.condition } : {}),
       ...(ability.rounds ? { rounds: ability.rounds } : {}),
       resource: abilityResource(ability),
-      refusal: abilityRefusal(enemy.displayName, ability, ledger)?.error ?? null,
+      refusal: abilityRefusal(enemy.displayName, ability, ledger, { turn: turnKey(encounter), round: encounter.round })?.error ?? null,
     }));
 
   const allowed = canEnemyAct({ enemy, encounter, kind: "action" });
