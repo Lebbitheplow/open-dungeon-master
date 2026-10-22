@@ -41,6 +41,7 @@ import {
 } from "./submit";
 import { clearBuilderDraft, readBuilderDraft, writeBuilderDraft, type BuilderDraft } from "./builderDraft";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
+import { BuildMathPanel } from "./BuildMathPanel";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
 import { listWords, unofferedPicks } from "./unoffered";
 import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState";
@@ -740,7 +741,10 @@ function CharacterBuilderForm({
         />
       ) : (
       <FeatJudgeContext.Provider value={featJudge}>
+      {/* The build math table (F10) beside the steps from lg, under them below it. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-5">
       <Wizard
+        className="min-w-0 flex-1"
         step={step}
         onStepChange={setStep}
         title={state.name.trim() || "New character"}
@@ -777,6 +781,8 @@ function CharacterBuilderForm({
           )
         }
       />
+      <BuildMathPanel derived={derived} scores={state.scores} klass={klass} atTable={Boolean(table.rules)} />
+      </div>
       </FeatJudgeContext.Provider>
       )}
       {cropping ? (

@@ -12,7 +12,7 @@
 import { weaponAttackProfile, weaponOf, type ResolvedWeapon } from "@/lib/dm/attack-logic";
 import { magicWeaponOfRow } from "@/lib/dm/gear-attack";
 import type { EquipmentItem as SheetItem } from "@/lib/schemas/sheet";
-import type { SheetDerived } from "@/lib/srd";
+import type { DerivedPart, SheetDerived } from "@/lib/srd";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { gearNameKey, type PriceLookup } from "@/lib/srd/starting-wealth";
 import { matchWeapon } from "@/lib/srd/weapons";
@@ -26,6 +26,12 @@ export type WeaponLine = {
   damage: string;
   damageType: string;
   notes: string[];
+  // How the to-hit is made, read off the attack profile (the build math
+  // table shows it): the ability, the proficiency, a magic bonus and what
+  // the features add, summing to toHit.
+  toHitParts: DerivedPart[];
+  // The ability the damage adds, upper case ("STR").
+  ability: string;
 };
 
 export type ReceiptRow = {
@@ -168,11 +174,18 @@ export function weaponLineFor(
   if (!profile.proficient) {
     notes.push("Not proficient");
   }
+  const abilityPart = { label: `${profile.ability.toUpperCase()} modifier`, value: derived.abilityMods[profile.ability] };
+  const proficiency = { label: "proficiency", value: profile.proficient ? derived.proficiencyBonus : 0 };
+  const magicPart = { label: "magic", value: profile.magicBonus };
+  // A fighting style's to-hit (Archery) is the rest; the notes name it.
+  const features = { label: "features", value: profile.toHit - abilityPart.value - proficiency.value - magicPart.value };
   return {
     toHit: profile.toHit,
     damage: profile.damageExpression,
     damageType: profile.damageType,
     notes,
+    toHitParts: [abilityPart, proficiency, magicPart, features].filter((part, index) => index === 0 || part.value !== 0),
+    ability: profile.ability.toUpperCase(),
   };
 }
 

@@ -1,7 +1,7 @@
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
-import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
+import { SRD_CLASSES } from "@/lib/srd";
 import { expertiseAllowed, expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/srd/point-buy";
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { reconcilePicks } from "./reconcile";
-import { builderCasting } from "./casting";
+import { builderCasting, builderSpellSlots } from "./casting";
 import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
@@ -486,12 +486,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // How the class casts at this level: an Eldritch Knight or Arcane
   // Trickster with Intelligence and a third caster's slots (./casting.ts).
   const casting = builderCasting(klass, state.subclass, effectiveLevel);
-  const slots = Object.fromEntries(
-    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass, casting.profile)).map(([slotLevel, max]) => [
-      slotLevel,
-      { max, used: 0 },
-    ]),
-  );
+  const slots = builderSpellSlots(klass, state.subclass, effectiveLevel);
   const isKnownCaster = derived.spellStyle === "known";
   const isWizard = derived.spellStyle === "spellbook";
   // The picks were checked against every change as it was made; checked
