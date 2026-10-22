@@ -21,7 +21,7 @@ export function homebrewAvailability(kind: HomebrewKind, parent?: { name: string
   const where =
     kind === "archetype"
       ? parent
-        ? `under ${parent.name} in the character builder${parent.subclassLevel ? ` from level ${parent.subclassLevel}, the level a ${parent.name.toLowerCase()} picks a subclass, and at that level-up` : ""}`
+        ? `under ${parent.name} in the character builder${parent.subclassLevel ? ` from level ${parent.subclassLevel}, the level that class picks a subclass, and at that level-up` : ""}`
         : "under its class in the character builder"
       : (WHERE[kind] ?? "where the books' own are");
   return `Offered ${where}: for your own characters, and at every table you run as its owner, DM or assistant DM. At someone else's table it is offered once that table's owner or DM keeps a copy, from a Workshop bundle with your Homebrew in it.`;
