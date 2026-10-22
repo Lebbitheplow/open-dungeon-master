@@ -11,7 +11,7 @@ import { largeWorld } from "./lib/large-world.mjs";
 
 const { test, finish } = suite("test-world-large-budgets");
 const { importWorldForge } = await import("../src/lib/db/world-forge-io.ts");
-const { worldAnswer, worldView } = await import("../src/lib/db/world-forge.ts");
+const { worldAnswer, worldAnswerFor, worldView } = await import("../src/lib/db/world-forge.ts");
 const { searchIndex, searchEntries } = await import("../src/lib/worldforge/search.ts");
 const { compressedJson } = await import("../src/lib/compressed-json.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
@@ -68,6 +68,13 @@ await test("The World tab's answer keeps to its size, each entry's WorldForge da
   assert.ok(size <= BUDGET.answerKb, `the answer is ${size} KB, over its ${BUDGET.answerKb} KB budget`);
   assert.ok(gzipped <= BUDGET.answerGzipKb, `the answer is ${gzipped} KB gzipped, over its ${BUDGET.answerGzipKb} KB budget`);
   assert.ok(ms <= BUDGET.answerMs, `the answer took ${ms} ms, over its ${BUDGET.answerMs} ms budget`);
+});
+
+await test("The lean answer goes only to a caller that asks for it: an older app's screens read the document's entries.", () => {
+  const route = `http://localhost/api/campaigns/${workshop.id}/world`;
+  assert.equal(worldAnswerFor(new Request(`${route}?lean=1`), workshop.id).doc.entries, undefined);
+  const whole = worldAnswerFor(new Request(route), workshop.id);
+  assert.equal(Object.keys(whole.doc.entries ?? {}).length, whole.entities.length);
 });
 
 await test("The answer goes over the wire packed: brotli when the browser takes it, else gzip, plain when it takes neither.", async () => {

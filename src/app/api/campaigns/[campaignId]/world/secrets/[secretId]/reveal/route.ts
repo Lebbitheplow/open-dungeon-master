@@ -1,5 +1,5 @@
 import { isDm, isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { revealSecret, worldAnswer } from "@/lib/db/world-forge";
+import { revealSecret, worldAnswerFor } from "@/lib/db/world-forge";
 import { loreBodyOverflow, normalizeLoreInput } from "@/lib/dm/world-lore-logic";
 import { publishHandout } from "@/lib/dm/scene-state";
 import { publishEphemeral } from "@/lib/events";
@@ -56,5 +56,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   publishEphemeral(campaignId, "lore_updated", { at: Date.now() });
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, "lore", "world");
-  return Response.json({ secret: outcome.secret, entry, ...worldAnswer(campaignId) });
+  return Response.json({ secret: outcome.secret, entry, ...worldAnswerFor(request, campaignId) });
 }

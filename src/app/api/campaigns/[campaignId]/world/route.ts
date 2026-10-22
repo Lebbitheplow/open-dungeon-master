@@ -2,7 +2,7 @@ import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { compressedJson } from "@/lib/compressed-json";
 import { followPins } from "@/lib/db/atlas-region";
 import { partyAtlasChanged } from "@/lib/db/party-atlas";
-import { patchWorldDoc, worldAnswer, worldCounts } from "@/lib/db/world-forge";
+import { patchWorldDoc, worldAnswerFor, worldCounts } from "@/lib/db/world-forge";
 import { publishEphemeral } from "@/lib/events";
 import { recordsChanged } from "@/lib/workshop/record-events";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 // The workshop's WorldForge (src/lib/worldforge/model.ts): its document and
 // the records it describes (each entry's WorldForge data once, on its
-// record: worldAnswer), gzipped when big (compressedJson). The DM's alone,
+// record, for a caller that asks with ?lean=1: worldAnswerFor), gzipped when big (compressedJson). The DM's alone,
 // hidden truths and all.
 // ?counts=1 answers with the hub card's numbers only.
 export async function GET(request: Request, { params }: { params: Promise<{ campaignId: string }> }) {
@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ camp
   if (new URL(request.url).searchParams.get("counts")) {
     return Response.json({ counts: worldCounts(campaignId) });
   }
-  return compressedJson(request, worldAnswer(campaignId));
+  return compressedJson(request, worldAnswerFor(request, campaignId));
 }
 
 // Changes slices (types, links, folders, calendars, events, secrets, stubs,
@@ -49,5 +49,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   partyAtlasChanged(campaignId, before);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, "world");
-  return compressedJson(request, { ...worldAnswer(campaignId), ...(conflicts.length ? { conflicts } : {}), ...(region.length ? { region } : {}) });
+  return compressedJson(request, { ...worldAnswerFor(request, campaignId), ...(conflicts.length ? { conflicts } : {}), ...(region.length ? { region } : {}) });
 }

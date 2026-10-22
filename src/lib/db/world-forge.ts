@@ -209,6 +209,14 @@ export function worldAnswer(campaignId: string): { doc: Omit<WorldDoc, "entries"
   return { doc: sent as Omit<WorldDoc, "entries">, entities };
 }
 
+// The answer a world route gives: the lean one (worldAnswer) to a caller
+// that puts the document's entries back itself and asks with ?lean=1
+// (src/app/workshop/world/useWorld.ts), else the whole view, which the
+// app's screens compiled before 0.29.0 read the entries from.
+export function worldAnswerFor(request: Request, campaignId: string): ReturnType<typeof worldAnswer> | ReturnType<typeof worldView> {
+  return new URL(request.url).searchParams.get("lean") === "1" ? worldAnswer(campaignId) : worldView(campaignId);
+}
+
 function ownedBy(campaignId: string, ref: string): boolean {
   const parsed = parseRef(ref);
   if (!parsed) return false;
